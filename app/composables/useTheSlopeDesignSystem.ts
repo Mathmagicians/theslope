@@ -434,17 +434,23 @@ export const COMPONENTS = {
         level1: {
             header: 'bg-ocean-50 dark:bg-ocean-800',
             icon: 'text-xl text-ocean-600 dark:text-ocean-400',
-            statBox: 'bg-white dark:bg-neutral-900 rounded-lg'
+            statBox: 'bg-white dark:bg-neutral-900 rounded-lg',
+            border: 'border-ocean-50 dark:border-ocean-800',
+            footer: 'bg-ocean-50 dark:bg-ocean-800'
         },
         level2: {
             header: 'bg-peach-100 dark:bg-peach-900',
             icon: 'text-xl text-peach-600 dark:text-peach-400',
-            statBox: 'bg-white dark:bg-neutral-900 rounded-lg'
+            statBox: 'bg-white dark:bg-neutral-900 rounded-lg',
+            border: 'border-peach-100 dark:border-peach-900',
+            footer: 'bg-peach-100 dark:bg-peach-900'
         },
         level3: {
             header: 'bg-neutral-50 dark:bg-neutral-900',
             icon: 'text-neutral-600 dark:text-neutral-400',
-            statBox: 'bg-white dark:bg-neutral-800 rounded-lg'
+            statBox: 'bg-white dark:bg-neutral-800 rounded-lg',
+            border: 'border-neutral-50 dark:border-neutral-900',
+            footer: 'bg-neutral-50 dark:bg-neutral-900'
         }
     },
 

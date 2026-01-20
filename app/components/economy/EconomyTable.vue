@@ -50,20 +50,25 @@ interface Props {
     pageSize?: number
     /** Placeholder for search input */
     searchPlaceholder?: string
+    /** Default sort direction: true = descending (newest first), false = ascending (oldest first) */
+    defaultSortDesc?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
     loading: false,
     pageSize: 5,
-    searchPlaceholder: 'Søg på dato'
+    searchPlaceholder: 'Søg på dato',
+    defaultSortDesc: false
 })
 
-const {COMPONENTS, ICONS, SIZES} = useTheSlopeDesignSystem()
+const {COMPONENTS, ICONS, SIZES, PAGINATION} = useTheSlopeDesignSystem()
 
+// Table ref for accessing TanStack table API
+const tableRef = ref<{ tableApi?: { setPageIndex: (index: number) => void; getState: () => { pagination: { pageIndex: number; pageSize: number } }; getFilteredRowModel: () => { rows: unknown[] } } } | null>(null)
 
 // Internal state
 const search = ref('')
-const sortDesc = ref(true)  // Default to descending (newest first)
+const sortDesc = ref(props.defaultSortDesc)  // Use prop for default direction
 const pagination = ref({pageIndex: 0, pageSize: props.pageSize})
 const {expanded} = useExpandableRow()
 
@@ -88,12 +93,20 @@ const filteredData = computed(() => {
     return result
 })
 
-// Pagination display
-const showPagination = computed(() => filteredData.value.length > props.pageSize)
-const currentPage = computed(() => pagination.value.pageIndex + 1)
+// Pagination display - use table API state when available
+const totalRows = computed(() =>
+    tableRef.value?.tableApi?.getFilteredRowModel().rows.length ?? filteredData.value.length
+)
+const showPagination = computed(() => totalRows.value > props.pageSize)
+const currentPage = computed(() => {
+    const pageIndex = tableRef.value?.tableApi?.getState().pagination.pageIndex ?? pagination.value.pageIndex
+    return pageIndex + 1
+})
 
 const handlePageChange = (page: number) => {
-    pagination.value.pageIndex = page - 1
+    // Use table API directly for reliable pagination control
+    tableRef.value?.tableApi?.setPageIndex(page - 1)
+    pagination.value.pageIndex = page - 1  // Keep local state in sync
 }
 
 const toggleSort = () => {
@@ -124,15 +137,17 @@ const toggleSort = () => {
       </div>
       <UPagination
           v-if="showPagination"
-          :default-page="currentPage"
+          :page="currentPage"
           :items-per-page="pageSize"
-          :total="filteredData.length"
+          :total="totalRows"
           :size="SIZES.standard"
+          :sibling-count="PAGINATION.siblingCount.value"
           @update:page="handlePageChange"
       />
     </div>
 
     <UTable
+        ref="tableRef"
         v-model:expanded="expanded"
         v-model:pagination="pagination"
         :data="filteredData"
@@ -203,7 +218,7 @@ const toggleSort = () => {
       </template>
 
       <template #empty>
-        <slot name="empty"/>
+        <slot v-if="!loading" name="empty"/>
       </template>
     </UTable>
   </div>

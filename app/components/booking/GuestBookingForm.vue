@@ -14,6 +14,7 @@ import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {TicketPriceSelectItem} from '~/composables/useTicket'
+import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import type {FormSubmitEvent} from '@nuxt/ui'
 import {FORM_MODES} from '~/types/form'
 
@@ -22,7 +23,7 @@ interface Props {
   ticketPrices: TicketPrice[]
   allergyTypes: AllergyTypeDisplay[]
   deadlines: SeasonDeadlines
-  releasedTicketCount: number
+  releasedTicketCounts: ReleasedTicketCounts
   bookerId: number
 }
 
@@ -57,7 +58,7 @@ const bookingOptions = computed(() => getBookingOptions(
   canModifyOrders(props.dinnerEvent.date),
   canEditDiningMode(props.dinnerEvent.date),
   props.dinnerEvent.state,
-  props.releasedTicketCount > 0
+  props.releasedTicketCounts.total > 0
 ))
 
 // Form state - reactive object for UForm binding
@@ -83,10 +84,10 @@ const validateForm = (state: Partial<typeof formState>) => {
   }
 
   // Claiming: count must not exceed available released tickets
-  if (action === 'claim' && count > props.releasedTicketCount) {
+  if (action === 'claim' && count > props.releasedTicketCounts.total) {
     errors.push({
       name: 'count',
-      message: `Kun ${props.releasedTicketCount} billet${props.releasedTicketCount === 1 ? '' : 'ter'} ledig${props.releasedTicketCount === 1 ? '' : 'e'}`
+      message: `Kun ${props.releasedTicketCounts.total} billet${props.releasedTicketCounts.total === 1 ? '' : 'ter'} ledig${props.releasedTicketCounts.total === 1 ? '' : 'e'}`
     })
   }
 
@@ -95,7 +96,7 @@ const validateForm = (state: Partial<typeof formState>) => {
 
 
 // Deadline badges using existing factory
-const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCount))
+const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))
 
 // Enabled modes for guest: filter out NONE (can't add a guest who won't eat)
 const enabledModesForGuest = computed((): DinnerMode[] =>
@@ -176,8 +177,8 @@ const handleCancel = () => emit('cancel')
         <div class="flex items-center gap-2">
           <UIcon :name="ICONS.userPlus" class="size-5 text-info" />
           <h4 class="text-md font-semibold">Tilføj gæst</h4>
-          <UBadge v-if="props.releasedTicketCount > 0" :color="COLOR.info" :icon="ICONS.claim" variant="subtle" :size="SIZES.small">
-            {{ props.releasedTicketCount }} Ledig{{ props.releasedTicketCount === 1 ? '' : 'e' }}
+          <UBadge v-if="props.releasedTicketCounts.total > 0" :color="COLOR.info" :icon="ICONS.claim" variant="subtle" :size="SIZES.small">
+            {{ props.releasedTicketCounts.formatted }} Ledig{{ props.releasedTicketCounts.total === 1 ? '' : 'e' }}
           </UBadge>
         </div>
       </template>

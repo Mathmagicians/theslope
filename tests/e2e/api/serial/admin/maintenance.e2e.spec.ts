@@ -237,6 +237,16 @@ test.describe('Daily Maintenance API', () => {
         expect(periodDetail.invoices).toBeDefined()
         expect(periodDetail.shareToken).toBeDefined()
 
+        // Bug fix verification: test household's invoice must have valid householdId and pbsId
+        // Previously, if ticketPrice was deleted (SET NULL), deserializeTransaction
+        // would fall back to snapshot data which could set householdId to 0
+        // Note: Only verify our test household's invoice (other invoices may be from previous runs)
+        const testInvoice = periodDetail.invoices.find(inv => inv.householdId === householdId)
+        expect(testInvoice, `Test household ${householdId} should have an invoice`).toBeDefined()
+        expect(testInvoice!.householdId, 'Invoice householdId should not be null').not.toBeNull()
+        expect(testInvoice!.householdId, 'Invoice householdId should be valid (> 0)').toBeGreaterThan(0)
+        expect(testInvoice!.pbsId, 'Invoice pbsId should be valid (> 0)').toBeGreaterThan(0)
+
         // GET billing via public magic link
         const publicData = await BillingFactory.getBillingPeriodByToken(context, periodDetail.shareToken)
         expect(publicData.id).toBe(periodDetail.id)

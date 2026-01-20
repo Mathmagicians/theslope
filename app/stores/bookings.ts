@@ -1,5 +1,7 @@
 import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder, DinnerState} from '~/composables/useBookingValidation'
 import type {MonthlyBillingResponse, BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail, TransactionDisplay} from '~/composables/useBillingValidation'
+import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import {useBilling} from '~/composables/useBilling'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
@@ -192,8 +194,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // Released counts fetch (internal)
     const releasedCountsDinnerIds = ref<number[]>([])
     const releasedCountsKey = computed(() => `released-counts-${releasedCountsDinnerIds.value.join('-') || 'none'}`)
+    const {formatTicketCounts} = useBilling()
 
-    const {data: releasedCounts, status: releasedCountsStatus, refresh: refreshReleasedCounts} = useAsyncData<Map<number, number>>(
+    const {data: releasedCounts, status: releasedCountsStatus, refresh: refreshReleasedCounts} = useAsyncData<Map<number, ReleasedTicketCounts>>(
         releasedCountsKey,
         async () => {
             if (releasedCountsDinnerIds.value.length === 0) return new Map()
@@ -202,9 +205,11 @@ export const useBookingsStore = defineStore("Bookings", () => {
             params.append('state', 'RELEASED')
             params.append('allHouseholds', 'true')
             const released = await $fetch<OrderDisplay[]>(`/api/order?${params.toString()}`)
-            const counts = new Map<number, number>()
-            for (const order of released) {
-                counts.set(order.dinnerEventId, (counts.get(order.dinnerEventId) ?? 0) + 1)
+            // Group orders by dinnerEventId
+            const grouped = Map.groupBy(released, o => o.dinnerEventId)
+            const counts = new Map<number, ReleasedTicketCounts>()
+            for (const [dinnerEventId, orders] of grouped) {
+                counts.set(dinnerEventId, { total: orders.length, formatted: formatTicketCounts(orders) })
             }
             return counts
         },
@@ -229,7 +234,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // Exposed computed: lockStatus map for calendar display
     const lockStatus = computed(() => {
         const season = planStore.selectedSeason
-        if (!season?.dinnerEvents) return new Map<number, number | null>()
+        if (!season?.dinnerEvents) return new Map<number, ReleasedTicketCounts | null>()
         return computeLockStatus(season.dinnerEvents, deadlinesForSeason(season), releasedCounts.value)
     })
 

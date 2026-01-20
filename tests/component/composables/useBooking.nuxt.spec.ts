@@ -1402,27 +1402,31 @@ describe('Lock Status Utilities', () => {
     })
 
     describe('computeLockStatus', () => {
+        // Helper to create ReleasedTicketCounts
+        const counts = (total: number, formatted: string) => ({ total, formatted })
+        const emptyCount = counts(0, '-')
+
         describe.each([
             {
                 name: 'marks locked dinners with released count',
                 dinnerEvents: [makeEvent(1, 2), makeEvent(2, 5), makeEvent(3, 10)],
                 lockedDays: 7,
-                releasedCounts: new Map([[1, 3], [2, 1]]),
-                expected: new Map([[1, 3], [2, 1]])
+                releasedCounts: new Map([[1, counts(3, '3V')], [2, counts(1, '1B')]]),
+                expected: new Map([[1, counts(3, '3V')], [2, counts(1, '1B')]])
             },
             {
-                name: 'defaults to 0 when no released count provided',
+                name: 'defaults to empty count when no released count provided',
                 dinnerEvents: [makeEvent(1, 2), makeEvent(2, 5)],
                 lockedDays: 7,
                 releasedCounts: undefined,
-                expected: new Map([[1, 0], [2, 0]])
+                expected: new Map([[1, emptyCount], [2, emptyCount]])
             },
             {
                 name: 'excludes non-locked dinners',
                 dinnerEvents: [makeEvent(1, 2), makeEvent(2, 10)],
                 lockedDays: 5,
-                releasedCounts: new Map([[1, 2], [2, 5]]),
-                expected: new Map([[1, 2]])
+                releasedCounts: new Map([[1, counts(2, '2V')], [2, counts(5, '5V')]]),
+                expected: new Map([[1, counts(2, '2V')]])
             }
         ])('$name', ({dinnerEvents, lockedDays, releasedCounts, expected}) => {
             it('returns correct lock status map', () => {

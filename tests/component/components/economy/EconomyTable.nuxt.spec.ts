@@ -149,8 +149,28 @@ describe('EconomyTable', () => {
     })
 
     describe('Sorting', () => {
-        it('sorts descending by default (newest first)', async () => {
+        it('sorts ascending by default (closest dates first)', async () => {
             const wrapper = await createWrapper()
+            const vm = wrapper.vm as unknown as EconomyTableVm
+
+            // First item should be earliest date (Jan 10)
+            expect(vm.filteredData[0]!.date.getDate()).toBe(10)
+            expect(vm.filteredData[0]!.date.getMonth()).toBe(0) // January
+        })
+
+        it('sorts descending when defaultSortDesc=true', async () => {
+            const wrapper = await mountSuspended(EconomyTable, {
+                props: {
+                    data: createTestData(),
+                    columns: defaultColumns,
+                    rowKey: 'date',
+                    dateAccessor,
+                    defaultSortDesc: true
+                },
+                global: {
+                    provide: {isMd: ref(true)}
+                }
+            })
             const vm = wrapper.vm as unknown as EconomyTableVm
 
             // First item should be latest date (Feb 15)
@@ -158,7 +178,7 @@ describe('EconomyTable', () => {
             expect(vm.filteredData[0]!.date.getMonth()).toBe(1) // February
         })
 
-        it('toggles to ascending on click', async () => {
+        it('toggles to descending on click', async () => {
             const wrapper = await createWrapper()
             const sortButton = getSortButton(wrapper)
 
@@ -166,12 +186,12 @@ describe('EconomyTable', () => {
             await nextTick()
 
             const vm = wrapper.vm as unknown as EconomyTableVm
-            // First item should be earliest date (Jan 10)
-            expect(vm.filteredData[0]!.date.getDate()).toBe(10)
-            expect(vm.filteredData[0]!.date.getMonth()).toBe(0) // January
+            // First item should be latest date (Feb 15)
+            expect(vm.filteredData[0]!.date.getDate()).toBe(15)
+            expect(vm.filteredData[0]!.date.getMonth()).toBe(1) // February
         })
 
-        it('toggles back to descending on second click', async () => {
+        it('toggles back to ascending on second click', async () => {
             const wrapper = await createWrapper()
             const sortButton = getSortButton(wrapper)
 
@@ -180,9 +200,9 @@ describe('EconomyTable', () => {
             await nextTick()
 
             const vm = wrapper.vm as unknown as EconomyTableVm
-            // Back to descending - first item is Feb 15
-            expect(vm.filteredData[0]!.date.getDate()).toBe(15)
-            expect(vm.filteredData[0]!.date.getMonth()).toBe(1)
+            // Back to ascending - first item is Jan 10
+            expect(vm.filteredData[0]!.date.getDate()).toBe(10)
+            expect(vm.filteredData[0]!.date.getMonth()).toBe(0)
         })
     })
 
@@ -268,18 +288,13 @@ describe('EconomyTable', () => {
         it('filters then sorts in correct order', async () => {
             const wrapper = await createWrapper()
             const searchInput = getSearchInput(wrapper)
-            const sortButton = getSortButton(wrapper)
 
             // Filter to January only (format is dd/MM/yyyy)
             await searchInput.setValue('/01/')
             await nextTick()
 
-            // Default is descending, toggle to ascending
-            await sortButton.trigger('click')
-            await nextTick()
-
             const vm = wrapper.vm as unknown as EconomyTableVm
-            // Should have 3 January items, sorted ascending (10, 15, 20)
+            // Should have 3 January items, default is ascending (10, 15, 20)
             expect(vm.filteredData.length).toBe(3)
             expect(vm.filteredData[0]!.date.getDate()).toBe(10)
             expect(vm.filteredData[1]!.date.getDate()).toBe(15)

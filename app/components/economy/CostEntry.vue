@@ -110,6 +110,18 @@ const iconClass = computed(() =>
         : COMPONENTS.economyTable.level1.icon
 )
 
+const borderClass = computed(() =>
+    props.level === 2
+        ? COMPONENTS.economyTable.level2.border
+        : COMPONENTS.economyTable.level1.border
+)
+
+const footerClass = computed(() =>
+    props.level === 2
+        ? COMPONENTS.economyTable.level2.footer
+        : COMPONENTS.economyTable.level1.footer
+)
+
 // Extract values via accessors
 const displayTitle = computed(() =>
     props.titleAccessor?.(props.entry) ?? ''
@@ -137,7 +149,7 @@ const displayItems = computed((): T[] => {
 </script>
 
 <template>
-  <div class="rounded-lg overflow-hidden border border-default">
+  <div :class="['rounded-lg overflow-hidden border', borderClass]">
     <!-- Stat header -->
     <div
         v-if="shouldShowHeader"
@@ -195,5 +207,8 @@ const displayItems = computed((): T[] => {
         description="Ingen transaktioner i denne periode."
         class="m-4"
     />
+
+    <!-- Footer bar (subtle color accent to match header) -->
+    <div v-if="displayItems.length > 0" :class="['h-1.5', footerClass]"/>
   </div>
 </template>

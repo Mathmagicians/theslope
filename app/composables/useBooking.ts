@@ -430,20 +430,29 @@ export interface DeadlineBadgeData {
 }
 
 /**
+ * Released ticket counts with pre-formatted breakdown
+ * Used for deadline badges to show "2V 1B" format
+ */
+export interface ReleasedTicketCounts {
+    total: number
+    formatted: string  // Pre-computed by formatTicketCounts, e.g., "2V 1B"
+}
+
+/**
  * Create booking deadline badge data
  * @param isOpen - Whether booking is still open (canModifyOrders)
- * @param releasedCount - Number of released tickets available (optional)
+ * @param releasedCounts - Released ticket counts with formatted breakdown (optional)
  */
-export const createBookingBadge = (isOpen: boolean, releasedCount?: number): DeadlineBadgeData => {
-    const hasTickets = !isOpen && releasedCount !== undefined && releasedCount > 0
+export const createBookingBadge = (isOpen: boolean, releasedCounts?: ReleasedTicketCounts): DeadlineBadgeData => {
+    const hasTickets = !isOpen && releasedCounts !== undefined && releasedCounts.total > 0
     return {
         label: DEADLINE_LABELS.BOOKING_CLOSED.label,
         icon: isOpen ? ICONS.lockOpen : (hasTickets ? ICONS.released : ICONS.lockClosed),
         color: isOpen ? 'success' : (hasTickets ? 'warning' : 'error'),
-        value: isOpen ? 'Åben' : (hasTickets ? `${releasedCount} ledig${releasedCount === 1 ? '' : 'e'}` : 'Lukket'),
+        value: isOpen ? 'Åben' : (hasTickets ? `${releasedCounts!.formatted} ledig${releasedCounts!.total === 1 ? '' : 'e'}` : 'Lukket'),
         helpText: isOpen
             ? DEADLINE_LABELS.BOOKING_CLOSED.openText
-            : (hasTickets ? DEADLINE_LABELS.BOOKING_CLOSED.availableText(releasedCount!) : DEADLINE_LABELS.BOOKING_CLOSED.closedText)
+            : (hasTickets ? DEADLINE_LABELS.BOOKING_CLOSED.availableText(releasedCounts!.total) : DEADLINE_LABELS.BOOKING_CLOSED.closedText)
     }
 }
 
@@ -465,9 +474,9 @@ export const createDiningModeBadge = (isOpen: boolean): DeadlineBadgeData => ({
 export const createBookingBadges = (
     dinnerEvent: DinnerEventDisplay,
     deadlines: SeasonDeadlines,
-    releasedCount?: number
+    releasedCounts?: ReleasedTicketCounts
 ): { booking: DeadlineBadgeData; diningMode: DeadlineBadgeData } => ({
-    booking: createBookingBadge(deadlines.canModifyOrders(dinnerEvent.date), releasedCount),
+    booking: createBookingBadge(deadlines.canModifyOrders(dinnerEvent.date), releasedCounts),
     diningMode: createDiningModeBadge(deadlines.canEditDiningMode(dinnerEvent.date))
 })
 
@@ -1091,8 +1100,8 @@ export const useBooking = () => {
     const SCAFFOLD_FIELDS = [
         { key: 'created', symbol: '+', label: 'oprettet' },
         { key: 'deleted', symbol: '-', label: 'slettet' },
-        { key: 'released', symbol: '~', label: 'frigivet' },
-        { key: 'claimed', symbol: '⬅', label: 'købt fra andre' },
+        { key: 'released', symbol: '↑', label: 'frigivet' },
+        { key: 'claimed', symbol: '⇅', label: 'købt fra andre' },
         { key: 'claimRejected', symbol: '✗', label: 'køb fra andre afvist' },
         { key: 'priceUpdated', symbol: '$', label: 'pris opdateret' },
         { key: 'modeUpdated', symbol: 'm', label: 'spisemåde opdateret' },
@@ -1164,20 +1173,21 @@ export const useBooking = () => {
      *
      * @param dinnerEvents - Dinner events to check
      * @param deadlines - Season deadlines from deadlinesForSeason()
-     * @param releasedOrdersByDinnerId - Map of dinner ID → count of RELEASED orders (tickets for sale)
-     * @returns Map of dinner ID → released ticket count (null = not locked, 0 = locked no tickets, >0 = locked with tickets)
+     * @param releasedCountsByDinnerId - Map of dinner ID → released ticket counts with breakdown
+     * @returns Map of dinner ID → released ticket counts (null = not locked, {total:0} = locked no tickets)
      */
     const computeLockStatus = (
         dinnerEvents: Array<{ id: number; date: Date }>,
         deadlines: { canModifyOrders: (date: Date) => boolean },
-        releasedOrdersByDinnerId?: Map<number, number>
-    ): Map<number, number | null> => {
-        const result = new Map<number, number | null>()
+        releasedCountsByDinnerId?: Map<number, ReleasedTicketCounts>
+    ): Map<number, ReleasedTicketCounts | null> => {
+        const result = new Map<number, ReleasedTicketCounts | null>()
+        const emptyCount: ReleasedTicketCounts = { total: 0, formatted: '-' }
 
         for (const dinner of dinnerEvents) {
             const isLocked = !deadlines.canModifyOrders(dinner.date)
             if (isLocked) {
-                result.set(dinner.id, releasedOrdersByDinnerId?.get(dinner.id) ?? 0)
+                result.set(dinner.id, releasedCountsByDinnerId?.get(dinner.id) ?? emptyCount)
             }
         }
 
@@ -1191,7 +1201,7 @@ export const useBooking = () => {
     const createChefBadges = (
         dinnerEvent: DinnerEventDisplay,
         deadlines: SeasonDeadlines,
-        releasedTicketCount?: number
+        releasedCounts?: ReleasedTicketCounts
     ): Map<number, DeadlineBadgeData> => {
         const {ALARM_TO_BADGE} = useTheSlopeDesignSystem()
         const {getDinnerTimeRange, getCookingDeadlineThresholds} = useSeason()
@@ -1220,7 +1230,7 @@ export const useBooking = () => {
         const bookingOpen = deadlines.canModifyOrders(dinnerEvent.date)
 
         // Booking badge: reuse createBookingBadge (DRY) + add countdown when open
-        const baseBadge = createBookingBadge(bookingOpen, releasedTicketCount)
+        const baseBadge = createBookingBadge(bookingOpen, releasedCounts)
         const bookingResult = DINNER_STEP_MAP[DinnerStepState.BOOKING_CLOSED].getDeadline(countdown, isPastDeadline, thresholds)
         const bookingBadge: DeadlineBadgeData = {
             ...baseBadge,

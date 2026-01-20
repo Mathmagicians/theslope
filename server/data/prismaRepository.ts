@@ -875,28 +875,14 @@ export async function fetchSeasonForRange(d1Client: D1Database, start: string, e
     }
 }
 
-// Returns active season or null if none active
+/**
+ * Fetch the current active season with all relations (DRY wrapper)
+ * @returns Full Season with ticketPrices, cookingTeams, dinnerEvents, or null if none active
+ */
 export async function fetchCurrentSeason(d1Client: D1Database): Promise<Season | null> {
-    console.info(`🌞 > SEASON > [GET] Fetching current active season`)
-    const prisma = await getPrismaClientConnection(d1Client)
-
-    try {
-        const season = await prisma.season.findFirst({
-            where: {
-                isActive: true
-            }
-        })
-
-        if (season) {
-            console.info(`🌞 > SEASON > [GET] Found current active season ${season.shortName} (ID: ${season.id})`)
-            return deserializeSeason(season)
-        } else {
-            console.info(`🌞 > SEASON > [GET] No active season found`)
-            return null
-        }
-    } catch (error) {
-        return throwH3Error('🌞 > SEASON > [FETCH CURRENT]: Error fetching current active season', error)
-    }
+    const activeSeasonId = await fetchActiveSeasonId(d1Client)
+    if (!activeSeasonId) return null
+    return fetchSeason(d1Client, activeSeasonId)
 }
 
 /**
@@ -944,18 +930,18 @@ export async function deactivateSeason(d1Client: D1Database): Promise<Season | n
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        const activeSeason = await fetchCurrentSeason(d1Client)
-        if (!activeSeason) {
+        const activeSeasonId = await fetchActiveSeasonId(d1Client)
+        if (!activeSeasonId) {
             console.info(`🌞 > SEASON > [DEACTIVATE] No active season to deactivate`)
             return null
         }
 
         await prisma.season.update({
-            where: {id: activeSeason.id!},
+            where: {id: activeSeasonId},
             data: {isActive: false}
         })
 
-        const season = await fetchSeason(d1Client, activeSeason.id!)
+        const season = await fetchSeason(d1Client, activeSeasonId)
         console.info(`🌞 > SEASON > [DEACTIVATE] Deactivated season ${season?.shortName}`)
         return season
     } catch (error) {
@@ -1742,12 +1728,16 @@ export const fetchBillingPeriodSummaries = async (d1Client: D1Database): Promise
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
+        // Get active season's ticketPrices for resolving null ticketTypes
+        const activeSeason = await fetchCurrentSeason(d1Client)
+        const ticketPrices = activeSeason?.ticketPrices ?? []
+
         const summaries = await prisma.billingPeriodSummary.findMany({
             orderBy: {cutoffDate: 'desc'},
             include: billingPeriodDetailInclude
         })
         console.info(`💰 > BILLING > [GET] Returning ${summaries.length} billing period summaries`)
-        return summaries.map(deserializeBillingPeriodDisplay)
+        return summaries.map(s => deserializeBillingPeriodDisplay(s, ticketPrices))
     } catch (error) {
         return throwH3Error('💰 > BILLING > [GET] Error fetching billing period summaries', error)
     }
@@ -1758,8 +1748,12 @@ export const fetchBillingPeriodSummary = async (d1Client: D1Database, id: number
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
+        // Get active season's ticketPrices for resolving null ticketTypes
+        const activeSeason = await fetchCurrentSeason(d1Client)
+        const ticketPrices = activeSeason?.ticketPrices ?? []
+
         const summary = await prisma.billingPeriodSummary.findUnique({where: {id}, include: billingPeriodDetailInclude})
-        return deserializeBillingPeriodDetail(summary)
+        return deserializeBillingPeriodDetail(summary, ticketPrices)
     } catch (error) {
         return throwH3Error(`💰 > BILLING > [GET] Error fetching billing period summary ID ${id}`, error)
     }
@@ -1770,8 +1764,12 @@ export const fetchBillingPeriodSummaryByToken = async (d1Client: D1Database, tok
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
+        // Get active season's ticketPrices for resolving null ticketTypes
+        const activeSeason = await fetchCurrentSeason(d1Client)
+        const ticketPrices = activeSeason?.ticketPrices ?? []
+
         const summary = await prisma.billingPeriodSummary.findUnique({where: {shareToken: token}, include: billingPeriodDetailInclude})
-        return deserializeBillingPeriodDetail(summary)
+        return deserializeBillingPeriodDetail(summary, ticketPrices)
     } catch (error) {
         return throwH3Error('💰 > BILLING > [GET] Error fetching billing period summary by token', error)
     }

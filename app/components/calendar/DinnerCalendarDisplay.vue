@@ -36,6 +36,7 @@ import type {DateValue} from '@internationalized/date'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
 import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import {isCalendarDateInDateList, toDate} from '~/utils/date'
 
 interface Props {
@@ -47,8 +48,8 @@ interface Props {
   color?: string
   useRings?: boolean
   selectedDate?: Date
-  /** Lock status map keyed by dinner event ID (null = not locked, 0 = locked, >0 = tickets available) */
-  lockStatus?: Map<number, number | null>
+  /** Lock status map keyed by dinner event ID (null = not locked, counts = locked with breakdown) */
+  lockStatus?: Map<number, ReleasedTicketCounts | null>
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -125,10 +126,10 @@ const getLockStatusForDay = (day: DateValue): { config: NonNullable<ReturnType<t
   if (!props.lockStatus) return null
   const dinner = getDinnerForDay(day)
   if (!dinner) return null
-  const releasedCount = props.lockStatus.get(dinner.id) ?? null
-  if (releasedCount === null) return null
-  const config = getLockStatusConfig(releasedCount)
-  return config ? { config, count: releasedCount } : null
+  const released = props.lockStatus.get(dinner.id) ?? null
+  if (released === null) return null
+  const config = getLockStatusConfig(released.total)
+  return config ? { config, count: released.total } : null
 }
 
 // Day type detection - returns 'next' | 'future' | 'past' | null

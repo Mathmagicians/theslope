@@ -1,4 +1,6 @@
 <script setup lang="ts" generic="T extends CostLineItem">
+import type {DinnerMode} from '~/composables/useBookingValidation'
+
 /**
  * CostLine - Individual line item in economy views
  *
@@ -15,6 +17,7 @@ export interface CostLineItem {
     id: number
     inhabitant: { name: string }
     ticketType: string | null
+    dinnerMode?: DinnerMode      // DinnerMode for display (DINEIN/TAKEAWAY/DINEINLATE)
     orderId?: number | null      // For history lookup (transactions have this)
     isGuestTicket?: boolean      // For guest badge
     state?: string               // OrderState for live orders
@@ -56,6 +59,10 @@ const orderId = computed(() => {
 const isHistoryExpanded = computed(() => orderId.value && props.historyOrderId === orderId.value)
 const ticketLabel = computed(() => props.item.ticketType ? ticketTypeConfig[props.item.ticketType as keyof typeof ticketTypeConfig]?.label : 'Ukendt')
 const ticketColor = computed(() => props.item.ticketType ? ticketTypeConfig[props.item.ticketType as keyof typeof ticketTypeConfig]?.color : 'neutral')
+// DinnerModeSelector accepts string | undefined, handles type validation internally
+const dinnerModeValue = computed(() => props.item.dinnerMode)
+// Show dinner mode icon for all modes including NONE (X icon) - only hide if dinnerMode is undefined
+const showDinnerMode = computed(() => dinnerModeValue.value !== undefined)
 
 // Amount - prefer priceAtBooking (orders) over amount (transactions)
 const itemAmount = computed(() => props.item.priceAtBooking ?? props.item.amount ?? 0)
@@ -92,6 +99,8 @@ const formatted = computed(() => {
         <UBadge :color="ticketColor" variant="soft" :size="SIZES.small">
           {{ ticketLabel }}
         </UBadge>
+        <!-- Dinner mode (reuses DinnerModeSelector in VIEW mode) -->
+        <DinnerModeSelector v-if="showDinnerMode" :model-value="dinnerModeValue" size="xs"/>
         <!-- Guest badge (from formatOrder) -->
         <UBadge v-if="formatted?.guest" :color="formatted.guest.color" variant="soft" :size="SIZES.small" :icon="formatted.guest.icon">
           {{ formatted.guest.label }}

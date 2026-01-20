@@ -46,6 +46,7 @@ import type {DinnerEventDisplay, OrderDisplay, DinnerMode, OrderState, DesiredOr
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import {FORM_MODES} from '~/types/form'
 
 // Row types for synthetic rows in table
@@ -84,14 +85,14 @@ interface Props {
   orders?: OrderDisplay[]
   ticketPrices?: TicketPrice[]
   deadlines: SeasonDeadlines
-  releasedTicketCount?: number
+  releasedTicketCounts?: ReleasedTicketCounts
 }
 
 const props = withDefaults(defineProps<Props>(), {
   household: undefined,
   orders: () => [],
   ticketPrices: () => [],
-  releasedTicketCount: 0
+  releasedTicketCounts: () => ({ total: 0, formatted: '-' })
 })
 
 const emit = defineEmits<{
@@ -216,7 +217,7 @@ const householdReleasedTickets = computed(() =>
 )
 
 // Released tickets from all households (passed from store's lockStatus)
-const hasReleasedTickets = computed(() => props.releasedTicketCount > 0)
+const hasReleasedTickets = computed(() => props.releasedTicketCounts.total > 0)
 
 // ============================================================================
 // ORDER PARTITIONING (uses useBooking helpers)
@@ -467,7 +468,7 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
 const {partitionGuestOrders, groupGuestOrders, createBookingBadges, getBookingOptions, getDayBillSummary} = useBooking()
 
 // Deadline badges
-const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCount))
+const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))
 
 // Day bill summary (ticket counts + total price)
 const dayBillSummary = computed(() => getDayBillSummary(eventOrders.value))
@@ -515,7 +516,7 @@ const dayBillSummary = computed(() => getDayBillSummary(eventOrders.value))
       </UAlert>
       <UAlert v-if="hasReleasedTickets" color="info" variant="soft" :icon="ICONS.claim">
         <template #title>Har du brug for flere billetter?</template>
-        <template #description>Lukket for ændringer, men der er {{ props.releasedTicketCount }} ledig{{ props.releasedTicketCount === 1 ? ' billet' : 'e billetter' }} til salg.</template>
+        <template #description>Lukket for ændringer, men der er {{ props.releasedTicketCounts.total }} ledig{{ props.releasedTicketCounts.total === 1 ? ' billet' : 'e billetter' }} til salg.</template>
       </UAlert>
     </div>
 
@@ -578,7 +579,7 @@ const dayBillSummary = computed(() => getDayBillSummary(eventOrders.value))
             >
               <template #badge>
                 <UBadge v-if="hasReleasedTickets" :color="COLOR.info" :icon="ICONS.claim" variant="subtle" :size="SIZES.small">
-                  {{ props.releasedTicketCount }} Ledig{{ props.releasedTicketCount === 1 ? '' : 'e' }}
+                  {{ props.releasedTicketCounts.formatted }} Ledig{{ props.releasedTicketCounts.total === 1 ? '' : 'e' }}
                 </UBadge>
               </template>
             </UserListItem>
@@ -693,7 +694,7 @@ const dayBillSummary = computed(() => getDayBillSummary(eventOrders.value))
           :ticket-prices="ticketPrices"
           :allergy-types="allergyTypes ?? []"
           :deadlines="deadlines"
-          :released-ticket-count="releasedTicketCount"
+          :released-ticket-counts="releasedTicketCounts"
           :booker-id="bookerInhabitant.id"
           @save="handleGuestSave"
           @cancel="handleCancel"

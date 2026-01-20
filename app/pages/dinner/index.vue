@@ -28,14 +28,14 @@
  * │ 👥 Madhold 3: Bob Jensen, Clara Nielsen, David Hansen                      │
  * ├─────────────────────────────────────────────────────────────────────────────┤
  * │                          LAV MAD - 100%                                     │
- * │  100 PORTIONER                                                              │
- * │  Voksne: 80  |  Børn: 40 (20 portioner)  |  Baby: 5 (0 portioner)          │
+ * │  100 KUVERTER                                                               │
+ * │  Voksne: 80  |  Børn: 40 (20 kuverter)  |  Baby: 5 (0 kuverter)            │
  * ├──────────────────────────┬─────────────────────┬──────────────┬────────────┤
  * │   TAKEAWAY - 40%         │  SPIS HER - 35%     │SPIS SENT-20% │IKKE-5%     │
  * │                          │                     │              │            │
  * │      50 personer         │    44 personer      │  25 personer │ 6 personer │
  * │                          │                     │              │            │
- * │    40 portioner          │     35 stole        │   20 stole   │            │
+ * │    40 kuverter           │     35 stole        │   20 stole   │            │
  * │    40 tallerkener        │   33 tallerkener    │18 tallerkener│            │
  * │                          │                     │              │            │
  * │    🌾 Maria (2)          │   🥛 Anna (3)       │  🌾 Peter    │            │
@@ -309,7 +309,7 @@ useHead({
             :orders="householdOrders"
             :ticket-prices="selectedSeason?.ticketPrices ?? []"
             :deadlines="deadlinesForSeason(selectedSeason)"
-            :released-ticket-count="lockStatus.get(dinnerEventDetail.id) ?? 0"
+            :released-ticket-counts="lockStatus.get(dinnerEventDetail.id) ?? { total: 0, formatted: '-' }"
             @save-bookings="handleSaveBookings"
           />
 

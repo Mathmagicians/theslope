@@ -23,7 +23,7 @@ const PUBLIC_BILLING_ENDPOINT = '/api/public/billing'
 const MONTHLY_BILLING_ENDPOINT = '/api/admin/maintenance/monthly'
 const ORDER_IMPORT_DIR = join(process.cwd(), '.theslope', 'order-import')
 const HOUSEHOLD_BILLING_ENDPOINT = '/api/billing'
-const {BillingImportResponseSchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema, HouseholdBillingResponseSchema, MonthlyBillingResponseSchema, TransactionDisplaySchema, parseCSV, deserializeBillingPeriodDetail, serializeTransaction} = useBillingValidation()
+const {BillingImportResponseSchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema, HouseholdBillingResponseSchema, MonthlyBillingResponseSchema, TransactionDisplaySchema, parseCSV, deserializeBillingPeriodDetail, serializeTransaction, TicketType} = useBillingValidation()
 
 export class BillingFactory {
 
@@ -31,6 +31,16 @@ export class BillingFactory {
     // Default Test Data (for unit tests - no HTTP calls)
     // Uses raw data with orderSnapshots, then deserializes to compute fields
     // ============================================================================
+
+    /**
+     * Mock ticket prices for resolving ticketTypes in test data
+     * Used by deserializeBillingPeriodDetail when computing stats from snapshots
+     */
+    private static readonly mockTicketPrices = [
+        {price: 4000, ticketType: TicketType.ADULT},
+        {price: 1700, ticketType: TicketType.CHILD},
+        {price: 0, ticketType: TicketType.BABY}
+    ]
 
     /**
      * Create order snapshot JSON for test transactions
@@ -88,7 +98,7 @@ export class BillingFactory {
      */
     static readonly defaultSummaryData = (testSalt: string = 'default'): BillingPeriodSummaryDetail => {
         const raw = BillingFactory.defaultRawBillingPeriod(testSalt)
-        return deserializeBillingPeriodDetail(raw)!
+        return deserializeBillingPeriodDetail(raw, BillingFactory.mockTicketPrices)!
     }
 
     // ============================================================================

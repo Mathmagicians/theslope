@@ -3,6 +3,7 @@ import {TicketTypeSchema, DinnerModeSchema, OrderStateSchema} from '~~/prisma/ge
 import {parse as parseDate} from 'date-fns'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 
 /**
  * Validation schemas for Billing domain (CSV Import/Export, BillingPeriodSummary)
@@ -514,33 +515,25 @@ export const useBillingValidation = () => {
         // Parse snapshot to get guest/provenance fields (may be absent in old snapshots)
         const snapshot = OrderSnapshotSchema.parse(JSON.parse(tx.orderSnapshot))
 
-        // Use live data only if ALL required relations exist
-        if (tx.order?.inhabitant?.household && tx.order.ticketPrice) {
-            return TransactionDisplaySchema.parse({
-                ...base,
-                orderId: tx.order.id,
-                dinnerEvent: tx.order.dinnerEvent,
-                inhabitant: tx.order.inhabitant,
-                ticketType: tx.order.ticketPrice.ticketType,
-                // Prefer live data, fallback to snapshot for guest/provenance
-                isGuestTicket: tx.order.isGuestTicket ?? snapshot.isGuestTicket,
-                provenanceHousehold: tx.order.provenanceHousehold ?? snapshot.provenanceHousehold
-            })
-        }
+        // Check relations independently - use live data where available, snapshot as fallback
+        // This handles partial deletion (e.g., ticketPrice deleted but household still exists)
+        const hasOrder = tx.order !== null
+        const hasHousehold = tx.order?.inhabitant?.household != null
+        const hasTicketPrice = tx.order?.ticketPrice != null
 
-        // Any relation deleted - use frozen snapshot (strict parsing)
-        // Set household.id to 0 to indicate deleted (not valid as FK), orderId null
+        // Build inhabitant: use live household if available (preserves valid householdId for billing)
+        const inhabitant = hasHousehold
+            ? tx.order!.inhabitant
+            : {...snapshot.inhabitant, household: {...snapshot.inhabitant.household, id: 0}}
+
         return TransactionDisplaySchema.parse({
             ...base,
-            orderId: null,
-            dinnerEvent: snapshot.dinnerEvent,
-            inhabitant: {
-                ...snapshot.inhabitant,
-                household: {...snapshot.inhabitant.household, id: 0}
-            },
-            ticketType: snapshot.ticketType,
-            isGuestTicket: snapshot.isGuestTicket,
-            provenanceHousehold: snapshot.provenanceHousehold
+            orderId: hasOrder ? tx.order!.id : null,
+            dinnerEvent: hasOrder ? tx.order!.dinnerEvent : snapshot.dinnerEvent,
+            inhabitant,
+            ticketType: hasTicketPrice ? tx.order!.ticketPrice!.ticketType : snapshot.ticketType,
+            isGuestTicket: tx.order?.isGuestTicket ?? snapshot.isGuestTicket,
+            provenanceHousehold: tx.order?.provenanceHousehold ?? snapshot.provenanceHousehold
         })
     }
 
@@ -582,17 +575,31 @@ export const useBillingValidation = () => {
     /**
      * Compute derived stats from order snapshots.
      * Pure function - extracts dinnerCount and ticketCountsByType.
+     * When ticketType is null (orphaned from deleted ticketPrices), resolves from amount using active season prices.
      */
-    const computeStatsFromSnapshots = (invoices: Array<{transactions: Array<{orderSnapshot: string}>}>) => {
-        const snapshots = invoices
-            .flatMap(inv => inv.transactions)
-            .map(tx => { try { return deserializeOrderSnapshot(tx.orderSnapshot) } catch { return null } })
-            .filter((s): s is NonNullable<typeof s> => s !== null)
+    const computeStatsFromSnapshots = (
+        invoices: Array<{transactions: Array<{amount: number, orderSnapshot: string}>}>,
+        ticketPrices: TicketPrice[]
+    ) => {
+        const {resolveTicketPrice} = useTicket()
 
-        const dinnerCount = new Set(snapshots.map(s => s.dinnerEvent.id)).size
+        const transactions = invoices.flatMap(inv => inv.transactions)
+        const parsed = transactions.map(tx => {
+            try {
+                const snapshot = deserializeOrderSnapshot(tx.orderSnapshot)
+                return {snapshot, amount: tx.amount}
+            } catch { return null }
+        }).filter((p): p is NonNullable<typeof p> => p !== null)
+
+        const dinnerCount = new Set(parsed.map(p => p.snapshot.dinnerEvent.id)).size
         const ticketCountsByType: Record<string, number> = {}
-        for (const s of snapshots) {
-            if (s.ticketType) ticketCountsByType[s.ticketType] = (ticketCountsByType[s.ticketType] ?? 0) + 1
+        for (const {snapshot, amount} of parsed) {
+            // Use snapshot ticketType, or resolve from amount if null (orphaned orders)
+            const ticketType = snapshot.ticketType
+                ?? resolveTicketPrice(null, amount, ticketPrices)?.ticketType
+            if (ticketType) {
+                ticketCountsByType[ticketType] = (ticketCountsByType[ticketType] ?? 0) + 1
+            }
         }
         return {dinnerCount, ticketCountsByType}
     }
@@ -600,9 +607,13 @@ export const useBillingValidation = () => {
     /**
      * Deserialize billing period display from raw Prisma data.
      * Computes dinnerCount and ticketCountsByType from order snapshots.
+     * @param ticketPrices - Active season ticket prices for resolving null ticketTypes
      */
-    const deserializeBillingPeriodDisplay = (raw: RawBillingPeriod): z.infer<typeof BillingPeriodSummaryDisplaySchema> => {
-        const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(raw.invoices)
+    const deserializeBillingPeriodDisplay = (
+        raw: RawBillingPeriod,
+        ticketPrices: TicketPrice[]
+    ): z.infer<typeof BillingPeriodSummaryDisplaySchema> => {
+        const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(raw.invoices, ticketPrices)
         const invoiceSum = raw.invoices.reduce((sum, inv) => sum + inv.amount, 0)
         return BillingPeriodSummaryDisplaySchema.parse({...raw, invoiceSum, dinnerCount, ticketCountsByType})
     }
@@ -610,10 +621,14 @@ export const useBillingValidation = () => {
     /**
      * Deserialize billing period detail from raw Prisma data.
      * Computes all derived fields including per-invoice transactionSum.
+     * @param ticketPrices - Active season ticket prices for resolving null ticketTypes
      */
-    const deserializeBillingPeriodDetail = (raw: RawBillingPeriod | null): z.infer<typeof BillingPeriodSummaryDetailSchema> | null => {
+    const deserializeBillingPeriodDetail = (
+        raw: RawBillingPeriod | null,
+        ticketPrices: TicketPrice[]
+    ): z.infer<typeof BillingPeriodSummaryDetailSchema> | null => {
         if (!raw) return null
-        const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(raw.invoices)
+        const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(raw.invoices, ticketPrices)
         const invoiceSum = raw.invoices.reduce((sum, inv) => sum + inv.amount, 0)
         const invoices = raw.invoices.map(inv => deserializeInvoice(inv))
         return BillingPeriodSummaryDetailSchema.parse({...raw, invoices, invoiceSum, dinnerCount, ticketCountsByType})

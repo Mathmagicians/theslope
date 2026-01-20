@@ -16,7 +16,7 @@ import type {OrderDisplay} from '~/composables/useBookingValidation'
 import type {StatBox} from '~/components/economy/CostEntry.vue'
 
 const {formatPrice} = useTicket()
-const {groupByCostEntry, joinOrdersWithDinnerEvents, calculateCurrentBillingPeriod, controlInvoices, formatTicketCounts} = useBilling()
+const {groupByCostEntry, groupByHouseholdEntry, joinOrdersWithDinnerEvents, calculateCurrentBillingPeriod, controlInvoices, formatTicketCounts} = useBilling()
 const {splitDinnerEvents} = useSeason()
 const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS} = useTheSlopeDesignSystem()
 const {OrderDisplaySchema} = useBookingValidation()
@@ -71,6 +71,19 @@ const futureDinnerIds = computed(() => {
 const inhabitantsMap = computed(() => new Map(allInhabitants.value.map(i => [i.id, i.name])))
 const getInhabitantName = (id: number) => inhabitantsMap.value.get(id) ?? `#${id}`
 
+// Household lookup for future orders grouping
+const householdsMap = computed(() =>
+    new Map(households.value.map(h => [h.id, {id: h.id, pbsId: h.pbsId, address: h.address}]))
+)
+// Inhabitant -> household lookup
+const inhabitantHouseholdMap = computed(() =>
+    new Map(allInhabitants.value.map(i => [i.id, i.householdId]))
+)
+const getHouseholdForInhabitant = (inhabitantId: number) => {
+    const householdId = inhabitantHouseholdMap.value.get(inhabitantId)
+    return householdId ? householdsMap.value.get(householdId) : undefined
+}
+
 // Fetch future orders (admin: all households)
 const futureDinnerIdsArray = computed(() => Array.from(futureDinnerIds.value))
 // CRITICAL: Use computed key for reactive refetch when season changes (ADR-007)
@@ -88,23 +101,40 @@ const {data: futureOrders, status: futureOrdersStatus} = useAsyncData<OrderDispl
     },
     {
         default: () => [],
-        transform: (data: unknown[]) => (data as Record<string, unknown>[]).map(o => OrderDisplaySchema.parse(o))
-        // Computed key handles reactivity - no watch option needed (ADR-007)
+        transform: (data: unknown[]) => (data as Record<string, unknown>[]).map(o => OrderDisplaySchema.parse(o)),
+        // Watch for changes to re-fetch when season loads (computed key alone doesn't trigger refetch)
+        watch: [futureDinnerIdsArray]
     }
 )
-const isFutureOrdersLoading = computed(() => futureOrdersStatus.value === 'pending')
+// Loading state includes season not yet loaded (futureDinnerIds depends on season)
+const isFutureOrdersLoading = computed(() =>
+    futureOrdersStatus.value === 'pending' || !isSelectedSeasonInitialized.value
+)
 
-// Future orders grouped by dinner (with order state for display)
-type OrderWithDinner = OrderDisplay & {dinnerEvent: {id: number, date: Date, menuTitle: string}, inhabitant: {id: number, name: string}}
-const futureOrdersWithDinner = computed(() =>
-    joinOrdersWithDinnerEvents(futureOrders.value, dinnerEventsMap.value, getInhabitantName) as OrderWithDinner[]
+// Future orders enriched with dinner + household info for grouping
+type OrderWithDinnerAndHousehold = OrderDisplay & {
+    dinnerEvent: {id: number, date: Date, menuTitle: string}
+    inhabitant: {id: number, name: string, household: {id: number, pbsId: number, address: string}}
+}
+const futureOrdersWithDinnerAndHousehold = computed(() =>
+    joinOrdersWithDinnerEvents(futureOrders.value, dinnerEventsMap.value, getInhabitantName)
+        .map(o => ({
+            ...o,
+            inhabitant: {
+                ...o.inhabitant,
+                household: getHouseholdForInhabitant(o.inhabitantId) ?? {id: 0, pbsId: 0, address: 'Ukendt'}
+            }
+        })) as OrderWithDinnerAndHousehold[]
 )
-const groupOrdersByDinner = groupByCostEntry<OrderWithDinner>(o => o.dinnerEvent)
+const groupOrdersByDinner = groupByCostEntry<OrderWithDinnerAndHousehold>(o => o.dinnerEvent)
 const futureOrdersGrouped = computed(() =>
-    groupOrdersByDinner(futureOrdersWithDinner.value, o => o.priceAtBooking)
+    groupOrdersByDinner(futureOrdersWithDinnerAndHousehold.value, o => o.priceAtBooking)
 )
+
+// Grouper for orders by household (within a dinner)
+const groupOrdersByHousehold = groupByHouseholdEntry<OrderWithDinnerAndHousehold>(o => o.inhabitant.household)
 const futureOrdersTotal = computed(() =>
-    futureOrdersWithDinner.value.reduce((sum, o) => sum + o.priceAtBooking, 0)
+    futureOrdersWithDinnerAndHousehold.value.reduce((sum, o) => sum + o.priceAtBooking, 0)
 )
 
 // Dinner columns for orders table
@@ -116,6 +146,25 @@ const dinnerColumns = [
     {accessorKey: 'totalAmount', header: 'Beløb'}
 ]
 
+// Household columns for nested table within dinner expansion
+const householdOrderColumns = [
+    {id: 'expand'},
+    {accessorKey: 'pbsId', header: 'PBS'},
+    {accessorKey: 'address', header: 'Adresse'},
+    {accessorKey: 'ticketCounts', header: 'Kuverter'},
+    {accessorKey: 'totalAmount', header: 'Beløb'}
+]
+
+// Stats accessor for future orders dinner expansion
+const futureDinnerStatsAccessor = (entry: {items: OrderWithDinnerAndHousehold[], date: Date, menuTitle: string}): StatBox[] => {
+    const households = new Set(entry.items.map(o => o.inhabitant.household.id))
+    return [
+        {icon: ICONS.household, value: households.size, label: 'Husstande'},
+        {icon: ICONS.dinner, value: formatTicketCounts(entry.items), label: 'Kuverter'},
+        {icon: ICONS.shoppingCart, value: `${formatPrice(entry.items.reduce((sum, o) => sum + o.priceAtBooking, 0))} kr`, label: 'Total'}
+    ]
+}
+
 // ========== SECTION 2: FAKTURERINGSPERIODER (unified) ==========
 
 // Current billing period dates
@@ -124,7 +173,15 @@ const currentPeriod = computed(() => calculateCurrentBillingPeriod())
 // Curried grouper for transactions by dinner
 const groupTxByDinner = groupByCostEntry<TransactionDisplay>(tx => tx.dinnerEvent)
 
-// Current period grouped by dinner (for virtual row expansion)
+// Curried grouper for transactions by household (for virtual invoices)
+const groupTxByHousehold = groupByHouseholdEntry<TransactionDisplay>(tx => tx.inhabitant.household)
+
+// Current period grouped by HOUSEHOLD first (virtual invoices - same structure as closed)
+const currentPeriodByHousehold = computed(() =>
+    groupTxByHousehold(currentPeriodTransactions.value, tx => tx.amount)
+)
+
+// Current period grouped by dinner (for expanded household view)
 const currentPeriodGrouped = computed(() =>
     groupTxByDinner(currentPeriodTransactions.value, tx => tx.amount)
 )
@@ -161,7 +218,7 @@ interface UnifiedBillingPeriod {
 }
 
 // Accessor functions for CostEntry (reusable lambdas)
-// Level 1: Billing period summary (Samlet PBS Afregning)
+// Level 1: Billing period summary - CLOSED periods
 const billingPeriodTitleAccessor = () => 'Samlet PBS Afregning'
 const billingPeriodSubtitleAccessor = (period: UnifiedBillingPeriod) => formatDateRange(period.period)
 const billingPeriodStatsAccessor = (period: UnifiedBillingPeriod): StatBox[] => [
@@ -170,6 +227,26 @@ const billingPeriodStatsAccessor = (period: UnifiedBillingPeriod): StatBox[] => 
     {icon: ICONS.dinner, value: period.ticketCounts, label: 'Kuverter'},
     {icon: ICONS.shoppingCart, value: `${formatPrice(period.totalAmount)} kr`, label: 'Total'}
 ]
+
+// Level 1: Virtual period summary - "NÆSTE PBS"
+const virtualPeriodTitleAccessor = () => 'Næste PBS'
+const virtualPeriodSubtitleAccessor = (period: UnifiedBillingPeriod) => formatDateRange(period.period)
+const virtualPeriodStatsAccessor = (period: UnifiedBillingPeriod): StatBox[] => [
+    {icon: ICONS.household, value: period.householdCount, label: 'Husstande'},
+    {icon: ICONS.calendar, value: period.dinnerCount, label: 'Middage'},
+    {icon: ICONS.dinner, value: period.ticketCounts, label: 'Kuverter'},
+    {icon: ICONS.shoppingCart, value: `${formatPrice(period.totalAmount)} kr`, label: 'Total'}
+]
+
+// Virtual invoice columns (same as closed invoice columns)
+const virtualInvoiceColumns = [
+    {id: 'expand'},
+    {accessorKey: 'pbsId', header: 'PBS'},
+    {accessorKey: 'address', header: 'Adresse'},
+    {accessorKey: 'totalAmount', header: 'Beløb'},
+    {accessorKey: 'control', header: 'Kontrol'}
+]
+
 
 const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
     // Virtual row (current period) - use already-grouped data
@@ -304,17 +381,56 @@ const dinnerBreakdownStats = computed(() => {
           </template>
           <template #totalAmount-cell="{ row }">{{ formatPrice(row.original.totalAmount) }} kr</template>
           <template #expanded="{ row }">
-            <UCard class="ml-2 md:ml-8 mr-2 md:mr-4 my-2">
-              <div class="space-y-2 max-h-64 md:max-h-96 overflow-y-auto">
-                <CostLine
-                    v-for="order in row.original.items"
-                    :key="order.id"
-                    :item="order"
-                    :history-order-id="historyOrderId"
-                    @toggle-history="toggleHistory"
-                />
-              </div>
-            </UCard>
+            <!-- Group orders by household within this dinner -->
+            <div class="p-4 bg-neutral-50 dark:bg-neutral-900">
+              <CostEntry
+                  :entry="{date: row.original.date, menuTitle: row.original.menuTitle, items: row.original.items}"
+                  :level="2"
+                  :title-accessor="(e) => formatDate(e.date)"
+                  :subtitle-accessor="(e) => e.menuTitle"
+                  :stats-accessor="futureDinnerStatsAccessor"
+              >
+                <template #default>
+                  <!-- Household table within dinner -->
+                  <UTable
+                      :data="groupOrdersByHousehold(row.original.items, o => o.priceAtBooking)"
+                      :columns="householdOrderColumns"
+                      :ui="COMPONENTS.table.ui"
+                      row-key="householdId"
+                  >
+                    <template #expand-cell="{ row: householdRow }">
+                      <UButton
+                          v-if="householdRow.original.items.length > 0"
+                          color="neutral"
+                          variant="ghost"
+                          :icon="householdRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
+                          square
+                          :size="SIZES.small"
+                          aria-label="Vis ordrer"
+                          @click="householdRow.toggleExpanded()"
+                      />
+                    </template>
+                    <template #pbsId-cell="{ row: householdRow }">{{ householdRow.original.pbsId }}</template>
+                    <template #address-cell="{ row: householdRow }">{{ householdRow.original.address }}</template>
+                    <template #totalAmount-cell="{ row: householdRow }">{{ formatPrice(householdRow.original.totalAmount) }} kr</template>
+
+                    <!-- Expanded household: individual order line items -->
+                    <template #expanded="{ row: householdRow }">
+                      <div class="p-2 bg-neutral-100 dark:bg-neutral-800 space-y-1">
+                        <CostLine
+                            v-for="order in householdRow.original.items"
+                            :key="order.id"
+                            :item="order"
+                            :history-order-id="historyOrderId"
+                            compact
+                            @toggle-history="toggleHistory"
+                        />
+                      </div>
+                    </template>
+                  </UTable>
+                </template>
+              </CostEntry>
+            </div>
           </template>
           <template #empty>
             <UAlert
@@ -351,6 +467,7 @@ const dinnerBreakdownStats = computed(() => {
             :date-accessor="(item) => item.period.start"
             search-placeholder="Søg periode..."
             :loading="isBillingPeriodsLoading || isCurrentPeriodLoading"
+            :default-sort-desc="true"
         >
           <template #expand-cell="{ row }">
             <UButton
@@ -398,34 +515,67 @@ const dinnerBreakdownStats = computed(() => {
           <!-- Expanded: Virtual row shows current period transactions, closed rows show invoices -->
           <template #expanded="{ row }">
             <div class="p-4 bg-neutral-50 dark:bg-neutral-900 space-y-4">
-              <!-- VIRTUAL ROW: Current period transactions grouped by dinner -->
+              <!-- VIRTUAL ROW: Same structure as closed - header + household table -->
               <template v-if="row.original.isVirtual">
-                <div v-if="currentPeriodGrouped.length > 0" class="space-y-2">
-                  <CostEntry
-                      v-for="group in currentPeriodGrouped"
-                      :key="group.dinnerEventId"
-                      :entry="group"
-                  >
-                    <template #items="{ items }">
-                      <CostLine
-                          v-for="tx in items"
-                          :key="tx.id"
-                          :item="tx"
-                          :history-order-id="historyOrderId"
-                          compact
-                          @toggle-history="toggleHistory"
-                      />
-                    </template>
-                  </CostEntry>
-                </div>
-                <UAlert
-                    v-else
-                    :icon="ICONS.robotHappy"
-                    color="neutral"
-                    variant="subtle"
-                    title="Tomt her!"
-                    description="Ingen transaktioner i denne periode endnu."
-                />
+                <CostEntry
+                    :entry="row.original"
+                    :level="1"
+                    :title-accessor="virtualPeriodTitleAccessor"
+                    :subtitle-accessor="virtualPeriodSubtitleAccessor"
+                    :stats-accessor="virtualPeriodStatsAccessor"
+                >
+                  <template #default>
+                    <!-- Virtual invoice table (households) -->
+                    <UTable
+                        :data="currentPeriodByHousehold"
+                        :columns="virtualInvoiceColumns"
+                        :ui="COMPONENTS.table.ui"
+                        row-key="householdId"
+                    >
+                      <template #expand-cell="{ row: householdRow }">
+                        <UButton
+                            v-if="householdRow.original.items.length > 0"
+                            color="neutral"
+                            variant="ghost"
+                            :icon="householdRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
+                            square
+                            :size="SIZES.small"
+                            aria-label="Vis transaktioner"
+                            @click="householdRow.toggleExpanded()"
+                        />
+                      </template>
+                      <template #pbsId-cell="{ row: householdRow }">{{ householdRow.original.pbsId }}</template>
+                      <template #address-cell="{ row: householdRow }">{{ householdRow.original.address }}</template>
+                      <template #totalAmount-cell="{ row: householdRow }">{{ formatPrice(householdRow.original.totalAmount) }} kr</template>
+                      <template #control-cell>
+                        <span class="text-neutral-400">—</span>
+                      </template>
+
+                      <!-- Expanded household: transactions list -->
+                      <template #expanded="{ row: householdRow }">
+                        <div class="p-2 bg-neutral-100 dark:bg-neutral-800 space-y-1">
+                          <CostLine
+                              v-for="tx in householdRow.original.items"
+                              :key="tx.id"
+                              :item="tx"
+                              :history-order-id="historyOrderId"
+                              compact
+                              @toggle-history="toggleHistory"
+                          />
+                        </div>
+                      </template>
+                      <template #empty>
+                        <UAlert
+                            :icon="ICONS.robotHappy"
+                            color="neutral"
+                            variant="subtle"
+                            title="Tomt her!"
+                            description="Ingen transaktioner i denne periode endnu."
+                        />
+                      </template>
+                    </UTable>
+                  </template>
+                </CostEntry>
               </template>
 
               <!-- CLOSED ROW: Invoice list (nested UTable) with expandable transactions -->

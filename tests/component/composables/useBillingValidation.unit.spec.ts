@@ -114,22 +114,22 @@ describe('useBillingValidation', () => {
     })
 
     describe('deserializeTransaction', () => {
-        it.each<['full' | 'noHousehold' | 'noTicketPrice' | 'noOrder', 'live' | 'snapshot']>([
-            ['full', 'live'],
-            ['noHousehold', 'snapshot'],
-            ['noTicketPrice', 'snapshot'],
-            ['noOrder', 'snapshot']
-        ])('GIVEN liveData=%s WHEN deserializing THEN uses %s data', (liveData, expectedSource) => {
+        // Independent fallback: use live data where available, snapshot only for missing relations
+        it.each<['full' | 'noHousehold' | 'noTicketPrice' | 'noOrder', number, string]>([
+            // full: all live data available → use live household (1111) and live ticketType (ADULT)
+            ['full', 1111, TicketType.ADULT],
+            // noHousehold: household null → snapshot household (9999), but live ticketType (ADULT)
+            ['noHousehold', 9999, TicketType.ADULT],
+            // noTicketPrice: ticketPrice null → live household (1111), snapshot ticketType (CHILD)
+            ['noTicketPrice', 1111, TicketType.CHILD],
+            // noOrder: order null → all snapshot (9999, CHILD)
+            ['noOrder', 9999, TicketType.CHILD]
+        ])('GIVEN liveData=%s WHEN deserializing THEN uses independent fallback (pbsId=%s, ticketType=%s)', (liveData, expectedPbsId, expectedTicketType) => {
             const tx = BillingFactory.defaultPrismaTransaction('de-test', liveData)
             const result = deserializeTransaction(tx)
 
-            if (expectedSource === 'live') {
-                expect(result.inhabitant.household.pbsId).toBe(1111)
-                expect(result.ticketType).toBe(TicketType.ADULT)
-            } else {
-                expect(result.inhabitant.household.pbsId).toBe(9999)
-                expect(result.ticketType).toBe(TicketType.CHILD)
-            }
+            expect(result.inhabitant.household.pbsId).toBe(expectedPbsId)
+            expect(result.ticketType).toBe(expectedTicketType)
         })
 
         it('GIVEN transaction WHEN deserializing THEN base fields are always from transaction', () => {
@@ -221,30 +221,56 @@ describe('useBillingValidation', () => {
         ticketType
     })
 
+    // Mock ticket prices for resolving null ticketTypes
+    const mockTicketPrices = [
+        {price: 4000, ticketType: TicketType.ADULT},
+        {price: 1700, ticketType: TicketType.CHILD},
+        {price: 0, ticketType: TicketType.BABY}
+    ]
+
     describe('computeStatsFromSnapshots', () => {
         it.each([
             ['empty', [], 0, {}],
-            ['single ADULT', [[1, TicketType.ADULT]], 1, {[TicketType.ADULT]: 1}],
-            ['mixed types same dinner', [[1, TicketType.ADULT], [1, TicketType.CHILD], [1, TicketType.BABY]], 1, {[TicketType.ADULT]: 1, [TicketType.CHILD]: 1, [TicketType.BABY]: 1}],
-            ['same type multiple dinners', [[1, TicketType.ADULT], [2, TicketType.ADULT], [3, TicketType.ADULT]], 3, {[TicketType.ADULT]: 3}],
-            ['mixed all', [[1, TicketType.ADULT], [1, TicketType.ADULT], [2, TicketType.CHILD], [2, TicketType.BABY], [3, TicketType.ADULT]], 3, {[TicketType.ADULT]: 3, [TicketType.CHILD]: 1, [TicketType.BABY]: 1}],
-            ['null ticketType ignored', [[1, null], [1, TicketType.ADULT]], 1, {[TicketType.ADULT]: 1}],
+            ['single ADULT', [[1, TicketType.ADULT, 4000]], 1, {[TicketType.ADULT]: 1}],
+            ['mixed types same dinner', [[1, TicketType.ADULT, 4000], [1, TicketType.CHILD, 1700], [1, TicketType.BABY, 0]], 1, {[TicketType.ADULT]: 1, [TicketType.CHILD]: 1, [TicketType.BABY]: 1}],
+            ['same type multiple dinners', [[1, TicketType.ADULT, 4000], [2, TicketType.ADULT, 4000], [3, TicketType.ADULT, 4000]], 3, {[TicketType.ADULT]: 3}],
+            ['mixed all', [[1, TicketType.ADULT, 4000], [1, TicketType.ADULT, 4000], [2, TicketType.CHILD, 1700], [2, TicketType.BABY, 0], [3, TicketType.ADULT, 4000]], 3, {[TicketType.ADULT]: 3, [TicketType.CHILD]: 1, [TicketType.BABY]: 1}],
+            // null ticketType resolved from amount using ticketPrices (4000 → ADULT)
+            ['null ticketType resolved from amount', [[1, null, 4000], [1, TicketType.ADULT, 4000]], 1, {[TicketType.ADULT]: 2}],
+            // null ticketType with CHILD price resolves to CHILD
+            ['null ticketType resolved to CHILD', [[1, null, 1700], [1, TicketType.ADULT, 4000]], 1, {[TicketType.CHILD]: 1, [TicketType.ADULT]: 1}],
         ] as const)('%s', (_, txData, expectedDinners, expectedCounts) => {
             const invoices = [{
-                transactions: txData.map(([dinnerId, type]) => ({orderSnapshot: makeSnapshot(dinnerId, type)}))
+                transactions: txData.map(([dinnerId, type, amount]) => ({
+                    amount,
+                    orderSnapshot: makeSnapshot(dinnerId, type)
+                }))
             }]
-            const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(invoices)
+            const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(invoices, mockTicketPrices)
 
             expect(dinnerCount).toBe(expectedDinners)
             expect(ticketCountsByType).toEqual(expectedCounts)
         })
 
+        it('GIVEN null ticketType with unresolvable amount WHEN computing stats THEN falls back to ADULT', () => {
+            // resolveTicketPrice has fallback: if price doesn't match, return ADULT price
+            // This ensures orphaned tickets are always counted (defaults to ADULT)
+            const invoices = [{transactions: [
+                {amount: 9999, orderSnapshot: makeSnapshot(1, null)}, // unresolvable → fallback to ADULT
+                {amount: 4000, orderSnapshot: makeSnapshot(1, TicketType.ADULT)}
+            ]}]
+            const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(invoices, mockTicketPrices)
+
+            expect(dinnerCount).toBe(1)
+            expect(ticketCountsByType).toEqual({[TicketType.ADULT]: 2}) // both counted as ADULT (fallback behavior)
+        })
+
         it('GIVEN invalid JSON WHEN computing stats THEN skips invalid', () => {
             const invoices = [{transactions: [
-                {orderSnapshot: 'invalid json'},
-                {orderSnapshot: makeSnapshot(1, TicketType.ADULT)}
+                {amount: 0, orderSnapshot: 'invalid json'},
+                {amount: 4000, orderSnapshot: makeSnapshot(1, TicketType.ADULT)}
             ]}]
-            const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(invoices)
+            const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(invoices, mockTicketPrices)
 
             expect(dinnerCount).toBe(1)
             expect(ticketCountsByType).toEqual({[TicketType.ADULT]: 1})
@@ -275,7 +301,7 @@ describe('useBillingValidation', () => {
                 {amount: 5000, transactions: [{amount: 5000, orderSnapshot: makeSnapshot(1, TicketType.ADULT)}]},
                 {amount: 3000, transactions: [{amount: 3000, orderSnapshot: makeSnapshot(1, TicketType.CHILD)}]}
             ])
-            const result = deserializeBillingPeriodDisplay(raw)
+            const result = deserializeBillingPeriodDisplay(raw, mockTicketPrices)
 
             expect(result.invoiceSum).toBe(8000)
         })
@@ -289,7 +315,7 @@ describe('useBillingValidation', () => {
                     {amount: 2000, orderSnapshot: makeSnapshot(1, TicketType.CHILD)} // same dinner as first
                 ]
             }])
-            const result = deserializeBillingPeriodDisplay(raw)
+            const result = deserializeBillingPeriodDisplay(raw, mockTicketPrices)
 
             expect(result.dinnerCount).toBe(2) // dinners 1 and 2
         })
@@ -303,7 +329,7 @@ describe('useBillingValidation', () => {
                     {amount: 2000, orderSnapshot: makeSnapshot(1, TicketType.CHILD)}
                 ]
             }])
-            const result = deserializeBillingPeriodDisplay(raw)
+            const result = deserializeBillingPeriodDisplay(raw, mockTicketPrices)
 
             expect(result.ticketCountsByType).toEqual({[TicketType.ADULT]: 2, [TicketType.CHILD]: 1})
         })
@@ -311,7 +337,7 @@ describe('useBillingValidation', () => {
 
     describe('deserializeBillingPeriodDetail', () => {
         it('GIVEN null WHEN deserializing THEN returns null', () => {
-            expect(deserializeBillingPeriodDetail(null)).toBeNull()
+            expect(deserializeBillingPeriodDetail(null, mockTicketPrices)).toBeNull()
         })
 
         it('GIVEN period WHEN deserializing THEN computes transactionSum per invoice', () => {
@@ -329,7 +355,7 @@ describe('useBillingValidation', () => {
                     ]
                 }]
             }
-            const result = deserializeBillingPeriodDetail(raw)
+            const result = deserializeBillingPeriodDetail(raw, mockTicketPrices)
 
             expect(result?.invoices[0]?.transactionSum).toBe(8000)
         })

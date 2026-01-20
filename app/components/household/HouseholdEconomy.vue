@@ -66,12 +66,14 @@ const {data: orders, status: ordersStatus} = useAsyncData<OrderDisplay[]>(
 const isOrdersLoading = computed(() => ordersStatus.value === 'pending')
 
 // Data fetch (ADR-007: component-local exception)
+const householdId = computed(() => props.household.id)
 const {data: billing, status, error} = useAsyncData<HouseholdBillingResponse | null>(
-    `billing-${props.household.id}`,
-    () => $fetch<HouseholdBillingResponse>('/api/billing', {query: {householdId: props.household.id}}),
+    computed(() => `billing-${householdId.value}`),
+    () => $fetch<HouseholdBillingResponse>('/api/billing', {query: {householdId: householdId.value}}),
     {
         default: () => null,
-        transform: (data) => data ? HouseholdBillingResponseSchema.parse(data) : null
+        transform: (data) => data ? HouseholdBillingResponseSchema.parse(data) : null,
+        watch: [householdId]
     }
 )
 
@@ -323,6 +325,7 @@ const upcomingPeriodStart = computed(() => {
             row-key="id"
             :date-accessor="(item) => item.period.start"
             search-placeholder="Søg periode..."
+            :default-sort-desc="true"
         >
           <template #expand-cell="{ row }">
             <UButton

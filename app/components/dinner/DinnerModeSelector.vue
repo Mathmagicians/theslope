@@ -90,6 +90,18 @@ const { WEEKDAY, ORIENTATIONS, ICONS, SIZES, TYPOGRAPHY } = useTheSlopeDesignSys
 // Responsive size: use prop if provided, otherwise use responsive default
 const responsiveSize = computed(() => props.size ?? SIZES.small)
 
+// Icon size class based on size prop (scales with button/badge size)
+const iconSizeClass = computed(() => {
+  const size = props.size
+  if (size === 'xs') return 'size-3'
+  if (size === 'sm') return 'size-3'
+  if (size === 'md') return 'size-4'
+  if (size === 'lg') return 'size-5'
+  if (size === 'xl') return 'size-6'
+  // Default: use design system responsive size
+  return WEEKDAY.badgeContentSize
+})
+
 // Determine if we're in title mode (showing weekday) or selector mode (showing dinner mode)
 const isTitle = computed(() => WEEKDAYS.includes(props.modelValue as WeekDay))
 
@@ -242,7 +254,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
         :name="name"
         :data-testid="name"
       >
-        <div :class="`${WEEKDAY.badgeContentSize} flex items-center justify-center text-xs font-medium text-gray-900 dark:text-white`">
+        <div :class="`${iconSizeClass} flex items-center justify-center text-xs font-medium text-gray-900 dark:text-white`">
           {{ WEEKDAY.getLabel(modelValue as WeekDay) }}
         </div>
       </UBadge>
@@ -259,7 +271,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
         :name="name"
         :data-testid="name"
       >
-        <UIcon :name="getModeIcon()" :class="WEEKDAY.badgeContentSize" />
+        <UIcon :name="getModeIcon()" :class="iconSizeClass" />
       </UBadge>
       <span v-if="showLabel" :class="TYPOGRAPHY.finePrint">{{ getModeLabel() }}</span>
     </div>
@@ -274,7 +286,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
       :size="responsiveSize"
       :name="name"
       :data-testid="name"
-      :ui="{ leadingIcon: WEEKDAY.badgeContentSize }"
+      :ui="{ leadingIcon: iconSizeClass }"
       @click="toggleMode"
     />
 
@@ -297,7 +309,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
           :size="responsiveSize"
           :data-testid="`${name}-${mode}`"
           :class="['rounded-none md:rounded-md', { 'animate-pulse': shouldPulse(mode) }]"
-          :ui="{ leadingIcon: WEEKDAY.badgeContentSize }"
+          :ui="{ leadingIcon: iconSizeClass }"
           @click="updateMode(mode)"
         />
       </UFieldGroup>

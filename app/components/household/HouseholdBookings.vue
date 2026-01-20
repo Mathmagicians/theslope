@@ -255,7 +255,7 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
               :orders="orders"
               :ticket-prices="ticketPrices"
               :deadlines="deadlines"
-              :released-ticket-count="lockStatus.get(selectedDinnerEvent.id) ?? 0"
+              :released-ticket-counts="lockStatus.get(selectedDinnerEvent.id) ?? { total: 0, formatted: '-' }"
               @save-bookings="handleDayViewSave"
             />
             <UAlert

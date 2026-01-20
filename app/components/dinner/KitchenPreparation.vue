@@ -9,12 +9,12 @@
  * Layout (Full Bleed):
  * ┌─────────────────────────────────────────────────────────────────────────────┐
  * │                          FÆLLES MAD - 100% ØKOLOGI                          │
- * │                             100 PORTIONER                                   │
- * │           Voksen: 60 (50 port.) | Barn: 30 (15 port.) | Baby: 10            │
+ * │                             100 KUVERTER                                    │
+ * │           Voksen: 60 (50 kuv.) | Barn: 30 (15 kuv.) | Baby: 10              │
  * ├──────────────────────────┬─────────────────────┬──────────────┬────────────┤
  * │   TAKEAWAY - 38%         │  SPISESAL - 33%     │SPIS SENT-19% │TIL SALG-10%│
  * │                          │                     │              │            │
- * │    40 port.              │     35 port.        │   20 port.   │  5 port.   │
+ * │    40 kuv.               │     35 kuv.         │   20 kuv.    │  5 kuv.    │
  * │                          │  Voksen: 25         │  Voksen: 15  │  6 pers.   │
  * │                          │  Barn: 8 | Baby: 2  │  Barn: 4     │            │
  * │                          │  = 35               │  Baby: 1 = 20│            │
@@ -22,9 +22,9 @@
  * └──────────────────────────┴─────────────────────┴──────────────┴────────────┘
  *
  * Panel content:
- * - TAKEAWAY: % + portions only
- * - SPISESAL/SPIS SENT: % + portions + ticket breakdown (Voksen/Barn/Baby = total)
- * - TIL SALG: % + portions + people count
+ * - TAKEAWAY: % + kuverter only
+ * - SPISESAL/SPIS SENT: % + kuverter + ticket breakdown (Voksen/Barn/Baby = total)
+ * - TIL SALG: % + kuverter + people count
  */
 import type {OrderDetail} from '~/composables/useBookingValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
@@ -149,7 +149,7 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
           FÆLLES MAD - 100% ØKOLOGI OG 💚
         </div>
         <div class="text-2xl md:text-3xl lg:text-4xl font-bold">
-          {{ Math.round(totalPortions) }} PORTIONER
+          {{ Math.round(totalPortions) }} KUVERTER
         </div>
         <div class="text-xs md:text-sm text-gray-600 dark:text-gray-400 flex flex-wrap justify-center gap-x-2">
           <span class="whitespace-nowrap">Voksen: {{ ticketTypeBreakdown.adult }}</span>
@@ -179,7 +179,7 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
 
         <!-- Portions (main number) -->
         <div class="font-bold text-base md:text-lg">
-          {{ mode.portions }} port.
+          {{ mode.portions }} kuv.
         </div>
 
         <!-- Ticket breakdown for dine-in modes (chair planning) -->
