@@ -95,9 +95,14 @@ export async function scaffoldPrebookings(
     const isUserTriggered = options.userId !== undefined
     const isUserMode = options.desiredOrders !== undefined
 
+    // TODO: REVERT after healing is complete - restore userId requirement
     // User mode validation: desiredOrders requires householdId and userId
-    if (isUserMode && (!options.householdId || !options.userId)) {
-        throw new Error(`${LOG} User mode (desiredOrders provided) requires both householdId and userId`)
+    // if (isUserMode && (!options.householdId || !options.userId)) {
+    //     throw new Error(`${LOG} User mode (desiredOrders provided) requires both householdId and userId`)
+    // }
+    // TEMPORARY: Allow desiredOrders without userId for healing (creates SYSTEM_* audit)
+    if (isUserMode && !options.householdId) {
+        throw new Error(`${LOG} User mode (desiredOrders provided) requires householdId`)
     }
 
     // Resolve season ID - use provided or fall back to active season
@@ -219,7 +224,8 @@ export async function scaffoldPrebookings(
                 await createOrders(d1Client, household.id, batch, {
                     action: getAuditAction(isUserTriggered, 'create'),
                     performedByUserId: effectiveUserId,
-                    source: isUserMode ? 'user-booking' : (options.householdId ? 'preference-update' : 'scaffold-prebookings')
+                    source: isUserMode ? 'user-booking' : (options.householdId ? 'preference-update' : 'scaffold-prebookings'),
+                    seasonId: season.id ?? null
                 })
             }
 

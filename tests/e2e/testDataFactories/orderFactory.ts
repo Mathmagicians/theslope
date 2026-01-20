@@ -230,6 +230,7 @@ export class OrderFactory {
     action: 'SYSTEM_CREATED',
     performedByUserId: 1,
     source: 'csv_billing',
+    seasonId: overrides?.seasonId ?? null,
     ...overrides
   })
 

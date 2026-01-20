@@ -423,6 +423,7 @@ export const COMPONENTS = {
         }
     },
 
+
     // Calendar UI configuration (UCalendar)
     calendar: {
         cellTrigger: 'data-[outside-view]:hidden'
@@ -749,6 +750,29 @@ const createResponsiveIcons = (isMd: Ref<boolean>) => ({
     // Arrow pointing to master panel: up on mobile (stacked), left on desktop (side-by-side)
     get arrowToMaster(): string {
         return isMd.value ? ICONS.arrowLeft : ICONS.arrowUp
+    }
+})
+
+/**
+ * createResponsiveButtons - Standardized button configurations with responsive sizing
+ *
+ * Use v-bind to spread all button props at once.
+ * @example <UButton v-bind="BUTTONS.edit" @click="handleEdit" />
+ *
+ * @param isMd - Responsive breakpoint ref
+ * @returns Button configuration objects with responsive sizes
+ */
+const createResponsiveButtons = (isMd: Ref<boolean>) => ({
+    // Edit/pencil button - for row expand/edit actions
+    // Standard size: lg on desktop, md on mobile (same as SIZES.standard)
+    get edit() {
+        return {
+            icon: ICONS.edit,
+            color: 'neutral' as const,
+            variant: 'ghost' as const,
+            square: true,
+            size: (isMd.value ? 'lg' : 'md') as NuxtUISize
+        }
     }
 })
 
@@ -1261,6 +1285,9 @@ export const useTheSlopeDesignSystem = () => {
 
         // Responsive icons
         RESPONSIVE_ICONS: createResponsiveIcons(isMd),
+
+        // Responsive buttons (standardized button configs with sizing)
+        BUTTONS: createResponsiveButtons(isMd),
 
         // Low-level builders (only if you need custom combinations)
         BG,

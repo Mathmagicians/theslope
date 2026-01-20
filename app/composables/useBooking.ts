@@ -274,23 +274,14 @@ export const generateDesiredOrdersFromPreferences = (
 
             // User cancelled (USER_CANCELLED): respect their intent
             // - No existing order: don't recreate deleted order
-            // - RELEASED order: preserve as-is (don't reclaim, don't delete)
+            // - RELEASED order: skip here, let orphan detection preserve it
             // - BOOKED order: user re-booked after cancelling, let through (will be idempotent)
             if (cancelledKeys.has(key)) {
                 if (!existing) {
                     continue  // Don't recreate deleted order
                 }
                 if (existing.state === OrderState.RELEASED) {
-                    result.push({
-                        inhabitantId: existing.inhabitantId,
-                        dinnerEventId: existing.dinnerEventId,
-                        dinnerMode: DinnerMode.NONE,
-                        ticketPriceId: existing.ticketPriceId ?? 0,
-                        isGuestTicket: false,
-                        orderId: existing.id,
-                        state: OrderState.RELEASED
-                    })
-                    continue
+                    continue  // Let orphan detection preserve in idempotent bucket
                 }
             }
 
@@ -371,7 +362,25 @@ export const resolveOrdersFromPreferencesToBuckets = (
     for (const existing of existingOrders) {
         if (processedOrderIds.has(existing.id)) continue
 
-        // Orphan order - add to delete bucket (ticketPriceId/state not used for deletes)
+        const key = `${existing.inhabitantId}-${existing.dinnerEventId}`
+
+        // User-intent orders: preserve (confirmed = user wants it, cancelled = user released it)
+        if (confirmedKeys.has(key) || cancelledKeys.has(key)) {
+            console.info(`🔒 > ORPHAN_CHECK > Order ${existing.id} (key=${key}) PRESERVED (in confirmedKeys=${confirmedKeys.has(key)}, cancelledKeys=${cancelledKeys.has(key)})`)
+            result.idempotent.push({
+                inhabitantId: existing.inhabitantId,
+                dinnerEventId: existing.dinnerEventId,
+                dinnerMode: existing.dinnerMode,
+                ticketPriceId: existing.ticketPriceId ?? 0,
+                isGuestTicket: existing.isGuestTicket ?? false,
+                orderId: existing.id,
+                state: existing.state
+            })
+            continue
+        }
+
+        // True orphan order (no user intent) - add to delete bucket
+        console.info(`🗑️ > ORPHAN_CHECK > Order ${existing.id} (key=${key}) DELETED (orphan - not in confirmedKeys or cancelledKeys)`)
         result.delete.push({
             inhabitantId: existing.inhabitantId,
             dinnerEventId: existing.dinnerEventId,
@@ -1087,7 +1096,7 @@ export const useBooking = () => {
      */
     const getDayBillSummary = (orders: OrderDisplay[]): { ticketCounts: string; totalPrice: number } => {
         const {formatTicketCounts} = useBilling()
-        const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+        const {OrderStateSchema} = useBookingValidation()
 
         const activeOrders = orders.filter(o =>
             o.state === OrderStateSchema.enum.BOOKED || o.state === OrderStateSchema.enum.RELEASED

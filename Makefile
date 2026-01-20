@@ -389,6 +389,22 @@ heynabo-nuke-test-events: ## Nuke all test events from Heynabo (patterns: Test M
 	$(call theslope_call,$(ENV_local),$(URL_local),-X POST "$(URL_local)/api/test/heynabo/cleanup" -d '{"nuke": true}')
 
 # ============================================================================
+# HEAL USER BOOKINGS (bugfix - one-time healing)
+# ============================================================================
+# Usage: make heal-local hid=123 dryrun=false
+# Default: dryrun=true (preview mode)
+.PHONY: heal-local heal-dev heal-prod
+
+heal-local: ## Heal user bookings (local) - hid=householdId dryrun=true|false
+	$(call theslope_call,$(ENV_local),$(URL_local),-X POST "$(URL_local)/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
+
+heal-dev: ## Heal user bookings (dev) - hid=householdId dryrun=true|false
+	$(call theslope_call,$(ENV_dev),$(URL_dev),-X POST "$(URL_dev)/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
+
+heal-prod: ## Heal user bookings (prod) - hid=householdId dryrun=true|false
+	$(call theslope_call,$(ENV_prod),$(URL_prod),-X POST "$(URL_prod)/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
+
+# ============================================================================
 # TESTING
 # ============================================================================
 .PHONY: unit-test unit-test-single e2e-team e2e-season

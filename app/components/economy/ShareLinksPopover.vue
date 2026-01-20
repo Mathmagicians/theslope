@@ -82,12 +82,12 @@ const copyCsvLink = async () => {
                   :model-value="getShareUrl()"
                   readonly
                   class="flex-1 font-mono text-xs"
-                  size="xs"
+                  :size="SIZES.small"
               />
               <UButton
                   :color="linkCopied ? COLOR.success : COLOR.primary"
                   :icon="linkCopied ? ICONS.check : ICONS.clipboard"
-                  size="xs"
+                  :size="SIZES.small"
                   @click="copyLink"
               />
             </div>
@@ -99,12 +99,12 @@ const copyCsvLink = async () => {
                   :model-value="getCsvUrl()"
                   readonly
                   class="flex-1 font-mono text-xs"
-                  size="xs"
+                  :size="SIZES.small"
               />
               <UButton
                   :color="csvLinkCopied ? COLOR.success : COLOR.primary"
                   :icon="csvLinkCopied ? ICONS.check : ICONS.clipboard"
-                  size="xs"
+                  :size="SIZES.small"
                   @click="copyCsvLink"
               />
             </div>

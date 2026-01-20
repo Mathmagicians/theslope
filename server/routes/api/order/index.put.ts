@@ -65,6 +65,18 @@ export default defineEventHandler(async (event): Promise<CreateOrdersResult> => 
             })
         }
 
+        // Fetch dinner event to get seasonId for audit trail
+        const dinnerEvent = await prisma.dinnerEvent.findUnique({
+            where: { id: requestData.dinnerEventId },
+            select: { id: true, seasonId: true }
+        })
+        if (!dinnerEvent) {
+            throw createError({
+                statusCode: 404,
+                message: `Dinner event ${requestData.dinnerEventId} not found`
+            })
+        }
+
         // Look up ticket prices to get priceAtBooking
         const ticketPriceIds = [...new Set(requestData.orders.map(o => o.ticketPriceId))]
         const ticketPrices = await prisma.ticketPrice.findMany({
@@ -97,7 +109,8 @@ export default defineEventHandler(async (event): Promise<CreateOrdersResult> => 
         const auditContext: AuditContext = {
             action: 'USER_BOOKED',
             performedByUserId: requestData.orders[0]?.bookedByUserId ?? null,
-            source: 'api_order_put'
+            source: 'api_order_put',
+            seasonId: dinnerEvent.seasonId
         }
 
         // Create orders with audit trail

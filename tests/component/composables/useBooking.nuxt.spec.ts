@@ -907,9 +907,10 @@ describe('generateDesiredOrdersFromPreferences', () => {
 
         it.each([
             {desc: 'no existing → skip (dont recreate)', existingOrders: [], expectedEvents: [101, 103], expectedLength: 2},
-            {desc: 'RELEASED → preserve (no reclaim, no delete)', existingOrders: [
+            // RELEASED orders in cancelledKeys are NOT generated - orphan detection handles them
+            {desc: 'RELEASED → skip (orphan detection handles)', existingOrders: [
                 OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: 1, dinnerEventId: 102, state: OrderState.RELEASED, ticketPriceId: 1})
-            ], expectedEvents: [101, 102, 103], expectedLength: 3}
+            ], expectedEvents: [101, 103], expectedLength: 2}
         ])('$desc', ({existingOrders, expectedEvents, expectedLength}) => {
             const inhabitants = [createInhabitant(1, allDineIn)]
             const cancelledKeys = new Set(['1-102'])
@@ -927,7 +928,7 @@ describe('generateDesiredOrdersFromPreferences', () => {
             expect(result.map(o => o.dinnerEventId).sort()).toEqual(expectedEvents)
         })
 
-        it('preserves RELEASED order with correct state and orderId', () => {
+        it('RELEASED order not in generator result (orphan detection preserves it)', () => {
             const inhabitants = [createInhabitant(1, allDineIn)]
             const cancelledKeys = new Set(['1-102'])
             const releasedOrder = OrderFactory.defaultOrder(undefined, {
@@ -943,9 +944,9 @@ describe('generateDesiredOrdersFromPreferences', () => {
                 ticketPrices
             )
 
+            // RELEASED order in cancelledKeys is skipped - orphan detection in resolveOrdersFromPreferencesToBuckets handles it
             const preserved = result.find(o => o.dinnerEventId === 102)
-            expect(preserved?.orderId).toBe(42)
-            expect(preserved?.state).toBe(OrderState.RELEASED)
+            expect(preserved).toBeUndefined()
         })
     })
 
@@ -1175,6 +1176,14 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
             confirmed: new Set<string>(),
             cancelled: new Set(['1-102']),
             expected: {create: 2, delete: 0, update: 0, idempotent: 0}
+        },
+        {
+            desc: 'cancelledKeys: RELEASED order preserved (not deleted as orphan)',
+            inhabitants: [createInhabitant(1, allDineIn)],
+            existing: [createOrder(42, 1, 102, {state: OrderState.RELEASED})],
+            confirmed: new Set<string>(),
+            cancelled: new Set(['1-102']),
+            expected: {create: 2, delete: 0, update: 0, idempotent: 1}
         },
         {
             desc: 'confirmedKeys: prefs=NONE + user booked → PRESERVE (not delete)',

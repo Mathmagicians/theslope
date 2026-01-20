@@ -277,12 +277,15 @@ export async function createOrders(
         const createdIds = createdOrders.map(o => o.id)
         console.info(`🎟️ > ORDER > [BATCH CREATE] Created order IDs: ${createdIds.join(', ')}`)
 
-        // Create audit trail entries atomically
+        // Create audit trail entries with denormalized fields for user intent tracking
         await prisma.orderHistory.createMany({
             data: createdIds.map((orderId, index) => ({
                 orderId,
                 action: auditContext.action,
                 performedByUserId: auditContext.performedByUserId,
+                inhabitantId: validatedOrders[index]!.inhabitantId,
+                dinnerEventId: validatedOrders[index]!.dinnerEventId,
+                seasonId: auditContext.seasonId,
                 auditData: JSON.stringify({
                     source: auditContext.source,
                     orderData: validatedOrders[index]

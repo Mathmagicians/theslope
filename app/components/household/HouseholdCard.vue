@@ -88,7 +88,7 @@ const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Design system
-const { WEEKDAY, COMPONENTS, COLOR, ICONS } = useTheSlopeDesignSystem()
+const { WEEKDAY, COMPONENTS, COLOR, ICONS, BUTTONS } = useTheSlopeDesignSystem()
 const { powerMode } = COMPONENTS
 
 // Prepare table data with synthetic "all members" power row + individual inhabitants
@@ -227,11 +227,8 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
         <template #expand-cell="{ row }">
           <UButton
               v-if="canEdit"
-              color="neutral"
-              variant="ghost"
-              :icon="row.getIsExpanded() ? 'i-heroicons-chevron-down' : (row.original.isSynthetic ? 'i-heroicons-bolt' : 'i-heroicons-pencil')"
-              square
-              :size="getIsMd ? 'md' : 'xs'"
+              v-bind="BUTTONS.edit"
+              :icon="row.getIsExpanded() ? ICONS.chevronDown : (row.original.isSynthetic ? COMPONENTS.powerMode.buttonIcon : BUTTONS.edit.icon)"
               :aria-label="row.getIsExpanded() ? 'Luk' : (row.original.isSynthetic ? 'Power mode' : 'Rediger præferencer')"
               :data-testid="row.original.isSynthetic ? 'power-mode-toggle' : `inhabitant-${row.original.id}-edit-preferences`"
               :class="[

@@ -173,18 +173,39 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
                 } else {
                     const released = await OrderFactory.updateOrder(context, order.id, {dinnerMode: DinnerMode.NONE})
                     expect(released?.state).toBe(expectedStateAfterAction)
+
+                    // Verify USER_CANCELLED audit entry was created with denormalized fields
+                    const orderWithHistory = await OrderFactory.getOrder(context, order.id)
+                    const cancelledEntry = orderWithHistory?.history?.find(h => h.action === 'USER_CANCELLED')
+                    expect(cancelledEntry, 'USER_CANCELLED audit entry should exist').toBeDefined()
+                    expect(cancelledEntry?.inhabitantId, 'Audit should have inhabitantId').toBe(inhabitant.id)
+                    expect(cancelledEntry?.dinnerEventId, 'Audit should have dinnerEventId').toBe(dinnerEvent.id)
+                    expect(cancelledEntry?.seasonId, 'Audit should have seasonId').toBe(season.id)
                 }
 
                 await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
 
-                const ordersAfterRescaffold = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
-                const userOrder = ordersAfterRescaffold.find(o => o.inhabitantId === inhabitant.id)
-
                 if (action === 'delete') {
+                    // Deleted orders should not be recreated
+                    const ordersAfterRescaffold = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
+                    const userOrder = ordersAfterRescaffold.find(o => o.inhabitantId === inhabitant.id)
                     expect(userOrder, 'Deleted order should NOT be recreated').toBeUndefined()
                 } else {
-                    expect(userOrder, 'Released order should still exist').toBeDefined()
-                    expect(userOrder?.state, 'Released order should remain RELEASED').toBe(OrderState.RELEASED)
+                    // User cancelled - scaffolder should NOT re-book them
+                    // (another inhabitant claiming the released ticket is valid marketplace behavior)
+                    const ordersAfterRescaffold = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
+                    const userOrderAfter = ordersAfterRescaffold.find(o => o.inhabitantId === inhabitant.id)
+
+                    if (userOrderAfter) {
+                        // If order still belongs to original user, it must remain RELEASED
+                        expect(userOrderAfter.state, 'User who cancelled should not be re-booked').toBe(OrderState.RELEASED)
+                    } else {
+                        // Order no longer belongs to original user - verify it was claimed by someone else
+                        const claimedOrder = ordersAfterRescaffold.find(o => o.id === order.id)
+                        expect(claimedOrder, 'Released ticket should have been claimed by another inhabitant').toBeDefined()
+                        expect(claimedOrder?.inhabitantId, 'Claimed order should belong to different inhabitant').not.toBe(inhabitant.id)
+                        expect(claimedOrder?.state, 'Claimed order should be BOOKED').toBe(OrderState.BOOKED)
+                    }
                 }
             })
         }
@@ -210,39 +231,40 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
                 createdSeasonIds.push(season.id!)
                 const dinnerEvent = dinnerEvents[0]!
 
-                const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
-                    context, HouseholdFactory.defaultHouseholdData(testSalt), 1
-                )
-                createdHouseholdIds.push(household.id)
-                const inhabitant = inhabitants[0]!
+                // Use session user's household (user has access to their own household)
+                const {householdId, inhabitantId} = await testHelpers.getSessionUserInfo(context)
 
-                // Set preferences
-                const prefs = createDefaultDinnerModeMap(prefsMode)
-                await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: prefs}, 200, season.id!)
-
-                // User explicitly books via household scaffold endpoint (creates USER_BOOKED audit)
+                // STEP 1: User explicitly books FIRST (creates USER_BOOKED audit)
+                // This happens BEFORE preferences are set to avoid scaffold-on-preference-change
                 const desiredOrder = OrderFactory.createBookingOrder(
-                    inhabitant.id,
+                    inhabitantId,
                     dinnerEvent.id,
-                    season.ticketPrices[0]!.id,
+                    season.ticketPrices[0]!.id!,
                     bookedMode
                 )
                 await OrderFactory.scaffoldOrders(context, {
-                    householdId: household.id,
+                    householdId,
+                    seasonId: season.id!,
                     dinnerEventIds: [dinnerEvent.id],
                     orders: [desiredOrder]
                 })
 
                 // Get the user-booked order
                 const ordersAfterUserBook = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
-                const userOrder = ordersAfterUserBook.find(o => o.inhabitantId === inhabitant.id)
+                const userOrder = ordersAfterUserBook.find(o => o.inhabitantId === inhabitantId)
                 expect(userOrder, 'User order should exist after booking').toBeDefined()
+                expect(userOrder?.dinnerMode, 'User booked mode').toBe(bookedMode)
 
-                // System scaffold should PRESERVE user-booked order
+                // STEP 2: Set preferences (may differ from booking)
+                // This triggers scaffold but confirmedKeys should prevent overwrite
+                const prefs = createDefaultDinnerModeMap(prefsMode)
+                await HouseholdFactory.updateInhabitant(context, inhabitantId, {dinnerPreferences: prefs}, 200, season.id!)
+
+                // STEP 3: System scaffold should PRESERVE user-booked order
                 await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
 
                 const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
-                const preserved = ordersAfter.find(o => o.inhabitantId === inhabitant.id)
+                const preserved = ordersAfter.find(o => o.inhabitantId === inhabitantId)
 
                 expect(preserved, 'User-booked order preserved').toBeDefined()
                 expect(preserved?.dinnerMode, 'Mode unchanged').toBe(bookedMode)

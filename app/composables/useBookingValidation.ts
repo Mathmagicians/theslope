@@ -205,11 +205,14 @@ export const useBookingValidation = () => {
     /**
      * Audit context for order creation - used for OrderHistory entries
      * Uses OrderAuditActionSchema from generated Prisma Zod types (ADR-001)
+     *
+     * seasonId: Required for user intent tracking (fetchUserIntentKeys filters by seasonId)
      */
     const AuditContextSchema = z.object({
         action: OrderAuditActionSchema,
         performedByUserId: z.number().int().positive().nullable(),
-        source: z.string().min(1)
+        source: z.string().min(1),
+        seasonId: z.number().int().positive().nullable()
     })
 
     /**

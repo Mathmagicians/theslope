@@ -139,7 +139,8 @@ export default defineEventHandler(async (event): Promise<BillingImportResponse> 
         const auditContext: AuditContext = {
             action: 'SYSTEM_CREATED',
             performedByUserId: systemUserId,
-            source: 'csv_billing'
+            source: 'csv_billing',
+            seasonId: null  // Billing import is cross-season, no specific season
         }
 
         // Chunk and process all households in parallel

@@ -35,7 +35,7 @@ const getVariant = (view: BookingView) => isSelected(view) ? 'solid' : 'outline'
 </script>
 
 <template>
-  <UFieldGroup :size="SIZES.small" orientation="horizontal">
+  <UFieldGroup :size="SIZES.standard" orientation="horizontal">
     <UButton
       v-for="view in views"
       :key="view"

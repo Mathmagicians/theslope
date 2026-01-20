@@ -122,7 +122,7 @@ const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Design system
-const {COMPONENTS, SIZES, COLOR, ICONS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
+const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
 const emptyStateMessage = getRandomEmptyMessage('household')
 
 // Ticket business logic
@@ -529,15 +529,12 @@ const dayBillSummary = computed(() => getDayBillSummary(eventOrders.value))
       data-testid="booking-table"
       :ui="{tbody: '[&_tr:first-child]:bg-warning/10', tr: 'data-[expanded=true]:bg-elevated/50', th: 'px-1 py-1 md:px-4 md:py-3', td: 'px-1 md:px-4'}"
     >
-      <!-- Expand button column -->
+      <!-- Expand button column - uses BUTTONS.edit for standardized sizing -->
       <template #expand-cell="{row}">
         <UButton
           v-if="isEditModeAllowed"
-          color="neutral"
-          variant="ghost"
-          :icon="row.getIsExpanded() ? ICONS.chevronDown : (row.original.rowType === 'power' ? COMPONENTS.powerMode.buttonIcon : (row.original.rowType === 'guest' ? ICONS.plusCircle : ICONS.edit))"
-          square
-          :size="getIsMd ? 'md' : 'xs'"
+          v-bind="BUTTONS.edit"
+          :icon="row.getIsExpanded() ? ICONS.chevronDown : (row.original.rowType === 'power' ? COMPONENTS.powerMode.buttonIcon : (row.original.rowType === 'guest' ? ICONS.plusCircle : BUTTONS.edit.icon))"
           :aria-label="row.getIsExpanded() ? 'Luk' : 'Rediger'"
           :data-testid="`${row.original.rowType}-${row.original.id}-toggle`"
           :class="[row.getIsExpanded() ? 'rotate-180' : '', row.original.rowType === 'power' && !row.getIsExpanded() ? 'hover:animate-pulse hover:text-warning' : '']"

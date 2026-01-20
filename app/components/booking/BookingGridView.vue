@@ -121,7 +121,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, getRandomEmptyMessage, getOrderStateColor} = useTheSlopeDesignSystem()
+const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, getRandomEmptyMessage, getOrderStateColor} = useTheSlopeDesignSystem()
 const emptyState = getRandomEmptyMessage('noDinners')
 
 // Ticket price formatting
@@ -493,10 +493,7 @@ const getEventSummary = (eventId: number) => {
         <!-- Pencil button to enter edit mode (week/month grid only, hidden when !canEdit) -->
         <UButton
           v-if="view !== 'day' && formMode === FORM_MODES.VIEW && canEdit"
-          :icon="ICONS.edit"
-          :color="COLOR.neutral"
-          variant="ghost"
-          :size="SIZES.md"
+          v-bind="BUTTONS.edit"
           :disabled="props.isSaving"
           data-testid="grid-edit"
           @click="emit('update:formMode', FORM_MODES.EDIT)"
