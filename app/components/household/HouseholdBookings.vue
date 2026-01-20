@@ -237,6 +237,7 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
           :orders="orders"
           :ticket-prices="ticketPrices"
           :deadlines="deadlines"
+          :lock-status="lockStatus"
           :allergy-types="allergyTypes"
           :booker-id="bookerId"
           :is-saving="isProcessingBookings"

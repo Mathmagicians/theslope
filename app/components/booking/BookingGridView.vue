@@ -59,6 +59,7 @@ import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {BookingView} from '~/composables/useBookingView'
 import type {DateRange} from '~/types/dateTypes'
 import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 // Row types for synthetic rows (same pattern as HouseholdCard)
@@ -87,6 +88,7 @@ interface Props {
   orders: OrderDisplay[]
   ticketPrices: TicketPrice[]
   deadlines: SeasonDeadlines
+  lockStatus?: Map<number, ReleasedTicketCounts | null>
   allergyTypes?: AllergyTypeDisplay[]
   bookerId?: number // Current user's inhabitant ID for guest booking
   formMode?: FormMode
@@ -97,6 +99,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  lockStatus: () => new Map(),
   allergyTypes: () => [],
   bookerId: undefined,
   formMode: FORM_MODES.VIEW,
@@ -466,7 +469,7 @@ const guestOrders = computed(() => partitionGuestOrders(props.orders).guestOrder
 
 const getEventSummary = (eventId: number) => {
   const eventOrders = props.orders.filter(o => o.dinnerEventId === eventId)
-  return getDayBillSummary(eventOrders) ?? { ticketCounts: '', totalPrice: 0 }
+  return getDayBillSummary(eventOrders)
 }
 </script>
 
@@ -704,7 +707,7 @@ const getEventSummary = (eventId: number) => {
           :allergy-types="props.allergyTypes"
           :deadlines="props.deadlines"
           :booker-id="props.bookerId"
-          :released-ticket-count="0"
+          :released-ticket-counts="props.lockStatus.get(activeGuestEvent.id) ?? { total: 0, formatted: '-' }"
           @save="handleGuestSave"
           @cancel="expanded = {}"
         />

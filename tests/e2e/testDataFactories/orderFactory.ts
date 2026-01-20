@@ -603,13 +603,13 @@ export class OrderFactory {
     inhabitantId: number,
     dinnerEventId: number,
     ticketPriceId: number,
-    dinnerMode: 'DINEIN' | 'TAKEAWAY' = 'DINEIN',
+    dinnerMode: typeof DinnerModeSchema.enum[keyof typeof DinnerModeSchema.enum] = DinnerModeSchema.enum.DINEIN,
     orderId?: number
   ): DesiredOrder => this.defaultDesiredOrder({
     inhabitantId,
     dinnerEventId,
     ticketPriceId,
-    dinnerMode: DinnerModeSchema.enum[dinnerMode],
+    dinnerMode,
     orderId
   })
 

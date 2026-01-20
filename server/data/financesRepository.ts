@@ -149,6 +149,75 @@ export async function fetchUserCancellationKeys(
     return keys
 }
 
+/**
+ * Fetch user intent keys for scaffolding decisions.
+ *
+ * Returns two sets based on most recent user action per (inhabitant, dinnerEvent):
+ * - confirmedKeys: USER_BOOKED or USER_CLAIMED (user wants to eat)
+ * - cancelledKeys: USER_CANCELLED (user doesn't want to eat)
+ *
+ * When both exist for same key, most recent action wins.
+ *
+ * ADR-011: Uses denormalized fields (inhabitantId, dinnerEventId, seasonId)
+ * which persist even after order deletion.
+ */
+export async function fetchUserIntentKeys(
+    d1Client: D1Database,
+    seasonId: number
+): Promise<{ confirmedKeys: Set<string>; cancelledKeys: Set<string> }> {
+    const {OrderAuditActionSchema} = useBookingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    // Fetch all user intent actions (not system actions)
+    const userIntents = await prisma.orderHistory.findMany({
+        where: {
+            action: {
+                in: [
+                    OrderAuditActionSchema.enum.USER_CANCELLED,
+                    OrderAuditActionSchema.enum.USER_BOOKED,
+                    OrderAuditActionSchema.enum.USER_CLAIMED
+                ]
+            },
+            seasonId: seasonId,
+            inhabitantId: { not: null },
+            dinnerEventId: { not: null }
+        },
+        select: {
+            inhabitantId: true,
+            dinnerEventId: true,
+            action: true,
+            timestamp: true
+        },
+        orderBy: { timestamp: 'desc' }
+    })
+
+    // Group by key, take most recent action per key
+    const keyToAction = new Map<string, string>()
+    for (const intent of userIntents) {
+        const key = `${intent.inhabitantId}-${intent.dinnerEventId}`
+        if (!keyToAction.has(key)) {
+            keyToAction.set(key, intent.action)
+        }
+    }
+
+    // Split into confirmed and cancelled sets
+    const confirmedKeys = new Set<string>()
+    const cancelledKeys = new Set<string>()
+
+    for (const [key, action] of keyToAction) {
+        if (action === OrderAuditActionSchema.enum.USER_CANCELLED) {
+            cancelledKeys.add(key)
+        } else {
+            // USER_BOOKED or USER_CLAIMED
+            confirmedKeys.add(key)
+        }
+    }
+
+    console.info(`📋 > ORDER_AUDIT > [FETCH_USER_INTENT] Season ${seasonId}: ${confirmedKeys.size} confirmed, ${cancelledKeys.size} cancelled keys`)
+
+    return { confirmedKeys, cancelledKeys }
+}
+
 /*** ORDERS ***/
 
 // ADR-005: Order relationships:

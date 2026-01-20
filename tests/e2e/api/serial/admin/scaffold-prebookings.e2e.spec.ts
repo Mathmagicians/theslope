@@ -149,19 +149,17 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
         const {OrderStateSchema} = useBookingValidation()
         const OrderState = OrderStateSchema.enum
 
-        const userActions = [
+        // USER_CANCELLED scenarios (negative intent)
+        const cancelledScenarios = [
             {action: 'delete', daysFromNow: 15, expectedStateAfterAction: null},
             {action: 'release', daysFromNow: 3, expectedStateAfterAction: OrderState.RELEASED}
         ] as const
 
-        for (const {action, daysFromNow, expectedStateAfterAction} of userActions) {
-            test(`should not reclaim user-${action}d orders`, async ({browser}) => {
+        for (const {action, daysFromNow, expectedStateAfterAction} of cancelledScenarios) {
+            test(`USER_CANCELLED: should not reclaim user-${action}d orders`, async ({browser}) => {
                 const context = await validatedBrowserContext(browser)
                 const testSalt = temporaryAndRandom()
 
-                // Fixture creates season, event, order
-                // - Before deadline (delete): creates test household, scaffold creates order
-                // - After deadline (release): uses admin's session household, creates order directly
                 const {season, dinnerEvent, household, inhabitant, order, isTestHousehold} =
                     await OrderFactory.createOrderFixture(context, daysFromNow, testSalt)
                 createdSeasonIds.push(season.id!)
@@ -169,7 +167,6 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
                     createdHouseholdIds.push(household.id)
                 }
 
-                // User performs action (delete before deadline, release after deadline)
                 if (action === 'delete') {
                     await OrderFactory.deleteOrder(context, order.id)
                     await OrderFactory.getOrder(context, order.id, 404)
@@ -178,7 +175,6 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
                     expect(released?.state).toBe(expectedStateAfterAction)
                 }
 
-                // Re-scaffold - system should respect user intent
                 await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
 
                 const ordersAfterRescaffold = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
@@ -190,6 +186,68 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
                     expect(userOrder, 'Released order should still exist').toBeDefined()
                     expect(userOrder?.state, 'Released order should remain RELEASED').toBe(OrderState.RELEASED)
                 }
+            })
+        }
+
+        // USER_BOOKED scenarios (positive intent - preserves order despite prefs)
+        const bookedScenarios = [
+            // Prefs DIFFER from booking - confirmedKeys prevents overwrite/delete
+            {desc: 'prefs=NONE, user booked DINEIN', prefsMode: DinnerMode.NONE, bookedMode: DinnerMode.DINEIN},
+            {desc: 'prefs=DINEIN, user booked TAKEAWAY', prefsMode: DinnerMode.DINEIN, bookedMode: DinnerMode.TAKEAWAY},
+            {desc: 'prefs=TAKEAWAY, user booked DINEINLATE', prefsMode: DinnerMode.TAKEAWAY, bookedMode: DinnerMode.DINEINLATE},
+            // Prefs MATCH booking - confirmedKeys ensures idempotent via intent, not coincidence
+            {desc: 'prefs=DINEIN, user booked DINEIN', prefsMode: DinnerMode.DINEIN, bookedMode: DinnerMode.DINEIN}
+        ] as const
+
+        for (const {desc, prefsMode, bookedMode} of bookedScenarios) {
+            test(`USER_BOOKED: ${desc} → PRESERVE`, async ({browser}) => {
+                const context = await validatedBrowserContext(browser)
+                const testSalt = temporaryAndRandom()
+
+                const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+                    ticketIsCancellableDaysBefore: 0
+                })
+                createdSeasonIds.push(season.id!)
+                const dinnerEvent = dinnerEvents[0]!
+
+                const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+                    context, HouseholdFactory.defaultHouseholdData(testSalt), 1
+                )
+                createdHouseholdIds.push(household.id)
+                const inhabitant = inhabitants[0]!
+
+                // Set preferences
+                const prefs = createDefaultDinnerModeMap(prefsMode)
+                await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: prefs}, 200, season.id!)
+
+                // User explicitly books via household scaffold endpoint (creates USER_BOOKED audit)
+                const desiredOrder = OrderFactory.createBookingOrder(
+                    inhabitant.id,
+                    dinnerEvent.id,
+                    season.ticketPrices[0]!.id,
+                    bookedMode
+                )
+                await OrderFactory.scaffoldOrders(context, {
+                    householdId: household.id,
+                    dinnerEventIds: [dinnerEvent.id],
+                    orders: [desiredOrder]
+                })
+
+                // Get the user-booked order
+                const ordersAfterUserBook = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
+                const userOrder = ordersAfterUserBook.find(o => o.inhabitantId === inhabitant.id)
+                expect(userOrder, 'User order should exist after booking').toBeDefined()
+
+                // System scaffold should PRESERVE user-booked order
+                await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
+
+                const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
+                const preserved = ordersAfter.find(o => o.inhabitantId === inhabitant.id)
+
+                expect(preserved, 'User-booked order preserved').toBeDefined()
+                expect(preserved?.dinnerMode, 'Mode unchanged').toBe(bookedMode)
+                expect(preserved?.state, 'State=BOOKED').toBe(OrderState.BOOKED)
+                expect(preserved?.id, 'Same order ID').toBe(userOrder!.id)
             })
         }
     })

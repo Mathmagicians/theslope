@@ -892,7 +892,8 @@ describe('generateDesiredOrdersFromPreferences', () => {
             inhabitants,
             dinnerEvents,
             [],
-            new Set(),
+            new Set(),  // confirmedKeys
+            new Set(),  // cancelledKeys
             ticketPrices
         )
 
@@ -900,7 +901,7 @@ describe('generateDesiredOrdersFromPreferences', () => {
         expect(result.map(o => o.dinnerEventId).sort()).toEqual([101, 102, 103])
     })
 
-    describe('excludedKeys handling', () => {
+    describe('cancelledKeys handling', () => {
         const {OrderStateSchema} = useBookingValidation()
         const OrderState = OrderStateSchema.enum
 
@@ -911,13 +912,14 @@ describe('generateDesiredOrdersFromPreferences', () => {
             ], expectedEvents: [101, 102, 103], expectedLength: 3}
         ])('$desc', ({existingOrders, expectedEvents, expectedLength}) => {
             const inhabitants = [createInhabitant(1, allDineIn)]
-            const excludedKeys = new Set(['1-102'])
+            const cancelledKeys = new Set(['1-102'])
 
             const result = generateDesiredOrdersFromPreferences(
                 inhabitants,
                 dinnerEvents,
                 existingOrders,
-                excludedKeys,
+                new Set(),  // confirmedKeys
+                cancelledKeys,
                 ticketPrices
             )
 
@@ -927,7 +929,7 @@ describe('generateDesiredOrdersFromPreferences', () => {
 
         it('preserves RELEASED order with correct state and orderId', () => {
             const inhabitants = [createInhabitant(1, allDineIn)]
-            const excludedKeys = new Set(['1-102'])
+            const cancelledKeys = new Set(['1-102'])
             const releasedOrder = OrderFactory.defaultOrder(undefined, {
                 id: 42, inhabitantId: 1, dinnerEventId: 102, state: OrderState.RELEASED, ticketPriceId: 1
             })
@@ -936,7 +938,8 @@ describe('generateDesiredOrdersFromPreferences', () => {
                 inhabitants,
                 dinnerEvents,
                 [releasedOrder],
-                excludedKeys,
+                new Set(),  // confirmedKeys
+                cancelledKeys,
                 ticketPrices
             )
 
@@ -959,7 +962,8 @@ describe('generateDesiredOrdersFromPreferences', () => {
             inhabitants,
             dinnerEvents,
             [existingGuestOrder],
-            new Set(),
+            new Set(),  // confirmedKeys
+            new Set(),  // cancelledKeys
             ticketPrices
         )
 
@@ -987,7 +991,8 @@ describe('generateDesiredOrdersFromPreferences', () => {
             inhabitants,
             singleEvent,
             [orphanedGuestOrder],
-            new Set(),
+            new Set(),  // confirmedKeys
+            new Set(),  // cancelledKeys
             []  // Empty ticketPrices
         )
 
@@ -1014,7 +1019,8 @@ describe('generateDesiredOrdersFromPreferences', () => {
             inhabitants,
             dinnerEvents,
             [orphanedGuestOrder],
-            new Set(),
+            new Set(),  // confirmedKeys
+            new Set(),  // cancelledKeys
             ticketPrices
         )
 
@@ -1035,7 +1041,8 @@ describe('generateDesiredOrdersFromPreferences', () => {
             inhabitants,
             dinnerEvents,
             [existingOrder],
-            new Set(),
+            new Set(),  // confirmedKeys
+            new Set(),  // cancelledKeys
             ticketPrices
         )
 
@@ -1050,7 +1057,8 @@ describe('generateDesiredOrdersFromPreferences', () => {
             inhabitants,
             dinnerEvents,
             [],
-            new Set(),
+            new Set(),  // confirmedKeys
+            new Set(),  // cancelledKeys
             ticketPrices
         )
 
@@ -1069,7 +1077,7 @@ describe('generateDesiredOrdersFromPreferences', () => {
             ], expectedState: OrderState.RELEASED}
         ])('$desc', ({existingOrders, expectedState}) => {
             const inhabitants = [createInhabitant(1, allDineIn)]
-            const result = generateDesiredOrdersFromPreferences(inhabitants, dinnerEvents, existingOrders, new Set(), ticketPrices)
+            const result = generateDesiredOrdersFromPreferences(inhabitants, dinnerEvents, existingOrders, new Set(), new Set(), ticketPrices)
 
             const order101 = result.find(o => o.dinnerEventId === 101)
             expect(order101?.state).toBe(expectedState)
@@ -1140,6 +1148,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
             desc: 'creates all orders for household with no existing',
             inhabitants: [createInhabitant(1, allDineIn)],
             existing: [],
+            confirmed: new Set<string>(),
             cancelled: new Set<string>(),
             expected: {create: 3, delete: 0, update: 0, idempotent: 0}
         },
@@ -1147,42 +1156,64 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
             desc: 'recognizes matching orders as idempotent',
             inhabitants: [createInhabitant(1, allDineIn)],
             existing: [createOrder(1, 1, 101), createOrder(2, 1, 102), createOrder(3, 1, 103)],
+            confirmed: new Set<string>(),
             cancelled: new Set<string>(),
             expected: {create: 0, delete: 0, update: 0, idempotent: 3}
         },
         {
-            desc: 'marks orders for deletion when preferences change to NONE',
+            desc: 'marks orders for deletion when preferences change to NONE (no user intent)',
             inhabitants: [createInhabitant(1, allNone)],
             existing: [createOrder(1, 1, 101), createOrder(2, 1, 102)],
+            confirmed: new Set<string>(),
             cancelled: new Set<string>(),
             expected: {create: 0, delete: 2, update: 0, idempotent: 0}
         },
         {
-            desc: 'excludes user-cancelled bookings',
+            desc: 'cancelledKeys: dont recreate deleted order',
             inhabitants: [createInhabitant(1, allDineIn)],
             existing: [],
-            cancelled: new Set(['1-102']),  // User cancelled dinner 102
+            confirmed: new Set<string>(),
+            cancelled: new Set(['1-102']),
             expected: {create: 2, delete: 0, update: 0, idempotent: 0}
+        },
+        {
+            desc: 'confirmedKeys: prefs=NONE + user booked → PRESERVE (not delete)',
+            inhabitants: [createInhabitant(1, allNone)],
+            existing: [createOrder(1, 1, 101)],
+            confirmed: new Set(['1-101']),
+            cancelled: new Set<string>(),
+            expected: {create: 0, delete: 0, update: 0, idempotent: 1}
+        },
+        {
+            desc: 'confirmedKeys: prefs=DINEIN + user booked TAKEAWAY → PRESERVE mode',
+            inhabitants: [createInhabitant(1, allDineIn)],
+            existing: [createOrder(1, 1, 101, {dinnerMode: DinnerMode.TAKEAWAY}), createOrder(2, 1, 102), createOrder(3, 1, 103)],
+            confirmed: new Set(['1-101']),
+            cancelled: new Set<string>(),
+            expected: {create: 0, delete: 0, update: 0, idempotent: 3}
         },
         {
             desc: 'handles empty household (no inhabitants)',
             inhabitants: [],
             existing: [],
+            confirmed: new Set<string>(),
             cancelled: new Set<string>(),
             expected: {create: 0, delete: 0, update: 0, idempotent: 0}
         },
         {
             desc: 'deletes orphan orders when inhabitants leave',
             inhabitants: [],
-            existing: [createOrder(1, 99, 101), createOrder(2, 99, 102)],  // Orders for non-existent inhabitant
+            existing: [createOrder(1, 99, 101), createOrder(2, 99, 102)],
+            confirmed: new Set<string>(),
             cancelled: new Set<string>(),
             expected: {create: 0, delete: 2, update: 0, idempotent: 0}
         }
-    ])('$desc', ({inhabitants, existing, cancelled, expected}) => {
+    ])('$desc', ({inhabitants, existing, confirmed, cancelled, expected}) => {
         const result = resolveOrdersFromPreferencesToBuckets(
             testSeason,
             createHousehold(1, inhabitants),
             existing,
+            confirmed,
             cancelled
         )
 
@@ -1218,7 +1249,8 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
                 season,
                 household,
                 [existingOrder],
-                new Set()
+                new Set(),  // confirmedKeys
+                new Set()   // cancelledKeys
             )
 
             expect(result.delete).toHaveLength(expected.delete)
@@ -1242,7 +1274,8 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
             testSeason,
             household,
             [guestOrder],
-            new Set()
+            new Set(),  // confirmedKeys
+            new Set()   // cancelledKeys
         )
 
         // Guest order should be idempotent, not deleted
@@ -1283,7 +1316,8 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
                 pastDeadlineSeason,
                 household,
                 [],  // No existing orders
-                new Set(),  // No cancelled keys
+                new Set(),  // confirmedKeys
+                new Set(),  // cancelledKeys
                 releasedKeys
             )
 
@@ -1516,5 +1550,36 @@ describe('groupGuestOrders', () => {
         ], expected: 4},
     ])('$desc → $expected groups', ({orders, expected}) => {
         expect(Object.keys(groupGuestOrders(orders))).toHaveLength(expected)
+    })
+})
+
+// =============================================================================
+// getDayBillSummary - Ticket counts + total price for booking views
+// =============================================================================
+
+describe('getDayBillSummary', () => {
+    const {getDayBillSummary} = useBooking()
+    const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+    const DM = DinnerModeSchema.enum
+    const OS = OrderStateSchema.enum
+
+    // Use OrderFactory.defaultOrder with overrides
+    const o = (overrides: Parameters<typeof OrderFactory.defaultOrder>[1]) => OrderFactory.defaultOrder('test', overrides)
+
+    // Note: dinnerMode is ignored - only state matters for billing (BOOKED/RELEASED = paying)
+    describe.each([
+        {name: 'empty array', orders: [], expectedCounts: '-', expectedPrice: 0},
+        {name: 'all CLOSED', orders: [o({state: OS.CLOSED})], expectedCounts: '-', expectedPrice: 0},
+        {name: 'BOOKED counted', orders: [o({state: OS.BOOKED, priceAtBooking: 37}), o({state: OS.BOOKED, priceAtBooking: 37})], expectedCounts: '2V', expectedPrice: 74},
+        {name: 'RELEASED counted', orders: [o({state: OS.RELEASED, priceAtBooking: 37}), o({state: OS.RELEASED, priceAtBooking: 20, ticketType: 'CHILD'})], expectedCounts: '1V 1B', expectedPrice: 57},
+        {name: 'BOOKED + RELEASED', orders: [o({state: OS.BOOKED, priceAtBooking: 37}), o({state: OS.RELEASED, priceAtBooking: 37}), o({state: OS.BOOKED, priceAtBooking: 20, ticketType: 'CHILD'})], expectedCounts: '2V 1B', expectedPrice: 94},
+        {name: 'excludes CLOSED', orders: [o({state: OS.BOOKED, priceAtBooking: 37}), o({state: OS.CLOSED, priceAtBooking: 37})], expectedCounts: '1V', expectedPrice: 37},
+        {name: 'excludes CANCELLED', orders: [o({state: OS.BOOKED, priceAtBooking: 37}), o({state: OS.CANCELLED, priceAtBooking: 37})], expectedCounts: '1V', expectedPrice: 37},
+        {name: 'RELEASED with NONE mode counts', orders: [o({state: OS.RELEASED, dinnerMode: DM.NONE, priceAtBooking: 37})], expectedCounts: '1V', expectedPrice: 37},
+    ])('$name', ({orders, expectedCounts, expectedPrice}) => {
+        it(`→ counts='${expectedCounts}', price=${expectedPrice}`, () => {
+            const result = getDayBillSummary(orders)
+            expect(result).toEqual({ticketCounts: expectedCounts, totalPrice: expectedPrice})
+        })
     })
 })

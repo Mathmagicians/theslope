@@ -207,13 +207,18 @@ export const resolveDesiredOrdersToBuckets = (
 
 /**
  * Generate DesiredOrder[] from inhabitant preferences for system scaffolding.
- * Unified loop handles: guest preservation, excluded keys, and preference-based orders.
+ * Unified loop handles: guest preservation, user intent keys, and preference-based orders.
+ *
+ * User intent keys (from OrderHistory):
+ * - confirmedKeys: USER_BOOKED, USER_CLAIMED → preserve order as-is
+ * - cancelledKeys: USER_CANCELLED → don't recreate deleted orders
  */
 export const generateDesiredOrdersFromPreferences = (
     inhabitants: InhabitantDisplay[],
     dinnerEvents: DinnerEventDisplay[],
     existingOrders: OrderDisplay[],
-    excludedKeys: Set<string>,
+    confirmedKeys: Set<string>,
+    cancelledKeys: Set<string>,
     ticketPrices: TicketPrice[]
 ): DesiredOrder[] => {
     const {resolveTicketPrice} = useTicket()
@@ -253,16 +258,29 @@ export const generateDesiredOrdersFromPreferences = (
                 continue
             }
 
-            // Excluded key: user cancelled (USER_CANCELLED audit), respect their intent
+            // User confirmed (USER_BOOKED or USER_CLAIMED): preserve order as-is
+            if (confirmedKeys.has(key) && existing) {
+                result.push({
+                    inhabitantId: existing.inhabitantId,
+                    dinnerEventId: existing.dinnerEventId,
+                    dinnerMode: existing.dinnerMode,
+                    ticketPriceId: existing.ticketPriceId ?? 0,
+                    isGuestTicket: false,
+                    orderId: existing.id,
+                    state: existing.state
+                })
+                continue
+            }
+
+            // User cancelled (USER_CANCELLED): respect their intent
             // - No existing order: don't recreate deleted order
             // - RELEASED order: preserve as-is (don't reclaim, don't delete)
             // - BOOKED order: user re-booked after cancelling, let through (will be idempotent)
-            if (excludedKeys.has(key)) {
+            if (cancelledKeys.has(key)) {
                 if (!existing) {
                     continue  // Don't recreate deleted order
                 }
                 if (existing.state === OrderState.RELEASED) {
-                    // Preserve RELEASED order as-is (goes to idempotent bucket)
                     result.push({
                         inhabitantId: existing.inhabitantId,
                         dinnerEventId: existing.dinnerEventId,
@@ -274,7 +292,6 @@ export const generateDesiredOrdersFromPreferences = (
                     })
                     continue
                 }
-                // BOOKED order: user re-booked, let through (will be idempotent)
             }
 
             // Get preference mode (default DINEIN if no preferences set)
@@ -311,6 +328,7 @@ export const resolveOrdersFromPreferencesToBuckets = (
     season: Season,
     household: HouseholdDisplay,
     existingOrders: OrderDisplay[],
+    confirmedKeys: Set<string> = new Set(),
     cancelledKeys: Set<string> = new Set(),
     releasedByEventAndPrice: Set<string> = new Set()
 ): OrderBucketResult<DesiredOrder> => {
@@ -326,6 +344,7 @@ export const resolveOrdersFromPreferencesToBuckets = (
         household.inhabitants,
         dinnerEvents,
         existingOrders,
+        confirmedKeys,
         cancelledKeys,
         season.ticketPrices
     )
@@ -1064,18 +1083,15 @@ export const useBooking = () => {
      * Filters to active orders only (BOOKED/RELEASED, not NONE mode)
      *
      * @param orders - Orders for the dinner event
-     * @returns Object with ticketCounts and totalPrice, or null if no active orders
+     * @returns Object with ticketCounts and totalPrice (always returns object)
      */
-    const getDayBillSummary = (orders: OrderDisplay[]): { ticketCounts: string; totalPrice: number } | null => {
+    const getDayBillSummary = (orders: OrderDisplay[]): { ticketCounts: string; totalPrice: number } => {
         const {formatTicketCounts} = useBilling()
         const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 
         const activeOrders = orders.filter(o =>
-            o.dinnerMode !== DinnerModeSchema.enum.NONE &&
-            (o.state === OrderStateSchema.enum.BOOKED || o.state === OrderStateSchema.enum.RELEASED)
+            o.state === OrderStateSchema.enum.BOOKED || o.state === OrderStateSchema.enum.RELEASED
         )
-        if (activeOrders.length === 0) return null
-
         return {
             ticketCounts: formatTicketCounts(activeOrders),
             totalPrice: activeOrders.reduce((sum, o) => sum + o.priceAtBooking, 0)

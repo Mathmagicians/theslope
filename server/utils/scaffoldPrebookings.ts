@@ -1,5 +1,5 @@
 import type {D1Database} from "@cloudflare/workers-types"
-import {fetchOrders, createOrders, deleteOrder, updateOrdersBatch, claimOrder, type OrderBatchUpdate, fetchUserCancellationKeys} from "~~/server/data/financesRepository"
+import {fetchOrders, createOrders, deleteOrder, updateOrdersBatch, claimOrder, type OrderBatchUpdate, fetchUserIntentKeys} from "~~/server/data/financesRepository"
 import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/prismaRepository"
 import {useSeason} from "~/composables/useSeason"
 import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
@@ -130,12 +130,13 @@ export async function scaffoldPrebookings(
     // Fetch households - user mode is always single household
     const households = await fetchHouseholds(d1Client, options.householdId)
 
-    // Fetch orders (chunked) and cancellation keys in parallel
-    const [orderBatches, cancelledKeys] = await Promise.all([
+    // Fetch orders (chunked) and user intent keys in parallel
+    const [orderBatches, userIntentKeys] = await Promise.all([
         Promise.all(chunkFetchIds(dinnerEventIds).map(batch => fetchOrders(d1Client, batch))),
-        fetchUserCancellationKeys(d1Client, effectiveSeasonId)
+        fetchUserIntentKeys(d1Client, effectiveSeasonId)
     ])
     const existingOrders = orderBatches.flat()
+    const {confirmedKeys, cancelledKeys} = userIntentKeys
 
     // Build set of "eventId-priceId" keys where released tickets exist (for claim decisions)
     const releasedByEventAndPrice = new Set<string>()
@@ -189,6 +190,7 @@ export async function scaffoldPrebookings(
                     { ...season, dinnerEvents },
                     household,
                     householdOrders,
+                    confirmedKeys,
                     cancelledKeys,
                     releasedByEventAndPrice
                 )

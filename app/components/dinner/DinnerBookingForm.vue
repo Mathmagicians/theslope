@@ -496,7 +496,7 @@ const dayBillSummary = computed(() => getDayBillSummary(eventOrders.value))
         <DeadlineBadge :badge="badges.booking" />
         <DeadlineBadge :badge="badges.diningMode" />
       </div>
-      <div v-if="dayBillSummary" class="border-b-2 border-default px-2 pb-1">
+      <div class="border-b-2 border-default px-2 pb-1">
         <span :class="TYPOGRAPHY.cardTitle">{{ dayBillSummary.ticketCounts }} · {{ formatPrice(dayBillSummary.totalPrice) }} kr</span>
       </div>
     </div>
