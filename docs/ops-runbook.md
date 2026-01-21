@@ -144,42 +144,100 @@ Users can verify the deployed version:
    }
    ```
 
-### Triggering Deployments
+### Deployment Routing Table
 
 All deployments bake version info into the health endpoint (`/api/public/health`).
 
-**Automated (CI/CD):**
+Only code from the `main` branch should reach production.
 
-| Trigger | Deploys to | Version |
-|---------|------------|---------|
-| PR to `main` | dev | Auto-calculated (patch bump) |
-| Push to `main` | prod | Auto-calculated (patch bump) |
+```mermaid
+---
+title: CI/CD Flow
+---
+flowchart TD
+    subgraph Triggers
+        PR[PR]
+        MERGE[Merge to main]
+        TAG_MAIN[Tag on main]
+        TAG_OTHER[Tag on feature branch]
+        UI[workflow_dispatch]
+        LOCAL_DEV[make deploy-dev]
+        LOCAL_PROD[make deploy-prod]
+    end
 
-**Manual (for minor/major version bumps):**
+    subgraph Environments
+        DEV[dev.skraaningen.dk]
+        PROD[www.skraaningen.dk]
+    end
 
-| Method | Command | Deploys to |
-|--------|---------|------------|
-| **Git CLI** | `git tag v0.2.0 && git push origin v0.2.0` | prod |
-| **GitHub CLI** | `gh workflow run cicd.yml -f release_version=0.2.0` | prod |
-| **GitHub UI** | Actions → CI/CD Pipeline → Run workflow → Enter version | prod |
+    PR --> DEV
+    MERGE --> PROD
+    TAG_MAIN --> PROD
+    TAG_OTHER --> DEV
+    UI --> PROD
+    LOCAL_DEV --> DEV
+    LOCAL_PROD --> PROD
 
+    PROD -->|is_release| GHR[GitHub Release]
+```
+
+| Trigger | Condition | Target | Version | When to Use |
+|---------|-----------|--------|---------|-------------|
+| PR | branch ≠ main | dev | Auto RC | Feature development, testing |
+| Push to main | branch = main | prod | Auto RC | Normal release flow |
+| Tag push | commit on main | prod | From tag | Mark version milestone (GitOps) |
+| Tag push | commit NOT on main | dev | From tag | Testing tag flow |
+| workflow_dispatch + version | runs on main | prod | From input | Mark version milestone (UI) |
+| workflow_dispatch (empty) | runs on main | prod | Auto RC | Force redeploy to prod |
+| `make deploy-dev` | local | dev | Auto RC | Local testing on dev |
+| `RELEASE_VERSION=x.y.z make deploy-dev` | local | dev | From input | Test release version on dev |
+| `make deploy-prod` | local | prod | Auto RC | Emergency deploy |
+| `RELEASE_VERSION=x.y.z make deploy-prod` | local | prod | From input | Emergency release |
+
+### Deploy vs Release
+
+| Action | What It Does | When to Use | Creates GitHub Release? |
+|--------|--------------|-------------|-------------------------|
+| **Deploy** | Ships code to environment | Every PR merge (automatic) | No |
+| **Release** | Marks a version milestone | Business decision (manual) | Yes |
+
+### Triggering Releases
+
+**GitOps (recommended):**
 ```bash
-# Git CLI (GitOps)
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.9.0
+git push origin v0.9.0
+```
 
-# GitHub CLI
-gh workflow run cicd.yml -f release_version=0.2.0
+**GitHub CLI:**
+```bash
+gh workflow run cicd.yml -f release_version=0.9.0
 gh run watch
 ```
 
-**Makefile Targets (local deploy, requires Wrangler auth):**
+**GitHub UI:**
+1. Actions → CI/CD Pipeline → Run workflow
+2. Enter version (e.g., `0.9.0`) in `release_version` field
+3. Click "Run workflow"
+
+**Local (emergency only, requires Wrangler auth):**
+```bash
+RELEASE_VERSION=0.9.0 make deploy-prod
+```
+
+### Makefile Targets
 
 ```bash
 make deploy-dev    # Deploy to dev
 make deploy-prod   # Deploy to prod
 make version       # Output current version
 make version-info  # Output all version env vars
+```
+
+### Verify Deployment
+
+```bash
+curl -s https://www.skraaningen.dk/api/public/health | jq '.version'
 ```
 
 ### Rollback Process
