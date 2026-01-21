@@ -116,6 +116,13 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
     const myInhabitant = computed(() => authStore.user?.Inhabitant ?? null)
 
+    const householdByInhabitantId = computed(() => {
+        const map = new Map<number, HouseholdDisplay>()
+        households.value.forEach(h => h.inhabitants.forEach(i => map.set(i.id, h)))
+        return map
+    })
+    const getHouseholdForInhabitant = (inhabitantId: number) => householdByInhabitantId.value.get(inhabitantId)
+
     // ========================================
     // Store Actions
     // ========================================
@@ -293,7 +300,8 @@ export const useHouseholdsStore = defineStore("Households", () => {
         refreshSelectedHousehold,
         initHouseholdsStore,
         updateInhabitantPreferences,
-        updateAllInhabitantPreferences
+        updateAllInhabitantPreferences,
+        getHouseholdForInhabitant
     }
 })
 

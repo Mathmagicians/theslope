@@ -14,9 +14,10 @@ import type {DateRange} from '~/types/dateTypes'
 import type {HouseholdBillingResponse, TransactionDisplay, CostEntry} from '~/composables/useBillingValidation'
 import type {OrderDisplay} from '~/composables/useBookingValidation'
 import type {StatBox} from '~/components/economy/CostEntry.vue'
+import type {HouseholdDetail} from '~/composables/useCoreValidation'
 
 interface Props {
-    household: {id: number}
+    household: HouseholdDetail
 }
 
 const props = defineProps<Props>()

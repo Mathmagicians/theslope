@@ -84,18 +84,8 @@ const upcomingDinnerIds = computed(() => {
 const inhabitantsMap = computed(() => new Map(allInhabitants.value.map(i => [i.id, i.name])))
 const getInhabitantName = (id: number) => inhabitantsMap.value.get(id) ?? `#${id}`
 
-// Household lookup for future orders grouping
-const householdsMap = computed(() =>
-    new Map(households.value.map(h => [h.id, {id: h.id, pbsId: h.pbsId, address: h.address}]))
-)
-// Inhabitant -> household lookup
-const inhabitantHouseholdMap = computed(() =>
-    new Map(allInhabitants.value.map(i => [i.id, i.householdId]))
-)
-const getHouseholdForInhabitant = (inhabitantId: number) => {
-    const householdId = inhabitantHouseholdMap.value.get(inhabitantId)
-    return householdId ? householdsMap.value.get(householdId) : undefined
-}
+// Household lookup from store (reused in KitchenPreparation)
+const {getHouseholdForInhabitant} = householdsStore
 
 // Fetch upcoming orders (admin: all households)
 // CRITICAL: Use computed key for reactive refetch when season changes (ADR-007)
@@ -502,6 +492,7 @@ const dinnerBreakdownStats = computed(() => {
                 :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                 square
                 :size="SIZES.small"
+                :data-testid="`future-orders-expand-${row.original.dinnerEventId}`"
                 aria-label="Vis detaljer"
                 @click="row.toggleExpanded()"
             />
