@@ -52,26 +52,28 @@ requireHouseholdAccess(event, householdId, adminBypass = () => false)
 
 ### 5. UI Location: AdminEconomy
 
-Reuse `DinnerBookingForm` with `adminOverride` prop:
+Reuse `DinnerBookingForm` by passing wrapped predicates from parent:
 
-| Prop | Effect |
-|------|--------|
-| `adminOverride=true` | Bypasses `isHouseholdMember` check |
-| `adminOverride=true` | Bypasses deadline-based disabled modes |
-| `adminOverride=true` | Parent calls admin-enabled endpoints |
+| Current | Admin Wrapper |
+|---------|---------------|
+| `canBook(date)` | `() => true` (always allowed) |
+| `canChangeDiningMode(date)` | `() => true` (all modes available) |
+| `isHouseholdMember(id)` | `() => true` (can edit any household) |
 
-AdminEconomy already shows future orders per dinner - add edit button that opens DinnerBookingForm in modal.
+**Key:** Form doesn't know about admin mode - parent wraps existing predicates with admin override. Form just uses predicates it receives.
+
+AdminEconomy already shows future orders per dinner - add edit button that opens DinnerBookingForm in modal with wrapped predicates.
 
 ## Implementation Scope
 
 | Component | Change |
 |-----------|--------|
-| `authorizationHelper.ts` | Add `adminBypass` param to `requireHouseholdAccess` |
+| `authorizationHelper.ts` | Add `adminBypass` param to `requireHouseholdAccess` (default `() => false`) |
 | `PUT /api/order` | Pass `isAdmin` as bypass predicate |
 | `POST /api/order/[id]` | Pass `isAdmin` + skip deadline logic when admin |
-| `DinnerBookingForm.vue` | Add `adminOverride` prop for permission + deadline bypass |
+| `DinnerBookingForm.vue` | Accept deadline predicates as props (instead of computing internally) |
 | `bookings.ts` store | Add admin-aware methods (or flag) |
-| `AdminEconomy.vue` | Add correction UI using DinnerBookingForm |
+| `AdminEconomy.vue` | Add correction UI, pass wrapped predicates to DinnerBookingForm |
 
 ## UI Mockups
 

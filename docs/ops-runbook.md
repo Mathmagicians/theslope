@@ -201,6 +201,8 @@ flowchart TD
 | **Deploy** | Ships code to environment | Every PR merge (automatic) | No |
 | **Release** | Marks a version milestone | Business decision (manual) | Yes |
 
+**Idempotent releases:** Re-running a release with the same version is safe. The CI/CD pipeline checks if the tag and GitHub release already exist and skips creation if so.
+
 ### Triggering Releases
 
 **GitOps (recommended):**
