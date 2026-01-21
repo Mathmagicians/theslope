@@ -522,10 +522,11 @@ const dinnerBreakdownStats = computed(() => {
                   <div>
                     <DangerButton
                         v-if="props.canEdit"
-                        label="Korrektion"
+                        label="Admin Korrektion"
                         confirm-label="Klik igen for at rette"
                         :icon="ICONS.authorize"
-                        :size="SIZES.small"
+                        :confirm-icon="ICONS.authorize"
+                        :size="SIZES.standard"
                         undo
                         data-testid="admin-correction-btn"
                         @confirm="startEditingDinner(row.original.dinnerEventId)"
