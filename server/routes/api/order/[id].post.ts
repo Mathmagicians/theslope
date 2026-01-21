@@ -1,7 +1,8 @@
-import {createError, defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus} from "h3"
+import {createError, defineEventHandler, getValidatedRouterParams, getValidatedQuery, readValidatedBody, setResponseStatus} from "h3"
 import {fetchOrder, updateOrder, deleteOrder} from "~~/server/data/financesRepository"
 import {fetchSeason} from "~~/server/data/prismaRepository"
 import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
+import {isAdmin} from '~/composables/usePermissions'
 import type {OrderDetail} from "~/composables/useBookingValidation"
 import {useBookingValidation} from "~/composables/useBookingValidation"
 import {useSeason} from "~/composables/useSeason"
@@ -71,8 +72,10 @@ export default defineEventHandler(async (event): Promise<OrderDetail> => {
             throw createError({statusCode: 404, message: `Order ${id} not found`})
         }
 
-        // Authorization: User must belong to the order's household
-        await requireHouseholdAccess(event, existingOrder.inhabitant.householdId)
+        // Authorization: User must belong to the order's household (admin can bypass via ?adminBypass=true)
+        const querySchema = z.object({adminBypass: z.coerce.boolean().optional()})
+        const {adminBypass} = await getValidatedQuery(event, querySchema.parse)
+        await requireHouseholdAccess(event, existingOrder.inhabitant.householdId, adminBypass ? isAdmin : undefined)
 
         // Get season for deadline calculation
         const season = await fetchSeason(d1Client, existingOrder.dinnerEvent.seasonId!)
@@ -85,24 +88,22 @@ export default defineEventHandler(async (event): Promise<OrderDetail> => {
 
         // Handle cancellation (dinnerMode → NONE)
         if (isCancellation) {
-            const cancellationAction = getOrderCancellationAction(existingOrder.dinnerEvent.date)
+            // Admin bypass skips deadline check (always DELETE)
+            const releaseAction = adminBypass ? null : getOrderCancellationAction(existingOrder.dinnerEvent.date)
 
-            if (cancellationAction === null) {
-                // Before deadline: DELETE order (user not charged)
-                console.info(`${LOG} Cancelling order ${id} BEFORE deadline - deleting`)
+            if (releaseAction === null) {
+                // Before deadline OR admin bypass: DELETE order
+                console.info(`${LOG} ${adminBypass ? 'Admin bypass' : 'Before deadline'}: deleting order ${id}`)
                 await deleteOrder(d1Client, id, performedByUserId)
-
-                // Return the order with updated dinnerMode to indicate final state
                 setResponseStatus(event, 200)
                 return {...existingOrder, dinnerMode: DinnerMode.NONE}
             } else {
                 // After deadline: RELEASE order (user pays, ticket available)
-                console.info(`${LOG} Cancelling order ${id} AFTER deadline - releasing`)
-                const updatedOrder = await updateOrder(d1Client, id, cancellationAction.updates, {
-                    action: cancellationAction.auditAction,
+                console.info(`${LOG} After deadline: releasing order ${id}`)
+                const updatedOrder = await updateOrder(d1Client, id, releaseAction.updates, {
+                    action: releaseAction.auditAction,
                     performedByUserId
                 })
-
                 setResponseStatus(event, 200)
                 return updatedOrder
             }

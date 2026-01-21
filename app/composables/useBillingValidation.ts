@@ -315,7 +315,6 @@ export const useBillingValidation = () => {
             })
         }),
         ticketType: TicketTypeSchema.nullable(),
-        // Guest/provenance fields for CostLine display (extracted from snapshot)
         isGuestTicket: z.boolean().optional(),
         provenanceHousehold: z.string().nullable().optional()
     })
@@ -443,7 +442,6 @@ export const useBillingValidation = () => {
 
     /**
      * Order snapshot schema - frozen billing data for immutability.
-     * Matches what createTransactions.ts stores. Strict - no defaults.
      * Price is in Transaction.amount, not duplicated here.
      */
     const OrderSnapshotSchema = z.object({
@@ -462,14 +460,12 @@ export const useBillingValidation = () => {
             })
         }),
         ticketType: TicketTypeSchema.nullable(),
-        // Guest/provenance fields (optional for backward compatibility with existing snapshots)
         isGuestTicket: z.boolean().optional(),
         provenanceHousehold: z.string().nullable().optional()
     })
 
     /**
      * Serialize order data for transaction snapshot.
-     * Freezes billing-relevant data at transaction creation time.
      * ADR-010: Domain-driven serialization
      */
     const serializeTransaction = (order: {

@@ -25,6 +25,7 @@ export const useTemporalCalendar = () => {
   /**
    * Split events into temporal categories (past/next/future)
    * Uses splitDinnerEvents which computes nextDinnerDateRange internally (DRY)
+   * Returns dates (not events) for calendar badge display - extracts .date from events
    */
   const useTemporalSplit = <T extends { date: Date }>(events: T[]) => {
     const dinnerStartHour = getDefaultDinnerStartTime()
@@ -32,8 +33,9 @@ export const useTemporalCalendar = () => {
     const splitResult = computed(() => splitDinnerEvents<T>(events))
 
     const nextDinner = computed(() => splitResult.value.nextDinner)
-    const pastDinnerDates = computed(() => splitResult.value.pastDinnerDates)
-    const futureDinnerDates = computed(() => splitResult.value.futureDinnerDates)
+    // Extract dates from events for calendar badge display
+    const pastDinnerDates = computed(() => splitResult.value.pastDinners.map(e => e.date))
+    const futureDinnerDates = computed(() => splitResult.value.futureDinners.map(e => e.date))
     const nextDinnerDateRange = computed(() => splitResult.value.nextDinnerDateRange)
 
     return {

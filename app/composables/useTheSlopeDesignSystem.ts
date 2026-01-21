@@ -455,6 +455,14 @@ export const COMPONENTS = {
         }
     },
 
+    // CostLine - line item in economy views with fixed column widths for vertical alignment
+    costLine: {
+        row: 'grid items-center justify-items-center gap-1 md:gap-2 max-w-2xl',
+        columns: 'grid-cols-[1.5rem_6rem_3rem_1.5rem_3rem_5rem_auto] md:grid-cols-[1.5rem_8rem_3.5rem_1.5rem_4rem_5.5rem_auto]',
+        nameSlot: 'justify-self-start',
+        amountSlot: 'justify-self-end'
+    },
+
     // Hero-complementary panels - Sections that sit on hero backgrounds (mocha/peach/pink/orange)
     // Curated defaults for maximum readability on warm hero backgrounds
     heroPanel: {
@@ -589,6 +597,7 @@ export const ICONS = {
     shoppingCart: 'i-heroicons-shopping-cart',
     released: 'i-heroicons-arrow-up-tray',
     claim: 'i-heroicons-arrows-right-left',
+    archive: 'i-heroicons-archive-box',
 
     // Empty states & system feedback
     robotDead: 'i-mage-robot-dead',

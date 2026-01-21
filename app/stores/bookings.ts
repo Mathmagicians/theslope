@@ -1,6 +1,6 @@
-import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder, DinnerState} from '~/composables/useBookingValidation'
+import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder, DinnerState, DinnerMode} from '~/composables/useBookingValidation'
 import type {MonthlyBillingResponse, BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail, TransactionDisplay} from '~/composables/useBillingValidation'
-import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import {type ReleasedTicketCounts, resolveDesiredOrdersToBuckets} from '~/composables/useBooking'
 import {useBilling} from '~/composables/useBilling'
 
 export const useBookingsStore = defineStore("Bookings", () => {
@@ -111,12 +111,12 @@ export const useBookingsStore = defineStore("Bookings", () => {
         console.info(CTX, `Loading orders for inhabitant: ${inhabitantId}${withProvenance ? ' (with provenance)' : ''}`)
     }
 
+    // Internal order methods - only used by processAdminCorrection
     const createOrder = async (request: CreateOrdersRequest): Promise<CreateOrdersResult> => {
         try {
-            const result = await $fetch<CreateOrdersResult>('/api/order', {
+            const result = await $fetch<CreateOrdersResult>(`/api/order?adminBypass=${authStore.isAdmin}`, {
                 method: 'PUT',
-                body: request,
-                headers: {'Content-Type': 'application/json'}
+                body: request
             })
             console.info(CTX, `Created ${result.createdIds.length} order(s)`)
             await refreshOrders()
@@ -129,7 +129,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
     const deleteOrder = async (orderId: number): Promise<void> => {
         try {
-            await $fetch(`/api/order/${orderId}`, {
+            await $fetch(`/api/order/${orderId}?adminBypass=${authStore.isAdmin}`, {
                 method: 'DELETE'
             })
             console.info(CTX, `Deleted order ${orderId}`)
@@ -140,12 +140,11 @@ export const useBookingsStore = defineStore("Bookings", () => {
         }
     }
 
-    const updateOrder = async (orderId: number, orderData: Partial<OrderCreate>): Promise<OrderDisplay> => {
+    const updateOrder = async (orderId: number, orderData: { dinnerMode: DinnerMode }): Promise<OrderDisplay> => {
         try {
-            const updatedOrder = await $fetch<OrderDisplay>(`/api/order/${orderId}`, {
+            const updatedOrder = await $fetch<OrderDisplay>(`/api/order/${orderId}?adminBypass=${authStore.isAdmin}`, {
                 method: 'POST',
-                body: orderData,
-                headers: {'Content-Type': 'application/json'}
+                body: orderData
             })
             console.info(CTX, `Updated order ${orderId}`)
             await refreshOrders()
@@ -221,8 +220,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         const season = planStore.selectedSeason
         if (!season?.dinnerEvents?.length) return
 
-        const {nextDinner, futureDinnerDates} = splitDinnerEvents(season.dinnerEvents)
-        const futureDinners = season.dinnerEvents.filter(e => futureDinnerDates.some(d => d.getTime() === e.date.getTime()))
+        const {nextDinner, futureDinners} = splitDinnerEvents(season.dinnerEvents)
         const deadlines = deadlinesForSeason(season)
 
         const lockedIds = getLockedFutureDinnerIds(nextDinner, futureDinners, deadlines)
@@ -292,6 +290,80 @@ export const useBookingsStore = defineStore("Bookings", () => {
             return result
         } catch (e: unknown) {
             handleApiError(e, 'Kunne ikke gemme bookinger')
+            throw e
+        } finally {
+            isProcessingBookings.value = false
+        }
+    }
+
+    /**
+     * Admin-only: Process order corrections bypassing deadlines.
+     * Uses individual order endpoints (PUT, POST, DELETE) with adminBypass.
+     * Reuses resolveDesiredOrdersToBuckets with always-true predicates (admin bypasses deadlines).
+     */
+    const processAdminCorrection = async (
+        householdId: number,
+        dinnerEventId: number,
+        dinnerEventDate: Date,
+        orders: DesiredOrder[],
+        existingOrders: OrderDisplay[]
+    ): Promise<void> => {
+        const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+
+        // Fail fast: admin access required
+        if (!authStore.isAdmin) {
+            handleApiError(new Error('Admin access required'), 'Kun administratorer kan rette bookinger')
+            return
+        }
+
+        const bookedByUserId = authStore.user?.id
+        if (!bookedByUserId) {
+            handleApiError(new Error('User ID required'), 'Bruger-ID mangler')
+            return
+        }
+
+        isProcessingBookings.value = true
+        try {
+            // Admin bypasses deadlines: always-true predicates → DELETE instead of RELEASE
+            const dinnerEventById = new Map([[dinnerEventId, { date: dinnerEventDate }]])
+            const buckets = resolveDesiredOrdersToBuckets(
+                orders,
+                existingOrders,
+                dinnerEventById,
+                () => true,  // canModifyOrders: admin bypasses
+                () => true,  // canEditDiningMode: admin bypasses
+                DinnerModeSchema.enum,
+                OrderStateSchema.enum
+            )
+
+            // Execute creates
+            if (buckets.create.length > 0) {
+                await createOrder({
+                    householdId,
+                    dinnerEventId,
+                    orders: buckets.create.map(o => ({
+                        inhabitantId: o.inhabitantId,
+                        ticketPriceId: o.ticketPriceId,
+                        dinnerMode: o.dinnerMode,
+                        bookedByUserId,
+                        isGuestTicket: o.isGuestTicket
+                    }))
+                })
+            }
+
+            // Execute deletes
+            for (const order of buckets.delete) {
+                await deleteOrder(order.orderId!)
+            }
+
+            // Execute updates
+            for (const order of buckets.update) {
+                await updateOrder(order.orderId!, { dinnerMode: order.dinnerMode })
+            }
+
+            console.info(CTX, `processAdminCorrection: created=${buckets.create.length}, deleted=${buckets.delete.length}, updated=${buckets.update.length}`)
+        } catch (e: unknown) {
+            handleApiError(e, 'Kunne ikke rette bookinger')
             throw e
         } finally {
             isProcessingBookings.value = false
@@ -534,9 +606,6 @@ export const useBookingsStore = defineStore("Bookings", () => {
         // actions
         loadOrdersForDinners,
         loadOrdersForInhabitant,
-        createOrder,
-        deleteOrder,
-        updateOrder,
         claimOrder,
         fetchReleasedOrders,
         // Lock status (calendar display)
@@ -545,6 +614,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         isProcessingBookings,
         processSingleEventBookings,
         processMultipleEventsBookings,
+        processAdminCorrection,
 
         // dinner event actions
         isDinnerUpdating,

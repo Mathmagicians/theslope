@@ -78,8 +78,9 @@ const splitResult = computed(() =>
 )
 
 const nextDinner = computed(() => splitResult.value.nextDinner)
-const pastDinnerDates = computed(() => splitResult.value.pastDinnerDates)
-const futureDinnerDates = computed(() => splitResult.value.futureDinnerDates)
+// Extract dates from events for calendar badge display
+const pastDinnerDates = computed(() => splitResult.value.pastDinners.map(e => e.date))
+const futureDinnerDates = computed(() => splitResult.value.futureDinners.map(e => e.date))
 
 const pastDinnersEventList = computed(() =>
     createEventList(pastDinnerDates.value, 'past-dinners', 'badge', {

@@ -33,11 +33,11 @@ import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import {SeasonFactory} from '../../e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../../e2e/testDataFactories/dinnerEventFactory'
 
-// Schema for splitDinnerEvents return structure
+// Schema for splitDinnerEvents return structure (returns full events, not just dates)
 const SplitDinnerEventsResultSchema = z.object({
     nextDinner: z.object({ id: z.number(), date: z.date() }).nullable(),
-    pastDinnerDates: z.array(z.date()),
-    futureDinnerDates: z.array(z.date())
+    pastDinners: z.array(z.object({ id: z.number(), date: z.date() })),
+    futureDinners: z.array(z.object({ id: z.number(), date: z.date() }))
 })
 
 const { createDefaultWeekdayMap } = useWeekDayMapValidation()
@@ -1176,8 +1176,8 @@ describe('Active Season Management utilities', () => {
 
                 // Verify expected values
                 expect(result.nextDinner?.id).toBe(expectedNextDinnerId)
-                expect(result.pastDinnerDates).toHaveLength(expectedPastCount)
-                expect(result.futureDinnerDates).toHaveLength(expectedFutureCount)
+                expect(result.pastDinners).toHaveLength(expectedPastCount)
+                expect(result.futureDinners).toHaveLength(expectedFutureCount)
             })
         })
 
@@ -1214,8 +1214,8 @@ describe('Active Season Management utilities', () => {
                 const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, undefined, referenceTime)
 
                 expect(result.nextDinner?.id).toBe(events.length > 0 && expectedPastCount < events.length ? events[expectedPastCount]?.id : undefined)
-                expect(result.pastDinnerDates).toHaveLength(expectedPastCount)
-                expect(result.futureDinnerDates).toHaveLength(expectedFutureCount)
+                expect(result.pastDinners).toHaveLength(expectedPastCount)
+                expect(result.futureDinners).toHaveLength(expectedFutureCount)
             })
         })
 
@@ -1269,7 +1269,7 @@ describe('Active Season Management utilities', () => {
             ])('$scenario', ({ referenceTime, events, maxDaysAhead, expectedNextDinnerId, expectedFutureCount }) => {
                 const result = splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(events, maxDaysAhead, referenceTime)
                 expect(result.nextDinner?.id).toBe(expectedNextDinnerId)
-                expect(result.futureDinnerDates).toHaveLength(expectedFutureCount)
+                expect(result.futureDinners).toHaveLength(expectedFutureCount)
             })
         })
 

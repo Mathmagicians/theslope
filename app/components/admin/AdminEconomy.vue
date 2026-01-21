@@ -12,8 +12,11 @@
 import {formatDate, formatDateRange} from '~/utils/date'
 import type {DateRange} from '~/types/dateTypes'
 import type {TransactionDisplay, CostEntry} from '~/composables/useBillingValidation'
-import type {OrderDisplay} from '~/composables/useBookingValidation'
+import type {OrderDisplay, DesiredOrder} from '~/composables/useBookingValidation'
 import type {StatBox} from '~/components/economy/CostEntry.vue'
+import type {SeasonDeadlines} from '~/composables/useSeason'
+import type {HouseholdDetail, TicketPrice} from '~/composables/useCoreValidation'
+import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 
 const {formatPrice} = useTicket()
 const {groupByCostEntry, groupByHouseholdEntry, joinOrdersWithDinnerEvents, calculateCurrentBillingPeriod, controlInvoices, formatTicketCounts} = useBilling()
@@ -60,11 +63,14 @@ const dinnerEventsMap = computed(() =>
     new Map(dinnerEvents.value.map(e => [e.id, {id: e.id, date: e.date, menuTitle: e.menuTitle}]))
 )
 
-// Future dinner IDs (using splitDinnerEvents logic)
+// Upcoming dinner IDs = nextDinner + future (using splitDinnerEvents)
 const splitResult = computed(() => splitDinnerEvents(dinnerEvents.value))
-const futureDinnerIds = computed(() => {
-    const futureDates = new Set(splitResult.value.futureDinnerDates.map(d => d.getTime()))
-    return new Set(dinnerEvents.value.filter(e => futureDates.has(e.date.getTime())).map(e => e.id))
+const upcomingDinnerIds = computed(() => {
+    const {nextDinner, futureDinners} = splitResult.value
+    return [
+        ...(nextDinner ? [nextDinner.id] : []),
+        ...futureDinners.map(e => e.id)
+    ]
 })
 
 // Inhabitant name lookup
@@ -84,18 +90,17 @@ const getHouseholdForInhabitant = (inhabitantId: number) => {
     return householdId ? householdsMap.value.get(householdId) : undefined
 }
 
-// Fetch future orders (admin: all households)
-const futureDinnerIdsArray = computed(() => Array.from(futureDinnerIds.value))
+// Fetch upcoming orders (admin: all households)
 // CRITICAL: Use computed key for reactive refetch when season changes (ADR-007)
-const futureOrdersKey = computed(() =>
-    `admin-economy-future-orders-${futureDinnerIdsArray.value.join('-')}`
+const upcomingOrdersKey = computed(() =>
+    `admin-economy-upcoming-orders-${upcomingDinnerIds.value.join('-')}`
 )
-const {data: futureOrders, status: futureOrdersStatus} = useAsyncData<OrderDisplay[]>(
-    futureOrdersKey,
+const {data: upcomingOrders, status: upcomingOrdersStatus} = useAsyncData<OrderDisplay[]>(
+    upcomingOrdersKey,
     () => {
-        if (futureDinnerIdsArray.value.length === 0) return Promise.resolve([])
+        if (upcomingDinnerIds.value.length === 0) return Promise.resolve([])
         const params = new URLSearchParams()
-        futureDinnerIdsArray.value.forEach(id => params.append('dinnerEventIds', String(id)))
+        upcomingDinnerIds.value.forEach(id => params.append('dinnerEventIds', String(id)))
         params.append('allHouseholds', 'true')
         return $fetch<OrderDisplay[]>(`/api/order?${params.toString()}`)
     },
@@ -103,12 +108,12 @@ const {data: futureOrders, status: futureOrdersStatus} = useAsyncData<OrderDispl
         default: () => [],
         transform: (data: unknown[]) => (data as Record<string, unknown>[]).map(o => OrderDisplaySchema.parse(o)),
         // Watch for changes to re-fetch when season loads (computed key alone doesn't trigger refetch)
-        watch: [futureDinnerIdsArray]
+        watch: [upcomingDinnerIds]
     }
 )
-// Loading state includes season not yet loaded (futureDinnerIds depends on season)
-const isFutureOrdersLoading = computed(() =>
-    futureOrdersStatus.value === 'pending' || !isSelectedSeasonInitialized.value
+// Loading state includes season not yet loaded (upcomingDinnerIds depends on season)
+const isUpcomingOrdersLoading = computed(() =>
+    upcomingOrdersStatus.value === 'pending' || !isSelectedSeasonInitialized.value
 )
 
 // Future orders enriched with dinner + household info for grouping
@@ -116,8 +121,8 @@ type OrderWithDinnerAndHousehold = OrderDisplay & {
     dinnerEvent: {id: number, date: Date, menuTitle: string}
     inhabitant: {id: number, name: string, household: {id: number, pbsId: number, address: string}}
 }
-const futureOrdersWithDinnerAndHousehold = computed(() =>
-    joinOrdersWithDinnerEvents(futureOrders.value, dinnerEventsMap.value, getInhabitantName)
+const upcomingOrdersWithDinnerAndHousehold = computed(() =>
+    joinOrdersWithDinnerEvents(upcomingOrders.value, dinnerEventsMap.value, getInhabitantName)
         .map(o => ({
             ...o,
             inhabitant: {
@@ -127,14 +132,14 @@ const futureOrdersWithDinnerAndHousehold = computed(() =>
         })) as OrderWithDinnerAndHousehold[]
 )
 const groupOrdersByDinner = groupByCostEntry<OrderWithDinnerAndHousehold>(o => o.dinnerEvent)
-const futureOrdersGrouped = computed(() =>
-    groupOrdersByDinner(futureOrdersWithDinnerAndHousehold.value, o => o.priceAtBooking)
+const upcomingOrdersGrouped = computed(() =>
+    groupOrdersByDinner(upcomingOrdersWithDinnerAndHousehold.value, o => o.priceAtBooking)
 )
 
 // Grouper for orders by household (within a dinner)
 const groupOrdersByHousehold = groupByHouseholdEntry<OrderWithDinnerAndHousehold>(o => o.inhabitant.household)
-const futureOrdersTotal = computed(() =>
-    futureOrdersWithDinnerAndHousehold.value.reduce((sum, o) => sum + o.priceAtBooking, 0)
+const upcomingOrdersTotal = computed(() =>
+    upcomingOrdersWithDinnerAndHousehold.value.reduce((sum, o) => sum + o.priceAtBooking, 0)
 )
 
 // Dinner columns for orders table
@@ -147,13 +152,36 @@ const dinnerColumns = [
 ]
 
 // Household columns for nested table within dinner expansion
+// Address column shows "<address> · PBS xx" format
 const householdOrderColumns = [
     {id: 'expand'},
-    {accessorKey: 'pbsId', header: 'PBS'},
     {accessorKey: 'address', header: 'Adresse'},
     {accessorKey: 'ticketCounts', header: 'Kuverter'},
     {accessorKey: 'totalAmount', header: 'Beløb'}
 ]
+
+// Sort household entries by address (alphabetical)
+const sortByAddress = <T extends { address: string }>(entries: T[]): T[] =>
+    [...entries].sort((a, b) => a.address.localeCompare(b.address, 'da'))
+
+// Per-dinner search state for household filtering
+const householdSearchQueries = ref<Map<number, string>>(new Map())
+const getHouseholdSearch = (dinnerEventId: number): string =>
+    householdSearchQueries.value.get(dinnerEventId) ?? ''
+const setHouseholdSearch = (dinnerEventId: number, query: string) => {
+    householdSearchQueries.value.set(dinnerEventId, query)
+}
+
+// Filter households by address and inhabitant names
+type HouseholdEntry = { address: string, pbsId: number, totalAmount: number, items: OrderWithDinnerAndHousehold[] }
+const filterHouseholds = (entries: HouseholdEntry[], query: string): HouseholdEntry[] => {
+    if (!query) return entries
+    const q = query.toLowerCase()
+    return entries.filter(entry =>
+        entry.address.toLowerCase().includes(q) ||
+        entry.items.some(order => order.inhabitant.name.toLowerCase().includes(q))
+    )
+}
 
 // Stats accessor for future orders dinner expansion
 const futureDinnerStatsAccessor = (entry: {items: OrderWithDinnerAndHousehold[], date: Date, menuTitle: string}): StatBox[] => {
@@ -332,6 +360,73 @@ const toggleHistory = (orderId: number | null) => {
     historyOrderId.value = historyOrderId.value === orderId ? null : orderId
 }
 
+// ========== ADMIN CORRECTION (edit orders bypassing deadlines) ==========
+
+// Track which dinner is being edited + selected household
+const editingDinnerId = ref<number | null>(null)
+const editingHouseholdId = ref<number | null>(null)
+
+const startEditingDinner = (dinnerEventId: number) => {
+    editingDinnerId.value = dinnerEventId
+    editingHouseholdId.value = null
+}
+const cancelEditing = () => {
+    editingDinnerId.value = null
+    editingHouseholdId.value = null
+}
+
+// Household options for selector
+const householdOptions = computed(() =>
+    households.value.map(h => ({
+        label: `${h.address} · PBS ${h.pbsId}`,
+        value: h.id
+    }))
+)
+
+// Admin deadlines - bypass all checks (ADR-016: always-true predicates)
+const adminDeadlines: SeasonDeadlines = {
+    canModifyOrders: () => true,
+    canEditDiningMode: () => true,
+    getOrderCancellationAction: () => null,
+    isAnnounceMenuPastDeadline: () => false
+}
+
+// Get data for DinnerBookingForm
+const editingDinnerEvent = computed((): DinnerEventDisplay | null => {
+    if (!editingDinnerId.value) return null
+    return dinnerEvents.value.find(e => e.id === editingDinnerId.value) ?? null
+})
+
+const editingHousehold = computed((): HouseholdDetail | undefined =>
+    editingHouseholdId.value ? households.value.find(h => h.id === editingHouseholdId.value) : undefined
+)
+
+const editingOrders = computed((): OrderDisplay[] => {
+    if (!editingDinnerId.value || !editingHouseholdId.value) return []
+    return upcomingOrders.value.filter(o =>
+        o.dinnerEventId === editingDinnerId.value &&
+        inhabitantHouseholdMap.value.get(o.inhabitantId) === editingHouseholdId.value
+    )
+})
+
+const ticketPrices = computed((): TicketPrice[] =>
+    selectedSeason.value?.ticketPrices ?? []
+)
+
+// Handle save from DinnerBookingForm
+const {processAdminCorrection} = bookingsStore
+const handleAdminSave = async (orders: DesiredOrder[]) => {
+    if (!editingDinnerId.value || !editingHouseholdId.value || !editingDinnerEvent.value) return
+    await processAdminCorrection(
+        editingHouseholdId.value,
+        editingDinnerId.value,
+        editingDinnerEvent.value.date,
+        orders,
+        editingOrders.value
+    )
+    cancelEditing()
+}
+
 // Dinner breakdown stats (for caption in expanded invoice view)
 const dinnerBreakdownStats = computed(() => {
     const groups = invoiceTransactionsGrouped.value
@@ -361,11 +456,11 @@ const dinnerBreakdownStats = computed(() => {
         </template>
 
         <EconomyTable
-            :data="futureOrdersGrouped"
+            :data="upcomingOrdersGrouped"
             :columns="dinnerColumns"
             row-key="dinnerEventId"
             :date-accessor="(item) => item.date"
-            :loading="isFutureOrdersLoading"
+            :loading="isUpcomingOrdersLoading"
         >
           <template #expand-cell="{ row }">
             <UButton
@@ -391,13 +486,22 @@ const dinnerBreakdownStats = computed(() => {
                   :stats-accessor="futureDinnerStatsAccessor"
               >
                 <template #default>
-                  <!-- Household table within dinner -->
+                  <!-- Household table within dinner (filtered + sorted by address) -->
                   <UTable
-                      :data="groupOrdersByHousehold(row.original.items, o => o.priceAtBooking)"
+                      :data="filterHouseholds(sortByAddress(groupOrdersByHousehold(row.original.items, o => o.priceAtBooking)), getHouseholdSearch(row.original.dinnerEventId))"
                       :columns="householdOrderColumns"
                       :ui="COMPONENTS.table.ui"
                       row-key="householdId"
                   >
+                    <template #address-header>
+                      <UInput
+                          :model-value="getHouseholdSearch(row.original.dinnerEventId)"
+                          placeholder="Søg adresse eller navn..."
+                          trailing-icon="i-heroicons-magnifying-glass"
+                          :size="SIZES.small"
+                          @update:model-value="setHouseholdSearch(row.original.dinnerEventId, $event)"
+                      />
+                    </template>
                     <template #expand-cell="{ row: householdRow }">
                       <UButton
                           v-if="householdRow.original.items.length > 0"
@@ -410,8 +514,7 @@ const dinnerBreakdownStats = computed(() => {
                           @click="householdRow.toggleExpanded()"
                       />
                     </template>
-                    <template #pbsId-cell="{ row: householdRow }">{{ householdRow.original.pbsId }}</template>
-                    <template #address-cell="{ row: householdRow }">{{ householdRow.original.address }}</template>
+                    <template #address-cell="{ row: householdRow }">{{ householdRow.original.address }} <span :class="TYPOGRAPHY.bodyTextMuted">· PBS {{ householdRow.original.pbsId }}</span></template>
                     <template #totalAmount-cell="{ row: householdRow }">{{ formatPrice(householdRow.original.totalAmount) }} kr</template>
 
                     <!-- Expanded household: individual order line items -->
@@ -443,10 +546,10 @@ const dinnerBreakdownStats = computed(() => {
           </template>
         </EconomyTable>
 
-        <template v-if="futureOrdersGrouped.length > 0" #footer>
+        <template v-if="upcomingOrdersGrouped.length > 0" #footer>
           <div class="flex justify-end items-center gap-2">
             <span :class="TYPOGRAPHY.bodyTextMedium">Total:</span>
-            <span :class="TYPOGRAPHY.cardTitle">{{ formatPrice(futureOrdersTotal) }} kr</span>
+            <span :class="TYPOGRAPHY.cardTitle">{{ formatPrice(upcomingOrdersTotal) }} kr</span>
           </div>
         </template>
       </UCard>

@@ -275,15 +275,10 @@ export const useSeason = () => {
         if (allDinnerEvents.length === 0) return []
 
         const prebookingWindow = getPrebookingWindowDays()
-        const {nextDinner, futureDinnerDates} = configuredSplitDinnerEvents(allDinnerEvents, prebookingWindow)
+        const {nextDinner, futureDinners} = configuredSplitDinnerEvents(allDinnerEvents, prebookingWindow)
 
-        // Build set of all scaffoldable dates: nextDinner + futureDinnerDates
-        const scaffoldableDates = [...futureDinnerDates]
-        if (nextDinner) {
-            scaffoldableDates.push(nextDinner.date)
-        }
-        const scaffoldableDateSet = new Set(scaffoldableDates.map(d => d.getTime()))
-        return allDinnerEvents.filter(de => scaffoldableDateSet.has(de.date.getTime()))
+        // All scaffoldable events: nextDinner + futureDinners
+        return nextDinner ? [nextDinner, ...futureDinners] : futureDinners
     }
 
     const getHolidaysForSeason = (season: Season): Date[] =>getHolidayDatesFromDateRangeList(season.holidays)

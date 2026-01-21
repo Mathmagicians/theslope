@@ -86,9 +86,13 @@ const {splitDinnerEvents} = useSeason()
 // Split dinner events into past/future using dinner time logic
 const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
 const splitResult = computed(() => splitDinnerEvents(dinnerEvents.value))
-const futureDinnerIds = computed(() => {
-    const futureDates = new Set(splitResult.value.futureDinnerDates.map(d => d.getTime()))
-    return new Set(dinnerEvents.value.filter(e => futureDates.has(e.date.getTime())).map(e => e.id))
+// Upcoming = nextDinner + future (same as AdminEconomy)
+const upcomingDinnerIds = computed(() => {
+    const {nextDinner, futureDinners} = splitResult.value
+    return new Set([
+        ...(nextDinner ? [nextDinner.id] : []),
+        ...futureDinners.map(e => e.id)
+    ])
 })
 
 // Dinner events lookup for joining orders
@@ -110,7 +114,7 @@ const upcomingOrdersData = computed(() => {
     // Filter: BOOKED/RELEASED, future dinner (using splitDinnerEvents logic)
     const upcomingOrders = orders.value.filter(o =>
         (o.state === OrderStateSchema.enum.BOOKED || o.state === OrderStateSchema.enum.RELEASED) &&
-        futureDinnerIds.value.has(o.dinnerEventId)
+        upcomingDinnerIds.value.has(o.dinnerEventId)
     )
 
     // Join using pure function

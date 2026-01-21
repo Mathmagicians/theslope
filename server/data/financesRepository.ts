@@ -771,11 +771,30 @@ export async function deleteOrder(
 }
 
 /**
+ * Sort comparator for OrderDisplay by sortBy field.
+ * Extracted for unit testing (ADR-003).
+ */
+export const getOrderSortComparator = (sortBy: 'createdAt' | 'releasedAt') =>
+    (a: OrderDisplay, b: OrderDisplay): number =>
+        sortBy === 'releasedAt'
+            ? (a.releasedAt?.getTime() ?? 0) - (b.releasedAt?.getTime() ?? 0)
+            : a.createdAt.getTime() - b.createdAt.getTime()
+
+/**
+ * ADR-014: Batch size for dinner event ID queries.
+ * D1 limit is 100 bound params. 90 reserves ~10 for other params (householdId, state, etc.)
+ */
+const DINNER_EVENT_ID_BATCH_SIZE = 90
+
+/**
  * Fetch orders, optionally filtered by dinner event ID(s) and/or household.
  *
  * WORKAROUND: Uses raw SQL instead of Prisma nested includes because Prisma D1 adapter
  * doesn't support relationJoins, and nested includes with WHERE clauses exceed D1's
  * 100 SQL variable limit when fetching many orders.
+ *
+ * ADR-014: When dinnerEventIds exceeds DINNER_EVENT_ID_BATCH_SIZE (90), the query is
+ * chunked into multiple batches to stay within D1's 100 parameter limit.
  *
  * Prisma issues tracking this limitation:
  * - https://github.com/prisma/prisma/issues/23348 (relationJoins for SQLite - not supported)
@@ -808,6 +827,39 @@ export async function fetchOrders(
     ].join(', ')
     console.info(`🎟️ > ORDER > [GET] Fetching orders for ${filterDesc}`)
 
+    // ADR-014: Chunk large ID arrays to stay within D1's 100 param limit
+    if (ids && ids.length > DINNER_EVENT_ID_BATCH_SIZE) {
+        console.info(`🎟️ > ORDER > [GET] Chunking ${ids.length} IDs into batches of ${DINNER_EVENT_ID_BATCH_SIZE}`)
+        const chunkIds = chunkArray<number>(DINNER_EVENT_ID_BATCH_SIZE)
+        const batches = chunkIds(ids)
+
+        // Execute batches in parallel and merge results
+        const batchResults = await Promise.all(
+            batches.map(batch => fetchOrdersBatch(d1Client, batch, householdId, state, sortBy, includeProvenance))
+        )
+
+        // Flatten and sort by the requested field
+        const allOrders = batchResults.flat()
+        const sorted = allOrders.sort(getOrderSortComparator(sortBy))
+        console.info(`🎟️ > ORDER > [GET] Merged ${sorted.length} orders from ${batches.length} batches`)
+        return sorted
+    }
+
+    return fetchOrdersBatch(d1Client, ids, householdId, state, sortBy, includeProvenance)
+}
+
+/**
+ * Internal: Fetch orders for a single batch of dinner event IDs.
+ * Called directly when IDs fit in one batch, or repeatedly for chunked queries.
+ */
+async function fetchOrdersBatch(
+    d1Client: D1Database,
+    dinnerEventIds: number[] | undefined,
+    householdId: number | undefined,
+    state: OrderState | undefined,
+    sortBy: 'createdAt' | 'releasedAt',
+    includeProvenance: boolean
+): Promise<OrderDisplay[]> {
     const {OrderDisplaySchema, deserializeOrderAuditData, OrderAuditActionSchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -816,9 +868,9 @@ export async function fetchOrders(
         const whereClauses: string[] = []
         const params: (string | number)[] = []
 
-        if (ids && ids.length > 0) {
-            whereClauses.push(`o.dinnerEventId IN (${ids.map(() => '?').join(',')})`)
-            params.push(...ids)
+        if (dinnerEventIds && dinnerEventIds.length > 0) {
+            whereClauses.push(`o.dinnerEventId IN (${dinnerEventIds.map(() => '?').join(',')})`)
+            params.push(...dinnerEventIds)
         }
         if (householdId) {
             whereClauses.push('i.householdId = ?')
@@ -875,8 +927,7 @@ export async function fetchOrders(
         }
 
         const rawOrders = await prisma.$queryRawUnsafe<RawOrderRow[]>(sql, ...params)
-
-        console.info(`🎟️ > ORDER > [GET] Found ${rawOrders.length} orders for ${filterDesc}`)
+        console.info(`🎟️ > ORDER > [GET] Batch returned ${rawOrders.length} orders`)
 
         return rawOrders.map(row => {
             // Extract provenance from audit data if present
@@ -913,6 +964,11 @@ export async function fetchOrders(
             })
         })
     } catch (error) {
+        const filterDesc = [
+            dinnerEventIds ? `${dinnerEventIds.length} dinner event(s)` : 'all events',
+            householdId ? `household ${householdId}` : 'all households',
+            state ? `state=${state}` : 'all states'
+        ].join(', ')
         return throwH3Error(`🎟️ > ORDER > [GET] : Error fetching orders for ${filterDesc}`, error)
     }
 }

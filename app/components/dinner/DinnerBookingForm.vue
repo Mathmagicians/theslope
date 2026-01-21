@@ -84,15 +84,19 @@ interface Props {
   dinnerEvent: DinnerEventDisplay
   orders?: OrderDisplay[]
   ticketPrices?: TicketPrice[]
+  /** Deadline predicates - parent can wrap with () => true for admin mode to bypass deadline checks */
   deadlines: SeasonDeadlines
   releasedTicketCounts?: ReleasedTicketCounts
+  /** Admin override for edit permission - bypasses isHouseholdMember check when provided */
+  canEditAdminOverride?: () => boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
   household: undefined,
   orders: () => [],
   ticketPrices: () => [],
-  releasedTicketCounts: () => ({ total: 0, formatted: '-' })
+  releasedTicketCounts: () => ({ total: 0, formatted: '-' }),
+  canEditAdminOverride: undefined
 })
 
 const emit = defineEmits<{
@@ -110,11 +114,12 @@ const household = computed(() => props.household ?? selectedHousehold.value)
 const {computeConsensus} = useHousehold()
 
 // Permission-based form mode - EDIT if user is member of household (ADR: permission in composable)
+// Admin can override via canEditAdminOverride prop
 const {isHouseholdMember} = usePermissions()
 const formMode = computed(() => {
   const householdId = household.value?.id
-  if (!householdId) return FORM_MODES.VIEW
-  return isHouseholdMember(householdId) ? FORM_MODES.EDIT : FORM_MODES.VIEW
+  const canEdit = householdId && (props.canEditAdminOverride ?? (() => isHouseholdMember(householdId)))()
+  return canEdit ? FORM_MODES.EDIT : FORM_MODES.VIEW
 })
 
 // Inject responsive breakpoint

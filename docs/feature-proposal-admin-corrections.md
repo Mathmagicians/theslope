@@ -66,14 +66,16 @@ AdminEconomy already shows future orders per dinner - add edit button that opens
 
 ## Implementation Scope
 
-| Component | Change |
-|-----------|--------|
-| `authorizationHelper.ts` | Add `adminBypass` param to `requireHouseholdAccess` (default `() => false`) |
-| `PUT /api/order` | Pass `isAdmin` as bypass predicate |
-| `POST /api/order/[id]` | Pass `isAdmin` + skip deadline logic when admin |
-| `DinnerBookingForm.vue` | Accept deadline predicates as props (instead of computing internally) |
-| `bookings.ts` store | Add admin-aware methods (or flag) |
-| `AdminEconomy.vue` | Add correction UI, pass wrapped predicates to DinnerBookingForm |
+| Component | Change | Status |
+|-----------|--------|--------|
+| `DinnerBookingForm.vue` | `canEditAdminOverride` prop + `deadlines` prop for bypass | ✅ Done |
+| `HouseholdFactory` | `defaultHouseholdDetail()` for component tests | ✅ Done |
+| `authorizationHelper.ts` | Add `adminBypass` param to `requireHouseholdAccess` (default `() => false`) | ✅ Done |
+| `PUT /api/order` | `?adminBypass=true` triggers `isAdmin` bypass | ✅ Done |
+| `POST /api/order/[id]` | `?adminBypass=true` bypasses deadline (always DELETE) | ✅ Done |
+| `OrderFactory` | `withAdminBypass` param on `updateOrder()` | ✅ Done |
+| E2E tests | Parametrized AFTER deadline test (release vs adminBypass delete) | ✅ Done |
+| `AdminEconomy.vue` | Add correction UI, pass wrapped predicates | ⏳ Next |
 
 ## UI Mockups
 

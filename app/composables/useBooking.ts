@@ -920,12 +920,8 @@ export const useBooking = () => {
      */
     const getPastDinnerIds = (pendingDinners: {id: number, date: Date}[]): number[] => {
         if (pendingDinners.length === 0) return []
-
-        const {pastDinnerDates} = splitDinnerEvents(pendingDinners)
-
-        return pendingDinners
-            .filter(d => pastDinnerDates.some(pd => pd.getTime() === d.date.getTime()))
-            .map(d => d.id)
+        const {pastDinners} = splitDinnerEvents(pendingDinners)
+        return pastDinners.map(d => d.id)
     }
 
     /**

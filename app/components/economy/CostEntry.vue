@@ -155,14 +155,18 @@ const displayItems = computed((): T[] => {
         v-if="shouldShowHeader"
         :class="['flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4', headerClass]"
     >
-      <!-- Title/subtitle -->
-      <div class="md:mr-8">
-        <h4 :class="TYPOGRAPHY.cardTitle">{{ displayTitle }}</h4>
-        <p v-if="displaySubtitle" :class="TYPOGRAPHY.bodyTextMuted">{{ displaySubtitle }}</p>
+      <!-- Title/subtitle + header actions slot -->
+      <div class="flex flex-wrap items-center gap-4">
+        <div>
+          <h4 :class="TYPOGRAPHY.cardTitle">{{ displayTitle }}</h4>
+          <p v-if="displaySubtitle" :class="TYPOGRAPHY.bodyTextMuted">{{ displaySubtitle }}</p>
+        </div>
+        <!-- Header actions slot (e.g., search input) -->
+        <slot name="header-actions"/>
       </div>
 
       <!-- Stat boxes + control badge -->
-      <div class="flex flex-wrap gap-2">
+      <div class="flex flex-wrap items-center gap-2">
         <div
             v-for="(stat, index) in displayStats"
             :key="index"
@@ -196,17 +200,6 @@ const displayItems = computed((): T[] => {
     <div class="divide-y divide-default">
       <slot :items="displayItems" :entry="entry"/>
     </div>
-
-    <!-- Empty state -->
-    <UAlert
-        v-if="displayItems.length === 0"
-        :icon="ICONS.robotHappy"
-        color="neutral"
-        variant="subtle"
-        title="Tomt her!"
-        description="Ingen transaktioner i denne periode."
-        class="m-4"
-    />
 
     <!-- Footer bar (subtle color accent to match header) -->
     <div v-if="displayItems.length > 0" :class="['h-1.5', footerClass]"/>
