@@ -618,6 +618,7 @@ export const ICONS = {
     // Status/state
     lockOpen: 'i-heroicons-lock-open',
     lockClosed: 'i-heroicons-lock-closed',
+    authorize: 'i-heroicons-shield-check',
 
     // Actions
     share: 'i-heroicons-share',

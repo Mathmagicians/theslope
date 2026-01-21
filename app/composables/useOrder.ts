@@ -52,7 +52,7 @@ export const useOrder = () => {
   const orderStateConfig = {
     [OrderState.BOOKED]: { label: 'Bestilt', color: 'primary' as const, icon: ICONS.clipboard },
     [OrderState.RELEASED]: { label: 'Frigivet', color: 'error' as const, icon: ICONS.released },
-    [OrderState.CLOSED]: { label: 'Afsluttet', color: 'neutral' as const, icon: ICONS.archive },
+    [OrderState.CLOSED]: { label: 'Lukket', color: 'neutral' as const, icon: ICONS.archive },
     [OrderState.CANCELLED]: { label: 'Annulleret', color: 'error' as const, icon: ICONS.xMark },
     claimed: { label: 'Købt fra anden', color: 'info' as const, icon: ICONS.claim }
   }

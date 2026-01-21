@@ -137,6 +137,20 @@ export const useHouseholdsStore = defineStore("Households", () => {
         console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Loading household ID: ${id}`)
     }
 
+    /**
+     * Fetch household detail without affecting selectedHousehold
+     * Use for admin operations that need HouseholdDetail but shouldn't change navigation state
+     */
+    const fetchHouseholdDetail = async (householdId: number): Promise<HouseholdDetail> => {
+        try {
+            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Fetching household detail: ${householdId}`)
+            const data = await $fetch<HouseholdDetail>(`/api/admin/household/${householdId}`)
+            return HouseholdDetailSchema.parse(data)
+        } catch (e: unknown) {
+            handleApiError(e, `Kunne ikke hente husstand ${householdId}`)
+            throw e
+        }
+    }
 
     /**
      * Update inhabitant dinner preferences
@@ -275,6 +289,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         // Actions
         loadHouseholds,
         loadHousehold,
+        fetchHouseholdDetail,
         refreshSelectedHousehold,
         initHouseholdsStore,
         updateInhabitantPreferences,

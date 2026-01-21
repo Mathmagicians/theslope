@@ -21,15 +21,10 @@ const props = withDefaults(defineProps<Props>(), {
 
 const {ICONS, SIZES, TYPOGRAPHY, COLOR} = useTheSlopeDesignSystem()
 
-const getShareUrl = (): string => {
-    const baseUrl = window.location.origin
-    return `${baseUrl}/public/billing/${props.shareToken}`
-}
-
-const getCsvUrl = (): string => {
-    const baseUrl = window.location.origin
-    return `${baseUrl}/api/public/billing/${props.shareToken}/csv`
-}
+// SSR-safe: useRequestURL works on both server and client
+const baseUrl = useRequestURL().origin
+const getShareUrl = () => `${baseUrl}/public/billing/${props.shareToken}`
+const getCsvUrl = () => `${baseUrl}/api/public/billing/${props.shareToken}/csv`
 
 const linkCopied = ref(false)
 const csvLinkCopied = ref(false)

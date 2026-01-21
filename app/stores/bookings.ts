@@ -300,6 +300,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
      * Admin-only: Process order corrections bypassing deadlines.
      * Uses individual order endpoints (PUT, POST, DELETE) with adminBypass.
      * Reuses resolveDesiredOrdersToBuckets with always-true predicates (admin bypasses deadlines).
+     * Returns ScaffoldResult for consistent formatting with formatScaffoldResult.
      */
     const processAdminCorrection = async (
         householdId: number,
@@ -307,19 +308,24 @@ export const useBookingsStore = defineStore("Bookings", () => {
         dinnerEventDate: Date,
         orders: DesiredOrder[],
         existingOrders: OrderDisplay[]
-    ): Promise<void> => {
+    ): Promise<ScaffoldResult> => {
         const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+
+        const emptyResult: ScaffoldResult = {
+            seasonId: null, created: 0, deleted: 0, released: 0, claimed: 0,
+            claimRejected: 0, priceUpdated: 0, modeUpdated: 0, unchanged: 0, households: 0, errored: 0
+        }
 
         // Fail fast: admin access required
         if (!authStore.isAdmin) {
             handleApiError(new Error('Admin access required'), 'Kun administratorer kan rette bookinger')
-            return
+            return emptyResult
         }
 
         const bookedByUserId = authStore.user?.id
         if (!bookedByUserId) {
             handleApiError(new Error('User ID required'), 'Bruger-ID mangler')
-            return
+            return emptyResult
         }
 
         isProcessingBookings.value = true
@@ -361,7 +367,16 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 await updateOrder(order.orderId!, { dinnerMode: order.dinnerMode })
             }
 
-            console.info(CTX, `processAdminCorrection: created=${buckets.create.length}, deleted=${buckets.delete.length}, updated=${buckets.update.length}`)
+            const result: ScaffoldResult = {
+                ...emptyResult,
+                created: buckets.create.length,
+                deleted: buckets.delete.length,
+                modeUpdated: buckets.update.length,
+                unchanged: buckets.idempotent.length,
+                households: 1
+            }
+            console.info(CTX, `processAdminCorrection: ${formatScaffoldResult(result, 'compact')}`)
+            return result
         } catch (e: unknown) {
             handleApiError(e, 'Kunne ikke rette bookinger')
             throw e

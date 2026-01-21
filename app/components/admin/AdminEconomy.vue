@@ -12,11 +12,18 @@
 import {formatDate, formatDateRange} from '~/utils/date'
 import type {DateRange} from '~/types/dateTypes'
 import type {TransactionDisplay, CostEntry} from '~/composables/useBillingValidation'
-import type {OrderDisplay, DesiredOrder} from '~/composables/useBookingValidation'
+import type {OrderDisplay, DesiredOrder, DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {StatBox} from '~/components/economy/CostEntry.vue'
 import type {SeasonDeadlines} from '~/composables/useSeason'
-import type {HouseholdDetail, TicketPrice} from '~/composables/useCoreValidation'
-import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
+import type {HouseholdDetail} from '~/composables/useCoreValidation'
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+
+// Props - canEdit from parent for authorization
+const props = withDefaults(defineProps<{
+  canEdit?: boolean
+}>(), {
+  canEdit: false
+})
 
 const {formatPrice} = useTicket()
 const {groupByCostEntry, groupByHouseholdEntry, joinOrdersWithDinnerEvents, calculateCurrentBillingPeriod, controlInvoices, formatTicketCounts} = useBilling()
@@ -26,10 +33,10 @@ const {OrderDisplaySchema} = useBookingValidation()
 
 // Plan store for future dinners
 const planStore = usePlanStore()
-const {selectedSeason, isSelectedSeasonInitialized} = storeToRefs(planStore)
+const {selectedSeason} = storeToRefs(planStore)
 planStore.initPlanStore()
 
-// Households store for inhabitant name lookup
+// Households store for inhabitant name lookup and admin correction
 const householdsStore = useHouseholdsStore()
 const {households} = storeToRefs(householdsStore)
 householdsStore.initHouseholdsStore()
@@ -95,7 +102,7 @@ const getHouseholdForInhabitant = (inhabitantId: number) => {
 const upcomingOrdersKey = computed(() =>
     `admin-economy-upcoming-orders-${upcomingDinnerIds.value.join('-')}`
 )
-const {data: upcomingOrders, status: upcomingOrdersStatus} = useAsyncData<OrderDisplay[]>(
+const {data: upcomingOrders, status: upcomingOrdersStatus, refresh: refreshUpcomingOrders} = useAsyncData<OrderDisplay[]>(
     upcomingOrdersKey,
     () => {
         if (upcomingDinnerIds.value.length === 0) return Promise.resolve([])
@@ -111,10 +118,8 @@ const {data: upcomingOrders, status: upcomingOrdersStatus} = useAsyncData<OrderD
         watch: [upcomingDinnerIds]
     }
 )
-// Loading state includes season not yet loaded (upcomingDinnerIds depends on season)
-const isUpcomingOrdersLoading = computed(() =>
-    upcomingOrdersStatus.value === 'pending' || !isSelectedSeasonInitialized.value
-)
+// Loading state: only actual fetch status (table shows empty until season loads, then reactively updates)
+const isUpcomingOrdersLoading = computed(() => upcomingOrdersStatus.value === 'pending')
 
 // Future orders enriched with dinner + household info for grouping
 type OrderWithDinnerAndHousehold = OrderDisplay & {
@@ -365,23 +370,46 @@ const toggleHistory = (orderId: number | null) => {
 // Track which dinner is being edited + selected household
 const editingDinnerId = ref<number | null>(null)
 const editingHouseholdId = ref<number | null>(null)
+const editingHousehold = ref<HouseholdDetail | null>(null)
+const isLoadingHousehold = ref(false)
 
 const startEditingDinner = (dinnerEventId: number) => {
     editingDinnerId.value = dinnerEventId
     editingHouseholdId.value = null
+    editingHousehold.value = null
 }
 const cancelEditing = () => {
     editingDinnerId.value = null
     editingHouseholdId.value = null
+    editingHousehold.value = null
 }
 
 // Household options for selector
-const householdOptions = computed(() =>
+type HouseholdOption = { label: string; value: number }
+const householdOptions = computed((): HouseholdOption[] =>
     households.value.map(h => ({
         label: `${h.address} · PBS ${h.pbsId}`,
         value: h.id
     }))
 )
+
+// Selected household option (USelectMenu expects undefined not null for empty state)
+const selectedHouseholdOption = computed({
+    get: () => householdOptions.value.find(o => o.value === editingHouseholdId.value),
+    set: async (option: HouseholdOption | undefined) => {
+        editingHouseholdId.value = option?.value ?? null
+        editingHousehold.value = null
+        // Load full HouseholdDetail for DinnerBookingForm
+        if (option?.value) {
+            isLoadingHousehold.value = true
+            try {
+                editingHousehold.value = await householdsStore.fetchHouseholdDetail(option.value)
+            } finally {
+                isLoadingHousehold.value = false
+            }
+        }
+    }
+})
 
 // Admin deadlines - bypass all checks (ADR-016: always-true predicates)
 const adminDeadlines: SeasonDeadlines = {
@@ -397,10 +425,6 @@ const editingDinnerEvent = computed((): DinnerEventDisplay | null => {
     return dinnerEvents.value.find(e => e.id === editingDinnerId.value) ?? null
 })
 
-const editingHousehold = computed((): HouseholdDetail | undefined =>
-    editingHouseholdId.value ? households.value.find(h => h.id === editingHouseholdId.value) : undefined
-)
-
 const editingOrders = computed((): OrderDisplay[] => {
     if (!editingDinnerId.value || !editingHouseholdId.value) return []
     return upcomingOrders.value.filter(o =>
@@ -414,16 +438,25 @@ const ticketPrices = computed((): TicketPrice[] =>
 )
 
 // Handle save from DinnerBookingForm
+const toast = useToast()
+const {formatScaffoldResult} = useBooking()
 const {processAdminCorrection} = bookingsStore
+
 const handleAdminSave = async (orders: DesiredOrder[]) => {
-    if (!editingDinnerId.value || !editingHouseholdId.value || !editingDinnerEvent.value) return
-    await processAdminCorrection(
+    if (!editingDinnerId.value || !editingHouseholdId.value || !editingDinnerEvent.value || !editingHousehold.value) return
+    const result = await processAdminCorrection(
         editingHouseholdId.value,
         editingDinnerId.value,
         editingDinnerEvent.value.date,
         orders,
         editingOrders.value
     )
+    await refreshUpcomingOrders()
+    toast.add({
+        title: 'Administrator Korrektion',
+        description: `${editingHousehold.value.address}: ${formatScaffoldResult(result)}`,
+        color: 'success'
+    })
     cancelEditing()
 }
 
@@ -443,7 +476,6 @@ const dinnerBreakdownStats = computed(() => {
 <template>
   <div data-testid="admin-economy" class="space-y-6">
     <ViewError v-if="isBillingPeriodsErrored" :error="billingPeriodsError?.statusCode" message="Kunne ikke hente økonomioversigt"/>
-    <Loader v-else-if="isBillingPeriodsLoading || !isSelectedSeasonInitialized" text="Henter økonomioversigt..."/>
 
     <template v-else>
       <!-- SECTION 1: Fremtidige bestillinger -->
@@ -479,13 +511,69 @@ const dinnerBreakdownStats = computed(() => {
             <!-- Group orders by household within this dinner -->
             <div class="p-4 bg-neutral-50 dark:bg-neutral-900">
               <CostEntry
-                  :entry="{date: row.original.date, menuTitle: row.original.menuTitle, items: row.original.items}"
+                  :entry="{date: row.original.date, menuTitle: row.original.menuTitle, items: row.original.items, dinnerEventId: row.original.dinnerEventId}"
                   :level="2"
                   :title-accessor="(e) => formatDate(e.date)"
                   :subtitle-accessor="(e) => e.menuTitle"
                   :stats-accessor="futureDinnerStatsAccessor"
               >
+                <!-- Admin correction button in header (div wrapper: slot content must be SSR-consistent) -->
+                <template #header-actions>
+                  <div>
+                    <DangerButton
+                        v-if="props.canEdit"
+                        label="Korrektion"
+                        confirm-label="Klik igen for at rette"
+                        :icon="ICONS.authorize"
+                        :size="SIZES.small"
+                        undo
+                        data-testid="admin-correction-btn"
+                        @confirm="startEditingDinner(row.original.dinnerEventId)"
+                    />
+                  </div>
+                </template>
                 <template #default>
+                  <!-- Admin Correction UI (when editing this dinner) -->
+                  <div v-if="editingDinnerId === row.original.dinnerEventId" class="p-4 space-y-4 bg-success-50 dark:bg-success-900/20 border-b border-success-200 dark:border-success-800">
+                    <div class="flex items-center gap-4">
+                      <label :class="TYPOGRAPHY.bodyTextMedium">Vælg husstand:</label>
+                      <USelectMenu
+                          v-model="selectedHouseholdOption"
+                          :items="householdOptions"
+                          placeholder="Vælg husstand..."
+                          class="w-80"
+                          data-testid="admin-correction-household-select"
+                      />
+                      <UButton
+                          color="neutral"
+                          variant="ghost"
+                          :icon="ICONS.xMark"
+                          :size="SIZES.small"
+                          aria-label="Annuller"
+                          @click="cancelEditing"
+                      />
+                    </div>
+
+                    <!-- Loading indicator while fetching household -->
+                    <div v-if="isLoadingHousehold" class="flex items-center gap-2 text-muted">
+                      <UIcon :name="ICONS.sync" class="animate-spin" />
+                      <span>Henter husstand...</span>
+                    </div>
+
+                    <!-- DinnerBookingForm when household loaded -->
+                    <DinnerBookingForm
+                        v-else-if="editingHousehold && editingDinnerEvent"
+                        :household="editingHousehold"
+                        :dinner-event="editingDinnerEvent"
+                        :orders="editingOrders"
+                        :ticket-prices="ticketPrices"
+                        :deadlines="adminDeadlines"
+                        :can-edit-admin-override="() => true"
+                        @save-bookings="handleAdminSave"
+                        @cancel="cancelEditing"
+                    />
+                  </div>
+
                   <!-- Household table within dinner (filtered + sorted by address) -->
                   <UTable
                       :data="filterHouseholds(sortByAddress(groupOrdersByHousehold(row.original.items, o => o.priceAtBooking)), getHouseholdSearch(row.original.dinnerEventId))"

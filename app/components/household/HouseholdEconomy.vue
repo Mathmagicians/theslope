@@ -53,15 +53,11 @@ const planStore = usePlanStore()
 const {selectedSeason, isSelectedSeasonInitialized} = storeToRefs(planStore)
 planStore.initPlanStore()
 
-const householdsStore = useHouseholdsStore()
-const {selectedHousehold} = storeToRefs(householdsStore)
-
 // Local orders fetch (ADR-007 exception - component-local data)
-// Empty dinnerEventIds = all orders for household (endpoint auto-filters by session)
 const {data: orders, status: ordersStatus} = useAsyncData<OrderDisplay[]>(
     `economy-orders-${props.household.id}`,
-    () => $fetch<OrderDisplay[]>('/api/order'),
-    {default: () => []}
+    () => $fetch<OrderDisplay[]>('/api/order', {query: {householdId: props.household.id}}),
+    {default: () => [], watch: [() => props.household.id]}
 )
 const isOrdersLoading = computed(() => ordersStatus.value === 'pending')
 
@@ -102,7 +98,7 @@ const dinnerEventsMap = computed(() =>
 
 // Inhabitants lookup for name resolution
 const inhabitantsMap = computed(() => {
-    const inhabitants = selectedHousehold.value?.inhabitants ?? []
+    const inhabitants = props.household.inhabitants ?? []
     return new Map(inhabitants.map(i => [i.id, i.name]))
 })
 const getInhabitantName = (id: number) => inhabitantsMap.value.get(id) ?? `#${id}`
