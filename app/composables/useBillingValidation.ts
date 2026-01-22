@@ -387,7 +387,7 @@ export const useBillingValidation = () => {
     // CSV Export Functions
     // ============================================================================
 
-    const CSV_HEADER = '"Kunde nr",Adresse,"Total DKK/måned","Opkrævning periode start","Opkrævning periode slut",Opgørelsesdato,"Måltider total","Evt ekstra",Note'
+    const CSV_HEADER = '"Kunde nr",Adresse,"Total DKK/måned","Opkrævning periode start","Opkrævning periode slut",Opgørelsesdato,Note'
 
     /**
      * Format date for CSV export (DD/MM/YYYY)
@@ -418,7 +418,7 @@ export const useBillingValidation = () => {
         const paymentEnd = formatCsvDate(getLastDayOfMonth(summary.paymentDate))
         const cutoff = formatCsvDate(summary.cutoffDate)
 
-        return `${invoice.pbsId},"${invoice.address}",${totalDKK},${paymentStart},${paymentEnd},${cutoff},${totalDKK},,`
+        return `${invoice.pbsId},"${invoice.address}",${totalDKK},${paymentStart},${paymentEnd},${cutoff},`
     }
 
     /**
