@@ -138,7 +138,7 @@ test.describe('AdminTeams Form UI', () => {
             await teamInput.press('End') // Move cursor to end
             await teamInput.type('Q')
 
-            // Wait for the API call to complete
+            // Setup response wait BEFORE blur to avoid race condition
             const responsePromise = page.waitForResponse(
                 (response: Response) => response.url().includes('/api/admin/team/') && response.request().method() === 'POST',
                 { timeout: 5000 }

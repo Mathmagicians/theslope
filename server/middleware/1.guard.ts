@@ -3,7 +3,7 @@ import {maskPassword} from "~/utils/utils"
 import type {UserDetail} from "~/composables/useCoreValidation"
 
 // list of endpoints that we want dont need to protect
-const unprotectedRoutes = ["/api/auth", "/api/calendar/feed", "/login", "/api/_auth", "/api/_nuxt_icon", "/api/public"]
+const unprotectedRoutes = ["/api/auth", "/api/calendar/feed", "/login", "/api/_auth", "/api/_nuxt_icon", "/api/public", "/public"]
 
 /**
  * Authentication Guard Middleware
@@ -15,6 +15,7 @@ const unprotectedRoutes = ["/api/auth", "/api/calendar/feed", "/login", "/api/_a
  * Unprotected routes:
  * - / (home/landing page)
  * - /login
+ * - /public/* (public billing pages)
  * - /api/auth, /api/calendar/feed, /api/_auth, /api/_nuxt_icon, /api/public
  */
 export default defineEventHandler(async (event) => {

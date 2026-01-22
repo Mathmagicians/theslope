@@ -130,10 +130,9 @@ test.describe('Household members display', () => {
             10
         )
 
-        // Click the edit button (pencil icon) for Donald's row to expand it
-        // Name is "Anders-{salt}-Donald" so filter by "-Donald" suffix
-        const donaldRow = page.getByRole('row').filter({hasText: '-Donald'}).first()
-        const editButton = donaldRow.getByRole('button', {name: 'Rediger præferencer'})
+        // Click the edit button (pencil icon) for Donald's row using testid
+        // More reliable than row text filtering which can match wrong row
+        const editButton = page.getByTestId(`inhabitant-${donaldId}-edit-preferences`)
         await editButton.click()
 
         // Wait for edit panel to be visible (UFormField renders label as generic element, not heading)
