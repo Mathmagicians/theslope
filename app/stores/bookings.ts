@@ -301,13 +301,16 @@ export const useBookingsStore = defineStore("Bookings", () => {
      * Uses individual order endpoints (PUT, POST, DELETE) with adminBypass.
      * Reuses resolveDesiredOrdersToBuckets with always-true predicates (admin bypasses deadlines).
      * Returns ScaffoldResult for consistent formatting with formatScaffoldResult.
+     *
+     * @param guestBookerInhabitantId - For guest tickets, use this inhabitant (from target household) instead of the one in orders
      */
     const processAdminCorrection = async (
         householdId: number,
         dinnerEventId: number,
         dinnerEventDate: Date,
         orders: DesiredOrder[],
-        existingOrders: OrderDisplay[]
+        existingOrders: OrderDisplay[],
+        guestBookerInhabitantId?: number
     ): Promise<ScaffoldResult> => {
         const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 
@@ -348,7 +351,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
                     householdId,
                     dinnerEventId,
                     orders: buckets.create.map(o => ({
-                        inhabitantId: o.inhabitantId,
+                        // For guest tickets, use the provided booker from target household
+                        inhabitantId: o.isGuestTicket ? guestBookerInhabitantId! : o.inhabitantId,
                         ticketPriceId: o.ticketPriceId,
                         dinnerMode: o.dinnerMode,
                         bookedByUserId,

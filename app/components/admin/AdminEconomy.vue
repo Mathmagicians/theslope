@@ -419,7 +419,7 @@ const editingOrders = computed((): OrderDisplay[] => {
     if (!editingDinnerId.value || !editingHouseholdId.value) return []
     return upcomingOrders.value.filter(o =>
         o.dinnerEventId === editingDinnerId.value &&
-        inhabitantHouseholdMap.value.get(o.inhabitantId) === editingHouseholdId.value
+        getHouseholdForInhabitant(o.inhabitantId)?.id === editingHouseholdId.value
     )
 })
 
@@ -434,12 +434,14 @@ const {processAdminCorrection} = bookingsStore
 
 const handleAdminSave = async (orders: DesiredOrder[]) => {
     if (!editingDinnerId.value || !editingHouseholdId.value || !editingDinnerEvent.value || !editingHousehold.value) return
+    const guestBookerInhabitantId = editingHousehold.value.inhabitants?.[0]?.id
     const result = await processAdminCorrection(
         editingHouseholdId.value,
         editingDinnerId.value,
         editingDinnerEvent.value.date,
         orders,
-        editingOrders.value
+        editingOrders.value,
+        guestBookerInhabitantId
     )
     await refreshUpcomingOrders()
     toast.add({

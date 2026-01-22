@@ -261,7 +261,14 @@ export const TYPOGRAPHY = {
     caption: 'text-xs font-medium',
 
     // Footer
-    footerText: 'text-xs text-white dark:text-amber-50'
+    footerText: 'text-xs text-white dark:text-amber-50',
+
+    // Kitchen panel text (inherits text-white from panel, no color classes)
+    kitchenLabel: 'text-xs md:text-sm font-semibold',
+    kitchenSecondary: 'text-xs md:text-sm font-medium opacity-90',
+    kitchenMain: 'font-bold text-base md:text-lg',
+    kitchenDetail: 'text-xs md:text-sm',
+    kitchenMuted: 'text-xs md:text-sm opacity-75'
 } as const
 
 /**

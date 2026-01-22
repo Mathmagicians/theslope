@@ -30,6 +30,7 @@ import type {OrderDetail} from '~/composables/useBookingValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {AffectedDiner} from '~/composables/useAllergy'
 import type {DiningModeStats} from '~/composables/useOrder'
+import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 
 // Ticket type breakdown for dine-in modes (chair planning)
 interface TicketBreakdown {
@@ -64,6 +65,39 @@ const {TicketTypeSchema, DinnerModeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
 const DinnerMode = DinnerModeSchema.enum
 const {computeAffectedDiners} = useAllergy()
+const {formatTicketCounts} = useBilling()
+const {getHouseholdForInhabitant} = useHouseholdsStore()
+
+// Panel expansion state
+const selectedPanel = ref<string | null>(null)
+const togglePanel = (key: string) => {
+  selectedPanel.value = selectedPanel.value === key ? null : key
+}
+
+// Group orders by household for breakdown display
+interface HouseholdBreakdownEntry {
+  shortName: string
+  orders: OrderDetail[]
+}
+const selectedPanelBreakdown = computed((): HouseholdBreakdownEntry[] => {
+  if (!selectedPanel.value) return []
+  const orders = getOrdersForMode(selectedPanel.value)
+
+  const byHousehold = new Map<number, { household: HouseholdDisplay, orders: OrderDetail[] }>()
+  for (const order of orders) {
+    const household = getHouseholdForInhabitant(order.inhabitantId)
+    if (!household) continue
+    if (!byHousehold.has(household.id)) {
+      byHousehold.set(household.id, { household, orders: [] })
+    }
+    byHousehold.get(household.id)!.orders.push(order)
+  }
+
+  return Array.from(byHousehold.values()).map(({ household, orders }) => ({
+    shortName: getHouseholdShortName(household.address),
+    orders
+  }))
+})
 
 // Menu allergen IDs for affected diner calculation
 const menuAllergenIds = computed(() => props.allergens?.map(a => a.id) ?? [])
@@ -129,7 +163,7 @@ const diningModeStats = computed((): ExtendedDiningModeStats[] => {
 })
 
 // Use design system for kitchen panel colors
-const { getKitchenPanelClasses, COMPONENTS } = useTheSlopeDesignSystem()
+const { getKitchenPanelClasses, COMPONENTS, ICONS, TYPOGRAPHY } = useTheSlopeDesignSystem()
 
 // Get background color classes for each dining mode
 const getModeClasses = (key: string) => {
@@ -166,24 +200,26 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
         v-for="mode in diningModeStats"
         :key="mode.key"
         :style="{ flex: `${normalizedWidths[mode.key]} 0 0` }"
-        class="border-b md:border-b-0 md:border-r last:border-b-0 last:md:border-r-0 p-3 md:p-4 text-center min-w-0 box-border"
+        class="border-b md:border-b-0 md:border-r last:border-b-0 last:md:border-r-0 p-3 md:p-4 text-center min-w-0 box-border cursor-pointer"
         :class="getModeClasses(mode.key)"
+        @click="togglePanel(mode.key)"
       >
-        <!-- Header with label and percentage -->
-        <div class="font-semibold text-xs md:text-sm truncate">
+        <!-- Header with label, percentage, and chevron (only if content exists) -->
+        <div :class="TYPOGRAPHY.kitchenLabel" class="truncate flex items-center justify-center gap-1">
           {{ mode.label }}
+          <UIcon v-if="getOrdersForMode(mode.key).length > 0" :name="selectedPanel === mode.key ? ICONS.chevronUp : ICONS.chevronDown" class="size-4" />
         </div>
-        <div class="text-xs md:text-sm font-medium opacity-90">
+        <div :class="TYPOGRAPHY.kitchenSecondary">
           {{ mode.percentage }}%
         </div>
 
         <!-- Portions (main number) -->
-        <div class="font-bold text-base md:text-lg">
+        <div :class="TYPOGRAPHY.kitchenMain">
           {{ mode.portions }} kuv.
         </div>
 
         <!-- Ticket breakdown for dine-in modes (chair planning) -->
-        <div v-if="mode.ticketBreakdown" class="text-xs md:text-sm flex flex-wrap justify-center gap-x-1">
+        <div v-if="mode.ticketBreakdown" :class="TYPOGRAPHY.kitchenDetail" class="flex flex-wrap justify-center gap-x-1">
           <span class="whitespace-nowrap">Voksen: {{ mode.ticketBreakdown.adult }}</span>
           <span class="whitespace-nowrap">| Barn: {{ mode.ticketBreakdown.child }}</span>
           <span class="whitespace-nowrap">| Baby: {{ mode.ticketBreakdown.baby }}</span>
@@ -192,7 +228,7 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
 
 
         <!-- Affected Diners (allergies matching menu) -->
-        <div v-if="mode.affectedDiners && mode.affectedDiners.length > 0" class="text-xs border-t pt-2">
+        <div v-if="mode.affectedDiners && mode.affectedDiners.length > 0" :class="TYPOGRAPHY.kitchenDetail" class="border-t pt-2">
           <div
             v-for="diner in mode.affectedDiners"
             :key="diner.inhabitant.id"
@@ -203,6 +239,13 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
             <span v-if="diner.matchingAllergens.length > 1">({{ diner.matchingAllergens.length }})</span>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- Household breakdown (shown when panel selected) -->
+    <div v-if="selectedPanel && selectedPanelBreakdown.length > 0" :class="getModeClasses(selectedPanel)" class="px-8 md:px-32 py-6 md:py-8 max-h-64 overflow-y-auto text-left">
+      <div v-for="entry in selectedPanelBreakdown" :key="entry.shortName" :class="TYPOGRAPHY.kitchenDetail" class="py-1">
+        <span class="font-semibold">{{ entry.shortName }}</span> · {{ formatTicketCounts(entry.orders) }} · {{ entry.orders.map(o => o.inhabitant.name).join(', ') }}
       </div>
     </div>
   </div>

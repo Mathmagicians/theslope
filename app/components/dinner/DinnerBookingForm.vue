@@ -245,7 +245,7 @@ const columns = computed(() => [
   {id: 'ticket', class: 'hidden md:table-cell'}  // No header - ticket inline on mobile
 ])
 
-// Current user's inhabitant - the booker for guest tickets
+// Booker for guest tickets: current user's inhabitant (for regular booking flow)
 const {myInhabitant: bookerInhabitant} = storeToRefs(householdsStore)
 
 const tableData = computed((): TableRow[] => {
