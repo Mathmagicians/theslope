@@ -35,6 +35,9 @@ import {WEEKDAYS} from '~/types/dateTypes'
 import type {WeekDayMap, WeekDay} from '~/types/dateTypes'
 import type {DinnerMode as DinnerModeValue} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
+import type {ButtonProps} from '@nuxt/ui'
+
+type ButtonSize = ButtonProps['size']
 
 interface Props {
   modelValue?: WeekDayMap<DinnerModeValue> | null
@@ -44,6 +47,7 @@ interface Props {
   parentRestriction?: WeekDayMap | null // Filter which weekdays to display (e.g., season cooking days)
   showLabels?: boolean // Whether to show weekday labels (default true for standalone, false for table)
   consensus?: WeekDayMap<boolean> | null // Which days have consensus (power mode)
+  size?: ButtonSize // Size passed through to DinnerModeSelector
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -53,7 +57,8 @@ const props = withDefaults(defineProps<Props>(), {
   name: undefined,
   parentRestriction: null,
   showLabels: true,
-  consensus: null
+  consensus: null,
+  size: undefined // Falls back to DinnerModeSelector default
 })
 
 const emit = defineEmits<{
@@ -107,7 +112,7 @@ const getDayConsensus = (day: WeekDay): boolean | undefined => {
     v-if="formMode === FORM_MODES.VIEW"
     :name="name"
     :data-testid="name"
-    size="sm"
+    :size="size"
     orientation="horizontal"
     :class="WEEKDAY.fieldGroupClasses"
   >
@@ -118,7 +123,7 @@ const getDayConsensus = (day: WeekDay): boolean | undefined => {
       :form-mode="formMode"
       :disabled="disabled"
       :consensus="getDayConsensus(day)"
-      size="sm"
+      :size="size"
       :name="`${name}-${day}`"
     />
   </UFieldGroup>
@@ -130,7 +135,7 @@ const getDayConsensus = (day: WeekDay): boolean | undefined => {
       <DinnerModeSelector
         v-if="showLabels"
         :model-value="day"
-        size="sm"
+        :size="size"
         :name="`${name}-${day}-label`"
       />
 
@@ -140,7 +145,7 @@ const getDayConsensus = (day: WeekDay): boolean | undefined => {
         :form-mode="formMode"
         :disabled="disabled"
         :consensus="getDayConsensus(day)"
-        size="sm"
+        :size="size"
         :name="`${name}-${day}`"
         @update:model-value="(value) => updateDay(day, value as DinnerModeValue)"
       />

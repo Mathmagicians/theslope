@@ -248,6 +248,10 @@ const columns = computed(() => [
 // Booker for guest tickets: current user's inhabitant (for regular booking flow)
 const {myInhabitant: bookerInhabitant} = storeToRefs(householdsStore)
 
+// Inhabitant name lookup (used by actionPreviewItems)
+const getInhabitantName = (id: number) =>
+  household.value?.inhabitants.find(i => i.id === id)?.name ?? 'Ukendt'
+
 const tableData = computed((): TableRow[] => {
   if (!household.value?.inhabitants) return []
 
@@ -380,22 +384,15 @@ const tableData = computed((): TableRow[] => {
 // HANDLERS
 // ============================================================================
 
-const handleSave = async (row: TableRow) => {
-  isSaving.value = true
+// Build desired orders for a row (DRY: used by handleSave and actionPreviewItems)
+const buildDesiredOrdersForRow = (row: TableRow): DesiredOrder[] => {
+  const dinnerEventId = props.dinnerEvent.id
 
-  try {
-    const dinnerEventId = props.dinnerEvent.id
-    let orders: DesiredOrder[] = []
-
-    if (row.rowType === 'power') {
-      // Power mode: all inhabitants with same mode
-      // State is BOOKED when user actively books - RELEASED is only set by scaffolder for NONE after deadline
-      const inhabitantRows = tableData.value.filter((r: TableRow) => r.rowType === 'inhabitant')
-      const missingPrice = inhabitantRows.find(r => r.ticketPriceId === null)
-      if (missingPrice) {
-        throw new Error(`Kan ikke booke: mangler billetpris for ${missingPrice.name}`)
-      }
-      orders = inhabitantRows.map((r: TableRow) => ({
+  if (row.rowType === 'power') {
+    const inhabitantRows = tableData.value.filter((r: TableRow) => r.rowType === 'inhabitant')
+    return inhabitantRows
+      .filter(r => r.ticketPriceId !== null)
+      .map((r: TableRow) => ({
         inhabitantId: r.id as number,
         dinnerEventId,
         dinnerMode: draftMode.value,
@@ -404,40 +401,54 @@ const handleSave = async (row: TableRow) => {
         orderId: r.order?.id,
         state: OrderStateEnum.BOOKED
       }))
-    } else if (row.rowType === 'guest-order') {
-      // Update ALL existing guests in this group (like power mode does for inhabitants)
-      // State is BOOKED when user actively books - RELEASED is only set by scaffolder for NONE after deadline
-      if (!row.ticketPriceId) {
-        throw new Error('Kan ikke booke: mangler billetpris for gæst')
+  }
+
+  if (row.rowType === 'guest-order' && row.ticketPriceId) {
+    const guestOrders = row.orders ?? (row.order ? [row.order] : [])
+    return guestOrders.map((guestOrder: OrderDisplay) => ({
+      inhabitantId: guestOrder.inhabitantId,
+      dinnerEventId,
+      dinnerMode: draftMode.value,
+      ticketPriceId: row.ticketPriceId!,
+      isGuestTicket: true,
+      orderId: guestOrder.id,
+      state: OrderStateEnum.BOOKED
+    }))
+  }
+
+  if (row.rowType === 'inhabitant' && typeof row.id === 'number' && row.ticketPriceId) {
+    return [{
+      inhabitantId: row.id,
+      dinnerEventId,
+      dinnerMode: draftMode.value,
+      ticketPriceId: row.ticketPriceId,
+      isGuestTicket: false,
+      orderId: row.order?.id,
+      state: OrderStateEnum.BOOKED
+    }]
+  }
+
+  return []
+}
+
+const handleSave = async (row: TableRow) => {
+  isSaving.value = true
+
+  try {
+    // Validate before building orders
+    if (row.rowType === 'power') {
+      const inhabitantRows = tableData.value.filter((r: TableRow) => r.rowType === 'inhabitant')
+      const missingPrice = inhabitantRows.find(r => r.ticketPriceId === null)
+      if (missingPrice) {
+        throw new Error(`Kan ikke booke: mangler billetpris for ${missingPrice.name}`)
       }
-      const guestOrders = row.orders ?? (row.order ? [row.order] : [])
-      orders = guestOrders.map((guestOrder: OrderDisplay) => ({
-        inhabitantId: guestOrder.inhabitantId,
-        dinnerEventId,
-        dinnerMode: draftMode.value,
-        ticketPriceId: row.ticketPriceId!,
-        isGuestTicket: true,
-        orderId: guestOrder.id,
-        state: OrderStateEnum.BOOKED
-      }))
-    } else {
-      // Update single inhabitant
-      // State is BOOKED when user actively books - RELEASED is only set by scaffolder for NONE after deadline
-      if (!row.ticketPriceId) {
-        throw new Error(`Kan ikke booke: mangler billetpris for ${row.name}`)
-      }
-      if (typeof row.id === 'number') {
-        orders = [{
-          inhabitantId: row.id,
-          dinnerEventId,
-          dinnerMode: draftMode.value,
-          ticketPriceId: row.ticketPriceId,
-          isGuestTicket: false,
-          orderId: row.order?.id,
-          state: OrderStateEnum.BOOKED
-        }]
-      }
+    } else if (!row.ticketPriceId) {
+      throw new Error(row.rowType === 'guest-order'
+        ? 'Kan ikke booke: mangler billetpris for gæst'
+        : `Kan ikke booke: mangler billetpris for ${row.name}`)
     }
+
+    const orders = buildDesiredOrdersForRow(row)
 
     if (orders.length > 0) {
       completeBooking(orders)
@@ -470,13 +481,33 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
 // HELPER TEXT
 // ============================================================================
 
-const {partitionGuestOrders, groupGuestOrders, createBookingBadges, getBookingOptions, getDayBillSummary} = useBooking()
+const {partitionGuestOrders, groupGuestOrders, createBookingBadges, getBookingOptions, getDayBillSummary, resolveUserBookingBuckets, formatActionPreview} = useBooking()
 
 // Deadline badges
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))
 
 // Day bill summary (ticket counts + total price)
 const dayBillSummary = computed(() => getDayBillSummary(eventOrders.value))
+
+// Action preview for expanded row - shows what will happen when saving
+const actionPreviewItems = computed(() => {
+  if (!editingRowId.value) return []
+
+  const row = tableData.value.find(r => r.id === editingRowId.value)
+  if (!row || row.rowType === 'guest') return [] // guest-add uses GuestBookingForm
+
+  const desiredOrders = buildDesiredOrdersForRow(row)
+  if (desiredOrders.length === 0) return []
+
+  const buckets = resolveUserBookingBuckets(
+    desiredOrders,
+    eventOrders.value,
+    [props.dinnerEvent],
+    props.deadlines
+  )
+
+  return formatActionPreview(buckets, eventOrders.value, getInhabitantName)
+})
 </script>
 
 <template>
@@ -698,6 +729,7 @@ const dayBillSummary = computed(() => getDayBillSummary(eventOrders.value))
           :deadlines="deadlines"
           :released-ticket-counts="releasedTicketCounts"
           :booker-id="bookerInhabitant.id"
+          :booker-name="bookerInhabitant.name"
           @save="handleGuestSave"
           @cancel="handleCancel"
         />
@@ -763,45 +795,46 @@ const dayBillSummary = computed(() => getDayBillSummary(eventOrders.value))
           <OrderHistoryDisplay v-if="row.original.order?.id && historyOrderId === row.original.order.id" :order-id="row.original.order.id"/>
 
           <template #footer>
-            <div class="flex justify-between items-center">
-              <!-- History button (left) -->
-              <UButton
-                  v-if="row.original.order?.id"
-                  color="neutral"
-                  variant="ghost"
-                  :icon="historyOrderId === row.original.order.id ? ICONS.chevronUp : ICONS.clipboard"
-                  :size="getIsMd ? 'md' : 'sm'"
-                  @click="toggleHistory(row.original.order.id)"
-              >
-                Historik
-              </UButton>
-              <span v-else />
-              <!-- Cancel/Save buttons (right) -->
-              <div class="flex gap-2">
-              <UButton
-                :color="COLOR.neutral"
-                variant="ghost"
-                :icon="ICONS.xMark"
-                :size="getIsMd ? 'md' : 'sm'"
-                :data-testid="`${row.original.rowType}-${row.original.id}-cancel`"
-                @click="handleCancel"
-              >
-                Annuller
-              </UButton>
-              <UButton
-                :color="row.original.rowType === 'power' ? COMPONENTS.powerMode.color : (row.original.rowType === 'guest' ? 'info' : COLOR.primary)"
-                variant="solid"
-                :size="getIsMd ? 'md' : 'sm'"
-                :loading="isSaving"
-                :disabled="row.original.bookingAction === null"
-                :data-testid="`${row.original.rowType}-${row.original.id}-save`"
-                @click="handleSave(row.original)"
-              >
-                <template #leading>
-                  <UIcon :name="row.original.rowType === 'power' ? COMPONENTS.powerMode.buttonIcon : (row.original.rowType === 'guest' ? ICONS.userPlus : ICONS.check)" />
-                </template>
-                {{ row.original.rowType === 'power' ? 'Gem for alle' : (row.original.rowType === 'guest' ? 'Tilføj gæst' : 'Gem') }}
-              </UButton>
+            <div class="flex flex-col gap-2">
+              <!-- Action preview: show what will happen when saving -->
+              <ActionPreview :items="actionPreviewItems" />
+
+              <div class="flex justify-between items-center">
+                <!-- History button (left) -->
+                <UButton
+                    v-if="row.original.order?.id"
+                    color="neutral"
+                    variant="ghost"
+                    :icon="historyOrderId === row.original.order.id ? ICONS.chevronUp : ICONS.clipboard"
+                    :size="SIZES.standard"
+                    @click="toggleHistory(row.original.order.id)"
+                >
+                  Historik
+                </UButton>
+                <span v-else />
+                <!-- Cancel/Save buttons (right) -->
+                <div class="flex gap-2">
+                  <UButton
+                    v-bind="BUTTONS.cancel"
+                    :data-testid="`${row.original.rowType}-${row.original.id}-cancel`"
+                    @click="handleCancel"
+                  >
+                    Annuller
+                  </UButton>
+                  <UButton
+                    v-bind="row.original.rowType === 'power' ? {} : BUTTONS.save"
+                    :color="row.original.rowType === 'power' ? COMPONENTS.powerMode.color : undefined"
+                    :loading="isSaving"
+                    :disabled="row.original.bookingAction === null"
+                    :data-testid="`${row.original.rowType}-${row.original.id}-save`"
+                    @click="handleSave(row.original)"
+                  >
+                    <template #leading>
+                      <UIcon :name="row.original.rowType === 'power' ? COMPONENTS.powerMode.buttonIcon : ICONS.check" />
+                    </template>
+                    {{ row.original.rowType === 'power' ? 'Gem for alle' : 'Opdater' }}
+                  </UButton>
+                </div>
               </div>
             </div>
           </template>

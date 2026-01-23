@@ -429,7 +429,7 @@ const handleAdminSave = async (orders: DesiredOrder[]) => {
     await refreshUpcomingOrders()
     toast.add({
         title: 'Administrator Korrektion',
-        description: `${editingHousehold.value.address}: ${formatScaffoldResult(result)}`,
+        description: `${editingHousehold.value.address}: ${formatScaffoldResult(result, 'past')}`,
         color: 'success'
     })
     cancelEditing()

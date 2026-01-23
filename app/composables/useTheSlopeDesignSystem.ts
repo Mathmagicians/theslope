@@ -779,19 +779,44 @@ const createResponsiveIcons = (isMd: Ref<boolean>) => ({
  * @param isMd - Responsive breakpoint ref
  * @returns Button configuration objects with responsive sizes
  */
-const createResponsiveButtons = (isMd: Ref<boolean>) => ({
-    // Edit/pencil button - for row expand/edit actions
-    // Standard size: lg on desktop, md on mobile (same as SIZES.standard)
-    get edit() {
-        return {
-            icon: ICONS.edit,
-            color: 'neutral' as const,
-            variant: 'ghost' as const,
-            square: true,
-            size: (isMd.value ? 'lg' : 'md') as NuxtUISize
+const createResponsiveButtons = (isMd: Ref<boolean>) => {
+    const sizes = createResponsiveSizes(isMd)
+    return {
+        // Edit/pencil button - for row expand/edit actions
+        // Standard size: lg on desktop, md on mobile
+        get edit() {
+            return {
+                icon: ICONS.edit,
+                color: 'neutral' as const,
+                variant: 'ghost' as const,
+                square: true,
+                size: sizes.standard
+            }
+        },
+
+        // Cancel button - secondary action in form footers
+        // Large size for better touch targets
+        get cancel() {
+            return {
+                color: 'neutral' as const,
+                variant: 'ghost' as const,
+                icon: ICONS.xMark,
+                size: sizes.large
+            }
+        },
+
+        // Save/submit button - primary action in form footers
+        // Large size for better touch targets
+        get save() {
+            return {
+                color: 'primary' as const,
+                variant: 'solid' as const,
+                icon: ICONS.check,
+                size: sizes.large
+            }
         }
     }
-})
+}
 
 /**
  * createOrientations - Responsive orientation patterns for UFieldGroup

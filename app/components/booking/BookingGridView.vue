@@ -68,6 +68,9 @@ type RowType = 'power' | 'inhabitant' | 'guest-order' | 'guest-add'
 // Ticket config type (same as DinnerBookingForm)
 type TicketConfig = {label: string; color: NuxtUIColor; icon: string} | null
 
+// Lock status config type (from design system BOOKING_LOCK_STATUS)
+type LockStatusConfig = {color: NuxtUIColor; icon: string}
+
 interface GridRow {
   rowType: RowType
   id: number | string
@@ -121,14 +124,18 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, getRandomEmptyMessage, getOrderStateColor} = useTheSlopeDesignSystem()
+const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, getRandomEmptyMessage, getOrderStateColor, getLockStatusConfig} = useTheSlopeDesignSystem()
 const emptyState = getRandomEmptyMessage('noDinners')
 
 // Ticket price formatting
 const {formatPrice, getTicketTypeConfig, resolveTicketPrice, ticketTypeConfig} = useTicket()
 
 // Booking helpers (shared with DinnerBookingForm)
-const {groupGuestOrders, partitionGuestOrders, getDayBillSummary} = useBooking()
+const {groupGuestOrders, partitionGuestOrders, getDayBillSummary, resolveUserBookingBuckets, formatActionPreview} = useBooking()
+
+// Inhabitant name lookup (used by actionPreviewItems)
+const getInhabitantName = (id: number) =>
+  props.household.inhabitants.find(i => i.id === id)?.name ?? 'Ukendt'
 
 // Validation schemas
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
@@ -141,7 +148,44 @@ const OrderStateEnum = OrderStateSchema.enum
 
 const draftChanges = ref<Map<string, DinnerMode>>(new Map())
 const hasPendingChanges = computed(() => draftChanges.value.size > 0)
-const pendingChangeCount = computed(() => draftChanges.value.size)
+
+// Action preview: show what will happen when saving (uses same resolver as server)
+const actionPreviewItems = computed(() => {
+  if (!hasPendingChanges.value) return []
+
+  // Build desired orders from draft changes
+  const desiredOrders: DesiredOrder[] = Array.from(draftChanges.value.entries()).map(([key, dinnerMode]) => {
+    const [inhabitantId, dinnerEventId] = key.split('-').map(Number)
+    const existingOrder = props.orders.find(o => o.inhabitantId === inhabitantId && o.dinnerEventId === dinnerEventId && !o.isGuestTicket)
+    const inhabitant = props.household.inhabitants.find(i => i.id === inhabitantId)
+    const ticketPriceId = existingOrder?.ticketPriceId ?? resolveTicketPrice(
+      inhabitant?.birthDate ?? null,
+      null,
+      props.ticketPrices
+    )?.id
+
+    return {
+      inhabitantId: inhabitantId!,
+      dinnerEventId: dinnerEventId!,
+      dinnerMode,
+      ticketPriceId: ticketPriceId!,
+      isGuestTicket: false,
+      orderId: existingOrder?.id,
+      state: OrderStateEnum.BOOKED
+    }
+  }).filter(o => o.ticketPriceId) as DesiredOrder[]
+
+  if (desiredOrders.length === 0) return []
+
+  const buckets = resolveUserBookingBuckets(
+    desiredOrders,
+    props.orders,
+    props.dinnerEvents,
+    props.deadlines
+  )
+
+  return formatActionPreview(buckets, props.orders, getInhabitantName)
+})
 
 // Effective form mode - VIEW when saving to prevent cell edits
 const effectiveFormMode = computed(() => props.isSaving ? FORM_MODES.VIEW : props.formMode)
@@ -429,9 +473,7 @@ const getDisabledModesForEvent = (event: DinnerEventDisplay): DinnerMode[] => {
 }
 
 // Lock status for column header chips (reuse calendar pattern)
-const {BOOKING_LOCK_STATUS: _BOOKING_LOCK_STATUS, getLockStatusConfig} = useTheSlopeDesignSystem()
-
-const getEventLockStatus = (event: DinnerEventDisplay): { config: typeof _BOOKING_LOCK_STATUS.locked, count: number } | null => {
+const getEventLockStatus = (event: DinnerEventDisplay): { config: LockStatusConfig, count: number } | null => {
   if (canBookEvent(event)) return null // Not locked
   if (isEventPast(event)) return null // Past events don't show lock chip
   // Count released orders for this event
@@ -518,8 +560,8 @@ const getEventSummary = (eventId: number) => {
       :ui="{
         tbody: '[&_tr:first-child]:bg-warning/10',
         tr: 'data-[expanded=true]:bg-elevated/50',
-        th: 'px-1 py-1 md:px-2 md:py-2',
-        td: 'px-1 py-1 md:px-2',
+        th: 'px-1 py-1 md:px-2 md:py-2 text-center',
+        td: 'px-1 py-1 md:px-2 text-center',
         tfoot: 'sticky bottom-0 bg-default px-1 py-1 md:px-2 text-center text-xs'
       }"
     >
@@ -649,7 +691,7 @@ const getEventSummary = (eventId: number) => {
           :interaction="effectiveFormMode === FORM_MODES.EDIT && !isEventPast(event) ? 'toggle' : 'buttons'"
           :disabled-modes="getDisabledModesForEvent(event)"
           :consensus="getEventConsensus(event.id).hasConsensus"
-          :size="SIZES.xs"
+          :size="SIZES.standard"
           :name="`power-${event.id}`"
           @update:model-value="(mode: DinnerMode) => handlePowerUpdate(event.id, mode)"
         />
@@ -660,7 +702,7 @@ const getEventSummary = (eventId: number) => {
           :form-mode="isEventPast(event) ? FORM_MODES.VIEW : effectiveFormMode"
           :interaction="effectiveFormMode === FORM_MODES.EDIT && !isEventPast(event) ? 'toggle' : 'buttons'"
           :disabled-modes="getDisabledModesForEvent(event)"
-          :size="SIZES.xs"
+          :size="SIZES.standard"
           :name="`cell-${row.original.inhabitant.id}-${event.id}`"
           :is-modified="isCellModified(row.original.inhabitant.id, event.id)"
           @update:model-value="(mode: DinnerMode) => handleCellUpdate(row.original.inhabitant!.id, event.id, mode)"
@@ -670,7 +712,7 @@ const getEventSummary = (eventId: number) => {
           v-else-if="row.original.rowType === 'guest-order' && row.original.guestOrders?.some(o => o.dinnerEventId === event.id)"
           :model-value="row.original.guestOrders.find(o => o.dinnerEventId === event.id)!.dinnerMode"
           :form-mode="FORM_MODES.VIEW"
-          :size="SIZES.xs"
+          :size="SIZES.standard"
           :name="`guest-${row.original.id}-${event.id}`"
         />
         <!-- Guest add row: + button for future events -->
@@ -679,7 +721,7 @@ const getEventSummary = (eventId: number) => {
           :icon="activeGuestEventId === event.id ? ICONS.chevronDown : ICONS.plusCircle"
           :color="COMPONENTS.guestRow.color"
           variant="ghost"
-          :size="SIZES.xs"
+          :size="SIZES.standard"
           :data-testid="`guest-add-${event.id}`"
           :class="activeGuestEventId === event.id ? 'rotate-45' : ''"
           class="transition-transform duration-200"
@@ -704,6 +746,7 @@ const getEventSummary = (eventId: number) => {
           :allergy-types="props.allergyTypes"
           :deadlines="props.deadlines"
           :booker-id="props.bookerId"
+          :booker-name="props.household.inhabitants.find(i => i.id === props.bookerId)?.name ?? 'Ukendt'"
           :released-ticket-counts="props.lockStatus.get(activeGuestEvent.id) ?? { total: 0, formatted: '-' }"
           @save="handleGuestSave"
           @cancel="expanded = {}"
@@ -714,32 +757,31 @@ const getEventSummary = (eventId: number) => {
       <template v-if="formMode === FORM_MODES.EDIT" #body-bottom>
         <tr>
           <td :colspan="columns.length" class="px-2 py-2 border-t border-default">
-            <div class="flex items-center gap-2">
-              <UBadge v-if="hasPendingChanges" :color="COLOR.warning" variant="soft" :size="SIZES.xs">
-                {{ pendingChangeCount }} ændringer
-              </UBadge>
-              <div class="flex-1" />
-              <UButton
-                :color="COLOR.neutral"
-                variant="ghost"
-                :size="SIZES.sm"
-                :disabled="props.isSaving"
-                data-testid="grid-cancel"
-                @click="handleCancel"
-              >
-                Annuller
-              </UButton>
-              <UButton
-                v-if="canEdit"
-                :color="COLOR.primary"
-                :size="SIZES.sm"
-                :disabled="!hasPendingChanges || props.isSaving"
-                :loading="props.isSaving"
-                data-testid="grid-save"
-                @click="handleSave"
-              >
-                {{ props.isSaving ? 'Arbejder ...' : 'Gem' }}
-              </UButton>
+            <div class="flex flex-col gap-2">
+              <!-- Action preview: show what will happen when saving -->
+              <ActionPreview :items="actionPreviewItems" />
+
+              <!-- Buttons row -->
+              <div class="flex flex-col-reverse md:flex-row md:justify-end gap-2">
+                <UButton
+                  v-bind="BUTTONS.cancel"
+                  :disabled="props.isSaving"
+                  data-testid="grid-cancel"
+                  @click="handleCancel"
+                >
+                  Annuller
+                </UButton>
+                <UButton
+                  v-if="canEdit"
+                  v-bind="BUTTONS.save"
+                  :disabled="!hasPendingChanges || props.isSaving"
+                  :loading="props.isSaving"
+                  data-testid="grid-save"
+                  @click="handleSave"
+                >
+                  {{ props.isSaving ? 'Arbejder ...' : 'Opdater' }}
+                </UButton>
+              </div>
             </div>
           </td>
         </tr>

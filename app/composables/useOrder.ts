@@ -58,6 +58,14 @@ export const useOrder = () => {
   }
 
   /**
+   * Format guest label consistently across UI
+   * @param bookerName - Optional booker name for "Gæst af X" format
+   * @returns "Gæst af {bookerName}" or "Gæst"
+   */
+  const formatGuestLabel = (bookerName?: string): string =>
+    bookerName ? `Gæst af ${bookerName}` : 'Gæst'
+
+  /**
    * Format order for display - returns all display properties
    * @param order - Order to format
    * @param bookerName - Optional booker name for guest tickets
@@ -72,7 +80,7 @@ export const useOrder = () => {
 
     return {
       guest: order.isGuestTicket ? {
-        label: bookerName ? `Gæst af ${bookerName}` : 'Gæst',
+        label: formatGuestLabel(bookerName),
         color: 'info',
         icon: ICONS.userPlus
       } : null,
@@ -330,6 +338,7 @@ export const useOrder = () => {
     // Order display formatting
     orderStateConfig,
     formatOrder,
+    formatGuestLabel,
 
     // State filtering
     getActiveOrders,

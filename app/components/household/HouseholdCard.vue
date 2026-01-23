@@ -88,7 +88,7 @@ const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Design system
-const { WEEKDAY, COMPONENTS, COLOR, ICONS, BUTTONS } = useTheSlopeDesignSystem()
+const { WEEKDAY, COMPONENTS, COLOR, ICONS, BUTTONS, SIZES } = useTheSlopeDesignSystem()
 const { powerMode } = COMPONENTS
 
 // Prepare table data with synthetic "all members" power row + individual inhabitants
@@ -163,7 +163,7 @@ const savePreferences = async () => {
 
     toast.add({
       title: isPowerMode ? 'Alle præferencer opdateret' : 'Præferencer opdateret',
-      description: formatScaffoldResult(result),
+      description: formatScaffoldResult(result, 'past'),
       icon: 'i-heroicons-check-circle',
       color: 'success'
     })
@@ -287,12 +287,12 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
 
         <!-- Preferences header (weekday labels) -->
         <template #preferences-header>
-          <UFieldGroup size="sm" orientation="horizontal" :class="WEEKDAY.fieldGroupClasses">
+          <UFieldGroup :size="SIZES.standard" orientation="horizontal" :class="WEEKDAY.fieldGroupClasses">
             <DinnerModeSelector
               v-for="day in visibleDays"
               :key="day"
               :model-value="day"
-              size="sm"
+              :size="SIZES.standard"
               :name="`weekday-header-${day}`"
             />
           </UFieldGroup>
@@ -306,6 +306,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
               :parent-restriction="activeSeason?.cookingDays"
               :show-labels="false"
               :consensus="row.original.consensus"
+              :size="SIZES.standard"
               :name="`inhabitant-${row.original.id}-preferences-view`"
           />
         </template>
@@ -336,6 +337,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
                   :parent-restriction="activeSeason?.cookingDays"
                   :show-labels="true"
                   :consensus="row.original.consensus"
+                  :size="SIZES.standard"
                   :name="row.original.isSynthetic ? 'power-mode-preferences-edit' : `inhabitant-${row.original.id}-preferences-edit`"
                   @update:model-value="updateDraft"
               />
@@ -388,7 +390,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
           :color="lastPreferenceResult.errored > 0 ? 'error' : 'neutral'"
           variant="subtle"
           title="Sidste ændring"
-          :description="`Du har ændret præferencer, og familiens bookinger har ændret sig: ${formatScaffoldResult(lastPreferenceResult)}`"
+          :description="`Du har ændret præferencer, og familiens bookinger har ændret sig: ${formatScaffoldResult(lastPreferenceResult, 'past')}`"
           data-testid="last-result-alert"
       />
 

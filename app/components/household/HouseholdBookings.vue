@@ -156,7 +156,7 @@ const handleGridSave = async (changes: { inhabitantId: number, dinnerEventId: nu
   )
   toast.add({
     title: BOOKING_TOAST_TITLES.grid,
-    description: formatScaffoldResult(result.scaffoldResult, 'compact'),
+    description: formatScaffoldResult(result.scaffoldResult, 'past'),
     color: 'success'
   })
 }
@@ -191,7 +191,7 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
     )
     toast.add({
       title: BOOKING_TOAST_TITLES.guest,
-      description: `${formatScaffoldResult(result.scaffoldResult)} d. ${dateStr}`,
+      description: `${formatScaffoldResult(result.scaffoldResult, 'past')} d. ${dateStr}`,
       color: 'success'
     })
   } catch (e) {

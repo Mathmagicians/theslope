@@ -526,6 +526,20 @@ export const CONSUMABLE_DINNER_STATES = ['SCHEDULED', 'ANNOUNCED'] as const
  */
 export const CLOSABLE_ORDER_STATES = ['BOOKED', 'RELEASED'] as const
 
+// ============================================================================
+// Action Preview Types - Show users what will happen before they save
+// ============================================================================
+
+export type ActionType = 'create' | 'delete' | 'release' | 'reclaim' | 'claim' | 'updateMode'
+
+export interface ActionPreviewItem {
+    name: string
+    action: ActionType
+    icon: string
+    color: 'primary' | 'error' | 'info' | 'neutral'
+    text: string
+}
+
 /**
  * Dinner preparation step states (5-step workflow)
  */
@@ -643,6 +657,7 @@ export const useBooking = () => {
     const {getDefaultDinnerStartTime, getDefaultDinnerDuration, getDinnerTimeRange, splitDinnerEvents} = useSeason()
     const {DinnerStateSchema, OrderSnapshotSchema} = useBookingValidation()
     const {formatNameWithInitials} = useHousehold()
+    const {formatGuestLabel} = useOrder()
     const DinnerState = DinnerStateSchema.enum
 
     // ============================================================================
@@ -1119,23 +1134,24 @@ export const useBooking = () => {
     // ============================================================================
 
     const SCAFFOLD_FIELDS = [
-        { key: 'created', symbol: '+', label: 'oprettet' },
-        { key: 'deleted', symbol: '-', label: 'slettet' },
-        { key: 'released', symbol: '↑', label: 'frigivet' },
-        { key: 'claimed', symbol: '⇅', label: 'købt fra andre' },
-        { key: 'claimRejected', symbol: '✗', label: 'køb fra andre afvist' },
-        { key: 'priceUpdated', symbol: '$', label: 'pris opdateret' },
-        { key: 'modeUpdated', symbol: 'm', label: 'spisemåde opdateret' },
-        { key: 'unchanged', symbol: '=', label: 'uændret' },
-        { key: 'errored', symbol: '!', label: 'fejlet' },
+        { key: 'created', symbol: '+', label: 'oprettet', pastLabel: 'blev tilmeldt' },
+        { key: 'deleted', symbol: '-', label: 'slettet', pastLabel: 'blev frameldt' },
+        { key: 'released', symbol: '↑', label: 'frigivet', pastLabel: 'blev frigivet' },
+        { key: 'claimed', symbol: '⇅', label: 'købt fra andre', pastLabel: 'købte fra andre' },
+        { key: 'claimRejected', symbol: '✗', label: 'køb fra andre afvist', pastLabel: 'køb fra andre afvist' },
+        { key: 'priceUpdated', symbol: '$', label: 'pris opdateret', pastLabel: 'fik pris opdateret' },
+        { key: 'modeUpdated', symbol: 'm', label: 'spisemåde opdateret', pastLabel: 'fik spisemåde opdateret' },
+        { key: 'unchanged', symbol: '=', label: 'uændret', pastLabel: 'uændret' },
+        { key: 'errored', symbol: '!', label: 'fejlet', pastLabel: 'fejlede' },
     ] as const
 
-    type ScaffoldResultFormat = 'compact' | 'verbose'
+    type ScaffoldResultFormat = 'compact' | 'verbose' | 'past'
 
     /**
      * Format scaffold result for display (toast, logs)
      * - 'verbose' (default): Danish labels for user toasts - "7 oprettet, 179 uændret"
      * - 'compact': Technical symbols for admin/logs - "+7 =179"
+     * - 'past': Past tense for confirmation toasts - "7 blev tilmeldt, 2 blev frameldt"
      * Only includes non-zero counts for cleaner output
      */
     const formatScaffoldResult = (
@@ -1144,15 +1160,128 @@ export const useBooking = () => {
     ): string => {
         const parts = SCAFFOLD_FIELDS
             .filter(f => result[f.key] > 0)
-            .map(f => format === 'compact'
-                ? `${f.symbol}${result[f.key]}`
-                : `${result[f.key]} ${f.label}`)
+            .map(f => {
+                if (format === 'compact') return `${f.symbol}${result[f.key]}`
+                if (format === 'past') return `${result[f.key]} ${f.pastLabel}`
+                return `${result[f.key]} ${f.label}`
+            })
 
         if (parts.length === 0) {
             return format === 'compact' ? '(ingen)' : 'Der var ingen ændringer i dine bookinger'
         }
         return parts.join(format === 'compact' ? ' ' : ', ')
     }
+
+    // ============================================================================
+    // Bucket Resolution - Wrapper for UI components (mirrors server usage)
+    // ============================================================================
+
+    /**
+     * Resolve desired orders to buckets for UI preview.
+     * Wraps the pure resolveDesiredOrdersToBuckets with enum wiring.
+     * Use this to show users exactly what the server will do.
+     */
+    const resolveUserBookingBuckets = (
+        desiredOrders: DesiredOrder[],
+        existingOrders: OrderDisplay[],
+        dinnerEvents: DinnerEventDisplay[],
+        deadlines: SeasonDeadlines,
+        releasedByEventAndPrice: Set<string> = new Set()
+    ): OrderBucketResult<DesiredOrder> => {
+        const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+        const dinnerEventById = new Map(dinnerEvents.map(de => [de.id, de]))
+        return resolveDesiredOrdersToBuckets(
+            desiredOrders,
+            existingOrders,
+            dinnerEventById,
+            deadlines.canModifyOrders,
+            deadlines.canEditDiningMode,
+            DinnerModeSchema.enum,
+            OrderStateSchema.enum,
+            releasedByEventAndPrice
+        )
+    }
+
+    // ============================================================================
+    // Action Preview - Show users what will happen before they save
+    // ============================================================================
+
+    // Get colors from orderStateConfig (DRY - single source of truth)
+    const {orderStateConfig} = useOrder()
+    const {OrderStateSchema} = useBookingValidation()
+    const OrderStateEnum = OrderStateSchema.enum
+
+    // Map action types to order states for color lookup
+    const ACTION_TO_STATE = {
+        create:     OrderStateEnum.BOOKED,
+        delete:     OrderStateEnum.CANCELLED,
+        release:    OrderStateEnum.RELEASED,
+        reclaim:    OrderStateEnum.BOOKED,
+        claim:      'claimed' as const,
+        updateMode: OrderStateEnum.CLOSED
+    } as const
+
+    const ACTION_PREVIEW = {
+        create:     { icon: ICONS.plusCircle, template: (n: string) => `${n} tilmeldes` },
+        delete:     { icon: ICONS.xMark,      template: (n: string) => `${n} frameldes` },
+        release:    { icon: ICONS.released,   template: (n: string) => `${n}s billet frigives` },
+        reclaim:    { icon: ICONS.undo,       template: (n: string) => `${n} tilmeldes igen` },
+        claim:      { icon: ICONS.claim,      template: (n: string) => `${n} køber fra andre` },
+        updateMode: { icon: ICONS.edit,       template: (n: string) => `${n} opdaterer spisning` }
+    } as const
+
+    const getActionColor = (action: ActionType) => orderStateConfig[ACTION_TO_STATE[action]].color
+
+    type BucketKey = keyof OrderBucketResult<DesiredOrder>
+
+    const BUCKET_TO_ACTION: Record<Exclude<BucketKey, 'idempotent' | 'update'>, ActionType> = {
+        create: 'create',
+        delete: 'delete',
+        claim: 'claim'
+    }
+
+    const getUpdateAction = (
+        order: DesiredOrder,
+        existingById: Map<number, OrderDisplay>,
+        OrderState: { RELEASED: OrderState }
+    ): ActionType => {
+        const existing = order.orderId ? existingById.get(order.orderId) : null
+        if (order.state === OrderState.RELEASED) return 'release'
+        if (existing?.state === OrderState.RELEASED) return 'reclaim'
+        return 'updateMode'
+    }
+
+    const formatActionPreview = (
+        buckets: OrderBucketResult<DesiredOrder>,
+        existingOrders: OrderDisplay[],
+        getInhabitantName: (id: number) => string
+    ): ActionPreviewItem[] => {
+        const {OrderStateSchema} = useBookingValidation()
+        const existingById = new Map(existingOrders.map(o => [o.id, o]))
+
+        const toItem = (order: DesiredOrder, action: ActionType): ActionPreviewItem => {
+            // For guests: "Gæst af {bookerName}", for regular: inhabitant name
+            const bookerName = getInhabitantName(order.inhabitantId)
+            const name = order.isGuestTicket ? formatGuestLabel(bookerName) : bookerName
+            const config = ACTION_PREVIEW[action]
+            return { name, action, icon: config.icon, color: getActionColor(action), text: config.template(name) }
+        }
+
+        const simpleItems = (Object.entries(BUCKET_TO_ACTION) as [BucketKey, ActionType][])
+            .flatMap(([bucket, action]) => buckets[bucket].map(order => toItem(order, action)))
+
+        const updateItems = buckets.update.map(order =>
+            toItem(order, getUpdateAction(order, existingById, OrderStateSchema.enum))
+        )
+
+        return [...simpleItems, ...updateItems]
+    }
+
+    const hasChanges = (buckets: OrderBucketResult<DesiredOrder>): boolean =>
+        buckets.create.length + buckets.delete.length + buckets.update.length + buckets.claim.length > 0
+
+    const countChanges = (buckets: OrderBucketResult<DesiredOrder>): number =>
+        buckets.create.length + buckets.delete.length + buckets.update.length + buckets.claim.length
 
     // ============================================================================
     // Lock Status - Compute booking lock status for calendar display
@@ -1306,6 +1435,12 @@ export const useBooking = () => {
         // Day Bill Summary
         getDayBillSummary,
         // Toast Titles
-        BOOKING_TOAST_TITLES
+        BOOKING_TOAST_TITLES,
+        // Action Preview (show users what will happen before save)
+        resolveUserBookingBuckets,
+        ACTION_PREVIEW,
+        formatActionPreview,
+        hasChanges,
+        countChanges
     }
 }
