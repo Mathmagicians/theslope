@@ -1,7 +1,7 @@
 # ADR Compliance - Frontend Routes & Components
 
 **Generated:** 2025-11-11
-**Last Updated:** 2026-01-15 (Role management: UserProfileCard, users E2E tests)
+**Last Updated:** 2026-01-23 (Admin order corrections: ActionPreview, AdminEconomy, DinnerBookingForm updates)
 
 ## Legend
 
@@ -28,7 +28,7 @@
 | `/admin/households` | `admin/[tab].vue` → `AdminHouseholds.vue` | ✅ `useHouseholdsStore()` | ❓ | ✅ `?mode=` | ✅ | ⚠️ | **⚠️ AUDIT NEEDED** |
 | `/admin/allergies` | `admin/[tab].vue` → `AdminAllergies.vue` | ✅ `useAllergiesStore()` | N/A | ✅ tabs | ✅ | ⚠️ | **⚠️ REVIEW** |
 | `/admin/users` | `admin/[tab].vue` → `AdminUsers.vue` | ✅ `useUsersStore()` | N/A | ✅ tabs | ✅ | ❌ | **⚠️ E2E ONLY** |
-| `/admin/economy` | `admin/[tab].vue` → `AdminEconomy.vue` | ❓ | N/A | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
+| `/admin/economy` | `admin/[tab].vue` → `AdminEconomy.vue` | ✅ `usePlanStore()`, `useBookingsStore()` | N/A | ✅ tabs | ✅ Serial | ❌ | **⚠️ E2E ONLY** - Admin corrections feature |
 | `/admin/settings` | `admin/[tab].vue` → `AdminSettings.vue` | N/A | N/A | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
 | `/admin/allergies/pdf` | `admin/allergies/pdf.vue` | ✅ `useAllergiesStore()` | N/A | N/A | ❌ | ❌ | **❌ NO TESTS** |
 | **Household Routes** |
@@ -112,8 +112,9 @@
 | `HouseholdBookings.vue` | `/household/[shortname]/bookings` | `usePlanStore()`, `useHouseholdsStore()`, `useBookingsStore()` | `useBookingView()`, `useBooking()` | ✅ | ✅ | ❌ | ✅ | **⚠️ MISSING UNIT** |
 | `BookingGridView.vue` | `/household/[shortname]/bookings` | Parent props | `useBooking()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - ADR-016 week/month grid |
 | `BookingViewSwitcher.vue` | `/household/[shortname]/bookings` | Parent props | `useBookingView()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - Day/week/month toggle |
-| `GuestBookingFields.vue` | `/household/[shortname]/bookings` | Parent props | `useBookingValidation()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** - Guest ticket form |
-| `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings` | `useBookingsStore()` | `useBooking()`, `useBookingValidation()` | ✅ | ✅ | ❌ | ✅ | **⚠️ MISSING UNIT** - ADR-016 booking form |
+| `ActionPreview.vue` | `/household/[shortname]/bookings`, `/admin/economy` | Parent props | `useBooking()` | ✅ | ✅ | ✅ | ✅ Indirect | **✅ COMPLIANT** - Shows booking changes before save |
+| `GuestBookingForm.vue` | `/household/[shortname]/bookings`, `/admin/economy` | Parent props | `useBookingValidation()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - Guest ticket form |
+| `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | `useBookingsStore()` | `useBooking()`, `useBookingValidation()` | ✅ | ✅ | ✅ | ✅ Serial | **✅ COMPLIANT** - ADR-016 booking form, admin override support |
 | `DinnerEvent.vue` | `/household/[shortname]/bookings`, `/dinner` | Parent props | `useDinnerEvent()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
 | `DinnerTicket.vue` | `/household/[shortname]/bookings` | Parent props | `useTicket()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
 
@@ -139,7 +140,7 @@
 | `auth.ts` | N/A | ✅ | N/A | N/A | ❌ | **✅ COMPLIANT** - Uses `usePermissions()` for role checks, added `isMemberOfHousehold()` |
 | `event.ts` | ❓ | ❓ | ❓ | ❓ | ❌ | **❓ AUDIT NEEDED** |
 | `tickets.ts` | ❓ | ❓ | ❓ | ❓ | ❌ | **❓ AUDIT NEEDED** |
-| `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ❌ | **✅ COMPLIANT** - ADR-016 scaffold methods, `useRequestFetch()` for SSR |
+| `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ❌ | **✅ COMPLIANT** - ADR-016 scaffold methods, `processAdminCorrection()` for admin bypass, `useRequestFetch()` for SSR |
 
 ## Composable Compliance
 
@@ -155,7 +156,7 @@
 | `useOrderValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
 | `useDinnerEventValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
 | `useTicketPriceValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
-| `useBooking()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - ADR-016 `decideOrderAction`, bucket resolvers, deadline labels |
+| `useBooking()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - ADR-016 `decideOrderAction`, bucket resolvers, `formatActionPreview()`, `resolveUserBookingBuckets()` |
 | `useBookingView()` | ✅ `BookingViewSchema` | N/A | ✅ DateRange | ❌ | **⚠️ MISSING TESTS** - ADR-006 URL-synced view/date for booking calendar |
 | `useEntityFormManager()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
 | `useTabNavigation()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
@@ -213,7 +214,6 @@ All admin and household pages use:
 **Needs audit:**
 - ❓ `event.ts` - Not audited
 - ❓ `tickets.ts` - Not audited
-- ❓ `bookings.ts` - Not audited
 
 **Note:** `auth.ts` uses `useUserSession()` from nuxt-auth-utils (not `useAsyncData`), so ADR-007 patterns don't fully apply. It's compliant for its use case.
 
@@ -249,15 +249,16 @@ All components and stores work with domain types:
 - ✅ Admin planning (`AdminPlanning.e2e.spec.ts`, `AdminPlanningSeason.e2e.spec.ts`)
 - ✅ Admin teams (`AdminTeams.e2e.spec.ts`)
 - ✅ Admin households (`AdminHouseholds.e2e.spec.ts`)
+- ✅ Admin economy (`AdminEconomy.e2e.spec.ts` - serial, admin corrections)
 - ✅ Household members (`HouseholdMembers.e2e.spec.ts`)
 - ✅ Household navigation (`household.e2e.spec.ts`)
+- ✅ Household bookings (`DinnerBookingForm.e2e.spec.ts` - serial, `HouseholdBookingsCrossHousehold.e2e.spec.ts`)
+- ✅ Public billing (`PublicBilling.e2e.spec.ts`)
 
 **Missing E2E:**
 - ❌ Admin users
 - ❌ Admin allergies (has admin.e2e.spec.ts but needs specific tests)
-- ❌ Admin economy
 - ❌ Admin settings
-- ❌ Household bookings (backend tested, UI not)
 - ❌ Household allergies
 - ❌ Household settings
 - ❌ Household economy
@@ -283,19 +284,18 @@ All components and stores work with domain types:
 - ❌ Most form components (tested indirectly via E2E)
 - ❌ Calendar display components
 - ❌ Allergy components
-- ❌ Booking components
 - ❌ Layout components (ViewError, Loader, etc.)
 - ✅ Validation composables (all `use*Validation()` composables have comprehensive unit tests)
+- ✅ Booking components (`ActionPreview.nuxt.spec.ts`, `DinnerBookingForm.nuxt.spec.ts`, `useBooking.nuxt.spec.ts`)
 
 ## Priority Actions
 
 ### High Priority (Critical Gaps)
 
-1. **Store Audits** - Audit remaining 4 stores for ADR-007 compliance
+1. **Store Audits** - Audit remaining 3 stores for ADR-007 compliance
    - `auth.ts`
    - `event.ts`
    - `tickets.ts`
-   - `bookings.ts`
 
 2. **Validation Composable Tests** - ✅ COMPLETE
    - All `use*Validation()` composables now have comprehensive unit tests

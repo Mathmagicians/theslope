@@ -657,7 +657,6 @@ export const useBooking = () => {
     const {getDefaultDinnerStartTime, getDefaultDinnerDuration, getDinnerTimeRange, splitDinnerEvents} = useSeason()
     const {DinnerStateSchema, OrderSnapshotSchema} = useBookingValidation()
     const {formatNameWithInitials} = useHousehold()
-    const {formatGuestLabel} = useOrder()
     const DinnerState = DinnerStateSchema.enum
 
     // ============================================================================
@@ -1204,22 +1203,9 @@ export const useBooking = () => {
 
     // ============================================================================
     // Action Preview - Show users what will happen before they save
+    // NOTE: useOrder() is called lazily inside formatActionPreview to avoid
+    // server-side issues (useOrder relies on Nuxt auto-imports unavailable on server)
     // ============================================================================
-
-    // Get colors from orderStateConfig (DRY - single source of truth)
-    const {orderStateConfig} = useOrder()
-    const {OrderStateSchema} = useBookingValidation()
-    const OrderStateEnum = OrderStateSchema.enum
-
-    // Map action types to order states for color lookup
-    const ACTION_TO_STATE = {
-        create:     OrderStateEnum.BOOKED,
-        delete:     OrderStateEnum.CANCELLED,
-        release:    OrderStateEnum.RELEASED,
-        reclaim:    OrderStateEnum.BOOKED,
-        claim:      'claimed' as const,
-        updateMode: OrderStateEnum.CLOSED
-    } as const
 
     const ACTION_PREVIEW = {
         create:     { icon: ICONS.plusCircle, template: (n: string) => `${n} tilmeldes` },
@@ -1229,8 +1215,6 @@ export const useBooking = () => {
         claim:      { icon: ICONS.claim,      template: (n: string) => `${n} køber fra andre` },
         updateMode: { icon: ICONS.edit,       template: (n: string) => `${n} opdaterer spisning` }
     } as const
-
-    const getActionColor = (action: ActionType) => orderStateConfig[ACTION_TO_STATE[action]].color
 
     type BucketKey = keyof OrderBucketResult<DesiredOrder>
 
@@ -1256,8 +1240,23 @@ export const useBooking = () => {
         existingOrders: OrderDisplay[],
         getInhabitantName: (id: number) => string
     ): ActionPreviewItem[] => {
+        // Lazy import: useOrder relies on Nuxt auto-imports, only available client-side
+        const {orderStateConfig, formatGuestLabel} = useOrder()
         const {OrderStateSchema} = useBookingValidation()
+        const OrderStateEnum = OrderStateSchema.enum
         const existingById = new Map(existingOrders.map(o => [o.id, o]))
+
+        // Map action types to order states for color lookup
+        const ACTION_TO_STATE = {
+            create:     OrderStateEnum.BOOKED,
+            delete:     OrderStateEnum.CANCELLED,
+            release:    OrderStateEnum.RELEASED,
+            reclaim:    OrderStateEnum.BOOKED,
+            claim:      'claimed' as const,
+            updateMode: OrderStateEnum.CLOSED
+        } as const
+
+        const getActionColor = (action: ActionType) => orderStateConfig[ACTION_TO_STATE[action]].color
 
         const toItem = (order: DesiredOrder, action: ActionType): ActionPreviewItem => {
             // For guests: "Gæst af {bookerName}", for regular: inhabitant name

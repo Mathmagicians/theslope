@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2026-01-23 (Added upcomingForSeason query param to order GET endpoint)
+**Last Updated:** 2026-01-23 (Admin order corrections: `?adminBypass=true` on PUT/POST/DELETE, `upcomingForSeason`/`includeDinnerContext` on GET)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -12,12 +12,12 @@
 
 | Endpoint | Return Type | Validation | Repository | E2E Tests | Notes                                                                                            |
 |----------|-------------|------------|------------|-----------|--------------------------------------------------------------------------------------------------|
-| **Order Management** | | | | | **✅ FULLY COMPLIANT** (6/6 endpoints implemented) + Authorization middleware                     |
-| `/api/order/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createOrder() + `requireHouseholdAccess()` authorization                                         |
+| **Order Management** | | | | | **✅ FULLY COMPLIANT** (6/6 endpoints) + Authorization + Admin bypass for corrections            |
+| `/api/order/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createOrder() + `requireHouseholdAccess()`, `?adminBypass=true` for admin corrections            |
 | `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrders() with state/sortBy/allHouseholds/upcomingForSeason/includeDinnerContext filters     |
 | `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrder() + `requireHouseholdAccess()` authorization                                          |
-| `/api/order/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateOrder() + `requireHouseholdAccess()` authorization                                         |
-| `/api/order/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteOrder() validates with OrderSchema                                                         |
+| `/api/order/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateOrder() + `requireHouseholdAccess()`, `?adminBypass=true` skips deadline (always DELETE)   |
+| `/api/order/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteOrder() + `requireHouseholdAccess()`, `?adminBypass=true` for admin corrections            |
 | `/api/order/claim.post.ts` | ✅ | ✅ | ✅ | ✅ | claimOrder(dinnerEventId, ticketPriceId) - FIFO by releasedAt, retry logic, USER_CLAIMED audit   |
 | **Admin - Dinner Events** | | | | | **✅ FULLY COMPLIANT**                                                                            |
 | `/api/admin/dinner-event/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteDinnerEvent() validates with DinnerEventResponseSchema                                     |
