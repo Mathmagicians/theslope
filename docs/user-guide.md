@@ -137,6 +137,26 @@ Tilmelding sker automatisk baseret på dine ugentlige præferencer. Men du kan a
 ![Tilmeldingskalender](screenshots/household/household-bookings.png)
 *Kalenderen viser dine tilmeldinger - vælg dag/uge/måned visning*
 
+### Sådan ser du hvem der kommer til fællesspisning
+
+På [Middagskalenderen](https://www.skraaningen.dk/dinner) kan du se hvem der er tilmeldt:
+
+1. Gå til [skraaningen.dk/dinner](https://www.skraaningen.dk/dinner)
+2. Klik på en middag for at se detaljer
+3. Se **tilmeldingspanelet** med opdeling på spisningsform:
+
+| Kategori | Hvad du kan se |
+|----------|----------------|
+| **Total kuverter** | Samlet antal tilmeldte (voksen, barn, baby) |
+| **Takeaway** | Hvem der henter mad |
+| **Spisesal** | Hvem der spiser i salen |
+| **Sen spisning** | Hvem der kommer sent |
+| **Til salg** | Frigivne billetter du kan overtage |
+
+**Klik på en kategori** for at se hvilke husstande der er tilmeldt.
+
+> **Tip:** Brug oversigten til at koordinere med naboer om at hente hinandens takeaway, eller se om der er frigivne billetter du kan overtage.
+
 #### Uge- og månedsvisning (Grid booking)
 
 I uge- eller månedsvisning kan du hurtigt ændre tilmeldinger for flere dage:
@@ -144,9 +164,27 @@ I uge- eller månedsvisning kan du hurtigt ændre tilmeldinger for flere dage:
 1. Klik på **blyanten** for at aktivere redigeringstilstand
 2. Klik på en celle for at skifte, hvordan du spiser: Spisesal → Sen → Takeaway → Ingen
 3. Brug **Power-rækken** øverst til at ændre alle medlemmer på én gang
-4. Klik **Gem** når du er færdig - eller **Annullér** for at fortryde
+4. Se **forhåndsvisning** af ændringer før du gemmer
+5. Klik **Gem** når du er færdig - eller **Annullér** for at fortryde
 
 > **Tip:** Ændringer gemmes først når du klikker Gem. Du kan frit eksperimentere og annullere.
+
+#### Forhåndsvisning af ændringer
+
+Før du gemmer dine bookingændringer, viser systemet en oversigt over hvad der vil ske:
+
+| Symbol | Tekst | Beskrivelse |
+|:------:|-------|-------------|
+| ![Plus](https://api.iconify.design/heroicons:plus-circle.svg?height=20&color=%2322c55e) | **Anna tilmeldes** | Personen bliver tilmeldt fællesspisning |
+| ![Minus](https://api.iconify.design/heroicons:x-mark.svg?height=20&color=%23ef4444) | **Peter frameldes** | Personen bliver frameldt (før deadline) |
+| ![Frigiv](https://api.iconify.design/heroicons:arrow-up-tray.svg?height=20&color=%23f59e0b) | **Peters billet frigives** | Billetten sættes til salg (efter deadline) |
+| ![Fortryd](https://api.iconify.design/heroicons:arrow-uturn-left.svg?height=20&color=%233b82f6) | **Anna tilmeldes igen** | Frigivet billet tages tilbage |
+| ![Køb](https://api.iconify.design/heroicons:arrows-right-left.svg?height=20&color=%238b5cf6) | **Emil køber fra andre** | Overtager en frigivet billet |
+
+Forhåndsvisningen hjælper dig med at:
+- Se præcis hvilke ændringer du er ved at lave
+- Bekræfte at de rigtige personer bliver til- eller frameldt
+- Forstå forskellen på afmelding og frigivelse (afhængigt af deadline)
 
 ![Ugevisning](screenshots/dinner/booking-grid-week.png)
 *Ugevisning: Overblik over hele ugens tilmeldinger*
@@ -270,4 +308,4 @@ Kontakt en administrator eller opret et issue på [GitHub](https://github.com/Ma
 
 ---
 
-*Sidst opdateret: Januar 2026*
+*Sidst opdateret: Januar 2026 (tilføjet forhåndsvisning og tilmeldingspanel)*

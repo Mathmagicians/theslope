@@ -47,6 +47,7 @@ Ikke-administratorer ser en **"Se, men ikke røre"**-besked og kan ikke ændre d
 | Administrer allergityper | [Allergier](https://www.skraaningen.dk/admin/allergies) |
 | Se brugere og roller | [Brugere](https://www.skraaningen.dk/admin/users) |
 | Se økonomioversigt | [Økonomi](https://www.skraaningen.dk/admin/economy) |
+| **Ret bookinger (admin)** | [Økonomi](https://www.skraaningen.dk/admin/economy) → Fremtidige bestillinger |
 | Kør systemjobs | [System](https://www.skraaningen.dk/admin/system) |
 | Importér sæson fra CSV | `make theslope-import-season-*` |
 | Synkronisér fra Heynabo | `make heynabo-import-*` |
@@ -269,6 +270,36 @@ Fakturering kører automatisk den 17. hver måned:
 3. Klik **Del** for at generere et magic link
 4. Send linket til revisor (kræver ikke login)
 
+### Sådan retter du bookinger (Admin-korrektioner)
+
+Som administrator kan du rette bookinger for alle husstande - også efter deadline er passeret.
+
+**Hvornår bruges dette:**
+- Beboer glemte at tilmelde sig
+- Forkert booking opdaget efter deadline
+- Beboer misforstod præferencer
+
+**Sådan gør du:**
+
+1. Gå til [Økonomi](https://www.skraaningen.dk/admin/economy)
+2. Find middagen under **Fremtidige bestillinger**
+3. Klik på **Ret** (blyant-ikon) ud for den middag du vil rette
+4. Vælg husstand i dropdown-menuen
+5. Redigér tilmeldinger:
+   - Tilføj/fjern personer
+   - Ændr spisningsform (Spisesal, Sen, Takeaway)
+   - Tilføj/fjern gæster
+6. Se **forhåndsvisning** af ændringer
+7. Klik **Gem ændringer**
+
+**Admin-rettelser omgår:**
+- Tilmeldingsdeadline (10 dage)
+- Afmeldingsregler (slet i stedet for frigiv)
+
+> **Bemærk:** Admin-rettelser logges med dit bruger-ID i systemets audit trail.
+
+> **Vigtigt:** Rettelser til lukkede ordrer (efter middagen er afholdt) understøttes ikke endnu.
+
 ---
 
 ## Systemvedligeholdelse
@@ -298,4 +329,4 @@ Alle jobs er idempotente og kan køres igen uden problemer.
 
 ---
 
-*Sidst opdateret: Januar 2026*
+*Sidst opdateret: Januar 2026 (tilføjet admin-korrektioner)*
