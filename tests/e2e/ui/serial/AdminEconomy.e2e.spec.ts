@@ -143,7 +143,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         await correctionBtn.click()
         // Wait for button to show confirm state (text changes to "Klik igen for at rette")
         await pollUntil(
-            async () => (await correctionBtn.textContent())?.includes('Klik igen'),
+            async () => (await correctionBtn.textContent())?.includes('Klik igen') ?? false,
             (hasConfirmText) => hasConfirmText,
             10,
             200

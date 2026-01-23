@@ -761,8 +761,9 @@ export async function deleteOrder(
         console.info(`${LOG} Successfully deleted ${ordersToDelete.length} order(s) with ${action} audit entries`)
 
         // Transform Prisma types to domain types and validate (ADR-010)
+        // Exclude dinnerEvent - only needed seasonId for audit, not for returned OrderDisplay
         return ordersToDelete.map(order => {
-            const {ticketPrice, inhabitant, ...rest} = order
+            const {ticketPrice, inhabitant, dinnerEvent, ...rest} = order
             return OrderDisplaySchema.parse({ ...rest, ticketType: ticketPrice?.ticketType ?? null })
         })
     } catch (error) {
@@ -807,6 +808,7 @@ const DINNER_EVENT_ID_BATCH_SIZE = 90
  * @param state - Optional state filter (e.g., RELEASED for claim queue)
  * @param sortBy - Sort field: 'createdAt' (default) or 'releasedAt' (FIFO claim queue)
  * @param includeProvenance - Include provenance for claimed tickets (default: false)
+ * @param includeDinnerContext - Include dinner event context (date, menuTitle) for economy views (default: false)
  */
 export async function fetchOrders(
     d1Client: D1Database,
@@ -814,7 +816,8 @@ export async function fetchOrders(
     householdId?: number,
     state?: OrderState,
     sortBy: 'createdAt' | 'releasedAt' = 'createdAt',
-    includeProvenance: boolean = false
+    includeProvenance: boolean = false,
+    includeDinnerContext: boolean = false
 ): Promise<OrderDisplay[]> {
     // Normalize to array, return early for empty
     const ids = dinnerEventIds === undefined ? undefined : [dinnerEventIds].flat()
@@ -835,7 +838,7 @@ export async function fetchOrders(
 
         // Execute batches in parallel and merge results
         const batchResults = await Promise.all(
-            batches.map(batch => fetchOrdersBatch(d1Client, batch, householdId, state, sortBy, includeProvenance))
+            batches.map(batch => fetchOrdersBatch(d1Client, batch, householdId, state, sortBy, includeProvenance, includeDinnerContext))
         )
 
         // Flatten and sort by the requested field
@@ -845,7 +848,7 @@ export async function fetchOrders(
         return sorted
     }
 
-    return fetchOrdersBatch(d1Client, ids, householdId, state, sortBy, includeProvenance)
+    return fetchOrdersBatch(d1Client, ids, householdId, state, sortBy, includeProvenance, includeDinnerContext)
 }
 
 /**
@@ -858,7 +861,8 @@ async function fetchOrdersBatch(
     householdId: number | undefined,
     state: OrderState | undefined,
     sortBy: 'createdAt' | 'releasedAt',
-    includeProvenance: boolean
+    includeProvenance: boolean,
+    includeDinnerContext: boolean
 ): Promise<OrderDisplay[]> {
     const {OrderDisplaySchema, deserializeOrderAuditData, OrderAuditActionSchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
@@ -886,16 +890,19 @@ async function fetchOrdersBatch(
 
         // Raw SQL with proper JOINs - avoids D1 100 variable limit
         // LEFT JOIN to latest USER_CLAIMED history entry per order (for provenance)
+        // LEFT JOIN to DinnerEvent for context (date, menuTitle) when includeDinnerContext=true
         const sql = `
             SELECT
                 o.id, o.dinnerEventId, o.inhabitantId, o.bookedByUserId, o.ticketPriceId,
                 o.priceAtBooking, o.dinnerMode, o.state, o.isGuestTicket,
                 o.releasedAt, o.closedAt, o.createdAt, o.updatedAt,
                 tp.ticketType,
-                ${includeProvenance ? 'oh.auditData as provenanceData' : 'NULL as provenanceData'}
+                ${includeProvenance ? 'oh.auditData as provenanceData' : 'NULL as provenanceData'},
+                ${includeDinnerContext ? 'de.id as dinnerId, de.date as dinnerDate, de.menuTitle as dinnerMenuTitle' : 'NULL as dinnerId, NULL as dinnerDate, NULL as dinnerMenuTitle'}
             FROM "Order" o
             JOIN Inhabitant i ON i.id = o.inhabitantId
             LEFT JOIN TicketPrice tp ON tp.id = o.ticketPriceId
+            ${includeDinnerContext ? 'LEFT JOIN DinnerEvent de ON de.id = o.dinnerEventId' : ''}
             ${includeProvenance ? `
             LEFT JOIN (
                 SELECT orderId, auditData, ROW_NUMBER() OVER (PARTITION BY orderId ORDER BY timestamp DESC) as rn
@@ -924,6 +931,9 @@ async function fetchOrdersBatch(
             updatedAt: string
             ticketType: string | null
             provenanceData: string | null
+            dinnerId: number | null
+            dinnerDate: string | null
+            dinnerMenuTitle: string | null
         }
 
         const rawOrders = await prisma.$queryRawUnsafe<RawOrderRow[]>(sql, ...params)
@@ -944,6 +954,10 @@ async function fetchOrdersBatch(
                 }
             }
 
+            const dinnerEvent = row.dinnerId
+                ? { id: row.dinnerId, date: new Date(row.dinnerDate!), menuTitle: row.dinnerMenuTitle }
+                : undefined
+
             return OrderDisplaySchema.parse({
                 id: row.id,
                 dinnerEventId: row.dinnerEventId,
@@ -960,7 +974,8 @@ async function fetchOrdersBatch(
                 updatedAt: new Date(row.updatedAt),
                 ticketType: row.ticketType,
                 provenanceHousehold,
-                provenanceAllergies
+                provenanceAllergies,
+                dinnerEvent
             })
         })
     } catch (error) {

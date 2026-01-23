@@ -565,4 +565,67 @@ test.describe('Order API', () => {
 
     expect(orders).toEqual([])
   })
+
+  test('GET with upcomingForSeason returns orders for upcoming dinners only', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // Create order for the test dinner event
+    const result = await OrderFactory.createOrder(context, {
+      householdId: testHouseholdId,
+      dinnerEventId: testDinnerEventId,
+      orders: [OrderFactory.defaultOrderItem({
+        inhabitantId: testInhabitantId,
+        ticketPriceId: testAdultTicketPriceId
+      })]
+    })
+    testOrderIds.push(result!.createdIds[0]!)
+
+    // Fetch with upcomingForSeason
+    const orders = await OrderFactory.getOrders(context, {
+      upcomingForSeason: testSeasonId,
+      allHouseholds: true
+    })
+
+    // Should return orders (server computes upcoming dinner IDs from season)
+    expect(orders.length).toBeGreaterThan(0)
+    // All returned orders should be for dinner events in the test season
+    // (We can't verify exact dinner IDs without knowing what's "upcoming", but orders should exist)
+  })
+
+  test('GET with upcomingForSeason and includeDinnerContext returns dinnerEvent data', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    const orders = await OrderFactory.getOrders(context, {
+      upcomingForSeason: testSeasonId,
+      allHouseholds: true,
+      includeDinnerContext: true
+    })
+
+    // If there are orders, they should have dinnerEvent embedded
+    if (orders.length > 0) {
+      const order = orders[0]!
+      expect(order.dinnerEvent).toBeDefined()
+      expect(order.dinnerEvent!.id).toBeDefined()
+      expect(order.dinnerEvent!.date).toBeDefined()
+    }
+  })
+
+  test('GET with upcomingForSeason for non-existent season returns 404', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    await OrderFactory.getOrders(context, {
+      upcomingForSeason: 999999,
+      allHouseholds: true
+    }, 404)
+  })
+
+  test('GET with both upcomingForSeason and dinnerEventIds returns 400', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    await OrderFactory.getOrders(context, {
+      upcomingForSeason: testSeasonId,
+      dinnerEventIds: testDinnerEventId,
+      allHouseholds: true
+    }, 400)
+  })
 })

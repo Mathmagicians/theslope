@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2026-01-17 (Admin economy tree view endpoints)
+**Last Updated:** 2026-01-23 (Added upcomingForSeason query param to order GET endpoint)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -14,7 +14,7 @@
 |----------|-------------|------------|------------|-----------|--------------------------------------------------------------------------------------------------|
 | **Order Management** | | | | | **✅ FULLY COMPLIANT** (6/6 endpoints implemented) + Authorization middleware                     |
 | `/api/order/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createOrder() + `requireHouseholdAccess()` authorization                                         |
-| `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrders() with state/sortBy/allHouseholds filters, validates with OrderSchema                |
+| `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrders() with state/sortBy/allHouseholds/upcomingForSeason/includeDinnerContext filters     |
 | `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrder() + `requireHouseholdAccess()` authorization                                          |
 | `/api/order/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateOrder() + `requireHouseholdAccess()` authorization                                         |
 | `/api/order/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteOrder() validates with OrderSchema                                                         |

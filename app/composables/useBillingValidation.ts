@@ -2,6 +2,7 @@ import {z} from 'zod'
 import {TicketTypeSchema, DinnerModeSchema, OrderStateSchema} from '~~/prisma/generated/zod'
 import {parse as parseDate} from 'date-fns'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import type {DinnerEventInfo} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 
@@ -469,8 +470,8 @@ export const useBillingValidation = () => {
      * ADR-010: Domain-driven serialization
      */
     const serializeTransaction = (order: {
-        dinnerEvent: {id: number, date: Date, menuTitle: string}
-        inhabitant: {id: number, name: string, household: {id: number, pbsId: number, address: string}}
+        dinnerEvent: DinnerEventInfo
+        inhabitant: {id: number, name: string, household: HouseholdInfo}
         ticketType: string | null
         isGuestTicket?: boolean
         provenanceHousehold?: string | null
@@ -499,8 +500,8 @@ export const useBillingValidation = () => {
         orderSnapshot: string
         order: {
             id: number
-            dinnerEvent: {id: number, date: Date, menuTitle: string}
-            inhabitant: {id: number, name: string, household: {id: number, pbsId: number, address: string} | null}
+            dinnerEvent: DinnerEventInfo
+            inhabitant: {id: number, name: string, household: HouseholdInfo | null}
             ticketPrice: {ticketType: string} | null
             isGuestTicket?: boolean
             provenanceHousehold?: string | null  // Populated from OrderHistory USER_CLAIMED
@@ -758,20 +759,22 @@ export type HouseholdInvoice = z.infer<ReturnType<typeof useBillingValidation>['
 export type CurrentPeriodBilling = z.infer<ReturnType<typeof useBillingValidation>['CurrentPeriodBillingSchema']>
 
 // CostEntry/CostLine types (Economy views)
-export type CostEntry<T> = {
-    dinnerEventId: number
-    date: Date
-    menuTitle: string
+// DEI = DinnerEventInfo context type, T = item type
+export type CostEntry<T, DEI> = {
+    dinnerEvent: DEI
     items: T[]
     totalAmount: number
     ticketCounts: string
 }
 
+// HouseholdInfo - extracted household properties for grouping
+export type HouseholdInfo = { id: number, pbsId: number, address: string }
+
+// InhabitantInfo - extracted inhabitant properties with household for economy views
+export type InhabitantInfo = { id: number, name: string, household: HouseholdInfo }
+
 // HouseholdEntry - group by household for PBS/revisor view
-export type HouseholdEntry<T> = {
-    householdId: number
-    pbsId: number
-    address: string
+export type HouseholdEntry<T> = HouseholdInfo & {
     items: T[]
     totalAmount: number      // Stored/expected amount (invoice.amount or computed for virtual)
     computedTotal: number    // Control sum: Σ item amounts

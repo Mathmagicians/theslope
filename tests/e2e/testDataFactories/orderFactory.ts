@@ -437,10 +437,12 @@ export class OrderFactory {
     context: BrowserContext,
     options: {
       dinnerEventIds?: number | number[]
+      upcomingForSeason?: number
       householdId?: number
       allHouseholds?: boolean
       state?: string
       sortBy?: 'createdAt' | 'releasedAt'
+      includeDinnerContext?: boolean
     } = {},
     expectedStatus: number = 200
   ): Promise<OrderDisplay[]> => {
@@ -451,10 +453,12 @@ export class OrderFactory {
       const ids = [options.dinnerEventIds].flat()
       ids.forEach(id => params.append('dinnerEventIds', String(id)))
     }
+    if (options.upcomingForSeason !== undefined) params.append('upcomingForSeason', String(options.upcomingForSeason))
     if (options.householdId !== undefined) params.append('householdId', String(options.householdId))
     if (options.allHouseholds) params.append('allHouseholds', 'true')
     if (options.state) params.append('state', options.state)
     if (options.sortBy) params.append('sortBy', options.sortBy)
+    if (options.includeDinnerContext) params.append('includeDinnerContext', 'true')
 
     const response = await context.request.get(`${ORDER_ENDPOINT}?${params.toString()}`, { headers })
 
