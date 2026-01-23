@@ -89,6 +89,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const {getDefaultSeason, getDefaultHolidays} = useSeason()
+const toast = useToast()
 const store = usePlanStore()
 const {
   isSeasonsLoading,
@@ -141,7 +142,6 @@ const showAdminSeason = computed(() => {
 
 // UTILITY
 const showSuccessToast = (title: string, description?: string) => {
-  const toast = useToast()
   toast.add({
     title,
     description,

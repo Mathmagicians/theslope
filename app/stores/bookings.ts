@@ -104,13 +104,6 @@ export const useBookingsStore = defineStore("Bookings", () => {
         console.info(CTX, `Loading orders for ${ids.length} dinner(s)${householdId ? ` (household ${householdId})` : ''}${withProvenance ? ' (with provenance)' : ''}`)
     }
 
-    const loadOrdersForInhabitant = (inhabitantId: number, withProvenance = false) => {
-        selectedInhabitantId.value = inhabitantId
-        selectedDinnerEventIds.value = []
-        includeProvenance.value = withProvenance
-        console.info(CTX, `Loading orders for inhabitant: ${inhabitantId}${withProvenance ? ' (with provenance)' : ''}`)
-    }
-
     // Internal order methods - only used by processAdminCorrection
     const createOrder = async (request: CreateOrdersRequest): Promise<CreateOrdersResult> => {
         try {
@@ -624,7 +617,6 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
         // actions
         loadOrdersForDinners,
-        loadOrdersForInhabitant,
         claimOrder,
         fetchReleasedOrders,
         // Lock status (calendar display)

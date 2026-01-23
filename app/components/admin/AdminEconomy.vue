@@ -11,7 +11,7 @@
  */
 import {formatDate, formatDateRange} from '~/utils/date'
 import type {DateRange} from '~/types/dateTypes'
-import type {TransactionDisplay, CostEntry, HouseholdInfo, InhabitantInfo, HouseholdEntry} from '~/composables/useBillingValidation'
+import type {TransactionDisplay, CostEntry, InhabitantInfo, HouseholdEntry} from '~/composables/useBillingValidation'
 import type {OrderDisplay, DesiredOrder, DinnerEventDisplay, DinnerEventInfo} from '~/composables/useBookingValidation'
 import type {StatBox} from '~/components/economy/CostEntry.vue'
 import type {SeasonDeadlines} from '~/composables/useSeason'
