@@ -111,13 +111,14 @@ const viewMode = toRef(props, 'viewMode')
 const accordionOpen = toRef(props, 'accordionOpen')
 
 // Temporal splitting using shared composable
+// Pass getter to maintain reactivity when team changes (props.dinnerEvents updates)
 const {
   nextDinner,
   pastDinnerDates,
   futureDinnerDates,
   nextDinnerDateRange,
   dinnerStartHour
-} = useTemporalSplit(props.dinnerEvents)
+} = useTemporalSplit(() => props.dinnerEvents)
 
 // Create event lists with ocean color (professional chef palette)
 const allEventLists = computed(() =>

@@ -24,7 +24,7 @@ const {SIZES} = useTheSlopeDesignSystem()
 </script>
 
 <template>
-  <div class="flex flex-col items-start">
+  <div data-testid="deadline-badge" class="flex flex-col items-start">
     <UBadge :color="badge.color" :icon="badge.icon" variant="soft" :size="SIZES.small">
       <template v-if="!compact">{{ badge.label }}: </template>
       {{ badge.value }}

@@ -13,6 +13,7 @@
  * Note: Components must handle their own countdown timers with lifecycle hooks.
  * This composable provides the calculation logic only.
  */
+import {toValue, type MaybeRefOrGetter} from 'vue'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 
 export const useTemporalCalendar = () => {
@@ -26,11 +27,14 @@ export const useTemporalCalendar = () => {
    * Split events into temporal categories (past/next/future)
    * Uses splitDinnerEvents which computes nextDinnerDateRange internally (DRY)
    * Returns dates (not events) for calendar badge display - extracts .date from events
+   *
+   * @param events - MaybeRefOrGetter of events array. Pass a getter (() => props.dinnerEvents)
+   *                 to maintain reactivity when props change.
    */
-  const useTemporalSplit = <T extends { date: Date }>(events: T[]) => {
+  const useTemporalSplit = <T extends { date: Date }>(events: MaybeRefOrGetter<T[]>) => {
     const dinnerStartHour = getDefaultDinnerStartTime()
 
-    const splitResult = computed(() => splitDinnerEvents<T>(events))
+    const splitResult = computed(() => splitDinnerEvents<T>(toValue(events)))
 
     const nextDinner = computed(() => splitResult.value.nextDinner)
     // Extract dates from events for calendar badge display

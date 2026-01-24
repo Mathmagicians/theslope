@@ -7,6 +7,7 @@ import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 
 // Wrapper to provide NuxtUI's required TooltipProvider context
 const withTooltipProvider = (component: Parameters<typeof h>[0], props: Record<string, unknown>) => ({
@@ -32,8 +33,9 @@ mockNuxtImport('usePermissions', () => () => ({
   isHouseholdMember: mockIsHouseholdMember
 }))
 
-// Test fixtures
-const baseDeadlines = {canModifyOrders: () => true, canEditDiningMode: () => true, getOrderCancellationAction: () => null, isAnnounceMenuPastDeadline: () => false}
+// Test fixtures - use real deadlinesForSeason() to stay in sync with SeasonDeadlines interface
+const {deadlinesForSeason} = useSeason()
+const baseDeadlines = deadlinesForSeason(SeasonFactory.defaultSeasonData)
 const baseProps = {
   dinnerEvent: DinnerEventFactory.defaultDinnerEventDisplay(),
   ticketPrices: TicketFactory.defaultTicketPrices(),

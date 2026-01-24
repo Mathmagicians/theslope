@@ -485,16 +485,31 @@ export const createBookingBadge = (isOpen: boolean, releasedCounts?: ReleasedTic
 }
 
 /**
- * Create dining mode deadline badge data
- * @param isOpen - Whether dining mode can be changed (canEditDiningMode)
+ * Create dining mode deadline badge data.
+ * Shows urgency (yellow/red) when < 24h and still open.
  */
-export const createDiningModeBadge = (isOpen: boolean): DeadlineBadgeData => ({
-    label: DEADLINE_LABELS.DINING_MODE.label,
-    icon: isOpen ? ICONS.lockOpen : ICONS.lockClosed,
-    color: isOpen ? 'success' : 'error',
-    value: isOpen ? 'Åben' : 'Lukket',
-    helpText: isOpen ? DEADLINE_LABELS.DINING_MODE.openText : DEADLINE_LABELS.DINING_MODE.closedText
-})
+export const createDiningModeBadge = (
+    isOpen: boolean,
+    countdown?: { hours: number; formatted: string }
+): DeadlineBadgeData => {
+    // Show urgency when open and < 24h
+    if (isOpen && countdown && countdown.hours > 0 && countdown.hours < 24) {
+        return {
+            label: DEADLINE_LABELS.DINING_MODE.label,
+            icon: ICONS.lockOpen,
+            color: countdown.hours < 1 ? 'error' : 'warning',
+            value: `lukker om ${countdown.formatted.toLowerCase()}`,
+            helpText: DEADLINE_LABELS.DINING_MODE.openText
+        }
+    }
+    return {
+        label: DEADLINE_LABELS.DINING_MODE.label,
+        icon: isOpen ? ICONS.lockOpen : ICONS.lockClosed,
+        color: isOpen ? 'success' : 'error',
+        value: isOpen ? 'Åben' : 'Lukket',
+        helpText: isOpen ? DEADLINE_LABELS.DINING_MODE.openText : DEADLINE_LABELS.DINING_MODE.closedText
+    }
+}
 
 /**
  * Create booking view badges (for DinnerBookingForm, BookingGridView)
@@ -503,10 +518,13 @@ export const createBookingBadges = (
     dinnerEvent: DinnerEventDisplay,
     deadlines: SeasonDeadlines,
     releasedCounts?: ReleasedTicketCounts
-): { booking: DeadlineBadgeData; diningMode: DeadlineBadgeData } => ({
-    booking: createBookingBadge(deadlines.canModifyOrders(dinnerEvent.date), releasedCounts),
-    diningMode: createDiningModeBadge(deadlines.canEditDiningMode(dinnerEvent.date))
-})
+): { booking: DeadlineBadgeData; diningMode: DeadlineBadgeData } => {
+    const diningModeCountdown = calculateCountdown(deadlines.getDiningModeDeadlineTime(dinnerEvent.date))
+    return {
+        booking: createBookingBadge(deadlines.canModifyOrders(dinnerEvent.date), releasedCounts),
+        diningMode: createDiningModeBadge(deadlines.canEditDiningMode(dinnerEvent.date), diningModeCountdown)
+    }
+}
 
 // ============================================================================
 // Daily Maintenance - State Constants (ADR-015: Idempotent operations)
@@ -787,13 +805,15 @@ export const useBooking = () => {
      */
     const getChefDeadlineAlarm = (
         dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost' | 'heynaboEventId'>,
-        deadlines: { isAnnounceMenuPastDeadline: (date: Date) => boolean }
+        deadlines: Pick<SeasonDeadlines, 'getMenuDeadlineTime' | 'getDinnerStartTime' | 'isAnnounceMenuPastDeadline'>
     ): AlarmLevel => {
-        const {getDinnerTimeRange, getDefaultDinnerStartTime, getCookingDeadlineThresholds} = useSeason()
+        const {getCookingDeadlineThresholds} = useSeason()
         const thresholds = getCookingDeadlineThresholds()
-        const dinnerTimeRange = getDinnerTimeRange(dinnerEvent.date, getDefaultDinnerStartTime(), 0)
-        const countdown = calculateCountdown(dinnerTimeRange.start)
-        const isPastDeadline = deadlines.isAnnounceMenuPastDeadline(dinnerEvent.date)
+
+        // Each badge uses its specific deadline countdown
+        const menuCountdown = calculateCountdown(deadlines.getMenuDeadlineTime(dinnerEvent.date))
+        const dinnerCountdown = calculateCountdown(deadlines.getDinnerStartTime(dinnerEvent.date))
+        const isPastMenuDeadline = deadlines.isAnnounceMenuPastDeadline(dinnerEvent.date)
 
         const alarms: AlarmLevel[] = []
 
@@ -801,13 +821,13 @@ export const useBooking = () => {
         const menuDone = dinnerEvent.state === DinnerState.ANNOUNCED ||
                         (dinnerEvent.state === DinnerState.CONSUMED && dinnerEvent.heynaboEventId !== null)
         if (!menuDone) {
-            alarms.push(DINNER_STEP_MAP[DinnerStepState.ANNOUNCED].getDeadline(countdown, isPastDeadline, thresholds).alarm)
+            alarms.push(DINNER_STEP_MAP[DinnerStepState.ANNOUNCED].getDeadline(menuCountdown, isPastMenuDeadline, thresholds).alarm)
         }
 
         // Groceries badge
         const groceriesDone = dinnerEvent.totalCost > 0
         if (!groceriesDone) {
-            alarms.push(DINNER_STEP_MAP[DinnerStepState.GROCERIES_DONE].getDeadline(countdown, isPastDeadline, thresholds).alarm)
+            alarms.push(DINNER_STEP_MAP[DinnerStepState.GROCERIES_DONE].getDeadline(dinnerCountdown, isPastMenuDeadline, thresholds).alarm)
         }
 
         return alarms.length === 0 ? -1 : Math.max(...alarms) as AlarmLevel
@@ -1344,8 +1364,8 @@ export const useBooking = () => {
     }
 
     /**
-     * Create chef workflow badges for a dinner event
-     * Returns badges for: Menu (1), Booking (2), Groceries (3), Consumed (4)
+     * Create chef workflow badges for a dinner event.
+     * Each badge uses countdown to its specific deadline (from SeasonDeadlines time getters).
      */
     const createChefBadges = (
         dinnerEvent: DinnerEventDisplay,
@@ -1353,14 +1373,25 @@ export const useBooking = () => {
         releasedCounts?: ReleasedTicketCounts
     ): Map<number, DeadlineBadgeData> => {
         const {ALARM_TO_BADGE} = useTheSlopeDesignSystem()
-        const {getDinnerTimeRange, getCookingDeadlineThresholds} = useSeason()
+        const {getCookingDeadlineThresholds} = useSeason()
         const thresholds = getCookingDeadlineThresholds()
-        const countdown = calculateCountdown(getDinnerTimeRange(dinnerEvent.date, getDefaultDinnerStartTime(), 0).start)
-        const isPastDeadline = deadlines.isAnnounceMenuPastDeadline(dinnerEvent.date)
 
-        const badge = (step: number, key: keyof typeof DEADLINE_LABELS, state: DinnerStepState, done: boolean): DeadlineBadgeData => {
+        // Each badge gets countdown to its specific deadline (DRY: time getters are ROOT)
+        const menuCountdown = calculateCountdown(deadlines.getMenuDeadlineTime(dinnerEvent.date))
+        const bookingCountdown = calculateCountdown(deadlines.getBookingDeadlineTime(dinnerEvent.date))
+        const dinnerCountdown = calculateCountdown(deadlines.getDinnerStartTime(dinnerEvent.date))
+
+        const isPastMenuDeadline = deadlines.isAnnounceMenuPastDeadline(dinnerEvent.date)
+
+        const badge = (
+            step: number,
+            key: keyof typeof DEADLINE_LABELS,
+            state: DinnerStepState,
+            done: boolean,
+            countdown: { hours: number; formatted: string }
+        ): DeadlineBadgeData => {
             const labels = DEADLINE_LABELS[key]
-            const result = DINNER_STEP_MAP[state].getDeadline(countdown, isPastDeadline, thresholds)
+            const result = DINNER_STEP_MAP[state].getDeadline(countdown, isPastMenuDeadline, thresholds)
             const alarm = done ? -1 : result.alarm
             const b = ALARM_TO_BADGE[alarm]
             const text = done ? labels.closedText : labels.openText
@@ -1368,7 +1399,7 @@ export const useBooking = () => {
                 step, alarm,
                 label: 'label' in labels ? labels.label : '',
                 icon: b.icon,
-                value: done ? '' : result.description,  // Empty when done, countdown/status otherwise
+                value: done ? '' : result.description,
                 color: b.color as 'success' | 'error' | 'warning' | 'neutral',
                 helpText: text
             }
@@ -1380,19 +1411,19 @@ export const useBooking = () => {
 
         // Booking badge: reuse createBookingBadge (DRY) + add countdown when open
         const baseBadge = createBookingBadge(bookingOpen, releasedCounts)
-        const bookingResult = DINNER_STEP_MAP[DinnerStepState.BOOKING_CLOSED].getDeadline(countdown, isPastDeadline, thresholds)
+        const bookingResult = DINNER_STEP_MAP[DinnerStepState.BOOKING_CLOSED].getDeadline(bookingCountdown, isPastMenuDeadline, thresholds)
         const bookingBadge: DeadlineBadgeData = {
             ...baseBadge,
             step: 2,
             alarm: bookingOpen ? bookingResult.alarm : -1,
-            value: bookingOpen ? bookingResult.description : baseBadge.value  // Countdown when open, lock status when closed
+            value: bookingOpen ? bookingResult.description : baseBadge.value
         }
 
         return new Map([
-            [1, badge(1, 'ANNOUNCED', DinnerStepState.ANNOUNCED, menuDone)],
+            [1, badge(1, 'ANNOUNCED', DinnerStepState.ANNOUNCED, menuDone, menuCountdown)],
             [2, bookingBadge],
-            [3, badge(3, 'GROCERIES_DONE', DinnerStepState.GROCERIES_DONE, dinnerEvent.totalCost > 0)],
-            [4, badge(4, 'CONSUMED', DinnerStepState.CONSUMED, dinnerEvent.state === DinnerState.CONSUMED)]
+            [3, badge(3, 'GROCERIES_DONE', DinnerStepState.GROCERIES_DONE, dinnerEvent.totalCost > 0, dinnerCountdown)],
+            [4, badge(4, 'CONSUMED', DinnerStepState.CONSUMED, dinnerEvent.state === DinnerState.CONSUMED, dinnerCountdown)]
         ])
     }
 
