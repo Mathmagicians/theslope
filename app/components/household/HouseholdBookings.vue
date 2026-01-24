@@ -166,11 +166,16 @@ const handleDayViewSave = async (desiredOrders: DesiredOrder[]) => {
   const dinnerEventId = selectedDinnerEvent.value?.id
   if (!dinnerEventId || desiredOrders.length === 0) return
 
-  await bookingsStore.processSingleEventBookings(
+  const result = await bookingsStore.processSingleEventBookings(
     household.value.id,
     dinnerEventId,
     desiredOrders
   )
+  toast.add({
+    title: BOOKING_TOAST_TITLES.day,
+    description: formatScaffoldResult(result.scaffoldResult, 'past'),
+    color: 'success'
+  })
 }
 
 // Grid view guest booking - receives DesiredOrder[] from GuestBookingForm (all goes through scaffolder)

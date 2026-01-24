@@ -499,11 +499,21 @@ const actionPreviewItems = computed(() => {
   const desiredOrders = buildDesiredOrdersForRow(row)
   if (desiredOrders.length === 0) return []
 
+  // Build releasedByEventAndPrice for claim detection
+  // If released tickets exist, mark all desired order prices as claimable
+  const releasedByEventAndPrice = new Set<string>()
+  if (props.releasedTicketCounts.total > 0) {
+    for (const order of desiredOrders) {
+      releasedByEventAndPrice.add(`${props.dinnerEvent.id}-${order.ticketPriceId}`)
+    }
+  }
+
   const buckets = resolveUserBookingBuckets(
     desiredOrders,
     eventOrders.value,
     [props.dinnerEvent],
-    props.deadlines
+    props.deadlines,
+    releasedByEventAndPrice
   )
 
   return formatActionPreview(buckets, eventOrders.value, getInhabitantName)

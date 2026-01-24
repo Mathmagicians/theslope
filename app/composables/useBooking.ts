@@ -1139,6 +1139,7 @@ export const useBooking = () => {
     // ============================================================================
 
     const BOOKING_TOAST_TITLES = {
+        day: 'Booking opdateret',
         guest: 'Du får gæster til middag',
         booking: 'Booking processeret',
         grid: 'Bookinger processeret',
@@ -1153,7 +1154,7 @@ export const useBooking = () => {
         { key: 'created', symbol: '+', label: 'oprettet', pastLabel: 'blev tilmeldt' },
         { key: 'deleted', symbol: '-', label: 'slettet', pastLabel: 'blev frameldt' },
         { key: 'released', symbol: '↑', label: 'frigivet', pastLabel: 'blev frigivet' },
-        { key: 'claimed', symbol: '⇅', label: 'købt fra andre', pastLabel: 'købte fra andre' },
+        { key: 'claimed', symbol: '⇅', label: 'købt fra andre', pastLabel: 'købt fra andre' },
         { key: 'claimRejected', symbol: '✗', label: 'køb fra andre afvist', pastLabel: 'køb fra andre afvist' },
         { key: 'priceUpdated', symbol: '$', label: 'pris opdateret', pastLabel: 'fik pris opdateret' },
         { key: 'modeUpdated', symbol: 'm', label: 'spisemåde opdateret', pastLabel: 'fik spisemåde opdateret' },

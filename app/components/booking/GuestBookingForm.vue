@@ -114,12 +114,19 @@ const actionPreviewItems = computed(() => {
     state: OrderStateEnum.BOOKED
   }))
 
+  // Build releasedByEventAndPrice for claim detection
+  // If released tickets exist for this event, mark the selected price as claimable
+  const releasedByEventAndPrice = props.releasedTicketCounts.total > 0
+    ? new Set([`${props.dinnerEvent.id}-${formState.ticketPriceId}`])
+    : new Set<string>()
+
   // Resolve buckets using same logic as server
   const buckets = resolveUserBookingBuckets(
     desiredOrders,
     [], // No existing orders for new guests
     [props.dinnerEvent],
-    props.deadlines
+    props.deadlines,
+    releasedByEventAndPrice
   )
 
   // Format preview items - use booker name for guest label
