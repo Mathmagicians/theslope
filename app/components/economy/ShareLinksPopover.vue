@@ -21,15 +21,10 @@ const props = withDefaults(defineProps<Props>(), {
 
 const {ICONS, SIZES, TYPOGRAPHY, COLOR} = useTheSlopeDesignSystem()
 
-const getShareUrl = (): string => {
-    const baseUrl = window.location.origin
-    return `${baseUrl}/public/billing/${props.shareToken}`
-}
-
-const getCsvUrl = (): string => {
-    const baseUrl = window.location.origin
-    return `${baseUrl}/api/public/billing/${props.shareToken}/csv`
-}
+// Compute base URL lazily - useRequestURL is SSR-safe
+const baseUrl = computed(() => useRequestURL().origin)
+const getShareUrl = () => `${baseUrl.value}/public/billing/${props.shareToken}`
+const getCsvUrl = () => `${baseUrl.value}/api/public/billing/${props.shareToken}/csv`
 
 const linkCopied = ref(false)
 const csvLinkCopied = ref(false)
@@ -49,18 +44,22 @@ const copyCsvLink = async () => {
 
 <template>
   <div class="flex gap-1">
-    <!-- Button 1: Direct link to public page (optional) -->
-    <UButton
+    <!-- Button 1: Direct link to public page (opens in new tab) -->
+    <a
         v-if="!hideExternalLink"
-        :to="getShareUrl()"
+        :href="getShareUrl()"
         target="_blank"
-        color="neutral"
-        variant="ghost"
-        :icon="ICONS.externalLink"
-        :size="SIZES.small"
-        aria-label="Åbn offentlig side"
+        rel="noopener"
         @click.stop
-    />
+    >
+      <UButton
+          color="neutral"
+          variant="ghost"
+          :icon="ICONS.externalLink"
+          :size="SIZES.small"
+          aria-label="Åbn offentlig side"
+      />
+    </a>
     <!-- Button 2: Popover with copyable links -->
     <UPopover>
       <UButton

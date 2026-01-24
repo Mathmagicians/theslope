@@ -12,18 +12,19 @@
 import {formatDate, createDateRange, formatDateRange} from '~/utils/date'
 import type {DateRange} from '~/types/dateTypes'
 import type {HouseholdBillingResponse, TransactionDisplay, CostEntry} from '~/composables/useBillingValidation'
-import type {OrderDisplay} from '~/composables/useBookingValidation'
+import type {OrderDisplay, DinnerEventInfo} from '~/composables/useBookingValidation'
 import type {StatBox} from '~/components/economy/CostEntry.vue'
+import type {HouseholdDetail} from '~/composables/useCoreValidation'
 
 interface Props {
-    household: {id: number}
+    household: HouseholdDetail
 }
 
 const props = defineProps<Props>()
 
 // Composables
 const {formatPrice} = useTicket()
-const {groupByCostEntry, joinOrdersWithDinnerEvents, calculateCurrentBillingPeriod, formatTicketCounts} = useBilling()
+const {groupByCostEntry, calculateCurrentBillingPeriod, formatTicketCounts} = useBilling()
 const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS} = useTheSlopeDesignSystem()
 const {OrderStateSchema} = useBookingValidation()
 const {HouseholdBillingResponseSchema} = useBillingValidation()
@@ -48,22 +49,32 @@ const periodControlSumAccessor = (period: UnifiedBillingPeriod) => ({
 
 const periodItemsAccessor = (period: UnifiedBillingPeriod) => period.groups
 
-// Stores for dinner events (for date/menu info)
 const planStore = usePlanStore()
 const {selectedSeason, isSelectedSeasonInitialized} = storeToRefs(planStore)
 planStore.initPlanStore()
 
-const householdsStore = useHouseholdsStore()
-const {selectedHousehold} = storeToRefs(householdsStore)
-
-// Local orders fetch (ADR-007 exception - component-local data)
-// Empty dinnerEventIds = all orders for household (endpoint auto-filters by session)
+const {OrderDisplaySchema} = useBookingValidation()
+const selectedSeasonId = computed(() => selectedSeason.value?.id)
 const {data: orders, status: ordersStatus} = useAsyncData<OrderDisplay[]>(
-    `economy-orders-${props.household.id}`,
-    () => $fetch<OrderDisplay[]>('/api/order'),
-    {default: () => []}
+    computed(() => `economy-orders-${props.household.id}-season-${selectedSeasonId.value ?? 'none'}`),
+    () => {
+        if (!selectedSeasonId.value) return Promise.resolve([])
+        return $fetch<OrderDisplay[]>('/api/order', {
+            query: {
+                householdId: props.household.id,
+                upcomingForSeason: selectedSeasonId.value,
+                includeDinnerContext: true
+            }
+        })
+    },
+    {
+        default: () => [],
+        transform: (data: unknown[]) => (data as Record<string, unknown>[]).map(o => OrderDisplaySchema.parse(o)),
+        watch: [() => props.household.id, selectedSeasonId]
+    }
 )
 const isOrdersLoading = computed(() => ordersStatus.value === 'pending')
+const isUpcomingOrdersLoading = computed(() => isOrdersLoading.value || !isSelectedSeasonInitialized.value)
 
 // Data fetch (ADR-007: component-local exception)
 const householdId = computed(() => props.household.id)
@@ -80,52 +91,34 @@ const {data: billing, status, error} = useAsyncData<HouseholdBillingResponse | n
 const isLoading = computed(() => status.value === 'pending')
 const isErrored = computed(() => status.value === 'error')
 
-// Dinner time splitter for past/future classification
-const {splitDinnerEvents} = useSeason()
-
-// Split dinner events into past/future using dinner time logic
-const dinnerEvents = computed(() => selectedSeason.value?.dinnerEvents ?? [])
-const splitResult = computed(() => splitDinnerEvents(dinnerEvents.value))
-const futureDinnerIds = computed(() => {
-    const futureDates = new Set(splitResult.value.futureDinnerDates.map(d => d.getTime()))
-    return new Set(dinnerEvents.value.filter(e => futureDates.has(e.date.getTime())).map(e => e.id))
-})
-
-// Dinner events lookup for joining orders
-const dinnerEventsMap = computed(() =>
-    new Map(dinnerEvents.value.map(e => [e.id, { id: e.id, date: e.date, menuTitle: e.menuTitle }]))
-)
 
 // Inhabitants lookup for name resolution
 const inhabitantsMap = computed(() => {
-    const inhabitants = selectedHousehold.value?.inhabitants ?? []
+    const inhabitants = props.household.inhabitants ?? []
     return new Map(inhabitants.map(i => [i.id, i.name]))
 })
 const getInhabitantName = (id: number) => inhabitantsMap.value.get(id) ?? `#${id}`
 
-// Upcoming orders (BOOKED/RELEASED for future dinners)
+type OrderWithContext = OrderDisplay & { dinnerEvent: DinnerEventInfo, inhabitant: { id: number, name: string } }
+
+const groupOrdersByDinner = groupByCostEntry<OrderWithContext>()
 const upcomingOrdersData = computed(() => {
-    if (!isSelectedSeasonInitialized.value) return []
-
-    // Filter: BOOKED/RELEASED, future dinner (using splitDinnerEvents logic)
-    const upcomingOrders = orders.value.filter(o =>
-        (o.state === OrderStateSchema.enum.BOOKED || o.state === OrderStateSchema.enum.RELEASED) &&
-        futureDinnerIds.value.has(o.dinnerEventId)
+    return groupOrdersByDinner(
+        orders.value
+            .filter((o): o is OrderDisplay & { dinnerEvent: DinnerEventInfo } =>
+                (o.state === OrderStateSchema.enum.BOOKED || o.state === OrderStateSchema.enum.RELEASED) &&
+                o.dinnerEvent !== undefined
+            )
+            .map(o => ({
+                ...o,
+                inhabitant: { id: o.inhabitantId, name: getInhabitantName(o.inhabitantId) }
+            })),
+        o => o.priceAtBooking
     )
-
-    // Join using pure function
-    const ordersWithDinner = joinOrdersWithDinnerEvents(
-        upcomingOrders,
-        dinnerEventsMap.value,
-        getInhabitantName
-    )
-
-    const groupOrdersByDinner = groupByCostEntry<typeof ordersWithDinner[number]>(o => o.dinnerEvent)
-    return groupOrdersByDinner(ordersWithDinner, o => o.priceAtBooking)
 })
 
 // Curried grouper for transactions by dinner
-const groupTxByDinner = groupByCostEntry<TransactionDisplay>(tx => tx.dinnerEvent)
+const groupTxByDinner = groupByCostEntry<TransactionDisplay>()
 
 // Current period grouped data
 const currentPeriodData = computed(() =>
@@ -146,7 +139,7 @@ interface UnifiedBillingPeriod {
     dinnerCount: number
     ticketCounts: string
     isClosed: boolean           // true = past invoice, false = virtual/current
-    groups: CostEntry<TransactionDisplay>[]  // Grouped transactions by dinner
+    groups: CostEntry<TransactionDisplay, DinnerEventInfo>[]  // Grouped transactions by dinner
     transactionSum: number      // Control sum: Σ transaction amounts
 }
 
@@ -261,9 +254,9 @@ const upcomingPeriodStart = computed(() => {
         <EconomyTable
             :data="upcomingOrdersData"
             :columns="dinnerColumns"
-            row-key="dinnerEventId"
-            :date-accessor="(item) => item.date"
-            :loading="isOrdersLoading"
+            row-key="dinnerEvent.id"
+            :date-accessor="(item) => item.dinnerEvent.date"
+            :loading="isUpcomingOrdersLoading"
         >
           <template #expand-cell="{ row }">
             <UButton
@@ -370,7 +363,7 @@ const upcomingPeriodStart = computed(() => {
                     :data="items"
                     :columns="dinnerColumns"
                     :ui="{...COMPONENTS.table.ui, thead: 'bg-ocean-100 dark:bg-ocean-900'}"
-                    row-key="dinnerEventId"
+                    row-key="dinnerEvent.id"
                 >
                   <template #expand-cell="{ row: dinnerRow }">
                     <UButton
@@ -384,7 +377,7 @@ const upcomingPeriodStart = computed(() => {
                         @click="dinnerRow.toggleExpanded()"
                     />
                   </template>
-                  <template #date-cell="{ row: dinnerRow }">{{ formatDate(dinnerRow.original.date) }}</template>
+                  <template #date-cell="{ row: dinnerRow }">{{ formatDate(dinnerRow.original.dinnerEvent.date) }}</template>
                   <template #totalAmount-cell="{ row: dinnerRow }">{{ formatPrice(dinnerRow.original.totalAmount) }} kr</template>
 
                   <!-- Expanded dinner: individual transactions with history -->

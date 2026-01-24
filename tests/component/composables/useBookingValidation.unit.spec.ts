@@ -187,6 +187,7 @@ describe('useBookingValidation', () => {
         const result = OrderDisplaySchema.safeParse(order)
         expect(result.success).toBe(false)
       })
+
     })
 
     describe('OrderDetailSchema (ADR-009: ALL scalar relations)', () => {
@@ -426,6 +427,19 @@ describe('useBookingValidation', () => {
           expect(deserialized[field as keyof typeof deserialized]).toBeNull()
         }
       )
+
+      it.each([
+        {desc: 'without dinnerEvent', context: undefined},
+        {desc: 'with dinnerEvent', context: {id: 1, date: new Date('2025-01-15'), menuTitle: 'Test Menu'}}
+      ])('GIVEN order $desc WHEN round-tripping THEN preserves data', ({context}) => {
+        const order = OrderFactory.defaultOrder(undefined, {dinnerEvent: context})
+        const serialized = serializeOrder(order)
+        const deserialized = deserializeOrder(serialized)
+        expect(deserialized.dinnerEvent?.menuTitle).toBe(context?.menuTitle)
+        if (context) {
+          expect(deserialized.dinnerEvent?.date).toBeInstanceOf(Date)
+        }
+      })
     })
 
     describe('serializeOrderHistoryDisplay / deserializeOrderHistoryDisplay', () => {

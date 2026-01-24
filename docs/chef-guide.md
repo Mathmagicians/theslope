@@ -74,10 +74,24 @@ Selvom du er på et madhold, skal du aktivt melde dig som chefkok for de middage
 ### 5. Tjek tilmeldinger
 
 1. Gå til din middag på [Chef](https://www.skraaningen.dk/chef)
-2. Se antal gæster:
-   - **Spis i salen** - Antal der spiser i fællessalen
-   - **Takeaway** - Antal der henter mad
-   - **Total** - Samlet antal portioner
+2. Se **køkkenpanelet** med overblik over tilmeldinger:
+
+**Køkkenpanelet viser:**
+
+| Kategori | Indhold |
+|----------|---------|
+| **Total kuverter** | Samlet antal portioner (voksen, barn, baby) |
+| **Takeaway** | Antal og procentdel der henter mad |
+| **Spisesal** | Antal og procentdel der spiser i salen |
+| **Sen spisning** | Antal og procentdel der kommer sent |
+| **Til salg** | Frigivne billetter der kan overtages |
+
+**Klik på en kategori** for at se detaljeret opdeling:
+- Hvilke husstande der har tilmeldt sig
+- Hvem der har allergier (markeret med emoji)
+- Billettyper per husstand (voksen/barn/baby)
+
+> **Tip:** Brug husstandsoversigten til at planlægge portionsstørrelser og allergihensyn.
 
 ---
 
@@ -126,4 +140,4 @@ Se dine holdmedlemmer på [Chef](https://www.skraaningen.dk/chef).
 
 ---
 
-*Sidst opdateret: Januar 2026*
+*Sidst opdateret: Januar 2026 (udvidet køkkenpanel med husstandsopdeling)*

@@ -44,12 +44,19 @@ export const requireRoutePermission = async (
 
 /**
  * Verify user belongs to specified household
+ * @param adminBypass - Optional predicate to bypass household check (for admin corrections)
  */
 export const requireHouseholdAccess = async (
     event: H3Event,
-    targetHouseholdId: number
+    targetHouseholdId: number,
+    adminBypass: (user: UserDetail) => boolean = () => false
 ): Promise<UserDetail> => {
     const user = await getRequiredUser(event)
+
+    if (adminBypass(user)) {
+        console.info(`${PREFIX} Admin bypass for user ${user.email} on household ${targetHouseholdId}`)
+        return user
+    }
 
     if (!isInHousehold(user, targetHouseholdId)) {
         return throwH3Error(

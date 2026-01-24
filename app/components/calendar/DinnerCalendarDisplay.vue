@@ -62,51 +62,24 @@ const props = withDefaults(defineProps<Props>(), {
   lockStatus: undefined
 })
 
-const {createEventList} = useCalendarEvents()
-const {
-  getHolidayDatesFromDateRangeList,
-  getDefaultDinnerStartTime,
-  splitDinnerEvents
-} = useSeason()
+const {getHolidayDatesFromDateRangeList} = useSeason()
+const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
 const {CALENDAR, DINNER_CALENDAR, SIZES, ICONS, BOOKING_LOCK_STATUS, getLockStatusConfig} = useTheSlopeDesignSystem()
 
 const holidayDates = computed(() => getHolidayDatesFromDateRangeList(props.holidays))
-const dinnerStartHour = getDefaultDinnerStartTime()
 
-const splitResult = computed(() =>
-    splitDinnerEvents<DinnerEventDisplay>(props.dinnerEvents ?? [])
+// Temporal splitting using shared composable (DRY with ChefCalendarDisplay)
+const {
+  nextDinner,
+  pastDinnerDates,
+  futureDinnerDates,
+  dinnerStartHour
+} = useTemporalSplit(() => props.dinnerEvents ?? [])
+
+// Create event lists with dynamic color from props
+const allEventLists = computed(() =>
+    createTemporalEventLists(pastDinnerDates.value, futureDinnerDates.value, nextDinner.value, props.color)
 )
-
-const nextDinner = computed(() => splitResult.value.nextDinner)
-const pastDinnerDates = computed(() => splitResult.value.pastDinnerDates)
-const futureDinnerDates = computed(() => splitResult.value.futureDinnerDates)
-
-const pastDinnersEventList = computed(() =>
-    createEventList(pastDinnerDates.value, 'past-dinners', 'badge', {
-      color: 'mocha'
-    })
-)
-
-const futureDinnersEventList = computed(() =>
-    createEventList(futureDinnerDates.value, 'future-dinners', 'badge', {
-      color: props.color
-    })
-)
-
-const nextDinnerEventList = computed(() => {
-  if (!nextDinner.value) return createEventList([], 'next-dinner', 'badge')
-  return createEventList([nextDinner.value.date], 'next-dinner', 'badge', {
-    color: props.color
-  })
-})
-
-const allEventLists = computed(() => {
-  return [
-    pastDinnersEventList.value,
-    futureDinnersEventList.value,
-    nextDinnerEventList.value
-  ]
-})
 
 const isHoliday = (day: DateValue): boolean => {
   return isCalendarDateInDateList(day, holidayDates.value)

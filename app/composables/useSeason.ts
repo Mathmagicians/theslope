@@ -1,7 +1,7 @@
 import type {DateRange, WeekDayMap} from '~/types/dateTypes'
 import {WEEKDAYS} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
-import {isSameDay, isWithinInterval} from "date-fns"
+import {isSameDay, isWithinInterval, isBefore, subDays, subMinutes} from "date-fns"
 import {type Season, useSeasonValidation} from '~/composables/useSeasonValidation'
 import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderAuditAction, OrderAuditAction as OrderAuditActionEnum, useBookingValidation} from '~/composables/useBookingValidation'
 import type {CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
@@ -21,17 +21,24 @@ import {chunkArray, pruneAndCreate} from '~/utils/batchUtils'
 export type DeadlineUrgency = 0 | 1 | 2
 
 /**
- * Season-configured deadline functions
- * Returned by deadlinesForSeason() - pass as prop to components needing deadline checks
+ * Season-configured deadline functions.
+ * Time getters are ROOT, predicates derive via isBefore(now, timeGetter).
  */
 export type SeasonDeadlines = {
+    // Time getters (ROOT)
+    getDinnerStartTime: (dinnerEventDate: Date) => Date
+    getMenuDeadlineTime: (dinnerEventDate: Date) => Date
+    getBookingDeadlineTime: (dinnerEventDate: Date) => Date
+    getDiningModeDeadlineTime: (dinnerEventDate: Date) => Date
+
+    // Predicates (DERIVED)
     canModifyOrders: (dinnerEventDate: Date) => boolean
     canEditDiningMode: (dinnerEventDate: Date) => boolean
+    isAnnounceMenuPastDeadline: (dinnerEventDate: Date) => boolean
     getOrderCancellationAction: (dinnerEventDate: Date) => {
         updates: { dinnerMode: DinnerMode, state: 'RELEASED', releasedAt: Date }
         auditAction: OrderAuditAction
     } | null
-    isAnnounceMenuPastDeadline: (dinnerEventDate: Date) => boolean
 }
 
 /**
@@ -275,15 +282,10 @@ export const useSeason = () => {
         if (allDinnerEvents.length === 0) return []
 
         const prebookingWindow = getPrebookingWindowDays()
-        const {nextDinner, futureDinnerDates} = configuredSplitDinnerEvents(allDinnerEvents, prebookingWindow)
+        const {nextDinner, futureDinners} = configuredSplitDinnerEvents(allDinnerEvents, prebookingWindow)
 
-        // Build set of all scaffoldable dates: nextDinner + futureDinnerDates
-        const scaffoldableDates = [...futureDinnerDates]
-        if (nextDinner) {
-            scaffoldableDates.push(nextDinner.date)
-        }
-        const scaffoldableDateSet = new Set(scaffoldableDates.map(d => d.getTime()))
-        return allDinnerEvents.filter(de => scaffoldableDateSet.has(de.date.getTime()))
+        // All scaffoldable events: nextDinner + futureDinners
+        return nextDinner ? [nextDinner, ...futureDinners] : futureDinners
     }
 
     const getHolidaysForSeason = (season: Season): Date[] =>getHolidayDatesFromDateRangeList(season.holidays)
@@ -366,36 +368,41 @@ export const useSeason = () => {
 
     /**
      * Get deadline functions configured for a specific season.
-     *
-     * Two distinct deadlines:
-     * - **Menu deadline** (10 days from config): When chef must announce menu
-     * - **Booking deadline** (8 days from season): When users can book/cancel
-     *
-     * @param season - Season with deadline configuration
-     * @returns Object with all deadline-related functions configured for this season
+     * Menu deadline from config (10 days), booking deadline from season (8 days).
      */
-    const deadlinesForSeason = (season: Pick<Season, 'ticketIsCancellableDaysBefore' | 'diningModeIsEditableMinutesBefore'>) => {
+    const deadlinesForSeason = (season: Pick<Season, 'ticketIsCancellableDaysBefore' | 'diningModeIsEditableMinutesBefore'>): SeasonDeadlines => {
         const dinnerStartHour = getDefaultDinnerStartTime()
         const menuDeadlineDays = getMenuAnnouncementDeadlineDays()
 
-        // Booking deadline (for users) - from season config (typically 8 days)
-        const canModifyOrders = (dinnerEventDate: Date): boolean => {
-            const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, dinnerStartHour, 0).start
-            return isBeforeDeadline(season.ticketIsCancellableDaysBefore, 0)(dinnerStartTime)
-        }
+        // ROOT: Time getters
+        const getDinnerStartTime = (dinnerEventDate: Date): Date =>
+            getDinnerTimeRange(dinnerEventDate, dinnerStartHour, 0).start
 
-        const canEditDiningMode = (dinnerEventDate: Date): boolean => {
-            const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, dinnerStartHour, 0).start
-            return isBeforeDeadline(0, season.diningModeIsEditableMinutesBefore)(dinnerStartTime)
-        }
+        const getMenuDeadlineTime = (dinnerEventDate: Date): Date =>
+            subDays(getDinnerStartTime(dinnerEventDate), menuDeadlineDays)
+
+        const getBookingDeadlineTime = (dinnerEventDate: Date): Date =>
+            subDays(getDinnerStartTime(dinnerEventDate), season.ticketIsCancellableDaysBefore)
+
+        const getDiningModeDeadlineTime = (dinnerEventDate: Date): Date =>
+            subMinutes(getDinnerStartTime(dinnerEventDate), season.diningModeIsEditableMinutesBefore)
+
+        // DERIVED: Predicates
+        const now = () => new Date()
+        const canModifyOrders = (dinnerEventDate: Date): boolean =>
+            isBefore(now(), getBookingDeadlineTime(dinnerEventDate))
+
+        const canEditDiningMode = (dinnerEventDate: Date): boolean =>
+            isBefore(now(), getDiningModeDeadlineTime(dinnerEventDate))
+
+        const isAnnounceMenuPastDeadline = (dinnerEventDate: Date): boolean =>
+            !isBefore(now(), getMenuDeadlineTime(dinnerEventDate))
 
         const getOrderCancellationAction = (dinnerEventDate: Date): {
             updates: { dinnerMode: DinnerMode, state: typeof OrderState.RELEASED, releasedAt: Date }
             auditAction: OrderAuditAction
         } | null => {
-            if (canModifyOrders(dinnerEventDate)) {
-                return null
-            }
+            if (canModifyOrders(dinnerEventDate)) return null
             return {
                 updates: {
                     dinnerMode: DinnerMode.NONE,
@@ -406,17 +413,15 @@ export const useSeason = () => {
             }
         }
 
-        // Menu deadline (for chefs) - from app config (typically 10 days)
-        const isAnnounceMenuPastDeadline = (dinnerEventDate: Date): boolean => {
-            const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, dinnerStartHour, 0).start
-            return !isBeforeDeadline(menuDeadlineDays, 0)(dinnerStartTime)
-        }
-
         return {
+            getDinnerStartTime,
+            getMenuDeadlineTime,
+            getBookingDeadlineTime,
+            getDiningModeDeadlineTime,
             canModifyOrders,
             canEditDiningMode,
-            getOrderCancellationAction,
-            isAnnounceMenuPastDeadline
+            isAnnounceMenuPastDeadline,
+            getOrderCancellationAction
         }
     }
 

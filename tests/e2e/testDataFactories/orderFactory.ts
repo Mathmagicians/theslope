@@ -295,9 +295,11 @@ export class OrderFactory {
     context: BrowserContext,
     orderId: number,
     updateData: { dinnerMode: string },
-    expectedStatus: number = 200
+    expectedStatus: number = 200,
+    withAdminBypass: boolean = false
   ): Promise<OrderDetail | null> => {
-    const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}`, {
+    const query = withAdminBypass ? '?adminBypass=true' : ''
+    const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}${query}`, {
       headers,
       data: updateData
     })
@@ -313,12 +315,21 @@ export class OrderFactory {
     return null
   }
 
+  /**
+   * Delete an order by ID
+   * @param context - Browser context for API requests
+   * @param orderId - Order ID to delete
+   * @param expectedStatus - Expected HTTP status (default 200)
+   * @param withAdminBypass - If true, adds ?adminBypass=true (for admin tests deleting orders from test households)
+   */
   static readonly deleteOrder = async (
     context: BrowserContext,
     orderId: number,
-    expectedStatus: number = 200
+    expectedStatus: number = 200,
+    withAdminBypass: boolean = false
   ): Promise<OrderDisplay | null> => {
-    const response = await context.request.delete(`${ORDER_ENDPOINT}/${orderId}`, { headers })
+    const query = withAdminBypass ? '?adminBypass=true' : ''
+    const response = await context.request.delete(`${ORDER_ENDPOINT}/${orderId}${query}`, { headers })
 
     const status = response.status()
     const errorBody = status !== expectedStatus ? await response.text() : ''
@@ -426,10 +437,12 @@ export class OrderFactory {
     context: BrowserContext,
     options: {
       dinnerEventIds?: number | number[]
+      upcomingForSeason?: number
       householdId?: number
       allHouseholds?: boolean
       state?: string
       sortBy?: 'createdAt' | 'releasedAt'
+      includeDinnerContext?: boolean
     } = {},
     expectedStatus: number = 200
   ): Promise<OrderDisplay[]> => {
@@ -440,10 +453,12 @@ export class OrderFactory {
       const ids = [options.dinnerEventIds].flat()
       ids.forEach(id => params.append('dinnerEventIds', String(id)))
     }
+    if (options.upcomingForSeason !== undefined) params.append('upcomingForSeason', String(options.upcomingForSeason))
     if (options.householdId !== undefined) params.append('householdId', String(options.householdId))
     if (options.allHouseholds) params.append('allHouseholds', 'true')
     if (options.state) params.append('state', options.state)
     if (options.sortBy) params.append('sortBy', options.sortBy)
+    if (options.includeDinnerContext) params.append('includeDinnerContext', 'true')
 
     const response = await context.request.get(`${ORDER_ENDPOINT}?${params.toString()}`, { headers })
 
@@ -519,15 +534,20 @@ export class OrderFactory {
   /**
    * Cleanup multiple orders by ID (for test afterAll hooks)
    * Gracefully handles 404 errors for already-deleted orders
+   * @param context - Browser context for API requests
+   * @param orderIds - Array of order IDs to delete
+   * @param withAdminBypass - If true, adds ?adminBypass=true (for admin tests deleting orders from test households)
    */
   static readonly cleanupOrders = async (
     context: BrowserContext,
-    orderIds: number[]
+    orderIds: number[],
+    withAdminBypass: boolean = false
   ): Promise<void> => {
     if (orderIds.length === 0) return
 
+    const query = withAdminBypass ? '?adminBypass=true' : ''
     await Promise.all(orderIds.map(async (id) => {
-      const response = await context.request.delete(`${ORDER_ENDPOINT}/${id}`)
+      const response = await context.request.delete(`${ORDER_ENDPOINT}/${id}${query}`)
       if (response.status() !== 200 && response.status() !== 404) {
         console.warn(`Failed to cleanup order ${id}: status ${response.status()}`)
       }

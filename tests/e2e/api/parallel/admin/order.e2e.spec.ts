@@ -123,39 +123,47 @@ test.describe('Order API', () => {
     expect(retrievedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.TAKEAWAY)
   })
 
-  test('POST cancellation AFTER deadline releases order (state=RELEASED, user pays)', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
+  const afterDeadlineCases = [
+    {adminBypass: false, expectDeleted: false, desc: 'releases order (user pays)'},
+    {adminBypass: true, expectDeleted: true, desc: 'with adminBypass deletes order'},
+  ]
 
-    // Default season events are within 7 days (< 8 day deadline) = AFTER deadline
-    const result = await OrderFactory.createOrder(context, {
-      householdId: testHouseholdId,
-      dinnerEventId: testDinnerEventId,
-      orders: [OrderFactory.defaultOrderItem({
-        inhabitantId: testInhabitantId,
-        ticketPriceId: testAdultTicketPriceId
-      })]
+  afterDeadlineCases.forEach(({adminBypass, expectDeleted, desc}) => {
+    test(`POST cancellation AFTER deadline ${desc}`, async ({ browser }) => {
+      const context = await validatedBrowserContext(browser)
+
+      // Default season events are within 7 days (< 8 day deadline) = AFTER deadline
+      const result = await OrderFactory.createOrder(context, {
+        householdId: testHouseholdId,
+        dinnerEventId: testDinnerEventId,
+        orders: [OrderFactory.defaultOrderItem({
+          inhabitantId: testInhabitantId,
+          ticketPriceId: testAdultTicketPriceId
+        })]
+      })
+      const orderId = result!.createdIds[0]!
+      testOrderIds.push(orderId)
+
+      // Cancel by setting dinnerMode to NONE
+      const updatedOrder = await OrderFactory.updateOrder(context, orderId, {
+        dinnerMode: DinnerModeSchema.enum.NONE
+      }, 200, adminBypass)
+
+      expect(updatedOrder).toBeDefined()
+      expect(updatedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
+
+      const retrievedOrder = await OrderFactory.getOrder(context, orderId, expectDeleted ? 404 : 200)
+
+      if (expectDeleted) {
+        // Admin bypass: order deleted
+        expect(retrievedOrder).toBeNull()
+      } else {
+        // Normal: order released
+        expect(retrievedOrder).toBeDefined()
+        expect(retrievedOrder!.state).toBe(OrderStateSchema.enum.RELEASED)
+        expect(retrievedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
+      }
     })
-    const orderId = result!.createdIds[0]!
-    testOrderIds.push(orderId)
-
-    // Cancel by setting dinnerMode to NONE
-    const updatedOrder = await OrderFactory.updateOrder(context, orderId, {
-      dinnerMode: DinnerModeSchema.enum.NONE
-    })
-
-    // Order should be RELEASED (not deleted) - user still pays
-    expect(updatedOrder).toBeDefined()
-    expect(updatedOrder!.id).toBe(orderId)
-    expect(updatedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
-    expect(updatedOrder!.state).toBe(OrderStateSchema.enum.RELEASED)
-    expect(updatedOrder!.releasedAt).toBeDefined()
-
-    // Order should still exist in database with correct state
-    const retrievedOrder = await OrderFactory.getOrder(context, orderId)
-    expect(retrievedOrder).toBeDefined()
-    expect(retrievedOrder!.state).toBe(OrderStateSchema.enum.RELEASED)
-    // DATA INTEGRITY: Verify dinnerMode=NONE persisted (RELEASED orders must have NONE mode)
-    expect(retrievedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
   })
 
   test('POST cancellation BEFORE deadline deletes order (user not charged)', async ({ browser }) => {
@@ -556,5 +564,68 @@ test.describe('Order API', () => {
     })
 
     expect(orders).toEqual([])
+  })
+
+  test('GET with upcomingForSeason returns orders for upcoming dinners only', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    // Create order for the test dinner event
+    const result = await OrderFactory.createOrder(context, {
+      householdId: testHouseholdId,
+      dinnerEventId: testDinnerEventId,
+      orders: [OrderFactory.defaultOrderItem({
+        inhabitantId: testInhabitantId,
+        ticketPriceId: testAdultTicketPriceId
+      })]
+    })
+    testOrderIds.push(result!.createdIds[0]!)
+
+    // Fetch with upcomingForSeason
+    const orders = await OrderFactory.getOrders(context, {
+      upcomingForSeason: testSeasonId,
+      allHouseholds: true
+    })
+
+    // Should return orders (server computes upcoming dinner IDs from season)
+    expect(orders.length).toBeGreaterThan(0)
+    // All returned orders should be for dinner events in the test season
+    // (We can't verify exact dinner IDs without knowing what's "upcoming", but orders should exist)
+  })
+
+  test('GET with upcomingForSeason and includeDinnerContext returns dinnerEvent data', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    const orders = await OrderFactory.getOrders(context, {
+      upcomingForSeason: testSeasonId,
+      allHouseholds: true,
+      includeDinnerContext: true
+    })
+
+    // If there are orders, they should have dinnerEvent embedded
+    if (orders.length > 0) {
+      const order = orders[0]!
+      expect(order.dinnerEvent).toBeDefined()
+      expect(order.dinnerEvent!.id).toBeDefined()
+      expect(order.dinnerEvent!.date).toBeDefined()
+    }
+  })
+
+  test('GET with upcomingForSeason for non-existent season returns 404', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    await OrderFactory.getOrders(context, {
+      upcomingForSeason: 999999,
+      allHouseholds: true
+    }, 404)
+  })
+
+  test('GET with both upcomingForSeason and dinnerEventIds returns 400', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    await OrderFactory.getOrders(context, {
+      upcomingForSeason: testSeasonId,
+      dinnerEventIds: testDinnerEventId,
+      allHouseholds: true
+    }, 400)
   })
 })

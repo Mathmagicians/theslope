@@ -25,6 +25,7 @@ interface Props {
   deadlines: SeasonDeadlines
   releasedTicketCounts: ReleasedTicketCounts
   bookerId: number
+  bookerName: string
 }
 
 const props = defineProps<Props>()
@@ -35,7 +36,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {SIZES, COLOR, ICONS, COMPONENTS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
+const {SIZES, COLOR, ICONS, BUTTONS, COMPONENTS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
 
 // Ticket type config for styled badges
 const {getTicketPriceSelectItems} = useTicket()
@@ -44,7 +45,7 @@ const {getTicketPriceSelectItems} = useTicket()
 const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets'))
 
 // Booking logic
-const {getBookingOptions, createBookingBadges} = useBooking()
+const {getBookingOptions, createBookingBadges, resolveUserBookingBuckets, formatActionPreview} = useBooking()
 const {canModifyOrders, canEditDiningMode} = props.deadlines
 
 // Validation schemas
@@ -97,6 +98,40 @@ const validateForm = (state: Partial<typeof formState>) => {
 
 // Deadline badges using existing factory
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))
+
+// Action preview: show what the server will do when saving (uses same resolver)
+const actionPreviewItems = computed(() => {
+  if (!formState.ticketPriceId || !bookingOptions.value.action) return []
+
+  // Build desired orders from form state (same structure as handleSubmit)
+  const desiredOrders: DesiredOrder[] = Array.from({length: formState.count}, () => ({
+    inhabitantId: props.bookerId,
+    dinnerEventId: props.dinnerEvent.id,
+    dinnerMode: formState.dinnerMode,
+    ticketPriceId: formState.ticketPriceId!,
+    isGuestTicket: true,
+    allergyTypeIds: formState.allergyTypeIds.length > 0 ? formState.allergyTypeIds : undefined,
+    state: OrderStateEnum.BOOKED
+  }))
+
+  // Build releasedByEventAndPrice for claim detection
+  // If released tickets exist for this event, mark the selected price as claimable
+  const releasedByEventAndPrice = props.releasedTicketCounts.total > 0
+    ? new Set([`${props.dinnerEvent.id}-${formState.ticketPriceId}`])
+    : new Set<string>()
+
+  // Resolve buckets using same logic as server
+  const buckets = resolveUserBookingBuckets(
+    desiredOrders,
+    [], // No existing orders for new guests
+    [props.dinnerEvent],
+    props.deadlines,
+    releasedByEventAndPrice
+  )
+
+  // Format preview items - use booker name for guest label
+  return formatActionPreview(buckets, [], () => props.bookerName)
+})
 
 // Enabled modes for guest: filter out NONE (can't add a guest who won't eat)
 const enabledModesForGuest = computed((): DinnerMode[] =>
@@ -189,12 +224,12 @@ const handleCancel = () => emit('cancel')
         <DeadlineBadge :badge="badges.diningMode" />
       </div>
 
-      <UFormField label="Hvordan spiser I?" name="dinnerMode" :size="SIZES.small">
+      <UFormField label="Hvordan spiser I?" name="dinnerMode" :size="SIZES.standard">
         <DinnerModeSelector
           v-model="formState.dinnerMode"
           :form-mode="FORM_MODES.EDIT"
           :disabled-modes="disabledModes"
-          :size="SIZES.small"
+          :size="SIZES.standard"
           name="guest-dinner-mode"
           orientation="horizontal"
         />
@@ -247,9 +282,12 @@ const handleCancel = () => emit('cancel')
         </UFormField>
       </div>
 
-      <!-- Footer: Error messages + action buttons -->
+      <!-- Footer: Action preview + error messages + buttons -->
       <template #footer>
         <div class="flex flex-col gap-2">
+          <!-- Action preview: show what will happen when saving -->
+          <ActionPreview :items="actionPreviewItems" title="Du er ved at tilføje gæster" />
+
           <!-- Error messages near buttons -->
           <div v-if="errors.length > 0" class="text-sm text-error">
             <div v-for="error in errors" :key="error.name" class="flex items-center gap-1">
@@ -258,23 +296,18 @@ const handleCancel = () => emit('cancel')
             </div>
           </div>
 
-          <!-- Action buttons -->
-          <div class="flex justify-end gap-2">
+          <!-- Action buttons - stacked on mobile (primary on top), horizontal on desktop -->
+          <div class="flex flex-col-reverse md:flex-row md:justify-end gap-2">
             <UButton
-              :color="COLOR.neutral"
-              variant="ghost"
-              :icon="ICONS.xMark"
-              :size="SIZES.small"
+              v-bind="BUTTONS.cancel"
               data-testid="guest-form-cancel"
               @click="handleCancel"
             >
               Annuller
             </UButton>
             <UButton
+              v-bind="BUTTONS.save"
               type="submit"
-              color="info"
-              variant="solid"
-              :size="SIZES.small"
               :loading="isSaving"
               data-testid="guest-form-save"
             >

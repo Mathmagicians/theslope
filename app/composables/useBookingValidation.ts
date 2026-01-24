@@ -63,6 +63,16 @@ export const useBookingValidation = () => {
     })
 
     /**
+     * DinnerEvent Info - minimal fields for grouping (economy views, cost entries)
+     * Used by groupByCostEntry callback return type
+     */
+    const DinnerEventInfoSchema = DinnerEventDisplaySchema.pick({
+        id: true,
+        date: true,
+        menuTitle: true
+    })
+
+    /**
      * DinnerEvent Create - For API input validation (PUT /api/admin/dinner-event)
      */
     const DinnerEventCreateSchema = DinnerEventBaseSchema
@@ -105,19 +115,15 @@ export const useBookingValidation = () => {
     })
 
     /**
-     * Order Display - Minimal for index endpoints (GET /api/order), all scalar fields
+     * Order Display - Minimal for index endpoints (GET /api/order)
      * ADR-009: Lightweight with flattened ticketType
-     *
-     * Provenance: Optional fields populated for claimed tickets (USER_CLAIMED history)
-     * - householdShortname: Original owner's household shortname (e.g., "AR_1")
-     * - snapshotAllergies: Original ticket's allergies at claim time
      */
     const OrderDisplaySchema = OrderBaseSchema.extend({
         id: z.number().int().positive(),
-        ticketType: TicketTypeSchema.nullable(), // Flattened from ticketPrice relation (ADR-009), nullable when TicketPrice deleted
-        // Provenance fields for claimed tickets (populated from USER_CLAIMED OrderHistory)
-        provenanceHousehold: z.string().optional(),       // Original owner's household shortname
-        provenanceAllergies: z.array(z.string()).optional() // Original ticket's allergies at claim time
+        ticketType: TicketTypeSchema.nullable(),
+        provenanceHousehold: z.string().optional(),
+        provenanceAllergies: z.array(z.string()).optional(),
+        dinnerEvent: DinnerEventInfoSchema.optional()
     })
 
     /**
@@ -821,6 +827,7 @@ export const useBookingValidation = () => {
 
         // DinnerEvent
         DinnerEventDisplaySchema,
+        DinnerEventInfoSchema,
         DinnerEventDetailSchema,
         DinnerEventCreateSchema,
         DinnerEventUpdateSchema,
@@ -914,6 +921,7 @@ export type TicketType = z.infer<ReturnType<typeof useBookingValidation>['Ticket
 
 // DinnerEvent
 export type DinnerEventDisplay = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventDisplaySchema']>
+export type DinnerEventInfo = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventInfoSchema']>
 export type DinnerEventDetail = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventDetailSchema']>
 export type DinnerEventCreate = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventCreateSchema']>
 export type DinnerEventUpdate = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventUpdateSchema']>

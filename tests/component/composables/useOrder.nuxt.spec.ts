@@ -33,7 +33,18 @@ const createTestOrder = (overrides: {
 }
 
 describe('useOrder', () => {
-  const { calculateBudget, getActiveOrders, getReleasedOrders, getPortionsForTicketPrice, requiresChair, convertVat } = useOrder()
+  const { calculateBudget, getActiveOrders, getReleasedOrders, getPortionsForTicketPrice, requiresChair, convertVat, formatGuestLabel } = useOrder()
+
+  describe('formatGuestLabel', () => {
+    it.each([
+      {bookerName: undefined, expected: 'Gæst'},
+      {bookerName: 'Anna', expected: 'Gæst af Anna'},
+      {bookerName: 'Peter Hansen', expected: 'Gæst af Peter Hansen'},
+      {bookerName: '', expected: 'Gæst'},  // empty string treated as falsy
+    ])('GIVEN bookerName="$bookerName" THEN returns "$expected"', ({bookerName, expected}) => {
+      expect(formatGuestLabel(bookerName)).toBe(expected)
+    })
+  })
 
   describe('convertVat', () => {
     describe.each([

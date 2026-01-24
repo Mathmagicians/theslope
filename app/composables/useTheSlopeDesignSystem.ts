@@ -261,7 +261,14 @@ export const TYPOGRAPHY = {
     caption: 'text-xs font-medium',
 
     // Footer
-    footerText: 'text-xs text-white dark:text-amber-50'
+    footerText: 'text-xs text-white dark:text-amber-50',
+
+    // Kitchen panel text (inherits text-white from panel, no color classes)
+    kitchenLabel: 'text-xs md:text-sm font-semibold',
+    kitchenSecondary: 'text-xs md:text-sm font-medium opacity-90',
+    kitchenMain: 'font-bold text-base md:text-lg',
+    kitchenDetail: 'text-xs md:text-sm',
+    kitchenMuted: 'text-xs md:text-sm opacity-75'
 } as const
 
 /**
@@ -455,6 +462,14 @@ export const COMPONENTS = {
         }
     },
 
+    // CostLine - line item in economy views with fixed column widths for vertical alignment
+    costLine: {
+        row: 'grid items-center justify-items-center gap-1 md:gap-2 max-w-2xl',
+        columns: 'grid-cols-[1.5rem_6rem_3rem_1.5rem_3rem_5rem_auto] md:grid-cols-[1.5rem_8rem_3.5rem_1.5rem_4rem_5.5rem_auto]',
+        nameSlot: 'justify-self-start',
+        amountSlot: 'justify-self-end'
+    },
+
     // Hero-complementary panels - Sections that sit on hero backgrounds (mocha/peach/pink/orange)
     // Curated defaults for maximum readability on warm hero backgrounds
     heroPanel: {
@@ -589,6 +604,7 @@ export const ICONS = {
     shoppingCart: 'i-heroicons-shopping-cart',
     released: 'i-heroicons-arrow-up-tray',
     claim: 'i-heroicons-arrows-right-left',
+    archive: 'i-heroicons-archive-box',
 
     // Empty states & system feedback
     robotDead: 'i-mage-robot-dead',
@@ -609,6 +625,7 @@ export const ICONS = {
     // Status/state
     lockOpen: 'i-heroicons-lock-open',
     lockClosed: 'i-heroicons-lock-closed',
+    authorize: 'i-heroicons-shield-check',
 
     // Actions
     share: 'i-heroicons-share',
@@ -762,19 +779,44 @@ const createResponsiveIcons = (isMd: Ref<boolean>) => ({
  * @param isMd - Responsive breakpoint ref
  * @returns Button configuration objects with responsive sizes
  */
-const createResponsiveButtons = (isMd: Ref<boolean>) => ({
-    // Edit/pencil button - for row expand/edit actions
-    // Standard size: lg on desktop, md on mobile (same as SIZES.standard)
-    get edit() {
-        return {
-            icon: ICONS.edit,
-            color: 'neutral' as const,
-            variant: 'ghost' as const,
-            square: true,
-            size: (isMd.value ? 'lg' : 'md') as NuxtUISize
+const createResponsiveButtons = (isMd: Ref<boolean>) => {
+    const sizes = createResponsiveSizes(isMd)
+    return {
+        // Edit/pencil button - for row expand/edit actions
+        // Standard size: lg on desktop, md on mobile
+        get edit() {
+            return {
+                icon: ICONS.edit,
+                color: 'neutral' as const,
+                variant: 'ghost' as const,
+                square: true,
+                size: sizes.standard
+            }
+        },
+
+        // Cancel button - secondary action in form footers
+        // Large size for better touch targets
+        get cancel() {
+            return {
+                color: 'neutral' as const,
+                variant: 'ghost' as const,
+                icon: ICONS.xMark,
+                size: sizes.large
+            }
+        },
+
+        // Save/submit button - primary action in form footers
+        // Large size for better touch targets
+        get save() {
+            return {
+                color: 'primary' as const,
+                variant: 'solid' as const,
+                icon: ICONS.check,
+                size: sizes.large
+            }
         }
     }
-})
+}
 
 /**
  * createOrientations - Responsive orientation patterns for UFieldGroup

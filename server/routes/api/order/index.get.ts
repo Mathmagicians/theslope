@@ -3,6 +3,8 @@
  *
  * Query params:
  * - dinnerEventIds: Optional array of dinner event IDs (0=all, 1=single, many=multiple)
+ * - upcomingForSeason: Season ID - fetch orders for upcoming dinner events (next + future)
+ *                      Server computes upcoming IDs from season's dinnerEvents
  * - state: Optional filter by order state (e.g., RELEASED for claim queue)
  * - sortBy: 'createdAt' (default) or 'releasedAt' (FIFO for claim queue)
  * - allHouseholds: false (default) = filter by session user's household
@@ -12,7 +14,9 @@
  * ADR-004: Logging standards
  */
 import {fetchOrders} from "~~/server/data/financesRepository"
+import {fetchSeason} from "~~/server/data/prismaRepository"
 import {useBookingValidation} from "~/composables/useBookingValidation"
+import {useSeason} from "~/composables/useSeason"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
 import type { OrderDisplay } from '~/composables/useBookingValidation'
@@ -25,14 +29,19 @@ const sortBySchema = z.enum(['createdAt', 'releasedAt']).default('createdAt')
 
 const querySchema = z.object({
     dinnerEventIds: IdOrIdsSchema,
+    upcomingForSeason: z.coerce.number().int().positive().optional(),
     state: OrderStateSchema.optional(),
     sortBy: sortBySchema.optional(),
     allHouseholds: z.coerce.boolean().optional().default(false),
     includeProvenance: z.coerce.boolean().optional().default(false),
+    includeDinnerContext: z.coerce.boolean().optional().default(false),
     householdId: z.coerce.number().int().positive().optional()
 }).refine(
     (data) => !(data.householdId && data.allHouseholds),
     { message: 'Cannot specify both householdId and allHouseholds=true' }
+).refine(
+    (data) => !(data.upcomingForSeason && data.dinnerEventIds.length > 0),
+    { message: 'Cannot specify both upcomingForSeason and dinnerEventIds' }
 )
 
 export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
@@ -69,9 +78,32 @@ export default defineEventHandler(async (event): Promise<OrderDisplay[]> => {
 
     // Business logic
     try {
-        // Pass array (empty = all events, otherwise filter by IDs)
-        const eventIds = query.dinnerEventIds.length > 0 ? query.dinnerEventIds : undefined
-        const orders = await fetchOrders(d1Client, eventIds, householdId, query.state, query.sortBy, query.includeProvenance)
+        // Determine event IDs: explicit list, upcoming for season, or all
+        let eventIds: number[] | undefined
+
+        if (query.upcomingForSeason) {
+            // Fetch season and compute upcoming dinner IDs
+            const season = await fetchSeason(d1Client, query.upcomingForSeason)
+            if (!season) {
+                throw createError({ statusCode: 404, message: `Season ${query.upcomingForSeason} not found` })
+            }
+
+            const {splitDinnerEvents} = useSeason()
+            const {nextDinner, futureDinners} = splitDinnerEvents(season.dinnerEvents ?? [])
+            eventIds = [
+                ...(nextDinner ? [nextDinner.id] : []),
+                ...futureDinners.map(e => e.id)
+            ]
+            console.info(`${LOG} Upcoming for season ${query.upcomingForSeason}: ${eventIds.length} dinner events`)
+
+            if (eventIds.length === 0) {
+                return []
+            }
+        } else if (query.dinnerEventIds.length > 0) {
+            eventIds = query.dinnerEventIds
+        }
+
+        const orders = await fetchOrders(d1Client, eventIds, householdId, query.state, query.sortBy, query.includeProvenance, query.includeDinnerContext)
         console.info(`${LOG} Fetched ${orders.length} orders${householdId ? ` for household ${householdId}` : ' (all households)'}`)
         setResponseStatus(event, 200)
         return orders

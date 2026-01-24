@@ -199,7 +199,7 @@ const handleSaveBookings = async (orders: DesiredOrder[]) => {
     await refreshBookingData()
     toast.add({
       title: toastTitle,
-      description: formatScaffoldResult(response.scaffoldResult),
+      description: formatScaffoldResult(response.scaffoldResult, 'past'),
       color: 'success',
       icon: ICONS.checkCircle
     })

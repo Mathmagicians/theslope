@@ -138,7 +138,7 @@ test.describe('AdminTeams Form UI', () => {
             await teamInput.press('End') // Move cursor to end
             await teamInput.type('Q')
 
-            // Wait for the API call to complete
+            // Setup response wait BEFORE blur to avoid race condition
             const responsePromise = page.waitForResponse(
                 (response: Response) => response.url().includes('/api/admin/team/') && response.request().method() === 'POST',
                 { timeout: 5000 }
@@ -212,11 +212,14 @@ test.describe('AdminTeams Form UI', () => {
             const teamInput = page.getByTestId('team-name-input').first()
             await expect(teamInput).toBeVisible()
 
-            // WHEN: Delete team
+            // WHEN: Delete team (DangerButton requires 2 clicks: first to confirm, second to execute)
             const deleteButton = page.getByTestId('delete-team-button')
             await expect(deleteButton).toBeVisible()
 
-            // Wait for the API call to complete
+            // First click: enter confirm mode
+            await deleteButton.click()
+
+            // Second click: actually trigger delete
             const responsePromise = page.waitForResponse(
                 (response: Response) => response.url().includes('/api/admin/team/') && response.request().method() === 'DELETE',
                 { timeout: 5000 }

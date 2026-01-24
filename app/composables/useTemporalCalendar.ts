@@ -13,6 +13,7 @@
  * Note: Components must handle their own countdown timers with lifecycle hooks.
  * This composable provides the calculation logic only.
  */
+import {toValue, type MaybeRefOrGetter} from 'vue'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 
 export const useTemporalCalendar = () => {
@@ -25,15 +26,20 @@ export const useTemporalCalendar = () => {
   /**
    * Split events into temporal categories (past/next/future)
    * Uses splitDinnerEvents which computes nextDinnerDateRange internally (DRY)
+   * Returns dates (not events) for calendar badge display - extracts .date from events
+   *
+   * @param events - MaybeRefOrGetter of events array. Pass a getter (() => props.dinnerEvents)
+   *                 to maintain reactivity when props change.
    */
-  const useTemporalSplit = <T extends { date: Date }>(events: T[]) => {
+  const useTemporalSplit = <T extends { date: Date }>(events: MaybeRefOrGetter<T[]>) => {
     const dinnerStartHour = getDefaultDinnerStartTime()
 
-    const splitResult = computed(() => splitDinnerEvents<T>(events))
+    const splitResult = computed(() => splitDinnerEvents<T>(toValue(events)))
 
     const nextDinner = computed(() => splitResult.value.nextDinner)
-    const pastDinnerDates = computed(() => splitResult.value.pastDinnerDates)
-    const futureDinnerDates = computed(() => splitResult.value.futureDinnerDates)
+    // Extract dates from events for calendar badge display
+    const pastDinnerDates = computed(() => splitResult.value.pastDinners.map(e => e.date))
+    const futureDinnerDates = computed(() => splitResult.value.futureDinners.map(e => e.date))
     const nextDinnerDateRange = computed(() => splitResult.value.nextDinnerDateRange)
 
     return {

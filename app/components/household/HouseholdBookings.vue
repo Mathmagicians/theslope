@@ -156,7 +156,7 @@ const handleGridSave = async (changes: { inhabitantId: number, dinnerEventId: nu
   )
   toast.add({
     title: BOOKING_TOAST_TITLES.grid,
-    description: formatScaffoldResult(result.scaffoldResult, 'compact'),
+    description: formatScaffoldResult(result.scaffoldResult, 'past'),
     color: 'success'
   })
 }
@@ -166,11 +166,16 @@ const handleDayViewSave = async (desiredOrders: DesiredOrder[]) => {
   const dinnerEventId = selectedDinnerEvent.value?.id
   if (!dinnerEventId || desiredOrders.length === 0) return
 
-  await bookingsStore.processSingleEventBookings(
+  const result = await bookingsStore.processSingleEventBookings(
     household.value.id,
     dinnerEventId,
     desiredOrders
   )
+  toast.add({
+    title: BOOKING_TOAST_TITLES.day,
+    description: formatScaffoldResult(result.scaffoldResult, 'past'),
+    color: 'success'
+  })
 }
 
 // Grid view guest booking - receives DesiredOrder[] from GuestBookingForm (all goes through scaffolder)
@@ -191,7 +196,7 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
     )
     toast.add({
       title: BOOKING_TOAST_TITLES.guest,
-      description: `${formatScaffoldResult(result.scaffoldResult)} d. ${dateStr}`,
+      description: `${formatScaffoldResult(result.scaffoldResult, 'past')} d. ${dateStr}`,
       color: 'success'
     })
   } catch (e) {

@@ -348,9 +348,10 @@ test.describe('Admin Inhabitant API', () => {
             const inhabitantOrders = orders.filter(o => o.inhabitantId === inhabitant.id)
             expect(inhabitantOrders.length).toBeGreaterThan(0)
 
-            // User cancels one specific order (creates USER_CANCELLED audit)
+            // Admin cancels one specific order (creates USER_CANCELLED audit)
+            // Using adminBypass because admin user is not a member of test household
             const orderToCancel = inhabitantOrders[0]!
-            await OrderFactory.deleteOrder(context, orderToCancel.id)
+            await OrderFactory.deleteOrder(context, orderToCancel.id, 200, true)
 
             // WHEN: Re-save same preferences
             await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: ALL_DINEIN}, 200, season.id)

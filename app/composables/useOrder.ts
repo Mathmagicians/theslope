@@ -52,10 +52,18 @@ export const useOrder = () => {
   const orderStateConfig = {
     [OrderState.BOOKED]: { label: 'Bestilt', color: 'primary' as const, icon: ICONS.clipboard },
     [OrderState.RELEASED]: { label: 'Frigivet', color: 'error' as const, icon: ICONS.released },
-    [OrderState.CLOSED]: { label: 'Afsluttet', color: 'neutral' as const, icon: ICONS.check },
+    [OrderState.CLOSED]: { label: 'Lukket', color: 'neutral' as const, icon: ICONS.archive },
     [OrderState.CANCELLED]: { label: 'Annulleret', color: 'error' as const, icon: ICONS.xMark },
     claimed: { label: 'Købt fra anden', color: 'info' as const, icon: ICONS.claim }
   }
+
+  /**
+   * Format guest label consistently across UI
+   * @param bookerName - Optional booker name for "Gæst af X" format
+   * @returns "Gæst af {bookerName}" or "Gæst"
+   */
+  const formatGuestLabel = (bookerName?: string): string =>
+    bookerName ? `Gæst af ${bookerName}` : 'Gæst'
 
   /**
    * Format order for display - returns all display properties
@@ -72,7 +80,7 @@ export const useOrder = () => {
 
     return {
       guest: order.isGuestTicket ? {
-        label: bookerName ? `Gæst af ${bookerName}` : 'Gæst',
+        label: formatGuestLabel(bookerName),
         color: 'info',
         icon: ICONS.userPlus
       } : null,
@@ -330,6 +338,7 @@ export const useOrder = () => {
     // Order display formatting
     orderStateConfig,
     formatOrder,
+    formatGuestLabel,
 
     // State filtering
     getActiveOrders,

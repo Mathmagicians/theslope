@@ -46,7 +46,9 @@ const emit = defineEmits<{
 
 const {formatPrice, ticketTypeConfig} = useTicket()
 const {formatOrder} = useOrder()
-const {TYPOGRAPHY, ICONS, SIZES} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, ICONS, SIZES, COMPONENTS} = useTheSlopeDesignSystem()
+const {OrderStateSchema} = useBookingValidation()
+const OrderState = OrderStateSchema.enum
 
 // Extract fields from item
 // For orders: use item.id (order is itself), for transactions: use orderId (may be null if order deleted)
@@ -68,12 +70,11 @@ const showDinnerMode = computed(() => dinnerModeValue.value !== undefined)
 const itemAmount = computed(() => props.item.priceAtBooking ?? props.item.amount ?? 0)
 
 // Formatted order display (handles claimed override, released state, guest badge)
-// Cast item to OrderDisplay shape for formatOrder - only used when state is present
+// For transactions, as they don't have order state, use CLOSED
 const formatted = computed(() => {
-    if (!props.item.state) return null
-    // Build minimal OrderDisplay-compatible object for formatOrder
+    const state = props.item.state ?? OrderState.CLOSED
     return formatOrder({
-        state: props.item.state,
+        state,
         provenanceHousehold: props.item.provenanceHousehold ?? null,
         isGuestTicket: props.item.isGuestTicket ?? false
     } as Parameters<typeof formatOrder>[0])
@@ -82,8 +83,9 @@ const formatted = computed(() => {
 
 <template>
   <div class="space-y-1">
-    <div class="flex justify-between items-center max-w-sm md:max-w-md" :class="compact ? TYPOGRAPHY.finePrint : TYPOGRAPHY.bodyTextSmall">
-      <div class="flex items-center gap-2">
+    <div :class="[COMPONENTS.costLine.row, COMPONENTS.costLine.columns, compact ? TYPOGRAPHY.finePrint : TYPOGRAPHY.bodyTextSmall]">
+      <!-- History button -->
+      <div>
         <UButton
             v-if="orderId"
             color="neutral"
@@ -94,25 +96,35 @@ const formatted = computed(() => {
             aria-label="Vis ordrehistorik"
             @click="emit('toggle-history', orderId)"
         />
-        <span>{{ item.inhabitant.name }}</span>
-        <!-- Ticket type badge -->
+      </div>
+      <!-- Name -->
+      <span :class="['truncate', COMPONENTS.costLine.nameSlot]">{{ item.inhabitant.name }}</span>
+      <!-- Ticket type -->
+      <div>
         <UBadge :color="ticketColor" variant="soft" :size="SIZES.small">
           {{ ticketLabel }}
         </UBadge>
-        <!-- Dinner mode (reuses DinnerModeSelector in VIEW mode) -->
+      </div>
+      <!-- Dinner mode -->
+      <div>
         <DinnerModeSelector v-if="showDinnerMode" :model-value="dinnerModeValue" size="xs"/>
-        <!-- Guest badge (from formatOrder) -->
-        <UBadge v-if="formatted?.guest" :color="formatted.guest.color" variant="soft" :size="SIZES.small" :icon="formatted.guest.icon">
+      </div>
+      <!-- Guest badge -->
+      <div>
+        <UBadge v-if="formatted.guest" :color="formatted.guest.color" variant="soft" :size="SIZES.small" :icon="formatted.guest.icon">
           {{ formatted.guest.label }}
         </UBadge>
-        <!-- Order state badge (from formatOrder - handles claimed/released/booked) -->
-        <UBadge v-if="formatted" :color="formatted.stateColor" variant="soft" :size="SIZES.small" :icon="formatted.stateIcon">
+      </div>
+      <!-- Order state -->
+      <div>
+        <UBadge :color="formatted.stateColor" variant="soft" :size="SIZES.small" :icon="formatted.stateIcon">
           {{ formatted.stateText }}
         </UBadge>
       </div>
-      <span :class="compact ? TYPOGRAPHY.finePrint : TYPOGRAPHY.bodyTextMuted">{{ formatPrice(itemAmount) }} kr</span>
+      <!-- Amount -->
+      <span :class="[COMPONENTS.costLine.amountSlot, compact ? TYPOGRAPHY.finePrint : TYPOGRAPHY.bodyTextMuted]">{{ formatPrice(itemAmount) }} kr</span>
     </div>
-    <div v-if="isHistoryExpanded" class="pl-4 md:pl-8 pt-1">
+    <div v-if="isHistoryExpanded" class="pl-6 md:pl-8 pt-1">
       <OrderHistoryDisplay :order-id="orderId!"/>
     </div>
   </div>

@@ -35,6 +35,22 @@ export class HouseholdFactory {
         }
     }
 
+    /** Mock HouseholdDetail for component tests (no API calls) */
+    static readonly defaultHouseholdDetail = (testSalt: string = temporaryAndRandom()): HouseholdDetail => {
+        const householdId = saltedId(TEST_DATA_ID_BASE, testSalt)
+        const base = this.defaultHouseholdData(testSalt)
+        return {
+            ...base,
+            id: householdId,
+            shortName: salt('TV 42', testSalt),
+            moveOutDate: null,
+            inhabitants: [
+                {...this.defaultInhabitantData(testSalt), id: saltedId(TEST_DATA_ID_BASE + 1, testSalt), householdId, dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)},
+                {...this.defaultInhabitantData(testSalt + '2'), id: saltedId(TEST_DATA_ID_BASE + 2, testSalt), householdId, dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)}
+            ]
+        }
+    }
+
     static readonly createHousehold = async (
         context: BrowserContext,
         partialHousehold: Partial<ReturnType<typeof HouseholdFactory.defaultHouseholdData>> = {},

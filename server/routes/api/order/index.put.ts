@@ -1,5 +1,7 @@
+import {z} from 'zod'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
+import {isAdmin} from '~/composables/usePermissions'
 import type { CreateOrdersRequest, OrderCreateWithPrice, AuditContext, CreateOrdersResult } from '~/composables/useBookingValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { createOrders } from "~~/server/data/financesRepository"
@@ -28,8 +30,10 @@ export default defineEventHandler(async (event): Promise<CreateOrdersResult> => 
         return throwH3Error('🎟️ > ORDER > [PUT] Input validation error', error)
     }
 
-    // Ownership check
-    await requireHouseholdAccess(event, requestData.householdId)
+    // Ownership check (admin can bypass when explicitly requested via ?adminBypass=true)
+    const querySchema = z.object({adminBypass: z.coerce.boolean().optional()})
+    const {adminBypass} = await getValidatedQuery(event, querySchema.parse)
+    await requireHouseholdAccess(event, requestData.householdId, adminBypass ? isAdmin : undefined)
 
     // Graceful handling of empty orders array
     if (requestData.orders.length === 0) {

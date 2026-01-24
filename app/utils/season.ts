@@ -435,12 +435,13 @@ export const getDinnerTimeRange = (date: Date, startHour: number, durationMinute
 
 /**
  * Result type for splitDinnerEvents
+ * Returns full events (not just dates) for consistency - clients needing dates can use .map(e => e.date)
  */
 export type SplitDinnerEventsResult<T> = {
     nextDinner: T | null
     nextDinnerDateRange: DateRange | null
-    pastDinnerDates: Date[]
-    futureDinnerDates: Date[]
+    pastDinners: T[]
+    futureDinners: T[]
 }
 
 /**
@@ -461,7 +462,7 @@ export type SplitDinnerEventsResult<T> = {
  *
  * @example
  * const split = splitDinnerEvents(18, 60)
- * const { nextDinner, nextDinnerDateRange, pastDinnerDates, futureDinnerDates } = split(events)
+ * const { nextDinner, nextDinnerDateRange, pastDinners, futureDinners } = split(events)
  */
 export const splitDinnerEvents = (dinnerStartHour: number, dinnerDurationMinutes: number) =>
     <T extends { date: Date }>(
@@ -510,22 +511,22 @@ export const splitDinnerEvents = (dinnerStartHour: number, dinnerDurationMinutes
 
         const nextDinnerDateRange = computeNextDinnerDateRange()
 
-        // Split events into categories
+        // Split events into categories (returns full events, not just dates)
         const result = dinnerEvents.reduce(
             (acc, event) => {
                 if (nextDinnerDateRange && isSameDay(event.date, nextDinnerDateRange.start)) {
                     acc.nextDinner = event
                 } else if (isBefore(event.date, now)) {
-                    acc.pastDinnerDates.push(event.date)
+                    acc.pastDinners.push(event)
                 } else if (isWithinWindow(event.date)) {
-                    acc.futureDinnerDates.push(event.date)
+                    acc.futureDinners.push(event)
                 }
                 return acc
             },
             {
                 nextDinner: null as T | null,
-                pastDinnerDates: [] as Date[],
-                futureDinnerDates: [] as Date[]
+                pastDinners: [] as T[],
+                futureDinners: [] as T[]
             }
         )
 

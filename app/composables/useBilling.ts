@@ -1,7 +1,7 @@
 import type {DateRange} from '~/types/dateTypes'
 import {createDateRange, formatDateRange} from '~/utils/date'
 import {useSeason} from '~/composables/useSeason'
-import {useBookingValidation, type TicketType, type OrderDisplay} from '~/composables/useBookingValidation'
+import {useBookingValidation, type TicketType, type OrderDisplay, type DinnerEventInfo} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
 import type {CostEntry, HouseholdEntry, InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'
 
@@ -46,15 +46,24 @@ export const useBilling = () => {
      * Curried generic groupBy factory for economy views.
      * Creates specialized groupers for CostEntry (by dinner) and HouseholdEntry (by household).
      *
+     * Type params:
+     * - T: Item type (must have ticketType for formatting)
+     * - Base: The context/base fields returned by createBase (e.g., {dinnerEvent} or HouseholdInfo)
+     * - C: Complete entry type (Base + items/totalAmount/ticketCounts)
+     *
      * @param config.getKey - Extract grouping key from item
-     * @param config.createBase - Create base entry fields from first item (without items/totalAmount/ticketCounts)
+     * @param config.createBase - Create base entry fields from first item
      * @param config.onAccumulate - Optional extra accumulation (e.g., computedTotal for HouseholdEntry)
      * @param config.sortBy - Optional custom sort (default: preserve insertion order)
      */
-    const createGroupBy = <T extends { ticketType: TicketType | null }, C extends { items: T[], totalAmount: number, ticketCounts: string }>(
+    const createGroupBy = <
+        T extends { ticketType: TicketType | null },
+        Base,
+        C extends Base & { items: T[], totalAmount: number, ticketCounts: string }
+    >(
         config: {
             getKey: (item: T) => number
-            createBase: (item: T) => Omit<C, 'items' | 'totalAmount' | 'ticketCounts'>
+            createBase: (item: T) => Base
             onAccumulate?: (entry: C, amount: number) => void
             sortBy?: (a: C, b: C) => number
         }
@@ -93,20 +102,18 @@ export const useBilling = () => {
 
     /**
      * Group items by dinner event for economy display.
-     * Works with any item type (Orders, Transactions) that has ticketType.
+     * T must have ticketType and dinnerEvent. Groups by dinnerEvent.id.
      *
-     * @param getDinner - Extract dinner info from item
      * @returns Curried function: (items, getAmount) => CostEntry[]
+     *
+     * @example
+     * const grouped = groupByCostEntry<OrderWithInhabitant>()(orders, o => o.priceAtBooking)
      */
-    const groupByCostEntry = <T extends { ticketType: TicketType | null }>(
-        getDinner: (item: T) => { id: number, date: Date, menuTitle: string }
-    ) => createGroupBy<T, CostEntry<T>>({
-        getKey: item => getDinner(item).id,
-        createBase: item => {
-            const dinner = getDinner(item)
-            return {dinnerEventId: dinner.id, date: new Date(dinner.date), menuTitle: dinner.menuTitle}
-        }
-    })
+    const groupByCostEntry = <T extends { ticketType: TicketType | null, dinnerEvent: DinnerEventInfo }>() =>
+        createGroupBy<T, { dinnerEvent: DinnerEventInfo }, CostEntry<T, DinnerEventInfo>>({
+            getKey: item => item.dinnerEvent.id,
+            createBase: item => ({ dinnerEvent: item.dinnerEvent })
+        })
 
     /**
      * Group items by household for PBS/revisor view.
@@ -115,13 +122,14 @@ export const useBilling = () => {
      * @param getHousehold - Extract household info from item
      * @returns Curried function: (items, getAmount) => HouseholdEntry[]
      */
+    type HouseholdEntryBase = { id: number, pbsId: number, address: string, computedTotal: number }
     const groupByHouseholdEntry = <T extends { ticketType: TicketType | null }>(
         getHousehold: (item: T) => { id: number, pbsId: number, address: string }
-    ) => createGroupBy<T, HouseholdEntry<T>>({
+    ) => createGroupBy<T, HouseholdEntryBase, HouseholdEntry<T>>({
         getKey: item => getHousehold(item).id,
         createBase: item => {
             const household = getHousehold(item)
-            return {householdId: household.id, pbsId: household.pbsId, address: household.address, computedTotal: 0}
+            return {id: household.id, pbsId: household.pbsId, address: household.address, computedTotal: 0}
         },
         onAccumulate: (entry, amount) => { entry.computedTotal += amount },
         sortBy: (a, b) => a.pbsId - b.pbsId
@@ -306,35 +314,12 @@ export const useBilling = () => {
         }
     }
 
-    /**
-     * Join orders with dinner events for economy display.
-     * Pure function - testable without stores.
-     *
-     * @param orders - Orders to join (OrderDisplay)
-     * @param dinnerEvents - Dinner events lookup
-     * @param getInhabitantName - Function to resolve inhabitant name from ID
-     * @returns Orders with dinner event and inhabitant info attached
-     */
-    const joinOrdersWithDinnerEvents = <T extends { dinnerEventId: number, inhabitantId: number, ticketType: TicketType | null }>(
-        orders: T[],
-        dinnerEvents: Map<number, { id: number, date: Date, menuTitle: string }>,
-        getInhabitantName: (inhabitantId: number) => string
-    ): (T & { dinnerEvent: { id: number, date: Date, menuTitle: string }, inhabitant: { id: number, name: string } })[] =>
-        orders
-            .filter(o => dinnerEvents.has(o.dinnerEventId))
-            .map(o => ({
-                ...o,
-                dinnerEvent: dinnerEvents.get(o.dinnerEventId)!,
-                inhabitant: { id: o.inhabitantId, name: getInhabitantName(o.inhabitantId) }
-            }))
-
     return {
         calculateClosedBillingPeriod,
         calculateCurrentBillingPeriod,
         getBillingPeriodForDate,
         groupByCostEntry,
         groupByHouseholdEntry,
-        joinOrdersWithDinnerEvents,
         formatTicketCounts,
         chunkTransactionIds,
         // Control sums

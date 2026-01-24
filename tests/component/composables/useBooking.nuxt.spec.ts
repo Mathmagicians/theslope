@@ -1592,3 +1592,211 @@ describe('getDayBillSummary', () => {
         })
     })
 })
+
+// =============================================================================
+// Action Preview - Show users what will happen before save
+// =============================================================================
+
+describe('Action Preview', () => {
+    const {formatActionPreview, hasChanges, countChanges, ACTION_PREVIEW} = useBooking()
+    const {orderStateConfig} = useOrder()
+    const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+    const DM = DinnerModeSchema.enum
+    const OS = OrderStateSchema.enum
+
+    // Action → OrderState mapping (mirrors useBooking.ts ACTION_TO_STATE)
+    const ACTION_TO_STATE = {
+        create:     OS.BOOKED,
+        delete:     OS.CANCELLED,
+        release:    OS.RELEASED,
+        reclaim:    OS.BOOKED,
+        claim:      'claimed' as const,
+        updateMode: OS.CLOSED
+    } as const
+
+    // Get expected color from orderStateConfig (DRY - same source as implementation)
+    const getExpectedColor = (action: keyof typeof ACTION_TO_STATE) =>
+        orderStateConfig[ACTION_TO_STATE[action]].color
+
+    // Helper to create DesiredOrder
+    const desired = (overrides: Partial<DesiredOrder> = {}): DesiredOrder => ({
+        inhabitantId: 1,
+        dinnerEventId: 101,
+        dinnerMode: DM.DINEIN,
+        ticketPriceId: 1,
+        isGuestTicket: false,
+        state: OS.BOOKED,
+        ...overrides
+    })
+
+    // Helper to create existing order
+    const existing = (id: number, overrides: Partial<OrderDisplay> = {}): OrderDisplay =>
+        OrderFactory.defaultOrder(undefined, {
+            id,
+            inhabitantId: 1,
+            dinnerEventId: 101,
+            ticketPriceId: 1,
+            dinnerMode: DM.DINEIN,
+            state: OS.BOOKED,
+            ...overrides
+        })
+
+    // Empty buckets helper
+    const emptyBuckets = (): Parameters<typeof formatActionPreview>[0] => ({
+        create: [],
+        update: [],
+        delete: [],
+        idempotent: [],
+        claim: []
+    })
+
+    // Name lookup for tests
+    const getName = (id: number) => id === 1 ? 'Anna' : id === 2 ? 'Peter' : `User${id}`
+
+    describe('ACTION_PREVIEW config', () => {
+        it.each([
+            {action: 'create', expectedText: 'Anna tilmeldes'},
+            {action: 'delete', expectedText: 'Anna frameldes'},
+            {action: 'release', expectedText: 'Annas billet frigives'},
+            {action: 'reclaim', expectedText: 'Anna tilmeldes igen'},
+            {action: 'claim', expectedText: 'Anna køber fra andre'},
+            {action: 'updateMode', expectedText: 'Anna opdaterer spisning'}
+        ])('$action template produces "$expectedText"', ({action, expectedText}) => {
+            const config = ACTION_PREVIEW[action as keyof typeof ACTION_PREVIEW]
+            expect(config.template('Anna')).toBe(expectedText)
+            expect(config.icon).toBeDefined()
+        })
+    })
+
+    describe('formatActionPreview', () => {
+        it('returns empty array for all idempotent buckets', () => {
+            const buckets = {...emptyBuckets(), idempotent: [desired()]}
+            const result = formatActionPreview(buckets, [], getName)
+            expect(result).toHaveLength(0)
+        })
+
+        it.each([
+            {bucket: 'create', action: 'create' as const, textContains: 'tilmeldes'},
+            {bucket: 'delete', action: 'delete' as const, textContains: 'frameldes'},
+            {bucket: 'claim', action: 'claim' as const, textContains: 'køber fra andre'}
+        ])('$bucket bucket → $action action', ({bucket, action, textContains}) => {
+            const buckets = {...emptyBuckets(), [bucket]: [desired({inhabitantId: 1})]}
+            const result = formatActionPreview(buckets, [], getName)
+
+            expect(result).toHaveLength(1)
+            expect(result[0]).toMatchObject({
+                name: 'Anna',
+                action,
+                color: getExpectedColor(action),
+                text: expect.stringContaining(textContains)
+            })
+            expect(result[0]!.icon).toBeDefined()
+        })
+
+        describe('update bucket → action depends on existing state', () => {
+            it.each([
+                {
+                    desc: 'desired RELEASED → release action',
+                    desiredOrder: desired({orderId: 42, state: OS.RELEASED}),
+                    existingOrder: existing(42, {state: OS.BOOKED}),
+                    expectedAction: 'release' as const,
+                    expectedText: 'frigives'
+                },
+                {
+                    desc: 'existing RELEASED + desired BOOKED → reclaim action',
+                    desiredOrder: desired({orderId: 42, state: OS.BOOKED}),
+                    existingOrder: existing(42, {state: OS.RELEASED}),
+                    expectedAction: 'reclaim' as const,
+                    expectedText: 'tilmeldes igen'
+                },
+                {
+                    desc: 'both BOOKED with different mode → updateMode action',
+                    desiredOrder: desired({orderId: 42, dinnerMode: DM.TAKEAWAY, state: OS.BOOKED}),
+                    existingOrder: existing(42, {dinnerMode: DM.DINEIN, state: OS.BOOKED}),
+                    expectedAction: 'updateMode' as const,
+                    expectedText: 'opdaterer spisning'
+                }
+            ])('$desc', ({desiredOrder, existingOrder, expectedAction, expectedText}) => {
+                const buckets = {...emptyBuckets(), update: [desiredOrder]}
+                const result = formatActionPreview(buckets, [existingOrder], getName)
+
+                expect(result).toHaveLength(1)
+                expect(result[0]).toMatchObject({
+                    action: expectedAction,
+                    color: getExpectedColor(expectedAction),
+                    text: expect.stringContaining(expectedText)
+                })
+            })
+        })
+
+        describe('guest ticket handling', () => {
+            it('uses "Gæst af {bookerName}" for guest tickets', () => {
+                const guestOrder = desired({inhabitantId: 1, isGuestTicket: true})
+                const buckets = {...emptyBuckets(), create: [guestOrder]}
+                const result = formatActionPreview(buckets, [], getName)
+
+                expect(result).toHaveLength(1)
+                expect(result[0]!.name).toBe('Gæst af Anna')
+                expect(result[0]!.text).toBe('Gæst af Anna tilmeldes')
+            })
+
+            it('uses inhabitant name for non-guest tickets', () => {
+                const regularOrder = desired({inhabitantId: 1, isGuestTicket: false})
+                const buckets = {...emptyBuckets(), create: [regularOrder]}
+                const result = formatActionPreview(buckets, [], getName)
+
+                expect(result).toHaveLength(1)
+                expect(result[0]!.name).toBe('Anna')
+                expect(result[0]!.text).toBe('Anna tilmeldes')
+            })
+        })
+
+        it('handles multiple orders across buckets', () => {
+            const buckets = {
+                ...emptyBuckets(),
+                create: [desired({inhabitantId: 1})],
+                delete: [desired({inhabitantId: 2, orderId: 43})],
+                update: [desired({inhabitantId: 1, orderId: 42, state: OS.RELEASED})],
+                claim: [desired({inhabitantId: 2})]
+            }
+            const existingOrders = [existing(42, {state: OS.BOOKED})]
+            const result = formatActionPreview(buckets, existingOrders, getName)
+
+            expect(result).toHaveLength(4)
+            const actions = result.map(r => r.action).sort()
+            expect(actions).toEqual(['claim', 'create', 'delete', 'release'])
+        })
+    })
+
+    describe('hasChanges', () => {
+        it.each([
+            {desc: 'all empty → false', buckets: emptyBuckets(), expected: false},
+            {desc: 'only idempotent → false', buckets: {...emptyBuckets(), idempotent: [desired()]}, expected: false},
+            {desc: 'create → true', buckets: {...emptyBuckets(), create: [desired()]}, expected: true},
+            {desc: 'delete → true', buckets: {...emptyBuckets(), delete: [desired()]}, expected: true},
+            {desc: 'update → true', buckets: {...emptyBuckets(), update: [desired()]}, expected: true},
+            {desc: 'claim → true', buckets: {...emptyBuckets(), claim: [desired()]}, expected: true},
+        ])('$desc', ({buckets, expected}) => {
+            expect(hasChanges(buckets)).toBe(expected)
+        })
+    })
+
+    describe('countChanges', () => {
+        it.each([
+            {desc: 'all empty → 0', buckets: emptyBuckets(), expected: 0},
+            {desc: 'only idempotent → 0', buckets: {...emptyBuckets(), idempotent: [desired(), desired()]}, expected: 0},
+            {desc: '1 create → 1', buckets: {...emptyBuckets(), create: [desired()]}, expected: 1},
+            {desc: '2 delete → 2', buckets: {...emptyBuckets(), delete: [desired(), desired()]}, expected: 2},
+            {desc: 'mixed buckets', buckets: {
+                ...emptyBuckets(),
+                create: [desired()],
+                delete: [desired(), desired()],
+                update: [desired()],
+                claim: [desired()],
+                idempotent: [desired(), desired(), desired()]  // not counted
+            }, expected: 5},
+        ])('$desc', ({buckets, expected}) => {
+            expect(countChanges(buckets)).toBe(expected)
+        })
+    })
+})

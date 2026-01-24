@@ -3,14 +3,12 @@ import {describe, it, expect} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import BookingGridView from '~/components/booking/BookingGridView.vue'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 
 const ticketPrices = TicketFactory.defaultTicketPrices()
-const deadlines = {
-  canModifyOrders: () => true,
-  canEditDiningMode: () => true,
-  getOrderCancellationAction: () => null,
-  isAnnounceMenuPastDeadline: () => false
-}
+// Use real deadlinesForSeason() to stay in sync with SeasonDeadlines interface
+const {deadlinesForSeason} = useSeason()
+const deadlines = deadlinesForSeason(SeasonFactory.defaultSeasonData)
 
 // Mock household with inhabitants (inline to avoid type imports)
 const mockHousehold = {

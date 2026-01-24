@@ -218,7 +218,7 @@ const toggleSort = () => {
       </template>
 
       <template #empty>
-        <slot v-if="!loading" name="empty"/>
+        <slot name="empty"/>
       </template>
     </UTable>
   </div>
