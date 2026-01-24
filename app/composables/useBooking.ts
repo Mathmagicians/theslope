@@ -824,10 +824,12 @@ export const useBooking = () => {
             alarms.push(DINNER_STEP_MAP[DinnerStepState.ANNOUNCED].getDeadline(menuCountdown, isPastMenuDeadline, thresholds).alarm)
         }
 
-        // Groceries badge
+        // Groceries badge - uses dinner countdown, not menu deadline
+        // Only cascade isPastMenuDeadline if menu is NOT done (both chef tasks late)
         const groceriesDone = dinnerEvent.totalCost > 0
         if (!groceriesDone) {
-            alarms.push(DINNER_STEP_MAP[DinnerStepState.GROCERIES_DONE].getDeadline(dinnerCountdown, isPastMenuDeadline, thresholds).alarm)
+            const groceriesIsPastDeadline = !menuDone && isPastMenuDeadline
+            alarms.push(DINNER_STEP_MAP[DinnerStepState.GROCERIES_DONE].getDeadline(dinnerCountdown, groceriesIsPastDeadline, thresholds).alarm)
         }
 
         return alarms.length === 0 ? -1 : Math.max(...alarms) as AlarmLevel
@@ -1383,15 +1385,22 @@ export const useBooking = () => {
 
         const isPastMenuDeadline = deadlines.isAnnounceMenuPastDeadline(dinnerEvent.date)
 
+        const menuDone = dinnerEvent.state === DinnerState.ANNOUNCED ||
+            (dinnerEvent.state === DinnerState.CONSUMED && dinnerEvent.heynaboEventId !== null)
+
+        // Groceries cascade: only apply isPastMenuDeadline if menu is NOT done
+        const groceriesIsPastDeadline = !menuDone && isPastMenuDeadline
+
         const badge = (
             step: number,
             key: keyof typeof DEADLINE_LABELS,
             state: DinnerStepState,
             done: boolean,
-            countdown: { hours: number; formatted: string }
+            countdown: { hours: number; formatted: string },
+            isPastDeadline: boolean
         ): DeadlineBadgeData => {
             const labels = DEADLINE_LABELS[key]
-            const result = DINNER_STEP_MAP[state].getDeadline(countdown, isPastMenuDeadline, thresholds)
+            const result = DINNER_STEP_MAP[state].getDeadline(countdown, isPastDeadline, thresholds)
             const alarm = done ? -1 : result.alarm
             const b = ALARM_TO_BADGE[alarm]
             const text = done ? labels.closedText : labels.openText
@@ -1405,8 +1414,6 @@ export const useBooking = () => {
             }
         }
 
-        const menuDone = dinnerEvent.state === DinnerState.ANNOUNCED ||
-            (dinnerEvent.state === DinnerState.CONSUMED && dinnerEvent.heynaboEventId !== null)
         const bookingOpen = deadlines.canModifyOrders(dinnerEvent.date)
 
         // Booking badge: reuse createBookingBadge (DRY) + add countdown when open
@@ -1420,10 +1427,10 @@ export const useBooking = () => {
         }
 
         return new Map([
-            [1, badge(1, 'ANNOUNCED', DinnerStepState.ANNOUNCED, menuDone, menuCountdown)],
+            [1, badge(1, 'ANNOUNCED', DinnerStepState.ANNOUNCED, menuDone, menuCountdown, isPastMenuDeadline)],
             [2, bookingBadge],
-            [3, badge(3, 'GROCERIES_DONE', DinnerStepState.GROCERIES_DONE, dinnerEvent.totalCost > 0, dinnerCountdown)],
-            [4, badge(4, 'CONSUMED', DinnerStepState.CONSUMED, dinnerEvent.state === DinnerState.CONSUMED, dinnerCountdown)]
+            [3, badge(3, 'GROCERIES_DONE', DinnerStepState.GROCERIES_DONE, dinnerEvent.totalCost > 0, dinnerCountdown, groceriesIsPastDeadline)],
+            [4, badge(4, 'CONSUMED', DinnerStepState.CONSUMED, dinnerEvent.state === DinnerState.CONSUMED, dinnerCountdown, false)]
         ])
     }
 

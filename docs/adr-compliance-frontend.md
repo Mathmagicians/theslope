@@ -1,7 +1,7 @@
 # ADR Compliance - Frontend Routes & Components
 
 **Generated:** 2025-11-11
-**Last Updated:** 2026-01-23 (Admin order corrections: ActionPreview, AdminEconomy, DinnerBookingForm updates)
+**Last Updated:** 2026-01-24 (Chef page reactivity fix: useTemporalCalendar MaybeRefOrGetter pattern, DRY calendar components, E2E test)
 
 ## Legend
 
@@ -41,6 +41,7 @@
 | `/` | `index.vue` → `Hero.vue` | N/A | N/A | N/A | ✅ | ✅ | **✅ COMPLIANT** |
 | `/login` | `login.vue` → `Login.vue` | ✅ `useAuthStore()` | N/A | N/A | ❌ | ❌ | **❌ NO TESTS** |
 | `/dinner` | `dinner/index.vue` | ✅ `useEventStore()` | N/A | N/A | ❌ | ❌ | **❌ NO TESTS** |
+| `/chef` | `chef/index.vue` | ✅ `usePlanStore()` | N/A | ✅ `?team=` | ✅ | ❌ | **⚠️ E2E ONLY** - Team tab switching with calendar reactivity |
 | `/chef/dinner/[id]` | `chef/dinner/[id].vue` | ❓ | N/A | ✅ path params | ❌ | ❌ | **❌ NO TESTS** |
 
 ## Component Breakdown
@@ -102,6 +103,8 @@
 | `WeekDayMapDinnerModeDisplay.vue` | `/household/[shortname]/settings` | None | `useWeekday()`, `useDinnerMode()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 | `BaseCalendar.vue` | All calendar displays | None | - | N/A | N/A | ❌ | N/A | **N/A DISPLAY** |
 | `CalendarDisplay.vue` | `/dinner` | `useEventStore()` | - | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
+| `ChefCalendarDisplay.vue` | `/chef` | Parent props | `useTemporalCalendar()` | ✅ | ✅ | ❌ | ✅ | **⚠️ E2E ONLY** - Uses MaybeRefOrGetter for reactivity |
+| `DinnerCalendarDisplay.vue` | `/dinner`, `/household/[shortname]/bookings` | Parent props | `useTemporalCalendar()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ E2E ONLY** - DRY with ChefCalendarDisplay |
 | `TeamCalendarDisplay.vue` | `/admin/teams`, `/chef` | Parent props | - | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 | `HouseholdCalendarDisplay.vue` | `/household/[shortname]/bookings` | Parent props | - | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 
@@ -163,6 +166,7 @@
 | `useSeasonSelector()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
 | `useApiHandler()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
 | `usePermissions()` | N/A | ✅ `SystemRoleSchema` | N/A | ✅ Full | **✅ COMPLIANT** - Permission predicates for auth (imports from generated layer, re-exports enum) |
+| `useTemporalCalendar()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Uses `MaybeRefOrGetter` + `toValue()` for reactive inputs, shared by ChefCalendarDisplay and DinnerCalendarDisplay (DRY) |
 
 ## ADR Compliance Summary
 
@@ -254,6 +258,7 @@ All components and stores work with domain types:
 - ✅ Household navigation (`household.e2e.spec.ts`)
 - ✅ Household bookings (`DinnerBookingForm.e2e.spec.ts` - serial, `HouseholdBookingsCrossHousehold.e2e.spec.ts`)
 - ✅ Public billing (`PublicBilling.e2e.spec.ts`)
+- ✅ Chef page (`Chef.e2e.spec.ts` - team tab switching, calendar reactivity)
 
 **Missing E2E:**
 - ❌ Admin users
@@ -271,7 +276,7 @@ All components and stores work with domain types:
 **Full Coverage:**
 - ✅ Calendar components (`CalendarDateRangePicker`, `CalendarDateRangeListPicker`)
 - ✅ Form components (`FormModeSelector`, `SeasonSelector`)
-- ✅ Composables (`useEntityFormManager`, `useTabNavigation`, `useSeasonSelector`, `useApiHandler`, `useSeason`, `useCookingTeam`)
+- ✅ Composables (`useEntityFormManager`, `useTabNavigation`, `useSeasonSelector`, `useApiHandler`, `useSeason`, `useCookingTeam`, `useTemporalCalendar`)
 - ✅ Stores (`plan`, `households`, `allergies`)
 - ✅ Landing (`Hero.vue`)
 
@@ -488,8 +493,10 @@ Reference these components for correct ADR implementation:
 - ✅ `useBooking()` - ADR-016 order decision logic (`decideOrderAction`, bucket resolvers)
 - ✅ `useEntityFormManager()` - Form management pattern
 - ✅ `useTabNavigation()` - URL navigation pattern
+- ✅ `useTemporalCalendar()` - `MaybeRefOrGetter` + `toValue()` pattern for reactive composable inputs (DRY shared by calendar displays)
 
 ### Tests
 - ✅ `tests/component/stores/plan.nuxt.spec.ts` - Store testing pattern
 - ✅ `tests/component/components/calendar/CalendarDateRangeListPicker.nuxt.spec.ts` - Component testing best practices
 - ✅ `tests/e2e/ui/AdminPlanning.e2e.spec.ts` - E2E testing pattern with factories
+- ✅ `tests/e2e/ui/Chef.e2e.spec.ts` - E2E testing with proper beforeAll/afterAll cleanup, salted test data

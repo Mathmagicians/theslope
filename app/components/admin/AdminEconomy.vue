@@ -385,7 +385,12 @@ const selectedHouseholdOption = computed({
 })
 
 // Admin deadlines - bypass all checks (ADR-016: always-true predicates)
+// Time getters return far-future date (not used in admin mode, badges show "admin override")
 const adminDeadlines: SeasonDeadlines = {
+    getDinnerStartTime: (date: Date) => date,
+    getMenuDeadlineTime: (date: Date) => date,
+    getBookingDeadlineTime: (date: Date) => date,
+    getDiningModeDeadlineTime: (date: Date) => date,
     canModifyOrders: () => true,
     canEditDiningMode: () => true,
     getOrderCancellationAction: () => null,

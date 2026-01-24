@@ -89,60 +89,88 @@ describe('ChefDinnerCard', () => {
             expect(text).toMatch(/åben|lukket/i)
         })
 
-        // Each badge shows deadline-specific countdown OR "mangler" when past deadline
-        // Menu deadline: dinner - 10 days, Booking deadline: dinner - 8 days
-        // When menu deadline passed: ALL user-action badges (Menu, Groceries) show "mangler"
+        // SCHEDULED dinners: menu NOT done
+        // When menu deadline passed AND menu not done: groceries also shows "mangler" (cascade)
         describe.each([
             {
-                name: 'far future (15 days): all deadlines ahead',
-                dinnerDate: new Date(2025, 0, 26, 18, 0), // Jan 26, 18:00
+                name: 'SCHEDULED, far future (15 days)',
+                dinnerDate: new Date(2025, 0, 26, 18, 0),
+                dinnerState: DinnerState.SCHEDULED,
                 expectedBadges: {
-                    menu: /om\s+5\s+dage/i,           // Menu deadline: Jan 16, 5 days away
-                    framelding: /åben/i,              // Booking open (before deadline)
-                    groceries: /om\s+15\s+dage/i,     // Groceries deadline: dinner time
-                    dinner: /om\s+15\s+dage/i         // Dinner countdown
+                    menu: /om\s+5\s+dage/i,
+                    framelding: /åben/i,
+                    groceries: /om\s+15\s+dage/i,
+                    dinner: /om\s+15\s+dage/i
                 }
             },
             {
-                name: '9 days: menu deadline passed',
-                dinnerDate: new Date(2025, 0, 20, 18, 0), // Jan 20, 18:00
+                name: 'SCHEDULED, 9 days (menu deadline passed)',
+                dinnerDate: new Date(2025, 0, 20, 18, 0),
+                dinnerState: DinnerState.SCHEDULED,
                 expectedBadges: {
-                    menu: /mangler/i,                 // Menu deadline Jan 10 passed → mangler
-                    framelding: /åben/i,              // Booking still open
-                    groceries: /mangler/i,            // Also mangler (chef actions cascade)
-                    dinner: /om\s+9\s+dage/i          // Dinner countdown (countdownOnly)
+                    menu: /mangler/i,
+                    framelding: /åben/i,
+                    groceries: /mangler/i,       // Cascade: menu not done + past deadline
+                    dinner: /om\s+9\s+dage/i
                 }
             },
             {
-                name: '6 days: menu + booking deadline passed',
-                dinnerDate: new Date(2025, 0, 17, 18, 0), // Jan 17, 18:00
-                expectedBadges: {
-                    menu: /mangler/i,                 // Menu deadline passed
-                    framelding: /lukket/i,            // Booking closed
-                    groceries: /mangler/i,            // Chef actions cascade
-                    dinner: /om\s+6\s+dage/i          // Dinner countdown
-                }
-            },
-            {
-                name: '48 hours: imminent dinner',
-                dinnerDate: new Date(2025, 0, 13, 18, 0), // Jan 13, 18:00
+                name: 'SCHEDULED, 6 days (both deadlines passed)',
+                dinnerDate: new Date(2025, 0, 17, 18, 0),
+                dinnerState: DinnerState.SCHEDULED,
                 expectedBadges: {
                     menu: /mangler/i,
                     framelding: /lukket/i,
                     groceries: /mangler/i,
-                    dinner: /om\s+(2\s+dage|48\s+timer)/i
+                    dinner: /om\s+6\s+dage/i
                 }
             }
-        ])('$name', ({ dinnerDate, expectedBadges }) => {
+        ])('$name', ({ dinnerDate, dinnerState, expectedBadges }) => {
             it.each([
                 { label: 'Menu', pattern: expectedBadges.menu },
                 { label: 'Framelding', pattern: expectedBadges.framelding },
                 { label: 'Indkøb', pattern: expectedBadges.groceries },
                 { label: 'Spisning', pattern: expectedBadges.dinner }
             ])('$label badge', async ({ label, pattern }) => {
-                const dinnerEvent = createDinnerEvent({ date: dinnerDate, state: DinnerState.SCHEDULED })
+                const dinnerEvent = createDinnerEvent({ date: dinnerDate, state: dinnerState })
                 const wrapper = await mountCard({ dinnerEvent })
+                const badges = wrapper.findAll('[data-testid="deadline-badge"]')
+                const badge = badges.find(b => b.text().includes(label))
+                expect(badge?.text()).toMatch(pattern)
+            })
+        })
 
+        // ANNOUNCED dinners: menu IS done
+        // When menu done: groceries shows countdown (NO cascade)
+        describe.each([
+            {
+                name: 'ANNOUNCED, 9 days (menu done, groceries shows countdown)',
+                dinnerDate: new Date(2025, 0, 20, 18, 0),
+                dinnerState: DinnerState.ANNOUNCED,
+                expectedBadges: {
+                    framelding: /åben/i,
+                    groceries: /om\s+9\s+dage/i,  // No cascade: menu done
+                    dinner: /om\s+9\s+dage/i
+                }
+            },
+            {
+                name: 'ANNOUNCED, 6 days (menu done, booking closed)',
+                dinnerDate: new Date(2025, 0, 17, 18, 0),
+                dinnerState: DinnerState.ANNOUNCED,
+                expectedBadges: {
+                    framelding: /lukket/i,
+                    groceries: /om\s+6\s+dage/i,  // No cascade: menu done
+                    dinner: /om\s+6\s+dage/i
+                }
+            }
+        ])('$name', ({ dinnerDate, dinnerState, expectedBadges }) => {
+            it.each([
+                { label: 'Framelding', pattern: expectedBadges.framelding },
+                { label: 'Indkøb', pattern: expectedBadges.groceries },
+                { label: 'Spisning', pattern: expectedBadges.dinner }
+            ])('$label badge', async ({ label, pattern }) => {
+                const dinnerEvent = createDinnerEvent({ date: dinnerDate, state: dinnerState })
+                const wrapper = await mountCard({ dinnerEvent })
                 const badges = wrapper.findAll('[data-testid="deadline-badge"]')
                 const badge = badges.find(b => b.text().includes(label))
                 expect(badge?.text()).toMatch(pattern)

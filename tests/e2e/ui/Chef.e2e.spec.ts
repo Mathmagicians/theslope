@@ -18,6 +18,8 @@ test.describe('Chef Page', () => {
     const chefPageUrl = '/chef'
     let team1Id: number
     let team2Id: number
+    let team1Name: string
+    let team2Name: string
     let team1DinnerDate: Date
     let team2DinnerDate: Date
     let memberInhabitantId: number
@@ -43,11 +45,12 @@ test.describe('Chef Page', () => {
         expect(futureDinners.length, 'Should have at least 2 future dinner events').toBeGreaterThanOrEqual(2)
 
         // Create Team 1 with dinner on first future date
-        const team1 = await SeasonFactory.createCookingTeamForSeason(adminContext, activeSeason.id!, `ChefTeam1-${testSalt}`)
+        team1Name = `ChefTeam1-${testSalt}`
+        const team1 = await SeasonFactory.createCookingTeamForSeason(adminContext, activeSeason.id!, team1Name)
         team1Id = team1.id!
         createdTeamIds.push(team1Id)
         await SeasonFactory.assignMemberToTeam(adminContext, team1Id, memberInhabitantId, TeamRole.CHEF)
-        team1DinnerDate = new Date(futureDinners[0].date)
+        team1DinnerDate = new Date(futureDinners[0]!.date)
         await DinnerEventFactory.createDinnerEvent(adminContext, {
             date: team1DinnerDate,
             menuTitle: `Team1Dinner-${testSalt}`,
@@ -57,11 +60,12 @@ test.describe('Chef Page', () => {
         })
 
         // Create Team 2 with dinner on second future date
-        const team2 = await SeasonFactory.createCookingTeamForSeason(adminContext, activeSeason.id!, `ChefTeam2-${testSalt}`)
+        team2Name = `ChefTeam2-${testSalt}`
+        const team2 = await SeasonFactory.createCookingTeamForSeason(adminContext, activeSeason.id!, team2Name)
         team2Id = team2.id!
         createdTeamIds.push(team2Id)
         await SeasonFactory.assignMemberToTeam(adminContext, team2Id, memberInhabitantId, TeamRole.CHEF)
-        team2DinnerDate = new Date(futureDinners[1].date)
+        team2DinnerDate = new Date(futureDinners[1]!.date)
         await DinnerEventFactory.createDinnerEvent(adminContext, {
             date: team2DinnerDate,
             menuTitle: `Team2Dinner-${testSalt}`,
@@ -102,33 +106,33 @@ test.describe('Chef Page', () => {
 
         // Wait for countdown to load
         await pollUntil(
-            async () => await page.locator('[data-testid="countdown-timer"]').first().isVisible().catch(() => false),
+            async () => await page.locator('[data-testid="chef-next-cooking-countdown"]').first().isVisible().catch(() => false),
             (isVisible) => isVisible,
             10
         )
 
         // Get Team 1's countdown text
-        const team1CountdownText = await page.locator('[data-testid="countdown-timer"]').first().textContent()
+        const team1CountdownText = await page.locator('[data-testid="chef-next-cooking-countdown"]').first().textContent()
         expect(team1CountdownText).toBeTruthy()
 
-        // Switch to Team 2 tab
-        await page.getByRole('tab').filter({hasText: /ChefTeam2/}).click()
+        // Switch to Team 2 tab (use exact name to avoid matching leftover teams)
+        await page.getByRole('tab', {name: team2Name}).click()
         await page.waitForURL(url => url.searchParams.get('team') === String(team2Id))
         await page.waitForTimeout(500)
 
         // Verify countdown changed
-        const team2CountdownText = await page.locator('[data-testid="countdown-timer"]').first().textContent()
+        const team2CountdownText = await page.locator('[data-testid="chef-next-cooking-countdown"]').first().textContent()
         expect(team2CountdownText).toBeTruthy()
         if (team1DinnerDate.toDateString() !== team2DinnerDate.toDateString()) {
             expect(team2CountdownText).not.toBe(team1CountdownText)
         }
 
         // Switch back to Team 1 - verify it updates again
-        await page.getByRole('tab').filter({hasText: /ChefTeam1/}).click()
+        await page.getByRole('tab', {name: team1Name}).click()
         await page.waitForURL(url => url.searchParams.get('team') === String(team1Id))
         await page.waitForTimeout(500)
 
-        const team1CountdownTextAfter = await page.locator('[data-testid="countdown-timer"]').first().textContent()
+        const team1CountdownTextAfter = await page.locator('[data-testid="chef-next-cooking-countdown"]').first().textContent()
         expect(team1CountdownTextAfter).toBe(team1CountdownText)
     })
 })
