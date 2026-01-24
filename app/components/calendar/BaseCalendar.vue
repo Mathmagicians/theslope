@@ -45,6 +45,28 @@ const getEventListsForDay = (day: DateValue): DayEventList[] => {
 }
 
 const monthsToDisplay = computed(() => props.numberOfMonths ?? SIZES.calendarMonths)
+
+// Restrict navigation to stay within season bounds
+// nextPage/prevPage return the new placeholder date; returning current date prevents navigation
+const restrictedPrevPage = (placeholder: DateValue): DateValue => {
+  const prevMonth = placeholder.subtract({months: 1})
+  // Allow if prev month's last day is >= season start (some days visible)
+  const prevMonthEnd = prevMonth.set({day: 1}).add({months: 1}).subtract({days: 1})
+  if (prevMonthEnd.compare(seasonDatesAsCalendarDates.value.start) >= 0) {
+    return prevMonth
+  }
+  return placeholder // Stay on current month
+}
+
+const restrictedNextPage = (placeholder: DateValue): DateValue => {
+  const nextMonth = placeholder.add({months: 1})
+  // Allow if next month's first day is <= season end (some days visible)
+  const nextMonthStart = nextMonth.set({day: 1})
+  if (nextMonthStart.compare(seasonDatesAsCalendarDates.value.end) <= 0) {
+    return nextMonth
+  }
+  return placeholder // Stay on current month
+}
 </script>
 
 <template>
@@ -55,6 +77,9 @@ const monthsToDisplay = computed(() => props.numberOfMonths ?? SIZES.calendarMon
         :placeholder="focusDateAsCalendarDate"
         :min-value="seasonDatesAsCalendarDates.start"
         :max-value="seasonDatesAsCalendarDates.end"
+        :prev-page="restrictedPrevPage"
+        :next-page="restrictedNextPage"
+        :year-controls="false"
         :week-starts-on="1"
         :fixed-weeks="false"
         :disable-days-outside-current-view="true"
