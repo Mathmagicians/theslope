@@ -96,9 +96,8 @@ const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS, URGEN
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
-// Focus date for calendar navigation (from selected dinner)
+// Selected dinner for detail display
 const selectedDinner = computed(() => props.dinnerEvents.find(e => e.id === props.selectedDinnerId))
-const focusDate = computed(() => selectedDinner.value ? new Date(selectedDinner.value.date) : null)
 
 // View state with horizontal tabs
 // Both viewMode and accordionOpen are one-way props to prevent race conditions
@@ -119,6 +118,16 @@ const {
   nextDinnerDateRange,
   dinnerStartHour
 } = useTemporalSplit(() => props.dinnerEvents)
+
+// Focus date for calendar navigation (selected dinner → next dinner → first dinner)
+// Must be after useTemporalSplit since it depends on nextDinner
+const focusDate = computed(() => {
+  // Priority: selected dinner > next dinner > first dinner in list
+  if (selectedDinner.value) return new Date(selectedDinner.value.date)
+  if (nextDinner.value) return new Date(nextDinner.value.date)
+  if (props.dinnerEvents.length > 0) return new Date(props.dinnerEvents[0]!.date)
+  return null
+})
 
 // Create event lists with ocean color (professional chef palette)
 const allEventLists = computed(() =>

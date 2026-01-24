@@ -589,7 +589,7 @@ export interface StepConfig {
     title: string
     icon: string
     text: string
-    getDeadline: (countdown: { hours: number; formatted: string }, isPastMenuDeadline: boolean, thresholds: { warning: number; critical: number }) => StepDeadlineResult
+    getDeadline: (countdown: { hours: number; formatted: string }, thresholds: { warning: number; critical: number }) => StepDeadlineResult
 }
 
 // Deadline helpers - calculate alarm level based on countdown and thresholds
@@ -603,17 +603,17 @@ const getAlarmLevel = (countdown: { hours: number }, thresholds: { warning: numb
 // No deadline - always neutral
 const noDeadline = (): StepConfig['getDeadline'] => () => ({ description: '', alarm: -1 })
 
-// User action deadline: g/y/r/💀 (overdue shows skull with "mangler")
+// User action deadline: g/y/r/💀 (overdue when countdown.hours <= 0)
 const userActionDeadline = (prefix: string): StepConfig['getDeadline'] =>
-    (countdown, isPastDeadline, thresholds) => {
-        if (isPastDeadline || countdown.hours <= 0) return { description: 'mangler', alarm: 3 }
+    (countdown, thresholds) => {
+        if (countdown.hours <= 0) return { description: 'mangler', alarm: 3 }
         const alarm = getAlarmLevel(countdown, thresholds)
         return { description: prefix ? `${prefix} ${countdown.formatted.toLowerCase()}` : '', alarm }
     }
 
 // System deadline: g/y/r/neutral (overdue shows neutral, not skull)
 const systemDeadline = (prefix: string): StepConfig['getDeadline'] =>
-    (countdown, _, thresholds) => {
+    (countdown, thresholds) => {
         const alarm = getAlarmLevel(countdown, thresholds)
         if (alarm === 3) return { description: '', alarm: -1 }
         return { description: `${prefix} ${countdown.formatted.toLowerCase()}`, alarm }
@@ -757,7 +757,7 @@ export const useBooking = () => {
      */
     const getStepDeadline = (
         dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost'>,
-        deadlines: { canModifyOrders: (date: Date) => boolean, isAnnounceMenuPastDeadline: (date: Date) => boolean }
+        deadlines: { canModifyOrders: (date: Date) => boolean }
     ): StepDeadlineResult => {
         const {getDinnerTimeRange, getDefaultDinnerStartTime, getCookingDeadlineThresholds} = useSeason()
         const config = getStepConfig(dinnerEvent, deadlines)
@@ -765,9 +765,8 @@ export const useBooking = () => {
 
         const dinnerTimeRange = getDinnerTimeRange(dinnerEvent.date, getDefaultDinnerStartTime(), 0)
         const countdown = calculateCountdown(dinnerTimeRange.start)
-        const isPastMenuDeadline = deadlines.isAnnounceMenuPastDeadline(dinnerEvent.date)
 
-        return config.getDeadline(countdown, isPastMenuDeadline, thresholds)
+        return config.getDeadline(countdown, thresholds)
     }
 
     /**
@@ -799,37 +798,33 @@ export const useBooking = () => {
 
     /**
      * Get max alarm level for chef tasks (menu + groceries) - for calendar chips.
-     * Uses DINNER_STEP_MAP.getDeadline() logic (same as createChefBadges).
+     * Each badge uses countdown to its specific deadline.
      *
      * @returns AlarmLevel: -1 (all done), 0 (on track), 1 (warning), 2 (critical), 3 (overdue)
      */
     const getChefDeadlineAlarm = (
         dinnerEvent: Pick<DinnerEventDisplay, 'state' | 'date' | 'totalCost' | 'heynaboEventId'>,
-        deadlines: Pick<SeasonDeadlines, 'getMenuDeadlineTime' | 'getDinnerStartTime' | 'isAnnounceMenuPastDeadline'>
+        deadlines: Pick<SeasonDeadlines, 'getMenuDeadlineTime' | 'getDinnerStartTime'>
     ): AlarmLevel => {
         const {getCookingDeadlineThresholds} = useSeason()
         const thresholds = getCookingDeadlineThresholds()
 
-        // Each badge uses its specific deadline countdown
         const menuCountdown = calculateCountdown(deadlines.getMenuDeadlineTime(dinnerEvent.date))
         const dinnerCountdown = calculateCountdown(deadlines.getDinnerStartTime(dinnerEvent.date))
-        const isPastMenuDeadline = deadlines.isAnnounceMenuPastDeadline(dinnerEvent.date)
 
         const alarms: AlarmLevel[] = []
 
-        // Menu badge
+        // Menu badge - overdue when menuCountdown.hours <= 0
         const menuDone = dinnerEvent.state === DinnerState.ANNOUNCED ||
                         (dinnerEvent.state === DinnerState.CONSUMED && dinnerEvent.heynaboEventId !== null)
         if (!menuDone) {
-            alarms.push(DINNER_STEP_MAP[DinnerStepState.ANNOUNCED].getDeadline(menuCountdown, isPastMenuDeadline, thresholds).alarm)
+            alarms.push(DINNER_STEP_MAP[DinnerStepState.ANNOUNCED].getDeadline(menuCountdown, thresholds).alarm)
         }
 
-        // Groceries badge - uses dinner countdown, not menu deadline
-        // Only cascade isPastMenuDeadline if menu is NOT done (both chef tasks late)
+        // Groceries badge - overdue when dinnerCountdown.hours <= 0
         const groceriesDone = dinnerEvent.totalCost > 0
         if (!groceriesDone) {
-            const groceriesIsPastDeadline = !menuDone && isPastMenuDeadline
-            alarms.push(DINNER_STEP_MAP[DinnerStepState.GROCERIES_DONE].getDeadline(dinnerCountdown, groceriesIsPastDeadline, thresholds).alarm)
+            alarms.push(DINNER_STEP_MAP[DinnerStepState.GROCERIES_DONE].getDeadline(dinnerCountdown, thresholds).alarm)
         }
 
         return alarms.length === 0 ? -1 : Math.max(...alarms) as AlarmLevel
@@ -1378,29 +1373,23 @@ export const useBooking = () => {
         const {getCookingDeadlineThresholds} = useSeason()
         const thresholds = getCookingDeadlineThresholds()
 
-        // Each badge gets countdown to its specific deadline (DRY: time getters are ROOT)
+        // Each badge counts to its specific deadline
         const menuCountdown = calculateCountdown(deadlines.getMenuDeadlineTime(dinnerEvent.date))
         const bookingCountdown = calculateCountdown(deadlines.getBookingDeadlineTime(dinnerEvent.date))
         const dinnerCountdown = calculateCountdown(deadlines.getDinnerStartTime(dinnerEvent.date))
 
-        const isPastMenuDeadline = deadlines.isAnnounceMenuPastDeadline(dinnerEvent.date)
-
         const menuDone = dinnerEvent.state === DinnerState.ANNOUNCED ||
             (dinnerEvent.state === DinnerState.CONSUMED && dinnerEvent.heynaboEventId !== null)
-
-        // Groceries cascade: only apply isPastMenuDeadline if menu is NOT done
-        const groceriesIsPastDeadline = !menuDone && isPastMenuDeadline
 
         const badge = (
             step: number,
             key: keyof typeof DEADLINE_LABELS,
             state: DinnerStepState,
             done: boolean,
-            countdown: { hours: number; formatted: string },
-            isPastDeadline: boolean
+            countdown: { hours: number; formatted: string }
         ): DeadlineBadgeData => {
             const labels = DEADLINE_LABELS[key]
-            const result = DINNER_STEP_MAP[state].getDeadline(countdown, isPastDeadline, thresholds)
+            const result = DINNER_STEP_MAP[state].getDeadline(countdown, thresholds)
             const alarm = done ? -1 : result.alarm
             const b = ALARM_TO_BADGE[alarm]
             const text = done ? labels.closedText : labels.openText
@@ -1418,7 +1407,7 @@ export const useBooking = () => {
 
         // Booking badge: reuse createBookingBadge (DRY) + add countdown when open
         const baseBadge = createBookingBadge(bookingOpen, releasedCounts)
-        const bookingResult = DINNER_STEP_MAP[DinnerStepState.BOOKING_CLOSED].getDeadline(bookingCountdown, isPastMenuDeadline, thresholds)
+        const bookingResult = DINNER_STEP_MAP[DinnerStepState.BOOKING_CLOSED].getDeadline(bookingCountdown, thresholds)
         const bookingBadge: DeadlineBadgeData = {
             ...baseBadge,
             step: 2,
@@ -1427,10 +1416,10 @@ export const useBooking = () => {
         }
 
         return new Map([
-            [1, badge(1, 'ANNOUNCED', DinnerStepState.ANNOUNCED, menuDone, menuCountdown, isPastMenuDeadline)],
+            [1, badge(1, 'ANNOUNCED', DinnerStepState.ANNOUNCED, menuDone, menuCountdown)],
             [2, bookingBadge],
-            [3, badge(3, 'GROCERIES_DONE', DinnerStepState.GROCERIES_DONE, dinnerEvent.totalCost > 0, dinnerCountdown, groceriesIsPastDeadline)],
-            [4, badge(4, 'CONSUMED', DinnerStepState.CONSUMED, dinnerEvent.state === DinnerState.CONSUMED, dinnerCountdown, false)]
+            [3, badge(3, 'GROCERIES_DONE', DinnerStepState.GROCERIES_DONE, dinnerEvent.totalCost > 0, dinnerCountdown)],
+            [4, badge(4, 'CONSUMED', DinnerStepState.CONSUMED, dinnerEvent.state === DinnerState.CONSUMED, dinnerCountdown)]
         ])
     }
 

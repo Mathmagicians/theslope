@@ -90,7 +90,7 @@ describe('ChefDinnerCard', () => {
         })
 
         // SCHEDULED dinners: menu NOT done
-        // When menu deadline passed AND menu not done: groceries also shows "mangler" (cascade)
+        // Each badge counts to its OWN deadline (menu, booking, groceries, dinner are independent)
         describe.each([
             {
                 name: 'SCHEDULED, far future (15 days)',
@@ -110,7 +110,7 @@ describe('ChefDinnerCard', () => {
                 expectedBadges: {
                     menu: /mangler/i,
                     framelding: /åben/i,
-                    groceries: /mangler/i,       // Cascade: menu not done + past deadline
+                    groceries: /om\s+9\s+dage/i,  // Independent: counts to dinner time
                     dinner: /om\s+9\s+dage/i
                 }
             },
@@ -121,7 +121,7 @@ describe('ChefDinnerCard', () => {
                 expectedBadges: {
                     menu: /mangler/i,
                     framelding: /lukket/i,
-                    groceries: /mangler/i,
+                    groceries: /om\s+6\s+dage/i,  // Independent: counts to dinner time
                     dinner: /om\s+6\s+dage/i
                 }
             }

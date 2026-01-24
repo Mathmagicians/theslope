@@ -52,7 +52,7 @@ const monthsToDisplay = computed(() => props.numberOfMonths ?? SIZES.calendarMon
     <UCalendar
         :size="SIZES.calendar"
         :number-of-months="monthsToDisplay"
-        :default-value="focusDateAsCalendarDate"
+        :placeholder="focusDateAsCalendarDate"
         :min-value="seasonDatesAsCalendarDates.start"
         :max-value="seasonDatesAsCalendarDates.end"
         :week-starts-on="1"
