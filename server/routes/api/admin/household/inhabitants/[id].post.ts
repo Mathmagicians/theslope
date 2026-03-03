@@ -4,7 +4,7 @@ import {useCoreValidation} from "~/composables/useCoreValidation"
 import type {InhabitantUpdate} from "~/composables/useCoreValidation"
 import {useBookingValidation, type InhabitantUpdateResponse} from "~/composables/useBookingValidation"
 import {updateInhabitant} from "~~/server/data/prismaRepository"
-import {rescaffoldOnFieldChange, noScaffoldResult} from "~~/server/utils/scaffoldPrebookings"
+import {rescaffoldOnFieldChange} from "~~/server/utils/scaffoldPrebookings"
 import {z} from 'zod'
 
 const {throwH3Error} = eventHandlerHelper

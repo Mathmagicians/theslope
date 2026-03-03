@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { useHousehold, isHouseholdActiveOnDay } from '~/composables/useHousehold'
+import { useHousehold, isHouseholdActiveOnDay, getResidencyStatus } from '~/composables/useHousehold'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
 import type { InhabitantDetail, InhabitantDisplay } from '~/composables/useCoreValidation'
@@ -33,6 +33,32 @@ describe('isHouseholdActiveOnDay', () => {
   ])('$scenario', ({ movedIn, moveOut, eventDate, expected }) => {
     const predicate = isHouseholdActiveOnDay(movedIn, moveOut)
     expect(predicate(eventDate)).toBe(expected)
+  })
+})
+
+describe('getResidencyStatus', () => {
+  const date = (y: number, m: number, d: number) => new Date(y, m - 1, d)
+  const REF = date(2026, 3, 1) // Fixed reference date: 2026-03-01
+
+  it.each([
+    { scenario: 'moved in long ago, no move-out',
+      movedIn: date(2020, 1, 1), moveOut: null, expected: 'active' },
+    { scenario: 'moved in on reference date, no move-out',
+      movedIn: REF, moveOut: null, expected: 'active' },
+    { scenario: 'not yet moved in (future movedInDate)',
+      movedIn: date(2026, 6, 1), moveOut: null, expected: 'pending' },
+    { scenario: 'not yet moved in, with future move-out',
+      movedIn: date(2026, 6, 1), moveOut: date(2027, 1, 1), expected: 'pending' },
+    { scenario: 'active with future move-out date',
+      movedIn: date(2020, 1, 1), moveOut: date(2026, 6, 1), expected: 'leaving' },
+    { scenario: 'move-out date on reference date (still leaving)',
+      movedIn: date(2020, 1, 1), moveOut: REF, expected: 'leaving' },
+    { scenario: 'move-out date in the past',
+      movedIn: date(2020, 1, 1), moveOut: date(2025, 12, 1), expected: 'moved-out' },
+    { scenario: 'moved in and out in the past',
+      movedIn: date(2020, 1, 1), moveOut: date(2022, 1, 1), expected: 'moved-out' },
+  ])('$scenario → $expected', ({ movedIn, moveOut, expected }) => {
+    expect(getResidencyStatus(movedIn, moveOut, REF)).toBe(expected)
   })
 })
 

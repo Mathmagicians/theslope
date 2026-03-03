@@ -37,7 +37,7 @@ const {createEventMap, getEventListsForDay: getEventListsForDayFromComposable} =
 const {SIZES, COMPONENTS} = useTheSlopeDesignSystem()
 
 const seasonDatesAsCalendarDates = computed(() => toCalendarDateRange(props.seasonDates))
-const focusDateAsCalendarDate = computed(() => props.focusDate ? toCalendarDate(props.focusDate) : undefined)
+const focusDateAsCalendarDate = computed(() => props.focusDate ? toCalendarDate(props.focusDate) : toCalendarDate(props.seasonDates.start))
 const eventMap = computed(() => createEventMap(props.eventLists))
 
 const getEventListsForDay = (day: DateValue): DayEventList[] => {

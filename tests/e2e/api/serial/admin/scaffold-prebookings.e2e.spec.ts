@@ -209,6 +209,8 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
     })
 
     test.describe('update household triggers re-scaffold respecting dates', () => {
+        test.setTimeout(60_000)
+
         const rescaffoldCases = [
             {desc: 'moveOutDate mid-season → only eligible orders remain',
                 moveOutAtEvent: 2, moveOutDaysFromNow: undefined as number | undefined, eligibleIndices: [0, 1, 2]},

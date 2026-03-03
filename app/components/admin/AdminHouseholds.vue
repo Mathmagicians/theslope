@@ -126,7 +126,7 @@ class="w-full px-0"
       <!-- Custom shortName cell with link -->
       <template #shortName-cell="{ row }">
         <NuxtLink
-            :to="`/household/${encodeURIComponent(row.original.shortName)}`"
+            :to="getHouseholdUrl(row.original.shortName, row.original.pbsId)"
             class="text-primary hover:underline font-medium"
         >
           {{ row.original.shortName }}

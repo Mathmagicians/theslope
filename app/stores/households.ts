@@ -2,7 +2,7 @@ import type {
     HouseholdDisplay,
     HouseholdDetail
 } from '~/composables/useCoreValidation'
-import type {ScaffoldResult} from '~/composables/useBookingValidation'
+import type {ScaffoldResult, InhabitantUpdateResponse} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
 
 /**
@@ -172,7 +172,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
             const url = adminBypass
                 ? `/api/household/inhabitants/${inhabitantId}/preferences?adminBypass=true`
                 : `/api/household/inhabitants/${inhabitantId}/preferences`
-            const result = await $fetch(url, {
+            const result = await $fetch<InhabitantUpdateResponse>(url, {
                 method: 'POST',
                 body: { dinnerPreferences: preferences }
             })
@@ -217,7 +217,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
                 const url = adminBypass
                     ? `/api/household/inhabitants/${inhabitant.id}/preferences?adminBypass=true`
                     : `/api/household/inhabitants/${inhabitant.id}/preferences`
-                const result = await $fetch(url, {
+                const result = await $fetch<InhabitantUpdateResponse>(url, {
                     method: 'POST',
                     body: { dinnerPreferences: preferences }
                 })
@@ -284,30 +284,64 @@ export const useHouseholdsStore = defineStore("Households", () => {
         }
     }
 
-    /**
-     * Initialize store - load households and optionally select one by shortName
-     * If no shortName provided, keeps current selection or falls back to user's household
-     * @param shortName - Optional shortName to load specific household
-     */
-    const initHouseholdsStore = (shortName?: string) => {
-        // households autoload when store is created (immediate: true)
-        // If shortName provided: use that. Otherwise: keep current selection, or fall back to user's household
-        const householdId = shortName
-            ? households.value.find(h => h.shortName === shortName)?.id
-            : (selectedHouseholdId.value ?? myHousehold.value?.id)
+    // Stored init args - watcher re-invokes initHouseholdsStore when households load,
+    // but needs to remember the original shortName/pbsId from the URL
+    const _initShortName = ref<string>()
+    const _initPbsId = ref<number>()
 
-        console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > initHouseholdsStore > shortName: ${shortName ?? 'none'}, current: ${selectedHouseholdId.value}, resolved: ${householdId}`)
+    /**
+     * Initialize store - select household by pbsId, shortName, or fall back to user's household
+     *
+     * Resolution priority:
+     * 1. pbsId provided → find by pbsId (unambiguous, Phase 2 disambiguation)
+     * 2. shortName only, 1 match → use it (backwards-compatible)
+     * 3. shortName only, multiple matches → check if user is member of one → use theirs
+     * 4. No match → fall back to current selection or user's household
+     *
+     * @param shortName - Optional shortName from URL path
+     * @param pbsId - Optional pbsId from ?pbs= query param (always unique)
+     */
+    const initHouseholdsStore = (shortName?: string, pbsId?: number) => {
+        // Persist args so the watcher can re-invoke with them when households load
+        _initShortName.value = shortName ?? _initShortName.value
+        _initPbsId.value = pbsId ?? _initPbsId.value
+
+        let householdId: number | undefined
+
+        if (_initPbsId.value) {
+            // Priority 1: pbsId is always unique — unambiguous resolution
+            householdId = households.value.find(h => h.pbsId === _initPbsId.value)?.id
+        } else if (_initShortName.value) {
+            // Priority 2+3: shortName lookup with disambiguation
+            const matches = households.value.filter(h => h.shortName === _initShortName.value)
+            if (matches.length === 1) {
+                // Single match — backwards-compatible
+                householdId = matches[0]!.id
+            } else if (matches.length > 1) {
+                // Multiple matches — check if user is member of one
+                const myMatch = matches.find(h => h.id === myHousehold.value?.id)
+                householdId = myMatch?.id ?? matches[0]!.id
+            }
+        }
+
+        // Priority 4: fall back to current selection or user's household
+        if (!householdId) {
+            householdId = selectedHouseholdId.value ?? myHousehold.value?.id ?? undefined
+        }
+
+        console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > initHouseholdsStore > shortName: ${_initShortName.value ?? 'none'}, pbsId: ${_initPbsId.value ?? 'none'}, current: ${selectedHouseholdId.value}, resolved: ${householdId}`)
 
         if (householdId && householdId !== selectedHouseholdId.value) loadHousehold(householdId)
     }
 
     // AUTO-INITIALIZATION - Watch for households to load, then auto-select user's household
+    // Re-invokes with stored init args so pbsId/shortName from URL isn't lost
     watch([isHouseholdsInitialized, selectedHouseholdId, myHousehold], () => {
         if (!isHouseholdsInitialized.value) return
         if (selectedHouseholdId.value) return // Already selected
 
         console.info(LOG_CTX, '🏠 > HOUSEHOLDS_STORE > WATCH Households loaded, calling initHouseholdsStore')
-        initHouseholdsStore()
+        initHouseholdsStore(_initShortName.value, _initPbsId.value)
     })
 
     return {

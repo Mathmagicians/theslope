@@ -10,6 +10,7 @@ const {handleApiError} = useApiHandler()
 const {TYPOGRAPHY, LAYOUTS, COLOR, BG, ICONS} = useTheSlopeDesignSystem()
 
 const householdShortName = computed(() => authStore.user?.Inhabitant?.household?.shortName || null)
+const householdPbsId = computed(() => authStore.user?.Inhabitant?.household?.pbsId || null)
 
 const state = reactive<LoginCredentials>({
   email: '',
@@ -123,7 +124,7 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
           :color="COLOR.secondary"
           :header-bg="BG.pink[50]"
           button-label="Gå til husstand"
-          :to="`/household/${encodeURIComponent(householdShortName || '')}`"
+          :to="householdShortName && householdPbsId ? getHouseholdUrl(householdShortName, householdPbsId) : '/household'"
         />
 
         <!-- Cooking Team Card -->

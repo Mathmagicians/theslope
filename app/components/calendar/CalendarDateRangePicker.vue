@@ -3,6 +3,7 @@ import type {DateRange, NullableDateRange} from "~/types/dateTypes"
 import {DATE_SETTINGS, translateToDanish} from "~/utils/date"
 import {inject, type Ref} from "vue"
 import {mapZodErrorsToFormErrors, getErrorMessage} from "~/utils/validtation"
+import type {z} from 'zod'
 
 // TYPES
 type DateRangeInput = {
@@ -10,17 +11,21 @@ type DateRangeInput = {
   end: string;
 }
 
+// Schema prop type — accepts any Zod schema that outputs DateRange or NullableDateRange
+// Third generic param (Input) is `unknown` because schemas transform strings/ISO dates to Date objects
+type DateRangeSchemaType = z.ZodType<DateRange | NullableDateRange, z.ZodTypeDef, unknown>
+
 // COMPONENT DEFINITIONS
 const model = defineModel<T>({required: true})
 const props = withDefaults(defineProps<{
   name?: string,
   /** Zod schema for validation — drives nullable/refinement behavior */
-  schema?: ReturnType<typeof createDateRangeSchema>,
+  schema?: DateRangeSchemaType,
   /** Custom labels for start/end fields */
   labels?: { start: string, end: string }
 }>(), {
   name: undefined,
-  schema: () => dateRangeSchema,
+  schema: () => dateRangeSchema as DateRangeSchemaType,
   labels: () => ({ start: 'Start dato', end: 'Slut dato' })
 })
 const emit = defineEmits(['update:model-value', 'close'])
@@ -46,7 +51,7 @@ const pickerDateRange = computed({
   },
   set: (value) => {
     if (value?.start && value?.end) {
-      updateDateRange({ start: toDate(value.start), end: toDate(value.end) })
+      updateDateRange({ start: toDate(value.start), end: toDate(value.end) } as T)
       emit('close')
     }
   }
@@ -73,7 +78,7 @@ const updateDateRange = (newRange: T) => {
   return false
 }
 
-const handleInputChange = (value: string, key: keyof T) => {
+const handleInputChange = (value: string, key: 'start' | 'end') => {
   inputState.value[key] = value
 
   const stringRange = {

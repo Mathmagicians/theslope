@@ -38,7 +38,7 @@ const mainLinks = computed((): NavItem[] => loggedIn.value ? [
   {
     label: 'Husstand',
     to: myHousehold.value
-        ? `/household/${encodeURIComponent(myHousehold.value.shortName)}/bookings`
+        ? getHouseholdUrl(myHousehold.value.shortName, myHousehold.value.pbsId, 'bookings')
         : '/household',
     icon: ICONS.household,
     active: isActive('/household')

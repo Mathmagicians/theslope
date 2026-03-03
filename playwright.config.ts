@@ -87,6 +87,7 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
       testMatch: /tests\/e2e\/api\/serial\/.*\.spec\.ts/,
       fullyParallel: false,
+      workers: 1,
       dependencies: ['chromium-api'],
     },
     // UI tests need full UI auth (excludes serial tests)
@@ -102,6 +103,7 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
       testMatch: /tests\/e2e\/ui\/serial\/.*\.spec\.ts/,
       fullyParallel: false,
+      workers: 1,
       dependencies: ['chromium-ui'],
     },
     // Smoke tests - run serially (shared active season state)
@@ -111,6 +113,7 @@ export default defineConfig({
       testMatch: /tests\/e2e\/.*\.spec\.ts/,
       grep: /@smoke/,
       fullyParallel: false,
+      workers: 1,
       dependencies: ['setup-api', 'setup-ui'],
     },
     // Exploratory tests - only run when explicitly targeted

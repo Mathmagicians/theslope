@@ -12,6 +12,7 @@ test.describe('Household tab navigation', () => {
     const testSalt = temporaryAndRandom()
     let householdId: number
     let shortName: string
+    let pbsId: number
 
     const tabs = [
         {name: 'Tilmeldinger', path: 'bookings', selector: '[data-testid="household-bookings"]'},
@@ -25,8 +26,10 @@ test.describe('Household tab navigation', () => {
 
     type Tab = typeof tabs[number]
 
-    const buildUrl = (tabPath: string, query?: string) =>
-        `/household/${encodeURIComponent(shortName)}/${tabPath}${query ? `?${query}` : ''}`
+    const buildUrl = (tabPath: string, query?: string) => {
+        const base = `/household/${encodeURIComponent(shortName)}/${tabPath}?pbs=${pbsId}`
+        return query ? `${base}&${query}` : base
+    }
 
     const waitForTabVisible = async (page: Page, tab: Tab) => {
         await pollUntil(
@@ -62,6 +65,7 @@ test.describe('Household tab navigation', () => {
         const household = await HouseholdFactory.createHousehold(context, {name: salt('TabNav', testSalt)})
         householdId = household.id
         shortName = household.shortName
+        pbsId = household.pbsId
     })
 
     test.afterAll(async ({browser}) => {
@@ -75,7 +79,7 @@ test.describe('Household tab navigation', () => {
 
 
     test('Base URL redirects to default tab', async ({page}) => {
-        await page.goto(`/household/${encodeURIComponent(shortName)}`)
+        await page.goto(`/household/${encodeURIComponent(shortName)}?pbs=${pbsId}`)
 
         await pollUntil(
             async () => page.url(),
@@ -204,6 +208,7 @@ for (const ctx of visitorContexts) {
         const testSalt = temporaryAndRandom()
         let householdId: number
         let shortName: string
+        let pbsId: number
 
         test.use({storageState: ctx.storageState})
 
@@ -217,6 +222,7 @@ for (const ctx of visitorContexts) {
             const household = await HouseholdFactory.createHousehold(context, {name: salt(`Visitor-${ctx.name}`, testSalt)})
             householdId = household.id
             shortName = household.shortName
+            pbsId = household.pbsId
         })
 
         test.afterAll(async ({browser}) => {
@@ -228,7 +234,7 @@ for (const ctx of visitorContexts) {
         })
 
         test('Visitor banner is shown when visiting another household', async ({page}) => {
-            await page.goto(`/household/${encodeURIComponent(shortName)}/bookings`)
+            await page.goto(`/household/${encodeURIComponent(shortName)}/bookings?pbs=${pbsId}`)
 
             // Wait for page to load using pollUntil (same pattern as other tests)
             await pollUntil(
@@ -253,7 +259,8 @@ for (const ctx of visitorContexts) {
 
         for (const testCase of editControlTestCases) {
             test(`${testCase.name} tab - edit controls hidden when visiting`, async ({page}) => {
-                await page.goto(`/household/${encodeURIComponent(shortName)}/${testCase.path}`)
+                const separator = testCase.path.includes('?') ? '&' : '?'
+                await page.goto(`/household/${encodeURIComponent(shortName)}/${testCase.path}${separator}pbs=${pbsId}`)
 
                 // Wait for page content to load using pollUntil (same pattern as other tests)
                 await pollUntil(

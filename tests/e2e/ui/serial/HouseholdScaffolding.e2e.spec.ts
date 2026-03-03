@@ -50,6 +50,7 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
     // Test context
     let householdId: number
     let shortName: string
+    let pbsId: number
     let testSeason: Awaited<ReturnType<typeof SeasonFactory.createSeasonWithDinnerEvents>>
     const testSalt = temporaryAndRandom()
 
@@ -57,7 +58,7 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
 
     // Helper to navigate to household members page
     const goToHouseholdMembers = async (page: import('@playwright/test').Page) => {
-        await page.goto(`/household/${encodeURIComponent(shortName)}/members`)
+        await page.goto(`/household/${encodeURIComponent(shortName)}/members?pbs=${pbsId}`)
         await pollUntil(
             async () => await page.locator('[data-testid="household-members"]').isVisible(),
             (isVisible) => isVisible
@@ -74,6 +75,7 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
 
         const household = await HouseholdFactory.getHouseholdById(adminContext, householdId)
         shortName = household!.shortName
+        pbsId = household!.pbsId
 
         // Create dedicated season for scaffolding tests:
         // - ALL days cooking (Mon-Sun) for predictable event count regardless of day-of-week

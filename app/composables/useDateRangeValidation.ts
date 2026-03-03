@@ -34,9 +34,20 @@ export const stringDateRangeSchema = z.object({
     end: dateSchema
 })
 
-// Shared refinements
+// Shared refinement messages
 const END_AFTER_START_MSG = 'Tidsmaskinen er ikke opfundet endnu - slutdato skal være efter startdato'
 const MAX_ONE_YEAR_MSG = 'Wow, wow, lidt for meget planlægning - max et år ad gangen'
+
+// Shared refinement predicates (DRY — used by both pre-built schemas and factory)
+const endAfterStart = (data: { start: Date, end: Date | null }) => {
+    if (data.end === null) return true
+    return data.start <= data.end
+}
+
+const withinOneYear = (data: { start: Date, end: Date | null }) => {
+    if (data.end === null) return true
+    return (intervalToDuration({ start: data.start, end: data.end }).years ?? 0) < 1
+}
 
 // Nullable date: accepts valid dates, null, or empty string → null (for cleared form inputs)
 const nullableDateSchema = z.union([
@@ -45,9 +56,26 @@ const nullableDateSchema = z.union([
     z.null()
 ])
 
+// Pre-built schemas with precise TypeScript types
+// Defined directly (not through factory) so TypeScript correctly infers end: Date vs Date | null
+export const dateRangeSchema = z.object({
+    start: dateSchema,
+    end: dateSchema
+})
+    .refine(endAfterStart, { message: END_AFTER_START_MSG })
+    .refine(withinOneYear, { message: MAX_ONE_YEAR_MSG })
+
+export const nullableEndDateRangeSchema = z.object({
+    start: dateSchema,
+    end: nullableDateSchema
+})
+    .refine(endAfterStart, { message: END_AFTER_START_MSG })
+
 /**
  * Factory for date range schemas with composable refinements
- * Defaults match existing dateRangeSchema behavior (non-nullable, no maxOneYear)
+ * NOTE: Pre-built schemas (dateRangeSchema, nullableEndDateRangeSchema) are preferred
+ * for direct use — they have precise TypeScript types. Use the factory only when
+ * you need custom combinations at runtime.
  * @param nullableEnd - Allow null/empty end date (open-ended ranges like move-in/move-out)
  * @param maxOneYear - Enforce max 1 year duration (season planning)
  */
@@ -55,22 +83,12 @@ export const createDateRangeSchema = ({ nullableEnd = false, maxOneYear = false 
     const base = z.object({
         start: dateSchema,
         end: nullableEnd ? nullableDateSchema : dateSchema
-    }).refine((data) => {
-        if (data.end === null) return true
-        return data.start <= data.end
-    }, { message: END_AFTER_START_MSG })
+    }).refine(endAfterStart, { message: END_AFTER_START_MSG })
 
     if (!maxOneYear) return base
 
-    return base.refine((data) => {
-        if (data.end === null) return true
-        return (intervalToDuration({ start: data.start, end: data.end }).years ?? 0) < 1
-    }, { message: MAX_ONE_YEAR_MSG })
+    return base.refine(withinOneYear, { message: MAX_ONE_YEAR_MSG })
 }
-
-// Pre-built schemas
-export const dateRangeSchema = createDateRangeSchema({ maxOneYear: true })
-export const nullableEndDateRangeSchema = createDateRangeSchema({ nullableEnd: true })
 
 
 type RangeAsStrings = {start: string, end: string}

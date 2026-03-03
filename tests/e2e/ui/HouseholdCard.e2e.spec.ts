@@ -20,6 +20,7 @@ const {createDefaultWeekdayMap, deserializeWeekDayMap} = useWeekDayMapValidation
 test.describe('HouseholdCard - Weekday Preferences', () => {
     let householdId: number
     let shortName: string
+    let pbsId: number
     let scroogeId: number
     let _activeSeason: Awaited<ReturnType<typeof SeasonFactory.createActiveSeason>>
     const testSalt = temporaryAndRandom()
@@ -31,7 +32,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
 
     // Helper to navigate to household members page and wait for load
     const goToHouseholdMembers = async (page: import('@playwright/test').Page) => {
-        await page.goto(`/household/${encodeURIComponent(shortName)}/members`)
+        await page.goto(`/household/${encodeURIComponent(shortName)}/members?pbs=${pbsId}`)
         await pollUntil(
             async () => await page.locator('[data-testid="household-members"]').isVisible(),
             (isVisible) => isVisible
@@ -52,6 +53,7 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         // Get household details to get shortName
         const household = await HouseholdFactory.getHouseholdById(adminContext, householdId)
         shortName = household!.shortName
+        pbsId = household!.pbsId
 
         // Create test inhabitant in member's household (using admin for setup)
         // Use Anders- pattern for d1-nuke-all cleanup

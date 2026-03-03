@@ -81,7 +81,9 @@ const {
 
 const {initHouseholdsStore} = householdStore
 
-initHouseholdsStore(shortname.value)
+// Read ?pbs query param for disambiguation (Phase 2: PBS-based resolution)
+const pbsId = route.query.pbs ? parseInt(route.query.pbs as string, 10) : undefined
+initHouseholdsStore(shortname.value, pbsId)
 
 // Access control: check if current user is member of this household
 const authStore = useAuthStore()
