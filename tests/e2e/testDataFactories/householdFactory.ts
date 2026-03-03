@@ -31,7 +31,8 @@ export class HouseholdFactory {
             pbsId: saltedId(TEST_DATA_ID_BASE, testSalt),
             name: salt('Test Household Hurlumhej', testSalt),
             address: salt('Andeby 123', testSalt),
-            movedInDate: now
+            movedInDate: now,
+            moveOutDate: null
         }
     }
 

@@ -462,6 +462,16 @@ export const COMPONENTS = {
         }
     },
 
+    // Diagonal corner ribbon - top-right status overlay (cancelled dinners, move-out, move-in)
+    ribbon: {
+        base: 'absolute top-4 -right-8 z-10 text-white text-xs font-bold py-1 px-10 rotate-45 shadow-md',
+        container: 'relative overflow-hidden',
+        colors: {
+            cancel: 'bg-red-600',
+            new: 'bg-green-600'
+        }
+    },
+
     // CostLine - line item in economy views with fixed column widths for vertical alignment
     costLine: {
         row: 'grid items-center justify-items-center gap-1 md:gap-2 max-w-2xl',

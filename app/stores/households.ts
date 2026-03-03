@@ -165,11 +165,14 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * @param inhabitantId - ID of the inhabitant to update
      * @param preferences - WeekDayMap of DinnerMode preferences
      */
-    const updateInhabitantPreferences = async (inhabitantId: number, preferences: Record<string, string>) => {
+    const updateInhabitantPreferences = async (inhabitantId: number, preferences: Record<string, string>, adminBypass = false) => {
         try {
-            console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for inhabitant ${inhabitantId}`)
+            console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for inhabitant ${inhabitantId}${adminBypass ? ' (admin bypass)' : ''}`)
 
-            const result = await $fetch(`/api/household/inhabitants/${inhabitantId}/preferences`, {
+            const url = adminBypass
+                ? `/api/household/inhabitants/${inhabitantId}/preferences?adminBypass=true`
+                : `/api/household/inhabitants/${inhabitantId}/preferences`
+            const result = await $fetch(url, {
                 method: 'POST',
                 body: { dinnerPreferences: preferences }
             })
@@ -196,7 +199,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * @param householdId - ID of the household
      * @param preferences - WeekDayMap of DinnerMode preferences to apply to all inhabitants
      */
-    const updateAllInhabitantPreferences = async (householdId: number, preferences: Record<string, string>) => {
+    const updateAllInhabitantPreferences = async (householdId: number, preferences: Record<string, string>, adminBypass = false) => {
         try {
             // Get the household to access inhabitants
             const household = households.value.find(h => h.id === householdId)
@@ -204,14 +207,17 @@ export const useHouseholdsStore = defineStore("Households", () => {
                 throw new Error(`Household ${householdId} not found`)
             }
 
-            console.info(`🏠 > HOUSEHOLDS_STORE > Power mode: Updating preferences for all ${household.inhabitants.length} inhabitants in household ${householdId}`)
+            console.info(`🏠 > HOUSEHOLDS_STORE > Power mode: Updating preferences for all ${household.inhabitants.length} inhabitants in household ${householdId}${adminBypass ? ' (admin bypass)' : ''}`)
 
             // Update all inhabitants SEQUENTIALLY to avoid race conditions in scaffolding
             // Each update triggers scaffoldPrebookings for the same household - parallel execution
             // causes FK constraint errors when multiple scaffolds try to delete the same orders
             const results = []
             for (const inhabitant of household.inhabitants) {
-                const result = await $fetch(`/api/household/inhabitants/${inhabitant.id}/preferences`, {
+                const url = adminBypass
+                    ? `/api/household/inhabitants/${inhabitant.id}/preferences?adminBypass=true`
+                    : `/api/household/inhabitants/${inhabitant.id}/preferences`
+                const result = await $fetch(url, {
                     method: 'POST',
                     body: { dinnerPreferences: preferences }
                 })
@@ -245,6 +251,35 @@ export const useHouseholdsStore = defineStore("Households", () => {
             return aggregatedResult
         } catch (e: unknown) {
             handleApiError(e, 'updateAllInhabitantPreferences')
+            throw e
+        }
+    }
+
+    /**
+     * Set or clear move-out date for a household
+     * Uses admin household update endpoint (POST /api/admin/household/:id)
+     * Triggers re-scaffolding of prebookings when moveOutDate changes (server-side)
+     * @param householdId - ID of the household
+     * @param moveOutDate - Date to set, or null to clear
+     */
+    const setMoveOutDate = async (householdId: number, moveOutDate: Date | null) => {
+        try {
+            console.info(`🏠 > HOUSEHOLDS_STORE > Setting moveOutDate for household ${householdId}: ${moveOutDate?.toISOString() ?? 'null'}`)
+            await $fetch(`/api/admin/household/${householdId}`, {
+                method: 'POST',
+                body: { moveOutDate }
+            })
+
+            // Refresh selected household to get updated data
+            if (selectedHouseholdId.value === householdId) {
+                await refreshSelectedHousehold()
+            }
+            // Also refresh household list to update display badges
+            await refreshHouseholds()
+
+            console.info(`🏠 > HOUSEHOLDS_STORE > moveOutDate updated for household ${householdId}`)
+        } catch (e: unknown) {
+            handleApiError(e, 'setMoveOutDate')
             throw e
         }
     }
@@ -301,6 +336,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         initHouseholdsStore,
         updateInhabitantPreferences,
         updateAllInhabitantPreferences,
+        setMoveOutDate,
         getHouseholdForInhabitant
     }
 })

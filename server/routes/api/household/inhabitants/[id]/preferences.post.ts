@@ -2,6 +2,7 @@ import {defineEventHandler, getValidatedRouterParams, getValidatedQuery, readVal
 import {z} from 'zod'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
+import {isAdmin} from '~/composables/usePermissions'
 import {useCoreValidation} from "~/composables/useCoreValidation"
 import {useBookingValidation, type InhabitantUpdateResponse, type ScaffoldResult, type DinnerMode} from "~/composables/useBookingValidation"
 import {fetchInhabitant, updateInhabitant} from "~~/server/data/prismaRepository"
@@ -17,7 +18,8 @@ const idSchema = z.object({
 })
 
 const querySchema = z.object({
-    seasonId: z.coerce.number().int().positive().optional()
+    seasonId: z.coerce.number().int().positive().optional(),
+    adminBypass: z.coerce.boolean().default(false)
 })
 
 /**
@@ -31,6 +33,7 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
 
     let id!: number
     let seasonId: number | undefined
+    let adminBypass!: boolean
     let dinnerPreferences: WeekDayMap<DinnerMode>
     try {
         const {InhabitantUpdateSchema} = useCoreValidation()
@@ -40,6 +43,7 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
         id = params.id
         const query = await getValidatedQuery(event, querySchema.parse)
         seasonId = query.seasonId
+        adminBypass = query.adminBypass
         const body = await readValidatedBody(event, bodySchema.parse)
         dinnerPreferences = body.dinnerPreferences!
     } catch (error) {
@@ -53,8 +57,8 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
             return throwH3Error(`${LOG} Inhabitant ${id} not found`, new Error('Not found'), 404)
         }
 
-        // Verify user belongs to same household
-        const user = await requireHouseholdAccess(event, inhabitant.householdId)
+        // Verify user belongs to same household (admin can bypass via ?adminBypass=true)
+        const user = await requireHouseholdAccess(event, inhabitant.householdId, adminBypass ? isAdmin : undefined)
 
         console.info(`${LOG} User ${user.email} updating preferences for inhabitant ${inhabitant.name} ${inhabitant.lastName}`)
         const updatedInhabitant = await updateInhabitant(d1Client, id, {dinnerPreferences})

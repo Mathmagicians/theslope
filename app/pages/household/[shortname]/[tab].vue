@@ -85,13 +85,25 @@ initHouseholdsStore(shortname.value)
 
 // Access control: check if current user is member of this household
 const authStore = useAuthStore()
-const canEdit = computed(() =>
+const isMember = computed(() =>
   selectedHousehold.value ? authStore.isMemberOfHousehold(selectedHousehold.value.id) : false
 )
 
+// Admin override: admin can unlock editing on households they don't belong to
+const adminOverrideActive = ref(false)
+const showAdminOverride = computed(() =>
+  authStore.isAdmin && selectedHousehold.value ? !authStore.isMemberOfHousehold(selectedHousehold.value.id) : false
+)
+const canEdit = computed(() =>
+  isMember.value || (authStore.isAdmin && adminOverrideActive.value)
+)
+
+// Move-out ribbon
+const hasMoveOutDate = computed(() => !!selectedHousehold.value?.moveOutDate)
+
 // Format household title: address + family name
 const { formatHouseholdFamilyName } = useHousehold()
-const { TYPOGRAPHY } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, ICONS, COMPONENTS, COLOR } = useTheSlopeDesignSystem()
 const householdAddress = computed(() => selectedHousehold.value?.address ?? '')
 const householdFamilyName = computed(() =>
   selectedHousehold.value?.inhabitants
@@ -119,7 +131,16 @@ v-if="isHouseholdsErrored" :error="householdsError?.statusCode"
 v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCode"
                :message="`Kunne ikke hente data for husstanden ${shortname}`" :cause="selectedHouseholdError"/>
     <Loader v-else-if="!isHouseholdsStoreReady" :text="`Henter husstanden ${shortname}`"/>
-    <UCard v-else class="w-full px-0 rounded-none md:rounded-lg" :ui="{ body: 'px-0 py-2 md:px-4 md:py-6' }">
+    <UCard v-else class="w-full px-0 rounded-none md:rounded-lg" :ui="{ root: COMPONENTS.ribbon.container, body: 'px-0 py-2 md:px-4 md:py-6' }">
+      <!-- Move-out ribbon -->
+      <div
+        v-if="hasMoveOutDate"
+        :class="[COMPONENTS.ribbon.base, COMPONENTS.ribbon.colors.cancel]"
+        data-testid="move-out-ribbon"
+      >
+        Fraflytter {{ formatDate(selectedHousehold!.moveOutDate!) }}
+      </div>
+
       <template #header>
         <div class="flex flex-col gap-2">
           <div class="flex items-center gap-1 md:gap-2">
@@ -127,16 +148,51 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
             <h2 :class="TYPOGRAPHY.cardTitle">{{ householdAddress }}</h2>
             <span v-if="householdFamilyName" :class="TYPOGRAPHY.bodyTextMuted">· {{ householdFamilyName }}</span>
           </div>
-          <!-- Visitor banner: shown when viewing another household -->
+
+          <!-- Visitor banner: non-member, admin override NOT active -->
           <UAlert
-            v-if="!canEdit"
+            v-if="!isMember && !adminOverrideActive"
             data-testid="visitor-banner"
             icon="i-heroicons-eye"
             color="info"
             variant="subtle"
             title="Du besøger nu en anden husstand end din egen"
-            description="Kigge, ikke røre"
-          />
+            description="Admin kigge, ikke røre"
+          >
+            <template v-if="showAdminOverride" #actions>
+              <DangerButton
+                data-testid="admin-override-btn"
+                label="Admin røre alligevel"
+                confirm-label="Klik igen for at låse op"
+                :icon="ICONS.authorize"
+                initial-color="info"
+                initial-variant="subtle"
+                @confirm="adminOverrideActive = true"
+              />
+            </template>
+          </UAlert>
+
+          <!-- Admin override active banner -->
+          <UAlert
+            v-if="adminOverrideActive"
+            data-testid="admin-override-active"
+            :icon="ICONS.authorize"
+            color="warning"
+            variant="subtle"
+            title="Admin rører, men forsigtigt"
+          >
+            <template #actions>
+              <UButton
+                data-testid="admin-override-exit"
+                :color="COLOR.neutral"
+                variant="ghost"
+                :icon="ICONS.xMark"
+                @click="adminOverrideActive = false"
+              >
+                Afslut
+              </UButton>
+            </template>
+          </UAlert>
         </div>
       </template>
       <UTabs
@@ -147,7 +203,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
           color="primary"
       >
         <template #content="{ item }">
-          <component :is="asyncComponents[item.value]" :household="selectedHousehold" :can-edit="canEdit"/>
+          <component :is="asyncComponents[item.value]" :household="selectedHousehold" :can-edit="canEdit" :admin-bypass="adminOverrideActive"/>
         </template>
       </UTabs>
     </UCard>

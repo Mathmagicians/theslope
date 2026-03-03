@@ -5,6 +5,7 @@ import {updateHousehold} from "~~/server/data/prismaRepository"
 import {useCoreValidation} from "~/composables/useCoreValidation"
 import type {HouseholdDetail, HouseholdUpdate} from "~/composables/useCoreValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
+import {rescaffoldOnFieldChange} from "~~/server/utils/scaffoldPrebookings"
 import {z} from 'zod'
 
 const {throwH3Error} = eventHandlerHelper
@@ -35,6 +36,12 @@ export default defineEventHandler<Promise<HouseholdDetail>>(async (event) => {
     try {
         console.info("🏠 > HOUSEHOLD > [POST] Updating household", "id", id)
         const updatedHousehold = await updateHousehold(d1Client, id, householdData)
+
+        // Re-scaffold when moveOutDate or movedInDate changes — releases/deletes orders for inactive households
+        await rescaffoldOnFieldChange(d1Client, '🏠 > HOUSEHOLD > [POST]', id, {
+            moveOutDate: householdData.moveOutDate,
+            movedInDate: householdData.movedInDate
+        })
 
         console.info("🏠 > HOUSEHOLD > [POST] Updated household", "name", updatedHousehold.name)
         setResponseStatus(event, 200)

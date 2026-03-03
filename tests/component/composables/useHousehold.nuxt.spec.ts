@@ -1,9 +1,40 @@
 import { describe, it, expect } from 'vitest'
-import { useHousehold } from '~/composables/useHousehold'
+import { useHousehold, isHouseholdActiveOnDay } from '~/composables/useHousehold'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
 import type { InhabitantDetail, InhabitantDisplay } from '~/composables/useCoreValidation'
 import { WEEKDAYS } from '~/types/dateTypes'
+
+describe('isHouseholdActiveOnDay', () => {
+  const date = (y: number, m: number, d: number) => new Date(y, m - 1, d)
+
+  it.each([
+    { scenario: 'past move-in, no move-out → all events eligible',
+      movedIn: date(2020, 1, 1), moveOut: null,
+      eventDate: date(2026, 5, 1), expected: true },
+    { scenario: 'future move-in → event before move-in ineligible',
+      movedIn: date(2026, 4, 1), moveOut: null,
+      eventDate: date(2026, 3, 15), expected: false },
+    { scenario: 'future move-in → event after move-in eligible',
+      movedIn: date(2026, 4, 1), moveOut: null,
+      eventDate: date(2026, 5, 1), expected: true },
+    { scenario: 'past move-out → event after move-out ineligible',
+      movedIn: date(2020, 1, 1), moveOut: date(2026, 4, 1),
+      eventDate: date(2026, 5, 1), expected: false },
+    { scenario: 'past move-out → event before move-out eligible',
+      movedIn: date(2020, 1, 1), moveOut: date(2026, 4, 1),
+      eventDate: date(2026, 3, 15), expected: true },
+    { scenario: 'boundary: event on movedInDate → eligible',
+      movedIn: date(2026, 4, 1), moveOut: null,
+      eventDate: date(2026, 4, 1), expected: true },
+    { scenario: 'boundary: event on moveOutDate → eligible',
+      movedIn: date(2020, 1, 1), moveOut: date(2026, 4, 1),
+      eventDate: date(2026, 4, 1), expected: true },
+  ])('$scenario', ({ movedIn, moveOut, eventDate, expected }) => {
+    const predicate = isHouseholdActiveOnDay(movedIn, moveOut)
+    expect(predicate(eventDate)).toBe(expected)
+  })
+})
 
 describe('useHousehold', () => {
   const { DinnerModeSchema } = useBookingValidation()

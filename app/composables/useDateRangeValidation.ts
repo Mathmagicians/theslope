@@ -23,35 +23,46 @@ const ddMMyyyyDateSchema = z.string({
     })
 
 // Union: Accepts ISO strings (HTTP), dd/MM/yyyy strings (UI), or Date objects
-const dateSchema = z.union([
+export const dateSchema = z.union([
     isoDateSchema,
     ddMMyyyyDateSchema,
     z.date()
 ])
-
-const baseDateRangeSchema = z.object({
-    start: z.date().describe('Startdato'),
-    end: z.date().describe('Slutdato')
-})
 
 export const stringDateRangeSchema = z.object({
     start: dateSchema,
     end: dateSchema
 })
 
-export const dateRangeSchema = z.union([
-    stringDateRangeSchema,
-    baseDateRangeSchema
-]).refine((data) => data.start <= data.end, {
-    message: 'Tidsmaskinen er ikke opfundet endnu - slutdato skal være efter startdato'
-}).refine((data) => (intervalToDuration(data).years ?? 0) < 1, {
-    message: 'Wow, wow, lidt for meget planlægning - max et år ad gangen'
-})
+// Shared refinements
+const END_AFTER_START_MSG = 'Tidsmaskinen er ikke opfundet endnu - slutdato skal være efter startdato'
+const MAX_ONE_YEAR_MSG = 'Wow, wow, lidt for meget planlægning - max et år ad gangen'
 
+/**
+ * Factory for date range schemas with composable refinements
+ * @param nullableEnd - Allow null end date (open-ended ranges like move-in/move-out)
+ * @param maxOneYear - Enforce max 1 year duration (season planning)
+ */
+export const createDateRangeSchema = ({ nullableEnd = false, maxOneYear = false } = {}) => {
+    const base = z.object({
+        start: dateSchema,
+        end: nullableEnd ? dateSchema.nullable() : dateSchema
+    }).refine((data) => {
+        if (data.end === null) return true
+        return data.start <= data.end
+    }, { message: END_AFTER_START_MSG })
 
-//z.object({
-//start: dateSchema.pipe(z.date().describe('Startdato')),
-//end: dateSchema.pipe(z.date().describe('Slutdato'))
+    if (!maxOneYear) return base
+
+    return base.refine((data) => {
+        if (data.end === null) return true
+        return (intervalToDuration({ start: data.start, end: data.end }).years ?? 0) < 1
+    }, { message: MAX_ONE_YEAR_MSG })
+}
+
+// Pre-built schemas
+export const dateRangeSchema = createDateRangeSchema({ maxOneYear: true })
+export const nullableEndDateRangeSchema = createDateRangeSchema({ nullableEnd: true })
 
 
 type RangeAsStrings = {start: string, end: string}

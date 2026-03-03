@@ -204,6 +204,13 @@ function assertNoOrdersWithOrphanPrices(
     expect(orphans, message).toHaveLength(0)
 }
 
+/** Create a Date offset by N days from now */
+const daysFromNow = (days: number) => {
+    const d = new Date()
+    d.setDate(d.getDate() + days)
+    return d
+}
+
 const testHelpers = {
     salt,
     saltedId,
@@ -215,7 +222,8 @@ const testHelpers = {
     doScreenshot,
     selectDropdownOption,
     getSessionUserInfo,
-    assertNoOrdersWithOrphanPrices
+    assertNoOrdersWithOrphanPrices,
+    daysFromNow
 }
 
 export default testHelpers

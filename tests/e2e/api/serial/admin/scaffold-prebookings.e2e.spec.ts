@@ -1,6 +1,7 @@
 import {test, expect} from '@playwright/test'
 import {useCoreValidation} from '~~/app/composables/useCoreValidation'
 import {useBookingValidation} from '~~/app/composables/useBookingValidation'
+import {useWeekDayMapValidation} from '~~/app/composables/useWeekDayMapValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
@@ -9,7 +10,8 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const {createDefaultWeekdayMap: createDefaultDinnerModeMap} = useCoreValidation()
-const {validatedBrowserContext, temporaryAndRandom, assertNoOrdersWithOrphanPrices} = testHelpers
+const {validatedBrowserContext, temporaryAndRandom, assertNoOrdersWithOrphanPrices, daysFromNow} = testHelpers
+const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
 
 /**
  * Admin Scaffold Pre-bookings API Tests
@@ -26,6 +28,7 @@ const {validatedBrowserContext, temporaryAndRandom, assertNoOrdersWithOrphanPric
 test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
     const createdSeasonIds: number[] = []
     const createdHouseholdIds: number[] = []
+    const allDaysCooking = createBooleanWeekdayMap([true, true, true, true, true, true, true])
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
@@ -143,6 +146,237 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
         const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
         const inhabitantOrders = orders.filter(o => o.inhabitantId === inhabitants[0]!.id)
         expect(inhabitantOrders.length).toBe(0)
+    })
+
+    test.describe('scaffold respects move-in and move-out dates', () => {
+        // --- GIVEN household with residency dates WHEN scaffold runs THEN only eligible events get orders ---
+
+        const scaffoldCases = [
+            {desc: 'past moveOutDate → zero orders (all events after moveOutDate)',
+                moveOutDaysFromNow: -1, moveOutAtEvent: undefined as number | undefined, movedInAtEvent: undefined as number | undefined, eligibleIndices: [] as number[]},
+            {desc: 'moveOutDate mid-season → orders only on/before moveOutDate',
+                moveOutDaysFromNow: undefined as number | undefined, moveOutAtEvent: 2, movedInAtEvent: undefined as number | undefined, eligibleIndices: [0, 1, 2]},
+            {desc: 'movedInDate mid-season → orders only on/after movedInDate',
+                moveOutDaysFromNow: undefined as number | undefined, moveOutAtEvent: undefined as number | undefined, movedInAtEvent: 4, eligibleIndices: [4, 5, 6, 7]},
+        ]
+
+        for (const {desc, moveOutDaysFromNow, moveOutAtEvent, movedInAtEvent, eligibleIndices} of scaffoldCases) {
+            test(desc, async ({browser}) => {
+                const context = await validatedBrowserContext(browser)
+                const testSalt = temporaryAndRandom()
+
+                // GIVEN: Season with all-days cooking (7 predictable events)
+                const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+                    cookingDays: allDaysCooking,
+                    ticketIsCancellableDaysBefore: 0
+                })
+                createdSeasonIds.push(season.id!)
+                expect(dinnerEvents.length, 'all-days cooking over 8-day window').toBe(8)
+
+                // GIVEN: Household with specific residency dates
+                const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+                    context, HouseholdFactory.defaultHouseholdData(testSalt), 1
+                )
+                createdHouseholdIds.push(household.id)
+
+                const updates: Record<string, Date> = {}
+                if (moveOutDaysFromNow !== undefined) updates.moveOutDate = daysFromNow(moveOutDaysFromNow)
+                if (moveOutAtEvent !== undefined) updates.moveOutDate = new Date(dinnerEvents[moveOutAtEvent]!.date)
+                if (movedInAtEvent !== undefined) updates.movedInDate = new Date(dinnerEvents[movedInAtEvent]!.date)
+                if (Object.keys(updates).length > 0) {
+                    await HouseholdFactory.updateHousehold(context, household.id, updates)
+                }
+
+                // WHEN: Preferences set and scaffold runs
+                const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
+                await HouseholdFactory.updateInhabitant(context, inhabitants[0]!.id, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
+                await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
+
+                // THEN: Only eligible events have orders
+                const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+                const inhabitantOrders = orders.filter(o => o.inhabitantId === inhabitants[0]!.id)
+
+                expect(inhabitantOrders.length, `${desc}: order count`).toBe(eligibleIndices.length)
+
+                if (eligibleIndices.length > 0) {
+                    const eligibleEventIds = eligibleIndices.map(i => dinnerEvents[i]!.id)
+                    const orderEventIds = inhabitantOrders.map(o => o.dinnerEventId)
+                    expect(orderEventIds.sort()).toEqual(eligibleEventIds.sort())
+                }
+            })
+        }
+
+    })
+
+    test.describe('update household triggers re-scaffold respecting dates', () => {
+        const rescaffoldCases = [
+            {desc: 'moveOutDate mid-season → only eligible orders remain',
+                moveOutAtEvent: 2, moveOutDaysFromNow: undefined as number | undefined, eligibleIndices: [0, 1, 2]},
+            {desc: 'moveOutDate set to past → ALL orders deleted',
+                moveOutAtEvent: undefined as number | undefined, moveOutDaysFromNow: -1, eligibleIndices: [] as number[]},
+        ]
+
+        for (const {desc, moveOutAtEvent, moveOutDaysFromNow, eligibleIndices} of rescaffoldCases) {
+            test(desc, async ({browser}) => {
+                const context = await validatedBrowserContext(browser)
+                const testSalt = temporaryAndRandom()
+
+                // GIVEN: Season with all-days cooking (7 predictable events)
+                const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+                    cookingDays: allDaysCooking,
+                    ticketIsCancellableDaysBefore: 0
+                })
+                createdSeasonIds.push(season.id!)
+                expect(dinnerEvents.length, 'all-days cooking over 8-day window').toBe(8)
+                await SeasonFactory.activateSeason(context, season.id!)
+
+                // GIVEN: Active household with orders for ALL dinner events
+                const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+                    context, HouseholdFactory.defaultHouseholdData(testSalt), 1
+                )
+                createdHouseholdIds.push(household.id)
+                const inhabitant = inhabitants[0]!
+
+                const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
+                await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
+                await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
+
+                const ordersBefore = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+                const inhabitantOrdersBefore = ordersBefore.filter(o => o.inhabitantId === inhabitant.id)
+                expect(inhabitantOrdersBefore.length, 'should have orders for all events').toBe(dinnerEvents.length)
+
+                // WHEN: Admin updates moveOutDate via POST /api/admin/household/[id] → triggers re-scaffold
+                const moveOutDate = moveOutAtEvent !== undefined
+                    ? new Date(dinnerEvents[moveOutAtEvent]!.date)
+                    : daysFromNow(moveOutDaysFromNow!)
+                await HouseholdFactory.updateHousehold(context, household.id, {moveOutDate})
+
+                // Verify moveOutDate persisted
+                const updatedHousehold = await HouseholdFactory.getHouseholdById(context, household.id)
+                expect(updatedHousehold!.moveOutDate, 'moveOutDate should be set').not.toBeNull()
+
+                // THEN: Only eligible events have orders after re-scaffold
+                const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+                const inhabitantOrdersAfter = ordersAfter.filter(o => o.inhabitantId === inhabitant.id)
+
+                expect(inhabitantOrdersAfter.length, `${desc}: order count after re-scaffold`).toBe(eligibleIndices.length)
+                expect(inhabitantOrdersAfter.length, 'fewer orders than before').toBeLessThan(inhabitantOrdersBefore.length)
+
+                if (eligibleIndices.length > 0) {
+                    const eligibleEventIds = eligibleIndices.map(i => dinnerEvents[i]!.id)
+                    const orderEventIds = inhabitantOrdersAfter.map(o => o.dinnerEventId)
+                    expect(orderEventIds.sort()).toEqual(eligibleEventIds.sort())
+                }
+            })
+        }
+
+        test('moveOutDate with real deadline → all orders deleted (family is gone)', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+
+            // GIVEN: Season with 8-day deadline, 20-day window → both before/after deadline events
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+                cookingDays: allDaysCooking,
+                ticketIsCancellableDaysBefore: 8,
+                seasonDates: {start: daysFromNow(1), end: daysFromNow(20)}
+            })
+            createdSeasonIds.push(season.id!)
+            await SeasonFactory.activateSeason(context, season.id!)
+
+            const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+                context, HouseholdFactory.defaultHouseholdData(testSalt), 1
+            )
+            createdHouseholdIds.push(household.id)
+
+            const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
+            await HouseholdFactory.updateInhabitant(context, inhabitants[0]!.id, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
+            await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
+
+            const ordersBefore = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            const inhabitantOrdersBefore = ordersBefore.filter(o => o.inhabitantId === inhabitants[0]!.id)
+            expect(inhabitantOrdersBefore.length, 'should have orders before').toBeGreaterThan(0)
+
+            // WHEN: moveOutDate set to yesterday → family is gone, all events ineligible
+            await HouseholdFactory.updateHousehold(context, household.id, {moveOutDate: daysFromNow(-1)})
+
+            // THEN: ALL orders deleted — deadline doesn't protect moved-out households
+            const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            const inhabitantOrdersAfter = ordersAfter.filter(o => o.inhabitantId === inhabitants[0]!.id)
+            expect(inhabitantOrdersAfter.length, 'all orders deleted for moved-out household').toBe(0)
+        })
+    })
+
+    test.describe('daily maintenance respects move-in and move-out dates', () => {
+        test('past moveOutDate → daily maintenance creates no orders', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+
+            // GIVEN: Season with all-days cooking, activated for daily maintenance
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+                cookingDays: allDaysCooking,
+                ticketIsCancellableDaysBefore: 0
+            })
+            createdSeasonIds.push(season.id!)
+            await SeasonFactory.activateSeason(context, season.id!)
+
+            // GIVEN: Household with past moveOutDate (moved out yesterday)
+            const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+                context, HouseholdFactory.defaultHouseholdData(testSalt), 1
+            )
+            createdHouseholdIds.push(household.id)
+
+            const yesterday = new Date()
+            yesterday.setDate(yesterday.getDate() - 1)
+            await HouseholdFactory.updateHousehold(context, household.id, {moveOutDate: yesterday})
+
+            const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
+            await HouseholdFactory.updateInhabitant(context, inhabitants[0]!.id, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
+
+            // WHEN: Daily maintenance runs (calls scaffoldPrebookings for active season)
+            await SeasonFactory.runDailyMaintenance(context)
+
+            // THEN: No orders for moved-out household
+            const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            const inhabitantOrders = orders.filter(o => o.inhabitantId === inhabitants[0]!.id)
+            expect(inhabitantOrders.length, 'daily maintenance: past moveOutDate → zero orders').toBe(0)
+        })
+
+        test('future movedInDate → daily maintenance creates no orders for events before movedInDate', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+
+            // GIVEN: Season with all-days cooking, activated for daily maintenance
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+                cookingDays: allDaysCooking,
+                ticketIsCancellableDaysBefore: 0
+            })
+            createdSeasonIds.push(season.id!)
+            expect(dinnerEvents.length, 'all-days cooking over 8-day window').toBe(8)
+            await SeasonFactory.activateSeason(context, season.id!)
+
+            // GIVEN: Household with movedInDate mid-season (5th event)
+            const movedInDate = new Date(dinnerEvents[4]!.date)
+            const householdData = {...HouseholdFactory.defaultHouseholdData(testSalt), movedInDate}
+            const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+                context, householdData, 1
+            )
+            createdHouseholdIds.push(household.id)
+
+            const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
+            await HouseholdFactory.updateInhabitant(context, inhabitants[0]!.id, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
+
+            // WHEN: Daily maintenance runs
+            await SeasonFactory.runDailyMaintenance(context)
+
+            // THEN: Orders only for events on/after movedInDate (last 4 of 8)
+            const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            const inhabitantOrders = orders.filter(o => o.inhabitantId === inhabitants[0]!.id)
+            expect(inhabitantOrders.length, 'daily maintenance: orders only on/after movedInDate').toBe(4)
+
+            const eligibleEventIds = dinnerEvents.slice(4).map(e => e.id)
+            const orderEventIds = inhabitantOrders.map(o => o.dinnerEventId)
+            expect(orderEventIds.sort()).toEqual(eligibleEventIds.sort())
+        })
     })
 
     test.describe('user intent respected by system scaffold', () => {

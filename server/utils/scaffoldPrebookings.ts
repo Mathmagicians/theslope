@@ -4,6 +4,7 @@ import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/
 import {useSeason} from "~/composables/useSeason"
 import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
 import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets} from "~/composables/useBooking"
+import {isHouseholdActiveOnDay} from "~/composables/useHousehold"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {getSystemUserId} from "~~/server/utils/systemUser"
 
@@ -73,6 +74,37 @@ const skippedResult = (): ScaffoldResult => ({
     errored: 0
 })
 
+/** Default scaffold result when no re-scaffold needed */
+export const noScaffoldResult = (): ScaffoldResult => skippedResult()
+
+/**
+ * Re-scaffold a household if any of the given fields changed.
+ * Shared by household update (moveOutDate/movedInDate) and inhabitant update (preferences/birthDate).
+ *
+ * @param d1Client - D1 database client
+ * @param log - Log prefix for the calling endpoint
+ * @param householdId - Household to re-scaffold
+ * @param fields - Map of field name → value (re-scaffolds if any value !== undefined)
+ * @param seasonId - Optional season to scope the re-scaffold
+ * @returns ScaffoldResult (noScaffoldResult if nothing changed)
+ */
+export const rescaffoldOnFieldChange = async (
+    d1Client: D1Database,
+    log: string,
+    householdId: number,
+    fields: Record<string, unknown>,
+    seasonId?: number
+): Promise<ScaffoldResult> => {
+    const changed = Object.entries(fields)
+        .filter(([, v]) => v !== undefined)
+        .map(([k]) => k)
+
+    if (changed.length === 0) return noScaffoldResult()
+
+    console.info(`${log} ${changed.join('+')} changed, re-scaffolding household ${householdId}`)
+    return scaffoldPrebookings(d1Client, {householdId, seasonId})
+}
+
 /**
  * Scaffolds pre-bookings for season's dinner events based on inhabitant preferences.
  * Core business logic shared between endpoints, activation workflow, and preference updates.
@@ -132,7 +164,6 @@ export async function scaffoldPrebookings(
             : getScaffoldableDinnerEvents(allDinnerEvents).map(e => e.id))
     const dinnerEvents = allDinnerEvents.filter(de => dinnerEventIds.includes(de.id))
 
-    // Fetch households - user mode is always single household
     const households = await fetchHouseholds(d1Client, options.householdId)
 
     // Fetch orders (chunked) and user intent keys in parallel
@@ -168,12 +199,16 @@ export async function scaffoldPrebookings(
 
     for (const household of households) {
         try {
+            // Filter dinner events to household's residency period
+            const isActiveOnDay = isHouseholdActiveOnDay(household.movedInDate, household.moveOutDate)
+            const householdDinnerEvents = dinnerEvents.filter(de => isActiveOnDay(de.date))
+
             const householdInhabitantIds = new Set(household.inhabitants.map(i => i.id))
             const householdOrders = existingOrders.filter(o => householdInhabitantIds.has(o.inhabitantId))
 
             // Build lookup: orderId → existing order (for updates)
             const orderById = new Map(householdOrders.map(o => [o.id, o]))
-            const dinnerEventById = new Map(dinnerEvents.map(de => [de.id, de]))
+            const dinnerEventById = new Map(householdDinnerEvents.map(de => [de.id, de]))
             const {canModifyOrders, canEditDiningMode} = deadlinesForSeason(season)
 
             // Build ticket price lookup (needed for creates and price change detection)
@@ -192,7 +227,7 @@ export async function scaffoldPrebookings(
                     releasedByEventAndPrice
                 )
                 : resolveOrdersFromPreferencesToBuckets(
-                    { ...season, dinnerEvents },
+                    { ...season, dinnerEvents: householdDinnerEvents },
                     household,
                     householdOrders,
                     confirmedKeys,
