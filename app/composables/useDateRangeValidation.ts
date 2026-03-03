@@ -38,15 +38,23 @@ export const stringDateRangeSchema = z.object({
 const END_AFTER_START_MSG = 'Tidsmaskinen er ikke opfundet endnu - slutdato skal være efter startdato'
 const MAX_ONE_YEAR_MSG = 'Wow, wow, lidt for meget planlægning - max et år ad gangen'
 
+// Nullable date: accepts valid dates, null, or empty string → null (for cleared form inputs)
+const nullableDateSchema = z.union([
+    z.literal('').transform(() => null as null),
+    dateSchema,
+    z.null()
+])
+
 /**
  * Factory for date range schemas with composable refinements
- * @param nullableEnd - Allow null end date (open-ended ranges like move-in/move-out)
+ * Defaults match existing dateRangeSchema behavior (non-nullable, no maxOneYear)
+ * @param nullableEnd - Allow null/empty end date (open-ended ranges like move-in/move-out)
  * @param maxOneYear - Enforce max 1 year duration (season planning)
  */
 export const createDateRangeSchema = ({ nullableEnd = false, maxOneYear = false } = {}) => {
     const base = z.object({
         start: dateSchema,
-        end: nullableEnd ? dateSchema.nullable() : dateSchema
+        end: nullableEnd ? nullableDateSchema : dateSchema
     }).refine((data) => {
         if (data.end === null) return true
         return data.start <= data.end

@@ -110,8 +110,11 @@ describe('useDateRangeValidation', () => {
         { name: 'nullableEndDateRangeSchema', schema: nullableEndDateRangeSchema },
         { name: 'createDateRangeSchema({ nullableEnd: true })', schema: createDateRangeSchema({ nullableEnd: true }) }
     ])('$name - nullable end', ({ schema }) => {
-        it('should accept null end', () => {
-            const result = schema.safeParse({ start: testDate, end: null })
+        it.each([
+            { input: null, desc: 'null' },
+            { input: '', desc: 'empty string' }
+        ])('should accept $desc end and parse to null', ({ input }) => {
+            const result = schema.safeParse({ start: testDate, end: input })
             expect(result.success).toBe(true)
             if (result.success) {
                 expect(result.data.end).toBeNull()

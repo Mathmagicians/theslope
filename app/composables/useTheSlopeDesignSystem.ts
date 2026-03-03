@@ -468,6 +468,7 @@ export const COMPONENTS = {
         container: 'relative overflow-hidden',
         colors: {
             cancel: 'bg-red-600',
+            past: 'bg-gray-500',
             new: 'bg-green-600'
         }
     },
@@ -524,6 +525,19 @@ export function getKitchenPanelClasses(
     mode: 'TAKEAWAY' | 'DINEIN' | 'DINEINLATE' | 'RELEASED'
 ): string {
     return COMPONENTS.kitchenPanel[mode]
+}
+
+/** Get combined ribbon classes for a ribbon type */
+export type RibbonType = keyof typeof COMPONENTS.ribbon.colors
+export const getRibbonClasses = (type: RibbonType): string =>
+    `${COMPONENTS.ribbon.base} ${COMPONENTS.ribbon.colors[type]}`
+
+/** Residency status → ribbon config mapping (null = no ribbon) */
+export const RESIDENCY_RIBBONS: Record<import('~/composables/useHousehold').ResidencyStatus, { type: RibbonType, prefix: string } | null> = {
+    'pending':   { type: 'new',    prefix: 'Indflytter' },
+    'leaving':   { type: 'cancel', prefix: 'Fraflytter' },
+    'moved-out': { type: 'past',   prefix: 'Fraflyttet' },
+    'active':    null
 }
 
 /**
@@ -1348,6 +1362,8 @@ export const useTheSlopeDesignSystem = () => {
 
         // Helpers
         getKitchenPanelClasses,
+        getRibbonClasses,
+        RESIDENCY_RIBBONS,
         getRandomEmptyMessage,
         EMPTY_STATE_MESSAGES
     }

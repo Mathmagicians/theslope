@@ -1,4 +1,5 @@
 import {z} from 'zod'
+import {isBefore, isAfter} from 'date-fns'
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 import type {InhabitantDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
@@ -24,7 +25,24 @@ export const isHouseholdActiveOnDay = (
     movedInDate: Date,
     moveOutDate: Date | null
 ) => (eventDate: Date): boolean =>
-    movedInDate <= eventDate && (!moveOutDate || moveOutDate >= eventDate)
+    !isAfter(movedInDate, eventDate) && (!moveOutDate || !isBefore(moveOutDate, eventDate))
+
+/**
+ * Household residency status based on move-in/move-out dates.
+ * Used by ribbon display and admin badges.
+ */
+export type ResidencyStatus = 'pending' | 'active' | 'leaving' | 'moved-out'
+
+export const getResidencyStatus = (
+    movedInDate: Date,
+    moveOutDate: Date | null,
+    referenceDate: Date = new Date()
+): ResidencyStatus => {
+    if (isAfter(movedInDate, referenceDate)) return 'pending'
+    if (moveOutDate && isBefore(moveOutDate, referenceDate)) return 'moved-out'
+    if (moveOutDate) return 'leaving'
+    return 'active'
+}
 
 /**
  * Business logic for working with households and inhabitants

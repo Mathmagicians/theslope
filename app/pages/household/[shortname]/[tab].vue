@@ -98,8 +98,15 @@ const canEdit = computed(() =>
   isMember.value || (authStore.isAdmin && adminOverrideActive.value)
 )
 
-// Move-out ribbon
-const hasMoveOutDate = computed(() => !!selectedHousehold.value?.moveOutDate)
+// Household status ribbon
+const ribbon = computed(() => {
+  const h = selectedHousehold.value
+  if (!h) return null
+  const config = RESIDENCY_RIBBONS[getResidencyStatus(h.movedInDate, h.moveOutDate)]
+  if (!config) return null
+  const date = config.type === 'new' ? h.movedInDate : h.moveOutDate!
+  return { classes: getRibbonClasses(config.type), text: `${config.prefix} ${formatDate(date)}` }
+})
 
 // Format household title: address + family name
 const { formatHouseholdFamilyName } = useHousehold()
@@ -132,13 +139,13 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
                :message="`Kunne ikke hente data for husstanden ${shortname}`" :cause="selectedHouseholdError"/>
     <Loader v-else-if="!isHouseholdsStoreReady" :text="`Henter husstanden ${shortname}`"/>
     <UCard v-else class="w-full px-0 rounded-none md:rounded-lg" :ui="{ root: COMPONENTS.ribbon.container, body: 'px-0 py-2 md:px-4 md:py-6' }">
-      <!-- Move-out ribbon -->
+      <!-- Household status ribbon -->
       <div
-        v-if="hasMoveOutDate"
-        :class="[COMPONENTS.ribbon.base, COMPONENTS.ribbon.colors.cancel]"
-        data-testid="move-out-ribbon"
+        v-if="ribbon"
+        :class="ribbon.classes"
+        data-testid="household-ribbon"
       >
-        Fraflytter {{ formatDate(selectedHousehold!.moveOutDate!) }}
+        {{ ribbon.text }}
       </div>
 
       <template #header>
@@ -157,7 +164,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
             color="info"
             variant="subtle"
             title="Du besøger nu en anden husstand end din egen"
-            description="Admin kigge, ikke røre"
+            description="Kigge, ikke røre"
           >
             <template v-if="showAdminOverride" #actions>
               <DangerButton

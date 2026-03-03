@@ -1,9 +1,8 @@
 # Feature Proposal: Move-Out Date Enforcement & Household Coexistence
 
-**Status:** In Progress (Phase 1)
+**Status:** Phase 1 done, Phases 2–5 pending
 **Date:** 2026-02-22
-**Updated:** 2026-03-03 (Corrected business rule: per-dinner-event residency filter, not per-household toggle)
-**Author:** Claude + User
+**Updated:** 2026-03-03
 
 ## Business Rule
 
@@ -91,66 +90,57 @@ URL disambiguation (Phase 2) MUST ship BEFORE the schema migration (Phase 3) tha
 
 ## Implementation Phases
 
-### Phase 1: Residency Period Enforcement (This Branch)
+### Phase 1: Residency Period Enforcement ✅ DONE
 
-**Goal:** Enforce the per-dinner-event residency filter in scaffolding; re-scaffold when dates change.
-
-**Changes:**
+**Branch:** `move-out-date-does-not-scaffold`
 
 | File | Change |
 |------|--------|
-| `app/composables/useHousehold.ts` (NEW) | `isHouseholdActiveOnDay` curried predicate |
-| `server/utils/scaffoldPrebookings.ts` | Filter dinner events per household using predicate (1 line, both modes); remove top-level household filter; `rescaffoldOnFieldChange` + `noScaffoldResult` shared helpers |
-| `server/utils/initializePreferences.ts` | Skip inhabitants whose household has no eligible events today |
-| `server/routes/api/admin/household/[id].post.ts` | Re-scaffold via `rescaffoldOnFieldChange` when moveOutDate/movedInDate changes |
-| `server/routes/api/admin/household/inhabitants/[id].post.ts` | Refactored to use shared `rescaffoldOnFieldChange` |
-| `app/composables/useCoreValidation.ts` | `moveOutDate` in household display/detail/update schemas |
+| `app/composables/useHousehold.ts` | `isHouseholdActiveOnDay` standalone curried predicate |
+| `server/utils/scaffoldPrebookings.ts` | Per-household event filter; `rescaffoldOnFieldChange` + `noScaffoldResult` shared helpers |
+| `server/routes/api/admin/household/[id].post.ts` | Re-scaffold on moveOutDate/movedInDate change |
+| `server/routes/api/admin/household/inhabitants/[id].post.ts` | Refactored to shared `rescaffoldOnFieldChange` |
+| `server/routes/api/household/inhabitants/[id]/preferences.post.ts` | `?adminBypass=true` for admin preference updates |
+| `app/composables/useCoreValidation.ts` | `moveOutDate` in household schemas |
+| `app/stores/households.ts` | `updateInhabitantPreferences` / `updateAllInhabitantPreferences` actions |
 
-**E2E test cases:**
-
-| # | Scenario | Expected |
-|---|----------|----------|
-| **Scaffold respects move-in and move-out dates** | | |
-| 1 | Household with past `moveOutDate` → scaffold | Zero orders (all events after moveOutDate) |
-| 2 | Household with `moveOutDate` mid-season → scaffold | Orders only for events on/before `moveOutDate`; exact count verified |
-| 3 | Household with `movedInDate` mid-season → scaffold | Orders only for events on/after `movedInDate`; exact count verified |
-| **Update household triggers re-scaffold** | | |
-| 4 | Set `moveOutDate` mid-season on household with existing orders | Orders after `moveOutDate` orphan-deleted; orders on/before preserved |
-| 5 | Set `moveOutDate` to past on household with existing orders | ALL orders orphan-deleted (zero eligible events) |
-| **Daily maintenance respects move-in and move-out dates** | | |
-| 6 | Daily maintenance on household with past `moveOutDate` | No new orders created for moved-out household |
-| 7 | Daily maintenance on household with future `movedInDate` | No orders for events before movedInDate |
-
-**Unit test cases:**
-
-| # | Scenario | Expected |
-|---|----------|----------|
-| 1 | Predicate with past move-in, no move-out, various event dates | All events eligible |
-| 2 | Predicate with future move-in | Events before move-in ineligible |
-| 3 | Predicate with past move-out | Events after move-out ineligible |
-| 4 | Boundary: event on movedInDate | Eligible |
-| 5 | Boundary: event on moveOutDate | Eligible |
+**Tests:** 7 unit tests (boundary cases), 8+ E2E tests (scaffold/re-scaffold/daily maintenance/deadline interaction). All green.
 
 ### Phase 2: Household URL `?pbs=X` (BEFORE Schema Migration)
 
-**Goal:** All household links include `?pbs=X` for disambiguation. Store resolves by `pbsId` from query.
+**Goal:** All household links include `?pbs=X` for disambiguation. Store resolves by `pbsId` from query. Old URLs without `?pbs` still work via fallback.
+
+**Key findings:**
+- `shortName` is NOT a database field — computed from `address` via `getHouseholdShortName()`
+- `pbsId` is `@unique` on Household, available on `HouseholdDisplay`, `HouseholdDetail`, and user's nested household schema
+- `useTabNavigation` already preserves `route.query` on tab switches — `?pbs` survives automatically
 
 **Disambiguation logic for missing `?pbs`:**
 
 | Scenario | Behavior |
 |----------|----------|
 | 1 household with shortname | Use it |
-| Multiple + user is member | Use their household |
-| Multiple + admin | Redirect to `/admin/households` |
+| Multiple + user is member of one | Use theirs |
+| Multiple + not member of any | Redirect `/admin/households` |
+
+**`getHouseholdUrl(shortName, pbsId, tab?)` utility** — new `app/utils/household.ts`, auto-imported. Single source of truth for household URL construction.
+
+**Store: stored init args** — `initHouseholdsStore` is called sync during setup when `households.value` may be empty. Existing watcher re-invokes without args. Fix: store `shortName`/`pbsId` in refs so watcher re-invokes with original context.
 
 **Changes:**
 
 | File | Change |
 |------|--------|
-| `app/pages/household/[shortname]/[tab].vue` | Read `?pbs`, disambiguation logic |
-| `app/stores/households.ts` | `initHouseholdsStore(shortname, pbsId?)` resolves by pbsId |
-| `app/components/admin/AdminHouseholds.vue` | Links include `?pbs=X` |
-| All household link sources | Append `?pbs=X` to URLs |
+| `app/utils/household.ts` (new) | `getHouseholdUrl(shortName, pbsId, tab?)` pure utility |
+| `app/stores/households.ts` | `initHouseholdsStore(shortName?, pbsId?)` with pbsId resolution + disambiguation + stored init args for watcher |
+| `app/pages/household/[shortname]/[tab].vue` | Read `?pbs` from query, pass to store init |
+| `app/pages/household/[shortname]/index.vue` | Preserve `?pbs` on redirect to `/bookings` |
+| `app/components/PageHeader.vue` | `getHouseholdUrl(myHousehold.shortName, myHousehold.pbsId, 'bookings')` |
+| `app/components/admin/AdminHouseholds.vue` | `getHouseholdUrl(row.original.shortName, row.original.pbsId)` |
+| `app/components/user/UserProfileCard.vue` | Add `householdPbsId` computed + `getHouseholdUrl` |
+| `app/components/login/Login.vue` | Add `householdPbsId` computed + `getHouseholdUrl` |
+
+**E2E tests (7 files, 10 `page.goto` calls):** `household.e2e`, `HouseholdMembers.e2e`, `HouseholdCard.e2e`, `HouseholdAllergies.e2e`, `DinnerBookingForm.e2e`, `HouseholdScaffolding.e2e`, `HouseholdBookingsCrossHousehold.e2e`
 
 ### Phase 3: Schema Migration (Drop `@unique`, Add `@@index`)
 
@@ -205,18 +195,13 @@ URL disambiguation (Phase 2) MUST ship BEFORE the schema migration (Phase 3) tha
 
 ## Verification Plan
 
-| # | Verification | Phase |
-|---|-------------|-------|
-| 1 | Unit tests for predicate (all boundary cases) | 1 |
-| 2 | E2E: past moveOutDate → scaffold → 0 orders | 1 |
-| 3 | E2E: future moveOutDate → orders only before date | 1 |
-| 4 | E2E: future movedInDate → orders only after date | 1 |
-| 5 | E2E: set moveOutDate → re-scaffold deletes orders outside period | 1 |
-| 6 | E2E: set moveOutDate to past → ALL future orders deleted | 1 |
-| 7 | `/household/S_31/bookings?pbs=100` resolves correctly | 2 |
-| 8 | Two households with same `heynaboId` coexist | 3 |
-| 9 | Heynabo import routes new members to active household | 4 |
-| 10 | Household member can set moveOutDate in settings | 5 |
+| # | Verification | Phase | Status |
+|---|-------------|-------|--------|
+| 1 | Unit + E2E tests for residency enforcement | 1 | ✅ |
+| 2 | `/household/S_31/bookings?pbs=100` resolves correctly | 2 | |
+| 3 | Two households with same `heynaboId` coexist | 3 | |
+| 4 | Heynabo import routes new members to active household | 4 | |
+| 5 | Household member can set moveOutDate in settings | 5 | |
 
 ## Risk Assessment
 

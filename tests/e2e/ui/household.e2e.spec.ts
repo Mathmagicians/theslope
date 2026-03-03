@@ -4,7 +4,7 @@ import testHelpers from '../testHelpers'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 
-const {adminUIFile} = authFiles
+const {adminUIFile, memberUIFile} = authFiles
 const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, doScreenshot} = testHelpers
 
 test.describe('Household tab navigation', () => {
@@ -153,102 +153,121 @@ test.describe('Household tab navigation', () => {
     })
 })
 
-test.describe('Visitor mode - viewing another household', () => {
-    /**
-     * Tests that when a user visits a household they're NOT a member of:
-     * - Visitor banner is shown
-     * - Edit controls (pencil icons, save buttons) are hidden
-     *
-     * Uses admin user who is NOT a member of the created test household.
-     */
-    const testSalt = temporaryAndRandom()
-    let householdId: number
-    let shortName: string
+/**
+ * Visitor mode tests - parametrized by user context (admin vs member).
+ *
+ * Both contexts:
+ * - See visitor banner with "anden husstand end din egen"
+ * - Have edit controls hidden (no editing allowed)
+ *
+ * Admin-only:
+ * - Sees admin override button to unlock editing
+ *
+ * Member-only:
+ * - No admin override button
+ */
+const editControlTestCases = [
+    {
+        name: 'Preferences',
+        path: 'members',
+        contentSelector: '[data-testid="household-members"]',
+        hiddenSelectors: [
+            {desc: 'pencil buttons', selector: 'table button:has([class*="i-heroicons-pencil"])'},
+            {desc: 'save button', selector: '[data-testid="save-preferences"]'}
+        ]
+    },
+    {
+        name: 'Allergies',
+        path: 'allergies',
+        contentSelector: '[data-testid="household-allergies"]',
+        hiddenSelectors: [
+            {desc: 'pencil buttons', selector: 'table button:has([class*="i-heroicons-pencil"])'}
+        ]
+    },
+    {
+        name: 'Bookings (week view)',
+        path: 'bookings?view=week',
+        contentSelector: '[data-testid="booking-grid-view"]',
+        hiddenSelectors: [
+            {desc: 'grid edit button', selector: '[data-testid="grid-edit"]'}
+        ]
+    }
+] as const
 
-    // Parametrized test cases for edit controls hidden when visiting
-    const editControlTestCases = [
-        {
-            name: 'Preferences',
-            path: 'members',
-            contentSelector: '[data-testid="household-members"]',
-            hiddenSelectors: [
-                {desc: 'pencil buttons', selector: 'table button:has([class*="i-heroicons-pencil"])'},
-                {desc: 'save button', selector: '[data-testid="save-preferences"]'}
-            ]
-        },
-        {
-            name: 'Allergies',
-            path: 'allergies',
-            contentSelector: '[data-testid="household-allergies"]',
-            hiddenSelectors: [
-                {desc: 'pencil buttons', selector: 'table button:has([class*="i-heroicons-pencil"])'}
-            ]
-        },
-        {
-            name: 'Bookings (week view)',
-            path: 'bookings?view=week',
-            contentSelector: '[data-testid="booking-grid-view"]',
-            hiddenSelectors: [
-                {desc: 'grid edit button', selector: '[data-testid="grid-edit"]'}
-            ]
-        }
-    ] as const
+const visitorContexts = [
+    {name: 'member', storageState: memberUIFile, expectAdminOverride: false},
+    {name: 'admin', storageState: adminUIFile, expectAdminOverride: true}
+] as const
 
-    test.use({storageState: adminUIFile})
+for (const ctx of visitorContexts) {
+    test.describe(`Visitor mode (${ctx.name}) - viewing another household`, () => {
+        const testSalt = temporaryAndRandom()
+        let householdId: number
+        let shortName: string
 
-    test.beforeAll(async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
+        test.use({storageState: ctx.storageState})
 
-        // Create active season (required for bookings tab) - singleton pattern
-        await SeasonFactory.createActiveSeason(context, {holidays: []})
+        test.beforeAll(async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
 
-        // Create household - admin user is NOT a member of this household
-        const household = await HouseholdFactory.createHousehold(context, {name: salt('Visitor', testSalt)})
-        householdId = household.id
-        shortName = household.shortName
-    })
+            // Create active season (required for bookings tab) - singleton pattern
+            await SeasonFactory.createActiveSeason(context, {holidays: []})
 
-    test.afterAll(async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
+            // Create household - test user is NOT a member of this household
+            const household = await HouseholdFactory.createHousehold(context, {name: salt(`Visitor-${ctx.name}`, testSalt)})
+            householdId = household.id
+            shortName = household.shortName
+        })
 
-        if (householdId) {
-            await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
-        }
-    })
+        test.afterAll(async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
 
-    test('Visitor banner is shown when visiting another household', async ({page}) => {
-        await page.goto(`/household/${encodeURIComponent(shortName)}/bookings`)
+            if (householdId) {
+                await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
+            }
+        })
 
-        // Wait for page to load using pollUntil (same pattern as other tests)
-        await pollUntil(
-            async () => page.locator('[data-testid="household-bookings"]').isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
+        test('Visitor banner is shown when visiting another household', async ({page}) => {
+            await page.goto(`/household/${encodeURIComponent(shortName)}/bookings`)
 
-        // Visitor banner should be visible
-        const visitorBanner = page.locator('[data-testid="visitor-banner"]')
-        await expect(visitorBanner).toBeVisible()
-        await expect(visitorBanner).toContainText('Du besøger nu en anden husstand')
-        await expect(visitorBanner).toContainText('Kigge, ikke røre')
-    })
-
-    for (const testCase of editControlTestCases) {
-        test(`${testCase.name} tab - edit controls hidden when visiting`, async ({page}) => {
-            await page.goto(`/household/${encodeURIComponent(shortName)}/${testCase.path}`)
-
-            // Wait for page content to load using pollUntil (same pattern as other tests)
+            // Wait for page to load using pollUntil (same pattern as other tests)
             await pollUntil(
-                async () => page.locator(testCase.contentSelector).isVisible(),
+                async () => page.locator('[data-testid="household-bookings"]').isVisible(),
                 (isVisible) => isVisible,
                 10
             )
 
-            // Verify all edit controls are hidden
-            for (const {desc, selector} of testCase.hiddenSelectors) {
-                const element = page.locator(selector)
-                await expect(element, `${desc} should be hidden`).toHaveCount(0)
+            // Visitor banner should be visible with generic text (not hardcoded to specific wording)
+            const visitorBanner = page.locator('[data-testid="visitor-banner"]')
+            await expect(visitorBanner).toBeVisible()
+            await expect(visitorBanner).toContainText('anden husstand end din egen')
+
+            // Admin override button: visible for admins, absent for members
+            const adminOverrideBtn = page.getByTestId('admin-override-btn')
+            if (ctx.expectAdminOverride) {
+                await expect(adminOverrideBtn).toBeVisible()
+            } else {
+                await expect(adminOverrideBtn).toHaveCount(0)
             }
         })
-    }
-})
+
+        for (const testCase of editControlTestCases) {
+            test(`${testCase.name} tab - edit controls hidden when visiting`, async ({page}) => {
+                await page.goto(`/household/${encodeURIComponent(shortName)}/${testCase.path}`)
+
+                // Wait for page content to load using pollUntil (same pattern as other tests)
+                await pollUntil(
+                    async () => page.locator(testCase.contentSelector).isVisible(),
+                    (isVisible) => isVisible,
+                    10
+                )
+
+                // Verify all edit controls are hidden (same for both member and admin without override)
+                for (const {desc, selector} of testCase.hiddenSelectors) {
+                    const element = page.locator(selector)
+                    await expect(element, `${desc} should be hidden`).toHaveCount(0)
+                }
+            })
+        }
+    })
+}
