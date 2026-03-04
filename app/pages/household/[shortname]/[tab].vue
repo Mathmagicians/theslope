@@ -104,10 +104,9 @@ const canEdit = computed(() =>
 const ribbon = computed(() => {
   const h = selectedHousehold.value
   if (!h) return null
-  const config = RESIDENCY_RIBBONS[getResidencyStatus(h.movedInDate, h.moveOutDate)]
-  if (!config) return null
-  const date = config.type === 'new' ? h.movedInDate : h.moveOutDate!
-  return { classes: getRibbonClasses(config.type), text: `${config.prefix} ${formatDate(date)}` }
+  const display = getResidencyDisplay(h.movedInDate, h.moveOutDate)
+  if (!display) return null
+  return { classes: getRibbonClasses(display.type), text: display.badgeText }
 })
 
 // Format household title: address + family name

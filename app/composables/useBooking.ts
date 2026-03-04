@@ -1079,13 +1079,15 @@ export const useBooking = () => {
      * @param canEditDiningMode - Before dining mode deadline
      * @param dinnerState - Dinner event state (CANCELLED/CONSUMED blocks booking)
      * @param hasReleasedTickets - Released tickets available to claim
+     * @param isHouseholdInResidency - Whether household is active on the dinner date
      */
     const getBookingOptions = (
         orderState: OrderState | null,
         canModifyOrders: boolean,
         canEditDiningMode: boolean,
         dinnerState: DinnerState,
-        hasReleasedTickets: boolean
+        hasReleasedTickets: boolean,
+        isHouseholdInResidency: boolean
     ): { enabledModes: DinnerMode[], action: 'process' | 'claim' | null } => {
         const {DinnerModeSchema, DinnerStateSchema} = useBookingValidation()
         const DinnerModeEnum = DinnerModeSchema.enum
@@ -1094,6 +1096,9 @@ export const useBooking = () => {
         const OrderStateEnum = OrderStateSchema.enum
 
         const ALL_MODES: DinnerMode[] = [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY, DinnerModeEnum.NONE]
+
+        // Outside residency period - no booking possible
+        if (!isHouseholdInResidency) return { enabledModes: [], action: null }
 
         // Cancelled/consumed dinner - no booking possible
         if (dinnerState === DinnerStateEnum.CANCELLED || dinnerState === DinnerStateEnum.CONSUMED) {

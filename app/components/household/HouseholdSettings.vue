@@ -53,7 +53,7 @@ const props = withDefaults(defineProps<Props>(), {
   adminBypass: false
 })
 
-const {TYPOGRAPHY, ICONS, SIZES, LAYOUTS, BUTTONS} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, ICONS, SIZES, LAYOUTS, BUTTONS, getResidencyDisplay} = useTheSlopeDesignSystem()
 
 // Store integration
 const householdsStore = useHouseholdsStore()
@@ -83,14 +83,12 @@ const cancelEdit = () => {
   moveOutDate.value = props.household.moveOutDate ?? null
 }
 
-// Status display (DRY: single row driven by hasMoveOutDate)
-const statusIcon = computed(() => hasMoveOutDate.value ? ICONS.moveOut : 'i-heroicons-sun')
-const statusIconClass = computed(() => hasMoveOutDate.value ? 'opacity-60' : 'text-warning-500')
-const statusText = computed(() => hasMoveOutDate.value
-  ? `Familien fraflytter ${formatDate(props.household.moveOutDate!)}`
-  : 'Familien har ingen flytteplaner'
-)
-const statusTextClass = computed(() => hasMoveOutDate.value ? TYPOGRAPHY.bodyTextMuted : TYPOGRAPHY.bodyText)
+// Status display: use shared residency config, fallback for active households
+const residencyDisplay = computed(() => getResidencyDisplay(props.household.movedInDate, props.household.moveOutDate))
+const statusIcon = computed(() => residencyDisplay.value?.icon ?? 'i-heroicons-sun')
+const statusIconClass = computed(() => residencyDisplay.value ? 'opacity-60' : 'text-warning-500')
+const statusText = computed(() => residencyDisplay.value?.dateText ?? 'Familien har ingen flytteplaner')
+const statusTextClass = computed(() => residencyDisplay.value ? TYPOGRAPHY.bodyTextMuted : TYPOGRAPHY.bodyText)
 
 // Edit alert (contextual: warning for new, info for change)
 const editAlert = computed(() => hasMoveOutDate.value
@@ -171,9 +169,9 @@ const getCalendarFeedForUser = async () => {
           <UIcon :name="ICONS.moveIn" class="opacity-60"/>
           <span :class="TYPOGRAPHY.bodyTextMuted">Indflyttet {{ formatDate(household.movedInDate) }}</span>
         </div>
-        <div v-if="hasMoveOutDate" class="flex items-center gap-2">
-          <UIcon :name="ICONS.moveOut" class="opacity-60"/>
-          <span :class="TYPOGRAPHY.bodyTextMuted">Fraflytter {{ formatDate(household.moveOutDate!) }}</span>
+        <div v-if="residencyDisplay" class="flex items-center gap-2">
+          <UIcon :name="residencyDisplay.icon" class="opacity-60"/>
+          <span :class="TYPOGRAPHY.bodyTextMuted">{{ residencyDisplay.dateText }}</span>
         </div>
       </div>
     </div>
@@ -261,11 +259,11 @@ const getCalendarFeedForUser = async () => {
     </UCard>
 
     <!-- Read-only move-out display for non-editors -->
-    <div v-else-if="hasMoveOutDate" :class="LAYOUTS.sectionDivider" class="pt-6">
+    <div v-else-if="residencyDisplay" :class="LAYOUTS.sectionDivider" class="pt-6">
       <h3 :class="TYPOGRAPHY.cardTitle" class="mb-4">Fraflytning</h3>
       <div class="flex items-center gap-2">
-        <UIcon :name="ICONS.moveOut" class="opacity-60"/>
-        <span :class="TYPOGRAPHY.bodyTextMuted" data-testid="move-out-date-display">Fraflytter {{ formatDate(household.moveOutDate!) }}</span>
+        <UIcon :name="residencyDisplay.icon" class="opacity-60"/>
+        <span :class="TYPOGRAPHY.bodyTextMuted" data-testid="move-out-date-display">{{ residencyDisplay.dateText }}</span>
       </div>
     </div>
 

@@ -532,14 +532,6 @@ export type RibbonType = keyof typeof COMPONENTS.ribbon.colors
 export const getRibbonClasses = (type: RibbonType): string =>
     `${COMPONENTS.ribbon.base} ${COMPONENTS.ribbon.colors[type]}`
 
-/** Residency status → ribbon config mapping (null = no ribbon) */
-export const RESIDENCY_RIBBONS: Record<import('~/composables/useHousehold').ResidencyStatus, { type: RibbonType, prefix: string } | null> = {
-    'pending':   { type: 'new',    prefix: 'Indflytter' },
-    'leaving':   { type: 'cancel', prefix: 'Fraflytter' },
-    'moved-out': { type: 'past',   prefix: 'Fraflyttet' },
-    'active':    null
-}
-
 /**
  * Ticket type colors (for UBadge components)
  *
@@ -663,6 +655,29 @@ export const ICONS = {
     github: 'i-simple-icons-github',
     book: 'i-heroicons-book-open'
 } as const
+
+/** Residency status → display config (ribbon, alert, badge). null = active, no display needed */
+export const RESIDENCY_CONFIG: Record<import('~/composables/useHousehold').ResidencyStatus, { type: RibbonType, prefix: string, description: string, icon: string, color: NuxtUIColor, dateField: 'movedInDate' | 'moveOutDate' } | null> = {
+    'pending':   { type: 'new',    prefix: 'Indflytter',  description: 'Familien flytter ind d.',    icon: ICONS.moveIn,  color: COLOR.success as NuxtUIColor, dateField: 'movedInDate' },
+    'leaving':   { type: 'cancel', prefix: 'Fraflytter',  description: 'Familien fraflytter d.',     icon: ICONS.moveOut, color: COLOR.error as NuxtUIColor,   dateField: 'moveOutDate' },
+    'moved-out': { type: 'past',   prefix: 'Fraflyttet',  description: 'Familien er fraflyttet d.',  icon: ICONS.moveOut, color: COLOR.neutral as NuxtUIColor, dateField: 'moveOutDate' },
+    'active':    null
+}
+
+/** Resolve residency display data for a household. Returns null for active households. */
+export const getResidencyDisplay = (movedInDate: Date, moveOutDate: Date | null) => {
+    const config = RESIDENCY_CONFIG[getResidencyStatus(movedInDate, moveOutDate)]
+    if (!config) return null
+    const date = config.dateField === 'movedInDate' ? movedInDate : moveOutDate
+    const dateText = `${config.description} ${formatDate(date!)}`
+    return {
+        ...config,
+        dateText,
+        badgeText: `${config.prefix} ${formatDate(date!)}`,
+        alertTitle: 'Fællesspisning er for beboere',
+        alertDescription: `Familien skal bo her, for at kunne bestille. ${dateText}.`
+    }
+}
 
 /**
  * IMG - Image assets for brand logos and external services
@@ -1366,7 +1381,8 @@ export const useTheSlopeDesignSystem = () => {
         // Helpers
         getKitchenPanelClasses,
         getRibbonClasses,
-        RESIDENCY_RIBBONS,
+        RESIDENCY_CONFIG,
+        getResidencyDisplay,
         getRandomEmptyMessage,
         EMPTY_STATE_MESSAGES
     }

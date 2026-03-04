@@ -26,6 +26,7 @@ interface Props {
   releasedTicketCounts: ReleasedTicketCounts
   bookerId: number
   bookerName: string
+  isHouseholdInResidency: boolean
 }
 
 const props = defineProps<Props>()
@@ -59,7 +60,8 @@ const bookingOptions = computed(() => getBookingOptions(
   canModifyOrders(props.dinnerEvent.date),
   canEditDiningMode(props.dinnerEvent.date),
   props.dinnerEvent.state,
-  props.releasedTicketCounts.total > 0
+  props.releasedTicketCounts.total > 0,
+  props.isHouseholdInResidency
 ))
 
 // Form state - reactive object for UForm binding

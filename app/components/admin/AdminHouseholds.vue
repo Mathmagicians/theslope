@@ -16,8 +16,7 @@ const {households, isHouseholdsLoading,isHouseholdsErrored, householdsError} = s
 // Initialize without await for SSR hydration consistency
 householdsStore.initHouseholdsStore()
 
-// Design system
-const { COMPONENTS } = useTheSlopeDesignSystem()
+const { COMPONENTS, getResidencyDisplay } = useTheSlopeDesignSystem()
 
 // Search/filter state
 const searchQuery = ref('')
@@ -133,11 +132,27 @@ class="w-full px-0"
         </NuxtLink>
       </template>
 
-      <!-- Custom address cell with test-id for easier test selection -->
       <template #address-cell="{ row }">
         <span :data-testid="`household-address-${row.original.id}`">
           {{ row.original.address }}
         </span>
+      </template>
+
+      <template #pbsId-cell="{ row }">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span>{{ row.original.pbsId }}</span>
+          <template v-for="residency in [getResidencyDisplay(row.original.movedInDate, row.original.moveOutDate)]" :key="residency?.badgeText">
+            <UBadge
+              v-if="residency"
+              :color="residency.color"
+              :icon="residency.icon"
+              variant="subtle"
+              size="sm"
+            >
+              {{ residency.badgeText }}
+            </UBadge>
+          </template>
+        </div>
       </template>
 
       <template #empty-state>
