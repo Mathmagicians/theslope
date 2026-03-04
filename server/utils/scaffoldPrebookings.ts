@@ -380,11 +380,11 @@ export async function scaffoldPrebookings(
             // Household may have been deleted during scaffolding (FK constraint error)
             // Log and continue with remaining households - don't fail entire operation
             erroredHouseholds++
-            const h3e = eventHandlerHelper.h3eFromCatch(
+            const nuxtError = eventHandlerHelper.nuxtErrorFromCatch(
                 `${LOG} Skipping household ${household.id} (${household.shortName})`,
                 error
             )
-            eventHandlerHelper.logH3Error(h3e, error)
+            eventHandlerHelper.logNuxtError(nuxtError, error)
         }
     }
 

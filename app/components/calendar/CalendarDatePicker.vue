@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import {DATE_SETTINGS, translateToDanish} from "~/utils/date"
-import {type Ref} from "vue"
+import type {Ref} from "vue"
 import {mapZodErrorsToFormErrors, getErrorMessage} from "~/utils/validtation"
 
 // COMPONENT DEFINITIONS

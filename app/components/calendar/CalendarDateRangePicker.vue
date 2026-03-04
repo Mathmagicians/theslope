@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type {DateRange} from "~/types/dateTypes"
 import {DATE_SETTINGS, translateToDanish} from "~/utils/date"
-import {type Ref} from "vue"
+import type {Ref} from "vue"
 import {mapZodErrorsToFormErrors, getErrorMessage} from "~/utils/validtation"
 
 // TYPES
