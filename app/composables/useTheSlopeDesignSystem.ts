@@ -600,6 +600,8 @@ export const ICONS = {
     economy: 'i-heroicons-currency-dollar',
     login: 'i-guidance-entry',
     logout: 'i-tdesign-wave-bye',
+    moveIn: 'i-guidance-entry',
+    moveOut: 'i-guidance-exit',
     admin: 'i-pajamas-admin',
     menu: 'i-heroicons-bars-3',
     help: 'i-heroicons-question-mark-circle',
@@ -640,6 +642,7 @@ export const ICONS = {
     // Descriptive
     mail: 'i-guidance-mail',
     phone: 'i-guidance-phone',
+    identification: 'i-heroicons-identification',
 
     // Time & info
     clock: 'i-heroicons-clock',

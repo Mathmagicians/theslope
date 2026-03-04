@@ -3,10 +3,6 @@ export interface DateRange {
     end: Date
 }
 
-export interface NullableDateRange {
-    start: Date
-    end: Date | null
-}
 export const WEEKDAYS = ['mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag', 'søndag'] as const
 export type WeekDay = typeof WEEKDAYS[number]
 export type WeekDayMap<T = boolean> = Record<WeekDay, T>

@@ -9,10 +9,9 @@
  *
  * Move-out date flow:
  * - No moveOutDate → date picker + DangerButton "Sæt udflytningsdato"
- * - moveOutDate set → display date + "Ændr" toggle + DangerButton "Fjern udflytningsdato" (undo mode)
+ * - moveOutDate set → display date + "Ændr" toggle + DangerButton "Fortryd flytning" (undo mode)
  */
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
-import type {NullableDateRange} from '~/types/dateTypes'
 
 interface Props {
   household: HouseholdDetail
@@ -33,26 +32,21 @@ const householdsStore = useHouseholdsStore()
 // Move-out date state
 const isSaving = ref(false)
 const isEditing = ref(false)
-
-// Date range model for the picker: movedInDate (read-only start) + moveOutDate (editable end)
-const dateRange = ref<NullableDateRange>({
-  start: props.household.movedInDate,
-  end: props.household.moveOutDate ?? null
-})
+const moveOutDate = ref<Date | null>(props.household.moveOutDate ?? null)
 
 // Sync when household changes (e.g., after save)
 watch(() => props.household, (h) => {
-  dateRange.value = {start: h.movedInDate, end: h.moveOutDate ?? null}
+  moveOutDate.value = h.moveOutDate ?? null
   isEditing.value = false
 }, {deep: true})
 
 const hasMoveOutDate = computed(() => !!props.household.moveOutDate)
 
 const setMoveOutDate = async () => {
-  if (!dateRange.value.end) return
+  if (!moveOutDate.value) return
   isSaving.value = true
   try {
-    await householdsStore.setMoveOutDate(props.household.id, dateRange.value.end)
+    await householdsStore.setMoveOutDate(props.household.id, moveOutDate.value)
   } finally {
     isSaving.value = false
   }
@@ -80,54 +74,72 @@ const getCalendarFeedForUser = async () => {
     <!-- Section 1: Husstandsoplysninger -->
     <div>
       <h3 :class="TYPOGRAPHY.cardTitle" class="mb-4">Husstandsoplysninger</h3>
-      <div class="space-y-3">
+      <div class="space-y-2">
         <div class="flex items-center gap-2">
-          <UIcon :name="ICONS.household" :class="TYPOGRAPHY.bodyTextMuted"/>
-          <span :class="TYPOGRAPHY.bodyTextMuted">Adresse</span>
-          <span :class="TYPOGRAPHY.bodyText">{{ household.address }}</span>
+          <UIcon :name="ICONS.household" class="opacity-60"/>
+          <span :class="TYPOGRAPHY.bodyTextMuted">{{ household.address }}</span>
         </div>
         <div class="flex items-center gap-2">
-          <UIcon name="i-heroicons-calendar" :class="TYPOGRAPHY.bodyTextMuted"/>
-          <span :class="TYPOGRAPHY.bodyTextMuted">Indflyttet</span>
-          <span :class="TYPOGRAPHY.bodyText">{{ formatDate(household.movedInDate) }}</span>
+          <UIcon :name="ICONS.identification" class="opacity-60"/>
+          <span :class="TYPOGRAPHY.bodyTextMuted">PBS {{ household.pbsId }}</span>
         </div>
         <div class="flex items-center gap-2">
-          <UIcon name="i-heroicons-identification" :class="TYPOGRAPHY.bodyTextMuted"/>
-          <span :class="TYPOGRAPHY.bodyTextMuted">PBS ID</span>
-          <span :class="TYPOGRAPHY.bodyText">{{ household.pbsId }}</span>
+          <UIcon :name="ICONS.moveIn" class="opacity-60"/>
+          <span :class="TYPOGRAPHY.bodyTextMuted">Indflyttet {{ formatDate(household.movedInDate) }}</span>
+        </div>
+        <div v-if="hasMoveOutDate" class="flex items-center gap-2">
+          <UIcon :name="ICONS.moveOut" class="opacity-60"/>
+          <span :class="TYPOGRAPHY.bodyTextMuted">Fraflytter {{ formatDate(household.moveOutDate!) }}</span>
         </div>
       </div>
     </div>
 
     <!-- Section 2: Fraflytning -->
     <div v-if="canEdit" :class="LAYOUTS.sectionDivider" class="pt-6">
-      <h3 :class="TYPOGRAPHY.cardTitle" class="mb-4">Fraflytning</h3>
+      <h3 :class="TYPOGRAPHY.cardTitle" class="mb-2">Fraflytning</h3>
+      <p :class="TYPOGRAPHY.bodyTextMuted" class="mb-4">
+        Skal familien flytte? Du kan angive flyttedato her, og alle bookinger stopper efter denne dato.
+      </p>
 
-      <!-- No move-out date set: show picker + set button -->
+      <!-- No move-out date set: sun status + pencil to reveal picker -->
       <div v-if="!hasMoveOutDate" class="space-y-4">
-        <CalendarDateRangePicker
-          v-model="dateRange"
-          :schema="nullableEndDateRangeSchema"
-          :labels="{ start: 'Indflyttet', end: 'Udflytningsdato' }"
-          data-testid="move-out-date-picker"
-        />
-        <DangerButton
-          data-testid="set-move-out-date"
-          label="Sæt udflytningsdato"
-          confirm-label="Klik igen for at bekræfte"
-          :icon="ICONS.calendar"
-          :loading="isSaving"
-          :disabled="!dateRange.end"
-          @confirm="setMoveOutDate"
-        />
+        <div class="flex items-center gap-2">
+          <UIcon name="i-heroicons-sun" class="text-warning-500"/>
+          <span :class="TYPOGRAPHY.bodyText">Familien har ingen flytteplaner</span>
+          <UButton
+            v-if="!isEditing"
+            data-testid="edit-move-out-date"
+            :icon="ICONS.edit"
+            :color="COLOR.neutral"
+            variant="ghost"
+            :size="SIZES.small"
+            @click="isEditing = true"
+          />
+        </div>
+
+        <template v-if="isEditing">
+          <CalendarDatePicker
+            v-model="moveOutDate"
+            label="Fraflytningsdato"
+            name="moveOutDate"
+          />
+          <DangerButton
+            data-testid="set-move-out-date"
+            label="Sæt udflytningsdato"
+            confirm-label="Klik igen for at bekræfte flytning"
+            :icon="ICONS.moveOut"
+            :loading="isSaving"
+            :disabled="!moveOutDate"
+            @confirm="setMoveOutDate"
+          />
+        </template>
       </div>
 
       <!-- Move-out date set: show date + edit/clear buttons -->
       <div v-else class="space-y-4">
         <div class="flex items-center gap-2">
-          <UIcon name="i-heroicons-calendar" :class="TYPOGRAPHY.bodyTextMuted"/>
-          <span :class="TYPOGRAPHY.bodyTextMuted">Udflytningsdato</span>
-          <span :class="TYPOGRAPHY.bodyText" data-testid="move-out-date-display">{{ formatDate(household.moveOutDate!) }}</span>
+          <UIcon :name="ICONS.moveOut" class="opacity-60"/>
+          <span :class="TYPOGRAPHY.bodyTextMuted" data-testid="move-out-date-display">Fraflytter {{ formatDate(household.moveOutDate!) }}</span>
           <UButton
             v-if="!isEditing"
             data-testid="edit-move-out-date"
@@ -141,11 +153,10 @@ const getCalendarFeedForUser = async () => {
 
         <!-- Edit mode: date picker for changing the date -->
         <div v-if="isEditing" class="space-y-4">
-          <CalendarDateRangePicker
-            v-model="dateRange"
-            :schema="nullableEndDateRangeSchema"
-            :labels="{ start: 'Indflyttet', end: 'Udflytningsdato' }"
-            data-testid="move-out-date-picker-edit"
+          <CalendarDatePicker
+            v-model="moveOutDate"
+            label="Fraflytningsdato"
+            name="moveOutDate"
           />
           <div class="flex gap-2">
             <UButton
@@ -154,7 +165,7 @@ const getCalendarFeedForUser = async () => {
               :color="COLOR.primary"
               :size="SIZES.standard"
               :loading="isSaving"
-              :disabled="!dateRange.end"
+              :disabled="!moveOutDate"
               @click="setMoveOutDate"
             >
               Gem
@@ -165,7 +176,7 @@ const getCalendarFeedForUser = async () => {
               :color="COLOR.neutral"
               variant="ghost"
               :size="SIZES.standard"
-              @click="isEditing = false; dateRange.end = household.moveOutDate ?? null"
+              @click="isEditing = false; moveOutDate = household.moveOutDate ?? null"
             >
               Annullér
             </UButton>
@@ -175,8 +186,8 @@ const getCalendarFeedForUser = async () => {
         <!-- Clear move-out date -->
         <DangerButton
           data-testid="clear-move-out-date"
-          label="Fjern udflytningsdato"
-          confirm-label="Klik igen for at fjerne"
+          label="Fortryd flytning"
+          confirm-label="Klik igen for at fortryde"
           :icon="ICONS.undo"
           :loading="isSaving"
           undo
@@ -189,9 +200,8 @@ const getCalendarFeedForUser = async () => {
     <div v-else-if="hasMoveOutDate" :class="LAYOUTS.sectionDivider" class="pt-6">
       <h3 :class="TYPOGRAPHY.cardTitle" class="mb-4">Fraflytning</h3>
       <div class="flex items-center gap-2">
-        <UIcon name="i-heroicons-calendar" :class="TYPOGRAPHY.bodyTextMuted"/>
-        <span :class="TYPOGRAPHY.bodyTextMuted">Udflytningsdato</span>
-        <span :class="TYPOGRAPHY.bodyText" data-testid="move-out-date-display">{{ formatDate(household.moveOutDate!) }}</span>
+        <UIcon :name="ICONS.moveOut" class="opacity-60"/>
+        <span :class="TYPOGRAPHY.bodyTextMuted" data-testid="move-out-date-display">Fraflytter {{ formatDate(household.moveOutDate!) }}</span>
       </div>
     </div>
 

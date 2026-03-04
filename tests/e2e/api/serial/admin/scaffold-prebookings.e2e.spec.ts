@@ -64,8 +64,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
         expect(result.seasonId).toBe(season.id)
         expect(result.created).toBeGreaterThan(0)
 
-        // Use admin endpoint (dinner event detail includes tickets) - user-facing /api/order filters by session household
-        const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+        const orders = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
         const householdOrders = orders.filter(o => inhabitants.some(i => i.id === o.inhabitantId))
         expect(householdOrders.length).toBeGreaterThan(0)
 
@@ -101,15 +100,14 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
         const scaffoldResult = await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
         expect(scaffoldResult.seasonId, 'Scaffold should return correct seasonId').toBe(season.id)
 
-        // Use admin endpoint (dinner event detail includes tickets) - user-facing /api/order filters by session household
-        const ordersAfterFirst = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+        const ordersAfterFirst = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
         const inhabitantOrdersAfterFirst = ordersAfterFirst.filter(o => o.inhabitantId === inhabitant.id)
         expect(inhabitantOrdersAfterFirst.length, `Expected ${dinnerEvents.length} orders for inhabitant ${inhabitant.id}`).toBe(dinnerEvents.length)
 
         // Second scaffold should be idempotent for THIS test's inhabitant
         // Note: Other parallel tests may create households, so we check our inhabitant's orders, not global created count
         await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
-        const ordersAfterSecond = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+        const ordersAfterSecond = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
         const inhabitantOrdersAfterSecond = ordersAfterSecond.filter(o => o.inhabitantId === inhabitant.id)
 
         // Verify idempotency: same orders, same count, no duplicates
@@ -142,8 +140,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
 
         await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
 
-        // Use admin endpoint - user-facing /api/order filters by session household
-        const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+        const orders = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
         const inhabitantOrders = orders.filter(o => o.inhabitantId === inhabitants[0]!.id)
         expect(inhabitantOrders.length).toBe(0)
     })
@@ -193,7 +190,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
                 await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
 
                 // THEN: Only eligible events have orders
-                const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+                const orders = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
                 const inhabitantOrders = orders.filter(o => o.inhabitantId === inhabitants[0]!.id)
 
                 expect(inhabitantOrders.length, `${desc}: order count`).toBe(eligibleIndices.length)
@@ -209,8 +206,6 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
     })
 
     test.describe('update household triggers re-scaffold respecting dates', () => {
-        test.setTimeout(60_000)
-
         const rescaffoldCases = [
             {desc: 'moveOutDate mid-season → only eligible orders remain',
                 moveOutAtEvent: 2, moveOutDaysFromNow: undefined as number | undefined, eligibleIndices: [0, 1, 2]},
@@ -243,7 +238,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
                 await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
                 await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
 
-                const ordersBefore = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+                const ordersBefore = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
                 const inhabitantOrdersBefore = ordersBefore.filter(o => o.inhabitantId === inhabitant.id)
                 expect(inhabitantOrdersBefore.length, 'should have orders for all events').toBe(dinnerEvents.length)
 
@@ -258,7 +253,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
                 expect(updatedHousehold!.moveOutDate, 'moveOutDate should be set').not.toBeNull()
 
                 // THEN: Only eligible events have orders after re-scaffold
-                const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+                const ordersAfter = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
                 const inhabitantOrdersAfter = ordersAfter.filter(o => o.inhabitantId === inhabitant.id)
 
                 expect(inhabitantOrdersAfter.length, `${desc}: order count after re-scaffold`).toBe(eligibleIndices.length)
@@ -294,7 +289,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
             await HouseholdFactory.updateInhabitant(context, inhabitants[0]!.id, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
             await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
 
-            const ordersBefore = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            const ordersBefore = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
             const inhabitantOrdersBefore = ordersBefore.filter(o => o.inhabitantId === inhabitants[0]!.id)
             expect(inhabitantOrdersBefore.length, 'should have orders before').toBeGreaterThan(0)
 
@@ -302,7 +297,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
             await HouseholdFactory.updateHousehold(context, household.id, {moveOutDate: daysFromNow(-1)})
 
             // THEN: ALL orders deleted — deadline doesn't protect moved-out households
-            const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            const ordersAfter = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
             const inhabitantOrdersAfter = ordersAfter.filter(o => o.inhabitantId === inhabitants[0]!.id)
             expect(inhabitantOrdersAfter.length, 'all orders deleted for moved-out household').toBe(0)
         })
@@ -338,7 +333,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
             await SeasonFactory.runDailyMaintenance(context)
 
             // THEN: No orders for moved-out household
-            const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            const orders = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
             const inhabitantOrders = orders.filter(o => o.inhabitantId === inhabitants[0]!.id)
             expect(inhabitantOrders.length, 'daily maintenance: past moveOutDate → zero orders').toBe(0)
         })
@@ -371,7 +366,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
             await SeasonFactory.runDailyMaintenance(context)
 
             // THEN: Orders only for events on/after movedInDate (last 4 of 8)
-            const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            const orders = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
             const inhabitantOrders = orders.filter(o => o.inhabitantId === inhabitants[0]!.id)
             expect(inhabitantOrders.length, 'daily maintenance: orders only on/after movedInDate').toBe(4)
 
@@ -424,13 +419,13 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
 
                 if (action === 'delete') {
                     // Deleted orders should not be recreated
-                    const ordersAfterRescaffold = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
+                    const ordersAfterRescaffold = await OrderFactory.getAllOrdersForEvents(context, dinnerEvent.id)
                     const userOrder = ordersAfterRescaffold.find(o => o.inhabitantId === inhabitant.id)
                     expect(userOrder, 'Deleted order should NOT be recreated').toBeUndefined()
                 } else {
                     // User cancelled - scaffolder should NOT re-book them
                     // (another inhabitant claiming the released ticket is valid marketplace behavior)
-                    const ordersAfterRescaffold = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
+                    const ordersAfterRescaffold = await OrderFactory.getAllOrdersForEvents(context, dinnerEvent.id)
                     const userOrderAfter = ordersAfterRescaffold.find(o => o.inhabitantId === inhabitant.id)
 
                     if (userOrderAfter) {
@@ -487,7 +482,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
                 })
 
                 // Get the user-booked order
-                const ordersAfterUserBook = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
+                const ordersAfterUserBook = await OrderFactory.getAllOrdersForEvents(context, dinnerEvent.id)
                 const userOrder = ordersAfterUserBook.find(o => o.inhabitantId === inhabitantId)
                 expect(userOrder, 'User order should exist after booking').toBeDefined()
                 expect(userOrder?.dinnerMode, 'User booked mode').toBe(bookedMode)
@@ -500,7 +495,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
                 // STEP 3: System scaffold should PRESERVE user-booked order
                 await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
 
-                const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
+                const ordersAfter = await OrderFactory.getAllOrdersForEvents(context, dinnerEvent.id)
                 const preserved = ordersAfter.find(o => o.inhabitantId === inhabitantId)
 
                 expect(preserved, 'User-booked order preserved').toBeDefined()

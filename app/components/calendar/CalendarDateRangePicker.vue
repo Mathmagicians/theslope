@@ -1,9 +1,8 @@
-<script setup lang="ts" generic="T extends DateRange | NullableDateRange = DateRange">
-import type {DateRange, NullableDateRange} from "~/types/dateTypes"
+<script setup lang="ts">
+import type {DateRange} from "~/types/dateTypes"
 import {DATE_SETTINGS, translateToDanish} from "~/utils/date"
-import {inject, type Ref} from "vue"
+import {type Ref} from "vue"
 import {mapZodErrorsToFormErrors, getErrorMessage} from "~/utils/validtation"
-import type {z} from 'zod'
 
 // TYPES
 type DateRangeInput = {
@@ -11,36 +10,30 @@ type DateRangeInput = {
   end: string;
 }
 
-// Schema prop type — accepts any Zod schema that outputs DateRange or NullableDateRange
-// Third generic param (Input) is `unknown` because schemas transform strings/ISO dates to Date objects
-type DateRangeSchemaType = z.ZodType<DateRange | NullableDateRange, z.ZodTypeDef, unknown>
-
 // COMPONENT DEFINITIONS
-const model = defineModel<T>({required: true})
-const props = withDefaults(defineProps<{
-  name?: string,
-  /** Zod schema for validation — drives nullable/refinement behavior */
-  schema?: DateRangeSchemaType,
-  /** Custom labels for start/end fields */
-  labels?: { start: string, end: string }
-}>(), {
+const model = defineModel<DateRange>({required: true})
+const props = withDefaults(defineProps<{ name?: string, disabled?: boolean }>(), {
   name: undefined,
-  schema: () => dateRangeSchema as DateRangeSchemaType,
-  labels: () => ({ start: 'Start dato', end: 'Slut dato' })
+  disabled: false
 })
 const emit = defineEmits(['update:model-value', 'close'])
+
+// DESIGN SYSTEM
+const {SIZES} = useTheSlopeDesignSystem()
 
 // STATE
 const errors = ref<Map<string, string[]>>(new Map())
 
 const inputState: Ref<DateRangeInput> = ref({
   start: formatDate(model.value.start),
-  end: formatDate(model.value.end ?? undefined)
+  end: formatDate(model.value.end)
 })
 
 // COMPUTED STATE
+
 const pickerDateRange = computed({
   get: () => {
+    // Convert Date objects to CalendarDate for UCalendar
     if (model.value?.start && model.value?.end) {
       return {
         start: toCalendarDate(model.value.start),
@@ -51,25 +44,32 @@ const pickerDateRange = computed({
   },
   set: (value) => {
     if (value?.start && value?.end) {
-      updateDateRange({ start: toDate(value.start), end: toDate(value.end) } as T)
+      // Convert CalendarDate back to Date objects
+      const dateRange = {
+        start: toDate(value.start),
+        end: toDate(value.end)
+      }
+      updateDateRange(dateRange)
       emit('close')
     }
   }
 })
 
 // ACTIONS
-const updateDateRange = (newRange: T) => {
-  const validation = props.schema.safeParse(newRange)
+const updateDateRange = (newRange: DateRange) => {
+  const validation = dateRangeSchema.safeParse(newRange)
   if (validation.success) {
     model.value = newRange
     inputState.value = {
       start: formatDate(newRange.start),
-      end: formatDate(newRange.end ?? undefined)
+      end: formatDate(newRange.end)
     }
     emit('update:model-value', newRange)
+    // Clear errors
     errors.value.clear()
     return true
   }
+  // Set errors properly from validation
   const errorMap = mapZodErrorsToFormErrors(validation.error)
   errors.value.clear()
   errorMap.forEach((value, key) => {
@@ -78,18 +78,24 @@ const updateDateRange = (newRange: T) => {
   return false
 }
 
-const handleInputChange = (value: string, key: 'start' | 'end') => {
+const handleInputChange = (value: string, key: keyof DateRange) => {
+  // Update the input field
   inputState.value[key] = value
 
+  // Create an object to validate with stringDateRangeSchema
   const stringRange = {
     start: key === 'start' ? value : inputState.value.start,
     end: key === 'end' ? value : inputState.value.end
   }
 
-  const validation = props.schema.safeParse(stringRange)
+  // Validate using the string schema first
+  const validation = stringDateRangeSchema.safeParse(stringRange)
+
   if (validation.success) {
-    updateDateRange(validation.data as T)
+    // If validation passes, update with the transformed dates
+    updateDateRange(validation.data)
   } else {
+    // If validation fails, map the errors
     const errorMap = mapZodErrorsToFormErrors(validation.error)
     errors.value.clear()
     errorMap.forEach((value, key) => {
@@ -98,18 +104,24 @@ const handleInputChange = (value: string, key: 'start' | 'end') => {
   }
 }
 
+const formatLabel = (key: keyof DateRange): string => {
+  switch (key) {
+    case 'start':
+      return 'Start dato'
+    case 'end':
+      return 'Slut dato'
+  }
+}
+
 // Watch for external model changes
 watch(() => model.value, (newModelValue) => {
   if (newModelValue) {
     inputState.value = {
       start: formatDate(newModelValue.start),
-      end: formatDate(newModelValue.end ?? undefined)
+      end: formatDate(newModelValue.end)
     }
   }
 }, {deep: true})
-
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Expose for testing
 defineExpose({
@@ -121,40 +133,43 @@ defineExpose({
 
 <template>
   <UPopover
-:content="{
+    :disabled="props.disabled"
+    :content="{
       align: 'center',
       side: 'bottom',
       sideOffset: 16
     }">
     <template #content>
       <UCalendar
-          v-model="pickerDateRange"
-          range
-          :size="getIsMd ? 'xl': 'sm'"
-          :number-of-months="getIsMd ? 2: 1"
-          :week-starts-on="1"
-          :fixed-weeks="false"
-          weekday-format="short"
-          color="success"
+        v-model="pickerDateRange"
+        range
+        :size="SIZES.calendar"
+        :number-of-months="SIZES.calendarMonths"
+        :week-starts-on="1"
+        :fixed-weeks="false"
+        weekday-format="short"
+        color="success"
       >
-        <template #week-day="{ day}">
-      <span class="text-sm text-muted uppercase">
-        {{ translateToDanish(day) }}
-      </span>
+        <template #week-day="{ day }">
+          <span class="text-sm text-muted uppercase">
+            {{ translateToDanish(day) }}
+          </span>
         </template>
       </UCalendar>
     </template>
     <div :name="props.name" class="flex flex-row gap-1 md:gap-4">
       <UFormField
-v-for="key in ['start', 'end'] as const" :key="key"
-                  class="p-2"
-                  :label="props.labels[key]"
-                  :error="getErrorMessage(errors, [key, '_'])">
+        v-for="key in ['start', 'end'] as const" :key="key"
+        class="p-2"
+        :label="formatLabel(key)"
+        :error="getErrorMessage(errors, [key, '_'])">
         <UInput
-v-model="inputState[key]" :placeholder="DATE_SETTINGS.USER_MASK"
-                type="string"
-                :name="key"
-                @update:model-value="handleInputChange($event, key)"
+          v-model="inputState[key]"
+          :placeholder="DATE_SETTINGS.USER_MASK"
+          type="string"
+          :name="key"
+          :disabled="props.disabled"
+          @update:model-value="handleInputChange($event, key)"
         >
           <template #trailing>
             <UButton icon="i-heroicons-calendar" color="info"/>
