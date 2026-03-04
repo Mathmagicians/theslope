@@ -4,7 +4,7 @@
 
 ## ADR-016: Unified Booking Through Scaffold
 
-**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-01-12
+**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-03-04
 
 ### Context
 
@@ -77,11 +77,19 @@ DesiredOrderSchema = {
 }
 ```
 
+### Residency Period Filtering
+
+`isHouseholdActiveOnDay(movedInDate, moveOutDate)` curried predicate filters dinner events per-household before generators run. Events on move-in/move-out day are included.
+
+### Re-scaffold on Field Change
+
+`rescaffoldOnFieldChange` triggers immediate re-scaffold when `dinnerPreferences`, `birthDate`, `moveOutDate`, or `movedInDate` change.
+
 ### Two Modes
 
 | Mode | Trigger | Generator | Use Case |
 |------|---------|-----------|----------|
-| **System** | Preference change, cron | `resolveOrdersFromPreferencesToBuckets` | Scaffolding, preference updates |
+| **System** | Preference change, cron, field change | `resolveOrdersFromPreferencesToBuckets` | Scaffolding, preference updates, residency changes |
 | **User** | UI booking | `resolveDesiredOrdersToBuckets` | Grid view, single booking |
 
 ### Frontend Pattern
@@ -108,6 +116,8 @@ const desiredOrders = selectedInhabitants.map(inhabitant => ({
 3. UI MUST include `orderId` from existing orders for updates
 4. Guest orders preserved (not managed by preferences)
 5. User cancellations tracked in `cancelledKeys` set
+6. Generators MUST receive dinner events filtered by `isHouseholdActiveOnDay`
+7. Booking-relevant field changes MUST trigger immediate re-scaffold via `rescaffoldOnFieldChange`
 
 ### Key Files
 
@@ -115,7 +125,8 @@ const desiredOrders = selectedInhabitants.map(inhabitant => ({
 |------|------|
 | `app/composables/useBooking.ts` | Generator: `decideOrderAction`, bucket resolvers |
 | `app/composables/useBookingValidation.ts` | Schemas: `DesiredOrderSchema`, `ScaffoldResultSchema` |
-| `server/utils/scaffoldPrebookings.ts` | Scaffolder: transforms and executes |
+| `app/composables/useHousehold.ts` | `isHouseholdActiveOnDay` residency predicate |
+| `server/utils/scaffoldPrebookings.ts` | Scaffolder: transforms, executes, `rescaffoldOnFieldChange` |
 
 ### Related ADRs
 
@@ -635,22 +646,30 @@ Components MAY use `useAsyncData` directly when:
 
 ## ADR-006: URL-Based Navigation and Client-Side State
 
-**Status:** Accepted | **Date:** 2025-01-27
+**Status:** Accepted | **Date:** 2025-01-27 | **Updated:** 2026-03-04
 
 ### Decision
 
 ```
 /admin/planning              # Path-based tab navigation
 /admin/planning?mode=edit    # Query param for form mode
+/household/S_31/bookings?pbs=12345  # Household disambiguation
 ```
 
 Draft state: In-memory Vue ref in component (no persistence).
+
+### Household URL Disambiguation
+
+`?pbs=X` query param on household routes. `pbsId` is always unique. `getHouseholdUrl(shortName, pbsId, tab?)` utility builds all household URLs. Store persists init args in refs so watchers can re-invoke after async data loads.
+
+**Resolution priority:** `pbsId` → match by `pbsId`. No `pbsId`, one `shortName` match → use it. No `pbsId`, multiple `shortName` matches → user's own household, else first match. No match → current selection or user's household.
 
 ### Compliance
 
 1. Path-based routing for tabs
 2. Query param `?mode=edit|create|view` for form mode
 3. Draft data in component refs, not store
+4. Household URLs MUST use `getHouseholdUrl()` to include `?pbs=X`
 
 ---
 

@@ -4,15 +4,41 @@
  *
  * Sections:
  * 1. Husstandsoplysninger - Read-only display: address, movedInDate, PBS ID
- * 2. Fraflytning - Set/clear move-out date (gated by canEdit)
- *    - Info box when editing (explains consequences)
+ * 2. Fraflytning - UCard with pencil-gate edit flow (gated by canEdit)
  *    - Toast on save (formatScaffoldResult in past tense)
- *    - Persistent alert after operation (robotHappy/robotDead)
+ *    - Persistent alert below card (robotHappy/robotDead)
  * 3. Kalenderabonnement - Calendar feed subscription
  *
- * Move-out date flow:
- * - No moveOutDate → date picker + DangerButton "Sæt udflytningsdato"
- * - moveOutDate set → display date + "Ændr" toggle + DangerButton "Fortryd flytning" (undo mode)
+ * Fraflytning — 4 states:
+ *
+ * State 1: No date, viewing
+ * ┌─ Fraflytning ──────────────────────── [pen] ─┐
+ * │  sun  Familien har ingen flytteplaner         │
+ * └──────────────────────────────────────────────-┘
+ *
+ * State 2: No date, editing
+ * ┌─ Fraflytning ────────────────────────────────-┐
+ * │  !! Advarsel                                  │
+ * │  Alle bookinger efter dato slettes.           │
+ * │  Fraflytningsdato: [  dd/MM/yyyy  cal ]       │
+ * ├───────────────────────────────────────────────-┤
+ * │         [x Annuller]  [!! Saet fraflytning]   │
+ * └───────────────────────────────────────────────-┘
+ *
+ * State 3: Has date, viewing
+ * ┌─ Fraflytning ──────────────────────── [pen] ─┐
+ * │  >>  Familien fraflytter 15/03/2026           │
+ * └──────────────────────────────────────────────-┘
+ *
+ * State 4: Has date, editing
+ * ┌─ Fraflytning ────────────────────────────────-┐
+ * │  (i) Aendring af fraflytningsdato             │
+ * │  Bookinger efter ny dato slettes.             │
+ * │  Fraflytningsdato: [  15/03/2026  cal ]       │
+ * │  [<< Fortryd flytning]                        │
+ * ├───────────────────────────────────────────────-┤
+ * │      [x Annuller]  [v Gem fraflytningsdato]   │
+ * └───────────────────────────────────────────────-┘
  */
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
 
@@ -27,7 +53,7 @@ const props = withDefaults(defineProps<Props>(), {
   adminBypass: false
 })
 
-const {TYPOGRAPHY, ICONS, SIZES, COLOR, LAYOUTS} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, ICONS, SIZES, LAYOUTS, BUTTONS} = useTheSlopeDesignSystem()
 
 // Store integration
 const householdsStore = useHouseholdsStore()
@@ -51,6 +77,26 @@ watch(() => props.household, (h) => {
 }, {deep: true})
 
 const hasMoveOutDate = computed(() => !!props.household.moveOutDate)
+
+const cancelEdit = () => {
+  isEditing.value = false
+  moveOutDate.value = props.household.moveOutDate ?? null
+}
+
+// Status display (DRY: single row driven by hasMoveOutDate)
+const statusIcon = computed(() => hasMoveOutDate.value ? ICONS.moveOut : 'i-heroicons-sun')
+const statusIconClass = computed(() => hasMoveOutDate.value ? 'opacity-60' : 'text-warning-500')
+const statusText = computed(() => hasMoveOutDate.value
+  ? `Familien fraflytter ${formatDate(props.household.moveOutDate!)}`
+  : 'Familien har ingen flytteplaner'
+)
+const statusTextClass = computed(() => hasMoveOutDate.value ? TYPOGRAPHY.bodyTextMuted : TYPOGRAPHY.bodyText)
+
+// Edit alert (contextual: warning for new, info for change)
+const editAlert = computed(() => hasMoveOutDate.value
+  ? { icon: 'i-heroicons-information-circle', title: 'Ændring af fraflytningsdato', description: 'Bookinger efter den nye dato slettes, og bookinger før den nye dato kan genoprettes.', testid: 'move-out-change-warning' }
+  : { icon: 'i-heroicons-exclamation-triangle', title: 'Advarsel', description: 'Når du sætter en fraflytningsdato, slettes alle bookinger efter den valgte dato for husstanden.', testid: 'move-out-warning' }
+)
 
 const setMoveOutDate = async () => {
   if (!moveOutDate.value) return
@@ -133,114 +179,46 @@ const getCalendarFeedForUser = async () => {
     </div>
 
     <!-- Section 2: Fraflytning -->
-    <div v-if="canEdit" :class="LAYOUTS.sectionDivider" class="pt-6">
-      <h3 :class="TYPOGRAPHY.cardTitle" class="mb-2">Fraflytning</h3>
-      <p :class="TYPOGRAPHY.bodyTextMuted" class="mb-4">
-        Skal familien flytte? Du kan angive flyttedato her, og alle bookinger stopper efter denne dato.
-      </p>
-
-      <!-- No move-out date set: sun status + pencil to reveal picker -->
-      <div v-if="!hasMoveOutDate" class="space-y-4">
-        <div class="flex items-center gap-2">
-          <UIcon name="i-heroicons-sun" class="text-warning-500"/>
-          <span :class="TYPOGRAPHY.bodyText">Familien har ingen flytteplaner</span>
+    <UCard v-if="canEdit" data-testid="move-out-card">
+      <template #header>
+        <div class="flex items-center justify-between">
+          <h3 :class="TYPOGRAPHY.cardTitle">Fraflytning</h3>
           <UButton
             v-if="!isEditing"
+            v-bind="BUTTONS.edit"
             data-testid="edit-move-out-date"
-            :icon="ICONS.edit"
-            :color="COLOR.neutral"
-            variant="ghost"
-            :size="SIZES.small"
             @click="isEditing = true"
           />
         </div>
+      </template>
 
+      <div class="space-y-4">
+        <!-- Status row (view mode) -->
+        <div v-if="!isEditing" class="flex items-center gap-2">
+          <UIcon :name="statusIcon" :class="statusIconClass"/>
+          <span :class="statusTextClass" data-testid="move-out-date-display">{{ statusText }}</span>
+        </div>
+
+        <!-- Edit mode: contextual alert + date picker -->
         <template v-if="isEditing">
-          <!-- Warning: consequences of setting move-out date -->
           <UAlert
-            icon="i-heroicons-exclamation-triangle"
+            :icon="editAlert.icon"
             color="warning"
             variant="soft"
-            title="Advarsel"
-            description="Når du sætter en fraflytningsdato, slettes alle bookinger efter den valgte dato for husstanden."
-            data-testid="move-out-warning"
+            :title="editAlert.title"
+            :description="editAlert.description"
+            :data-testid="editAlert.testid"
           />
           <CalendarDatePicker
             v-model="moveOutDate"
             label="Fraflytningsdato"
             name="moveOutDate"
-          />
-          <DangerButton
-            data-testid="set-move-out-date"
-            label="Sæt udflytningsdato"
-            confirm-label="Klik igen for at bekræfte flytning"
-            :icon="ICONS.moveOut"
-            :loading="isSaving"
-            :disabled="!moveOutDate"
-            @confirm="setMoveOutDate"
           />
         </template>
-      </div>
 
-      <!-- Move-out date set: show date + edit/clear buttons -->
-      <div v-else class="space-y-4">
-        <div class="flex items-center gap-2">
-          <UIcon :name="ICONS.moveOut" class="opacity-60"/>
-          <span :class="TYPOGRAPHY.bodyTextMuted" data-testid="move-out-date-display">Fraflytter {{ formatDate(household.moveOutDate!) }}</span>
-          <UButton
-            v-if="!isEditing"
-            data-testid="edit-move-out-date"
-            :icon="ICONS.edit"
-            :color="COLOR.neutral"
-            variant="ghost"
-            :size="SIZES.small"
-            @click="isEditing = true"
-          />
-        </div>
-
-        <!-- Edit mode: date picker for changing the date -->
-        <div v-if="isEditing" class="space-y-4">
-          <!-- Info: consequences of changing move-out date -->
-          <UAlert
-            icon="i-heroicons-information-circle"
-            color="warning"
-            variant="soft"
-            title="Ændring af fraflytningsdato"
-            description="Bookinger efter den nye dato slettes, og bookinger før den nye dato kan genoprettes."
-            data-testid="move-out-change-warning"
-          />
-          <CalendarDatePicker
-            v-model="moveOutDate"
-            label="Fraflytningsdato"
-            name="moveOutDate"
-          />
-          <div class="flex gap-2">
-            <UButton
-              data-testid="save-move-out-date"
-              :icon="ICONS.check"
-              :color="COLOR.primary"
-              :size="SIZES.standard"
-              :loading="isSaving"
-              :disabled="!moveOutDate"
-              @click="setMoveOutDate"
-            >
-              Gem
-            </UButton>
-            <UButton
-              data-testid="cancel-edit-move-out-date"
-              :icon="ICONS.xMark"
-              :color="COLOR.neutral"
-              variant="ghost"
-              :size="SIZES.standard"
-              @click="isEditing = false; moveOutDate = household.moveOutDate ?? null"
-            >
-              Annullér
-            </UButton>
-          </div>
-        </div>
-
-        <!-- Clear move-out date -->
+        <!-- Undo move-out (edit mode, only when date is set) -->
         <DangerButton
+          v-if="hasMoveOutDate && isEditing"
           data-testid="clear-move-out-date"
           label="Fortryd flytning"
           confirm-label="Klik igen for at fortryde"
@@ -251,17 +229,36 @@ const getCalendarFeedForUser = async () => {
         />
       </div>
 
-      <!-- Last operation result (persistent, subtle) -->
-      <UAlert
-        v-if="lastMoveOutResult"
-        :icon="lastMoveOutResult.errored > 0 ? ICONS.robotDead : ICONS.robotHappy"
-        :color="lastMoveOutResult.errored > 0 ? 'error' : 'neutral'"
-        variant="subtle"
-        title="Sidste ændring"
-        :description="`Fraflytningsdato ændret, og familiens bookinger har ændret sig: ${formatScaffoldResult(lastMoveOutResult, 'past')}`"
-        data-testid="last-move-out-result-alert"
-      />
-    </div>
+      <template #footer>
+        <div v-if="isEditing" class="flex flex-col-reverse md:flex-row justify-end gap-2">
+          <UButton v-bind="BUTTONS.cancel" data-testid="cancel-edit-move-out-date" @click="cancelEdit">Annullér</UButton>
+          <!-- No date yet: destructive "set date" action -->
+          <DangerButton
+            v-if="!hasMoveOutDate"
+            data-testid="set-move-out-date"
+            label="Sæt fraflytningsdato"
+            confirm-label="Klik igen for at bekræfte fraflytning"
+            :icon="ICONS.moveOut"
+            initial-color="error"
+            initial-variant="soft"
+            :loading="isSaving"
+            :disabled="!moveOutDate"
+            @confirm="setMoveOutDate"
+          />
+          <!-- Has date: save new date -->
+          <UButton
+            v-else
+            v-bind="BUTTONS.save"
+            data-testid="save-move-out-date"
+            :loading="isSaving"
+            :disabled="!moveOutDate"
+            @click="setMoveOutDate"
+          >
+            Gem fraflytningsdato
+          </UButton>
+        </div>
+      </template>
+    </UCard>
 
     <!-- Read-only move-out display for non-editors -->
     <div v-else-if="hasMoveOutDate" :class="LAYOUTS.sectionDivider" class="pt-6">
@@ -271,6 +268,17 @@ const getCalendarFeedForUser = async () => {
         <span :class="TYPOGRAPHY.bodyTextMuted" data-testid="move-out-date-display">Fraflytter {{ formatDate(household.moveOutDate!) }}</span>
       </div>
     </div>
+
+    <!-- Last operation result (persistent, below card) -->
+    <UAlert
+      v-if="canEdit && lastMoveOutResult"
+      :icon="lastMoveOutResult.errored > 0 ? ICONS.robotDead : ICONS.robotHappy"
+      :color="lastMoveOutResult.errored > 0 ? 'error' : 'neutral'"
+      variant="subtle"
+      title="Sidste ændring"
+      :description="`Fraflytningsdato ændret, og familiens bookinger har ændret sig: ${formatScaffoldResult(lastMoveOutResult, 'past')}`"
+      data-testid="last-move-out-result-alert"
+    />
 
     <!-- Section 3: Kalenderabonnement -->
     <div :class="LAYOUTS.sectionDivider" class="pt-6">

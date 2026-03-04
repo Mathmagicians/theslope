@@ -1,6 +1,6 @@
 # Feature Proposal: Move-Out Date Enforcement & Household Coexistence
 
-**Status:** Phases 1–2 done, Phase 5a (UI) done, Phase 5b (scaffold feedback) in progress, Phases 3–4 pending
+**Status:** Phases 1–2 done, Phase 5a–5b done, Phase 5c (UX polish) in progress, Phases 3–4 pending
 **Date:** 2026-02-22
 **Updated:** 2026-03-04
 
@@ -194,18 +194,106 @@ URL disambiguation (Phase 2) MUST ship BEFORE the schema migration (Phase 3) tha
 | `tests/component/components/calendar/CalendarDatePicker.nuxt.spec.ts` (new) | 7 parametrized tests |
 | `tests/component/components/calendar/CalendarDateRangePicker.nuxt.spec.ts` | Reverted to main, DRY helpers |
 
-### Phase 5b: Move-Out Scaffold Result Feedback ← IN PROGRESS
+### Phase 5b: Move-Out Scaffold Result Feedback ✅ DONE
 
-**Goal:** Show users what happened to their bookings after setting/clearing move-out date. Same UX as preference changes: info box → toast → persistent alert.
+**Goal:** Show users what happened to their bookings after setting/clearing move-out date. Same UX as preference changes: info box → toast → persistent alert. Moved endpoint from admin-only to self-service with admin bypass (`/api/household/[id]/update`).
 
 **Changes:**
 
 | File | Change |
 |------|--------|
 | `app/composables/useBookingValidation.ts` | `HouseholdUpdateResponseSchema` (household + scaffoldResult) |
-| `server/routes/api/admin/household/[id].post.ts` | Return `{ household, scaffoldResult }` instead of just household |
-| `app/stores/households.ts` | `lastMoveOutResult` ref, `setMoveOutDate` returns scaffold result |
-| `app/components/household/HouseholdSettings.vue` | Warning info box in edit mode, success toast, persistent result alert |
+| `server/routes/api/household/[id]/update.post.ts` (moved) | Self-service with `requireHouseholdAccess` + `?adminBypass=true` |
+| `app/stores/households.ts` | `lastMoveOutResult` ref, `setMoveOutDate` with `adminBypass` param |
+| `app/components/household/HouseholdSettings.vue` | Warning info box, success toast, persistent result alert |
+| `tests/e2e/api/parallel/admin/household.e2e.spec.ts` | Parametrized: member (200), admin bypass (200), cross-household (403) |
+
+### Phase 5c: Move-Out UX Polish ← IN PROGRESS
+
+**Goal:** Restyle Fraflytning section with UCard header/content/footer pattern, add cancel action, use prominent button styling.
+
+**Current issues:**
+- No cancel action when editing (user must reload to escape)
+- Button styling not prominent
+- Flat layout — no visual grouping like other edit flows
+
+#### UX Mockups — 4 States
+
+**State 1: No move-out date, viewing (default)**
+```
+┌─ Fraflytning ──────────────────────────────────┐
+│                                                 │
+│  ☀  Familien har ingen flytteplaner      [pen]  │
+│                                                 │
+└─────────────────────────────────────────────────┘
+```
+
+**State 2: No move-out date, editing (after pencil click)**
+```
+┌─ Fraflytning ──────────────────────────────────┐
+│                                                 │
+│  Familien har planer om at flytte               │
+│                                                 │
+│  !! Advarsel                                    │
+│  Naar du angiver en fraflytningsdato, slettes   │
+│  alle bookinger efter den valgte dato.          │
+│                                                 │
+│  Fraflytningsdato: [  dd/MM/yyyy  cal ]         │
+│                                                 │
+├─────────────────────────────────────────────────┤
+│  [x Annuller]     [!! Angiv fraflytningsdato]   │
+│                      (click again to confirm)   │
+└─────────────────────────────────────────────────┘
+```
+
+**State 3: Has move-out date, viewing**
+```
+┌─ Fraflytning ──────────────────────────────────┐
+│                                                 │
+│  >>  Fraflytter 15/03/2026               [pen]  │
+│                                                 │
+│  [<< Fortryd flytning]                          │
+│     (click again to confirm)                    │
+│                                                 │
+└─────────────────────────────────────────────────┘
+```
+
+**State 4: Has move-out date, editing (after pencil click)**
+```
+┌─ Fraflytning ──────────────────────────────────┐
+│                                                 │
+│  (i) Aendring af fraflytningsdato              │
+│  Bookinger efter den nye dato slettes, og       │
+│  bookinger foer den nye dato kan genoprettes.   │
+│                                                 │
+│  Fraflytningsdato: [  15/03/2026  cal ]         │
+│                                                 │
+├─────────────────────────────────────────────────┤
+│  [x Annuller]                       [v Gem]     │
+└─────────────────────────────────────────────────┘
+```
+
+**Persistent result alert (below card, after any operation):**
+```
+(robot) Sidste aendring
+        Fraflytningsdato aendret: 3 blev frameldt, 12 uaendret
+```
+
+#### Implementation
+
+| Pattern | Source |
+|---------|--------|
+| UCard with `#header` / `#footer` | HouseholdCard, AdminPlanningSeason |
+| `v-bind="BUTTONS.cancel"` | Design system (neutral/ghost, xMark, large) |
+| `v-bind="BUTTONS.save"` | Design system (primary/solid, check, large) |
+| `v-bind="BUTTONS.edit"` | Design system (neutral/ghost, pencil, square) |
+| `DangerButton` 2-step confirm | Existing in component |
+
+**Changes:**
+
+| File | Change |
+|------|--------|
+| `app/components/household/HouseholdSettings.vue` | Wrap Fraflytning in UCard, `#footer` with cancel + DangerButton/save |
 
 ## ADR Impact Analysis
 
@@ -230,8 +318,10 @@ URL disambiguation (Phase 2) MUST ship BEFORE the schema migration (Phase 3) tha
 | 3 | Two households with same `heynaboId` coexist | 3 | |
 | 4 | Heynabo import routes new members to active household | 4 | |
 | 5a | Household member can set/clear moveOutDate in settings | 5a | ✅ |
-| 5b | Toast + alert shows scaffold result after set/clear | 5b | |
-| 5c | Info box warns about consequences before confirming | 5b | |
+| 5b | Toast + alert shows scaffold result after set/clear | 5b | ✅ |
+| 5b | Info box warns about consequences before confirming | 5b | ✅ |
+| 5b | Self-service endpoint with admin bypass, parametrized E2E | 5b | ✅ |
+| 5c | UCard with cancel action + prominent button styling | 5c | |
 
 ## Risk Assessment
 

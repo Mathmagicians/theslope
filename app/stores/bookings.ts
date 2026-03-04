@@ -619,6 +619,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         ordersByTicketType,
 
         // actions
+        refreshOrders,
         loadOrdersForDinners,
         claimOrder,
         fetchReleasedOrders,

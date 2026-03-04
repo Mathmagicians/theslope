@@ -3,7 +3,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {HouseholdDisplay, InhabitantDisplay} from '~/composables/useCoreValidation'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, headers} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom} = testHelpers
 
 // Variables to store IDs for cleanup
 const testHouseholdIds: number[] = []

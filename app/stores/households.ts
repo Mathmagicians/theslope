@@ -285,6 +285,10 @@ export const useHouseholdsStore = defineStore("Households", () => {
             // Also refresh household list to update display badges
             await refreshHouseholds()
 
+            // Refresh bookings so UI reflects scaffold changes (deleted/created orders)
+            const bookingsStore = useBookingsStore()
+            await bookingsStore.refreshOrders()
+
             return result.scaffoldResult
         } catch (e: unknown) {
             handleApiError(e, 'setMoveOutDate')
