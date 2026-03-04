@@ -824,50 +824,46 @@ const actionPreviewItems = computed(() => {
             show-label
           />
 
-          <!-- Order history display -->
-          <OrderHistoryDisplay v-if="row.original.order?.id && historyOrderId === row.original.order.id" :order-id="row.original.order.id"/>
+          <!-- Order history toggle + display (in body, near the content it reveals) -->
+          <div v-if="row.original.order?.id">
+            <UButton
+                color="neutral"
+                variant="ghost"
+                :icon="historyOrderId === row.original.order.id ? ICONS.chevronUp : ICONS.clipboard"
+                square
+                :size="SIZES.small"
+                aria-label="Vis ordrehistorik"
+                @click="toggleHistory(row.original.order.id)"
+            />
+            <OrderHistoryDisplay v-if="historyOrderId === row.original.order.id" :order-id="row.original.order.id" class="mt-2"/>
+          </div>
 
+          <!-- Footer: action preview + buttons (stacked on mobile, horizontal on desktop) -->
           <template #footer>
             <div class="flex flex-col gap-2">
-              <!-- Action preview: show what will happen when saving -->
               <ActionPreview :items="actionPreviewItems" />
 
-              <div class="flex justify-between items-center">
-                <!-- History button (left) -->
+              <div class="flex flex-col-reverse md:flex-row md:justify-end gap-2">
                 <UButton
-                    v-if="row.original.order?.id"
-                    color="neutral"
-                    variant="ghost"
-                    :icon="historyOrderId === row.original.order.id ? ICONS.chevronUp : ICONS.clipboard"
-                    :size="SIZES.standard"
-                    @click="toggleHistory(row.original.order.id)"
+                  v-bind="BUTTONS.cancel"
+                  :data-testid="`${row.original.rowType}-${row.original.id}-cancel`"
+                  @click="handleCancel"
                 >
-                  Historik
+                  Annuller
                 </UButton>
-                <span v-else />
-                <!-- Cancel/Save buttons (right) -->
-                <div class="flex gap-2">
-                  <UButton
-                    v-bind="BUTTONS.cancel"
-                    :data-testid="`${row.original.rowType}-${row.original.id}-cancel`"
-                    @click="handleCancel"
-                  >
-                    Annuller
-                  </UButton>
-                  <UButton
-                    v-bind="row.original.rowType === 'power' ? {} : BUTTONS.save"
-                    :color="row.original.rowType === 'power' ? COMPONENTS.powerMode.color : undefined"
-                    :loading="isSaving"
-                    :disabled="row.original.bookingAction === null"
-                    :data-testid="`${row.original.rowType}-${row.original.id}-save`"
-                    @click="handleSave(row.original)"
-                  >
-                    <template #leading>
-                      <UIcon :name="row.original.rowType === 'power' ? COMPONENTS.powerMode.buttonIcon : ICONS.check" />
-                    </template>
-                    {{ row.original.rowType === 'power' ? 'Gem for alle' : 'Opdater' }}
-                  </UButton>
-                </div>
+                <UButton
+                  v-bind="row.original.rowType === 'power' ? {} : BUTTONS.save"
+                  :color="row.original.rowType === 'power' ? COMPONENTS.powerMode.color : undefined"
+                  :loading="isSaving"
+                  :disabled="row.original.bookingAction === null"
+                  :data-testid="`${row.original.rowType}-${row.original.id}-save`"
+                  @click="handleSave(row.original)"
+                >
+                  <template #leading>
+                    <UIcon :name="row.original.rowType === 'power' ? COMPONENTS.powerMode.buttonIcon : ICONS.check" />
+                  </template>
+                  {{ row.original.rowType === 'power' ? 'Gem for alle' : 'Opdater' }}
+                </UButton>
               </div>
             </div>
           </template>

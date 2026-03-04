@@ -59,8 +59,8 @@ export const useHouseholdsStore = defineStore("Households", () => {
             default: () => [],
             watch: [loggedIn],  // Re-fetch when login state changes
             transform: (data: HouseholdDisplay[]) => {
-                const {deserializeHouseholdDisplay} = useCoreValidation()
-                return data.map(h => deserializeHouseholdDisplay(h as Record<string, unknown>))
+                const {HouseholdDisplaySchema} = useCoreValidation()
+                return data.map(h => HouseholdDisplaySchema.parse(h))
             }
         }
     )
