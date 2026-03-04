@@ -464,7 +464,7 @@ export const COMPONENTS = {
 
     // Diagonal corner ribbon - top-right status overlay (cancelled dinners, move-out, move-in)
     ribbon: {
-        base: 'absolute top-4 -right-8 z-10 text-white text-xs font-bold py-1 px-10 rotate-45 shadow-md',
+        base: 'absolute top-8 -right-10 z-10 text-white text-xs font-bold py-1 pl-14 pr-12 rotate-45 shadow-md',
         container: 'relative overflow-hidden',
         colors: {
             cancel: 'bg-red-600',
