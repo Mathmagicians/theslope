@@ -5,6 +5,9 @@
  * Sections:
  * 1. Husstandsoplysninger - Read-only display: address, movedInDate, PBS ID
  * 2. Fraflytning - Set/clear move-out date (gated by canEdit)
+ *    - Info box when editing (explains consequences)
+ *    - Toast on save (formatScaffoldResult in past tense)
+ *    - Persistent alert after operation (robotHappy/robotDead)
  * 3. Kalenderabonnement - Calendar feed subscription
  *
  * Move-out date flow:
@@ -28,6 +31,13 @@ const {TYPOGRAPHY, ICONS, SIZES, COLOR, LAYOUTS} = useTheSlopeDesignSystem()
 
 // Store integration
 const householdsStore = useHouseholdsStore()
+const {lastMoveOutResult} = storeToRefs(householdsStore)
+
+// Booking business logic (scaffold result formatting)
+const {formatScaffoldResult} = useBooking()
+
+// Toast notifications
+const toast = useToast()
 
 // Move-out date state
 const isSaving = ref(false)
@@ -46,7 +56,21 @@ const setMoveOutDate = async () => {
   if (!moveOutDate.value) return
   isSaving.value = true
   try {
-    await householdsStore.setMoveOutDate(props.household.id, moveOutDate.value)
+    const result = await householdsStore.setMoveOutDate(props.household.id, moveOutDate.value, props.adminBypass)
+    toast.add({
+      title: 'Fraflytningsdato sat',
+      description: formatScaffoldResult(result, 'past'),
+      icon: ICONS.checkCircle,
+      color: 'success'
+    })
+  } catch (error) {
+    console.error('Failed to set move-out date:', error)
+    toast.add({
+      title: 'Kunne ikke gemme',
+      description: 'Der opstod en fejl. Prøv igen senere.',
+      icon: 'i-heroicons-exclamation-circle',
+      color: 'error'
+    })
   } finally {
     isSaving.value = false
   }
@@ -55,7 +79,21 @@ const setMoveOutDate = async () => {
 const clearMoveOutDate = async () => {
   isSaving.value = true
   try {
-    await householdsStore.setMoveOutDate(props.household.id, null)
+    const result = await householdsStore.setMoveOutDate(props.household.id, null, props.adminBypass)
+    toast.add({
+      title: 'Fraflytning fortrudt',
+      description: formatScaffoldResult(result, 'past'),
+      icon: ICONS.checkCircle,
+      color: 'success'
+    })
+  } catch (error) {
+    console.error('Failed to clear move-out date:', error)
+    toast.add({
+      title: 'Kunne ikke gemme',
+      description: 'Der opstod en fejl. Prøv igen senere.',
+      icon: 'i-heroicons-exclamation-circle',
+      color: 'error'
+    })
   } finally {
     isSaving.value = false
   }
@@ -118,6 +156,15 @@ const getCalendarFeedForUser = async () => {
         </div>
 
         <template v-if="isEditing">
+          <!-- Warning: consequences of setting move-out date -->
+          <UAlert
+            icon="i-heroicons-exclamation-triangle"
+            color="warning"
+            variant="soft"
+            title="Advarsel"
+            description="Når du sætter en fraflytningsdato, slettes alle bookinger efter den valgte dato for husstanden."
+            data-testid="move-out-warning"
+          />
           <CalendarDatePicker
             v-model="moveOutDate"
             label="Fraflytningsdato"
@@ -153,6 +200,15 @@ const getCalendarFeedForUser = async () => {
 
         <!-- Edit mode: date picker for changing the date -->
         <div v-if="isEditing" class="space-y-4">
+          <!-- Info: consequences of changing move-out date -->
+          <UAlert
+            icon="i-heroicons-information-circle"
+            color="warning"
+            variant="soft"
+            title="Ændring af fraflytningsdato"
+            description="Bookinger efter den nye dato slettes, og bookinger før den nye dato kan genoprettes."
+            data-testid="move-out-change-warning"
+          />
           <CalendarDatePicker
             v-model="moveOutDate"
             label="Fraflytningsdato"
@@ -194,6 +250,17 @@ const getCalendarFeedForUser = async () => {
           @confirm="clearMoveOutDate"
         />
       </div>
+
+      <!-- Last operation result (persistent, subtle) -->
+      <UAlert
+        v-if="lastMoveOutResult"
+        :icon="lastMoveOutResult.errored > 0 ? ICONS.robotDead : ICONS.robotHappy"
+        :color="lastMoveOutResult.errored > 0 ? 'error' : 'neutral'"
+        variant="subtle"
+        title="Sidste ændring"
+        :description="`Fraflytningsdato ændret, og familiens bookinger har ændret sig: ${formatScaffoldResult(lastMoveOutResult, 'past')}`"
+        data-testid="last-move-out-result-alert"
+      />
     </div>
 
     <!-- Read-only move-out display for non-editors -->

@@ -1,8 +1,8 @@
 # Feature Proposal: Move-Out Date Enforcement & Household Coexistence
 
-**Status:** Phase 1 done, Phases 2–5 pending
+**Status:** Phases 1–2 done, Phase 5a (UI) done, Phase 5b (scaffold feedback) in progress, Phases 3–4 pending
 **Date:** 2026-02-22
-**Updated:** 2026-03-03
+**Updated:** 2026-03-04
 
 ## Business Rule
 
@@ -168,16 +168,44 @@ URL disambiguation (Phase 2) MUST ship BEFORE the schema migration (Phase 3) tha
 | `server/utils/heynaboImportService.ts` | Route new inhabitants to household without moveOutDate |
 | `app/composables/useCoreValidation.ts` | `householdId` in `InhabitantUpdateSchema` |
 
-### Phase 5: Household Member `moveOutDate` Setting
+### Phase 5a: Household Member `moveOutDate` Setting ✅ DONE
 
-**Goal:** Household members can set their own `moveOutDate` via household settings.
+**Goal:** Household members can set their own `moveOutDate` via household settings tab.
+
+**UX decisions:**
+- Pencil-gate pattern: rare/high-consequence operation, hidden behind edit pencil
+- `CalendarDatePicker` (new single-date component) — move-in and move-out are independent, not a range
+- Guiding text always visible: "Skal familien flytte? Du kan angive flyttedato her, og alle bookinger stopper efter denne dato."
+- Sun icon + "Familien har ingen flytteplaner" when no move-out date
+- DangerButton double-confirm for set ("Klik igen for at bekræfte flytning") and clear ("Klik igen for at fortryde")
+- Master data section matches UserProfileCard layout: opacity-60 icons, TYPOGRAPHY.bodyTextMuted values
 
 **Changes:**
 
 | File | Change |
 |------|--------|
-| `app/components/household/HouseholdSettings.vue` | moveOutDate date picker |
-| New API endpoint | Member-facing endpoint with household auth + re-scaffold trigger |
+| `app/components/calendar/CalendarDatePicker.vue` (new) | Single nullable date picker (UPopover + UCalendar + UInput) |
+| `app/components/calendar/CalendarDateRangePicker.vue` | Cleanup: useTheSlopeDesignSystem(), added disabled prop, removed debug |
+| `app/components/household/HouseholdSettings.vue` | Full rewrite: 3 sections (master data, fraflytning, calendar), pencil-gate, DangerButton |
+| `app/composables/useTheSlopeDesignSystem.ts` | Added ICONS: moveIn, moveOut, identification; fixed ribbon clipping |
+| `app/stores/households.ts` | `setMoveOutDate(householdId, date|null)` action |
+| `app/types/dateTypes.ts` | Removed unused `NullableDateRange` |
+| `server/utils/eventHandlerHelper.ts` | Fixed Nuxt 4.3 TS: H3Error → NuxtError (createError return type change) |
+| `tests/component/components/calendar/CalendarDatePicker.nuxt.spec.ts` (new) | 7 parametrized tests |
+| `tests/component/components/calendar/CalendarDateRangePicker.nuxt.spec.ts` | Reverted to main, DRY helpers |
+
+### Phase 5b: Move-Out Scaffold Result Feedback ← IN PROGRESS
+
+**Goal:** Show users what happened to their bookings after setting/clearing move-out date. Same UX as preference changes: info box → toast → persistent alert.
+
+**Changes:**
+
+| File | Change |
+|------|--------|
+| `app/composables/useBookingValidation.ts` | `HouseholdUpdateResponseSchema` (household + scaffoldResult) |
+| `server/routes/api/admin/household/[id].post.ts` | Return `{ household, scaffoldResult }` instead of just household |
+| `app/stores/households.ts` | `lastMoveOutResult` ref, `setMoveOutDate` returns scaffold result |
+| `app/components/household/HouseholdSettings.vue` | Warning info box in edit mode, success toast, persistent result alert |
 
 ## ADR Impact Analysis
 
@@ -198,10 +226,12 @@ URL disambiguation (Phase 2) MUST ship BEFORE the schema migration (Phase 3) tha
 | # | Verification | Phase | Status |
 |---|-------------|-------|--------|
 | 1 | Unit + E2E tests for residency enforcement | 1 | ✅ |
-| 2 | `/household/S_31/bookings?pbs=100` resolves correctly | 2 | |
+| 2 | `/household/S_31/bookings?pbs=100` resolves correctly | 2 | ✅ |
 | 3 | Two households with same `heynaboId` coexist | 3 | |
 | 4 | Heynabo import routes new members to active household | 4 | |
-| 5 | Household member can set moveOutDate in settings | 5 | |
+| 5a | Household member can set/clear moveOutDate in settings | 5a | ✅ |
+| 5b | Toast + alert shows scaffold result after set/clear | 5b | |
+| 5c | Info box warns about consequences before confirming | 5b | |
 
 ## Risk Assessment
 

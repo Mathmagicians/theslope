@@ -246,9 +246,15 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
                 const moveOutDate = moveOutAtEvent !== undefined
                     ? new Date(dinnerEvents[moveOutAtEvent]!.date)
                     : daysFromNow(moveOutDaysFromNow!)
-                await HouseholdFactory.updateHousehold(context, household.id, {moveOutDate})
+                const updateResult = await HouseholdFactory.updateHousehold(context, household.id, {moveOutDate})
 
-                // Verify moveOutDate persisted
+                // THEN: Response contains scaffoldResult with correct counts
+                expect(updateResult, 'should return HouseholdUpdateResponse').not.toBeNull()
+                const deletedCount = inhabitantOrdersBefore.length - eligibleIndices.length
+                expect(updateResult!.scaffoldResult.deleted, 'scaffoldResult.deleted matches removed orders').toBe(deletedCount)
+                expect(updateResult!.household.moveOutDate, 'response household has moveOutDate set').not.toBeNull()
+
+                // Verify moveOutDate persisted via separate GET
                 const updatedHousehold = await HouseholdFactory.getHouseholdById(context, household.id)
                 expect(updatedHousehold!.moveOutDate, 'moveOutDate should be set').not.toBeNull()
 
@@ -294,12 +300,67 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
             expect(inhabitantOrdersBefore.length, 'should have orders before').toBeGreaterThan(0)
 
             // WHEN: moveOutDate set to yesterday → family is gone, all events ineligible
-            await HouseholdFactory.updateHousehold(context, household.id, {moveOutDate: daysFromNow(-1)})
+            const updateResult = await HouseholdFactory.updateHousehold(context, household.id, {moveOutDate: daysFromNow(-1)})
+
+            // THEN: scaffoldResult reflects all orders deleted
+            expect(updateResult, 'should return HouseholdUpdateResponse').not.toBeNull()
+            expect(updateResult!.scaffoldResult.deleted, 'scaffoldResult.deleted matches all removed orders').toBe(inhabitantOrdersBefore.length)
 
             // THEN: ALL orders deleted — deadline doesn't protect moved-out households
             const ordersAfter = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
             const inhabitantOrdersAfter = ordersAfter.filter(o => o.inhabitantId === inhabitants[0]!.id)
             expect(inhabitantOrdersAfter.length, 'all orders deleted for moved-out household').toBe(0)
+        })
+
+        test('clear moveOutDate → orders re-scaffolded (created)', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+
+            // GIVEN: Season with no deadline, all-days cooking
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+                cookingDays: allDaysCooking,
+                ticketIsCancellableDaysBefore: 0
+            })
+            createdSeasonIds.push(season.id!)
+            await SeasonFactory.activateSeason(context, season.id!)
+
+            // GIVEN: Household with DINEIN preferences and scaffold
+            const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+                context, HouseholdFactory.defaultHouseholdData(testSalt), 1
+            )
+            createdHouseholdIds.push(household.id)
+
+            const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
+            await HouseholdFactory.updateInhabitant(context, inhabitants[0]!.id, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
+            await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
+
+            const ordersBeforeMoveOut = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
+            const inhabitantOrdersBeforeMoveOut = ordersBeforeMoveOut.filter(o => o.inhabitantId === inhabitants[0]!.id)
+            expect(inhabitantOrdersBeforeMoveOut.length, 'should have orders for all events').toBe(dinnerEvents.length)
+
+            // GIVEN: Set moveOutDate to past → all orders deleted
+            const setResult = await HouseholdFactory.updateHousehold(context, household.id, {moveOutDate: daysFromNow(-1)})
+            expect(setResult!.scaffoldResult.deleted, 'set: all orders deleted').toBe(dinnerEvents.length)
+
+            const ordersAfterMoveOut = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
+            expect(ordersAfterMoveOut.filter(o => o.inhabitantId === inhabitants[0]!.id).length, 'zero orders after moveOut').toBe(0)
+
+            // WHEN: Clear moveOutDate (set to null) → orders should be re-scaffolded
+            const clearResult = await HouseholdFactory.updateHousehold(context, household.id, {moveOutDate: null as unknown as Date})
+
+            // THEN: scaffoldResult reflects orders re-created
+            expect(clearResult, 'should return HouseholdUpdateResponse').not.toBeNull()
+            // Debug: log full scaffold result to understand what happened
+            const sr = clearResult!.scaffoldResult
+            expect(sr.seasonId, `clear: scaffold ran with season (full: created=${sr.created} deleted=${sr.deleted} released=${sr.released} unchanged=${sr.unchanged} errored=${sr.errored} households=${sr.households})`).not.toBeNull()
+            expect(clearResult!.household.moveOutDate, 'response household has moveOutDate cleared').toBeNull()
+            expect(sr.households, `clear: scaffold processed the household`).toBe(1)
+            expect(sr.created, 'clear: orders re-created').toBe(dinnerEvents.length)
+
+            // THEN: Orders are back
+            const ordersAfterClear = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
+            const inhabitantOrdersAfterClear = ordersAfterClear.filter(o => o.inhabitantId === inhabitants[0]!.id)
+            expect(inhabitantOrdersAfterClear.length, 'orders restored after clearing moveOutDate').toBe(dinnerEvents.length)
         })
     })
 

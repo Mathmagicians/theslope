@@ -3,7 +3,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {HouseholdDisplay, InhabitantDisplay} from '~/composables/useCoreValidation'
 
-const {validatedBrowserContext, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, headers} = testHelpers
 
 // Variables to store IDs for cleanup
 const testHouseholdIds: number[] = []
@@ -59,36 +59,32 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         verifyHouseholdStructure(household, 'PUT household')
     })
 
-    test('POST can update household with valid structure', async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
+    // POST /api/household/[id]/update — self-service with optional admin bypass
+    const updateCases = [
+        {desc: 'member updates own household', actor: 'member' as const, ownHousehold: true, adminBypass: false, expected: 200},
+        {desc: 'admin with bypass updates other household', actor: 'admin' as const, ownHousehold: false, adminBypass: true, expected: 200},
+        {desc: 'member cannot update other household', actor: 'member' as const, ownHousehold: false, adminBypass: false, expected: 403},
+    ]
 
-        // Create household first
-        const household = await HouseholdFactory.createHousehold(context)
-        testHouseholdIds.push(household.id)
+    updateCases.forEach(({desc, actor, ownHousehold, adminBypass, expected}) => {
+        test(`POST update: ${desc} → ${expected}`, async ({browser}) => {
+            const adminContext = await validatedBrowserContext(browser)
+            const memberContext = await memberValidatedBrowserContext(browser)
+            const actorContext = actor === 'member' ? memberContext : adminContext
 
-        // Update household
-        const updatedData = {
-            name: 'Updated Household Name',
-            address: 'Updated Address 456'
-        }
+            const householdId = ownHousehold
+                ? (await getSessionUserInfo(memberContext)).householdId
+                : (await HouseholdFactory.createHousehold(adminContext, HouseholdFactory.defaultHouseholdData(temporaryAndRandom())).then(h => { testHouseholdIds.push(h.id); return h })).id
 
-        const response = await context.request.post(`/api/admin/household/${household.id}`, {
-            headers: {'Content-Type': 'application/json'},
-            data: updatedData
+            const result = await HouseholdFactory.updateHousehold(actorContext, householdId, {name: `Updated-${desc}`}, expected, adminBypass)
+
+            if (expected === 200) {
+                expect(result).not.toBeNull()
+                verifyHouseholdStructure(result!.household, desc)
+                expect(result!.scaffoldResult).toBeDefined()
+                expect(result!.household.name).toBe(`Updated-${desc}`)
+            }
         })
-
-        const errorBody = response.status() !== 200 ? await response.text() : ''
-        expect(response.status(), `Expected 200 but got ${response.status()}. Error: ${errorBody}`).toBe(200)
-
-        const updatedHousehold = await response.json()
-
-        // Verify response structure (server validates against HouseholdDetail schema)
-        verifyHouseholdStructure(updatedHousehold, 'POST household')
-
-        // Verify updates applied
-        expect(updatedHousehold.name).toBe(updatedData.name)
-        expect(updatedHousehold.address).toBe(updatedData.address)
-        expect(updatedHousehold.id).toBe(household.id)
     })
 
     test('DELETE can remove household with valid structure', async ({browser}) => {

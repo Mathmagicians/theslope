@@ -626,9 +626,18 @@ export const useBookingValidation = () => {
      * Operation result for inhabitant update with preference re-scaffolding
      * ADR-009: Operation result type (not entity type)
      */
-    const {InhabitantDetailSchema} = useCoreValidation()
+    const {InhabitantDetailSchema, HouseholdDetailSchema} = useCoreValidation()
     const InhabitantUpdateResponseSchema = z.object({
         inhabitant: InhabitantDetailSchema,
+        scaffoldResult: ScaffoldResultSchema
+    })
+
+    /**
+     * Operation result for household update with move-out date re-scaffolding
+     * ADR-009: Operation result type (not entity type)
+     */
+    const HouseholdUpdateResponseSchema = z.object({
+        household: HouseholdDetailSchema,
         scaffoldResult: ScaffoldResultSchema
     })
 
@@ -885,6 +894,7 @@ export const useBookingValidation = () => {
         // Scaffold Pre-bookings
         ScaffoldResultSchema,
         InhabitantUpdateResponseSchema,
+        HouseholdUpdateResponseSchema,
 
         // Unified Booking Scaffold (ADR-016)
         DesiredOrderSchema,
@@ -960,6 +970,7 @@ export type HeynaboEventStatus = z.infer<ReturnType<typeof useBookingValidation>
 // Scaffold Pre-bookings
 export type ScaffoldResult = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldResultSchema']>
 export type InhabitantUpdateResponse = z.infer<ReturnType<typeof useBookingValidation>['InhabitantUpdateResponseSchema']>
+export type HouseholdUpdateResponse = z.infer<ReturnType<typeof useBookingValidation>['HouseholdUpdateResponseSchema']>
 
 // Unified Booking Scaffold (ADR-016)
 export type DesiredOrder = z.infer<ReturnType<typeof useBookingValidation>['DesiredOrderSchema']>

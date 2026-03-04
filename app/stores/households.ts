@@ -2,7 +2,7 @@ import type {
     HouseholdDisplay,
     HouseholdDetail
 } from '~/composables/useCoreValidation'
-import type {ScaffoldResult, InhabitantUpdateResponse} from '~/composables/useBookingValidation'
+import type {ScaffoldResult, InhabitantUpdateResponse, HouseholdUpdateResponse} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
 
 /**
@@ -21,6 +21,9 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
     // Last preference update result (persists across component remounts)
     const lastPreferenceResult = ref<ScaffoldResult | null>(null)
+
+    // Last move-out date update result (persists across component remounts)
+    const lastMoveOutResult = ref<ScaffoldResult | null>(null)
 
     // ========================================
     // State - useAsyncData with useRequestFetch for SSR-safe auth context
@@ -262,13 +265,18 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * @param householdId - ID of the household
      * @param moveOutDate - Date to set, or null to clear
      */
-    const setMoveOutDate = async (householdId: number, moveOutDate: Date | null) => {
+    const setMoveOutDate = async (householdId: number, moveOutDate: Date | null, adminBypass = false) => {
         try {
             console.info(`🏠 > HOUSEHOLDS_STORE > Setting moveOutDate for household ${householdId}: ${moveOutDate?.toISOString() ?? 'null'}`)
-            await $fetch(`/api/admin/household/${householdId}`, {
+            const result = await $fetch<HouseholdUpdateResponse>(`/api/household/${householdId}/update`, {
                 method: 'POST',
-                body: { moveOutDate }
+                body: { moveOutDate },
+                query: {adminBypass}
             })
+
+            // Store scaffold result for persistent UI display
+            lastMoveOutResult.value = result.scaffoldResult
+            console.info(`🏠 > HOUSEHOLDS_STORE > moveOutDate updated for household ${householdId}: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
 
             // Refresh selected household to get updated data
             if (selectedHouseholdId.value === householdId) {
@@ -277,7 +285,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
             // Also refresh household list to update display badges
             await refreshHouseholds()
 
-            console.info(`🏠 > HOUSEHOLDS_STORE > moveOutDate updated for household ${householdId}`)
+            return result.scaffoldResult
         } catch (e: unknown) {
             handleApiError(e, 'setMoveOutDate')
             throw e
@@ -349,6 +357,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         households,
         selectedHousehold,
         lastPreferenceResult,
+        lastMoveOutResult,
         // Computed
         myHousehold,
         myInhabitant,

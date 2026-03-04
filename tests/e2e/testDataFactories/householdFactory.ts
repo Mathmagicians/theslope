@@ -5,16 +5,17 @@ import {expect} from "@playwright/test"
 import testHelpers from "../testHelpers"
 import type {HouseholdDetail, HouseholdDisplay, InhabitantDetail, InhabitantCreate, UserDisplay} from "~/composables/useCoreValidation"
 import {useCoreValidation} from "~/composables/useCoreValidation"
-import {useBookingValidation, type InhabitantUpdateResponse} from "~/composables/useBookingValidation"
+import {useBookingValidation, type InhabitantUpdateResponse, type HouseholdUpdateResponse} from "~/composables/useBookingValidation"
 import {useHeynaboValidation, type HeynaboImportResponse} from "~/composables/useHeynaboValidation"
 
 const {salt, saltedId, temporaryAndRandom, headers} = testHelpers
 const {createDefaultWeekdayMap, InhabitantDetailSchema, UserDisplaySchema, HouseholdDisplaySchema} = useCoreValidation()
-const {DinnerModeSchema, InhabitantUpdateResponseSchema} = useBookingValidation()
+const {DinnerModeSchema, InhabitantUpdateResponseSchema, HouseholdUpdateResponseSchema} = useBookingValidation()
 const {HeynaboImportResponseSchema} = useHeynaboValidation()
 const DinnerMode = DinnerModeSchema.enum
-const HOUSEHOLD_ENDPOINT = '/api/admin/household'
-const INHABITANT_ENDPOINT = `${HOUSEHOLD_ENDPOINT}/inhabitants`
+const HOUSEHOLD_ADMIN_ENDPOINT = '/api/admin/household'
+const HOUSEHOLD_ENDPOINT = '/api/household'
+const INHABITANT_ENDPOINT = `${HOUSEHOLD_ADMIN_ENDPOINT}/inhabitants`
 const HEYNABO_IMPORT_ENDPOINT = '/api/admin/heynabo/import'
 
 // Use high base ID to avoid conflicts with real Heynabo data (which uses low IDs)
@@ -70,7 +71,7 @@ export class HouseholdFactory {
             ? householdData
             : partialHousehold
 
-        const response = await context.request.put(HOUSEHOLD_ENDPOINT, {
+        const response = await context.request.put(HOUSEHOLD_ADMIN_ENDPOINT, {
             headers: headers,
             data: requestData
         })
@@ -115,7 +116,7 @@ export class HouseholdFactory {
         expectedStatus: number = 200
     ): Promise<HouseholdDetail | null> => {
         const {HouseholdDetailSchema} = useCoreValidation()
-        const response = await context.request.get(`${HOUSEHOLD_ENDPOINT}/${householdId}`)
+        const response = await context.request.get(`${HOUSEHOLD_ADMIN_ENDPOINT}/${householdId}`)
 
         const status = response.status()
         expect(status, 'Unexpected status').toBe(expectedStatus)
@@ -131,7 +132,7 @@ export class HouseholdFactory {
      * Get all households (Display type per ADR-009)
      */
     static readonly getAllHouseholds = async (context: BrowserContext): Promise<HouseholdDisplay[]> => {
-        const response = await context.request.get(HOUSEHOLD_ENDPOINT)
+        const response = await context.request.get(HOUSEHOLD_ADMIN_ENDPOINT)
         expect(response.status()).toBe(200)
 
         const responseBody = await response.json()
@@ -141,17 +142,19 @@ export class HouseholdFactory {
 
     /**
      * Update household (for setting TheSlope-owned fields like pbsId, movedInDate, moveOutDate)
+     * Returns HouseholdUpdateResponse (household + scaffoldResult) validated through schema
      */
     static readonly updateHousehold = async (
         context: BrowserContext,
         householdId: number,
         updates: Partial<HouseholdDetail>,
-        expectedStatus: number = 200
-    ): Promise<HouseholdDetail | null> => {
-        const {HouseholdDetailSchema} = useCoreValidation()
-        const response = await context.request.post(`${HOUSEHOLD_ENDPOINT}/${householdId}`, {
+        expectedStatus: number = 200,
+        adminBypass: boolean = true
+    ): Promise<HouseholdUpdateResponse | null> => {
+        const response = await context.request.post(`${HOUSEHOLD_ENDPOINT}/${householdId}/update`, {
             headers: headers,
-            data: updates
+            data: updates,
+            params: {adminBypass}
         })
 
         const status = response.status()
@@ -159,7 +162,7 @@ export class HouseholdFactory {
 
         if (expectedStatus === 200) {
             const rawData = await response.json()
-            return HouseholdDetailSchema.parse(rawData)
+            return HouseholdUpdateResponseSchema.parse(rawData)
         }
         return null
     }
@@ -182,7 +185,7 @@ export class HouseholdFactory {
         const results = await Promise.all(
             ids.map(async (id) => {
                 try {
-                    const response = await context.request.delete(`${HOUSEHOLD_ENDPOINT}/${id}`)
+                    const response = await context.request.delete(`${HOUSEHOLD_ADMIN_ENDPOINT}/${id}`)
                     const status = response.status()
 
                     // Cleanup mode - silent on success, log only failures

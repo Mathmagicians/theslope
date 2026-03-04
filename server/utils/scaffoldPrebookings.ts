@@ -342,7 +342,9 @@ export async function scaffoldPrebookings(
                 })
             if (deleteIds.length > 0) {
                 for (const idChunk of chunkIds(deleteIds)) {
-                    await deleteOrder(d1Client, idChunk, effectiveUserId)
+                    // Pass null for system-triggered deletes → SYSTEM_DELETED audit (deleteOrder contract: null = system)
+                    // Pass effectiveUserId for user-triggered deletes → USER_CANCELLED audit (respected by scaffolder)
+                    await deleteOrder(d1Client, idChunk, isUserTriggered ? effectiveUserId : null)
                 }
             }
 
