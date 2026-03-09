@@ -13,6 +13,8 @@
  * - Settings tab: Settings
  */
 
+import {useQueryParam} from '~/composables/useQueryParam'
+
 // TAB CONFIGURATION
 const tabs = [
   {
@@ -75,15 +77,32 @@ const tabItems = tabs.map(tab => ({
 // Initialize stores
 const householdStore = useHouseholdsStore()
 const {
-  selectedHousehold, isSelectedHouseholdErrored, selectedHouseholdError,
-  householdsError, isHouseholdsErrored, isHouseholdsStoreReady
+  selectedHousehold, selectedHouseholdId, isSelectedHouseholdErrored, selectedHouseholdError,
+  householdsError, isHouseholdsErrored, isHouseholdsStoreReady,
+  households, isHouseholdsInitialized, myHousehold
 } = storeToRefs(householdStore)
 
-const {initHouseholdsStore} = householdStore
+const {loadHousehold} = householdStore
 
-// Read ?pbs query param for disambiguation (Phase 2: PBS-based resolution)
-const pbsId = route.query.pbs ? parseInt(route.query.pbs as string, 10) : undefined
-initHouseholdsStore(shortname.value, pbsId)
+// URL-driven household resolution (ADR-006)
+// Valid ?pbs= → load that household. Invalid/missing ?pbs= → fall back to myHousehold.
+const {value: pbsId} = useQueryParam<number | null>('pbs', {
+  deserialize: (s) => {
+    const n = parseInt(s, 10)
+    return Number.isNaN(n) ? null : n
+  },
+  serialize: (v) => v ? String(v) : '',
+  validate: (v) => v !== null && households.value.some(h => h.pbsId === v),
+  defaultValue: () => myHousehold.value?.pbsId ?? null,
+  syncWhen: () => isHouseholdsInitialized.value
+})
+
+// Watch pbsId to load the corresponding household
+watch(pbsId, (pbs) => {
+  if (!pbs) return
+  const hh = households.value.find(h => h.pbsId === pbs)
+  if (hh && hh.id !== selectedHouseholdId.value) loadHousehold(hh.id)
+}, {immediate: true})
 
 // Access control: check if current user is member of this household
 const authStore = useAuthStore()

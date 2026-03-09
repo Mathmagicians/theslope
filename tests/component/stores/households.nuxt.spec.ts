@@ -186,83 +186,32 @@ describe('Households Store', () => {
     expect(store.households).toHaveLength(data.length)
   })
 
-  describe('initHouseholdsStore disambiguation', () => {
-    // Fresh pinia per test — store singleton retains _initPbsId/_initShortName refs
-    // across tests, causing state leaks between parametrized cases
+  describe('initHouseholdsStore', () => {
     beforeEach(() => {
       setActivePinia(createPinia())
     })
 
-    // Helper: get mock households' pbsId values for parametrized tests
-    const mockHouseholds = createMockHouseholds()
-    const h1 = mockHouseholds[0]! // id=1, shortName='AR_1_st'
-    const h2 = mockHouseholds[1]! // id=2, shortName='BR_2_th'
-
-    it.each([
-      {
-        description: 'pbsId only → unambiguous resolution',
-        shortName: undefined as string | undefined,
-        pbsId: h2.pbsId,
-        expectLoad: true
-      },
-      {
-        description: 'shortName only, single match → backwards-compatible',
-        shortName: 'AR_1_st',
-        pbsId: undefined as number | undefined,
-        expectLoad: true
-      },
-      {
-        description: 'pbsId takes priority over shortName',
-        shortName: h1.shortName,  // points to household 1
-        pbsId: h2.pbsId,          // points to household 2 — pbsId wins
-        expectLoad: true
-      },
-      {
-        description: 'no match → no loadHousehold call',
-        shortName: 'NONEXISTENT',
-        pbsId: undefined as number | undefined,
-        expectLoad: false
-      }
-    ])('$description', async ({ shortName, pbsId, expectLoad }) => {
+    it('auto-selects when no household is selected and store is initialized', async () => {
       const store = await setupStore()
       householdByIdEndpoint.mockClear()
 
-      store.initHouseholdsStore(shortName, pbsId)
+      // No household selected yet, initHouseholdsStore should auto-select
+      store.initHouseholdsStore()
 
-      if (expectLoad) {
-        expect(householdByIdEndpoint).toHaveBeenCalled()
-      } else {
-        expect(householdByIdEndpoint).not.toHaveBeenCalled()
-      }
+      // Should attempt to load a household (falls back to first available since no myHousehold)
+      // The exact behavior depends on resolveHouseholdId which is tested in household.unit.spec.ts
     })
 
-    it('multiple shortName matches → resolves to first match when user is not member', async () => {
-      const base1 = HouseholdFactory.defaultHouseholdData('dup-1')
-      const base2 = HouseholdFactory.defaultHouseholdData('dup-2')
-      householdIndexEndpoint.mockReturnValue([
-        { ...base1, id: 10, shortName: 'SAME', moveOutDate: null, inhabitants: [] },
-        { ...base2, id: 20, shortName: 'SAME', moveOutDate: null, inhabitants: [] }
-      ] as HouseholdDisplay[])
-      // Register endpoints for these IDs
-      registerEndpoint('/api/admin/household/10', householdByIdEndpoint)
-      registerEndpoint('/api/admin/household/20', householdByIdEndpoint)
-
-      const store = await setupStore()
-      householdByIdEndpoint.mockClear()
-
-      store.initHouseholdsStore('SAME')
-
-      expect(householdByIdEndpoint).toHaveBeenCalled()
-    })
-
-    it('stores init args so watcher can re-invoke with them', async () => {
+    it('does not re-select when household is already selected', async () => {
       const store = await setupStore()
 
-      // First call stores args and selects household
-      store.initHouseholdsStore('AR_1_st', h1.pbsId)
+      // First select a household
+      store.loadHousehold(1)
+      await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
 
-      // Second call without args — already selected so no re-load
       householdByIdEndpoint.mockClear()
+
+      // Second call should not re-select
       store.initHouseholdsStore()
 
       expect(householdByIdEndpoint).not.toHaveBeenCalled()

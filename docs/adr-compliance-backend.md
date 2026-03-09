@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2026-01-23 (Admin order corrections: `?adminBypass=true` on PUT/POST/DELETE, `upcomingForSeason`/`includeDinnerContext` on GET)
+**Last Updated:** 2026-03-05 (Household self-service update endpoint for move-out date + residency fields)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -81,6 +81,8 @@
 | `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | updateInhabitantPreferences() for non-admin users, triggers scaffoldPrebookings                  |
 | **Household - Bookings** | | | | | **✅ FULLY COMPLIANT (2026-01-13)** - ADR-016 unified booking through scaffold                   |
 | `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ✅ | ADR-016 unified booking endpoint, `requireHouseholdAccess()`, returns ScaffoldOrdersResponse     |
+| **Household - Update** | | | | | **✅ FULLY COMPLIANT (2026-03-04)** - Self-service household update with admin bypass            |
+| `/api/household/[id]/update.post.ts` | ✅ | ✅ | ✅ | ✅ | updateHousehold() + `rescaffoldOnFieldChange()`, `requireHouseholdAccess()`, `?adminBypass=true`, returns HouseholdUpdateResponse |
 | **Teams (Public)** |
 | `/api/team/index.get.ts` | ❌ | ✅ | |
 | `/api/team/[id].get.ts` | ❌ | ✅ | |

@@ -5,7 +5,7 @@ import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 
 const {adminUIFile, memberUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, doScreenshot} = testHelpers
+const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, doScreenshot, getSessionUserInfo} = testHelpers
 
 test.describe('Household tab navigation', () => {
     // Unique salt per worker to avoid parallel test conflicts
@@ -155,6 +155,82 @@ test.describe('Household tab navigation', () => {
             await expect(activeTab).toHaveAttribute('aria-selected', 'true')
         }
     })
+})
+
+test.describe('Household PBS query param resolution', () => {
+    const testSalt = temporaryAndRandom()
+    let householdId: number
+    let shortName: string
+    let pbsId: number
+    let myShortName: string
+    let myPbsId: number
+
+    test.use({storageState: adminUIFile})
+
+    test.beforeAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        await SeasonFactory.createActiveSeason(context, {holidays: []})
+
+        const household = await HouseholdFactory.createHousehold(context, {name: salt('PbsTest', testSalt)})
+        householdId = household.id
+        shortName = household.shortName
+        pbsId = household.pbsId
+
+        const sessionInfo = await getSessionUserInfo(context)
+        myShortName = sessionInfo.householdShortname
+        myPbsId = sessionInfo.householdPbsId
+    })
+
+    test.afterAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        if (householdId) {
+            await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
+        }
+    })
+
+    test('Valid ?pbs= loads that household', async ({page}) => {
+        await page.goto(`/household/${encodeURIComponent(shortName)}/bookings?pbs=${pbsId}`)
+
+        await pollUntil(
+            async () => page.locator('[data-testid="household-bookings"]').isVisible(),
+            (isVisible) => isVisible,
+            10
+        )
+
+        expect(page.url()).toContain(`pbs=${pbsId}`)
+    })
+
+    test('Missing ?pbs= defaults to user own household', async ({page}) => {
+        await page.goto(`/household/${encodeURIComponent(myShortName)}/bookings`)
+
+        await pollUntil(
+            async () => page.locator('[data-testid="household-bookings"]').isVisible(),
+            (isVisible) => isVisible,
+            10
+        )
+
+        expect(page.url()).toContain(`pbs=${myPbsId}`)
+    })
+
+    const invalidPbsCases = [
+        {description: 'unknown numeric', pbs: '99999'},
+        {description: 'non-numeric', pbs: 'abc'},
+    ] as const
+
+    for (const {description, pbs} of invalidPbsCases) {
+        test(`${description} ?pbs= falls back to user own household`, async ({page}) => {
+            await page.goto(`/household/${encodeURIComponent(myShortName)}/bookings?pbs=${pbs}`)
+
+            await pollUntil(
+                async () => page.locator('[data-testid="household-bookings"]').isVisible(),
+                (isVisible) => isVisible,
+                10
+            )
+
+            expect(page.url()).toContain(`pbs=${myPbsId}`)
+        })
+    }
 })
 
 /**

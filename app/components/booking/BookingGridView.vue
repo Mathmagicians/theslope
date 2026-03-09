@@ -572,9 +572,9 @@ const getEventSummary = (eventId: number) => {
       </div>
     </div>
 
-    <!-- Residency alert: shown when events outside residency are visible -->
+    <!-- Residency alert: grid views only (week/month). Day view delegates to DinnerBookingForm. -->
     <UAlert
-      v-if="residencyAlert"
+      v-if="residencyAlert && view !== 'day'"
       :color="residencyAlert.color"
       variant="soft"
       :icon="residencyAlert.icon"
