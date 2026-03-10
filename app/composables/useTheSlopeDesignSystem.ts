@@ -462,6 +462,17 @@ export const COMPONENTS = {
         }
     },
 
+    // Diagonal corner ribbon - top-right status overlay (cancelled dinners, move-out, move-in)
+    ribbon: {
+        base: 'absolute top-8 -right-10 z-10 text-white text-xs font-bold py-1 pl-14 pr-12 rotate-45 shadow-md',
+        container: 'relative overflow-hidden',
+        colors: {
+            cancel: 'bg-red-600',
+            past: 'bg-gray-500',
+            new: 'bg-green-600'
+        }
+    },
+
     // CostLine - line item in economy views with fixed column widths for vertical alignment
     costLine: {
         row: 'grid items-center justify-items-center gap-1 md:gap-2 max-w-2xl',
@@ -515,6 +526,11 @@ export function getKitchenPanelClasses(
 ): string {
     return COMPONENTS.kitchenPanel[mode]
 }
+
+/** Get combined ribbon classes for a ribbon type */
+export type RibbonType = keyof typeof COMPONENTS.ribbon.colors
+export const getRibbonClasses = (type: RibbonType): string =>
+    `${COMPONENTS.ribbon.base} ${COMPONENTS.ribbon.colors[type]}`
 
 /**
  * Ticket type colors (for UBadge components)
@@ -576,6 +592,8 @@ export const ICONS = {
     economy: 'i-heroicons-currency-dollar',
     login: 'i-guidance-entry',
     logout: 'i-tdesign-wave-bye',
+    moveIn: 'i-guidance-entry',
+    moveOut: 'i-guidance-exit',
     admin: 'i-pajamas-admin',
     menu: 'i-heroicons-bars-3',
     help: 'i-heroicons-question-mark-circle',
@@ -616,6 +634,7 @@ export const ICONS = {
     // Descriptive
     mail: 'i-guidance-mail',
     phone: 'i-guidance-phone',
+    identification: 'i-heroicons-identification',
 
     // Time & info
     clock: 'i-heroicons-clock',
@@ -636,6 +655,29 @@ export const ICONS = {
     github: 'i-simple-icons-github',
     book: 'i-heroicons-book-open'
 } as const
+
+/** Residency status → display config (ribbon, alert, badge). null = active, no display needed */
+export const RESIDENCY_CONFIG: Record<import('~/composables/useHousehold').ResidencyStatus, { type: RibbonType, prefix: string, description: string, icon: string, color: NuxtUIColor, dateField: 'movedInDate' | 'moveOutDate' } | null> = {
+    'pending':   { type: 'new',    prefix: 'Indflytter',  description: 'Familien flytter ind d.',    icon: ICONS.moveIn,  color: COLOR.success as NuxtUIColor, dateField: 'movedInDate' },
+    'leaving':   { type: 'cancel', prefix: 'Fraflytter',  description: 'Familien fraflytter d.',     icon: ICONS.moveOut, color: COLOR.error as NuxtUIColor,   dateField: 'moveOutDate' },
+    'moved-out': { type: 'past',   prefix: 'Fraflyttet',  description: 'Familien er fraflyttet d.',  icon: ICONS.moveOut, color: COLOR.neutral as NuxtUIColor, dateField: 'moveOutDate' },
+    'active':    null
+}
+
+/** Resolve residency display data for a household. Returns null for active households. */
+export const getResidencyDisplay = (movedInDate: Date, moveOutDate: Date | null) => {
+    const config = RESIDENCY_CONFIG[getResidencyStatus(movedInDate, moveOutDate)]
+    if (!config) return null
+    const date = config.dateField === 'movedInDate' ? movedInDate : moveOutDate
+    const dateText = `${config.description} ${formatDate(date!)}`
+    return {
+        ...config,
+        dateText,
+        badgeText: `${config.prefix} ${formatDate(date!)}`,
+        alertTitle: 'Fællesspisning er for beboere',
+        alertDescription: `Familien skal bo her, for at kunne bestille. ${dateText}.`
+    }
+}
 
 /**
  * IMG - Image assets for brand logos and external services
@@ -1338,6 +1380,9 @@ export const useTheSlopeDesignSystem = () => {
 
         // Helpers
         getKitchenPanelClasses,
+        getRibbonClasses,
+        RESIDENCY_CONFIG,
+        getResidencyDisplay,
         getRandomEmptyMessage,
         EMPTY_STATE_MESSAGES
     }

@@ -1,3 +1,12 @@
+/**
+ * NOT CURRENTLY IN USE - One-time recovery endpoint.
+ *
+ * Heals orders that were corrupted before user intent tracking was fixed.
+ * Compares USER_BOOKED/USER_CLAIMED audit snapshots against current order
+ * state to find deleted or mode-changed orders and restores them.
+ *
+ * Supports dry run (?dryRun=true) and optional household filter (?householdId=N).
+ */
 import {defineEventHandler, setResponseStatus, getQuery} from "h3"
 import {getPrismaClientConnection} from "~~/server/utils/database"
 import {fetchUserIntentKeys, fetchOrders} from "~~/server/data/financesRepository"

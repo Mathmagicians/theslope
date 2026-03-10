@@ -508,13 +508,18 @@ export class OrderFactory {
   }
 
   /**
-   * Get orders for dinner events via admin dinner event detail endpoint.
-   * Use this in E2E tests that run as admin - the user-facing /api/order endpoint
-   * filters by session user's household, which won't work for admin users.
-   *
-   * @param context - Browser context for API requests (admin auth)
-   * @param dinnerEventIds - Single ID or array of dinner event IDs
-   * @returns Array of OrderDetail for all events (from tickets field)
+   * Get all orders for dinner events across all households (single request).
+   * Use in admin tests where session user is not a member of the test household.
+   */
+  static readonly getAllOrdersForEvents = async (
+    context: BrowserContext,
+    dinnerEventIds: number | number[]
+  ): Promise<OrderDisplay[]> => {
+    return OrderFactory.getOrders(context, {dinnerEventIds, allHouseholds: true})
+  }
+
+  /**
+   * @deprecated Use getAllOrdersForEvents instead (single request vs N+1)
    */
   static readonly getOrdersForDinnerEventsViaAdmin = async (
     context: BrowserContext,

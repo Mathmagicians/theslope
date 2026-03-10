@@ -236,10 +236,11 @@ export const useBookingsStore = defineStore("Bookings", () => {
     /**
      * ADR-016: Internal scaffold endpoint call.
      */
-    const _scaffoldOrders = async (request: ScaffoldOrdersRequest): Promise<ScaffoldOrdersResponse> => {
+    const _scaffoldOrders = async (request: ScaffoldOrdersRequest, adminBypass = false): Promise<ScaffoldOrdersResponse> => {
         const result = await $fetch<ScaffoldOrdersResponse>('/api/household/order/scaffold', {
             method: 'POST',
-            body: request
+            body: request,
+            query: {adminBypass}
         })
         await Promise.all([refreshOrders(), refreshReleasedCounts()])
         return ScaffoldOrdersResponseSchema.parse(result)
@@ -252,11 +253,12 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const processSingleEventBookings = async (
         householdId: number,
         dinnerEventId: number,
-        orders: DesiredOrder[]
+        orders: DesiredOrder[],
+        adminBypass = false
     ): Promise<ScaffoldOrdersResponse> => {
         isProcessingBookings.value = true
         try {
-            const result = await _scaffoldOrders({ householdId, dinnerEventIds: [dinnerEventId], orders })
+            const result = await _scaffoldOrders({ householdId, dinnerEventIds: [dinnerEventId], orders }, adminBypass)
             console.info(CTX, `processSingleEventBookings: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
             return result
         } catch (e: unknown) {
@@ -274,11 +276,12 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const processMultipleEventsBookings = async (
         householdId: number,
         dinnerEventIds: number[],
-        orders: DesiredOrder[]
+        orders: DesiredOrder[],
+        adminBypass = false
     ): Promise<ScaffoldOrdersResponse> => {
         isProcessingBookings.value = true
         try {
-            const result = await _scaffoldOrders({ householdId, dinnerEventIds, orders })
+            const result = await _scaffoldOrders({ householdId, dinnerEventIds, orders }, adminBypass)
             console.info(CTX, `processMultipleEventsBookings: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
             return result
         } catch (e: unknown) {
@@ -616,6 +619,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         ordersByTicketType,
 
         // actions
+        refreshOrders,
         loadOrdersForDinners,
         claimOrder,
         fetchReleasedOrders,

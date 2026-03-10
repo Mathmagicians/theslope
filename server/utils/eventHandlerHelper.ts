@@ -2,6 +2,7 @@ import {Prisma} from "@prisma/client"
 import {ZodError} from "zod"
 import {H3Error} from "h3"
 import type {H3Event} from 'h3'
+import type {NuxtError} from '#app'
 import type {UserDetail} from '~/composables/useCoreValidation'
 
 const PRISMA_RECORD_NOT_FOUND = 'P2025'
@@ -66,8 +67,8 @@ const getSerializableCause = (error: unknown): SerializableError => {
         return String(error)
 }
 
-const h3eFromCatch = (prepend: string = 'uh oh, an error', error: unknown, statusCode: number = 500): H3Error => {
-    // If error is already an H3Error, return it (let throwH3Error handle logging)
+const nuxtErrorFromCatch = (prepend: string = 'uh oh, an error', error: unknown, statusCode: number = 500): NuxtError => {
+    // If error is already an H3Error, return it (let throwNuxtError handle logging)
     if (error instanceof H3Error) {
         return error
     }
@@ -94,7 +95,7 @@ const h3eFromCatch = (prepend: string = 'uh oh, an error', error: unknown, statu
         })
     }
 
-    if (error instanceof Prisma.PrismaClientKnownRequestError) return h3eFromPrismaError(prepend, error)
+    if (error instanceof Prisma.PrismaClientKnownRequestError) return nuxtErrorFromPrismaError(prepend, error)
 
     if (error instanceof Error) return createError({
         statusCode: statusCode,
@@ -118,7 +119,7 @@ const h3eFromCatch = (prepend: string = 'uh oh, an error', error: unknown, statu
     })
 }
 
-const h3eFromPrismaError = (prepend: string = 'uh oh, a prisma error', error: Prisma.PrismaClientKnownRequestError): H3Error => {
+const nuxtErrorFromPrismaError = (prepend: string = 'uh oh, a prisma error', error: Prisma.PrismaClientKnownRequestError): NuxtError => {
     if (error.code === PRISMA_RECORD_NOT_FOUND) return createError({
         statusCode: 404,
         statusMessage: 'Not Found',
@@ -136,15 +137,16 @@ const h3eFromPrismaError = (prepend: string = 'uh oh, a prisma error', error: Pr
 
 
 /**
- * Log H3Error with appropriate level based on status code
- * @param h3e - The H3Error to log
+ * Log NuxtError with appropriate level based on status code
+ * @param nuxtError - The NuxtError to log
  * @param originalError - Optional original error for additional context
  */
-const logH3Error = (h3e: H3Error, originalError?: unknown): void => {
-    if (h3e.statusCode >= 400 && h3e.statusCode < 500) {
-        console.warn(h3e.message)
+const logNuxtError = (nuxtError: NuxtError, originalError?: unknown): void => {
+    const status = nuxtError.statusCode ?? 500
+    if (status >= 400 && status < 500) {
+        console.warn(nuxtError.message)
     } else {
-        console.error(h3e.message)
+        console.error(nuxtError.message)
         // For 500 errors, log original error details for debugging
         if (originalError instanceof Error) {
             console.error(`  ↳ Original error: ${originalError.name}: ${originalError.message}`)
@@ -156,24 +158,24 @@ const logH3Error = (h3e: H3Error, originalError?: unknown): void => {
 }
 
 /**
- * Create H3Error from caught error, log it, and throw
+ * Create NuxtError from caught error, log it, and throw
  * Convenience method for the common pattern: catch -> create error -> log -> throw
  *
  * @param prepend - Context message (e.g., "🏠 > HOUSEHOLD > [POST] Input validation error")
  * @param error - The caught error
- * @throws H3Error - Always throws after logging
+ * @throws NuxtError - Always throws after logging
  *
  * @example
  * try {
  *   const data = await readValidatedBody(event, schema.parse)
  * } catch (error) {
- *   throwH3Error('🏠 > HOUSEHOLD > [POST] Input validation error', error)
+ *   throwNuxtError('🏠 > HOUSEHOLD > [POST] Input validation error', error)
  * }
  */
-const throwH3Error = (prepend: string, error: unknown, statusCode: number = 500): never => {
-    const h3e = h3eFromCatch(prepend, error, statusCode)
-    logH3Error(h3e, error)
-    throw h3e
+const throwNuxtError = (prepend: string, error: unknown, statusCode: number = 500): never => {
+    const nuxtError = nuxtErrorFromCatch(prepend, error, statusCode)
+    logNuxtError(nuxtError, error)
+    throw nuxtError
 }
 
 /**
@@ -203,10 +205,15 @@ const getSessionUserId = async (event: H3Event): Promise<number | null> => {
 
 const eventHandlerHelper = {
     isPrismaNotFound,
-    h3eFromCatch,
-    h3eFromPrismaError,
-    logH3Error,
-    throwH3Error,
+    nuxtErrorFromCatch,
+    nuxtErrorFromPrismaError,
+    logNuxtError,
+    throwNuxtError,
+    // Backwards-compatible aliases (used across 80+ call sites)
+    throwH3Error: throwNuxtError,
+    h3eFromCatch: nuxtErrorFromCatch,
+    h3eFromPrismaError: nuxtErrorFromPrismaError,
+    logH3Error: logNuxtError,
     getSessionUser,
     getSessionUserId
 }

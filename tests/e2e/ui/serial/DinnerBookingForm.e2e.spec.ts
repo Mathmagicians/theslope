@@ -30,6 +30,7 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
     let householdId: number
     let inhabitantId: number
     let householdShortname: string
+    let householdPbsId: number
     let testSeason: Awaited<ReturnType<typeof SeasonFactory.createSeasonWithDinnerEvents>>
     let adminContext: BrowserContext
     const testSalt = `booking-form-${Date.now()}`
@@ -45,6 +46,7 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
         householdId = sessionInfo.householdId
         inhabitantId = sessionInfo.inhabitantId
         householdShortname = sessionInfo.householdShortname
+        householdPbsId = sessionInfo.householdPbsId
 
         // Create dedicated season with SHORT deadline so all events are bookable
         const tomorrow = new Date()
@@ -87,7 +89,7 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
 
     const goToBookingsPage = async (page: import('@playwright/test').Page, date: Date) => {
         const dateParam = formatDate(date)
-        await page.goto(`/household/${householdShortname}/bookings?date=${dateParam}`)
+        await page.goto(`/household/${householdShortname}/bookings?pbs=${householdPbsId}&date=${dateParam}`)
 
         // Wait for booking table - ignore transient "no season" state during store init
         await pollUntil(

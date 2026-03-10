@@ -29,6 +29,7 @@ export async function clipPreferences(
     }
 
     const {createPreferenceClipper, chunkPreferenceUpdates} = useSeason()
+
     const inhabitants = await fetchInhabitants(d1Client)
 
     const clipper = createPreferenceClipper(season.cookingDays)

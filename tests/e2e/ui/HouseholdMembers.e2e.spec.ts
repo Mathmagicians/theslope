@@ -19,6 +19,7 @@ test.describe('Household members display', () => {
     const testSalt = temporaryAndRandom()
     let householdId: number
     let shortName: string
+    let pbsId: number
     let babyId: number
     let donaldId: number
     let daisyId: number
@@ -40,6 +41,7 @@ test.describe('Household members display', () => {
         // Get household details to get shortName
         const household = await HouseholdFactory.getHouseholdById(adminContext, householdId)
         shortName = household!.shortName
+        pbsId = household!.pbsId
 
         const today = new Date()
 
@@ -88,7 +90,7 @@ test.describe('Household members display', () => {
             {timeout: 10000}
         )
 
-        await page.goto(`/household/${encodeURIComponent(shortName)}/members`)
+        await page.goto(`/household/${encodeURIComponent(shortName)}/members?pbs=${pbsId}`)
         const response = await responsePromise
         expect(response.status()).toBe(200)
 
@@ -120,7 +122,7 @@ test.describe('Household members display', () => {
             {timeout: 10000}
         )
 
-        await page.goto(`/household/${encodeURIComponent(shortName)}/members`)
+        await page.goto(`/household/${encodeURIComponent(shortName)}/members?pbs=${pbsId}`)
         const response = await responsePromise
         expect(response.status()).toBe(200)
 

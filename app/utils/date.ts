@@ -127,6 +127,8 @@ export function formatCalendarDate( date: DateValue ) : string {
 }
 
 // Helper for ranges
+export function toCalendarDateRange(range: DateRange): { start: CalendarDate, end: CalendarDate }
+export function toCalendarDateRange(range: DateRange | undefined): { start?: CalendarDate, end?: CalendarDate }
 export function toCalendarDateRange(range: DateRange | undefined): { start?: CalendarDate, end?: CalendarDate } {
     if (!range) return { start: undefined, end: undefined }
 

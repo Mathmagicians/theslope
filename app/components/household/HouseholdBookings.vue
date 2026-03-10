@@ -14,10 +14,12 @@ import {useDinnerDateParam, BookingViewSchema, type BookingView} from '~/composa
 interface Props {
   household: HouseholdDetail
   canEdit?: boolean
+  adminBypass?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  canEdit: true
+  canEdit: true,
+  adminBypass: false
 })
 const {household} = toRefs(props)
 
@@ -152,7 +154,8 @@ const handleGridSave = async (changes: { inhabitantId: number, dinnerEventId: nu
   const result = await bookingsStore.processMultipleEventsBookings(
     household.value.id,
     changedEventIds,
-    desiredOrders
+    desiredOrders,
+    props.adminBypass
   )
   toast.add({
     title: BOOKING_TOAST_TITLES.grid,
@@ -169,7 +172,8 @@ const handleDayViewSave = async (desiredOrders: DesiredOrder[]) => {
   const result = await bookingsStore.processSingleEventBookings(
     household.value.id,
     dinnerEventId,
-    desiredOrders
+    desiredOrders,
+    props.adminBypass
   )
   toast.add({
     title: BOOKING_TOAST_TITLES.day,
@@ -192,7 +196,8 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
     const result = await bookingsStore.processSingleEventBookings(
       household.value.id,
       eventId,
-      guestOrders
+      guestOrders,
+      props.adminBypass
     )
     toast.add({
       title: BOOKING_TOAST_TITLES.guest,
@@ -262,6 +267,7 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
               :ticket-prices="ticketPrices"
               :deadlines="deadlines"
               :released-ticket-counts="lockStatus.get(selectedDinnerEvent.id) ?? { total: 0, formatted: '-' }"
+              :can-edit-admin-override="adminBypass ? () => canEdit : undefined"
               @save-bookings="handleDayViewSave"
             />
             <UAlert

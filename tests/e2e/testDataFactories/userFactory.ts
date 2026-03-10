@@ -59,6 +59,7 @@ export class UserFactory {
                     heynaboId: householdData.heynaboId,
                     pbsId: householdData.pbsId,
                     movedInDate: householdData.movedInDate,
+                    moveOutDate: null,
                     name: householdData.name,
                     shortName: salt('TH', testSalt), // Computed from address in real data
                     address: householdData.address

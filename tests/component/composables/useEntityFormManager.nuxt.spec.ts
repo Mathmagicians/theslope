@@ -1,6 +1,6 @@
 // @vitest-environment nuxt
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { ref, computed } from 'vue'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { ref, computed, effectScope, type EffectScope } from 'vue'
 import { useEntityFormManager } from '~/composables/useEntityFormManager'
 import { FORM_MODES } from '~/types/form'
 
@@ -33,31 +33,36 @@ describe('useEntityFormManager', () => {
 
   let selectedEntity: ReturnType<typeof ref<TestEntity | null>>
   let getDefaultEntity: () => TestEntity
+  // Scope composable watchers so they're cleaned up after each test
+  let scope: EffectScope
 
   beforeEach(() => {
-    // Reset mocks
     vi.clearAllMocks()
-
-    // Setup test dependencies
     selectedEntity = ref<TestEntity | null>(existingEntity)
     getDefaultEntity = vi.fn(() => ({ ...defaultEntity }))
+    scope = effectScope()
   })
+
+  afterEach(() => {
+    scope.stop()
+  })
+
+  // Helper: run useEntityFormManager inside the effect scope so watchers are cleaned up
+  const createFormManager = (overrides?: { selectedEntity?: ReturnType<typeof computed<TestEntity | null>> }) => {
+    return scope.run(() => useEntityFormManager({
+      getDefaultEntity,
+      selectedEntity: overrides?.selectedEntity ?? computed(() => selectedEntity.value)
+    }))!
+  }
 
   describe('Form Mode State Management', () => {
     it('should initialize with VIEW mode', () => {
-      const { formMode } = useEntityFormManager({
-        getDefaultEntity,
-        selectedEntity: computed(() => selectedEntity.value)
-      })
-
+      const { formMode } = createFormManager()
       expect(formMode.value).toBe(FORM_MODES.VIEW)
     })
 
     it('should change to CREATE mode and set draft to default entity', async () => {
-      const { formMode, currentModel, onModeChange } = useEntityFormManager({
-        getDefaultEntity,
-        selectedEntity: computed(() => selectedEntity.value)
-      })
+      const { formMode, currentModel, onModeChange } = createFormManager()
 
       await onModeChange(FORM_MODES.CREATE)
 
@@ -67,10 +72,7 @@ describe('useEntityFormManager', () => {
     })
 
     it('should change to EDIT mode and copy selected entity to draft', async () => {
-      const { formMode, currentModel, onModeChange } = useEntityFormManager({
-        getDefaultEntity,
-        selectedEntity: computed(() => selectedEntity.value)
-      })
+      const { formMode, currentModel, onModeChange } = createFormManager()
 
       await onModeChange(FORM_MODES.EDIT)
 
@@ -81,10 +83,7 @@ describe('useEntityFormManager', () => {
     })
 
     it('should change to VIEW mode and clear draft entity', async () => {
-      const { formMode, currentModel, onModeChange } = useEntityFormManager({
-        getDefaultEntity,
-        selectedEntity: computed(() => selectedEntity.value)
-      })
+      const { formMode, currentModel, onModeChange } = createFormManager()
 
       // First go to CREATE mode
       await onModeChange(FORM_MODES.CREATE)
@@ -102,10 +101,7 @@ describe('useEntityFormManager', () => {
     it('should handle null selected entity in EDIT mode', async () => {
       selectedEntity.value = null
 
-      const { currentModel, onModeChange } = useEntityFormManager({
-        getDefaultEntity,
-        selectedEntity: computed(() => selectedEntity.value)
-      })
+      const { currentModel, onModeChange } = createFormManager()
 
       await onModeChange(FORM_MODES.EDIT)
 
@@ -113,10 +109,7 @@ describe('useEntityFormManager', () => {
     })
 
     it('should maintain draft changes when switching between CREATE and VIEW modes', async () => {
-      const { currentModel, onModeChange } = useEntityFormManager({
-        getDefaultEntity,
-        selectedEntity: computed(() => selectedEntity.value)
-      })
+      const { currentModel, onModeChange } = createFormManager()
 
       // Create mode
       await onModeChange(FORM_MODES.CREATE)
@@ -134,10 +127,7 @@ describe('useEntityFormManager', () => {
     })
 
     it('should create independent copy in EDIT mode to prevent mutation of selected entity', async () => {
-      const { currentModel, onModeChange } = useEntityFormManager({
-        getDefaultEntity,
-        selectedEntity: computed(() => selectedEntity.value)
-      })
+      const { currentModel, onModeChange } = createFormManager()
 
       await onModeChange(FORM_MODES.EDIT)
 
@@ -153,20 +143,14 @@ describe('useEntityFormManager', () => {
 
   describe('currentModel Computed Property', () => {
     it('should return selected entity when in VIEW mode', () => {
-      const { currentModel } = useEntityFormManager({
-        getDefaultEntity,
-        selectedEntity: computed(() => selectedEntity.value)
-      })
+      const { currentModel } = createFormManager()
 
       expect(currentModel.value).toEqual(existingEntity)
       expect(currentModel.value).toBe(selectedEntity.value)
     })
 
     it('should return draft entity when in CREATE mode', async () => {
-      const { currentModel, onModeChange } = useEntityFormManager({
-        getDefaultEntity,
-        selectedEntity: computed(() => selectedEntity.value)
-      })
+      const { currentModel, onModeChange } = createFormManager()
 
       await onModeChange(FORM_MODES.CREATE)
 
@@ -175,10 +159,7 @@ describe('useEntityFormManager', () => {
     })
 
     it('should return draft entity when in EDIT mode', async () => {
-      const { currentModel, onModeChange } = useEntityFormManager({
-        getDefaultEntity,
-        selectedEntity: computed(() => selectedEntity.value)
-      })
+      const { currentModel, onModeChange } = createFormManager()
 
       await onModeChange(FORM_MODES.EDIT)
 
@@ -187,10 +168,7 @@ describe('useEntityFormManager', () => {
     })
 
     it('should allow setting draft entity value', async () => {
-      const { currentModel, onModeChange } = useEntityFormManager({
-        getDefaultEntity,
-        selectedEntity: computed(() => selectedEntity.value)
-      })
+      const { currentModel, onModeChange } = createFormManager()
 
       await onModeChange(FORM_MODES.CREATE)
 
@@ -206,10 +184,7 @@ describe('useEntityFormManager', () => {
 
   describe('Edge Cases', () => {
     it('should handle selectedEntity changing while in VIEW mode', () => {
-      const { currentModel } = useEntityFormManager({
-        getDefaultEntity,
-        selectedEntity: computed(() => selectedEntity.value)
-      })
+      const { currentModel } = createFormManager()
 
       expect(currentModel.value).toEqual(existingEntity)
 
@@ -222,10 +197,7 @@ describe('useEntityFormManager', () => {
     })
 
     it('should not affect draft when selectedEntity changes in EDIT mode', async () => {
-      const { currentModel, onModeChange } = useEntityFormManager({
-        getDefaultEntity,
-        selectedEntity: computed(() => selectedEntity.value)
-      })
+      const { currentModel, onModeChange } = createFormManager()
 
       await onModeChange(FORM_MODES.EDIT)
       const draftCopy = { ...currentModel.value! }

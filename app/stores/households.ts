@@ -2,7 +2,7 @@ import type {
     HouseholdDisplay,
     HouseholdDetail
 } from '~/composables/useCoreValidation'
-import type {ScaffoldResult} from '~/composables/useBookingValidation'
+import type {ScaffoldResult, InhabitantUpdateResponse, HouseholdUpdateResponse} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
 
 /**
@@ -21,6 +21,9 @@ export const useHouseholdsStore = defineStore("Households", () => {
 
     // Last preference update result (persists across component remounts)
     const lastPreferenceResult = ref<ScaffoldResult | null>(null)
+
+    // Last move-out date update result (persists across component remounts)
+    const lastMoveOutResult = ref<ScaffoldResult | null>(null)
 
     // ========================================
     // State - useAsyncData with useRequestFetch for SSR-safe auth context
@@ -54,7 +57,11 @@ export const useHouseholdsStore = defineStore("Households", () => {
         },
         {
             default: () => [],
-            watch: [loggedIn]  // Re-fetch when login state changes
+            watch: [loggedIn],  // Re-fetch when login state changes
+            transform: (data: HouseholdDisplay[]) => {
+                const {HouseholdDisplaySchema} = useCoreValidation()
+                return data.map(h => HouseholdDisplaySchema.parse(h))
+            }
         }
     )
 
@@ -165,11 +172,14 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * @param inhabitantId - ID of the inhabitant to update
      * @param preferences - WeekDayMap of DinnerMode preferences
      */
-    const updateInhabitantPreferences = async (inhabitantId: number, preferences: Record<string, string>) => {
+    const updateInhabitantPreferences = async (inhabitantId: number, preferences: Record<string, string>, adminBypass = false) => {
         try {
-            console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for inhabitant ${inhabitantId}`)
+            console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for inhabitant ${inhabitantId}${adminBypass ? ' (admin bypass)' : ''}`)
 
-            const result = await $fetch(`/api/household/inhabitants/${inhabitantId}/preferences`, {
+            const url = adminBypass
+                ? `/api/household/inhabitants/${inhabitantId}/preferences?adminBypass=true`
+                : `/api/household/inhabitants/${inhabitantId}/preferences`
+            const result = await $fetch<InhabitantUpdateResponse>(url, {
                 method: 'POST',
                 body: { dinnerPreferences: preferences }
             })
@@ -196,7 +206,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * @param householdId - ID of the household
      * @param preferences - WeekDayMap of DinnerMode preferences to apply to all inhabitants
      */
-    const updateAllInhabitantPreferences = async (householdId: number, preferences: Record<string, string>) => {
+    const updateAllInhabitantPreferences = async (householdId: number, preferences: Record<string, string>, adminBypass = false) => {
         try {
             // Get the household to access inhabitants
             const household = households.value.find(h => h.id === householdId)
@@ -204,14 +214,17 @@ export const useHouseholdsStore = defineStore("Households", () => {
                 throw new Error(`Household ${householdId} not found`)
             }
 
-            console.info(`🏠 > HOUSEHOLDS_STORE > Power mode: Updating preferences for all ${household.inhabitants.length} inhabitants in household ${householdId}`)
+            console.info(`🏠 > HOUSEHOLDS_STORE > Power mode: Updating preferences for all ${household.inhabitants.length} inhabitants in household ${householdId}${adminBypass ? ' (admin bypass)' : ''}`)
 
             // Update all inhabitants SEQUENTIALLY to avoid race conditions in scaffolding
             // Each update triggers scaffoldPrebookings for the same household - parallel execution
             // causes FK constraint errors when multiple scaffolds try to delete the same orders
             const results = []
             for (const inhabitant of household.inhabitants) {
-                const result = await $fetch(`/api/household/inhabitants/${inhabitant.id}/preferences`, {
+                const url = adminBypass
+                    ? `/api/household/inhabitants/${inhabitant.id}/preferences?adminBypass=true`
+                    : `/api/household/inhabitants/${inhabitant.id}/preferences`
+                const result = await $fetch<InhabitantUpdateResponse>(url, {
                     method: 'POST',
                     body: { dinnerPreferences: preferences }
                 })
@@ -250,28 +263,59 @@ export const useHouseholdsStore = defineStore("Households", () => {
     }
 
     /**
-     * Initialize store - load households and optionally select one by shortName
-     * If no shortName provided, keeps current selection or falls back to user's household
-     * @param shortName - Optional shortName to load specific household
+     * Set or clear move-out date for a household
+     * Uses admin household update endpoint (POST /api/admin/household/:id)
+     * Triggers re-scaffolding of prebookings when moveOutDate changes (server-side)
+     * @param householdId - ID of the household
+     * @param moveOutDate - Date to set, or null to clear
      */
-    const initHouseholdsStore = (shortName?: string) => {
-        // households autoload when store is created (immediate: true)
-        // If shortName provided: use that. Otherwise: keep current selection, or fall back to user's household
-        const householdId = shortName
-            ? households.value.find(h => h.shortName === shortName)?.id
-            : (selectedHouseholdId.value ?? myHousehold.value?.id)
+    const setMoveOutDate = async (householdId: number, moveOutDate: Date | null, adminBypass = false) => {
+        try {
+            console.info(`🏠 > HOUSEHOLDS_STORE > Setting moveOutDate for household ${householdId}: ${moveOutDate?.toISOString() ?? 'null'}`)
+            const result = await $fetch<HouseholdUpdateResponse>(`/api/household/${householdId}/update`, {
+                method: 'POST',
+                body: { moveOutDate },
+                query: {adminBypass}
+            })
 
-        console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > initHouseholdsStore > shortName: ${shortName ?? 'none'}, current: ${selectedHouseholdId.value}, resolved: ${householdId}`)
+            // Store scaffold result for persistent UI display
+            lastMoveOutResult.value = result.scaffoldResult
+            console.info(`🏠 > HOUSEHOLDS_STORE > moveOutDate updated for household ${householdId}: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
 
-        if (householdId && householdId !== selectedHouseholdId.value) loadHousehold(householdId)
+            // Refresh selected household to get updated data
+            if (selectedHouseholdId.value === householdId) {
+                await refreshSelectedHousehold()
+            }
+            // Also refresh household list to update display badges
+            await refreshHouseholds()
+
+            // Refresh bookings so UI reflects scaffold changes (deleted/created orders)
+            const bookingsStore = useBookingsStore()
+            await bookingsStore.refreshOrders()
+
+            return result.scaffoldResult
+        } catch (e: unknown) {
+            handleApiError(e, 'setMoveOutDate')
+            throw e
+        }
+    }
+
+    /**
+     * Initialize store - ensures households are fetched and auto-selects user's own household
+     * Used by components that just need "ensure store is initialized" (AdminHouseholds, AdminEconomy, DinnerBookingForm)
+     * The household page uses useQueryParam('pbs') for URL-driven resolution instead.
+     */
+    const initHouseholdsStore = () => {
+        if (isHouseholdsInitialized.value && !selectedHouseholdId.value && myHousehold.value?.id) {
+            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > initHouseholdsStore > auto-selecting myHousehold: ${myHousehold.value.id}`)
+            loadHousehold(myHousehold.value.id)
+        }
     }
 
     // AUTO-INITIALIZATION - Watch for households to load, then auto-select user's household
     watch([isHouseholdsInitialized, selectedHouseholdId, myHousehold], () => {
         if (!isHouseholdsInitialized.value) return
         if (selectedHouseholdId.value) return // Already selected
-
-        console.info(LOG_CTX, '🏠 > HOUSEHOLDS_STORE > WATCH Households loaded, calling initHouseholdsStore')
         initHouseholdsStore()
     })
 
@@ -279,7 +323,9 @@ export const useHouseholdsStore = defineStore("Households", () => {
         // State
         households,
         selectedHousehold,
+        selectedHouseholdId,
         lastPreferenceResult,
+        lastMoveOutResult,
         // Computed
         myHousehold,
         myInhabitant,
@@ -301,6 +347,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         initHouseholdsStore,
         updateInhabitantPreferences,
         updateAllInhabitantPreferences,
+        setMoveOutDate,
         getHouseholdForInhabitant
     }
 })

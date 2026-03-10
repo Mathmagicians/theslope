@@ -421,7 +421,7 @@ const handleCardClick = () => {
     <!-- Cancelled ribbon -->
     <div
       v-if="isCancelled"
-      class="absolute top-4 -right-8 z-10 bg-red-600 text-white text-xs font-bold py-1 px-10 rotate-45 shadow-md"
+      :class="getRibbonClasses('cancel')"
       data-testid="cancelled-ribbon"
     >
       AFLYST

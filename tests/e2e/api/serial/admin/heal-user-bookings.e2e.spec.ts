@@ -27,7 +27,12 @@ test.describe('POST /api/admin/maintenance/heal-user-bookings', () => {
         await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
     })
 
-    // TODO: Fix test to use memberValidatedBrowserContext for user booking
+    // SKIPPED: Heal endpoint is not currently in use. The endpoint exists at
+    // /api/admin/maintenance/heal-user-bookings.post.ts but was a one-time recovery
+    // tool for orders corrupted before user intent tracking was fixed.
+    // If re-activated: fix to use memberValidatedBrowserContext for the initial
+    // user booking (scaffoldOrders requires requireHouseholdAccess), or use
+    // adminBypass=true since the test is about heal logic, not authorization.
     test.skip('dry run counts → heal executes → orders restored', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()

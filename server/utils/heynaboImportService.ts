@@ -295,11 +295,11 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
         return result
     } catch (error) {
         // Try to record failure, fallback to logging if DB is exhausted
-        const h3e = eventHandlerHelper.h3eFromCatch(`${LOG} Import failed`, error)
-        await completeJobRun(d1Client, jobRun.id, JobStatus.FAILED, undefined, h3e.message)
-            .catch(() => console.error(`${LOG} Could not record failure for job ${jobRun.id}: ${h3e.message}`))
-        eventHandlerHelper.logH3Error(h3e, error)
-        throw h3e
+        const nuxtError = eventHandlerHelper.nuxtErrorFromCatch(`${LOG} Import failed`, error)
+        await completeJobRun(d1Client, jobRun.id, JobStatus.FAILED, undefined, nuxtError.message)
+            .catch(() => console.error(`${LOG} Could not record failure for job ${jobRun.id}: ${nuxtError.message}`))
+        eventHandlerHelper.logNuxtError(nuxtError, error)
+        throw nuxtError
     }
 }
 

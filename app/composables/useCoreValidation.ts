@@ -252,7 +252,8 @@ export const useCoreValidation = () => {
         pbsId: true,
         name: true,
         address: true,
-        movedInDate: true
+        movedInDate: true,
+        moveOutDate: true
     })
 
     // ADR-009: Index endpoint - full household scalars + lightweight inhabitant relation
@@ -262,7 +263,8 @@ export const useCoreValidation = () => {
         pbsId: true,
         name: true,
         address: true,
-        movedInDate: true
+        movedInDate: true,
+        moveOutDate: true
     }).extend({
         shortName: z.string().min(1), // Required computed field
         inhabitants: z.array(InhabitantDisplaySchema) // Lightweight relation
@@ -276,6 +278,7 @@ export const useCoreValidation = () => {
         name: true,
         address: true,
         movedInDate: true,
+        moveOutDate: true,
         shortName: true
     }).extend({
         inhabitants: z.array(InhabitantDetailSchema)
@@ -291,6 +294,7 @@ export const useCoreValidation = () => {
                 heynaboId: true,
                 pbsId: true,
                 movedInDate: true,
+                moveOutDate: true,
                 name: true,
                 address: true,
                 shortName: true

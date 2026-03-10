@@ -26,6 +26,7 @@ test.describe('Cross-Household Bookings - Serial UI Tests', () => {
     let adminInhabitantId: number
     let targetHouseholdId: number
     let targetShortName: string
+    let targetPbsId: number
     let targetInhabitantId: number
     let testSeason: Awaited<ReturnType<typeof SeasonFactory.createSeasonWithDinnerEvents>>
     const testSalt = temporaryAndRandom()
@@ -41,6 +42,7 @@ test.describe('Cross-Household Bookings - Serial UI Tests', () => {
         const targetHousehold = await HouseholdFactory.createHousehold(adminContext, {name: salt('CrossTest', testSalt)})
         targetHouseholdId = targetHousehold.id
         targetShortName = targetHousehold.shortName
+        targetPbsId = targetHousehold.pbsId
         createdHouseholdIds.push(targetHouseholdId)
 
         const targetInhabitant = await HouseholdFactory.createInhabitantWithConfig(adminContext, targetHouseholdId, {
@@ -96,7 +98,7 @@ test.describe('Cross-Household Bookings - Serial UI Tests', () => {
         expect(adminOrder?.dinnerMode).toBe(DinnerMode.DINEIN)
         expect(targetOrder?.dinnerMode).toBe(DinnerMode.DINEINLATE)
 
-        await page.goto(`/household/${encodeURIComponent(targetShortName)}/bookings`)
+        await page.goto(`/household/${encodeURIComponent(targetShortName)}/bookings?pbs=${targetPbsId}`)
         await pollUntil(
             async () => await page.locator('[data-testid="household-bookings"]').isVisible(),
             (isVisible) => isVisible, 10

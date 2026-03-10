@@ -124,14 +124,14 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, getRandomEmptyMessage, getOrderStateColor, getLockStatusConfig} = useTheSlopeDesignSystem()
+const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, getRandomEmptyMessage, getOrderStateColor, getLockStatusConfig, getResidencyDisplay} = useTheSlopeDesignSystem()
 const emptyState = getRandomEmptyMessage('noDinners')
 
 // Ticket price formatting
 const {formatPrice, getTicketTypeConfig, resolveTicketPrice, ticketTypeConfig} = useTicket()
 
 // Booking helpers (shared with DinnerBookingForm)
-const {groupGuestOrders, partitionGuestOrders, getDayBillSummary, resolveUserBookingBuckets, formatActionPreview} = useBooking()
+const {groupGuestOrders, partitionGuestOrders, getDayBillSummary, resolveUserBookingBuckets, formatActionPreview, getBookingOptions} = useBooking()
 
 // Inhabitant name lookup (used by actionPreviewItems)
 const getInhabitantName = (id: number) =>
@@ -461,21 +461,50 @@ const isFirstEventOfWeek = (event: DinnerEventDisplay, idx: number): boolean => 
 const {isDinnerPast} = useSeason()
 const {canModifyOrders, canEditDiningMode} = props.deadlines
 
-const isEventPast = (event: DinnerEventDisplay): boolean => isDinnerPast(event.date)
 const canBookEvent = (event: DinnerEventDisplay): boolean => canModifyOrders(event.date)
 const canChangeEventMode = (event: DinnerEventDisplay): boolean => canEditDiningMode(event.date)
 
-// Disabled modes for event (same pattern as DinnerBookingForm.disabledModes)
-const getDisabledModesForEvent = (event: DinnerEventDisplay): DinnerMode[] => {
-  if (isEventPast(event)) return [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY, DinnerModeEnum.NONE]
-  if (!canChangeEventMode(event)) return [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY]
-  return []
+const ALL_MODES: DinnerMode[] = [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY, DinnerModeEnum.NONE]
+
+const isHouseholdInResidency = isHouseholdActiveOnDay(props.household.movedInDate, props.household.moveOutDate)
+
+const isEventDisabled = (event: DinnerEventDisplay): boolean =>
+  isDinnerPast(event.date) || !isHouseholdInResidency(event.date)
+
+const getCellDisabledModes = (inhabitantId: number, event: DinnerEventDisplay): DinnerMode[] => {
+  if (isDinnerPast(event.date)) return ALL_MODES
+
+  const order = getOrderForCell(inhabitantId, event.id)
+  const releasedCount = props.lockStatus?.get(event.id)?.total ?? 0
+
+  const {enabledModes} = getBookingOptions(
+    order?.state ?? null,
+    canBookEvent(event),
+    canChangeEventMode(event),
+    event.state,
+    releasedCount > 0,
+    isHouseholdInResidency(event.date)
+  )
+  return ALL_MODES.filter(m => !enabledModes.includes(m))
+}
+
+// Residency alert: shown when any visible event falls outside residency
+const residencyAlert = computed(() => {
+  const hasDisabledByResidency = flatEvents.value.some(e => !isHouseholdInResidency(e.date))
+  if (!hasDisabledByResidency) return null
+  return getResidencyDisplay(props.household.movedInDate, props.household.moveOutDate)
+})
+
+const getPowerDisabledModes = (event: DinnerEventDisplay): DinnerMode[] => {
+  const firstInhabitant = props.household.inhabitants[0]
+  if (!firstInhabitant) return ALL_MODES
+  return getCellDisabledModes(firstInhabitant.id, event)
 }
 
 // Lock status for column header chips (reuse calendar pattern)
 const getEventLockStatus = (event: DinnerEventDisplay): { config: LockStatusConfig, count: number } | null => {
   if (canBookEvent(event)) return null // Not locked
-  if (isEventPast(event)) return null // Past events don't show lock chip
+  if (isDinnerPast(event.date)) return null
   // Count released orders for this event
   const releasedCount = props.orders.filter(o =>
     o.dinnerEventId === event.id && o.state === OrderStateEnum.RELEASED
@@ -543,6 +572,18 @@ const getEventSummary = (eventId: number) => {
       </div>
     </div>
 
+    <!-- Residency alert: grid views only (week/month). Day view delegates to DinnerBookingForm. -->
+    <UAlert
+      v-if="residencyAlert && view !== 'day'"
+      :color="residencyAlert.color"
+      variant="soft"
+      :icon="residencyAlert.icon"
+      :title="residencyAlert.alertTitle"
+      :description="residencyAlert.alertDescription"
+      data-testid="outside-residency-alert"
+      class="mx-2 mt-2"
+    />
+
     <!-- Day view: slot for DinnerBookingForm -->
     <div v-if="view === 'day'" class="pt-2 md:pt-4">
       <slot name="day-content" />
@@ -584,7 +625,7 @@ const getEventSummary = (eventId: number) => {
       <template v-for="event in flatEvents" :key="`header-${event.id}`" #[`event-${event.id}-header`]>
         <div
           class="flex flex-col items-center"
-          :class="{ 'text-muted': isEventPast(event) }"
+          :class="{ 'text-muted': isEventDisabled(event) }"
         >
           <span :class="TYPOGRAPHY.caption">{{ formatDate(event.date, 'EEEEE') }}</span>
           <span :class="TYPOGRAPHY.finePrint">{{ formatDate(event.date, 'd/M') }}</span>
@@ -687,9 +728,9 @@ const getEventSummary = (eventId: number) => {
         <DinnerModeSelector
           v-if="row.original.rowType === 'power'"
           :model-value="getEventConsensus(event.id).mode"
-          :form-mode="isEventPast(event) ? FORM_MODES.VIEW : effectiveFormMode"
-          :interaction="effectiveFormMode === FORM_MODES.EDIT && !isEventPast(event) ? 'toggle' : 'buttons'"
-          :disabled-modes="getDisabledModesForEvent(event)"
+          :form-mode="isEventDisabled(event) ? FORM_MODES.VIEW : effectiveFormMode"
+          :interaction="effectiveFormMode === FORM_MODES.EDIT && !isEventDisabled(event) ? 'toggle' : 'buttons'"
+          :disabled-modes="getPowerDisabledModes(event)"
           :consensus="getEventConsensus(event.id).hasConsensus"
           :size="SIZES.standard"
           :name="`power-${event.id}`"
@@ -699,9 +740,9 @@ const getEventSummary = (eventId: number) => {
         <DinnerModeSelector
           v-else-if="row.original.rowType === 'inhabitant' && row.original.inhabitant"
           :model-value="getCellMode(row.original.inhabitant.id, event.id)"
-          :form-mode="isEventPast(event) ? FORM_MODES.VIEW : effectiveFormMode"
-          :interaction="effectiveFormMode === FORM_MODES.EDIT && !isEventPast(event) ? 'toggle' : 'buttons'"
-          :disabled-modes="getDisabledModesForEvent(event)"
+          :form-mode="isEventDisabled(event) ? FORM_MODES.VIEW : effectiveFormMode"
+          :interaction="effectiveFormMode === FORM_MODES.EDIT && !isEventDisabled(event) ? 'toggle' : 'buttons'"
+          :disabled-modes="getCellDisabledModes(row.original.inhabitant.id, event)"
           :size="SIZES.standard"
           :name="`cell-${row.original.inhabitant.id}-${event.id}`"
           :is-modified="isCellModified(row.original.inhabitant.id, event.id)"
@@ -717,7 +758,7 @@ const getEventSummary = (eventId: number) => {
         />
         <!-- Guest add row: + button for future events -->
         <UButton
-          v-else-if="row.original.rowType === 'guest-add' && !isEventPast(event) && canBookEvent(event)"
+          v-else-if="row.original.rowType === 'guest-add' && !isEventDisabled(event) && canBookEvent(event)"
           :icon="activeGuestEventId === event.id ? ICONS.chevronDown : ICONS.plusCircle"
           :color="COMPONENTS.guestRow.color"
           variant="ghost"
@@ -748,6 +789,7 @@ const getEventSummary = (eventId: number) => {
           :booker-id="props.bookerId"
           :booker-name="props.household.inhabitants.find(i => i.id === props.bookerId)?.name ?? 'Ukendt'"
           :released-ticket-counts="props.lockStatus.get(activeGuestEvent.id) ?? { total: 0, formatted: '-' }"
+          :is-household-in-residency="isHouseholdInResidency(activeGuestEvent.date)"
           @save="handleGuestSave"
           @cancel="expanded = {}"
         />

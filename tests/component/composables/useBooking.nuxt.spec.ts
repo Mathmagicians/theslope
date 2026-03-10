@@ -1501,30 +1501,35 @@ describe('getBookingOptions', () => {
 
     it.each([
         // Cancelled/consumed dinner - no booking possible
-        {desc: 'CANCELLED dinner', orderState: null, canModify: true, canEdit: true, dinnerState: DS.CANCELLED, hasReleased: false, expectedModes: EMPTY, expectedAction: null},
-        {desc: 'CONSUMED dinner', orderState: null, canModify: true, canEdit: true, dinnerState: DS.CONSUMED, hasReleased: false, expectedModes: EMPTY, expectedAction: null},
+        {desc: 'CANCELLED dinner', orderState: null, canModify: true, canEdit: true, dinnerState: DS.CANCELLED, hasReleased: false, inResidency: true, expectedModes: EMPTY, expectedAction: null},
+        {desc: 'CONSUMED dinner', orderState: null, canModify: true, canEdit: true, dinnerState: DS.CONSUMED, hasReleased: false, inResidency: true, expectedModes: EMPTY, expectedAction: null},
 
         // BOOKED order
-        {desc: 'BOOKED + canEdit=true', orderState: OS.BOOKED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, expectedModes: ALL, expectedAction: 'process'},
-        {desc: 'BOOKED + canEdit=false', orderState: OS.BOOKED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: false, expectedModes: NONE_ONLY, expectedAction: 'process'},
+        {desc: 'BOOKED + canEdit=true', orderState: OS.BOOKED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
+        {desc: 'BOOKED + canEdit=false', orderState: OS.BOOKED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: NONE_ONLY, expectedAction: 'process'},
 
         // RELEASED order (reclaim own)
-        {desc: 'RELEASED + canEdit=true', orderState: OS.RELEASED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, expectedModes: ALL, expectedAction: 'process'},
-        {desc: 'RELEASED + canEdit=false', orderState: OS.RELEASED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: false, expectedModes: DINEIN_NONE, expectedAction: 'process'},
+        {desc: 'RELEASED + canEdit=true', orderState: OS.RELEASED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
+        {desc: 'RELEASED + canEdit=false', orderState: OS.RELEASED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: DINEIN_NONE, expectedAction: 'process'},
 
         // No order - before deadline
-        {desc: 'null + canModify=true', orderState: null, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, expectedModes: ALL, expectedAction: 'process'},
-        {desc: 'null + canModify=false + !hasReleased', orderState: null, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: false, expectedModes: EMPTY, expectedAction: null},
+        {desc: 'null + canModify=true', orderState: null, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
+        {desc: 'null + canModify=false + !hasReleased', orderState: null, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: EMPTY, expectedAction: null},
 
         // No order - claim (after booking deadline, released available)
-        {desc: 'claim + canEdit=true → all eating modes', orderState: null, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: true, expectedModes: EATING, expectedAction: 'claim'},
-        {desc: 'claim + canEdit=false → DINEIN only', orderState: null, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: true, expectedModes: DINEIN_ONLY, expectedAction: 'claim'},
+        {desc: 'claim + canEdit=true → all eating modes', orderState: null, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: true, inResidency: true, expectedModes: EATING, expectedAction: 'claim'},
+        {desc: 'claim + canEdit=false → DINEIN only', orderState: null, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: true, inResidency: true, expectedModes: DINEIN_ONLY, expectedAction: 'claim'},
 
         // Edge: existing order ignores hasReleased (uses process, not claim)
-        {desc: 'BOOKED ignores hasReleased', orderState: OS.BOOKED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: true, expectedModes: ALL, expectedAction: 'process'},
-        {desc: 'RELEASED ignores hasReleased', orderState: OS.RELEASED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: true, expectedModes: DINEIN_NONE, expectedAction: 'process'},
-    ])('$desc → modes=$expectedModes.length, action=$expectedAction', ({orderState, canModify, canEdit, dinnerState, hasReleased, expectedModes, expectedAction}) => {
-        const result = getBookingOptions(orderState, canModify, canEdit, dinnerState, hasReleased)
+        {desc: 'BOOKED ignores hasReleased', orderState: OS.BOOKED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: true, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
+        {desc: 'RELEASED ignores hasReleased', orderState: OS.RELEASED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: true, inResidency: true, expectedModes: DINEIN_NONE, expectedAction: 'process'},
+
+        // Outside residency - no booking regardless of other params
+        {desc: 'outside residency + no order', orderState: null, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: false, expectedModes: EMPTY, expectedAction: null},
+        {desc: 'outside residency + BOOKED order', orderState: OS.BOOKED, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: false, expectedModes: EMPTY, expectedAction: null},
+        {desc: 'outside residency + released tickets', orderState: null, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: true, inResidency: false, expectedModes: EMPTY, expectedAction: null},
+    ])('$desc → modes=$expectedModes.length, action=$expectedAction', ({orderState, canModify, canEdit, dinnerState, hasReleased, inResidency, expectedModes, expectedAction}) => {
+        const result = getBookingOptions(orderState, canModify, canEdit, dinnerState, hasReleased, inResidency)
         expect(result.enabledModes).toEqual(expectedModes)
         expect(result.action).toBe(expectedAction)
     })

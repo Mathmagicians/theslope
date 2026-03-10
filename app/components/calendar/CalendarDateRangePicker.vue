@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type {DateRange} from "~/types/dateTypes"
-import {DATE_SETTINGS, formatDateRange, translateToDanish} from "~/utils/date"
-import {inject, type Ref} from "vue"
+import {DATE_SETTINGS, translateToDanish} from "~/utils/date"
+import type {Ref} from "vue"
 import {mapZodErrorsToFormErrors, getErrorMessage} from "~/utils/validtation"
 
 // TYPES
@@ -12,11 +12,14 @@ type DateRangeInput = {
 
 // COMPONENT DEFINITIONS
 const model = defineModel<DateRange>({required: true})
-const props = withDefaults(defineProps<{ debug?: boolean, name?: string }>(), {
-  debug: false,
-  name: undefined
+const props = withDefaults(defineProps<{ name?: string, disabled?: boolean }>(), {
+  name: undefined,
+  disabled: false
 })
 const emit = defineEmits(['update:model-value', 'close'])
+
+// DESIGN SYSTEM
+const {SIZES} = useTheSlopeDesignSystem()
 
 // STATE
 const errors = ref<Map<string, string[]>>(new Map())
@@ -51,18 +54,6 @@ const pickerDateRange = computed({
     }
   }
 })
-
-// DEBUG LOGGING
-if (props.debug) {
-  console.log('CalendarDateRangePicker > Initialization:', {
-    modelValue: {
-      start: model.value?.start instanceof Date ? 'Date' : typeof model.value?.start,
-      end: model.value?.end instanceof Date ? 'Date' : typeof model.value?.end,
-      raw: formatDateRange(model.value)
-    },
-    inputState: inputState.value
-  })
-}
 
 // ACTIONS
 const updateDateRange = (newRange: DateRange) => {
@@ -122,10 +113,6 @@ const formatLabel = (key: keyof DateRange): string => {
   }
 }
 
-const togglePopover = () => {
-  console.log("toggle popover")
-}
-
 // Watch for external model changes
 watch(() => model.value, (newModelValue) => {
   if (newModelValue) {
@@ -135,9 +122,6 @@ watch(() => model.value, (newModelValue) => {
     }
   }
 }, {deep: true})
-
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Expose for testing
 defineExpose({
@@ -149,50 +133,49 @@ defineExpose({
 
 <template>
   <UPopover
-:content="{
+    :disabled="props.disabled"
+    :content="{
       align: 'center',
       side: 'bottom',
       sideOffset: 16
     }">
     <template #content>
       <UCalendar
-          v-model="pickerDateRange"
-          range
-          :size="getIsMd ? 'xl': 'sm'"
-          :number-of-months="getIsMd ? 2: 1"
-          :week-starts-on="1"
-          :fixed-weeks="false"
-          weekday-format="short"
-          color="success"
+        v-model="pickerDateRange"
+        range
+        :size="SIZES.calendar"
+        :number-of-months="SIZES.calendarMonths"
+        :week-starts-on="1"
+        :fixed-weeks="false"
+        weekday-format="short"
+        color="success"
       >
-        <template #week-day="{ day}">
-      <span class="text-sm text-muted uppercase">
-        {{ translateToDanish(day) }}
-      </span>
+        <template #week-day="{ day }">
+          <span class="text-sm text-muted uppercase">
+            {{ translateToDanish(day) }}
+          </span>
         </template>
       </UCalendar>
     </template>
     <div :name="props.name" class="flex flex-row gap-1 md:gap-4">
       <UFormField
-v-for="key in ['start', 'end'] as const" :key="key"
-                  class="p-2"
-                  :label="formatLabel(key)"
-                  :error="getErrorMessage(errors, [key, '_'])">
+        v-for="key in ['start', 'end'] as const" :key="key"
+        class="p-2"
+        :label="formatLabel(key)"
+        :error="getErrorMessage(errors, [key, '_'])">
         <UInput
-v-model="inputState[key]" :placeholder="DATE_SETTINGS.USER_MASK"
-                type="string"
-                :name="key"
-                @update:model-value="handleInputChange($event, key)"
+          v-model="inputState[key]"
+          :placeholder="DATE_SETTINGS.USER_MASK"
+          type="string"
+          :name="key"
+          :disabled="props.disabled"
+          @update:model-value="handleInputChange($event, key)"
         >
           <template #trailing>
-            <UButton
-icon="i-heroicons-calendar" color="info"
-                     @click="togglePopover"/>
+            <UButton icon="i-heroicons-calendar" color="info"/>
           </template>
         </UInput>
       </UFormField>
-      <p v-if="debug">CalendarDateInput > Model Value is: {{ formatDateRange(model) }}, Input value is:
-        {{ inputState }} </p>
     </div>
   </UPopover>
 </template>

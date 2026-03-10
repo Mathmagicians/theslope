@@ -1,8 +1,48 @@
 import {z} from 'zod'
+import {isBefore, isAfter} from 'date-fns'
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 import type {InhabitantDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+
+/**
+ * Curried predicate: is a dinner event within the household's residency period?
+ * Takes household dates, returns a filter function for dinner event dates.
+ *
+ * DRY — one predicate for both user booking and system scaffolding.
+ * Per ADR-016, both paths build a dinnerEventById map from the filtered set.
+ *
+ * Boundary rules:
+ * - Event on movedInDate → included (moved in that day, can eat)
+ * - Event on moveOutDate → included (still there that day)
+ * - moveOutDate null → no upper bound
+ *
+ * @param movedInDate - Household move-in date
+ * @param moveOutDate - Household move-out date (null = no upper bound)
+ * @returns Predicate: (eventDate) => boolean
+ */
+export const isHouseholdActiveOnDay = (
+    movedInDate: Date,
+    moveOutDate: Date | null
+) => (eventDate: Date): boolean =>
+    !isAfter(movedInDate, eventDate) && (!moveOutDate || !isBefore(moveOutDate, eventDate))
+
+/**
+ * Household residency status based on move-in/move-out dates.
+ * Used by ribbon display and admin badges.
+ */
+export type ResidencyStatus = 'pending' | 'active' | 'leaving' | 'moved-out'
+
+export const getResidencyStatus = (
+    movedInDate: Date,
+    moveOutDate: Date | null,
+    referenceDate: Date = new Date()
+): ResidencyStatus => {
+    if (isAfter(movedInDate, referenceDate)) return 'pending'
+    if (moveOutDate && isBefore(moveOutDate, referenceDate)) return 'moved-out'
+    if (moveOutDate) return 'leaving'
+    return 'active'
+}
 
 /**
  * Business logic for working with households and inhabitants

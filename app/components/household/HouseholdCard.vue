@@ -61,10 +61,12 @@ import type {DinnerMode, ScaffoldResult} from '~/composables/useBookingValidatio
 interface Props {
   household: HouseholdDetail
   canEdit?: boolean
+  adminBypass?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  canEdit: true
+  canEdit: true,
+  adminBypass: false
 })
 
 
@@ -154,11 +156,11 @@ const savePreferences = async () => {
 
     // Power mode: update all inhabitants
     if (isPowerMode) {
-      result = await householdsStore.updateAllInhabitantPreferences(props.household.id, draftPreferences.value)
+      result = await householdsStore.updateAllInhabitantPreferences(props.household.id, draftPreferences.value, props.adminBypass)
     }
     // Regular mode: update single inhabitant
     else {
-      result = await householdsStore.updateInhabitantPreferences(editingInhabitantId.value, draftPreferences.value)
+      result = await householdsStore.updateInhabitantPreferences(editingInhabitantId.value, draftPreferences.value, props.adminBypass)
     }
 
     toast.add({

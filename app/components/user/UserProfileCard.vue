@@ -75,6 +75,7 @@ const email = computed(() => props.user.email)
 const phone = computed(() => props.user.phone || null)
 const systemRoles = computed(() => props.user.systemRoles || [])
 const householdShortName = computed(() => hasHousehold(props.user) ? props.user.Inhabitant!.household.shortName : null)
+const householdPbsId = computed(() => hasHousehold(props.user) ? props.user.Inhabitant!.household.pbsId : null)
 const householdAddress = computed(() => hasHousehold(props.user) ? props.user.Inhabitant!.household.address : null)
 const heynaboProfileUrl = computed(() => inhabitant.value ? getUserUrl(inhabitant.value.heynaboId) : null)
 
@@ -227,10 +228,10 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
       </div>
 
       <!-- Household -->
-      <div v-if="householdShortName" class="flex items-center gap-2">
+      <div v-if="householdShortName && householdPbsId" class="flex items-center gap-2">
         <UIcon :name="ICONS.household" class="opacity-60" />
         <NuxtLink
-          :to="`/household/${encodeURIComponent(householdShortName)}`"
+          :to="getHouseholdUrl(householdShortName, householdPbsId)"
           :class="[TYPOGRAPHY.bodyTextMuted, 'underline hover:no-underline hover:text-primary transition-colors']"
         >
           {{ householdShortName }}

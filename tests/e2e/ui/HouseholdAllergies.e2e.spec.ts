@@ -23,6 +23,7 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
     // Shared session info only (immutable, safe for parallel)
     let inhabitantId: number
     let shortName: string
+    let pbsId: number
 
     test.use({storageState: memberUIFile})
 
@@ -34,6 +35,7 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
         const sessionInfo = await getSessionUserInfo(memberContext)
         inhabitantId = sessionInfo.inhabitantId
         shortName = sessionInfo.householdShortname
+        pbsId = sessionInfo.householdPbsId
 
         // Create active season (required for page to load)
         await SeasonFactory.createActiveSeason(adminContext)
@@ -43,7 +45,7 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
      * Helper to navigate to allergies tab and wait for content
      */
     const navigateToAllergiesTab = async (page: import('@playwright/test').Page) => {
-        await page.goto(`/household/${encodeURIComponent(shortName)}/allergies`)
+        await page.goto(`/household/${encodeURIComponent(shortName)}/allergies?pbs=${pbsId}`)
         await pollUntil(
             async () => page.locator('[data-testid="household-allergies"]').isVisible(),
             (isVisible) => isVisible,

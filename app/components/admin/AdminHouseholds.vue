@@ -16,8 +16,7 @@ const {households, isHouseholdsLoading,isHouseholdsErrored, householdsError} = s
 // Initialize without await for SSR hydration consistency
 householdsStore.initHouseholdsStore()
 
-// Design system
-const { COMPONENTS } = useTheSlopeDesignSystem()
+const { COMPONENTS, getResidencyDisplay } = useTheSlopeDesignSystem()
 
 // Search/filter state
 const searchQuery = ref('')
@@ -41,9 +40,16 @@ const filteredHouseholds = computed(() => {
     )
   }
 
-  // Sort by address (data is already sorted from DB, just reverse if needed)
+  // Sort: non-active residency status first (pending, leaving, moved-out), then by address
+  result = [...result].sort((a, b) => {
+    const aInteresting = getResidencyStatus(a.movedInDate, a.moveOutDate) !== 'active'
+    const bInteresting = getResidencyStatus(b.movedInDate, b.moveOutDate) !== 'active'
+    if (aInteresting !== bInteresting) return aInteresting ? -1 : 1
+    return (a.address ?? '').localeCompare(b.address ?? '')
+  })
+
   if (sortDescending.value) {
-    result = [...result].reverse()
+    result.reverse()
   }
 
   return result
@@ -55,12 +61,12 @@ const columns = [
     header: 'Forkortelse'
   },
   {
-    accessorKey: 'address',
-    header: 'Address'
-  },
-  {
     accessorKey: 'pbsId',
     header: 'PBS'
+  },
+  {
+    accessorKey: 'address',
+    header: 'Address'
   },
   {
     accessorKey: 'inhabitants',
@@ -126,18 +132,34 @@ class="w-full px-0"
       <!-- Custom shortName cell with link -->
       <template #shortName-cell="{ row }">
         <NuxtLink
-            :to="`/household/${encodeURIComponent(row.original.shortName)}`"
+            :to="getHouseholdUrl(row.original.shortName, row.original.pbsId)"
             class="text-primary hover:underline font-medium"
         >
           {{ row.original.shortName }}
         </NuxtLink>
       </template>
 
-      <!-- Custom address cell with test-id for easier test selection -->
       <template #address-cell="{ row }">
         <span :data-testid="`household-address-${row.original.id}`">
           {{ row.original.address }}
         </span>
+      </template>
+
+      <template #pbsId-cell="{ row }">
+        <div class="flex flex-col md:flex-row md:items-center gap-1 md:gap-2">
+          <span>{{ row.original.pbsId }}</span>
+          <template v-for="residency in [getResidencyDisplay(row.original.movedInDate, row.original.moveOutDate)]" :key="residency?.badgeText">
+            <UBadge
+              v-if="residency"
+              :color="residency.color"
+              :icon="residency.icon"
+              variant="subtle"
+              size="sm"
+            >
+              {{ residency.badgeText }}
+            </UBadge>
+          </template>
+        </div>
       </template>
 
       <template #empty-state>

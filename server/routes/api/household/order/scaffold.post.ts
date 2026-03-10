@@ -1,6 +1,8 @@
-import {defineEventHandler, readValidatedBody, setResponseStatus} from "h3"
+import {z} from 'zod'
+import {defineEventHandler, readValidatedBody, getValidatedQuery, setResponseStatus} from "h3"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
+import {isAdmin} from '~/composables/usePermissions'
 import {useBookingValidation, type ScaffoldOrdersRequest, type ScaffoldOrdersResponse} from "~/composables/useBookingValidation"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 
@@ -33,8 +35,10 @@ export default defineEventHandler<Promise<ScaffoldOrdersResponse>>(async (event)
         return throwH3Error(`${LOG} Input validation error`, error)
     }
 
-    // Authorization: verify user belongs to household
-    const user = await requireHouseholdAccess(event, requestData.householdId)
+    // Authorization: verify user belongs to household (admin can bypass via ?adminBypass=true)
+    const querySchema = z.object({adminBypass: z.coerce.boolean().optional()})
+    const {adminBypass} = await getValidatedQuery(event, querySchema.parse)
+    const user = await requireHouseholdAccess(event, requestData.householdId, adminBypass ? isAdmin : undefined)
 
     // Business logic (ADR-002)
     try {

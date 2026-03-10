@@ -13,6 +13,8 @@
  * - Settings tab: Settings
  */
 
+import {useQueryParam} from '~/composables/useQueryParam'
+
 // TAB CONFIGURATION
 const tabs = [
   {
@@ -75,23 +77,60 @@ const tabItems = tabs.map(tab => ({
 // Initialize stores
 const householdStore = useHouseholdsStore()
 const {
-  selectedHousehold, isSelectedHouseholdErrored, selectedHouseholdError,
-  householdsError, isHouseholdsErrored, isHouseholdsStoreReady
+  selectedHousehold, selectedHouseholdId, isSelectedHouseholdErrored, selectedHouseholdError,
+  householdsError, isHouseholdsErrored, isHouseholdsStoreReady,
+  households, isHouseholdsInitialized, myHousehold
 } = storeToRefs(householdStore)
 
-const {initHouseholdsStore} = householdStore
+const {loadHousehold} = householdStore
 
-initHouseholdsStore(shortname.value)
+// URL-driven household resolution (ADR-006)
+// Valid ?pbs= → load that household. Invalid/missing ?pbs= → fall back to myHousehold.
+const {value: pbsId} = useQueryParam<number | null>('pbs', {
+  deserialize: (s) => {
+    const n = parseInt(s, 10)
+    return Number.isNaN(n) ? null : n
+  },
+  serialize: (v) => v ? String(v) : '',
+  validate: (v) => v !== null && households.value.some(h => h.pbsId === v),
+  defaultValue: () => myHousehold.value?.pbsId ?? null,
+  syncWhen: () => isHouseholdsInitialized.value
+})
+
+// Watch pbsId to load the corresponding household
+watch(pbsId, (pbs) => {
+  if (!pbs) return
+  const hh = households.value.find(h => h.pbsId === pbs)
+  if (hh && hh.id !== selectedHouseholdId.value) loadHousehold(hh.id)
+}, {immediate: true})
 
 // Access control: check if current user is member of this household
 const authStore = useAuthStore()
-const canEdit = computed(() =>
+const isMember = computed(() =>
   selectedHousehold.value ? authStore.isMemberOfHousehold(selectedHousehold.value.id) : false
 )
 
+// Admin override: admin can unlock editing on households they don't belong to
+const adminOverrideActive = ref(false)
+const showAdminOverride = computed(() =>
+  authStore.isAdmin && selectedHousehold.value ? !authStore.isMemberOfHousehold(selectedHousehold.value.id) : false
+)
+const canEdit = computed(() =>
+  isMember.value || (authStore.isAdmin && adminOverrideActive.value)
+)
+
+// Household status ribbon
+const ribbon = computed(() => {
+  const h = selectedHousehold.value
+  if (!h) return null
+  const display = getResidencyDisplay(h.movedInDate, h.moveOutDate)
+  if (!display) return null
+  return { classes: getRibbonClasses(display.type), text: display.badgeText }
+})
+
 // Format household title: address + family name
 const { formatHouseholdFamilyName } = useHousehold()
-const { TYPOGRAPHY } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, ICONS, COMPONENTS, COLOR } = useTheSlopeDesignSystem()
 const householdAddress = computed(() => selectedHousehold.value?.address ?? '')
 const householdFamilyName = computed(() =>
   selectedHousehold.value?.inhabitants
@@ -119,7 +158,16 @@ v-if="isHouseholdsErrored" :error="householdsError?.statusCode"
 v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCode"
                :message="`Kunne ikke hente data for husstanden ${shortname}`" :cause="selectedHouseholdError"/>
     <Loader v-else-if="!isHouseholdsStoreReady" :text="`Henter husstanden ${shortname}`"/>
-    <UCard v-else class="w-full px-0 rounded-none md:rounded-lg" :ui="{ body: 'px-0 py-2 md:px-4 md:py-6' }">
+    <UCard v-else class="w-full px-0 rounded-none md:rounded-lg" :ui="{ root: COMPONENTS.ribbon.container, body: 'px-0 py-2 md:px-4 md:py-6' }">
+      <!-- Household status ribbon -->
+      <div
+        v-if="ribbon"
+        :class="ribbon.classes"
+        data-testid="household-ribbon"
+      >
+        {{ ribbon.text }}
+      </div>
+
       <template #header>
         <div class="flex flex-col gap-2">
           <div class="flex items-center gap-1 md:gap-2">
@@ -127,16 +175,51 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
             <h2 :class="TYPOGRAPHY.cardTitle">{{ householdAddress }}</h2>
             <span v-if="householdFamilyName" :class="TYPOGRAPHY.bodyTextMuted">· {{ householdFamilyName }}</span>
           </div>
-          <!-- Visitor banner: shown when viewing another household -->
+
+          <!-- Visitor banner: non-member, admin override NOT active -->
           <UAlert
-            v-if="!canEdit"
+            v-if="!isMember && !adminOverrideActive"
             data-testid="visitor-banner"
             icon="i-heroicons-eye"
             color="info"
             variant="subtle"
             title="Du besøger nu en anden husstand end din egen"
             description="Kigge, ikke røre"
-          />
+          >
+            <template v-if="showAdminOverride" #actions>
+              <DangerButton
+                data-testid="admin-override-btn"
+                label="Admin røre alligevel"
+                confirm-label="Klik igen for at låse op"
+                :icon="ICONS.authorize"
+                initial-color="info"
+                initial-variant="subtle"
+                @confirm="adminOverrideActive = true"
+              />
+            </template>
+          </UAlert>
+
+          <!-- Admin override active banner -->
+          <UAlert
+            v-if="adminOverrideActive"
+            data-testid="admin-override-active"
+            :icon="ICONS.authorize"
+            color="warning"
+            variant="subtle"
+            title="Admin rører, men forsigtigt"
+          >
+            <template #actions>
+              <UButton
+                data-testid="admin-override-exit"
+                :color="COLOR.neutral"
+                variant="ghost"
+                :icon="ICONS.xMark"
+                @click="adminOverrideActive = false"
+              >
+                Afslut
+              </UButton>
+            </template>
+          </UAlert>
         </div>
       </template>
       <UTabs
@@ -147,7 +230,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
           color="primary"
       >
         <template #content="{ item }">
-          <component :is="asyncComponents[item.value]" :household="selectedHousehold" :can-edit="canEdit"/>
+          <component :is="asyncComponents[item.value]" :household="selectedHousehold" :can-edit="canEdit" :admin-bypass="adminOverrideActive"/>
         </template>
       </UTabs>
     </UCard>

@@ -127,7 +127,7 @@ const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Design system
-const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
+const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, getRandomEmptyMessage, getResidencyDisplay} = useTheSlopeDesignSystem()
 const emptyStateMessage = getRandomEmptyMessage('household')
 
 // Ticket business logic
@@ -187,6 +187,18 @@ const dinnerHasPassed = computed(() => isDinnerPast(props.dinnerEvent.date))
 // Edit allowed if: permission-based formMode is EDIT AND dinner hasn't passed
 const isEditModeAllowed = computed(() => formMode.value === FORM_MODES.EDIT && !dinnerHasPassed.value)
 
+const isHouseholdInResidency = computed(() => {
+  if (!household.value) return true
+  return isHouseholdActiveOnDay(
+    household.value.movedInDate, household.value.moveOutDate
+  )(props.dinnerEvent.date)
+})
+
+const residencyAlert = computed(() => {
+  if (isHouseholdInResidency.value || !household.value) return null
+  return getResidencyDisplay(household.value.movedInDate, household.value.moveOutDate)
+})
+
 // All dinner modes for computing disabled from enabled
 const ALL_MODES: DinnerMode[] = [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY, DinnerModeEnum.NONE]
 
@@ -197,7 +209,8 @@ const getRowBookingState = (orderState: OrderState | undefined, isGuestAddRow: b
     canBook.value,
     canChangeDiningMode.value,
     props.dinnerEvent.state,
-    hasReleasedTickets.value
+    hasReleasedTickets.value,
+    isHouseholdInResidency.value
   )
   // Disable NONE for: guest add row OR inhabitants without existing order (can't select "nothing" when no ticket exists)
   const hasNoExistingOrder = orderState === undefined
@@ -521,9 +534,18 @@ const actionPreviewItems = computed(() => {
 </script>
 
 <template>
-  <!-- Empty state -->
   <UAlert
-    v-if="!household?.inhabitants?.length"
+    v-if="residencyAlert"
+    :color="residencyAlert.color"
+    variant="soft"
+    :icon="residencyAlert.icon"
+    :title="residencyAlert.alertTitle"
+    :description="residencyAlert.alertDescription"
+    data-testid="outside-residency-alert"
+  />
+
+  <UAlert
+    v-else-if="!household?.inhabitants?.length"
     :color="COLOR.neutral"
     variant="soft"
     :avatar="{text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar}"
@@ -740,6 +762,7 @@ const actionPreviewItems = computed(() => {
           :released-ticket-counts="releasedTicketCounts"
           :booker-id="bookerInhabitant.id"
           :booker-name="bookerInhabitant.name"
+          :is-household-in-residency="isHouseholdInResidency"
           @save="handleGuestSave"
           @cancel="handleCancel"
         />
@@ -801,50 +824,46 @@ const actionPreviewItems = computed(() => {
             show-label
           />
 
-          <!-- Order history display -->
-          <OrderHistoryDisplay v-if="row.original.order?.id && historyOrderId === row.original.order.id" :order-id="row.original.order.id"/>
+          <!-- Order history toggle + display (in body, near the content it reveals) -->
+          <div v-if="row.original.order?.id">
+            <UButton
+                color="neutral"
+                variant="ghost"
+                :icon="historyOrderId === row.original.order.id ? ICONS.chevronUp : ICONS.clipboard"
+                square
+                :size="SIZES.small"
+                aria-label="Vis ordrehistorik"
+                @click="toggleHistory(row.original.order.id)"
+            />
+            <OrderHistoryDisplay v-if="historyOrderId === row.original.order.id" :order-id="row.original.order.id" class="mt-2"/>
+          </div>
 
+          <!-- Footer: action preview + buttons (stacked on mobile, horizontal on desktop) -->
           <template #footer>
             <div class="flex flex-col gap-2">
-              <!-- Action preview: show what will happen when saving -->
               <ActionPreview :items="actionPreviewItems" />
 
-              <div class="flex justify-between items-center">
-                <!-- History button (left) -->
+              <div class="flex flex-col-reverse md:flex-row md:justify-end gap-2">
                 <UButton
-                    v-if="row.original.order?.id"
-                    color="neutral"
-                    variant="ghost"
-                    :icon="historyOrderId === row.original.order.id ? ICONS.chevronUp : ICONS.clipboard"
-                    :size="SIZES.standard"
-                    @click="toggleHistory(row.original.order.id)"
+                  v-bind="BUTTONS.cancel"
+                  :data-testid="`${row.original.rowType}-${row.original.id}-cancel`"
+                  @click="handleCancel"
                 >
-                  Historik
+                  Annuller
                 </UButton>
-                <span v-else />
-                <!-- Cancel/Save buttons (right) -->
-                <div class="flex gap-2">
-                  <UButton
-                    v-bind="BUTTONS.cancel"
-                    :data-testid="`${row.original.rowType}-${row.original.id}-cancel`"
-                    @click="handleCancel"
-                  >
-                    Annuller
-                  </UButton>
-                  <UButton
-                    v-bind="row.original.rowType === 'power' ? {} : BUTTONS.save"
-                    :color="row.original.rowType === 'power' ? COMPONENTS.powerMode.color : undefined"
-                    :loading="isSaving"
-                    :disabled="row.original.bookingAction === null"
-                    :data-testid="`${row.original.rowType}-${row.original.id}-save`"
-                    @click="handleSave(row.original)"
-                  >
-                    <template #leading>
-                      <UIcon :name="row.original.rowType === 'power' ? COMPONENTS.powerMode.buttonIcon : ICONS.check" />
-                    </template>
-                    {{ row.original.rowType === 'power' ? 'Gem for alle' : 'Opdater' }}
-                  </UButton>
-                </div>
+                <UButton
+                  v-bind="row.original.rowType === 'power' ? {} : BUTTONS.save"
+                  :color="row.original.rowType === 'power' ? COMPONENTS.powerMode.color : undefined"
+                  :loading="isSaving"
+                  :disabled="row.original.bookingAction === null"
+                  :data-testid="`${row.original.rowType}-${row.original.id}-save`"
+                  @click="handleSave(row.original)"
+                >
+                  <template #leading>
+                    <UIcon :name="row.original.rowType === 'power' ? COMPONENTS.powerMode.buttonIcon : ICONS.check" />
+                  </template>
+                  {{ row.original.rowType === 'power' ? 'Gem for alle' : 'Opdater' }}
+                </UButton>
               </div>
             </div>
           </template>

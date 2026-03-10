@@ -13,7 +13,7 @@ const tabs = [
   { name: 'Allergier', path: 'allergies', selector: '[data-testid="admin-allergies"]', hasFormModes: false },
   { name: 'Brugere', path: 'users', selector: '[data-testid="admin-users"]', hasFormModes: false },
   { name: 'Økonomi', path: 'economy', selector: '[data-testid="admin-economy"]', hasFormModes: false },
-  { name: 'System', path: 'settings', selector: '[data-testid="admin-system"]', hasFormModes: false }
+  { name: 'System', path: 'system', selector: '[data-testid="admin-system"]', hasFormModes: false }
 ]
 
 test.describe('Admin page path-based navigation', () => {
@@ -66,9 +66,8 @@ test.describe('Admin page path-based navigation', () => {
     })
   }
 
-  // TODO: Re-enable after fixing allergyManagers API timeout in CI
   for (const tab of tabs) {
-    test.skip(`Tab "${tab.name}" can be loaded with path /admin/${tab.path}`, async ({ page }) => {
+    test(`Tab "${tab.name}" can be loaded with path /admin/${tab.path}`, async ({ page }) => {
       await page.goto(`${adminUrl}/${tab.path}`)
 
       expect(page.url()).toContain(`/admin/${tab.path}`)

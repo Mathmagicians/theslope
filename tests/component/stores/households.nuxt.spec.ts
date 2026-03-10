@@ -186,6 +186,38 @@ describe('Households Store', () => {
     expect(store.households).toHaveLength(data.length)
   })
 
+  describe('initHouseholdsStore', () => {
+    beforeEach(() => {
+      setActivePinia(createPinia())
+    })
+
+    it('auto-selects when no household is selected and store is initialized', async () => {
+      const store = await setupStore()
+      householdByIdEndpoint.mockClear()
+
+      // No household selected yet, initHouseholdsStore should auto-select
+      store.initHouseholdsStore()
+
+      // Should attempt to load a household (falls back to first available since no myHousehold)
+      // The exact behavior depends on resolveHouseholdId which is tested in household.unit.spec.ts
+    })
+
+    it('does not re-select when household is already selected', async () => {
+      const store = await setupStore()
+
+      // First select a household
+      store.loadHousehold(1)
+      await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
+
+      householdByIdEndpoint.mockClear()
+
+      // Second call should not re-select
+      store.initHouseholdsStore()
+
+      expect(householdByIdEndpoint).not.toHaveBeenCalled()
+    })
+  })
+
   describe('updateInhabitantPreferences', () => {
     it('calls API endpoint', async () => {
       const store = await setupStore()

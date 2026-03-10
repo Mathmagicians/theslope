@@ -364,7 +364,24 @@ export const resolveOrdersFromPreferencesToBuckets = (
 
         const key = `${existing.inhabitantId}-${existing.dinnerEventId}`
 
-        // User-intent orders: preserve (confirmed = user wants it, cancelled = user released it)
+        // Residency enforcement: orders for events outside the eligible set (e.g. after moveOutDate)
+        // are force-deleted regardless of user intent
+        const isInEligibleEvents = dinnerEventById.has(existing.dinnerEventId)
+        if (!isInEligibleEvents) {
+            console.info(`🏠 > RESIDENCY_CHECK > Order ${existing.id} (key=${key}) DELETED (event ${existing.dinnerEventId} outside residency period)`)
+            result.delete.push({
+                inhabitantId: existing.inhabitantId,
+                dinnerEventId: existing.dinnerEventId,
+                dinnerMode: existing.dinnerMode,
+                ticketPriceId: existing.ticketPriceId ?? 0,
+                isGuestTicket: existing.isGuestTicket ?? false,
+                orderId: existing.id,
+                state: existing.state
+            })
+            continue
+        }
+
+        // User-intent orders within eligible events: preserve (confirmed = user wants it, cancelled = user released it)
         if (confirmedKeys.has(key) || cancelledKeys.has(key)) {
             console.info(`🔒 > ORPHAN_CHECK > Order ${existing.id} (key=${key}) PRESERVED (in confirmedKeys=${confirmedKeys.has(key)}, cancelledKeys=${cancelledKeys.has(key)})`)
             result.idempotent.push({
@@ -379,7 +396,7 @@ export const resolveOrdersFromPreferencesToBuckets = (
             continue
         }
 
-        // True orphan order (no user intent) - add to delete bucket
+        // True orphan order (no user intent, within eligible events) - add to delete bucket
         console.info(`🗑️ > ORPHAN_CHECK > Order ${existing.id} (key=${key}) DELETED (orphan - not in confirmedKeys or cancelledKeys)`)
         result.delete.push({
             inhabitantId: existing.inhabitantId,
@@ -1062,13 +1079,15 @@ export const useBooking = () => {
      * @param canEditDiningMode - Before dining mode deadline
      * @param dinnerState - Dinner event state (CANCELLED/CONSUMED blocks booking)
      * @param hasReleasedTickets - Released tickets available to claim
+     * @param isHouseholdInResidency - Whether household is active on the dinner date
      */
     const getBookingOptions = (
         orderState: OrderState | null,
         canModifyOrders: boolean,
         canEditDiningMode: boolean,
         dinnerState: DinnerState,
-        hasReleasedTickets: boolean
+        hasReleasedTickets: boolean,
+        isHouseholdInResidency: boolean
     ): { enabledModes: DinnerMode[], action: 'process' | 'claim' | null } => {
         const {DinnerModeSchema, DinnerStateSchema} = useBookingValidation()
         const DinnerModeEnum = DinnerModeSchema.enum
@@ -1077,6 +1096,9 @@ export const useBooking = () => {
         const OrderStateEnum = OrderStateSchema.enum
 
         const ALL_MODES: DinnerMode[] = [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY, DinnerModeEnum.NONE]
+
+        // Outside residency period - no booking possible
+        if (!isHouseholdInResidency) return { enabledModes: [], action: null }
 
         // Cancelled/consumed dinner - no booking possible
         if (dinnerState === DinnerStateEnum.CANCELLED || dinnerState === DinnerStateEnum.CONSUMED) {
