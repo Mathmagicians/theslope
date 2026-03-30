@@ -295,7 +295,7 @@ export const useSeason = () => {
     // DINNER EVENT RECONCILIATION - ADR-015 idempotent pruneAndCreate
     // ========================================================================
 
-    const toDateKey = (date: Date): string => formatDate(date, 'yyyy-MM-dd')
+    const toDateKey = (date: Date): string => formatDate(date)
 
     const getDinnerEventDateKey = (event: DinnerEventDisplay | DinnerEventCreate): string =>
         toDateKey(event.date)

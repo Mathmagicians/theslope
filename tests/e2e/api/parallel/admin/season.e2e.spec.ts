@@ -4,10 +4,13 @@ import {useBookingValidation, type DinnerEventDisplay} from '~~/app/composables/
 import type {CookingTeamDetail} from '~~/app/composables/useCookingTeamValidation'
 import {useCoreValidation} from '~~/app/composables/useCoreValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {SeasonImportFactory} from '~~/tests/e2e/testDataFactories/seasonImportFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 import {WEEKDAYS} from '~~/app/types/dateTypes'
+import {format, addDays, getISODay} from 'date-fns'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const {DinnerStateSchema, DinnerModeSchema} = useBookingValidation()
@@ -681,6 +684,34 @@ test.describe('Season API Tests', () => {
                 }
             }
         })
+    })
+
+    test("Regenerating dinner events should remove events on holiday dates", async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const holidayStart = new Date(SeasonFactory.tomorrow)
+        holidayStart.setDate(holidayStart.getDate() + 1)
+        const holidayEnd = new Date(holidayStart)
+        holidayEnd.setDate(holidayEnd.getDate() + 1)
+        const holiday = {start: holidayStart, end: holidayEnd}
+
+        // GIVEN: Season with holidays, then holidays removed to create extra events
+        const created = await SeasonFactory.createSeason(context, {...SeasonFactory.defaultSeason(temporaryAndRandom()), holidays: [holiday]})
+        createdSeasonIds.push(created.id!)
+        const expectedCount = SeasonFactory.calculateExpectedEventCount(created)
+
+        const expanded = await SeasonFactory.updateSeason(context, {...created, holidays: []})
+        expect(expanded.dinnerEvents!.length).toBeGreaterThan(expectedCount)
+
+        // GIVEN: Restore holidays in config
+        await SeasonFactory.updateSeason(context, {...expanded, holidays: [holiday]})
+
+        // WHEN: Regenerate dinner events
+        const result = await SeasonFactory.generateDinnerEventsForSeason(context, created.id!)
+
+        // THEN: No dinner events on holiday dates
+        expect(result.eventCount).toBe(expectedCount)
+        const onHoliday = result.events.filter(de => new Date(de.date) >= holiday.start && new Date(de.date) <= holiday.end)
+        expect(onHoliday).toHaveLength(0)
     })
 
     // NOTE: Scaffold Pre-bookings tests moved to tests/e2e/api/serial/admin/scaffold-prebookings.e2e.spec.ts
