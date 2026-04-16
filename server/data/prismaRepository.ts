@@ -1715,13 +1715,15 @@ export async function deleteTeam(d1Client: D1Database, id: number): Promise<Cook
 
 const {deserializeBillingPeriodDisplay, deserializeBillingPeriodDetail} = useBillingValidation()
 
-const billingPeriodDetailInclude = {
+// Invoices ordered by address, then pbsId as tiebreaker.
+const billingPeriodDetailInclude = Prisma.validator<Prisma.BillingPeriodSummaryInclude>()({
     invoices: {
+        orderBy: [{address: 'asc'}, {pbsId: 'asc'}],
         include: {
             transactions: {select: {amount: true, orderSnapshot: true, orderId: true}}
         }
     }
-} as const
+})
 
 export const fetchBillingPeriodSummaries = async (d1Client: D1Database): Promise<BillingPeriodSummaryDisplay[]> => {
     console.info('💰 > BILLING > [GET] Fetching all billing period summaries')

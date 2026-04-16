@@ -47,6 +47,27 @@ test.describe('Admin Billing API', () => {
 
             expect(invoice.transactionSum).toBe(computedSum)
         })
+
+        test('GIVEN billing period detail WHEN fetching THEN invoices are ordered by address then pbsId', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const periods = await BillingFactory.getBillingPeriods(context)
+
+            expect(periods.length, 'Need a billing period to verify ordering').toBeGreaterThan(0)
+
+            const detail = await BillingFactory.getBillingPeriodById(context, periods[0]!.id)
+            expect(detail.invoices.length, 'Need at least 2 invoices to verify ordering').toBeGreaterThanOrEqual(2)
+
+            // Verifies invoices are sorted by address (primary) and pbsId (tiebreaker).
+            for (let i = 1; i < detail.invoices.length; i++) {
+                const prev = detail.invoices[i - 1]!
+                const curr = detail.invoices[i]!
+                if (prev.address === curr.address) {
+                    expect(curr.pbsId).toBeGreaterThanOrEqual(prev.pbsId)
+                } else {
+                    expect(curr.address.localeCompare(prev.address)).toBeGreaterThanOrEqual(0)
+                }
+            }
+        })
     })
 
     test.describe('GET /api/admin/billing/current-period', () => {

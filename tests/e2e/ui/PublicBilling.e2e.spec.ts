@@ -72,9 +72,26 @@ test.describe('Public Billing Page', () => {
         expect(header).toContain('Adresse')
         expect(header).toContain('Total DKK')
 
-        // Verify CSV has data rows (not just header)
+        // Verifies CSV data rows are sorted by address (primary) and pbsId (tiebreaker).
+        // Row format: pbsId,"address",totalDKK,...
         const lines = csv.split('\n').filter(l => l.trim())
-        expect(lines.length).toBeGreaterThan(1)
+        expect(lines.length, 'Need header + at least 2 data rows to verify ordering').toBeGreaterThanOrEqual(3)
+
+        const parseRow = (line: string) => {
+            const pbsId = Number(line.split(',')[0])
+            const addressMatch = line.match(/^[^,]+,"([^"]*)"/)
+            return {pbsId, address: addressMatch?.[1] ?? ''}
+        }
+        const rows = lines.slice(1).map(parseRow)
+        for (let i = 1; i < rows.length; i++) {
+            const prev = rows[i - 1]!
+            const curr = rows[i]!
+            if (prev.address === curr.address) {
+                expect(curr.pbsId).toBeGreaterThanOrEqual(prev.pbsId)
+            } else {
+                expect(curr.address.localeCompare(prev.address)).toBeGreaterThanOrEqual(0)
+            }
+        }
     })
 
     test('GIVEN invalid token WHEN navigating to public billing page THEN shows not found message', async ({page}) => {

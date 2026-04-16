@@ -14,7 +14,8 @@ describe('useBilling', () => {
         controlInvoices,
         controlTransactions,
         controlOrders,
-        formatTicketCounts
+        formatTicketCounts,
+        groupByHouseholdEntry
     } = useBilling()
     const {TicketTypeSchema} = useBookingValidation()
     const TicketType = TicketTypeSchema.enum
@@ -164,6 +165,52 @@ describe('useBilling', () => {
             expect(result.ticketCounts.computed).toBe('2V 1B 1b')
             expect(result.ticketCounts.isValid).toBe(true)
             expect(result.isValid).toBe(true)
+        })
+    })
+
+    // ========== GROUPING TESTS ==========
+
+    describe('groupByHouseholdEntry', () => {
+        const makeTx = (householdId: number, pbsId: number, address: string, amount: number): TransactionDisplay => ({
+            id: householdId * 10, orderId: 1, amount, createdAt: new Date(), orderSnapshot: '{}',
+            dinnerEvent: {id: 1, date: new Date(), menuTitle: 'Test'},
+            inhabitant: {id: 1, name: 'Test', household: {id: householdId, pbsId, address}},
+            ticketType: TicketType.ADULT
+        })
+
+        // Verifies grouped output is ordered by address, then pbsId as tiebreaker.
+        it('GIVEN transactions pre-sorted by address then pbsId WHEN grouping THEN output is sorted by address then pbsId', () => {
+            const grouper = groupByHouseholdEntry<TransactionDisplay>(tx => tx.inhabitant.household)
+            const input = [
+                makeTx(1, 3000, 'Abbey Road 1', 4000),        // address "A" + lower pbs
+                makeTx(2, 7000, 'Abbey Road 1', 4000),        // same address, higher pbs → after 1
+                makeTx(3, 1000, 'Penny Lane 4', 4000),        // different address
+                makeTx(4, 5000, 'Skråningen 31', 4000),
+                makeTx(1, 3000, 'Abbey Road 1', 1700)         // merged into first entry
+            ]
+            const grouped = grouper(input, tx => tx.amount)
+
+            expect(grouped.map(g => g.address)).toEqual(['Abbey Road 1', 'Abbey Road 1', 'Penny Lane 4', 'Skråningen 31'])
+            expect(grouped.map(g => g.pbsId)).toEqual([3000, 7000, 1000, 5000])
+            expect(grouped[0]!.totalAmount).toBe(5700)  // 4000 + 1700 merged
+        })
+
+        it('GIVEN single household with multiple transactions WHEN grouping THEN single entry with summed total', () => {
+            const grouper = groupByHouseholdEntry<TransactionDisplay>(tx => tx.inhabitant.household)
+            const grouped = grouper([
+                makeTx(1, 100, 'Smedekildevej 42', 4000),
+                makeTx(1, 100, 'Smedekildevej 42', 1700),
+                makeTx(1, 100, 'Smedekildevej 42', 0)
+            ], tx => tx.amount)
+
+            expect(grouped).toHaveLength(1)
+            expect(grouped[0]!.totalAmount).toBe(5700)
+            expect(grouped[0]!.computedTotal).toBe(5700)
+        })
+
+        it('GIVEN empty input WHEN grouping THEN returns empty array', () => {
+            const grouper = groupByHouseholdEntry<TransactionDisplay>(tx => tx.inhabitant.household)
+            expect(grouper([], tx => tx.amount)).toEqual([])
         })
     })
 

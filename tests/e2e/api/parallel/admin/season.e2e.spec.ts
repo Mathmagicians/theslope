@@ -4,13 +4,10 @@ import {useBookingValidation, type DinnerEventDisplay} from '~~/app/composables/
 import type {CookingTeamDetail} from '~~/app/composables/useCookingTeamValidation'
 import {useCoreValidation} from '~~/app/composables/useCoreValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
-import {SeasonImportFactory} from '~~/tests/e2e/testDataFactories/seasonImportFactory'
-import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 import {WEEKDAYS} from '~~/app/types/dateTypes'
-import {format, addDays, getISODay} from 'date-fns'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const {DinnerStateSchema, DinnerModeSchema} = useBookingValidation()
