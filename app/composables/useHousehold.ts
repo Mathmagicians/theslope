@@ -1,7 +1,7 @@
 import {z} from 'zod'
 import {isBefore, isAfter} from 'date-fns'
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
-import type {InhabitantDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
+import type {InhabitantDetail, InhabitantDisplay, HouseholdDisplay} from '~/composables/useCoreValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
@@ -42,6 +42,46 @@ export const getResidencyStatus = (
     if (moveOutDate && isBefore(moveOutDate, referenceDate)) return 'moved-out'
     if (moveOutDate) return 'leaving'
     return 'active'
+}
+
+/**
+ * Resolve which household a Heynabo entity should be routed to, given N candidates
+ * sharing the same heynaboId. Pure function, deterministic, always resolves.
+ *
+ * Decision 4 rules (feature-proposal-move-out-date.md):
+ * 1. 0 candidates → create new
+ * 2. 1 candidate → that one
+ * 3. N candidates, exactly 1 without moveOutDate → that one (active household)
+ * 4. N candidates, all with moveOutDate → newest moveOutDate, tie-break lowest id
+ * 5. N candidates, 2+ without moveOutDate → lowest id (deterministic)
+ */
+export type HouseholdRoutingResult =
+    | { create: true }
+    | { id: number }
+
+export const resolveHouseholdForHeynaboId = (
+    _heynaboId: number,
+    candidates: Pick<HouseholdDisplay, 'id' | 'moveOutDate'>[]
+): HouseholdRoutingResult => {
+    if (candidates.length === 0) return { create: true }
+    if (candidates.length === 1) return { id: candidates[0]!.id }
+
+    const active = candidates.filter(c => !c.moveOutDate)
+
+    if (active.length === 1) return { id: active[0]!.id }
+
+    if (active.length === 0) {
+        // All have moveOutDate — newest date wins, lowest id breaks ties
+        const sorted = [...candidates].sort((a, b) => {
+            const cmp = isAfter(a.moveOutDate!, b.moveOutDate!) ? -1 : isBefore(a.moveOutDate!, b.moveOutDate!) ? 1 : 0
+            return cmp !== 0 ? cmp : a.id - b.id
+        })
+        return { id: sorted[0]!.id }
+    }
+
+    // 2+ active — lowest id
+    const sorted = [...active].sort((a, b) => a.id - b.id)
+    return { id: sorted[0]!.id }
 }
 
 /**

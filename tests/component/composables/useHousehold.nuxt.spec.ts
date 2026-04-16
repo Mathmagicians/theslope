@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { useHousehold, isHouseholdActiveOnDay, getResidencyStatus } from '~/composables/useHousehold'
+import { useHousehold, isHouseholdActiveOnDay, getResidencyStatus, resolveHouseholdForHeynaboId } from '~/composables/useHousehold'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
 import type { InhabitantDetail, InhabitantDisplay } from '~/composables/useCoreValidation'
@@ -481,5 +481,71 @@ describe('useHousehold', () => {
     ])('$scenario → $expected', ({ inhabitants, expected }) => {
       expect(formatHouseholdFamilyName(inhabitants)).toBe(expected)
     })
+  })
+})
+
+describe('resolveHouseholdForHeynaboId', () => {
+  const date = (y: number, m: number, d: number) => new Date(y, m - 1, d)
+
+  // Minimal candidate shape: only id, heynaboId, moveOutDate matter for routing
+  const candidate = (id: number, moveOutDate: Date | null) => ({
+    id,
+    heynaboId: 42,
+    moveOutDate,
+    pbsId: id * 100,
+    name: `Household ${id}`,
+    address: `Street ${id}`,
+    movedInDate: date(2020, 1, 1),
+    inhabitants: []
+  })
+
+  it.each([
+    {
+      scenario: 'branch 1: 0 candidates → create new',
+      candidates: [],
+      expected: { create: true }
+    },
+    {
+      scenario: 'branch 2: 1 candidate → use that one',
+      candidates: [candidate(7, null)],
+      expected: { id: 7 }
+    },
+    {
+      scenario: 'branch 2: 1 candidate with moveOutDate → still use that one',
+      candidates: [candidate(7, date(2026, 6, 1))],
+      expected: { id: 7 }
+    },
+    {
+      scenario: 'branch 3: N candidates, exactly 1 without moveOutDate → use active',
+      candidates: [candidate(10, date(2026, 3, 1)), candidate(11, null), candidate(12, date(2025, 12, 1))],
+      expected: { id: 11 }
+    },
+    {
+      scenario: 'branch 4: N candidates, all with moveOutDate → newest moveOutDate wins',
+      candidates: [candidate(20, date(2026, 1, 1)), candidate(21, date(2026, 6, 1)), candidate(22, date(2025, 9, 1))],
+      expected: { id: 21 }
+    },
+    {
+      scenario: 'branch 4: N candidates, all with moveOutDate, tie-break by date not id',
+      candidates: [candidate(30, date(2026, 12, 31)), candidate(31, date(2026, 12, 30))],
+      expected: { id: 30 }
+    },
+    {
+      scenario: 'branch 4: N candidates, same moveOutDate → tie-break by lowest id',
+      candidates: [candidate(35, date(2026, 6, 1)), candidate(33, date(2026, 6, 1))],
+      expected: { id: 33 }
+    },
+    {
+      scenario: 'branch 5: N candidates, 2+ without moveOutDate → lowest id (deterministic)',
+      candidates: [candidate(41, null), candidate(40, null)],
+      expected: { id: 40 }
+    },
+    {
+      scenario: 'branch 5: 3 candidates, 2 without moveOutDate → lowest id among active',
+      candidates: [candidate(50, date(2026, 1, 1)), candidate(52, null), candidate(51, null)],
+      expected: { id: 51 }
+    }
+  ])('$scenario', ({ candidates, expected }) => {
+    expect(resolveHouseholdForHeynaboId(42, candidates)).toEqual(expected)
   })
 })

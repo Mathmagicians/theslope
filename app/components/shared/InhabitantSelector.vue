@@ -1,0 +1,140 @@
+<script setup lang="ts">
+/**
+ * InhabitantSelector - Reusable inhabitant finder with search, sort, pagination.
+ *
+ * Parent provides data (ADR-007) and domain-specific UI via scoped slots.
+ *
+ * Call-sites:
+ * - CookingTeamCard: team badge in #status, role buttons in #actions
+ * - HouseholdEditPanel: household badge in #status, move button in #actions
+ */
+import { getPaginationRowModel } from '@tanstack/vue-table'
+import type { InhabitantDisplay } from '~/composables/useCoreValidation'
+
+interface Props {
+  inhabitants: InhabitantDisplay[]
+  sortFn?: (rowA: { original: InhabitantDisplay }, rowB: { original: InhabitantDisplay }) => number
+  searchPlaceholder?: string
+  statusHeader?: string
+  actionsHeader?: string
+  emptyText?: string
+  pageSize?: number
+  loading?: boolean
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  sortFn: undefined,
+  searchPlaceholder: 'Søg efter navn...',
+  statusHeader: 'Status',
+  actionsHeader: 'Handling',
+  emptyText: 'Ingen beboere tilgængelige',
+  pageSize: 8,
+  loading: false
+})
+
+const { SIZES, COMPONENTS } = useTheSlopeDesignSystem()
+
+// Search
+const searchQuery = ref('')
+
+const filteredInhabitants = computed(() => {
+  const q = searchQuery.value.toLowerCase()
+  if (!q) return props.inhabitants
+  return props.inhabitants.filter(i =>
+      `${i.name} ${i.lastName}`.toLowerCase().includes(q)
+  )
+})
+
+// Columns — sort enabled on status only when sortFn is provided
+const columns = computed(() => [
+  { accessorKey: 'name', header: 'Navn', enableSorting: false },
+  {
+    accessorKey: 'status',
+    header: props.statusHeader,
+    enableSorting: !!props.sortFn,
+    ...(props.sortFn ? { sortingFn: props.sortFn } : {})
+  },
+  { accessorKey: 'actions', header: props.actionsHeader, enableSorting: false }
+])
+
+// Sorting state (toggleable via header button)
+const sorting = ref([{ id: 'status', desc: true }])
+const toggleSortOrder = () => { sorting.value[0]!.desc = !sorting.value[0]!.desc }
+
+// Pagination
+const pagination = ref({ pageIndex: 0, pageSize: props.pageSize })
+const table = useTemplateRef('table')
+</script>
+
+<template>
+  <div class="space-y-3">
+    <TableSearchPagination
+        v-model:search-query="searchQuery"
+        :table="table"
+        :pagination="pagination"
+        :placeholder="searchPlaceholder"
+    />
+
+    <UTable
+        ref="table"
+        v-model:sorting="sorting"
+        v-model:pagination="pagination"
+        sticky
+        :columns="columns"
+        :data="filteredInhabitants"
+        :loading="loading"
+        :ui="COMPONENTS.table.ui"
+        :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
+        class="flex-1"
+    >
+      <!-- Sort toggle header for status column -->
+      <template v-if="sortFn" #status-header>
+        <UButton
+            variant="outline"
+            :size="SIZES.standard"
+            name="sort-by-status"
+            @click="toggleSortOrder"
+        >
+          <template #leading>
+            <UIcon
+                :name="sorting[0]!.desc ? 'i-lucide-arrow-down-wide-narrow' : 'i-lucide-arrow-up-narrow-wide'"
+                :size="SIZES.standardIconSize"
+            />
+          </template>
+          {{ statusHeader }}
+        </UButton>
+      </template>
+
+      <!-- Name column: avatar + full name -->
+      <template #name-cell="{ row }">
+        <div class="flex items-center gap-3">
+          <UAvatar
+              :src="row.original.pictureUrl ?? undefined"
+              :alt="`${row.original.name} ${row.original.lastName}`"
+              icon="i-heroicons-user"
+              size="sm"
+          />
+          <span class="font-medium">{{ row.original.name }} {{ row.original.lastName }}</span>
+        </div>
+      </template>
+
+      <!-- Status + Actions: delegated to parent via scoped slots -->
+      <template #status-cell="{ row }">
+        <slot name="status" :row="row" />
+      </template>
+
+      <template #actions-cell="{ row }">
+        <slot name="actions" :row="row" />
+      </template>
+
+      <template #empty-state>
+        <div class="flex flex-col items-center justify-center py-6 gap-3">
+          <UIcon name="i-heroicons-users" class="w-8 h-8 text-gray-400"/>
+          <p class="text-sm text-gray-500">
+            {{ searchQuery ? 'Ingen beboere fundet' : emptyText }}
+          </p>
+        </div>
+      </template>
+    </UTable>
+  </div>
+</template>

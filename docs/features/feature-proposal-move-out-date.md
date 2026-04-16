@@ -181,7 +181,7 @@ const saved = data.id
 2. 1 candidate → that one
 3. N candidates, exactly 1 without `moveOutDate` → that one
 4. N candidates, all with `moveOutDate` → newest `moveOutDate`
-5. N candidates, 2+ without `moveOutDate` → error (ambiguous, data integrity issue)
+5. N candidates, 2+ without `moveOutDate` → lowest `id` (deterministic, always resolves)
 
 **Callers of `saveHousehold`** (2 external):
 
@@ -214,7 +214,7 @@ const saved = data.id
 | # | Check | Test file |
 |---|-------|-----------|
 | pre | **All** unit and E2E suites green before and after — `npx vitest run` + `npx playwright test` (full suite). No regressions. | — |
-| 1 | Unit — `resolveHouseholdForHeynaboId` parametrized over all 5 branches: 0 candidates → create; 1 candidate → that one; N with 1 active → active; N all with moveOutDate → newest; N with 2+ active → error | `tests/component/composables/useHousehold.unit.spec.ts` |
+| 1 | Unit — `resolveHouseholdForHeynaboId` parametrized over all 5 branches: 0 candidates → create; 1 candidate → that one; N with 1 active → active; N all with moveOutDate → newest; N with 2+ active → lowest id | `tests/component/composables/useHousehold.nuxt.spec.ts` |
 | 2 | E2E API — admin creates a household via PUT, verify it persists correctly (regression: create path still works after upsert removal) | `tests/e2e/api/parallel/admin/household.e2e.spec.ts` |
 | 3 | E2E API — admin updates an existing household via POST by id, verify update applies correctly (regression: update path works via id instead of heynaboId) | `tests/e2e/api/parallel/admin/household.e2e.spec.ts` |
 | 4 | E2E API — create two households with same heynaboId (one with moveOutDate, one without); both persist; both retrievable by their own id | `tests/e2e/api/parallel/admin/household.e2e.spec.ts` |
@@ -222,6 +222,8 @@ const saved = data.id
 | 6 | E2E API — Heynabo import with two households sharing heynaboId (one active, one leaving): update routes to the active household, leaving household untouched | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` |
 | 7 | E2E API — Heynabo import deletes an address from community: `deleteHouseholdsByHeynaboId` removes all households at that heynaboId (both active and leaving) | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` |
 | 8 | Factory — add helpers for creating households with explicit heynaboId + moveOutDate combinations | `tests/e2e/testDataFactories/householdFactory.ts` |
+| 9 | Deploy to dev, verify E2E on dev environment | — |
+| 10 | Migrate prod: `make d1-migrate-prod` once verified on dev | — |
 
 ### Phase 4: Add New Household + Heynabo Import Routing
 

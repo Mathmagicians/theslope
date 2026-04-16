@@ -1396,26 +1396,10 @@ export const HouseholdOrderByWithRelationInputSchema: z.ZodType<Prisma.Household
 export const HouseholdWhereUniqueInputSchema: z.ZodType<Prisma.HouseholdWhereUniqueInput> = z.union([
   z.object({
     id: z.number().int(),
-    heynaboId: z.number().int(),
     pbsId: z.number().int(),
   }),
   z.object({
     id: z.number().int(),
-    heynaboId: z.number().int(),
-  }),
-  z.object({
-    id: z.number().int(),
-    pbsId: z.number().int(),
-  }),
-  z.object({
-    id: z.number().int(),
-  }),
-  z.object({
-    heynaboId: z.number().int(),
-    pbsId: z.number().int(),
-  }),
-  z.object({
-    heynaboId: z.number().int(),
   }),
   z.object({
     pbsId: z.number().int(),
@@ -1423,11 +1407,11 @@ export const HouseholdWhereUniqueInputSchema: z.ZodType<Prisma.HouseholdWhereUni
 ])
 .and(z.object({
   id: z.number().int().optional(),
-  heynaboId: z.number().int().optional(),
   pbsId: z.number().int().optional(),
   AND: z.union([ z.lazy(() => HouseholdWhereInputSchema), z.lazy(() => HouseholdWhereInputSchema).array() ]).optional(),
   OR: z.lazy(() => HouseholdWhereInputSchema).array().optional(),
   NOT: z.union([ z.lazy(() => HouseholdWhereInputSchema), z.lazy(() => HouseholdWhereInputSchema).array() ]).optional(),
+  heynaboId: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   movedInDate: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   moveOutDate: z.union([ z.lazy(() => DateTimeNullableFilterSchema), z.coerce.date() ]).optional().nullable(),
   name: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),

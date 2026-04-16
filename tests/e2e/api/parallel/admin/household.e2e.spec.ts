@@ -3,7 +3,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {HouseholdDisplay, InhabitantDisplay} from '~/composables/useCoreValidation'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, saltedId, salt} = testHelpers
 
 // Variables to store IDs for cleanup
 const testHouseholdIds: number[] = []
@@ -240,6 +240,46 @@ test.describe('Household /api/admin/household CRUD operations', () => {
                 }
             })
         })
+    })
+
+    test('two households with same heynaboId can coexist', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const testSalt = temporaryAndRandom()
+        const sharedHeynaboId = saltedId(900000, testSalt)
+        const sharedAddress = salt('Shared Street 1', testSalt)
+
+        // Create leaving household (has moveOutDate) and arriving household (no moveOutDate)
+        const leaving = await HouseholdFactory.createHousehold(context, {
+            heynaboId: sharedHeynaboId, pbsId: saltedId(900001, testSalt),
+            name: salt('Leaving', testSalt), address: sharedAddress,
+            movedInDate: new Date('2020-01-01'), moveOutDate: new Date('2026-06-01')
+        })
+        testHouseholdIds.push(leaving.id)
+
+        const arriving = await HouseholdFactory.createHousehold(context, {
+            heynaboId: sharedHeynaboId, pbsId: saltedId(900002, testSalt),
+            name: salt('Arriving', testSalt), address: sharedAddress,
+            movedInDate: new Date('2026-05-15'), moveOutDate: null
+        })
+        testHouseholdIds.push(arriving.id)
+
+        // Both share heynaboId but have distinct ids
+        expect(leaving.heynaboId).toBe(sharedHeynaboId)
+        expect(arriving.heynaboId).toBe(sharedHeynaboId)
+        expect(leaving.id).not.toBe(arriving.id)
+
+        // Both individually fetchable
+        const [fetchedLeaving, fetchedArriving] = await Promise.all([
+            HouseholdFactory.getHouseholdById(context, leaving.id),
+            HouseholdFactory.getHouseholdById(context, arriving.id)
+        ])
+        expect(fetchedLeaving!.heynaboId).toBe(sharedHeynaboId)
+        expect(fetchedArriving!.heynaboId).toBe(sharedHeynaboId)
+
+        // Index returns both
+        const response = await context.request.get('/api/admin/household')
+        const allHouseholds: HouseholdDisplay[] = await response.json()
+        expect(allHouseholds.filter(h => h.heynaboId === sharedHeynaboId).length).toBe(2)
     })
 
     // Cleanup after all tests

@@ -100,7 +100,7 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
             const updateChunks = chunkHouseholds(mergedHouseholds)
             for (const chunk of updateChunks) {
                 // Strip inhabitants to avoid cascade, skipRefetch for batch (ADR-014)
-                await Promise.all(chunk.map(h => saveHousehold(d1Client, { ...h, inhabitants: undefined }, true)))
+                await Promise.all(chunk.map(h => saveHousehold(d1Client, { ...h, inhabitants: undefined }, existingByHeynaboId.get(h.heynaboId)!.id, true)))
             }
             console.info(`${LOG} Updated ${householdReconciliation.update.length} households`)
         }

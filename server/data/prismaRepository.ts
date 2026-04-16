@@ -587,7 +587,7 @@ export async function updateInhabitantPreferencesBulk(
 
 /*** HOUSEHOLDS ***/
 
-export async function saveHousehold(d1Client: D1Database, household: HouseholdCreate, skipRefetch?: boolean): Promise<HouseholdDetail | null> {
+export async function saveHousehold(d1Client: D1Database, household: HouseholdCreate, id?: number, skipRefetch?: boolean): Promise<HouseholdDetail | null> {
     console.info(`🏠 > HOUSEHOLD > [SAVE] Saving household at ${household.address} (Heynabo ID: ${household.heynaboId})`)
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -601,11 +601,10 @@ export async function saveHousehold(d1Client: D1Database, household: HouseholdCr
             address: household.address,
         }
 
-        const newHousehold = await prisma.household.upsert({
-            where: {heynaboId: household.heynaboId},
-            create: data,
-            update: data
-        })
+        // ADR-010: WHERE clauses MUST use unique fields. Branch on id, never heynaboId.
+        const newHousehold = id
+            ? await prisma.household.update({ where: { id }, data })
+            : await prisma.household.create({ data })
         console.info(`🏠 > HOUSEHOLD > [SAVE] Successfully saved household ${newHousehold.address} with ID ${newHousehold.id}`)
 
         if (household.inhabitants) {
