@@ -2,10 +2,10 @@ import {test, expect} from '@playwright/test'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {useHeynaboValidation} from '~/composables/useHeynaboValidation'
 import {isAdmin, isAllergyManager} from '~/composables/usePermissions'
-import type {UserDisplay, InhabitantDisplay} from '~/composables/useCoreValidation'
+import type {UserDisplay, InhabitantDisplay, HouseholdDetail} from '~/composables/useCoreValidation'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 
-const {validatedBrowserContext, saltedId, headers} = testHelpers
+const {validatedBrowserContext, saltedId, salt, headers} = testHelpers
 const {HeynaboImportResponseSchema} = useHeynaboValidation()
 
 /**
@@ -36,6 +36,7 @@ const {HeynaboImportResponseSchema} = useHeynaboValidation()
  */
 
 const TEST_HOUSEHOLD_HEYNABO_ID = 2
+const TEST_HOUSEHOLD_PBS_ID = 2 // Seed pbsId (unique, TheSlope-owned)
 const SEED_USER_EMAIL = 'agata@mathmagicians.dk'
 
 // Inhabitants in test household (from Heynabo API)
@@ -50,6 +51,10 @@ const INHABITANTS = {
 // Only heynaboIds are stable keys - all other data comes from Heynabo
 // ========================================================================
 const RECREATE_HOUSEHOLD_HEYNABO_IDS = [4, 28]
+
+// Cleanup arrays - populated during setup, cleaned in afterAll
+const createdHouseholdIds: number[] = []
+const createdUserIds: number[] = []
 
 // Test data containers - populated in beforeAll, verified in tests
 const testData = {
@@ -89,14 +94,17 @@ const testData = {
     // HOUSEHOLD TEST DATA
     // ========================================================================
     household: {
-        // IDEMPOTENT: TheSlope-owned fields preserved
-        uniquePbsId: 0,
-        uniqueMovedInDate: new Date(),
+        // IDEMPOTENT: Households at test address captured before import — TheSlope-owned fields must survive
+        beforeImport: [] as HouseholdDetail[],
+        // Heynabo's address — captured after initial import, before mutations
+        heynaboAddress: '',
         // UPDATE: Heynabo-owned field mutated, should be restored
         originalName: '',
         mutatedName: '',
         // DELETE: Fake household not in Heynabo
-        fakeId: 0
+        fakeId: 0,
+        // CREATE: Ids of deleted households, keyed by heynaboId — verify recreation produces new ids
+        deletedIdsByHeynaboId: new Map<number, number>()
     },
 
     // ========================================================================
@@ -140,33 +148,56 @@ test.describe.serial('Heynabo Integration API', () => {
         // ========================================================================
         const initialImport = await context.request.get('/api/admin/heynabo/import')
         expect(initialImport.status(), 'Initial Heynabo import must succeed').toBe(200)
+        const initialResult = HeynaboImportResponseSchema.parse(await initialImport.json())
+
+        // Seed household (heynaboId=2) should be UPDATE or IDEMPOTENT, never deleted+recreated
+        expect(initialResult.householdsDeleted, 'Initial import: seed household must not be deleted').toBe(0)
 
         // ========================================================================
         // STEP 2: Find test household (now exists after import)
         // ========================================================================
         const households = await HouseholdFactory.getAllHouseholds(context)
-        const household = households.find(h => h.heynaboId === TEST_HOUSEHOLD_HEYNABO_ID)
-        expect(household, `Test household heynaboId=${TEST_HOUSEHOLD_HEYNABO_ID} must exist after import`).toBeDefined()
+        const household = households.find(h => h.pbsId === TEST_HOUSEHOLD_PBS_ID)
+        expect(household, `Test household pbsId=${TEST_HOUSEHOLD_PBS_ID} must exist after import. Got pbsIds: ${households.map(h => h.pbsId).join(',')}`).toBeDefined()
         testData.householdId = household!.id
+        testData.household.heynaboAddress = household!.address
 
         const householdDetail = await HouseholdFactory.getHouseholdById(context, testData.householdId)
         expect(householdDetail, 'Household detail must exist').not.toBeNull()
 
         // ========================================================================
+        // STEP 2b: Create moved-out sibling at same heynaboId (multi-household scenario)
+        // ========================================================================
+        const sibling = await HouseholdFactory.createHousehold(context, {
+            heynaboId: TEST_HOUSEHOLD_HEYNABO_ID,
+            pbsId: saltedId(800000, testSalt),
+            name: salt('Sibling Leaving', testSalt),
+            address: household!.address,
+            movedInDate: new Date('2018-01-01'),
+            moveOutDate: new Date('2026-06-01')
+        })
+        createdHouseholdIds.push(sibling.id)
+
+        // Mutate sibling's address — import should broadcast Heynabo's address to ALL households at this heynaboId
+        await HouseholdFactory.updateHousehold(context, sibling.id, {
+            address: `Wrong Address ${testSalt}`
+        }, 200, true)
+
+        // Capture both households before reconciliation import — TheSlope-owned fields must survive
+        testData.household.beforeImport = [
+            (await HouseholdFactory.getHouseholdById(context, testData.householdId))!,
+            (await HouseholdFactory.getHouseholdById(context, sibling.id))!
+        ]
+
+        // ========================================================================
         // STEP 3: HOUSEHOLD MUTATIONS (for UPDATE/DELETE/IDEMPOTENT tests)
         // ========================================================================
 
-        // IDEMPOTENT: Set unique TheSlope-owned fields
-        testData.household.uniquePbsId = saltedId(999000, testSalt)
-        testData.household.uniqueMovedInDate = new Date('2010-05-15')
-
-        // UPDATE: Mutate Heynabo-owned field (name)
+        // UPDATE: Mutate Heynabo-owned field (name) — import should restore it
         testData.household.originalName = household!.name
         testData.household.mutatedName = `Mutated-Household-${testSalt}`
 
         await HouseholdFactory.updateHousehold(context, testData.householdId, {
-            pbsId: testData.household.uniquePbsId,
-            movedInDate: testData.household.uniqueMovedInDate,
             name: testData.household.mutatedName
         })
 
@@ -179,6 +210,7 @@ test.describe.serial('Heynabo Integration API', () => {
             movedInDate: new Date('2020-01-01')
         })
         testData.household.fakeId = fakeHousehold.id
+        createdHouseholdIds.push(fakeHousehold.id)
 
         // ========================================================================
         // STEP 4: INHABITANT MUTATIONS
@@ -235,18 +267,23 @@ test.describe.serial('Heynabo Integration API', () => {
         expect(userResponse.status()).toBe(201)
         const orphanUser = await userResponse.json()
         testData.user.orphanId = orphanUser.id
+        createdUserIds.push(orphanUser.id)
 
         // Link orphan user to Babyyoda (limited role in Heynabo = no user)
         await HouseholdFactory.updateInhabitant(context, babyyoda!.id, {userId: orphanUser.id})
 
         // CREATE: Delete households to verify recreation from Heynabo
+        // Record ids before deletion so we can verify recreation (new id) after import
         const householdsBeforeDelete = await HouseholdFactory.getAllHouseholds(context)
+        const deletedIdsByHeynaboId = new Map<number, number>()
         for (const heynaboId of RECREATE_HOUSEHOLD_HEYNABO_IDS) {
             const household = householdsBeforeDelete.find(h => h.heynaboId === heynaboId)
             if (household) {
+                deletedIdsByHeynaboId.set(heynaboId, household.id)
                 await context.request.delete(`/api/admin/household/${household.id}`)
             }
         }
+        testData.household.deletedIdsByHeynaboId = deletedIdsByHeynaboId
 
         // Run 2: Reconciliation import
         const reconciliationImport = await context.request.get('/api/admin/heynabo/import')
@@ -289,19 +326,28 @@ test.describe.serial('Heynabo Integration API', () => {
         // HOUSEHOLD ASSERTIONS
         // ========================================================================
 
-        // CREATE: Deleted households recreated from Heynabo
+        // CREATE: Deleted households recreated from Heynabo (new id, different from deleted)
         for (const heynaboId of RECREATE_HOUSEHOLD_HEYNABO_IDS) {
             const recreated = households.find(h => h.heynaboId === heynaboId)
             expect(recreated, `CREATE: Household heynaboId=${heynaboId} recreated`).toBeDefined()
-            expect(recreated!.inhabitants.length, `CREATE: Household heynaboId=${heynaboId} has inhabitants`).toBeGreaterThan(0)
+            const deletedId = testData.household.deletedIdsByHeynaboId.get(heynaboId)
+            expect(recreated!.id, `CREATE: Household heynaboId=${heynaboId} has new id (was ${deletedId})`).not.toBe(deletedId)
         }
 
-        // IDEMPOTENT: TheSlope-owned fields preserved
-        expect(household!.pbsId, 'Household: pbsId preserved (TheSlope-owned)').toBe(testData.household.uniquePbsId)
-        expect(
-            new Date(household!.movedInDate).toISOString().slice(0, 10),
-            'Household: movedInDate preserved (TheSlope-owned)'
-        ).toBe(testData.household.uniqueMovedInDate.toISOString().slice(0, 10))
+        // MULTI-HOUSEHOLD: For ALL households at same heynaboId:
+        // - TheSlope-owned fields (pbsId, movedInDate, moveOutDate) preserved
+        // - Heynabo-owned fields (address) broadcast-updated to match Heynabo
+        for (const before of testData.household.beforeImport) {
+            const after = await HouseholdFactory.getHouseholdById(context, before.id)
+            expect(after, `Household ${before.id}: still exists after import`).not.toBeNull()
+            // TheSlope-owned fields preserved
+            expect(after!.pbsId, `Household ${before.id}: pbsId preserved`).toBe(before.pbsId)
+            expect(new Date(after!.movedInDate).toISOString().slice(0, 10), `Household ${before.id}: movedInDate preserved`)
+                .toBe(new Date(before.movedInDate).toISOString().slice(0, 10))
+            expect(after!.moveOutDate, `Household ${before.id}: moveOutDate preserved`).toEqual(before.moveOutDate)
+            // Heynabo-owned fields broadcast to all households at same address
+            expect(after!.address, `Household ${before.id}: address updated from Heynabo`).toBe(testData.household.heynaboAddress)
+        }
 
         // UPDATE: Heynabo-owned field restored
         expect(household!.name, 'Household: name restored from Heynabo').not.toBe(testData.household.mutatedName)
@@ -391,19 +437,12 @@ test.describe.serial('Heynabo Integration API', () => {
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // Best-effort cleanup of orphan user (may already be deleted by import)
-        if (testData.user.orphanId) {
-            await context.request.delete(`/api/admin/users/${testData.user.orphanId}`).catch(() => {})
-        }
-
-        // Best-effort cleanup of fake household (may already be deleted by import)
-        if (testData.household.fakeId) {
-            await context.request.delete(`/api/admin/household/${testData.household.fakeId}`).catch(() => {})
-        }
-
-        // Best-effort cleanup of fake inhabitant (may already be deleted by import)
-        if (testData.inhabitant.fakeId) {
-            await context.request.delete(`/api/admin/household/inhabitants/${testData.inhabitant.fakeId}`).catch(() => {})
-        }
+        // Best-effort cleanup — entities may already be deleted by import
+        await Promise.all(createdHouseholdIds.map(id =>
+            HouseholdFactory.deleteHousehold(context, id).catch(() => {})
+        ))
+        await Promise.all(createdUserIds.map(id =>
+            context.request.delete(`/api/admin/users/${id}`).catch(() => {})
+        ))
     })
 })

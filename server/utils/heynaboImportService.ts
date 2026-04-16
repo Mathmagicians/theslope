@@ -37,11 +37,13 @@ import {
     linkUsersToInhabitants
 } from '~~/server/data/prismaRepository'
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
-import {chunkArray} from '~/utils/batchUtils'
+import {chunkArray, groupBy} from '~/utils/batchUtils'
+import {buildResolvedHouseholdMap} from '~/composables/useHousehold'
 import type {HouseholdCreate, HouseholdDisplay, UserCreate, SystemRole} from '~/composables/useCoreValidation'
 import {reconcileUserRoles, RoleOwner} from '~/composables/useUserRoles'
 
 const LOG = '🏠 > IMPORT > [HEYNABO]'
+
 const {createHouseholdsFromImport} = useHeynaboValidation()
 
 // D1 limit: 100 bound parameters per query, Household ~10 fields = max 8 per batch
@@ -75,8 +77,9 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
         const existingHouseholds = await fetchHouseholds(d1Client)
 
         // 4. Reconcile households (Heynabo is source of truth - ADR-013)
-        const existingAsCreate = existingHouseholds.map(householdDisplayToCreate)
-        const existingByHeynaboId = new Map(existingHouseholds.map(h => [h.heynaboId, h]))
+        // Resolve duplicates: when multiple households share a heynaboId, pick the active one (Decision 4)
+        const existingByHeynaboId = buildResolvedHouseholdMap(existingHouseholds)
+        const existingAsCreate = [...existingByHeynaboId.values()].map(householdDisplayToCreate)
         const householdReconciliation = reconcileHouseholds(existingAsCreate)(incomingHouseholds)
         console.info(`${LOG} Reconciliation: create=${householdReconciliation.create.length}, delete=${householdReconciliation.delete.length}, unchanged=${householdReconciliation.idempotent.length + householdReconciliation.update.length}`)
 
@@ -92,18 +95,18 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
         const createdHouseholds = await createHouseholds(d1Client, householdReconciliation.create)
         console.info(`${LOG} Created ${createdHouseholds.length} new households`)
 
-        // Execute household updates in chunks - preserve TheSlope-owned fields
-        if (householdReconciliation.update.length > 0) {
-            const mergedHouseholds = householdReconciliation.update.map(incoming =>
-                mergeHouseholdForUpdate(incoming, existingByHeynaboId.get(incoming.heynaboId)!)
-            )
-            const updateChunks = chunkHouseholds(mergedHouseholds)
-            for (const chunk of updateChunks) {
-                // Strip inhabitants to avoid cascade, skipRefetch for batch (ADR-014)
-                await Promise.all(chunk.map(h => saveHousehold(d1Client, { ...h, inhabitants: undefined }, existingByHeynaboId.get(h.heynaboId)!.id, true)))
+        // Update ALL existing households at each incoming heynaboId — preserves each household's TheSlope-owned fields
+        // Covers both UPDATE (resolved household changed) and IDEMPOTENT (siblings may have stale Heynabo fields)
+        const allExistingByHeynaboId = groupBy<HouseholdDisplay, number>(h => h.heynaboId)(existingHouseholds)
+        const activeIncoming = [...new Set([...householdReconciliation.update, ...householdReconciliation.idempotent])]
+        for (const incoming of activeIncoming) {
+            const allAtAddress = allExistingByHeynaboId.get(incoming.heynaboId) ?? []
+            for (const existing of allAtAddress) {
+                const merged = mergeHouseholdForUpdate(incoming, existing)
+                await saveHousehold(d1Client, { ...merged, inhabitants: undefined }, existing.id, true)
             }
-            console.info(`${LOG} Updated ${householdReconciliation.update.length} households`)
         }
+        console.info(`${LOG} Updated ${householdReconciliation.update.length} households, broadcast to ${existingHouseholds.length - existingByHeynaboId.size} siblings`)
 
         // Process inhabitants for each household
         let inhabitantsCreated = 0
@@ -114,7 +117,7 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
 
         // Refetch households to get updated IDs for newly created ones
         const updatedHouseholds = await fetchHouseholds(d1Client)
-        const householdByHeynaboId = new Map(updatedHouseholds.map(h => [h.heynaboId, h]))
+        const householdByHeynaboId = buildResolvedHouseholdMap(updatedHouseholds)
 
         for (const incomingHousehold of incomingHouseholds) {
             const existingHousehold = householdByHeynaboId.get(incomingHousehold.heynaboId)
@@ -245,8 +248,10 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
         const usersForSanityCheck = await fetchUsers(d1Client)
         const linkedUsersCount = usersForSanityCheck.filter(u => u.Inhabitant !== null).length
 
+        // Count unique heynaboIds (addresses), not households — DB can have multiple households per heynaboId
+        const uniqueHeynaboIds = new Set(householdsForSanityCheck.map(h => h.heynaboId)).size
         const dbCounts = {
-            households: householdsForSanityCheck.length,
+            households: uniqueHeynaboIds,
             inhabitants: householdsForSanityCheck.reduce((sum, h) => sum + h.inhabitants.length, 0),
             users: linkedUsersCount
         }

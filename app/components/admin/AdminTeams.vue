@@ -321,16 +321,31 @@ const handleDeleteTeam = async (teamId: number | undefined) => {
 }
 
 // EDIT MODE: Add member to team (IMMEDIATE SAVE)
-const handleAddMember = async (inhabitantId: number, role: TeamRole) => {
+const handleAddMember = async (inhabitantId: number, role: TeamRole, allocationPercentage: number = 100, affinity: WeekDayMap | null = null) => {
   if (!selectedTeam.value?.id) return
 
   await addTeamMember({
     cookingTeamId: selectedTeam.value.id,
     inhabitantId,
     role,
-    allocationPercentage: 100
+    allocationPercentage,
+    ...(affinity ? {affinity} : {})
   })
   showSuccessToast('Medlem tilføjet til hold')
+}
+
+// EDIT MODE: Update member (delete old + create new, single refresh)
+const handleUpdateMember = async (assignmentId: number, inhabitantId: number, role: TeamRole, allocationPercentage: number = 100, affinity: WeekDayMap | null = null) => {
+  if (!selectedTeam.value?.id) return
+  await removeTeamMember(assignmentId)
+  await addTeamMember({
+    cookingTeamId: selectedTeam.value.id,
+    inhabitantId,
+    role,
+    allocationPercentage,
+    ...(affinity ? {affinity} : {})
+  })
+  showSuccessToast('Medlem opdateret')
 }
 
 // EDIT MODE: Remove member from team (IMMEDIATE DELETE)
@@ -537,6 +552,7 @@ const columns = [
                     @update:affinity="(affinity) => handleUpdateTeamAffinity(selectedTeam!.id!, affinity)"
                     @delete="handleDeleteTeam"
                     @add:member="handleAddMember"
+                    @update:member="handleUpdateMember"
                     @remove:member="handleRemoveMember"
                 />
               </div>

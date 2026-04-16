@@ -61,6 +61,9 @@ const columns = computed(() => [
 const sorting = ref([{ id: 'status', desc: true }])
 const toggleSortOrder = () => { sorting.value[0]!.desc = !sorting.value[0]!.desc }
 
+// Row expansion (parent controls which row is expanded via v-model)
+const expanded = defineModel<Record<string, boolean>>('expanded', { default: () => ({}) })
+
 // Pagination
 const pagination = ref({ pageIndex: 0, pageSize: props.pageSize })
 const table = useTemplateRef('table')
@@ -79,6 +82,7 @@ const table = useTemplateRef('table')
         ref="table"
         v-model:sorting="sorting"
         v-model:pagination="pagination"
+        v-model:expanded="expanded"
         sticky
         :columns="columns"
         :data="filteredInhabitants"
@@ -125,6 +129,11 @@ const table = useTemplateRef('table')
 
       <template #actions-cell="{ row }">
         <slot name="actions" :row="row" />
+      </template>
+
+      <!-- Expanded row: delegated to parent -->
+      <template #expanded="{ row }">
+        <slot name="expanded" :row="row" />
       </template>
 
       <template #empty-state>
