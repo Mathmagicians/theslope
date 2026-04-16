@@ -70,18 +70,17 @@ const updateDay = (day: WeekDay, value: boolean | 'indeterminate') => {
 </script>
 
 <template>
-  <!-- COMPACT VIEW: Show all 7 weekdays with badges for selected days only -->
-  <div v-if="compact && selectedDays.length > 0" class="flex gap-1">
-    <div v-for="day in WEEKDAYS" :key="day" class="w-12 flex justify-center">
-      <UBadge
-        v-if="modelValue?.[day]"
-        :color="color"
-        class="capitalize"
-        variant="soft"
-      >
-        {{ formatDayCompact(day) }}
-      </UBadge>
-    </div>
+  <!-- COMPACT VIEW: Only render selected days (no empty placeholders) -->
+  <div v-if="compact && selectedDays.length > 0" class="flex flex-wrap gap-1">
+    <UBadge
+      v-for="day in selectedDays"
+      :key="day"
+      :color="color"
+      class="capitalize"
+      variant="soft"
+    >
+      {{ formatDayCompact(day) }}
+    </UBadge>
   </div>
   <span v-else-if="compact && selectedDays.length === 0" class="text-lg">
       💤

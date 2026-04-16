@@ -120,7 +120,7 @@
  *   - Side-by-side sections become vertically stacked on mobile
  */
 import {h, resolveComponent} from 'vue'
-import {FORM_MODES} from "~/types/form"
+import {FORM_MODES, type FormMode} from "~/types/form"
 import type {TeamRole, CookingTeamDisplay} from "~/composables/useCookingTeamValidation"
 import type {WeekDayMap} from "~/types/dateTypes"
 
@@ -158,10 +158,12 @@ const teams = computed(() => selectedSeason.value?.CookingTeams ?? [])
 const isNoTeams = computed(() => teams.value.length === 0)
 
 // FORM MANAGEMENT - useEntityFormManager for URL/mode management only
-const {formMode, onModeChange} = useEntityFormManager<CookingTeamDisplay[]>({
-  getDefaultEntity: () => [], // Not used - component manages CREATE draft
+const {formMode, onModeChange: baseOnModeChange} = useEntityFormManager<CookingTeamDisplay[]>({
+  getDefaultEntity: () => [],
   selectedEntity: computed(() => teams.value)
 })
+
+const onModeChange = baseOnModeChange
 
 // SEASON SELECTION MANAGEMENT - delegated to composable (ADR-007)
 const selectedSeasonId = computed(() => selectedSeason.value?.id ?? null)
@@ -208,36 +210,39 @@ const displayedTeams = computed(() => {
   return teams.value
 })
 
-// EDIT MODE - Team selection for master-detail pattern
-const selectedTeamIndex = ref(0)
-const selectedTeam = computed(() => {
-  if (displayedTeams.value.length === 0) return null
-  return displayedTeams.value[selectedTeamIndex.value] ?? null
+// EDIT MODE - Team selection via ?team= query param (ADR-006, survives store refresh)
+// Cleanup (strip ?team= on mode change) handled by onModeChange wrapper above.
+const {value: selectedTeamId} = useQueryParam<number>('team', {
+  serialize: (id) => id.toString(),
+  deserialize: (s) => {
+    const parsed = parseInt(s)
+    return !isNaN(parsed) ? parsed : null
+  },
+  validate: (id) => displayedTeams.value.some(t => t.id === id),
+  normalize: (id) => {
+    if (id && displayedTeams.value.some(t => t.id === id)) return id
+    return displayedTeams.value[0]?.id ?? null
+  },
+  defaultValue: () => displayedTeams.value[0]?.id ?? 0,
+  syncWhen: () => formMode.value === FORM_MODES.EDIT && displayedTeams.value.some(t => t.id)
 })
+const selectedTeamIndex = computed(() => {
+  const idx = displayedTeams.value.findIndex(t => t.id === selectedTeamId.value)
+  return idx >= 0 ? idx : 0
+})
+const selectedTeam = computed(() => displayedTeams.value[selectedTeamIndex.value] ?? null)
 
-// Team tabs for vertical navigation - using CookingTeamBadges for consistent display
-// ADR-009: Use Display data with aggregated cookingDaysCount from DB
+// Team tabs for vertical navigation
 const teamTabs = computed(() => {
   return displayedTeams.value.map((team, index) => ({
     label: team.name,
     value: index,
     icon: 'i-fluent-mdl2-team-favorite',
     color: getTeamColor(index),
-    // Data for badges - all from Display entity
     memberCount: team.assignments?.length ?? 0,
     cookingDaysCount: team.cookingDaysCount ?? 0
   }))
 })
-
-// Auto-select first team when entering EDIT mode or when teams change
-watch([formMode, displayedTeams], () => {
-  if (formMode.value === FORM_MODES.EDIT && displayedTeams.value.length > 0) {
-    // Reset to first team if current selection is invalid
-    if (selectedTeamIndex.value >= displayedTeams.value.length) {
-      selectedTeamIndex.value = 0
-    }
-  }
-}, {immediate: true})
 
 const showAdminTeams = computed(() => {
   return !isSelectedSeasonLoading.value && selectedSeason.value && (!isNoTeams.value || formMode.value === FORM_MODES.CREATE)
@@ -499,7 +504,7 @@ const columns = [
           <!-- MOBILE: Dropdown team selector (only visible on mobile) -->
           <div class="block md:hidden">
             <USelect
-              v-model="selectedTeamIndex"
+              :model-value="selectedTeamIndex"
               :options="teamTabs.map((tab, index) => ({
                 value: index,
                 label: `${tab.label} (${tab.memberCount} medl.)`
@@ -508,6 +513,7 @@ const columns = [
               option-label="label"
               placeholder="Vælg hold"
               size="lg"
+              @update:model-value="(idx) => selectedTeamId = displayedTeams[Number(idx)]?.id ?? 0"
             />
           </div>
 
@@ -517,8 +523,9 @@ const columns = [
               <h3 class="text-lg font-semibold mb-4">Madhold</h3>
 
               <UTabs
-                  v-model="selectedTeamIndex"
+                  :model-value="selectedTeamIndex"
                   orientation="vertical"
+                  @update:model-value="(idx) => selectedTeamId = displayedTeams[Number(idx)]?.id ?? 0"
                   :items="teamTabs"
                   variant="link"
                   size="xl"

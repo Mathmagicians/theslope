@@ -433,6 +433,32 @@ test.describe.serial('Heynabo Integration API', () => {
         expect(result.sanityCheck.passed, 'IDEMPOTENT: Sanity check passed').toBe(true)
     })
 
+    test('should route recreated inhabitant to active household, not sibling', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        // Delete Babyyoda from seed household
+        await HouseholdFactory.deleteInhabitant(context, testData.inhabitant.babyyodaId)
+
+        // Run import — Heynabo still has Babyyoda at heynaboId=2
+        const result = await HouseholdFactory.runHeynaboImport(context)
+        expect(result.inhabitantsCreated, 'Babyyoda recreated').toBeGreaterThanOrEqual(1)
+
+        // Babyyoda must be on the seed household (active, no moveOutDate), not the sibling
+        const seedHousehold = await HouseholdFactory.getHouseholdById(context, testData.householdId)
+        const babyyoda = seedHousehold!.inhabitants.find(
+            (i: InhabitantDisplay) => i.heynaboId === INHABITANTS.BABYYODA.heynaboId
+        )
+        expect(babyyoda, 'ROUTING: Babyyoda recreated on active household').toBeDefined()
+
+        // Sibling must NOT have Babyyoda
+        const siblingBefore = testData.household.beforeImport.find(h => h.moveOutDate !== null)!
+        const siblingAfter = await HouseholdFactory.getHouseholdById(context, siblingBefore.id)
+        const babyyodaOnSibling = siblingAfter!.inhabitants.find(
+            (i: InhabitantDisplay) => i.heynaboId === INHABITANTS.BABYYODA.heynaboId
+        )
+        expect(babyyodaOnSibling, 'ROUTING: Babyyoda NOT on sibling').toBeUndefined()
+    })
+
     // Cleanup: Remove test data if tests fail before import can reconcile
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)

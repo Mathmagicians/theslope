@@ -691,8 +691,11 @@ test.describe('Season API Tests', () => {
         holidayEnd.setDate(holidayEnd.getDate() + 1)
         const holiday = {start: holidayStart, end: holidayEnd}
 
+        // All days cooking — guarantees holiday always covers cooking days regardless of day-of-week
+        const allDaysCooking = createDefaultWeekdayMap([true, true, true, true, true, true, true])
+
         // GIVEN: Season with holidays, then holidays removed to create extra events
-        const created = await SeasonFactory.createSeason(context, {...SeasonFactory.defaultSeason(temporaryAndRandom()), holidays: [holiday]})
+        const created = await SeasonFactory.createSeason(context, {...SeasonFactory.defaultSeason(temporaryAndRandom()), cookingDays: allDaysCooking, holidays: [holiday]})
         createdSeasonIds.push(created.id!)
         const expectedCount = SeasonFactory.calculateExpectedEventCount(created)
 

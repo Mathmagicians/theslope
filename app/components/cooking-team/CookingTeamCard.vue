@@ -192,7 +192,7 @@ const getCurrentAssignment = (id: number) =>
     getAssignmentsFor(id).find(a => a.cookingTeamId === props.teamId)
 
 const getTeamName = (cookingTeamId: number) =>
-    props.teams?.find(t => t.id === cookingTeamId)?.name ?? '?'
+    getTeamShortName(props.teams?.find(t => t.id === cookingTeamId)?.name ?? '')
 
 const getTeamColorForId = (cookingTeamId: number) => {
   const idx = props.teams?.findIndex(t => t.id === cookingTeamId) ?? -1
@@ -421,7 +421,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
               </h5>
 
               <div v-if="members.length > 0" class="flex flex-col gap-2 p-3 bg-gray-50 dark:bg-gray-800">
-                <div v-for="member in members" :key="member.id" class="flex items-center gap-2">
+                <div v-for="member in members" :key="member.id" class="flex items-center gap-2 flex-wrap">
                   <UAvatar
                     :src="member.inhabitant?.pictureUrl ?? undefined"
                     :alt="`${member.inhabitant?.name} ${member.inhabitant?.lastName}`"
@@ -434,11 +434,15 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                     size="md"
                     variant="subtle"
                     :color="teamColor"
-                    class="cursor-pointer hover:opacity-80 transition-opacity flex-1"
+                    class="cursor-pointer hover:opacity-80 transition-opacity"
                     @click="member.inhabitant && navigateToInhabitant(member.inhabitant.id)"
                   >
                     {{ member.inhabitant?.name }} {{ member.inhabitant?.lastName }}
                   </UBadge>
+                  <UBadge :color="teamColor" variant="outline" :size="SIZES.small" class="w-fit">
+                    {{ member.allocationPercentage }}%
+                  </UBadge>
+                  <WeekDayMapDisplay v-if="member.affinity" :model-value="member.affinity" compact disabled :color="teamColor" />
                   <UButton
                     v-if="isEditable && member.id"
                     color="winery"
@@ -476,7 +480,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
               </div>
               <div v-else class="flex flex-col gap-1">
                 <div v-for="(a, idx) in getAssignmentsFor(row.original.id)" :key="idx" class="flex flex-col gap-0.5">
-                  <UBadge :color="getTeamColorForId(a.cookingTeamId)" variant="solid" :size="SIZES.small">
+                  <UBadge :color="getTeamColorForId(a.cookingTeamId)" variant="solid" :size="SIZES.small" class="w-fit">
                     {{ getTeamName(a.cookingTeamId) }} · {{ a.allocationPercentage }}%
                   </UBadge>
                   <WeekDayMapDisplay v-if="a.affinity" :model-value="a.affinity" compact disabled :color="getTeamColorForId(a.cookingTeamId)" />

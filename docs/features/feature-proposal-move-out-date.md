@@ -147,7 +147,7 @@ URL disambiguation (Phase 2) MUST ship BEFORE the schema migration (Phase 3) tha
 
 **E2E tests (7 files, 10 `page.goto` calls):** `household.e2e`, `HouseholdMembers.e2e`, `HouseholdCard.e2e`, `HouseholdAllergies.e2e`, `DinnerBookingForm.e2e`, `HouseholdScaffolding.e2e`, `HouseholdBookingsCrossHousehold.e2e`
 
-### Phase 3: Schema Migration + Repository Refactor
+### Phase 3: Schema Migration + Repository Refactor ← IN PROGRESS
 
 **Goal:** Allow multiple households with the same `heynaboId` (old + new family at same address).
 
@@ -155,42 +155,21 @@ URL disambiguation (Phase 2) MUST ship BEFORE the schema migration (Phase 3) tha
 
 **Schema change:** Drop `@unique` on `Household.heynaboId` only; add `@@index`. `Inhabitant.heynaboId` stays `@unique` (inhabitants are distinct Heynabo users; households can share a Heynabo address).
 
-**Repository refactor:** Only one repo function breaks — `saveHousehold` (line 605) uses `prisma.household.upsert({ where: { heynaboId } })`. After dropping `@unique`, Prisma rejects upsert on a non-unique key. All other household repo functions are safe:
+**Repository refactor:** `saveHousehold` used `prisma.household.upsert({ where: { heynaboId } })` — breaks after dropping `@unique`. Refactored to accept separate `id` parameter: `saveHousehold(d1, household, id?, skipRefetch?)`. Branches on `id`: present → `update({where:{id}})`, absent → `create`. No other repo functions affected.
 
-| Function | Current WHERE | Status |
-|----------|---------------|--------|
-| `saveHousehold` (line 605) | `{ heynaboId }` | **BREAKS** — refactor to branch on `data.id` |
-| `deleteHouseholdsByHeynaboId` (line 697) | `deleteMany({ heynaboId: { in: [...] } })` | SAFE — batch delete on non-unique works; semantics correct (address leaves community → delete all households there) |
-| `deleteHousehold` (line 813) | `{ id }` | SAFE — uses our unique id |
-| `updateHousehold` | `{ id }` | SAFE |
-| `createHouseholds` | No WHERE (batch create) | SAFE |
-| `saveInhabitant` (line 292) | `{ heynaboId }` on Inhabitant | SAFE — `Inhabitant.heynaboId` stays `@unique` |
-| `linkUsersToInhabitants` (line 228) | `{ heynaboId }` on Inhabitant | SAFE — same reason |
+**Routing:** Two functions in `app/composables/useHousehold.ts`:
 
-**`saveHousehold` refactor:** Accept optional `data.id`. Caller decides create vs update. No more `heynaboId` in WHERE.
+- `resolveHouseholdForHeynaboId(heynaboId, candidates)` — pure function, returns the resolved household object (or null for empty input). Decision 4 rules: 0 → null; 1 → that one; N with 1 active → active; N all with moveOutDate → newest (tie-break lowest id); N with 2+ active → lowest id.
+- `buildResolvedHouseholdMap(households)` — groups by heynaboId using `groupBy` from `batchUtils.ts` (server-safe, NOT `Map.groupBy`), picks winner per group via `resolveHouseholdForHeynaboId`. Returns `Map<number, HouseholdDisplay>`.
 
-```typescript
-const saved = data.id
-    ? await prisma.household.update({ where: { id: data.id }, data: toDbData(data) })
-    : await prisma.household.create({ data: toDbData(data) })
-```
+**Import service changes:**
 
-**Routing function:** `resolveHouseholdForHeynaboId(heynaboId, candidates)` added to `app/composables/useHousehold.ts` (alongside existing `isHouseholdActiveOnDay`, `getResidencyStatus`). Pure function, no side effects. Server code imports it the same way `scaffoldPrebookings.ts` already imports `isHouseholdActiveOnDay`. Decision 4 rules:
+1. `existingByHeynaboId` built via `buildResolvedHouseholdMap` — deterministic representative per heynaboId for reconciliation.
+2. **Household updates apply to ALL existing households at each heynaboId** (not just the resolved one). For every incoming heynaboId (UPDATE + IDEMPOTENT buckets), each existing household at that address gets `mergeHouseholdForUpdate(incoming, existing)` → preserves THAT household's TheSlope-owned fields (pbsId, movedInDate, moveOutDate) while updating Heynabo-owned fields (name, address). No separate "broadcast" step — same merge path handles all.
+3. Sanity check counts unique heynaboIds (not total households) for household comparison.
+4. Delete branch unchanged — `deleteHouseholdsByHeynaboId` removes all households at that address.
 
-1. 0 candidates → create new
-2. 1 candidate → that one
-3. N candidates, exactly 1 without `moveOutDate` → that one
-4. N candidates, all with `moveOutDate` → newest `moveOutDate`
-5. N candidates, 2+ without `moveOutDate` → lowest `id` (deterministic, always resolves)
-
-**Callers of `saveHousehold`** (2 external):
-
-| Caller | File | Post-refactor |
-|--------|------|---------------|
-| Admin create endpoint | `server/routes/api/admin/household/index.put.ts:25` | Passes data without `id` → create path. No change needed. |
-| Heynabo import (update branch) | `server/utils/heynaboImportService.ts:103` | Calls `resolveHouseholdForHeynaboId` to get target `id`; passes `{ id, ...mergedData }` to `saveHousehold`. |
-
-**Import service update** (lines 95–104): The existing `existingByHeynaboId` map (line 79) becomes `existingByHeynaboId: Map<number, HouseholdDisplay[]>` (grouped, not 1:1). Before calling `saveHousehold`, the update loop resolves each incoming household's target via `resolveHouseholdForHeynaboId`. Delete branch (lines 83–89) stays unchanged.
+**Key finding:** `Map.groupBy` is NOT available in Cloudflare Workers server runtime. Codebase has `groupBy` utility in `batchUtils.ts` for server-safe grouping. `Map.groupBy` is only safe in client-side code (stores).
 
 **ADR compliance updates:**
 
@@ -201,29 +180,31 @@ const saved = data.id
 
 **Changes:**
 
-| File | Change |
-|------|--------|
-| `prisma/schema.prisma` | Drop `@unique` on `Household.heynaboId`, add `@@index` |
-| `server/data/prismaRepository.ts` | `saveHousehold`: branch on `data.id` — `update({where:{id}})` or `create`. Remove `heynaboId` from WHERE. |
-| `app/composables/useHousehold.ts` | Add `resolveHouseholdForHeynaboId(heynaboId, candidates)` pure function |
-| `server/utils/heynaboImportService.ts` | Group `existingByHeynaboId` as `Map<number, HouseholdDisplay[]>`; resolve target via routing before `saveHousehold`; delete branch unchanged |
-| `docs/adr.md` | ADR-010 + ADR-013 compliance additions |
+| File | Change | Status |
+|------|--------|--------|
+| `prisma/schema.prisma` | Drop `@unique` on `Household.heynaboId`, add `@@index` | ✅ |
+| `server/data/prismaRepository.ts` | `saveHousehold`: separate `id` parameter, branch on `id` | ✅ |
+| `app/composables/useHousehold.ts` | `resolveHouseholdForHeynaboId` + `buildResolvedHouseholdMap` | ✅ |
+| `server/utils/heynaboImportService.ts` | `buildResolvedHouseholdMap` for reconciliation, update all households at each heynaboId, sanity check counts unique heynaboIds | ✅ |
+| `docs/adr.md` | ADR-010 + ADR-013 compliance additions | ⏳ |
 
 **Verification:**
 
-| # | Check | Test file |
-|---|-------|-----------|
-| pre | **All** unit and E2E suites green before and after — `npx vitest run` + `npx playwright test` (full suite). No regressions. | — |
-| 1 | Unit — `resolveHouseholdForHeynaboId` parametrized over all 5 branches: 0 candidates → create; 1 candidate → that one; N with 1 active → active; N all with moveOutDate → newest; N with 2+ active → lowest id | `tests/component/composables/useHousehold.nuxt.spec.ts` |
-| 2 | E2E API — admin creates a household via PUT, verify it persists correctly (regression: create path still works after upsert removal) | `tests/e2e/api/parallel/admin/household.e2e.spec.ts` |
-| 3 | E2E API — admin updates an existing household via POST by id, verify update applies correctly (regression: update path works via id instead of heynaboId) | `tests/e2e/api/parallel/admin/household.e2e.spec.ts` |
-| 4 | E2E API — create two households with same heynaboId (one with moveOutDate, one without); both persist; both retrievable by their own id | `tests/e2e/api/parallel/admin/household.e2e.spec.ts` |
-| 5 | E2E API — Heynabo import with existing single-household community still succeeds (regression: no duplicate heynaboIds yet, existing flow intact) | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` |
-| 6 | E2E API — Heynabo import with two households sharing heynaboId (one active, one leaving): update routes to the active household, leaving household untouched | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` |
-| 7 | E2E API — Heynabo import deletes an address from community: `deleteHouseholdsByHeynaboId` removes all households at that heynaboId (both active and leaving) | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` |
-| 8 | Factory — add helpers for creating households with explicit heynaboId + moveOutDate combinations | `tests/e2e/testDataFactories/householdFactory.ts` |
-| 9 | Deploy to dev, verify E2E on dev environment | — |
-| 10 | Migrate prod: `make d1-migrate-prod` once verified on dev | — |
+| # | Check | Test file | Status |
+|---|-------|-----------|--------|
+| pre | **All** unit and E2E suites green — `npx vitest run` + `npx playwright test` (full suite). No regressions. | — | ⏳ |
+| 1 | Unit — `buildResolvedHouseholdMap` parametrized: empty, unique heynaboIds, duplicates (all 5 routing branches), mixed | `tests/component/composables/useHousehold.nuxt.spec.ts` | ✅ |
+| 2 | E2E API — admin creates a household via PUT (regression: create path still works after upsert removal) | `tests/e2e/api/parallel/admin/household.e2e.spec.ts` | ✅ |
+| 3 | E2E API — admin updates an existing household via POST by id (regression) | `tests/e2e/api/parallel/admin/household.e2e.spec.ts` | ✅ |
+| 4 | E2E API — two households with same heynaboId coexist, both persist, both retrievable | `tests/e2e/api/parallel/admin/household.e2e.spec.ts` | ✅ |
+| 5 | E2E API — Heynabo import regression: single-household community, seed household pbsId preserved | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` | ✅ |
+| 6 | E2E API — Heynabo import with sibling: TheSlope-owned fields preserved on BOTH households, Heynabo-owned fields (address) broadcast to sibling | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` | ✅ |
+| 7 | E2E API — Inhabitant routing: delete Babyyoda, run import, verify recreated on active household (not sibling) — proves `buildResolvedHouseholdMap` drives inhabitant routing | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` | ✅ |
+| 8 | E2E API — Heynabo import delete: fake household removed (existing test, unchanged) | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` | ✅ |
+| 9 | ADR-010 + ADR-013 compliance additions | `docs/adr.md` | ⏳ |
+| 10 | Full suite green: `npx vitest run` + `npx playwright test` | — | ⏳ |
+| 11 | Deploy to dev, verify E2E on dev environment | — | ⏳ |
+| 12 | Migrate prod: `make d1-migrate-prod` once verified on dev | — | ⏳ |
 
 ### Phase 4: Add New Household + Heynabo Import Routing
 
