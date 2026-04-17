@@ -4,7 +4,7 @@ import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import testHelpers from '../testHelpers'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, temporaryAndRandom, doScreenshot} = testHelpers
+const {validatedBrowserContext, pollUntil, temporaryAndRandom, saltedId, doScreenshot} = testHelpers
 
 /**
  * UI TEST STRATEGY:
@@ -95,12 +95,16 @@ test.describe('AdminHouseholds View', () => {
         await page.getByRole('option', {name: new RegExp(seed.address)}).first().click()
 
         // WHEN: fill unique PBS + move-in date + submit
-        const newPbsId = 900500 + Math.floor(Math.random() * 99999)
-        // Target the underlying <input> via data-testid + input selector (UInput forwards data-testid to wrapper)
-        await page.getByTestId('create-household-pbs').locator('input').fill(String(newPbsId))
-        await page.locator('input[name="movedInDate"]').fill('15/05/2026')
-        // Blur so UForm picks up the date input value before submitting
-        await page.locator('input[name="movedInDate"]').press('Tab')
+        const newPbsId = saltedId(900500, testSalt)
+        const pbsInput = page.getByTestId('create-household-pbs')
+        await expect(pbsInput, 'PBS input should be visible').toBeVisible()
+        await pbsInput.fill(String(newPbsId))
+
+        const moveInInput = page.locator('input[name="movedInDate"]')
+        await expect(moveInInput, 'move-in date input should be visible').toBeVisible()
+        await moveInInput.fill('15/05/2026')
+        await moveInInput.press('Tab')
+
         await page.getByTestId('create-household-submit').click()
 
         // THEN: server persists a sibling household (heynaboId + name inherited from seed)

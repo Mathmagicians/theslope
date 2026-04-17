@@ -41,5 +41,5 @@ setup('Authenticate member for API', async ({request}) => {
 })
 
 setup('Authenticate member for UI', async ({page}) => {
-    await setupUIAuth(page, memberUserName, authFiles.memberUIFile, '/dinner', '/dinner')
+    await setupUIAuth(page, memberUserName, authFiles.memberUIFile, '/dinner', /\/dinner/)
 })

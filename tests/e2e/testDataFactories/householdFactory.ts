@@ -33,7 +33,7 @@ export class HouseholdFactory {
             name: salt('Test Household Hurlumhej', testSalt),
             address: salt('Andeby 123', testSalt),
             movedInDate: now,
-            moveOutDate: null
+            moveOutDate: null as Date | null
         }
     }
 

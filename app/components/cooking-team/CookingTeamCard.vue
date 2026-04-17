@@ -34,21 +34,13 @@
  * - Uses UserListItem for consistent inhabitant display
  */
 import type { WeekDayMap, DateRange } from '~/types/dateTypes'
-import type { TeamRole } from '~/composables/useCookingTeamValidation'
-import type { InhabitantDisplay } from '~/composables/useCoreValidation'
+import type { TeamRole, CookingTeamAssignment } from '~/composables/useCookingTeamValidation'
 import { ROLE_LABELS, ROLE_ICONS } from '~/composables/useCookingTeamValidation'
 
 // Design system
 const { COLOR, COMPONENTS, SIZES, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 type DisplayMode = 'monitor' | 'regular' | 'edit'
-
-// TeamMember requires inhabitant - only assignments with valid inhabitants are displayed
-interface TeamMember {
-  id?: number  // Optional - new assignments don't have id yet
-  role: TeamRole
-  inhabitant: InhabitantDisplay  // Required for display
-}
 
 interface Props {
   teamId: number           // Database ID - component fetches detail from store
@@ -133,9 +125,9 @@ const resolvedColor = computed(() => {
 
 const roleGroups = computed(() => {
   const groups = {
-    CHEF: [] as TeamMember[],
-    COOK: [] as TeamMember[],
-    JUNIORHELPER: [] as TeamMember[]
+    CHEF: [] as CookingTeamAssignment[],
+    COOK: [] as CookingTeamAssignment[],
+    JUNIORHELPER: [] as CookingTeamAssignment[]
   }
 
   assignments.value.forEach(assignment => {
