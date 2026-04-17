@@ -496,16 +496,18 @@ describe('buildResolvedHouseholdMap', () => {
     moveOutDate
   })
 
-  it('empty input → empty map', () => {
-    expect(buildResolvedHouseholdMap([]).size).toBe(0)
+  it('empty input → empty maps', () => {
+    const {resolved, siblingInhabitants} = buildResolvedHouseholdMap([])
+    expect(resolved.size).toBe(0)
+    expect(siblingInhabitants.size).toBe(0)
   })
 
   it('unique heynaboIds → 1:1 map unchanged', () => {
-    const result = buildResolvedHouseholdMap([household(1, 10), household(2, 20), household(3, 30)])
-    expect(result.size).toBe(3)
-    expect(result.get(10)!.id).toBe(1)
-    expect(result.get(20)!.id).toBe(2)
-    expect(result.get(30)!.id).toBe(3)
+    const {resolved} = buildResolvedHouseholdMap([household(1, 10), household(2, 20), household(3, 30)])
+    expect(resolved.size).toBe(3)
+    expect(resolved.get(10)!.id).toBe(1)
+    expect(resolved.get(20)!.id).toBe(2)
+    expect(resolved.get(30)!.id).toBe(3)
   })
 
   it.each([
@@ -540,21 +542,43 @@ describe('buildResolvedHouseholdMap', () => {
       expectedId: 51
     }
   ])('duplicate heynaboId: $scenario', ({ households, expectedId }) => {
-    const result = buildResolvedHouseholdMap(households)
-    expect(result.size).toBe(1)
-    expect(result.get(42)!.id).toBe(expectedId)
+    const {resolved} = buildResolvedHouseholdMap(households)
+    expect(resolved.size).toBe(1)
+    expect(resolved.get(42)!.id).toBe(expectedId)
   })
 
   it('mixed: some unique, some duplicate heynaboIds', () => {
-    const result = buildResolvedHouseholdMap([
+    const {resolved} = buildResolvedHouseholdMap([
       household(1, 10),
       household(2, 20, null),
       household(3, 20, date(2026, 6, 1)),
       household(4, 30)
     ])
-    expect(result.size).toBe(3)
-    expect(result.get(10)!.id).toBe(1)
-    expect(result.get(20)!.id).toBe(2)
-    expect(result.get(30)!.id).toBe(4)
+    expect(resolved.size).toBe(3)
+    expect(resolved.get(10)!.id).toBe(1)
+    expect(resolved.get(20)!.id).toBe(2)
+    expect(resolved.get(30)!.id).toBe(4)
+  })
+
+  it('siblingInhabitants includes inhabitants from all households at same address', () => {
+    const h1 = {...household(1, 42), inhabitants: [
+      {...HouseholdFactory.defaultInhabitantData('a'), id: 10, heynaboId: 100, householdId: 1},
+      {...HouseholdFactory.defaultInhabitantData('b'), id: 11, heynaboId: 101, householdId: 1}
+    ]}
+    const h2 = {...household(2, 42, date(2026, 6, 1)), inhabitants: [
+      {...HouseholdFactory.defaultInhabitantData('c'), id: 20, heynaboId: 200, householdId: 2}
+    ]}
+    const {siblingInhabitants} = buildResolvedHouseholdMap([h1, h2])
+
+    const lookup = siblingInhabitants.get(42)!
+    expect(lookup.size).toBe(3)
+    expect(lookup.get(100)).toEqual({householdHeynaboId: 42})
+    expect(lookup.get(101)).toEqual({householdHeynaboId: 42})
+    expect(lookup.get(200)).toEqual({householdHeynaboId: 42})
+  })
+
+  it('siblingInhabitants empty for address with no inhabitants', () => {
+    const {siblingInhabitants} = buildResolvedHouseholdMap([{...household(1, 42), inhabitants: []}])
+    expect(siblingInhabitants.get(42)!.size).toBe(0)
   })
 })

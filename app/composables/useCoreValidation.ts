@@ -1,4 +1,5 @@
 import {z} from 'zod'
+import {isBefore} from 'date-fns'
 import {SystemRoleSchema, DinnerModeSchema} from '~~/prisma/generated/zod'
 import {UserFragmentSchema, InhabitantFragmentSchema, HouseholdFragmentSchema} from '~/composables/fragments/domainFragments'
 import {useWeekDayMapValidation} from './useWeekDayMapValidation'
@@ -246,6 +247,32 @@ export const useCoreValidation = () => {
         id: z.number().int().positive()
     })
 
+    /**
+     * Household create form - UI form validation schema factory.
+     * Used by HouseholdCreateForm.vue for UForm validation.
+     *
+     * Takes runtime sibling move-out constraints (closure over caller state) and enforces
+     * new movedInDate >= every sibling moveOutDate. Pass `[]` when no constraints apply.
+     *
+     * Derived from HouseholdCreateSchema (reuses address min/max from BaseHouseholdSchema).
+     * Overrides pbsId with z.coerce.number() for HTML number input string → number.
+     * movedInDate is strict z.date() — z.coerce.date() would coerce null to 1970-01-01.
+     * (PBS uniqueness is a cross-field rule handled by the component's validate() function.)
+     */
+    const HouseholdCreateFormSchema = (siblingMoveOutConstraints: Date[] = []) =>
+        HouseholdCreateSchema
+            .pick({pbsId: true, address: true, movedInDate: true})
+            .extend({
+                pbsId: z.coerce.number({invalid_type_error: 'PBS skal være et tal'})
+                    .int({message: 'PBS skal være et helt tal'})
+                    .positive({message: 'PBS skal være positivt'}),
+                movedInDate: z.date({invalid_type_error: 'Du skal sætte en indflytningsdato for den nye familie'})
+            })
+            .refine(
+                (data) => siblingMoveOutConstraints.every(c => !isBefore(data.movedInDate, c)),
+                {message: 'Ny familie kan ikke flytte ind, så længe den forrige ikke er flyttet ud', path: ['movedInDate']}
+            )
+
     const HouseholdResponseSchema = BaseHouseholdSchema.required({
         id: true,
         heynaboId: true,
@@ -485,6 +512,7 @@ export const useCoreValidation = () => {
         // Schemas - Household
         BaseHouseholdSchema,
         HouseholdCreateSchema,
+        HouseholdCreateFormSchema,
         HouseholdUpdateSchema,
         HouseholdResponseSchema,
         HouseholdDisplaySchema,
@@ -541,6 +569,7 @@ export type HouseholdDisplay = z.infer<ReturnType<typeof useCoreValidation>['Hou
 export type HouseholdDetail = z.infer<ReturnType<typeof useCoreValidation>['HouseholdDetailSchema']>
 // Mutations
 export type HouseholdCreate = z.infer<ReturnType<typeof useCoreValidation>['HouseholdCreateSchema']>
+export type HouseholdCreateFormData = z.infer<ReturnType<ReturnType<typeof useCoreValidation>['HouseholdCreateFormSchema']>>
 export type HouseholdUpdate = z.infer<ReturnType<typeof useCoreValidation>['HouseholdUpdateSchema']>
 
 // ROLE OWNERSHIP TYPES

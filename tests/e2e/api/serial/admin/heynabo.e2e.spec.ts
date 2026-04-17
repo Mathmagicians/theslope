@@ -459,6 +459,55 @@ test.describe.serial('Heynabo Integration API', () => {
         expect(babyyodaOnSibling, 'ROUTING: Babyyoda NOT on sibling').toBeUndefined()
     })
 
+    test('should preserve admin-assigned household when inhabitant moved to sibling at same address', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        // Ensure Babyyoda is on the seed household (winner) after previous test
+        const seedBefore = await HouseholdFactory.getHouseholdById(context, testData.householdId)
+        const babyyoda = seedBefore!.inhabitants.find(
+            (i: InhabitantDisplay) => i.heynaboId === INHABITANTS.BABYYODA.heynaboId
+        )
+        expect(babyyoda, 'Setup: Babyyoda exists on seed household').toBeDefined()
+
+        // Find sibling household (same heynaboId, has moveOutDate)
+        const sibling = testData.household.beforeImport.find(h => h.moveOutDate !== null)!
+        expect(sibling, 'Setup: Sibling household exists').toBeDefined()
+
+        // Admin moves Babyyoda to sibling (same address, different householdId)
+        await HouseholdFactory.updateInhabitant(context, babyyoda!.id, {householdId: sibling.id})
+
+        // Verify move happened
+        const movedBabyyoda = await HouseholdFactory.getInhabitantById(context, babyyoda!.id)
+        expect(movedBabyyoda!.householdId, 'Babyyoda moved to sibling').toBe(sibling.id)
+
+        // Run HNI — Heynabo still has Babyyoda at this address
+        const result = await HouseholdFactory.runHeynaboImport(context)
+
+        // Rule 1: HNI should NOT create a duplicate (inhabitant already exists at this address)
+        expect(result.inhabitantsCreated, 'No inhabitants created (Babyyoda already at address)').toBe(0)
+
+        // Rule 2: HNI should NOT move Babyyoda back to winner (admin assignment preserved)
+        const babyyodaAfter = await HouseholdFactory.getInhabitantById(context, babyyoda!.id)
+        expect(babyyodaAfter!.householdId, 'Babyyoda stays in admin-assigned sibling').toBe(sibling.id)
+
+        // Seed household should NOT have Babyyoda
+        const seedAfter = await HouseholdFactory.getHouseholdById(context, testData.householdId)
+        const babyyodaOnSeed = seedAfter!.inhabitants.find(
+            (i: InhabitantDisplay) => i.heynaboId === INHABITANTS.BABYYODA.heynaboId
+        )
+        expect(babyyodaOnSeed, 'Babyyoda NOT on seed household').toBeUndefined()
+
+        // Sibling should still have Babyyoda
+        const siblingAfter = await HouseholdFactory.getHouseholdById(context, sibling.id)
+        const babyyodaOnSibling = siblingAfter!.inhabitants.find(
+            (i: InhabitantDisplay) => i.heynaboId === INHABITANTS.BABYYODA.heynaboId
+        )
+        expect(babyyodaOnSibling, 'Babyyoda still on sibling').toBeDefined()
+
+        // Sanity: import should pass
+        expect(result.sanityCheck.passed, 'Sanity check passed').toBe(true)
+    })
+
     // Cleanup: Remove test data if tests fail before import can reconcile
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)

@@ -242,6 +242,58 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         })
     })
 
+    test('createAtExistingAddress copies heynaboId + name from sibling (Phase 4 frontend flow)', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const testSalt = temporaryAndRandom()
+
+        // GIVEN: a seed household at an address
+        const seed = await HouseholdFactory.createHousehold(context, {
+            ...HouseholdFactory.defaultHouseholdData(testSalt),
+            name: salt('Leaving', testSalt),
+            address: salt('Shared Lane 7', testSalt),
+            moveOutDate: new Date('2026-09-01')
+        })
+        testHouseholdIds.push(seed.id)
+
+        // WHEN: admin creates a second household at the same address (new family moving in).
+        // The factory mirrors the frontend HouseholdCreateForm: copies heynaboId + name from sibling.
+        const sibling = await HouseholdFactory.createAtExistingAddress(context, seed, {
+            pbsId: saltedId(900010, testSalt),
+            movedInDate: new Date('2026-08-15')
+        })
+        testHouseholdIds.push(sibling.id)
+
+        // THEN: both persist, share heynaboId + name + address, have distinct ids + pbs
+        expect(sibling.heynaboId).toBe(seed.heynaboId)
+        expect(sibling.name).toBe(seed.name)
+        expect(sibling.address).toBe(seed.address)
+        expect(sibling.id).not.toBe(seed.id)
+        expect(sibling.pbsId).not.toBe(seed.pbsId)
+        expect(sibling.moveOutDate).toBeNull()
+
+        // THEN: index returns both
+        const all = await HouseholdFactory.getAllHouseholds(context)
+        const siblingsAtAddress = all.filter(h => h.heynaboId === seed.heynaboId)
+        expect(siblingsAtAddress.map(h => h.id).sort()).toEqual([seed.id, sibling.id].sort())
+    })
+
+    test('create with duplicate pbsId is rejected (unique constraint)', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const testSalt = temporaryAndRandom()
+
+        const seed = await HouseholdFactory.createHousehold(context, HouseholdFactory.defaultHouseholdData(testSalt))
+        testHouseholdIds.push(seed.id)
+
+        // Attempt to create another household reusing the same pbsId — server rejects.
+        // (Prisma unique constraint surfaces as 500 today; see proposal Phase 4: promote to 400.)
+        await HouseholdFactory.createAtExistingAddress(
+            context,
+            seed,
+            {pbsId: seed.pbsId, movedInDate: new Date('2026-08-15')},
+            500
+        )
+    })
+
     test('two households with same heynaboId can coexist', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()

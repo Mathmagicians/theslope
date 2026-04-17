@@ -2,21 +2,46 @@
 import { getPaginationRowModel } from '@tanstack/vue-table'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 
-// Props - canEdit from parent for authorization (unused for now - view-only component)
 interface Props {
   canEdit?: boolean
 }
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   canEdit: false
 })
 
 const householdsStore = useHouseholdsStore()
-const {households, isHouseholdsLoading,isHouseholdsErrored, householdsError} = storeToRefs(householdsStore)
+const {households, isHouseholdsLoading, isHouseholdsErrored, householdsError} = storeToRefs(householdsStore)
 
-// Initialize without await for SSR hydration consistency
 householdsStore.initHouseholdsStore()
 
-const { COMPONENTS, getResidencyDisplay } = useTheSlopeDesignSystem()
+const {COMPONENTS, SIZES, BUTTONS, ICONS, getResidencyDisplay} = useTheSlopeDesignSystem()
+
+// Row expansion for edit panel
+const expanded = ref<Record<string, boolean>>({})
+
+// Event handlers — store owns API calls, toasts, error handling
+const handleMoveInhabitant = async (inhabitantId: number, householdId: number) => {
+  await householdsStore.moveInhabitant(inhabitantId, householdId)
+}
+
+const handleDeleteHousehold = async (householdId: number) => {
+  await householdsStore.deleteHousehold(householdId)
+  expanded.value = {}
+}
+
+const isCreateFormOpen = ref(false)
+
+const handleCreateHousehold = async (payload: {
+  pbsId: number
+  address: string
+  movedInDate: Date
+  heynaboId: number
+  name: string
+  prevOwnerMoveOutUpdates: {id: number, moveOutDate: Date}[]
+}) => {
+  const created = await householdsStore.createHousehold(payload)
+  if (created) isCreateFormOpen.value = false
+}
 
 // Search/filter state
 const searchQuery = ref('')
@@ -56,6 +81,7 @@ const filteredHouseholds = computed(() => {
 })
 
 const columns = [
+  ...(props.canEdit ? [{id: 'expand'}] : []),
   {
     accessorKey: 'shortName',
     header: 'Forkortelse'
@@ -66,11 +92,11 @@ const columns = [
   },
   {
     accessorKey: 'address',
-    header: 'Address'
+    header: 'Adresse'
   },
   {
     accessorKey: 'inhabitants',
-    header: 'Inhabitants',
+    header: 'Beboere',
     cell: ({row}: {row: {original: HouseholdDisplay}}) =>
       h(resolveComponent('HouseholdListItem'), {
         household: row.original,
@@ -102,8 +128,31 @@ v-if="isHouseholdsErrored"
 class="w-full px-0"
          data-testid="admin-households">
     <template #header>
-      <div>Husstande på Skråningen</div>
+      <div class="flex items-center justify-between">
+        <span>Husstande på Skråningen</span>
+        <UButton
+            v-if="props.canEdit && !isCreateFormOpen"
+            v-bind="BUTTONS.save"
+            :size="SIZES.standard"
+            data-testid="open-create-household"
+            @click="isCreateFormOpen = true"
+        >
+          <template #leading>
+            <UIcon :name="ICONS.plusCircle" />
+          </template>
+          Ny husstand
+        </UButton>
+      </div>
     </template>
+
+    <!-- Inline create form (above table) -->
+    <div v-if="isCreateFormOpen" class="px-6 py-3">
+      <HouseholdCreateForm
+          :existing-households="households"
+          @create="handleCreateHousehold"
+          @cancel="isCreateFormOpen = false"
+      />
+    </div>
 
     <!-- Search, Sort, and Pagination Row -->
     <div class="px-6 py-3">
@@ -121,6 +170,7 @@ class="w-full px-0"
     <UTable
         ref="table"
         v-model:pagination="pagination"
+        v-model:expanded="expanded"
         :columns="columns"
         :data="filteredHouseholds"
         :loading="isHouseholdsLoading"
@@ -160,6 +210,26 @@ class="w-full px-0"
             </UBadge>
           </template>
         </div>
+      </template>
+
+      <!-- Edit button (admin only) -->
+      <template v-if="props.canEdit" #expand-cell="{ row }">
+        <UButton
+            v-bind="BUTTONS.edit"
+            :size="SIZES.small"
+            @click="row.toggleExpanded()"
+        />
+      </template>
+
+      <!-- Expanded row: HouseholdEditPanel -->
+      <template #expanded="{ row }">
+        <HouseholdEditPanel
+            :household="row.original"
+            :all-households="households"
+            @move:inhabitant="(inhabitantId) => handleMoveInhabitant(inhabitantId, row.original.id)"
+            @delete="handleDeleteHousehold(row.original.id)"
+            @close="row.toggleExpanded()"
+        />
       </template>
 
       <template #empty-state>

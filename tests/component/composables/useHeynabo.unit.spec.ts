@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { reconcileHouseholds, reconcileInhabitants, reconcileUsers, mergeHouseholdForUpdate } from '~/composables/useHeynabo'
+import { reconcileHouseholds, reconcileInhabitants, reconcileUsers, mergeHouseholdForUpdate, classifyInhabitantForImport } from '~/composables/useHeynabo'
 import type { HouseholdDisplay } from '~/composables/useCoreValidation'
 import {
     householdReconciliationTestData,
@@ -85,6 +85,25 @@ describe('useHeynabo', () => {
             expect(result.pbsId).toBe(existingHousehold.pbsId)
             expect(result.movedInDate).toEqual(existingHousehold.movedInDate)
             expect(result.moveOutDate).toEqual(existingHousehold.moveOutDate)
+        })
+    })
+
+    describe('classifyInhabitantForImport', () => {
+        const ADDRESS_42 = 42
+        const ADDRESS_99 = 99
+
+        const makeLookup = (entries: Array<[number, number]>) =>
+            new Map(entries.map(([inhId, addrId]) => [inhId, {householdHeynaboId: addrId}]))
+
+        it.each([
+            ['not in siblings, in incoming → create', 100, ADDRESS_42, true, makeLookup([]), 'create'],
+            ['not in siblings, not in incoming → delete', 100, ADDRESS_42, false, makeLookup([]), 'delete'],
+            ['in sibling at same address, in incoming → idempotent', 100, ADDRESS_42, true, makeLookup([[100, ADDRESS_42]]), 'idempotent'],
+            ['in sibling at same address, not in incoming → delete', 100, ADDRESS_42, false, makeLookup([[100, ADDRESS_42]]), 'delete'],
+            ['in sibling at different address, in incoming → update', 100, ADDRESS_42, true, makeLookup([[100, ADDRESS_99]]), 'update'],
+            ['in sibling at different address, not in incoming → delete', 100, ADDRESS_42, false, makeLookup([[100, ADDRESS_99]]), 'delete'],
+        ])('%s', (_, inhabitantHeynaboId, addressHeynaboId, inIncoming, siblingLookup, expected) => {
+            expect(classifyInhabitantForImport(inhabitantHeynaboId, addressHeynaboId, inIncoming, siblingLookup)).toBe(expected)
         })
     })
 })

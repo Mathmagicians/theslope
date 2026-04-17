@@ -34,32 +34,35 @@ const props = withDefaults(defineProps<Props>(), {
 
 const { SIZES, COMPONENTS } = useTheSlopeDesignSystem()
 
-// Search
+// Search + sort at data level (same pattern as AdminHouseholds, AdminUsers)
 const searchQuery = ref('')
+const sortDescending = ref(false)
 
 const filteredInhabitants = computed(() => {
-  const q = searchQuery.value.toLowerCase()
-  if (!q) return props.inhabitants
-  return props.inhabitants.filter(i =>
-      `${i.name} ${i.lastName}`.toLowerCase().includes(q)
-  )
+  let result = props.inhabitants
+
+  if (searchQuery.value) {
+    const q = searchQuery.value.toLowerCase()
+    result = result.filter(i =>
+        `${i.name} ${i.lastName}`.toLowerCase().includes(q)
+    )
+  }
+
+  if (props.sortFn) {
+    result = [...result].sort((a, b) => {
+      const cmp = props.sortFn!({original: a}, {original: b})
+      return sortDescending.value ? -cmp : cmp
+    })
+  }
+
+  return result
 })
 
-// Columns — sort enabled on status only when sortFn is provided
-const columns = computed(() => [
-  { accessorKey: 'name', header: 'Navn', enableSorting: false },
-  {
-    accessorKey: 'status',
-    header: props.statusHeader,
-    enableSorting: !!props.sortFn,
-    ...(props.sortFn ? { sortingFn: props.sortFn } : {})
-  },
-  { accessorKey: 'actions', header: props.actionsHeader, enableSorting: false }
-])
-
-// Sorting state (toggleable via header button)
-const sorting = ref([{ id: 'status', desc: true }])
-const toggleSortOrder = () => { sorting.value[0]!.desc = !sorting.value[0]!.desc }
+const columns = [
+  { accessorKey: 'name', header: 'Navn' },
+  { accessorKey: 'status', header: props.statusHeader },
+  { accessorKey: 'actions', header: props.actionsHeader }
+]
 
 // Row expansion (parent controls which row is expanded via v-model)
 const expanded = defineModel<Record<string, boolean>>('expanded', { default: () => ({}) })
@@ -80,7 +83,6 @@ const table = useTemplateRef('table')
 
     <UTable
         ref="table"
-        v-model:sorting="sorting"
         v-model:pagination="pagination"
         v-model:expanded="expanded"
         sticky
@@ -91,17 +93,17 @@ const table = useTemplateRef('table')
         :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
         class="flex-1"
     >
-      <!-- Sort toggle header for status column -->
+      <!-- Sort toggle in status column header -->
       <template v-if="sortFn" #status-header>
         <UButton
             variant="outline"
             :size="SIZES.standard"
             name="sort-by-status"
-            @click="toggleSortOrder"
+            @click="sortDescending = !sortDescending"
         >
           <template #leading>
             <UIcon
-                :name="sorting[0]!.desc ? 'i-lucide-arrow-down-wide-narrow' : 'i-lucide-arrow-up-narrow-wide'"
+                :name="sortDescending ? 'i-lucide-arrow-down-wide-narrow' : 'i-lucide-arrow-up-narrow-wide'"
                 :size="SIZES.standardIconSize"
             />
           </template>

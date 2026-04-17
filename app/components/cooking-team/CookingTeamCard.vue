@@ -210,7 +210,7 @@ const sortByStatusThenName = (rowA: {original: InhabitantDisplay}, rowB: {origin
       .localeCompare(`${rowB.original.name} ${rowB.original.lastName}`)
 }
 
-const expandedInhabitantId = ref<number | null>(null)
+
 
 const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercentage: number, affinity: WeekDayMap | null) => {
   const existing = getCurrentAssignment(inhabitantId)

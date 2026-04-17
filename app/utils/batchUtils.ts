@@ -44,6 +44,8 @@ export interface PruneAndCreateResult<E, I = E> {
     delete: E[]
 }
 
+export type ReconciliationBucket = keyof PruneAndCreateResult<unknown>
+
 /**
  * Curried function to compare two arrays and categorize items into create/update/idempotent/delete
  *

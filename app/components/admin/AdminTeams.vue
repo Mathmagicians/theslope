@@ -120,7 +120,7 @@
  *   - Side-by-side sections become vertically stacked on mobile
  */
 import {h, resolveComponent} from 'vue'
-import {FORM_MODES, type FormMode} from "~/types/form"
+import {FORM_MODES} from "~/types/form"
 import type {TeamRole, CookingTeamDisplay} from "~/composables/useCookingTeamValidation"
 import type {WeekDayMap} from "~/types/dateTypes"
 
@@ -524,11 +524,11 @@ const columns = [
 
               <UTabs
                   :model-value="selectedTeamIndex"
-                  orientation="vertical"
-                  @update:model-value="(idx) => selectedTeamId = displayedTeams[Number(idx)]?.id ?? 0"
                   :items="teamTabs"
+                  orientation="vertical"
                   variant="link"
                   size="xl"
+                  @update:model-value="(idx) => selectedTeamId = displayedTeams[Number(idx)]?.id ?? 0"
               >
                 <template #default="{ item }">
                   <CookingTeamBadges

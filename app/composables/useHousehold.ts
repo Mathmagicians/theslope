@@ -84,16 +84,29 @@ export const resolveHouseholdForHeynaboId = <T extends Pick<HouseholdDisplay, 'i
 }
 
 /**
- * Build a lookup map of household objects that Heynabo addresses resolve to.
- * Groups by heynaboId, then picks the winner from each group using resolveHouseholdForHeynaboId.
+ * Build lookup maps for Heynabo import reconciliation.
+ * Groups by heynaboId, picks winner per address, and builds sibling inhabitant lookup.
+ *
+ * @returns resolved: winner household per address, siblingInhabitants: all inhabitants per address for admin-move detection
  */
-export const buildResolvedHouseholdMap = (households: HouseholdDisplay[]): Map<number, HouseholdDisplay> => {
+export const buildResolvedHouseholdMap = (households: HouseholdDisplay[]) => {
     const grouped = groupBy<HouseholdDisplay, number>(h => h.heynaboId)(households)
     const resolved = new Map<number, HouseholdDisplay>()
+    const siblingInhabitants = new Map<number, Map<number, { householdHeynaboId: number }>>()
+
     for (const [heynaboId, candidates] of grouped) {
         resolved.set(heynaboId, resolveHouseholdForHeynaboId(heynaboId, candidates)!)
+
+        const lookup = new Map<number, { householdHeynaboId: number }>()
+        for (const h of candidates) {
+            for (const i of h.inhabitants ?? []) {
+                lookup.set(i.heynaboId, {householdHeynaboId: h.heynaboId})
+            }
+        }
+        siblingInhabitants.set(heynaboId, lookup)
     }
-    return resolved
+
+    return {resolved, siblingInhabitants}
 }
 
 /**

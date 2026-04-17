@@ -201,8 +201,8 @@ URL disambiguation (Phase 2) MUST ship BEFORE the schema migration (Phase 3) tha
 | 6 | E2E API — Heynabo import with sibling: TheSlope-owned fields preserved on BOTH households, Heynabo-owned fields (address) broadcast to sibling | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` | ✅ |
 | 7 | E2E API — Inhabitant routing: delete Babyyoda, run import, verify recreated on active household (not sibling) — proves `buildResolvedHouseholdMap` drives inhabitant routing | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` | ✅ |
 | 8 | E2E API — Heynabo import delete: fake household removed (existing test, unchanged) | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` | ✅ |
-| 9 | ADR-010 + ADR-013 compliance additions | `docs/adr.md` | ⏳ |
-| 10 | Full suite green: `npx vitest run` + `npx playwright test` | — | ⏳ |
+| 9 | ADR-010 + ADR-013 compliance additions | `docs/adr.md` | ✅ |
+| 10 | Full suite green: `npx vitest run` (1846/1846) + parallel API (202/202) + serial API (all pass). Pre-existing singleton season race causes flaky serial-after-parallel locally; CI runs 2-pass and is green. | — | ✅ |
 | 11 | Deploy to dev, verify E2E on dev environment | — | ⏳ |
 | 12 | Migrate prod: `make d1-migrate-prod` once verified on dev | — | ⏳ |
 
@@ -210,7 +210,7 @@ URL disambiguation (Phase 2) MUST ship BEFORE the schema migration (Phase 3) tha
 
 **Goal:** Admin can create a new household at an address that already has one (so families can overlap during a move). Heynabo import routes incoming inhabitants to the correct household per Decision 4.
 
-**UX:** `[+ Ny husstand]` header button opens a virtual expanded row at the top of the `AdminHouseholds` table (mirrors `AdminUsers.vue` `v-model:expanded` + `#expanded` pattern). Admin inputs **PBS-nummer**, **Adresse**, **Indflytningsdato**. `shortName` derived from address and shown inline. `heynaboId` copied from sibling at the same address.
+**UX:** `HouseholdCreateForm.vue` — parent-driven form, emits `create` + `cancel`. Admin selects **Adresse** from a dropdown of unique addresses (showing `address · heynaboId` per option — Heynabo owns addresses). Selecting resolves `heynaboId` and shows coexistence info. Admin inputs **PBS-nummer** (number, unique) and **Indflytningsdato** (`CalendarDatePicker`). Validation via Zod with PBS uniqueness refinement.
 
 ```
 ┌─ Husstande på Skråningen ────────────────────────────── [+ Ny husstand] ─┐
@@ -218,14 +218,13 @@ URL disambiguation (Phase 2) MUST ship BEFORE the schema migration (Phase 3) tha
 │                                                                           │
 │ ▾ │ (ny)        │ ___                │ ___           │ ─          │       │
 │ ╔═══════════════════════════════════════════════════════════════════╗    │
-│ ║  PBS-nummer *       [ ______ ]                                     ║    │
-│ ║                       ⚠ PBS 101 bruges af Skr_17   (if duplicate)  ║    │
-│ ║                                                                     ║    │
-│ ║  Adresse *          [ Skråningen 14                          ]    ║    │
+│ ║  Adresse *          [ Skråningen 14 · HN 42                 ▾ ] ║    │
 │ ║                       → Forkortelse: Skr_14                        ║    │
-│ ║                       ⓘ 1 eksisterende husstand på adressen:      ║    │
+│ ║                       ⓘ 1 eksisterende husstand:                  ║    │
 │ ║                          Skr_14 · PBS 115 · ➡ Fraflytter 01/06     ║    │
-│ ║                          heynaboId kopieres fra den (42)           ║    │
+│ ║                                                                     ║    │
+│ ║  PBS-nummer *       [ 116    ]                                     ║    │
+│ ║                       ⚠ PBS 101 bruges af Skr_17   (if duplicate)  ║    │
 │ ║                                                                     ║    │
 │ ║  Indflytningsdato * [ 15/05/2026                       📅 ]       ║    │
 │ ║                                                                     ║    │
@@ -240,11 +239,10 @@ URL disambiguation (Phase 2) MUST ship BEFORE the schema migration (Phase 3) tha
 
 | File | Change |
 |------|--------|
-| `app/components/admin/AdminHouseholds.vue` | `[+ Ny husstand]` button; `v-model:expanded`; virtual create row at top of table |
+| `app/components/admin/HouseholdCreateForm.vue` | New; parent-driven form, emits `create` + `cancel`; USelect for address (`address · HN id`), number input for PBS, CalendarDatePicker for date; Zod validation with PBS uniqueness refinement |
+| `app/components/admin/AdminHouseholds.vue` | `[+ Ny husstand]` button; show `HouseholdCreateForm` inline; handle `create` emit by calling store |
 | `app/stores/households.ts` | `createHousehold()` action |
-| `app/composables/useCoreValidation.ts` | Household create schema (PBS, address, movedInDate) |
 | `server/routes/api/admin/household/index.put.ts` | Accept create at existing address; copy `heynaboId` from sibling |
-| `server/utils/heynaboImportService.ts` | Route new inhabitants per Decision 4 (no-`moveOutDate` first, newest `moveOutDate` as fallback) |
 
 **Verification:**
 

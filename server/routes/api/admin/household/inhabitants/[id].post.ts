@@ -3,7 +3,7 @@ import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {useCoreValidation} from "~/composables/useCoreValidation"
 import type {InhabitantUpdate} from "~/composables/useCoreValidation"
 import {useBookingValidation, type InhabitantUpdateResponse} from "~/composables/useBookingValidation"
-import {updateInhabitant} from "~~/server/data/prismaRepository"
+import {updateInhabitant, fetchInhabitant, fetchHousehold} from "~~/server/data/prismaRepository"
 import {rescaffoldOnFieldChange} from "~~/server/utils/scaffoldPrebookings"
 import {z} from 'zod'
 
@@ -30,21 +30,36 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
         id = params.id
         const query = await getValidatedQuery(event, querySchema.parse)
         seasonId = query.seasonId
-        inhabitantData = await readValidatedBody(event, InhabitantUpdateSchema.partial().omit({householdId: true, id: true}).parse)
+        inhabitantData = await readValidatedBody(event, InhabitantUpdateSchema.partial().omit({id: true}).parse)
     } catch (error) {
         return throwH3Error('👩‍🏠 > INHABITANT > [POST] Input validation error', error)
     }
 
     try {
+        // Validate move: source and target household must share the same heynaboId (same address)
+        if (inhabitantData.householdId) {
+            const sourceInhabitant = await fetchInhabitant(d1Client, id)
+            if (!sourceInhabitant) return throwH3Error('👩‍🏠 > INHABITANT > [POST] Inhabitant not found', {statusCode: 404})
+            const [sourceHousehold, targetHousehold] = await Promise.all([
+                fetchHousehold(d1Client, sourceInhabitant.householdId),
+                fetchHousehold(d1Client, inhabitantData.householdId)
+            ])
+            if (!sourceHousehold || !targetHousehold) return throwH3Error('👩‍🏠 > INHABITANT > [POST] Household not found', {statusCode: 404})
+            if (sourceHousehold.heynaboId !== targetHousehold.heynaboId) {
+                console.warn('👩‍🏠 > INHABITANT > [POST] Rejected move between different addresses')
+                return throwH3Error('👩‍🏠 > INHABITANT > [POST] Cannot move between different addresses', {statusCode: 400, message: 'Kan kun flytte beboere mellem husstande på samme adresse'})
+            }
+        }
+
         console.info(`👩‍🏠 > INHABITANT > [POST] Updating inhabitant with ID ${id}`)
         const updatedInhabitant = await updateInhabitant(d1Client, id, inhabitantData)
         console.info(`👩‍🏠 > INHABITANT > [POST] Successfully updated inhabitant ${updatedInhabitant.name} ${updatedInhabitant.lastName}`)
 
-        // Re-scaffold if dinner preferences OR birthDate changed (affects ticket price category)
+        // Re-scaffold if preferences, birthDate or householdId changed
         const {InhabitantUpdateResponseSchema} = useBookingValidation()
         const scaffoldResult = await rescaffoldOnFieldChange(
             d1Client, '👩‍🏠 > INHABITANT > [POST]', updatedInhabitant.householdId,
-            {preferences: inhabitantData.dinnerPreferences, birthDate: inhabitantData.birthDate},
+            {preferences: inhabitantData.dinnerPreferences, birthDate: inhabitantData.birthDate, householdId: inhabitantData.householdId},
             seasonId
         )
 

@@ -8,7 +8,7 @@ Denne guide dækker alle administrative opgaver i TheSlope. Du skal have **ADMIN
 
 ## Adgangskontrol
 
-Admin-siden er tilgængelig for alle brugere, men **kun administratorer kan redigere**:
+Admin-siden er tilgængelig for alle brugere, men **kun admin kan redigere**:
 
 | Rolle | Kan se | Kan redigere |
 |-------|--------|--------------|
@@ -16,7 +16,7 @@ Admin-siden er tilgængelig for alle brugere, men **kun administratorer kan redi
 | Allergi-ansvarlig | ✅ Alle faner | ✅ Kun Allergier |
 | Almindelig bruger | ✅ Alle faner | ❌ Ingen |
 
-Ikke-administratorer ser en **"Se, men ikke røre"**-besked og kan ikke ændre data:
+Ikke-admin ser en **"Se, men ikke røre"**-besked og kan ikke ændre data:
 
 ![Ikke-admin advarsel](screenshots/admin/admin-readonly-banner.png)
 
@@ -28,7 +28,7 @@ Ikke-administratorer ser en **"Se, men ikke røre"**-besked og kan ikke ændre d
 |------|--------|--------------|
 | **Planlægning** | Opret og administrer sæsoner, ferier, priser | Admin |
 | **Madhold** | Opret hold, tildel medlemmer og madlavningsdage | Admin |
-| **Husstande** | Se alle husstande og beboere | (kun visning) |
+| **Husstande** | Se husstande, flyt beboere ved flere husstande på samme adresse, slet husstande | Admin |
 | **Allergier** | Administrer allergi-katalog | Admin eller Allergi-ansvarlig |
 | **Brugere** | Se brugere, tildel systemroller | Admin |
 | **Økonomi** | Se fakturaer og økonomioversigt | (kun visning) |
@@ -43,7 +43,7 @@ Ikke-administratorer ser en **"Se, men ikke røre"**-besked og kan ikke ændre d
 | Opret ny sæson | [Planlægning → Opret](https://www.skraaningen.dk/admin/planning?mode=create) |
 | Aktivér sæson | [Planlægning](https://www.skraaningen.dk/admin/planning) → Sæsonvælger |
 | Administrer madhold | [Madhold](https://www.skraaningen.dk/admin/teams) |
-| Se husstande | [Husstande](https://www.skraaningen.dk/admin/households) |
+| Redigér husstande / flyt beboere | [Husstande](https://www.skraaningen.dk/admin/households) |
 | Administrer allergityper | [Allergier](https://www.skraaningen.dk/admin/allergies) |
 | Se brugere og roller | [Brugere](https://www.skraaningen.dk/admin/users) |
 | Se økonomioversigt | [Økonomi](https://www.skraaningen.dk/admin/economy) |
@@ -122,7 +122,11 @@ Når du aktiverer en sæson, bliver den synlig for alle brugere, og automatiske 
 
 1. I redigeringstilstand, vælg et hold
 2. Brug søgefeltet til at finde beboere
-3. Klik på en rolle-knap (Chef, Kok, Kokkespire)
+3. Klik **Tilføj** — formularen åbner under rækken
+4. Vælg rolle, arbejdstid og eventuelle ugedage
+5. Klik **Tilføj**
+
+Beboere kan være medlem af flere hold. Klik **Rediger** for at ændre rolle, arbejdstid eller ugedage for et eksisterende medlem.
 
 ---
 
@@ -135,11 +139,45 @@ Når du aktiverer en sæson, bliver den synlig for alle brugere, og automatiske 
 
 ![Admin Husstande](screenshots/admin/admin-households-list.png)
 
+### Sådan redigerer du en husstand
+
+1. Gå til [Husstande](https://www.skraaningen.dk/admin/households)
+2. Klik på blyant-ikonet ud for husstanden
+3. Panelet viser stamdata (PBS, adresse, Heynabo-ID) og residensstatus
+
+### Sådan flytter du en beboer
+
+Beboere kan flyttes mellem husstande på **samme adresse** (samme Heynabo-ID). Dette bruges f.eks. når en ny husstand oprettes ved fraflytning, og en beboer skal tilknyttes den nye husstand.
+
+1. Åbn redigeringspanelet for mål-husstanden
+2. Find beboeren i listen (viser kun beboere på samme adresse)
+3. Klik **Flyt hertil**
+4. Systemet opdaterer tilknytningen og genberegner bookinger
+
+> **Bemærk:** Heynabo-import forsøger at gætte hvilken husstand nye beboere tilhører, men nogen gange skal dette korrigeres af admin. Heynabo-import respekterer admin-flytninger.
+
+### Admin-adgang til husstandssider
+
+Admin kan besøge enhver husstands side og aktivere admin-tilgang:
+
+1. Gå til en husstand via linket i husstandstabellen
+2. Klik **Aktivér admin-adgang** på banneret "Du besøger en anden husstand"
+3. Nu kan du ændre på vegne af beboerne:
+   - **Præferencer** — ændre madpræferencer (genberegner bookinger)
+   - **Fraflytningsdato** — sætte eller fjerne fraflytningsdato (genberegner bookinger)
+   - **Bookinger** — rette tilmeldinger også efter deadline er passeret
+
+### Sådan sletter du en husstand
+
+1. Åbn redigeringspanelet for husstanden
+2. Flyt eventuelle beboere til en anden husstand først
+3. Klik **Slet** nederst (to-klik bekræftelse)
+
 ---
 
 ## Allergityper
 
-Administratorer og allergi-ansvarlige kan administrere allergi-kataloget.
+Admin og allergi-ansvarlige kan redigere allergi-kataloget.
 
 ### Sådan opretter du en allergitype
 
@@ -177,7 +215,7 @@ Brugerfanen viser alle brugere importeret fra Heynabo.
 
 ### Systemroller
 
-Administratorer kan tildele systemroller til brugere:
+Admin kan tildele systemroller til brugere:
 
 | Rolle | Beskrivelse | Tildeles af |
 |-------|-------------|-------------|
@@ -272,7 +310,7 @@ Fakturering kører automatisk den 17. hver måned:
 
 ### Sådan retter du bookinger (Admin-korrektioner)
 
-Som administrator kan du rette bookinger for alle husstande - også efter deadline er passeret.
+Som admin kan du rette bookinger for alle husstande - også efter deadline er passeret.
 
 **Hvornår bruges dette:**
 - Beboer glemte at tilmelde sig
@@ -329,4 +367,4 @@ Alle jobs er idempotente og kan køres igen uden problemer.
 
 ---
 
-*Sidst opdateret: Januar 2026 (tilføjet admin-korrektioner)*
+*Sidst opdateret: April 2026 (tilføjet husstandsredigering, beboerflytning, holdmedlemsformular)*

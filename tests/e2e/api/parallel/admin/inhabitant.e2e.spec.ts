@@ -483,6 +483,129 @@ test.describe('Admin Inhabitant API', () => {
         })
     })
 
+    test.describe('Move Inhabitant (householdId update)', () => {
+        const moveTestHouseholdIds: number[] = []
+        const moveTestSeasonIds: number[] = []
+
+        const {DinnerModeSchema} = useBookingValidation()
+        const DinnerMode = DinnerModeSchema.enum
+        const {createDefaultWeekdayMap} = useWeekDayMapValidation({
+            valueSchema: DinnerModeSchema,
+            defaultValue: DinnerMode.NONE
+        })
+        const ALL_DINEIN = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN])
+        const SHORT_CANCEL_PERIOD = 0
+
+        test.afterAll(async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            await HouseholdFactory.deleteHousehold(context, moveTestHouseholdIds)
+            await SeasonFactory.cleanupSeasons(context, moveTestSeasonIds)
+        })
+
+        test('GIVEN inhabitant in household A WHEN moved to household B THEN householdId updated and scaffoldResult returned', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+
+            const [hA, hB] = await Promise.all([
+                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('MoveA', testSalt)}, 1),
+                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('MoveB', testSalt)}, 0)
+            ])
+            moveTestHouseholdIds.push(hA.household.id, hB.household.id)
+            const inhabitant = hA.inhabitants[0]!
+
+            await HouseholdFactory.updateInhabitant(
+                context, inhabitant.id, {householdId: hB.household.id}, 200, undefined,
+                ({inhabitant: updated, scaffoldResult}) => {
+                    expect(updated.householdId).toBe(hB.household.id)
+                    expect(scaffoldResult).toBeDefined()
+                }
+            )
+
+            const retrieved = await HouseholdFactory.getInhabitantById(context, inhabitant.id)
+            expect(retrieved!.householdId).toBe(hB.household.id)
+        })
+
+        test('GIVEN inhabitant with orders WHEN moved to new household THEN scaffold creates orders on target', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+                ticketIsCancellableDaysBefore: SHORT_CANCEL_PERIOD
+            })
+            moveTestSeasonIds.push(season.id as number)
+
+            const [hA, hB] = await Promise.all([
+                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('ScaffA', testSalt)}, 1),
+                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('ScaffB', testSalt)}, 0)
+            ])
+            moveTestHouseholdIds.push(hA.household.id, hB.household.id)
+            const inhabitant = hA.inhabitants[0]!
+
+            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: ALL_DINEIN}, 200, season.id)
+
+            const ordersBefore = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvents.map(e => e.id))
+            expect(ordersBefore.filter(o => o.inhabitantId === inhabitant.id).length).toBeGreaterThan(0)
+
+            await HouseholdFactory.updateInhabitant(
+                context, inhabitant.id, {householdId: hB.household.id}, 200, season.id,
+                ({scaffoldResult}) => {
+                    expect(scaffoldResult).toBeDefined()
+                }
+            )
+
+            expect(inhabitant.id).toBeDefined()
+        })
+
+        test('GIVEN moved-out household WHEN inhabitant moved there THEN no new orders created', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+
+            const {season} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+                ticketIsCancellableDaysBefore: SHORT_CANCEL_PERIOD
+            })
+            moveTestSeasonIds.push(season.id as number)
+
+            const pastDate = new Date()
+            pastDate.setDate(pastDate.getDate() - 1)
+
+            const [hA, hB] = await Promise.all([
+                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('ActiveH', testSalt)}, 1),
+                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('MovedOutH', testSalt), moveOutDate: pastDate}, 0)
+            ])
+            moveTestHouseholdIds.push(hA.household.id, hB.household.id)
+            const inhabitant = hA.inhabitants[0]!
+
+            await HouseholdFactory.updateInhabitant(
+                context, inhabitant.id, {householdId: hB.household.id}, 200, season.id,
+                ({scaffoldResult}) => {
+                    expect(scaffoldResult.created).toBe(0)
+                }
+            )
+        })
+
+        test('GIVEN inhabitant with preferences WHEN moved THEN preferences preserved', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+
+            const [hA, hB] = await Promise.all([
+                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('KeepA', testSalt)}, 1),
+                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('KeepB', testSalt)}, 0)
+            ])
+            moveTestHouseholdIds.push(hA.household.id, hB.household.id)
+            const inhabitant = hA.inhabitants[0]!
+
+            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: ALL_DINEIN})
+
+            await HouseholdFactory.updateInhabitant(
+                context, inhabitant.id, {householdId: hB.household.id}, 200, undefined,
+                ({inhabitant: updated}) => {
+                    expect(updated.householdId).toBe(hB.household.id)
+                    expect(updated.dinnerPreferences).toEqual(ALL_DINEIN)
+                }
+            )
+        })
+    })
+
     test.describe('Validation and Error Handling', () => {
 
         test('PUT /api/admin/inhabitant should reject invalid inhabitant data', async ({browser}) => {
