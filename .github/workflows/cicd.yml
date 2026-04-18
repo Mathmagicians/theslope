@@ -21,6 +21,8 @@ jobs:
   CICD:
     runs-on: ubuntu-latest
     environment: CLOUDFLARE_THESLOPE
+    permissions:
+      contents: read  # Checkout only; deploy uses CLOUDFLARE_API_TOKEN, not GITHUB_TOKEN
     outputs:
       deployed_env: ${{ steps.target.outputs.env }}
       deployed_url: ${{ steps.deploy.outputs.url }}
@@ -195,6 +197,8 @@ jobs:
     needs: CICD
     if: github.event_name == 'workflow_dispatch' && inputs.rollback_to != ''
     runs-on: ubuntu-latest
+    permissions:
+      contents: read  # Writes step summaries 
     steps:
       - name: Rollback summary
         run: |
@@ -209,6 +213,8 @@ jobs:
     if: needs.CICD.outputs.deployed_url != ''
     runs-on: ubuntu-latest
     environment: ${{ needs.CICD.outputs.deployed_env }}
+    permissions:
+      contents: read  # Checkout + run smoke tests against deployed URL
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v5
