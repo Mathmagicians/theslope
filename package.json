@@ -79,7 +79,7 @@
     "@vue/test-utils": "^2.4.6",
     "baseline-browser-mapping": "^2.9.11",
     "eslint": "^9.39.2",
-    "happy-dom": "^20.0.11",
+    "happy-dom": "^20.9.0",
     "nitro-cloudflare-dev": "^0.2.1",
     "nitropack": "^2.13.1",
     "playwright": "^1.57.0",
