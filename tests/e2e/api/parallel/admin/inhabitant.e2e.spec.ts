@@ -506,10 +506,10 @@ test.describe('Admin Inhabitant API', () => {
             const context = await validatedBrowserContext(browser)
             const testSalt = temporaryAndRandom()
 
-            const [hA, hB] = await Promise.all([
-                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('MoveA', testSalt)}, 1),
-                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('MoveB', testSalt)}, 0)
-            ])
+            const hA = await HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('MoveA', testSalt)}, 1)
+            const hB = await HouseholdFactory.createHouseholdWithInhabitants(
+                context, {heynaboId: hA.household.heynaboId, name: salt('MoveB', testSalt)}, 0
+            )
             moveTestHouseholdIds.push(hA.household.id, hB.household.id)
             const inhabitant = hA.inhabitants[0]!
 
@@ -534,10 +534,10 @@ test.describe('Admin Inhabitant API', () => {
             })
             moveTestSeasonIds.push(season.id as number)
 
-            const [hA, hB] = await Promise.all([
-                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('ScaffA', testSalt)}, 1),
-                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('ScaffB', testSalt)}, 0)
-            ])
+            const hA = await HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('ScaffA', testSalt)}, 1)
+            const hB = await HouseholdFactory.createHouseholdWithInhabitants(
+                context, {heynaboId: hA.household.heynaboId, name: salt('ScaffB', testSalt)}, 0
+            )
             moveTestHouseholdIds.push(hA.household.id, hB.household.id)
             const inhabitant = hA.inhabitants[0]!
 
@@ -568,10 +568,12 @@ test.describe('Admin Inhabitant API', () => {
             const pastDate = new Date()
             pastDate.setDate(pastDate.getDate() - 1)
 
-            const [hA, hB] = await Promise.all([
-                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('ActiveH', testSalt)}, 1),
-                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('MovedOutH', testSalt), moveOutDate: pastDate}, 0)
-            ])
+            const hA = await HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('ActiveH', testSalt)}, 1)
+            const hB = await HouseholdFactory.createHouseholdWithInhabitants(
+                context,
+                {heynaboId: hA.household.heynaboId, name: salt('MovedOutH', testSalt), moveOutDate: pastDate},
+                0
+            )
             moveTestHouseholdIds.push(hA.household.id, hB.household.id)
             const inhabitant = hA.inhabitants[0]!
 
@@ -587,10 +589,10 @@ test.describe('Admin Inhabitant API', () => {
             const context = await validatedBrowserContext(browser)
             const testSalt = temporaryAndRandom()
 
-            const [hA, hB] = await Promise.all([
-                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('KeepA', testSalt)}, 1),
-                HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('KeepB', testSalt)}, 0)
-            ])
+            const hA = await HouseholdFactory.createHouseholdWithInhabitants(context, {name: salt('KeepA', testSalt)}, 1)
+            const hB = await HouseholdFactory.createHouseholdWithInhabitants(
+                context, {heynaboId: hA.household.heynaboId, name: salt('KeepB', testSalt)}, 0
+            )
             moveTestHouseholdIds.push(hA.household.id, hB.household.id)
             const inhabitant = hA.inhabitants[0]!
 

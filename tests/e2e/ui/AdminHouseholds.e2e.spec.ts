@@ -96,15 +96,9 @@ test.describe('AdminHouseholds View', () => {
 
         // WHEN: fill unique PBS + move-in date + submit
         const newPbsId = saltedId(900500, testSalt)
-        const pbsInput = page.getByTestId('create-household-pbs')
-        await expect(pbsInput, 'PBS input should be visible').toBeVisible()
-        await pbsInput.fill(String(newPbsId))
-
-        const moveInInput = page.locator('input[name="movedInDate"]')
-        await expect(moveInInput, 'move-in date input should be visible').toBeVisible()
-        await moveInInput.fill('15/05/2026')
-        await moveInInput.press('Tab')
-
+        await page.getByTestId('create-household-pbs').fill(String(newPbsId))
+        await page.locator('input[name="movedInDate"]').fill('15/05/2026')
+        await page.locator('input[name="movedInDate"]').press('Tab')
         await page.getByTestId('create-household-submit').click()
 
         // THEN: server persists a sibling household (heynaboId + name inherited from seed)
