@@ -1,7 +1,8 @@
 import {z} from 'zod'
 import {useQueryParam} from '~/composables/useQueryParam'
-import {startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval, addDays, isSameDay} from 'date-fns'
+import {startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachWeekOfInterval, addDays} from 'date-fns'
 import type {DateRange} from '~/types/dateTypes'
+import {getPeriodBoundary} from '~/utils/date'
 
 /**
  * Booking view types for household booking page
@@ -42,18 +43,22 @@ export const useDinnerDateParam = (options: {
  * Curried composable: caller provides date/view state (from useQueryParam),
  * this composable provides navigation logic (hasPrev, hasNext, navigate, dateRange).
  *
+ * Navigation algorithm (single path for day/week/month):
+ *   1. Compute a period boundary from (selectedDate, view, direction) via `getPeriodBoundary`.
+ *   2. Feed that boundary into `useSeason().getAdjacentDinner` as a "reference time".
+ *   3. getAdjacentDinner returns the next/previous dinner on the appropriate side of the
+ *      boundary, or `null` when there is none (→ arrow hidden, navigation no-ops).
+ *
+ * Season clamping is NOT needed: dinners outside the active season are not in `dinnerDates`,
+ * so adjacency naturally stops at season edges.
+ *
  * @example
  * ```ts
- * // Page creates its own query params with custom validation
- * const {value: selectedDate, setValue: setDate} = useQueryParam<Date>('date', {
- *   validate: (d) => dinnerDates.value.some(...),
- *   defaultValue: getNextDinner
- * })
- *
- * // Pass to useBookingView for navigation
  * const { hasPrev, hasNext, navigate, dateRange } = useBookingView({
  *   selectedDate,
  *   setDate,
+ *   view,
+ *   setView,
  *   dinnerDates: () => dinnerDates.value
  * })
  * ```
@@ -67,15 +72,12 @@ export const useBookingView = (options: {
     view?: ComputedRef<BookingView>
     /** View setter from useQueryParam (optional) */
     setView?: (view: BookingView) => Promise<void>
-    /** Season bounds for week/month navigation */
-    seasonDates?: () => DateRange | null
-    /** Dinner event dates - used for day view navigation to skip to next/prev cooking day */
+    /** Dinner event dates - used for adjacency lookup. Absent or empty ⇒ no navigation. */
     dinnerDates?: () => Date[]
 }) => {
-    // Default to 'day' view if not provided
     const view = options.view ?? computed(() => 'day' as BookingView)
-    const selectedDate = options.selectedDate
-    const setDate = options.setDate
+    const {selectedDate, setDate} = options
+    const {getAdjacentDinner} = useSeason()
 
     /**
      * Date range for current view
@@ -112,7 +114,6 @@ export const useBookingView = (options: {
         const monthStart = startOfMonth(selectedDate.value)
         const monthEnd = endOfMonth(selectedDate.value)
 
-        // Get all week starts in the month
         const weekStarts = eachWeekOfInterval(
             {start: monthStart, end: monthEnd},
             {weekStartsOn: 1}
@@ -125,107 +126,34 @@ export const useBookingView = (options: {
     })
 
     /**
-     * Check if navigation is possible in a direction
-     * Used by CalendarDateNav to show/hide arrows
+     * Single adjacency lookup used by hasPrev/hasNext and navigate.
+     * Returns the Date of the adjacent dinner (or null when none).
      */
-    const canNavigate = (direction: 1 | -1): boolean => {
-        const date = selectedDate.value
-        const bounds = options?.seasonDates?.()
-        const dinnerDates = options?.dinnerDates?.() ?? []
-
-        switch (view.value) {
-            case 'day': {
-                if (dinnerDates.length === 0) return false
-                const currentIndex = dinnerDates.findIndex(d => isSameDay(d, date))
-                if (direction === 1) {
-                    return currentIndex >= 0
-                        ? currentIndex < dinnerDates.length - 1
-                        : dinnerDates.some(d => d > date)
-                } else {
-                    return currentIndex >= 0
-                        ? currentIndex > 0
-                        : dinnerDates.some(d => d < date)
-                }
-            }
-            case 'week':
-            case 'month': {
-                if (!bounds) return true
-                const newDate = view.value === 'week'
-                    ? addDays(date, direction * 7)
-                    : new Date(date.getFullYear(), date.getMonth() + direction, date.getDate())
-                return direction === 1 ? newDate <= bounds.end : newDate >= bounds.start
-            }
-        }
+    const findAdjacent = (direction: 1 | -1): Date | null => {
+        const dinnerDates = options.dinnerDates?.() ?? []
+        if (dinnerDates.length === 0) return null
+        const boundary = getPeriodBoundary(selectedDate.value, view.value, direction)
+        const events = dinnerDates.map(d => ({date: d}))
+        return getAdjacentDinner(events, boundary, direction)
     }
 
-    const hasPrev = computed(() => canNavigate(-1))
-    const hasNext = computed(() => canNavigate(1))
+    const hasPrev = computed(() => findAdjacent(-1) !== null)
+    const hasNext = computed(() => findAdjacent(1) !== null)
 
     /**
-     * Navigate to adjacent period based on view type
-     * - Day view: navigates to next/previous cooking day (skips non-dinner days)
-     * - Week/Month view: navigates by period
-     * Clamps to season bounds if provided
-     * @param direction - 1 for next, -1 for previous
+     * Navigate to the adjacent dinner in the given direction.
+     * No-op when there is no adjacent dinner (e.g. first/last event of season).
      */
-    const navigate = async (direction: 1 | -1) => {
-        const date = selectedDate.value
-        const bounds = options?.seasonDates?.()
-        const dinnerDates = options?.dinnerDates?.() ?? []
-        let newDate: Date | null = null
-
-        switch (view.value) {
-            case 'day':
-                // Find next/previous dinner date
-                if (dinnerDates.length > 0) {
-                    const sortedDates = [...dinnerDates].sort((a, b) => a.getTime() - b.getTime())
-                    const currentIndex = sortedDates.findIndex(d => isSameDay(d, date))
-
-                    if (direction === 1) {
-                        // Next: find first date after current
-                        const nextDate = currentIndex >= 0
-                            ? sortedDates[currentIndex + 1]
-                            : sortedDates.find(d => d > date)
-                        newDate = nextDate ?? null
-                    } else {
-                        // Previous: find last date before current
-                        const prevDate = currentIndex >= 0
-                            ? sortedDates[currentIndex - 1]
-                            : sortedDates.filter(d => d < date).pop()
-                        newDate = prevDate ?? null
-                    }
-                }
-                // If no dinner dates or no adjacent found, don't navigate
-                if (!newDate) return
-                break
-            case 'week':
-                newDate = addDays(date, direction * 7)
-                break
-            case 'month':
-                newDate = new Date(date)
-                newDate.setMonth(newDate.getMonth() + direction)
-                break
-        }
-
-        // Clamp to season bounds
-        if (bounds && newDate) {
-            if (newDate < bounds.start) newDate = bounds.start
-            if (newDate > bounds.end) newDate = bounds.end
-        }
-
-        if (newDate) {
-            await setDate(newDate)
-        }
+    const navigate = async (direction: 1 | -1): Promise<void> => {
+        const target = findAdjacent(direction)
+        if (target) await setDate(target)
     }
 
     return {
-        // View state (passthrough for convenience)
         view,
         selectedDate,
-        // Computed ranges
         dateRange,
         weeks,
-        // Navigation
         hasPrev,
         hasNext,
         navigate

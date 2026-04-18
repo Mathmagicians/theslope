@@ -131,8 +131,9 @@ export const useBilling = () => {
             const household = getHousehold(item)
             return {id: household.id, pbsId: household.pbsId, address: household.address, computedTotal: 0}
         },
-        onAccumulate: (entry, amount) => { entry.computedTotal += amount },
-        sortBy: (a, b) => a.pbsId - b.pbsId
+        onAccumulate: (entry, amount) => { entry.computedTotal += amount }
+        // No sortBy: input transactions are pre-sorted by household address at the DB layer
+        // (fetchUnbilledTransactions orderBy). Map grouping preserves insertion order.
     })
 
     /**

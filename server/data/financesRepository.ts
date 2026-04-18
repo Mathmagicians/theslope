@@ -1604,6 +1604,7 @@ export async function fetchUnbilledTransactions(
 
     console.info(`💰 > BILLING > Fetching unbilled transactions for dinners <= ${cutoffDate.toISOString().split('T')[0]}`)
 
+    // Ordered by household address, then pbsId as tiebreaker.
     const transactions = await prisma.transaction.findMany({
         where: {
             invoiceId: null,
@@ -1613,6 +1614,10 @@ export async function fetchUnbilledTransactions(
                 }
             }
         },
+        orderBy: [
+            {order: {inhabitant: {household: {address: 'asc'}}}},
+            {order: {inhabitant: {household: {pbsId: 'asc'}}}}
+        ],
         include: {
             order: {
                 include: {

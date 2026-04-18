@@ -34,21 +34,13 @@
  * - Uses UserListItem for consistent inhabitant display
  */
 import type { WeekDayMap, DateRange } from '~/types/dateTypes'
-import type { TeamRole } from '~/composables/useCookingTeamValidation'
-import type { InhabitantDisplay } from '~/composables/useCoreValidation'
+import type { TeamRole, CookingTeamAssignment } from '~/composables/useCookingTeamValidation'
 import { ROLE_LABELS, ROLE_ICONS } from '~/composables/useCookingTeamValidation'
 
 // Design system
 const { COLOR, COMPONENTS, SIZES, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 type DisplayMode = 'monitor' | 'regular' | 'edit'
-
-// TeamMember requires inhabitant - only assignments with valid inhabitants are displayed
-interface TeamMember {
-  id?: number  // Optional - new assignments don't have id yet
-  role: TeamRole
-  inhabitant: InhabitantDisplay  // Required for display
-}
 
 interface Props {
   teamId: number           // Database ID - component fetches detail from store
@@ -77,7 +69,8 @@ const emit = defineEmits<{
   'update:teamName': [name: string]
   'update:affinity': [affinity: WeekDayMap | null]
   delete: [teamId: number | undefined]
-  'add:member': [inhabitantId: number, role: TeamRole]
+  'add:member': [inhabitantId: number, role: TeamRole, allocationPercentage: number, affinity: WeekDayMap | null]
+  'update:member': [assignmentId: number, inhabitantId: number, role: TeamRole, allocationPercentage: number, affinity: WeekDayMap | null]
   'remove:member': [assignmentId: number]
 }>()
 
@@ -132,9 +125,9 @@ const resolvedColor = computed(() => {
 
 const roleGroups = computed(() => {
   const groups = {
-    CHEF: [] as TeamMember[],
-    COOK: [] as TeamMember[],
-    JUNIORHELPER: [] as TeamMember[]
+    CHEF: [] as CookingTeamAssignment[],
+    COOK: [] as CookingTeamAssignment[],
+    JUNIORHELPER: [] as CookingTeamAssignment[]
   }
 
   assignments.value.forEach(assignment => {
@@ -167,6 +160,58 @@ const hasNoMembers = computed(() => assignments.value.length === 0)
 
 // Random fun empty state message from design system
 const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
+
+// ========== INHABITANT SELECTOR (EDIT mode) ==========
+
+const {mergeInhabitantsWithAssignments, getTeamColor: getTeamColorByIndex} = useCookingTeam()
+const householdsStore = useHouseholdsStore()
+
+const inhabitantsWithAssignments = computed(() =>
+    mergeInhabitantsWithAssignments(
+        householdsStore.households.flatMap(h => h.inhabitants ?? []),
+        planStore.selectedSeason?.CookingTeams ?? []
+    )
+)
+
+const findInhabitant = (id: number) => inhabitantsWithAssignments.value.find(i => i.id === id)
+
+const getAssignmentsFor = (id: number) => findInhabitant(id)?.CookingTeamAssignment ?? []
+
+const isInThisTeam = (id: number) =>
+    getAssignmentsFor(id).some(a => a.cookingTeamId === props.teamId)
+
+const getCurrentAssignment = (id: number) =>
+    getAssignmentsFor(id).find(a => a.cookingTeamId === props.teamId)
+
+const getTeamName = (cookingTeamId: number) =>
+    getTeamShortName(props.teams?.find(t => t.id === cookingTeamId)?.name ?? '')
+
+const getTeamColorForId = (cookingTeamId: number) => {
+  const idx = props.teams?.findIndex(t => t.id === cookingTeamId) ?? -1
+  return idx >= 0 ? getTeamColorByIndex(idx) : 'neutral' as TeamColor
+}
+
+const sortByStatusThenName = (rowA: {original: InhabitantDisplay}, rowB: {original: InhabitantDisplay}): number => {
+  const countA = getAssignmentsFor(rowA.original.id).length
+  const countB = getAssignmentsFor(rowB.original.id).length
+  if (countA === 0 && countB > 0) return -1
+  if (countA > 0 && countB === 0) return 1
+  if (isInThisTeam(rowA.original.id) && !isInThisTeam(rowB.original.id)) return -1
+  if (!isInThisTeam(rowA.original.id) && isInThisTeam(rowB.original.id)) return 1
+  return `${rowA.original.name} ${rowA.original.lastName}`
+      .localeCompare(`${rowB.original.name} ${rowB.original.lastName}`)
+}
+
+
+
+const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercentage: number, affinity: WeekDayMap | null) => {
+  const existing = getCurrentAssignment(inhabitantId)
+  if (existing?.id) {
+    emit('update:member', existing.id, inhabitantId, role, allocationPercentage, affinity)
+  } else {
+    emit('add:member', inhabitantId, role, allocationPercentage, affinity)
+  }
+}
 </script>
 
 <template>
@@ -368,7 +413,7 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
               </h5>
 
               <div v-if="members.length > 0" class="flex flex-col gap-2 p-3 bg-gray-50 dark:bg-gray-800">
-                <div v-for="member in members" :key="member.id" class="flex items-center gap-2">
+                <div v-for="member in members" :key="member.id" class="flex items-center gap-2 flex-wrap">
                   <UAvatar
                     :src="member.inhabitant?.pictureUrl ?? undefined"
                     :alt="`${member.inhabitant?.name} ${member.inhabitant?.lastName}`"
@@ -381,11 +426,15 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
                     size="md"
                     variant="subtle"
                     :color="teamColor"
-                    class="cursor-pointer hover:opacity-80 transition-opacity flex-1"
+                    class="cursor-pointer hover:opacity-80 transition-opacity"
                     @click="member.inhabitant && navigateToInhabitant(member.inhabitant.id)"
                   >
                     {{ member.inhabitant?.name }} {{ member.inhabitant?.lastName }}
                   </UBadge>
+                  <UBadge :color="teamColor" variant="outline" :size="SIZES.small" class="w-fit">
+                    {{ member.allocationPercentage }}%
+                  </UBadge>
+                  <WeekDayMapDisplay v-if="member.affinity" :model-value="member.affinity" compact disabled :color="teamColor" />
                   <UButton
                     v-if="isEditable && member.id"
                     color="winery"
@@ -409,13 +458,58 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
           <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Tilføj medlemmer</h4>
           <InhabitantSelector
             v-if="teamId && seasonId"
-            :team-id="teamId"
-            :team-name="teamName"
-            :team-color="teamColor"
-            :teams="teams"
-            @add:member="(inhabitantId, role) => emit('add:member', inhabitantId, role)"
-            @remove:member="(assignmentId) => emit('remove:member', assignmentId)"
-          />
+            :inhabitants="inhabitantsWithAssignments"
+            :sort-fn="sortByStatusThenName"
+            status-header="Status"
+            actions-header="Tilføj til hold"
+            search-placeholder="Søg efter navn..."
+            empty-text="Ingen beboere tilgængelige"
+          >
+            <!-- Status: one badge per team assignment, or LEDIG -->
+            <template #status="{ row }">
+              <div v-if="getAssignmentsFor(row.original.id).length === 0">
+                <UBadge color="success" variant="outline" :size="SIZES.small">LEDIG</UBadge>
+              </div>
+              <div v-else class="flex flex-col gap-1">
+                <div v-for="(a, idx) in getAssignmentsFor(row.original.id)" :key="idx" class="flex flex-col gap-0.5">
+                  <UBadge :color="getTeamColorForId(a.cookingTeamId)" variant="solid" :size="SIZES.small" class="w-fit">
+                    {{ getTeamName(a.cookingTeamId) }} · {{ a.allocationPercentage }}%
+                  </UBadge>
+                  <WeekDayMapDisplay v-if="a.affinity" :model-value="a.affinity" compact disabled :color="getTeamColorForId(a.cookingTeamId)" />
+                </div>
+              </div>
+            </template>
+
+            <!-- Actions: Tilføj or Rediger, both expand the form -->
+            <template #actions="{ row }">
+              <UButton
+                color="primary"
+                variant="soft"
+                :size="SIZES.small"
+                @click="row.toggleExpanded()"
+              >
+                <template #leading>
+                  <UIcon :name="row.getIsExpanded() ? ICONS.chevronDown : isInThisTeam(row.original.id) ? ICONS.edit : ICONS.plusCircle" />
+                </template>
+                {{ row.getIsExpanded() ? 'Luk' : isInThisTeam(row.original.id) ? 'Rediger' : 'Tilføj' }}
+              </UButton>
+            </template>
+
+            <!-- Expanded row: add/edit member form, pre-filled for existing members -->
+            <template #expanded="{ row }">
+              <div class="p-4 bg-neutral-50 dark:bg-neutral-900">
+                <TeamMemberAddForm
+                  :team-affinity="affinity"
+                  :team-color="teamColor"
+                  :initial-role="getCurrentAssignment(row.original.id)?.role"
+                  :initial-percentage="getCurrentAssignment(row.original.id)?.allocationPercentage"
+                  :initial-affinity="getCurrentAssignment(row.original.id)?.affinity"
+                  @submit="(role, pct, aff) => { handleFormSubmit(row.original.id, role, pct, aff); row.toggleExpanded() }"
+                  @cancel="row.toggleExpanded()"
+                />
+              </div>
+            </template>
+          </InhabitantSelector>
           <div v-else class="p-6 border-2 border-dashed text-center text-gray-500">
             <UIcon name="i-heroicons-users" class="text-4xl mb-2" />
             <p class="text-sm">Hold skal gemmes før medlemmer kan tilføjes</p>
@@ -432,6 +526,7 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
             :parent-restriction="seasonCookingDays"
             :disabled="!isEditable"
             :compact="!isEditable"
+            hide-restricted
             :label="isEditable ? 'Holdets madlavningsdage' : 'Madlavningsdage'"
             :color="teamColor"
             @update:model-value="(value) => emit('update:affinity', value)"

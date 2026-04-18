@@ -1,7 +1,7 @@
 # ADR Compliance - Frontend Routes & Components
 
 **Generated:** 2025-11-11
-**Last Updated:** 2026-03-05 (Move-out date feature: HouseholdSettings, CalendarDatePicker, DangerButton, useHousehold residency, ADR-006 ?pbs=X disambiguation)
+**Last Updated:** 2026-04-18 (Booking arrow-navigation fix: `getPeriodBoundary` (`utils/date`), `getAdjacentDinner` (`utils/season`, `useSeason`) replace per-view switches in `useBookingView`; dead `HouseholdCalendarDisplay.vue` removed; new `HouseholdBookings.e2e.spec.ts`)
 
 ## Legend
 
@@ -59,15 +59,17 @@
 
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
-| `AdminTeams.vue` | `/admin/teams` | `usePlanStore()` | `useEntityFormManager()`, `useCookingTeam()` | ✅ | ✅ | ❌ | ✅ Full | **⚠️ MISSING UNIT** |
-| `CookingTeamCard.vue` | `/admin/teams` | Parent props | `useCookingTeam()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
-| `InhabitantSelector.vue` | `/admin/teams` | `useHouseholdsStore()` | `useInhabitantValidation()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
+| `AdminTeams.vue` | `/admin/teams` | `usePlanStore()`, `useHouseholdsStore()` | `useEntityFormManager()`, `useCookingTeam()`, `useQueryParam()` | ✅ | ✅ | ❌ | ✅ Full | **⚠️ MISSING UNIT** — `?team=` query param bleeds to other tabs (parked) |
+| `CookingTeamCard.vue` | `/admin/teams` | `usePlanStore()`, `useHouseholdsStore()` | `useCookingTeam()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** — Uses shared InhabitantSelector + TeamMemberAddForm |
+| `TeamMemberAddForm.vue` | `/admin/teams` (via CookingTeamCard) | None | `useCookingTeamValidation()` | ✅ | ✅ | ✅ 13 tests | ✅ Indirect | **✅ COMPLIANT** |
+| `InhabitantSelector.vue` | `/admin/teams`, future `/admin/households` | None | - | ✅ | ✅ | ✅ 22 tests | ✅ Indirect | **✅ COMPLIANT** — Moved to `shared/`; generic slots |
 
 ### Admin Household Components
 
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
-| `AdminHouseholds.vue` | `/admin/households` | `useHouseholdsStore()` | `useHouseholdValidation()` | ✅ | ✅ | ⚠️ Store tested | ✅ Full | **⚠️ COMPONENT TESTS** |
+| `AdminHouseholds.vue` | `/admin/households` | `useHouseholdsStore()` | - | ✅ | ✅ | ⚠️ Store tested | ✅ Full | **⚠️ COMPONENT TESTS** — Row expansion with HouseholdEditPanel, move/delete via store |
+| `HouseholdEditPanel.vue` | `/admin/households` (via expand) | None (prop-driven) | - | ✅ | ✅ | ✅ 11 tests | ✅ Indirect | **✅ COMPLIANT** |
 | `HouseholdCard.vue` | `/admin/households`, `/household/[shortname]` | Parent props | `useHouseholdValidation()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
 | `InhabitantCard.vue` | `/admin/households`, `/household/[shortname]` | Parent props | `useInhabitantValidation()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
 | `HouseholdListItem.vue` | `/admin/households` | Parent props | - | ✅ | ✅ | ❌ | N/A | **N/A DISPLAY** |
@@ -99,22 +101,22 @@
 
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
+| `CalendarDatePicker.vue` | `/household/[shortname]/settings` | None | `useDateRangeValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** - Single date picker with UCalendar + validation |
 | `CalendarDateRangePicker.vue` | `/admin/planning` | None | `useDateRange()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** |
 | `CalendarDateRangeListPicker.vue` | `/admin/planning` | None | `useDateRange()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** |
-| `WeekDayMapDisplay.vue` | `/admin/planning`, `/admin/teams` | None | `useWeekday()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
+| `WeekDayMapDisplay.vue` | `/admin/planning`, `/admin/teams` | None | `useWeekday()` | ✅ | ✅ | ✅ 9 tests | ✅ Indirect | **✅ COMPLIANT** — Added `hideRestricted` prop; compact view only renders active days |
 | `WeekDayMapDinnerModeDisplay.vue` | `/household/[shortname]/settings` | None | `useWeekday()`, `useDinnerMode()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 | `BaseCalendar.vue` | All calendar displays | None | - | N/A | N/A | ❌ | N/A | **N/A DISPLAY** |
-| `CalendarDisplay.vue` | `/dinner` | `useEventStore()` | - | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
+| `CalendarDisplay.vue` | `/admin/planning` (via `AdminSeason`, `AdminPlanningSeason`) | None | `useSeason()`, `useCalendarEvents()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** - potential-cooking/generated-events preview |
 | `ChefCalendarDisplay.vue` | `/chef` | Parent props | `useTemporalCalendar()` | ✅ | ✅ | ❌ | ✅ | **⚠️ E2E ONLY** - Uses MaybeRefOrGetter for reactivity |
 | `DinnerCalendarDisplay.vue` | `/dinner`, `/household/[shortname]/bookings` | Parent props | `useTemporalCalendar()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ E2E ONLY** - DRY with ChefCalendarDisplay |
 | `TeamCalendarDisplay.vue` | `/admin/teams`, `/chef` | Parent props | - | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
-| `HouseholdCalendarDisplay.vue` | `/household/[shortname]/bookings` | Parent props | - | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 
 ### Household Booking Components
 
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
-| `HouseholdBookings.vue` | `/household/[shortname]/bookings` | `usePlanStore()`, `useHouseholdsStore()`, `useBookingsStore()` | `useBookingView()`, `useBooking()` | ✅ | ✅ | ❌ | ✅ | **⚠️ MISSING UNIT** |
+| `HouseholdBookings.vue` | `/household/[shortname]/bookings` | `usePlanStore()`, `useHouseholdsStore()`, `useBookingsStore()` | `useBookingView()`, `useBooking()` | ✅ | ✅ | ❌ | ✅ Full | **⚠️ MISSING UNIT** - E2E arrow-nav (`HouseholdBookings.e2e.spec.ts`) + day-view + cross-household covered |
 | `BookingGridView.vue` | `/household/[shortname]/bookings` | Parent props | `useBooking()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - ADR-016 week/month grid |
 | `BookingViewSwitcher.vue` | `/household/[shortname]/bookings` | Parent props | `useBookingView()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - Day/week/month toggle |
 | `ActionPreview.vue` | `/household/[shortname]/bookings`, `/admin/economy` | Parent props | `useBooking()` | ✅ | ✅ | ✅ | ✅ Indirect | **✅ COMPLIANT** - Shows booking changes before save |
@@ -139,7 +141,7 @@
 | Store | ADR-007 useFetch | ADR-007 Status Computeds | ADR-007 isReady | ADR-007 watch:false | Component Tests | Status |
 |-------|------------------|--------------------------|-----------------|---------------------|-----------------|--------|
 | `plan.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** |
-| `households.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** - Added `updateInhabitantPreferences()`, `updateAllInhabitantPreferences()` actions |
+| `households.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** - `setMoveOutDate()`, `lastMoveOutResult`, `moveInhabitant()`, `deleteHousehold()`, `lastMoveResult`, `updateInhabitantPreferences()`, `updateAllInhabitantPreferences()`, `initHouseholdsStore(shortName?, pbsId?)` disambiguation |
 | `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** |
 | `users.ts` | ✅ | ✅ | ✅ | ✅ | ❌ | **⚠️ MISSING TESTS** |
 | `auth.ts` | N/A | ✅ | N/A | N/A | ❌ | **✅ COMPLIANT** - Uses `usePermissions()` for role checks, added `isMemberOfHousehold()` |
@@ -151,24 +153,38 @@
 
 | Composable | ADR-001 Zod Schemas | ADR-001 Enum Re-export | ADR-010 Domain Types | Unit Tests | Status |
 |------------|---------------------|------------------------|----------------------|------------|--------|
+| **Validation Composables** |
+| `useCoreValidation()` | ✅ | ✅ `SystemRoleSchema`, `DinnerModeSchema` | ✅ User, Inhabitant, Household (Display + Detail) | ✅ Full | **✅ COMPLIANT** - Merged useUserValidation + useHouseholdValidation via fragment pattern (ADR-001) |
+| `useBookingValidation()` | ✅ | ✅ `OrderStateSchema`, `DinnerModeSchema` | ✅ Order, DinnerEvent, DesiredOrder, ScaffoldResult, HouseholdUpdateResponse | ✅ Full | **✅ COMPLIANT** - ADR-016 schemas, operation result types (ADR-009) |
 | `useSeasonValidation()` | ✅ | ✅ | ✅ SerializedSeason | ✅ Full | **✅ COMPLIANT** |
-| `useSeason()` | ✅ | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
-| `useCookingTeam()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
-| `useHouseholdValidation()` | ✅ | ✅ | ✅ Domain types (includes Inhabitant schemas) | ✅ Full | **✅ COMPLIANT** |
 | `useCookingTeamValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
 | `useAllergyValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
-| `useUserValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
-| `useOrderValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
-| `useDinnerEventValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
 | `useTicketPriceValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
+| `useDateRangeValidation()` | ✅ | N/A | ✅ DateRange schemas (required + nullable end) | ✅ Full | **✅ COMPLIANT** - Factory pattern for date range schemas with composable refinements |
+| `useWeekDayMapValidation()` | ✅ | N/A | ✅ Generic WeekDayMap<T> | ✅ Full | **✅ COMPLIANT** - Generic weekday map validation factory |
+| `useBillingValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Billing, transaction, invoice schemas |
+| `useHeynaboValidation()` | ✅ | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Heynabo import response schemas |
+| `useMaintenanceValidation()` | ✅ | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Season import response schemas |
+| **Business Logic Composables** |
 | `useBooking()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - ADR-016 `decideOrderAction`, bucket resolvers, `formatActionPreview()`, `resolveUserBookingBuckets()` |
-| `useBookingView()` | ✅ `BookingViewSchema` | N/A | ✅ DateRange | ❌ | **⚠️ MISSING TESTS** - ADR-006 URL-synced view/date for booking calendar |
+| `useHousehold()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - `isHouseholdActiveOnDay()` residency predicate (ADR-016), `getResidencyStatus()`, consensus, name formatting |
+| `useSeason()` | ✅ | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Exposes pre-configured `splitDinnerEvents`, `getNextDinnerDate`, `getAdjacentDinner` (the last powers `useBookingView` arrow nav) |
+| `useCookingTeam()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
+| `useBilling()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Billing business logic |
+| `useHeynabo()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Heynabo import merge logic, `mergeHouseholdForUpdate()`, `classifyInhabitantForImport()` (sibling-aware admin move support) |
+| `useOrder()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Order business logic |
+| `useTicket()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Ticket display logic |
+| `useUserRoles()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Role reconciliation logic |
+| **UI/Navigation Composables** |
+| `useBookingView()` | ✅ `BookingViewSchema` | N/A | ✅ DateRange | ✅ Full | **✅ COMPLIANT** - ADR-006 URL-synced view/date for booking calendar. Single `findAdjacent(direction)` helper (boundary from `getPeriodBoundary` → `getAdjacentDinner`) replaces per-view switches; `seasonDates` option dropped (implicit via `dinnerDates`) |
 | `useEntityFormManager()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
 | `useTabNavigation()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
 | `useSeasonSelector()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
+| `useQueryParam()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** - Generic query param composable for URL state |
 | `useApiHandler()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
 | `usePermissions()` | N/A | ✅ `SystemRoleSchema` | N/A | ✅ Full | **✅ COMPLIANT** - Permission predicates for auth (imports from generated layer, re-exports enum) |
 | `useTemporalCalendar()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Uses `MaybeRefOrGetter` + `toValue()` for reactive inputs, shared by ChefCalendarDisplay and DinnerCalendarDisplay (DRY) |
+| `useTheSlopeDesignSystem()` | N/A | N/A | N/A | N/A | **N/A UTILITY** - Design system constants (icons, sizes, typography, buttons) |
 
 ## ADR Compliance Summary
 
@@ -204,6 +220,8 @@ All admin and household pages use:
 - ✅ Path-based routing for tabs (`/admin/[tab].vue`)
 - ✅ Query parameters for form mode (`?mode=edit|create|view`)
 - ✅ Dynamic tab loading with async components
+- ✅ Household URLs use `?pbs=X` for disambiguation (`getHouseholdUrl()` utility in `app/utils/household.ts`)
+- ✅ `?pbs` preserved on tab switches (via `useTabNavigation` query passthrough) and index redirects
 
 **Issues:**
 - None identified
@@ -261,13 +279,13 @@ All components and stores work with domain types:
 - ✅ Household bookings (`DinnerBookingForm.e2e.spec.ts` - serial, `HouseholdBookingsCrossHousehold.e2e.spec.ts`)
 - ✅ Public billing (`PublicBilling.e2e.spec.ts`)
 - ✅ Chef page (`Chef.e2e.spec.ts` - team tab switching, calendar reactivity)
+- ✅ Household settings (`household.e2e.spec.ts` - move-out date management, tab navigation)
 
 **Missing E2E:**
 - ❌ Admin users
 - ❌ Admin allergies (has admin.e2e.spec.ts but needs specific tests)
 - ❌ Admin settings
 - ❌ Household allergies
-- ❌ Household settings
 - ❌ Household economy
 - ❌ Login flow
 - ❌ Dinner calendar
@@ -276,7 +294,7 @@ All components and stores work with domain types:
 ### Component Test Coverage (Vitest + Nuxt)
 
 **Full Coverage:**
-- ✅ Calendar components (`CalendarDateRangePicker`, `CalendarDateRangeListPicker`)
+- ✅ Calendar components (`CalendarDatePicker`, `CalendarDateRangePicker`, `CalendarDateRangeListPicker`)
 - ✅ Form components (`FormModeSelector`, `SeasonSelector`)
 - ✅ Composables (`useEntityFormManager`, `useTabNavigation`, `useSeasonSelector`, `useApiHandler`, `useSeason`, `useCookingTeam`, `useTemporalCalendar`)
 - ✅ Stores (`plan`, `households`, `allergies`)

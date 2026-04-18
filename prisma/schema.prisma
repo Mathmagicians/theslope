@@ -157,7 +157,7 @@ model Inhabitant {
 
 model Household {
   id          Int          @id @default(autoincrement())
-  heynaboId   Int          @unique
+  heynaboId   Int // Not unique: multiple households can share a heynaboId (address)
   pbsId       Int          @unique
   movedInDate DateTime
   moveOutDate DateTime?
@@ -165,6 +165,8 @@ model Household {
   address     String
   inhabitants Inhabitant[]
   Invoice     Invoice[]
+
+  @@index([heynaboId])
 }
 
 model DinnerEvent {

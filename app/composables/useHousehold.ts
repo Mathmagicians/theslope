@@ -1,7 +1,8 @@
 import {z} from 'zod'
 import {isBefore, isAfter} from 'date-fns'
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
-import type {InhabitantDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
+import {groupBy} from '~/utils/batchUtils'
+import type {InhabitantDetail, InhabitantDisplay, HouseholdDisplay} from '~/composables/useCoreValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
@@ -42,6 +43,70 @@ export const getResidencyStatus = (
     if (moveOutDate && isBefore(moveOutDate, referenceDate)) return 'moved-out'
     if (moveOutDate) return 'leaving'
     return 'active'
+}
+
+/**
+ * Resolve which household a Heynabo entity should be routed to, given N candidates
+ * sharing the same heynaboId. Pure function, deterministic, always resolves.
+ *
+ * Returns the resolved household id, or null if no candidates (caller should create).
+ *
+ * Decision 4 rules (feature-proposal-move-out-date.md):
+ * 1. 0 candidates → null (create new)
+ * 2. 1 candidate → that one
+ * 3. N candidates, exactly 1 without moveOutDate → that one (active household)
+ * 4. N candidates, all with moveOutDate → newest moveOutDate, tie-break lowest id
+ * 5. N candidates, 2+ without moveOutDate → lowest id (deterministic)
+ */
+export const resolveHouseholdForHeynaboId = <T extends Pick<HouseholdDisplay, 'id' | 'moveOutDate'>>(
+    _heynaboId: number,
+    candidates: T[]
+): T | null => {
+    if (candidates.length === 0) return null
+    if (candidates.length === 1) return candidates[0]!
+
+    const active = candidates.filter(c => !c.moveOutDate)
+
+    if (active.length === 1) return active[0]!
+
+    if (active.length === 0) {
+        // All have moveOutDate — newest date wins, lowest id breaks ties
+        const sorted = [...candidates].sort((a, b) => {
+            const cmp = isAfter(a.moveOutDate!, b.moveOutDate!) ? -1 : isBefore(a.moveOutDate!, b.moveOutDate!) ? 1 : 0
+            return cmp !== 0 ? cmp : a.id - b.id
+        })
+        return sorted[0]!
+    }
+
+    // 2+ active — lowest id
+    const sorted = [...active].sort((a, b) => a.id - b.id)
+    return sorted[0]!
+}
+
+/**
+ * Build lookup maps for Heynabo import reconciliation.
+ * Groups by heynaboId, picks winner per address, and builds sibling inhabitant lookup.
+ *
+ * @returns resolved: winner household per address, siblingInhabitants: all inhabitants per address for admin-move detection
+ */
+export const buildResolvedHouseholdMap = (households: HouseholdDisplay[]) => {
+    const grouped = groupBy<HouseholdDisplay, number>(h => h.heynaboId)(households)
+    const resolved = new Map<number, HouseholdDisplay>()
+    const siblingInhabitants = new Map<number, Map<number, { householdHeynaboId: number }>>()
+
+    for (const [heynaboId, candidates] of grouped) {
+        resolved.set(heynaboId, resolveHouseholdForHeynaboId(heynaboId, candidates)!)
+
+        const lookup = new Map<number, { householdHeynaboId: number }>()
+        for (const h of candidates) {
+            for (const i of h.inhabitants ?? []) {
+                lookup.set(i.heynaboId, {householdHeynaboId: h.heynaboId})
+            }
+        }
+        siblingInhabitants.set(heynaboId, lookup)
+    }
+
+    return {resolved, siblingInhabitants}
 }
 
 /**

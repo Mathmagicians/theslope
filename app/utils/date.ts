@@ -1,7 +1,8 @@
 import {
     addDays, setISOWeek, startOfISOWeekYear, isSameDay, isSameWeek, eachDayOfInterval, getISODay,
     isValid, parse, format, isWithinInterval, areIntervalsOverlapping, eachWeekOfInterval, getISOWeek, parseISO,
-    formatDistanceToNow, formatDistanceToNowStrict, differenceInHours, differenceInDays, intervalToDuration
+    formatDistanceToNow, formatDistanceToNowStrict, differenceInHours, differenceInDays, intervalToDuration,
+    startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth
 } from "date-fns"
 import {da} from "date-fns/locale"
 import type {DateRange, WeekDay, WeekDayMap} from "~/types/dateTypes"
@@ -366,4 +367,34 @@ export function createDateInTimezone(
     const calendarDate = toCalendarDate(date)!
     const calendarDateTime = toCalendarDateTime(calendarDate, new Time(hour, minute, 0, 0))
     return toZoned(calendarDateTime, timezone).toDate()
+}
+
+/**
+ * Period view for calendar navigation
+ */
+export type PeriodView = 'day' | 'week' | 'month'
+
+/**
+ * Return the boundary timestamp for a view/direction pair.
+ *
+ * Used by calendar navigation to find the "adjacent" dinner: feed this into
+ * `splitDinnerEvents(events, undefined, boundary)` and pick from the resulting
+ * past/future buckets.
+ *
+ * Forward boundary is `endOf*` so that today/this-week/this-month's dinners fall
+ * into `pastDinners` instead of being returned as `nextDinner` (which would
+ * block navigation forward).
+ *
+ * Week uses Monday-start (`DATE_SETTINGS.weekStartsOn = 1`).
+ */
+export const getPeriodBoundary = (date: Date, view: PeriodView, direction: 1 | -1): Date => {
+    const weekOpts = {weekStartsOn: DATE_SETTINGS.weekStartsOn}
+    switch (view) {
+        case 'day':
+            return direction === 1 ? endOfDay(date) : startOfDay(date)
+        case 'week':
+            return direction === 1 ? endOfWeek(date, weekOpts) : startOfWeek(date, weekOpts)
+        case 'month':
+            return direction === 1 ? endOfMonth(date) : startOfMonth(date)
+    }
 }

@@ -1,4 +1,5 @@
-import {useCookingTeamValidation, type CookingTeamDisplay} from './useCookingTeamValidation'
+import {useCookingTeamValidation, type CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
+import type {InhabitantDisplay} from '~/composables/useCoreValidation'
 import {chunkArray} from '~/utils/batchUtils'
 
 const TEAM_COLORS = ['party', 'peach', 'secondary', 'neutral', 'info', 'warning', 'error', 'ocean', 'winery', 'primary', 'caramel'] as const
@@ -55,65 +56,21 @@ export const useCookingTeam = () => {
     }
 
     /**
-     * Fetch inhabitants with their cooking team assignments
+     * Merge inhabitants with their cooking team assignments (client-side join).
+     * Pure function — caller provides both inputs.
      *
-     * ADR-009 compliant: Fetches lightweight inhabitants from index endpoint,
-     * then merges with assignments from the selected season (already in store).
-     *
-     * @returns Inhabitants with merged assignment data, loading state, and refresh function
+     * @param inhabitants - All community inhabitants
+     * @param cookingTeams - Season's cooking teams with nested assignments
      */
-    const useInhabitantsWithAssignments = async () => {
-        const store = usePlanStore()
-        const {selectedSeason} = storeToRefs(store)
-
-        // Fetch lightweight inhabitants (ADR-009: index endpoint is lightweight)
-        const {data: lightweightInhabitants, pending, error, refresh} = await useFetch<Array<{
-            id: number
-            name: string
-            lastName: string
-            pictureUrl: string | null
-        }>>('/api/admin/household/inhabitants')
-
-        // Get all assignments from selected season's cooking teams
-        const allAssignments = computed(() => {
-            if (!selectedSeason.value?.CookingTeams) return []
-
-            return selectedSeason.value.CookingTeams.flatMap(team =>
-                (team.assignments || [])
-                    .filter(assignment => assignment.inhabitant)
-                    .map(assignment => ({
-                        id: assignment.id,
-                        role: assignment.role,
-                        cookingTeamId: team.id!,
-                        inhabitantId: assignment.inhabitant!.id,
-                        cookingTeam: {
-                            id: team.id!,
-                            name: team.name
-                        }
-                    }))
-            )
+    const mergeInhabitantsWithAssignments = (inhabitants: InhabitantDisplay[], cookingTeams: CookingTeamDisplay[]) => {
+        const allAssignments = cookingTeams.flatMap(t => t.assignments ?? [])
+        return inhabitants.map(inhabitant => {
+            const assignments = allAssignments.filter(a => a.inhabitantId === inhabitant.id)
+            return {
+                ...inhabitant,
+                CookingTeamAssignment: assignments.length > 0 ? assignments : undefined
+            }
         })
-
-        // Merge inhabitants with assignments (client-side join)
-        const inhabitantsWithAssignments = computed(() => {
-            if (!lightweightInhabitants.value) return []
-
-            return lightweightInhabitants.value.map(inhabitant => {
-                const assignment = allAssignments.value.find(a => a.inhabitantId === inhabitant.id)
-
-                return {
-                    ...inhabitant,
-                    CookingTeamAssignment: assignment ? [assignment] : undefined
-                }
-            })
-        })
-
-        return {
-            inhabitants: inhabitantsWithAssignments,
-            pending,
-            error,
-            refresh
-        }
     }
 
     // Team affinity batching (D1 rate limit safe, though typically only 3-8 teams)
@@ -127,7 +84,7 @@ export const useCookingTeam = () => {
         extractTeamNumber,
         getTeamShortName,
         getDefaultCookingTeam,
-        useInhabitantsWithAssignments,
+        mergeInhabitantsWithAssignments,
         chunkTeamAffinities
     }
 }

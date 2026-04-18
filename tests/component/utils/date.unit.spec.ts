@@ -19,6 +19,8 @@ import {
     calculateCountdown,
     createDateInTimezone,
     areSameWeek,
+    getPeriodBoundary,
+    type PeriodView,
     DATE_SETTINGS
 } from "~/utils/date"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
@@ -788,5 +790,54 @@ describe('areSameWeek', () => {
         {a: new Date(2024, 11, 29), b: new Date(2025, 0, 6), expected: false, desc: 'year boundary different weeks'},
     ])('$desc: $expected', ({a, b, expected}) => {
         expect(areSameWeek(a, b)).toBe(expected)
+    })
+})
+
+describe('getPeriodBoundary', () => {
+    // ISO week (Mon-start) of Jan 15 2025 (Wed): Mon Jan 13 → Sun Jan 19
+    // Month of Jan 15 2025:                      Wed Jan  1 → Fri Jan 31
+    // All dates use local-time constructors so .getTime() equality is TZ-safe.
+    const atStartOfDay = (d: Date): Date => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
+    const atEndOfDay = (d: Date): Date => { const x = new Date(d); x.setHours(23, 59, 59, 999); return x }
+
+    const wed = new Date(2025, 0, 15, 10, 30) // Wed mid-day — interior of week & month
+    const mon = new Date(2025, 0, 13, 10, 30) // Mon — week-start edge
+    const sun = new Date(2025, 0, 19, 10, 30) // Sun — week-end edge
+    const jan1 = new Date(2025, 0, 1, 10, 30)  // Month-start edge
+    const jan31 = new Date(2025, 0, 31, 10, 30) // Month-end edge
+
+    it.each([
+        // Core {view × direction} matrix from interior (Wed)
+        {input: wed, view: 'day' as PeriodView, direction: 1 as const,
+            expected: atEndOfDay(wed), desc: 'day forward from interior = endOfDay'},
+        {input: wed, view: 'day' as PeriodView, direction: -1 as const,
+            expected: atStartOfDay(wed), desc: 'day backward from interior = startOfDay'},
+        {input: wed, view: 'week' as PeriodView, direction: 1 as const,
+            expected: atEndOfDay(new Date(2025, 0, 19)), desc: 'week forward from interior = Sun 19 end-of-day'},
+        {input: wed, view: 'week' as PeriodView, direction: -1 as const,
+            expected: atStartOfDay(new Date(2025, 0, 13)), desc: 'week backward from interior = Mon 13 start-of-day'},
+        {input: wed, view: 'month' as PeriodView, direction: 1 as const,
+            expected: atEndOfDay(new Date(2025, 0, 31)), desc: 'month forward from interior = Jan 31 end-of-day'},
+        {input: wed, view: 'month' as PeriodView, direction: -1 as const,
+            expected: atStartOfDay(new Date(2025, 0, 1)), desc: 'month backward from interior = Jan 1 start-of-day'},
+
+        // Monday-start week edges
+        {input: mon, view: 'week' as PeriodView, direction: -1 as const,
+            expected: atStartOfDay(new Date(2025, 0, 13)), desc: 'week backward from Monday = Monday itself start-of-day'},
+        {input: mon, view: 'week' as PeriodView, direction: 1 as const,
+            expected: atEndOfDay(new Date(2025, 0, 19)), desc: 'week forward from Monday = Sunday end-of-day'},
+        {input: sun, view: 'week' as PeriodView, direction: -1 as const,
+            expected: atStartOfDay(new Date(2025, 0, 13)), desc: 'week backward from Sunday = Monday of same ISO week (Mon-start)'},
+        {input: sun, view: 'week' as PeriodView, direction: 1 as const,
+            expected: atEndOfDay(new Date(2025, 0, 19)), desc: 'week forward from Sunday = Sunday itself end-of-day'},
+
+        // Month edges
+        {input: jan1, view: 'month' as PeriodView, direction: -1 as const,
+            expected: atStartOfDay(new Date(2025, 0, 1)), desc: 'month backward from 1st = 1st itself start-of-day'},
+        {input: jan31, view: 'month' as PeriodView, direction: 1 as const,
+            expected: atEndOfDay(new Date(2025, 0, 31)), desc: 'month forward from last = last itself end-of-day'}
+    ])('$desc', ({input, view, direction, expected}) => {
+        const boundary = getPeriodBoundary(input, view, direction)
+        expect(boundary.getTime()).toBe(expected.getTime())
     })
 })

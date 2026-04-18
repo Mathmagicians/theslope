@@ -58,7 +58,11 @@ User (Bruger)
 | **Allergy Management** | Track allergies per inhabitant | [User Guide](user-guide.md#sådan-tilføjer-du-allergier) |
 | **Chef Dashboard** | View team, menu planning, allergen tracking | [Chef Guide](chef-guide.md) |
 | **Heynabo Event Sync** | Announce menus to Heynabo calendar | [Chef Guide](chef-guide.md#annoncér-menu) |
-| **Household Management** | View/edit households and inhabitants | [Admin Guide](admin-guide.md#household-management) |
+| **Household Management** | View/edit households and inhabitants | [Admin Guide](admin-guide.md#husstande) |
+| **Multi-Household per Address** | Two families can coexist at one address during move (Heynabo import preserves both) | [Admin Guide](admin-guide.md#husstande) |
+| **Admin Household Edit** | Inline row-expand: move inhabitants between same-address households, delete household (CASCADE) | [Admin Guide](admin-guide.md#sådan-flytter-du-en-beboer) |
+| **Move-Out Date** | Members set own `moveOutDate`; bookings after date auto-pruned; pencil-gate UX | [User Guide](user-guide.md#sådan-sætter-du-fraflytningsdato) |
+| **Unified Booking Navigation** | Day/week/month arrows use one algorithm (period boundary → adjacent dinner) | — |
 | **Season Import** | Import calendar and teams from CSV | [Admin Guide](admin-guide.md#data-importexport) |
 | **Billing Import** | Import orders from legacy CSV format | [Admin Guide](admin-guide.md#billing--economy) |
 | **Daily Maintenance** | Auto-consume dinners, close orders, create transactions | [Admin Guide](admin-guide.md#system-maintenance) |
@@ -121,7 +125,10 @@ User (Bruger)
 *Team management with master-detail interface*
 
 ![Admin Households](screenshots/admin/admin-households-list.png)
-*Household list with inhabitants and quick search*
+*Household list with inhabitants — inline edit-panel expands per row for move/delete*
+
+![Household Settings](screenshots/household/household-settings.png)
+*Husstandens indstillinger — set/clear move-out date via pencil-gate*
 
 ---
 
@@ -187,6 +194,54 @@ EXPANDED ROW (Edit mode):
 Legend: ⚡ Power mode | ✏️ Edit | 🍽️ Dine in | 🕐 Late | 🛍️ Takeaway | ❌ None
 ```
 
+### Admin Household Edit Panel
+```
+┌─ Husstande på Skråningen ─────────────────────── [+ Ny husstand] ─┐
+│ ▾ │ Skr_14 │ 115 ➡ Fraflytter │ Skråningen 14 │ Emil, Frida │    │
+│ ╔═════════════════════════════════════════════════════════════╗  │
+│ ║ Stamdata    PBS 115 · HN 42 · Skråningen 14    (read-only)  ║  │
+│ ║ Residens    Indflyttet 15/08/2020  ➡ 01/06/2026      [✎]   ║  │
+│ ║ Beboere     [🔍 søg…]                        [⇅ Status]     ║  │
+│ ║  👤 Emil  │ [Skr_14 · PBS 115] ✓  │ (i denne husstand)      ║  │
+│ ║  👤 Anna  │ [Skr_12 · PBS 100]    │ [→ Flyt hertil]         ║  │
+│ ║  👤 Greta │ [Skr_20 · PBS 102] ⊗  │ (fraflyttet)            ║  │
+│ ║ [🗑 Slet husstand]  (2-click DangerButton)       [✕ Luk]   ║  │
+│ ╚═════════════════════════════════════════════════════════════╝  │
+└────────────────────────────────────────────────────────────────────┘
+```
+
+### Move-Out Date (Household Settings)
+```
+┌─ Fraflytning ───────────────────────────────┐
+│ ☀ Familien har ingen flytteplaner      [✎] │  ← view, no date
+└─────────────────────────────────────────────┘
+
+┌─ Fraflytning ───────────────────────────────┐
+│ ➡ Fraflytter 15/03/2026                [✎] │  ← view, has date
+│ [« Fortryd flytning]  (2-click)             │
+└─────────────────────────────────────────────┘
+
+┌─ Fraflytning ───────────────────────────────┐
+│ (!) Bookinger efter datoen slettes.         │  ← edit mode
+│ Dato: [ 15/03/2026  📅 ]                    │
+├─────────────────────────────────────────────┤
+│ [✕ Annullér]              [✓ Gem]           │
+└─────────────────────────────────────────────┘
+
+🤖 Sidste ændring · 3 bookinger slettet · 12 uændret
+```
+
+### Unified Booking Arrow Nav
+```
+ period boundary per view → getAdjacentDinner → next/prev dinner
+
+ day   ◀── startOfDay(date)   ·   endOfDay(date)   ──▶
+ week  ◀── startOfWeek(date)  ·   endOfWeek(date)  ──▶   (Mon-start)
+ month ◀── startOfMonth(date) ·   endOfMonth(date) ──▶
+
+ null ⇒ arrow hidden  (hasPrev / hasNext = false)
+```
+
 ---
 
 ## Technical Architecture
@@ -208,4 +263,4 @@ Legend: ⚡ Power mode | ✏️ Edit | 🍽️ Dine in | 🕐 Late | 🛍️ Tak
 
 ---
 
-*Last Updated: January 2026*
+*Last Updated: April 2026*

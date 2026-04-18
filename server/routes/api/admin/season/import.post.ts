@@ -6,7 +6,8 @@ import {fetchSeasons, createSeason, updateSeason, fetchInhabitants, createTeam, 
 import {dateToWeekDay} from '~/utils/season'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {pruneAndCreate} from '~/utils/batchUtils'
-import {saveDinnerEvents, assignCookingTeamToDinnerEvent, fetchDinnerEvents} from '~~/server/data/financesRepository'
+import {assignCookingTeamToDinnerEvent, fetchDinnerEvents} from '~~/server/data/financesRepository'
+import {reconcileDinnerEventsForSeason} from '~~/server/utils/reconcileDinnerEvents'
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
 import {useSeason} from '~/composables/useSeason'
 import {useHousehold} from '~/composables/useHousehold'
@@ -84,7 +85,7 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
         console.info(`${LOG} Teams parsed: ${parsedTeams.teams.length} teams, ${parsedTeams.unmatched.length} unmatched names`)
 
         // Step 3: Build season data from defaults + CSV
-        const {getDefaultSeason, generateDinnerEventDataForSeason, createSeasonName} = useSeason()
+        const {getDefaultSeason, createSeasonName} = useSeason()
 
         const defaultSeason = getDefaultSeason()
         const seasonFromCsv: Partial<Season> = {
@@ -120,19 +121,9 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
             console.info(`${LOG} Created season ID: ${savedSeason.id}`)
         }
 
-        // Step 5: Generate dinner events (if new season or regenerate)
-        const dinnerEventData = generateDinnerEventDataForSeason(savedSeason)
-        if (dinnerEventData.length > 0) {
-            // Check if events already exist
-            const existingEvents = await fetchDinnerEvents(d1Client, savedSeason.id!)
-            if (existingEvents.length === 0) {
-                const savedEvents = await saveDinnerEvents(d1Client, dinnerEventData)
-                dinnerEventsCreated = savedEvents.length
-                console.info(`${LOG} Created ${dinnerEventsCreated} dinner events`)
-            } else {
-                console.info(`${LOG} Season already has ${existingEvents.length} dinner events, skipping generation`)
-            }
-        }
+        // Step 5: Reconcile dinner events (idempotent - ADR-015)
+        const reconciliation = await reconcileDinnerEventsForSeason(d1Client, savedSeason, LOG)
+        dinnerEventsCreated = reconciliation.created
 
         // Step 6: Create cooking teams with assignments (idempotent - ADR-015)
         const dinnerEvents = await fetchDinnerEvents(d1Client, savedSeason.id!)

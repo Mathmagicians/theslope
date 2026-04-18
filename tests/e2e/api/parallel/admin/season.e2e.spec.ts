@@ -683,6 +683,37 @@ test.describe('Season API Tests', () => {
         })
     })
 
+    test("Regenerating dinner events should remove events on holiday dates", async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const holidayStart = new Date(SeasonFactory.tomorrow)
+        holidayStart.setDate(holidayStart.getDate() + 1)
+        const holidayEnd = new Date(holidayStart)
+        holidayEnd.setDate(holidayEnd.getDate() + 1)
+        const holiday = {start: holidayStart, end: holidayEnd}
+
+        // All days cooking — guarantees holiday always covers cooking days regardless of day-of-week
+        const allDaysCooking = createDefaultWeekdayMap([true, true, true, true, true, true, true])
+
+        // GIVEN: Season with holidays, then holidays removed to create extra events
+        const created = await SeasonFactory.createSeason(context, {...SeasonFactory.defaultSeason(temporaryAndRandom()), cookingDays: allDaysCooking, holidays: [holiday]})
+        createdSeasonIds.push(created.id!)
+        const expectedCount = SeasonFactory.calculateExpectedEventCount(created)
+
+        const expanded = await SeasonFactory.updateSeason(context, {...created, holidays: []})
+        expect(expanded.dinnerEvents!.length).toBeGreaterThan(expectedCount)
+
+        // GIVEN: Restore holidays in config
+        await SeasonFactory.updateSeason(context, {...expanded, holidays: [holiday]})
+
+        // WHEN: Regenerate dinner events
+        const result = await SeasonFactory.generateDinnerEventsForSeason(context, created.id!)
+
+        // THEN: No dinner events on holiday dates
+        expect(result.eventCount).toBe(expectedCount)
+        const onHoliday = result.events.filter(de => new Date(de.date) >= holiday.start && new Date(de.date) <= holiday.end)
+        expect(onHoliday).toHaveLength(0)
+    })
+
     // NOTE: Scaffold Pre-bookings tests moved to tests/e2e/api/serial/admin/scaffold-prebookings.e2e.spec.ts
     // because the admin scaffold endpoint processes ALL households, causing timeouts in parallel
 

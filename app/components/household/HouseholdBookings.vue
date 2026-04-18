@@ -70,12 +70,12 @@ const {value: selectedDate, setValue: setDate} = useDinnerDateParam({
 })
 
 // Navigation logic (curried with our refs)
+// Season clamping is implicit: dinners outside the season aren't in dinnerDates.
 const {dateRange, hasPrev, hasNext, navigate} = useBookingView({
   selectedDate,
   setDate,
   view,
   setView,
-  seasonDates: () => selectedSeason.value?.seasonDates ?? null,
   dinnerDates: () => dinnerDates.value
 })
 

@@ -8,6 +8,7 @@ interface Props {
   parentRestriction?: WeekDayMap | null
   compact?: boolean
   disabled?: boolean
+  hideRestricted?: boolean
   label?: string
   name?: string
   color?: BadgeProps['color']
@@ -18,6 +19,7 @@ const props = withDefaults(defineProps<Props>(), {
   parentRestriction: null,
   compact: false,
   disabled: false,
+  hideRestricted: false,
   label: '',
   name: undefined,
   color: 'success'
@@ -45,6 +47,11 @@ const isRestricted = (day: WeekDay) => {
   return props.parentRestriction ? !props.parentRestriction[day] : false
 }
 
+// Days to show in full view (respects hideRestricted)
+const visibleDays = computed(() =>
+    props.hideRestricted ? WEEKDAYS.filter(day => !isRestricted(day)) : WEEKDAYS
+)
+
 // Update local model value
 const updateDay = (day: WeekDay, value: boolean | 'indeterminate') => {
   if (props.disabled) return
@@ -63,18 +70,17 @@ const updateDay = (day: WeekDay, value: boolean | 'indeterminate') => {
 </script>
 
 <template>
-  <!-- COMPACT VIEW: Show all 7 weekdays with badges for selected days only -->
-  <div v-if="compact && selectedDays.length > 0" class="flex gap-1">
-    <div v-for="day in WEEKDAYS" :key="day" class="w-12 flex justify-center">
-      <UBadge
-        v-if="modelValue?.[day]"
-        :color="color"
-        class="capitalize"
-        variant="soft"
-      >
-        {{ formatDayCompact(day) }}
-      </UBadge>
-    </div>
+  <!-- COMPACT VIEW: Only render selected days (no empty placeholders) -->
+  <div v-if="compact && selectedDays.length > 0" class="flex flex-wrap gap-1">
+    <UBadge
+      v-for="day in selectedDays"
+      :key="day"
+      :color="color"
+      class="capitalize"
+      variant="soft"
+    >
+      {{ formatDayCompact(day) }}
+    </UBadge>
   </div>
   <span v-else-if="compact && selectedDays.length === 0" class="text-lg">
       💤
@@ -84,7 +90,7 @@ const updateDay = (day: WeekDay, value: boolean | 'indeterminate') => {
   <UFormField v-else :label="label" :name="name">
     <div class="flex flex-col gap-3">
       <UCheckbox
-        v-for="day in WEEKDAYS"
+        v-for="day in visibleDays"
         :key="day"
         :model-value="modelValue?.[day] ?? false"
         :label="day"

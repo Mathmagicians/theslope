@@ -254,6 +254,21 @@ Gæsten vises i tabellen som "Gæst af [dit navn]" med den valgte billettype.
 
 ![Økonomi fanen](screenshots/household/household-economy.png)
 
+### Sådan sætter du fraflytningsdato
+
+Skal familien flytte? Angiv en fraflytningsdato så alle jeres bookinger efter den dato slettes automatisk.
+
+1. Gå til **Indstillinger** på jeres husstand
+2. Klik på **blyanten** i Fraflytning-sektionen
+3. Vælg dato i kalenderen
+4. Klik **Gem** — systemet sletter fremtidige bookinger efter datoen og viser en kvittering ("3 bookinger slettet, 12 uændret")
+
+Har I skiftet mening? Åbn samme sektion og klik **Fortryd flytning** (to-klik bekræftelse) — bookinger genoprettes efter jeres ugentlige præferencer.
+
+![Husstandens indstillinger](screenshots/household/household-settings.png)
+
+> **Bemærk:** To familier kan bo på samme adresse i en overgangsperiode. Admin opretter den nye husstand, og flytter gradvist beboere over via [Husstande-administrationen](admin-guide.md#sådan-flytter-du-en-beboer).
+
 ### Sådan tilføjer du allergier
 
 1. Gå til **Allergier** (advarsels-ikonet)

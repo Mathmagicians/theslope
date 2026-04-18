@@ -120,6 +120,9 @@ expect(result).toBe(expectedValue)
 | `console.log()` | `expect()` assertions |
 | `page.waitForTimeout()` | `pollUntil()` or `waitForResponse()` |
 | `name` or `data-test-id` on buttons | `data-testid` + `getByTestId()` |
+| `<button type="submit">` in `UForm` tests | `formRef?.submit()` + `flushPromises()` (see [Testing UForm Submission](#testing-uform-submission)) |
+| Hardcoded formatted values (`'15/05/2026'`) | Call the same utility the component uses (`formatDate(date)`) |
+| `z.coerce.date()` in form schemas | `z.date()` — strict rejects `null` (coerce turns `null` into 1970-01-01) |
 
 ---
 
@@ -215,6 +218,78 @@ const clickAddButton = async (wrapper: any) => {
     await nextTick()
 }
 ```
+
+### Testing `UForm` Submission
+
+**The Problem:** In happy-dom, `trigger('click')` on a `<button type="submit">` inside a `<form>` does NOT reliably fire the form's `@submit` handler. Validation-gated emits appear to silently drop.
+
+**The Solution — NuxtUI `useTemplateRef` pattern:**
+
+Component wires the button outside the implicit form-submit flow and calls the form's `submit()` method via ref. This is the [NuxtUI-documented pattern](https://ui.nuxt.com/components/form#methods) for buttons outside `<form>` scope (modal footers, UCard `#footer`, etc.) — and it happens to be test-friendly.
+
+```vue
+<script setup lang="ts">
+import type {Form, FormSubmitEvent} from '@nuxt/ui'
+
+const formRef = useTemplateRef<Form<MyFormData>>('formRef')
+
+const handleSubmit = (event: FormSubmitEvent<MyFormData>) => {
+    emit('save', event.data)
+}
+</script>
+
+<template>
+    <UForm ref="formRef" :state="formState" :schema="MyFormSchema" @submit="handleSubmit">
+        <!-- fields -->
+        <template #footer>
+            <UButton
+                v-bind="BUTTONS.save"
+                data-testid="my-form-submit"
+                @click="formRef?.submit()"
+            >
+                Gem
+            </UButton>
+        </template>
+    </UForm>
+</template>
+```
+
+**Test pattern — click the button, flush promises:**
+
+```typescript
+import {flushPromises} from '@vue/test-utils'
+
+const clickSubmit = async (wrapper: Awaited<ReturnType<typeof mount>>) => {
+    const submitBtn = wrapper.findAll('button').find(b => b.text().includes('Gem'))
+    await submitBtn!.trigger('click')
+    // UForm.submit() validates schema + contextual rules asynchronously
+    await flushPromises()
+    await nextTick()
+}
+
+it('emits save with valid data', async () => {
+    const wrapper = await mount()
+    // ...fill fields...
+    await clickSubmit(wrapper)
+    expect(wrapper.emitted('save')).toBeTruthy()
+})
+
+it('does not emit save when validation fails', async () => {
+    const wrapper = await mount()
+    // ...fill only some fields or violate contextual rules...
+    await clickSubmit(wrapper)
+    expect(wrapper.emitted('save')).toBeFalsy()
+})
+```
+
+**Key rules:**
+
+1. **Always use `ref="formRef"` on `UForm`** + `@click="formRef?.submit()"` on the submit button. Do NOT rely on `type="submit"` — it works in production but is flaky in tests.
+2. **Always `await flushPromises()` then `await nextTick()`** after click. Schema + `:validate` function both run async; the emit happens after they resolve.
+3. **Never hardcode formatted values.** Use the same utility the component uses (e.g. `formatDate()` from `~/utils/date`) so the assertion stays correct if the format changes.
+4. **Dates in form state should be strict `z.date()` in form schemas** — not `z.coerce.date()`. Coercion silently accepts `null` as 1970-01-01 and fails your "missing date blocks submit" tests.
+
+**Reference implementation:** `tests/component/components/admin/HouseholdCreateForm.nuxt.spec.ts`
 
 ---
 

@@ -251,12 +251,14 @@ export class OrderFactory {
   static readonly createOrder = async (
     context: BrowserContext,
     orderData?: Partial<CreateOrdersRequest>,
-    expectedStatus: number = 201
+    expectedStatus: number = 201,
+    withAdminBypass: boolean = false
   ): Promise<CreateOrdersResult | null> => {
     const { CreateOrdersResultSchema } = useBookingValidation()
     const data = this.defaultCreateOrdersRequest(orderData)
 
-    const response = await context.request.put(ORDER_ENDPOINT, {
+    const query = withAdminBypass ? '?adminBypass=true' : ''
+    const response = await context.request.put(`${ORDER_ENDPOINT}${query}`, {
       headers,
       data
     })

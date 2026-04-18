@@ -23,6 +23,23 @@ export const ROLE_ICONS = {
 } as const
 
 /**
+ * Role select options for forms — derived from ROLE_LABELS + ROLE_ICONS
+ */
+export const ROLE_OPTIONS = (Object.keys(ROLE_LABELS) as Array<keyof typeof ROLE_LABELS>).map(role => ({
+    label: `${ROLE_ICONS[role]} ${ROLE_LABELS[role]}`,
+    value: role
+}))
+
+/**
+ * Allocation percentage options for team member assignment forms
+ */
+export const ALLOCATION_PERCENTAGE_OPTIONS = [
+    {label: '25%', value: 25},
+    {label: '50%', value: 50},
+    {label: '100%', value: 100}
+]
+
+/**
  * Validation schemas for CookingTeam objects
  */
 export const useCookingTeamValidation = () => {

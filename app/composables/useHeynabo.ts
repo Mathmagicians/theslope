@@ -1,6 +1,6 @@
 import type { HouseholdCreate, HouseholdDisplay, InhabitantCreate, UserDisplay, SystemRole } from '~/composables/useCoreValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
-import { pruneAndCreate } from '~/utils/batchUtils'
+import { pruneAndCreate, type ReconciliationBucket } from '~/utils/batchUtils'
 import { isSameDay } from 'date-fns'
 
 const { SystemRoleSchema } = useCoreValidation()
@@ -85,6 +85,32 @@ export const reconcileUsers = pruneAndCreate<UserDisplay, InhabitantData, number
     isUserEqual,
     i => i.heynaboId
 )
+
+// ========================================================================
+// SIBLING-AWARE INHABITANT CLASSIFICATION (admin move support)
+// ========================================================================
+
+/**
+ * Classify an inhabitant considering sibling households at the same address.
+ * Handles cases where admin moved an inhabitant to a non-winner sibling.
+ *
+ * @param inhabitantHeynaboId - The inhabitant's heynaboId
+ * @param addressHeynaboId - The address heynaboId being reconciled
+ * @param inIncoming - Whether Heynabo still sends this inhabitant
+ * @param siblingLookup - All inhabitants across all households at this address
+ */
+export const classifyInhabitantForImport = (
+    inhabitantHeynaboId: number,
+    addressHeynaboId: number,
+    inIncoming: boolean,
+    siblingLookup: Map<number, { householdHeynaboId: number }>
+): ReconciliationBucket => {
+    const existing = siblingLookup.get(inhabitantHeynaboId)
+    if (!existing) return inIncoming ? 'create' : 'delete'
+    if (!inIncoming) return 'delete'
+    if (existing.householdHeynaboId !== addressHeynaboId) return 'update'
+    return 'idempotent'
+}
 
 // ========================================================================
 // MERGE FUNCTIONS - Preserve TheSlope-owned fields during UPDATE

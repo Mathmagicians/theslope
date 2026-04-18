@@ -259,6 +259,37 @@ export class SeasonFactory {
     }
 
     /**
+     * Update an existing season via POST /api/admin/season/{id}
+     * Returns the updated season with reconciled dinner events
+     */
+    static readonly updateSeason = async (
+        context: BrowserContext,
+        season: Season,
+        expectedStatus: number = 200
+    ): Promise<Season> => {
+        const {SeasonSchema} = useSeasonValidation()
+
+        expect(season.id, 'Season must have an ID to update').toBeDefined()
+
+        const response = await context.request.post(`/api/admin/season/${season.id}`, {
+            headers: headers,
+            data: season
+        })
+        const status = response.status()
+        const responseBody = await response.json()
+
+        expect(status, `Expected ${expectedStatus}, got ${status}. Response: ${JSON.stringify(responseBody)}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            const result = SeasonSchema.safeParse(responseBody)
+            expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+            return result.data!
+        }
+
+        return responseBody
+    }
+
+    /**
      * Calculate expected dinner event count for a season
      * Based on cooking days, season dates, and holidays
      */

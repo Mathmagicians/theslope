@@ -642,6 +642,127 @@ describe('useCoreValidation - Household Schema Validation Edge Cases', () => {
 })
 
 // ============================================================================
+// HOUSEHOLD CREATE FORM SCHEMA
+// ============================================================================
+
+describe('useCoreValidation - HouseholdCreateFormSchema', () => {
+    const {HouseholdCreateFormSchema} = useCoreValidation()
+
+    // Schema without sibling constraints — base case
+    const baseSchema = HouseholdCreateFormSchema([])
+
+    const validFormInput = () => ({
+        pbsId: 12345,
+        address: 'Skråningen 14',
+        movedInDate: new Date('2026-05-15')
+    })
+
+    // ---------- Happy path + coercion ----------
+
+    it('accepts valid form input', () => {
+        expect(baseSchema.safeParse(validFormInput()).success).toBe(true)
+    })
+
+    it('coerces stringified pbsId from HTML number input to integer', () => {
+        const result = baseSchema.safeParse({...validFormInput(), pbsId: '12345'})
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.pbsId).toBe(12345)
+            expect(typeof result.data.pbsId).toBe('number')
+        }
+    })
+
+    // ---------- pbsId validation (parametrized) ----------
+
+    it.each([
+        ['non-numeric string',        'abc',   'PBS skal være et tal'],
+        ['decimal',                   12.5,    'PBS skal være et helt tal'],
+        ['zero',                      0,       'PBS skal være positivt'],
+        ['negative',                  -1,      'PBS skal være positivt']
+    ])('rejects pbsId when %s', (_, pbsId, expectedMessage) => {
+        const result = baseSchema.safeParse({...validFormInput(), pbsId})
+        expect(result.success).toBe(false)
+        if (!result.success) {
+            const pbsError = result.error.issues.find(i => i.path[0] === 'pbsId')
+            expect(pbsError?.message).toBe(expectedMessage)
+        }
+    })
+
+    // ---------- address validation ----------
+
+    it('rejects empty address', () => {
+        expect(baseSchema.safeParse({...validFormInput(), address: ''}).success).toBe(false)
+    })
+
+    it('inherits address max length (200) from BaseHouseholdSchema', () => {
+        expect(baseSchema.safeParse({...validFormInput(), address: 'a'.repeat(201)}).success).toBe(false)
+    })
+
+    // ---------- movedInDate validation (strict z.date() — no coercion) ----------
+
+    it.each([
+        ['null',               null],
+        ['undefined',          undefined],
+        ['empty string',       ''],
+        ['ISO date string',    '2026-05-15']
+    ])('rejects movedInDate when %s', (_, movedInDate) => {
+        const result = baseSchema.safeParse({...validFormInput(), movedInDate})
+        expect(result.success).toBe(false)
+        if (!result.success) {
+            expect(result.error.issues.find(i => i.path[0] === 'movedInDate')).toBeDefined()
+        }
+    })
+
+    it('uses friendly message when movedInDate is missing', () => {
+        const result = baseSchema.safeParse({...validFormInput(), movedInDate: null})
+        expect(result.success).toBe(false)
+        if (!result.success) {
+            const err = result.error.issues.find(i => i.path[0] === 'movedInDate')
+            expect(err?.message).toBe('Du skal sætte en indflytningsdato for den nye familie')
+        }
+    })
+
+    it('accepts a valid Date instance', () => {
+        const result = baseSchema.safeParse(validFormInput())
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.movedInDate).toBeInstanceOf(Date)
+        }
+    })
+
+    it('only contains the form fields (pbsId, address, movedInDate) — nothing else', () => {
+        const result = baseSchema.safeParse(validFormInput())
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(Object.keys(result.data).sort()).toEqual(['address', 'movedInDate', 'pbsId'])
+        }
+    })
+
+    // ---------- Sibling move-out constraints (closure) ----------
+
+    const movedIn = new Date('2026-05-15')
+    const dayBefore = new Date('2026-05-14')
+    const sameDay = new Date('2026-05-15')
+    const dayAfter = new Date('2026-05-16')
+
+    it.each([
+        ['no constraints',                     []                                   , true],
+        ['constraint before movedInDate',      [dayBefore]                          , true],
+        ['constraint equal to movedInDate',    [sameDay]                            , true],
+        ['constraint after movedInDate',       [dayAfter]                           , false],
+        ['all constraints <= movedInDate',     [dayBefore, sameDay]                 , true],
+        ['any constraint > movedInDate fails', [dayBefore, dayAfter]                , false]
+    ])('sibling constraints: %s → valid=%s', (_, constraints, expectedValid) => {
+        const result = HouseholdCreateFormSchema(constraints).safeParse({...validFormInput(), movedInDate: movedIn})
+        expect(result.success).toBe(expectedValid)
+        if (!result.success) {
+            const err = result.error.issues.find(i => i.path[0] === 'movedInDate')
+            expect(err?.message).toBe('Ny familie kan ikke flytte ind, så længe den forrige ikke er flyttet ud')
+        }
+    })
+})
+
+// ============================================================================
 // WEEKDAYMAP VALIDATION
 // ============================================================================
 

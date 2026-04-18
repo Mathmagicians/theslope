@@ -2,7 +2,7 @@
 
 **Status:** Phases 1–2 done, Phase 5a–5b done, Phase 5c (UX polish) in progress, Phases 3–4 pending
 **Date:** 2026-02-22
-**Updated:** 2026-03-04
+**Updated:** 2026-04-15
 
 ## Business Rule
 
@@ -76,9 +76,14 @@ When `moveOutDate` or `movedInDate` changes on a household, trigger a re-scaffol
 
 Uses the existing `rescaffoldOnFieldChange` shared helper (DRY with inhabitant preference/birthDate updates).
 
-### Decision 4: Heynabo Import Routing (Future Phase)
+### Decision 4: Heynabo Import Routing
 
-Existing inhabitants update/delete on their current household. NEW inhabitants are routed to the household WITHOUT `moveOutDate`. If none exists, skip + log warning.
+Existing inhabitants update/delete on their current household. NEW inhabitants coming in with a given `heynaboId` are routed to the household (among those sharing that `heynaboId`) selected by:
+
+1. The household with no `moveOutDate` set.
+2. Fallback (all households at that `heynaboId` have a `moveOutDate`): the household with the **newest** `moveOutDate`.
+
+An inhabitant always needs a household, so there is no skip case — the fallback guarantees a target.
 
 ### Decision 5: Household URL Disambiguation with `?pbs=X` (Future Phase)
 
@@ -142,31 +147,117 @@ URL disambiguation (Phase 2) MUST ship BEFORE the schema migration (Phase 3) tha
 
 **E2E tests (7 files, 10 `page.goto` calls):** `household.e2e`, `HouseholdMembers.e2e`, `HouseholdCard.e2e`, `HouseholdAllergies.e2e`, `DinnerBookingForm.e2e`, `HouseholdScaffolding.e2e`, `HouseholdBookingsCrossHousehold.e2e`
 
-### Phase 3: Schema Migration (Drop `@unique`, Add `@@index`)
+### Phase 3: Schema Migration + Repository Refactor ← IN PROGRESS
 
 **Goal:** Allow multiple households with the same `heynaboId` (old + new family at same address).
 
 **Safe because:** Phase 2 already handles URL disambiguation.
 
+**Schema change:** Drop `@unique` on `Household.heynaboId` only; add `@@index`. `Inhabitant.heynaboId` stays `@unique` (inhabitants are distinct Heynabo users; households can share a Heynabo address).
+
+**Repository refactor:** `saveHousehold` used `prisma.household.upsert({ where: { heynaboId } })` — breaks after dropping `@unique`. Refactored to accept separate `id` parameter: `saveHousehold(d1, household, id?, skipRefetch?)`. Branches on `id`: present → `update({where:{id}})`, absent → `create`. No other repo functions affected.
+
+**Routing:** Two functions in `app/composables/useHousehold.ts`:
+
+- `resolveHouseholdForHeynaboId(heynaboId, candidates)` — pure function, returns the resolved household object (or null for empty input). Decision 4 rules: 0 → null; 1 → that one; N with 1 active → active; N all with moveOutDate → newest (tie-break lowest id); N with 2+ active → lowest id.
+- `buildResolvedHouseholdMap(households)` — groups by heynaboId using `groupBy` from `batchUtils.ts` (server-safe, NOT `Map.groupBy`), picks winner per group via `resolveHouseholdForHeynaboId`. Returns `Map<number, HouseholdDisplay>`.
+
+**Import service changes:**
+
+1. `existingByHeynaboId` built via `buildResolvedHouseholdMap` — deterministic representative per heynaboId for reconciliation.
+2. **Household updates apply to ALL existing households at each heynaboId** (not just the resolved one). For every incoming heynaboId (UPDATE + IDEMPOTENT buckets), each existing household at that address gets `mergeHouseholdForUpdate(incoming, existing)` → preserves THAT household's TheSlope-owned fields (pbsId, movedInDate, moveOutDate) while updating Heynabo-owned fields (name, address). No separate "broadcast" step — same merge path handles all.
+3. Sanity check counts unique heynaboIds (not total households) for household comparison.
+4. Delete branch unchanged — `deleteHouseholdsByHeynaboId` removes all households at that address.
+
+**Key finding:** `Map.groupBy` is NOT available in Cloudflare Workers server runtime. Codebase has `groupBy` utility in `batchUtils.ts` for server-safe grouping. `Map.groupBy` is only safe in client-side code (stores).
+
+**ADR compliance updates:**
+
+| ADR | Addition |
+|-----|----------|
+| **ADR-010** | Repository WHERE clauses MUST use unique fields (`id` or `@unique` constraints). Non-unique lookups MUST be resolved by caller. |
+| **ADR-013** | External ID → internal ID resolution is integration concern (import service / routing function), not persistence. |
+
+**Changes:**
+
+| File | Change | Status |
+|------|--------|--------|
+| `prisma/schema.prisma` | Drop `@unique` on `Household.heynaboId`, add `@@index` | ✅ |
+| `server/data/prismaRepository.ts` | `saveHousehold`: separate `id` parameter, branch on `id` | ✅ |
+| `app/composables/useHousehold.ts` | `resolveHouseholdForHeynaboId` + `buildResolvedHouseholdMap` | ✅ |
+| `server/utils/heynaboImportService.ts` | `buildResolvedHouseholdMap` for reconciliation, update all households at each heynaboId, sanity check counts unique heynaboIds | ✅ |
+| `docs/adr.md` | ADR-010 + ADR-013 compliance additions | ⏳ |
+
+**Verification:**
+
+| # | Check | Test file | Status |
+|---|-------|-----------|--------|
+| pre | **All** unit and E2E suites green — `npx vitest run` + `npx playwright test` (full suite). No regressions. | — | ⏳ |
+| 1 | Unit — `buildResolvedHouseholdMap` parametrized: empty, unique heynaboIds, duplicates (all 5 routing branches), mixed | `tests/component/composables/useHousehold.nuxt.spec.ts` | ✅ |
+| 2 | E2E API — admin creates a household via PUT (regression: create path still works after upsert removal) | `tests/e2e/api/parallel/admin/household.e2e.spec.ts` | ✅ |
+| 3 | E2E API — admin updates an existing household via POST by id (regression) | `tests/e2e/api/parallel/admin/household.e2e.spec.ts` | ✅ |
+| 4 | E2E API — two households with same heynaboId coexist, both persist, both retrievable | `tests/e2e/api/parallel/admin/household.e2e.spec.ts` | ✅ |
+| 5 | E2E API — Heynabo import regression: single-household community, seed household pbsId preserved | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` | ✅ |
+| 6 | E2E API — Heynabo import with sibling: TheSlope-owned fields preserved on BOTH households, Heynabo-owned fields (address) broadcast to sibling | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` | ✅ |
+| 7 | E2E API — Inhabitant routing: delete Babyyoda, run import, verify recreated on active household (not sibling) — proves `buildResolvedHouseholdMap` drives inhabitant routing | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` | ✅ |
+| 8 | E2E API — Heynabo import delete: fake household removed (existing test, unchanged) | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` | ✅ |
+| 9 | ADR-010 + ADR-013 compliance additions | `docs/adr.md` | ✅ |
+| 10 | Full suite green: `npx vitest run` (1846/1846) + parallel API (202/202) + serial API (all pass). Pre-existing singleton season race causes flaky serial-after-parallel locally; CI runs 2-pass and is green. | — | ✅ |
+| 11 | Deploy to dev, verify E2E on dev environment | — | ⏳ |
+| 12 | Migrate prod: `make d1-migrate-prod` once verified on dev | — | ⏳ |
+
+### Phase 4: Add New Household + Heynabo Import Routing
+
+**Goal:** Admin can create a new household at an address that already has one (so families can overlap during a move). Heynabo import routes incoming inhabitants to the correct household per Decision 4.
+
+**UX:** `HouseholdCreateForm.vue` — parent-driven form, emits `create` + `cancel`. Admin selects **Adresse** from a dropdown of unique addresses (showing `address · heynaboId` per option — Heynabo owns addresses). Selecting resolves `heynaboId` and shows coexistence info. Admin inputs **PBS-nummer** (number, unique) and **Indflytningsdato** (`CalendarDatePicker`). Validation via Zod with PBS uniqueness refinement.
+
+```
+┌─ Husstande på Skråningen ────────────────────────────── [+ Ny husstand] ─┐
+│ [🔍 Søg…]                                        [⇅ Adresse]              │
+│                                                                           │
+│ ▾ │ (ny)        │ ___                │ ___           │ ─          │       │
+│ ╔═══════════════════════════════════════════════════════════════════╗    │
+│ ║  Adresse *          [ Skråningen 14 · HN 42                 ▾ ] ║    │
+│ ║                       → Forkortelse: Skr_14                        ║    │
+│ ║                       ⓘ 1 eksisterende husstand:                  ║    │
+│ ║                          Skr_14 · PBS 115 · ➡ Fraflytter 01/06     ║    │
+│ ║                                                                     ║    │
+│ ║  PBS-nummer *       [ 116    ]                                     ║    │
+│ ║                       ⚠ PBS 101 bruges af Skr_17   (if duplicate)  ║    │
+│ ║                                                                     ║    │
+│ ║  Indflytningsdato * [ 15/05/2026                       📅 ]       ║    │
+│ ║                                                                     ║    │
+│ ║              [✕ Annuller]          [✓ Opret husstand]              ║    │
+│ ╚═══════════════════════════════════════════════════════════════════╝    │
+│ ▸ │ Skr_14      │ 115 ➡ Fraflytter   │ Skråningen 14 │ Emil, Frida│       │
+│ ▸ │ Skr_14      │ 116 ☀ Indflytter   │ Skråningen 14 │ (ingen)    │       │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
 **Changes:**
 
 | File | Change |
 |------|--------|
-| `prisma/schema.prisma` | Drop `@unique` on `Household.heynaboId` and `Inhabitant.heynaboId`, add `@@index` |
-| `server/data/prismaRepository.ts` | `saveHousehold`: find-first-active then create/update |
+| `app/components/admin/HouseholdCreateForm.vue` | New; parent-driven form, emits `create` + `cancel`; USelect for address (`address · HN id`), number input for PBS, CalendarDatePicker for date; Zod validation with PBS uniqueness refinement |
+| `app/components/admin/AdminHouseholds.vue` | `[+ Ny husstand]` button; show `HouseholdCreateForm` inline; handle `create` emit by calling store |
+| `app/stores/households.ts` | `createHousehold()` action |
+| `server/routes/api/admin/household/index.put.ts` | Accept create at existing address; copy `heynaboId` from sibling |
 
-### Phase 4: Admin Household UI + Import Routing
+**Verification:**
 
-**Goal:** Admin can set/clear `moveOutDate`, create new households, edit preferences, move inhabitants. Heynabo import routes new inhabitants to active households.
-
-**Changes:**
-
-| File | Change |
-|------|--------|
-| `app/components/admin/AdminHouseholds.vue` | moveOutDate column, create/edit household forms |
-| `app/stores/households.ts` | New admin actions: setMoveOutDate, createHousehold, moveInhabitant |
-| `server/utils/heynaboImportService.ts` | Route new inhabitants to household without moveOutDate |
-| `app/composables/useCoreValidation.ts` | `householdId` in `InhabitantUpdateSchema` |
+| # | Check | Test file |
+|---|-------|-----------|
+| pre | **All** unit and E2E suites green before and after this phase — `npx vitest run` + `npx playwright test` (full suite, not just touched files). No regressions tolerated. | — |
+| 1 | E2E API — create a second household at an existing address; both persist; `heynaboId` copied from sibling; PBS conflict returns 400 | `tests/e2e/api/parallel/admin/household.e2e.spec.ts` |
+| 2 | E2E API — Heynabo import with a new inhabitant at a `heynaboId` with one active + one leaving household routes to the active one | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` |
+| 3 | E2E API — Heynabo import with a new inhabitant at a `heynaboId` where all households have `moveOutDate` routes to the one with the newest `moveOutDate` | `tests/e2e/api/serial/admin/heynabo.e2e.spec.ts` |
+| 4 | E2E UI — admin clicks `[+ Ny husstand]`, fills PBS/adresse/indflytningsdato, submits, row appears with correct PBS and coexistence visible | `tests/e2e/ui/AdminHouseholds.e2e.spec.ts` |
+| 5 | Unit — `createHousehold` store action: success, PBS conflict, heynaboId copy | `tests/component/stores/households.nuxt.spec.ts` |
+| 6 | Unit — household create schema: required fields, PBS integer, date parsing | `tests/component/composables/useCoreValidation.unit.spec.ts` |
+| 7 | Factory — `createHouseholdAtExistingAddress(context, siblingPbsId, {pbsId, movedInDate})` helper added | `tests/e2e/testDataFactories/householdFactory.ts` |
+| 8 | `npx vitest run` green | — |
+| 9 | `npx playwright test tests/e2e/api/parallel/admin/household.e2e.spec.ts tests/e2e/api/serial/admin/heynabo.e2e.spec.ts tests/e2e/ui/AdminHouseholds.e2e.spec.ts --workers=4` green | — |
 
 ### Phase 5a: Household Member `moveOutDate` Setting ✅ DONE
 
@@ -299,15 +390,13 @@ URL disambiguation (Phase 2) MUST ship BEFORE the schema migration (Phase 3) tha
 
 | ADR | Impact |
 |-----|--------|
-| **ADR-005** (Cascade/SET NULL) | Future phases: inhabitant can move between households |
 | **ADR-006** (URL Navigation) | Phase 2: `?pbs=X` follows query param pattern |
 | **ADR-009** (Index Data Inclusion) | `moveOutDate` added to `HouseholdDisplay` (scalar, bounded, essential) |
-| **ADR-012** (Prisma.skip) | `moveOutDate` updates already compliant |
 | **ADR-013** (External System) | Phase 4: Heynabo import routing changes |
 | **ADR-015** (Idempotent Jobs) | Per-event filter is idempotent: same input → same output |
 | **ADR-016** (Unified Booking) | Predicate filters dinner events BEFORE generators — both modes inherit filtered set |
 
-**No new ADR needed.** The predicate follows existing composable patterns. However, **ADR-005 should be updated** in Phase 4 to document inhabitant reassignment.
+**No new ADR needed.** The predicate follows existing composable patterns.
 
 ## Verification Plan
 
@@ -316,7 +405,9 @@ URL disambiguation (Phase 2) MUST ship BEFORE the schema migration (Phase 3) tha
 | 1 | Unit + E2E tests for residency enforcement | 1 | ✅ |
 | 2 | `/household/S_31/bookings?pbs=100` resolves correctly | 2 | ✅ |
 | 3 | Two households with same `heynaboId` coexist | 3 | |
-| 4 | Heynabo import routes new members to active household | 4 | |
+| 4a | Admin can create a second household at an existing address via `[+ Ny husstand]`; `heynaboId` copied from sibling | 4 | |
+| 4b | Heynabo import routes new inhabitant to household with no `moveOutDate` when one exists | 4 | |
+| 4c | Heynabo import falls back to household with newest `moveOutDate` when none is active | 4 | |
 | 5a | Household member can set/clear moveOutDate in settings | 5a | ✅ |
 | 5b | Toast + alert shows scaffold result after set/clear | 5b | ✅ |
 | 5b | Info box warns about consequences before confirming | 5b | ✅ |
@@ -330,7 +421,6 @@ URL disambiguation (Phase 2) MUST ship BEFORE the schema migration (Phase 3) tha
 | Phase ordering mistake (schema before URL) | Medium | High | Strict phase gates |
 | Heynabo import fails with non-unique heynaboId | Medium | High | Phase 3 + 4 deploy together |
 | Existing moved-out households with stale orders | Low | Medium | Re-scaffold cleans up via orphan detection |
-| Admin moves inhabitant with active orders | Low | Medium | Validate: no active orders before allowing move |
 
 ## References
 

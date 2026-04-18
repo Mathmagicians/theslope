@@ -4,7 +4,7 @@ import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import testHelpers from '../testHelpers'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, temporaryAndRandom, doScreenshot} = testHelpers
+const {validatedBrowserContext, pollUntil, temporaryAndRandom, saltedId, doScreenshot} = testHelpers
 
 /**
  * UI TEST STRATEGY:
@@ -73,6 +73,62 @@ test.describe('AdminHouseholds View', () => {
         await expect(page.locator('[data-testid="admin-households"]')).toBeVisible()
     })
 
+    test('admin creates a new household at an existing address via the inline form', async ({page, browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const testSalt = temporaryAndRandom()
+
+        // GIVEN: a seed household (the address the admin will pick from the USelect)
+        const seed = await HouseholdFactory.createHousehold(context, {
+            ...HouseholdFactory.defaultHouseholdData(testSalt),
+            address: `UI Shared Lane ${testSalt}`
+        })
+        createdHouseholdIds.push(seed.id)
+
+        await navigateToHouseholds(page)
+
+        // WHEN: admin opens the inline create form
+        await page.getByTestId('open-create-household').click()
+        await expect(page.getByTestId('create-household-address')).toBeVisible()
+
+        // Fill scalar fields first. Picking the address later triggers the "prevOwner" section
+        // to render, which re-renders surrounding FormFields and drops any in-progress fill.
+        const newPbsId = saltedId(900500, testSalt)
+        const pbsInput = page.getByTestId('create-household-pbs')
+        await pbsInput.fill(String(newPbsId))
+        await expect(pbsInput).toHaveValue(String(newPbsId))
+
+        const moveInInput = page.locator('input[name="movedInDate"]')
+        await moveInInput.fill('15/05/2026')
+        await moveInInput.press('Tab')
+        await expect(moveInInput).toHaveValue('15/05/2026')
+
+        // Now pick the seed's address (USelect offers "{address} · HN {heynaboId}")
+        await page.getByTestId('create-household-address').click()
+        const addressOption = page.getByRole('option', {name: new RegExp(seed.address)}).first()
+        await expect(addressOption).toBeVisible()
+        await addressOption.click()
+
+        await page.getByTestId('create-household-submit').click()
+
+        // THEN: server persists a sibling household (heynaboId + name inherited from seed)
+        const newHousehold = await pollUntil(
+            () => HouseholdFactory.getAllHouseholds(context).then(all =>
+                all.find(h => h.pbsId === newPbsId)
+            ),
+            (h) => h !== undefined,
+            10
+        )
+        expect(newHousehold).toBeDefined()
+        expect(newHousehold!.heynaboId).toBe(seed.heynaboId)
+        expect(newHousehold!.name).toBe(seed.name)
+        expect(newHousehold!.address).toBe(seed.address)
+        createdHouseholdIds.push(newHousehold!.id)
+
+        // THEN: table row shows the new household (after the inline form closes)
+        await navigateAndFindHousehold(page, newHousehold!.id, seed.address, true)
+        await expect(page.locator(`[data-testid="household-address-${newHousehold!.id}"]`)).toBeVisible()
+    })
+
     test('GIVEN households with/without inhabitants WHEN searching THEN correct households are displayed', async ({
         page,
         browser
@@ -117,5 +173,71 @@ test.describe('AdminHouseholds View', () => {
         // THEN: Empty household is visible (use data-testid for exact match)
         const emptyHouseholdCell = page.locator(`[data-testid="household-address-${householdEmpty.id}"]`)
         await expect(emptyHouseholdCell, 'Empty household row should be visible').toBeVisible()
+    })
+
+    test('GIVEN two households at same address WHEN admin moves inhabitant THEN inhabitant appears in target', async ({page, browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const testSalt = temporaryAndRandom()
+
+        // GIVEN: Two households at same address with inhabitants
+        const {household: source, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+            context, HouseholdFactory.defaultHouseholdData(testSalt), 1
+        )
+        createdHouseholdIds.push(source.id)
+
+        const target = await HouseholdFactory.createHousehold(context, {
+            ...HouseholdFactory.defaultHouseholdData(testSalt + '-target'),
+            heynaboId: source.heynaboId,
+            address: source.address
+        })
+        createdHouseholdIds.push(target.id)
+
+        const inhabitant = inhabitants[0]!
+
+        // WHEN: Navigate to households, find target, expand edit panel
+        await navigateAndFindHousehold(page, target.id, target.address, true)
+        const targetRow = page.locator(`[data-testid="household-address-${target.id}"]`).locator('xpath=ancestor::tr')
+        await targetRow.getByRole('button').first().click()
+
+        // WHEN: Find inhabitant in the selector and click "Flyt hertil"
+        await pollUntil(
+            async () => await page.getByText(inhabitant.name).first().isVisible().catch(() => false),
+            (visible) => visible
+        )
+        const moveBtn = page.getByText('Flyt hertil').first()
+        await moveBtn.click()
+
+        // THEN: Inhabitant moved to target (verify via API)
+        const moved = await pollUntil(
+            () => HouseholdFactory.getInhabitantById(context, inhabitant.id),
+            (i) => i?.householdId === target.id
+        )
+        expect(moved!.householdId).toBe(target.id)
+    })
+
+    test('GIVEN household with no inhabitants WHEN admin deletes THEN household removed', async ({page, browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const testSalt = temporaryAndRandom()
+
+        // GIVEN: Empty household
+        const household = await HouseholdFactory.createHousehold(context, HouseholdFactory.defaultHouseholdData(testSalt + '-delete'))
+        // Don't add to cleanup — we're deleting it
+
+        // WHEN: Navigate, find household, expand edit panel
+        await navigateAndFindHousehold(page, household.id, household.address, true)
+        const row = page.locator(`[data-testid="household-address-${household.id}"]`).locator('xpath=ancestor::tr')
+        await row.getByRole('button').first().click()
+
+        // WHEN: Click delete (DangerButton two-click)
+        const deleteBtn = page.getByText(new RegExp(`Slet.*PBS ${household.pbsId}`)).first()
+        await deleteBtn.click()
+        // Second click (confirm)
+        await page.getByText(/Tryk igen/).first().click()
+
+        // THEN: Household no longer in list (verify via API)
+        await pollUntil(
+            () => HouseholdFactory.getAllHouseholds(context).then(all => all.find(h => h.id === household.id)),
+            (h) => h === undefined
+        )
     })
 })

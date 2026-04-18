@@ -33,7 +33,7 @@ export class HouseholdFactory {
             name: salt('Test Household Hurlumhej', testSalt),
             address: salt('Andeby 123', testSalt),
             movedInDate: now,
-            moveOutDate: null
+            moveOutDate: null as Date | null
         }
     }
 
@@ -89,6 +89,25 @@ export class HouseholdFactory {
 
         return responseBody
     }
+
+    /**
+     * Create a new household at an existing sibling's address.
+     * Inherits heynaboId + name + address from the sibling (mirrors the frontend
+     * HouseholdCreateForm behaviour). Overrides pbsId + movedInDate per caller.
+     */
+    static readonly createAtExistingAddress = async (
+        context: BrowserContext,
+        sibling: Pick<HouseholdDetail, 'heynaboId' | 'name' | 'address'>,
+        overrides: {pbsId: number, movedInDate: Date, moveOutDate?: Date | null},
+        expectedStatus: number = 201
+    ): Promise<HouseholdDetail> => this.createHousehold(context, {
+        heynaboId: sibling.heynaboId,
+        name: sibling.name,
+        address: sibling.address,
+        pbsId: overrides.pbsId,
+        movedInDate: overrides.movedInDate,
+        moveOutDate: overrides.moveOutDate ?? null
+    }, expectedStatus)
 
     static readonly createHouseholdWithInhabitants = async (
         context: BrowserContext,

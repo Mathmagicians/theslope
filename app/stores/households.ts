@@ -300,6 +300,112 @@ export const useHouseholdsStore = defineStore("Households", () => {
         }
     }
 
+    // Last move result (persists across component remounts)
+    const lastMoveResult = ref<ScaffoldResult | null>(null)
+
+    /**
+     * Move an inhabitant to a different household
+     * Updates householdId via admin endpoint, triggers re-scaffold on target household
+     */
+    const moveInhabitant = async (inhabitantId: number, targetHouseholdId: number) => {
+        const toast = useToast()
+        try {
+            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Moving inhabitant ${inhabitantId} to household ${targetHouseholdId}`)
+            const result = await $fetch<InhabitantUpdateResponse>(`/api/admin/household/inhabitants/${inhabitantId}`, {
+                method: 'POST',
+                body: {householdId: targetHouseholdId}
+            })
+
+            lastMoveResult.value = result.scaffoldResult
+            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Inhabitant moved: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
+
+            if (selectedHouseholdId.value) {
+                await refreshSelectedHousehold()
+            }
+            await refreshHouseholds()
+
+            const bookingsStore = useBookingsStore()
+            await bookingsStore.refreshOrders()
+
+            const targetHousehold = households.value.find(h => h.id === targetHouseholdId)
+            const targetLabel = targetHousehold ? `${targetHousehold.shortName} (PBS ${targetHousehold.pbsId})` : `husstand ${targetHouseholdId}`
+            const scaffoldSummary = formatScaffoldResult(result.scaffoldResult)
+            const hasOrderChanges = result.scaffoldResult.created > 0 || result.scaffoldResult.deleted > 0 || result.scaffoldResult.released > 0
+
+            toast.add({
+                title: `${result.inhabitant.name} ${result.inhabitant.lastName} flyttet til ${targetLabel}`,
+                description: hasOrderChanges ? scaffoldSummary : undefined,
+                color: 'success'
+            })
+
+            return result
+        } catch (e: unknown) {
+            handleApiError(e, 'moveInhabitant')
+        }
+    }
+
+    /**
+     * Delete a household (CASCADE removes inhabitants, ADR-005)
+     */
+    const deleteHousehold = async (householdId: number) => {
+        const toast = useToast()
+        // Capture identity before deletion (lookup disappears after refreshHouseholds)
+        const deleted = households.value.find(h => h.id === householdId)
+        try {
+            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Deleting household ${householdId}`)
+            await $fetch(`/api/admin/household/${householdId}`, {method: 'DELETE'})
+            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Household ${householdId} deleted`)
+
+            if (selectedHouseholdId.value === householdId) {
+                selectedHouseholdId.value = null
+            }
+            await refreshHouseholds()
+
+            toast.add({
+                title: 'Husstand slettet',
+                description: deleted ? `${deleted.shortName} · PBS ${deleted.pbsId}` : undefined,
+                color: 'success'
+            })
+        } catch (e: unknown) {
+            handleApiError(e, 'deleteHousehold')
+        }
+    }
+
+    /**
+     * Create a new household at an existing Heynabo address, optionally applying
+     * move-out updates to prev owners at the same address (reuses setMoveOutDate).
+     */
+    const createHousehold = async (payload: {
+        pbsId: number
+        address: string
+        movedInDate: Date
+        heynaboId: number
+        name: string
+        prevOwnerMoveOutUpdates?: {id: number, moveOutDate: Date}[]
+    }): Promise<HouseholdDetail | null> => {
+        const toast = useToast()
+        const {prevOwnerMoveOutUpdates = [], ...createBody} = payload
+        try {
+            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Creating household at ${payload.address} (PBS ${payload.pbsId})`)
+            const created = await $fetch<HouseholdDetail>('/api/admin/household', {
+                method: 'PUT',
+                body: createBody
+            })
+            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Created household ${created.id} at ${created.address}`)
+
+            for (const update of prevOwnerMoveOutUpdates) {
+                await setMoveOutDate(update.id, update.moveOutDate, true)
+            }
+
+            await refreshHouseholds()
+            toast.add({title: 'Husstand oprettet', description: `${created.shortName} · PBS ${created.pbsId}`, color: 'success'})
+            return created
+        } catch (e: unknown) {
+            handleApiError(e, 'createHousehold')
+            return null
+        }
+    }
+
     /**
      * Initialize store - ensures households are fetched and auto-selects user's own household
      * Used by components that just need "ensure store is initialized" (AdminHouseholds, AdminEconomy, DinnerBookingForm)
@@ -326,6 +432,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         selectedHouseholdId,
         lastPreferenceResult,
         lastMoveOutResult,
+        lastMoveResult,
         // Computed
         myHousehold,
         myInhabitant,
@@ -348,6 +455,9 @@ export const useHouseholdsStore = defineStore("Households", () => {
         updateInhabitantPreferences,
         updateAllInhabitantPreferences,
         setMoveOutDate,
+        moveInhabitant,
+        deleteHousehold,
+        createHousehold,
         getHouseholdForInhabitant
     }
 })

@@ -405,6 +405,21 @@ heal-prod: ## Heal user bookings (prod) - hid=householdId dryrun=true|false
 	$(call theslope_call,$(ENV_prod),$(URL_prod),-X POST "$(URL_prod)/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
 
 # ============================================================================
+# REGENERATE DINNER EVENTS (reconcile with season config - fixes stale holiday events)
+# ============================================================================
+# Usage: make regen-dinner-events-prod sid=2
+.PHONY: regen-dinner-events-local regen-dinner-events-dev regen-dinner-events-prod
+
+regen-dinner-events-local: ## Regenerate dinner events (local) - sid=seasonId
+	$(call theslope_call,$(ENV_local),$(URL_local),-X POST "$(URL_local)/api/admin/season/$(sid)/generate-dinner-events")
+
+regen-dinner-events-dev: ## Regenerate dinner events (dev) - sid=seasonId
+	$(call theslope_call,$(ENV_dev),$(URL_dev),-X POST "$(URL_dev)/api/admin/season/$(sid)/generate-dinner-events")
+
+regen-dinner-events-prod: ## Regenerate dinner events (prod) - sid=seasonId
+	$(call theslope_call,$(ENV_prod),$(URL_prod),-X POST "$(URL_prod)/api/admin/season/$(sid)/generate-dinner-events")
+
+# ============================================================================
 # TESTING
 # ============================================================================
 .PHONY: unit-test unit-test-single e2e-team e2e-season

@@ -33,7 +33,7 @@ async function getTokenFromHeynaboApi(username: string | undefined, password: st
         statusCode: 400,
         statusMessage: "Heynabo integration not configured properly - missing env variables"
     })
-    console.info(LOG, "TOKEN >", "Getting token for username: ", username)
+    console.info(LOG, "TOKEN >", "Getting token for username: ", maskPassword(username))
 
     let heynaboUser: LoggedInHeynaboUser
 
@@ -64,7 +64,7 @@ export async function getApiToken(username: string, password: string, api: strin
 
 export async function loginUserIntoHeynabo(username: string, password: string): Promise<LoggedInHeynaboUser> {
     const result = await getTokenFromHeynaboApi(username, password, heyNaboApi)
-    console.info(LOG, "LOGIN > Logged into Heynabo for username: ", username, result?.token.length > 0 ? "🔑" : "❌")
+    console.info(LOG, "LOGIN > Logged into Heynabo for username: ", maskPassword(username), result?.token.length > 0 ? "🔑" : "❌")
     return result
 }
 

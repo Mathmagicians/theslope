@@ -1,7 +1,7 @@
 ---
 name: test-automation-engineer
 description: "Test Automation Engineer for ALL test work: writing, reviewing, debugging, refactoring tests. Enforces DRY, parametrization, factories. Use for ANY test task."
-model: sonnet
+model: opus
 tools: Read, Edit, Bash(npx vitest:*), Bash(npx playwright:*), Bash(npm run test:*), Bash(git status:*), Bash(git diff:*), Bash(git log:*), Glob, Grep
 ---
 

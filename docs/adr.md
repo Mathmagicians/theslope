@@ -362,6 +362,10 @@ const { create, update, idempotent, delete: toDelete } = reconcile(existing)(inc
 
 **Note:** Heynabo uses `CANCELED` (one L).
 
+### Heynabo Import Routing (Multiple Households per Address)
+
+`Household.heynaboId` is NOT unique — multiple households can share an address (old family leaving, new family arriving). The import service uses `buildResolvedHouseholdMap` (Decision 4 in `feature-proposal-move-out-date.md`) to deterministically pick one household per heynaboId for reconciliation and inhabitant routing. All households at the same heynaboId receive Heynabo-owned field updates (name, address); each household's TheSlope-owned fields (pbsId, movedInDate, moveOutDate) are preserved individually via `mergeHouseholdForUpdate`.
+
 ### Compliance
 
 1. External IDs MUST be nullable fields
@@ -369,6 +373,8 @@ const { create, update, idempotent, delete: toDelete } = reconcile(existing)(inc
 3. Admin sync: use system credentials, warn on error (don't block local changes)
 4. Heynabo updates MUST use PATCH
 5. Image uploads: non-blocking (warn on failure)
+6. External ID → internal ID resolution is an integration concern (import service / routing module), NOT a persistence concern. Repository MUST NOT resolve ambiguous external IDs.
+7. `Map.groupBy` is NOT available in Cloudflare Workers runtime. Use `groupBy` from `~/utils/batchUtils.ts` for server-side grouping.
 
 ---
 
@@ -474,6 +480,7 @@ export const deserializeSeason = (s: SerializedSeason) => ({ ...s, holidays: JSO
 2. Repository MUST serialize before writes, deserialize after reads
 3. Composables MUST export: domain schema, serialized schema, transform functions
 4. Tests MUST use domain types (no manual serialization)
+5. Repository WHERE clauses MUST use unique fields (`id` or `@unique` constraints). Non-unique lookups MUST be resolved by caller before reaching the repository.
 
 ---
 

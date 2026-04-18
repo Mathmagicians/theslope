@@ -11,6 +11,7 @@ import {
     createTeamRoster,
     distanceToToday,
     findFirstCookingDayInDates,
+    getAdjacentDinner,
     getNextDinnerDate,
     getSeasonStatus,
     isBeforeDeadline,
@@ -27,7 +28,7 @@ import {
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import type {DateRange, WeekDay, WeekDayMap} from '~/types/dateTypes'
-import {createDateInTimezone} from '~/utils/date'
+import {createDateInTimezone, getPeriodBoundary} from '~/utils/date'
 import {createWeekDayMapFromSelection} from '~/types/dateTypes'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import {SeasonFactory} from '../../e2e/testDataFactories/seasonFactory'
@@ -1316,6 +1317,112 @@ describe('Active Season Management utilities', () => {
                     expect(result.nextDinnerDateRange?.end).toEqual(expectedEnd)
                 }
             })
+        })
+    })
+
+    describe('getAdjacentDinner', () => {
+        // Config matches app defaults: dinner 18:00 CPH, 60-minute window.
+        // Using createDateInTimezone-consumed CPH hours inside splitDinnerEvents is TZ-safe
+        // because (a) event.date is local-midnight, (b) boundary is derived from local-time
+        // helpers (startOf*/endOf*), and (c) isSameDay/isBefore operate on absolute timestamps
+        // where both sides shift identically under TZ change.
+        const find = getAdjacentDinner(18, 60)
+
+        // Week-sparse dinner series (Mon/Wed/Fri pattern) covering 3 ISO weeks in January 2025:
+        //   Week of Mon 13: [Mon 13, Wed 15, Fri 17]
+        //   Week of Mon 20: (empty — skip)
+        //   Week of Mon 27: [Wed 29]
+        // And later, a month-skipping series:
+        //   January: [Wed 15, Mon 27], then March: [Mon Mar 3] (February = empty month)
+        const d = (dd: number, mm = 0) => ({date: new Date(2025, mm, dd)})
+        const mon13 = d(13)
+        const wed15 = d(15)
+        const fri17 = d(17)
+        const mon20Boundary = new Date(2025, 0, 20) // no dinner that day
+        const wed29 = d(29)
+        const mar3 = d(3, 2)
+
+        // Same boundary helper prod code uses (DRY).
+        const boundary = (date: Date, view: 'day' | 'week' | 'month', direction: 1 | -1) =>
+            getPeriodBoundary(date, view, direction)
+
+        it.each([
+            // DAY view — finds the immediately prior/next dinner relative to the day.
+            {desc: 'day +1 from Wed 15 → Fri 17',
+                events: [mon13, wed15, fri17], input: wed15.date, view: 'day' as const,
+                direction: 1 as const, expected: fri17.date},
+            {desc: 'day -1 from Wed 15 → Mon 13',
+                events: [mon13, wed15, fri17], input: wed15.date, view: 'day' as const,
+                direction: -1 as const, expected: mon13.date},
+
+            // WEEK view — skips the empty intermediate week.
+            {desc: 'week +1 from week-of-Mon-13 skips empty week-of-20 → Wed 29',
+                events: [mon13, wed15, fri17, wed29], input: wed15.date, view: 'week' as const,
+                direction: 1 as const, expected: wed29.date},
+            {desc: 'week -1 from week-of-Mon-27 skips empty week-of-20 → Fri 17',
+                events: [mon13, wed15, fri17, wed29], input: wed29.date, view: 'week' as const,
+                direction: -1 as const, expected: fri17.date},
+
+            // MONTH view — skips the empty intermediate month (February).
+            {desc: 'month +1 from January skips empty February → Mar 3',
+                events: [wed15, wed29, mar3], input: wed15.date, view: 'month' as const,
+                direction: 1 as const, expected: mar3.date},
+            {desc: 'month -1 from March skips empty February → Wed 29',
+                events: [wed15, wed29, mar3], input: mar3.date, view: 'month' as const,
+                direction: -1 as const, expected: wed29.date},
+
+            // Boundary conditions — returns null at first/last dinner.
+            {desc: 'day +1 from last dinner → null',
+                events: [mon13, wed15, fri17], input: fri17.date, view: 'day' as const,
+                direction: 1 as const, expected: null},
+            {desc: 'day -1 from first dinner → null',
+                events: [mon13, wed15, fri17], input: mon13.date, view: 'day' as const,
+                direction: -1 as const, expected: null},
+
+            // Empty input list.
+            {desc: '+1 on empty list → null',
+                events: [], input: wed15.date, view: 'day' as const,
+                direction: 1 as const, expected: null},
+            {desc: '-1 on empty list → null',
+                events: [], input: wed15.date, view: 'day' as const,
+                direction: -1 as const, expected: null},
+
+            // Input from a non-dinner day (e.g. route parameter landed on a non-cooking day).
+            {desc: 'day +1 from non-dinner day → next dinner after',
+                events: [mon13, wed15, fri17, wed29], input: mon20Boundary, view: 'day' as const,
+                direction: 1 as const, expected: wed29.date},
+            {desc: 'day -1 from non-dinner day → last dinner before',
+                events: [mon13, wed15, fri17, wed29], input: mon20Boundary, view: 'day' as const,
+                direction: -1 as const, expected: fri17.date}
+        ])('$desc', ({events, input, view, direction, expected}) => {
+            const b = boundary(input, view, direction)
+            const result = find(events, b, direction)
+            if (expected === null) {
+                expect(result).toBeNull()
+            } else {
+                expect(result?.getTime()).toBe(expected.getTime())
+            }
+        })
+
+        it('sorts unordered input deterministically', () => {
+            // Shuffled input: Fri 17, Mon 13, Wed 15. Day +1 from Mon 13 must still be Wed 15.
+            const shuffled = [fri17, mon13, wed15]
+            const b = boundary(mon13.date, 'day', 1)
+            const result = find(shuffled, b, 1)
+            expect(result?.getTime()).toBe(wed15.date.getTime())
+        })
+
+        it('regression guard: day +1 from a dinner day uses endOfDay boundary, skipping same day', () => {
+            // Bug we are preventing: if we used `date` as the boundary (not endOfDay), then the
+            // current day's dinner would fall inside the "dinner is ongoing" window of
+            // splitDinnerEvents and be returned as nextDinner — blocking forward navigation.
+            //
+            // Assert: day +1 from Wed 15 with only dinners [Wed 15, Fri 17] returns Fri 17.
+            const events = [wed15, fri17]
+            const b = boundary(wed15.date, 'day', 1)
+            expect(b.getTime()).toBe(new Date(2025, 0, 15, 23, 59, 59, 999).getTime())
+            const result = find(events, b, 1)
+            expect(result?.getTime()).toBe(fri17.date.getTime())
         })
     })
 

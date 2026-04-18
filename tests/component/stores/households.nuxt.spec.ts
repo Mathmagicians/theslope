@@ -32,11 +32,17 @@ const householdIndexEndpoint = vi.fn()
 const householdByIdEndpoint = vi.fn()
 const preferencesEndpoint1 = vi.fn()
 const preferencesEndpoint2 = vi.fn()
+const moveInhabitantEndpoint = vi.fn()
+const deleteHouseholdEndpoint = vi.fn()
 
 registerEndpoint('/api/household/inhabitants/1/preferences', preferencesEndpoint1)
 registerEndpoint('/api/household/inhabitants/2/preferences', preferencesEndpoint2)
+// Generic (no method) registered BEFORE method-specific so method-specific wins (reverse-order lookup)
 registerEndpoint('/api/admin/household/1', householdByIdEndpoint)
 registerEndpoint('/api/admin/household/2', householdByIdEndpoint)
+registerEndpoint('/api/admin/household/inhabitants/1', { handler: moveInhabitantEndpoint, method: 'POST' })
+registerEndpoint('/api/admin/household/1', { handler: deleteHouseholdEndpoint, method: 'DELETE' })
+registerEndpoint('/api/admin/household/2', { handler: deleteHouseholdEndpoint, method: 'DELETE' })
 registerEndpoint('/api/admin/household', householdIndexEndpoint)
 
 // ========================================
@@ -145,11 +151,15 @@ describe('Households Store', () => {
     householdByIdEndpoint.mockClear()
     preferencesEndpoint1.mockClear()
     preferencesEndpoint2.mockClear()
+    moveInhabitantEndpoint.mockClear()
+    deleteHouseholdEndpoint.mockClear()
 
     householdIndexEndpoint.mockReturnValue(createMockHouseholds())
     householdByIdEndpoint.mockReturnValue(createMockHouseholdDetail())
     preferencesEndpoint1.mockReturnValue(createMockInhabitantUpdateResponse())
     preferencesEndpoint2.mockReturnValue(createMockInhabitantUpdateResponse())
+    moveInhabitantEndpoint.mockReturnValue(createMockInhabitantUpdateResponse())
+    deleteHouseholdEndpoint.mockReturnValue(null)
   })
 
   it('initializes with 2 households', async () => {
@@ -394,6 +404,127 @@ describe('Households Store', () => {
       await expect(
         store.updateAllInhabitantPreferences(1, { MONDAY: 'DINEIN' })
       ).rejects.toThrow()
+    })
+  })
+
+  describe('moveInhabitant', () => {
+    it('calls POST /api/admin/household/inhabitants/:id with target householdId', async () => {
+      const store = await setupStore()
+
+      await store.moveInhabitant(1, 2)
+
+      expect(moveInhabitantEndpoint).toHaveBeenCalledTimes(1)
+    })
+
+    it('stores scaffold result in lastMoveResult', async () => {
+      const store = await setupStore()
+      const mockResponse = createMockInhabitantUpdateResponse()
+      moveInhabitantEndpoint.mockReturnValue(mockResponse)
+
+      await store.moveInhabitant(1, 2)
+
+      expect(store.lastMoveResult).toEqual(mockResponse.scaffoldResult)
+    })
+
+    it('returns an InhabitantUpdateResponse with inhabitant and scaffoldResult', async () => {
+      const store = await setupStore()
+      const mockResponse = createMockInhabitantUpdateResponse()
+      moveInhabitantEndpoint.mockReturnValue(mockResponse)
+
+      const result = await store.moveInhabitant(1, 2)
+
+      // $fetch returns JSON-deserialized data (dates as strings), so compare non-date fields
+      expect(result?.inhabitant.id).toBe(mockResponse.inhabitant.id)
+      expect(result?.scaffoldResult).toEqual(mockResponse.scaffoldResult)
+    })
+
+    it('refreshes selected household after move when one is selected', async () => {
+      const store = await setupStore()
+
+      store.loadHousehold(1)
+      await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
+      householdByIdEndpoint.mockClear()
+
+      await store.moveInhabitant(1, 2)
+
+      expect(householdByIdEndpoint).toHaveBeenCalled()
+    })
+
+    it('refreshes household list after move', async () => {
+      const store = await setupStore()
+      householdIndexEndpoint.mockClear()
+
+      await store.moveInhabitant(1, 2)
+
+      expect(householdIndexEndpoint).toHaveBeenCalled()
+    })
+
+    it.each([
+      { description: 'no order changes (created=0, deleted=0, released=0)', scaffoldOverrides: { created: 0, deleted: 0, released: 0 } },
+      { description: 'with order changes (created=3)', scaffoldOverrides: { created: 3, deleted: 0, released: 0 } }
+    ])('does not throw on success with $description', async ({ scaffoldOverrides }) => {
+      const store = await setupStore()
+      moveInhabitantEndpoint.mockReturnValue(
+        InhabitantUpdateResponseSchema.parse({
+          inhabitant: createMockInhabitant(1, 2),
+          scaffoldResult: createMockScaffoldResult(scaffoldOverrides)
+        })
+      )
+
+      await expect(store.moveInhabitant(1, 2)).resolves.not.toThrow()
+    })
+
+    it('does not throw on API error (calls handleApiError instead)', async () => {
+      const store = await setupStore()
+      moveInhabitantEndpoint.mockImplementation(() => {
+        throw createError({ statusCode: 500, statusMessage: 'Server error' })
+      })
+
+      // moveInhabitant catches errors with handleApiError and does not rethrow
+      await expect(store.moveInhabitant(1, 2)).resolves.toBeUndefined()
+    })
+  })
+
+  describe('deleteHousehold', () => {
+    it('calls DELETE /api/admin/household/:id', async () => {
+      const store = await setupStore()
+
+      await store.deleteHousehold(1)
+
+      expect(deleteHouseholdEndpoint).toHaveBeenCalledTimes(1)
+    })
+
+    it('refreshes household list after deletion', async () => {
+      const store = await setupStore()
+      householdIndexEndpoint.mockClear()
+
+      await store.deleteHousehold(1)
+
+      expect(householdIndexEndpoint).toHaveBeenCalled()
+    })
+
+    it.each([
+      { description: 'selected household is the deleted one', selectedId: 1, expectedAfter: null },
+      { description: 'selected household is a different one', selectedId: 2, expectedAfter: 2 }
+    ])('clears selectedHouseholdId when $description', async ({ selectedId, expectedAfter }) => {
+      const store = await setupStore()
+
+      store.loadHousehold(selectedId)
+      await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(selectedId))
+
+      await store.deleteHousehold(1)
+
+      expect(store.selectedHouseholdId).toBe(expectedAfter)
+    })
+
+    it('does not throw on API error (calls handleApiError instead)', async () => {
+      const store = await setupStore()
+      deleteHouseholdEndpoint.mockImplementation(() => {
+        throw createError({ statusCode: 500, statusMessage: 'Server error' })
+      })
+
+      // deleteHousehold catches errors with handleApiError and does not rethrow
+      await expect(store.deleteHousehold(1)).resolves.toBeUndefined()
     })
   })
 })
