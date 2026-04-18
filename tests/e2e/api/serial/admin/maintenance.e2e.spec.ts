@@ -16,7 +16,7 @@ const {JobType, JobStatus} = useMaintenanceValidation()
 const DinnerState = DinnerStateSchema.enum
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
-const {validatedBrowserContext, temporaryAndRandom, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, temporaryAndRandom, getSessionUserInfo, salt} = testHelpers
 
 // === HELPERS ===
 
@@ -87,6 +87,7 @@ test.describe('Daily Maintenance API', () => {
 
     const createdDinnerEventIds: number[] = []
     const createdInhabitantIds: number[] = []
+    const createdHouseholdIds: number[] = []
     let activeSeason: Season
 
     test.beforeAll(async ({browser}) => {
@@ -101,6 +102,9 @@ test.describe('Daily Maintenance API', () => {
         }
         for (const id of createdDinnerEventIds) {
             await DinnerEventFactory.deleteDinnerEvent(context, id)
+        }
+        for (const id of createdHouseholdIds) {
+            await HouseholdFactory.deleteHousehold(context, id)
         }
     })
 
@@ -174,6 +178,26 @@ test.describe('Daily Maintenance API', () => {
         expect(guestOrderId, 'Guest order ID should exist').toBeDefined()
         expect(orderId, 'Order IDs should be different').not.toBe(guestOrderId)
 
+        // Setup: 2nd household at a different address so billing yields ≥2 invoices → can verify ordering
+        const secondHousehold = await HouseholdFactory.createHouseholdWithInhabitants(
+            context,
+            {address: salt('ZZZ Ordering Test', testSalt)}, // 'ZZZ' sorts after session household's address
+            1
+        )
+        createdHouseholdIds.push(secondHousehold.household.id)
+        // Admin session doesn't belong to 2nd household → use adminBypass
+        await OrderFactory.createOrder(context, {
+            householdId: secondHousehold.household.id,
+            dinnerEventId: dinner.id,
+            orders: [{
+                inhabitantId: secondHousehold.inhabitants[0]!.id,
+                bookedByUserId: 1,
+                ticketPriceId: ticketPrice.id!,
+                dinnerMode: DinnerMode.DINEIN,
+                isGuestTicket: false
+            }]
+        }, 201, true)
+
         // Setup: Create inhabitant with NULL preferences (simulates Heynabo import)
         const nullPrefsInhabitant = await HouseholdFactory.createInhabitantWithConfig(
             context, householdId, {dinnerPreferences: null}
@@ -246,6 +270,38 @@ test.describe('Daily Maintenance API', () => {
         expect(testInvoice!.householdId, 'Invoice householdId should not be null').not.toBeNull()
         expect(testInvoice!.householdId, 'Invoice householdId should be valid (> 0)').toBeGreaterThan(0)
         expect(testInvoice!.pbsId, 'Invoice pbsId should be valid (> 0)').toBeGreaterThan(0)
+
+        // Verify invoices ordered by address (primary) then pbsId (tiebreaker)
+        // Second household was created with 'ZZZ' address to guarantee ≥2 invoices in this period
+        expect(periodDetail.invoices.length, 'Need at least 2 invoices to verify ordering').toBeGreaterThanOrEqual(2)
+        for (let i = 1; i < periodDetail.invoices.length; i++) {
+            const prev = periodDetail.invoices[i - 1]!
+            const curr = periodDetail.invoices[i]!
+            if (prev.address === curr.address) {
+                expect(curr.pbsId).toBeGreaterThanOrEqual(prev.pbsId)
+            } else {
+                expect(curr.address.localeCompare(prev.address)).toBeGreaterThanOrEqual(0)
+            }
+        }
+
+        // Control sum: Σ invoice.amount equals billing period totalAmount
+        expect(periodDetail.invoiceSum, 'invoiceSum control should match totalAmount').toBe(periodDetail.totalAmount)
+
+        // Control sum: each invoice.transactionSum equals Σ of its transactions
+        // Structure check: getInvoiceTransactions returns transactions with expected fields
+        for (const invoice of periodDetail.invoices) {
+            const transactions = await BillingFactory.getInvoiceTransactions(context, invoice.id)
+            const computedSum = transactions.reduce((sum, tx) => sum + tx.amount, 0)
+            expect(invoice.transactionSum, `transactionSum for invoice ${invoice.id} should equal Σ transactions`).toBe(computedSum)
+            if (transactions.length > 0) {
+                const tx = transactions[0]!
+                expect(tx).toHaveProperty('id')
+                expect(tx).toHaveProperty('amount')
+                expect(tx).toHaveProperty('dinnerEvent')
+                expect(tx).toHaveProperty('inhabitant')
+                expect(tx).toHaveProperty('ticketType')
+            }
+        }
 
         // GET billing via public magic link
         const publicData = await BillingFactory.getBillingPeriodByToken(context, periodDetail.shareToken)

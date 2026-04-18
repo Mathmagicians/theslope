@@ -88,20 +88,26 @@ test.describe('AdminHouseholds View', () => {
 
         // WHEN: admin opens the inline create form
         await page.getByTestId('open-create-household').click()
-        await doScreenshot(page, 'adminhouseholds-after-open-click')
-        const createForm = page.getByTestId('create-household-form')
-        await expect(createForm).toBeVisible()
+        await expect(page.getByTestId('create-household-address')).toBeVisible()
 
-        // WHEN: pick the seed's address (USelect offers "{address} · HN {heynaboId}")
-        await page.getByTestId('create-household-address').click()
-        await page.getByRole('option', {name: new RegExp(seed.address)}).first().click()
-
-        // WHEN: fill unique PBS + move-in date + submit
+        // Fill scalar fields first. Picking the address later triggers the "prevOwner" section
+        // to render, which re-renders surrounding FormFields and drops any in-progress fill.
         const newPbsId = saltedId(900500, testSalt)
-        await page.getByTestId('create-household-pbs').fill(String(newPbsId))
-        const moveInInput = createForm.locator('input[name="movedInDate"]')
+        const pbsInput = page.getByTestId('create-household-pbs')
+        await pbsInput.fill(String(newPbsId))
+        await expect(pbsInput).toHaveValue(String(newPbsId))
+
+        const moveInInput = page.locator('input[name="movedInDate"]')
         await moveInInput.fill('15/05/2026')
         await moveInInput.press('Tab')
+        await expect(moveInInput).toHaveValue('15/05/2026')
+
+        // Now pick the seed's address (USelect offers "{address} · HN {heynaboId}")
+        await page.getByTestId('create-household-address').click()
+        const addressOption = page.getByRole('option', {name: new RegExp(seed.address)}).first()
+        await expect(addressOption).toBeVisible()
+        await addressOption.click()
+
         await page.getByTestId('create-household-submit').click()
 
         // THEN: server persists a sibling household (heynaboId + name inherited from seed)

@@ -138,10 +138,11 @@ test.describe('AdminTeams Form UI', () => {
             await teamInput.press('End') // Move cursor to end
             await teamInput.type('Q')
 
-            // Setup response wait BEFORE blur to avoid race condition
+            // Setup response wait BEFORE blur to avoid race condition.
+            // 15s timeout tolerates parallel-load latency; POST triggers dinner event reconciliation (ADR-015).
             const responsePromise = page.waitForResponse(
                 (response: Response) => response.url().includes('/api/admin/team/') && response.request().method() === 'POST',
-                { timeout: 5000 }
+                { timeout: 15000 }
             )
             await teamInput.blur() // Trigger save on blur
             await responsePromise

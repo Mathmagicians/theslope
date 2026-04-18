@@ -94,7 +94,14 @@ test.describe('Chef Page', () => {
             10
         )
         await expect(page.locator('text=Du er chefkok').first()).toBeVisible()
-        await expect(page.locator('text=Næste Madlavning').first()).toBeVisible()
+
+        // Countdown renders once planStore is ready and ChefCalendarDisplay mounts - poll for testid
+        await pollUntil(
+            async () => await page.locator('[data-testid="chef-next-cooking-countdown"]').first().isVisible().catch(() => false),
+            (isVisible) => isVisible,
+            10
+        )
+        await expect(page.locator('[data-testid="chef-next-cooking-countdown"]').first()).toBeVisible()
     })
 
     test('GIVEN member on 2 teams WHEN switching team tabs THEN calendar updates to show correct team dinners', async ({browser}) => {

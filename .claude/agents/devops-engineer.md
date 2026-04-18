@@ -2,7 +2,7 @@
 name: devops-engineer
 description: DevOps Engineer responsible for GitHub pull requests, CI/CD pipelines, and GitOps workflows for TheSlope project
 tools: Bash(gh pr create:*), Bash(gh pr status:*), Bash(gh pr checks:*), Bash(gh pr merge:*), Bash(gh workflow list:*), Bash(gh run list:*)
-model: sonnet
+model: opus
 ---
 
 # DevOps Engineer Subagent

@@ -252,6 +252,11 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
             // Submit and verify via API
             await page.getByTestId('submit-season').click()
+            await pollUntil(
+                async () => /\bmode=view\b/.test(page.url()),
+                (inViewMode) => inViewMode,
+                10
+            )
             await expect(page).toHaveURL(/.*mode=view/)
 
             const updatedSeason = await pollUntil(
