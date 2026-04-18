@@ -8,7 +8,7 @@ import type {CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTe
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
-    findFirstCookingDayInDates, getNextDinnerDate, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
+    findFirstCookingDayInDates, getNextDinnerDate, getAdjacentDinner, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
     isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
     selectMostAppropriateActiveSeason, isBeforeDeadline} from "~/utils/season"
 import {getEachDayOfIntervalWithSelectedWeekdays, formatDate, calculateDayFromWeekNumber, formatDateRange, DATE_SETTINGS} from "~/utils/date"
@@ -365,6 +365,7 @@ export const useSeason = () => {
     // Pre-configured with defaults from appConfig
     const configuredSplitDinnerEvents = splitDinnerEvents(getDefaultDinnerStartTime(), getDefaultDinnerDuration())
     const configuredGetNextDinnerDate = getNextDinnerDate(getDefaultDinnerStartTime(), getDefaultDinnerDuration())
+    const configuredGetAdjacentDinner = getAdjacentDinner(getDefaultDinnerStartTime(), getDefaultDinnerDuration())
 
     /**
      * Get deadline functions configured for a specific season.
@@ -548,6 +549,7 @@ export const useSeason = () => {
         isNextDinnerDate,
         getDinnerTimeRange,
         getNextDinnerDate: configuredGetNextDinnerDate,
+        getAdjacentDinner: configuredGetAdjacentDinner,
         splitDinnerEvents: configuredSplitDinnerEvents,
         sortDinnerEventsByTemporal,
         deadlinesForSeason,

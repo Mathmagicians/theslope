@@ -11,6 +11,9 @@ import {useBookingView, useDinnerDateParam, BookingViewSchema, type BookingView}
  * Architecture:
  * - useDinnerDateParam: creates date query param with dinner validation
  * - useBookingView: takes refs, provides navigation logic (hasPrev, hasNext, navigate)
+ *
+ * Navigation model: getPeriodBoundary(date, view, direction) → boundary → getAdjacentDinner →
+ * the next/previous dinner on that side of the boundary (null if none, which hides the arrow).
  */
 
 const {mockNavigateTo, mockRouteData} = vi.hoisted(() => ({
@@ -26,7 +29,6 @@ const {mockNavigateTo, mockRouteData} = vi.hoisted(() => ({
 mockNuxtImport('navigateTo', () => mockNavigateTo)
 mockNuxtImport('useRoute', () => () => mockRouteData)
 
-// Test data factory
 const setupQuery = (query: Record<string, string>) => {
   for (const key in mockRouteData.query) {
     if (Object.hasOwn(mockRouteData.query, key)) {
@@ -73,12 +75,12 @@ describe('useBookingView', () => {
   describe('dateRange Computed', () => {
     const rangeCases: { view: BookingView, date: Date, expectedStartDay: number, expectedEndDay: number }[] = [
       // Day view: same start/end
-      {view: 'day', date: new Date('2025-01-15'), expectedStartDay: 15, expectedEndDay: 15},
+      {view: 'day', date: new Date(2025, 0, 15), expectedStartDay: 15, expectedEndDay: 15},
       // Week view: Monday-Sunday (15th is Wednesday → 13-19)
-      {view: 'week', date: new Date('2025-01-15'), expectedStartDay: 13, expectedEndDay: 19},
+      {view: 'week', date: new Date(2025, 0, 15), expectedStartDay: 13, expectedEndDay: 19},
       // Month view: 1st to last day
-      {view: 'month', date: new Date('2025-01-15'), expectedStartDay: 1, expectedEndDay: 31},
-      {view: 'month', date: new Date('2025-02-15'), expectedStartDay: 1, expectedEndDay: 28}
+      {view: 'month', date: new Date(2025, 0, 15), expectedStartDay: 1, expectedEndDay: 31},
+      {view: 'month', date: new Date(2025, 1, 15), expectedStartDay: 1, expectedEndDay: 28}
     ]
 
     it.each(rangeCases)('$view view → days $expectedStartDay-$expectedEndDay', ({view, date, expectedStartDay, expectedEndDay}) => {
@@ -91,13 +93,13 @@ describe('useBookingView', () => {
 
   describe('weeks Computed', () => {
     it.each(['day', 'week'] as const)('returns empty for %s view', (view) => {
-      const refs = createMockRefs(new Date('2025-01-15'), view)
+      const refs = createMockRefs(new Date(2025, 0, 15), view)
       const {weeks} = useBookingView({...refs})
       expect(weeks.value).toEqual([])
     })
 
     it('returns weeks for month view with Monday-Sunday spans', () => {
-      const refs = createMockRefs(new Date('2025-01-15'), 'month')
+      const refs = createMockRefs(new Date(2025, 0, 15), 'month')
       const {weeks} = useBookingView({...refs})
       expect(weeks.value.length).toBeGreaterThan(0)
       weeks.value.forEach(week => {
@@ -109,126 +111,84 @@ describe('useBookingView', () => {
     })
   })
 
-  describe('hasPrev / hasNext', () => {
-    const dinnerDates = [
-      new Date('2025-01-13'),
-      new Date('2025-01-15'),
-      new Date('2025-01-17'),
-      new Date('2025-01-20')
+  /**
+   * Unified navigation matrix.
+   *
+   * Dinner fixture (January/March 2025, all local-time Dates for TZ safety):
+   *   Week of Mon Jan 13: [Mon 13, Wed 15, Fri 17]
+   *   Week of Mon Jan 20: empty
+   *   Week of Mon Jan 27: [Wed 29]
+   *   Month Feb:          empty
+   *   Month Mar:          [Mon Mar 3]
+   *
+   * Each row asserts both hasPrev/hasNext flags AND the navigate() result in one pass,
+   * so we do not need separate describe blocks per concern.
+   */
+  describe('navigation matrix', () => {
+    const mon13 = new Date(2025, 0, 13)
+    const wed15 = new Date(2025, 0, 15)
+    const fri17 = new Date(2025, 0, 17)
+    const wed29 = new Date(2025, 0, 29)
+    const mar3 = new Date(2025, 2, 3)
+
+    const allDinners = [mon13, wed15, fri17, wed29, mar3]
+
+    const cases: {
+      desc: string
+      date: Date
+      view: BookingView
+      direction: 1 | -1
+      dinnerDates: Date[]
+      expected: Date | null
+    }[] = [
+      // DAY view
+      {desc: 'day +1 from Wed 15 → Fri 17',
+        date: wed15, view: 'day', direction: 1, dinnerDates: allDinners, expected: fri17},
+      {desc: 'day -1 from Wed 15 → Mon 13',
+        date: wed15, view: 'day', direction: -1, dinnerDates: allDinners, expected: mon13},
+      {desc: 'day +1 from last dinner (Mar 3) → null (no-op)',
+        date: mar3, view: 'day', direction: 1, dinnerDates: allDinners, expected: null},
+      {desc: 'day -1 from first dinner (Mon 13) → null (no-op)',
+        date: mon13, view: 'day', direction: -1, dinnerDates: allDinners, expected: null},
+
+      // WEEK view — skips the empty week of Mon 20.
+      {desc: 'week +1 from Wed 15 skips empty week-of-20 → Wed 29',
+        date: wed15, view: 'week', direction: 1, dinnerDates: allDinners, expected: wed29},
+      {desc: 'week -1 from Wed 29 skips empty week-of-20 → Fri 17',
+        date: wed29, view: 'week', direction: -1, dinnerDates: allDinners, expected: fri17},
+
+      // MONTH view — skips empty February.
+      {desc: 'month +1 from January skips empty Feb → Mar 3',
+        date: wed15, view: 'month', direction: 1, dinnerDates: allDinners, expected: mar3},
+      {desc: 'month -1 from March skips empty Feb → Wed 29',
+        date: mar3, view: 'month', direction: -1, dinnerDates: allDinners, expected: wed29},
+
+      // No dinner dates supplied → every arrow is blocked.
+      {desc: 'day +1 with empty dinnerDates → null',
+        date: wed15, view: 'day', direction: 1, dinnerDates: [], expected: null},
+      {desc: 'week +1 with empty dinnerDates → null',
+        date: wed15, view: 'week', direction: 1, dinnerDates: [], expected: null},
+      {desc: 'month +1 with empty dinnerDates → null',
+        date: wed15, view: 'month', direction: 1, dinnerDates: [], expected: null}
     ]
 
-    const boundsCases: { date: Date, hasPrev: boolean, hasNext: boolean }[] = [
-      {date: new Date('2025-01-13'), hasPrev: false, hasNext: true},  // First dinner
-      {date: new Date('2025-01-15'), hasPrev: true, hasNext: true},   // Middle
-      {date: new Date('2025-01-20'), hasPrev: true, hasNext: false}   // Last dinner
-    ]
-
-    it.each(boundsCases)('date $date → hasPrev=$hasPrev, hasNext=$hasNext', ({date, hasPrev, hasNext}) => {
-      const refs = createMockRefs(date, 'day')
-      const result = useBookingView({
+    it.each(cases)('$desc', async ({date, view, direction, dinnerDates, expected}) => {
+      const refs = createMockRefs(date, view)
+      const {hasPrev, hasNext, navigate} = useBookingView({
         ...refs,
         dinnerDates: () => dinnerDates
       })
-      expect(result.hasPrev.value).toBe(hasPrev)
-      expect(result.hasNext.value).toBe(hasNext)
-    })
 
-    it('returns false when no dinner dates', () => {
-      const refs = createMockRefs(new Date('2025-01-15'), 'day')
-      const {hasPrev, hasNext} = useBookingView({...refs})
-      expect(hasPrev.value).toBe(false)
-      expect(hasNext.value).toBe(false)
-    })
-  })
+      // Directional flag must agree with adjacency lookup.
+      const flag = direction === 1 ? hasNext.value : hasPrev.value
+      expect(flag).toBe(expected !== null)
 
-  describe('navigate()', () => {
-    describe('Day View (cooking days only)', () => {
-      const dinnerDates = [
-        new Date('2025-01-13'),
-        new Date('2025-01-15'),
-        new Date('2025-01-17'),
-        new Date('2025-01-20')
-      ]
-
-      const dayCases: { date: Date, direction: 1 | -1, expectedDate: Date }[] = [
-        // Navigate from 15th → 17th (skips 16th)
-        {date: new Date('2025-01-15'), direction: 1, expectedDate: new Date('2025-01-17')},
-        // Navigate from 15th → 13th (skips 14th)
-        {date: new Date('2025-01-15'), direction: -1, expectedDate: new Date('2025-01-13')}
-      ]
-
-      it.each(dayCases)('day $direction from date → skips non-cooking days', async ({date, direction, expectedDate}) => {
-        const refs = createMockRefs(date, 'day')
-        const {navigate} = useBookingView({...refs, dinnerDates: () => dinnerDates})
-        await navigate(direction)
-        expect(refs.setDate).toHaveBeenCalledWith(expectedDate)
-      })
-
-      it('does not navigate when at boundary', async () => {
-        const refs = createMockRefs(new Date('2025-01-20'), 'day') // Last dinner
-        const {navigate} = useBookingView({...refs, dinnerDates: () => dinnerDates})
-        await navigate(1)
+      await navigate(direction)
+      if (expected === null) {
         expect(refs.setDate).not.toHaveBeenCalled()
-      })
-
-      it('does not navigate when no dinner dates', async () => {
-        const refs = createMockRefs(new Date('2025-01-15'), 'day')
-        const {navigate} = useBookingView({...refs})
-        await navigate(1)
-        expect(refs.setDate).not.toHaveBeenCalled()
-      })
-    })
-
-    describe('Week/Month View', () => {
-      const weekMonthCases: { view: BookingView, date: Date, direction: 1 | -1, expectedDay: number }[] = [
-        // Week: ±7 days
-        {view: 'week', date: new Date('2025-01-15'), direction: 1, expectedDay: 22},
-        {view: 'week', date: new Date('2025-01-15'), direction: -1, expectedDay: 8},
-        // Month: ±1 month (same day)
-        {view: 'month', date: new Date('2025-01-15'), direction: 1, expectedDay: 15},
-        {view: 'month', date: new Date('2025-01-15'), direction: -1, expectedDay: 15}
-      ]
-
-      it.each(weekMonthCases)('$view $direction from date', async ({view, date, direction, expectedDay}) => {
-        const refs = createMockRefs(date, view)
-        const {navigate} = useBookingView({...refs})
-        await navigate(direction)
-        expect(refs.setDate).toHaveBeenCalled()
-        const calledDate = refs.setDate.mock.calls[0]?.[0] as Date
-        expect(calledDate.getDate()).toBe(expectedDay)
-      })
-    })
-
-    describe('Season Bounds Clamping', () => {
-      const bounds = {start: new Date('2025-01-10'), end: new Date('2025-01-20')}
-      const dinnerDates = [
-        new Date('2025-01-10'),
-        new Date('2025-01-11'),
-        new Date('2025-01-19'),
-        new Date('2025-01-20')
-      ]
-
-      it('clamps to start bound', async () => {
-        const refs = createMockRefs(new Date('2025-01-11'), 'day')
-        const {navigate} = useBookingView({
-          ...refs,
-          seasonDates: () => bounds,
-          dinnerDates: () => dinnerDates
-        })
-        await navigate(-1)
-        expect(refs.setDate).toHaveBeenCalledWith(new Date('2025-01-10'))
-      })
-
-      it('clamps to end bound', async () => {
-        const refs = createMockRefs(new Date('2025-01-19'), 'day')
-        const {navigate} = useBookingView({
-          ...refs,
-          seasonDates: () => bounds,
-          dinnerDates: () => dinnerDates
-        })
-        await navigate(1)
-        expect(refs.setDate).toHaveBeenCalledWith(new Date('2025-01-20'))
-      })
+      } else {
+        expect(refs.setDate).toHaveBeenCalledWith(expected)
+      }
     })
   })
 })
@@ -240,9 +200,9 @@ describe('useDinnerDateParam', () => {
   })
 
   const dinnerDates = [
-    new Date('2025-01-13'),
-    new Date('2025-01-15'),
-    new Date('2025-01-17')
+    new Date(2025, 0, 13),
+    new Date(2025, 0, 15),
+    new Date(2025, 0, 17)
   ]
 
   it('parses valid dinner date from URL', () => {
@@ -261,7 +221,7 @@ describe('useDinnerDateParam', () => {
       dinnerDates: () => dinnerDates,
       syncWhen: () => false
     })
-    await setValue(new Date('2025-01-17'))
+    await setValue(new Date(2025, 0, 17))
     await flushPromises()
     expect(mockNavigateTo).toHaveBeenCalledWith(
       expect.objectContaining({query: expect.objectContaining({date: '17/01/2025'})}),

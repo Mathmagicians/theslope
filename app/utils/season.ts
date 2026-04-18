@@ -557,6 +557,42 @@ export const getNextDinnerDate = (dinnerStartHour: number, dinnerDurationMinutes
     }
 
 /**
+ * Find the dinner event immediately adjacent to a period boundary.
+ *
+ * Curried: (config) => (events, boundary, direction) => Date | null
+ *
+ * Pipes boundary through `splitDinnerEvents` (reusing the same temporal logic
+ * as "next dinner" categorisation) and picks from the resulting buckets:
+ * - direction =  1 → `nextDinner ?? futureDinners[0] ?? null`
+ * - direction = -1 → `pastDinners.at(-1) ?? null`
+ *
+ * Returns `null` when there is no adjacent dinner — the caller treats this as
+ * "arrow hidden / navigation blocked".
+ *
+ * Input is sorted internally so unordered event lists behave deterministically.
+ *
+ * @param dinnerStartHour - Hour when dinner starts (24h, e.g. 18)
+ * @param dinnerDurationMinutes - Duration of dinner window in minutes (e.g. 60)
+ */
+export const getAdjacentDinner = (dinnerStartHour: number, dinnerDurationMinutes: number) =>
+    <T extends { date: Date }>(
+        dinnerEvents: T[],
+        boundary: Date,
+        direction: 1 | -1
+    ): Date | null => {
+        if (dinnerEvents.length === 0) return null
+
+        const sorted = [...dinnerEvents].sort((a, b) => a.date.getTime() - b.date.getTime())
+        const {nextDinner, pastDinners, futureDinners} =
+            splitDinnerEvents(dinnerStartHour, dinnerDurationMinutes)(sorted, undefined, boundary)
+
+        if (direction === 1) {
+            return nextDinner?.date ?? futureDinners[0]?.date ?? null
+        }
+        return pastDinners.at(-1)?.date ?? null
+    }
+
+/**
  * Temporal category for dinner events
  * Re-exported from useSeason composable (ADR-001)
  */

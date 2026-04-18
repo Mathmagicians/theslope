@@ -88,7 +88,9 @@ test.describe('AdminHouseholds View', () => {
 
         // WHEN: admin opens the inline create form
         await page.getByTestId('open-create-household').click()
-        await expect(page.locator('form')).toBeVisible()
+        await doScreenshot(page, 'adminhouseholds-after-open-click')
+        const createForm = page.getByTestId('create-household-form')
+        await expect(createForm).toBeVisible()
 
         // WHEN: pick the seed's address (USelect offers "{address} · HN {heynaboId}")
         await page.getByTestId('create-household-address').click()
@@ -97,8 +99,9 @@ test.describe('AdminHouseholds View', () => {
         // WHEN: fill unique PBS + move-in date + submit
         const newPbsId = saltedId(900500, testSalt)
         await page.getByTestId('create-household-pbs').fill(String(newPbsId))
-        await page.locator('input[name="movedInDate"]').fill('15/05/2026')
-        await page.locator('input[name="movedInDate"]').press('Tab')
+        const moveInInput = createForm.locator('input[name="movedInDate"]')
+        await moveInInput.fill('15/05/2026')
+        await moveInInput.press('Tab')
         await page.getByTestId('create-household-submit').click()
 
         // THEN: server persists a sibling household (heynaboId + name inherited from seed)
