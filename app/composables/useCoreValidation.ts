@@ -20,6 +20,12 @@ import {useWeekDayMapValidation} from './useWeekDayMapValidation'
 export type SystemRole = z.infer<typeof SystemRoleSchema>
 
 /**
+ * Positive integer ID — single source of truth for entity ids (ADR-001).
+ * Use IdSchema for required ids, IdSchema.nullable() for FK fields.
+ */
+export const IdSchema = z.number().int().positive()
+
+/**
  * Generate shortName from household address
  * Business rule: First letter of each word (uppercase) + underscore + numeric/alphanumeric suffix
  *
@@ -488,6 +494,8 @@ export const useCoreValidation = () => {
     }
 
     return {
+        // Shared building blocks
+        IdSchema,
         // Schemas - Role Ownership
         RoleOwnerSchema,
         ReconcileResultSchema,

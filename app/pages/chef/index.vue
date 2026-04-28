@@ -62,6 +62,8 @@ const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialize
 
 // Permission helpers and date utilities
 const {isChefFor, deadlinesForSeason} = useSeason()
+const {TeamRoleSchema} = useCookingTeamValidation()
+const TeamRole = TeamRoleSchema.enum
 const authStore = useAuthStore()
 
 // Responsive breakpoint for mobile-collapsed calendar
@@ -234,13 +236,26 @@ const handleFormUpdate = async (data: ChefMenuForm) => {
   const result = await bookingsStore.updateDinnerEventField(selectedDinnerId.value, data)
   if (!result) return
   await refreshDinnerEventDetail()
+  // Phase 1 auto-claim: if the server promoted the saver to chef on a WANTED dinner,
+  // the response carries `wasAutoClaimed: true` — reflect it in the toast copy.
+  const wasAutoClaimed = (result as {wasAutoClaimed?: boolean}).wasAutoClaimed === true
   toast.add({
-    title: 'Menu gemt',
+    title: wasAutoClaimed ? 'Menu gemt — du er nu chefkok for denne middag' : 'Menu gemt',
     description: `"${result.menuTitle}" er nu opdateret`,
     icon: ICONS.checkCircle,
     color: COLOR.success
   })
   await usersStore.loadMyTeams()
+}
+
+const handleRoleAssigned = async () => {
+  await refreshDinnerEventDetail()
+  await usersStore.loadMyTeams()
+  toast.add({
+    title: 'Du er nu chefkok!',
+    icon: ICONS.checkCircle,
+    color: COLOR.success
+  })
 }
 
 const handleAdvanceState = async (newState: string) => {
@@ -415,6 +430,7 @@ useHead({
               @advance-state="handleAdvanceState"
               @cancel-dinner="handleCancelDinner"
               @undo-cancel-dinner="handleUndoCancelDinner"
+              @role-assigned="handleRoleAssigned"
               @prev="navigate(-1)"
               @next="navigate(1)"
               @toggle-calendar="setViewState({ ...viewState, open: !viewState.open })"
@@ -430,7 +446,18 @@ useHead({
                 :team-number="dinnerEventDetail.cookingTeamId"
                 mode="monitor"
                 use-short-name
-            />
+            >
+              <!-- Second entry point for chef claim/swap, next to the team's chef row.
+                   Slot keeps CookingTeamCard generic; /admin/teams omits this slot. -->
+              <template #chef-action>
+                <RoleAssignment
+                    :dinner-event="dinnerEventDetail"
+                    :role="TeamRole.CHEF"
+                    :current-holder="dinnerEventDetail.chef"
+                    @role-assigned="handleRoleAssigned"
+                />
+              </template>
+            </CookingTeamCard>
             <UAlert
                 v-else
                 variant="soft"

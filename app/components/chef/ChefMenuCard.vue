@@ -115,6 +115,8 @@ const emit = defineEmits<{
   'cancel-dinner': []
   'undo-cancel-dinner': []
   'toggle-calendar': []
+  /** Bubbled from RoleAssignment when the chef is claimed/changed. Parent should refresh the dinner. */
+  'role-assigned': []
   prev: []
   next: []
   select: [dinnerEventId: number]
@@ -128,7 +130,9 @@ const HERO_BUTTON = COMPONENTS.heroPanel.light
 
 // Validation schemas
 const { DinnerStateSchema, ChefMenuFormSchema } = useBookingValidation()
+const { TeamRoleSchema } = useCookingTeamValidation()
 const DinnerState = DinnerStateSchema.enum
+const TeamRole = TeamRoleSchema.enum
 
 // Business logic from useBooking (ADR-001)
 const { getStepConfig, canCancelDinner } = useBooking()
@@ -517,34 +521,42 @@ const handleCardClick = () => {
           {{ dinnerEvent.menuDescription }}
         </div>
 
-        <!-- Chef display - portrait frame with chef hat (or WANTED when no chef) -->
-        <div
-          class="flex items-center gap-3 pt-4 mt-4"
-          :class="{ [`${BG.mocha[950]} border-2 border-dashed border-amber-600 rounded-lg p-3 -skew-x-1 w-fit`]: !dinnerEvent.chef }"
-          :data-testid="dinnerEvent.chef ? 'chef-display' : 'chef-wanted'"
+        <!-- Chef display - portrait + RoleAssignment trigger / panel -->
+        <RoleAssignment
+          class="pt-4 mt-4"
+          :dinner-event="dinnerEvent"
+          :role="TeamRole.CHEF"
+          :current-holder="dinnerEvent.chef"
+          @role-assigned="emit('role-assigned')"
         >
-          <!-- Portrait frame around avatar -->
-          <div class="relative">
-            <div class="rounded-full ring-2 md:ring-4 ring-amber-500">
-              <UserListItem
-                v-if="dinnerEvent.chef"
-                :inhabitants="dinnerEvent.chef"
-                :show-names="false"
-                :link-to-profile="false"
-                :size="SIZES.standard"
-              />
-              <UAvatar v-else :icon="ICONS.help" :size="SIZES.standard" :ui="{ icon: TEXT.mocha[50] }" :class="BG.mocha[800]" />
+          <div
+            class="flex items-center gap-3"
+            :class="{ [`${BG.mocha[950]} border-2 border-dashed border-amber-600 rounded-lg p-3 -skew-x-1 w-fit`]: !dinnerEvent.chef }"
+            :data-testid="dinnerEvent.chef ? 'chef-display' : 'chef-wanted'"
+          >
+            <!-- Portrait frame around avatar -->
+            <div class="relative">
+              <div class="rounded-full ring-2 md:ring-4 ring-amber-500">
+                <UserListItem
+                  v-if="dinnerEvent.chef"
+                  :inhabitants="dinnerEvent.chef"
+                  :show-names="false"
+                  :link-to-profile="false"
+                  :size="SIZES.standard"
+                />
+                <UAvatar v-else :icon="ICONS.help" :size="SIZES.standard" :ui="{ icon: TEXT.mocha[50] }" :class="BG.mocha[800]" />
+              </div>
+              <!-- Chef hat on top -->
+              <UIcon :name="ICONS.chef" class="absolute -top-5 md:-top-7 left-1/2 -translate-x-1/2 text-amber-500 text-xl md:text-3xl -rotate-9 drop-shadow-md" />
             </div>
-            <!-- Chef hat on top -->
-            <UIcon :name="ICONS.chef" class="absolute -top-5 md:-top-7 left-1/2 -translate-x-1/2 text-amber-500 text-xl md:text-3xl -rotate-9 drop-shadow-md" />
+            <!-- Name or WANTED -->
+            <div class="flex flex-col">
+              <span v-if="dinnerEvent.chef" :class="TYPOGRAPHY.cardTitle">{{ formatNameWithInitials(dinnerEvent.chef) }}</span>
+              <span v-else :class="`font-serif text-lg md:text-xl font-bold ${TEXT.mocha[50]} tracking-widest uppercase`">WANTED</span>
+              <span :class="dinnerEvent.chef ? TYPOGRAPHY.bodyTextMuted : `${TEXT.mocha[50]} text-sm opacity-75`">Chefkok</span>
+            </div>
           </div>
-          <!-- Name or WANTED -->
-          <div class="flex flex-col">
-            <span v-if="dinnerEvent.chef" :class="TYPOGRAPHY.cardTitle">{{ formatNameWithInitials(dinnerEvent.chef) }}</span>
-            <span v-else :class="`font-serif text-lg md:text-xl font-bold ${TEXT.mocha[50]} tracking-widest uppercase`">WANTED</span>
-            <span :class="dinnerEvent.chef ? TYPOGRAPHY.bodyTextMuted : `${TEXT.mocha[50]} text-sm opacity-75`">Chefkok</span>
-          </div>
-        </div>
+        </RoleAssignment>
 
         <!-- Warning when menu title missing -->
         <UAlert

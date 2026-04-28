@@ -16,6 +16,32 @@ const DinnerMode = DinnerModeSchema.enum
 type DinnerModeType = z.infer<typeof DinnerModeSchema>
 
 // ============================================================================
+// ID SCHEMA — shared building block for entity ids (ADR-001)
+// ============================================================================
+
+describe('useCoreValidation - IdSchema', () => {
+    const {IdSchema} = useCoreValidation()
+
+    it.each([
+        {desc: 'positive int', input: 1},
+        {desc: 'large positive int', input: 999999}
+    ])('GIVEN $desc THEN parses successfully', ({input}) => {
+        expect(IdSchema.parse(input)).toBe(input)
+    })
+
+    it.each([
+        {desc: 'zero', input: 0},
+        {desc: 'negative int', input: -1},
+        {desc: 'float', input: 1.5},
+        {desc: 'string', input: '1'},
+        {desc: 'null', input: null},
+        {desc: 'undefined', input: undefined}
+    ])('GIVEN $desc THEN rejects', ({input}) => {
+        expect(() => IdSchema.parse(input)).toThrow()
+    })
+})
+
+// ============================================================================
 // USER VALIDATION TESTS
 // ============================================================================
 

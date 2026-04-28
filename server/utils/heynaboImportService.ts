@@ -266,7 +266,8 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
                 const result = reconcileUserRoles(existing.systemRoles as SystemRole[], incoming.user!.systemRoles, RoleOwner.HN)
                 if (result.adminAdded) adminsAdded++
                 if (result.adminRemoved) adminsRemoved++
-                return { existingId: existing.id, payload: { ...incoming.user!, systemRoles: result.roles } as UserCreate }
+                const payload: UserCreate = { ...incoming.user!, systemRoles: result.roles }
+                return { existingId: existing.id, payload }
             })
 
             const chunkUserUpdates = chunkArray<{existingId: number, payload: UserCreate}>(CHUNK_SIZE)

@@ -35,9 +35,9 @@
 | `/api/admin/team/assignment/index.get.ts` | ❌ | ✅ | N/A | N/A | Stub endpoint (returns static message)                                                           |
 | `/api/admin/team/assignment/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeamAssignment() → CookingTeamAssignment                                                    |
 | `/api/admin/team/assignment/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createTeamAssignment() → CookingTeamAssignment                                                   |
-| **Admin - Users** | | | | | **✅ FULLY COMPLIANT (2026-01-15)** - Added role management endpoint                             |
+| **Admin - Users** | | | | | **✅ FULLY COMPLIANT (2026-04-28)** - Partial update + id-keyed write for HN email-change resilience |
 | `/api/admin/users/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteUser() validates with UserResponseSchema                                                   |
-| `/api/admin/users/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateUser roles with reconcileUserRoles() - TS owns ALLERGYMANAGER, preserves HN-owned ADMIN    |
+| `/api/admin/users/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | Partial update accepting any subset of {systemRoles, email, phone}; writes via `saveUser(payload, id)` (id-keyed update). Roles still reconciled with TS ownership. |
 | `/api/admin/users/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchUsers() validates with UserDisplaySchema                                                    |
 | `/api/admin/users/index.put.ts` | ✅ | ✅ | ✅ | ✅ | saveUser() validates with UserResponseSchema                                                     |
 | `/api/admin/users/by-role/[role].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchUsersByRole() validates with UserDisplaySchema                                              |
@@ -97,7 +97,7 @@
 | `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ✅ | CSV import with ADR-002 separate try-catch, uses useBillingValidation composable                 |
 | `/api/admin/billing/current-period.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchUnbilledTransactions() → TransactionDisplay[], "virtual" billing period for admin economy   |
 | `/api/admin/billing/invoices/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTransactionsForInvoice() → TransactionDisplay[], lazy loading for tree view                 |
-| **Admin - Heynabo** | | | | | **✅ COMPLIANT**                                                                                  |
+| **Admin - Heynabo** | | | | | **✅ COMPLIANT (2026-04-28)** - User UPDATE bucket re-keyed by `Inhabitant.heynaboId` (stable identity); HN email/phone changes update existing row, never email-keyed upsert (prevents Rose Marie duplicate-user bug). |
 | `/api/admin/heynabo/import.get.ts` | ✅ | ✅ | ✅ | ✅ | GET endpoint with proper business logic try-catch, uses transformation functions from composable |
 | **Authorization Infrastructure** | | | | | **✅ COMPLIANT (2025-12-23)** - Route-level + resource-level authorization                       |
 | `server/middleware/2.authorize.ts` | N/A | N/A | N/A | ✅ | Route-level authorization middleware, uses `usePermissions` composable                           |

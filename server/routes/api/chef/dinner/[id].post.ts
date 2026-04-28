@@ -6,6 +6,7 @@ import {useBooking} from '~/composables/useBooking'
 import type {DinnerEventDetail} from '~/composables/useBookingValidation'
 import type {UserSession} from '~/composables/useCoreValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
+import {requireChefForDinner} from '~~/server/utils/authorizationHelper'
 import {z} from 'zod'
 
 const {throwH3Error} = eventHandlerHelper
@@ -54,6 +55,10 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     } catch (error) {
         return throwH3Error(PREFIX + 'Input validation error', error, 400)
     }
+
+    // Authorization: caller must be in this dinner's team chef pool (ADR Phase 1).
+    // Throws 401/403/404 — admins use /api/admin/dinner-event/[id] for corrections.
+    await requireChefForDinner(event, id)
 
     // Get user session and Heynabo token
     const session = await getUserSession(event)

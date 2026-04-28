@@ -74,14 +74,22 @@ export async function saveUser(
     user: UserCreate | Partial<UserCreate>,
     id?: number
 ): Promise<UserDetail> {
+    // Precondition: identify the row by `id` (partial update) or `user.email` (upsert).
+    if (id == null && !user.email) {
+        return throwH3Error(
+            `${LOG_USER}: requires id or user.email`,
+            new Error('Invalid saveUser call: neither id nor user.email provided')
+        )
+    }
+
     const prisma = await getPrismaClientConnection(d1Client)
-    const subject = id != null ? `id=${id}` : (user as UserCreate).email
+    const subject = id != null ? `id=${id}` : user.email!
 
     try {
         const row = id != null
             ? await prisma.user.update({where: {id}, data: serializeUserPartial(user)})
             : await prisma.user.upsert({
-                  where: {email: (user as UserCreate).email},
+                  where: {email: user.email!},
                   create: serializeUserInput(user as UserCreate),
                   update: serializeUserInput(user as UserCreate)
               })

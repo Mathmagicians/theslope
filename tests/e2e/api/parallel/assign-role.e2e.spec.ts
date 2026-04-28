@@ -43,7 +43,7 @@ test.describe('DinnerEvent API - Assign Role', () => {
         }
     })
 
-    test.describe('POST /api/admin/dinner-event/[id]/assign-role', () => {
+    test.describe('POST /api/team/cooking/[id]/assign-role', () => {
 
         // Parametrized tests for role assignment (CHEF, COOK, JUNIORHELPER)
         const roleAssignmentCases = [
@@ -126,6 +126,55 @@ test.describe('DinnerEvent API - Assign Role', () => {
                 expect(assignment!.role, `Assignment role should be ${role}`).toBe(role)
                 expect(assignment!.cookingTeamId, 'Assignment should reference correct team').toBe(team.id)
             })
+        })
+
+        test('GIVEN dinner event with me as CHEF WHEN demoting to COOK THEN dinner.chefId is cleared', async ({ browser }) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+
+            const team = await SeasonFactory.createCookingTeamForSeason(context, testSeason.id!, salt('Team', testSalt))
+
+            const household = await HouseholdFactory.createHousehold(context, {
+                name: salt('DemoteHouse', testSalt)
+            })
+            createdHouseholdIds.push(household.id)
+
+            const inhabitant = await HouseholdFactory.createInhabitantForHousehold(
+                context,
+                household.id,
+                salt('DemoteMe', testSalt)
+            )
+
+            const dinnerEvent = await SeasonFactory.createDinnerEventForSeason(
+                context,
+                testSeason.id!,
+                { chefId: null, cookingTeamId: team.id }
+            )
+
+            // Promote to CHEF — dinner.chefId becomes inhabitant.id
+            await DinnerEventFactory.assignRoleToDinnerEvent(
+                context,
+                dinnerEvent.id,
+                inhabitant.id,
+                TeamRole.CHEF
+            )
+            const afterPromote = await DinnerEventFactory.getDinnerEvent(context, dinnerEvent.id)
+            expect(afterPromote.chefId, 'After CHEF assignment dinner.chefId should be inhabitant').toBe(inhabitant.id)
+
+            // Demote to COOK — dinner.chefId must clear
+            await DinnerEventFactory.assignRoleToDinnerEvent(
+                context,
+                dinnerEvent.id,
+                inhabitant.id,
+                TeamRole.COOK
+            )
+            const afterDemote = await DinnerEventFactory.getDinnerEvent(context, dinnerEvent.id)
+            expect(afterDemote.chefId, 'After demotion dinner.chefId should be cleared').toBeNull()
+
+            // Team-level role downgraded to COOK
+            const teamWithAssignments = await SeasonFactory.getCookingTeamById(context, team.id!)
+            const assignment = teamWithAssignments!.assignments.find(a => a.inhabitantId === inhabitant.id)
+            expect(assignment!.role, 'Team-level role should be COOK after demotion').toBe(TeamRole.COOK)
         })
 
         test('GIVEN dinner event with existing COOK assignment WHEN assigning as chef THEN updates role to CHEF', async ({ browser }) => {

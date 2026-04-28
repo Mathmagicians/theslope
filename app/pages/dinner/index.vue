@@ -65,6 +65,8 @@ const {user} = storeToRefs(authStore)
 
 // Booking validation and helpers
 const {formatScaffoldResult, BOOKING_TOAST_TITLES} = useBooking()
+const {TeamRoleSchema} = useCookingTeamValidation()
+const TeamRole = TeamRoleSchema.enum
 
 // Component needs to handle its own data needs
 const planStore = usePlanStore()
@@ -178,6 +180,17 @@ const {
 // Helper to refresh both data sources after booking changes
 const refreshBookingData = async () => {
   await Promise.all([refreshDinnerEventDetail(), _refreshHouseholdOrders()])
+}
+
+// Bubbled from RoleAssignment (next to chef portrait + on team's chef row).
+// Refresh dinner detail and toast — the chef has been claimed/changed.
+const handleRoleAssigned = async () => {
+  await refreshDinnerEventDetail()
+  toast.add({
+    title: 'Du er nu chefkok!',
+    icon: ICONS.checkCircle,
+    color: 'success'
+  })
 }
 
 // ADR-016: Unified booking handler via scaffold endpoint
@@ -302,6 +315,7 @@ useHead({
           @prev="navigate(-1)"
           @next="navigate(1)"
           @toggle-calendar="setCalendarOpen(!calendarOpen)"
+          @role-assigned="handleRoleAssigned"
         >
           <!-- Household booking form - uses session-filtered orders (not admin's all-households tickets) -->
           <DinnerBookingForm
@@ -325,7 +339,16 @@ useHead({
             :team-number="dinnerEventDetail.cookingTeamId"
             mode="monitor"
             use-short-name
-          />
+          >
+            <template #chef-action>
+              <RoleAssignment
+                  :dinner-event="dinnerEventDetail"
+                  :role="TeamRole.CHEF"
+                  :current-holder="dinnerEventDetail.chef"
+                  @role-assigned="handleRoleAssigned"
+              />
+            </template>
+          </CookingTeamCard>
           <UAlert
             v-else
             variant="soft"

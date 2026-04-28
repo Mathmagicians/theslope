@@ -1,4 +1,4 @@
-import {useCookingTeamValidation, type CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
+import {useCookingTeamValidation, type CookingTeamDisplay, type TeamRole, type RoleAssignmentPlan} from '~/composables/useCookingTeamValidation'
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
 import {chunkArray} from '~/utils/batchUtils'
 
@@ -9,7 +9,7 @@ export type TeamColor = typeof TEAM_COLORS[number]
  * Business logic for working with cooking teams
  */
 export const useCookingTeam = () => {
-    const {CookingTeamSchema} = useCookingTeamValidation()
+    const {CookingTeamSchema, TeamRoleSchema} = useCookingTeamValidation()
 
     const getTeamColor = (index: number): TeamColor => {
         const colorIndex = index % TEAM_COLORS.length
@@ -77,6 +77,38 @@ export const useCookingTeam = () => {
     const TEAM_AFFINITY_BATCH_SIZE = 50
     const chunkTeamAffinities = chunkArray<CookingTeamDisplay>(TEAM_AFFINITY_BATCH_SIZE)
 
+    /**
+     * Decide the writes required to assign `role` to `inhabitantId` on a dinner
+     * belonging to `cookingTeamId`. Pure — caller executes the plan.
+     *
+     * - nextChefId: the desired post-operation value of DinnerEvent.chefId.
+     *   Promote (CHEF role) → inhabitantId.
+     *   Demote (non-CHEF role and the inhabitant was the dinner's chef) → null.
+     *   Otherwise → currentDinnerChefId (unchanged).
+     *   Caller compares with current dinner.chefId and writes only on diff.
+     * - assignment: the team-membership upsert payload, always present.
+     */
+    const decideRoleAssignmentWrites = (
+        cookingTeamId: number,
+        inhabitantId: number,
+        role: TeamRole,
+        currentDinnerChefId: number | null
+    ): RoleAssignmentPlan => {
+        const isChef = role === TeamRoleSchema.enum.CHEF
+        const wasChefOnDinner = currentDinnerChefId === inhabitantId
+        const nextChefId = isChef ? inhabitantId : (wasChefOnDinner ? null : currentDinnerChefId)
+        return {
+            nextChefId,
+            assignment: {
+                cookingTeamId,
+                inhabitantId,
+                role,
+                allocationPercentage: 100,
+                affinity: null
+            }
+        }
+    }
+
     return {
         CookingTeamSchema,
         getTeamColor,
@@ -85,6 +117,7 @@ export const useCookingTeam = () => {
         getTeamShortName,
         getDefaultCookingTeam,
         mergeInhabitantsWithAssignments,
-        chunkTeamAffinities
+        chunkTeamAffinities,
+        decideRoleAssignmentWrites
     }
 }

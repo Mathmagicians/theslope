@@ -1,350 +1,443 @@
-# Feature Proposal: Chef Swap
+# Feature Proposal: Chef Role Assignment & Swap
 
-**Status:** Proposal
+**Status:** Accepted
 **Date:** 2026-03-30
+**Updated:** 2026-04-28 — design refinements: client-side auto-claim, business logic in composables, plain panel buttons, copy with date+team, `IdSchema`
 
 ## Problem
 
-- The chef portrait ("WANTED" / assigned chef) is not interactive — users try to click it
-- Chef volunteering is buried in the WorkAssignment panel below, separate from the portrait
-- No swap support exists ("Byt Tjans" button is a disabled placeholder)
-- When a chef is replaced on an ANNOUNCED dinner, there's no flow to handle the menu or Heynabo
-- 95% of chef changes are swaps, not volunteering for empty spots
-- Swaps are not always 1-for-1 chef: you can trade e.g. 2x dishwashing for 1x chef
+- Volunteering is ~100% of chef assignments. Swaps are ~2/month. UX optimises the volunteer path first.
+- Chef portrait is inert — users tap it expecting to volunteer, nothing happens.
+- The "Bliv chefkok" button sits in `WorkAssignment` far below the menu editor. Chefs editing a WANTED menu scroll past saving and forget to click it.
+- No swap flow ("Byt Tjans" is a disabled placeholder).
+- No flow for menu/Heynabo handling when a chef is replaced on an ANNOUNCED dinner.
+- `Household.moveOutDate` doesn't cascade — future cooking assignments linger.
+- Swaps aren't always 1-for-1 chef (e.g. trade 2× dishwashing for 1× chef).
 
 ## Scope
 
-- Chef assignment and swap via button next to the chef portrait
-- Accessible from `/dinner` and `/chef`
-- Team panel roster swaps are future work — this is chef assignment only
-- Component is built generic (`RoleAssignment`) so it can be reused on team panel role rows later
+- Tap target next to the chef portrait for volunteering. Inline panel with confirm/cancel.
+- Swap flow: tap portrait row or "Byt" when someone else is chef → inline panel with multi-select assignment checkboxes, menu decision (when ANNOUNCED), confirm.
+- Two paths to claim chef:
+  - **Explicit:** trigger button → `POST /api/team/cooking/[id]/assign-role`.
+  - **Implicit:** save menu on a WANTED dinner → client orchestrates `assign-role` then `chef/dinner/[id]`.
+- Move-out cascade on `Household.moveOutDate`: delete future `CookingTeamAssignment` rows, fully reset future dinners where the moving inhabitant was chef. "Flytter {date}" badge in team rosters.
+- Generic `RoleAssignment` component, role-keyed (CHEF mounted this iteration).
+- Accessible from `/dinner` and `/chef`.
 
 ## UX Design
 
 ### Entry Points
 
-**WANTED (no chef assigned) — "Bliv chefkok" button next to portrait:**
+**Vacant — adjacent "Bliv chefkok" trigger:**
 
 ```
 +-----------------------------------------------+
-|  (hat)                                         |
-|  (?)  WANTED                                   |
-|       Chefkok              [Bliv chefkok]      |
+|  (hat)                                        |
+|  (?)  WANTED   [(chef-hat) Bliv chefkok (+)]  |
+|       Chefkok                                 |
 +-----------------------------------------------+
-  DangerButton -> phase 2 -> assign-role
-  Toast: Du er chefkok!
 ```
 
-**Chef assigned — someone else — "Byt" button next to portrait:**
+**Other chef — adjacent "Byt" trigger:**
 
 ```
 +-----------------------------------------------+
-|  (hat)                                         |
-|  (AH) Anna H.                    [Byt]        |
-|       Chefkok                                  |
+|  (hat)                                        |
+|  (AH) Anna H.    [(chef-hat) Byt (↔)]         |
+|       Chefkok                                 |
 +-----------------------------------------------+
-  "Byt" -> expands swap panel inline
 ```
 
-**Chef assigned — yourself — no button:**
-
-```
-+-----------------------------------------------+
-|  (hat)                                         |
-|  (DU) Dit Navn                                 |
-|       Chefkok (dig)                            |
-+-----------------------------------------------+
-  No button. Edit menu below.
-```
-
-### Swap Panel (after tapping "Byt")
-
-Expands inline below the portrait. Shows the dinner you're taking over and your assignments as checkboxes (multi-select — you can offer multiple assignments).
+**Self — portrait inert:**
 
 ```
 +-----------------------------------------------+
-|  Bliv chefkok                                  |
-|                                                |
+|  (hat)                                        |
+|  (DU) Dit Navn                                |
+|       Chefkok (dig)                           |
++-----------------------------------------------+
+```
+
+### Vacant Claim Panel
+
+Copy uses `dinnerEvent.date` (via `formatDate`) and `dinnerEvent.cookingTeam.name` (via `useCookingTeam.getTeamShortName`). Generic across roles via `ROLE_LABELS[role]`. The "sammen med …" clause is omitted when the dinner has no cooking team.
+
+```
++--------------------------------------------------------+
+|  🍳 Spisning søger chefkok!                            |
+|                                                        |
+|  Du tager chefkok-tjansen for fællesspisning           |
+|  den 15. apr, sammen med Madhold A.                    |
+|                                                        |
+|             [Fortryd]      [👨‍🍳 Bliv chefkok]          |
++--------------------------------------------------------+
+```
+
+### Swap Panel
+
+Shows the dinner being taken over and the caller's assignments (multi-select). Selecting 1+ assignments switches the commit button label and the agreement question.
+
+```
++------------------------------------------------+
 |  Du overtager fra Anna H:                      |
-|  +-------------------------------------------+ |
-|  |  Tirs. 1. apr - Team Tirsdag              | |
-|  |  Tatziki med bagt kartoffel               | |
-|  |  (chef) Chefkok - 42 kuverter            | |
-|  +-------------------------------------------+ |
+|  +------------------------------------------+  |
+|  |  Tirs. 1. apr · Madhold A                |  |
+|  |  Tatziki med bagt kartoffel              |  |
+|  |  👨‍🍳 Chefkok · 42 kuverter              |  |
+|  +------------------------------------------+  |
 |                                                |
 |  Byt med dine tjans:                           |
-|  +-------------------------------------------+ |
-|  | [ ]  Tors. 3. apr - Team Torsdag          | |
-|  |      (chef) Chefkok - 38 kuv.            | |
-|  +-------------------------------------------+ |
-|  | [ ]  Tirs. 8. apr - Team Tirsdag          | |
-|  |      (kok) Kok - 45 kuv.                 | |
-|  +-------------------------------------------+ |
-|  | [ ]  Ons. 9. apr - Team Onsdag            | |
-|  |      (opvask) Opvask - 50 kuv.           | |
-|  +-------------------------------------------+ |
-|  | [ ]  Tors. 17. apr - Team Torsdag         | |
-|  |      (opvask) Opvask - 41 kuv.           | |
-|  +-------------------------------------------+ |
+|  +------------------------------------------+  |
+|  | [ ]  Tors. 3. apr · Madhold C            |  |
+|  |      👨‍🍳 Chefkok · 38 kuv.              |  |
+|  +------------------------------------------+  |
+|  | [ ]  Ons. 9. apr · Madhold B             |  |
+|  |      🧽 Opvask · 50 kuv.                 |  |
+|  +------------------------------------------+  |
 |                                                |
-|  +-------------------------------------------+ |
-|  | (i) Har du aftalt med Anna at du          | |
-|  |     overtager hendes chefkok-tjans?       | |
-|  +-------------------------------------------+ |
+|  ℹ Har du aftalt med Anna at du               |
+|    overtager hendes chefkok-tjans?             |
 |                                                |
-|  [(chef) Overtag chefkok-tjans]                |
+|  ℹ Husk at sige til Anna at hun skal           |
+|    genannoncere sin middag bagefter            |
 |                                                |
-|              [Fortryd]                         |
-+-----------------------------------------------+
+|             [Fortryd]   [👨‍🍳 Overtag tjans]   |
++------------------------------------------------+
 ```
 
-**When 1+ assignments selected — button and text adapt:**
+The re-announce note (second `ℹ` line) shows only when any swap-side dinner is currently `ANNOUNCED`.
 
-```
-|  | [x]  Ons. 9. apr - Team Onsdag          v | |
-|  |      (opvask) Opvask - 50 kuv.           | |
-|  +-------------------------------------------+ |
-|  | [x]  Tors. 17. apr - Team Torsdag       v | |
-|  |      (opvask) Opvask - 41 kuv.           | |
-|  +-------------------------------------------+ |
-|                                                |
-|  +-------------------------------------------+ |
-|  | (i) Har du aftalt med Anna at I           | |
-|  |     bytter tjans?                         | |
-|  +-------------------------------------------+ |
-|                                                |
-|  [(swap) Byt tjans]                            |
-```
+### Contextual Commit Button
 
-### Contextual Button
-
-One button — label and icon adapt to context:
-
-| State | Selection | Button label | Icon |
+| State | Selection | Label | Icon |
 |---|---|---|---|
-| WANTED | N/A | Bliv chefkok | chef-hat |
-| Assigned, nothing selected | None | Overtag chefkok-tjans | chef-hat |
-| Assigned, 1+ selected | Assignments | Byt tjans | swap arrows |
+| WANTED | n/a | Bliv chefkok | chef-hat |
+| Other chef, none selected | none | Overtag chefkok-tjans | chef-hat |
+| Other chef, 1+ selected | assignments | Byt tjans | swap-arrows |
 
-All use the DangerButton 2-phase confirmation pattern.
+The panel itself is the confirmation surface — commit is a plain `UButton`, cancel is `Fortryd`. `DangerButton` is reserved for inline destructive actions outside panels (Aflys, Slet hold).
 
-### Menu Decision (ANNOUNCED dinners)
-
-When one or both dinners in the swap are ANNOUNCED, a menu question appears between the assignment list and the confirm button. Only relevant when `role === CHEF`.
-
-**Both ANNOUNCED (both have menus):**
-
-```
-|  (!) Begge middage er annonceret.              |
-|  Hvad skal der ske med menuerne?               |
-|                                                |
-|  +-------------------------------------------+ |
-|  | O  Byt menuer                             | |
-|  +-------------------------------------------+ |
-|  | O  Behold menuer                          | |
-|  +-------------------------------------------+ |
-|  | O  Nulstil menuer                         | |
-|  +-------------------------------------------+ |
-```
-
-**Only one ANNOUNCED:**
-
-```
-|  (!) Middagen er annonceret.                   |
-|  Hvad skal der ske med menuen?                 |
-|                                                |
-|  +-------------------------------------------+ |
-|  | O  Behold menu                            | |
-|  +-------------------------------------------+ |
-|  | O  Nulstil menu                           | |
-|  +-------------------------------------------+ |
-```
-
-**Neither ANNOUNCED:** No menu question.
-
-**Menu option matrix:**
+### Menu Decision (ANNOUNCED dinners, swap only, role=CHEF)
 
 | Target ANNOUNCED | Swap assignment ANNOUNCED | Options |
 |---|---|---|
-| No | No | No menu question |
+| No | No | No question |
 | Yes | No | Behold menu / Nulstil menu |
 | No | Yes | Behold menu / Nulstil menu |
 | Yes | Yes | Byt menuer / Behold menuer / Nulstil menuer |
 
-Button is disabled until menu choice is made (when applicable).
+Commit button disabled until a menu choice is made (when applicable).
 
-### Heynabo Token Flow
+### Heynabo Token Flow (swap)
 
-Heynabo requires the user's token to show them as publisher. In a swap we only have the logged-in user's (Bo's) token — not the other person's (Anna's).
+Heynabo events are owned by their publisher's HN account. Editing an existing event requires the publisher's token; no other token can modify it (system token can only delete).
 
-**Rules:**
+When chefs swap on an ANNOUNCED dinner, the new chef cannot edit the old chef's event. Forced behaviour:
 
-| Side | Delete old event | New event | Menu content |
+| ANNOUNCED dinner whose chef changes | Old HN event | New HN event |
+|---|---|---|
+| Target (caller becomes chef) | Delete via system token | Recreate under caller's token (caller as publisher) |
+| Swap-side (other person becomes chef) | Delete via system token | Not recreated — no token for the other person |
+
+This is independent of `menuStrategy`. Strategy controls only what menu content sits in TheSlope DB after the chef change; HN republish (when applicable) uses whatever's there.
+
+The other person's "needs re-announce" state is **derived** — banner shown when `state === SCHEDULED && heynaboEventId === null && menuTitle !== ''`. No schema change.
+
+**Banner on the other person's dinner card:** "Din middag skal genannonceres på Heynabo" with [Annoncer] button — clicking it republishes under their token.
+
+### Empty Assignment List
+
+```
+ℹ Du har ingen kommende tjans at bytte med.
+
+[Fortryd]   [👨‍🍳 Overtag chefkok-tjans]
+```
+
+Commit active — pure takeover.
+
+### Toasts
+
+Single toast per outcome — re-announce reminder folded into the same toast's description. Lines composed via `formatAssignmentLine(role, date, cookingTeamName)` (new helper in `useCookingTeam`, returns `"chefkok · 15. apr · Madhold A"`).
+
+| Scenario | title | description |
+|---|---|---|
+| Volunteer / takeover | `Du er nu chefkok!` | `formatAssignmentLine(CHEF, d.date, d.cookingTeam.name)` |
+| Auto-claim on save | `Menu gemt — du er nu chefkok!` | same |
+| Swap | `Tjans byttet med {name}` | `Du tog: …` per `ours[i]`; `{name} tog: …` per `theirs[i]`; menu outcome line; re-announce reminder line (when applicable) |
+
+Description lines (in order):
+- `Du tog: {role · date · team}` — one per `ours`.
+- `{name} tog: {role · date · team}` — one per `theirs`.
+- Menu outcome: `SWAP` → `Menuerne er byttet`; `CLEAR` → `Menuerne er nulstillet`; `PRESERVE` → no line.
+- Re-announce reminder: `Husk at sige til {name} at hun skal genannoncere sin middag` — only when any `theirs` dinner was `ANNOUNCED` before the swap.
+
+### Pre-commit Panel Note
+
+When a swap will require the other person to re-announce, an inline note appears in the swap panel above the commit button (alongside the "Har du aftalt med …" agreement question):
+
+> ℹ Husk at sige til {name} at hun skal genannoncere sin middag bagefter
+
+Visibility: any `swapAssignment` dinner is currently `ANNOUNCED`. Same trigger as the post-toast reminder line.
+
+## Auto-Claim Orchestration
+
+Client-side, in the bookings store. HTTP isn't atomic; convergence on retry is the model.
+
+```ts
+// app/stores/bookings.ts
+const updateDinnerEventField = async (
+    dinnerEventId: number,
+    updates: Partial<DinnerEventUpdate>,
+    currentChefId: number | null
+): Promise<{dinner: DinnerEventDetail, wasAutoClaimed: boolean} | null> => {
+    const myInhabitantId = authStore.user?.Inhabitant?.id ?? null
+    const wasAutoClaimed = currentChefId === null && myInhabitantId !== null
+
+    if (wasAutoClaimed) {
+        await planStore.assignRoleToDinner(dinnerEventId, myInhabitantId, TeamRole.CHEF)
+    }
+    const dinner = await updateDinner(dinnerEventId, updates)
+    return {dinner, wasAutoClaimed}
+}
+```
+
+**Failure modes:**
+
+| Step 1 (claim) | Step 2 (menu) | DB state | UX |
 |---|---|---|---|
-| Bo's dinner (logged in) | System token | Bo's token → Bo shown as publisher | Per menu choice |
-| Anna's dinner (other person) | System token | NOT republished — no token | Menu preserved in TheSlope, state → SCHEDULED |
+| ok | ok | chef set, menu set | toast "Menu gemt — du er nu chefkok" |
+| ok | fails | chef set, menu unchanged | toast error. Retry: claim is skipped (chef now set), menu saves. |
+| fails | (skipped) | unchanged | toast error. Retry from scratch. |
 
-Anna's dinner keeps its menu content in TheSlope but the Heynabo event is deleted. Anna re-announces with one tap next time she opens the dinner.
+The strict `requireChefForDinner` guard on `/api/chef/dinner/[id]` enforces the order: cannot update the menu without first being chef.
 
-**Notifications:**
+## Move-out Cascade
 
-- **Bo sees after swap (toast):** "Husk at sige til Anna at hun skal genannoncere sin middag"
-- **Anna sees next time she opens the dinner (banner on dinner card):** "Din middag skal genannonceres på Heynabo" with [Annoncer] button
+**Trigger:** `Household.moveOutDate` set or changed to a future date (via `/api/household/[id]/update.post.ts`).
 
-The user never sees the delete+recreate mechanism — only menu choices and notifications.
+**Behaviour:**
 
-### No Assignments Available
+1. Delete future `CookingTeamAssignment` rows for every inhabitant in the household.
+2. For every future `DinnerEvent` where `chefId = inhabitant.id AND date > moveOutDate`: apply `CHEF_LOSS_DINNER_UPDATES` + clear allergens; if dinner was ANNOUNCED, also delete the Heynabo event via system token (best-effort).
 
-```
-|  +-------------------------------------------+ |
-|  | (i) Du har ingen kommende tjans           | |
-|  |     at bytte med.                         | |
-|  +-------------------------------------------+ |
-|                                                |
-|  [(chef) Overtag chefkok-tjans]                |
-```
+Move-out is one-way — clearing `moveOutDate` later does not restore deleted assignments. Distinct from swap's preserve-menu semantic (the other person is still around to re-announce; the moving inhabitant is not).
 
-Button is active — pure takeover without swap.
-
-### Toast Messages
-
-```
-Swap:      Du og Anna har byttet tjans!
-           Husk at sige til Anna at hun skal genannoncere sin middag
-           (only when Anna's dinner was ANNOUNCED)
-
-Takeover:  Du er nu chefkok!
-
-Volunteer: Du er nu chefkok!
-```
+**UI:** in `CookingTeamCard.vue`, members whose household has a future `moveOutDate` show `<UBadge color="warning">Flytter {formatDate(moveOutDate)}</UBadge>`.
 
 ## Architecture
 
 ### Component Structure
 
 ```
-RoleAssignment.vue (NEW — generic component)
+RoleAssignment.vue (NEW — generic, role-agnostic)
   Props:
     - dinnerEvent: DinnerEventDetail
     - role: "CHEF" | "COOK" | "JUNIORHELPER"
-    - currentHolder?: Inhabitant   (null = vacant)
-  Renders:
-    - Vacant    -> "Bliv [role label]" button
-    - Yourself  -> no button
-    - Other     -> "Byt" button -> swap panel
-  Menu decision only when role === "CHEF" and ANNOUNCED
+    - currentHolder?: InhabitantDisplay   (null = vacant)
+    - default slot: portrait content
+  Render branches:
+    - Vacant   → portrait + trigger UButton ("Bliv {role}", role-icon + plus-circle)
+                 click → panel with intro + commit UButton + Fortryd
+    - Self     → portrait only
+    - Other    → portrait + trigger UButton ("Byt", role-icon + swap-arrows)
+                 click → panel with swap form
+  Click outside or Fortryd collapses the panel.
+  Menu decision rendered when role === "CHEF" and ANNOUNCED.
 
 Mounted this iteration:
-  ChefMenuCard.vue -> RoleAssignment next to chef portrait
-
-Future mounting:
-  Team panel role rows -> RoleAssignment per role
-  (chef row in team panel also gets "Byt" — two entry points to same flow)
+  ChefMenuCard.vue      — wraps chef portrait
+  CookingTeamCard.vue   — chef row, via #chef-action slot from /chef and /dinner
 ```
 
 ### API
 
-**Existing endpoint — for volunteering (WANTED):**
+| Method | Path | Status |
+|---|---|---|
+| POST | `/api/team/cooking/[id]/assign-role` | existing — refactored in Phase 1 to call `decideRoleAssignmentWrites` |
+| POST | `/api/team/cooking/[id]/remove-role` | new (Phase 3) |
+| POST | `/api/team/cooking/assignment/swap` | new (Phase 3) |
+| POST | `/api/chef/dinner/[id]` | existing — Phase 1 adds `requireChefForDinner` guard |
 
-```
-POST /api/team/cooking/[id]/assign-role
-  body: { inhabitantId, role: "CHEF" }
+**`/remove-role` body:**
+
+```ts
+{ dinnerEventId: number, role: TeamRole, inhabitantId?: number }  // inhabitantId defaults to caller
 ```
 
-**New endpoint — for swaps:**
+When removing CHEF: applies `CHEF_LOSS_DINNER_UPDATES` + clears allergens; deletes Heynabo event via system token if was ANNOUNCED. Authz: self-remove allowed; other-remove requires admin.
 
-```
-POST /api/team/cooking/swap
-  body: {
+**`/assignment/swap` body:**
+
+```ts
+{
     targetDinnerEventId: number
-    swapAssignments: {
-      dinnerEventId: number
-      role: "CHEF" | "COOK" | "JUNIORHELPER"
-    }[]                          // empty = pure takeover
-    menuAction: "keep" | "swap" | "reset"
-  }
+    swapAssignments: { dinnerEventId: number, role: TeamRole }[]   // empty = pure takeover
+    menuStrategy: 'PRESERVE' | 'SWAP' | 'CLEAR'                    // default 'PRESERVE'
+}
 ```
 
-**Backend swap logic:**
-1. Assign me as chef on targetDinnerEvent
-2. For each swapAssignment: assign the other person my role on that dinner
-3. Menu actions:
-   - **keep**: menus stay on their dinners, only chefs change
-   - **swap**: menu fields (title, description, picture, allergens) swap between dinners
-   - **reset**: clear menu fields on affected dinners, set state to SCHEDULED
-4. Heynabo (for ANNOUNCED dinners):
-   - Delete old events (system token)
-   - Logged-in user's dinner: recreate under their token
-   - Other person's dinner: don't recreate — menu preserved in TheSlope, state → SCHEDULED
-5. Return updated dinner events
+**Authorization (all four):**
 
-### Data for Swap Panel
+1. Caller holds every role in `swapAssignments`.
+2. `targetDinnerEvent` has no chef or a different chef (rejects if caller is already chef).
+3. All dinners are future and not in `(CONSUMED, CANCELLED)`.
+4. All dinners are in the active season.
 
-User's upcoming assignments (all roles, not just chef):
+**Strategy validation:** `SWAP` requires every affected dinner to be `ANNOUNCED` AND every `swapAssignments[i].role === CHEF` (else 400).
+
+**Execution:**
+
+1. Apply `decideRoleAssignmentWrites` for caller as chef on `targetDinnerEvent` → `ours`.
+2. Apply `decideRoleAssignmentWrites` for the other person on each swap dinner → `theirs`.
+3. Apply `menuStrategy` to TheSlope DB:
+   - `PRESERVE` — no menu writes.
+   - `SWAP` — copy menu fields target ↔ each swap dinner (server-side, cross-dinner).
+   - `CLEAR` — apply `CHEF_LOSS_DINNER_UPDATES` to all affected dinners + clear allergens.
+4. For each ANNOUNCED dinner whose chef changed (best-effort, ADR-013): delete old HN event via system token; recreate under caller's token only for the target side.
+5. Returns `SwapResult { ours: DinnerEventDetail[], theirs: DinnerEventDetail[] }` (caller's perspective). `ours.length === 1`; `theirs.length === 0` for pure takeover, ≥1 for swap.
+
+The swap panel's "my upcoming assignments" list is derived client-side from `usersStore.myTeams` (existing). No new GET endpoint.
+
+### Business Logic — composables
+
+Pure decision functions, unit-tested without I/O. Endpoints execute the plans.
+
+```ts
+// app/composables/useCookingTeam.ts
+decideRoleAssignmentWrites(cookingTeamId: number, inhabitantId: number, role: TeamRole): RoleAssignmentPlan
+  // Returns: { chefId: number | null, assignment: CookingTeamAssignmentCreate }
+  // chefId is the inhabitantId when role === CHEF, else null.
+
+// app/composables/useDinnerLifecycle.ts (NEW)
+export const CHEF_LOSS_DINNER_UPDATES = {
+    chefId: null,
+    menuTitle: '',
+    menuDescription: '',
+    menuPictureUrl: null,
+    totalCost: 0,
+    heynaboEventId: null,
+    state: DinnerStateSchema.enum.SCHEDULED
+} satisfies Partial<DinnerEventUpdate>
+```
+
+`decideRoleAssignmentWrites` is used by `assign-role` (Phase 1 refactor), `remove-role` (Phase 3), and `assignment/swap` (Phase 3).
+
+`CHEF_LOSS_DINNER_UPDATES` is used by `remove-role` (when removing CHEF), `assignment/swap` (when `menuStrategy === 'CLEAR'`), and the move-out cascade (Phase 4). Endpoints apply it via `updateDinnerEvent(d1, dinner.id, CHEF_LOSS_DINNER_UPDATES)` plus `updateDinnerEventAllergens(d1, dinner.id, [])`. Heynabo deletion is endpoint-side I/O — captures `dinner.heynaboEventId` before applying the constant, then calls `deleteHeynaboEventAsSystem` separately.
+
+### Authorization
 
 ```
-GET /api/chef/my-assignments
-  -> { dinnerEventId, date, menuTitle, role, teamName, covers }[]
+server/utils/authorizationHelper.ts
+  requireChefForDinner(event, dinnerEventId): UserDetail
+    - 200 when caller has CookingTeamAssignment role=CHEF for dinner.cookingTeamId
+    - 401 when not authenticated
+    - 403 when caller has no Inhabitant or is not in the team's chef pool
+    - 404 when dinner missing or has no cookingTeamId
 ```
 
-Or extend an existing endpoint with a filter.
+Mirrors the UI gate: any team chef can act on any dinner of their team (chefs help each other). No admin bypass — admins use `/api/admin/dinner-event/[id]` for corrections.
 
-### Validation Schema
+### Validation Schemas
 
-```typescript
-const ChefSwapRequestSchema = z.object({
-  targetDinnerEventId: z.number().int().positive(),
-  swapAssignments: z.array(z.object({
-    dinnerEventId: z.number().int().positive(),
-    role: z.enum(['CHEF', 'COOK', 'JUNIORHELPER'])
-  })).default([]),
-  menuAction: z.enum(['keep', 'swap', 'reset']).optional()
+```ts
+// app/composables/useCoreValidation.ts (NEW shared building block)
+const IdSchema = z.number().int().positive()
+
+// app/composables/useCookingTeamValidation.ts
+const RoleAssignmentPlanSchema = z.object({
+    chefId: IdSchema.nullable(),
+    assignment: CookingTeamAssignmentCreateSchema
+})
+
+const RemoveRoleRequestSchema = z.object({
+    dinnerEventId: IdSchema,
+    role: TeamRoleSchema,
+    inhabitantId: IdSchema.optional()
+})
+
+const MenuSwapStrategySchema = z.enum(['PRESERVE', 'SWAP', 'CLEAR'])
+
+const SwapAssignmentsRequestSchema = z.object({
+    targetDinnerEventId: IdSchema,
+    swapAssignments: z.array(z.object({
+        dinnerEventId: IdSchema,
+        role: TeamRoleSchema
+    })).default([]),
+    menuStrategy: MenuSwapStrategySchema.default('PRESERVE')
+})
+
+// app/composables/useBookingValidation.ts
+const SwapResultSchema = z.object({
+    ours: z.array(DinnerEventDetailSchema),
+    theirs: z.array(DinnerEventDetailSchema)
 })
 ```
 
+`IdSchema` is a foundational cleanup — 114 inline `z.number().int().positive()` sites in `app/composables/` exist today. Phase 1 introduces the shared schema; wide migration is out of scope for this PR.
+
 ### ADR Compliance
 
-- **ADR-001**: ChefSwapRequestSchema in useChefValidation composable
-- **ADR-002**: Separate try-catch for validation vs business logic
-- **ADR-006**: Swap panel state in component refs (draft, not URL)
-- **ADR-007**: API calls through store
-- **ADR-009**: Return DinnerEventDetail for affected dinners
-- **ADR-013**: Heynabo delete (system token) + recreate (user token for logged-in, deferred for other person)
-
-## UX Decisions Made
-
-1. **Portrait is NOT clickable** — button next to the portrait
-2. **One generic component** (`RoleAssignment`) for both volunteering and swapping, all roles
-3. **This iteration:** mounted next to chef portrait only
-4. **Future:** also mounted on team panel role rows (incl. chef — two entry points to same flow)
-5. **Assignment list is checkboxes** (multi-select) — you can trade e.g. 2x dishwashing for 1x chef
-6. **No pre-selection** in the assignment list — user chooses consciously
-7. **One contextual button** — label adapts: "Bliv chefkok" / "Overtag chefkok-tjans" / "Byt tjans"
-8. **DangerButton 2-phase confirmation** with "Har du aftalt med [name]..." text
-9. **Menu options:** byt menuer / behold menuer / nulstil menuer (only for ANNOUNCED)
-10. **Heynabo:** logged-in user's side republished under their token; other person's side preserved in TheSlope but set to SCHEDULED — they re-announce with one tap
-11. **Notifications:** toast reminds logged-in user to tell the other person; banner on dinner card prompts re-announce
+- **ADR-001** — schemas in validation composables; business logic in domain composables (`useCookingTeam`, `useDinnerLifecycle`); `IdSchema` shared in `useCoreValidation`.
+- **ADR-002** — separate try-catch for validation vs business logic in all new endpoints.
+- **ADR-004** — `console.info` for swap completion; `console.warn` for Heynabo failures; never log tokens.
+- **ADR-005** — existing `onDelete` behaviour unchanged. Move-out cascade is a business rule, not a DB cascade.
+- **ADR-006** — swap panel state in component refs.
+- **ADR-007** — API calls via store methods.
+- **ADR-009** — endpoints return `DinnerEventDetail`. Swap returns operation result `SwapResult`.
+- **ADR-013** — Heynabo: user token for recreate (logged-in side); system token for deletes; best-effort on admin ops; user-facing failures surface to toast.
 
 ## Phases
 
-### Phase 1: RoleAssignment Component + Volunteer Flow
-- Create generic RoleAssignment.vue component
-- "Bliv chefkok" button on WANTED (uses existing assign-role endpoint)
-- DangerButton 2-phase confirmation
-- Mount next to chef portrait in ChefMenuCard
-- Accessible on both `/dinner` and `/chef`
+Each phase ships as one or more commits, each red-first per ADR-003.
 
-### Phase 2: Swap Panel + Assignment List + Menu Decision
-- Fetch user's upcoming assignments (all roles)
-- Checkbox list UI for assignment selection (multi-select)
-- Contextual button (overtag vs byt)
-- "Har du aftalt med..." confirmation text
-- Menu radio buttons (byt/behold/nulstil) conditional on ANNOUNCED state
-- Button disabled until menu choice made (when applicable)
-- New `/api/team/cooking/swap` endpoint with full menu + Heynabo logic
-- Notification: toast for logged-in user, banner for other person's dinner
+### Phase 0 — Update the proposal (this document)
 
-### Phase 3: Tests
-- Unit tests for ChefSwapRequestSchema validation
-- Component tests for RoleAssignment (collapsed/expanded, button labels, context)
-- E2E: volunteer for WANTED, swap SCHEDULED dinners, swap ANNOUNCED with menu options
+Apply the design corrections agreed on review: composables for business logic; client-side auto-claim; plain panel buttons; copy with date+team; `IdSchema`; strict `requireChefForDinner`.
+
+### Phase 1 — Security + composable foundation
+
+- `IdSchema` in `useCoreValidation`.
+- `decideRoleAssignmentWrites` + `RoleAssignmentPlanSchema` in `useCookingTeam` / `useCookingTeamValidation`. Refactor `/api/team/cooking/[id]/assign-role` to use it.
+- `requireChefForDinner` in `server/utils/authorizationHelper.ts`. Wire into `/api/chef/dinner/[id].post.ts` validation block.
+- Refactor: behavioural change in `decideRoleAssignmentWrites` — passing `currentDinnerChefId` returns the desired post-operation `nextChefId`, clearing it on demote (CHEF → non-CHEF for the dinner's current chef).
+- Tests: `useCoreValidation.unit.spec.ts` (IdSchema), `useCookingTeam.nuxt.spec.ts` (decideRoleAssignmentWrites), `authorizationHelper.unit.spec.ts` (requireChefForDinner), `tests/e2e/api/parallel/chef/dinner.e2e.spec.ts` (consolidated; covers Heynabo sync, allergens, permissions), `tests/e2e/api/parallel/assign-role.e2e.spec.ts` (regression + new demotion case).
+
+### Phase 2 — `RoleAssignment` + auto-claim
+
+- `app/components/shared/RoleAssignment.vue`: vacant / self / other branches. Plain `UButton` + Fortryd inside the panel. Copy with date and `getTeamShortName(cookingTeam.name)`. Trigger icon driven by role.
+- Mount in `ChefMenuCard.vue` and `CookingTeamCard.vue` (`#chef-action` slot from `/chef` and `/dinner`).
+- `bookings.updateDinnerEventField` orchestrates the auto-claim and returns `{dinner, wasAutoClaimed}`.
+- Toast wiring on `/chef` and `/dinner`: "Du er nu chefkok!" / "Menu gemt — du er nu chefkok for denne middag".
+- Tests: `RoleAssignment.nuxt.spec.ts` (parametrized over roles, with/without team), `bookings.nuxt.spec.ts` (auto-claim), `ChefSwap.e2e.spec.ts` (volunteer path on `/chef` and `/dinner`, click-outside, Fortryd).
+
+### Phase 3 — `remove-role` + `swap` + swap panel
+
+- `CHEF_LOSS_DINNER_UPDATES` constant in `useDinnerLifecycle`.
+- `RemoveRoleRequestSchema`, `SwapAssignmentsRequestSchema`, `MenuSwapStrategySchema` in `useCookingTeamValidation`. `SwapResultSchema` in `useBookingValidation`.
+- `POST /api/team/cooking/[id]/remove-role` + `plan.ts → removeRole`.
+- `POST /api/team/cooking/assignment/swap` + `plan.ts → swapAssignments`.
+- Expand `RoleAssignment.vue` with swap form (assignments from `usersStore.myTeams`, filtered + projected client-side), menu decision, pre-commit re-announce note.
+- "Needs re-announce" banner in `ChefMenuCard.vue`.
+
+### Phase 4 — Move-out cascade + "Flytter" badge
+
+- `server/utils/cleanupAssignmentsOnMoveOut.ts` using `CHEF_LOSS_DINNER_UPDATES`.
+- Wire into `server/routes/api/household/[id]/update.post.ts` on `moveOutDate` change.
+- Surface `household.moveOutDate` on team-assignment projection.
+- Badge in `CookingTeamCard.vue` for members with future `moveOutDate`.
+- Tests: `cleanupAssignmentsOnMoveOut.unit.spec.ts`, `moveout-cascade.e2e.spec.ts`, `CookingTeamCard.nuxt.spec.ts`.
+
+## Reuse
+
+| Existing | Used for |
+|---|---|
+| `fetchMyTeams` → `/api/team/my` → `usersStore.myTeams` | Swap panel's "my upcoming assignments" list |
+| `fetchDinnerEvent`, `updateDinnerEvent`, `updateDinnerEventAllergens` | Dinner writes in swap and chef-loss |
+| `createTeamAssignment`, `findTeamAssignmentByTeamAndInhabitant`, `updateTeamAssignment` | Team-assignment writes |
+| `deleteHeynaboEventAsSystem`, `createHeynaboEvent` | Heynabo lifecycle in swap and chef-loss |
+| `requireHouseholdAccess` pattern | Shape for `requireChefForDinner` |
+| `rescaffoldOnFieldChange` pattern | Shape for move-out cascade hook |
+| `getTeamShortName` (`useCookingTeam`) | Team name in panel copy |
+| `formatDate` (`utils/date`) | Date in panel copy |
+| `isChefFor` (`useSeason`) | Per-team chef check |
