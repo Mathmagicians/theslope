@@ -1,8 +1,7 @@
 import {defineEventHandler, getValidatedRouterParams, readValidatedBody} from "h3"
 import {fetchUser, saveUser} from "~~/server/data/prismaRepository"
-import type {UserCreate, UserDetail} from "~/composables/useCoreValidation"
+import {useCoreValidation, type UserCreate, type UserDetail} from "~/composables/useCoreValidation"
 import {reconcileUserRoles, RoleOwner} from "~/composables/useUserRoles"
-import {SystemRoleSchema} from '~~/prisma/generated/zod'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from 'zod'
 
@@ -13,25 +12,26 @@ const idSchema = z.object({
     id: z.coerce.number().int().positive('User ID must be a positive integer')
 })
 
-// Partial update — admin may set any subset. systemRoles are TS-reconciled (HN-owned roles preserved).
-const UpdateUserSchema = z.object({
-    systemRoles: z.array(SystemRoleSchema).optional(),
-    email:       z.string().email().optional(),
-    phone:       z.union([z.string(), z.null()]).optional()
-}).refine(b => b.systemRoles !== undefined || b.email !== undefined || b.phone !== undefined, {
-    message: 'At least one of systemRoles, email, phone must be provided'
-})
-
 export default defineEventHandler(async (event): Promise<UserDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
+    // Get schema inside handler to avoid circular dependency.
+    // Reuse UserUpdateSchema validators so update validation stays consistent with create/login flows
+    // (RFC 5322 "Display Name <email>" normalization, phone regex). ID comes from route params, not body.
+    const {UserUpdateSchema} = useCoreValidation()
+    const UpdateUserBodySchema = UserUpdateSchema
+        .pick({systemRoles: true, email: true, phone: true})
+        .refine(b => b.systemRoles !== undefined || b.email !== undefined || b.phone !== undefined, {
+            message: 'At least one of systemRoles, email, phone must be provided'
+        })
+
     // Validate input - fail early on invalid data
     let userId!: number
-    let body!: z.infer<typeof UpdateUserSchema>
+    let body!: z.infer<typeof UpdateUserBodySchema>
     try {
         userId = (await getValidatedRouterParams(event, idSchema.parse)).id
-        body = await readValidatedBody(event, UpdateUserSchema.parse)
+        body = await readValidatedBody(event, UpdateUserBodySchema.parse)
     } catch (error) {
         return throwH3Error(`${LOG} Input validation error`, error)
     }

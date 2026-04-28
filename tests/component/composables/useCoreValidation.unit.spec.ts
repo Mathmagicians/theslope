@@ -508,56 +508,82 @@ describe('useCoreValidation - Fragment Pattern Compliance', () => {
 // SCHEMA VALIDATION EDGE CASES
 // ============================================================================
 
+// User contact-field validation MUST be identical between UserCreateSchema and UserUpdateSchema
+// (RFC 5322 display-name normalization, phone regex). The /api/admin/users/[id] endpoint
+// picks {systemRoles, email, phone} from UserUpdateSchema, so its validation behaviour is
+// asserted against the same data set as UserCreateSchema.
 describe('useCoreValidation - User Schema Validation Edge Cases', () => {
-    const {UserCreateSchema} = useCoreValidation()
+    const {UserCreateSchema, UserUpdateSchema} = useCoreValidation()
 
-    describe('email validation', () => {
-        it.each([
-            {email: 'not-an-email', description: 'missing @ symbol'},
-            {email: '@example.com', description: 'missing local part'},
-            {email: 'user@', description: 'missing domain'},
-        ])('should reject invalid email: $description', ({email}) => {
-            const invalidUser = {email, systemRoles: []}
-            const result = UserCreateSchema.safeParse(invalidUser)
-            expect(result.success).toBe(false)
+    // Each variant defines: how to build a valid input from a partial set of fields.
+    // UserCreateSchema requires email + systemRoles; UserUpdateSchema (picked) accepts any subset.
+    const variants = [
+        {
+            name: 'UserCreateSchema',
+            schema: UserCreateSchema,
+            withEmail: (email: unknown) => ({email, systemRoles: []}),
+            withPhone: (phone: unknown) => ({email: 'test@example.com', phone, systemRoles: []})
+        },
+        {
+            name: 'UserUpdateSchema (picked for [id].post.ts)',
+            schema: UserUpdateSchema.pick({systemRoles: true, email: true, phone: true}),
+            withEmail: (email: unknown) => ({email}),
+            withPhone: (phone: unknown) => ({phone})
+        }
+    ] as const
+
+    const invalidEmails = [
+        {email: 'not-an-email', description: 'missing @ symbol'},
+        {email: '@example.com', description: 'missing local part'},
+        {email: 'user@', description: 'missing domain'}
+    ]
+    const validEmails = [
+        {email: 'simple@example.com', expected: 'simple@example.com', description: 'simple format'},
+        {email: 'John Doe <john@example.com>', expected: 'john@example.com', description: 'RFC 5322 with display name'}
+    ]
+    const phoneCases = [
+        {phone: 'abc-def-ghij', shouldPass: false, description: 'reject letters'},
+        {phone: '12-34-56', shouldPass: false, description: 'reject special characters'},
+        {phone: '+45 12345678', shouldPass: true, description: 'accept country code with spaces'},
+        {phone: '12345678', shouldPass: true, description: 'accept no country code'},
+        {phone: '+4512345678', shouldPass: true, description: 'accept country code without spaces'},
+        {phone: '+45 12 34 56 78', shouldPass: true, description: 'accept extra spaces'}
+    ]
+
+    describe.each(variants)('$name', ({schema, withEmail, withPhone}) => {
+        it.each(invalidEmails)('rejects invalid email: $description', ({email}) => {
+            expect(schema.safeParse(withEmail(email)).success).toBe(false)
         })
 
-        it.each([
-            {email: 'simple@example.com', expected: 'simple@example.com', description: 'simple format'},
-            {email: 'John Doe <john@example.com>', expected: 'john@example.com', description: 'RFC 5322 with display name'}
-        ])('should accept valid email: $description', ({email, expected}) => {
-            const user = {email, systemRoles: []}
-            const result = UserCreateSchema.safeParse(user)
-
+        it.each(validEmails)('accepts and normalizes: $description', ({email, expected}) => {
+            const result = schema.safeParse(withEmail(email))
             expect(result.success).toBe(true)
-            if (result.success) {
-                expect(result.data.email).toBe(expected)
-            }
+            if (result.success) expect(result.data.email).toBe(expected)
+        })
+
+        it.each(phoneCases)('phone: $description', ({phone, shouldPass}) => {
+            expect(schema.safeParse(withPhone(phone)).success).toBe(shouldPass)
+        })
+
+        it('converts empty string phone to null', () => {
+            const result = schema.safeParse(withPhone(''))
+            expect(result.success).toBe(true)
+            if (result.success) expect(result.data.phone).toBeNull()
+        })
+
+        it('accepts null to clear phone', () => {
+            const result = schema.safeParse(withPhone(null))
+            expect(result.success).toBe(true)
+            if (result.success) expect(result.data.phone).toBeNull()
         })
     })
 
-    describe('phone validation', () => {
-        it.each([
-            {phone: 'abc-def-ghij', shouldPass: false, description: 'letters'},
-            {phone: '+45 12345678', shouldPass: true, description: 'country code with spaces'},
-            {phone: '12345678', shouldPass: true, description: 'no country code'},
-            {phone: '+4512345678', shouldPass: true, description: 'country code without spaces'},
-            {phone: '+45 12 34 56 78', shouldPass: true, description: 'extra spaces'}
-        ])('should $description', ({phone, shouldPass}) => {
-            const user = {email: 'test@example.com', phone, systemRoles: []}
-            const result = UserCreateSchema.safeParse(user)
-            expect(result.success).toBe(shouldPass)
-        })
-
-        it('should convert empty string phone to null', () => {
-            const user = {email: 'test@example.com', phone: '', systemRoles: []}
-            const result = UserCreateSchema.safeParse(user)
-
-            expect(result.success).toBe(true)
-            if (result.success) {
-                expect(result.data.phone).toBeNull()
-            }
-        })
+    // Update-only behaviour: any subset of contact fields is valid (id comes from route params).
+    it('UserUpdateSchema (picked) allows partial updates', () => {
+        const ContactUpdate = UserUpdateSchema.pick({systemRoles: true, email: true, phone: true})
+        expect(ContactUpdate.safeParse({email: 'only@example.com'}).success).toBe(true)
+        expect(ContactUpdate.safeParse({phone: '+45 12345678'}).success).toBe(true)
+        expect(ContactUpdate.safeParse({systemRoles: []}).success).toBe(true)
     })
 })
 
