@@ -42,7 +42,7 @@ jobs:
       CI: true
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0  # Fetch all history for version calculation
           ref: ${{ inputs.rollback_to || github.sha }}
@@ -84,7 +84,7 @@ jobs:
           npx wrangler d1 execute theslope --command="SELECT * FROM User" --local
       - name: Run e2e api tests
         run: npm run test:e2e:api
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-api
@@ -93,7 +93,7 @@ jobs:
       - name: Run e2e ui tests
         run: npm run test:e2e:ui
         continue-on-error: true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-ui
@@ -105,12 +105,13 @@ jobs:
           if [ "${{ github.ref }}" == "refs/heads/main" ]; then
             echo "env=prod" >> $GITHUB_OUTPUT
           elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            # Tag push: check if tagged commit is on main branch
-            if git branch -r --contains HEAD | grep -q 'origin/main'; then
-              echo "🏷️ Tag on main branch → prod"
+            # Tag push: tag on main → prod, tag elsewhere → dev (for release-flow testing)
+            git fetch origin main
+            if git merge-base --is-ancestor ${{ github.sha }} origin/main; then
+              echo "🏷️ Tag ${{ github.ref_name }} on main → prod"
               echo "env=prod" >> $GITHUB_OUTPUT
             else
-              echo "🏷️ Tag NOT on main branch → dev"
+              echo "🏷️ Tag ${{ github.ref_name }} NOT on main → dev"
               echo "env=dev" >> $GITHUB_OUTPUT
             fi
           else
@@ -153,7 +154,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Create release tag
         if: startsWith(github.ref, 'refs/heads/')  # Only for workflow_dispatch, not tag push
         env:
@@ -216,7 +217,7 @@ jobs:
     permissions:
       contents: read  # Checkout + run smoke tests against deployed URL
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-node@v5
         with:
           node-version-file: 'package.json'
@@ -233,7 +234,7 @@ jobs:
           SHOULD_NOT_MUTATE: true
           EXPECTED_VERSION: ${{ needs.CICD.outputs.release_version }}
         run: npm run test:e2e:smoke
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-smoke
