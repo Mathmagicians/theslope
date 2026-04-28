@@ -425,7 +425,7 @@ regen-dinner-events-prod: ## Regenerate dinner events (prod) - sid=seasonId
 # ============================================================================
 # TESTING
 # ============================================================================
-.PHONY: unit-test unit-test-single e2e-team e2e-season
+.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod
 
 unit-test: ## Run all unit tests
 	@npx vitest --run
@@ -438,6 +438,17 @@ e2e-team: ## Run team E2E tests
 
 e2e-season: ## Run season E2E tests
 	@npx playwright test tests/e2e/api/admin/season.e2e.spec.ts --reporter=line
+
+# Smoke macro: $(1)=env file, $(2)=BASE_URL — sources env, sets BASE_URL + SHOULD_NOT_MUTATE, runs smoke suite
+define run_smoke
+	$(call with_env,$(1),BASE_URL=$(2) SHOULD_NOT_MUTATE=true npm run test:e2e:smoke)
+endef
+
+smoke-dev: ## Run smoke tests against dev (https://dev.skraaningen.dk)
+	$(call run_smoke,$(ENV_dev),$(URL_dev))
+
+smoke-prod: ## Run smoke tests against prod (https://skraaningen.dk)
+	$(call run_smoke,$(ENV_prod),$(URL_prod))
 
 # ============================================================================
 # UTILITIES

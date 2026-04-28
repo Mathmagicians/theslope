@@ -15,7 +15,7 @@ async function performLogin(request: APIRequestContext, userName: string) {
     return response
 }
 
-async function setupUIAuth(page: Page, userName: string, storageFile: string, landingPath: string = '/admin', expectedUrl: string | RegExp = '/admin/planning') {
+async function setupUIAuth(page: Page, userName: string, storageFile: string, landingPath: string = '/admin', expectedUrl: string | RegExp = /\/admin\/planning/) {
     await page.goto('/login')
     await page.waitForURL('/login')
     await performLogin(page.request, userName)
