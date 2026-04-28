@@ -246,26 +246,32 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
             console.info(`${LOG} Linked ${usersLinked} users to inhabitants`)
         }
 
-        // UPDATE existing users - reconcile roles (HN owns ADMIN, preserves ALLERGYMANAGER)
+        // UPDATE existing users — key by Inhabitant.heynaboId (stable identity), never by email.
+        // Email is mutable in HN; an email change must update the existing row, not create a duplicate.
         let adminsAdded = 0
         let adminsRemoved = 0
         if (userReconciliation.update.length > 0) {
-            // Build map of email -> existing roles
-            const existingRolesByEmail = new Map(linkedUsers.map(u => [u.email, u.systemRoles as SystemRole[]]))
+            const existingByInhabitantHeynaboId = new Map(
+                linkedUsers
+                    .filter(u => u.Inhabitant?.heynaboId != null)
+                    .map(u => [u.Inhabitant!.heynaboId, u])
+            )
 
-            // Reconcile roles for each user
-            const usersToUpdate = userReconciliation.update.map(i => {
-                const incoming = i.user!
-                const existingRoles = existingRolesByEmail.get(incoming.email) ?? []
-                const result = reconcileUserRoles(existingRoles, incoming.systemRoles, RoleOwner.HN)
+            const usersToUpdate = userReconciliation.update.map(incoming => {
+                const existing = existingByInhabitantHeynaboId.get(incoming.heynaboId)
+                if (!existing) {
+                    // reconcileUsers keys update bucket by Inhabitant.heynaboId — should be unreachable
+                    throw new Error(`${LOG} update bucket missing existing user for inhabitant ${incoming.heynaboId}`)
+                }
+                const result = reconcileUserRoles(existing.systemRoles as SystemRole[], incoming.user!.systemRoles, RoleOwner.HN)
                 if (result.adminAdded) adminsAdded++
                 if (result.adminRemoved) adminsRemoved++
-                return { ...incoming, systemRoles: result.roles }
+                return { existingId: existing.id, payload: { ...incoming.user!, systemRoles: result.roles } as UserCreate }
             })
 
-            const chunkUsers = chunkArray<UserCreate>(CHUNK_SIZE)
-            for (const chunk of chunkUsers(usersToUpdate)) {
-                await Promise.all(chunk.map(u => saveUser(d1Client, u)))
+            const chunkUserUpdates = chunkArray<{existingId: number, payload: UserCreate}>(CHUNK_SIZE)
+            for (const chunk of chunkUserUpdates(usersToUpdate)) {
+                await Promise.all(chunk.map(({existingId, payload}) => saveUser(d1Client, payload, existingId)))
             }
             usersUpdated = userReconciliation.update.length
             console.info(`${LOG} Updated ${usersUpdated} users (admins: +${adminsAdded}/-${adminsRemoved}, ALLERGYMANAGER preserved)`)

@@ -42,30 +42,53 @@ const {throwH3Error} = eventHandlerHelper
 // Get serialization utilities
 const {serializeUserInput, deserializeUser} = useCoreValidation()
 
+const LOG_USER = '🪪 > USER > [SAVE]'
+
 /**
- * Save user - upserts by email
- * NOTE: Callers must reconcile roles BEFORE calling (use reconcileUserRoles from useUserRoles)
+ * Serialize partial user payload for id-keyed update. Uses Prisma.skip per ADR-012:
+ * undefined → don't touch the column; null on phone → set to NULL.
  */
-export async function saveUser(d1Client: D1Database, user: UserCreate): Promise<UserDetail> {
-    console.info(`🪪 > USER > [SAVE] Saving user ${user.email} with roles [${user.systemRoles}]`)
+const serializeUserPartial = (user: Partial<UserCreate>) => ({
+    email:        user.email        !== undefined ? user.email                       : PrismaFromClient.skip,
+    phone:        user.phone        !== undefined ? (user.phone ?? null)             : PrismaFromClient.skip,
+    passwordHash: user.passwordHash !== undefined ? user.passwordHash                : PrismaFromClient.skip,
+    systemRoles:  user.systemRoles  !== undefined ? JSON.stringify(user.systemRoles) : PrismaFromClient.skip
+})
+
+const toUserDetail = (row: Parameters<typeof deserializeUser>[0]): UserDetail => ({
+    ...deserializeUser(row),
+    Inhabitant: null
+})
+
+/**
+ * Save user.
+ * - Without `id`: upsert by email (create / login-link flows).
+ * - With `id`: partial update by id — never creates, never touches columns the caller didn't set.
+ *   Use the id form whenever the caller already knows the row identity (HN import update bucket,
+ *   admin user POST). Identity for HN-linked users is reached via Inhabitant.heynaboId.
+ *
+ * NOTE: Callers must reconcile roles BEFORE calling (use reconcileUserRoles from useUserRoles).
+ */
+export async function saveUser(
+    d1Client: D1Database,
+    user: UserCreate | Partial<UserCreate>,
+    id?: number
+): Promise<UserDetail> {
     const prisma = await getPrismaClientConnection(d1Client)
+    const subject = id != null ? `id=${id}` : (user as UserCreate).email
 
     try {
-        const serializedUser = serializeUserInput(user)
-        const newUser = await prisma.user.upsert({
-            where: {email: user.email},
-            create: serializedUser,
-            update: serializedUser
-        })
-        console.info(`🪪 > USER > [SAVE] Successfully saved user ${newUser.email} with ID ${newUser.id}`)
-
-        const deserialized = deserializeUser(newUser)
-        return {
-            ...deserialized,
-            Inhabitant: null
-        }
+        const row = id != null
+            ? await prisma.user.update({where: {id}, data: serializeUserPartial(user)})
+            : await prisma.user.upsert({
+                  where: {email: (user as UserCreate).email},
+                  create: serializeUserInput(user as UserCreate),
+                  update: serializeUserInput(user as UserCreate)
+              })
+        console.info(`${LOG_USER} Saved user ${row.email} (id=${row.id}, target=${subject})`)
+        return toUserDetail(row)
     } catch (error) {
-        return throwH3Error(`🪪 > USER > [SAVE]: Error saving user ${user.email}`, error)
+        return throwH3Error(`${LOG_USER}: Error saving user ${subject}`, error)
     }
 }
 

@@ -37,7 +37,8 @@ const {HeynaboImportResponseSchema} = useHeynaboValidation()
 
 const TEST_HOUSEHOLD_HEYNABO_ID = 2
 const TEST_HOUSEHOLD_PBS_ID = 2 // Seed pbsId (unique, TheSlope-owned)
-const SEED_USER_EMAIL = 'agata@mathmagicians.dk'
+const SEED_USER_EMAIL = 'agata@mathmagicians.dk' // Auth user — never mutate
+const MEMBER_USER_EMAIL = 'test@mathmagicians.dk' // Non-auth seed user — safe to mutate locally
 
 // Inhabitants in test household (from Heynabo API)
 // Note: name = firstName from Heynabo (lastName is separate field)
@@ -124,11 +125,17 @@ const testData = {
     // USER TEST DATA
     // ========================================================================
     user: {
-        // IDEMPOTENT: ALLERGYMANAGER role preserved (TheSlope-owned)
+        // IDEMPOTENT: ALLERGYMANAGER role on agata preserved (TheSlope-owned, no mutation)
         seedUserEmail: SEED_USER_EMAIL,
-        // UPDATE: Heynabo-owned field (phone) mutated, should be restored
-        seedUserOriginalPhone: '',
-        seedUserMutatedPhone: '+4599999999',
+        // UPDATE: Heynabo-owned fields on test@ mutated locally, should be restored from HN.
+        // Email change is a regression guard: HN updating a user's email must rewrite the existing row
+        // (keyed by Inhabitant.heynaboId), not create a duplicate via email-keyed upsert.
+        // ALLERGYMANAGER (TheSlope-owned, granted in setup) must survive the email change.
+        memberUserId: 0,
+        memberUserOriginalEmail: '',
+        memberUserOriginalPhone: '',
+        memberUserMutatedEmail: '',
+        memberUserMutatedPhone: '+4599999999',
         // DELETE: User on limited-role inhabitant
         orphanId: 0,
         orphanEmail: ''
@@ -148,15 +155,15 @@ test.describe.serial('Heynabo Integration API', () => {
         // ========================================================================
         const initialImport = await context.request.get('/api/admin/heynabo/import')
         expect(initialImport.status(), 'Initial Heynabo import must succeed').toBe(200)
-        const initialResult = HeynaboImportResponseSchema.parse(await initialImport.json())
-
-        // Seed household (heynaboId=2) should be UPDATE or IDEMPOTENT, never deleted+recreated
-        expect(initialResult.householdsDeleted, 'Initial import: seed household must not be deleted').toBe(0)
+        HeynaboImportResponseSchema.parse(await initialImport.json())
 
         // ========================================================================
         // STEP 2: Find test household (now exists after import)
+        // Seed household (heynaboId=2) must survive the initial import — never deleted+recreated.
         // ========================================================================
         const households = await HouseholdFactory.getAllHouseholds(context)
+        const seedAfterInitial = households.find(h => h.heynaboId === TEST_HOUSEHOLD_HEYNABO_ID)
+        expect(seedAfterInitial, `Initial import preserves seed household (heynaboId=${TEST_HOUSEHOLD_HEYNABO_ID})`).toBeDefined()
         const household = households.find(h => h.pbsId === TEST_HOUSEHOLD_PBS_ID)
         expect(household, `Test household pbsId=${TEST_HOUSEHOLD_PBS_ID} must exist after import. Got pbsIds: ${households.map(h => h.pbsId).join(',')}`).toBeDefined()
         testData.householdId = household!.id
@@ -240,18 +247,29 @@ test.describe.serial('Heynabo Integration API', () => {
         // STEP 5: USER MUTATIONS
         // ========================================================================
 
-        // IDEMPOTENT + UPDATE: Get seed user and mutate phone
+        // UPDATE: mutate Heynabo-owned fields on the non-auth member user (test@).
+        // Email mutation simulates the production regression (RoseMarie HN email change):
+        // import UPDATE bucket must rewrite the existing row by id, not email-keyed upsert.
+        // ALLERGYMANAGER (TS-owned, granted in same partial update) must survive the email change.
+        // We do NOT mutate agata (auth user) — re-auth in this run would break.
         const usersResponse = await context.request.get('/api/admin/users')
         const users: UserDisplay[] = await usersResponse.json()
-        const seedUser = users.find(u => u.email === SEED_USER_EMAIL)
-        expect(seedUser, 'Seed user must exist after import').toBeDefined()
-        testData.user.seedUserOriginalPhone = seedUser!.phone || ''
+        const memberUser = users.find(u => u.email === MEMBER_USER_EMAIL)
+        expect(memberUser, 'Member user must exist after import').toBeDefined()
+        testData.user.memberUserId = memberUser!.id
+        testData.user.memberUserOriginalEmail = memberUser!.email
+        testData.user.memberUserOriginalPhone = memberUser!.phone || ''
+        testData.user.memberUserMutatedEmail = `mutated-${testSalt}@old.dk`
 
-        // Mutate phone (Heynabo-owned field)
-        await context.request.post(`/api/admin/users/${seedUser!.id}`, {
+        const mutateResponse = await context.request.post(`/api/admin/users/${memberUser!.id}`, {
             headers,
-            data: {phone: testData.user.seedUserMutatedPhone}
+            data: {
+                systemRoles: ['ALLERGYMANAGER'],
+                email: testData.user.memberUserMutatedEmail,
+                phone: testData.user.memberUserMutatedPhone
+            }
         })
+        expect(mutateResponse.status(), 'Setup precondition: admin POST accepts partial {systemRoles, email, phone}').toBe(200)
 
         // DELETE: Create orphan user on limited-role inhabitant
         testData.user.orphanEmail = `orphan-${testSalt}@test.dk`
@@ -386,19 +404,29 @@ test.describe.serial('Heynabo Integration API', () => {
         // USER ASSERTIONS
         // ========================================================================
 
-        // IDEMPOTENT: ALLERGYMANAGER role preserved (TheSlope-owned)
-        const seedUser = users.find(u => u.email === testData.user.seedUserEmail)
-        expect(seedUser, 'User: Seed user exists').toBeDefined()
-        expect(isAdmin(seedUser!), 'User: Seed user has ADMIN').toBe(true)
-        expect(isAllergyManager(seedUser!), 'User: ALLERGYMANAGER preserved (TheSlope-owned)').toBe(true)
+        // IDEMPOTENT: agata's TheSlope-owned ALLERGYMANAGER + HN-owned ADMIN preserved (no mutation)
+        const agata = users.find(u => u.email === testData.user.seedUserEmail)
+        expect(agata, 'Agata (auth user) row exists after import').toBeDefined()
+        expect(isAdmin(agata!), 'Agata: ADMIN preserved (HN-owned)').toBe(true)
+        expect(isAllergyManager(agata!), 'Agata: ALLERGYMANAGER preserved (TS-owned, idempotent)').toBe(true)
 
-        // UPDATE: Heynabo-owned field (phone) restored
-        expect(seedUser!.phone, 'User: phone restored from Heynabo').not.toBe(testData.user.seedUserMutatedPhone)
-        expect(seedUser!.phone, 'User: phone matches original').toBe(testData.user.seedUserOriginalPhone)
+        // REGRESSION (RoseMarie bug): HN email change must update existing row by id, not duplicate.
+        // Setup mutated test@'s email + phone locally, granted ALLERGYMANAGER. Import must:
+        //   (a) restore HN-owned email/phone on the SAME row (no email-keyed upsert duplicate),
+        //   (b) preserve TS-owned ALLERGYMANAGER across the email change.
+        const memberAfter = users.find(u => u.id === testData.user.memberUserId)
+        expect(memberAfter, 'test@ row preserved (id-keyed update, no duplicate)').toBeDefined()
+        expect(memberAfter!.email, 'test@ email: HN value restored, mutated value overwritten')
+            .toBe(testData.user.memberUserOriginalEmail)
+        expect(memberAfter!.phone, 'test@ phone: HN value restored')
+            .toBe(testData.user.memberUserOriginalPhone)
+        expect(isAllergyManager(memberAfter!), 'test@ ALLERGYMANAGER preserved across HN email change (regression guard)')
+            .toBe(true)
+        expect(users.filter(u => u.email === testData.user.memberUserMutatedEmail).length,
+            'No duplicate row was created with the mutated email').toBe(0)
 
-        // DELETE: Orphan user removed
-        const orphanUser = users.find(u => u.email === testData.user.orphanEmail)
-        expect(orphanUser, 'User: Orphan user deleted').toBeUndefined()
+        // DELETE: orphan user removed (Babyyoda has limited role in HN, so its linked user is purged)
+        expect(users.find(u => u.email === testData.user.orphanEmail), 'Orphan user (Babyyoda link) deleted').toBeUndefined()
 
         // Verify Babyyoda has no user (limited role in Heynabo)
         expect(babyyoda!.userId, 'User: Babyyoda has no user (limited role)').toBeNull()

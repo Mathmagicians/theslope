@@ -385,6 +385,9 @@ heynabo-get-locations-prod: ## List all locations (prod)
 heynabo-get-nhbrs-dev: ## List all neighbors (dev)
 	$(call heynabo_call,$(ENV_local),"$$NUXT_PUBLIC_HEY_NABO_API/members/users/")
 
+heynabo-get-nhbrs-prod: ## List all neighbors (prod) - uses /admin/users/ matching import client
+	$(call heynabo_call,$(ENV_prod),"$$NUXT_PUBLIC_HEY_NABO_API/admin/users/")
+
 heynabo-nuke-test-events: ## Nuke all test events from Heynabo (patterns: Test Menu-, Updated Delicious Pasta-)
 	$(call theslope_call,$(ENV_local),$(URL_local),-X POST "$(URL_local)/api/test/heynabo/cleanup" -d '{"nuke": true}')
 
