@@ -22,7 +22,6 @@
 | **Admin - Dinner Events** | | | | | **✅ FULLY COMPLIANT**                                                                            |
 | `/api/admin/dinner-event/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteDinnerEvent() validates with DinnerEventResponseSchema                                     |
 | `/api/admin/dinner-event/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchDinnerEvent() validates with DinnerEventResponseSchema                                      |
-| `/api/admin/dinner-event/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateDinnerEvent() validates with DinnerEventResponseSchema                                     |
 | `/api/admin/dinner-event/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchDinnerEvents() validates with DinnerEventResponseSchema                                     |
 | `/api/admin/dinner-event/index.put.ts` | ✅ | ✅ | ✅ | ✅ | saveDinnerEvent() validates with DinnerEventResponseSchema                                       |
 | **Admin - Teams** | | | | | **✅ FULLY COMPLIANT (2025-12-15)** - Uses teamService for auto-assignment                       |

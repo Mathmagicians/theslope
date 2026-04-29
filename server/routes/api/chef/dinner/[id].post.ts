@@ -29,7 +29,7 @@ const ChefDinnerUpdateSchema = DinnerEventUpdateSchema.extend({
 type ChefDinnerUpdate = z.infer<typeof ChefDinnerUpdateSchema>
 
 /**
- * Update dinner event (chef operation) - CONSOLIDATED ENDPOINT
+ * Update dinner event (chef operation)
  *
  * POST /api/chef/dinner/[id]
  *
@@ -56,8 +56,8 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
         return throwH3Error(PREFIX + 'Input validation error', error, 400)
     }
 
-    // Authorization: caller must be in this dinner's team chef pool (ADR Phase 1).
-    // Throws 401/403/404 — admins use /api/admin/dinner-event/[id] for corrections.
+    // Authorization: caller must be in this dinner's team chef pool.
+    // Throws 401/403/404.
     await requireChefForDinner(event, id)
 
     // Get user session and Heynabo token

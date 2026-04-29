@@ -336,7 +336,7 @@ server/utils/authorizationHelper.ts
     - 404 when dinner missing or has no cookingTeamId
 ```
 
-Mirrors the UI gate: any team chef can act on any dinner of their team (chefs help each other). No admin bypass — admins use `/api/admin/dinner-event/[id]` for corrections.
+Mirrors the UI gate: any team chef can act on any dinner of their team (chefs help each other). No admin bypass.
 
 ### Validation Schemas
 
@@ -391,17 +391,21 @@ const SwapResultSchema = z.object({
 
 Each phase ships as one or more commits, each red-first per ADR-003.
 
-### Phase 0 — Update the proposal (this document)
+### Phase 0 — Update the proposal ✅
 
-Apply the design corrections agreed on review: composables for business logic; client-side auto-claim; plain panel buttons; copy with date+team; `IdSchema`; strict `requireChefForDinner`.
+Design corrections applied: composables for business logic; client-side auto-claim; plain panel buttons; copy with date+team; `IdSchema`; strict `requireChefForDinner`; single `chef/dinner.e2e.spec.ts` per-endpoint test file.
 
-### Phase 1 — Security + composable foundation
+### Phase 1 — Security + composable foundation ✅
 
-- `IdSchema` in `useCoreValidation`.
-- `decideRoleAssignmentWrites` + `RoleAssignmentPlanSchema` in `useCookingTeam` / `useCookingTeamValidation`. Refactor `/api/team/cooking/[id]/assign-role` to use it.
-- `requireChefForDinner` in `server/utils/authorizationHelper.ts`. Wire into `/api/chef/dinner/[id].post.ts` validation block.
-- Refactor: behavioural change in `decideRoleAssignmentWrites` — passing `currentDinnerChefId` returns the desired post-operation `nextChefId`, clearing it on demote (CHEF → non-CHEF for the dinner's current chef).
-- Tests: `useCoreValidation.unit.spec.ts` (IdSchema), `useCookingTeam.nuxt.spec.ts` (decideRoleAssignmentWrites), `authorizationHelper.unit.spec.ts` (requireChefForDinner), `tests/e2e/api/parallel/chef/dinner.e2e.spec.ts` (consolidated; covers Heynabo sync, allergens, permissions), `tests/e2e/api/parallel/assign-role.e2e.spec.ts` (regression + new demotion case).
+Shipped:
+- `IdSchema` added to `useCoreValidation` (shared building block; 114 inline `z.number().int().positive()` sites remain for opportunistic migration).
+- `RoleAssignmentPlanSchema { nextChefId, assignment }` in `useCookingTeamValidation`; `decideRoleAssignmentWrites(cookingTeamId, inhabitantId, role, currentDinnerChefId)` in `useCookingTeam`. Returns the desired post-operation `dinner.chefId` (promote → me; demote of myself → null; otherwise unchanged).
+- `/api/team/cooking/[id]/assign-role` refactored to delegate to the composable; endpoint contract unchanged. **New behaviour**: demoting from CHEF (when caller is the dinner's current chef) clears `dinner.chefId`. Pinned by new e2e test.
+- `requireChefForDinner` in `server/utils/authorizationHelper.ts` — strict (any team chef of dinner.cookingTeamId passes), 401/403/404 codes. No admin bypass.
+- Wired into `/api/chef/dinner/[id].post.ts` validation block (ADR-002). Closes the security gap that allowed any authenticated `Inhabitant` to mutate any dinner's menu.
+- Test file consolidation: `dinnerAnnounce.e2e.spec.ts` + `dinnerAllergens.e2e.spec.ts` merged into single `chef/dinner.e2e.spec.ts` (flat, single `beforeAll` sets up season + team + member-as-chef).
+
+Tests: 8 new unit cases (`useCoreValidation.unit.spec.ts`), 8 new (`useCookingTeam.nuxt.spec.ts`), 8 new (`authorizationHelper.unit.spec.ts`), 14 e2e (`chef/dinner.e2e.spec.ts` — 12 regression + 2 permission), 10 e2e (`assign-role.e2e.spec.ts` — 9 regression + 1 demotion). All green; lint + ts clean.
 
 ### Phase 2 — `RoleAssignment` + auto-claim
 
