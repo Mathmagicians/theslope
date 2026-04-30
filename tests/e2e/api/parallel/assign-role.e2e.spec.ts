@@ -159,7 +159,7 @@ test.describe('DinnerEvent API - Assign Role', () => {
                 TeamRole.CHEF
             )
             const afterPromote = await DinnerEventFactory.getDinnerEvent(context, dinnerEvent.id)
-            expect(afterPromote.chefId, 'After CHEF assignment dinner.chefId should be inhabitant').toBe(inhabitant.id)
+            expect(afterPromote!.chefId, 'After CHEF assignment dinner.chefId should be inhabitant').toBe(inhabitant.id)
 
             // Demote to COOK — dinner.chefId must clear
             await DinnerEventFactory.assignRoleToDinnerEvent(
@@ -169,7 +169,7 @@ test.describe('DinnerEvent API - Assign Role', () => {
                 TeamRole.COOK
             )
             const afterDemote = await DinnerEventFactory.getDinnerEvent(context, dinnerEvent.id)
-            expect(afterDemote.chefId, 'After demotion dinner.chefId should be cleared').toBeNull()
+            expect(afterDemote!.chefId, 'After demotion dinner.chefId should be cleared').toBeNull()
 
             // Team-level role downgraded to COOK
             const teamWithAssignments = await SeasonFactory.getCookingTeamById(context, team.id!)

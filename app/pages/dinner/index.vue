@@ -66,6 +66,7 @@ const {user} = storeToRefs(authStore)
 // Booking validation and helpers
 const {formatScaffoldResult, BOOKING_TOAST_TITLES} = useBooking()
 const {TeamRoleSchema} = useCookingTeamValidation()
+const {isNotAssignedToMe} = useCookingTeam()
 const TeamRole = TeamRoleSchema.enum
 
 // Component needs to handle its own data needs
@@ -89,9 +90,13 @@ planStore.initPlanStore()
 const allergiesStore = useAllergiesStore()
 allergiesStore.initAllergiesStore()
 
-// Bookings store (lock status)
 const bookingsStore = useBookingsStore()
-const {lockStatus} = storeToRefs(bookingsStore)
+const {
+  lockStatus,
+  selectedDinnerEventDetail: dinnerEventDetail,
+  isSelectedDinnerEventLoading: isDinnerDetailLoading,
+  isSelectedDinnerEventErrored: isDinnerDetailError
+} = storeToRefs(bookingsStore)
 
 // Derive needed data from store
 const seasonDates = computed(() => selectedSeason.value?.seasonDates)
@@ -125,35 +130,17 @@ const selectedDinnerEvent = computed(() => {
     })
 })
 
-// Selected dinner ID for data fetching
 const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
 
-// Page owns dinner detail data (ADR-007: page owns data, layout receives via props)
-const { DinnerEventDetailSchema, OrderDisplaySchema } = useBookingValidation()
+watchEffect(() => {
+  const id = selectedDinnerId.value
+  if (id !== null) bookingsStore.loadDinnerEventDetail(id)
+})
 
-const {
-  data: dinnerEventDetail,
-  status: dinnerEventDetailStatus,
-  refresh: refreshDinnerEventDetail
-} = useAsyncData(
-  computed(() => `dinner-detail-${selectedDinnerId.value || 'null'}`),
-  () => selectedDinnerId.value
-    ? bookingsStore.fetchDinnerEventDetail(selectedDinnerId.value)
-    : Promise.resolve(null),
-  {
-    default: () => null,
-    watch: [selectedDinnerId],
-    immediate: true,
-    transform: (data: unknown) => {
-      if (!data) return null
-      try {
-        return DinnerEventDetailSchema.parse(data)
-      } catch (e) {
-        console.error('Error parsing dinner event detail:', e)
-        throw e
-      }
-    }
-  }
+const { OrderDisplaySchema } = useBookingValidation()
+
+const isNotChefForMe = computed(() =>
+  isNotAssignedToMe(dinnerEventDetail.value?.chef ?? undefined, authStore.inhabitantId)
 )
 
 // Fetch household-specific orders via user-facing endpoint (security: session-filtered)
@@ -177,21 +164,8 @@ const {
   }
 )
 
-// Helper to refresh both data sources after booking changes
-const refreshBookingData = async () => {
-  await Promise.all([refreshDinnerEventDetail(), _refreshHouseholdOrders()])
-}
-
-// Bubbled from RoleAssignment (next to chef portrait + on team's chef row).
-// Refresh dinner detail and toast — the chef has been claimed/changed.
-const handleRoleAssigned = async () => {
-  await refreshDinnerEventDetail()
-  toast.add({
-    title: 'Du er nu chefkok!',
-    icon: ICONS.checkCircle,
-    color: 'success'
-  })
-}
+const refreshBookingData = () =>
+  Promise.all([bookingsStore.refreshSelectedDinnerEventDetail(), _refreshHouseholdOrders()])
 
 // ADR-016: Unified booking handler via scaffold endpoint
 const handleSaveBookings = async (orders: DesiredOrder[]) => {
@@ -221,9 +195,6 @@ const handleSaveBookings = async (orders: DesiredOrder[]) => {
     toast.add({title: 'Kunne ikke gemme bookinger', color: 'error', icon: ICONS.exclamationCircle})
   }
 }
-
-const isDinnerDetailLoading = computed(() => dinnerEventDetailStatus.value === 'pending')
-const isDinnerDetailError = computed(() => dinnerEventDetailStatus.value === 'error')
 
 useHead({
   title: '🍽️ Fællesspisning',
@@ -315,7 +286,6 @@ useHead({
           @prev="navigate(-1)"
           @next="navigate(1)"
           @toggle-calendar="setCalendarOpen(!calendarOpen)"
-          @role-assigned="handleRoleAssigned"
         >
           <!-- Household booking form - uses session-filtered orders (not admin's all-households tickets) -->
           <DinnerBookingForm
@@ -342,11 +312,11 @@ useHead({
           >
             <template #chef-action>
               <RoleAssignment
+                  v-if="isNotChefForMe"
                   :dinner-event="dinnerEventDetail"
                   :role="TeamRole.CHEF"
-                  :current-holder="dinnerEventDetail.chef"
-                  @role-assigned="handleRoleAssigned"
-              />
+                  :swap-with="dinnerEventDetail.chef ?? undefined"
+                      />
             </template>
           </CookingTeamCard>
           <UAlert
@@ -356,7 +326,7 @@ useHead({
           >
             <template #title>{{ noTeamMessage.emoji }} {{ noTeamMessage.text }}</template>
           </UAlert>
-          <WorkAssignment :dinner-event="dinnerEventDetail" @role-assigned="refreshDinnerEventDetail"/>
+          <WorkAssignment :dinner-event="dinnerEventDetail"/>
         </template>
       </template>
 

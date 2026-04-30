@@ -17,6 +17,9 @@ export class DinnerEventFactory {
     static readonly today = new Date()
     static readonly tomorrow = new Date(this.today.getTime() + 24 * 60 * 60 * 1000)
 
+    static readonly dinnerEventDetailPath = (dinnerEventId: number): string =>
+        `${DINNER_EVENT_ENDPOINT}/${dinnerEventId}`
+
     static readonly defaultDinnerEventData: DinnerEventCreate = {
         date: this.tomorrow,
         menuTitle: 'Test Menu',

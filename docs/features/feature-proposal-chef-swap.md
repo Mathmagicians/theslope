@@ -2,6 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-03-30
+**Updated:** 2026-04-30 — Phase 2 implemented; toast moved into store via `claimRoleForMe` (DRY with auto-claim); SSR-safe refresh refactor scheduled before Phase 3 (see Phase 2.5)
 **Updated:** 2026-04-28 — design refinements: client-side auto-claim, business logic in composables, plain panel buttons, copy with date+team, `IdSchema`
 
 ## Problem
@@ -407,13 +408,36 @@ Shipped:
 
 Tests: 8 new unit cases (`useCoreValidation.unit.spec.ts`), 8 new (`useCookingTeam.nuxt.spec.ts`), 8 new (`authorizationHelper.unit.spec.ts`), 14 e2e (`chef/dinner.e2e.spec.ts` — 12 regression + 2 permission), 10 e2e (`assign-role.e2e.spec.ts` — 9 regression + 1 demotion). All green; lint + ts clean.
 
-### Phase 2 — `RoleAssignment` + auto-claim
+### Phase 2 — `RoleAssignment` + auto-claim ✅
 
-- `app/components/shared/RoleAssignment.vue`: vacant / self / other branches. Plain `UButton` + Fortryd inside the panel. Copy with date and `getTeamShortName(cookingTeam.name)`. Trigger icon driven by role.
-- Mount in `ChefMenuCard.vue` and `CookingTeamCard.vue` (`#chef-action` slot from `/chef` and `/dinner`).
-- `bookings.updateDinnerEventField` orchestrates the auto-claim and returns `{dinner, wasAutoClaimed}`.
-- Toast wiring on `/chef` and `/dinner`: "Du er nu chefkok!" / "Menu gemt — du er nu chefkok for denne middag".
-- Tests: `RoleAssignment.nuxt.spec.ts` (parametrized over roles, with/without team), `bookings.nuxt.spec.ts` (auto-claim), `ChefSwap.e2e.spec.ts` (volunteer path on `/chef` and `/dinner`, click-outside, Fortryd).
+Shipped:
+- `app/components/shared/RoleAssignment.vue`: wrapper component with `UCollapsible` panel; vacant / swap branches; trigger styled with `heroPrimary` + chef icon + chevron-down rotation; `defineExpose({open})` for portrait-click. Past-dinner gate via `useSeason.isDinnerPast`. Watch on `dinnerEvent.id` closes panel on navigation.
+- `RoleAssignmentForm.vue`: dumb form, emits `submit({ours, theirs?})`; commit label adapts to volunteer vs swap (`Ja tak, jeg bliver chefkok` / `Ja tak, jeg overtager chefkok-tjansen`). `LAYOUTS.formButtonRow` for stacked-on-mobile cancel/save.
+- Mounted in `ChefMenuCard.vue` (next to portrait, ref-opened on portrait click) and `CookingTeamCard.vue` `#chef-action` slot (from `/chef` and `/dinner`).
+- `useCookingTeam`: `isNotAssignedToMe(holder, myId)` predicate, `tryAutoClaim<T>(currentChefId, myId, claim)` generic auto-claim, `formatRoleClaimedTitle(dinner, role)` shared toast formatter (DRY across volunteer + auto-claim).
+- `bookings.updateDinnerEventField`: orchestrates auto-claim via `tryAutoClaim` + `withLoadingAndErrorHandler` wrappers; toast title built via `formatRoleClaimedTitle`; returns `{dinner, wasAutoClaimed}`.
+- `plan.claimRoleForMe(dinner, role)`: store-owned wrapper around `assignRoleToDinner`; shows the `formatRoleClaimedTitle` toast on success; returns `DinnerEventDetail | null`. Pages stripped of toast logic — `RoleAssignment` calls `claimRoleForMe`, pages just refresh.
+- Tests: `RoleAssignment.nuxt.spec.ts` (10 cases: branch labels, open/close, single-click commit, exposed `open()`, past-dinner gate, panel-closes-on-id-change), `RoleAssignmentForm.nuxt.spec.ts` (6 cases: copy, cancel, submit shape), `bookings.nuxt.spec.ts` (4 cases: auto-claim parametrized + `isDinnerUpdating` toggling), `useCookingTeam.nuxt.spec.ts` (8 cases for `decideRoleAssignmentWrites` + 5 for `isNotAssignedToMe`), `ChefSwap.e2e.spec.ts` (parametrized over `/chef` and `/dinner` mounts: API state + UI assertions for trigger disappearance and `chef-display`/`chef-wanted` flip).
+
+Cleanup along the way:
+- Deleted dead `POST /api/admin/dinner-event/[id]` endpoint (zero production callers; was masquerading as the failing CI test path).
+- `LAYOUTS.formButtonRow` extracted to design system; `IdSchema` in `useCoreValidation`; `authStore.inhabitantId` computed (replaces `user?.Inhabitant?.id ?? null` repetition across codebase).
+
+Known issue surfaced: `/dinner` chef portrait does not visibly update after volunteering — `refreshDinnerEventDetail()` short-circuits against the SSR payload cache. `/chef` works only via `onMounted(() => refreshDinnerEventDetail())` workaround at `chef/index.vue:196-198`. ChefSwap.e2e's new UI assertion (`role-assignment-trigger` disappears, `chef-display` appears) reproduces the bug. **Fixed in Phase 2.5.**
+
+### Phase 2.5 — SSR-safe reactive-key dinner-detail in bookings store
+
+Symptom: `/dinner` chef portrait stale after volunteer. Root cause: `bookings.fetchDinnerEventDetail` is a one-shot `$fetch` (drops SSR cookies), wrapped page-side in `useAsyncData` whose `refresh()` then short-circuits against `nuxtApp.payload.data[key]` after hydration. `/chef` masks this with an `onMounted` refresh hack.
+
+Fix (architect-approved, mirrors `bookings.ts:538-551 selectedBillingPeriodDetail` and `:580-592 selectedInvoiceTransactions`):
+
+- `bookings.ts`: add `selectedDinnerEventId` ref + `useAsyncData` with reactive key `` `/api/admin/dinner-event/${selectedDinnerEventId.value || 'null'}` ``, `useRequestFetch` (closes SSR auth hole), `DinnerEventDetailSchema.parse` in transform. Setter `loadDinnerEventDetail(id)`. Status computeds `isSelectedDinnerEventDetailLoading` etc. `refreshSelectedDinnerEventDetail` exposed.
+- `plan.assignRoleToDinner`: chain a cross-store `useBookingsStore().refreshSelectedDinnerEventDetail()` after `refreshSelectedSeason()` (line 489-491). Cycle is fine; bookings already imports plan store.
+- `/dinner` and `/chef` pages: drop inline `useAsyncData(dinner-detail-…)` blocks. Add `watchEffect(() => bookingsStore.loadDinnerEventDetail(selectedDinnerId.value))` bridge. Bind `bookingsStore.selectedDinnerEventDetail` in template. Drop `onMounted` workaround on `/chef`.
+- Page mutation handlers (`handleFormUpdate`, `handleAdvanceState`, `handleCancelDinner`, etc.) drop their `await refreshDinnerEventDetail()` calls — store self-refreshes after each mutation in `bookings.ts`.
+- ADR-007 amendments (`useRequestFetch` rule + SSR payload cache rule + reactive-key-detail-belongs-in-store rule) — see separate review.
+
+Order: implement /dinner first (where bug lives), validate ChefSwap.e2e turns green, then migrate /chef, drop the `onMounted` hack.
 
 ### Phase 3 — `remove-role` + `swap` + swap panel
 

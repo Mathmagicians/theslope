@@ -131,6 +131,10 @@ const HERO_BUTTON = COMPONENTS.heroPanel.light
 // Validation schemas
 const { DinnerStateSchema, ChefMenuFormSchema } = useBookingValidation()
 const { TeamRoleSchema } = useCookingTeamValidation()
+const { isNotAssignedToMe } = useCookingTeam()
+const authStore = useAuthStore()
+const roleAssignmentRef = ref<{open: () => void} | null>(null)
+const isNotChefForMe = computed(() => isNotAssignedToMe(props.dinnerEvent.chef ?? undefined, authStore.inhabitantId))
 const DinnerState = DinnerStateSchema.enum
 const TeamRole = TeamRoleSchema.enum
 
@@ -521,18 +525,13 @@ const handleCardClick = () => {
           {{ dinnerEvent.menuDescription }}
         </div>
 
-        <!-- Chef display - portrait + RoleAssignment trigger / panel -->
-        <RoleAssignment
-          class="pt-4 mt-4"
-          :dinner-event="dinnerEvent"
-          :role="TeamRole.CHEF"
-          :current-holder="dinnerEvent.chef"
-          @role-assigned="emit('role-assigned')"
-        >
+        <!-- Chef portrait + RoleAssignment trigger (when not the chef) -->
+        <div class="pt-4 mt-4 flex items-center gap-3 flex-wrap">
           <div
-            class="flex items-center gap-3"
+            class="flex items-center gap-3 cursor-pointer"
             :class="{ [`${BG.mocha[950]} border-2 border-dashed border-amber-600 rounded-lg p-3 -skew-x-1 w-fit`]: !dinnerEvent.chef }"
             :data-testid="dinnerEvent.chef ? 'chef-display' : 'chef-wanted'"
+            @click="isNotChefForMe && roleAssignmentRef?.open()"
           >
             <!-- Portrait frame around avatar -->
             <div class="relative">
@@ -556,7 +555,16 @@ const handleCardClick = () => {
               <span :class="dinnerEvent.chef ? TYPOGRAPHY.bodyTextMuted : `${TEXT.mocha[50]} text-sm opacity-75`">Chefkok</span>
             </div>
           </div>
-        </RoleAssignment>
+
+          <RoleAssignment
+            v-if="isNotChefForMe"
+            ref="roleAssignmentRef"
+            :dinner-event="dinnerEvent"
+            :role="TeamRole.CHEF"
+            :swap-with="dinnerEvent.chef ?? undefined"
+            @role-assigned="emit('role-assigned')"
+          />
+        </div>
 
         <!-- Warning when menu title missing -->
         <UAlert

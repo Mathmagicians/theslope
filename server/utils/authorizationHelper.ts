@@ -79,7 +79,7 @@ export const requireHouseholdAccess = async (
  * the dinner's `cookingTeamId` is allowed. Mirrors the UI gate (team chefs
  * help each other on each others' menus).
  *
- * No admin bypass — admins use `/api/admin/dinner-event/[id]` for corrections.
+ * No admin bypass.
  *
  * @returns the authenticated UserDetail on success
  * @throws 401 when not authenticated

@@ -1,6 +1,33 @@
-import {useCookingTeamValidation, type CookingTeamDisplay, type TeamRole, type RoleAssignmentPlan} from '~/composables/useCookingTeamValidation'
+import {useCookingTeamValidation, ROLE_LABELS, type CookingTeamDisplay, type TeamRole, type RoleAssignmentPlan} from '~/composables/useCookingTeamValidation'
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
+import type {DinnerEventDetail} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
+
+/**
+ * Predicate: the role's current holder is not the given inhabitant.
+ * True when the role is vacant OR held by someone else.
+ * Used by parents of RoleAssignment to gate `v-if`.
+ */
+export const isNotAssignedToMe = (
+    holder: InhabitantDisplay | undefined,
+    myInhabitantId: number | null
+): boolean =>
+    !holder || (myInhabitantId !== null && holder.id !== myInhabitantId)
+
+/**
+ * Run the chef auto-claim when the dinner is vacant and the caller has an Inhabitant.
+ * Returns the value the caller assigns to `wasAutoClaimed`. Propagates `claim` errors
+ * for the caller's wrapper to handle.
+ */
+export const tryAutoClaim = async <T>(
+    currentChefId: number | null,
+    myInhabitantId: number | null,
+    claim: () => Promise<T>
+): Promise<boolean> => {
+    if (currentChefId !== null || myInhabitantId === null) return false
+    await claim()
+    return true
+}
 
 const TEAM_COLORS = ['party', 'peach', 'secondary', 'neutral', 'info', 'warning', 'error', 'ocean', 'winery', 'primary', 'caramel'] as const
 export type TeamColor = typeof TEAM_COLORS[number]
@@ -38,6 +65,15 @@ export const useCookingTeam = () => {
     const getTeamShortName = (teamName: string): string => {
         const dashIndex = teamName.indexOf(' - ')
         return dashIndex !== -1 ? teamName.substring(0, dashIndex) : teamName
+    }
+
+    /**
+     * Toast title for "the current user just took the role on this dinner".
+     */
+    const formatRoleClaimedTitle = (dinner: Pick<DinnerEventDetail, 'date' | 'cookingTeam'>, role: TeamRole): string => {
+        const dateLabel = formatDate(dinner.date)
+        const teamLabel = dinner.cookingTeam ? ` med ${getTeamShortName(dinner.cookingTeam.name)}` : ''
+        return `Du er nu blevet ${ROLE_LABELS[role].toLowerCase()} for middagen d. ${dateLabel}${teamLabel}`
     }
 
     const getDefaultCookingTeam = (
@@ -115,9 +151,12 @@ export const useCookingTeam = () => {
         createDefaultTeamName,
         extractTeamNumber,
         getTeamShortName,
+        formatRoleClaimedTitle,
         getDefaultCookingTeam,
         mergeInhabitantsWithAssignments,
         chunkTeamAffinities,
-        decideRoleAssignmentWrites
+        decideRoleAssignmentWrites,
+        isNotAssignedToMe,
+        tryAutoClaim
     }
 }

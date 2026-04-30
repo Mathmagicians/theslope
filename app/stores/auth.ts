@@ -16,6 +16,7 @@ export const useAuthStore = defineStore("Auth", () => {
 
     const greeting = computed(() => user.value?.Inhabitant?.name || 'Ukendt bruger')
 
+    const inhabitantId = computed(() => user.value?.Inhabitant?.id ?? null)
     const avatar = computed(() => user.value?.Inhabitant?.pictureUrl)
     const name = computed(() => user.value?.Inhabitant?.name)
     const lastName = computed(() => user.value?.Inhabitant?.lastName)
@@ -28,7 +29,7 @@ export const useAuthStore = defineStore("Auth", () => {
     const address = computed(() => user.value?.Inhabitant?.household?.address)
     const isMemberOfHousehold = (householdId: number) => permissions.isHouseholdMember(householdId)
 
-    return {signIn, greeting, avatar, name, lastName, email, phone, birthDate, systemRoles, isAdmin, isAllergyManager, isMemberOfHousehold, address, loggedIn, user, session, clear, fetch}
+    return {signIn, greeting, avatar, name, lastName, email, phone, birthDate, inhabitantId, systemRoles, isAdmin, isAllergyManager, isMemberOfHousehold, address, loggedIn, user, session, clear, fetch}
 })
 
 if (import.meta.hot) {

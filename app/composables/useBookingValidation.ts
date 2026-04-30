@@ -78,8 +78,8 @@ export const useBookingValidation = () => {
     const DinnerEventCreateSchema = DinnerEventBaseSchema
 
     /**
-     * DinnerEvent Update - For API input validation (POST /api/admin/dinner-event/[id])
-     * Note: id is optional in body since it comes from URL path
+     * DinnerEvent Update - For API input validation (POST /api/chef/dinner/[id]).
+     * Note: id is optional in body since it comes from URL path.
      */
     const DinnerEventUpdateSchema = DinnerEventBaseSchema.partial()
 

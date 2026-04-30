@@ -55,7 +55,12 @@ const allergiesStore = useAllergiesStore()
 allergiesStore.initAllergiesStore()
 
 const bookingsStore = useBookingsStore()
-const {isDinnerUpdating} = storeToRefs(bookingsStore)
+const {
+  isDinnerUpdating,
+  selectedDinnerEventDetail: dinnerEventDetail,
+  isSelectedDinnerEventLoading: isDinnerDetailLoading,
+  isSelectedDinnerEventErrored: isDinnerDetailError
+} = storeToRefs(bookingsStore)
 
 // Page ready when both plan store and myTeams are initialized
 const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialized.value)
@@ -63,6 +68,7 @@ const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialize
 // Permission helpers and date utilities
 const {isChefFor, deadlinesForSeason} = useSeason()
 const {TeamRoleSchema} = useCookingTeamValidation()
+const {isNotAssignedToMe} = useCookingTeam()
 const TeamRole = TeamRoleSchema.enum
 const authStore = useAuthStore()
 
@@ -153,47 +159,11 @@ const selectedDinnerEvent = computed(() => {
   })
 })
 
-// Bridge between date-based page state and ID-based component selection
 const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
 
-// Page owns dinner detail data (ADR-007: page owns data, layout receives via props)
-const {DinnerEventDetailSchema} = useBookingValidation()
-
-// Reactive key for useAsyncData - follows ADR-007 pattern
-const dinnerDetailKey = computed(() => `chef-dinner-detail-${selectedDinnerId.value || 'null'}`)
-
-const {
-  data: dinnerEventDetail,
-  status: dinnerEventDetailStatus,
-  refresh: refreshDinnerEventDetail
-} = useAsyncData(
-    dinnerDetailKey,
-    () => selectedDinnerId.value
-        ? bookingsStore.fetchDinnerEventDetail(selectedDinnerId.value)
-        : Promise.resolve(null),
-    {
-      default: () => null,
-      watch: [selectedDinnerId],
-      immediate: true,
-      transform: (data: unknown) => {
-        if (!data) return null
-        try {
-          return DinnerEventDetailSchema.parse(data)
-        } catch (e) {
-          console.error('Error parsing dinner event detail:', e)
-          throw e
-        }
-      }
-    }
-)
-
-const isDinnerDetailLoading = computed(() => dinnerEventDetailStatus.value === 'pending')
-const isDinnerDetailError = computed(() => dinnerEventDetailStatus.value === 'error')
-
-// Fetch detail after hydration when ID is available
-// (useAsyncData's watch doesn't trigger for SSR→client value changes)
-onMounted(() => {
-  if (selectedDinnerId.value) refreshDinnerEventDetail()
+watchEffect(() => {
+  const id = selectedDinnerId.value
+  if (id !== null) bookingsStore.loadDinnerEventDetail(id)
 })
 
 const handleDinnerSelect = (dinnerId: number) => {
@@ -203,6 +173,10 @@ const handleDinnerSelect = (dinnerId: number) => {
 
 // ChefMenuCard formMode: EDIT for chef, VIEW for team members
 const currentInhabitantId = computed(() => authStore.user?.Inhabitant?.id)
+
+const isNotChefForMe = computed(() =>
+  isNotAssignedToMe(dinnerEventDetail.value?.chef ?? undefined, authStore.inhabitantId)
+)
 
 const isCurrentUserChef = computed(() => {
   if (!selectedTeam.value || !currentInhabitantId.value) return false
@@ -222,7 +196,6 @@ const handleAllergenUpdate = async (allergenIds: number[]) => {
   if (!selectedDinnerId.value) return
   const result = await bookingsStore.updateDinnerEventAllergens(selectedDinnerId.value, allergenIds)
   if (!result) return
-  await refreshDinnerEventDetail()
   toast.add({
     title: 'Allergeninformation gemt',
     description: allergenIds.length > 0 ? 'Beboerne kan nu se allergenerne i menuen' : 'Menuen er markeret uden allergener',
@@ -233,30 +206,15 @@ const handleAllergenUpdate = async (allergenIds: number[]) => {
 
 const handleFormUpdate = async (data: ChefMenuForm) => {
   if (!selectedDinnerId.value) return
-  const result = await bookingsStore.updateDinnerEventField(selectedDinnerId.value, data)
+  const result = await bookingsStore.updateDinnerEventField(
+    selectedDinnerId.value,
+    data,
+    dinnerEventDetail.value?.chefId ?? null
+  )
   if (!result) return
-  await refreshDinnerEventDetail()
-  // Phase 1 auto-claim: if the server promoted the saver to chef on a WANTED dinner,
-  // the response carries `wasAutoClaimed: true` — reflect it in the toast copy.
-  const wasAutoClaimed = (result as {wasAutoClaimed?: boolean}).wasAutoClaimed === true
-  toast.add({
-    title: wasAutoClaimed ? 'Menu gemt — du er nu chefkok for denne middag' : 'Menu gemt',
-    description: `"${result.menuTitle}" er nu opdateret`,
-    icon: ICONS.checkCircle,
-    color: COLOR.success
-  })
   await usersStore.loadMyTeams()
 }
 
-const handleRoleAssigned = async () => {
-  await refreshDinnerEventDetail()
-  await usersStore.loadMyTeams()
-  toast.add({
-    title: 'Du er nu chefkok!',
-    icon: ICONS.checkCircle,
-    color: COLOR.success
-  })
-}
 
 const handleAdvanceState = async (newState: string) => {
   if (!selectedDinnerId.value) return
@@ -264,7 +222,6 @@ const handleAdvanceState = async (newState: string) => {
   const isRepublish = dinnerEventDetail.value?.state === DinnerState.ANNOUNCED
   const result = await bookingsStore.announceDinner(selectedDinnerId.value)
   if (!result) return
-  await refreshDinnerEventDetail()
   toast.add({
     title: isRepublish ? 'Du har opdateret din menu på Heynabo' : 'Du har publiceret din menu på Heynabo',
     description: result.heynaboEventId ? `Heynabo event ID: ${result.heynaboEventId}` : 'Ingen Heynabo ID returneret',
@@ -278,7 +235,6 @@ const handleCancelDinner = async () => {
   if (!selectedDinnerId.value) return
   const result = await bookingsStore.cancelDinner(selectedDinnerId.value)
   if (!result) return
-  await refreshDinnerEventDetail()
   toast.add({
     title: 'Middag aflyst',
     description: `${result.menuTitle || 'Fællesspisningen'} d. ${formatDate(result.date)} er blevet aflyst`,
@@ -296,7 +252,6 @@ const handleUndoCancelDinner = async () => {
     : DinnerState.SCHEDULED
   const result = await bookingsStore.undoCancelDinner(selectedDinnerId.value, targetState)
   if (!result) return
-  await refreshDinnerEventDetail()
   toast.add({
     title: 'Aflysning annulleret',
     description: `${result.menuTitle || 'Fællesspisningen'} d. ${formatDate(result.date)} er genåbnet`,
@@ -430,7 +385,6 @@ useHead({
               @advance-state="handleAdvanceState"
               @cancel-dinner="handleCancelDinner"
               @undo-cancel-dinner="handleUndoCancelDinner"
-              @role-assigned="handleRoleAssigned"
               @prev="navigate(-1)"
               @next="navigate(1)"
               @toggle-calendar="setViewState({ ...viewState, open: !viewState.open })"
@@ -451,10 +405,10 @@ useHead({
                    Slot keeps CookingTeamCard generic; /admin/teams omits this slot. -->
               <template #chef-action>
                 <RoleAssignment
+                    v-if="isNotChefForMe"
                     :dinner-event="dinnerEventDetail"
                     :role="TeamRole.CHEF"
-                    :current-holder="dinnerEventDetail.chef"
-                    @role-assigned="handleRoleAssigned"
+                    :swap-with="dinnerEventDetail.chef ?? undefined"
                 />
               </template>
             </CookingTeamCard>
@@ -466,7 +420,7 @@ useHead({
             >
               <template #title>Intet madhold tildelt endnu</template>
             </UAlert>
-            <WorkAssignment :dinner-event="dinnerEventDetail" @role-assigned="refreshDinnerEventDetail"/>
+            <WorkAssignment :dinner-event="dinnerEventDetail"/>
           </template>
         </template>
 

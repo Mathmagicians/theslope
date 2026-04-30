@@ -388,13 +388,35 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // DINNER EVENT ACTIONS
     type DinnerUpdate = Partial<DinnerEventUpdate> & { allergenIds?: number[], state?: typeof DinnerState[keyof typeof DinnerState] }
 
-    const fetchDinnerEventDetail = async (id: number): Promise<DinnerEventDetail | null> => {
-        try {
-            return await $fetch<DinnerEventDetail>(`/api/admin/dinner-event/${id}`)
-        } catch (e: unknown) {
-            handleApiError(e, 'Kunne ikke hente fællesspisning')
-            throw e
+    const selectedDinnerEventId = ref<number | null>(null)
+    const selectedDinnerEventKey = computed(() => `dinner-event-detail-${selectedDinnerEventId.value || 'null'}`)
+
+    const {
+        data: selectedDinnerEventDetail,
+        status: selectedDinnerEventStatus,
+        error: selectedDinnerEventError,
+        refresh: refreshSelectedDinnerEventDetail
+    } = useAsyncData<DinnerEventDetail | null>(
+        selectedDinnerEventKey,
+        () => {
+            if (!selectedDinnerEventId.value) return Promise.resolve(null)
+            return useRequestFetch()<DinnerEventDetail>(`/api/admin/dinner-event/${selectedDinnerEventId.value}`, {
+                onResponseError: ({response}) => { handleApiError(response._data, 'Kunne ikke hente fællesspisning') }
+            })
+        },
+        {
+            default: () => null,
+            transform: data => data ? DinnerEventDetailSchema.parse(data) : null
         }
+    )
+
+    const isSelectedDinnerEventLoading = computed(() => selectedDinnerEventStatus.value === 'pending')
+    const isSelectedDinnerEventErrored = computed(() => selectedDinnerEventStatus.value === 'error')
+    const isSelectedDinnerEventInitialized = computed(() => selectedDinnerEventStatus.value === 'success')
+
+    const loadDinnerEventDetail = (id: number | null) => {
+        selectedDinnerEventId.value = id
+        if (id) console.info(`${CTX} Loading dinner event detail: ${id}`)
     }
 
     const isDinnerUpdating = ref(false)
@@ -403,11 +425,12 @@ export const useBookingsStore = defineStore("Bookings", () => {
         const updated = await $fetch(`/api/chef/dinner/${id}`, { method: 'POST', body: updates })
         const parsed = DinnerEventDetailSchema.parse(updated)
         console.info(`${CTX} Updated dinner ${id}: ${Object.keys(updates).join(', ')} → state: ${parsed.state}`)
+        if (selectedDinnerEventId.value === id) await refreshSelectedDinnerEventDetail()
         return parsed
     }
 
-    const withLoadingAndErrorHandler = <T extends unknown[]>(fn: (...args: T) => Promise<DinnerEventDetail>, msg: string) =>
-        async (...args: T): Promise<DinnerEventDetail | null> => {
+    const withLoadingAndErrorHandler = <T extends unknown[], R>(fn: (...args: T) => Promise<R>, msg: string) =>
+        async (...args: T): Promise<R | null> => {
             isDinnerUpdating.value = true
             try { return await fn(...args) }
             catch (e: unknown) { handleApiError(e, msg); return null }
@@ -415,10 +438,53 @@ export const useBookingsStore = defineStore("Bookings", () => {
         }
 
     const updateDinnerEventAllergens = withLoadingAndErrorHandler((id: number, allergenIds: number[]) => updateDinner(id, {allergenIds}), 'Kunne ikke gemme allergeninformation')
-    const updateDinnerEventField = withLoadingAndErrorHandler((id: number, updates: Partial<DinnerEventUpdate>) => updateDinner(id, updates), 'Kunne ikke gemme ændringer til menuen')
     const announceDinner = withLoadingAndErrorHandler((id: number) => updateDinner(id, {state: DinnerState.ANNOUNCED}), 'Kunne ikke annoncere fællesspisningen')
     const cancelDinner = withLoadingAndErrorHandler((id: number) => updateDinner(id, {state: DinnerState.CANCELLED}), 'Kunne ikke aflyse fællesspisningen')
     const undoCancelDinner = withLoadingAndErrorHandler((id: number, targetState: DinnerState = DinnerState.SCHEDULED) => updateDinner(id, {state: targetState}), 'Kunne ikke annullere aflysningen')
+
+    /**
+     * Update dinner menu fields with implicit chef auto-claim.
+     * If the dinner has no chef and the caller has an Inhabitant, the chef role is
+     * claimed first; then menu fields are saved. Returns `{dinner, wasAutoClaimed}`
+     * so the caller can adjust toast copy ("Menu gemt — du er nu chefkok…" vs plain "Menu gemt").
+     */
+    const {TeamRoleSchema} = useCookingTeamValidation()
+    const {tryAutoClaim, formatRoleClaimedTitle} = useCookingTeam()
+
+    const performAutoClaim = withLoadingAndErrorHandler(
+        (id: number, currentChefId: number | null) => tryAutoClaim(
+            currentChefId,
+            authStore.inhabitantId,
+            () => planStore.assignRoleToDinner(id, authStore.inhabitantId!, TeamRoleSchema.enum.CHEF)
+        ),
+        'Kunne ikke blive chefkok'
+    )
+
+    const saveMenuFields = withLoadingAndErrorHandler(
+        (id: number, updates: Partial<DinnerEventUpdate>) => updateDinner(id, updates),
+        'Kunne ikke gemme ændringer til menuen'
+    )
+
+    const updateDinnerEventField = async (
+        id: number,
+        updates: Partial<DinnerEventUpdate>,
+        currentChefId: number | null
+    ): Promise<{dinner: DinnerEventDetail, wasAutoClaimed: boolean} | null> => {
+        const wasAutoClaimed = await performAutoClaim(id, currentChefId)
+        if (wasAutoClaimed === null) return null
+        const dinner = await saveMenuFields(id, updates)
+        if (dinner === null) return null
+
+        toast.add({
+            title: wasAutoClaimed
+                ? `Menu gemt — ${formatRoleClaimedTitle(dinner, TeamRoleSchema.enum.CHEF)}`
+                : 'Menu gemt',
+            description: `"${dinner.menuTitle}" er nu opdateret`,
+            color: 'success'
+        })
+
+        return {dinner, wasAutoClaimed}
+    }
 
     // ========================================
     // DAILY MAINTENANCE JOB (ADR-007)
@@ -631,9 +697,17 @@ export const useBookingsStore = defineStore("Bookings", () => {
         processMultipleEventsBookings,
         processAdminCorrection,
 
+        // dinner event detail (reactive-key, store-owned per ADR-007)
+        selectedDinnerEventDetail,
+        selectedDinnerEventError,
+        isSelectedDinnerEventLoading,
+        isSelectedDinnerEventErrored,
+        isSelectedDinnerEventInitialized,
+        loadDinnerEventDetail,
+        refreshSelectedDinnerEventDetail,
+
         // dinner event actions
         isDinnerUpdating,
-        fetchDinnerEventDetail,
         updateDinnerEventField,
         updateDinnerEventAllergens,
         announceDinner,

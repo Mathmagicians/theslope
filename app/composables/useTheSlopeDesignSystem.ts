@@ -303,6 +303,9 @@ export const LAYOUTS = {
     // Responsive card rounding: no rounding on mobile (full-bleed), rounded on desktop
     cardResponsive: 'rounded-none md:rounded-lg',
 
+    // Form footer button row: stacked on mobile (cancel below save), horizontal right-aligned on desktop
+    formButtonRow: 'flex flex-col-reverse md:flex-row md:justify-end gap-2',
+
     // Section content (card body sections)
     sectionContent: 'px-4 md:px-6 py-4 md:py-6 space-y-4',           // Standard section with padding
     sectionContentNoPadX: 'px-0 py-4 md:py-6 space-y-4',             // No horizontal padding (full-bleed)
