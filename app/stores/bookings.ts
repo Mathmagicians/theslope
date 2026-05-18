@@ -420,9 +420,26 @@ export const useBookingsStore = defineStore("Bookings", () => {
     }
 
     const isDinnerUpdating = ref(false)
+    const toast = useToast()
 
     const updateDinner = async (id: number, updates: DinnerUpdate): Promise<DinnerEventDetail> => {
-        const updated = await $fetch(`/api/chef/dinner/${id}`, { method: 'POST', body: updates })
+        const updated = await $fetch(`/api/chef/dinner/${id}`, {
+            method: 'POST',
+            body: updates,
+            onResponse: ({response}) => {
+                if (response.status === 207) {
+                    const base = 'Din ændring er gemt, men Heynabo havde et problem. Vi har forsøgt at fikse det, tjek om det ser rigtig ud i Heynabo.'
+                    const description = response._data?.heynaboEventId
+                        ? base
+                        : `${base} Tryk på Publicer knappen igen`
+                    toast.add({
+                        title: 'Heynabo-synkronisering',
+                        description,
+                        color: 'error'
+                    })
+                }
+            }
+        })
         const parsed = DinnerEventDetailSchema.parse(updated)
         console.info(`${CTX} Updated dinner ${id}: ${Object.keys(updates).join(', ')} → state: ${parsed.state}`)
         if (selectedDinnerEventId.value === id) await refreshSelectedDinnerEventDetail()
@@ -489,8 +506,6 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // ========================================
     // DAILY MAINTENANCE JOB (ADR-007)
     // ========================================
-    const toast = useToast()
-
     const authStore = useAuthStore()
 
     const {
