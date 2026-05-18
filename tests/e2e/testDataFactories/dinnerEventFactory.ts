@@ -182,7 +182,7 @@ export class DinnerEventFactory {
         const errorBody = status !== expectedStatus ? await response.text() : ''
         expect(status, `Expected status ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
 
-        if (expectedStatus === 200) {
+        if (expectedStatus === 200 || expectedStatus === 207) {
             const responseBody = await response.json()
             expect(responseBody.id).toBe(dinnerEventId)
             return responseBody
@@ -207,7 +207,7 @@ export class DinnerEventFactory {
         const errorBody = status !== expectedStatus ? await response.text() : ''
         expect(status, `Expected status ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
 
-        if (expectedStatus === 200) {
+        if (expectedStatus === 200 || expectedStatus === 207) {
             const responseBody = await response.json()
             expect(responseBody.id).toBe(dinnerEventId)
             return responseBody
@@ -381,5 +381,17 @@ export class DinnerEventFactory {
         const response = await context.request.get(`/api/test/heynabo/event/${heynaboEventId}`)
         expect(response.status()).toBe(200)
         return await response.json()
+    }
+
+    static readonly deleteHeynaboEvent = async (
+        context: BrowserContext,
+        heynaboEventId: number,
+        expectedGoneStatus: number = 404
+    ): Promise<void> => {
+        const deleteResponse = await context.request.delete(`/api/test/heynabo/event/${heynaboEventId}`)
+        expect(deleteResponse.status()).toBe(200)
+
+        const getResponse = await context.request.get(`/api/test/heynabo/event/${heynaboEventId}`)
+        expect(getResponse.status()).toBe(expectedGoneStatus)
     }
 }

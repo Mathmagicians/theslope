@@ -1,3 +1,4 @@
+import {FetchError} from 'ofetch'
 import {z} from 'zod'
 import {maskPassword} from '~/utils/utils'
 import {useHeynaboValidation} from '~/composables/useHeynaboValidation'
@@ -185,23 +186,20 @@ export async function createHeynaboEvent(token: string, payload: HeynaboEventCre
 export async function updateHeynaboEvent(token: string, eventId: number, payload: HeynaboEventCreate): Promise<HeynaboEventResponse> {
     const url = `${heyNaboApi}/members/events/${eventId}`
 
-    let response: HeynaboEventResponse
-    try {
-        response = await $fetch<HeynaboEventResponse>(url, {
-            method: 'PATCH',
-            body: payload,
-            headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-        })
-    } catch (error: unknown) {
-        return throwH3Error(`${LOG}EVENT UPDATE > Error updating event ${eventId}`, error)
-    }
+    const response = await $fetch<HeynaboEventResponse>(url, {
+        method: 'PATCH',
+        body: payload,
+        headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        }
+    }).catch((error: FetchError): never =>
+        throwH3Error(`${LOG}EVENT UPDATE > Error updating event ${eventId}`, error, error.statusCode ?? 500)
+    )
 
     try {
         return HeynaboEventResponseSchema.parse(response)
-    } catch (error: unknown) {
+    } catch (error) {
         return throwH3Error(`${LOG}EVENT UPDATE > Error validating response`, error)
     }
 }
@@ -294,13 +292,14 @@ export async function fetchHeynaboEvent(token: string, eventId: number): Promise
                 'Content-Type': 'application/json'
             }
         })
-    } catch (error: unknown) {
-        return throwH3Error(`${LOG}EVENT FETCH > Error fetching event ${eventId}`, error)
+    } catch (error) {
+        const status = error instanceof FetchError ? error.statusCode : undefined
+        return throwH3Error(`${LOG}EVENT FETCH > Error fetching event ${eventId}`, error, status ?? 500)
     }
 
     try {
         return HeynaboEventResponseSchema.parse(response)
-    } catch (error: unknown) {
+    } catch (error) {
         return throwH3Error(`${LOG}EVENT FETCH > Error validating response`, error)
     }
 }

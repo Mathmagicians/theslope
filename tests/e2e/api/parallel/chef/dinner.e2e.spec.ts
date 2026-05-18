@@ -273,4 +273,70 @@ test.describe('Chef Dinner Endpoint', () => {
         const memberContext = await memberValidatedBrowserContext(browser)
         await DinnerEventFactory.updateDinnerEvent(memberContext, 999999, {menuTitle: 'Ghost'}, 404)
     })
+
+    // ---------- HN missing — reconciliation (ADR-013 best-effort sync) ----------
+    // Reproduces prod regression: chef gets 500 on Annuller Aflysning when the HN
+    // event was deleted externally. Local state must transition regardless of HN.
+
+    test('GIVEN announced dinner with HN event deleted externally WHEN chef cancels THEN 207 partial success + local CANCELLED', async ({browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
+        const memberContext = await memberValidatedBrowserContext(browser)
+        const testSalt = temporaryAndRandom()
+
+        const scheduledDinner = await createDinner(adminContext, testSalt)
+        const announcedDinner = await DinnerEventFactory.updateDinnerEvent(
+            memberContext, scheduledDinner.id, {state: DinnerState.ANNOUNCED}
+        )
+        expect(announcedDinner!.heynaboEventId).not.toBeNull()
+
+        await DinnerEventFactory.deleteHeynaboEvent(adminContext, announcedDinner!.heynaboEventId!)
+
+        const cancelledDinner = await DinnerEventFactory.updateDinnerEvent(
+            memberContext, announcedDinner!.id, {state: DinnerState.CANCELLED}, 207
+        )
+        expect(cancelledDinner!.state).toBe(DinnerState.CANCELLED)
+    })
+
+    test('GIVEN cancelled dinner with HN event deleted externally WHEN chef undoes cancellation THEN 207 + local ANNOUNCED + new heynaboEventId', async ({browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
+        const memberContext = await memberValidatedBrowserContext(browser)
+        const testSalt = temporaryAndRandom()
+
+        const scheduledDinner = await createDinner(adminContext, testSalt)
+        const announcedDinner = await DinnerEventFactory.updateDinnerEvent(
+            memberContext, scheduledDinner.id, {state: DinnerState.ANNOUNCED}
+        )
+        const originalHeynaboEventId = announcedDinner!.heynaboEventId!
+        await DinnerEventFactory.updateDinnerEvent(
+            memberContext, announcedDinner!.id, {state: DinnerState.CANCELLED}
+        )
+
+        await DinnerEventFactory.deleteHeynaboEvent(adminContext, originalHeynaboEventId)
+
+        const restoredDinner = await DinnerEventFactory.updateDinnerEvent(
+            memberContext, announcedDinner!.id, {state: DinnerState.ANNOUNCED}, 207
+        )
+        expect(restoredDinner!.state).toBe(DinnerState.ANNOUNCED)
+        expect(restoredDinner!.heynaboEventId).not.toBeNull()
+        expect(restoredDinner!.heynaboEventId).not.toBe(originalHeynaboEventId)
+    })
+
+    test('GIVEN announced dinner with HN event deleted externally WHEN chef updates menu THEN 207 + local update', async ({browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
+        const memberContext = await memberValidatedBrowserContext(browser)
+        const testSalt = temporaryAndRandom()
+
+        const scheduledDinner = await createDinner(adminContext, testSalt)
+        const announcedDinner = await DinnerEventFactory.updateDinnerEvent(
+            memberContext, scheduledDinner.id, {state: DinnerState.ANNOUNCED}
+        )
+
+        await DinnerEventFactory.deleteHeynaboEvent(adminContext, announcedDinner!.heynaboEventId!)
+
+        const updatedTitle = salt('Menu without HN sync', testSalt)
+        const updated = await DinnerEventFactory.updateDinnerEvent(
+            memberContext, announcedDinner!.id, {menuTitle: updatedTitle}, 207
+        )
+        expect(updated!.menuTitle).toBe(updatedTitle)
+    })
 })
