@@ -8,10 +8,10 @@
  */
 
 import { useCoreValidation } from '~/composables/useCoreValidation'
-import type { HouseholdCreate, InhabitantCreate, UserCreate, UserDisplay } from '~/composables/useCoreValidation'
+import type { HouseholdCreate, InhabitantCreate, InhabitantDisplay, UserCreate, UserDisplay } from '~/composables/useCoreValidation'
 import testHelpers from '../testHelpers'
 
-const { SystemRoleSchema, UserCreateSchema, InhabitantCreateSchema, UserDisplaySchema } = useCoreValidation()
+const { SystemRoleSchema, UserCreateSchema, InhabitantCreateSchema, InhabitantDisplaySchema, UserDisplaySchema } = useCoreValidation()
 const SystemRole = SystemRoleSchema.enum
 const InhabitantDataSchema = InhabitantCreateSchema.omit({ householdId: true })
 
@@ -93,6 +93,22 @@ const createInhabitantTestData = (
         user
     })
 
+const createInhabitantDisplayTestData = (
+    heynaboId: number,
+    name: string,
+    lastName: string,
+    pictureUrl: string | null,
+    birthDate: Date | null
+): InhabitantDisplay => InhabitantDisplaySchema.parse({
+        id: heynaboId,
+        heynaboId,
+        householdId: 1,
+        name,
+        lastName,
+        pictureUrl,
+        birthDate
+    })
+
 const OLD_BIRTHDATE = new Date('1990-01-01')
 const NEW_BIRTHDATE = new Date('1990-06-15')
 const OLD_PICTURE = 'https://example.com/old.jpg'
@@ -100,13 +116,13 @@ const NEW_PICTURE = 'https://example.com/new.jpg'
 
 export const inhabitantReconciliationTestData = {
     existing: [
-        createInhabitantTestData(101, 'Anna', 'Unchanged', null, null, createUserTestData('anna@test.dk', '+4511111111', false)),
-        createInhabitantTestData(102, 'Erik', 'OldLastName', null, null),
-        createInhabitantTestData(103, 'To Be', 'Deleted', null, null),
-        createInhabitantTestData(105, 'Email', 'Changer', null, null, createUserTestData('old-email@test.dk', '+4566666666', false)),
-        createInhabitantTestData(106, 'Allergy', 'Manager', null, null, createUserTestData('allergy@test.dk', '+4577777777', false, true)),
-        createInhabitantTestData(107, 'Picture', 'Changer', OLD_PICTURE, null),
-        createInhabitantTestData(108, 'Birthdate', 'Changer', null, OLD_BIRTHDATE)
+        createInhabitantDisplayTestData(101, 'Anna', 'Unchanged', null, null),
+        createInhabitantDisplayTestData(102, 'Erik', 'OldLastName', null, null),
+        createInhabitantDisplayTestData(103, 'To Be', 'Deleted', null, null),
+        createInhabitantDisplayTestData(105, 'Email', 'Changer', null, null),
+        createInhabitantDisplayTestData(106, 'Allergy', 'Manager', null, null),
+        createInhabitantDisplayTestData(107, 'Picture', 'Changer', OLD_PICTURE, null),
+        createInhabitantDisplayTestData(108, 'Birthdate', 'Changer', null, OLD_BIRTHDATE)
     ],
     incoming: [
         createInhabitantTestData(101, 'Anna', 'Unchanged', null, null, createUserTestData('anna@test.dk', '+4511111111', false)),

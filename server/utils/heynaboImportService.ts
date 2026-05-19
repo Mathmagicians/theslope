@@ -132,14 +132,7 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
                 continue
             }
 
-            // Reconcile inhabitants against winner household
-            const existingInhabitants = existingHousehold.inhabitants.map(i => ({
-                heynaboId: i.heynaboId,
-                name: i.name,
-                lastName: i.lastName,
-                pictureUrl: i.pictureUrl,
-                birthDate: i.birthDate
-            }))
+            const existingInhabitants = existingHousehold.inhabitants
             const incomingInhabitants = incomingHousehold.inhabitants || []
 
             const inhabitantReconciliation = reconcileInhabitants(existingInhabitants)(incomingInhabitants)

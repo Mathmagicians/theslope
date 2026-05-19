@@ -1,6 +1,7 @@
 import {test, expect} from '@playwright/test'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {useHeynaboValidation} from '~/composables/useHeynaboValidation'
+import {isInhabitantDataEqual} from '~/composables/useHeynabo'
 import {isAdmin, isAllergyManager} from '~/composables/usePermissions'
 import type {UserDisplay, InhabitantDisplay, HouseholdDetail} from '~/composables/useCoreValidation'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -438,12 +439,25 @@ test.describe.serial('Heynabo Integration API', () => {
     test('should be idempotent (third import has no changes)', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
+        const captureInhabitants = async () => {
+            const households = await HouseholdFactory.getAllHouseholds(context)
+            return new Map(households.flatMap(h => (h.inhabitants ?? []).map(i => [i.id, i] as const)))
+        }
+
+        const before = await captureInhabitants()
+
         // Run idempotency import (third import - no mutations since last import)
         const response = await context.request.get('/api/admin/heynabo/import')
         const responseBody = await response.text()
         expect(response.status(), `Import failed: ${responseBody}`).toBe(200)
 
         const result = HeynaboImportResponseSchema.parse(JSON.parse(responseBody))
+
+        const after = await captureInhabitants()
+        const drift = [...before.entries()]
+            .map(([id, b]) => [b, after.get(id)] as const)
+            .filter(([b, a]) => !a || !isInhabitantDataEqual(b, a))
+        expect(drift, `Inhabitants drifted on no-op import:\n${JSON.stringify(drift, null, 2)}`).toEqual([])
 
         // IDEMPOTENCY: All entities should be idempotent (no create/update/delete)
         expect(result.householdsIdempotent, 'IDEMPOTENT: All households idempotent').toBe(result.sanityCheck.householdsInHeynabo)
