@@ -1,4 +1,5 @@
-import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus, getRequestURL, H3Error} from 'h3'
+import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus, getRequestURL} from 'h3'
+import type {H3Error} from 'h3'
 import {fetchDinnerEvent, updateDinnerEvent, updateDinnerEventAllergens} from '~~/server/data/financesRepository'
 import {createHeynaboEvent, updateHeynaboEvent, cancelHeynaboEvent, uploadHeynaboEventImage, getRandomDefaultDinnerPicture, updateHeynaboEventWithFallback} from '~~/server/integration/heynabo/heynaboClient'
 import {useBookingValidation} from '~/composables/useBookingValidation'
