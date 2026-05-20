@@ -35,7 +35,7 @@ import {useBillingValidation} from '~/composables/useBillingValidation'
 // ADR-010: Use domain types from composables, not Prisma types
 // Repository transforms Prisma results to domain types before returning
 
-const {throwH3Error} = eventHandlerHelper
+const {throwH3Error, h3eFromCatch} = eventHandlerHelper
 
 /*** USERS ***/
 
@@ -1142,7 +1142,7 @@ export async function deleteSeason(
             console.info(`🌞 > SEASON > [DELETE] Cleaning up ${heynaboEventIds.length} Heynabo events`)
             const deleted = await deleteHeynaboEvents(heynaboEventIds)
                 .catch(err => {
-                    console.warn(`🌞 > SEASON > [DELETE] Failed to delete Heynabo events:`, err)
+                    console.warn(h3eFromCatch('🌞 > SEASON > [DELETE] Failed to delete Heynabo events', err).message)
                     return 0
                 })
             console.info(`🌞 > SEASON > [DELETE] Deleted ${deleted}/${heynaboEventIds.length} Heynabo events`)

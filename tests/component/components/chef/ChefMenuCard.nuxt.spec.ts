@@ -171,7 +171,8 @@ describe('ChefMenuCard', () => {
             // Primary action is labelled (no longer a bare pencil icon)
             expect(wrapper.find('[data-testid="edit-menu"]').text()).toContain('Rediger menu')
             expect(wrapper.find('[name="announce-dinner"]').text()).toContain('Publicer')
-            expect(wrapper.find('[data-testid="dinner-more-actions"]').text()).toContain('Mere')
+            // Overflow trigger is the quiet icon-only "..." (no label)
+            expect(wrapper.find('[data-testid="dinner-more-actions"]').exists()).toBe(true)
         })
 
         it('keeps the cancel-dinner action behind the overflow panel', async () => {

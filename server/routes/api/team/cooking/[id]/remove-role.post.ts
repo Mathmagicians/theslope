@@ -10,7 +10,7 @@ import {isAdmin} from '~/composables/usePermissions'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {z} from 'zod'
 
-const {throwH3Error} = eventHandlerHelper
+const {throwH3Error, h3eFromCatch} = eventHandlerHelper
 const {RemoveRoleRequestSchema, DinnerStateSchema} = useBookingValidation()
 const {TeamRoleSchema} = useCookingTeamValidation()
 const DinnerState = DinnerStateSchema.enum
@@ -75,7 +75,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
             try {
                 await deleteHeynaboEventAsSystem(dinner.heynaboEventId)
             } catch (heynaboError) {
-                console.warn(`${PREFIX}Failed to delete Heynabo event ${dinner.heynaboEventId} (non-blocking):`, heynaboError)
+                console.warn(h3eFromCatch(`${PREFIX}Failed to delete Heynabo event ${dinner.heynaboEventId} (non-blocking)`, heynaboError).message)
                 heynaboSyncDegraded = true
             }
         }

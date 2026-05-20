@@ -925,14 +925,15 @@ const createResponsiveButtons = (isMd: Ref<boolean>) => {
             }
         },
 
-        // Overflow "More" trigger - quiet (NOISE.quiet), icon-only square (the universal "..." glyph).
+        // Overflow "More" trigger - quiet (NOISE.quiet): "..." glyph + chevron, no label.
         // Reveals rare/destructive actions (danger zone) without competing with routine controls.
+        // Pair with a :ui rotation on the trailing chevron to reflect open/closed state.
         get more() {
             return {
                 icon: ICONS.ellipsis,
+                trailingIcon: ICONS.chevronDown,
                 color: 'neutral' as const,
                 variant: NOISE.quiet,
-                square: true,
                 size: sizes.standard
             }
         }

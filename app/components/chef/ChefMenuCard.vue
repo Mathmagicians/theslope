@@ -292,8 +292,13 @@ const isEditingMenu = ref(false)
 // so a chef hunting for "edit" can no longer mis-tap a prominent cancel button.
 const isMoreOpen = ref(false)
 
-// Close the danger-zone panel when navigating to another dinner - never carry an armed action across
-watch(() => props.dinnerEvent.id, () => { isMoreOpen.value = false })
+// Reset transient edit/panel state when navigating to another dinner - never carry a stale
+// edit form or an armed danger action across.
+watch(() => props.dinnerEvent.id, () => {
+  isMoreOpen.value = false
+  isEditingMenu.value = false
+  isEditingAllergens.value = false
+})
 
 // Can publish: not cancelled or consumed
 // - SCHEDULED: creates Heynabo event
@@ -481,19 +486,17 @@ const handleCardClick = () => {
                   {{ isUpdating ? 'Arbejder...' : (dinnerEvent.heynaboEventId ? 'Publiceret' : 'Publicer') }}
                 </UButton>
 
-                <!-- More - overflow trigger (NOISE.quiet): reveals the danger zone (cancel dinner) -->
+                <!-- More - overflow trigger (NOISE.quiet): "..." + chevron, reveals the danger zone -->
                 <UButton
                   v-if="canCancelDinner(dinnerEvent)"
                   v-bind="BUTTONS.more"
-                  :class="LAYOUTS.cardActionButton"
-                  :trailing-icon="ICONS.chevronDown"
+                  class="self-end md:self-auto"
                   :ui="{ trailingIcon: isMoreOpen ? 'rotate-180 transition-transform duration-200' : 'transition-transform duration-200' }"
                   :disabled="isUpdating"
+                  aria-label="Flere handlinger"
                   data-testid="dinner-more-actions"
                   @click="isMoreOpen = !isMoreOpen"
-                >
-                  Mere
-                </UButton>
+                />
 
                 <!-- Undo cancel - kept prominent when cancelled: recovering a mistake must be low-friction -->
                 <DangerButton
@@ -598,7 +601,7 @@ const handleCardClick = () => {
           v-if="isEditing && canAnnounce && !canAdvanceState"
           :color="COLOR.warning"
           variant="soft"
-          icon="i-heroicons-information-circle"
+          :icon="ICONS.info"
           :ui="{ root: 'p-2 mt-2', description: 'text-xs' }"
         >
           <template #description>Chefkokken skal oprette en menu, før den kan publiceres</template>
@@ -628,9 +631,9 @@ const handleCardClick = () => {
             = {{ costAlternativeDisplay }}
           </div>
         </UFormField>
-        <div class="flex gap-2 justify-end">
-          <UButton :color="COLOR.neutral" variant="ghost" :size="SIZES.standard" data-testid="cancel-menu-edit" @click="handleMenuCancel">Annuller</UButton>
-          <UButton type="submit" :color="HERO_BUTTON.primaryButton" variant="solid" :size="SIZES.standard" :icon="ICONS.check" data-testid="save-menu-edit">Gem</UButton>
+        <div :class="LAYOUTS.formButtonRow">
+          <UButton v-bind="BUTTONS.cancel" data-testid="cancel-menu-edit" @click="handleMenuCancel">Annuller</UButton>
+          <UButton v-bind="BUTTONS.save" :color="HERO_BUTTON.primaryButton" type="submit" data-testid="save-menu-edit">Gem</UButton>
         </div>
       </UForm>
 
@@ -663,12 +666,14 @@ const handleCardClick = () => {
           />
         </div>
 
-        <!-- EDIT allergens: Title + text buttons at top, then selector -->
+        <!-- EDIT allergens: title + form-footer buttons (DS configs, mobile-stacked), then selector -->
         <div v-else class="space-y-4">
-          <div class="flex items-center gap-2">
-            <h4 :class="`${TYPOGRAPHY.sectionSubheading} flex-1`">Allergener i menuen</h4>
-            <UButton :color="COLOR.neutral" variant="ghost" :size="SIZES.standard" data-testid="cancel-allergens-edit" @click="handleAllergenCancel">Annuller</UButton>
-            <UButton :color="HERO_BUTTON.primaryButton" variant="solid" :size="SIZES.standard" :icon="ICONS.check" data-testid="save-allergens-edit" @click="handleAllergenSave">Gem</UButton>
+          <div class="flex flex-col gap-2 md:flex-row md:items-center">
+            <h4 :class="`${TYPOGRAPHY.sectionSubheading} md:flex-1`">Allergener i menuen</h4>
+            <div :class="LAYOUTS.formButtonRow">
+              <UButton v-bind="BUTTONS.cancel" data-testid="cancel-allergens-edit" @click="handleAllergenCancel">Annuller</UButton>
+              <UButton v-bind="BUTTONS.save" :color="HERO_BUTTON.primaryButton" data-testid="save-allergens-edit" @click="handleAllergenSave">Gem</UButton>
+            </div>
           </div>
           <AllergenMultiSelector
             v-model="draftAllergenIds"
