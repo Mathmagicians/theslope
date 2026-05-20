@@ -539,6 +539,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
             const stats = formatDailyMaintenanceStats(r)
             const description = stats.map(s => `${s.label}: ${s.value}`).join(', ')
             console.info(CTX, `Daily maintenance completed: ${description}`)
+            // Maintenance closes orders and creates transactions server-side.
+            await Promise.all([refreshOrders(), refreshCurrentPeriodTransactions()])
             toast.add({
                 title: 'Daglig vedligeholdelse afsluttet',
                 description,
@@ -673,13 +675,13 @@ export const useBookingsStore = defineStore("Bookings", () => {
             const stats = formatMonthlyBillingStats(results)
             const description = stats.map(s => `${s.label}: ${s.value}`).join(', ')
             console.info(CTX, `Monthly billing completed: ${description}`)
+            // Billing moves transactions out of the unbilled current period into invoiced periods.
+            await Promise.all([refreshBillingPeriods(), refreshCurrentPeriodTransactions()])
             toast.add({
                 title: 'Månedlig fakturering afsluttet',
                 description,
                 color: 'success'
             })
-            // Refresh billing periods to show new data
-            await refreshBillingPeriods()
         }
     }
 

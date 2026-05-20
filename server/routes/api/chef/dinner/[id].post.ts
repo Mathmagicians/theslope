@@ -10,7 +10,7 @@ import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {requireChefForDinner} from '~~/server/utils/authorizationHelper'
 import {z} from 'zod'
 
-const {throwH3Error} = eventHandlerHelper
+const {throwH3Error, h3eFromCatch} = eventHandlerHelper
 const {DinnerStateSchema, DinnerEventUpdateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
@@ -90,7 +90,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
                     console.warn(PREFIX, 'Failed to fetch default picture:', pictureUrl, 'status:', imageResponse.status)
                 }
             } catch (imageError) {
-                console.warn(PREFIX, 'Image upload failed (non-blocking):', imageError)
+                console.warn(h3eFromCatch(`${PREFIX}Image upload failed (non-blocking)`, imageError).message)
             }
         }
 
