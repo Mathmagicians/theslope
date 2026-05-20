@@ -6,7 +6,7 @@ import {formatDate} from '~/utils/date'
 import {isThisACookingDay} from '~/utils/season'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, getSessionUserInfo, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, getSessionUserInfo, temporaryAndRandom, doScreenshot} = testHelpers
 const {TeamRoleSchema} = useCookingTeamValidation()
 const TeamRole = TeamRoleSchema.enum
 
@@ -118,8 +118,9 @@ test.describe('Chef Swap — volunteer flow', () => {
 
             // Volunteer: vacant dinner → member becomes chef
             await page.goto(url(dinner.date))
-            await openForm(page)
             await expect(page.locator(CHEF_WANTED).first(), 'precondition: WANTED placeholder').toBeVisible()
+            if (label === '/dinner') await doScreenshot(page, 'chef/role-wanted', true)
+            await openForm(page)
             await page.locator(ROLE_SAVE).first().click()
 
             const assignResult = await pollUntil(async () => assignRole, (r) => r !== null, 10)
@@ -130,6 +131,7 @@ test.describe('Chef Swap — volunteer flow', () => {
             await expect(page.locator(ROLE_TRIGGER).first(), 'trigger becomes "Ændre tjans" once chef').toContainText('Ændre tjans')
             await expect(page.locator(CHEF_WANTED).first(), 'WANTED placeholder gone').not.toBeVisible()
             await expect(page.locator(CHEF_DISPLAY).first(), 'chef portrait renders after volunteer').toBeVisible()
+            if (label === '/dinner') await doScreenshot(page, 'chef/role-assigned', true)
 
             // Meld afbud: chef resigns → dinner back to vacant
             await openForm(page)

@@ -14,9 +14,9 @@ import {chunkArray} from '~/utils/batchUtils'
 import type {TransactionCreateData} from '~~/server/data/financesRepository'
 
 /**
- * Field set applied when a dinner loses its chef (Meld afbud, swap CLEAR, move-out cascade).
- * Reverts the dinner to a clean chef-less SCHEDULED state. Allergens are cleared separately
- * via `updateDinnerEventAllergens(d1, id, [])`; Heynabo deletion is endpoint-side I/O.
+ * Field set that reverts a dinner to a clean chef-less SCHEDULED state.
+ * Allergens are cleared separately via `updateDinnerEventAllergens(d1, id, [])`;
+ * Heynabo deletion is endpoint-side I/O.
  */
 export const CHEF_LOSS_DINNER_UPDATES = {
     chefId: null,

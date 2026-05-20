@@ -74,6 +74,32 @@ export const COLOR = {
 /** NuxtUI color type - derived from COLOR constant for type-safe component props */
 export type NuxtUIColor = typeof COLOR[keyof typeof COLOR]
 
+/**
+ * NOISE - Visual emphasis scale ("how loud should this action be?")
+ *
+ * Maps emphasis intent → NuxtUI button/badge variant. Noise is CONTEXTUAL, not
+ * intrinsic to an action: "edit" is `quiet` in an admin table (many rows) but
+ * `loud` in the chef menu (the one action the user came to do).
+ *
+ * Colour stays separate - hero vs card contexts supply their own:
+ *   <UButton v-bind="BUTTONS.primaryAction" :color="HERO.primaryButton">Save</UButton>
+ *
+ * Ladder (loudest → quietest):
+ *   loud   → solid    primary CTA - the one action the user came to do
+ *   medium → outline  secondary - important, not primary
+ *   soft   → soft     supplementary - tinted, gentle
+ *   quiet  → ghost    tertiary - overflow triggers, inline icons, rare actions
+ */
+export const NOISE = {
+    loud:   'solid'   as NuxtUIButtonVariant,
+    medium: 'outline' as NuxtUIButtonVariant,
+    soft:   'soft'    as NuxtUIButtonVariant,
+    quiet:  'ghost'   as NuxtUIButtonVariant
+} as const
+
+/** Noise level type - derived from NOISE constant */
+export type NoiseLevel = keyof typeof NOISE
+
 // ============================================================================
 // PART 2: Tailwind Class Builders (for dynamic classes)
 // ============================================================================
@@ -306,6 +332,14 @@ export const LAYOUTS = {
     // Form footer button row: stacked on mobile (cancel below save), horizontal right-aligned on desktop
     formButtonRow: 'flex flex-col-reverse md:flex-row md:justify-end gap-2',
 
+    // Card action row: a toolbar of action buttons inside a card (e.g. ChefMenuCard menu actions).
+    // Mobile-first - full-width buttons stacked vertically (big tap targets, no competing for
+    // horizontal space), inline wrapping row on desktop. Pair the two classes:
+    //   <div :class="LAYOUTS.cardActionRow">
+    //     <UButton :class="LAYOUTS.cardActionButton" ... />
+    cardActionRow: 'flex flex-col md:flex-row md:flex-wrap md:items-center gap-2',
+    cardActionButton: 'w-full md:w-auto justify-center',
+
     // Section content (card body sections)
     sectionContent: 'px-4 md:px-6 py-4 md:py-6 space-y-4',           // Standard section with padding
     sectionContentNoPadX: 'px-0 py-4 md:py-6 space-y-4',             // No horizontal padding (full-bleed)
@@ -505,6 +539,16 @@ export const COMPONENTS = {
             primaryButton: 'peach' as const,     // Custom color mapped in app.config.ts → peach palette
             secondaryButton: 'neutral' as const
         }
+    },
+
+    // Danger zone - bordered region inside a "More"/overflow panel for destructive actions.
+    // Spatially separates rare + destructive actions from routine controls (see ChefMenuCard).
+    // Reusable: hosts DangerButton commits; designed to grow with more items.
+    dangerZone: {
+        container: 'rounded-lg border border-error-300 dark:border-error-800 ' +
+                   'bg-error-50 dark:bg-error-950/40 p-4 space-y-3',
+        heading: 'text-xs font-bold uppercase tracking-wide ' +
+                 'text-error-700 dark:text-error-400 flex items-center gap-1.5'
     }
 } as const
 
@@ -616,6 +660,8 @@ export const ICONS = {
     pauseCircle: 'i-heroicons-pause-circle',
     megaphone: 'i-heroicons-megaphone',
     exclamationCircle: 'i-heroicons-exclamation-circle',
+    warning: 'i-heroicons-exclamation-triangle',
+    ellipsis: 'i-heroicons-ellipsis-horizontal',
     xMark: 'i-heroicons-x-mark',
     arrowRight: 'i-heroicons-arrow-right',
     arrowLeft: 'i-heroicons-arrow-left',
@@ -858,6 +904,36 @@ const createResponsiveButtons = (isMd: Ref<boolean>) => {
                 variant: 'solid' as const,
                 icon: ICONS.check,
                 size: sizes.large
+            }
+        },
+
+        // Primary action - loud, labelled CTA (NOISE.loud).
+        // The one action the user came to do. Colour supplied by caller (context-dependent).
+        // <UButton v-bind="BUTTONS.primaryAction" :color="HERO.primaryButton" :icon="ICONS.edit">Save</UButton>
+        get primaryAction() {
+            return {
+                variant: NOISE.loud,
+                size: sizes.standard
+            }
+        },
+
+        // Secondary action - medium, labelled (NOISE.medium). Important, not primary.
+        get secondaryAction() {
+            return {
+                variant: NOISE.medium,
+                size: sizes.standard
+            }
+        },
+
+        // Overflow "More" trigger - quiet (NOISE.quiet), icon-only square (the universal "..." glyph).
+        // Reveals rare/destructive actions (danger zone) without competing with routine controls.
+        get more() {
+            return {
+                icon: ICONS.ellipsis,
+                color: 'neutral' as const,
+                variant: NOISE.quiet,
+                square: true,
+                size: sizes.standard
             }
         }
     }
@@ -1333,6 +1409,7 @@ export const useTheSlopeDesignSystem = () => {
     return {
         // For NuxtUI components
         COLOR,
+        NOISE,
         TICKET_TYPE_COLORS,
         DINNER_STATE_BADGES,
         CALENDAR,
