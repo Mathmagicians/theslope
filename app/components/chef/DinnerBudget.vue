@@ -49,7 +49,7 @@ const kitchenBaseRatePercent = appConfig.theslope?.kitchen?.baseRatePercent ?? 5
 const vatPercent = appConfig.theslope?.kitchen?.vatPercent ?? 25
 
 // Business logic from useOrder and useTicket
-const { getActiveOrders, groupByTicketType, calculateBudget } = useOrder()
+const { getActiveOrders, groupByTicketType, calculateBudget, calculateTotalPortionsFromPrices } = useOrder()
 const { formatPrice } = useTicket()
 
 // Expandable details state
@@ -60,6 +60,8 @@ const activeOrders = computed(() => getActiveOrders(props.orders))
 
 // Budget calculations from composable (business logic)
 const budget = computed(() => calculateBudget(props.orders, kitchenBaseRatePercent, vatPercent))
+
+const totalPortions = computed(() => calculateTotalPortionsFromPrices(props.orders))
 
 // Revenue by ticket type (for expanded details table)
 const revenueByType = computed(() => groupByTicketType(activeOrders.value))
@@ -101,7 +103,7 @@ const revenueByType = computed(() => groupByTicketType(activeOrders.value))
             {{ formatPrice(budget.totalRevenue) }} kr
           </div>
           <div :class="`${TYPOGRAPHY.finePrint} opacity-60`">
-            {{ budget.ticketCount }} billetter
+            {{ Math.round(totalPortions) }} kuverter
           </div>
         </div>
       </UCard>
