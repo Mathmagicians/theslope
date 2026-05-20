@@ -275,8 +275,8 @@ test.describe('Chef Dinner Endpoint', () => {
     })
 
     // ---------- HN missing — reconciliation (ADR-013 best-effort sync) ----------
-    // Reproduces prod regression: chef gets 500 on Annuller Aflysning when the HN
-    // event was deleted externally. Local state must transition regardless of HN.
+    // When the Heynabo event is gone, the local state change still applies and the
+    // endpoint returns 207 (partial success) instead of failing.
 
     test('GIVEN announced dinner with HN event deleted externally WHEN chef cancels THEN 207 partial success + local CANCELLED', async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)

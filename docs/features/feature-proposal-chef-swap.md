@@ -2,6 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-03-30
+**Updated:** 2026-05-20 — Meld afbud refinement: Self branch gains a resign trigger (was inert); `remove-role` realigned — `CHEF_LOSS_DINNER_UPDATES` lives in `useBooking` (no new composable), `RemoveRoleRequestSchema` drops the redundant `dinnerEventId` (it is the route `[id]`); resign panel commits via `DangerButton` 2-step (destructive — clears the menu)
 **Updated:** 2026-04-30 — Phase 2 implemented; toast moved into store via `claimRoleForMe` (DRY with auto-claim); SSR-safe refresh refactor scheduled before Phase 3 (see Phase 2.5)
 **Updated:** 2026-04-28 — design refinements: client-side auto-claim, business logic in composables, plain panel buttons, copy with date+team, `IdSchema`
 
@@ -30,6 +31,10 @@
 
 ### Entry Points
 
+The trigger next to the portrait is binary: **`Bliv chefkok`** when the dinner is
+vacant, **`Ændre tjans`** when a chef is assigned. The panel sub-branches by viewer
+— resign (Meld afbud) when the viewer is the chef, swap when it is someone else.
+
 **Vacant — adjacent "Bliv chefkok" trigger:**
 
 ```
@@ -40,23 +45,13 @@
 +-----------------------------------------------+
 ```
 
-**Other chef — adjacent "Byt" trigger:**
+**Has a chef (self or other) — adjacent "Ændre tjans" trigger:**
 
 ```
 +-----------------------------------------------+
 |  (hat)                                        |
-|  (AH) Anna H.    [(chef-hat) Byt (↔)]         |
+|  (AH) Anna H.    [(chef-hat) Ændre tjans (v)] |
 |       Chefkok                                 |
-+-----------------------------------------------+
-```
-
-**Self — portrait inert:**
-
-```
-+-----------------------------------------------+
-|  (hat)                                        |
-|  (DU) Dit Navn                                |
-|       Chefkok (dig)                           |
 +-----------------------------------------------+
 ```
 
@@ -74,6 +69,26 @@ Copy uses `dinnerEvent.date` (via `formatDate`) and `dinnerEvent.cookingTeam.nam
 |             [Fortryd]      [👨‍🍳 Bliv chefkok]          |
 +--------------------------------------------------------+
 ```
+
+### Meld afbud Panel (Self)
+
+When the viewer is the dinner's chef, `Ændre tjans` opens the resign panel. Clears
+the chef + menu + allergens server-side and reverts the dinner to `SCHEDULED`.
+
+```
++--------------------------------------------------------+
+|  ❌ Meld afbud som chefkok                             |
+|                                                        |
+|  Du melder afbud som chefkok. Tjansen bliver           |
+|  ledig igen, og din menu slettes.                      |
+|                                                        |
+|             [Fortryd]   [❌ Meld afbud →]              |
++--------------------------------------------------------+
+```
+
+The commit is a `DangerButton` 2-step (`Meld afbud` → `Tryk igen for at melde afbud`)
+— the documented exception to "panels use plain `UButton`": resigning is destructive
+(deletes the menu), so it warrants the inline two-step confirm.
 
 ### Swap Panel
 
@@ -117,7 +132,7 @@ The re-announce note (second `ℹ` line) shows only when any swap-side dinner is
 | Other chef, none selected | none | Overtag chefkok-tjans | chef-hat |
 | Other chef, 1+ selected | assignments | Byt tjans | swap-arrows |
 
-The panel itself is the confirmation surface — commit is a plain `UButton`, cancel is `Fortryd`. `DangerButton` is reserved for inline destructive actions outside panels (Aflys, Slet hold).
+The panel itself is the confirmation surface — commit is a plain `UButton`, cancel is `Fortryd`. `DangerButton` is reserved for inline destructive actions outside panels (Aflys, Slet hold) — plus one in-panel exception: the Meld afbud commit (resigning deletes the menu).
 
 ### Menu Decision (ANNOUNCED dinners, swap only, role=CHEF)
 
@@ -237,14 +252,15 @@ RoleAssignment.vue (NEW — generic, role-agnostic)
     - role: "CHEF" | "COOK" | "JUNIORHELPER"
     - currentHolder?: InhabitantDisplay   (null = vacant)
     - default slot: portrait content
-  Render branches:
-    - Vacant   → portrait + trigger UButton ("Bliv {role}", role-icon + plus-circle)
-                 click → panel with intro + commit UButton + Fortryd
-    - Self     → portrait only
-    - Other    → portrait + trigger UButton ("Byt", role-icon + swap-arrows)
-                 click → panel with swap form
+  Trigger branches (binary label):
+    - Vacant      → trigger UButton "Bliv {role}" (role-icon + plus-circle)
+    - Has a chef  → trigger UButton "Ændre tjans" (role-icon + chevron-down)
+  Panel branches (sub-mode derived from chef vs caller):
+    - volunteer (vacant)        → intro + commit UButton + Fortryd
+    - resign    (caller = chef) → Meld afbud copy + DangerButton 2-step + Fortryd
+    - swap      (other chef)    → swap form + commit UButton + Fortryd
   Click outside or Fortryd collapses the panel.
-  Menu decision rendered when role === "CHEF" and ANNOUNCED.
+  Menu decision rendered when role === "CHEF" and ANNOUNCED (swap only).
 
 Mounted this iteration:
   ChefMenuCard.vue      — wraps chef portrait
@@ -263,10 +279,10 @@ Mounted this iteration:
 **`/remove-role` body:**
 
 ```ts
-{ dinnerEventId: number, role: TeamRole, inhabitantId?: number }  // inhabitantId defaults to caller
+{ role: TeamRole, inhabitantId?: number }  // dinner = route [id]; inhabitantId defaults to caller
 ```
 
-When removing CHEF: applies `CHEF_LOSS_DINNER_UPDATES` + clears allergens; deletes Heynabo event via system token if was ANNOUNCED. Authz: self-remove allowed; other-remove requires admin.
+When removing CHEF: applies `CHEF_LOSS_DINNER_UPDATES` + clears allergens; deletes the Heynabo event best-effort (200 on full success, 207 when the HN delete failed — consistent with `chef/dinner`). Authz: self-remove allowed; other-remove requires admin.
 
 **`/assignment/swap` body:**
 
@@ -310,7 +326,7 @@ decideRoleAssignmentWrites(cookingTeamId: number, inhabitantId: number, role: Te
   // Returns: { chefId: number | null, assignment: CookingTeamAssignmentCreate }
   // chefId is the inhabitantId when role === CHEF, else null.
 
-// app/composables/useDinnerLifecycle.ts (NEW)
+// app/composables/useBooking.ts (existing — no new composable)
 export const CHEF_LOSS_DINNER_UPDATES = {
     chefId: null,
     menuTitle: '',
@@ -351,12 +367,11 @@ const RoleAssignmentPlanSchema = z.object({
     assignment: CookingTeamAssignmentCreateSchema
 })
 
-const RemoveRoleRequestSchema = z.object({
-    dinnerEventId: IdSchema,
-    role: TeamRoleSchema,
-    inhabitantId: IdSchema.optional()
-})
+// app/composables/useBookingValidation.ts — reuses AssignRoleSchema (DRY).
+// dinner is the route [id]; inhabitantId optional, defaults to caller.
+const RemoveRoleRequestSchema = AssignRoleSchema.partial({inhabitantId: true})
 
+// app/composables/useCookingTeamValidation.ts
 const MenuSwapStrategySchema = z.enum(['PRESERVE', 'SWAP', 'CLEAR'])
 
 const SwapAssignmentsRequestSchema = z.object({
@@ -379,7 +394,7 @@ const SwapResultSchema = z.object({
 
 ### ADR Compliance
 
-- **ADR-001** — schemas in validation composables; business logic in domain composables (`useCookingTeam`, `useDinnerLifecycle`); `IdSchema` shared in `useCoreValidation`.
+- **ADR-001** — schemas in validation composables; business logic in domain composables (`useCookingTeam`, `useBooking`); `IdSchema` shared in `useCoreValidation`.
 - **ADR-002** — separate try-catch for validation vs business logic in all new endpoints.
 - **ADR-004** — `console.info` for swap completion; `console.warn` for Heynabo failures; never log tokens.
 - **ADR-005** — existing `onDelete` behaviour unchanged. Move-out cascade is a business rule, not a DB cascade.
@@ -439,11 +454,16 @@ Fix (architect-approved, mirrors `bookings.ts:538-551 selectedBillingPeriodDetai
 
 Order: implement /dinner first (where bug lives), validate ChefSwap.e2e turns green, then migrate /chef, drop the `onMounted` hack.
 
-### Phase 3 — `remove-role` + `swap` + swap panel
+### Phase 3a — `remove-role` + Meld afbud (resign) ✅ shipping with this release
 
-- `CHEF_LOSS_DINNER_UPDATES` constant in `useDinnerLifecycle`.
-- `RemoveRoleRequestSchema`, `SwapAssignmentsRequestSchema`, `MenuSwapStrategySchema` in `useCookingTeamValidation`. `SwapResultSchema` in `useBookingValidation`.
-- `POST /api/team/cooking/[id]/remove-role` + `plan.ts → removeRole`.
+- `CHEF_LOSS_DINNER_UPDATES` constant in `useBooking`.
+- `RemoveRoleRequestSchema` in `useBookingValidation` (`AssignRoleSchema.partial({inhabitantId})`).
+- `POST /api/team/cooking/[id]/remove-role` + `plan.ts → resignRoleForMe`.
+- `RoleAssignment.vue` Self branch: `Ændre tjans` trigger → resign panel (Meld afbud copy + `DangerButton` 2-step).
+
+### Phase 3b — `swap` + swap panel
+
+- `SwapAssignmentsRequestSchema`, `MenuSwapStrategySchema` in `useCookingTeamValidation`. `SwapResultSchema` in `useBookingValidation`.
 - `POST /api/team/cooking/assignment/swap` + `plan.ts → swapAssignments`.
 - Expand `RoleAssignment.vue` with swap form (assignments from `usersStore.myTeams`, filtered + projected client-side), menu decision, pre-commit re-announce note.
 - "Needs re-announce" banner in `ChefMenuCard.vue`.

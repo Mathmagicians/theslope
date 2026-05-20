@@ -26,7 +26,7 @@ mockNuxtImport('useAuthStore', () => () => ({
 mockNuxtImport('usePlanStore', () => () => ({
     selectedSeason: null,
     assignRoleToDinner: assignRoleSpy,
-    isAssigningRole: false
+    isRoleUpdating: false
 }))
 
 mockNuxtImport('useToast', () => () => ({add: toastAddSpy}))

@@ -66,7 +66,6 @@ const {user} = storeToRefs(authStore)
 // Booking validation and helpers
 const {formatScaffoldResult, BOOKING_TOAST_TITLES} = useBooking()
 const {TeamRoleSchema} = useCookingTeamValidation()
-const {isNotAssignedToMe} = useCookingTeam()
 const TeamRole = TeamRoleSchema.enum
 
 // Component needs to handle its own data needs
@@ -91,6 +90,8 @@ const allergiesStore = useAllergiesStore()
 allergiesStore.initAllergiesStore()
 
 const bookingsStore = useBookingsStore()
+useUsersStore()  // chef-volunteer flow needs it instantiated in setup context
+
 const {
   lockStatus,
   selectedDinnerEventDetail: dinnerEventDetail,
@@ -138,10 +139,6 @@ watchEffect(() => {
 })
 
 const { OrderDisplaySchema } = useBookingValidation()
-
-const isNotChefForMe = computed(() =>
-  isNotAssignedToMe(dinnerEventDetail.value?.chef ?? undefined, authStore.inhabitantId)
-)
 
 // Fetch household-specific orders via user-facing endpoint (security: session-filtered)
 // This is separate from dinnerEventDetail.tickets which includes ALL households for kitchen stats
@@ -312,11 +309,9 @@ useHead({
           >
             <template #chef-action>
               <RoleAssignment
-                  v-if="isNotChefForMe"
                   :dinner-event="dinnerEventDetail"
                   :role="TeamRole.CHEF"
-                  :swap-with="dinnerEventDetail.chef ?? undefined"
-                      />
+              />
             </template>
           </CookingTeamCard>
           <UAlert

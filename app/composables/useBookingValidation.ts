@@ -328,6 +328,10 @@ export const useBookingValidation = () => {
         role: RoleSchema
     })
 
+    // Remove a role from a dinner ("Meld afbud"). dinner = route [id];
+    // inhabitantId optional, defaults to caller. Reuses AssignRoleSchema (DRY).
+    const RemoveRoleRequestSchema = AssignRoleSchema.partial({inhabitantId: true})
+
     /**
      * Order query filters (GET /api/order?...)
      */
@@ -849,6 +853,7 @@ export const useBookingValidation = () => {
         CreateOrdersRequestSchema,
         SwapOrderRequestSchema,
         AssignRoleSchema,
+        RemoveRoleRequestSchema,
         OrderQuerySchema,
 
         // OrderHistory

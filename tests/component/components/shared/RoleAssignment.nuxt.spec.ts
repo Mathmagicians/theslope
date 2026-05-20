@@ -12,9 +12,11 @@ const {TeamRoleSchema} = useCookingTeamValidation()
 const TeamRole = TeamRoleSchema.enum
 
 const ME_ID = 42
+const ME: InhabitantDisplay = {id: ME_ID, name: 'Mig', lastName: 'Test'} as unknown as InhabitantDisplay
 const OTHER: InhabitantDisplay = {id: 99, name: 'Anna', lastName: 'Hansen'} as unknown as InhabitantDisplay
 
 const claimRoleForMeMock = vi.fn(async () => ({id: 1}))
+const resignRoleForMeMock = vi.fn(async () => ({id: 1}))
 
 mockNuxtImport('useAuthStore', () => () => ({
     inhabitantId: ME_ID,
@@ -23,41 +25,43 @@ mockNuxtImport('useAuthStore', () => () => ({
 
 mockNuxtImport('usePlanStore', () => () => ({
     claimRoleForMe: claimRoleForMeMock,
-    isAssigningRole: false
+    resignRoleForMe: resignRoleForMeMock,
+    isRoleUpdating: false
 }))
 
 const TEST_IDS = {
     trigger: 'role-assignment-trigger',
     save: 'role-assignment-save',
-    cancel: 'role-assignment-cancel'
+    cancel: 'role-assignment-cancel',
+    resign: 'role-assignment-resign'
 } as const
 
-const dinner = {
+const buildDinner = (chef: InhabitantDisplay | null = null) => ({
     ...DinnerEventFactory.defaultDinnerEventDetail(),
     cookingTeamId: 7,
-    cookingTeam: {id: 7, name: 'Madhold A - Winter 2026'} as unknown as never
-}
+    cookingTeam: {id: 7, name: 'Madhold A - Winter 2026'} as unknown as never,
+    chef
+})
 
-const mountWith = (props: {swapWith?: InhabitantDisplay} = {}) =>
-    mountSuspended(RoleAssignment, {
-        props: {dinnerEvent: dinner, role: TeamRole.CHEF, swapWith: props.swapWith}
-    })
+const mountWith = (chef: InhabitantDisplay | null = null) =>
+    mountSuspended(RoleAssignment, {props: {dinnerEvent: buildDinner(chef), role: TeamRole.CHEF}})
 
 const findById = (wrapper: Awaited<ReturnType<typeof mountWith>>, id: string) =>
     wrapper.find(`[data-testid="${id}"]`)
 
-beforeEach(() => claimRoleForMeMock.mockClear())
+beforeEach(() => vi.clearAllMocks())
 
 describe('RoleAssignment', () => {
     it.each([
-        {desc: 'volunteer (no swapWith)', swapWith: undefined, expectedLabel: 'Bliv chefkok'},
-        {desc: 'swap (with swapWith)',    swapWith: OTHER,     expectedLabel: 'Byt'}
-    ])('shows trigger label "$expectedLabel" for $desc', async ({swapWith, expectedLabel}) => {
-        const wrapper = await mountWith({swapWith})
+        {desc: 'vacant (no chef)',    chef: null,  expectedLabel: 'Bliv chefkok'},
+        {desc: 'self is chef',        chef: ME,    expectedLabel: 'Ændre tjans'},
+        {desc: 'other is chef',       chef: OTHER, expectedLabel: 'Ændre tjans'}
+    ])('shows trigger label "$expectedLabel" when $desc', async ({chef, expectedLabel}) => {
+        const wrapper = await mountWith(chef)
         expect(findById(wrapper, TEST_IDS.trigger).text()).toContain(expectedLabel)
     })
 
-    it('clicking the trigger opens the collapsible form', async () => {
+    it('clicking the trigger opens the collapsible panel', async () => {
         const wrapper = await mountWith()
         expect(findById(wrapper, TEST_IDS.save).exists()).toBe(false)
 
@@ -67,7 +71,7 @@ describe('RoleAssignment', () => {
         expect(findById(wrapper, TEST_IDS.save).exists()).toBe(true)
     })
 
-    it('volunteer flow: clicking save calls assignRoleToDinner and emits role-assigned', async () => {
+    it('volunteer flow: save calls claimRoleForMe and emits role-assigned', async () => {
         const wrapper = await mountWith()
         await findById(wrapper, TEST_IDS.trigger).trigger('click')
         await nextTick()
@@ -75,18 +79,35 @@ describe('RoleAssignment', () => {
         await nextTick()
 
         expect(claimRoleForMeMock).toHaveBeenCalledTimes(1)
-        expect(claimRoleForMeMock).toHaveBeenCalledWith(dinner, TeamRole.CHEF)
+        expect(claimRoleForMeMock).toHaveBeenCalledWith(expect.objectContaining({chef: null}), TeamRole.CHEF)
         expect(wrapper.emitted('role-assigned')).toHaveLength(1)
     })
 
-    it('swap flow does NOT call assignRoleToDinner (Phase 3 placeholder)', async () => {
-        const wrapper = await mountWith({swapWith: OTHER})
+    it('resign flow: DangerButton confirm calls resignRoleForMe and emits role-removed', async () => {
+        const wrapper = await mountWith(ME)
+        await findById(wrapper, TEST_IDS.trigger).trigger('click')
+        await nextTick()
+
+        const resignBtn = findById(wrapper, TEST_IDS.resign).find('button')
+        await resignBtn.trigger('click')
+        await nextTick()
+        await resignBtn.trigger('click')
+        await nextTick()
+
+        expect(resignRoleForMeMock).toHaveBeenCalledTimes(1)
+        expect(resignRoleForMeMock).toHaveBeenCalledWith(expect.objectContaining({chef: ME}), TeamRole.CHEF)
+        expect(wrapper.emitted('role-removed')).toHaveLength(1)
+    })
+
+    it('swap flow does NOT call the API (Phase 3 placeholder)', async () => {
+        const wrapper = await mountWith(OTHER)
         await findById(wrapper, TEST_IDS.trigger).trigger('click')
         await nextTick()
         await findById(wrapper, TEST_IDS.save).trigger('click')
         await nextTick()
 
         expect(claimRoleForMeMock).not.toHaveBeenCalled()
+        expect(resignRoleForMeMock).not.toHaveBeenCalled()
         expect(wrapper.emitted('role-assigned')).toBeFalsy()
     })
 
@@ -112,19 +133,15 @@ describe('RoleAssignment', () => {
         expect(findById(wrapper, TEST_IDS.save).exists()).toBe(true)
     })
 
-    it('renders nothing for past dinners (cannot volunteer in the past)', async () => {
-        const pastDinner = {...dinner, id: dinner.id + 1, date: new Date(Date.now() - 24 * 60 * 60 * 1000)}
-        const wrapper = await mountSuspended(RoleAssignment, {
-            props: {dinnerEvent: pastDinner, role: TeamRole.CHEF}
-        })
+    it('renders nothing for past dinners (cannot act in the past)', async () => {
+        const pastDinner = {...buildDinner(), id: 999, date: new Date(Date.now() - 24 * 60 * 60 * 1000)}
+        const wrapper = await mountSuspended(RoleAssignment, {props: {dinnerEvent: pastDinner, role: TeamRole.CHEF}})
         expect(findById(wrapper, TEST_IDS.trigger).exists()).toBe(false)
     })
 
     it('exposed open() is a no-op for past dinners', async () => {
-        const pastDinner = {...dinner, id: dinner.id + 1, date: new Date(Date.now() - 24 * 60 * 60 * 1000)}
-        const wrapper = await mountSuspended(RoleAssignment, {
-            props: {dinnerEvent: pastDinner, role: TeamRole.CHEF}
-        })
+        const pastDinner = {...buildDinner(), id: 999, date: new Date(Date.now() - 24 * 60 * 60 * 1000)}
+        const wrapper = await mountSuspended(RoleAssignment, {props: {dinnerEvent: pastDinner, role: TeamRole.CHEF}})
         const exposed = (wrapper.vm.$ as {exposed: {open: () => void} | null}).exposed
         exposed!.open()
         await flushPromises()
@@ -138,7 +155,7 @@ describe('RoleAssignment', () => {
         await nextTick()
         expect(findById(wrapper, TEST_IDS.save).exists()).toBe(true)
 
-        await wrapper.setProps({dinnerEvent: {...dinner, id: dinner.id + 1}, role: TeamRole.CHEF})
+        await wrapper.setProps({dinnerEvent: {...buildDinner(), id: 1234}, role: TeamRole.CHEF})
         await flushPromises()
         await nextTick()
         expect(findById(wrapper, TEST_IDS.save).exists()).toBe(false)

@@ -68,7 +68,6 @@ const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialize
 // Permission helpers and date utilities
 const {isChefFor, deadlinesForSeason} = useSeason()
 const {TeamRoleSchema} = useCookingTeamValidation()
-const {isNotAssignedToMe} = useCookingTeam()
 const TeamRole = TeamRoleSchema.enum
 const authStore = useAuthStore()
 
@@ -173,10 +172,6 @@ const handleDinnerSelect = (dinnerId: number) => {
 
 // ChefMenuCard formMode: EDIT for chef, VIEW for team members
 const currentInhabitantId = computed(() => authStore.user?.Inhabitant?.id)
-
-const isNotChefForMe = computed(() =>
-  isNotAssignedToMe(dinnerEventDetail.value?.chef ?? undefined, authStore.inhabitantId)
-)
 
 const isCurrentUserChef = computed(() => {
   if (!selectedTeam.value || !currentInhabitantId.value) return false
@@ -405,10 +400,8 @@ useHead({
                    Slot keeps CookingTeamCard generic; /admin/teams omits this slot. -->
               <template #chef-action>
                 <RoleAssignment
-                    v-if="isNotChefForMe"
                     :dinner-event="dinnerEventDetail"
                     :role="TeamRole.CHEF"
-                    :swap-with="dinnerEventDetail.chef ?? undefined"
                 />
               </template>
             </CookingTeamCard>

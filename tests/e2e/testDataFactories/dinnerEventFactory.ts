@@ -283,6 +283,33 @@ export class DinnerEventFactory {
         return null
     }
 
+    static readonly removeRoleFromDinnerEvent = async (
+        context: BrowserContext,
+        dinnerEventId: number,
+        inhabitantId: number,
+        role: TeamRole,
+        expectedStatus: number = 200
+    ): Promise<DinnerEventDetail | null> => {
+        const {DinnerEventDetailSchema} = useBookingValidation()
+        const response = await context.request.post(
+            `/api/team/cooking/${dinnerEventId}/remove-role`,
+            {
+                headers: headers,
+                data: { inhabitantId, role }
+            }
+        )
+
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `POST remove-role should return ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            const responseBody = await response.json()
+            return DinnerEventDetailSchema.parse(responseBody)
+        }
+        return null
+    }
+
     /**
      * Wait for dinner events to be generated for a season
      * Polls the API with exponential backoff until the expected number of events are created

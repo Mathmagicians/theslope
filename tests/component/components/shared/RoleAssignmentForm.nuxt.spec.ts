@@ -1,6 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach} from 'vitest'
 import {mountSuspended, mockNuxtImport} from '@nuxt/test-utils/runtime'
+import {nextTick} from 'vue'
 import RoleAssignmentForm from '~/components/shared/RoleAssignmentForm.vue'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
@@ -10,28 +11,26 @@ const {TeamRoleSchema} = useCookingTeamValidation()
 const TeamRole = TeamRoleSchema.enum
 
 const COOKING_TEAM = {id: 7, name: 'Madhold A - Winter 2026'} as unknown as never
-const OTHER: InhabitantDisplay = {id: 99, name: 'Anna', lastName: 'Hansen'} as unknown as InhabitantDisplay
+const CHEF: InhabitantDisplay = {id: 99, name: 'Anna', lastName: 'Hansen'} as unknown as InhabitantDisplay
 
-mockNuxtImport('usePlanStore', () => () => ({isAssigningRole: false}))
+mockNuxtImport('usePlanStore', () => () => ({isRoleUpdating: false}))
 
 const TEST_IDS = {
     cancel: 'role-assignment-cancel',
-    save: 'role-assignment-save'
+    save: 'role-assignment-save',
+    resign: 'role-assignment-resign'
 } as const
 
-const buildDinner = (cookingTeam: typeof COOKING_TEAM | null = COOKING_TEAM) => ({
+const buildDinner = (overrides: {cookingTeam?: typeof COOKING_TEAM | null, chef?: InhabitantDisplay} = {}) => ({
     ...DinnerEventFactory.defaultDinnerEventDetail(),
     cookingTeamId: 7,
-    cookingTeam
+    cookingTeam: overrides.cookingTeam === undefined ? COOKING_TEAM : overrides.cookingTeam,
+    chef: overrides.chef ?? null
 })
 
-const mountForm = (props: {role?: typeof TeamRole.CHEF, swapWith?: InhabitantDisplay, cookingTeam?: typeof COOKING_TEAM | null} = {}) =>
+const mountForm = (mode: 'volunteer' | 'resign' | 'swap', dinnerOverrides: {cookingTeam?: typeof COOKING_TEAM | null, chef?: InhabitantDisplay} = {}) =>
     mountSuspended(RoleAssignmentForm, {
-        props: {
-            dinnerEvent: buildDinner(props.cookingTeam),
-            role: props.role ?? TeamRole.CHEF,
-            swapWith: props.swapWith
-        }
+        props: {dinnerEvent: buildDinner(dinnerOverrides), role: TeamRole.CHEF, mode}
     })
 
 const findById = (wrapper: Awaited<ReturnType<typeof mountForm>>, id: string) =>
@@ -40,8 +39,8 @@ const findById = (wrapper: Awaited<ReturnType<typeof mountForm>>, id: string) =>
 beforeEach(() => vi.clearAllMocks())
 
 describe('RoleAssignmentForm', () => {
-    it('renders volunteer copy when no swapWith', async () => {
-        const wrapper = await mountForm()
+    it('renders volunteer copy in volunteer mode', async () => {
+        const wrapper = await mountForm('volunteer')
         const text = wrapper.text()
         expect(text).toContain('Fællesspisning søger chefkok')
         expect(text).toContain('chefkok-tjansen')
@@ -49,39 +48,50 @@ describe('RoleAssignmentForm', () => {
         expect(text).not.toContain('Winter 2026')
     })
 
-    it('renders swap copy when swapWith present', async () => {
-        const wrapper = await mountForm({swapWith: OTHER})
+    it('renders Meld afbud copy in resign mode', async () => {
+        const wrapper = await mountForm('resign')
         const text = wrapper.text()
-        expect(text).toContain('Byt med Anna')
-        expect(text).not.toContain('Fællesspisning søger')
+        expect(text).toContain('Meld afbud som chefkok')
+        expect(text).toContain('Tjansen bliver ledig igen')
     })
 
-    it('omits team clause when dinner has no cookingTeam', async () => {
-        const wrapper = await mountForm({cookingTeam: null})
+    it('renders swap copy in swap mode', async () => {
+        const wrapper = await mountForm('swap', {chef: CHEF})
+        expect(wrapper.text()).toContain('Byt med Anna')
+    })
+
+    it('omits team clause when dinner has no cookingTeam (volunteer)', async () => {
+        const wrapper = await mountForm('volunteer', {cookingTeam: null})
         const text = wrapper.text()
         expect(text).toContain('Fællesspisning søger chefkok')
         expect(text).not.toContain('sammen med')
     })
 
     it('emits cancel when Annuller is clicked', async () => {
-        const wrapper = await mountForm()
+        const wrapper = await mountForm('volunteer')
         await findById(wrapper, TEST_IDS.cancel).trigger('click')
         expect(wrapper.emitted('cancel')).toHaveLength(1)
     })
 
-    it('emits submit with {ours, theirs: undefined} on volunteer', async () => {
-        const wrapper = await mountForm()
+    it('emits submit {ours, theirs: undefined} on volunteer', async () => {
+        const wrapper = await mountForm('volunteer')
         await findById(wrapper, TEST_IDS.save).trigger('click')
-        const submitted = wrapper.emitted('submit')
-        expect(submitted).toHaveLength(1)
-        expect(submitted![0]![0]).toEqual({ours: expect.any(Number), theirs: undefined})
+        expect(wrapper.emitted('submit')![0]![0]).toEqual({ours: expect.any(Number), theirs: undefined})
     })
 
-    it('emits submit with {ours, theirs: []} on swap (placeholder)', async () => {
-        const wrapper = await mountForm({swapWith: OTHER})
+    it('emits submit {ours, theirs: []} on swap', async () => {
+        const wrapper = await mountForm('swap', {chef: CHEF})
         await findById(wrapper, TEST_IDS.save).trigger('click')
-        const submitted = wrapper.emitted('submit')
-        expect(submitted).toHaveLength(1)
-        expect(submitted![0]![0]).toEqual({ours: expect.any(Number), theirs: []})
+        expect(wrapper.emitted('submit')![0]![0]).toEqual({ours: expect.any(Number), theirs: []})
+    })
+
+    it('emits resign after the DangerButton 2-step confirm', async () => {
+        const wrapper = await mountForm('resign')
+        const resignBtn = findById(wrapper, TEST_IDS.resign).find('button')
+        await resignBtn.trigger('click')
+        await nextTick()
+        await resignBtn.trigger('click')
+        await nextTick()
+        expect(wrapper.emitted('resign')).toHaveLength(1)
     })
 })

@@ -115,8 +115,9 @@ const emit = defineEmits<{
   'cancel-dinner': []
   'undo-cancel-dinner': []
   'toggle-calendar': []
-  /** Bubbled from RoleAssignment when the chef is claimed/changed. Parent should refresh the dinner. */
+  /** Bubbled from RoleAssignment when the chef is claimed/changed/removed. Parent should refresh the dinner. */
   'role-assigned': []
+  'role-removed': []
   prev: []
   next: []
   select: [dinnerEventId: number]
@@ -131,10 +132,7 @@ const HERO_BUTTON = COMPONENTS.heroPanel.light
 // Validation schemas
 const { DinnerStateSchema, ChefMenuFormSchema } = useBookingValidation()
 const { TeamRoleSchema } = useCookingTeamValidation()
-const { isNotAssignedToMe } = useCookingTeam()
-const authStore = useAuthStore()
 const roleAssignmentRef = ref<{open: () => void} | null>(null)
-const isNotChefForMe = computed(() => isNotAssignedToMe(props.dinnerEvent.chef ?? undefined, authStore.inhabitantId))
 const DinnerState = DinnerStateSchema.enum
 const TeamRole = TeamRoleSchema.enum
 
@@ -525,13 +523,13 @@ const handleCardClick = () => {
           {{ dinnerEvent.menuDescription }}
         </div>
 
-        <!-- Chef portrait + RoleAssignment trigger (when not the chef) -->
+        <!-- Chef portrait + RoleAssignment trigger -->
         <div class="pt-4 mt-4 flex items-center gap-3 flex-wrap">
           <div
             class="flex items-center gap-3 cursor-pointer"
             :class="{ [`${BG.mocha[950]} border-2 border-dashed border-amber-600 rounded-lg p-3 -skew-x-1 w-fit`]: !dinnerEvent.chef }"
             :data-testid="dinnerEvent.chef ? 'chef-display' : 'chef-wanted'"
-            @click="isNotChefForMe && roleAssignmentRef?.open()"
+            @click="roleAssignmentRef?.open()"
           >
             <!-- Portrait frame around avatar -->
             <div class="relative">
@@ -557,12 +555,11 @@ const handleCardClick = () => {
           </div>
 
           <RoleAssignment
-            v-if="isNotChefForMe"
             ref="roleAssignmentRef"
             :dinner-event="dinnerEvent"
             :role="TeamRole.CHEF"
-            :swap-with="dinnerEvent.chef ?? undefined"
             @role-assigned="emit('role-assigned')"
+            @role-removed="emit('role-removed')"
           />
         </div>
 
