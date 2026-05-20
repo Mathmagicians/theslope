@@ -246,6 +246,35 @@ test.describe('POST /api/admin/users/[id] role updates', () => {
     })
 })
 
+// POST /api/admin/users/[id] contact updates — happy-path integration smoke
+// Schema edge cases are unit-tested in useCoreValidation.unit.spec.ts; these tests
+// prove the body → UserUpdateSchema (picked) → repository → response wiring works.
+const contactUpdateCases: Array<{
+    label: string
+    body: {email?: string; phone?: string | null}
+    expected: {email?: string; phone?: string | null}
+}> = [
+    {label: 'plain email persists',                body: {email: 'updated@andeby.dk'},          expected: {email: 'updated@andeby.dk'}},
+    {label: 'RFC 5322 email is normalized',        body: {email: 'Donald <donald@andeby.dk>'},  expected: {email: 'donald@andeby.dk'}},
+    {label: 'phone persists',                      body: {phone: '+45 12 34 56 78'},            expected: {phone: '+45 12 34 56 78'}},
+    {label: 'phone null clears value',             body: {phone: null},                         expected: {phone: null}}
+]
+
+for (const {label, body, expected} of contactUpdateCases) {
+    test(`POST /api/admin/users/[id]: ${label}`, async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const user = await UserFactory.createUser(context, UserFactory.defaultUser())
+        createdUserIds.push(user.id as number)
+
+        const response = await context.request.post(`/api/admin/users/${user.id}`, {data: body})
+        expect(response.status(), `Expected 200, got ${response.status()}: ${await response.text()}`).toBe(200)
+
+        const updated = await response.json()
+        if (expected.email !== undefined) expect(updated.email).toBe(expected.email)
+        if (expected.phone !== undefined) expect(updated.phone).toBe(expected.phone)
+    })
+}
+
 // Cleanup after all tests
 test.afterAll(async ({browser}) => {
     if (createdUserIds.length > 0) {

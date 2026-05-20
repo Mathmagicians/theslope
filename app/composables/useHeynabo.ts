@@ -1,4 +1,4 @@
-import type { HouseholdCreate, HouseholdDisplay, InhabitantCreate, UserDisplay, SystemRole } from '~/composables/useCoreValidation'
+import type { HouseholdCreate, HouseholdDisplay, InhabitantCreate, InhabitantDisplay, UserDisplay, SystemRole } from '~/composables/useCoreValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
 import { pruneAndCreate, type ReconciliationBucket } from '~/utils/batchUtils'
 import { isSameDay } from 'date-fns'
@@ -31,7 +31,7 @@ const isHouseholdEqual = (existing: HouseholdCreate, incoming: HouseholdCreate):
     existing.name === incoming.name &&
     existing.address === incoming.address
 
-const isInhabitantEqual = (existing: InhabitantData, incoming: InhabitantData): boolean =>
+export const isInhabitantDataEqual = (existing: InhabitantDisplay, incoming: InhabitantData): boolean =>
     existing.name === incoming.name &&
     existing.lastName === incoming.lastName &&
     existing.pictureUrl === incoming.pictureUrl &&
@@ -40,7 +40,7 @@ const isInhabitantEqual = (existing: InhabitantData, incoming: InhabitantData): 
 // Compares Heynabo-owned user fields. TheSlope-owned ALLERGYMANAGER role excluded.
 // Existing: UserDisplay (from fetchUsers), Incoming: InhabitantData (from Heynabo)
 // Key is inhabitant.heynaboId (stable), not email (can change).
-// Note: birthDate is an Inhabitant field, compared in isInhabitantEqual, not here.
+// Note: birthDate is an Inhabitant field, compared in isInhabitantDataEqual, not here.
 const isUserEqual = (existing: UserDisplay, incoming: InhabitantData): boolean => {
     if (!incoming.user) return false // Incoming has no user, existing does → delete
     const hasAdminRole = (roles: SystemRole[] | undefined) => roles?.includes(SystemRole.ADMIN) ?? false
@@ -69,9 +69,9 @@ export const reconcileHouseholds = pruneAndCreate<HouseholdCreate, HouseholdCrea
  * Heynabo is source of truth - inhabitants not in Heynabo will be marked for deletion.
  * Uses heynaboId as the unique key for matching.
  */
-export const reconcileInhabitants = pruneAndCreate<InhabitantData, InhabitantData, number>(
+export const reconcileInhabitants = pruneAndCreate<InhabitantDisplay, InhabitantData, number>(
     i => i.heynaboId,
-    isInhabitantEqual
+    isInhabitantDataEqual
 )
 
 /**

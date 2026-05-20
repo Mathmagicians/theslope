@@ -1,61 +1,60 @@
 import {defineEventHandler, getValidatedRouterParams, readValidatedBody} from "h3"
 import {fetchUser, saveUser} from "~~/server/data/prismaRepository"
-import type {UserDetail, SystemRole} from "~/composables/useCoreValidation"
+import {useCoreValidation, type UserCreate, type UserDetail} from "~/composables/useCoreValidation"
 import {reconcileUserRoles, RoleOwner} from "~/composables/useUserRoles"
-import {SystemRoleSchema} from '~~/prisma/generated/zod'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from 'zod'
 
 const {throwH3Error} = eventHandlerHelper
+const LOG = '🪪 > USER > [POST]'
 
 const idSchema = z.object({
     id: z.coerce.number().int().positive('User ID must be a positive integer')
-})
-
-const UpdateUserRolesSchema = z.object({
-    systemRoles: z.array(SystemRoleSchema)
 })
 
 export default defineEventHandler(async (event): Promise<UserDetail> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
+    // Get schema inside handler to avoid circular dependency.
+    // Reuse UserUpdateSchema validators so update validation stays consistent with create/login flows
+    // (RFC 5322 "Display Name <email>" normalization, phone regex). ID comes from route params, not body.
+    const {UserUpdateSchema} = useCoreValidation()
+    const UpdateUserBodySchema = UserUpdateSchema
+        .pick({systemRoles: true, email: true, phone: true})
+        .refine(b => b.systemRoles !== undefined || b.email !== undefined || b.phone !== undefined, {
+            message: 'At least one of systemRoles, email, phone must be provided'
+        })
+
     // Validate input - fail early on invalid data
     let userId!: number
-    let incomingRoles!: SystemRole[]
+    let body!: z.infer<typeof UpdateUserBodySchema>
     try {
-        const {id} = await getValidatedRouterParams(event, idSchema.parse)
-        userId = id
-        const body = await readValidatedBody(event, UpdateUserRolesSchema.parse)
-        incomingRoles = body.systemRoles
+        userId = (await getValidatedRouterParams(event, idSchema.parse)).id
+        body = await readValidatedBody(event, UpdateUserBodySchema.parse)
     } catch (error) {
-        return throwH3Error('🪪 > USER > [POST] Input validation error', error)
+        return throwH3Error(`${LOG} Input validation error`, error)
     }
 
     // Business logic
     try {
-        console.info(`🪪 > USER > [POST] Updating roles for user ID ${userId}`)
-
-        // Fetch existing user
         const existingUser = await fetchUser(d1Client, {id: userId})
         if (!existingUser) {
             throw new Error(`User with ID ${userId} not found`)
         }
 
-        // Reconcile roles - TS caller can only modify TS-owned roles
-        const result = reconcileUserRoles(existingUser.systemRoles, incomingRoles, RoleOwner.TS)
-        console.info(`🪪 > USER > [POST] Reconciled roles: [${result.roles}]`)
+        // Build delta — only the fields the admin actually set (no merge with existing).
+        const delta: Partial<UserCreate> = {}
+        if (body.email !== undefined) delta.email = body.email
+        if (body.phone !== undefined) delta.phone = body.phone
+        if (body.systemRoles !== undefined) {
+            // TS caller can only modify TS-owned roles; HN-owned roles preserved
+            delta.systemRoles = reconcileUserRoles(existingUser.systemRoles, body.systemRoles, RoleOwner.TS).roles
+        }
 
-        // Save with reconciled roles
-        const updatedUser = await saveUser(d1Client, {
-            email: existingUser.email,
-            phone: existingUser.phone,
-            passwordHash: 'preserved',  // saveUser upserts, password preserved
-            systemRoles: result.roles
-        })
-
-        return updatedUser
+        console.info(`${LOG} Updating user id=${userId} fields=[${Object.keys(delta).join(',')}]`)
+        return await saveUser(d1Client, delta, userId)
     } catch (error) {
-        return throwH3Error(`🪪 > USER > [POST] Error updating user ${userId}`, error)
+        return throwH3Error(`${LOG} Error updating user ${userId}`, error)
     }
 })

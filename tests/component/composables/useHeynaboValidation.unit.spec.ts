@@ -144,6 +144,16 @@ describe('useHeynaboValidation', () => {
             expect(Array.isArray(result.roles)).toBe(true)
             expect(result.roles.length).toBe(0)
         })
+
+        it.each([
+            ['null stays null', null, null],
+            ['plain URL passes through', 'https://prod-space.s3.fr-par.scw.cloud/demo/AVATAR/abc.jpg', 'https://prod-space.s3.fr-par.scw.cloud/demo/AVATAR/abc.jpg'],
+            ['signed URL gets stripped', 'https://prod-space.s3.fr-par.scw.cloud/demo/AVATAR/abc.jpg?X-Amz-Date=20260519T085522Z&X-Amz-Signature=d7f2266', 'https://prod-space.s3.fr-par.scw.cloud/demo/AVATAR/abc.jpg']
+        ])('avatar normalization: %s', (_, input, expected) => {
+            const member = { ...sampleHeynaboMembers[0], avatar: input }
+            const result = HeynaboMemberSchema.parse(member)
+            expect(result.avatar).toBe(expected)
+        })
     })
 
     describe('Can parse locations retrieved from Heynabo API', () => {

@@ -1,7 +1,7 @@
 import {z} from 'zod'
 import {RoleSchema, DinnerStateSchema} from '~~/prisma/generated/zod'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {useCoreValidation} from '~/composables/useCoreValidation'
+import {useCoreValidation, IdSchema} from '~/composables/useCoreValidation'
 import type {WeekDayMap as _WeekDayMap} from '~/types/dateTypes'
 
 /**
@@ -155,6 +155,21 @@ export const useCookingTeamValidation = () => {
      */
     const CookingTeamAssignmentCreateSchema = CookingTeamAssignmentSchema.omit({ id: true, inhabitant: true })
 
+    /**
+     * Plan describing the writes required to assign a role on a dinner.
+     * Pure decision output of `decideRoleAssignmentWrites` (useCookingTeam).
+     * - nextChefId: the desired post-operation value of DinnerEvent.chefId.
+     *   Caller compares to current and writes only on diff.
+     *   Captures three intents in one field: promote (= inhabitantId),
+     *   demote (= null when the inhabitant was the dinner's chef and now isn't),
+     *   leave-alone (= currentDinnerChefId).
+     * - assignment: the team-membership upsert payload (always present).
+     */
+    const RoleAssignmentPlanSchema = z.object({
+        nextChefId: IdSchema.nullable(),
+        assignment: CookingTeamAssignmentCreateSchema
+    })
+
     // Type definitions (inside composable to avoid circular reference)
     type CookingTeamDisplay = z.infer<typeof CookingTeamDisplaySchema>
     type CookingTeamDetail = z.infer<typeof CookingTeamDetailSchema>
@@ -302,6 +317,7 @@ export const useCookingTeamValidation = () => {
         CookingTeamUpdateSchema,             // For POST operations (ADR-009)
         CookingTeamAssignmentSchema,         // For nested assignments
         CookingTeamAssignmentCreateSchema,   // For creating assignments (ADR-009)
+        RoleAssignmentPlanSchema,            // Plan output from decideRoleAssignmentWrites
         TeamRoleSchema,                      // For role enums
         CookingTeamSchema,                   // Base schema
         // Validation helper
@@ -334,4 +350,5 @@ export type CookingTeamCreate = z.infer<ReturnType<typeof useCookingTeamValidati
 export type CookingTeamUpdate = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamUpdateSchema']>
 export type CookingTeamAssignment = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamAssignmentSchema']>
 export type CookingTeamAssignmentCreate = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamAssignmentCreateSchema']>
+export type RoleAssignmentPlan = z.infer<ReturnType<typeof useCookingTeamValidation>['RoleAssignmentPlanSchema']>
 export type TeamRole = z.infer<ReturnType<typeof useCookingTeamValidation>['TeamRoleSchema']>

@@ -1,4 +1,4 @@
-import {useBookingValidation, type DinnerEventDetail, type DinnerEventDisplay, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState} from '~/composables/useBookingValidation'
+import {useBookingValidation, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState} from '~/composables/useBookingValidation'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
 import {useHousehold} from '~/composables/useHousehold'
@@ -12,6 +12,21 @@ import {dateToWeekDay} from '~/utils/season'
 import {ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {chunkArray} from '~/utils/batchUtils'
 import type {TransactionCreateData} from '~~/server/data/financesRepository'
+
+/**
+ * Field set that reverts a dinner to a clean chef-less SCHEDULED state.
+ * Allergens are cleared separately via `updateDinnerEventAllergens(d1, id, [])`;
+ * Heynabo deletion is endpoint-side I/O.
+ */
+export const CHEF_LOSS_DINNER_UPDATES = {
+    chefId: null,
+    menuTitle: '',
+    menuDescription: '',
+    menuPictureUrl: null,
+    totalCost: 0,
+    heynaboEventId: null,
+    state: useBookingValidation().DinnerStateSchema.enum.SCHEDULED
+} satisfies Partial<DinnerEventUpdate>
 
 // ============================================================================
 // Order Decision - Pure function for categorizing booking intent

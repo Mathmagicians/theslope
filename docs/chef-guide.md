@@ -22,21 +22,26 @@ På [Chef-siden](https://www.skraaningen.dk/chef) vises farvede badges:
 
 ## Trin for trin
 
-### 1. Meld dig på som chefkok
+### 1. Bliv chefkok
 
-Selvom du er på et madhold, skal du aktivt melde dig som chefkok for de middage du vil stå for.
+Kokkehuen hopper ikke selv op på hovedet. Når du har aftalt med dit madhold — eller de andre chefkokke — at du tager tjansen en bestemt dag, melder du dig som chefkok i appen.
 
-**Fra middagskalenderen:**
-1. Gå til [Middagskalender](https://www.skraaningen.dk/dinner)
-2. Find en middag hvor dit hold er tildelt
-3. Klik på **Chef** under "Hvem laver maden?"
+Mangler en middag en chefkok, lyser portrættet med et stort **WANTED**, som en eftersøgt fra det vilde vesten. Du finder middagene to steder:
 
-**Eller fra chefsiden:**
-1. Gå til [Chef](https://www.skraaningen.dk/chef)
-2. Find dit madhold i oversigten
-3. Klik på **Bliv chefkok** for de dage du vil stå for
+- **Middagskalenderen** ([dinner](https://www.skraaningen.dk/dinner)) — viser alle middage
+- **Chefsiden** ([chef](https://www.skraaningen.dk/chef)) — viser middagene for de madhold du selv er på
 
-![Chef Dashboard](screenshots/chef/chef-dashboard.png)
+Klik **Bliv chefkok**, bekræft — og dit ansigt pryder portrættet. Tjansen er din.
+
+![Middagen søger en chefkok](screenshots/chef/role-wanted.png)
+*WANTED — denne middag mangler en helt*
+
+![Du er chefkok](screenshots/chef/role-assigned.png)
+*Tjansen er landet — nu er det dig der svinger grydeskeen*
+
+> **Fortrød du?** Klik **Ændre tjans** på portrættet og vælg **Meld afbud** (to klik — vi vil være helt sikre). Tjansen bliver ledig igen, WANTED-skiltet popper op, og din menu nulstilles til den næste helt.
+>
+> **På vej:** Snart kan du *bytte tjans* direkte med en anden kok — så slipper I for at lede efter en afløser.
 
 ---
 
@@ -140,4 +145,4 @@ Se dine holdmedlemmer på [Chef](https://www.skraaningen.dk/chef).
 
 ---
 
-*Sidst opdateret: Januar 2026 (udvidet køkkenpanel med husstandsopdeling)*
+*Sidst opdateret: Maj 2026 (enhver kan blive chefkok / meld afbud direkte på portrættet)*

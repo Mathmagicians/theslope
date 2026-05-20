@@ -5,8 +5,8 @@ import {
     findTeamAssignmentByTeamAndInhabitant,
     updateTeamAssignment
 } from '~~/server/data/prismaRepository'
-import { useCookingTeamValidation } from '~/composables/useCookingTeamValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
+import { useCookingTeam } from '~/composables/useCookingTeam'
 import type { DinnerEventDetail } from '~/composables/useBookingValidation'
 import type { TeamRole } from '~/composables/useCookingTeamValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
@@ -20,22 +20,15 @@ const idSchema = z.object({
 
 // ADR-001: Import schema from validation composable
 const { AssignRoleSchema } = useBookingValidation()
-const { TeamRoleSchema } = useCookingTeamValidation()
+const { decideRoleAssignmentWrites } = useCookingTeam()
 
 /**
  * Assign cooking role to team member for dinner event
  *
  * POST /api/team/cooking/[id]/assign-role
  *
- * Business Logic:
- * 1. Validate dinner event exists and has cookingTeamId
- * 2. IF role === CHEF: Update dinnerEvent.chefId = inhabitantId
- * 3. Check if CookingTeamAssignment exists for this inhabitant + team
- * 4. If exists: Update role to specified role
- * 5. If not exists: Create new assignment with specified role
- *
  * ADR Compliance:
- * - ADR-001: All database operations through repository pattern
+ * - ADR-001: All database operations through repository pattern; business logic in composable
  * - ADR-002: Separate validation + business logic try-catch
  * - ADR-004: Logging with console.info/error
  * - ADR-010: Domain types used throughout, no Prisma types in API route
@@ -59,50 +52,39 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     try {
         console.info(PREFIX, `Assigning ${assignData.role} role to inhabitant ${assignData.inhabitantId} for dinner event ${id}`)
 
-        // Step 1: Fetch dinner event to verify it exists and get cookingTeamId
         const dinnerEvent = await fetchDinnerEvent(d1Client, id)
         if (!dinnerEvent) {
             return throwH3Error(PREFIX, `Dinner event ${id} not found`, 404)
         }
-
         if (!dinnerEvent.cookingTeamId) {
             return throwH3Error(PREFIX, `Dinner event ${id} has no cooking team assigned`, 400)
         }
 
-        // Step 2: IF role is CHEF, update dinnerEvent.chefId (only CHEF gets special treatment)
-        if (assignData.role === TeamRoleSchema.enum.CHEF) {
-            await updateDinnerEvent(d1Client, id, {
-                chefId: assignData.inhabitantId
-            })
-            console.info(PREFIX, `Updated dinnerEvent.chefId to ${assignData.inhabitantId}`)
-        }
-
-        // Step 3 & 4: Check if CookingTeamAssignment exists and create/update
-        // ADR-001: Use repository functions for all database operations
-        const existingAssignment = await findTeamAssignmentByTeamAndInhabitant(
-            d1Client,
+        const plan = decideRoleAssignmentWrites(
             dinnerEvent.cookingTeamId,
-            assignData.inhabitantId
+            assignData.inhabitantId,
+            assignData.role,
+            dinnerEvent.chefId
         )
 
+        // Write 1: chef-on-dinner — set on promote, clear on demote, no-op when unchanged
+        if (plan.nextChefId !== dinnerEvent.chefId) {
+            await updateDinnerEvent(d1Client, id, { chefId: plan.nextChefId })
+            console.info(PREFIX, `Updated dinnerEvent.chefId to ${plan.nextChefId}`)
+        }
+
+        // Write 2: team-membership upsert (always)
+        const existingAssignment = await findTeamAssignmentByTeamAndInhabitant(
+            d1Client,
+            plan.assignment.cookingTeamId,
+            plan.assignment.inhabitantId
+        )
         if (existingAssignment) {
-            // Update role to specified role
-            // ADR-010: Repository handles domain types and serialization
-            await updateTeamAssignment(d1Client, existingAssignment.id!, {
-                role: assignData.role
-            })
-            console.info(`${PREFIX} Updated existing assignment ${existingAssignment.id} to ${assignData.role} role`)
+            await updateTeamAssignment(d1Client, existingAssignment.id!, { role: plan.assignment.role })
+            console.info(`${PREFIX} Updated existing assignment ${existingAssignment.id} to ${plan.assignment.role} role`)
         } else {
-            // Create new assignment with specified role
-            // ADR-010: Repository handles domain types and serialization
-            await createTeamAssignment(d1Client, {
-                cookingTeamId: dinnerEvent.cookingTeamId,
-                inhabitantId: assignData.inhabitantId,
-                role: assignData.role,
-                allocationPercentage: 100,
-                affinity: null
-            })
-            console.info(`${PREFIX} Created new ${assignData.role} assignment for inhabitant ${assignData.inhabitantId}`)
+            await createTeamAssignment(d1Client, plan.assignment)
+            console.info(`${PREFIX} Created new ${plan.assignment.role} assignment for inhabitant ${plan.assignment.inhabitantId}`)
         }
 
         console.info(`${PREFIX} Successfully assigned ${assignData.role} role to inhabitant ${assignData.inhabitantId} for dinner event ${id}`)

@@ -188,6 +188,7 @@ watch(() => props.loading, (newLoading) => {
 <template>
   <div ref="buttonRef" class="inline-block">
     <UButton
+      block
       :color="displayColor"
       :variant="displayVariant"
       :size="effectiveSize"

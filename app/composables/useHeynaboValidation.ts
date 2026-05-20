@@ -2,6 +2,15 @@ import {z} from "zod";
 import type { HouseholdCreate, InhabitantCreate, UserCreate, UserDisplay } from './useCoreValidation'
 import { useCoreValidation } from './useCoreValidation'
 
+// HN serves S3 presigned avatar URLs (1h expiry, rotating signature per call).
+// Bucket is publicly readable — strip the query so we store stable base URLs.
+const stripUrlQuery = (url: string | null): string | null => {
+    if (!url) return null
+    const parsed = new URL(url)
+    parsed.search = ''
+    return parsed.toString()
+}
+
 export const useHeynaboValidation = () => {
 
     // ========================================================================
@@ -21,7 +30,7 @@ export const useHeynaboValidation = () => {
         uiStorage: z.string().nullable(),
         role: z.string(),
         roles: z.array(z.string()).nullable().transform((v) => v ?? []),
-        avatar: z.string().url().nullable(),
+        avatar: z.string().url().nullable().transform(stripUrlQuery),
         alias: z.string().nullable(),
         locationId: z.number(),
         isFirstLogin: z.boolean(),

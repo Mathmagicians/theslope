@@ -23,6 +23,17 @@ export default defineConfig({
                     name: 'nuxt',
                     include: ['tests/component/**/*.nuxt.spec.ts'],
                     environment: 'nuxt',
+                    environmentOptions: {
+                        nuxt: {
+                            // Disable Nuxt's app manifest plugin under tests.
+                            // payload.client.js schedules `setTimeout(getAppManifest, 1000)`
+                            // on app boot — a tear-down race throws `$fetch is not defined`.
+                            // The plugin only matters for live build-staleness checks.
+                            overrides: {
+                                experimental: { appManifest: false }
+                            }
+                        }
+                    }
                 },
             }),
         ],

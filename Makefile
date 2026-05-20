@@ -385,6 +385,9 @@ heynabo-get-locations-prod: ## List all locations (prod)
 heynabo-get-nhbrs-dev: ## List all neighbors (dev)
 	$(call heynabo_call,$(ENV_local),"$$NUXT_PUBLIC_HEY_NABO_API/members/users/")
 
+heynabo-get-nhbrs-prod: ## List all neighbors (prod) - uses /admin/users/ matching import client
+	$(call heynabo_call,$(ENV_prod),"$$NUXT_PUBLIC_HEY_NABO_API/admin/users/")
+
 heynabo-nuke-test-events: ## Nuke all test events from Heynabo (patterns: Test Menu-, Updated Delicious Pasta-)
 	$(call theslope_call,$(ENV_local),$(URL_local),-X POST "$(URL_local)/api/test/heynabo/cleanup" -d '{"nuke": true}')
 
@@ -422,7 +425,7 @@ regen-dinner-events-prod: ## Regenerate dinner events (prod) - sid=seasonId
 # ============================================================================
 # TESTING
 # ============================================================================
-.PHONY: unit-test unit-test-single e2e-team e2e-season
+.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod
 
 unit-test: ## Run all unit tests
 	@npx vitest --run
@@ -435,6 +438,17 @@ e2e-team: ## Run team E2E tests
 
 e2e-season: ## Run season E2E tests
 	@npx playwright test tests/e2e/api/admin/season.e2e.spec.ts --reporter=line
+
+# Smoke macro: $(1)=env file, $(2)=BASE_URL — sources env, sets BASE_URL + SHOULD_NOT_MUTATE, runs smoke suite
+define run_smoke
+	$(call with_env,$(1),BASE_URL=$(2) SHOULD_NOT_MUTATE=true npm run test:e2e:smoke)
+endef
+
+smoke-dev: ## Run smoke tests against dev (https://dev.skraaningen.dk)
+	$(call run_smoke,$(ENV_dev),$(URL_dev))
+
+smoke-prod: ## Run smoke tests against prod (https://skraaningen.dk)
+	$(call run_smoke,$(ENV_prod),$(URL_prod))
 
 # ============================================================================
 # UTILITIES

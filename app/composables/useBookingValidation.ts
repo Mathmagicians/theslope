@@ -78,8 +78,8 @@ export const useBookingValidation = () => {
     const DinnerEventCreateSchema = DinnerEventBaseSchema
 
     /**
-     * DinnerEvent Update - For API input validation (POST /api/admin/dinner-event/[id])
-     * Note: id is optional in body since it comes from URL path
+     * DinnerEvent Update - For API input validation (POST /api/chef/dinner/[id]).
+     * Note: id is optional in body since it comes from URL path.
      */
     const DinnerEventUpdateSchema = DinnerEventBaseSchema.partial()
 
@@ -327,6 +327,10 @@ export const useBookingValidation = () => {
         inhabitantId: z.number().int().positive('Inhabitant ID must be a positive integer'),
         role: RoleSchema
     })
+
+    // Remove a role from a dinner ("Meld afbud"). dinner = route [id];
+    // inhabitantId optional, defaults to caller. Reuses AssignRoleSchema (DRY).
+    const RemoveRoleRequestSchema = AssignRoleSchema.partial({inhabitantId: true})
 
     /**
      * Order query filters (GET /api/order?...)
@@ -849,6 +853,7 @@ export const useBookingValidation = () => {
         CreateOrdersRequestSchema,
         SwapOrderRequestSchema,
         AssignRoleSchema,
+        RemoveRoleRequestSchema,
         OrderQuerySchema,
 
         // OrderHistory

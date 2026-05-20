@@ -158,4 +158,56 @@ describe('useCookingTeam', () => {
       expect(mergeInhabitantsWithAssignments([], [])).toEqual([])
     })
   })
+
+  describe('decideRoleAssignmentWrites', () => {
+    const {decideRoleAssignmentWrites} = useCookingTeam()
+    const {TeamRoleSchema} = useCookingTeamValidation()
+    const Role = TeamRoleSchema.enum
+
+    const COOKING_TEAM_ID = 7
+    const ME = 42
+    const SOMEONE_ELSE = 99
+
+    it.each([
+      // Promotion / first-time CHEF — nextChefId becomes me regardless of prior state
+      {desc: 'CHEF, dinner had no chef',          role: Role.CHEF,         currentChefId: null,         expectedNext: ME},
+      {desc: 'CHEF, I was already chef',          role: Role.CHEF,         currentChefId: ME,           expectedNext: ME},
+      {desc: 'CHEF, replacing someone else',      role: Role.CHEF,         currentChefId: SOMEONE_ELSE, expectedNext: ME},
+      // Demotion — when I am being assigned non-CHEF and I was the dinner's chef → clear
+      {desc: 'COOK, I was the chef (demote)',     role: Role.COOK,         currentChefId: ME,           expectedNext: null},
+      {desc: 'JUNIORHELPER, I was the chef',      role: Role.JUNIORHELPER, currentChefId: ME,           expectedNext: null},
+      // Non-CHEF assignment doesn't disturb someone else's chef status
+      {desc: 'COOK, someone else is chef',        role: Role.COOK,         currentChefId: SOMEONE_ELSE, expectedNext: SOMEONE_ELSE},
+      {desc: 'JUNIORHELPER, someone else is chef',role: Role.JUNIORHELPER, currentChefId: SOMEONE_ELSE, expectedNext: SOMEONE_ELSE},
+      // Non-CHEF assignment on a vacant dinner — stays vacant
+      {desc: 'COOK, dinner had no chef',          role: Role.COOK,         currentChefId: null,         expectedNext: null}
+    ])('GIVEN $desc THEN nextChefId=$expectedNext AND assignment populated', ({role, currentChefId, expectedNext}) => {
+      const plan = decideRoleAssignmentWrites(COOKING_TEAM_ID, ME, role, currentChefId)
+      expect(plan.nextChefId).toBe(expectedNext)
+      expect(plan.assignment).toEqual({
+        cookingTeamId: COOKING_TEAM_ID,
+        inhabitantId: ME,
+        role,
+        allocationPercentage: 100,
+        affinity: null
+      })
+    })
+  })
+
+  describe('isNotAssignedToMe', () => {
+    const {isNotAssignedToMe} = useCookingTeam()
+    const ME = 42
+    const someoneElse = {id: 99, name: 'Anna', lastName: 'Hansen'} as InhabitantDisplay
+    const me = {id: ME, name: 'Selv', lastName: 'Test'} as InhabitantDisplay
+
+    it.each([
+      {desc: 'no holder, I am authenticated',           holder: undefined,    myInhabitantId: ME,   expected: true},
+      {desc: 'someone else is holder',                  holder: someoneElse,  myInhabitantId: ME,   expected: true},
+      {desc: 'I am the holder',                         holder: me,           myInhabitantId: ME,   expected: false},
+      {desc: 'no holder, I am not authenticated',       holder: undefined,    myInhabitantId: null, expected: true},
+      {desc: 'someone else holds, I am unauthenticated',holder: someoneElse,  myInhabitantId: null, expected: false}
+    ])('$desc → $expected', ({holder, myInhabitantId, expected}) => {
+      expect(isNotAssignedToMe(holder, myInhabitantId)).toBe(expected)
+    })
+  })
 })

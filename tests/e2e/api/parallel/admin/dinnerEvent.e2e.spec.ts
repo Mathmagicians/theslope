@@ -8,8 +8,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
 const {validatedBrowserContext, getSessionUserInfo} = testHelpers
-const {DinnerStateSchema, DinnerModeSchema} = useBookingValidation()
-const DinnerState = DinnerStateSchema.enum
+const {DinnerModeSchema} = useBookingValidation()
 
 // Variables to store for cleanup and test data
 let testSeasonId: number
@@ -115,42 +114,6 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(ticket!.ticketPrice?.ticketType).toBe(TicketType.ADULT)
         expect(ticket!.ticketPrice?.price).toBe(5000)
         // No manual cleanup needed - cascade delete handles orders when season is deleted
-    })
-
-    test('POST can update existing dinner event with status 200', async ({browser}) => {
-        // GIVEN: An existing dinner event
-        const context = await validatedBrowserContext(browser)
-        const dinnerEventData = {
-            ...DinnerEventFactory.defaultDinnerEvent(),
-            seasonId: testSeasonId
-        }
-        const createdDinnerEvent = await DinnerEventFactory.createDinnerEvent(context, dinnerEventData)
-        expect(createdDinnerEvent.id).toBeDefined()
-
-        // WHEN: Updating the dinner event
-        const updatedData = {
-            id: createdDinnerEvent.id!,
-            menuTitle: 'Updated Menu Title',
-            menuDescription: 'Updated description',
-            state: DinnerState.ANNOUNCED
-        }
-        const updatedDinnerEvent = await DinnerEventFactory.updateDinnerEvent(
-            context,
-            createdDinnerEvent.id!,
-            updatedData
-        )
-
-        // THEN: Dinner event is updated successfully
-        expect(updatedDinnerEvent?.id).toBe(createdDinnerEvent.id)
-        expect(updatedDinnerEvent?.menuTitle).toBe(updatedData.menuTitle)
-        expect(updatedDinnerEvent?.menuDescription).toBe(updatedData.menuDescription)
-        expect(updatedDinnerEvent?.state).toBe(updatedData.state)
-
-        // AND: Changes are persisted
-        const retrievedDinnerEvent = await DinnerEventFactory.getDinnerEvent(context, createdDinnerEvent.id!)
-        expect(retrievedDinnerEvent?.menuTitle).toBe(updatedData.menuTitle)
-        expect(retrievedDinnerEvent?.menuDescription).toBe(updatedData.menuDescription)
-        expect(retrievedDinnerEvent?.state).toBe(updatedData.state)
     })
 
     test('GET /api/admin/dinner-event should return all dinner events', async ({browser}) => {

@@ -17,6 +17,9 @@ export class DinnerEventFactory {
     static readonly today = new Date()
     static readonly tomorrow = new Date(this.today.getTime() + 24 * 60 * 60 * 1000)
 
+    static readonly dinnerEventDetailPath = (dinnerEventId: number): string =>
+        `${DINNER_EVENT_ENDPOINT}/${dinnerEventId}`
+
     static readonly defaultDinnerEventData: DinnerEventCreate = {
         date: this.tomorrow,
         menuTitle: 'Test Menu',
@@ -179,7 +182,7 @@ export class DinnerEventFactory {
         const errorBody = status !== expectedStatus ? await response.text() : ''
         expect(status, `Expected status ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
 
-        if (expectedStatus === 200) {
+        if (expectedStatus === 200 || expectedStatus === 207) {
             const responseBody = await response.json()
             expect(responseBody.id).toBe(dinnerEventId)
             return responseBody
@@ -204,7 +207,7 @@ export class DinnerEventFactory {
         const errorBody = status !== expectedStatus ? await response.text() : ''
         expect(status, `Expected status ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
 
-        if (expectedStatus === 200) {
+        if (expectedStatus === 200 || expectedStatus === 207) {
             const responseBody = await response.json()
             expect(responseBody.id).toBe(dinnerEventId)
             return responseBody
@@ -274,6 +277,33 @@ export class DinnerEventFactory {
 
         if (expectedStatus === 200) {
             // ADR-010: Validate response through schema to catch deserialization issues
+            const responseBody = await response.json()
+            return DinnerEventDetailSchema.parse(responseBody)
+        }
+        return null
+    }
+
+    static readonly removeRoleFromDinnerEvent = async (
+        context: BrowserContext,
+        dinnerEventId: number,
+        inhabitantId: number,
+        role: TeamRole,
+        expectedStatus: number = 200
+    ): Promise<DinnerEventDetail | null> => {
+        const {DinnerEventDetailSchema} = useBookingValidation()
+        const response = await context.request.post(
+            `/api/team/cooking/${dinnerEventId}/remove-role`,
+            {
+                headers: headers,
+                data: { inhabitantId, role }
+            }
+        )
+
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `POST remove-role should return ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
             const responseBody = await response.json()
             return DinnerEventDetailSchema.parse(responseBody)
         }
@@ -378,5 +408,17 @@ export class DinnerEventFactory {
         const response = await context.request.get(`/api/test/heynabo/event/${heynaboEventId}`)
         expect(response.status()).toBe(200)
         return await response.json()
+    }
+
+    static readonly deleteHeynaboEvent = async (
+        context: BrowserContext,
+        heynaboEventId: number,
+        expectedGoneStatus: number = 404
+    ): Promise<void> => {
+        const deleteResponse = await context.request.delete(`/api/test/heynabo/event/${heynaboEventId}`)
+        expect(deleteResponse.status()).toBe(200)
+
+        const getResponse = await context.request.get(`/api/test/heynabo/event/${heynaboEventId}`)
+        expect(getResponse.status()).toBe(expectedGoneStatus)
     }
 }

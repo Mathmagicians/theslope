@@ -2,7 +2,8 @@
 import {describe, it, expect, vi} from 'vitest'
 import {mountSuspended, mockNuxtImport, mockComponent} from '@nuxt/test-utils/runtime'
 import ChefMenuCard from '~/components/chef/ChefMenuCard.vue'
-import {ref, h} from 'vue'
+import {ref, h, nextTick} from 'vue'
+import {flushPromises} from '@vue/test-utils'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -160,6 +161,34 @@ describe('ChefMenuCard', () => {
 
             // Should show empty selection, not crash
             expect(selector.text()).toContain('none')
+        })
+    })
+
+    describe('Menu action row (EDIT mode)', () => {
+        it('shows a labelled primary edit, secondary publish, and a quiet overflow trigger', async () => {
+            const wrapper = await createWrapper()
+
+            // Primary action is labelled (no longer a bare pencil icon)
+            expect(wrapper.find('[data-testid="edit-menu"]').text()).toContain('Rediger menu')
+            expect(wrapper.find('[name="announce-dinner"]').text()).toContain('Publicer')
+            // Overflow trigger is the quiet icon-only "..." (no label)
+            expect(wrapper.find('[data-testid="dinner-more-actions"]').exists()).toBe(true)
+        })
+
+        it('keeps the cancel-dinner action behind the overflow panel', async () => {
+            const wrapper = await createWrapper()
+
+            // Danger zone is collapsed by default - cancel action is not in the DOM
+            expect(wrapper.find('[data-testid="dinner-danger-zone"]').exists()).toBe(false)
+
+            // Opening the overflow panel reveals the danger zone
+            await wrapper.find('[data-testid="dinner-more-actions"]').trigger('click')
+            await nextTick()
+            await flushPromises()
+
+            const dangerZone = wrapper.find('[data-testid="dinner-danger-zone"]')
+            expect(dangerZone.exists()).toBe(true)
+            expect(dangerZone.text()).toContain('Aflys middagen')
         })
     })
 

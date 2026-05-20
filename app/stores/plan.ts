@@ -1,5 +1,6 @@
 import type {Season} from '~/composables/useSeasonValidation'
-import type {CookingTeamDisplay, CookingTeamDetail, CookingTeamAssignment, CookingTeamCreate, CookingTeamUpdate, CookingTeamAssignmentCreate} from '~/composables/useCookingTeamValidation'
+import type {CookingTeamDisplay, CookingTeamDetail, CookingTeamAssignment, CookingTeamCreate, CookingTeamUpdate, CookingTeamAssignmentCreate, TeamRole} from '~/composables/useCookingTeamValidation'
+import {ROLE_ICONS} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay, DinnerEventDetail} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
@@ -474,23 +475,78 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         // DINNER EVENT ACTIONS
+        const isRoleUpdating = ref(false)
         const assignRoleToDinner = async (dinnerEventId: number, inhabitantId: number, role: CookingTeamAssignment['role']): Promise<DinnerEventDetail> => {
+            isRoleUpdating.value = true
             try {
-                const roleEmoji = role === 'CHEF' ? '👨‍🍳' : role === 'COOK' ? '👥' : '🌱'
                 const updated = await $fetch<DinnerEventDetail>(`/api/team/cooking/${dinnerEventId}/assign-role`, {
                     method: 'POST',
                     body: { inhabitantId, role },
                     headers: {'Content-Type': 'application/json'}
                 })
-                console.info(`${roleEmoji} > PLAN_STORE > Assigned ${role} role to inhabitant ${inhabitantId} for dinner event ${dinnerEventId}`)
-                // Refresh selected season to get updated dinner events and team assignments
-                if (selectedSeasonId.value) {
-                    await refreshSelectedSeason()
-                }
+                console.info(`${ROLE_ICONS[role]} > PLAN_STORE > Assigned ${role} role to inhabitant ${inhabitantId} for dinner event ${dinnerEventId}`)
+                if (selectedSeasonId.value) await refreshSelectedSeason()
+                await useBookingsStore().refreshSelectedDinnerEventDetail()
+                await useUsersStore().loadMyTeams()
                 return updated
             } catch (e: unknown) {
                 handleApiError(e, 'assignRoleToDinner')
                 throw e
+            } finally {
+                isRoleUpdating.value = false
+            }
+        }
+
+        /**
+         * Volunteer the current user for a role on a dinner. Wraps assignRoleToDinner +
+         * shows the same date/team-aware toast as the auto-claim path. Returns null on error.
+         */
+        const claimRoleForMe = async (dinnerEvent: DinnerEventDetail, role: TeamRole): Promise<DinnerEventDetail | null> => {
+            const inhabitantId = authStore.inhabitantId
+            if (inhabitantId === null) return null
+            try {
+                const updated = await assignRoleToDinner(dinnerEvent.id, inhabitantId, role)
+                const {formatRoleClaimedTitle} = useCookingTeam()
+                useToast().add({title: formatRoleClaimedTitle(dinnerEvent, role), color: 'success'})
+                return updated
+            } catch { return null }
+        }
+
+        /**
+         * Withdraw the current user from a role on a dinner ("Meld afbud").
+         * Clears chef + menu + allergens server-side; 207 means the Heynabo event
+         * could not be deleted (best-effort, ADR-013). Returns null on error.
+         */
+        const resignRoleForMe = async (dinnerEvent: DinnerEventDetail, role: TeamRole): Promise<DinnerEventDetail | null> => {
+            const inhabitantId = authStore.inhabitantId
+            if (inhabitantId === null) return null
+            isRoleUpdating.value = true
+            try {
+                let heynaboSyncDegraded = false
+                const updated = await $fetch<DinnerEventDetail>(`/api/team/cooking/${dinnerEvent.id}/remove-role`, {
+                    method: 'POST',
+                    body: {inhabitantId, role},
+                    headers: {'Content-Type': 'application/json'},
+                    onResponse: ({response}) => { heynaboSyncDegraded = response.status === 207 }
+                })
+                console.info(`${ROLE_ICONS[role]} > PLAN_STORE > Removed ${role} role from inhabitant ${inhabitantId} for dinner event ${dinnerEvent.id}`)
+                if (selectedSeasonId.value) await refreshSelectedSeason()
+                await useBookingsStore().refreshSelectedDinnerEventDetail()
+                await useUsersStore().loadMyTeams()
+                useToast().add({title: 'Du har meldt afbud. Tjansen som chefkok er nu ledig.', color: 'success'})
+                if (heynaboSyncDegraded) {
+                    useToast().add({
+                        title: 'Heynabo-synkronisering fejlede',
+                        description: 'Tjansen er fjernet, men Heynabo-begivenheden kunne ikke slettes. Tjek Heynabo.',
+                        color: 'error'
+                    })
+                }
+                return updated
+            } catch (e: unknown) {
+                handleApiError(e, 'resignRoleForMe')
+                return null
+            } finally {
+                isRoleUpdating.value = false
             }
         }
 
@@ -557,7 +613,10 @@ export const usePlanStore = defineStore("Plan", () => {
             deleteTeam,
             addTeamMember,
             removeTeamMember,
-            assignRoleToDinner
+            assignRoleToDinner,
+            claimRoleForMe,
+            resignRoleForMe,
+            isRoleUpdating
         }
     }
 )
