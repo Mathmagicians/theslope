@@ -286,6 +286,10 @@ Har I skiftet mening? Åbn samme sektion og klik **Fortryd flytning** (to-klik b
 
 ## Chefkok-opgaver
 
+Mangler en middag sin chefkok, lyser portrættet med et stort **WANTED** på [middagskalenderen](https://www.skraaningen.dk/dinner) — som en eftersøgt fra det vilde vesten. Når du har aftalt med dit madhold eller de andre chefkokke at du tager dagen, klikker du **Bliv chefkok**, og tjansen er din. Fortrød du? **Ændre tjans → Meld afbud** gør pladsen ledig igen. (Og snart kan du *bytte tjans* med en anden — så ingen står alene tilbage med gryderne.)
+
+![Middagen søger en chefkok](screenshots/chef/role-wanted.png)
+
 Er du chefkok for et madhold? Se [Chefkokguiden](chef-guide.md) for vejledning til:
 
 - Sådan planlægger og annoncerer du en menu
@@ -323,4 +327,4 @@ Kontakt en administrator eller opret et issue på [GitHub](https://github.com/Ma
 
 ---
 
-*Sidst opdateret: Januar 2026 (tilføjet forhåndsvisning og tilmeldingspanel)*
+*Sidst opdateret: Maj 2026 (bliv chefkok fra middagskalenderen)*
