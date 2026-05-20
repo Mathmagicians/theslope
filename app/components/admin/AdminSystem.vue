@@ -58,6 +58,10 @@ const usersStore = useUsersStore()
 const { isImportHeynaboLoading, heynaboImport, isImportHeynaboErrored, heynaboImportError } = storeToRefs(usersStore)
 const { importHeynaboData } = usersStore
 
+// Households store - for refreshing after Heynabo import
+const householdsStore = useHouseholdsStore()
+const { loadHouseholds, refreshSelectedHousehold } = householdsStore
+
 // Bookings store - for daily maintenance and monthly billing
 const bookingsStore = useBookingsStore()
 const { isDailyMaintenanceRunning, hasDailyMaintenanceResult, hasDailyMaintenanceError, dailyMaintenanceResult, dailyMaintenanceError } = storeToRefs(bookingsStore)
@@ -90,6 +94,10 @@ const runDailyMaintenanceAndRefresh = async () => {
 const importHeynaboDataAndRefresh = async () => {
     await importHeynaboData()
     await refreshJobRuns()
+    // Heynabo import mutates households + inhabitants server-side; refresh the
+    // households store so the table reflects them without a reload.
+    await loadHouseholds()
+    await refreshSelectedHousehold()
 }
 
 const runMonthlyBillingAndRefresh = async () => {
