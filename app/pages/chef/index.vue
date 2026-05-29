@@ -67,8 +67,6 @@ const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialize
 
 // Permission helpers and date utilities
 const {isChefFor, deadlinesForSeason} = useSeason()
-const {TeamRoleSchema} = useCookingTeamValidation()
-const TeamRole = TeamRoleSchema.enum
 const authStore = useAuthStore()
 
 // Responsive breakpoint for mobile-collapsed calendar
@@ -395,16 +393,7 @@ useHead({
                 :team-number="dinnerEventDetail.cookingTeamId"
                 mode="monitor"
                 use-short-name
-            >
-              <!-- Second entry point for chef claim/swap, next to the team's chef row.
-                   Slot keeps CookingTeamCard generic; /admin/teams omits this slot. -->
-              <template #chef-action>
-                <RoleAssignment
-                    :dinner-event="dinnerEventDetail"
-                    :role="TeamRole.CHEF"
-                />
-              </template>
-            </CookingTeamCard>
+            />
             <UAlert
                 v-else
                 variant="soft"

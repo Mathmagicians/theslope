@@ -70,8 +70,8 @@ jobs:
             RELEASE_VERSION="" make version-info >> $GITHUB_OUTPUT
           fi
           cat $GITHUB_OUTPUT
-      - name: Linting
-        run: npm run lint
+      - name: Lint and typecheck
+        run: npm run pre:all
       - run: npx prisma validate
       - name: Run unit tests
         run: npm run test:unit

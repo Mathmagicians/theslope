@@ -13,18 +13,14 @@
  * │           Voksen: 60 (50 kuv.) | Barn: 30 (15 kuv.) | Baby: 10              │
  * ├──────────────────────────┬─────────────────────┬──────────────┬────────────┤
  * │   TAKEAWAY - 38%         │  SPISESAL - 33%     │SPIS SENT-19% │TIL SALG-10%│
- * │                          │                     │              │            │
  * │    40 kuv.               │     35 kuv.         │   20 kuv.    │  5 kuv.    │
- * │                          │  Voksen: 25         │  Voksen: 15  │  6 pers.   │
- * │                          │  Barn: 8 | Baby: 2  │  Barn: 4     │            │
- * │                          │  = 35               │  Baby: 1 = 20│            │
+ * │  Voksen: 30              │  Voksen: 25         │  Voksen: 15  │  Voksen: 4 │
+ * │  Barn: 6 | Baby: 4       │  Barn: 8 | Baby: 2  │  Barn: 4     │  Barn: 1   │
+ * │  # 40                    │  # 35               │  Baby: 1 # 20│  # 5       │
  * │    🌾 Maria (2)          │   🥛 Anna (3)       │  🌾 Peter    │            │
  * └──────────────────────────┴─────────────────────┴──────────────┴────────────┘
  *
- * Panel content:
- * - TAKEAWAY: % + kuverter only
- * - SPISESAL/SPIS SENT: % + kuverter + ticket breakdown (Voksen/Barn/Baby = total)
- * - TIL SALG: % + kuverter + people count
+ * Each panel: % + kuverter + ticket breakdown (Voksen/Barn/Baby + total) + allergy flags.
  */
 import type {OrderDetail} from '~/composables/useBookingValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
@@ -32,7 +28,6 @@ import type {AffectedDiner} from '~/composables/useAllergy'
 import type {DiningModeStats} from '~/composables/useOrder'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 
-// Ticket type breakdown for dine-in modes (chair planning)
 interface TicketBreakdown {
   adult: number
   child: number
@@ -40,7 +35,7 @@ interface TicketBreakdown {
   total: number
 }
 
-// Extended stats with component-specific fields (allergies, chair planning)
+// Extended stats with component-specific fields
 interface ExtendedDiningModeStats extends DiningModeStats {
   ticketBreakdown: TicketBreakdown | null
   affectedDiners: AffectedDiner[]
@@ -61,9 +56,8 @@ const {
   calculateDiningModeStats,
   calculateNormalizedWidths
 } = useOrder()
-const {TicketTypeSchema, DinnerModeSchema} = useBookingValidation()
+const {TicketTypeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
-const DinnerMode = DinnerModeSchema.enum
 const {computeAffectedDiners} = useAllergy()
 const {formatTicketCounts} = useBilling()
 const {getHouseholdForInhabitant} = useHouseholdsStore()
@@ -144,9 +138,7 @@ const diningModeStats = computed((): ExtendedDiningModeStats[] => {
   return baseStats.map(stat => {
     const modeOrders = getOrdersForMode(stat.key)
 
-    // For dine-in modes, calculate ticket breakdown for chair planning
-    const isDineIn = stat.key === DinnerMode.DINEIN || stat.key === DinnerMode.DINEINLATE
-    const ticketBreakdown = (isDineIn || stat.key === 'RELEASED') && modeOrders.length > 0
+    const ticketBreakdown = modeOrders.length > 0
       ? calculateTicketBreakdown(modeOrders)
       : null
 
@@ -218,7 +210,7 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
           {{ mode.portions }} kuv.
         </div>
 
-        <!-- Ticket breakdown for dine-in modes (chair planning) -->
+        <!-- Ticket breakdown -->
         <div v-if="mode.ticketBreakdown" :class="TYPOGRAPHY.kitchenDetail" class="flex flex-wrap justify-center gap-x-1">
           <span class="whitespace-nowrap">Voksen: {{ mode.ticketBreakdown.adult }}</span>
           <span class="whitespace-nowrap">| Barn: {{ mode.ticketBreakdown.child }}</span>

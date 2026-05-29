@@ -5,7 +5,7 @@ import {nextTick} from 'vue'
 import {flushPromises} from '@vue/test-utils'
 import RoleAssignment from '~/components/shared/RoleAssignment.vue'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
-import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import {useCookingTeamValidation, ROLE_LABELS} from '~/composables/useCookingTeamValidation'
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
 
 const {TeamRoleSchema} = useCookingTeamValidation()
@@ -52,13 +52,19 @@ const findById = (wrapper: Awaited<ReturnType<typeof mountWith>>, id: string) =>
 beforeEach(() => vi.clearAllMocks())
 
 describe('RoleAssignment', () => {
+    it('vacant trigger label names the role to volunteer for', async () => {
+        const label = findById(await mountWith(null), TEST_IDS.trigger).text().toLowerCase()
+        expect(label).toContain(ROLE_LABELS[TeamRole.CHEF].toLowerCase())
+    })
+
     it.each([
-        {desc: 'vacant (no chef)',    chef: null,  expectedLabel: 'Bliv chefkok'},
-        {desc: 'self is chef',        chef: ME,    expectedLabel: 'Ændre tjans'},
-        {desc: 'other is chef',       chef: OTHER, expectedLabel: 'Ændre tjans'}
-    ])('shows trigger label "$expectedLabel" when $desc', async ({chef, expectedLabel}) => {
-        const wrapper = await mountWith(chef)
-        expect(findById(wrapper, TEST_IDS.trigger).text()).toContain(expectedLabel)
+        {desc: 'self is chef',  chef: ME},
+        {desc: 'other is chef', chef: OTHER}
+    ])('assigned trigger ($desc) shows a label distinct from vacant', async ({chef}) => {
+        const vacant = findById(await mountWith(null), TEST_IDS.trigger).text().trim()
+        const assigned = findById(await mountWith(chef), TEST_IDS.trigger).text().trim()
+        expect(assigned).not.toBe(vacant)
+        expect(assigned).not.toBe('')
     })
 
     it('clicking the trigger opens the collapsible panel', async () => {

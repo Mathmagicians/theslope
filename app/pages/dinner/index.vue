@@ -65,8 +65,6 @@ const {user} = storeToRefs(authStore)
 
 // Booking validation and helpers
 const {formatScaffoldResult, BOOKING_TOAST_TITLES} = useBooking()
-const {TeamRoleSchema} = useCookingTeamValidation()
-const TeamRole = TeamRoleSchema.enum
 
 // Component needs to handle its own data needs
 const planStore = usePlanStore()
@@ -306,14 +304,7 @@ useHead({
             :team-number="dinnerEventDetail.cookingTeamId"
             mode="monitor"
             use-short-name
-          >
-            <template #chef-action>
-              <RoleAssignment
-                  :dinner-event="dinnerEventDetail"
-                  :role="TeamRole.CHEF"
-              />
-            </template>
-          </CookingTeamCard>
+          />
           <UAlert
             v-else
             variant="soft"

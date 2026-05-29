@@ -267,13 +267,6 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
           :ring-color="teamColor"
           class="mt-2"
         />
-        <!--
-          chef-action slot — parents that have a specific dinner-event context
-          (e.g. /chef page) can mount a <RoleAssignment role="CHEF" .../> here.
-          /admin/teams omits the slot → no button shows. Keeps CookingTeamCard
-          generic and avoids prop drilling.
-        -->
-        <slot name="chef-action" :chefs="roleGroups.CHEF" />
       </div>
 
       <!-- Cooks group -->

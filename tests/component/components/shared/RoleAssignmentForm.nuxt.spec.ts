@@ -6,6 +6,7 @@ import RoleAssignmentForm from '~/components/shared/RoleAssignmentForm.vue'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
+import {formatDate} from '~/utils/date'
 
 const {TeamRoleSchema} = useCookingTeamValidation()
 const TeamRole = TeamRoleSchema.enum
@@ -55,9 +56,14 @@ describe('RoleAssignmentForm', () => {
         expect(text).toContain('Tjansen bliver ledig igen')
     })
 
-    it('renders swap copy in swap mode', async () => {
-        const wrapper = await mountForm('swap', {chef: CHEF})
-        expect(wrapper.text()).toContain('Byt med Anna')
+    it('renders swap copy naming the chef and dinner date in swap mode', async () => {
+        const dinner = buildDinner({chef: CHEF})
+        const wrapper = await mountSuspended(RoleAssignmentForm, {
+            props: {dinnerEvent: dinner, role: TeamRole.CHEF, mode: 'swap'}
+        })
+        const text = wrapper.text()
+        expect(text).toContain(CHEF.name)
+        expect(text).toContain(formatDate(dinner.date))
     })
 
     it('omits team clause when dinner has no cookingTeam (volunteer)', async () => {
@@ -79,10 +85,9 @@ describe('RoleAssignmentForm', () => {
         expect(wrapper.emitted('submit')![0]![0]).toEqual({ours: expect.any(Number), theirs: undefined})
     })
 
-    it('emits submit {ours, theirs: []} on swap', async () => {
+    it('disables the swap action button (swap not implemented yet)', async () => {
         const wrapper = await mountForm('swap', {chef: CHEF})
-        await findById(wrapper, TEST_IDS.save).trigger('click')
-        expect(wrapper.emitted('submit')![0]![0]).toEqual({ours: expect.any(Number), theirs: []})
+        expect(findById(wrapper, TEST_IDS.save).attributes('disabled')).toBeDefined()
     })
 
     it('emits resign after the DangerButton 2-step confirm', async () => {
