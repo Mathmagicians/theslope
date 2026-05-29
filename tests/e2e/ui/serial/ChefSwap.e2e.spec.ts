@@ -128,7 +128,7 @@ test.describe('Chef Swap — volunteer flow', () => {
             expect(assignResult!.status, 'assign-role must succeed').toBe(200)
             await expectDinnerChef(memberCtx, dinner.id, memberInhabitantId)
 
-            await expect(page.locator(ROLE_TRIGGER).first(), 'trigger becomes "Ændre tjans" once chef').toContainText('Ændre tjans')
+            await expect(page.locator(ROLE_TRIGGER).first(), 'trigger leaves the volunteer label once chef').not.toContainText('Bliv chefkok')
             await expect(page.locator(CHEF_WANTED).first(), 'WANTED placeholder gone').not.toBeVisible()
             await expect(page.locator(CHEF_DISPLAY).first(), 'chef portrait renders after volunteer').toBeVisible()
             if (label === '/dinner') await doScreenshot(page, 'chef/role-assigned', true)

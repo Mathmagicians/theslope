@@ -7,13 +7,13 @@
  * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
  *
  * WorkAssignment handles the business logic for:
- * - Volunteering for cooking roles (Chef, Cook, Junior Helper)
+ * - Volunteering for cooking roles (Cook, Junior Helper)
  * - (Future) Withdrawing from assigned roles
  * - (Future) Displaying the roster/schedule for the team
  *
  * ┌──────────────────────────────────────────────────────────────────────────┐
  * │ 🍽️ Vil du hjælpe til med madlavningen?                                  │
- * │ [Bliv chefkok 👨‍🍳]  [Bliv kok 👥]  [Bliv kokkespire 🌱]                  │
+ * │ [Bliv kok 👥]  [Bliv kokkespire 🌱]                                       │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
  * Used in:
@@ -94,19 +94,6 @@ const handleRoleAssignment = async (role: typeof TeamRole[keyof typeof TeamRole]
     data-testid="work-assignment"
   >
     <div class="flex flex-wrap gap-1 md:gap-2">
-      <UButton
-        :color="COMPONENTS.heroPanel.light.primaryButton"
-        variant="solid"
-        size="md"
-        name="volunteer-chef"
-        :loading="isAssigningRole"
-        :disabled="isAssigningRole || !canVolunteer"
-        @click="handleRoleAssignment(TeamRole.CHEF)"
-      >
-        <template #leading>{{ ROLE_ICONS.CHEF }}</template>
-        Chefkok
-        <template #trailing><UIcon :name="ICONS.plusCircle" /></template>
-      </UButton>
       <UButton
         :color="COMPONENTS.heroPanel.light.primaryButton"
         variant="solid"

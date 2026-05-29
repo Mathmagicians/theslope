@@ -2,6 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-03-30
+**Updated:** 2026-05-20 — Single chef-action entry point: removed the redundant `WorkAssignment` "Bliv chefkok" button and the `CookingTeamCard #chef-action` slot; `RoleAssignment` mounts only at the `ChefMenuCard` portrait. Trigger label `Ændre tjans` → `Rediger chefkokketjans`. Team-panel chef-action revisited when swap (Phase 3b) ships.
 **Updated:** 2026-05-20 — Meld afbud refinement: Self branch gains a resign trigger (was inert); `remove-role` realigned — `CHEF_LOSS_DINNER_UPDATES` lives in `useBooking` (no new composable), `RemoveRoleRequestSchema` drops the redundant `dinnerEventId` (it is the route `[id]`); resign panel commits via `DangerButton` 2-step (destructive — clears the menu)
 **Updated:** 2026-04-30 — Phase 2 implemented; toast moved into store via `claimRoleForMe` (DRY with auto-claim); SSR-safe refresh refactor scheduled before Phase 3 (see Phase 2.5)
 **Updated:** 2026-04-28 — design refinements: client-side auto-claim, business logic in composables, plain panel buttons, copy with date+team, `IdSchema`
@@ -32,7 +33,7 @@
 ### Entry Points
 
 The trigger next to the portrait is binary: **`Bliv chefkok`** when the dinner is
-vacant, **`Ændre tjans`** when a chef is assigned. The panel sub-branches by viewer
+vacant, **`Rediger chefkokketjans`** when a chef is assigned. The panel sub-branches by viewer
 — resign (Meld afbud) when the viewer is the chef, swap when it is someone else.
 
 **Vacant — adjacent "Bliv chefkok" trigger:**
@@ -45,14 +46,14 @@ vacant, **`Ændre tjans`** when a chef is assigned. The panel sub-branches by vi
 +-----------------------------------------------+
 ```
 
-**Has a chef (self or other) — adjacent "Ændre tjans" trigger:**
+**Has a chef (self or other) — adjacent "Rediger chefkokketjans" trigger:**
 
 ```
-+-----------------------------------------------+
-|  (hat)                                        |
-|  (AH) Anna H.    [(chef-hat) Ændre tjans (v)] |
-|       Chefkok                                 |
-+-----------------------------------------------+
++----------------------------------------------------------+
+|  (hat)                                                   |
+|  (AH) Anna H.  [(chef-hat) Rediger chefkokketjans (v)]   |
+|       Chefkok                                            |
++----------------------------------------------------------+
 ```
 
 ### Vacant Claim Panel
@@ -72,7 +73,7 @@ Copy uses `dinnerEvent.date` (via `formatDate`) and `dinnerEvent.cookingTeam.nam
 
 ### Meld afbud Panel (Self)
 
-When the viewer is the dinner's chef, `Ændre tjans` opens the resign panel. Clears
+When the viewer is the dinner's chef, `Rediger chefkokketjans` opens the resign panel. Clears
 the chef + menu + allergens server-side and reverts the dinner to `SCHEDULED`.
 
 ```
@@ -254,7 +255,7 @@ RoleAssignment.vue (NEW — generic, role-agnostic)
     - default slot: portrait content
   Trigger branches (binary label):
     - Vacant      → trigger UButton "Bliv {role}" (role-icon + plus-circle)
-    - Has a chef  → trigger UButton "Ændre tjans" (role-icon + chevron-down)
+    - Has a chef  → trigger UButton "Rediger chefkokketjans" (role-icon + chevron-down)
   Panel branches (sub-mode derived from chef vs caller):
     - volunteer (vacant)        → intro + commit UButton + Fortryd
     - resign    (caller = chef) → Meld afbud copy + DangerButton 2-step + Fortryd
@@ -263,9 +264,11 @@ RoleAssignment.vue (NEW — generic, role-agnostic)
   Menu decision rendered when role === "CHEF" and ANNOUNCED (swap only).
 
 Mounted this iteration:
-  ChefMenuCard.vue      — wraps chef portrait
-  CookingTeamCard.vue   — chef row, via #chef-action slot from /chef and /dinner
+  ChefMenuCard.vue      — wraps chef portrait (single chef-action entry point)
 ```
+
+The team panel (`CookingTeamCard` / `WorkAssignment`) gains a chef-action surface
+when the swap flow (Phase 3b) ships; until then the portrait is the sole entry point.
 
 ### API
 
@@ -428,7 +431,7 @@ Tests: 8 new unit cases (`useCoreValidation.unit.spec.ts`), 8 new (`useCookingTe
 Shipped:
 - `app/components/shared/RoleAssignment.vue`: wrapper component with `UCollapsible` panel; vacant / swap branches; trigger styled with `heroPrimary` + chef icon + chevron-down rotation; `defineExpose({open})` for portrait-click. Past-dinner gate via `useSeason.isDinnerPast`. Watch on `dinnerEvent.id` closes panel on navigation.
 - `RoleAssignmentForm.vue`: dumb form, emits `submit({ours, theirs?})`; commit label adapts to volunteer vs swap (`Ja tak, jeg bliver chefkok` / `Ja tak, jeg overtager chefkok-tjansen`). `LAYOUTS.formButtonRow` for stacked-on-mobile cancel/save.
-- Mounted in `ChefMenuCard.vue` (next to portrait, ref-opened on portrait click) and `CookingTeamCard.vue` `#chef-action` slot (from `/chef` and `/dinner`).
+- Mounted in `ChefMenuCard.vue` (next to portrait, ref-opened on portrait click) — the single chef-action entry point on `/chef` and `/dinner`.
 - `useCookingTeam`: `isNotAssignedToMe(holder, myId)` predicate, `tryAutoClaim<T>(currentChefId, myId, claim)` generic auto-claim, `formatRoleClaimedTitle(dinner, role)` shared toast formatter (DRY across volunteer + auto-claim).
 - `bookings.updateDinnerEventField`: orchestrates auto-claim via `tryAutoClaim` + `withLoadingAndErrorHandler` wrappers; toast title built via `formatRoleClaimedTitle`; returns `{dinner, wasAutoClaimed}`.
 - `plan.claimRoleForMe(dinner, role)`: store-owned wrapper around `assignRoleToDinner`; shows the `formatRoleClaimedTitle` toast on success; returns `DinnerEventDetail | null`. Pages stripped of toast logic — `RoleAssignment` calls `claimRoleForMe`, pages just refresh.
@@ -459,7 +462,7 @@ Order: implement /dinner first (where bug lives), validate ChefSwap.e2e turns gr
 - `CHEF_LOSS_DINNER_UPDATES` constant in `useBooking`.
 - `RemoveRoleRequestSchema` in `useBookingValidation` (`AssignRoleSchema.partial({inhabitantId})`).
 - `POST /api/team/cooking/[id]/remove-role` + `plan.ts → resignRoleForMe`.
-- `RoleAssignment.vue` Self branch: `Ændre tjans` trigger → resign panel (Meld afbud copy + `DangerButton` 2-step).
+- `RoleAssignment.vue` Self branch: `Rediger chefkokketjans` trigger → resign panel (Meld afbud copy + `DangerButton` 2-step).
 
 ### Phase 3b — `swap` + swap panel
 
