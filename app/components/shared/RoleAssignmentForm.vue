@@ -52,7 +52,7 @@ const handleSubmit = () => {
                 <h4 :class="TYPOGRAPHY.cardTitle">
                     <template v-if="mode === 'volunteer'">Fællesspisning søger {{ roleLabel }}!</template>
                     <template v-else-if="mode === 'resign'">Meld afbud som {{ roleLabel }}</template>
-                    <template v-else>Byt med {{ dinnerEvent.chef?.name }}</template>
+                    <template v-else>Byt tjans med {{ dinnerEvent.chef?.name }} for middagen {{ formattedDate }}</template>
                 </h4>
             </div>
         </template>
@@ -92,6 +92,7 @@ const handleSubmit = () => {
                     :icon="ICONS.chef"
                     :trailing-icon="commitTrailingIcon"
                     :loading="planStore.isRoleUpdating"
+                    :disabled="isSwap"
                     data-testid="role-assignment-save"
                     @click="handleSubmit"
                 >
