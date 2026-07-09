@@ -43,7 +43,7 @@
     "db:generate-client": "npx prisma generate"
   },
   "dependencies": {
-    "@nuxt/ui": "^4.3.0",
+    "@nuxt/ui": "^4.8.0",
     "@pinia/nuxt": "^0.11.3",
     "@prisma/adapter-d1": "^6.19.1",
     "@prisma/client": "^6.19.1",
