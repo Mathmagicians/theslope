@@ -19,21 +19,31 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     const {handleApiError} = useApiHandler()
 
     // ========================================
-    // State - useFetch with status exposed internally
+    // State - useAsyncData with useRequestFetch for SSR-safe auth context (ADR-007)
+    // Using useRequestFetch ensures cookies are properly forwarded during both SSR and CSR
     // ========================================
+    const requestFetch = useRequestFetch()
 
     // AllergyTypes - Global catalog (admin managed)
+    // Only reached on protected routes (server/middleware/1.guard.ts redirects without a
+    // session), so no auth gate is needed - one fetch, identical on server and client.
     const {
         data: allergyTypes,
         status: allergyTypesStatus,
         error: allergyTypesError,
         refresh: refreshAllergyTypes
-    } = useFetch<AllergyTypeDetail[]>('/api/admin/allergy-type', {
-        key: 'allergy-store-types',
-        immediate: true,
-        watch: false,
-        default: () => []
-    })
+    } = useAsyncData<AllergyTypeDetail[]>(
+        'allergy-store-types',
+        () => requestFetch<AllergyTypeDetail[]>('/api/admin/allergy-type', {
+            onResponseError: ({response}) => {
+                console.error(`🥜 > ALLERGY_STORE > fetchAllergyTypes failed: ${response.status} ${response.statusText}`)
+                handleApiError(response._data, 'Kunne ikke hente allergi katalog')
+            }
+        }),
+        {
+            default: () => []
+        }
+    )
 
     // Selected AllergyType - For detail view/editing
     const selectedAllergyTypeId = ref<number | null>(null)
@@ -98,7 +108,10 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     // AllergyTypes status
     const isAllergyTypesLoading = computed(() => allergyTypesStatus.value === 'pending')
     const isAllergyTypesErrored = computed(() => allergyTypesStatus.value === 'error')
-    const isAllergyTypesInitialized = computed(() => allergyTypesStatus.value === 'success')
+    // ADR-007: initialized requires data to exist, not just a successful status
+    const isAllergyTypesInitialized = computed(() =>
+        allergyTypesStatus.value === 'success' && allergyTypes.value !== null
+    )
     const isNoAllergyTypes = computed(() => isAllergyTypesInitialized.value && allergyTypes.value.length === 0)
 
     // Selected AllergyType status

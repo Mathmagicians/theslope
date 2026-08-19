@@ -141,7 +141,9 @@ reintroduce the ghost-person bug class and carry the heaviest GDPR surface.
 
 ### Chef-loss tests ✅ SHIPPED
 
-- E2E (serial heynabo spec): deleted member chef on a future ANNOUNCED dinner → dinner reverts to clean SCHEDULED (menu cleared, allergens cleared, `heynaboEventId` null).
+- **Unit** (`removeChefRole.unit.spec.ts`, mocked repos — the extracted shared logic): parametrized over Heynabo outcomes (no event / deleted / delete fails → reset always happens, `heynaboSyncDegraded` flagged), empty-inhabitants short-circuit, and the exact filter (`chefIds` + `excludeStates: [CONSUMED, CANCELLED]`).
+- **API** (`inhabitant.e2e.spec.ts` — the changed endpoint + `fetchDinnerEvents` filter signature against real D1): DELETE inhabitant → their ANNOUNCED dinner reverts to clean SCHEDULED, their CONSUMED dinner keeps state and menu.
+- **E2E** (serial heynabo spec — the import path): deleted member chef on a future ANNOUNCED dinner → dinner reverts to clean SCHEDULED (menu cleared, allergens cleared, `heynaboEventId` null).
 - Endpoint regression: remove-role E2E 5/5 and Chef UI E2E 6/6 green after the refactor.
 - State filtering lives in `fetchDinnerEvents({chefIds, excludeStates})` — one filtered repository query, no duplicate fetch body.
 

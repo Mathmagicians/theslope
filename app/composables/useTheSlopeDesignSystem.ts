@@ -648,6 +648,12 @@ export const ICONS = {
     // Actions & feedback
     clipboard: 'i-heroicons-clipboard-document-list',
     edit: 'i-heroicons-pencil',
+    trash: 'i-heroicons-trash',
+    compare: 'i-heroicons-rectangle-stack',
+    document: 'i-heroicons-document-text',
+    select: 'i-heroicons-cursor-arrow-rays',
+    /** Recently added or changed - paired with COLOR.success (see ribbon.colors.new) */
+    new: 'i-heroicons-sparkles',
     chevronDown: 'i-heroicons-chevron-down',
     chevronUp: 'i-heroicons-chevron-up',
     chevronRight: 'i-heroicons-chevron-right',
