@@ -10,7 +10,7 @@ const SystemRole = SystemRoleSchema.enum
 type InhabitantData = Omit<InhabitantCreate, 'householdId'>
 
 // deleteMany/findMany with WHERE IN: D1 caps bound parameters at 100, one per id. Using 90 for safety.
-export const HEYNABO_ID_BATCH_SIZE = 90
+const HEYNABO_ID_BATCH_SIZE = 90
 
 // Curried chunk function for heynaboId arrays (used for batch deletes)
 export const chunkHeynaboIds = chunkArray<number>(HEYNABO_ID_BATCH_SIZE)

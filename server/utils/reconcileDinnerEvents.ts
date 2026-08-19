@@ -23,7 +23,7 @@ export async function reconcileDinnerEventsForSeason(
 ): Promise<ReconciliationResult> {
     const {generateDinnerEventDataForSeason, reconcileDinnerEvents} = useSeason()
 
-    const existingEvents = await fetchDinnerEvents(d1Client, season.id!)
+    const existingEvents = await fetchDinnerEvents(d1Client, {seasonId: season.id!})
     const desiredEvents = generateDinnerEventDataForSeason(season)
     const reconciliation = reconcileDinnerEvents(existingEvents)(desiredEvents)
 

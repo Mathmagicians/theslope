@@ -3,6 +3,7 @@
 import {z} from 'zod'
 import {getValidatedRouterParams, setResponseStatus} from "h3"
 import {deleteInhabitant} from "~~/server/data/prismaRepository"
+import {removeChefRoleForInhabitants} from "~~/server/utils/removeChefRole"
 import type {InhabitantDetail} from "~/composables/useCoreValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
@@ -25,6 +26,11 @@ export default defineEventHandler(async (event): Promise<InhabitantDetail> => {
 
     try {
         console.info(`🏠👤 DELETE HOUSEHOLD/INHABITANTS/[ID]  Deleting inhabitant with id ${id}`)
+        // Chef-loss first: deletion SET-NULLs chefId, which would hide their dinners
+        const dinnersReset = await removeChefRoleForInhabitants(d1Client, [id])
+        if (dinnersReset > 0) {
+            console.info(`🏠👤 DELETE HOUSEHOLD/INHABITANTS/[ID]  Reset ${dinnersReset} upcoming dinners cheffed by inhabitant ${id}`)
+        }
         const deletedInhabitant = await deleteInhabitant(d1Client, id)
         console.info(`🏠👤 DELETE HOUSEHOLD/INHABITANTS/[ID]  Successfully deleted inhabitant ${deletedInhabitant.name} ${deletedInhabitant.lastName}`)
         setResponseStatus(event, 200)

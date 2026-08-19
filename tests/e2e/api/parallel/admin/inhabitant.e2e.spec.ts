@@ -3,11 +3,14 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
 const {headers, validatedBrowserContext, pollUntil, salt, temporaryAndRandom} = testHelpers
+const {DinnerStateSchema} = useBookingValidation()
+const DinnerState = DinnerStateSchema.enum
 
 // Variables to store IDs for cleanup
 // Only track household - CASCADE will delete all inhabitants (ADR-005)
@@ -130,6 +133,46 @@ test.describe('Admin Inhabitant API', () => {
     })
 
     test.describe('Inhabitant with CookingTeamAssignments', () => {
+
+        test('DELETE should reset upcoming dinners cheffed by the inhabitant, leaving consumed dinners untouched', async ({browser}) => {
+            // GIVEN: an inhabitant cheffing an upcoming ANNOUNCED dinner and a CONSUMED one
+            const context = await validatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+            const chef = await HouseholdFactory.createInhabitantForHousehold(
+                context, testHouseholdId, salt('Chef-For-Reset-Test', testSalt)
+            )
+
+            const season = await SeasonFactory.createSeason(context)
+            createdSeasonIds.push(season.id as number)
+
+            const announcedDinner = await DinnerEventFactory.createDinnerEvent(context, {
+                seasonId: season.id,
+                state: DinnerState.ANNOUNCED,
+                menuTitle: salt('Upcoming menu', testSalt),
+                chefId: chef.id
+            })
+            const consumedMenuTitle = salt('Consumed menu', testSalt)
+            const consumedDinner = await DinnerEventFactory.createDinnerEvent(context, {
+                seasonId: season.id,
+                state: DinnerState.CONSUMED,
+                menuTitle: consumedMenuTitle,
+                chefId: chef.id
+            })
+
+            // WHEN: the inhabitant is deleted
+            await HouseholdFactory.deleteInhabitant(context, chef.id)
+
+            // THEN: the upcoming dinner is ready for a new chef
+            const reset = await DinnerEventFactory.getDinnerEvent(context, announcedDinner.id)
+            expect(reset!.state, 'Upcoming dinner reverted to SCHEDULED').toBe(DinnerState.SCHEDULED)
+            expect(reset!.menuTitle, 'Menu cleared').toBe('')
+            expect(reset!.chefId, 'Chef cleared').toBeNull()
+
+            // AND: the consumed dinner keeps its record
+            const consumed = await DinnerEventFactory.getDinnerEvent(context, consumedDinner.id)
+            expect(consumed!.state, 'Consumed dinner untouched').toBe(DinnerState.CONSUMED)
+            expect(consumed!.menuTitle, 'Consumed menu preserved').toBe(consumedMenuTitle)
+        })
 
         test('DELETE should cascade delete cooking team assignments (strong relation)', async ({browser}) => {
             // GIVEN: An inhabitant assigned to a cooking team

@@ -12,6 +12,7 @@ import type {
     DinnerEventCreate,
     DinnerEventDisplay,
     DinnerEventDetail,
+    DinnerState,
     OrderHistoryDetail,
     OrderHistoryCreate,
     OrderForTransaction,
@@ -1026,14 +1027,25 @@ export async function saveDinnerEvents(
     }
 }
 
-export async function fetchDinnerEvents(d1Client: D1Database, seasonId?: number): Promise<DinnerEventDisplay[]> {
-    console.info(`🍽️ > DINNER_EVENT > [GET] Fetching dinner events${seasonId ? ` for season ${seasonId}` : ''}`)
+export type DinnerEventFilter = {
+    seasonId?: number
+    chefIds?: number[]
+    excludeStates?: DinnerState[]
+}
+
+export async function fetchDinnerEvents(d1Client: D1Database, filter: DinnerEventFilter = {}): Promise<DinnerEventDisplay[]> {
+    const {seasonId, chefIds, excludeStates} = filter
+    console.info(`🍽️ > DINNER_EVENT > [GET] Fetching dinner events (filter: ${JSON.stringify(filter)})`)
     const prisma = await getPrismaClientConnection(d1Client)
     const {DinnerEventDisplaySchema} = useBookingValidation()
 
     try {
-        // Build where clause explicitly - field name must be specified
-        const whereClause = seasonId ? { seasonId: seasonId } : {}
+        // ADR-012: spread pattern for conditional WHERE (Prisma.skip is data-only)
+        const whereClause = {
+            ...(seasonId !== undefined && {seasonId}),
+            ...(chefIds !== undefined && {chefId: {in: chefIds}}),
+            ...(excludeStates !== undefined && {state: {notIn: excludeStates}})
+        }
 
         const dinnerEvents = await prisma.dinnerEvent.findMany({
             where: whereClause,
@@ -1051,10 +1063,10 @@ export async function fetchDinnerEvents(d1Client: D1Database, seasonId?: number)
             }
         })
 
-        console.info(`🍽️ > DINNER_EVENT > [GET] Successfully fetched ${dinnerEvents.length} dinner events${seasonId ? ` for season ${seasonId}` : ''}`)
+        console.info(`🍽️ > DINNER_EVENT > [GET] Successfully fetched ${dinnerEvents.length} dinner events`)
         return dinnerEvents.map(de => DinnerEventDisplaySchema.parse(de))
     } catch (error) {
-        return throwH3Error(`🍽️ > DINNER_EVENT > [GET]: Error fetching dinner events${seasonId ? ` for season ${seasonId}` : ''}`, error)
+        return throwH3Error(`🍽️ > DINNER_EVENT > [GET]: Error fetching dinner events`, error)
     }
 }
 

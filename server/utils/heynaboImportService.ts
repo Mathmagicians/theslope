@@ -37,6 +37,7 @@ import {
     linkUsersToInhabitants
 } from '~~/server/data/prismaRepository'
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
+import {removeChefRoleForInhabitants} from '~~/server/utils/removeChefRole'
 import {chunkArray, groupBy} from '~/utils/batchUtils'
 import {buildResolvedHouseholdMap} from '~/composables/useHousehold'
 import type {HouseholdCreate, HouseholdDisplay, InhabitantCreate, UserCreate, SystemRole} from '~/composables/useCoreValidation'
@@ -126,10 +127,15 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
 
         const inhabitantPlan = resolveInhabitantImportPlan(incomingHouseholds, updatedHouseholds)
 
-        // Delete inhabitants Heynabo no longer sends — users first, they reference the inhabitant
+        // Delete inhabitants Heynabo no longer sends — chef-loss reset first (deletion
+        // SET-NULLs chefId, which would hide their dinners), then users, then inhabitants
         let inhabitantsDeleted = 0
         let usersDeleted = 0
         if (inhabitantPlan.delete.length > 0) {
+            const dinnersReset = await removeChefRoleForInhabitants(d1Client, inhabitantPlan.delete.map(i => i.id))
+            if (dinnersReset > 0) {
+                console.info(`${LOG} Reset ${dinnersReset} upcoming dinners cheffed by deleted inhabitants`)
+            }
             const heynaboIdsToDelete = inhabitantPlan.delete.map(i => i.heynaboId)
             for (const idChunk of chunkHeynaboIds(heynaboIdsToDelete)) {
                 usersDeleted += await deleteUsersByInhabitantHeynaboId(d1Client, idChunk)

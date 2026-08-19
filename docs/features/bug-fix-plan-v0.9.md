@@ -22,7 +22,7 @@ Every bug below exists because the same logic was written more than once and the
 | One chef-loss routine | `server/utils/removeChefRole.ts` (extracted from `remove-role.post.ts`), called by every path that takes a chef off a dinner | B2 |
 | One store fetch pattern | Canonical `useAsyncData` + `useRequestFetch` pattern (reference: `plan.ts`); extract shared status-computed helper | B3, B4 |
 | One DesiredOrder builder | `buildDesiredOrder` (B1 doc) | B1 |
-| One snapshot pattern | ADR-011 live-first fallback (Transaction; extended to `DinnerEvent.chefName`; B6's Order `ticketType`) | B2, B6 |
+| One snapshot pattern | ADR-011 live-first fallback (Transaction; B6's Order `ticketType`) | B6 |
 | DRY tests | Factories + `describe.each` per [testing.md](../testing.md); no copy-paste setup | all |
 
 The store-fetch helper extracted here is the **pilot** for the M2 consistency sweep (I1/I2 in
@@ -50,19 +50,27 @@ are consulted only for the *create* bucket (`classifyInhabitantForImport`). A se
 households whose `heynaboId` lookup misses are skipped with a `warn` — their inhabitants also
 escape reconciliation.
 
-### Fix — global inhabitant reconciliation, existing deletion machinery
+### Fix — one import plan, four buckets ✅ IMPLEMENTED (2026-08-19)
 
-`Inhabitant.heynaboId` is `@unique`, so identity is global; `reconcileUsers` in the same file
-already reconciles globally — mirror it:
+`resolveInhabitantImportPlan(incomingHouseholds, existingHouseholds)` in `useHeynabo.ts`
+returns the complete lifecycle decision as `PruneAndCreateResult<InhabitantDisplay,
+InhabitantCreate>` (ADR-016: composable decides, service executes). Rules:
 
-1. Delete bucket = all existing inhabitant `heynaboId`s − all incoming member `heynaboId`s (across ALL households, siblings included).
-2. Execute with the **existing** helpers the import already calls — `deleteUsersByInhabitantHeynaboId` then `deleteInhabitantsByHeynaboId`. No new deletion logic.
-3. **Remove** the per-household delete branch (the divergent copy).
-4. Create/update buckets stay per-address (they need household routing) — unchanged.
+1. **delete** — inhabitants Heynabo no longer sends, compared globally by `heynaboId @unique` across ALL households (previous inhabitants in the moved-out household included).
+2. **create** — members unknown to TheSlope, into the address's resolved household (a future-move-in household resolves as the target when the old family is leaving).
+3. **update** — a member whose Heynabo address differs from their TheSlope address is moved to the resolved household at the Heynabo address (**same row**, so orders and allergies follow — fixes the mover unique-constraint crash); changed member data is updated in the household they live in (previous inhabitants now receive data updates too, which the per-household code never delivered).
+4. **idempotent** — at their address, unchanged; placement in the moved-out household survives.
 
-**Pre-work check:** verify no production path mints inhabitants with synthetic `heynaboId`s
-Heynabo would never send (admin household creation inherits the address's real `heynaboId`;
-the admin move flow relocates existing inhabitants). If one exists, close it first.
+The import service executes buckets: users-then-inhabitants deletes chunked via
+`chunkHeynaboIds` (ADR-014, all three delete sites), creates grouped per target household,
+updates chunked. The per-household `reconcileInhabitants` + sibling-classify machinery is
+**deleted** — no divergent copy remains.
+
+**No mass-delete guard — decided:** Heynabo is the backend; an empty member list means what
+it says and deletes every inhabitant (covered by an explicit scenario).
+
+**Synthetic `heynaboId`s — resolved by design:** any inhabitant Heynabo doesn't know is
+deleted on the next import; inhabitants exist only as reflections of Heynabo members.
 
 ### Blast radius of deleting an Inhabitant (schema-verified)
 
@@ -78,7 +86,7 @@ delete-inhabitant action. Safety is designed in at the schema level (ADR-011):
 | `DinnerEvent.chefId` | SET NULL | Dinner survives — see chef-loss + attribution below |
 | `User` | explicit delete first (existing import step) | Payer preserved in `Transaction.userSnapshot` |
 
-### Chef-loss: shared `removeChefRole` routine
+### Chef-loss: shared `removeChefRole` routine ✅ IMPLEMENTED (2026-08-19)
 
 The DB cascade only nulls `chefId` — it cannot run the business-level chef-loss handling
 that today lives **only** in `remove-role.post.ts` (delete Heynabo event best-effort, apply
@@ -99,37 +107,43 @@ Callers (all converge on the one routine):
 Applied to **future non-CONSUMED** dinners where the deleted inhabitant is chef, before the
 inhabitant delete executes.
 
-### Chef attribution on old menus: `DinnerEvent.chefName` snapshot
+### Chef attribution on past dinners — DROPPED (decided 2026-08-19)
 
-Past dinners must keep "who cooked" after the chef's inhabitant row is deleted
-(ADR-011 snapshot pattern, live-first fallback — no tombstone inhabitants):
+Past dinners lose chef attribution on deletion (`chefId → null`). Accepted because no view
+renders the chef on past dinners (chef displays exist only in the upcoming-dinner workflow),
+billing and audit already survive via `Transaction.userSnapshot`/`orderSnapshot` and
+`OrderHistory`'s denormalized columns, and duty roster (F5, `DutyHistory`) owns attribution
+history when a surface for it exists. A previous-inhabitant record was rejected: it would
+reintroduce the ghost-person bug class and carry the heaviest GDPR surface.
 
-- **Migration:** add `chefName String?` to `DinnerEvent`.
-- **Write site (single):** `assign-role` sets it alongside `chefId`.
-- **Cleared by** `CHEF_LOSS_DINNER_UPDATES` (a resigned chef didn't cook) — add `chefName: null` to the field set.
-- **NOT cleared by deletion** — `chefId` SET NULLs, the name survives on old menus.
-- **Display:** live `chef` relation → else `chefName`.
-- Duty roster (F5) later carries full attribution history; this column is the cheap interim.
+### Delete-consistency verdicts ✅ CLOSED (decided 2026-08-19, code-verified)
 
-### Delete-consistency sweep
+| Leftover | Verdict | Fact |
+|----------|---------|------|
+| Stale `DinnerEventAllergen` | No action — not deletion-specific | Identical staleness on every ordinary booking cancellation; chef-owned curation; drift is over-cautious only (deletion removes attendees, never adds allergens) |
+| `Order.bookedByUserId → null` | No action — safe by design | Schemas `.nullable()` (ADR-011); `useBooking.ts` transaction creation falls back with payer in `userSnapshot`; no component renders `bookedByUser`; path exercised monthly pre-B2 (HN user deletions) |
+| `OrderHistory.performedByUserId → null` | No action — verified | `OrderHistoryDisplay.vue` renders `performedByUser?.email ?? 'System'` |
+| Roster/emptied roles | Folds into `removeChefRole` | Member-leaves-team is a normal state roster views handle (team-swap); the only harmful case is a future chef'd dinner |
 
-Audit step: list every business-level leftover a plain cascade misses when an
-inhabitant/user is deleted, fix via the shared routine or log as follow-up. Known candidates:
+### Tests ✅ SHIPPED with the plan implementation
 
-- [ ] Stale `DinnerEventAllergen` rows derived from a deleted inhabitant's allergies (chef-facing allergen list may name an allergen no attendee has)
-- [ ] `Order.bookedByUserId → null` display fallbacks (payer shown as "—"?)
-- [ ] `OrderHistory.performedByUserId → null` rendering in audit timeline
-- [ ] Team roster views when an assignment cascade empties a role
+- **Unit** (`useHeynabo.unit.spec.ts`): 10 parametrized plan scenarios in domain language —
+  create at the Heynabo address, data update in place (active AND moved-out household),
+  previous inhabitants preserved, future move-in targeting, cross-address mover
+  (updated, never deleted), deletion from the moved-out household, whole family deleted,
+  unknown address skipped, empty Heynabo deletes all, empty plan. Plus global
+  `inhabitantPlacements` map tests (`useHousehold.nuxt.spec.ts`).
+- **E2E** (`heynabo.e2e.spec.ts`, serial — 7/7 green): old-household inhabitant + user
+  deletion (household row survives with `moveOutDate`), and the mover test — member whose
+  Heynabo address differs from their TheSlope address is moved with the same inhabitant row
+  and Heynabo data restored.
+- **Gates:** `pre:all` clean, full Vitest 2047 green.
 
-### TDD
+### Chef-loss tests ✅ SHIPPED
 
-- **Red (E2E, extends the #106 multi-household import suite):**
-  - Old family in preserved sibling household; Heynabo stops sending its members → inhabitants deleted, allergies gone from poster/catalog/household queries, **household row remains** with `moveOutDate` intact.
-  - Member still in Heynabo (in resolved OR sibling household) → untouched (idempotency).
-  - Billing: transaction with `orderSnapshot` survives the inhabitant deletion.
-  - Deleted inhabitant is chef on a future ANNOUNCED dinner → dinner reverts to clean SCHEDULED (menu cleared, allergens cleared, `heynaboEventId` null).
-  - Past CONSUMED dinner keeps `chefName` after the chef's deletion.
-- **Unit:** global reconciliation bucket function, parametrized (in resolved household / in sibling / not in DB / not in Heynabo); `removeChefRole` against dinner states (parametrized).
+- E2E (serial heynabo spec): deleted member chef on a future ANNOUNCED dinner → dinner reverts to clean SCHEDULED (menu cleared, allergens cleared, `heynaboEventId` null).
+- Endpoint regression: remove-role E2E 5/5 and Chef UI E2E 6/6 green after the refactor.
+- State filtering lives in `fetchDinnerEvents({chefIds, excludeStates})` — one filtered repository query, no duplicate fetch body.
 
 ---
 

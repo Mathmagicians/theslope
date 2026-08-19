@@ -1,13 +1,18 @@
 import {test, expect, type BrowserContext} from '@playwright/test'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {useHeynaboValidation} from '~/composables/useHeynaboValidation'
+import {useBookingValidation} from '~/composables/useBookingValidation'
 import {isInhabitantDataEqual} from '~/composables/useHeynabo'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {isAdmin, isAllergyManager} from '~/composables/usePermissions'
 import type {UserDisplay, InhabitantDisplay, HouseholdDetail} from '~/composables/useCoreValidation'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 
 const {validatedBrowserContext, saltedId, salt, headers} = testHelpers
 const {HeynaboImportResponseSchema} = useHeynaboValidation()
+const {DinnerStateSchema} = useBookingValidation()
+const DinnerState = DinnerStateSchema.enum
 
 /**
  * Heynabo Import E2E Tests
@@ -659,6 +664,51 @@ test.describe.serial('Heynabo Integration API', () => {
             expect(moved!.name, 'Member data restored from Heynabo on the move').toBe(INHABITANTS.BABYYODA.name)
             expect(result.inhabitantsUpdated, 'The move is reported as an update').toBeGreaterThanOrEqual(1)
             expect(result.sanityCheck.passed, 'No count drift between TheSlope and Heynabo').toBe(true)
+        })
+    })
+
+    /**
+     * Deleting an inhabitant only SET-NULLs DinnerEvent.chefId. The business-level chef-loss
+     * handling — Heynabo event deletion, CHEF_LOSS_DINNER_UPDATES, allergen clear — is shared
+     * with "Meld afbud" (removeChefRole) and runs for every not-yet-consumed dinner the
+     * deleted member was chef on, so the dinner is ready for a new chef.
+     */
+    test.describe('member deleted in Heynabo while chef on an upcoming dinner', () => {
+        let chefLossSeasonId: number
+
+        test.afterAll(async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            if (chefLossSeasonId) await SeasonFactory.cleanupSeasons(context, [chefLossSeasonId])
+        })
+
+        test('reverts the dinner to a clean SCHEDULED state', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const testSalt = Date.now().toString()
+
+            // GIVEN: an inhabitant unknown to Heynabo is chef on an ANNOUNCED dinner with a menu
+            const departingChef = await HouseholdFactory.createInhabitantForHousehold(
+                context, testData.householdId, `DepartingChef-${testSalt}`
+            )
+            const season = await SeasonFactory.createSeason(context)
+            chefLossSeasonId = season.id!
+            const dinner = await DinnerEventFactory.createDinnerEvent(context, {
+                seasonId: chefLossSeasonId,
+                state: DinnerState.ANNOUNCED,
+                menuTitle: salt('Chef-loss menu', testSalt),
+                chefId: departingChef.id
+            })
+
+            // WHEN: import runs (Heynabo does not know the chef → inhabitant deleted)
+            const result = await HouseholdFactory.runHeynaboImport(context)
+            expect(result.inhabitantsDeleted, 'Departing chef deleted').toBeGreaterThanOrEqual(1)
+
+            // THEN: the dinner is ready for a new chef — clean SCHEDULED, no menu, no allergens
+            const reset = await DinnerEventFactory.getDinnerEvent(context, dinner.id)
+            expect(reset!.state, 'Dinner reverted to SCHEDULED').toBe(DinnerState.SCHEDULED)
+            expect(reset!.chefId, 'Chef cleared').toBeNull()
+            expect(reset!.menuTitle, 'Menu cleared').toBe('')
+            expect(reset!.heynaboEventId, 'Heynabo event reference cleared').toBeNull()
+            expect(reset!.allergens ?? [], 'Allergens cleared').toEqual([])
         })
     })
 

@@ -1,7 +1,6 @@
 import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus} from 'h3'
-import {fetchDinnerEvent, updateDinnerEvent, updateDinnerEventAllergens} from '~~/server/data/financesRepository'
-import {deleteHeynaboEventAsSystem} from '~~/server/integration/heynabo/heynaboClient'
-import {CHEF_LOSS_DINNER_UPDATES} from '~/composables/useBooking'
+import {fetchDinnerEvent} from '~~/server/data/financesRepository'
+import {removeChefRole} from '~~/server/utils/removeChefRole'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDetail} from '~/composables/useBookingValidation'
@@ -10,7 +9,7 @@ import {isAdmin} from '~/composables/usePermissions'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {z} from 'zod'
 
-const {throwH3Error, h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 const {RemoveRoleRequestSchema, DinnerStateSchema} = useBookingValidation()
 const {TeamRoleSchema} = useCookingTeamValidation()
 const DinnerState = DinnerStateSchema.enum
@@ -26,8 +25,8 @@ const idSchema = z.object({
  *
  * POST /api/team/cooking/[id]/remove-role
  *
- * Twin of assign-role. Applies CHEF_LOSS_DINNER_UPDATES + clears allergens, reverts
- * the dinner to SCHEDULED, deletes the Heynabo event best-effort (ADR-013):
+ * Twin of assign-role. Delegates the chef-loss handling to the shared removeChefRole
+ * routine (Heynabo event delete best-effort, CHEF_LOSS_DINNER_UPDATES, allergen clear):
  * 200 on full success, 207 when the HN deletion failed.
  *
  * Authz: self-remove allowed; removing another inhabitant requires admin.
@@ -70,19 +69,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
             throw createError({statusCode: 400, message: PREFIX + `Inhabitant ${targetInhabitantId} is not the chef of dinner ${id}`})
         }
 
-        let heynaboSyncDegraded = false
-        if (dinner.heynaboEventId) {
-            try {
-                await deleteHeynaboEventAsSystem(dinner.heynaboEventId)
-            } catch (heynaboError) {
-                console.warn(h3eFromCatch(`${PREFIX}Failed to delete Heynabo event ${dinner.heynaboEventId} (non-blocking)`, heynaboError).message)
-                heynaboSyncDegraded = true
-            }
-        }
-
-        await updateDinnerEvent(d1Client, id, CHEF_LOSS_DINNER_UPDATES)
-        const updatedDinner = await updateDinnerEventAllergens(d1Client, id, [])
-        console.info(PREFIX + `Removed chef from dinner ${id}, reverted to SCHEDULED (heynaboSyncDegraded=${heynaboSyncDegraded})`)
+        const {dinner: updatedDinner, heynaboSyncDegraded} = await removeChefRole(d1Client, dinner)
         setResponseStatus(event, heynaboSyncDegraded ? 207 : 200)
         return updatedDinner
     } catch (error) {

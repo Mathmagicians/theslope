@@ -25,7 +25,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDisplay[]> =
 
     // Business logic try-catch - separate concerns
     try {
-        const dinnerEvents = await fetchDinnerEvents(d1Client, seasonId)
+        const dinnerEvents = await fetchDinnerEvents(d1Client, {seasonId})
         console.info(`🍽️ > DINNER_EVENT > [GET] Retrieved ${dinnerEvents.length} dinner events${seasonId ? ` for season ${seasonId}` : ''}`)
         setResponseStatus(event, 200)
         return dinnerEvents

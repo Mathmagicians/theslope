@@ -46,7 +46,7 @@
 | `/api/admin/household/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateHousehold() → HouseholdDetail (uses useCoreValidation, ADR-009)                            |
 | `/api/admin/household/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchHouseholds() → HouseholdDisplay[] (ADR-009)                                                 |
 | `/api/admin/household/index.put.ts` | ✅ | ✅ | ✅ | ✅ | saveHousehold() → HouseholdDetail (uses useCoreValidation, ADR-009)                              |
-| `/api/admin/household/inhabitants/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteInhabitant() → Inhabitant with deserializeInhabitant()                                     |
+| `/api/admin/household/inhabitants/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | removeChefRoleForInhabitants() (shared chef-loss reset) then deleteInhabitant() → Inhabitant     |
 | `/api/admin/household/inhabitants/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchInhabitant() → Inhabitant with deserialization                                              |
 | `/api/admin/household/inhabitants/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateInhabitant() → InhabitantUpdateResponse (ADR-015: triggers scaffoldPrebookings on preference/birthDate/householdId change). Accepts `householdId` for admin move (validates same-address via heynaboId) |
 | `/api/admin/household/inhabitants/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchInhabitants() → Inhabitant[] with deserialization                                           |
@@ -87,6 +87,7 @@
 | `/api/team/[id].get.ts` | ❌ | ✅ | |
 | `/api/team/my.get.ts` | ❌ | ✅ | |
 | `/api/team/cooking/[id]/assign-role.post.ts` | ✅ | ✅ | ✅ | ❌ | **FULLY COMPLIANT** - Uses repository functions only (ADR-001, ADR-010) |
+| `/api/team/cooking/[id]/remove-role.post.ts` | ✅ | ✅ | ✅ | ✅ | Delegates chef-loss to shared `removeChefRole` util (HN event delete best-effort, CHEF_LOSS_DINNER_UPDATES, allergen clear); 207 on degraded HN sync |
 | **Other** |
 | `/api/chefing/team.ts` | ❌ | ✅ | |
 | `/api/calendar/index.get.ts` | ❌ | ✅ | |

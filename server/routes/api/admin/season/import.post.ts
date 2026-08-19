@@ -126,7 +126,7 @@ export default defineEventHandler(async (event): Promise<SeasonImportResponse> =
         dinnerEventsCreated = reconciliation.created
 
         // Step 6: Create cooking teams with assignments (idempotent - ADR-015)
-        const dinnerEvents = await fetchDinnerEvents(d1Client, savedSeason.id!)
+        const dinnerEvents = await fetchDinnerEvents(d1Client, {seasonId: savedSeason.id!})
         const existingTeams = await fetchTeams(d1Client, savedSeason.id!)
         const {createDefaultTeamName, extractTeamNumber} = useCookingTeam()
 
