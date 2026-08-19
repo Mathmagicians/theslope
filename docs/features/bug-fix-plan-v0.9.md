@@ -2,7 +2,7 @@
 
 **Status:** Accepted
 **Date:** 2026-08-19
-**Branch:** `fix/bug-sprint-heynabo-allergies-holidays` (one branch, per-bug commits, TDD per ADR-003)
+**Branches:** B0–B2 ship from `fix/bug-sprint-heynabo-allergies-holidays`; B3–B6 follow on `fix/bug-sprint-allergies-holidays` (per-bug commits, TDD per ADR-003)
 **Parent:** [release-plan-v0.9.md](proposals/release-plan-v0.9.md)
 
 Covers B2–B5. B1 and B6 have their own docs:

@@ -99,11 +99,11 @@ Analysis, root causes, and TDD steps live in the detail docs — this table is t
 
 | Milestone | Branch | Content | Version |
 |-----------|--------|---------|---------|
-| M0 | `fix/booking-desired-order-builder` | Land in-flight: plan.ts refresh fix + B1 implementation | 0.8.3 |
-| M1 | `fix/bug-sprint-heynabo-allergies-holidays` | B2, B5, B3/B4, B6 (+ I3 hardening) | 0.8.4 |
+| M0 | `fix/bug-sprint-heynabo-allergies-holidays` | Ship in-flight work: plan.ts chef-refresh fix (B0) + B1 + B2 | 0.8.3 |
+| M1 | `fix/bug-sprint-allergies-holidays` | B3/B4, B5, B6 (+ I3 hardening) | 0.8.4 |
 | M2 | `refactor/store-fetch-consistency` | I1 + I2 consistency sweep (+ I5 docs) | 0.8.5 |
 | M3 | `feature/observability-baseline` | I4: Workers observability, health endpoint, error + job-failure alerting | 0.8.6 |
-| M4 | `feature/ad-hoc-transactions` (current) | F1 ad-hoc transactions, phased per proposal | **0.9.0** 🚀 |
+| M4 | `feature/ad-hoc-transactions` | F1 ad-hoc transactions, phased per proposal | **0.9.0** 🚀 |
 | M5 | `feature/email-notifications` | F3 email infra (outbox + provider + admin triggers) | 0.9.1 |
 | M6 | `feature/billing-archive` | F2 accountant mail + R2 billing CSV archive | 0.9.2 |
 | M7 | `feature/waitlist` | F4 claim UI, then subscribe-and-notify | 0.9.3 |
