@@ -497,9 +497,9 @@ describe('buildResolvedHouseholdMap', () => {
   })
 
   it('empty input → empty maps', () => {
-    const {resolved, siblingInhabitants} = buildResolvedHouseholdMap([])
+    const {resolved, inhabitantPlacements} = buildResolvedHouseholdMap([])
     expect(resolved.size).toBe(0)
-    expect(siblingInhabitants.size).toBe(0)
+    expect(inhabitantPlacements.size).toBe(0)
   })
 
   it('unique heynaboIds → 1:1 map unchanged', () => {
@@ -560,25 +560,30 @@ describe('buildResolvedHouseholdMap', () => {
     expect(resolved.get(30)!.id).toBe(4)
   })
 
-  it('siblingInhabitants includes inhabitants from all households at same address', () => {
-    const h1 = {...household(1, 42), inhabitants: [
-      {...HouseholdFactory.defaultInhabitantData('a'), id: 10, heynaboId: 100, householdId: 1},
-      {...HouseholdFactory.defaultInhabitantData('b'), id: 11, heynaboId: 101, householdId: 1}
-    ]}
-    const h2 = {...household(2, 42, date(2026, 6, 1)), inhabitants: [
-      {...HouseholdFactory.defaultInhabitantData('c'), id: 20, heynaboId: 200, householdId: 2}
-    ]}
-    const {siblingInhabitants} = buildResolvedHouseholdMap([h1, h2])
-
-    const lookup = siblingInhabitants.get(42)!
-    expect(lookup.size).toBe(3)
-    expect(lookup.get(100)).toEqual({householdHeynaboId: 42})
-    expect(lookup.get(101)).toEqual({householdHeynaboId: 42})
-    expect(lookup.get(200)).toEqual({householdHeynaboId: 42})
+  // Factory: minimal inhabitant shape for placement (only id, heynaboId, householdId matter)
+  const inhabitant = (testSalt: string, id: number, heynaboId: number, householdId: number) => ({
+    ...HouseholdFactory.defaultInhabitantData(testSalt), id, heynaboId, householdId
   })
 
-  it('siblingInhabitants empty for address with no inhabitants', () => {
-    const {siblingInhabitants} = buildResolvedHouseholdMap([{...household(1, 42), inhabitants: []}])
-    expect(siblingInhabitants.get(42)!.size).toBe(0)
+  it('inhabitantPlacements is global: spans sibling households AND other addresses', () => {
+    const anna = inhabitant('a', 10, 100, 1)
+    const bo = inhabitant('b', 11, 101, 1)
+    const carl = inhabitant('c', 20, 200, 2)
+    const dora = inhabitant('d', 30, 300, 3)
+    const activeAt42 = {...household(1, 42), inhabitants: [anna, bo]}
+    const siblingAt42 = {...household(2, 42, date(2026, 6, 1)), inhabitants: [carl]}
+    const activeAt77 = {...household(3, 77), inhabitants: [dora]}
+    const {inhabitantPlacements} = buildResolvedHouseholdMap([activeAt42, siblingAt42, activeAt77])
+
+    const expected = [[anna, activeAt42], [bo, activeAt42], [carl, siblingAt42], [dora, activeAt77]] as const
+    expect(inhabitantPlacements.size).toBe(expected.length)
+    for (const [person, home] of expected) {
+      expect(inhabitantPlacements.get(person.heynaboId)).toEqual({inhabitant: person, household: home})
+    }
+  })
+
+  it('inhabitantPlacements empty when households hold no inhabitants', () => {
+    const {inhabitantPlacements} = buildResolvedHouseholdMap([{...household(1, 42), inhabitants: []}])
+    expect(inhabitantPlacements.size).toBe(0)
   })
 })

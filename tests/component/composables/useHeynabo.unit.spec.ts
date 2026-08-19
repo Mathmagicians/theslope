@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { reconcileHouseholds, reconcileInhabitants, reconcileUsers, mergeHouseholdForUpdate, classifyInhabitantForImport } from '~/composables/useHeynabo'
-import type { HouseholdDisplay } from '~/composables/useCoreValidation'
+import { reconcileHouseholds, reconcileUsers, mergeHouseholdForUpdate, resolveInhabitantImportPlan } from '~/composables/useHeynabo'
+import type { HouseholdDisplay, InhabitantCreate, InhabitantDisplay } from '~/composables/useCoreValidation'
 import {
     householdReconciliationTestData,
-    inhabitantReconciliationTestData,
-    userReconciliationTestData
+    userReconciliationTestData,
+    inhabitantImportPlanScenarios
 } from '~~/tests/e2e/testDataFactories/reconciliationTestData'
 
 // Matches PruneAndCreateResult<E, I>: delete is E[], everything else is I[]
@@ -33,20 +33,6 @@ describe('useHeynabo', () => {
                 create: expected.create.heynaboIds
             }
             verifyReconciliation(result, expectedKeys, h => h.heynaboId)
-        })
-    })
-
-    describe('reconcileInhabitants', () => {
-        it('reconciles all 4 outcomes: idempotent, update, delete, create', () => {
-            const { existing, incoming, expected } = inhabitantReconciliationTestData
-            const result = reconcileInhabitants(existing)(incoming)
-            const expectedKeys = {
-                idempotent: expected.idempotent.heynaboIds,
-                update: expected.update.heynaboIds,
-                delete: expected.delete.heynaboIds,
-                create: expected.create.heynaboIds
-            }
-            verifyReconciliation(result, expectedKeys, i => i.heynaboId)
         })
     })
 
@@ -88,22 +74,18 @@ describe('useHeynabo', () => {
         })
     })
 
-    describe('classifyInhabitantForImport', () => {
-        const ADDRESS_42 = 42
-        const ADDRESS_99 = 99
+    describe('resolveInhabitantImportPlan', () => {
+        // Order-free comparisons: placements as heynaboId → target household id, deletions as a set
+        const placements = (placed: InhabitantCreate[]) => new Map(placed.map(i => [i.heynaboId, i.householdId]))
+        const expectedPlacements = (pairs: number[][]) => new Map(pairs as Array<[number, number]>)
+        const deletedHeynaboIds = (inhabitants: InhabitantDisplay[]) => new Set(inhabitants.map(i => i.heynaboId))
 
-        const makeLookup = (entries: Array<[number, number]>) =>
-            new Map(entries.map(([inhId, addrId]) => [inhId, {householdHeynaboId: addrId}]))
-
-        it.each([
-            ['not in siblings, in incoming → create', 100, ADDRESS_42, true, makeLookup([]), 'create'],
-            ['not in siblings, not in incoming → delete', 100, ADDRESS_42, false, makeLookup([]), 'delete'],
-            ['in sibling at same address, in incoming → idempotent', 100, ADDRESS_42, true, makeLookup([[100, ADDRESS_42]]), 'idempotent'],
-            ['in sibling at same address, not in incoming → delete', 100, ADDRESS_42, false, makeLookup([[100, ADDRESS_42]]), 'delete'],
-            ['in sibling at different address, in incoming → update', 100, ADDRESS_42, true, makeLookup([[100, ADDRESS_99]]), 'update'],
-            ['in sibling at different address, not in incoming → delete', 100, ADDRESS_42, false, makeLookup([[100, ADDRESS_99]]), 'delete'],
-        ])('%s', (_, inhabitantHeynaboId, addressHeynaboId, inIncoming, siblingLookup, expected) => {
-            expect(classifyInhabitantForImport(inhabitantHeynaboId, addressHeynaboId, inIncoming, siblingLookup)).toBe(expected)
+        it.each(inhabitantImportPlanScenarios)('$scenario', ({incoming, existing, expected}) => {
+            const plan = resolveInhabitantImportPlan(incoming, existing)
+            expect(placements(plan.create), 'create bucket').toEqual(expectedPlacements(expected.create))
+            expect(placements(plan.update), 'update bucket').toEqual(expectedPlacements(expected.update))
+            expect(placements(plan.idempotent), 'idempotent bucket').toEqual(expectedPlacements(expected.idempotent))
+            expect(deletedHeynaboIds(plan.delete), 'delete bucket').toEqual(new Set(expected.delete))
         })
     })
 })

@@ -1,4 +1,4 @@
-import {test, expect} from '@playwright/test'
+import {test, expect, type BrowserContext} from '@playwright/test'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {useHeynaboValidation} from '~/composables/useHeynaboValidation'
 import {isInhabitantDataEqual} from '~/composables/useHeynabo'
@@ -548,6 +548,118 @@ test.describe.serial('Heynabo Integration API', () => {
 
         // Sanity: import should pass
         expect(result.sanityCheck.passed, 'Sanity check passed').toBe(true)
+    })
+
+    /**
+     * When a family moves out and a new family moves in at the same address, the address
+     * holds two households: the old one (with moveOutDate) and the new active one.
+     *
+     * Heynabo owns inhabitants and users. Deleting a person in Heynabo must delete them in
+     * TheSlope, whichever of the two households at the address they belong to.
+     */
+    test.describe('old household at an address where a new family moved in', () => {
+
+        const getOldHousehold = () => {
+            const oldHousehold = testData.household.beforeImport.find(h => h.moveOutDate !== null)!
+            expect(oldHousehold, 'Setup: old household at the address exists').toBeDefined()
+            return oldHousehold
+        }
+
+        test('deletes an inhabitant of the old household when deleted in Heynabo', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const oldHousehold = getOldHousehold()
+
+            // GIVEN: an inhabitant in the old household that Heynabo does not have
+            const inhabitant = await HouseholdFactory.createInhabitantForHousehold(
+                context, oldHousehold.id, `Departed-${Date.now()}`
+            )
+            expect(inhabitant.householdId, 'Setup: inhabitant is in the old household').toBe(oldHousehold.id)
+
+            // WHEN: import runs
+            const result = await HouseholdFactory.runHeynaboImport(context)
+
+            // THEN: the inhabitant is gone from TheSlope
+            const response = await context.request.get(`/api/admin/household/inhabitants/${inhabitant.id}`)
+            expect(response.status(), 'Inhabitant deleted').toBe(404)
+            expect(result.inhabitantsDeleted, 'Deletion reported in import result').toBeGreaterThanOrEqual(1)
+            expect(result.sanityCheck.passed, 'No count drift between TheSlope and Heynabo').toBe(true)
+        })
+
+        test('deletes a user of the old household when deleted in Heynabo', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const oldHousehold = getOldHousehold()
+            const testSalt = Date.now().toString()
+
+            // GIVEN: an inhabitant in the old household, linked to a user, neither known to Heynabo
+            const inhabitant = await HouseholdFactory.createInhabitantForHousehold(
+                context, oldHousehold.id, `DepartedUser-${testSalt}`
+            )
+            const email = `departed-${testSalt}@test.dk`
+            const userResponse = await context.request.put('/api/admin/users', {
+                headers,
+                data: {email, phone: '+4512345678', passwordHash: 'test', systemRoles: []}
+            })
+            expect(userResponse.status(), 'Setup: user created').toBe(201)
+            const user = await userResponse.json()
+            createdUserIds.push(user.id)
+            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {userId: user.id})
+
+            // WHEN: import runs
+            await HouseholdFactory.runHeynaboImport(context)
+
+            // THEN: the user is gone from TheSlope
+            const usersResponse = await context.request.get('/api/admin/users')
+            const users: UserDisplay[] = await usersResponse.json()
+            expect(users.find(u => u.email === email), 'User deleted').toBeUndefined()
+        })
+    })
+
+    /**
+     * Heynabo owns the member's address. When the member's Heynabo address differs from their
+     * TheSlope address (the address of the household holding their inhabitant), the import
+     * moves the SAME inhabitant row to a household at the Heynabo address, so orders and
+     * allergies survive the move.
+     */
+    test.describe('member whose Heynabo address differs from their TheSlope address', () => {
+
+        // The member's inhabitant row, wherever it lives among the households at a Heynabo address
+        const findInhabitantAtHeynaboAddress = async (context: BrowserContext, addressHeynaboId: number, memberHeynaboId: number) => {
+            const households = await HouseholdFactory.getAllHouseholds(context)
+            return households
+                .filter(h => h.heynaboId === addressHeynaboId)
+                .flatMap(h => h.inhabitants ?? [])
+                .find(i => i.heynaboId === memberHeynaboId)
+        }
+
+        test('moves the inhabitant to a household at the Heynabo address, keeping the inhabitant row', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+
+            // GIVEN: Heynabo has Babyyoda at the test address; TheSlope holds their inhabitant
+            // in a household at a different address
+            const households = await HouseholdFactory.getAllHouseholds(context)
+            const householdAtDifferentAddress = households.find(h => h.heynaboId === RECREATE_HOUSEHOLD_HEYNABO_IDS[0])
+            expect(householdAtDifferentAddress, 'Setup: household at a different address exists').toBeDefined()
+
+            const babyyoda = await findInhabitantAtHeynaboAddress(context, TEST_HOUSEHOLD_HEYNABO_ID, INHABITANTS.BABYYODA.heynaboId)
+            expect(babyyoda, 'Setup: Babyyoda starts at their Heynabo address').toBeDefined()
+
+            await HouseholdFactory.deleteInhabitant(context, babyyoda!.id)
+            const driftedInhabitant = await HouseholdFactory.createInhabitantWithConfig(context, householdAtDifferentAddress!.id, {
+                heynaboId: INHABITANTS.BABYYODA.heynaboId,
+                name: `Drifted-${Date.now()}`
+            })
+
+            // WHEN: import runs
+            const result = await HouseholdFactory.runHeynaboImport(context)
+
+            // THEN: TheSlope address agrees with Heynabo again — same row, member data restored
+            const moved = await findInhabitantAtHeynaboAddress(context, TEST_HOUSEHOLD_HEYNABO_ID, INHABITANTS.BABYYODA.heynaboId)
+            expect(moved, 'Inhabitant lives in a household at their Heynabo address').toBeDefined()
+            expect(moved!.id, 'Same inhabitant row — orders and allergies follow the move').toBe(driftedInhabitant.id)
+            expect(moved!.name, 'Member data restored from Heynabo on the move').toBe(INHABITANTS.BABYYODA.name)
+            expect(result.inhabitantsUpdated, 'The move is reported as an update').toBeGreaterThanOrEqual(1)
+            expect(result.sanityCheck.passed, 'No count drift between TheSlope and Heynabo').toBe(true)
+        })
     })
 
     // Cleanup: Remove test data if tests fail before import can reconcile

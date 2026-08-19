@@ -21,7 +21,7 @@ import {importFromHeynabo} from '~~/server/integration/heynabo/heynaboClient'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {useHeynaboValidation, type HeynaboImportResponse} from '~/composables/useHeynaboValidation'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
-import {reconcileHouseholds, reconcileInhabitants, reconcileUsers, mergeHouseholdForUpdate, classifyInhabitantForImport} from '~/composables/useHeynabo'
+import {reconcileHouseholds, reconcileUsers, mergeHouseholdForUpdate, resolveInhabitantImportPlan, chunkHeynaboIds} from '~/composables/useHeynabo'
 import {
     fetchHouseholds,
     fetchUsers,
@@ -39,7 +39,7 @@ import {
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
 import {chunkArray, groupBy} from '~/utils/batchUtils'
 import {buildResolvedHouseholdMap} from '~/composables/useHousehold'
-import type {HouseholdCreate, HouseholdDisplay, UserCreate, SystemRole} from '~/composables/useCoreValidation'
+import type {HouseholdCreate, HouseholdDisplay, InhabitantCreate, UserCreate, SystemRole} from '~/composables/useCoreValidation'
 import {reconcileUserRoles, RoleOwner} from '~/composables/useUserRoles'
 
 const LOG = '🏠 > IMPORT > [HEYNABO]'
@@ -49,6 +49,7 @@ const {createHouseholdsFromImport} = useHeynaboValidation()
 // D1 limit: 100 bound parameters per query, Household ~10 fields = max 8 per batch
 const CHUNK_SIZE = 8
 const chunkHouseholds = chunkArray<{merged: HouseholdCreate, existingId: number}>(CHUNK_SIZE)
+
 
 export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string): Promise<HeynaboImportResponse> {
     const {JobType, JobStatus} = useMaintenanceValidation()
@@ -87,7 +88,9 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
         let householdsDeleted = 0
         if (householdReconciliation.delete.length > 0) {
             const heynaboIdsToDelete = householdReconciliation.delete.map(h => h.heynaboId)
-            householdsDeleted = await deleteHouseholdsByHeynaboId(d1Client, heynaboIdsToDelete)
+            for (const idChunk of chunkHeynaboIds(heynaboIdsToDelete)) {
+                householdsDeleted += await deleteHouseholdsByHeynaboId(d1Client, idChunk)
+            }
             console.info(`${LOG} Deleted ${householdsDeleted} households (moved out in Heynabo)`)
         }
 
@@ -114,81 +117,43 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
         }
         console.info(`${LOG} Updated ${householdReconciliation.update.length} households, broadcast to ${existingHouseholds.length - existingByHeynaboId.size} siblings`)
 
-        // Process inhabitants for each household
-        let inhabitantsCreated = 0
-        let inhabitantsUpdated = 0
-        let inhabitantsIdempotent = 0
+        // Refetch households to get updated IDs for newly created ones, then plan (ADR-016: decide, then execute)
+        const updatedHouseholds = await fetchHouseholds(d1Client)
+        const knownAddresses = new Set(updatedHouseholds.map(h => h.heynaboId))
+        incomingHouseholds
+            .filter(h => !knownAddresses.has(h.heynaboId))
+            .forEach(h => console.warn(`${LOG} Household with heynaboId ${h.heynaboId} not found after sync`))
+
+        const inhabitantPlan = resolveInhabitantImportPlan(incomingHouseholds, updatedHouseholds)
+
+        // Delete inhabitants Heynabo no longer sends — users first, they reference the inhabitant
         let inhabitantsDeleted = 0
         let usersDeleted = 0
-
-        // Refetch households to get updated IDs for newly created ones
-        const updatedHouseholds = await fetchHouseholds(d1Client)
-        const {resolved: householdByHeynaboId, siblingInhabitants} = buildResolvedHouseholdMap(updatedHouseholds)
-
-        for (const incomingHousehold of incomingHouseholds) {
-            const existingHousehold = householdByHeynaboId.get(incomingHousehold.heynaboId)
-            if (!existingHousehold) {
-                console.warn(`${LOG} Household with heynaboId ${incomingHousehold.heynaboId} not found after sync`)
-                continue
+        if (inhabitantPlan.delete.length > 0) {
+            const heynaboIdsToDelete = inhabitantPlan.delete.map(i => i.heynaboId)
+            for (const idChunk of chunkHeynaboIds(heynaboIdsToDelete)) {
+                usersDeleted += await deleteUsersByInhabitantHeynaboId(d1Client, idChunk)
+                inhabitantsDeleted += await deleteInhabitantsByHeynaboId(d1Client, idChunk)
             }
-
-            const existingInhabitants = existingHousehold.inhabitants
-            const incomingInhabitants = incomingHousehold.inhabitants || []
-
-            const inhabitantReconciliation = reconcileInhabitants(existingInhabitants)(incomingInhabitants)
-
-            // Delete inhabitants not in Heynabo (delete their users first)
-            if (inhabitantReconciliation.delete.length > 0) {
-                const heynaboIdsToDelete = inhabitantReconciliation.delete.map(i => i.heynaboId)
-                usersDeleted += await deleteUsersByInhabitantHeynaboId(d1Client, heynaboIdsToDelete)
-                inhabitantsDeleted += await deleteInhabitantsByHeynaboId(d1Client, heynaboIdsToDelete)
-            }
-
-            // Create bucket: check siblings for admin-moved inhabitants before creating
-            if (inhabitantReconciliation.create.length > 0) {
-                const siblingLookup = siblingInhabitants.get(incomingHousehold.heynaboId)!
-                const genuinelyNew = []
-
-                for (const incoming of inhabitantReconciliation.create) {
-                    const action = classifyInhabitantForImport(incoming.heynaboId, incomingHousehold.heynaboId, true, siblingLookup)
-                    switch (action) {
-                        case 'create':
-                            genuinelyNew.push(incoming)
-                            break
-                        case 'update':
-                            console.info(`${LOG} Inhabitant heynaboId=${incoming.heynaboId} at wrong address, updating`)
-                            await saveInhabitant(d1Client, {...incoming, user: undefined}, existingHousehold.id, true)
-                            inhabitantsUpdated++
-                            break
-                        case 'idempotent':
-                            console.info(`${LOG} Inhabitant heynaboId=${incoming.heynaboId} admin-assigned to sibling, preserving`)
-                            inhabitantsIdempotent++
-                            break
-                        case 'delete':
-                            break
-                    }
-                }
-
-                if (genuinelyNew.length > 0) {
-                    const createdIds = await createInhabitants(d1Client, genuinelyNew, existingHousehold.id)
-                    inhabitantsCreated += createdIds.length
-                }
-            }
-
-            // Update existing inhabitants in chunks
-            if (inhabitantReconciliation.update.length > 0) {
-                const chunkInhabitants = chunkArray<typeof inhabitantReconciliation.update[0]>(CHUNK_SIZE)
-                const inhabitantChunks = chunkInhabitants(inhabitantReconciliation.update)
-                for (const chunk of inhabitantChunks) {
-                    // Strip user to avoid cascade, skipRefetch for batch (ADR-014)
-                    await Promise.all(chunk.map(i => saveInhabitant(d1Client, { ...i, user: undefined }, existingHousehold.id, true)))
-                }
-                inhabitantsUpdated += inhabitantReconciliation.update.length
-            }
-
-            // Track idempotent inhabitants
-            inhabitantsIdempotent += inhabitantReconciliation.idempotent.length
+            console.info(`${LOG} Deleted ${inhabitantsDeleted} inhabitants no longer in Heynabo`)
         }
+
+        // Create per target household (Prisma auto-chunks per ADR-014)
+        let inhabitantsCreated = 0
+        const createsByHousehold = groupBy<InhabitantCreate, number>(i => i.householdId)(inhabitantPlan.create)
+        for (const [householdId, members] of createsByHousehold) {
+            const createdIds = await createInhabitants(d1Client, members, householdId)
+            inhabitantsCreated += createdIds.length
+        }
+
+        // Update in chunks — strip user to avoid cascade, skipRefetch for batch (ADR-014)
+        const chunkInhabitants = chunkArray<InhabitantCreate>(CHUNK_SIZE)
+        for (const chunk of chunkInhabitants(inhabitantPlan.update)) {
+            await Promise.all(chunk.map(({householdId, ...member}) =>
+                saveInhabitant(d1Client, {...member, user: undefined}, householdId, true)))
+        }
+        const inhabitantsUpdated = inhabitantPlan.update.length
+        const inhabitantsIdempotent = inhabitantPlan.idempotent.length
 
         // Reconcile users: existing UserDisplay (from DB) vs incoming InhabitantData (from Heynabo)
         const allUsers = await fetchUsers(d1Client)
@@ -206,7 +171,9 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
         // DELETE users whose inhabitants no longer have user role in Heynabo
         if (userReconciliation.delete.length > 0) {
             const heynaboIdsToDelete = userReconciliation.delete.map(u => u.Inhabitant!.heynaboId)
-            usersDeleted += await deleteUsersByInhabitantHeynaboId(d1Client, heynaboIdsToDelete)
+            for (const idChunk of chunkHeynaboIds(heynaboIdsToDelete)) {
+                usersDeleted += await deleteUsersByInhabitantHeynaboId(d1Client, idChunk)
+            }
             console.info(`${LOG} Deleted ${usersDeleted} orphan users (limited role in Heynabo)`)
         }
 

@@ -7,11 +7,12 @@
  * Shared between unit tests and E2E tests.
  */
 
+import { addDays } from 'date-fns'
 import { useCoreValidation } from '~/composables/useCoreValidation'
-import type { HouseholdCreate, InhabitantCreate, InhabitantDisplay, UserCreate, UserDisplay } from '~/composables/useCoreValidation'
+import type { HouseholdCreate, HouseholdDisplay, InhabitantCreate, InhabitantDisplay, UserCreate, UserDisplay } from '~/composables/useCoreValidation'
 import testHelpers from '../testHelpers'
 
-const { SystemRoleSchema, UserCreateSchema, InhabitantCreateSchema, InhabitantDisplaySchema, UserDisplaySchema } = useCoreValidation()
+const { SystemRoleSchema, UserCreateSchema, InhabitantCreateSchema, InhabitantDisplaySchema, HouseholdDisplaySchema, UserDisplaySchema } = useCoreValidation()
 const SystemRole = SystemRoleSchema.enum
 const InhabitantDataSchema = InhabitantCreateSchema.omit({ householdId: true })
 
@@ -102,7 +103,7 @@ const createInhabitantDisplayTestData = (
 ): InhabitantDisplay => InhabitantDisplaySchema.parse({
         id: heynaboId,
         heynaboId,
-        householdId: 1,
+        householdId: 1, // stamped to the real household by createHouseholdDisplayTestData
         name,
         lastName,
         pictureUrl,
@@ -114,32 +115,206 @@ const NEW_BIRTHDATE = new Date('1990-06-15')
 const OLD_PICTURE = 'https://example.com/old.jpg'
 const NEW_PICTURE = 'https://example.com/new.jpg'
 
-export const inhabitantReconciliationTestData = {
-    existing: [
-        createInhabitantDisplayTestData(101, 'Anna', 'Unchanged', null, null),
-        createInhabitantDisplayTestData(102, 'Erik', 'OldLastName', null, null),
-        createInhabitantDisplayTestData(103, 'To Be', 'Deleted', null, null),
-        createInhabitantDisplayTestData(105, 'Email', 'Changer', null, null),
-        createInhabitantDisplayTestData(106, 'Allergy', 'Manager', null, null),
-        createInhabitantDisplayTestData(107, 'Picture', 'Changer', OLD_PICTURE, null),
-        createInhabitantDisplayTestData(108, 'Birthdate', 'Changer', null, OLD_BIRTHDATE)
-    ],
-    incoming: [
-        createInhabitantTestData(101, 'Anna', 'Unchanged', null, null, createUserTestData('anna@test.dk', '+4511111111', false)),
-        createInhabitantTestData(102, 'Erik', 'NewLastName', null, null),
-        createInhabitantTestData(104, 'New', 'Person', null, null),
-        createInhabitantTestData(105, 'Email', 'Changer', null, null, createUserTestData('new-email@test.dk', '+4566666666', false)),
-        createInhabitantTestData(106, 'Allergy', 'Manager', null, null, createUserTestData('allergy@test.dk', '+4577777777', false, false)),
-        createInhabitantTestData(107, 'Picture', 'Changer', NEW_PICTURE, null),
-        createInhabitantTestData(108, 'Birthdate', 'Changer', null, NEW_BIRTHDATE)
-    ],
-    expected: {
-        idempotent: { count: 3, heynaboIds: [101, 105, 106] },
-        update: { count: 3, heynaboIds: [102, 107, 108] },
-        delete: { count: 1, heynaboIds: [103] },
-        create: { count: 1, heynaboIds: [104] }
-    }
+// ========================================================================
+// INHABITANT IMPORT PLAN TEST DATA (ADR-013)
+//
+// One plan per import. Heynabo owns member existence and address; TheSlope owns which
+// household at the address holds the inhabitant. Buckets reuse PruneAndCreateResult:
+// create/update/idempotent carry InhabitantCreate (member + target household),
+// delete carries the existing InhabitantDisplay rows Heynabo no longer sends.
+// ========================================================================
+
+const ADDRESS_A = 42
+const ADDRESS_B = 77
+
+const createHouseholdDisplayTestData = (
+    id: number,
+    heynaboId: number,
+    moveOutDate: Date | null,
+    inhabitants: InhabitantDisplay[],
+    movedInDate: Date = EXISTING_MOVED_IN
+): HouseholdDisplay => HouseholdDisplaySchema.parse({
+    id,
+    heynaboId,
+    pbsId: saltedId(id, TEST_SALT),
+    name: `Household ${id}`,
+    shortName: `H_${id}`,
+    address: `Street ${heynaboId}`,
+    movedInDate,
+    moveOutDate,
+    inhabitants: inhabitants.map(i => ({ ...i, householdId: id }))
+})
+
+/** The member as Heynabo sends them — optionally with changed Heynabo-owned data */
+const asMember = (
+    person: InhabitantDisplay,
+    changes: Partial<Pick<InhabitantDisplay, 'name' | 'lastName' | 'pictureUrl' | 'birthDate'>> = {}
+): Omit<InhabitantCreate, 'householdId'> => {
+    const sent = { ...person, ...changes }
+    return createInhabitantTestData(sent.heynaboId, sent.name, sent.lastName, sent.pictureUrl ?? null, sent.birthDate ?? null)
 }
+
+/** Heynabo's view of one address and the members living there */
+const asAddress = (heynaboId: number, members: Array<Omit<InhabitantCreate, 'householdId'>>): HouseholdCreate => ({
+    ...createHouseholdTestData(heynaboId, `Household ${heynaboId}`, `Street ${heynaboId}`),
+    inhabitants: members
+})
+
+// Address A: the active family, and the moved-out family whose household is preserved
+const ANNA = createInhabitantDisplayTestData(100, 'Anna', 'Aktiv', null, null)
+const BENT = createInhabitantDisplayTestData(101, 'Bent', 'Aktiv', null, OLD_BIRTHDATE)
+const CILLE = createInhabitantDisplayTestData(102, 'Cille', 'Fraflyttet', OLD_PICTURE, null)
+const DITTE = createInhabitantDisplayTestData(103, 'Ditte', 'Fraflyttet', null, null)
+const FREJA = createInhabitantDisplayTestData(104, 'Freja', 'Fraflyttet', null, null)
+// Address B
+const EJNAR = createInhabitantDisplayTestData(105, 'Ejnar', 'Flytter', null, null)
+const KAREN = createInhabitantDisplayTestData(106, 'Karen', 'Bliver', null, null)
+// Not in TheSlope yet
+const GORM = createInhabitantTestData(107, 'Gorm', 'Ny', null, null)
+
+const ACTIVE_AT_A = createHouseholdDisplayTestData(1, ADDRESS_A, null, [ANNA, BENT])
+const MOVEDOUT_AT_A = createHouseholdDisplayTestData(2, ADDRESS_A, EXISTING_MOVED_OUT, [CILLE, DITTE, FREJA])
+const ACTIVE_AT_B = createHouseholdDisplayTestData(3, ADDRESS_B, null, [EJNAR, KAREN])
+
+// Future move-in at address A: the old family is LEAVING (future moveOutDate, still resident);
+// the new family's household is FUTURE-MOVE-IN (future movedInDate, no moveOutDate).
+// The resolver targets the future-move-in household for members it doesn't hold yet.
+const FUTURE_MOVE_OUT = addDays(new Date(), 30)
+const FUTURE_MOVE_IN = addDays(new Date(), 31)
+const LEAVING_AT_A = createHouseholdDisplayTestData(4, ADDRESS_A, FUTURE_MOVE_OUT, [CILLE, DITTE])
+const FUTURE_MOVEIN_AT_A = createHouseholdDisplayTestData(5, ADDRESS_A, null, [], FUTURE_MOVE_IN)
+
+const ACTIVE_FAMILY_AS_SENT = [asMember(ANNA), asMember(BENT)]
+const MOVEDOUT_FAMILY_AS_SENT = [asMember(CILLE), asMember(DITTE), asMember(FREJA)]
+
+// expected pairs: [inhabitant heynaboId, target household id]
+export const inhabitantImportPlanScenarios = [
+    {
+        scenario: 'GIVEN a member unknown to TheSlope THEN they are created in the active household at their address',
+        incoming: [asAddress(ADDRESS_A, [...ACTIVE_FAMILY_AS_SENT, GORM])],
+        existing: [ACTIVE_AT_A],
+        expected: {
+            create: [[GORM.heynaboId, ACTIVE_AT_A.id]],
+            update: [],
+            idempotent: [[ANNA.heynaboId, ACTIVE_AT_A.id], [BENT.heynaboId, ACTIVE_AT_A.id]],
+            delete: []
+        }
+    },
+    {
+        scenario: 'GIVEN Heynabo changed member data THEN the inhabitant is updated in the household they live in',
+        incoming: [asAddress(ADDRESS_A, [asMember(ANNA), asMember(BENT, { lastName: 'NytEfternavn', birthDate: NEW_BIRTHDATE })])],
+        existing: [ACTIVE_AT_A],
+        expected: {
+            create: [],
+            update: [[BENT.heynaboId, ACTIVE_AT_A.id]],
+            idempotent: [[ANNA.heynaboId, ACTIVE_AT_A.id]],
+            delete: []
+        }
+    },
+    {
+        scenario: 'GIVEN previous inhabitants in the moved-out household, unchanged THEN they stay there',
+        incoming: [asAddress(ADDRESS_A, [...ACTIVE_FAMILY_AS_SENT, ...MOVEDOUT_FAMILY_AS_SENT])],
+        existing: [ACTIVE_AT_A, MOVEDOUT_AT_A],
+        expected: {
+            create: [],
+            update: [],
+            idempotent: [
+                [ANNA.heynaboId, ACTIVE_AT_A.id], [BENT.heynaboId, ACTIVE_AT_A.id],
+                [CILLE.heynaboId, MOVEDOUT_AT_A.id], [DITTE.heynaboId, MOVEDOUT_AT_A.id], [FREJA.heynaboId, MOVEDOUT_AT_A.id]
+            ],
+            delete: []
+        }
+    },
+    {
+        scenario: 'GIVEN a previous inhabitant with changed data THEN they are updated in the moved-out household, NOT moved to the active one',
+        incoming: [asAddress(ADDRESS_A, [...ACTIVE_FAMILY_AS_SENT, asMember(CILLE, { pictureUrl: NEW_PICTURE }), asMember(DITTE), asMember(FREJA)])],
+        existing: [ACTIVE_AT_A, MOVEDOUT_AT_A],
+        expected: {
+            create: [],
+            update: [[CILLE.heynaboId, MOVEDOUT_AT_A.id]],
+            idempotent: [
+                [ANNA.heynaboId, ACTIVE_AT_A.id], [BENT.heynaboId, ACTIVE_AT_A.id],
+                [DITTE.heynaboId, MOVEDOUT_AT_A.id], [FREJA.heynaboId, MOVEDOUT_AT_A.id]
+            ],
+            delete: []
+        }
+    },
+    {
+        scenario: 'GIVEN a leaving family and a future move-in household at one address THEN newcomers are created in the future-move-in household and the leaving family stays in theirs',
+        incoming: [asAddress(ADDRESS_A, [asMember(CILLE), asMember(DITTE), GORM])],
+        existing: [LEAVING_AT_A, FUTURE_MOVEIN_AT_A],
+        expected: {
+            create: [[GORM.heynaboId, FUTURE_MOVEIN_AT_A.id]],
+            update: [],
+            idempotent: [[CILLE.heynaboId, LEAVING_AT_A.id], [DITTE.heynaboId, LEAVING_AT_A.id]],
+            delete: []
+        }
+    },
+    {
+        scenario: 'GIVEN Heynabo moved a member to another address THEN they are re-homed to the active household there and NOT deleted',
+        incoming: [asAddress(ADDRESS_A, [...ACTIVE_FAMILY_AS_SENT, asMember(EJNAR)]), asAddress(ADDRESS_B, [asMember(KAREN)])],
+        existing: [ACTIVE_AT_A, ACTIVE_AT_B],
+        expected: {
+            create: [],
+            update: [[EJNAR.heynaboId, ACTIVE_AT_A.id]],
+            idempotent: [[ANNA.heynaboId, ACTIVE_AT_A.id], [BENT.heynaboId, ACTIVE_AT_A.id], [KAREN.heynaboId, ACTIVE_AT_B.id]],
+            delete: []
+        }
+    },
+    {
+        scenario: 'GIVEN a member deleted in Heynabo THEN the inhabitant is deleted — also from the moved-out household',
+        incoming: [asAddress(ADDRESS_A, [...ACTIVE_FAMILY_AS_SENT, asMember(CILLE), asMember(DITTE)])],
+        existing: [ACTIVE_AT_A, MOVEDOUT_AT_A],
+        expected: {
+            create: [],
+            update: [],
+            idempotent: [
+                [ANNA.heynaboId, ACTIVE_AT_A.id], [BENT.heynaboId, ACTIVE_AT_A.id],
+                [CILLE.heynaboId, MOVEDOUT_AT_A.id], [DITTE.heynaboId, MOVEDOUT_AT_A.id]
+            ],
+            delete: [FREJA.heynaboId]
+        }
+    },
+    {
+        scenario: 'GIVEN the whole moved-out family deleted in Heynabo THEN all are deleted and the active family is untouched',
+        incoming: [asAddress(ADDRESS_A, ACTIVE_FAMILY_AS_SENT)],
+        existing: [ACTIVE_AT_A, MOVEDOUT_AT_A],
+        expected: {
+            create: [],
+            update: [],
+            idempotent: [[ANNA.heynaboId, ACTIVE_AT_A.id], [BENT.heynaboId, ACTIVE_AT_A.id]],
+            delete: [CILLE.heynaboId, DITTE.heynaboId, FREJA.heynaboId]
+        }
+    },
+    {
+        scenario: 'GIVEN an address TheSlope does not hold yet THEN its members are not routed (households are created before the plan)',
+        incoming: [asAddress(ADDRESS_A, ACTIVE_FAMILY_AS_SENT), asAddress(999, [GORM])],
+        existing: [ACTIVE_AT_A],
+        expected: {
+            create: [],
+            update: [],
+            idempotent: [[ANNA.heynaboId, ACTIVE_AT_A.id], [BENT.heynaboId, ACTIVE_AT_A.id]],
+            delete: []
+        }
+    },
+    {
+        scenario: 'GIVEN Heynabo sends no members THEN every inhabitant is deleted (Heynabo is the backend)',
+        incoming: [asAddress(ADDRESS_A, [])],
+        existing: [ACTIVE_AT_A, MOVEDOUT_AT_A],
+        expected: {
+            create: [],
+            update: [],
+            idempotent: [],
+            delete: [ANNA.heynaboId, BENT.heynaboId, CILLE.heynaboId, DITTE.heynaboId, FREJA.heynaboId]
+        }
+    },
+    {
+        scenario: 'GIVEN nothing on either side THEN the plan is empty',
+        incoming: [],
+        existing: [],
+        expected: { create: [], update: [], idempotent: [], delete: [] }
+    }
+]
 
 // ========================================================================
 // USER RECONCILIATION TEST DATA

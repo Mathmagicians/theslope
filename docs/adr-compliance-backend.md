@@ -96,7 +96,7 @@
 | `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ✅ | CSV import with ADR-002 separate try-catch, uses useBillingValidation composable                 |
 | `/api/admin/billing/current-period.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchUnbilledTransactions() → TransactionDisplay[], "virtual" billing period for admin economy   |
 | `/api/admin/billing/invoices/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTransactionsForInvoice() → TransactionDisplay[], lazy loading for tree view                 |
-| **Admin - Heynabo** | | | | | **✅ COMPLIANT (2026-04-28)** - User UPDATE bucket re-keyed by `Inhabitant.heynaboId` (stable identity); HN email/phone changes update existing row, never email-keyed upsert (prevents Rose Marie duplicate-user bug). |
+| **Admin - Heynabo** | | | | | **✅ COMPLIANT (2026-08-19)** - Inhabitant DELETE reconciles globally (all existing vs all incoming) per ADR-013 lifecycle, so members of the old household at a shared address are deleted when removed from HN. User UPDATE bucket re-keyed by `Inhabitant.heynaboId` (stable identity); HN email/phone changes update existing row, never email-keyed upsert. |
 | `/api/admin/heynabo/import.get.ts` | ✅ | ✅ | ✅ | ✅ | GET endpoint with proper business logic try-catch, uses transformation functions from composable |
 | **Authorization Infrastructure** | | | | | **✅ COMPLIANT (2025-12-23)** - Route-level + resource-level authorization                       |
 | `server/middleware/2.authorize.ts` | N/A | N/A | N/A | ✅ | Route-level authorization middleware, uses `usePermissions` composable                           |
