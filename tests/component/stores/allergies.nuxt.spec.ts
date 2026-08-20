@@ -16,9 +16,11 @@ import { useAllergiesStore } from '~/stores/allergies'
 const allergyTypesEndpoint = vi.fn()
 const allergyTypeByIdEndpoint = vi.fn()
 const allergiesEndpoint = vi.fn()
+const allergyByIdEndpoint = vi.fn()
 
 registerEndpoint('/api/admin/allergy-type/1', allergyTypeByIdEndpoint)
 registerEndpoint('/api/admin/allergy-type', allergyTypesEndpoint)
+registerEndpoint('/api/household/allergy/1', allergyByIdEndpoint)
 registerEndpoint('/api/household/allergy', allergiesEndpoint)
 
 // ========================================
@@ -145,5 +147,59 @@ describe('Allergies Store - Allergies (Household/Inhabitant)', () => {
         const created = await store.createAllergy(newAllergy)
 
         expect(created).toBeDefined()
+    })
+})
+
+// The allergy-type catalog embeds inhabitants per type (admin counts, PDF poster).
+// Every allergy mutation must refresh BOTH caches, or /admin/allergies shows stale data
+// until a hard page refresh.
+describe('Allergies Store - cache coherence between allergies and the catalog', () => {
+    beforeEach(() => {
+        clearNuxtData()
+        vi.clearAllMocks()
+
+        allergyTypesEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypes())
+        allergyTypeByIdEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypes()[0])
+        allergiesEndpoint.mockReturnValue(AllergyFactory.createMockAllergies())
+        allergyByIdEndpoint.mockReturnValue(AllergyFactory.createMockAllergies()[0])
+    })
+
+    it.each([
+        {
+            mutation: 'createAllergy',
+            act: (store: ReturnType<typeof useAllergiesStore>) =>
+                store.createAllergy({inhabitantId: 1, allergyTypeId: 2, inhabitantComment: 'Mild'})
+        },
+        {
+            mutation: 'updateAllergy',
+            act: (store: ReturnType<typeof useAllergiesStore>) =>
+                store.updateAllergy(1, {allergyTypeId: 2, inhabitantComment: 'Worse'})
+        },
+        {
+            mutation: 'deleteAllergy',
+            act: (store: ReturnType<typeof useAllergiesStore>) => store.deleteAllergy(1)
+        }
+    ])('$mutation refetches the allergy-type catalog', async ({act}) => {
+        const store = await setupStore()
+        store.loadAllergiesForInhabitant(1)
+        await new Promise(resolve => setTimeout(resolve, 0))
+        const catalogFetchesBefore = allergyTypesEndpoint.mock.calls.length
+
+        await act(store)
+
+        expect(allergyTypesEndpoint.mock.calls.length, 'catalog refetched after the mutation')
+            .toBeGreaterThan(catalogFetchesBefore)
+    })
+
+    it('deleteAllergyType refetches household allergies (CASCADE removes their rows)', async () => {
+        const store = await setupStore()
+        store.loadAllergiesForInhabitant(1)
+        await new Promise(resolve => setTimeout(resolve, 0))
+        const allergyFetchesBefore = allergiesEndpoint.mock.calls.length
+
+        await store.deleteAllergyType(1)
+
+        expect(allergiesEndpoint.mock.calls.length, 'household allergies refetched after cascade')
+            .toBeGreaterThan(allergyFetchesBefore)
     })
 })

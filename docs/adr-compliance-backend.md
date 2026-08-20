@@ -46,7 +46,7 @@
 | `/api/admin/household/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateHousehold() → HouseholdDetail (uses useCoreValidation, ADR-009)                            |
 | `/api/admin/household/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchHouseholds() → HouseholdDisplay[] (ADR-009)                                                 |
 | `/api/admin/household/index.put.ts` | ✅ | ✅ | ✅ | ✅ | saveHousehold() → HouseholdDetail (uses useCoreValidation, ADR-009)                              |
-| `/api/admin/household/inhabitants/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteInhabitant() → Inhabitant with deserializeInhabitant()                                     |
+| `/api/admin/household/inhabitants/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | removeChefRoleForInhabitants() (shared chef-loss reset) then deleteInhabitant() → Inhabitant     |
 | `/api/admin/household/inhabitants/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchInhabitant() → Inhabitant with deserialization                                              |
 | `/api/admin/household/inhabitants/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateInhabitant() → InhabitantUpdateResponse (ADR-015: triggers scaffoldPrebookings on preference/birthDate/householdId change). Accepts `householdId` for admin move (validates same-address via heynaboId) |
 | `/api/admin/household/inhabitants/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchInhabitants() → Inhabitant[] with deserialization                                           |
@@ -87,6 +87,7 @@
 | `/api/team/[id].get.ts` | ❌ | ✅ | |
 | `/api/team/my.get.ts` | ❌ | ✅ | |
 | `/api/team/cooking/[id]/assign-role.post.ts` | ✅ | ✅ | ✅ | ❌ | **FULLY COMPLIANT** - Uses repository functions only (ADR-001, ADR-010) |
+| `/api/team/cooking/[id]/remove-role.post.ts` | ✅ | ✅ | ✅ | ✅ | Delegates chef-loss to shared `removeChefRole` util (HN event delete best-effort, CHEF_LOSS_DINNER_UPDATES, allergen clear); 207 on degraded HN sync |
 | **Other** |
 | `/api/chefing/team.ts` | ❌ | ✅ | |
 | `/api/calendar/index.get.ts` | ❌ | ✅ | |
@@ -96,7 +97,7 @@
 | `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ✅ | CSV import with ADR-002 separate try-catch, uses useBillingValidation composable                 |
 | `/api/admin/billing/current-period.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchUnbilledTransactions() → TransactionDisplay[], "virtual" billing period for admin economy   |
 | `/api/admin/billing/invoices/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTransactionsForInvoice() → TransactionDisplay[], lazy loading for tree view                 |
-| **Admin - Heynabo** | | | | | **✅ COMPLIANT (2026-04-28)** - User UPDATE bucket re-keyed by `Inhabitant.heynaboId` (stable identity); HN email/phone changes update existing row, never email-keyed upsert (prevents Rose Marie duplicate-user bug). |
+| **Admin - Heynabo** | | | | | **✅ COMPLIANT (2026-08-19)** - Inhabitant DELETE reconciles globally (all existing vs all incoming) per ADR-013 lifecycle, so members of the old household at a shared address are deleted when removed from HN. User UPDATE bucket re-keyed by `Inhabitant.heynaboId` (stable identity); HN email/phone changes update existing row, never email-keyed upsert. |
 | `/api/admin/heynabo/import.get.ts` | ✅ | ✅ | ✅ | ✅ | GET endpoint with proper business logic try-catch, uses transformation functions from composable |
 | **Authorization Infrastructure** | | | | | **✅ COMPLIANT (2025-12-23)** - Route-level + resource-level authorization                       |
 | `server/middleware/2.authorize.ts` | N/A | N/A | N/A | ✅ | Route-level authorization middleware, uses `usePermissions` composable                           |

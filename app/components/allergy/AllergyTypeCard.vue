@@ -2,24 +2,18 @@
 import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
 
 // Design system
-const { COLOR, COMPONENTS, SIZES, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { COLOR, COMPONENTS, SIZES, LAYOUTS, BUTTONS, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
-// Households store for shortName lookup
-const householdsStore = useHouseholdsStore()
-const {households} = storeToRefs(householdsStore)
-
-// Helper to get household shortName from householdId
-const getHouseholdShortName = (householdId: number) => {
-  const household = households.value.find(h => h.id === householdId)
-  return household?.shortName ?? ''
-}
-
-// PROPS
+// PROPS - allergyType absent in edit mode means CREATE.
+// householdShortNames is supplied by the parent (ADR-007: no server data in this card).
 const props = defineProps<{
-  allergyType: AllergyTypeDetail
+  allergyType?: AllergyTypeDetail
   mode?: 'view' | 'edit'
   compact?: boolean
+  householdShortNames?: Record<number, string>
 }>()
+
+const getHouseholdShortName = (householdId: number) => props.householdShortNames?.[householdId] ?? ''
 
 // EMITS
 const emit = defineEmits<{
@@ -27,20 +21,18 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
-// FORM STATE (edit mode only)
-const formData = ref({
-  name: props.allergyType.name,
-  description: props.allergyType.description,
-  icon: props.allergyType.icon
+// FORM STATE (edit mode only) - empty when creating
+const resetForm = () => ({
+  name: props.allergyType?.name ?? '',
+  description: props.allergyType?.description ?? '',
+  icon: props.allergyType?.icon ?? undefined
 })
 
+const formData = ref(resetForm())
+
 // Watch for allergyType changes to update form
-watch(() => props.allergyType, (newValue) => {
-  formData.value = {
-    name: newValue.name,
-    description: newValue.description,
-    icon: newValue.icon
-  }
+watch(() => props.allergyType, () => {
+  formData.value = resetForm()
 })
 
 // HANDLERS
@@ -53,18 +45,15 @@ const handleSave = () => {
 }
 
 const handleCancel = () => {
-  formData.value = {
-    name: props.allergyType.name,
-    description: props.allergyType.description,
-    icon: props.allergyType.icon
-  }
+  formData.value = resetForm()
   emit('cancel')
 }
 
 // COMPUTED
-const inhabitantCount = computed(() => props.allergyType.inhabitants?.length || 0)
+const isCreate = computed(() => !props.allergyType)
+const inhabitantCount = computed(() => props.allergyType?.inhabitants?.length || 0)
 const hasRecentAllergies = computed(() =>
-    props.allergyType.inhabitants?.some(i => isNew(i.allergyUpdatedAt)) || false
+    props.allergyType?.inhabitants?.some(i => isNew(i.allergyUpdatedAt)) || false
 )
 
 // Random fun empty state message from design system
@@ -73,14 +62,15 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
 
 <template>
   <!-- EDIT MODE -->
-  <div v-if="mode === 'edit'" class="space-y-4 max-w-2xl">
-    <h3 class="text-md font-semibold">Rediger allergi</h3>
+  <div v-if="mode === 'edit'" data-testid="allergy-type-form" class="w-full max-w-2xl space-y-4">
+    <h3 class="text-md font-semibold">{{ isCreate ? 'Opret allergi' : 'Rediger allergi' }}</h3>
 
     <UFormField label="Navn" required>
       <UInput
           v-model="formData.name"
           placeholder="F.eks. Jordnødder"
           name="allergy-name"
+          class="w-full"
       />
     </UFormField>
 
@@ -89,6 +79,7 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
           v-model="formData.icon"
           placeholder="F.eks. 🥜"
           name="allergy-icon"
+          class="w-full"
       />
     </UFormField>
 
@@ -98,31 +89,33 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
           placeholder="Beskriv allergien..."
           name="allergy-description"
           :rows="3"
+          class="w-full"
       />
     </UFormField>
 
-    <div class="flex gap-2">
+    <div :class="LAYOUTS.formButtonRow">
       <UButton
-          color="primary"
-          :disabled="!formData.name || !formData.description"
-          name="save-allergy-type"
-          @click="handleSave"
-      >
-        Gem
-      </UButton>
-      <UButton
-          color="neutral"
-          variant="outline"
-          name="cancel-allergy-type"
+          v-bind="BUTTONS.cancel"
+          :class="LAYOUTS.cardActionButton"
+          data-testid="cancel-allergy-type"
           @click="handleCancel"
       >
         Annuller
+      </UButton>
+      <UButton
+          v-bind="BUTTONS.save"
+          :class="LAYOUTS.cardActionButton"
+          :disabled="!formData.name || !formData.description"
+          data-testid="save-allergy-type"
+          @click="handleSave"
+      >
+        Gem
       </UButton>
     </div>
   </div>
 
   <!-- COMPACT VIEW -->
-  <div v-else-if="compact" class="flex items-center gap-3 p-3">
+  <div v-else-if="allergyType && compact" class="flex items-center gap-3 p-3">
     <!-- Icon -->
     <div class="flex items-center justify-center w-10 h-10 rounded-full ring-1 md:ring-2 ring-red-700 flex-shrink-0">
       <UIcon
@@ -139,7 +132,7 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
     <div class="flex-1 min-w-0">
       <div class="flex items-center gap-2">
         <h4 class="font-medium text-sm">{{ allergyType.name }}</h4>
-        <span v-if="hasRecentAllergies" class="text-xs">🆕</span>
+        <UIcon v-if="hasRecentAllergies" :name="ICONS.new" :class="COMPONENTS.rowIconClass"/>
       </div>
       <p class="text-xs text-gray-600 dark:text-gray-400">
         {{ inhabitantCount }} beboer{{ inhabitantCount !== 1 ? 'e' : '' }}
@@ -148,7 +141,7 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
   </div>
 
   <!-- FULL VIEW -->
-  <div v-else class="space-y-4">
+  <div v-else-if="allergyType" class="space-y-4">
     <!-- Header with Icon and Title -->
     <div class="flex items-start gap-4">
       <div class="flex items-center justify-center w-16 h-16 rounded-full ring-1 md:ring-2 ring-red-700 flex-shrink-0">
@@ -162,12 +155,12 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
         </span>
       </div>
 
-      <div class="flex-1">
+      <div class="flex-1 min-w-0">
         <div class="flex items-center gap-2">
-          <h3 class="text-lg font-semibold">{{ allergyType.name }}</h3>
-          <span v-if="hasRecentAllergies" class="text-sm">🆕</span>
+          <h3 class="text-lg font-semibold break-words">{{ allergyType.name }}</h3>
+          <UIcon v-if="hasRecentAllergies" :name="ICONS.new" :class="COMPONENTS.rowIconClass"/>
         </div>
-        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1">
+        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 break-words">
           {{ allergyType.description }}
         </p>
       </div>
@@ -185,19 +178,29 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
             :key="inhabitant.id"
             class="space-y-2"
         >
-          <!-- Inhabitant with avatar and name -->
-          <UserListItem
-              :inhabitants="inhabitant"
-              :label="getHouseholdShortName(inhabitant.householdId)"
-          />
+          <!-- Inhabitant with avatar and name; household shows as a per-person badge -->
+          <UserListItem :inhabitants="inhabitant">
+            <template #badge="{inhabitant: listed}">
+              <UBadge
+                  v-if="getHouseholdShortName(listed.householdId)"
+                  :color="COLOR.neutral"
+                  variant="subtle"
+                  :size="SIZES.small"
+                  :icon="ICONS.household"
+              >
+                {{ getHouseholdShortName(listed.householdId) }}
+              </UBadge>
+            </template>
+          </UserListItem>
 
           <!-- Additional info: Comment and timestamp -->
           <div v-if="inhabitant.inhabitantComment || inhabitant.allergyUpdatedAt" class="pl-14 space-y-1">
             <div v-if="inhabitant.inhabitantComment" class="text-xs text-gray-700 dark:text-gray-300 italic">
               "{{ inhabitant.inhabitantComment }}"
             </div>
+            <!-- NuxtTime: wall-clock text can never match between SSR and hydration -->
             <div v-if="inhabitant.allergyUpdatedAt" class="text-xs text-gray-500 dark:text-gray-500">
-              {{ formatRelativeTime(inhabitant.allergyUpdatedAt) }}
+              <NuxtTime :datetime="inhabitant.allergyUpdatedAt" relative :locale="DATE_SETTINGS.localeString"/>
             </div>
           </div>
         </div>

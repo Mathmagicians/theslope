@@ -53,7 +53,7 @@ export default defineEventHandler(async (event): Promise<GenerateDinnerEventsRes
 
         const reconciliation = await reconcileDinnerEventsForSeason(d1Client, season, LOG)
 
-        const allEvents = await fetchDinnerEvents(d1Client, seasonId)
+        const allEvents = await fetchDinnerEvents(d1Client, {seasonId})
         console.info(`${LOG} Successfully reconciled dinner events for season ${seasonId}: ${allEvents.length} total events`)
 
         setResponseStatus(event, 201)

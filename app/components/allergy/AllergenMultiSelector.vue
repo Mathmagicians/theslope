@@ -77,7 +77,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { COLOR, SIZES, COMPONENTS, TYPOGRAPHY } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, COMPONENTS, TYPOGRAPHY, ICONS } = useTheSlopeDesignSystem()
 
 // Business logic
 const { hasNewAllergyInhabitants } = useAllergy()
@@ -285,7 +285,11 @@ const columns = computed(() => {
               ]"
               @click="!readonly && toggleAllergySelection(row.original.id!)"
           >
-            <span v-if="hasNewAllergyInhabitants(row.original)">🆕</span>
+            <UIcon
+                v-if="hasNewAllergyInhabitants(row.original)"
+                :name="ICONS.new"
+                :class="COMPONENTS.rowIconClass"
+            />
           </div>
         </template>
       </UTable>

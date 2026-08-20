@@ -485,9 +485,12 @@ export const usePlanStore = defineStore("Plan", () => {
                     headers: {'Content-Type': 'application/json'}
                 })
                 console.info(`${ROLE_ICONS[role]} > PLAN_STORE > Assigned ${role} role to inhabitant ${inhabitantId} for dinner event ${dinnerEventId}`)
+                // Refresh selected detail LAST: on /chef the page watchEffect re-derives the
+                // selected dinner id from myTeams/season, so settle those first or its re-run
+                // reloads stale detail over the fresh fetch.
                 if (selectedSeasonId.value) await refreshSelectedSeason()
-                await useBookingsStore().refreshSelectedDinnerEventDetail()
                 await useUsersStore().loadMyTeams()
+                await useBookingsStore().refreshSelectedDinnerEventDetail()
                 return updated
             } catch (e: unknown) {
                 handleApiError(e, 'assignRoleToDinner')
@@ -530,9 +533,12 @@ export const usePlanStore = defineStore("Plan", () => {
                     onResponse: ({response}) => { heynaboSyncDegraded = response.status === 207 }
                 })
                 console.info(`${ROLE_ICONS[role]} > PLAN_STORE > Removed ${role} role from inhabitant ${inhabitantId} for dinner event ${dinnerEvent.id}`)
+                // Refresh selected detail LAST: on /chef the page watchEffect re-derives the
+                // selected dinner id from myTeams/season, so settle those first or its re-run
+                // reloads stale detail over the fresh fetch.
                 if (selectedSeasonId.value) await refreshSelectedSeason()
-                await useBookingsStore().refreshSelectedDinnerEventDetail()
                 await useUsersStore().loadMyTeams()
+                await useBookingsStore().refreshSelectedDinnerEventDetail()
                 useToast().add({title: 'Du har meldt afbud. Tjansen som chefkok er nu ledig.', color: 'success'})
                 if (heynaboSyncDegraded) {
                     useToast().add({

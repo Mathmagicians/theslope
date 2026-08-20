@@ -46,6 +46,8 @@ interface Props {
   description?: string  // Shows after names/count (e.g., "Holdets kokke")
   linkToProfile?: boolean
   icon?: string
+  label?: string        // Group mode label, e.g. "bofæller"
+  labelPlural?: string  // Plural form of label
 }
 
 const {ICONS} = useTheSlopeDesignSystem()
@@ -60,7 +62,9 @@ const props = withDefaults(defineProps<Props>(), {
   nameFormatter: undefined,
   description: undefined,
   linkToProfile: true,
-  icon: undefined
+  icon: undefined,
+  label: undefined,
+  labelPlural: undefined
 })
 
 const avatarIcon = computed(() => props.icon ?? ICONS.user)

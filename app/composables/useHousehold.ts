@@ -83,30 +83,37 @@ export const resolveHouseholdForHeynaboId = <T extends Pick<HouseholdDisplay, 'i
     return sorted[0]!
 }
 
+/** Where one inhabitant currently lives — keyed globally by inhabitant heynaboId */
+export type InhabitantPlacement = {
+    inhabitant: InhabitantDisplay
+    household: HouseholdDisplay
+}
+
 /**
  * Build lookup maps for Heynabo import reconciliation.
- * Groups by heynaboId, picks winner per address, and builds sibling inhabitant lookup.
+ * Groups by heynaboId and picks a winner household per address.
  *
- * @returns resolved: winner household per address, siblingInhabitants: all inhabitants per address for admin-move detection
+ * `inhabitantPlacements` is GLOBAL (inhabitant heynaboId is unique): routing must see
+ * members placed at other addresses to move them home instead of colliding on create,
+ * and members admin-placed in a sibling household at the same address to preserve them.
+ *
+ * @returns resolved: winner household per address, inhabitantPlacements: inhabitant heynaboId → current placement
  */
 export const buildResolvedHouseholdMap = (households: HouseholdDisplay[]) => {
     const grouped = groupBy<HouseholdDisplay, number>(h => h.heynaboId)(households)
     const resolved = new Map<number, HouseholdDisplay>()
-    const siblingInhabitants = new Map<number, Map<number, { householdHeynaboId: number }>>()
-
     for (const [heynaboId, candidates] of grouped) {
         resolved.set(heynaboId, resolveHouseholdForHeynaboId(heynaboId, candidates)!)
-
-        const lookup = new Map<number, { householdHeynaboId: number }>()
-        for (const h of candidates) {
-            for (const i of h.inhabitants ?? []) {
-                lookup.set(i.heynaboId, {householdHeynaboId: h.heynaboId})
-            }
-        }
-        siblingInhabitants.set(heynaboId, lookup)
     }
 
-    return {resolved, siblingInhabitants}
+    const inhabitantPlacements = new Map<number, InhabitantPlacement>()
+    for (const household of households) {
+        for (const inhabitant of household.inhabitants ?? []) {
+            inhabitantPlacements.set(inhabitant.heynaboId, {inhabitant, household})
+        }
+    }
+
+    return {resolved, inhabitantPlacements}
 }
 
 /**

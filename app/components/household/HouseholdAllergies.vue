@@ -115,7 +115,6 @@ const handleCommentUpdate = async (allergyTypeId: number, comment: string) => {
   if (!allergy) return
 
   await allergyStore.updateAllergy(allergy.id, {
-    id: allergy.id,
     inhabitantComment: comment || null
   })
 

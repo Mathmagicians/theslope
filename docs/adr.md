@@ -340,7 +340,7 @@ const { create, update, idempotent, delete: toDelete } = reconcile(existing)(inc
 
 ## ADR-013: External System Integration Pattern
 
-**Status:** Accepted | **Date:** 2025-01-30 | **Updated:** 2025-11-26
+**Status:** Accepted | **Date:** 2025-01-30 | **Updated:** 2026-08-19
 
 ### Decision
 
@@ -365,6 +365,18 @@ const { create, update, idempotent, delete: toDelete } = reconcile(existing)(inc
 ### Heynabo Import Routing (Multiple Households per Address)
 
 `Household.heynaboId` is NOT unique — multiple households can share an address (old family leaving, new family arriving). The import service uses `buildResolvedHouseholdMap` (Decision 4 in `feature-proposal-move-out-date.md`) to deterministically pick one household per heynaboId for reconciliation and inhabitant routing. All households at the same heynaboId receive Heynabo-owned field updates (name, address); each household's TheSlope-owned fields (pbsId, movedInDate, moveOutDate) are preserved individually via `mergeHouseholdForUpdate`.
+
+### Household & Inhabitant Lifecycle (Decided 2026-08-19)
+
+| Entity | Lifecycle rule |
+|--------|----------------|
+| **Household** | **Preserved on move-out.** The row keeps `moveOutDate` for billing history; it is never deleted by the import while its address exists in Heynabo. |
+| **Inhabitant** | **Always follows Heynabo.** Deleted in Heynabo → hard-deleted in TheSlope. Identity is global via `Inhabitant.heynaboId @unique`, so reconciliation MUST be global (all existing vs all incoming), never scoped to one household — otherwise inhabitants in sibling households at the same address escape deletion. No soft-delete/tombstone rows, no view-level residency filtering as a substitute for deletion. |
+| **User** | Deleted before its inhabitant (import order). Payer identity survives in `Transaction.userSnapshot`. |
+
+**Deletion safety is schema-designed, not caller-guarded** (ADR-005 + ADR-011): `Allergy`/`Order`/`CookingTeamAssignment` CASCADE; billing survives via `Transaction.orderSnapshot` (SET NULL); audit survives via `OrderHistory`'s denormalized `inhabitantId`/`dinnerEventId`/`seasonId`. Past dinners lose chef attribution (`chefId → null`) — accepted 2026-08-19: no view renders past chefs, and duty roster (`DutyHistory`) owns attribution history when a surface exists. Business-level chef-loss handling (Heynabo event delete + `CHEF_LOSS_DINNER_UPDATES` + allergen clear) lives in ONE shared server routine — callers MUST NOT duplicate guard logic.
+
+**Operational timing:** Heynabo admins delete users ~1 month AFTER move-out, and orders are never scaffolded past `moveOutDate` (#88). By deletion time no unbilled orders exist, so the nightly cron order (heynabo-import 01:00 UTC before daily-maintenance 02:00 UTC) is intentionally safe — do not reorder.
 
 ### Compliance
 

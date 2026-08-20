@@ -1,3 +1,4 @@
+import {addDays, startOfDay} from "date-fns"
 import {
     type DinnerEventDisplay,
     type DinnerEventDetail,
@@ -15,7 +16,7 @@ const { DinnerStateSchema } = useBookingValidation()
 
 export class DinnerEventFactory {
     static readonly today = new Date()
-    static readonly tomorrow = new Date(this.today.getTime() + 24 * 60 * 60 * 1000)
+    static readonly tomorrow = addDays(this.today, 1)
 
     static readonly dinnerEventDetailPath = (dinnerEventId: number): string =>
         `${DINNER_EVENT_ENDPOINT}/${dinnerEventId}`
@@ -67,12 +68,11 @@ export class DinnerEventFactory {
      * Create dinner event display at specific days from today
      * Useful for testing deadline-based logic (before/after cancellation deadline)
      */
-    static readonly dinnerEventAt = (id: number, daysFromToday: number): DinnerEventDisplay => {
-        const date = new Date()
-        date.setHours(0, 0, 0, 0)
-        date.setDate(date.getDate() + daysFromToday)
-        return { ...this.defaultDinnerEventDisplay(), id, date }
-    }
+    static readonly dinnerEventAt = (id: number, daysFromToday: number): DinnerEventDisplay => ({
+        ...this.defaultDinnerEventDisplay(),
+        id,
+        date: startOfDay(addDays(new Date(), daysFromToday))
+    })
 
     static readonly defaultDinnerEventDetail = (testSalt?: string): DinnerEventDetail => ({
         ...this.defaultDinnerEventDisplay(testSalt),

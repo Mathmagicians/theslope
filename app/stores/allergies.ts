@@ -19,21 +19,31 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     const {handleApiError} = useApiHandler()
 
     // ========================================
-    // State - useFetch with status exposed internally
+    // State - useAsyncData with useRequestFetch for SSR-safe auth context (ADR-007)
+    // Using useRequestFetch ensures cookies are properly forwarded during both SSR and CSR
     // ========================================
+    const requestFetch = useRequestFetch()
 
     // AllergyTypes - Global catalog (admin managed)
+    // Only reached on protected routes (server/middleware/1.guard.ts redirects without a
+    // session), so no auth gate is needed - one fetch, identical on server and client.
     const {
         data: allergyTypes,
         status: allergyTypesStatus,
         error: allergyTypesError,
         refresh: refreshAllergyTypes
-    } = useFetch<AllergyTypeDetail[]>('/api/admin/allergy-type', {
-        key: 'allergy-store-types',
-        immediate: true,
-        watch: false,
-        default: () => []
-    })
+    } = useAsyncData<AllergyTypeDetail[]>(
+        'allergy-store-types',
+        () => requestFetch<AllergyTypeDetail[]>('/api/admin/allergy-type', {
+            onResponseError: ({response}) => {
+                console.error(`🥜 > ALLERGY_STORE > fetchAllergyTypes failed: ${response.status} ${response.statusText}`)
+                handleApiError(response._data, 'Kunne ikke hente allergi katalog')
+            }
+        }),
+        {
+            default: () => []
+        }
+    )
 
     // Selected AllergyType - For detail view/editing
     const selectedAllergyTypeId = ref<number | null>(null)
@@ -98,7 +108,10 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     // AllergyTypes status
     const isAllergyTypesLoading = computed(() => allergyTypesStatus.value === 'pending')
     const isAllergyTypesErrored = computed(() => allergyTypesStatus.value === 'error')
-    const isAllergyTypesInitialized = computed(() => allergyTypesStatus.value === 'success')
+    // ADR-007: initialized requires data to exist, not just a successful status
+    const isAllergyTypesInitialized = computed(() =>
+        allergyTypesStatus.value === 'success' && allergyTypes.value !== null
+    )
     const isNoAllergyTypes = computed(() => isAllergyTypesInitialized.value && allergyTypes.value.length === 0)
 
     // Selected AllergyType status
@@ -173,6 +186,8 @@ export const useAllergiesStore = defineStore("Allergies", () => {
                 method: 'DELETE'
             })
             await loadAllergyTypes()
+            // CASCADE removed the type's household allergies — refresh that cache too
+            await refreshAllergies()
             console.info(`🥜 > ALLERGY_STORE > Deleted allergy type ID: ${id}`)
         } catch (e: unknown) {
             handleApiError(e, 'deleteAllergyType')
@@ -198,6 +213,13 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         await refreshAllergies()
     }
 
+    // The allergy-type catalog embeds inhabitants per type (admin counts, PDF poster),
+    // so every allergy mutation must refresh BOTH caches
+    const refreshAfterAllergyMutation = async () => {
+        await refreshAllergies()
+        await refreshAllergyTypes()
+    }
+
     const createAllergy = async (allergyData: AllergyCreate): Promise<AllergyDisplay> => {
         try {
             const created = await $fetch<AllergyDisplay>('/api/household/allergy', {
@@ -205,8 +227,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
                 body: allergyData,
                 headers: {'Content-Type': 'application/json'}
             })
-            // Refresh allergies to get updated data
-            await refreshAllergies()
+            await refreshAfterAllergyMutation()
             console.info(`🥜 > ALLERGY_STORE > Created allergy for inhabitant ID: ${created.inhabitantId}`)
             return created
         } catch (e: unknown) {
@@ -215,15 +236,15 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         }
     }
 
-    const updateAllergy = async (id: number, allergyData: AllergyUpdate): Promise<AllergyDisplay> => {
+    // id travels in the path, not the body - the endpoint injects it (mirrors updateAllergyType)
+    const updateAllergy = async (id: number, allergyData: Omit<AllergyUpdate, 'id'>): Promise<AllergyDisplay> => {
         try {
             const updated = await $fetch<AllergyDisplay>(`/api/household/allergy/${id}`, {
                 method: 'POST',
                 body: allergyData,
                 headers: {'Content-Type': 'application/json'}
             })
-            // Refresh allergies to get updated data
-            await refreshAllergies()
+            await refreshAfterAllergyMutation()
             console.info(`🥜 > ALLERGY_STORE > Updated allergy ID: ${updated.id}`)
             return updated
         } catch (e: unknown) {
@@ -237,8 +258,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
             await $fetch(`/api/household/allergy/${id}`, {
                 method: 'DELETE'
             })
-            // Refresh allergies to get updated data
-            await refreshAllergies()
+            await refreshAfterAllergyMutation()
             console.info(`🥜 > ALLERGY_STORE > Deleted allergy ID: ${id}`)
         } catch (e: unknown) {
             handleApiError(e, 'deleteAllergy')

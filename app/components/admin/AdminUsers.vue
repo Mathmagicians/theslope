@@ -48,8 +48,7 @@ const filteredUsers = computed(() => {
 const formattedUsers = computed(() => filteredUsers.value?.map((user) => {
   return {
     ...user,
-    greeting: user.Inhabitant?.name || 'Ukendt bruger',
-    updatedAt: user.updatedAt ? formatRelativeTime(user.updatedAt!) : '?'
+    greeting: user.Inhabitant?.name || 'Ukendt bruger'
   }
 })) || []
 
@@ -209,7 +208,8 @@ const pagination = ref({
       </template>
 
       <template #updatedAt-cell="{ row }">
-        {{ row.original.updatedAt }}
+        <NuxtTime v-if="row.original.updatedAt" :datetime="row.original.updatedAt" relative :locale="DATE_SETTINGS.localeString"/>
+        <span v-else>?</span>
       </template>
 
       <!-- Expanded row content -->

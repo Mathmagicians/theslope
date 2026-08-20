@@ -1,7 +1,7 @@
 import {
     addDays, setISOWeek, startOfISOWeekYear, isSameDay, isSameWeek, eachDayOfInterval, getISODay,
     isValid, parse, format, isWithinInterval, areIntervalsOverlapping, eachWeekOfInterval, getISOWeek, parseISO,
-    formatDistanceToNow, formatDistanceToNowStrict, differenceInHours, differenceInDays, intervalToDuration,
+    formatDistanceToNowStrict, differenceInHours, differenceInDays, intervalToDuration,
     startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth
 } from "date-fns"
 import {da} from "date-fns/locale"
@@ -227,15 +227,6 @@ export function calculateAgeOnDate(birthDate: Date, eventDate: Date): number {
     return age
 }
 
-/**
- * Format a date as relative time from now in Danish
- * @param dateString - ISO date string or Date object
- * @returns Relative time string (e.g., "for 2 timer siden", "i går")
- */
-export function formatRelativeTime(dateString: string | Date): string {
-    const date = typeof dateString === 'string' ? new Date(dateString) : dateString
-    return formatDistanceToNow(date, { locale: DATE_SETTINGS.locale, addSuffix: true })
-}
 
 /**
  * Check if a date is considered "new" (within 7 days)
