@@ -178,19 +178,29 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
             :key="inhabitant.id"
             class="space-y-2"
         >
-          <!-- Inhabitant with avatar and name -->
-          <UserListItem
-              :inhabitants="inhabitant"
-              :label="getHouseholdShortName(inhabitant.householdId)"
-          />
+          <!-- Inhabitant with avatar and name; household shows as a per-person badge -->
+          <UserListItem :inhabitants="inhabitant">
+            <template #badge="{inhabitant: listed}">
+              <UBadge
+                  v-if="getHouseholdShortName(listed.householdId)"
+                  :color="COLOR.neutral"
+                  variant="subtle"
+                  :size="SIZES.small"
+                  :icon="ICONS.household"
+              >
+                {{ getHouseholdShortName(listed.householdId) }}
+              </UBadge>
+            </template>
+          </UserListItem>
 
           <!-- Additional info: Comment and timestamp -->
           <div v-if="inhabitant.inhabitantComment || inhabitant.allergyUpdatedAt" class="pl-14 space-y-1">
             <div v-if="inhabitant.inhabitantComment" class="text-xs text-gray-700 dark:text-gray-300 italic">
               "{{ inhabitant.inhabitantComment }}"
             </div>
+            <!-- NuxtTime: wall-clock text can never match between SSR and hydration -->
             <div v-if="inhabitant.allergyUpdatedAt" class="text-xs text-gray-500 dark:text-gray-500">
-              {{ formatRelativeTime(inhabitant.allergyUpdatedAt) }}
+              <NuxtTime :datetime="inhabitant.allergyUpdatedAt" relative :locale="DATE_SETTINGS.localeString"/>
             </div>
           </div>
         </div>

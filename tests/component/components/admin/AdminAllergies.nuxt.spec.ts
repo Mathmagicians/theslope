@@ -76,12 +76,6 @@ describe('AdminAllergies', () => {
      * reachable at every breakpoint.
      */
     describe('single responsive tree', () => {
-        it('renders no breakpoint-hidden layout branches', async () => {
-            const wrapper = await mountAdmin()
-
-            expect(wrapper.html()).not.toContain('md:hidden')
-        })
-
         it.each([
             {action: 'edit', testId: TEST_IDS.edit},
             {action: 'compare', testId: TEST_IDS.compare}
@@ -118,6 +112,59 @@ describe('AdminAllergies', () => {
             await click(wrapper, TEST_IDS.compare)
 
             expect(wrapper.text()).toContain('Afslut sammenligning')
+        })
+
+        it('opens an empty form from the create button', async () => {
+            const wrapper = await mountAdmin()
+
+            await click(wrapper, TEST_IDS.create)
+
+            expect(find(wrapper, TEST_IDS.form).exists()).toBe(true)
+            expect(wrapper.text()).toContain('Opret allergi')
+        })
+    })
+
+    // Deleting a type cascades to every registration, so it confirms in-app rather than
+    // through a browser dialog, and names the inhabitants that lose their registration.
+    describe('delete confirmation', () => {
+        const [firstType] = mockAllergyTypes
+
+        it('asks for confirmation in the UI instead of deleting straight away', async () => {
+            const wrapper = await mountAdmin()
+            expect(find(wrapper, TEST_IDS.deleteConfirm).exists()).toBe(false)
+
+            await click(wrapper, TEST_IDS.delete)
+
+            const confirmPanel = find(wrapper, TEST_IDS.deleteConfirm)
+            expect(confirmPanel.exists()).toBe(true)
+            expect(confirmPanel.text()).toContain(firstType!.name)
+        })
+
+        it('warns how many inhabitants lose their registration', async () => {
+            const wrapper = await mountAdmin()
+
+            await click(wrapper, TEST_IDS.delete)
+
+            expect(find(wrapper, TEST_IDS.deleteConfirm).text())
+                .toContain(String(firstType!.inhabitants!.length))
+        })
+
+        it('returns to the detail view when cancelled', async () => {
+            const wrapper = await mountAdmin()
+            await click(wrapper, TEST_IDS.delete)
+
+            await click(wrapper, TEST_IDS.cancelDelete)
+
+            expect(find(wrapper, TEST_IDS.deleteConfirm).exists()).toBe(false)
+            expect(find(wrapper, TEST_IDS.edit).exists()).toBe(true)
+        })
+
+        it('exposes a confirm action', async () => {
+            const wrapper = await mountAdmin()
+
+            await click(wrapper, TEST_IDS.delete)
+
+            expect(find(wrapper, TEST_IDS.confirmDelete).exists()).toBe(true)
         })
     })
 

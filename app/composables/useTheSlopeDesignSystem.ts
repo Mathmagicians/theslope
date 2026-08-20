@@ -1399,12 +1399,12 @@ export const EMPTY_STATE_MESSAGES = {
     ]
 } as const
 
-/** Pick a random message from a context - uses date-based seed for SSR consistency */
-export const getRandomEmptyMessage = (context: keyof typeof EMPTY_STATE_MESSAGES) => {
+/** Pick a random message from a context - seeded by UTC date so SSR and client agree */
+export const getRandomEmptyMessage = (context: keyof typeof EMPTY_STATE_MESSAGES, today: Date = new Date()) => {
     const messages = EMPTY_STATE_MESSAGES[context]
-    // Use current date as seed so server and client get the same "random" message
-    const today = new Date()
-    const seed = today.getFullYear() * 10000 + (today.getMonth() + 1) * 100 + today.getDate()
+    // UTC parts: local date parts diverge between a UTC server and a Danish browser
+    // in the evening, giving each side a different "random" message (hydration mismatch)
+    const seed = today.getUTCFullYear() * 10000 + (today.getUTCMonth() + 1) * 100 + today.getUTCDate()
     const index = seed % messages.length
     return messages[index]!
 }
