@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type {DinnerEventDetail} from '~/composables/useBookingValidation'
+import {useBookingValidation, type DinnerEventDetail, type MenuSwapStrategy} from '~/composables/useBookingValidation'
 import {ROLE_LABELS, type TeamRole} from '~/composables/useCookingTeamValidation'
 import {useCookingTeam} from '~/composables/useCookingTeam'
 
@@ -12,7 +12,7 @@ interface Props {
 }
 
 interface Emits {
-    submit: [{ours: number, theirs?: number[]}]
+    submit: [{ours: number, theirs?: number[], menuStrategy?: MenuSwapStrategy}]
     resign: []
     cancel: []
 }
@@ -22,6 +22,9 @@ const emit = defineEmits<Emits>()
 
 const {ICONS, BUTTONS, TYPOGRAPHY, LAYOUTS} = useTheSlopeDesignSystem()
 const {getTeamShortName} = useCookingTeam()
+const {DinnerStateSchema, MenuSwapStrategySchema} = useBookingValidation()
+const DinnerState = DinnerStateSchema.enum
+const MenuSwapStrategy = MenuSwapStrategySchema.enum
 const planStore = usePlanStore()
 
 const formattedDate = computed(() => formatDate(props.dinnerEvent.date))
@@ -36,10 +39,21 @@ const commitLabel = computed(() => isSwap.value
     ? `Ja tak, jeg overtager ${roleLabel.value}-tjansen`
     : `Ja tak, jeg bliver ${roleLabel.value}`)
 
+// The departing chef's Heynabo event cannot be edited by the taker, so an ANNOUNCED
+// takeover must decide the menu's fate first (bug-fix-chef-takeover.md)
+const needsMenuDecision = computed(() => isSwap.value && props.dinnerEvent.state === DinnerState.ANNOUNCED)
+const menuStrategy = ref<MenuSwapStrategy | undefined>()
+const canCommit = computed(() => !needsMenuDecision.value || menuStrategy.value !== undefined)
+const menuStrategyItems = [
+    {label: 'Behold menuen', value: MenuSwapStrategy.PRESERVE},
+    {label: 'Nulstil menuen — jeg annoncerer min egen', value: MenuSwapStrategy.CLEAR}
+]
+
 const handleSubmit = () => {
     emit('submit', {
         ours: props.dinnerEvent.id,
-        theirs: isSwap.value ? [] : undefined
+        theirs: isSwap.value ? [] : undefined,
+        menuStrategy: menuStrategy.value
     })
 }
 </script>
@@ -52,7 +66,7 @@ const handleSubmit = () => {
                 <h4 :class="TYPOGRAPHY.cardTitle">
                     <template v-if="mode === 'volunteer'">Fællesspisning søger {{ roleLabel }}!</template>
                     <template v-else-if="mode === 'resign'">Meld afbud som {{ roleLabel }}</template>
-                    <template v-else>Byt tjans med {{ dinnerEvent.chef?.name }} for middagen {{ formattedDate }}</template>
+                    <template v-else>Overtag {{ roleLabel }}-tjansen fra {{ dinnerEvent.chef?.name }}</template>
                 </h4>
             </div>
         </template>
@@ -65,9 +79,19 @@ const handleSubmit = () => {
                 Du melder afbud som {{ roleLabel }}. Tjansen bliver ledig igen, og din menu slettes.
             </template>
             <template v-else>
-                Bytte tjanser funktionalitet kommer senere.
+                Du overtager {{ roleLabel }}-tjansen fra {{ dinnerEvent.chef?.name }} for fællesspisning den {{ formattedDate }}.
+                Husk at aftale det med {{ dinnerEvent.chef?.name }} først.
             </template>
         </p>
+
+        <URadioGroup
+            v-if="needsMenuDecision"
+            v-model="menuStrategy"
+            data-testid="role-assignment-menu-strategy"
+            legend="Middagen er annonceret — hvad skal der ske med menuen?"
+            :items="menuStrategyItems"
+            class="mt-3"
+        />
 
         <template #footer>
             <div :class="LAYOUTS.formButtonRow">
@@ -92,7 +116,7 @@ const handleSubmit = () => {
                     :icon="ICONS.chef"
                     :trailing-icon="commitTrailingIcon"
                     :loading="planStore.isRoleUpdating"
-                    :disabled="isSwap"
+                    :disabled="!canCommit"
                     data-testid="role-assignment-save"
                     @click="handleSubmit"
                 >

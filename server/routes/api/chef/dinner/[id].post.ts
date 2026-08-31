@@ -1,7 +1,7 @@
 import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus, getRequestURL} from 'h3'
 import type {H3Error} from 'h3'
 import {fetchDinnerEvent, updateDinnerEvent, updateDinnerEventAllergens} from '~~/server/data/financesRepository'
-import {createHeynaboEvent, updateHeynaboEvent, cancelHeynaboEvent, uploadHeynaboEventImage, getRandomDefaultDinnerPicture, updateHeynaboEventWithFallback} from '~~/server/integration/heynabo/heynaboClient'
+import {createHeynaboEvent, updateHeynaboEvent, cancelHeynaboEvent, uploadDefaultDinnerPictureToEvent, updateHeynaboEventWithFallback} from '~~/server/integration/heynabo/heynaboClient'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
 import type {DinnerEventDetail} from '~/composables/useBookingValidation'
@@ -10,7 +10,7 @@ import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {requireChefForDinner} from '~~/server/utils/authorizationHelper'
 import {z} from 'zod'
 
-const {throwH3Error, h3eFromCatch} = eventHandlerHelper
+const {throwH3Error} = eventHandlerHelper
 const {DinnerStateSchema, DinnerEventUpdateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
@@ -78,22 +78,6 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
         let updatedDinner = dinner
         let heynaboSyncDegraded = false
 
-        const uploadDefaultPicture = async (token: string, heynaboEventId: number): Promise<void> => {
-            try {
-                const pictureFilename = getRandomDefaultDinnerPicture()
-                const pictureUrl = `${baseUrl}/${encodeURIComponent(pictureFilename)}`
-                const imageResponse = await fetch(pictureUrl)
-                if (imageResponse.ok) {
-                    const imageBlob = await imageResponse.blob()
-                    await uploadHeynaboEventImage(token, heynaboEventId, imageBlob, pictureFilename)
-                } else {
-                    console.warn(PREFIX, 'Failed to fetch default picture:', pictureUrl, 'status:', imageResponse.status)
-                }
-            } catch (imageError) {
-                console.warn(h3eFromCatch(`${PREFIX}Image upload failed (non-blocking)`, imageError).message)
-            }
-        }
-
         const {allergenIds, state: targetState, ...menuUpdates} = updates
 
         if (targetState) {
@@ -126,7 +110,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
                             .catch(() => { heynaboSyncDegraded = true; return null })
                         if (created) {
                             heynaboEventId = created.id
-                            await uploadDefaultPicture(heynaboToken, created.id)
+                            await uploadDefaultDinnerPictureToEvent(heynaboToken, created.id, baseUrl)
                         }
                     }
 

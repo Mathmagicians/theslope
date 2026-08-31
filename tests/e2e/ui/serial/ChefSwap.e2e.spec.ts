@@ -100,7 +100,7 @@ test.describe('Chef Swap — volunteer flow', () => {
     mounts.forEach(({label, url}, mountIndex) => {
         test(`${label}: chef lifecycle — volunteer then Meld afbud returns the dinner to vacant`, async ({browser}) => {
             const adminCtx = await validatedBrowserContext(browser)
-            const dinner = await createVacantDinner(adminCtx, mountIndex * 2)
+            const dinner = await createVacantDinner(adminCtx, mountIndex * 3)
 
             const memberCtx = await memberValidatedBrowserContext(browser)
             const page = await memberCtx.newPage()
@@ -149,9 +149,34 @@ test.describe('Chef Swap — volunteer flow', () => {
             await expect(page.locator(CHEF_WANTED).first(), 'dinner vacant again after Meld afbud').toBeVisible()
         })
 
+        test(`${label}: takeover — member takes over the chefkok duty from the current chef`, async ({browser}) => {
+            const adminCtx = await validatedBrowserContext(browser)
+            const dinner = await createVacantDinner(adminCtx, mountIndex * 3 + 2)
+            const adminInhabitantId = (await getSessionUserInfo(adminCtx)).inhabitantId
+            await DinnerEventFactory.assignRoleToDinnerEvent(adminCtx, dinner.id, adminInhabitantId, TeamRole.CHEF)
+
+            const memberCtx = await memberValidatedBrowserContext(browser)
+            const page = await memberCtx.newPage()
+            let assignRole: {status: number} | null = null
+            page.on('response', (r) => {
+                if (/\/api\/team\/cooking\/\d+\/assign-role$/.test(r.url())) assignRole = {status: r.status()}
+            })
+
+            await page.goto(url(dinner.date))
+            await expect(page.locator(ROLE_TRIGGER).first(), 'occupied duty shows the edit trigger').toContainText('Rediger chefkokketjans')
+            await openForm(page)
+            const save = page.locator(ROLE_SAVE).first()
+            await expect(save, 'takeover commit is active').toBeEnabled()
+            await save.click()
+
+            const result = await pollUntil(async () => assignRole, r => r !== null, 10)
+            expect(result!.status, 'assign-role must succeed').toBe(200)
+            await expectDinnerChef(memberCtx, dinner.id, memberInhabitantId)
+        })
+
         test(`${label}: cancelling the volunteer form leaves the dinner without a chef if there was no chef before`, async ({browser}) => {
             const adminCtx = await validatedBrowserContext(browser)
-            const dinner = await createVacantDinner(adminCtx, mountIndex * 2 + 1)
+            const dinner = await createVacantDinner(adminCtx, mountIndex * 3 + 1)
 
             const memberCtx = await memberValidatedBrowserContext(browser)
             const page = await memberCtx.newPage()

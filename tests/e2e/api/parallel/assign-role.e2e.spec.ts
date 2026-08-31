@@ -4,11 +4,14 @@ import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactor
 import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import { useCookingTeamValidation } from '~/composables/useCookingTeamValidation'
+import { useBookingValidation } from '~/composables/useBookingValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 
 const { validatedBrowserContext, salt, temporaryAndRandom } = testHelpers
 const { TeamRoleSchema } = useCookingTeamValidation()
 const TeamRole = TeamRoleSchema.enum
+const { DinnerStateSchema } = useBookingValidation()
+const DinnerState = DinnerStateSchema.enum
 
 let testSeason: Season
 const createdHouseholdIds: number[] = []
@@ -125,6 +128,84 @@ test.describe('DinnerEvent API - Assign Role', () => {
                 expect(assignment, `${role} assignment should exist`).toBeDefined()
                 expect(assignment!.role, `Assignment role should be ${role}`).toBe(role)
                 expect(assignment!.cookingTeamId, 'Assignment should reference correct team').toBe(team.id)
+            })
+        })
+
+        // Takeover: Heynabo owns who exists, TheSlope members own who cooks — assigning CHEF
+        // on an occupied duty hands it over (bug-fix-chef-takeover.md)
+        test.describe('takeover of an occupied chef duty', () => {
+
+            const createDinnerWithChef = async (
+                context: Awaited<ReturnType<typeof validatedBrowserContext>>,
+                testSalt: string,
+                dinnerOverrides: Record<string, unknown> = {}
+            ) => {
+                const team = await SeasonFactory.createCookingTeamForSeason(context, testSeason.id!, salt('TakeoverTeam', testSalt))
+                const household = await HouseholdFactory.createHousehold(context, { name: salt('TakeoverHouse', testSalt) })
+                createdHouseholdIds.push(household.id)
+                const currentChef = await HouseholdFactory.createInhabitantForHousehold(context, household.id, salt('CurrentChef', testSalt))
+                const taker = await HouseholdFactory.createInhabitantForHousehold(context, household.id, salt('Taker', testSalt))
+                const dinnerEvent = await SeasonFactory.createDinnerEventForSeason(
+                    context, testSeason.id!,
+                    { chefId: null, cookingTeamId: team.id, heynaboEventId: null, ...dinnerOverrides }
+                )
+                await DinnerEventFactory.assignRoleToDinnerEvent(context, dinnerEvent.id, currentChef.id, TeamRole.CHEF)
+                return { dinnerEvent, currentChef, taker }
+            }
+
+            test('GIVEN a SCHEDULED dinner cheffed by another WHEN assigning CHEF THEN the duty is handed over', async ({ browser }) => {
+                const context = await validatedBrowserContext(browser)
+                const { dinnerEvent, taker } = await createDinnerWithChef(context, temporaryAndRandom())
+
+                const updated = await DinnerEventFactory.assignRoleToDinnerEvent(context, dinnerEvent.id, taker.id, TeamRole.CHEF)
+
+                expect(updated!.chefId, 'taker is the chef').toBe(taker.id)
+            })
+
+            test('GIVEN an ANNOUNCED dinner cheffed by another WHEN taking over with menuStrategy CLEAR THEN the dinner is reset for the new chef', async ({ browser }) => {
+                const context = await validatedBrowserContext(browser)
+                const testSalt = temporaryAndRandom()
+                const { dinnerEvent, taker } = await createDinnerWithChef(context, testSalt, {
+                    state: DinnerState.ANNOUNCED,
+                    menuTitle: salt('OldChefMenu', testSalt)
+                })
+
+                const updated = await DinnerEventFactory.assignRoleToDinnerEvent(context, dinnerEvent.id, taker.id, TeamRole.CHEF, 200, 'CLEAR')
+
+                expect(updated!.chefId, 'taker is the chef').toBe(taker.id)
+                expect(updated!.state, 'dinner reset to SCHEDULED').toBe(DinnerState.SCHEDULED)
+                expect(updated!.menuTitle, 'menu cleared').toBe('')
+            })
+
+            test('GIVEN a stale Heynabo event WHEN taking over with menuStrategy CLEAR THEN the dinner is reset and 207 reports the degraded sync', async ({ browser }) => {
+                const context = await validatedBrowserContext(browser)
+                const testSalt = temporaryAndRandom()
+                const { dinnerEvent, taker } = await createDinnerWithChef(context, testSalt, {
+                    state: DinnerState.ANNOUNCED,
+                    menuTitle: salt('StaleEventMenu', testSalt),
+                    heynaboEventId: 999999999 // Heynabo no longer has it — system delete fails, sync degrades
+                })
+
+                const updated = await DinnerEventFactory.assignRoleToDinnerEvent(context, dinnerEvent.id, taker.id, TeamRole.CHEF, 207, 'CLEAR')
+
+                expect(updated!.chefId, 'taker is the chef despite degraded sync').toBe(taker.id)
+                expect(updated!.state, 'dinner reset to SCHEDULED').toBe(DinnerState.SCHEDULED)
+            })
+
+            test('GIVEN an ANNOUNCED dinner cheffed by another WHEN taking over with menuStrategy PRESERVE THEN menu and announcement stand', async ({ browser }) => {
+                const context = await validatedBrowserContext(browser)
+                const testSalt = temporaryAndRandom()
+                const menuTitle = salt('KeptMenu', testSalt)
+                const { dinnerEvent, taker } = await createDinnerWithChef(context, testSalt, {
+                    state: DinnerState.ANNOUNCED,
+                    menuTitle
+                })
+
+                const updated = await DinnerEventFactory.assignRoleToDinnerEvent(context, dinnerEvent.id, taker.id, TeamRole.CHEF, 200, 'PRESERVE')
+
+                expect(updated!.chefId, 'taker is the chef').toBe(taker.id)
+                expect(updated!.state, 'announcement stands').toBe(DinnerState.ANNOUNCED)
+                expect(updated!.menuTitle, 'menu kept').toBe(menuTitle)
             })
         })
 

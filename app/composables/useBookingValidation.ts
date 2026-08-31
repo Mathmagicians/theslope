@@ -320,12 +320,21 @@ export const useBookingValidation = () => {
     })
 
     /**
-     * Assign role to dinner event (POST /api/admin/dinner-event/[id]/assign-role)
-     * Used for "Bliv chefkok", "Bliv kok", "Bliv kokkespire" buttons
+     * Menu handling when a chef duty is taken over on an ANNOUNCED dinner: the Heynabo event
+     * is owned by the departing chef's account, so it is deleted as system and either
+     * republished under the taker's token (PRESERVE) or the dinner is reset (CLEAR).
+     * See docs/features/bug-fix-chef-takeover.md.
+     */
+    const MenuSwapStrategySchema = z.enum(['PRESERVE', 'CLEAR'])
+
+    /**
+     * Assign role to dinner event (POST /api/team/cooking/[id]/assign-role)
+     * Used for "Bliv chefkok", "Bliv kok", "Bliv kokkespire" buttons and chef takeover
      */
     const AssignRoleSchema = z.object({
         inhabitantId: z.number().int().positive('Inhabitant ID must be a positive integer'),
-        role: RoleSchema
+        role: RoleSchema,
+        menuStrategy: MenuSwapStrategySchema.optional()
     })
 
     // Remove a role from a dinner ("Meld afbud"). dinner = route [id];
@@ -853,6 +862,7 @@ export const useBookingValidation = () => {
         CreateOrdersRequestSchema,
         SwapOrderRequestSchema,
         AssignRoleSchema,
+        MenuSwapStrategySchema,
         RemoveRoleRequestSchema,
         OrderQuerySchema,
 
@@ -949,6 +959,7 @@ export type OrderCreate = z.infer<ReturnType<typeof useBookingValidation>['Order
 export type CreateOrdersRequest = z.infer<ReturnType<typeof useBookingValidation>['CreateOrdersRequestSchema']>
 export type SwapOrderRequest = z.infer<ReturnType<typeof useBookingValidation>['SwapOrderRequestSchema']>
 export type AssignRole = z.infer<ReturnType<typeof useBookingValidation>['AssignRoleSchema']>
+export type MenuSwapStrategy = z.infer<ReturnType<typeof useBookingValidation>['MenuSwapStrategySchema']>
 export type OrderQuery = z.infer<ReturnType<typeof useBookingValidation>['OrderQuerySchema']>
 export type OrderHistoryDisplay = z.infer<ReturnType<typeof useBookingValidation>['OrderHistoryDisplaySchema']>
 export type OrderHistoryDetail = z.infer<ReturnType<typeof useBookingValidation>['OrderHistoryDetailSchema']>
