@@ -24,6 +24,7 @@ Expected volume: **10–50 notifications/day** once the trigger catalog lands (c
 | Address storage | **Normalized** — channels only; addresses resolved from `User.email` / `User.phone` at enqueue time | Email/phone are Heynabo-owned (nightly import overwrites them) → normalized means zero drift when HN data changes. The queue message snapshots the resolved address in `to:` for audit. Accepted limitation: SMS requires a phone in Heynabo. Upgrade path: TheSlope-owned `notificationPhone` override column later (non-breaking) |
 | v1 trigger | **Test notification only** — "Send testbesked" in the profile proves both channels end-to-end | Every future trigger is one template + one `notifyUsers()` call site (see Out of Scope) |
 | Templates | Danish, **app-side**; producer enqueues fully-rendered content | Domain knowledge stays in the app; the worker stays generic and reusable. Email `{subject, text, html?}`, SMS `{text}` ≤160 GSM-7 (æøå are in the GSM-7 basic set) |
+| Build order | **Infra-first — "don't touch theslope until the basics work"**: the delivery-pipe phase stands up the worker + queues and proves real delivery via a `make notify-test-dev` smoke target (Cloudflare Queues HTTP publish API); the Nuxt app is only modified from the schema phase on | The delivery pipe is verified end-to-end (real e-mail + SMS) before any app wiring; the smoke target remains a permanent ops tool |
 
 ## Architecture
 
@@ -378,7 +379,7 @@ logs-notifications-prod:     # npx wrangler tail theslope-notifications-prod --f
 
 | Item | Requirement | Cost |
 |---|---|---|
-| Workers Paid | required for Queues + Email Service | $5/mo — likely already active (`cpu_ms=180_000` in `wrangler.toml` is Paid-only); **verify in dashboard, Phase 0** |
+| Workers Paid | required for Queues + Email Service | $5/mo — **already active** ✓ |
 | Queues | included in Paid | 1M ops/mo included, then $0.40/M — negligible at this volume |
 | Email Service (public beta Apr 2026) | Paid + zone enablement | 3,000 mails/mo included, then $0.35/1k |
 | GatewayAPI SMS (DK) | prepaid account | 0.307 DKK/SMS → ~92–460 DKK/mo at 300–1,500 SMS/mo; no monthly fee |
@@ -409,19 +410,20 @@ Sources: developers.cloudflare.com (email-service pricing/limits/workers-api, qu
 | ADR-007 | All `$fetch` in the auth store; component renders from store/session state |
 | ADR-010 | Serialization confined to composable transforms + repository; domain types everywhere else |
 | ADR-012 | `Prisma.skip` branch in `serializeUserPartial` |
-| ADR-015 | Deliberately N/A — no send job; the queue replaces the outbox pattern (documented in new ADR-017) |
-| **ADR-017 (new)** | "Notification delivery via dedicated worker and versioned queue contract" — producer/consumer split, stateless consumer, contract ownership, provider ports, no-PII logging, the "notify never throws" degradation rule |
+| ADR-015 | Deliberately N/A — no send job; the queue replaces the outbox pattern (documented in ADR-017) |
+| **ADR-017 [Notification delivery via dedicated worker + versioned queue contract]** (new) | Producer/consumer split, stateless consumer, contract ownership, provider ports, no-PII logging, the "notify never throws" degradation rule |
 
 ## Phases (TDD, each independently shippable)
 
 > **Convention:** the USER runs all migrations, db operations, and account/infra commands (`make prisma-create-migration`, `npm run db:migrate:*`, `wrangler queues create/update`, `wrangler secret put`, dashboard steps). Claude prepares files and command lines; the user executes them.
 
-### Phase 0 — This proposal + account prerequisites ✍️
+### Prerequisites — accounts + queues ✍️
 
 Manual/dashboard, no code:
-1. Verify **Workers Paid**; enable **Email Service** for zone `skraaningen.dk`; sender domain verification (SPF/DKIM/DMARC auto — domain already on Cloudflare DNS); register `noreply@skraaningen.dk`.
-2. GatewayAPI account on the **EU platform** + API token (parked in the password manager until Phase 4).
-3. Create queues — **user-run** (separate DLQs per env — separate consumers, separate blast radius):
+1. Account is on **Workers Paid** ✓. Enable **Email Service** for zone `skraaningen.dk`; sender domain verification (SPF/DKIM/DMARC auto — domain already on Cloudflare DNS); register `noreply@skraaningen.dk`.
+2. GatewayAPI account on the **EU platform** + API token (needed by the delivery-pipe phase for `make secrets-notifications-dev`).
+3. A Cloudflare API token with **Queues Edit** permission for the smoke target (local `.env`: `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` — the existing CI deploy token may already qualify; verify).
+4. Create queues — **user-run** (separate DLQs per env — separate consumers, separate blast radius):
 
 ```bash
 npx wrangler queues create theslope-notifications-dev
@@ -433,57 +435,78 @@ npx wrangler queues update theslope-notifications-dlq-prod --message-retention-p
 ```
 
 Do **not** create the `-local` queue names remotely — they only ever exist under miniflare.
-4. `docs/ops-runbook.md` — new "Notifications" section: queues, DLQ triage (incl. the PII/14d note), sender verification, secret rotation.
+5. `docs/ops-runbook.md` — new "Notifications" section: queues, DLQ triage (incl. the PII/14d note), sender verification, secret rotation, smoke target.
 
-### Phase 1 — Schema + serialization (no behavior change)
+### Delivery pipe — worker + `make notify-test-dev` smoke target (theslope UNTOUCHED)
+
+The whole delivery system stands alone and is proven with real messages before any app work. Only `workers/`, `Makefile`, `package.json` (`test:worker` script + pool-workers devDep) and CI are touched — **zero changes to app/server/prisma code**.
+
+- **Tests first:** contract accept/reject matrix (bad version, bad msisdn, >160 SMS, missing subject); consumer spec (pool-workers: batch of [valid email, valid sms, poison] with fake `EMAIL` binding + mocked `fetch` → ack/ack/ack; retryable throw → `msg.retry` with backoff; terminal → ack); provider spec (GatewayAPI status taxonomy parametrized: 200/429/500/400/401/402).
+- Add devDep `@cloudflare/vitest-pool-workers` (**verify peer range against root vitest 3.2.4 at install**; fallback: the handler takes `(batch, env)` so plain-node vitest with fakes works), `vitest.config.ts` kept OUT of root vitest projects, npm script `test:worker`.
+- Files: `workers/notifications/` complete — `src/{index,contract,delivery,mask}.ts`, `src/providers/{email,sms}.ts`, `wrangler.toml`, `tsconfig.json`, `vitest.config.ts`, tests.
+- Makefile: `deploy-notifications-{dev,prod}`, `secrets-notifications-{dev,prod}`, `logs-notifications-{dev,prod}`, and the smoke target — a plain curl against the [Queues HTTP publish API](https://developers.cloudflare.com/queues/examples/publish-to-a-queue-via-http/) with a contract-valid body (no app code, no extra worker routes):
+
+```make
+notify-test-dev: ## Smoke test: publish contract-valid EMAIL+SMS messages to the dev queue (real delivery!)
+	@curl -sf -X POST "https://api.cloudflare.com/client/v4/accounts/$$CLOUDFLARE_ACCOUNT_ID/queues/$$QUEUE_ID_NOTIFICATIONS_DEV/messages" \
+	  -H "Authorization: Bearer $$CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
+	  --data '{"body":{"v":1,"channel":"EMAIL","dedupeKey":"SMOKE:EMAIL:0:'$$(date -u +%FT%TZ)'","to":"'$$NOTIFY_TEST_EMAIL'","content":{"subject":"Skråningen: smoke test","text":"Notifikations-røret virker."},"meta":{"trigger":"SMOKE","userId":1,"enqueuedAt":"'$$(date -u +%FT%TZ)'","source":"theslope-app"}}}'
+	@# + second curl with channel SMS / to $$NOTIFY_TEST_MSISDN — then check inbox + phone
+```
+
+  (`QUEUE_ID_NOTIFICATIONS_DEV` from `npx wrangler queues info theslope-notifications-dev` or the dashboard; `NOTIFY_TEST_EMAIL`/`NOTIFY_TEST_MSISDN` = the operator's own address/number — all in `.env`, loaded by the existing `with_env` macro. A third variant sends garbage to prove the poison path: consumer acks + logs, DLQ stays empty.)
+- CI: chain `deploy-notifications-dev|prod` into the existing deploy targets; add `npm run test:worker` step.
+- **User runs:** `make deploy-notifications-dev` → `make secrets-notifications-dev` → `make notify-test-dev`.
+- **Exit criterion ("basics working"):** real e-mail in the inbox, real SMS on the phone, `wrangler queues info` backlog 0, DLQ 0, `make logs-notifications-dev` shows `📮 > NOTIFICATIONS > [EMAIL] delivered`. Only then does app work begin.
+
+### Schema — `notificationChannels` + serialization (first theslope change; no behavior change)
 
 - **Tests first:** parametrized round-trip unit specs over `[]`, `['EMAIL']`, `['SMS']`, `['EMAIL','SMS']`; `UserFactory` defaults; existing `UserProfileCard` component spec stays green.
 - `prisma/schema.prisma` enum + column; then **user runs** `make prisma-create-migration name=notifications` → `migrations/0015_notifications.sql` → `make d1-prisma` → `npm run db:migrate:local`.
 - All serialization touchpoints from the table above.
 - Ship: dormant column, default `["EMAIL"]`.
 
-### Phase 2 — Contract + producer service
+### Producer — templates + `notificationService`
 
-- **Tests first:** contract accept/reject matrix (bad version, bad msisdn, >160 SMS, missing subject) + wire/Prisma enum parity; `resolveDeliveries` matrix (channels × phone × rendering); `normalizeToMsisdn` parametrized; chunking at 100; degraded path (queue=undefined never throws); GSM-7 + length guard on `renderTestNotification`.
-- Files: `workers/notifications/src/contract.ts` (contract only — the worker dir exists before the worker; it is the contract's home), `app/composables/useNotificationValidation.ts`, `server/utils/notificationService.ts`, `server/utils/notifications/templates/testNotification.ts`.
+- **Tests first:** wire/Prisma enum parity (`WireChannelSchema` ↔ `NotificationChannelSchema`); `resolveDeliveries` matrix (channels × phone × rendering); `normalizeToMsisdn` parametrized; chunking at 100; degraded path (queue=undefined never throws); GSM-7 + length guard on `renderTestNotification`.
+- Files: `app/composables/useNotificationValidation.ts` (re-exports the contract from the delivery-pipe phase), `server/utils/notificationService.ts`, `server/utils/notifications/templates/testNotification.ts`.
 - App `wrangler.toml` producer bindings ×3 + `npm run cf-typegen`; verify the binding exists under `nuxt dev`.
 
-### Phase 3 — Endpoints (producer path shippable, into the queue)
+### Endpoints — channels + test
 
 - **Tests first (BDD):** `tests/e2e/api/user/notifications.e2e.spec.ts` with `UserFactory`: `POST channels ['EMAIL','SMS']` → 200 with channels; `POST channels ['SMS']` for phoneless user → 400; `POST test` → 200 + `TestNotificationResponseSchema` shape; unauthenticated → 401.
 - Files: `channels.post.ts`, `test.post.ts`, `usePermissions.ts` row.
 - `docs/adr-compliance-backend.md`: two new rows.
-- Ship: messages accumulate in the dev queue (visible via `wrangler queues info`) — harmless, they expire at retention.
+- Ship: deploy app to dev → `POST test` now feeds the already-proven delivery pipe → real messages arrive from the app.
 
-### Phase 4 — Notifications worker
-
-- **Tests first:** contract spec; consumer spec (pool-workers: batch of [valid email, valid sms, poison] with fake `EMAIL` binding + mocked `fetch` → ack/ack/ack; retryable throw → `msg.retry` with backoff; terminal → ack); provider spec (GatewayAPI status taxonomy parametrized: 200/429/500/400/401/402).
-- Add devDep `@cloudflare/vitest-pool-workers` (**verify peer range against root vitest 3.2.4 at install**; fallback: the handler takes `(batch, env)` so plain-node vitest with fakes works), `vitest.config.ts` kept OUT of root vitest projects, npm script `test:worker`.
-- Files: `src/index.ts`, `delivery.ts`, `mask.ts`, `providers/email.ts`, `providers/sms.ts`, `wrangler.toml`, `tsconfig.json`.
-- Makefile targets + CI chaining + `make secrets-notifications-dev`.
-- Deploy to dev → run Phase 3 E2E against dev → **a real e-mail and SMS arrive**.
-
-### Phase 5 — UI
+### UI — profile toggles + Send testbesked
 
 - **Tests first:** `UserProfileCard.nuxt.spec.ts` extensions (parametrized badges per channels; SMS toggle disabled without phone; `registerEndpoint` for both POSTs → save calls store, testbesked → toast; not-current-user hides section); `tests/e2e/ui/notifications.e2e.spec.ts` (edit → toggle → Gem → reload persists → Send testbesked → toast; `doScreenshot` documentation shot).
 - Files: `UserProfileCard.vue` (footer section + ASCII mockup comment), `app/stores/auth.ts` (two actions).
 - `docs/adr-compliance-frontend.md`: rows for component + store.
 
-### Phase 6 — ADR + docs
+### Docs — new ADR + compliance
 
-- **ADR-017** at the top of `docs/adr.md`.
-- `docs/features.md` entry + the Phase 5 screenshot; ops-runbook final pass; compliance docs' "Last Updated" lines.
+- **ADR-017 [Notification delivery via dedicated worker + versioned queue contract]** at the top of `docs/adr.md`.
+- `docs/features.md` entry + the UI-phase screenshot; ops-runbook final pass; compliance docs' "Last Updated" lines.
 
 ## Verification (dev.skraaningen.dk before prod)
 
 ```bash
+# delivery-pipe exit criterion — the pipe alone, before any app work:
+make deploy-notifications-dev && make secrets-notifications-dev
+make notify-test-dev                 # → real e-mail in inbox + SMS on phone
+make logs-notifications-dev          # 📮 > NOTIFICATIONS > [EMAIL] delivered / [SMS] delivered
+npx wrangler queues info theslope-notifications-dev       # backlog 0
+npx wrangler queues info theslope-notifications-dlq-dev   # 0 messages
+
 # unit + worker + component
 npm run test:unit && npm run test:worker
 
 # E2E (local, producer path)
 npx playwright test tests/e2e/api/user/notifications.e2e.spec.ts tests/e2e/ui/notifications.e2e.spec.ts --reporter=line
 
-# deploy dev (app + worker via chained Makefile target), then:
+# after app deploy (endpoints phase onward), the same pipe fed from the app:
 curl -s -b .cookies.txt -X POST "https://dev.skraaningen.dk/api/user/notifications/channels" \
   -H "Content-Type: application/json" -d '{"channels":["EMAIL","SMS"]}' | jq
 curl -s -b .cookies.txt -X POST "https://dev.skraaningen.dk/api/user/notifications/test" | jq
@@ -500,11 +523,12 @@ Prod: repeat the curl pair against `https://skraaningen.dk` after prod deploy + 
 
 ## Risks / open items
 
-- **Email Service is public beta** (Apr 2026): `env.EMAIL.send()` signature/error codes may drift before GA. Contained — only `providers/email.ts` touches it; Resend swap = one adapter + one secret. Re-verify binding key + typed errors against current docs in Phase 0.
-- **Paid plan + zone enablement are dashboard steps** — cannot be IaC'd; Phase 0 checklist + runbook.
+- **Email Service is public beta** (Apr 2026): `env.EMAIL.send()` signature/error codes may drift before GA. Contained — only `providers/email.ts` touches it; Resend swap = one adapter + one secret. Re-verify binding key + typed errors against current docs during prerequisites.
+- **Email Service zone enablement is a dashboard step** — cannot be IaC'd; prerequisites checklist + runbook.
 - **No full local loop** (two workers, one `nuxt dev`): accepted — producer E2E against the miniflare queue sink, consumer via pool-workers tests, dev environment proves integration.
-- **`@cloudflare/vitest-pool-workers` peer pinning** vs root vitest 3.2.4 — check at install; fallback documented in Phase 4.
-- **Sender ID** `Skraaningen` (11-char GSM alphanumeric, no å) — verify DK carrier acceptance with one real SMS in Phase 4.
+- **`@cloudflare/vitest-pool-workers` peer pinning** vs root vitest 3.2.4 — check at install; fallback documented in the delivery-pipe phase.
+- **Sender ID** `Skraaningen` (11-char GSM alphanumeric, no å) — DK carrier acceptance is verified by the very first `make notify-test-dev`.
+- **Smoke-target token**: the Queues HTTP publish API requires a token with **Queues Edit** — confirm the existing `CLOUDFLARE_API_TOKEN` scope or mint a dedicated one (prerequisites).
 - **Two-device session staleness**: channels are snapshotted in the session; the endpoint patches it and the store re-fetches, but a second logged-in device shows stale toggles until next login. Cosmetic — the test endpoint reads the DB row.
 - **CI deploys the worker on every push** even when unchanged — wrangler deploys are cheap and idempotent; acceptable v1.
 
