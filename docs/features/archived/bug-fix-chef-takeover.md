@@ -1,7 +1,7 @@
 # Bug Fix: Chef Takeover — "Ja tak, jeg overtager chefkokketjansen" Cannot Be Pressed
 
-**Status:** Accepted
-**Date:** 2026-08-31
+**Status:** Implemented
+**Date:** 2026-08-31 | **Updated:** 2026-09-01
 **Builds on:** [feature-proposal-chef-swap.md](feature-proposal-chef-swap.md) (panel spec, menu decision, Heynabo token flow)
 
 ## Problem
@@ -13,15 +13,25 @@ confirmed on dev.
 
 ## Red Tests First
 
-The suite is green today. These go RED against current code, then drive the fix:
+These went RED against the broken code, drove the fix, and are all 🟢 GREEN now:
 
-| Layer | Test | Expected today |
+| Layer | Test | Outcome |
 |---|---|---|
-| Component (new `RoleAssignmentForm.nuxt.spec.ts`, parametrized over mode × dinner state) | Swap commit ENABLED on a non-ANNOUNCED dinner; on an ANNOUNCED dinner disabled until a menu choice is made (radio rendered); volunteer enabled, no radio; resign renders `DangerButton` | 🔴 RED — button unconditionally disabled, no radio exists |
-| E2E UI (`ChefSwap.e2e.spec.ts`, takeover flow) | Dinner cheffed by inhabitant A; member B opens "Rediger chefkokketjans", commits → B is chef | 🔴 RED — click impossible |
-| API (`assign-role.e2e.spec.ts`) | (a) SCHEDULED dinner cheffed by A, B assigns CHEF → `chefId` = B | 🟢 GREEN already — a contract pin so the server's takeover semantics can never silently change |
-| API | (b) ANNOUNCED + `menuStrategy: CLEAR` → dinner reset to clean SCHEDULED, B is chef | 🔴 RED — no `menuStrategy` support |
-| API | (c) ANNOUNCED + `menuStrategy: PRESERVE` → menu and state kept, B is chef, `heynaboEventId` re-pointed | 🔴 RED |
+| Component (`RoleAssignmentForm.nuxt.spec.ts`, 10 tests, parametrized over mode × dinner state) | Swap commit ENABLED on a non-ANNOUNCED dinner; on an ANNOUNCED dinner disabled until a menu choice is made (radio rendered); volunteer enabled, no radio; resign renders `DangerButton` | 🔴 → 🟢 |
+| Component (`RoleAssignment.nuxt.spec.ts`) | Takeover: swap save calls `claimRoleForMe` and emits `role-assigned` | 🔴 → 🟢 |
+| E2E UI (`ChefSwap.e2e.spec.ts`, takeover flow on `/chef` and `/dinner`) | Dinner cheffed by inhabitant A; member B opens "Rediger chefkokketjans", commits → B is chef (verified via API) | 🔴 → 🟢 |
+| API (`assign-role.e2e.spec.ts`) | (a) SCHEDULED dinner cheffed by A, B assigns CHEF → `chefId` = B | 🟢 already — contract pin so the server's takeover semantics can never silently change |
+| API | (b) ANNOUNCED + `menuStrategy: CLEAR` → dinner reset to clean SCHEDULED, B is chef | 🔴 → 🟢 |
+| API | (c) ANNOUNCED + `menuStrategy: PRESERVE` → menu and state kept, B is chef, `heynaboEventId` re-pointed | 🔴 → 🟢 |
+| API | (d) ANNOUNCED + `PRESERVE` with a stale/undeletable Heynabo event → assignment stands, response is 207 (degraded sync, ADR-013) | 🟢 new |
+
+### Test-layer contract (applied to `ChefSwap.e2e.spec.ts`)
+
+Component tests verify UI rendering (labels, modes, enabled states); E2E tests verify
+**trigger → API** from a deterministic starting state, asserting outcomes via API — never via
+UI settling. The lifecycle test reloads the page between the volunteer and resign phases so
+each trigger starts from a freshly rendered state; mid-session re-render propagation is
+component-test territory (and the `/chef` refresh-chain item on the v0.9 release plan).
 
 ## Root Cause — regression chain
 
@@ -72,8 +82,8 @@ Panel spec, menu-decision table, and Heynabo token flow are as designed in
 - **`plan.ts claimRoleForMe`** — passes `menuStrategy` through in the assign-role body.
 - **`assign-role` endpoint** — `AssignRoleSchema` gains optional
   `menuStrategy: 'PRESERVE' | 'CLEAR'` (`MenuSwapStrategySchema` in
-  `useCookingTeamValidation`, name per proposal). When taking over from a different chef on an
-  ANNOUNCED dinner:
+  `useBookingValidation`, next to `AssignRoleSchema`; name per proposal). When taking over
+  from a different chef on an ANNOUNCED dinner:
   - `CLEAR` → `removeChefRole(d1, dinner)` (shared util from the v0.9 bug sprint: HN event
     deleted via system token, `CHEF_LOSS_DINNER_UPDATES`, allergens cleared), then assign —
     clean SCHEDULED, the taker announces their own menu later.
@@ -105,8 +115,10 @@ without it.
 ## Affected Areas
 
 - `app/components/shared/RoleAssignmentForm.vue`, `app/components/shared/RoleAssignment.vue`
-- `app/stores/plan.ts` (`claimRoleForMe`)
-- `app/composables/useCookingTeamValidation.ts` (`MenuSwapStrategySchema`, `AssignRoleSchema`)
-- `server/routes/api/team/cooking/[id]/assign-role.post.ts`
-- Tests: `RoleAssignmentForm.nuxt.spec.ts` (new), `ChefSwap.e2e.spec.ts`, `assign-role.e2e.spec.ts`
+- `app/stores/plan.ts` (`claimRoleForMe`, `assignRoleToDinner`)
+- `app/composables/useBookingValidation.ts` (`MenuSwapStrategySchema`, `AssignRoleSchema.menuStrategy`)
+- `server/routes/api/team/cooking/[id]/assign-role.post.ts` (takeover branch, 207 on degraded HN sync)
+- Tests: `RoleAssignmentForm.nuxt.spec.ts` (new), `RoleAssignment.nuxt.spec.ts`,
+  `ChefSwap.e2e.spec.ts`, `assign-role.e2e.spec.ts`, `dinnerEventFactory.ts`
+  (`assignRoleToDinnerEvent` accepts `menuStrategy` + expected status)
 - Docs when shipped: compliance rows (assign-role endpoint, RoleAssignmentForm), dated note in the chef-swap proposal

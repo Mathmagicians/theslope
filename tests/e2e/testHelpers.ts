@@ -213,17 +213,6 @@ const daysFromNow = (days: number) => {
     return d
 }
 
-/**
- * Waits until the first element matching selector renders the expected text.
- * Steady-state UI wait: interact only after the page settled on the state the server confirmed.
- */
-const pollForText = (page: Page, selector: string, expected: string, maxAttempts?: number) =>
-    pollUntil(
-        async () => await page.locator(selector).first().textContent().catch(() => ''),
-        text => !!text?.includes(expected),
-        maxAttempts
-    )
-
 const testHelpers = {
     salt,
     saltedId,
@@ -232,7 +221,6 @@ const testHelpers = {
     validatedBrowserContext,
     memberValidatedBrowserContext,
     pollUntil,
-    pollForText,
     doScreenshot,
     selectDropdownOption,
     getSessionUserInfo,

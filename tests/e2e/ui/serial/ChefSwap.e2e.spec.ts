@@ -6,7 +6,7 @@ import {formatDate} from '~/utils/date'
 import {isThisACookingDay} from '~/utils/season'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, pollForText, getSessionUserInfo, temporaryAndRandom, doScreenshot} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, getSessionUserInfo, temporaryAndRandom, doScreenshot} = testHelpers
 const {TeamRoleSchema} = useCookingTeamValidation()
 const TeamRole = TeamRoleSchema.enum
 
@@ -21,7 +21,6 @@ test.describe('Chef Swap — volunteer flow', () => {
     const ROLE_CANCEL = '[data-testid="role-assignment-cancel"]'
     const ROLE_RESIGN = '[data-testid="role-assignment-resign"] button'
     const CHEF_WANTED = '[data-testid="chef-wanted"]'
-    const CHEF_DISPLAY = '[data-testid="chef-display"]'
 
     // Opens the role form; retries the trigger if a background re-render closes it
     // (volunteering flips /chef into chef mode, which briefly remounts the form).
@@ -135,12 +134,10 @@ test.describe('Chef Swap — volunteer flow', () => {
             expect(assignResult!.status, 'assign-role must succeed').toBe(200)
             await expectDinnerChef(memberCtx, dinner.id, memberInhabitantId)
 
-            // Steady state: the server confirmed the chef; interact only once the UI settled on it
-            await pollForText(page, ROLE_TRIGGER, 'Rediger chefkokketjans')
-            await expect(page.locator(CHEF_DISPLAY).first(), 'chef portrait renders after volunteer').toBeVisible()
+            // Meld afbud: chef resigns → dinner back to vacant. Reload for a deterministic
+            // chef-mode render — mid-session re-rendering is component-test territory.
+            await page.goto(url(dinner.date))
             if (label === '/dinner') await doScreenshot(page, 'chef/role-assigned', true)
-
-            // Meld afbud: chef resigns → dinner back to vacant
             await openForm(page)
             const resignBtn = page.locator(ROLE_RESIGN).first()
             await resignBtn.click()  // DangerButton: first click arms, second commits
