@@ -67,19 +67,18 @@ export function useEntityFormManager<T>(options: {
   }
 
   /**
-   * Handle form mode transitions
+   * Initialize the draft for a form mode
    * - CREATE: Initialize draft with default entity
-   * - EDIT: Copy selected entity to draft
+   * - EDIT: Copy selected entity to draft (independent copy to prevent mutation;
+   *         arrays handled specially - object spread on arrays creates objects, not arrays)
    * - VIEW: Clear draft, show selected entity
    */
-  const onModeChange = async (mode: FormMode) => {
+  const initDraftForMode = (mode: FormMode) => {
     switch (mode) {
       case FORM_MODES.CREATE:
         draftEntity.value = options.getDefaultEntity()
         break
       case FORM_MODES.EDIT:
-        // Create independent copy to prevent mutation of selected entity
-        // Handle arrays specially - object spread on arrays creates objects, not arrays
         if (!options.selectedEntity.value) {
           draftEntity.value = null
         } else if (Array.isArray(options.selectedEntity.value)) {
@@ -92,7 +91,13 @@ export function useEntityFormManager<T>(options: {
         draftEntity.value = null
         break
     }
+  }
 
+  /**
+   * Handle form mode transitions (draft side effects + URL sync)
+   */
+  const onModeChange = async (mode: FormMode) => {
+    initDraftForMode(mode)
     formMode.value = mode
     await updateURLQueryFromMode(mode)
   }
@@ -103,24 +108,20 @@ export function useEntityFormManager<T>(options: {
    */
   onMounted(() => {
     // Trigger side effects for initial mode (populate draftEntity if needed)
-    if (formMode.value === FORM_MODES.CREATE) {
-      draftEntity.value = options.getDefaultEntity()
-    } else if (formMode.value === FORM_MODES.EDIT) {
-      if (options.selectedEntity.value) {
-        if (Array.isArray(options.selectedEntity.value)) {
-          draftEntity.value = [...options.selectedEntity.value] as T
-        } else {
-          draftEntity.value = { ...options.selectedEntity.value }
-        }
-      }
+    if (formMode.value !== FORM_MODES.VIEW) {
+      initDraftForMode(formMode.value)
     }
   })
 
   /**
-   * Watch for formMode changes and update URL
-   * This handles cases where formMode is updated via v-model without calling onModeChange
+   * Watch for formMode changes: apply draft side effects and update URL.
+   * This handles formMode updates via v-model (FormModeSelector) without calling
+   * onModeChange - since #62 removed the fullPath page-key, no remount re-initializes
+   * the draft, so it MUST happen here. Re-applying after onModeChange is idempotent
+   * (fresh copy/default of the same data, applied before render - pre-flush).
    */
   watch(formMode, async (newMode) => {
+    initDraftForMode(newMode)
     if (route.query.mode !== newMode) {
       await updateURLQueryFromMode(newMode)
     }

@@ -449,7 +449,7 @@ const columns = [
               :disabled="disabledModes.includes(FORM_MODES.CREATE)"
               @update:model-value="handleSeasonChange"
           />
-          <FormModeSelector v-if="props.canEdit && !isNoSeasons" v-model="formMode" :disabled-modes="disabledModes" @change="onModeChange"/>
+          <FormModeSelector v-if="props.canEdit && !isNoSeasons" v-model="formMode" :disabled-modes="disabledModes"/>
         </div>
       </div>
     </template>

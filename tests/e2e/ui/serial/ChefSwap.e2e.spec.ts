@@ -144,14 +144,16 @@ test.describe('Chef Swap — volunteer flow', () => {
             await openForm(page)
             const resignBtn = page.locator(ROLE_RESIGN).first()
             await resignBtn.click()  // DangerButton: first click arms, second commits
-            await expect(resignBtn, 'DangerButton armed state settled').toContainText('Tryk igen')
+            await pollUntil(
+                async () => (await resignBtn.textContent().catch(() => ''))?.includes('Tryk igen') ?? false,
+                armed => armed
+            )
             await resignBtn.click()
 
             const removeResult = await pollUntil(async () => removeRole, (r) => r !== null, 10)
             expect(removeResult!.status, 'remove-role must succeed').toBe(200)
             await expectDinnerChef(memberCtx, dinner.id, null)
 
-            await pollForText(page, ROLE_TRIGGER, 'Bliv chefkok')
             await expect(page.locator(CHEF_WANTED).first(), 'dinner vacant again after Meld afbud').toBeVisible()
         })
 

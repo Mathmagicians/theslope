@@ -1,6 +1,6 @@
 // @vitest-environment nuxt
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { ref, computed, effectScope, type EffectScope } from 'vue'
+import { ref, computed, effectScope, nextTick, type EffectScope } from 'vue'
 import { useEntityFormManager } from '~/composables/useEntityFormManager'
 import { FORM_MODES } from '~/types/form'
 
@@ -209,4 +209,48 @@ describe('useEntityFormManager', () => {
       expect(currentModel.value).toEqual(draftCopy)
     })
   })
+  describe('Direct formMode set (FormModeSelector v-model path)', () => {
+    // FormModeSelector writes formMode via v-model without calling onModeChange.
+    // The composable must apply the same draft side effects (regression: #62 removed
+    // the fullPath page-key remount that masked the missing draft init).
+    it.each([
+      [FORM_MODES.EDIT, () => existingEntity],
+      [FORM_MODES.CREATE, () => defaultEntity]
+    ])('should initialize draft when formMode is set directly to %s', async (mode, expected) => {
+      const { formMode, currentModel } = createFormManager()
+
+      formMode.value = mode
+      await nextTick()
+
+      expect(currentModel.value).toEqual(expected())
+    })
+
+    it('should clear draft when formMode is set directly back to VIEW', async () => {
+      const { formMode, currentModel } = createFormManager()
+
+      formMode.value = FORM_MODES.EDIT
+      await nextTick()
+      currentModel.value = { name: 'Dirty', value: 7 }
+
+      formMode.value = FORM_MODES.VIEW
+      await nextTick()
+
+      expect(currentModel.value).toEqual(existingEntity)
+
+      formMode.value = FORM_MODES.EDIT
+      await nextTick()
+      expect(currentModel.value).toEqual(existingEntity) // fresh copy, not dirty draft
+    })
+
+    it('should not mutate selected entity when editing draft after direct EDIT set', async () => {
+      const { formMode, currentModel } = createFormManager()
+
+      formMode.value = FORM_MODES.EDIT
+      await nextTick()
+
+      currentModel.value = { ...(currentModel.value as TestEntity), name: 'Changed' }
+      expect(selectedEntity.value).toEqual(existingEntity)
+    })
+  })
+
 })
