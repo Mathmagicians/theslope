@@ -332,10 +332,15 @@ export class SeasonFactory {
             return season
         }
 
-        // Return cached active season if it exists
+        // A cache hit is only valid while the cached season is still the DB's active
+        // season - tests activate their own seasons, so verify before trusting it
         if (this.activeSeason) {
-            console.info('🌞 > SEASON_FACTORY > Returning cached active season:', this.activeSeason.shortName)
-            return this.activeSeason
+            const activeId = await this.getActiveSeasonId(context)
+            if (activeId === this.activeSeason.id) {
+                console.info('🌞 > SEASON_FACTORY > Returning cached active season:', this.activeSeason.shortName)
+                return this.activeSeason
+            }
+            this.activeSeason = null
         }
 
         // Check if the singleton test season already exists in DB (parallel-safe)
