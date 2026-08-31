@@ -71,13 +71,14 @@ Analysis, root causes, and TDD steps live in the detail docs — this table is t
 - **Related:** narrows `feature-proposal-backup-export.md` to the billing slice; full-data backup stays out of scope
 - **Effort:** M (R2 binding + archive step + one mail template)
 
-### F3. Email notifications (SMS later)
-- **Proposal:** ❌ needs writing (`feature-proposal-notifications.md`). No messaging infrastructure exists today. Scope for the proposal:
-  - Provider choice compatible with Cloudflare Workers (e.g., Resend / MailChannels / SES via API), secrets via runtime config
-  - `Notification`/outbox model + idempotent send job (ADR-015 pattern), opt-out per user
-  - Trigger catalog v1: **accountant billing mail (F2)** and **job-failure alerts (I4)** first (admin-facing, low volume), then waitlist ticket available (F4), duty/chef swap + sign-off (F5 — its proposal explicitly deferred notifications), dinner announced/cancelled
-  - Danish templates; SMS explicitly deferred to a later release (same outbox, different channel)
-- **Effort:** M (infra + 2–3 triggers)
+### F3. Notifications (email + SMS)
+- **Proposal:** ✅ written — [`feature-proposal-notifications.md`](../feature-proposal-notifications.md). Scope evolved from the sketch below during proposal work (decisions made 2026-08-31):
+  - **Email + SMS both in v1** (SMS no longer deferred); per-user channel preference none/email/SMS/both in the profile
+  - **Cloudflare Email Service** (native `send_email` binding) + **GatewayAPI** SMS (Danish/EU, 0.307 DKK/SMS), each behind a provider port
+  - **Separate stateless delivery worker** (`workers/notifications/`) consuming a Cloudflare Queue — no outbox table, no send job; queue retries + DLQ replace the ADR-015 outbox sketched earlier
+  - v1 trigger: test notification from profile; trigger catalog (job-failure/I4, dinner cancelled, waitlist/F4, duty/F5b, accountant/F2) are follow-up call sites of the same `notifyUsers()`
+  - Danish templates, rendered app-side
+- **Effort:** M–L (7 phases incl. account setup and second worker)
 
 ### F4. Waitlist (released-ticket claim)
 - **Proposal:** ❌ needs writing (`feature-proposal-waitlist.md`). Backend exists (`/api/order/claim` — FIFO by `releasedAt`, retry, audit) and claim detection is partially wired in `GuestBookingForm`/`DinnerBookingForm`. Missing: a first-class UI surfacing released tickets ("N ledige billetter"), an explicit claim flow in day + grid views, and a *subscribe-and-notify* waitlist ("tell me when a ticket frees up") — the latter depends on F3
@@ -121,7 +122,7 @@ Rationale for the ordering: bugs and the consistency sweep de-risk everything af
 | `bug-fix-booking-desired-order-builder.md` | Done (uncommitted) | Commit + implement (B1) |
 | `bug-fix-order-snapshot.md` | Done | Implement (B6) |
 | `proposals/bare-fetch-fix.md` | Notes | Expand into I1/I2 workplan |
-| `feature-proposal-notifications.md` | Missing | Write (F3) |
+| `feature-proposal-notifications.md` | Proposal | Review + sign-off (F3) |
 | `feature-proposal-billing-archive.md` | Missing | Write (F2, references backup-export proposal) |
 | `feature-proposal-waitlist.md` | Missing | Write (F4) |
 | `proposals/guest-booking-form.md` | Notes | Fold into F4 claim-UI work or archive |

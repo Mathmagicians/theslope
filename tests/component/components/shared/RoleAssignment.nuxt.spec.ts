@@ -85,7 +85,7 @@ describe('RoleAssignment', () => {
         await nextTick()
 
         expect(claimRoleForMeMock).toHaveBeenCalledTimes(1)
-        expect(claimRoleForMeMock).toHaveBeenCalledWith(expect.objectContaining({chef: null}), TeamRole.CHEF)
+        expect(claimRoleForMeMock).toHaveBeenCalledWith(expect.objectContaining({chef: null}), TeamRole.CHEF, undefined)
         expect(wrapper.emitted('role-assigned')).toHaveLength(1)
     })
 
@@ -105,16 +105,16 @@ describe('RoleAssignment', () => {
         expect(wrapper.emitted('role-removed')).toHaveLength(1)
     })
 
-    it('swap flow does NOT call the API (Phase 3 placeholder)', async () => {
+    it('takeover: swap save claims the duty and emits role-assigned', async () => {
         const wrapper = await mountWith(OTHER)
         await findById(wrapper, TEST_IDS.trigger).trigger('click')
         await nextTick()
         await findById(wrapper, TEST_IDS.save).trigger('click')
         await nextTick()
 
-        expect(claimRoleForMeMock).not.toHaveBeenCalled()
-        expect(resignRoleForMeMock).not.toHaveBeenCalled()
-        expect(wrapper.emitted('role-assigned')).toBeFalsy()
+        expect(claimRoleForMeMock).toHaveBeenCalledTimes(1)
+        expect(claimRoleForMeMock).toHaveBeenCalledWith(expect.objectContaining({chef: OTHER}), TeamRole.CHEF, undefined)
+        expect(wrapper.emitted('role-assigned')).toHaveLength(1)
     })
 
     it('cancel closes the panel without calling the API', async () => {

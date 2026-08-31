@@ -1,7 +1,7 @@
 import type {Season} from '~/composables/useSeasonValidation'
 import type {CookingTeamDisplay, CookingTeamDetail, CookingTeamAssignment, CookingTeamCreate, CookingTeamUpdate, CookingTeamAssignmentCreate, TeamRole} from '~/composables/useCookingTeamValidation'
 import {ROLE_ICONS} from '~/composables/useCookingTeamValidation'
-import type {DinnerEventDisplay, DinnerEventDetail} from '~/composables/useBookingValidation'
+import type {DinnerEventDisplay, DinnerEventDetail, MenuSwapStrategy} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 export const usePlanStore = defineStore("Plan", () => {
@@ -476,12 +476,12 @@ export const usePlanStore = defineStore("Plan", () => {
 
         // DINNER EVENT ACTIONS
         const isRoleUpdating = ref(false)
-        const assignRoleToDinner = async (dinnerEventId: number, inhabitantId: number, role: CookingTeamAssignment['role']): Promise<DinnerEventDetail> => {
+        const assignRoleToDinner = async (dinnerEventId: number, inhabitantId: number, role: CookingTeamAssignment['role'], menuStrategy?: MenuSwapStrategy): Promise<DinnerEventDetail> => {
             isRoleUpdating.value = true
             try {
                 const updated = await $fetch<DinnerEventDetail>(`/api/team/cooking/${dinnerEventId}/assign-role`, {
                     method: 'POST',
-                    body: { inhabitantId, role },
+                    body: { inhabitantId, role, ...(menuStrategy && {menuStrategy}) },
                     headers: {'Content-Type': 'application/json'}
                 })
                 console.info(`${ROLE_ICONS[role]} > PLAN_STORE > Assigned ${role} role to inhabitant ${inhabitantId} for dinner event ${dinnerEventId}`)
@@ -504,11 +504,11 @@ export const usePlanStore = defineStore("Plan", () => {
          * Volunteer the current user for a role on a dinner. Wraps assignRoleToDinner +
          * shows the same date/team-aware toast as the auto-claim path. Returns null on error.
          */
-        const claimRoleForMe = async (dinnerEvent: DinnerEventDetail, role: TeamRole): Promise<DinnerEventDetail | null> => {
+        const claimRoleForMe = async (dinnerEvent: DinnerEventDetail, role: TeamRole, menuStrategy?: MenuSwapStrategy): Promise<DinnerEventDetail | null> => {
             const inhabitantId = authStore.inhabitantId
             if (inhabitantId === null) return null
             try {
-                const updated = await assignRoleToDinner(dinnerEvent.id, inhabitantId, role)
+                const updated = await assignRoleToDinner(dinnerEvent.id, inhabitantId, role, menuStrategy)
                 const {formatRoleClaimedTitle} = useCookingTeam()
                 useToast().add({title: formatRoleClaimedTitle(dinnerEvent, role), color: 'success'})
                 return updated

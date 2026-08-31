@@ -49,10 +49,9 @@ test.describe('AdminTeams Form UI', () => {
                 expect(initialTeams.length).toBe(0)
 
                 await page.goto(`${adminTeamsUrl}?mode=create&season=${season.shortName}`)
-                await page.waitForResponse(
-                    (response) => response.url().includes('/api/admin/season') && response.status() === 200,
-                    {timeout: 10000}
-                )
+                // Wait on UI state, not on a season API response: with SSR payload transfer
+                // the client may legitimately never re-fetch /api/admin/season (CI-flaky otherwise)
+                await expect(page.locator('input#team-count')).toBeVisible({timeout: 10000})
 
                 // WHEN: Create 2 teams
                 await page.locator('input#team-count').fill('2')

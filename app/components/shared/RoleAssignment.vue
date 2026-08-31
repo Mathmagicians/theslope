@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type {DinnerEventDetail} from '~/composables/useBookingValidation'
+import type {DinnerEventDetail, MenuSwapStrategy} from '~/composables/useBookingValidation'
 import {ROLE_LABELS, type TeamRole} from '~/composables/useCookingTeamValidation'
 
 interface Props {
@@ -41,9 +41,9 @@ const isActionable = computed(() => !isDinnerPast(props.dinnerEvent.date))
 const isOpen = ref(false)
 watch(() => props.dinnerEvent.id, () => { isOpen.value = false })
 
-const handleSubmit = async ({theirs}: {ours: number, theirs?: number[]}) => {
-    if (theirs !== undefined) return  // swap path lands in next iteration
-    const result = await planStore.claimRoleForMe(props.dinnerEvent, props.role)
+const handleSubmit = async ({theirs, menuStrategy}: {ours: number, theirs?: number[], menuStrategy?: MenuSwapStrategy}) => {
+    if (theirs?.length) return  // two-sided trade ships with the duty roster
+    const result = await planStore.claimRoleForMe(props.dinnerEvent, props.role, menuStrategy)
     if (result === null) return
     isOpen.value = false
     emit('role-assigned')

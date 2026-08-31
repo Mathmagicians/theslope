@@ -352,6 +352,25 @@ async function getSystemToken(): Promise<string> {
 /**
  * Update Heynabo event using system credentials (admin update)
  */
+/**
+ * Upload one of the bundled default dinner pictures to a Heynabo event.
+ * Best-effort: never throws — a missing picture is not worth failing a publish over.
+ */
+export async function uploadDefaultDinnerPictureToEvent(token: string, heynaboEventId: number, baseUrl: string): Promise<void> {
+    try {
+        const pictureFilename = getRandomDefaultDinnerPicture()
+        const pictureUrl = `${baseUrl}/${encodeURIComponent(pictureFilename)}`
+        const imageResponse = await fetch(pictureUrl)
+        if (!imageResponse.ok) {
+            console.warn(`🖼️ > HEYNABO > Failed to fetch default picture ${pictureUrl} (status ${imageResponse.status})`)
+            return
+        }
+        await uploadHeynaboEventImage(token, heynaboEventId, await imageResponse.blob(), pictureFilename)
+    } catch (imageError) {
+        console.warn('🖼️ > HEYNABO > Image upload failed (non-blocking)', imageError)
+    }
+}
+
 export async function updateHeynaboEventAsSystem(eventId: number, payload: HeynaboEventCreate): Promise<HeynaboEventResponse> {
     const token = await getSystemToken()
     return updateHeynaboEvent(token, eventId, payload)

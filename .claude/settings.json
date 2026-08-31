@@ -22,11 +22,26 @@
       "Read(./.env.prod)",
       "Bash(npx wrangler :* --remote :*DELETE:*)",
       "Bash(npm run dev:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)"
     ],
     "ask": [
       "Bash(npx wrangler :* --remote :*)"
     ],
     "includeCoAuthoredBy": false
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/enforce-project-dir.sh"
+          }
+        ]
+      }
+    ]
   }
 }

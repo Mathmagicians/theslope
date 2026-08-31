@@ -260,14 +260,15 @@ export class DinnerEventFactory {
         dinnerEventId: number,
         inhabitantId: number,
         role: TeamRole,
-        expectedStatus: number = 200
+        expectedStatus: number = 200,
+        menuStrategy?: 'PRESERVE' | 'CLEAR'
     ): Promise<DinnerEventDetail | null> => {
         const {DinnerEventDetailSchema} = useBookingValidation()
         const response = await context.request.post(
             `/api/team/cooking/${dinnerEventId}/assign-role`,
             {
                 headers: headers,
-                data: { inhabitantId, role }
+                data: { inhabitantId, role, ...(menuStrategy && {menuStrategy}) }
             }
         )
 
@@ -275,7 +276,7 @@ export class DinnerEventFactory {
         const errorBody = status !== expectedStatus ? await response.text() : ''
         expect(status, `POST assign-role should return ${expectedStatus}. Response: ${errorBody}`).toBe(expectedStatus)
 
-        if (expectedStatus === 200) {
+        if (expectedStatus === 200 || expectedStatus === 207) {
             // ADR-010: Validate response through schema to catch deserialization issues
             const responseBody = await response.json()
             return DinnerEventDetailSchema.parse(responseBody)

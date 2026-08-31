@@ -72,4 +72,37 @@ test.describe('AdminPlanning UI', () => {
       10
     )
   })
+
+  test('GIVEN season in view mode WHEN clicking Rediger and Opret THEN form shows without page reload', async ({ page, browser }) => {
+    const context = await validatedBrowserContext(browser)
+    const season = await SeasonFactory.createSeason(context)
+    createdSeasonIds.push(season.id!)
+
+    // GIVEN: view mode with the season loaded (full page load happens only here)
+    await page.goto(`${adminPlanningUrl}?season=${encodeURIComponent(season.shortName)}`)
+    await pollUntil(
+      async () => await page.getByTestId('form-mode-edit').isVisible(),
+      (isVisible) => isVisible,
+      10
+    )
+
+    // WHEN: switching to EDIT by CLICKING the button (client-side navigation, no reload)
+    // Regression guard: v-model write bypassed draft init -> empty box (unmasked by #62 page-key change)
+    await page.getByTestId('form-mode-edit').click()
+
+    // THEN: the edit form renders with the season loaded
+    await pollUntil(
+      async () => await page.locator('form#seasonForm').isVisible(),
+      (isVisible) => isVisible,
+      10
+    )
+
+    // AND: clicking Opret also renders the form (fresh draft)
+    await page.getByTestId('form-mode-create').click()
+    await pollUntil(
+      async () => await page.locator('form#seasonForm').isVisible(),
+      (isVisible) => isVisible,
+      10
+    )
+  })
 })
