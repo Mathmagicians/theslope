@@ -48,7 +48,7 @@ describe('Allergies Store - AllergyTypes', () => {
         allergyTypesEndpoint.mockClear()
         allergyTypeByIdEndpoint.mockClear()
 
-        allergyTypesEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypes())
+        allergyTypesEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypesWithInhabitants())
         allergyTypeByIdEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypes()[0])
     })
 
@@ -56,8 +56,8 @@ describe('Allergies Store - AllergyTypes', () => {
         const store = await setupStore()
 
         expect(store.isAllergyTypesInitialized).toBe(true)
-        expect(store.allergyTypes).toHaveLength(2)
-        expect(store.allergyTypes[0]!.name).toBe('Peanuts')
+        expect(store.allergyTypes).toHaveLength(AllergyFactory.createMockAllergyTypesWithInhabitants().length)
+        expect(store.allergyTypes[0]!.name).toBe(AllergyFactory.createMockAllergyTypesWithInhabitants()[0]!.name)
     })
 
     it('exposes error when fetch fails', async () => {
@@ -77,7 +77,7 @@ describe('Allergies Store - AllergyTypes', () => {
 
     it.each([
         { data: [], expected: true, description: 'empty array' },
-        { data: AllergyFactory.createMockAllergyTypes(), expected: false, description: 'with data' }
+        { data: AllergyFactory.createMockAllergyTypesWithInhabitants(), expected: false, description: 'with data' }
     ])('isNoAllergyTypes detects $description', async ({ data, expected }) => {
         allergyTypesEndpoint.mockReturnValue(data)
 
@@ -158,7 +158,7 @@ describe('Allergies Store - cache coherence between allergies and the catalog', 
         clearNuxtData()
         vi.clearAllMocks()
 
-        allergyTypesEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypes())
+        allergyTypesEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypesWithInhabitants())
         allergyTypeByIdEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypes()[0])
         allergiesEndpoint.mockReturnValue(AllergyFactory.createMockAllergies())
         allergyByIdEndpoint.mockReturnValue(AllergyFactory.createMockAllergies()[0])

@@ -17,6 +17,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
 
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
+    const {AllergyTypeDetailSchema} = useAllergyValidation()
 
     // ========================================
     // State - useAsyncData with useRequestFetch for SSR-safe auth context (ADR-007)
@@ -41,7 +42,9 @@ export const useAllergiesStore = defineStore("Allergies", () => {
             }
         }),
         {
-            default: () => []
+            default: () => [],
+            // ADR-007/ADR-010: parse to domain types - dates arrive as JSON strings over HTTP
+            transform: (data: AllergyTypeDetail[]) => data.map(at => AllergyTypeDetailSchema.parse(at))
         }
     )
 

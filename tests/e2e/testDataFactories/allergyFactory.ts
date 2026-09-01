@@ -95,6 +95,15 @@ export class AllergyFactory {
      * Create mock AllergyTypeDetail data with inhabitants for component tests (no API call)
      * Returns array of AllergyTypeDetail objects (includes inhabitants with allergyUpdatedAt)
      */
+    /** Birth date for a given age today - age-category test data without hardcoded dates */
+    static readonly birthDateForAge = (years: number): Date => {
+        const d = new Date()
+        d.setFullYear(d.getFullYear() - years)
+        return d
+    }
+
+    // Age mix is canonical: Anna adult, Bob child (8), Clara baby (1) - age-category
+    // display tests rely on these without per-test overrides
     static readonly createMockAllergyTypesWithInhabitants = (): AllergyTypeDetail[] => [
         {
             id: 1,
@@ -103,7 +112,7 @@ export class AllergyFactory {
             icon: '🥛',
             inhabitants: [
                 { id: 1, heynaboId: 101, userId: null, householdId: 1, name: 'Anna', lastName: 'Hansen', pictureUrl: null, birthDate: new Date('1990-01-01'), inhabitantComment: null, allergyUpdatedAt: new Date('2025-01-01') },
-                { id: 2, heynaboId: 102, userId: null, householdId: 2, name: 'Bob', lastName: 'Jensen', pictureUrl: null, birthDate: new Date('1985-05-15'), inhabitantComment: 'Mild', allergyUpdatedAt: new Date('2025-01-05') }
+                { id: 2, heynaboId: 102, userId: null, householdId: 2, name: 'Bob', lastName: 'Jensen', pictureUrl: null, birthDate: AllergyFactory.birthDateForAge(8), inhabitantComment: 'Mild', allergyUpdatedAt: new Date('2025-01-05') }
             ]
         },
         {
@@ -112,7 +121,7 @@ export class AllergyFactory {
             description: 'Nøddeallergi',
             icon: '🥜',
             inhabitants: [
-                { id: 3, heynaboId: 103, userId: null, householdId: 3, name: 'Clara', lastName: 'Petersen', pictureUrl: null, birthDate: new Date('1995-03-20'), inhabitantComment: 'Alvorlig', allergyUpdatedAt: new Date('2025-01-10') }
+                { id: 3, heynaboId: 103, userId: null, householdId: 3, name: 'Clara', lastName: 'Petersen', pictureUrl: null, birthDate: AllergyFactory.birthDateForAge(1), inhabitantComment: 'Alvorlig', allergyUpdatedAt: new Date('2025-01-10') }
             ]
         },
         {

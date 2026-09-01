@@ -114,5 +114,13 @@ describe('AllergyTypeCard', () => {
             expect(wrapper.text()).toContain(existingType!.name)
             expect(wrapper.text()).toContain(`${existingType!.inhabitants!.length} beboer`)
         })
+
+        it('shows an age category badge per inhabitant (child renders Barn, not Voksen)', async () => {
+            // Factory canon: Anna is an adult, Bob a child
+            const wrapper = await mountCard({allergyType: existingType})
+
+            const badges = wrapper.findAll('[data-testid="inhabitant-age-badge"]')
+            expect(badges.map(b => b.text())).toEqual(['Voksen', 'Barn'])
+        })
     })
 })

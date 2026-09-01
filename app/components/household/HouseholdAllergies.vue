@@ -36,8 +36,9 @@ import type {TicketTypeConfig} from '~/composables/useTicket'
 // Design system
 const {SIZES} = useTheSlopeDesignSystem()
 
-// Ticket type config for display (label, color, icon)
+// Ticket type config for display (label, color, icon); active season prices carry the age limits
 const {getTicketTypeConfig} = useTicket()
+const {activeSeason} = storeToRefs(usePlanStore())
 
 interface Props {
   household: HouseholdDetail
@@ -165,7 +166,7 @@ const tableData = computed((): TableDataRow[] => {
       lastName: inhabitant.lastName,
       pictureUrl: inhabitant.pictureUrl,
       birthDate: inhabitant.birthDate,
-      ticketConfig: getTicketTypeConfig(inhabitant.birthDate ?? null),
+      ticketConfig: getTicketTypeConfig(inhabitant.birthDate ?? null, activeSeason.value?.ticketPrices),
       allergies: inhabitantAllergies
     }
   })
