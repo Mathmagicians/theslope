@@ -1,7 +1,7 @@
 # ADR Compliance - Frontend Routes & Components
 
 **Generated:** 2025-11-11
-**Last Updated:** 2026-08-20 (Allergy catalog: single responsive tree in `AdminAllergies.vue`, `AllergyTypeCard.vue` serves create+edit, inline delete confirm, allergies store on `useAsyncData`; new `AdminAllergies.nuxt.spec.ts` + `AllergyTypeCard.nuxt.spec.ts`)
+**Last Updated:** 2026-09-01 (Allergy catalog: responsive detail mount point — shared `AllergyCatalogTable.vue` + portable `AllergyDetailPanel.vue`, sticky desktop pane / row-docked mobile detail, compare-mode fixed summary bar; `AdminAllergies.nuxt.spec.ts` parametrized over `isMd`; new `AdminAllergies.e2e.spec.ts`)
 
 ## Legend
 
@@ -30,7 +30,7 @@
 | `/admin/users` | `admin/[tab].vue` → `AdminUsers.vue` | ✅ `useUsersStore()` | N/A | ✅ tabs | ✅ | ❌ | **⚠️ E2E ONLY** |
 | `/admin/economy` | `admin/[tab].vue` → `AdminEconomy.vue` | ✅ `usePlanStore()`, `useBookingsStore()` | N/A | ✅ tabs | ✅ Serial | ❌ | **⚠️ E2E ONLY** - Admin corrections feature |
 | `/admin/settings` | `admin/[tab].vue` → `AdminSettings.vue` | N/A | N/A | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
-| `/admin/allergies/pdf` | `admin/allergies/pdf.vue` | ✅ `useAllergiesStore()` | N/A | N/A | ❌ | ❌ | **❌ NO TESTS** |
+| `/admin/allergies/pdf` | `admin/allergies/pdf.vue` | ✅ `useAllergiesStore()`, `usePlanStore()` | N/A | N/A | ✅ Smoke | ✅ 2 tests | **✅ COMPLIANT** — Age categories via `groupInhabitantsByTicketCategory` + `formatTicketCounts` (V/B/b), active-season age limits, DS typography |
 | **Household Routes** |
 | `/household/[shortname]` | `household/[shortname]/index.vue` | ✅ `useHouseholdsStore()` | N/A | ✅ path + `?pbs=` | ✅ | ⚠️ | **⚠️ REVIEW** - ADR-006 preserves `?pbs` on redirect |
 | `/household/[shortname]/bookings` | `household/[shortname]/[tab].vue` → `HouseholdBookings.vue` | ✅ Multiple stores | N/A | ✅ tabs + `?pbs=` | ✅ | ❌ | **⚠️ MISSING TESTS** |
@@ -79,9 +79,12 @@
 
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
-| `AdminAllergies.vue` | `/admin/allergies` | `useAllergiesStore()`, `useHouseholdsStore()` | `useAllergyValidation()`, `useAllergy()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 14 tests | ✅ | **✅ COMPLIANT** — One responsive tree (no `md:hidden` branch); row actions replace `FormModeSelector`; inline delete confirm naming the cascade replaces `confirm()`; owns the households lookup passed to `AllergyTypeCard` |
+| `AdminAllergies.vue` | `/admin/allergies` | `useAllergiesStore()`, `useHouseholdsStore()` | `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 32 tests | ✅ Full | **✅ COMPLIANT** — Master/detail with a responsive detail mount point: `AllergyDetailPanel` in the sticky pane (md+) or docked under the tapped row (`#expanded`, `<md`); selection is the single state; spec parametrized over `isMd`; owns the households lookup |
+| `AllergyCatalogTable.vue` | `/admin/allergies`, `/chef` (via `AllergenMultiSelector`) | Parent props | `useAllergy()`, `useAllergyValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 15 tests | ✅ Indirect | **✅ COMPLIANT** — ONE catalog master table (`mode: 'single' \| 'multi'`); forwards `#expanded` + `#empty-state`; deduplicates the former AdminAllergies/AllergenMultiSelector tables |
+| `AllergyDetailPanel.vue` | `/admin/allergies` | None (prop-driven) | `useAllergyValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 12 tests | ✅ Indirect | **✅ COMPLIANT** — Portable detail (view ✏️🗑 / edit / create / delete-confirm); identical testids at every mount point |
+| `AllergenMultiSelector.vue` | `/admin/allergies`, `/chef` | Parent props | `useAllergyValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 17 tests | ✅ Indirect | **✅ COMPLIANT** — Consumes `AllergyCatalogTable` (multi); mobile fixed summary bar jumps to the statistics panel |
 | `HouseholdAllergies.vue` | `/household/[shortname]/allergies` | `useAllergiesStore()`, `useHouseholdsStore()` | `useAllergyValidation()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
-| `AllergyTypeCard.vue` | `/admin/allergies`, `/household/[shortname]/allergies` | Parent props | `useAllergyValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 12 tests | ✅ Indirect | **✅ COMPLIANT** — Serves view/compact/edit **and create** (`allergyType` optional); household rendered via `UserListItem` `#badge` slot; `<NuxtTime relative>` for timestamps (SSR-safe) |
+| `AllergyTypeCard.vue` | `/admin/allergies`, `/household/[shortname]/allergies` | Parent props + `usePlanStore()` (activeSeason read) | `useAllergyValidation()`, `useTicket()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 13 tests | ✅ Indirect | **✅ COMPLIANT** — Serves view/compact/edit **and create** (`allergyType` optional); household rendered via `UserListItem` `#badge` slot; per-inhabitant age badge (`getTicketTypeConfig`, HouseholdCard pattern); `<NuxtTime relative>` for timestamps (SSR-safe) |
 | `AllergyTypeDisplay.vue` | `/admin/allergies/pdf` | Parent props | `useAllergyValidation()` | ✅ | ✅ | ❌ | N/A | **N/A DISPLAY** |
 | `AllergyManagersList.vue` | `/admin/allergies` | `useUsersStore()` | `useUserValidation()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 
@@ -142,7 +145,7 @@
 |-------|------------------|--------------------------|-----------------|---------------------|-----------------|--------|
 | `plan.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** |
 | `households.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** - `setMoveOutDate()`, `lastMoveOutResult`, `moveInhabitant()`, `deleteHousehold()`, `lastMoveResult`, `updateInhabitantPreferences()`, `updateAllInhabitantPreferences()`, `initHouseholdsStore(shortName?, pbsId?)` disambiguation |
-| `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** — Catalog converted from `useFetch` to `useAsyncData` + `useRequestFetch`; `isAllergyTypesInitialized` checks data presence (ADR-007 rule 3); mutations refetch the catalog |
+| `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** — Catalog converted from `useFetch` to `useAsyncData` + `useRequestFetch`; `isAllergyTypesInitialized` checks data presence (ADR-007 rule 3); mutations refetch the catalog; catalog `transform` parses with `AllergyTypeDetailSchema` so dates are domain types (ADR-010) |
 | `users.ts` | ✅ | ✅ | ✅ | ✅ | ❌ | **⚠️ MISSING TESTS** |
 | `auth.ts` | N/A | ✅ | N/A | N/A | ❌ | **✅ COMPLIANT** - Uses `usePermissions()` for role checks, added `isMemberOfHousehold()` |
 | `event.ts` | ❓ | ❓ | ❓ | ❓ | ❌ | **❓ AUDIT NEEDED** |
@@ -173,7 +176,7 @@
 | `useBilling()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Billing business logic |
 | `useHeynabo()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Heynabo import merge logic, `mergeHouseholdForUpdate()`, `resolveInhabitantImportPlan()` (4-bucket inhabitant plan: ADR-016 decide/execute, global deletion + placement routing) |
 | `useOrder()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Order business logic |
-| `useTicket()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Ticket display logic |
+| `useTicket()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Ticket display logic; `ticketTypeConfig.compactLabel` (V/B/b single source, read by `formatTicketCounts`); `groupInhabitantsByTicketCategory` aggregator; `getTicketTypeConfig` falls back to `determineTicketType` (never silently ADULT) |
 | `useUserRoles()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Role reconciliation logic |
 | **UI/Navigation Composables** |
 | `useBookingView()` | ✅ `BookingViewSchema` | N/A | ✅ DateRange | ✅ Full | **✅ COMPLIANT** - ADR-006 URL-synced view/date for booking calendar. Single `findAdjacent(direction)` helper (boundary from `getPeriodBoundary` → `getAdjacentDinner`) replaces per-view switches; `seasonDates` option dropped (implicit via `dinnerDates`) |
@@ -281,9 +284,10 @@ All components and stores work with domain types:
 - ✅ Chef page (`Chef.e2e.spec.ts` - team tab switching, calendar reactivity)
 - ✅ Household settings (`household.e2e.spec.ts` - move-out date management, tab navigation)
 
+- ✅ Admin allergies (`AdminAllergies.e2e.spec.ts` - catalog CRUD)
+
 **Missing E2E:**
 - ❌ Admin users
-- ❌ Admin allergies (has admin.e2e.spec.ts but needs specific tests)
 - ❌ Admin settings
 - ❌ Household allergies
 - ❌ Household economy

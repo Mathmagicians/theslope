@@ -1,5 +1,5 @@
 <!--
-AllergyDetailPanel - the portable DETAIL of the allergy catalog (bug-fix doc D1)
+AllergyDetailPanel - the portable DETAIL of the allergy catalog
 
 One panel, four faces, chosen by panelMode:
 - view:           "Detaljer" header + ✏️🗑 actions + AllergyTypeCard (full view)

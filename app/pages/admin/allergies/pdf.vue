@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import {formatDate} from '~/utils/date'
 
-// Age categories via the shared classification path; active season prices carry the limits
+// Age categories - the active season's ticket prices carry the age limits
 const {groupInhabitantsByTicketCategory, ticketTypeConfig} = useTicket()
 const {formatTicketCounts} = useBilling()
-const {TYPOGRAPHY} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, COLOR} = useTheSlopeDesignSystem()
 
 // No layout for printing
 definePageMeta({
@@ -89,34 +89,34 @@ const printPage = () => {
       <div v-else>
         <!-- Header -->
         <div class="mb-6">
-          <h1 class="text-3xl font-bold text-blue-900 mb-2">
+          <h1 :class="`${TYPOGRAPHY.sectionTitle} mb-2`">
             ALLERGI-LISTE for skrånere
           </h1>
-          <p class="text-lg text-gray-600">pr. {{ currentDate }}</p>
+          <p :class="TYPOGRAPHY.bodyTextMuted">pr. {{ currentDate }}</p>
         </div>
 
         <!-- Main content with QR code -->
         <div class="flex gap-6 mb-6">
           <!-- Allergy table -->
           <div class="flex-1">
-            <table class="allergy-table">
+            <table data-testid="allergy-table" class="w-full border-collapse">
               <thead>
               <tr>
-                <th class="w-1/3">ALLERGEN / INTOLERANCE</th>
-                <th class="w-2/3">PERSON</th>
+                <th class="w-1/3 border-2 border-gray-700 p-3 text-left bg-gray-100 font-bold">ALLERGEN / INTOLERANCE</th>
+                <th class="w-2/3 border-2 border-gray-700 p-3 text-left bg-gray-100 font-bold">PERSON</th>
               </tr>
               </thead>
               <tbody>
               <tr v-for="allergy in allergyData" :key="allergy.id">
-                <td>
+                <td class="border-2 border-gray-700 p-3 align-top">
                   <div :class="`${TYPOGRAPHY.cardTitle} mb-2`">
                     {{ allergy.icon }} {{ allergy.name.toUpperCase() }}
                   </div>
-                  <div :class="`${TYPOGRAPHY.bodyTextSmall} text-gray-700 whitespace-pre-line`">
+                  <div :class="`${TYPOGRAPHY.bodyTextMuted} whitespace-pre-line`">
                     {{ allergy.description }}
                   </div>
                 </td>
-                <td>
+                <td class="border-2 border-gray-700 p-3 align-top">
                   <div class="space-y-2">
                     <!-- List inhabitants with compact category marker (V/B/b) -->
                     <div>
@@ -124,7 +124,7 @@ const printPage = () => {
                         {{ person.name }} ({{ ticketTypeConfig[person.ticketType].compactLabel }})
                         <span
                             v-if="person.inhabitantComment"
-                            :class="`text-xs ${TYPOGRAPHY.bodyTextMuted}`">
+                            :class="`${TYPOGRAPHY.finePrint} text-gray-600`">
                           - {{ person.inhabitantComment }}
                         </span>
                         <span v-if="idx < allergy.members.length - 1">, </span>
@@ -132,7 +132,7 @@ const printPage = () => {
                     </div>
 
                     <!-- Count summary, e.g. [2V 1B] -->
-                    <div class="font-bold mt-2">
+                    <div :class="`${TYPOGRAPHY.bodyTextMedium} mt-2`">
                       [{{ allergy.ticketCounts }}]
                     </div>
                   </div>
@@ -145,32 +145,31 @@ const printPage = () => {
           <!-- QR Code (no-print on screen) -->
           <div v-if="qrCodeDataUrl" class="no-print">
             <img :src="qrCodeDataUrl" alt="QR Code" class="w-40 h-40 border-2 border-gray-300">
-            <p class="text-xs text-gray-600 mt-2 text-center">Scan for online version</p>
+            <p :class="`${TYPOGRAPHY.caption} text-gray-600 mt-2 text-center`">Scan for online version</p>
           </div>
         </div>
 
         <!-- Footer notes -->
-        <div class="allergy-notes text-sm">
-          <p class="font-bold mb-2">Vigtige bemærkninger:</p>
-          <ul class="list-disc list-inside space-y-1">
-            <li>Glutenfri boller findes i fryseren og tages op af madholdet</li>
-            <li>Ved mælkeprodukter i brød, vil mælke-allergikere også have brug for glutenfrit brød (som altid er
-              mælkefrit)
-            </li>
-            <li>Husk at give besked om allergener ved menu-præsentationen</li>
-          </ul>
-        </div>
+        <UAlert :color="COLOR.warning" variant="outline" class="mt-4">
+          <template #description>
+            <p :class="`${TYPOGRAPHY.sectionSubheading} mb-2`">Vigtige bemærkninger:</p>
+            <ul :class="`list-disc list-inside space-y-1 ${TYPOGRAPHY.bodyTextSmall}`">
+              <li>Glutenfri boller findes i fryseren og tages op af madholdet</li>
+              <li>Ved mælkeprodukter i brød, vil mælke-allergikere også have brug for glutenfrit brød (som altid er
+                mælkefrit)
+              </li>
+              <li>Husk at give besked om allergener ved menu-præsentationen</li>
+            </ul>
+          </template>
+        </UAlert>
 
         <!-- Allergy manager contact -->
-        <div class="mt-6 p-4 bg-purple-50 border-l-4 border-purple-500">
-          <p class="text-sm">
-            <span class="font-bold text-purple-900">Allergiansvarlig:</span>
-            <AllergyManagersList class="inline-block ml-2"/>
-          </p>
-          <p class="text-xs text-gray-600 mt-1">
-            Tal med allergiansvarlig for hjælp til at spotte allergener i opskrifterne og udtænke allergihensyn!
-          </p>
-        </div>
+        <AllergyManagersList
+            :color="COLOR.neutral"
+            variant="outline"
+            message="Tal med allergiansvarlig for hjælp til at spotte allergener i opskrifterne og udtænke allergihensyn!"
+            class="mt-6"
+        />
       </div>
     </div>
   </div>
@@ -195,29 +194,5 @@ const printPage = () => {
   .page-break {
     page-break-before: always;
   }
-}
-
-.allergy-table {
-  border-collapse: collapse;
-  width: 100%;
-}
-
-.allergy-table th,
-.allergy-table td {
-  border: 2px solid #333;
-  padding: 12px;
-  text-align: left;
-}
-
-.allergy-table th {
-  background-color: #f3f4f6;
-  font-weight: bold;
-}
-
-.allergy-notes {
-  background-color: #fef3c7;
-  padding: 12px;
-  margin-top: 16px;
-  border-left: 4px solid #f59e0b;
 }
 </style>

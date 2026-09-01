@@ -15,7 +15,7 @@ const props = defineProps<{
 
 const getHouseholdShortName = (householdId: number) => props.householdShortNames?.[householdId] ?? ''
 
-// Age category badge - active season prices carry the age limits (HouseholdCard pattern)
+// Age category badge - the active season's ticket prices carry the age limits
 const {getTicketTypeConfig} = useTicket()
 const {activeSeason} = storeToRefs(usePlanStore())
 const ageBadge = (birthDate: Date | null | undefined) =>
@@ -185,9 +185,9 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
             class="space-y-2"
         >
           <!-- Inhabitant with avatar and name; household + age category as per-person badges -->
-          <div class="flex items-center gap-2">
-            <UserListItem :inhabitants="inhabitant" class="min-w-0">
-              <template #badge="{inhabitant: listed}">
+          <UserListItem :inhabitants="inhabitant">
+            <template #badge="{inhabitant: listed}">
+              <div class="flex items-center gap-1">
                 <UBadge
                     v-if="getHouseholdShortName(listed.householdId)"
                     :color="COLOR.neutral"
@@ -197,17 +197,17 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
                 >
                   {{ getHouseholdShortName(listed.householdId) }}
                 </UBadge>
-              </template>
-            </UserListItem>
-            <UBadge
-                :color="ageBadge(inhabitant.birthDate).color"
-                variant="subtle"
-                :size="SIZES.small"
-                data-testid="inhabitant-age-badge"
-            >
-              {{ ageBadge(inhabitant.birthDate).label }}
-            </UBadge>
-          </div>
+                <UBadge
+                    :color="ageBadge(listed.birthDate).color"
+                    variant="subtle"
+                    :size="SIZES.small"
+                    data-testid="inhabitant-age-badge"
+                >
+                  {{ ageBadge(listed.birthDate).label }}
+                </UBadge>
+              </div>
+            </template>
+          </UserListItem>
 
           <!-- Additional info: Comment and timestamp -->
           <div v-if="inhabitant.inhabitantComment || inhabitant.allergyUpdatedAt" class="pl-14 space-y-1">

@@ -1,15 +1,15 @@
 # Bug Fix: Allergy Catalog — Ages, Categories & Display Logic
 
-**Status:** Proposed | **Date:** 2026-09-01
+**Status:** Implemented | **Date:** 2026-09-01
 **Branch:** `fix/allergy-ages-categories-and-display-logic`
 
 ## Fix Inventory
 
 | id | Fix | Status |
 |----|-----|--------|
-| D1 | Master/detail display logic — mobile detail off-screen | Proposed |
-| D2 | Compare mode — sticky mobile summary | Proposed |
-| A1 | Wrong age categories in allergy surfaces (children as adults) | Accepted — in progress |
+| D1 | Master/detail display logic — mobile detail off-screen | ✅ IMPLEMENTED (2026-09-01) |
+| D2 | Compare mode — mobile summary bar | ✅ IMPLEMENTED (2026-09-01) |
+| A1 | Wrong age categories in allergy surfaces (children as adults) | **Implemented** (2026-09-01) |
 
 ---
 
@@ -114,12 +114,12 @@ ARCHITECTURE
 
 | Test | Change |
 |------|--------|
-| `AllergyCatalogTable.nuxt.spec.ts` (new) | 🔴 parametrized single/multi × showNewBadge × readonly; selection emits; `#expanded` forwarding |
-| `AllergyDetailPanel.nuxt.spec.ts` (new) | 🔴 view actions / edit / create / delete-confirm cascade text / `canEdit:false` |
-| `AdminAllergies.nuxt.spec.ts` | 🔴 parametrize over `isMd` true/false; mobile path selects a row first; `toHaveLength(1)` guards now pin the single-mount invariant |
+| `AllergyCatalogTable.nuxt.spec.ts` (new) | 🟢 parametrized single/multi × showNewBadge × readonly; selection emits; `#expanded` forwarding |
+| `AllergyDetailPanel.nuxt.spec.ts` (new) | 🟢 view actions / edit / create / delete-confirm cascade text / `canEdit:false` |
+| `AdminAllergies.nuxt.spec.ts` | 🟢 parametrize over `isMd` true/false; mobile path selects a row first; `toHaveLength(1)` guards now pin the single-mount invariant |
 | `AllergyTypeCard.nuxt.spec.ts` | untouched (layout-agnostic, mounts card in isolation) |
 | `AllergenMultiSelector.nuxt.spec.ts` | stays green through the table extraction |
-| `AdminAllergies.e2e.spec.ts` (new) | CRUD flow, desktop viewport — today only the tab smoke exists (`admin.e2e.spec.ts`) |
+| `AdminAllergies.e2e.spec.ts` (new) | 🟢 CRUD flow, desktop viewport; the navigation helper waits for the client-only detail pane — the container testid is SSR-visible before hydration attaches listeners |
 
 ### Affected Areas
 
@@ -139,9 +139,11 @@ Milder than D1 (read-only aggregate), but the same disease; fixed here so the ar
 
 ### Solution
 
-Sticky bottom bar inside `AllergenMultiSelector`, `<md` only (`md:hidden` — display-only,
+Fixed bottom bar inside `AllergenMultiSelector`, `<md` only (`md:hidden` — display-only,
 so CSS hiding is fine), visible when selections > 0; tap scrolls to the statistics panel
-(`scrollIntoView` on an anchor ref). `ChefMenuCard` edit mode gets it for free.
+(`scrollIntoView` on an anchor ref). `position: fixed`, not `sticky` — an
+overflow-clipping card ancestor keeps sticky from ever pinning to the viewport.
+`ChefMenuCard` edit mode gets it for free.
 
 ```
 MOBILE — Sammenlign (compare) mode
@@ -151,8 +153,8 @@ MOBILE — Sammenlign (compare) mode
 │ ☑ 🌾 Gluten       1        │
 │  ...list scrolls...        │
 │ 📊 Statistik (below list)  │
-├────────────────────────────┤ ← sticky bottom bar, <md only,
-│ 🧮 2 valgte · 3 beboere  ▲ │   hidden when nothing selected;
+├────────────────────────────┤ ← fixed bottom bar, <md only,
+│ 🧮 2 valgte · 3 beboere  ▼ │   hidden when nothing selected;
 └────────────────────────────┘   tap scrolls to 📊 Statistik
 ```
 
@@ -213,9 +215,17 @@ path.
 |------|--------|
 | `useTicket.nuxt.spec.ts` | ✅ done (red → green): `compactLabel` in config table; `getTicketTypeConfig` without prices (1yo→Baby, 8yo→Barn, 25yo/null→Voksen); aggregator bucketing/order/counts/config. Reuses `TicketFactory.defaultTicketPrices()`, existing `referenceDate` + birthdates, `HouseholdFactory.defaultInhabitantData` — no new age-limit variants (classifier variance already covered) |
 | `useBilling.nuxt.spec.ts` | ✅ existing `formatTicketCounts` tests stay green unchanged through the `compactLabel` refactor |
-| `AllergyTypeCard.nuxt.spec.ts` | 🔴 badge shows `Barn` for a child birthDate |
-| pdf page spec (new) | 🔴 child+baby not rendered as Voksen; counts via `formatTicketCounts` |
-| `AllergyPoster.e2e.spec.ts` (new) | render smoke only: logged-in, header + table visible |
+| `AllergyTypeCard.nuxt.spec.ts` | ✅ done (red → green): badge shows `Barn` for a child birthDate (factory canon: Anna adult, Bob child, Clara baby) |
+| pdf page spec (new: `tests/component/pages/admin-allergies-pdf.nuxt.spec.ts`) | ✅ done (red → green): child+baby not rendered as Voksen; counts via `formatTicketCounts` |
+| `AllergyPoster.e2e.spec.ts` (new) | ✅ done: render smoke only — logged-in, header + table visible |
+
+**Extra finding fixed en route:** the allergies store's catalog fetch had no ADR-007
+`transform` — dates arrived as JSON strings (masked before because the broken classifier
+never read `birthDate`). Catalog now parses with `AllergyTypeDetailSchema` (ADR-010 domain
+types); the store spec's catalog mocks corrected to the Detail shape the endpoint actually
+returns.
+
+**Verified 2026-09-01:** `pre:all` ✅ · full vitest 2140/2140 ✅ · e2e smoke 1/1 ✅
 
 ### Affected Areas
 

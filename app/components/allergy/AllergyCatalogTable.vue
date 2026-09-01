@@ -1,5 +1,5 @@
 <!--
-AllergyCatalogTable - THE master list of the allergy catalog (bug-fix doc D1)
+AllergyCatalogTable - THE master list of the allergy catalog
 
 One table for both selection modes:
 - single: row click emits the id (AdminAllergies master column)

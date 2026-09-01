@@ -1,42 +1,30 @@
 <!--
-ONE responsive tree (LAYOUTS.masterDetailPage) - no md:hidden branching, so every
-interaction exists at every breakpoint.
+Allergy catalog - master/detail with a responsive detail MOUNT POINT.
 
-DESKTOP (md+) - 3/9 split
-┌────────────────────────────────────────────────────────────────────────────────┐
-│ Allergi Katalog                    [📄 Plakat]  [👁 Vis][✏️ Rediger][＋ Opret]  │
-├────────────────────────────────────────────────────────────────────────────────┤
-│ ℹ️ Allergi-ansvarlige: [Alice] [Bob]                                            │
-├────────────────────────────────────────────────────────────────────────────────┤
-│ [⧉ Sammenlign]  [↓ Antal]                                                       │
-├──────────────────────────┬─────────────────────────────────────────────────────┤
-│ MASTER  .left (span 3)   │ DETAIL  .center (span 9)                            │
-│ ┌──────────────────────┐ │ ┌─────────────────────────────────────────────────┐ │
-│ │ 🥛 Mælk       2  🆕  │ │ │ Detaljer                            [✏️]  [🗑]  │ │
-│ │ 🥜 Jordnødder 2      │ │ │ 🥜 Jordnødder                                   │ │
-│ │ 🌾 Gluten     1      │ │ │ Allergi med proteiner...                        │ │
-│ └──────────────────────┘ │ │ Berørte beboere (2)                             │ │
-│                          │ │  👤 Anna Testsen · TV 42                        │ │
-│                          │ └─────────────────────────────────────────────────┘ │
-└──────────────────────────┴─────────────────────────────────────────────────────┘
+Selection is the single state; AllergyDetailPanel is the single detail component.
+Only WHERE it mounts differs - guards keep exactly one instance live.
 
-MOBILE (<md) - same components, stacked
-┌────────────────────────────┐
-│ Allergi Katalog            │
-│ [👁 Vis][✏️ Rediger][＋]    │
-├────────────────────────────┤
-│ [⧉ Sammenlign            ] │  full-width tap targets
-│ [↓ Antal                 ] │
-├────────────────────────────┤
-│ 🥛 Mælk         2   🆕     │  MASTER full width
-│ 🥜 Jordnødder   2          │
-├────────────────────────────┤
-│ Detaljer        [✏️]  [🗑] │  DETAIL stacks below
-│ 🥜 Jordnødder              │
-└────────────────────────────┘
+DESKTOP (md+) - LAYOUTS.masterDetailPage 3/9 grid, sticky detail pane
+┌──────────────────────────┬─────────────────────────────────────┐
+│ MASTER (CatalogTable)    │ DETAIL (AllergyDetailPanel)         │
+│ 🥛 Mælk        2  🆕     │ ┌─ sticky top-4 ─────────────────┐  │
+│ 🥜 Jordnødder  2  ◀ sel  │ │ Detaljer            [✏️]  [🗑] │  │
+│ 🌾 Gluten      1         │ │ 🥜 Jordnødder                  │  │
+│ ...long list scrolls...  │ │ Berørte beboere (2)            │  │
+│                          │ └─ follows you as list scrolls ──┘  │
+└──────────────────────────┴─────────────────────────────────────┘
 
-FormModeSelector in header toggles VIEW/EDIT/CREATE. In EDIT/CREATE the detail
-region swaps to AllergyTypeCard mode="edit" (no allergyType = create).
+MOBILE (<md) - the SAME panel docks under the tapped row (UTable #expanded)
+│ [👁] 🥛 Mælk          2  🆕 │
+│ [▼] 🥜 Jordnødder     2     │  ← tap = select = expand (tap again folds away)
+│ ┌─────────────────────────┐ │
+│ │ Detaljer      [✏️] [🗑] │ │  ✏️ → edit form IN PLACE
+│ │ Berørte beboere (2)     │ │  🗑 → cascade confirm IN PLACE
+│ └─────────────────────────┘ │
+│ [👁] 🌾 Gluten        1     │
+
+CREATE on mobile docks under the toolbar (adjacent to the button that opened it)
+and suppresses row expansion, so the toolbar panel is the single live mount.
 Multiselect mode replaces master+detail with AllergenMultiSelector.
 -->
 <script setup lang="ts">
@@ -52,6 +40,10 @@ const props = withDefaults(defineProps<Props>(), {
 
 // Design system
 const { COLOR, COMPONENTS, SIZES, LAYOUTS, BUTTONS, ICONS } = useTheSlopeDesignSystem()
+
+// Responsive mount point for the detail panel - provided by the default layout;
+// false during SSR, so first paint renders the mobile mount
+const isMd = inject<Ref<boolean>>('isMd', ref(false))
 
 // Household shortnames for the detail card - owned here, passed down as a plain map
 const householdsStore = useHouseholdsStore()
@@ -199,11 +191,53 @@ const showSuccessToast = (title: string, description?: string) => {
 // ACTIONS - catalog selection (single mode); the shared table highlights via modelValue
 const handleSelect = (id: number | number[] | null) => {
   if (typeof id !== 'number') return
+  // Mobile: tapping the selected row again folds its docked detail away
+  if (!isMd.value && selectedAllergyTypeId.value === id) {
+    selectedAllergyTypeId.value = null
+    return
+  }
   selectedAllergyTypeId.value = id
   // In CREATE mode, switch back to VIEW
   if (formMode.value === FORM_MODES.CREATE) {
     onModeChange(FORM_MODES.VIEW)
   }
+}
+
+// MOBILE EXPANSION - derived from the EXPLICIT selection (no auto-expand; the
+// first-item fallback feeds only the desktop pane). CREATE suppresses it so the
+// panel under the toolbar is the single live mount.
+const expanded = computed({
+  get: (): Record<number, boolean> => {
+    if (isMd.value || panelMode.value === 'create' || selectedAllergyTypeId.value === null) return {}
+    const index = sortedAllergyTypes.value.findIndex(at => at.id === selectedAllergyTypeId.value)
+    return index === -1 ? {} : {[index]: true}
+  },
+  set: (value: Record<number, boolean>) => {
+    // UTable-initiated collapse deselects; expansion goes through handleSelect
+    const openIndex = Object.keys(value).find(key => value[Number(key)])
+    selectedAllergyTypeId.value = openIndex !== undefined
+        ? sortedAllergyTypes.value[Number(openIndex)]?.id ?? null
+        : null
+  }
+})
+
+// ONE panel, three guarded mount points (desktop pane / mobile expanded row /
+// mobile create under the toolbar) - shared bindings keep them DRY
+const panelProps = computed(() => ({
+  allergyType: panelMode.value === 'create' ? undefined : (selectedAllergyType.value ?? undefined),
+  panelMode: panelMode.value,
+  canEdit: props.canEdit,
+  householdShortNames: householdShortNames.value,
+  isDeleting: isDeleting.value
+}))
+
+const panelEvents = {
+  edit: startEdit,
+  delete: startDelete,
+  save: handleSubmit,
+  cancel: cancelEdit,
+  'confirm-delete': confirmDelete,
+  'cancel-delete': cancelDelete
 }
 
 // Funny empty state message for allergy catalog
@@ -298,11 +332,18 @@ const catalogEmptyState = {
           :show-new-badge="true"
       />
 
-      <!-- MASTER-DETAIL - stacked on mobile, 1/3 - 2/3 from md -->
-      <div v-else class="flex flex-col md:flex-row gap-4 md:gap-6">
+      <!-- MASTER-DETAIL - LAYOUTS.masterDetailPage: 3/9 grid from md, stacked below.
+           The detail panel docks in the expanded row on mobile, in the sticky pane on md+ -->
+      <div v-else :class="LAYOUTS.masterDetailPage.root">
+        <!-- CREATE (mobile) - docks under the toolbar, adjacent to the button that opened it -->
+        <div v-if="!isMd && panelMode === 'create'" class="mb-2">
+          <AllergyDetailPanel v-bind="panelProps" v-on="panelEvents"/>
+        </div>
+
         <!-- MASTER -->
-        <div class="w-full md:w-1/3 min-w-0">
+        <div :class="[LAYOUTS.masterDetailPage.left, 'min-w-0']">
           <AllergyCatalogTable
+              v-model:expanded="expanded"
               mode="single"
               :allergy-types="sortedAllergyTypes"
               :model-value="selectedAllergyType?.id ?? null"
@@ -310,6 +351,10 @@ const catalogEmptyState = {
               :loading="isAllergyTypesLoading"
               @update:model-value="handleSelect"
           >
+            <!-- DETAIL (mobile) - the panel docks under the tapped row -->
+            <template #expanded>
+              <AllergyDetailPanel v-bind="panelProps" v-on="panelEvents"/>
+            </template>
             <!-- Empty state -->
             <template #empty-state>
               <UAlert
@@ -341,21 +386,12 @@ const catalogEmptyState = {
           </AllergyCatalogTable>
         </div>
 
-        <!-- DETAIL / FORM - horizontally centred, starting just below the table headers -->
-        <div class="w-full md:w-2/3 min-w-0 flex justify-center items-start md:pt-10">
-          <AllergyDetailPanel
-              :allergy-type="panelMode === 'create' ? undefined : (selectedAllergyType ?? undefined)"
-              :panel-mode="panelMode"
-              :can-edit="props.canEdit"
-              :household-short-names="householdShortNames"
-              :is-deleting="isDeleting"
-              @edit="startEdit"
-              @delete="startDelete"
-              @save="handleSubmit"
-              @cancel="cancelEdit"
-              @confirm-delete="confirmDelete"
-              @cancel-delete="cancelDelete"
-          />
+        <!-- DETAIL (md+) - sticky pane that follows the catalog as it scrolls -->
+        <div
+            v-if="isMd"
+            :class="[LAYOUTS.masterDetailPage.center, 'min-w-0 flex justify-center items-start md:sticky md:top-4 self-start']"
+        >
+          <AllergyDetailPanel v-bind="panelProps" v-on="panelEvents"/>
         </div>
       </div>
       </div>

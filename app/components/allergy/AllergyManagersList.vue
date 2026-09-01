@@ -1,4 +1,16 @@
 <script setup lang="ts">
+import type {AlertProps} from '@nuxt/ui'
+
+const props = withDefaults(defineProps<{
+  color?: AlertProps['color']
+  variant?: AlertProps['variant']
+  message?: string
+}>(), {
+  color: 'info',
+  variant: 'subtle',
+  message: 'Kontakt den allergiansvarlige, hvis du har brug for at snakke om allergier i din familie:'
+})
+
 const store = useUsersStore()
 const {allergyManagers, isAllergyManagersLoading} = storeToRefs(store)
 
@@ -14,22 +26,20 @@ const allergyManagerInhabitants = computed(() => {
 <template>
   <Loader v-if="isAllergyManagersLoading" text="Henter allergi ansvarlige" />
   <UAlert
-v-else
-    color="info"
-    variant="subtle"
+    v-else
+    :color="props.color"
+    :variant="props.variant"
     icon="i-heroicons-question-mark-circle"
     title="Spørgsmål om allergier?"
     :ui="{ description: 'flex flex-col md:flex-row md:items-center gap-3' }"
   >
     <template #description>
-      <p class="text-sm md:flex-1">Kontakt den allergiansvarlige, hvis du har brug for at snakke om allergier i din familie:</p>
-      <UserListItem 
+      <p class="text-sm md:flex-1">{{ props.message }}</p>
+      <UserListItem
         :inhabitants="allergyManagerInhabitants"
         label="Allergiansvarlige"
         ring-color="ocean-500"
       />
     </template>
   </UAlert>
-
-
 </template>

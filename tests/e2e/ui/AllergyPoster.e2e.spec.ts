@@ -13,6 +13,6 @@ test.describe('Allergy poster', () => {
         await page.goto('/admin/allergies/pdf')
 
         await expect(page.locator('h1')).toContainText('ALLERGI-LISTE')
-        await expect(page.locator('table.allergy-table')).toBeVisible()
+        await expect(page.getByTestId('allergy-table')).toBeVisible()
     })
 })

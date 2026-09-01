@@ -137,7 +137,7 @@ export const useTicket = () => {
         priceAtBooking?: number | null
     ) => {
         const resolved = resolveTicketPrice(birthDate, priceAtBooking, ticketPrices, referenceDate)
-        // No resolvable price (e.g. no price list): classify by age limits instead of assuming ADULT
+        // Without a resolvable price (e.g. empty price list) the age limits still decide the category
         const ticketType = resolved?.ticketType ?? determineTicketType(birthDate, ticketPrices, referenceDate)
         return ticketTypeConfig[ticketType]
     }
