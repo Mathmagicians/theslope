@@ -224,4 +224,26 @@ describe('AllergenMultiSelector', () => {
             expect(editWrapper.html()).toContain('Gluten')
         })
     })
+
+    // On mobile the statistics panel lands below the list, so a sticky bar
+    // summarises the selection and jumps to the 📊 panel on tap.
+    describe('Sticky Mobile Summary', () => {
+        it.each([
+            { modelValue: [1, 3], expected: true },
+            { modelValue: [], expected: false }
+        ])('bar rendered=$expected with selection=$modelValue', async ({ modelValue, expected }) => {
+            const wrapper = await createWrapper({ mode: 'edit', modelValue, showStatistics: true })
+
+            expect(wrapper.find('[data-testid="compare-summary-bar"]').exists()).toBe(expected)
+        })
+
+        it('summarises selected count and unique affected inhabitants', async () => {
+            // Mælk (Anna, Bob) + Gluten (Anna) → 2 selected, 2 unique inhabitants
+            const wrapper = await createWrapper({ mode: 'edit', modelValue: [1, 3], showStatistics: true })
+
+            const bar = wrapper.find('[data-testid="compare-summary-bar"]')
+            expect(bar.text()).toContain('2 valgte')
+            expect(bar.text()).toContain('2 beboere')
+        })
+    })
 })

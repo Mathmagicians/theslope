@@ -7,7 +7,7 @@ import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 
 const mockAllergyTypes = AllergyFactory.createMockAllergyTypesWithInhabitants()
 
-// One shared master table for the allergy catalog (bug-fix doc D1):
+// One shared master table for the allergy catalog:
 // - single mode: row click emits the id (AdminAllergies master)
 // - multi mode: checkboxes emit id[] (AllergenMultiSelector / compare)
 // It forwards UTable's expanded model + #expanded slot so the detail panel

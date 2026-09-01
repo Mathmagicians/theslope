@@ -29,7 +29,7 @@ const TEST_IDS = {
     save: 'save-allergy-type'
 } as const
 
-// The portable detail region of the allergy catalog (bug-fix doc D1): the SAME
+// The portable detail region of the allergy catalog: the SAME
 // component mounts beside the master on desktop and under the selected row on
 // mobile, so its behavior is specced once, independent of the mount point.
 const mountPanel = async (props: Record<string, unknown> = {}) => {

@@ -9,10 +9,11 @@ mockNuxtImport('useHeynabo', () => () => ({
     getUserUrl: vi.fn((heynaboId: number) => `/user/${heynaboId}`)
 }))
 
-// Avoid tooltip provider issues in tests
+// Avoid tooltip provider issues in tests; the badge slot renders so per-person badges stay testable
 mockComponent('UserListItem', {
     props: ['inhabitants', 'label'],
-    setup: () => () => h('div', {'data-testid': 'user-list-item'})
+    setup: (props: {inhabitants: unknown}, {slots}: {slots: Record<string, ((scope: {inhabitant: unknown}) => unknown) | undefined>}) =>
+        () => h('div', {'data-testid': 'user-list-item'}, slots.badge?.({inhabitant: props.inhabitants}) as never)
 })
 
 const [existingType] = AllergyFactory.createMockAllergyTypesWithInhabitants()
