@@ -1,6 +1,7 @@
 import type {DateRange} from '~/types/dateTypes'
 import {createDateRange, formatDateRange} from '~/utils/date'
 import {useSeason} from '~/composables/useSeason'
+import {useTicket} from '~/composables/useTicket'
 import {useBookingValidation, type TicketType, type OrderDisplay, type DinnerEventInfo} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
 import type {CostEntry, HouseholdEntry, InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'

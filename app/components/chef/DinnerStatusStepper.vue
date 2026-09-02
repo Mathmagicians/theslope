@@ -19,14 +19,14 @@
  * Badges are rendered UNDER each step using createChefBadges factory.
  *
  * ADR Compliance:
- * - ADR-001: Business logic in useBooking composable (DINNER_STEP_MAP, getStepConfig, createChefBadges)
+ * - ADR-001/017: Step logic in useBooking (DINNER_STEP_MAP, getStepConfig); badges + icons in useBookingUi (createChefBadges, STEP_ICONS)
  * - Mobile-first responsive design
  * - Uses NuxtUI UStepper component
  */
 import type { DinnerEventDisplay } from '~/composables/useBookingValidation'
 import type { SeasonDeadlines } from '~/composables/useSeason'
-import type { DeadlineBadgeData } from '~/composables/useBooking'
-import { DINNER_STEP_MAP } from '~/composables/useBooking'
+import type { DeadlineBadgeData } from '~/composables/useBookingUi'
+import { DINNER_STEP_MAP, type DinnerStepState } from '~/composables/useBooking'
 
 interface Props {
   dinnerEvent: DinnerEventDisplay
@@ -44,7 +44,8 @@ const props = withDefaults(defineProps<Props>(), {
 const { COLOR, SIZES, ORIENTATIONS, TYPOGRAPHY } = useTheSlopeDesignSystem()
 
 // Business logic from useBooking
-const { getStepConfig, createChefBadges } = useBooking()
+const { getStepConfig } = useBooking()
+const { createChefBadges, STEP_ICONS } = useBookingUi()
 const { DinnerStateSchema } = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
@@ -82,7 +83,7 @@ const steps = computed(() => {
       step: config.step,
       title: config.title,
       description,
-      icon: config.icon,
+      icon: STEP_ICONS[config.step as DinnerStepState],
       disabled: config.step > step,
       color: badge?.color ?? COLOR.neutral
     }

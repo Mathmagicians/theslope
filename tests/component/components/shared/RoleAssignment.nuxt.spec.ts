@@ -1,6 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach} from 'vitest'
 import {mountSuspended, mockNuxtImport} from '@nuxt/test-utils/runtime'
+import {findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
 import {nextTick} from 'vue'
 import {flushPromises} from '@vue/test-utils'
 import RoleAssignment from '~/components/shared/RoleAssignment.vue'
@@ -46,14 +47,11 @@ const buildDinner = (chef: InhabitantDisplay | null = null) => ({
 const mountWith = (chef: InhabitantDisplay | null = null) =>
     mountSuspended(RoleAssignment, {props: {dinnerEvent: buildDinner(chef), role: TeamRole.CHEF}})
 
-const findById = (wrapper: Awaited<ReturnType<typeof mountWith>>, id: string) =>
-    wrapper.find(`[data-testid="${id}"]`)
-
 beforeEach(() => vi.clearAllMocks())
 
 describe('RoleAssignment', () => {
     it('vacant trigger label names the role to volunteer for', async () => {
-        const label = findById(await mountWith(null), TEST_IDS.trigger).text().toLowerCase()
+        const label = findByTestId(await mountWith(null), TEST_IDS.trigger).text().toLowerCase()
         expect(label).toContain(ROLE_LABELS[TeamRole.CHEF].toLowerCase())
     })
 
@@ -61,28 +59,25 @@ describe('RoleAssignment', () => {
         {desc: 'self is chef',  chef: ME},
         {desc: 'other is chef', chef: OTHER}
     ])('assigned trigger ($desc) shows a label distinct from vacant', async ({chef}) => {
-        const vacant = findById(await mountWith(null), TEST_IDS.trigger).text().trim()
-        const assigned = findById(await mountWith(chef), TEST_IDS.trigger).text().trim()
+        const vacant = findByTestId(await mountWith(null), TEST_IDS.trigger).text().trim()
+        const assigned = findByTestId(await mountWith(chef), TEST_IDS.trigger).text().trim()
         expect(assigned).not.toBe(vacant)
         expect(assigned).not.toBe('')
     })
 
     it('clicking the trigger opens the collapsible panel', async () => {
         const wrapper = await mountWith()
-        expect(findById(wrapper, TEST_IDS.save).exists()).toBe(false)
+        expect(findByTestId(wrapper, TEST_IDS.save).exists()).toBe(false)
 
-        await findById(wrapper, TEST_IDS.trigger).trigger('click')
-        await nextTick()
+        await clickByTestId(wrapper, TEST_IDS.trigger)
 
-        expect(findById(wrapper, TEST_IDS.save).exists()).toBe(true)
+        expect(findByTestId(wrapper, TEST_IDS.save).exists()).toBe(true)
     })
 
     it('volunteer flow: save calls claimRoleForMe and emits role-assigned', async () => {
         const wrapper = await mountWith()
-        await findById(wrapper, TEST_IDS.trigger).trigger('click')
-        await nextTick()
-        await findById(wrapper, TEST_IDS.save).trigger('click')
-        await nextTick()
+        await clickByTestId(wrapper, TEST_IDS.trigger)
+        await clickByTestId(wrapper, TEST_IDS.save)
 
         expect(claimRoleForMeMock).toHaveBeenCalledTimes(1)
         expect(claimRoleForMeMock).toHaveBeenCalledWith(expect.objectContaining({chef: null}), TeamRole.CHEF, undefined)
@@ -91,10 +86,9 @@ describe('RoleAssignment', () => {
 
     it('resign flow: DangerButton confirm calls resignRoleForMe and emits role-removed', async () => {
         const wrapper = await mountWith(ME)
-        await findById(wrapper, TEST_IDS.trigger).trigger('click')
-        await nextTick()
+        await clickByTestId(wrapper, TEST_IDS.trigger)
 
-        const resignBtn = findById(wrapper, TEST_IDS.resign).find('button')
+        const resignBtn = findByTestId(wrapper, TEST_IDS.resign).find('button')
         await resignBtn.trigger('click')
         await nextTick()
         await resignBtn.trigger('click')
@@ -107,10 +101,8 @@ describe('RoleAssignment', () => {
 
     it('takeover: swap save claims the duty and emits role-assigned', async () => {
         const wrapper = await mountWith(OTHER)
-        await findById(wrapper, TEST_IDS.trigger).trigger('click')
-        await nextTick()
-        await findById(wrapper, TEST_IDS.save).trigger('click')
-        await nextTick()
+        await clickByTestId(wrapper, TEST_IDS.trigger)
+        await clickByTestId(wrapper, TEST_IDS.save)
 
         expect(claimRoleForMeMock).toHaveBeenCalledTimes(1)
         expect(claimRoleForMeMock).toHaveBeenCalledWith(expect.objectContaining({chef: OTHER}), TeamRole.CHEF, undefined)
@@ -119,13 +111,11 @@ describe('RoleAssignment', () => {
 
     it('cancel closes the panel without calling the API', async () => {
         const wrapper = await mountWith()
-        await findById(wrapper, TEST_IDS.trigger).trigger('click')
-        await nextTick()
-        await findById(wrapper, TEST_IDS.cancel).trigger('click')
-        await nextTick()
+        await clickByTestId(wrapper, TEST_IDS.trigger)
+        await clickByTestId(wrapper, TEST_IDS.cancel)
 
         expect(claimRoleForMeMock).not.toHaveBeenCalled()
-        expect(findById(wrapper, TEST_IDS.save).exists()).toBe(false)
+        expect(findByTestId(wrapper, TEST_IDS.save).exists()).toBe(false)
     })
 
     it('exposes open() to programmatically open the panel', async () => {
@@ -136,13 +126,13 @@ describe('RoleAssignment', () => {
         exposed!.open()
         await flushPromises()
         await nextTick()
-        expect(findById(wrapper, TEST_IDS.save).exists()).toBe(true)
+        expect(findByTestId(wrapper, TEST_IDS.save).exists()).toBe(true)
     })
 
     it('renders nothing for past dinners (cannot act in the past)', async () => {
         const pastDinner = {...buildDinner(), id: 999, date: new Date(Date.now() - 24 * 60 * 60 * 1000)}
         const wrapper = await mountSuspended(RoleAssignment, {props: {dinnerEvent: pastDinner, role: TeamRole.CHEF}})
-        expect(findById(wrapper, TEST_IDS.trigger).exists()).toBe(false)
+        expect(findByTestId(wrapper, TEST_IDS.trigger).exists()).toBe(false)
     })
 
     it('exposed open() is a no-op for past dinners', async () => {
@@ -152,18 +142,17 @@ describe('RoleAssignment', () => {
         exposed!.open()
         await flushPromises()
         await nextTick()
-        expect(findById(wrapper, TEST_IDS.save).exists()).toBe(false)
+        expect(findByTestId(wrapper, TEST_IDS.save).exists()).toBe(false)
     })
 
     it('closes an open panel when navigating to a different dinner', async () => {
         const wrapper = await mountWith()
-        await findById(wrapper, TEST_IDS.trigger).trigger('click')
-        await nextTick()
-        expect(findById(wrapper, TEST_IDS.save).exists()).toBe(true)
+        await clickByTestId(wrapper, TEST_IDS.trigger)
+        expect(findByTestId(wrapper, TEST_IDS.save).exists()).toBe(true)
 
         await wrapper.setProps({dinnerEvent: {...buildDinner(), id: 1234}, role: TeamRole.CHEF})
         await flushPromises()
         await nextTick()
-        expect(findById(wrapper, TEST_IDS.save).exists()).toBe(false)
+        expect(findByTestId(wrapper, TEST_IDS.save).exists()).toBe(false)
     })
 })

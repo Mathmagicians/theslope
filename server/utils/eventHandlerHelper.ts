@@ -2,7 +2,7 @@ import {Prisma} from "@prisma/client"
 import {ZodError} from "zod"
 import {H3Error} from "h3"
 import type {H3Event} from 'h3'
-import type {NuxtError} from '#app'
+import type {NuxtError} from 'nuxt/app'
 import type {UserDetail} from '~/composables/useCoreValidation'
 
 const PRISMA_RECORD_NOT_FOUND = 'P2025'

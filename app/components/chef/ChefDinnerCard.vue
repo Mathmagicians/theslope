@@ -21,7 +21,7 @@
  *
  * Features:
  * - Compact vertical layout for narrow sidebar
- * - Uses createChefBadges factory for status/deadline display
+ * - Uses createChefBadges factory (useBookingUi) for status/deadline display
  * - Click to select dinner
  * - Visual selection state (ring accent)
  * - Temporal color coding (consistent with calendar)
@@ -55,7 +55,7 @@ const emit = defineEmits<{
 
 // Design system & badge factory
 const { CALENDAR, CHEF_CALENDAR, TYPOGRAPHY } = useTheSlopeDesignSystem()
-const { createChefBadges } = useBooking()
+const { createChefBadges } = useBookingUi()
 
 // Get released ticket count from store (for booking badge)
 const bookingsStore = useBookingsStore()

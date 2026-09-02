@@ -1,6 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {findByTestId} from '~~/tests/component/testHelpers'
 import EconomyTable from '~/components/economy/EconomyTable.vue'
 import {nextTick, ref} from 'vue'
 
@@ -279,7 +280,7 @@ describe('EconomyTable', () => {
                 }
             })
 
-            const emptySlot = wrapper.find('[data-testid="custom-empty"]')
+            const emptySlot = findByTestId(wrapper, 'custom-empty')
             expect(emptySlot.exists()).toBe(true)
         })
     })

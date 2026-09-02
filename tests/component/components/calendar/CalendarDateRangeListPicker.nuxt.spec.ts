@@ -1,6 +1,7 @@
 // @vitest-environment nuxt
 import { describe, it, expect } from 'vitest'
 import { mountSuspended } from "@nuxt/test-utils/runtime"
+import {findByTestId} from '~~/tests/component/testHelpers'
 import CalendarDateRangeListPicker from '~/components/calendar/CalendarDateRangeListPicker.vue'
 import { nextTick, ref } from 'vue'
 
@@ -38,7 +39,7 @@ describe('CalendarDateRangeListPicker', () => {
     }
 
     const clickAddButton = async (wrapper: WrapperType) => {
-        const addButton = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.addButton}"]`)
+        const addButton = findByTestId(wrapper, ELEMENT_TESTIDS.addButton)
         await addButton.trigger('click')
         await nextTick()
     }
@@ -46,7 +47,7 @@ describe('CalendarDateRangeListPicker', () => {
     it('renders with empty date ranges', async () => {
         const wrapper = await createWrapper()
         expect(wrapper.exists()).toBe(true)
-        const addButton = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.addButton}"]`)
+        const addButton = findByTestId(wrapper, ELEMENT_TESTIDS.addButton)
         expect(addButton.text()).toContain('Tilføj ferie')
     })
 
@@ -70,7 +71,7 @@ describe('CalendarDateRangeListPicker', () => {
             }
         ])
 
-        const holidayInput = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.holidayListItem(0)}"]`)
+        const holidayInput = findByTestId(wrapper, ELEMENT_TESTIDS.holidayListItem(0))
         expect(holidayInput.exists()).toBe(true)
     })
 
@@ -114,10 +115,10 @@ describe('CalendarDateRangeListPicker', () => {
         });
 
         // Verify the holiday input exists before removal
-        expect(wrapper.find(`[data-testid="${ELEMENT_TESTIDS.holidayListItem(0)}"]`).exists()).toBe(true)
+        expect(findByTestId(wrapper, ELEMENT_TESTIDS.holidayListItem(0)).exists()).toBe(true)
 
         // Click the remove button
-        const removeButton = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.removeButton(0)}"]`)
+        const removeButton = findByTestId(wrapper, ELEMENT_TESTIDS.removeButton(0))
         await removeButton.trigger('click')
         await nextTick()
         
@@ -146,15 +147,15 @@ describe('CalendarDateRangeListPicker', () => {
         expect(wrapper.exists()).toBe(true);
         
         // Verify the holiday input exists
-        const holidayInput = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.holidayListItem(0)}"]`);
+        const holidayInput = findByTestId(wrapper, ELEMENT_TESTIDS.holidayListItem(0));
         expect(holidayInput.exists()).toBe(true);
 
         // In disabled mode, the add button and datepicker should not be visible
-        const addButton = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.addButton}"]`);
+        const addButton = findByTestId(wrapper, ELEMENT_TESTIDS.addButton);
         expect(addButton.exists()).toBe(false);
 
         // In disabled mode, the delete button should not be visible
-        const removeButton = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.removeButton(0)}"]`);
+        const removeButton = findByTestId(wrapper, ELEMENT_TESTIDS.removeButton(0));
         expect(removeButton.exists()).toBe(false);
         
         // In disabled mode, we should have an icon instead of the remove button
@@ -206,7 +207,7 @@ describe('CalendarDateRangeListPicker', () => {
         await nextTick(); // Sometimes two ticks are needed
         
         // Verify the component renders the holiday properly
-        const holidayListItem = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.holidayListItem(0)}"]`);
+        const holidayListItem = findByTestId(wrapper, ELEMENT_TESTIDS.holidayListItem(0));
         expect(holidayListItem.exists()).toBe(true);
     })
     
@@ -256,7 +257,7 @@ describe('CalendarDateRangeListPicker', () => {
         await nextTick();
         
         // Verify component properly renders the store data
-        const holidayItem = wrapper.find(`[data-testid="${ELEMENT_TESTIDS.holidayListItem(0)}"]`);
+        const holidayItem = findByTestId(wrapper, ELEMENT_TESTIDS.holidayListItem(0));
         expect(holidayItem.exists()).toBe(true);
     })
 })

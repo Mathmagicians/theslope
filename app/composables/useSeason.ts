@@ -4,14 +4,15 @@ import type {DateValue} from '@internationalized/date'
 import {isSameDay, isWithinInterval, isBefore, subDays, subMinutes} from "date-fns"
 import {type Season, useSeasonValidation} from '~/composables/useSeasonValidation'
 import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderAuditAction, OrderAuditAction as OrderAuditActionEnum, useBookingValidation} from '~/composables/useBookingValidation'
-import type {CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
+import {useCookingTeamValidation, type CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
     findFirstCookingDayInDates, getNextDinnerDate, getAdjacentDinner, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
     isPast, isFuture, distanceToToday, canSeasonBeActive, getSeasonStatus, sortSeasonsByActivePriority,
     selectMostAppropriateActiveSeason, isBeforeDeadline} from "~/utils/season"
-import {getEachDayOfIntervalWithSelectedWeekdays, formatDate, calculateDayFromWeekNumber, formatDateRange, DATE_SETTINGS} from "~/utils/date"
+import {getEachDayOfIntervalWithSelectedWeekdays, formatDate, calculateDayFromWeekNumber, formatDateRange, DATE_SETTINGS,
+    selectWeekNumbersFromListThatFitInsideDateRange, copyPartialDateRange, eachDayOfManyIntervals, toDate} from "~/utils/date"
 import {chunkArray, pruneAndCreate} from '~/utils/batchUtils'
 
 /**
@@ -87,12 +88,10 @@ export const useSeason = () => {
             end: calculateDayFromWeekNumber(4, theslope.defaultSeason.endWeek, thisYear + 1)
         }
 
-        const ticketPrices = theslope.defaultSeason.ticketPrices?.map(({
-                                                                           ticketType,
-                                                                           price,
-                                                                           description,
-                                                                           maximumAgeLimit
-                                                                       }) => createTicketPrice(
+        const ticketPrices = theslope.defaultSeason.ticketPrices?.map((
+            // Explicit shape: app.config types resolve to `any` under the server tsconfig
+            {ticketType, price, description, maximumAgeLimit}: {ticketType: string; price: number; description?: string; maximumAgeLimit?: number}
+        ) => createTicketPrice(
                 ticketType, price, undefined, description, maximumAgeLimit)) ??
             [createTicketPrice(TicketType.ADULT, 4000)]
 

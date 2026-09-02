@@ -61,6 +61,8 @@ The schema defines entity relationships, onDelete behaviors (CASCADE vs SET NULL
 - **Build**: `npm run build` - Build Nuxt application
 - **Deploy**: `npm run deploy` - Build and deploy with Wrangler
 - **Lint**: `npm run lint`, `npm run lint-fix` - Run ESLint
+- **Typecheck**: `npm run ts` (root/app project), `npm run ts:server` (Nitro server project - catches bare auto-imports in composables the server imports, ADR-017), `npm run ts:node` (build-time project)
+- **Pre-ship gate**: `npm run pre:all` - lint + all three typechecks; identical to the CI "Lint and typecheck" step
 - **Test**: 
   - All tests: `npm run test` - Run all Vitest tests
   - E2E tests: `npm run test:e2e` - Run Playwright tests

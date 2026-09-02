@@ -16,7 +16,7 @@ const store = useUsersStore()
 const {users, isUsersLoading, isUsersErrored, usersError} = storeToRefs(store)
 
 // Use existing role badge definitions
-const {roleLabels} = useUserRoles()
+const {roleLabels} = useUserRolesUi()
 const {COMPONENTS, ICONS} = useTheSlopeDesignSystem()
 
 // Search/filter state

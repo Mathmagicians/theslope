@@ -26,7 +26,7 @@ Mirror the CI/CD pipeline locally and confirm every gate is green before the bra
 
 ## Gotchas
 
-- `pre:all` = `npm run lint && npm run ts` (eslint + `vue-tsc --noEmit`). CI runs this as its "Lint and typecheck" step.
+- `pre:all` = `npm run lint && npm run ts && npm run ts:server && npm run ts:node` (eslint + `vue-tsc --noEmit` for the root/app project, the Nitro server project via `server/tsconfig.json`, and the node/build-time project). Server-reachable composables get no Nuxt auto-imports at runtime; only the server project check catches a bare `useX()` there (ADR-017). CI runs `pre:all` as its "Lint and typecheck" step.
 - Use Vitest reporters (`--reporter=verbose` or `dot`) for unit tests. Never pass `--reporter=line` to Vitest — `line` is a Playwright reporter and Vitest fails to load it.
 - E2E gates need gate 4 to have seeded the local D1 DB first, or they fail with missing-data errors.
 - Scope a targeted e2e re-run to the affected spec, e.g. `npx playwright test tests/e2e/ui/serial/ChefSwap.e2e.spec.ts --no-deps --reporter=line`.

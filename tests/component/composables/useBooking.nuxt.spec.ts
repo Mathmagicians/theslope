@@ -1603,13 +1603,14 @@ describe('getDayBillSummary', () => {
 // =============================================================================
 
 describe('Action Preview', () => {
-    const {formatActionPreview, hasChanges, countChanges, ACTION_PREVIEW} = useBooking()
+    const {hasChanges, countChanges} = useBooking()
+    const {formatActionPreview, ACTION_PREVIEW} = useBookingUi()
     const {orderStateConfig} = useOrder()
     const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
     const DM = DinnerModeSchema.enum
     const OS = OrderStateSchema.enum
 
-    // Action → OrderState mapping (mirrors useBooking.ts ACTION_TO_STATE)
+    // Action → OrderState mapping (mirrors useBookingUi.ts ACTION_TO_STATE)
     const ACTION_TO_STATE = {
         create:     OS.BOOKED,
         delete:     OS.CANCELLED,

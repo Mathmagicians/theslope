@@ -213,6 +213,27 @@ const daysFromNow = (days: number) => {
     return d
 }
 
+/**
+ * Poll until the Nuxt app has finished hydrating, i.e. Vue has attached its listeners.
+ * SSR markup is visible (and passes isVisible checks) long before that, so a click or fill
+ * issued too early is silently lost. Nuxt exposes `window.useNuxtApp` in every client build;
+ * `isHydrating` flips to false once hydration completes.
+ *
+ * @example
+ * await page.goto('/admin/households')
+ * await waitForHydration(page)
+ */
+async function waitForHydration(page: Page): Promise<void> {
+    await pollUntil(
+        () => page.evaluate(() => {
+            const nuxtApp = (window as unknown as { useNuxtApp?: () => { isHydrating?: boolean } }).useNuxtApp?.()
+            return nuxtApp?.isHydrating === false
+        }),
+        (hydrated) => hydrated,
+        10
+    )
+}
+
 const testHelpers = {
     salt,
     saltedId,
@@ -225,7 +246,8 @@ const testHelpers = {
     selectDropdownOption,
     getSessionUserInfo,
     assertNoOrdersWithOrphanPrices,
-    daysFromNow
+    daysFromNow,
+    waitForHydration
 }
 
 export default testHelpers

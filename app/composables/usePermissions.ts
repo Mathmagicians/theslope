@@ -32,15 +32,6 @@ export const isAuthenticated = (_user: UserDetail | UserDisplay): boolean => tru
 export const canMutateAllergies = (user: UserDetail | UserDisplay): boolean =>
     isAdmin(user) || isAllergyManager(user)
 
-// ============= SESSION-AWARE PREDICATES =============
-
-/** Check if current session user is member of specified household */
-export const isHouseholdMember = (householdId: number): boolean => {
-    const {user} = useUserSession()
-    if (!user.value) return false
-    return isInHousehold(user.value as UserDetail, householdId)
-}
-
 // ============= ROUTE PERMISSION TABLE =============
 
 type PermissionCheck = (user: UserDetail | UserDisplay) => boolean
@@ -96,7 +87,6 @@ export const usePermissions = () => ({
     isInHousehold,
     isAuthenticated,
     canMutateAllergies,
-    isHouseholdMember,
     getRoutePermission,
     ROUTE_PERMISSIONS
 })

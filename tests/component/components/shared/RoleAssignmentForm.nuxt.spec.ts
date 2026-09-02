@@ -1,6 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach} from 'vitest'
 import {mountSuspended, mockNuxtImport} from '@nuxt/test-utils/runtime'
+import {findByTestId} from '~~/tests/component/testHelpers'
 import {nextTick} from 'vue'
 import RoleAssignmentForm from '~/components/shared/RoleAssignmentForm.vue'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -41,9 +42,6 @@ const mountForm = (mode: 'volunteer' | 'resign' | 'swap', dinnerOverrides: Dinne
         props: {dinnerEvent: buildDinner(dinnerOverrides), role: TeamRole.CHEF, mode}
     })
 
-const findById = (wrapper: Awaited<ReturnType<typeof mountForm>>, id: string) =>
-    wrapper.find(`[data-testid="${id}"]`)
-
 beforeEach(() => vi.clearAllMocks())
 
 describe('RoleAssignmentForm', () => {
@@ -82,34 +80,34 @@ describe('RoleAssignmentForm', () => {
 
     it('emits cancel when Annuller is clicked', async () => {
         const wrapper = await mountForm('volunteer')
-        await findById(wrapper, TEST_IDS.cancel).trigger('click')
+        await findByTestId(wrapper, TEST_IDS.cancel).trigger('click')
         expect(wrapper.emitted('cancel')).toHaveLength(1)
     })
 
     it('emits submit {ours, theirs: undefined} on volunteer', async () => {
         const wrapper = await mountForm('volunteer')
-        await findById(wrapper, TEST_IDS.save).trigger('click')
+        await findByTestId(wrapper, TEST_IDS.save).trigger('click')
         expect(wrapper.emitted('submit')![0]![0]).toEqual({ours: expect.any(Number), theirs: undefined})
     })
 
     it('enables takeover of a dinner that is not announced and emits an empty offer', async () => {
         const wrapper = await mountForm('swap', {chef: CHEF})
-        const save = findById(wrapper, TEST_IDS.save)
+        const save = findByTestId(wrapper, TEST_IDS.save)
         expect(save.attributes('disabled'), 'takeover commit is active').toBeUndefined()
-        expect(findById(wrapper, TEST_IDS.menuStrategy).exists(), 'no menu decision outside ANNOUNCED').toBe(false)
+        expect(findByTestId(wrapper, TEST_IDS.menuStrategy).exists(), 'no menu decision outside ANNOUNCED').toBe(false)
         await save.trigger('click')
         expect(wrapper.emitted('submit')![0]![0]).toEqual({ours: expect.any(Number), theirs: [], menuStrategy: undefined})
     })
 
     it('gates takeover of an ANNOUNCED dinner behind the menu decision', async () => {
         const wrapper = await mountForm('swap', {chef: CHEF, state: DinnerStates.ANNOUNCED})
-        expect(findById(wrapper, TEST_IDS.menuStrategy).exists(), 'menu decision rendered').toBe(true)
-        expect(findById(wrapper, TEST_IDS.save).attributes('disabled'), 'commit gated until menu choice').toBeDefined()
+        expect(findByTestId(wrapper, TEST_IDS.menuStrategy).exists(), 'menu decision rendered').toBe(true)
+        expect(findByTestId(wrapper, TEST_IDS.save).attributes('disabled'), 'commit gated until menu choice').toBeDefined()
 
         // reka-ui renders radio items as <button role="radio" value="...">
-        await wrapper.find(`[data-testid="${TEST_IDS.menuStrategy}"] [role="radio"][value="CLEAR"]`).trigger('click')
+        await findByTestId(wrapper, TEST_IDS.menuStrategy).find('[role="radio"][value="CLEAR"]').trigger('click')
         await nextTick()
-        const save = findById(wrapper, TEST_IDS.save)
+        const save = findByTestId(wrapper, TEST_IDS.save)
         expect(save.attributes('disabled'), 'commit active after choice').toBeUndefined()
         await save.trigger('click')
         expect(wrapper.emitted('submit')![0]![0]).toEqual({ours: expect.any(Number), theirs: [], menuStrategy: 'CLEAR'})
@@ -117,12 +115,12 @@ describe('RoleAssignmentForm', () => {
 
     it('shows no menu decision in volunteer mode', async () => {
         const wrapper = await mountForm('volunteer', {state: DinnerStates.ANNOUNCED})
-        expect(findById(wrapper, TEST_IDS.menuStrategy).exists()).toBe(false)
+        expect(findByTestId(wrapper, TEST_IDS.menuStrategy).exists()).toBe(false)
     })
 
     it('emits resign after the DangerButton 2-step confirm', async () => {
         const wrapper = await mountForm('resign')
-        const resignBtn = findById(wrapper, TEST_IDS.resign).find('button')
+        const resignBtn = findByTestId(wrapper, TEST_IDS.resign).find('button')
         await resignBtn.trigger('click')
         await nextTick()
         await resignBtn.trigger('click')

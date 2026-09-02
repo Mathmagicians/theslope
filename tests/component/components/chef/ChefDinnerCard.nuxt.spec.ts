@@ -1,5 +1,6 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {findByTestId, findAllByTestId} from '~~/tests/component/testHelpers'
 import ChefDinnerCard from '~/components/chef/ChefDinnerCard.vue'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -134,7 +135,7 @@ describe('ChefDinnerCard', () => {
             ])('$label badge', async ({ label, pattern }) => {
                 const dinnerEvent = createDinnerEvent({ date: dinnerDate, state: dinnerState })
                 const wrapper = await mountCard({ dinnerEvent })
-                const badges = wrapper.findAll('[data-testid="deadline-badge"]')
+                const badges = findAllByTestId(wrapper, 'deadline-badge')
                 const badge = badges.find(b => b.text().includes(label))
                 expect(badge?.text()).toMatch(pattern)
             })
@@ -171,7 +172,7 @@ describe('ChefDinnerCard', () => {
             ])('$label badge', async ({ label, pattern }) => {
                 const dinnerEvent = createDinnerEvent({ date: dinnerDate, state: dinnerState })
                 const wrapper = await mountCard({ dinnerEvent })
-                const badges = wrapper.findAll('[data-testid="deadline-badge"]')
+                const badges = findAllByTestId(wrapper, 'deadline-badge')
                 const badge = badges.find(b => b.text().includes(label))
                 expect(badge?.text()).toMatch(pattern)
             })
@@ -183,7 +184,7 @@ describe('ChefDinnerCard', () => {
             const dinnerEvent = createDinnerEvent()
             const wrapper = await mountCard({ dinnerEvent, selected: true })
 
-            const card = wrapper.find('[data-testid="chef-dinner-card-1"]')
+            const card = findByTestId(wrapper, 'chef-dinner-card-1')
             expect(card.exists()).toBe(true)
             // cursor-pointer is on UCard root, check component text renders
             expect(wrapper.text()).toContain('Spaghetti Carbonara')
@@ -193,7 +194,7 @@ describe('ChefDinnerCard', () => {
             const dinnerEvent = createDinnerEvent()
             const wrapper = await mountCard({ dinnerEvent, selected: false })
 
-            const card = wrapper.find('[data-testid="chef-dinner-card-1"]')
+            const card = findByTestId(wrapper, 'chef-dinner-card-1')
             expect(card.exists()).toBe(true)
         })
 
@@ -201,7 +202,7 @@ describe('ChefDinnerCard', () => {
             const dinnerEvent = createDinnerEvent({ id: 42 })
             const wrapper = await mountCard({ dinnerEvent })
 
-            const card = wrapper.find('[data-testid="chef-dinner-card-42"]')
+            const card = findByTestId(wrapper, 'chef-dinner-card-42')
             await card.trigger('click')
             await nextTick()
 

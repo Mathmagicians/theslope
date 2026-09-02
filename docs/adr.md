@@ -1,6 +1,66 @@
 # Architecture Decision Records
 
 **NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
+## ADR-017: Isomorphic Composables, Pure UI Composables and Per-Context Type Checking
+
+**Status:** Accepted | **Date:** 2026-09-02
+
+### Context
+
+Nuxt builds two bundles. App auto-imports (`app/composables`, `app/utils`, Vue, Pinia, nuxt-auth-utils app composables) exist only in the app bundle; the Nitro bundle auto-imports `server/utils` and h3 only. ADR-001 allows `server/` to import selected composables explicitly, so those composables run in both bundles. A bare `useTicket()` in `useBilling.ts` (2026-09-01) typechecked and passed every unit test, then threw `useTicket is not defined` on the first server call and broke CI in the e2e API step.
+
+`npm run ts` could not catch it: the root `tsconfig.json` extends the legacy app-flavoured `.nuxt/tsconfig.json`, so `.nuxt/types/imports.d.ts` declares every auto-import as a global for server files too. Nuxt 4 generates per-context configs (`.nuxt/tsconfig.{app,server,shared,node}.json`); the server project flagged the defect plus 43 latent errors of the same class.
+
+### Decision
+
+**Composables the server imports are isomorphic; presentation lives in pure UI composables; `pre:all` typechecks every generated project.**
+
+| Kind | Location / naming | Rules |
+|------|-------------------|-------|
+| **Isomorphic composable** | `app/composables/use<Domain>.ts`, `use<Domain>Validation.ts` — anything imported from `server/` | Explicit imports only (no auto-imports). No Vue reactivity, Pinia stores, nuxt-auth-utils app composables (`useUserSession`), NuxtUI or design-system calls. Types shared with the repository live in validation composables (`TransactionCreateData`), never imported from `server/` |
+| **Pure UI composable** | `app/composables/use<Domain>Ui.ts` (`useBookingUi`, `useUserRolesUi`) | Client-only, never imported from `server/`. Owns badges, icons, labels, action previews, store-aware predicates. May use auto-imports |
+| **Design system** | `useTheSlopeDesignSystem.ts` | Page layout and design tokens only; not booking- or user-aware; never server-reachable |
+| **Session predicates** | `app/stores/auth.ts` | `isMemberOfHousehold` and other session-aware checks wrap the isomorphic predicates from `usePermissions` |
+| **Type augmentations** | `shared/types/*.d.ts` (or `server/types/` when server-only) | Nuxt 4 rule: augmentations outside `app/`, `server/`, `shared/` are invisible to the per-context projects |
+
+### Gate
+
+```
+"ts":        "npx vue-tsc --noEmit",                              // root: app + tests (legacy union)
+"ts:server": "npx vue-tsc --noEmit -p server/tsconfig.json",      // Nitro project: server/** + composables it imports
+"ts:node":   "npx vue-tsc --noEmit -p .nuxt/tsconfig.node.json",  // nuxt.config, app.config, vitest.config
+"pre:all":   "npm run lint && npm run ts && npm run ts:server && npm run ts:node"
+```
+
+CI runs `pre:all` before unit tests. A bare auto-import in a server-reachable composable now fails as `TS2304` in `ts:server`.
+
+**Follow-up:** adopt Nuxt 4's root `references` layout + `nuxt typecheck` (`vue-tsc -b`) once nuxt/nuxt#34385 is fixed (broken on Nuxt 4.3.1 / @nuxt/cli 3.33.1). Until then `server/tsconfig.json` stays as the stable gate target.
+
+### Compliance
+
+1. A composable imported from `server/` MUST NOT contain a bare auto-imported call; `npm run ts:server` MUST be clean
+2. Presentation code (icons, colors, labels, badge factories, store-aware predicates) MUST live in `use<Domain>Ui`, stores or components — never in isomorphic composables
+3. `use<Domain>Ui` and the design system MUST NOT be imported from `server/`
+4. App code MUST NOT import from `~~/server/**`; shared types go through validation composables
+5. New type augmentations go in `shared/types/` or `server/types/`
+
+### Key Files
+
+| File | Role |
+|------|------|
+| `app/composables/useBookingUi.ts` | Deadline badges, `STEP_ICONS`, action preview |
+| `app/composables/useUserRolesUi.ts` | Role labels/icons/visibility (auth store) |
+| `app/composables/useUserRoles.ts` | Server-safe role reconciliation |
+| `shared/types/cloudflare.d.ts` | `H3EventContext.cloudflare`, Nitro `TaskContext.cloudflare` |
+| `server/tsconfig.json` | Extends `.nuxt/tsconfig.server.json`; target of `ts:server` |
+
+### Related ADRs
+
+- **ADR-001**: Three-layer type architecture (exceptions list now points here)
+- **ADR-010**: Domain types cross layers through validation composables
+
+---
+
 
 ## ADR-016: Unified Booking Through Scaffold
 
@@ -854,3 +914,4 @@ if (order.state === OrderStateSchema.enum.BOOKED) { }
 **Exceptions:**
 - Build-time config (`app.config.ts`): MUST import from generated layer
 - Server utilities: MUST import from generated layer (no auto-imports)
+- Composables imported by `server/`: explicit imports only, no UI dependencies - see ADR-017

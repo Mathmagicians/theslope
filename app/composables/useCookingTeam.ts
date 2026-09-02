@@ -2,6 +2,7 @@ import {useCookingTeamValidation, ROLE_LABELS, type CookingTeamDisplay, type Tea
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {DinnerEventDetail} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
+import {formatDate} from '~/utils/date'
 
 /**
  * Predicate: the role's current holder is not the given inhabitant.

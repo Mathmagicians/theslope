@@ -12,7 +12,7 @@ ASCII mockup:
 -->
 
 <script setup lang="ts">
-import type {ActionPreviewItem} from '~/composables/useBooking'
+import type {ActionPreviewItem} from '~/composables/useBookingUi'
 
 interface Props {
   items: ActionPreviewItem[]

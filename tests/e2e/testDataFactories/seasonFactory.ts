@@ -548,7 +548,13 @@ export class SeasonFactory {
         expectedStatus: number = 200
     ): Promise<Season[]> => {
         const {SeasonSchema} = useSeasonValidation()
-        const response = await context.request.get('/api/admin/season')
+        // A season another worker is creating is briefly visible without its ticket prices
+        // (nested create, no D1 transactions) and the list endpoint answers 400 until the
+        // prices are written. Poll past that moment, then confirm every season is complete.
+        const response = await testHelpers.pollUntil(
+            () => context.request.get('/api/admin/season'),
+            (r) => r.status() === expectedStatus
+        )
         expect(response.status()).toBe(expectedStatus)
         const rawData = await response.json()
 
@@ -556,6 +562,7 @@ export class SeasonFactory {
         const parsedSeasons = rawData.map((season: unknown) => {
             const result = SeasonSchema.safeParse(season)
             expect(result.success, `API should return valid Season objects. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+            expect(result.data!.ticketPrices.length, `Season ${result.data!.shortName} must have ticket prices`).toBeGreaterThan(0)
             return result.data!
         })
 

@@ -1,6 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {findByTestId, findAllByTestId} from '~~/tests/component/testHelpers'
 import {ref, nextTick, h, defineComponent} from 'vue'
 import AllergyCatalogTable from '~/components/allergy/AllergyCatalogTable.vue'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
@@ -130,7 +131,7 @@ describe('AllergyCatalogTable', () => {
                 {expanded: () => h('div', {'data-testid': 'docked-detail'}, 'DETAIL HERE')}
             )
 
-            expect(wrapper.findAll('[data-testid="docked-detail"]')).toHaveLength(1)
+            expect(findAllByTestId(wrapper, 'docked-detail')).toHaveLength(1)
         })
 
         it('renders no expanded content when nothing is expanded', async () => {
@@ -139,7 +140,7 @@ describe('AllergyCatalogTable', () => {
                 {expanded: () => h('div', {'data-testid': 'docked-detail'})}
             )
 
-            expect(wrapper.find('[data-testid="docked-detail"]').exists()).toBe(false)
+            expect(findByTestId(wrapper, 'docked-detail').exists()).toBe(false)
         })
     })
 })

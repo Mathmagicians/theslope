@@ -1,13 +1,13 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach} from 'vitest'
-import {mountSuspended, mockComponent, registerEndpoint} from '@nuxt/test-utils/runtime'
+import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {setActivePinia, createPinia} from 'pinia'
 import {flushPromises} from '@vue/test-utils'
 import {clearNuxtData} from '#app'
-import {h} from 'vue'
 import AllergyPosterPage from '~/pages/admin/allergies/pdf.vue'
 import {useAllergiesStore} from '~/stores/allergies'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
+import {mountWithTooltipProvider} from '~~/tests/component/testHelpers'
 
 // Endpoint mocks - specific FIRST, generic LAST (docs/testing.md)
 registerEndpoint('/api/admin/season/active', () => null)
@@ -15,12 +15,12 @@ registerEndpoint('/api/admin/season', () => [])
 registerEndpoint('/api/admin/allergy-type', () => AllergyFactory.createMockAllergyTypesWithInhabitants())
 registerEndpoint('/api/admin/users/by-role/ALLERGYMANAGER', () => [])
 
-mockComponent('AllergyManagersList', {setup: () => () => h('div')})
-
-// Fetching is the store's concern; explicit load repopulates after clearNuxtData
+// Fetching is the store's concern; explicit load repopulates after clearNuxtData.
+// The poster has no layout (no UApp), so the real AllergyManagersList gets its
+// tooltip provider from the mount helper.
 const mountPage = async () => {
     await useAllergiesStore().loadAllergyTypes()
-    const wrapper = await mountSuspended(AllergyPosterPage)
+    const wrapper = await mountWithTooltipProvider(AllergyPosterPage)
     await flushPromises()
     return wrapper
 }

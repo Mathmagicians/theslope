@@ -1,6 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
 import {mountSuspended} from "@nuxt/test-utils/runtime"
+import {findByTestId} from '~~/tests/component/testHelpers'
 import SeasonSelector from '~/components/form/SeasonSelector.vue'
 import {nextTick, ref} from 'vue'
 import {SeasonFactory} from '../../../e2e/testDataFactories/seasonFactory'
@@ -44,7 +45,7 @@ describe('SeasonSelector', () => {
     }
 
     const getDropdown = (wrapper: WrapperType) => {
-        return wrapper.find(`[data-testid="${DROPDOWN_TEST_ID}"]`)
+        return findByTestId(wrapper, DROPDOWN_TEST_ID)
     }
 
     const selectOption = async (wrapper: WrapperType, optionValue: number) => {
