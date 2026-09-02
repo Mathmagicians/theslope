@@ -1,10 +1,15 @@
 // @vitest-environment nuxt
 import { describe, it, expect } from 'vitest'
+import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import AllergenMultiSelector from '~/components/allergy/AllergenMultiSelector.vue'
 import UserListItem from '~/components/shared/UserListItem.vue'
 import { AllergyFactory } from '../../../e2e/testDataFactories/allergyFactory'
 import { ALLERGY_TEST_IDS } from './allergyTestIds'
 import { mountWithTooltipProvider, findByTestId } from '~~/tests/component/testHelpers'
+
+// AllergyTypeCard reads the active season's ticket prices from the plan store - fake its HTTP (Rule 6)
+registerEndpoint('/api/admin/season/active', () => null)
+registerEndpoint('/api/admin/season', () => [])
 
 describe('AllergenMultiSelector', () => {
     // Test data from factory

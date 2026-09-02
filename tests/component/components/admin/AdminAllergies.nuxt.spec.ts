@@ -15,7 +15,14 @@ import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId} 
 const allergyTypesEndpoint = vi.fn()
 registerEndpoint('/api/admin/allergy-type', allergyTypesEndpoint)
 registerEndpoint('/api/admin/users/by-role/ALLERGYMANAGER', () => [])
+registerEndpoint('/api/admin/users', () => [])
 registerEndpoint('/api/admin/household', () => [])
+registerEndpoint('/api/admin/season/active', () => null)
+registerEndpoint('/api/admin/season', () => [])
+
+// Container spec: every test mounts the whole catalog page with three real stores (~0.6s alone,
+// several seconds under full-suite parallelism on a loaded machine) - size the timeout accordingly
+vi.setConfig({testTimeout: 15_000})
 
 const mockAllergyTypes = AllergyFactory.createMockAllergyTypesWithInhabitants()
 const [firstType] = mockAllergyTypes

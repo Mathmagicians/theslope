@@ -14,6 +14,7 @@ registerEndpoint('/api/admin/season/active', () => null)
 registerEndpoint('/api/admin/season', () => [])
 registerEndpoint('/api/admin/allergy-type', () => AllergyFactory.createMockAllergyTypesWithInhabitants())
 registerEndpoint('/api/admin/users/by-role/ALLERGYMANAGER', () => [])
+registerEndpoint('/api/admin/users', () => [])
 
 // Fetching is the store's concern; explicit load repopulates after clearNuxtData.
 // The poster has no layout (no UApp), so the real AllergyManagersList gets its
