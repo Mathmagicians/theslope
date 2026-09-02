@@ -291,6 +291,18 @@ export const useBillingValidation = () => {
     // ============================================================================
 
     /**
+     * Transaction create data - batch input for createTransactionsBatch (repository)
+     * Shared by the closing job generator (useBooking.prepareTransactionData) and the repository
+     */
+    const TransactionCreateDataSchema = z.object({
+        orderId: z.number().int(),
+        orderSnapshot: z.string(),
+        userSnapshot: z.string(),
+        amount: z.number(),
+        userEmailHandle: z.string()
+    })
+
+    /**
      * Transaction Display - for household billing view
      * Shows individual orders within a billing period
      */
@@ -709,6 +721,7 @@ export const useBillingValidation = () => {
         // Household Billing
         HouseholdBillingResponseSchema,
         TransactionDisplaySchema,
+        TransactionCreateDataSchema,
         HouseholdInvoiceSchema,
         CurrentPeriodBillingSchema,
 
@@ -755,6 +768,7 @@ export type MonthlyBillingResponse = z.infer<ReturnType<typeof useBillingValidat
 // Household Billing types
 export type HouseholdBillingResponse = z.infer<ReturnType<typeof useBillingValidation>['HouseholdBillingResponseSchema']>
 export type TransactionDisplay = z.infer<ReturnType<typeof useBillingValidation>['TransactionDisplaySchema']>
+export type TransactionCreateData = z.infer<ReturnType<typeof useBillingValidation>['TransactionCreateDataSchema']>
 export type HouseholdInvoice = z.infer<ReturnType<typeof useBillingValidation>['HouseholdInvoiceSchema']>
 export type CurrentPeriodBilling = z.infer<ReturnType<typeof useBillingValidation>['CurrentPeriodBillingSchema']>
 

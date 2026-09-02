@@ -4,7 +4,7 @@ import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import testHelpers from '../testHelpers'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, temporaryAndRandom, saltedId, doScreenshot} = testHelpers
+const {validatedBrowserContext, pollUntil, temporaryAndRandom, saltedId, doScreenshot, waitForHydration} = testHelpers
 
 /**
  * UI TEST STRATEGY:
@@ -43,6 +43,8 @@ test.describe('AdminHouseholds View', () => {
             (ready) => ready,
             10
         )
+        // Rows above are SSR markup; clicks and fills only register once Vue has hydrated
+        await waitForHydration(page)
     }
 
     /**

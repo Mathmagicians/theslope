@@ -1,7 +1,7 @@
 import {describe, it, expect} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import ActionPreview from '~/components/booking/ActionPreview.vue'
-import type {ActionPreviewItem} from '~/composables/useBooking'
+import type {ActionPreviewItem} from '~/composables/useBookingUi'
 
 describe('ActionPreview', () => {
     const createItem = (overrides: Partial<ActionPreviewItem> = {}): ActionPreviewItem => ({

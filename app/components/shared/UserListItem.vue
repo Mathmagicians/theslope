@@ -129,8 +129,8 @@ const groupNamesDisplay = computed(() => {
   return inhabitantsList.value.map(formatName).join(' · ')
 })
 
-// Responsive breakpoint injection
-const isMd = inject<Ref<boolean>>('isMd')
+// Responsive breakpoint injection - default keeps layout-less pages (e.g. print) warning-free
+const isMd = inject<Ref<boolean>>('isMd', ref(false))
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Avatar display settings

@@ -87,7 +87,7 @@ interface Props {
   /** Deadline predicates - parent can wrap with () => true for admin mode to bypass deadline checks */
   deadlines: SeasonDeadlines
   releasedTicketCounts?: ReleasedTicketCounts
-  /** Admin override for edit permission - bypasses isHouseholdMember check when provided */
+  /** Admin override for edit permission - bypasses the auth store isMemberOfHousehold check when provided */
   canEditAdminOverride?: () => boolean
 }
 
@@ -113,12 +113,12 @@ const household = computed(() => props.household ?? selectedHousehold.value)
 // Household business logic for consensus
 const {computeConsensus} = useHousehold()
 
-// Permission-based form mode - EDIT if user is member of household (ADR: permission in composable)
+// Permission-based form mode - EDIT if user is member of household (session predicate on the auth store, ADR-017)
 // Admin can override via canEditAdminOverride prop
-const {isHouseholdMember} = usePermissions()
+const {isMemberOfHousehold} = useAuthStore()
 const formMode = computed(() => {
   const householdId = household.value?.id
-  const canEdit = householdId && (props.canEditAdminOverride ?? (() => isHouseholdMember(householdId)))()
+  const canEdit = householdId && (props.canEditAdminOverride ?? (() => isMemberOfHousehold(householdId)))()
   return canEdit ? FORM_MODES.EDIT : FORM_MODES.VIEW
 })
 
@@ -494,7 +494,8 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
 // HELPER TEXT
 // ============================================================================
 
-const {partitionGuestOrders, groupGuestOrders, createBookingBadges, getBookingOptions, getDayBillSummary, resolveUserBookingBuckets, formatActionPreview} = useBooking()
+const {partitionGuestOrders, groupGuestOrders, getBookingOptions, getDayBillSummary, resolveUserBookingBuckets} = useBooking()
+const {createBookingBadges, formatActionPreview} = useBookingUi()
 
 // Deadline badges
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))

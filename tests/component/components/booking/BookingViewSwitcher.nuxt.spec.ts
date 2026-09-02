@@ -1,6 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {findByTestId} from '~~/tests/component/testHelpers'
 import {nextTick} from 'vue'
 import BookingViewSwitcher from '~/components/booking/BookingViewSwitcher.vue'
 import {BookingViewSchema, type BookingView} from '~/composables/useBookingView'
@@ -12,7 +13,7 @@ const mount = (modelValue: BookingView = 'day') =>
   mountSuspended(BookingViewSwitcher, {props: {modelValue}})
 
 const btn = (wrapper: Awaited<ReturnType<typeof mount>>, view: BookingView) =>
-  wrapper.find(`[data-testid="booking-view-${view}"]`)
+  findByTestId(wrapper, `booking-view-${view}`)
 
 describe('BookingViewSwitcher', () => {
   it.each(views)('renders %s button with label', async (view) => {

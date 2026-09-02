@@ -1,8 +1,9 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi} from 'vitest'
 import {mountSuspended, mockNuxtImport, mockComponent} from '@nuxt/test-utils/runtime'
+import {findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
 import ChefMenuCard from '~/components/chef/ChefMenuCard.vue'
-import {ref, h, nextTick} from 'vue'
+import {ref, h} from 'vue'
 import {flushPromises} from '@vue/test-utils'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
@@ -34,13 +35,6 @@ mockNuxtImport('usePlanStore', () => {
 mockNuxtImport('useAuthStore', () => {
     return () => ({
         user: ref({Inhabitant: {id: 1, name: 'Test User'}})
-    })
-})
-
-// Mock useHeynabo
-mockNuxtImport('useHeynabo', () => {
-    return () => ({
-        getEventUrl: vi.fn((id: number) => `https://heynabo.com/event/${id}`)
     })
 })
 
@@ -117,7 +111,7 @@ describe('ChefMenuCard', () => {
             const wrapper = await createWrapper({dinnerEvent})
 
             // The AllergenMultiSelector should receive the extracted IDs
-            const selector = wrapper.find('[data-testid="allergen-selector"]')
+            const selector = findByTestId(wrapper, 'allergen-selector')
             expect(selector.exists()).toBe(true)
 
             // Verify the text shows the correct IDs
@@ -141,7 +135,7 @@ describe('ChefMenuCard', () => {
             }
 
             const wrapper = await createWrapper({dinnerEvent})
-            const selector = wrapper.find('[data-testid="allergen-selector"]')
+            const selector = findByTestId(wrapper, 'allergen-selector')
 
             // Should show id=42, not undefined (which would happen with allergyTypeId)
             expect(selector.text()).toContain('42')
@@ -157,7 +151,7 @@ describe('ChefMenuCard', () => {
             }
 
             const wrapper = await createWrapper({dinnerEvent})
-            const selector = wrapper.find('[data-testid="allergen-selector"]')
+            const selector = findByTestId(wrapper, 'allergen-selector')
 
             // Should show empty selection, not crash
             expect(selector.text()).toContain('none')
@@ -169,24 +163,23 @@ describe('ChefMenuCard', () => {
             const wrapper = await createWrapper()
 
             // Primary action is labelled (no longer a bare pencil icon)
-            expect(wrapper.find('[data-testid="edit-menu"]').text()).toContain('Rediger menu')
+            expect(findByTestId(wrapper, 'edit-menu').text()).toContain('Rediger menu')
             expect(wrapper.find('[name="announce-dinner"]').text()).toContain('Publicer')
             // Overflow trigger is the quiet icon-only "..." (no label)
-            expect(wrapper.find('[data-testid="dinner-more-actions"]').exists()).toBe(true)
+            expect(findByTestId(wrapper, 'dinner-more-actions').exists()).toBe(true)
         })
 
         it('keeps the cancel-dinner action behind the overflow panel', async () => {
             const wrapper = await createWrapper()
 
             // Danger zone is collapsed by default - cancel action is not in the DOM
-            expect(wrapper.find('[data-testid="dinner-danger-zone"]').exists()).toBe(false)
+            expect(findByTestId(wrapper, 'dinner-danger-zone').exists()).toBe(false)
 
             // Opening the overflow panel reveals the danger zone
-            await wrapper.find('[data-testid="dinner-more-actions"]').trigger('click')
-            await nextTick()
+            await clickByTestId(wrapper, 'dinner-more-actions')
             await flushPromises()
 
-            const dangerZone = wrapper.find('[data-testid="dinner-danger-zone"]')
+            const dangerZone = findByTestId(wrapper, 'dinner-danger-zone')
             expect(dangerZone.exists()).toBe(true)
             expect(dangerZone.text()).toContain('Aflys middagen')
         })
@@ -201,7 +194,7 @@ describe('ChefMenuCard', () => {
             const dinnerEvent = createDinnerEventWithAllergens([1, 2])
             const wrapper = await createWrapper({dinnerEvent, formMode, showAllergens})
 
-            const selector = wrapper.find('[data-testid="allergen-selector"]')
+            const selector = findByTestId(wrapper, 'allergen-selector')
             expect(selector.exists()).toBe(shouldShowAllergenSelector)
         })
     })

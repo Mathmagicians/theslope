@@ -1,45 +1,27 @@
 // @vitest-environment nuxt
-import {describe, it, expect, vi} from 'vitest'
-import {mountSuspended, mockNuxtImport, mockComponent} from '@nuxt/test-utils/runtime'
-import {ref, h, nextTick} from 'vue'
+import {describe, it, expect} from 'vitest'
+import {registerEndpoint} from '@nuxt/test-utils/runtime'
+import {nextTick} from 'vue'
 import AllergyTypeCard from '~/components/allergy/AllergyTypeCard.vue'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
+import {ALLERGY_TEST_IDS} from './allergyTestIds'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId} from '~~/tests/component/testHelpers'
 
-mockNuxtImport('useHeynabo', () => () => ({
-    getUserUrl: vi.fn((heynaboId: number) => `/user/${heynaboId}`)
-}))
-
-// Avoid tooltip provider issues in tests
-mockComponent('UserListItem', {
-    props: ['inhabitants', 'label'],
-    setup: () => () => h('div', {'data-testid': 'user-list-item'})
-})
+// AllergyTypeCard reads the active season's ticket prices from the plan store - fake its HTTP (Rule 6)
+registerEndpoint('/api/admin/season/active', () => null)
+registerEndpoint('/api/admin/season', () => [])
 
 const [existingType] = AllergyFactory.createMockAllergyTypesWithInhabitants()
 
-const TEST_IDS = {
-    form: 'allergy-type-form',
-    save: 'save-allergy-type',
-    cancel: 'cancel-allergy-type'
-} as const
+// Renders the real UserListItem - its avatar tooltips need the provider the wrapper supplies
+const mountCard = (props: Record<string, unknown>) =>
+    mountWithTooltipProvider(AllergyTypeCard, {props, isMd: false})
 
-const mountCard = async (props: Record<string, unknown>) =>
-    await mountSuspended(AllergyTypeCard, {
-        props,
-        global: {provide: {isMd: ref(false)}}
-    })
+type Wrapper = Awaited<ReturnType<typeof mountCard>>
 
-const find = (wrapper: Awaited<ReturnType<typeof mountCard>>, testId: string) =>
-    wrapper.find(`[data-testid="${testId}"]`)
-
-const fillField = async (wrapper: Awaited<ReturnType<typeof mountCard>>, name: string, value: string) => {
+const fillField = async (wrapper: Wrapper, name: string, value: string) => {
     const field = wrapper.find(`[name="${name}"]`)
     await field.setValue(value)
-    await nextTick()
-}
-
-const clickSave = async (wrapper: Awaited<ReturnType<typeof mountCard>>) => {
-    await find(wrapper, TEST_IDS.save).trigger('click')
     await nextTick()
 }
 
@@ -54,7 +36,7 @@ describe('AllergyTypeCard', () => {
         it('renders the form with the right heading', async () => {
             const wrapper = await mountCard(props)
 
-            expect(find(wrapper, TEST_IDS.form).exists()).toBe(true)
+            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.form).exists()).toBe(true)
             expect(wrapper.text()).toContain(heading)
         })
 
@@ -71,7 +53,7 @@ describe('AllergyTypeCard', () => {
 
             await fillField(wrapper, 'allergy-name', 'Sesam')
             await fillField(wrapper, 'allergy-description', 'Sesamallergi')
-            await clickSave(wrapper)
+            await clickByTestId(wrapper, ALLERGY_TEST_IDS.save)
 
             expect(wrapper.emitted('save')).toBeTruthy()
             expect(wrapper.emitted('save')![0]![0]).toMatchObject({
@@ -86,14 +68,13 @@ describe('AllergyTypeCard', () => {
             await fillField(wrapper, 'allergy-name', '')
             await fillField(wrapper, 'allergy-description', '')
 
-            expect(find(wrapper, TEST_IDS.save).attributes('disabled')).toBeDefined()
+            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.save).attributes('disabled')).toBeDefined()
         })
 
         it('emits cancel', async () => {
             const wrapper = await mountCard(props)
 
-            await find(wrapper, TEST_IDS.cancel).trigger('click')
-            await nextTick()
+            await clickByTestId(wrapper, ALLERGY_TEST_IDS.cancel)
 
             expect(wrapper.emitted('cancel')).toBeTruthy()
         })
@@ -103,16 +84,24 @@ describe('AllergyTypeCard', () => {
         it('renders the allergy details without a form', async () => {
             const wrapper = await mountCard({allergyType: existingType})
 
-            expect(find(wrapper, TEST_IDS.form).exists()).toBe(false)
+            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.form).exists()).toBe(false)
             expect(wrapper.text()).toContain(existingType!.name)
         })
 
         it('renders the compact variant used by AllergenMultiSelector', async () => {
             const wrapper = await mountCard({allergyType: existingType, compact: true})
 
-            expect(find(wrapper, TEST_IDS.form).exists()).toBe(false)
+            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.form).exists()).toBe(false)
             expect(wrapper.text()).toContain(existingType!.name)
             expect(wrapper.text()).toContain(`${existingType!.inhabitants!.length} beboer`)
+        })
+
+        it('shows an age category badge per inhabitant (child renders Barn, not Voksen)', async () => {
+            // Factory canon: Anna is an adult, Bob a child
+            const wrapper = await mountCard({allergyType: existingType})
+
+            const badges = findAllByTestId(wrapper, ALLERGY_TEST_IDS.ageBadge)
+            expect(badges.map(b => b.text())).toEqual(['Voksen', 'Barn'])
         })
     })
 })

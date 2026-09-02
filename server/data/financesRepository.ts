@@ -30,6 +30,7 @@ import {
     useBillingValidation,
     type HouseholdBillingResponse,
     type TransactionDisplay,
+    type TransactionCreateData,
     type InvoiceDisplay,
     type InvoiceCreate,
     type InvoiceCreated,
@@ -1554,17 +1555,6 @@ export async function fetchClosedOrdersWithoutTransaction(
         ...order,
         ticketType: order.ticketPrice?.ticketType ?? null
     }))
-}
-
-/**
- * Transaction create data for batch operations
- */
-export type TransactionCreateData = {
-    orderId: number
-    orderSnapshot: string
-    userSnapshot: string
-    amount: number
-    userEmailHandle: string
 }
 
 /**

@@ -61,7 +61,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const {TYPOGRAPHY, SIZES, ICONS, IMG, COMPONENTS} = useTheSlopeDesignSystem()
-const {roleLabels} = useUserRoles()
+const {roleLabels} = useUserRolesUi()
 const {getUserUrl} = useHeynabo()
 const authStore = useAuthStore()
 

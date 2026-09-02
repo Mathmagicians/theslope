@@ -1,14 +1,11 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
 import {mountSuspended} from "@nuxt/test-utils/runtime"
+import {findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
 import FormModeSelector from '~/components/form/FormModeSelector.vue'
 import {FORM_MODES} from '~/types/form'
-import {nextTick} from 'vue'
-
 
 describe('FormModeSelector', () => {
-
-    type WrapperType = Awaited<ReturnType<typeof mountSuspended>>
 
     const BUTTON_NAMES = {
         view: 'form-mode-view',
@@ -24,9 +21,9 @@ describe('FormModeSelector', () => {
         })
 
         // Verify that 3 buttons are rendered (use data-testid instead of name)
-        const viewButton = wrapper.find(`[data-testid="${BUTTON_NAMES.view}"]`)
-        const editButton = wrapper.find(`[data-testid="${BUTTON_NAMES.edit}"]`)
-        const createButton = wrapper.find(`[data-testid="${BUTTON_NAMES.create}"]`)
+        const viewButton = findByTestId(wrapper, BUTTON_NAMES.view)
+        const editButton = findByTestId(wrapper, BUTTON_NAMES.edit)
+        const createButton = findByTestId(wrapper, BUTTON_NAMES.create)
 
         expect(viewButton.exists()).toBe(true)
         expect(editButton.exists()).toBe(true)
@@ -35,23 +32,13 @@ describe('FormModeSelector', () => {
         return wrapper
     }
 
-    const clickButton = async (wrapper: WrapperType, buttonName: string) => {
-        const button = wrapper.find(`[data-testid="${buttonName}"]`)
-        await button.trigger('click')
-        await nextTick()
-    }
-
-    const getButton = (wrapper: WrapperType, buttonName: string) => {
-        return wrapper.find(`[data-testid="${buttonName}"]`)
-    }
-
     it('renders with default view mode', async () => {
         const wrapper = await modeSelectectorWithMode(FORM_MODES.VIEW)
 
         // Check view button text
-        const viewButton = getButton(wrapper, BUTTON_NAMES.view)
-        const editButton = getButton(wrapper, BUTTON_NAMES.edit)
-        const createButton = getButton(wrapper, BUTTON_NAMES.create)
+        const viewButton = findByTestId(wrapper, BUTTON_NAMES.view)
+        const editButton = findByTestId(wrapper, BUTTON_NAMES.edit)
+        const createButton = findByTestId(wrapper, BUTTON_NAMES.create)
 
         expect(viewButton.text()).toContain('Vis')
         expect(editButton.text()).toContain('Rediger')
@@ -60,7 +47,7 @@ describe('FormModeSelector', () => {
 
     it('emits update:modelValue when button is clicked', async () => {
         const wrapper = await modeSelectectorWithMode(FORM_MODES.VIEW)
-        await clickButton(wrapper, BUTTON_NAMES.edit)
+        await clickByTestId(wrapper, BUTTON_NAMES.edit)
 
         const emitted = wrapper.emitted('update:modelValue')
         expect(emitted).toBeTruthy()
@@ -75,13 +62,13 @@ describe('FormModeSelector', () => {
             }
         })
 
-        const editButton = getButton(wrapper, BUTTON_NAMES.edit)
+        const editButton = findByTestId(wrapper, BUTTON_NAMES.edit)
         expect(editButton.attributes('disabled')).toBeDefined()
     })
 
     it('changes button variant when selected', async () => {
         const wrapper = await modeSelectectorWithMode(FORM_MODES.VIEW)
-        await clickButton(wrapper, BUTTON_NAMES.create)
+        await clickByTestId(wrapper, BUTTON_NAMES.create)
 
         const emitted = wrapper.emitted('update:modelValue')
         expect(emitted).toBeTruthy()

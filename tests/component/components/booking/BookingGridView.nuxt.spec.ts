@@ -1,6 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {findByTestId} from '~~/tests/component/testHelpers'
 import BookingGridView from '~/components/booking/BookingGridView.vue'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -44,25 +45,25 @@ const mount = (props = {}) => mountSuspended(BookingGridView, {
 describe('BookingGridView', () => {
   it('renders with data-testid', async () => {
     const wrapper = await mount()
-    expect(wrapper.find('[data-testid="booking-grid-view"]').exists()).toBe(true)
+    expect(findByTestId(wrapper, 'booking-grid-view').exists()).toBe(true)
   })
 
   it('renders navigation buttons', async () => {
     const wrapper = await mount()
     // Navigation is handled by CalendarDateNav component
-    expect(wrapper.find('[data-testid="date-nav-prev"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="date-nav-next"]').exists()).toBe(true)
+    expect(findByTestId(wrapper, 'date-nav-prev').exists()).toBe(true)
+    expect(findByTestId(wrapper, 'date-nav-next').exists()).toBe(true)
   })
 
   it('renders edit button in view mode (week/month only)', async () => {
     // Edit button only renders for week/month views, not day view
     const wrapper = await mount({view: 'week'})
-    expect(wrapper.find('[data-testid="grid-edit"]').exists()).toBe(true)
+    expect(findByTestId(wrapper, 'grid-edit').exists()).toBe(true)
   })
 
   it('renders day-content slot for day view', async () => {
     const wrapper = await mount({view: 'day'})
-    expect(wrapper.find('[data-testid="day-slot"]').exists()).toBe(true)
+    expect(findByTestId(wrapper, 'day-slot').exists()).toBe(true)
   })
 
   const navCases: {button: string, event: string}[] = [
@@ -73,36 +74,36 @@ describe('BookingGridView', () => {
   it.each(navCases)('emits navigate $event when $button clicked', async ({button, event}) => {
     const wrapper = await mount()
     // Navigation is handled by CalendarDateNav component
-    await wrapper.find(`[data-testid="${button}"]`).trigger('click')
+    await findByTestId(wrapper, button).trigger('click')
     expect(wrapper.emitted('navigate')?.[0]).toEqual([event])
   })
 
   it('emits update:formMode EDIT when edit button clicked (week/month only)', async () => {
     // Edit button only renders for week/month views, not day view
     const wrapper = await mount({view: 'week'})
-    await wrapper.find('[data-testid="grid-edit"]').trigger('click')
+    await findByTestId(wrapper, 'grid-edit').trigger('click')
     expect(wrapper.emitted('update:formMode')?.[0]).toEqual(['edit'])
   })
 
   describe('canEdit prop', () => {
     it.each(['week', 'month'] as const)('hides edit button when canEdit=false in %s view', async (view) => {
       const wrapper = await mount({view, canEdit: false})
-      expect(wrapper.find('[data-testid="grid-edit"]').exists()).toBe(false)
+      expect(findByTestId(wrapper, 'grid-edit').exists()).toBe(false)
     })
 
     it.each(['week', 'month'] as const)('shows edit button when canEdit=true (default) in %s view', async (view) => {
       const wrapper = await mount({view, canEdit: true})
-      expect(wrapper.find('[data-testid="grid-edit"]').exists()).toBe(true)
+      expect(findByTestId(wrapper, 'grid-edit').exists()).toBe(true)
     })
 
     it('hides save button when canEdit=false in edit mode', async () => {
       const wrapper = await mount({view: 'week', canEdit: false, formMode: 'edit'})
-      expect(wrapper.find('[data-testid="grid-save"]').exists()).toBe(false)
+      expect(findByTestId(wrapper, 'grid-save').exists()).toBe(false)
     })
 
     it('shows save button when canEdit=true in edit mode', async () => {
       const wrapper = await mount({view: 'week', canEdit: true, formMode: 'edit'})
-      expect(wrapper.find('[data-testid="grid-save"]').exists()).toBe(true)
+      expect(findByTestId(wrapper, 'grid-save').exists()).toBe(true)
     })
   })
 })

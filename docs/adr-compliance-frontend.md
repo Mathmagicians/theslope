@@ -1,7 +1,7 @@
 # ADR Compliance - Frontend Routes & Components
 
 **Generated:** 2025-11-11
-**Last Updated:** 2026-08-20 (Allergy catalog: single responsive tree in `AdminAllergies.vue`, `AllergyTypeCard.vue` serves create+edit, inline delete confirm, allergies store on `useAsyncData`; new `AdminAllergies.nuxt.spec.ts` + `AllergyTypeCard.nuxt.spec.ts`)
+**Last Updated:** 2026-09-02 (ADR-017: per-context typecheck gate; pure UI composables `useBookingUi` / `useUserRolesUi`; `isMemberOfHousehold` on the auth store; type augmentations in `shared/types/`)
 
 ## Legend
 
@@ -30,7 +30,7 @@
 | `/admin/users` | `admin/[tab].vue` → `AdminUsers.vue` | ✅ `useUsersStore()` | N/A | ✅ tabs | ✅ | ❌ | **⚠️ E2E ONLY** |
 | `/admin/economy` | `admin/[tab].vue` → `AdminEconomy.vue` | ✅ `usePlanStore()`, `useBookingsStore()` | N/A | ✅ tabs | ✅ Serial | ❌ | **⚠️ E2E ONLY** - Admin corrections feature |
 | `/admin/settings` | `admin/[tab].vue` → `AdminSettings.vue` | N/A | N/A | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
-| `/admin/allergies/pdf` | `admin/allergies/pdf.vue` | ✅ `useAllergiesStore()` | N/A | N/A | ❌ | ❌ | **❌ NO TESTS** |
+| `/admin/allergies/pdf` | `admin/allergies/pdf.vue` | ✅ `useAllergiesStore()`, `usePlanStore()` | N/A | N/A | ✅ Smoke | ✅ 2 tests | **✅ COMPLIANT** — Age categories via `groupInhabitantsByTicketCategory` + `formatTicketCounts` (V/B/b), active-season age limits, DS typography |
 | **Household Routes** |
 | `/household/[shortname]` | `household/[shortname]/index.vue` | ✅ `useHouseholdsStore()` | N/A | ✅ path + `?pbs=` | ✅ | ⚠️ | **⚠️ REVIEW** - ADR-006 preserves `?pbs` on redirect |
 | `/household/[shortname]/bookings` | `household/[shortname]/[tab].vue` → `HouseholdBookings.vue` | ✅ Multiple stores | N/A | ✅ tabs + `?pbs=` | ✅ | ❌ | **⚠️ MISSING TESTS** |
@@ -79,9 +79,12 @@
 
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
-| `AdminAllergies.vue` | `/admin/allergies` | `useAllergiesStore()`, `useHouseholdsStore()` | `useAllergyValidation()`, `useAllergy()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 14 tests | ✅ | **✅ COMPLIANT** — One responsive tree (no `md:hidden` branch); row actions replace `FormModeSelector`; inline delete confirm naming the cascade replaces `confirm()`; owns the households lookup passed to `AllergyTypeCard` |
+| `AdminAllergies.vue` | `/admin/allergies` | `useAllergiesStore()`, `useHouseholdsStore()` | `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 32 tests | ✅ Full | **✅ COMPLIANT** — Master/detail with a responsive detail mount point: `AllergyDetailPanel` in the sticky pane (md+) or docked under the tapped row (`#expanded`, `<md`); selection is the single state; spec parametrized over `isMd`; owns the households lookup |
+| `AllergyCatalogTable.vue` | `/admin/allergies`, `/chef` (via `AllergenMultiSelector`) | Parent props | `useAllergy()`, `useAllergyValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 15 tests | ✅ Indirect | **✅ COMPLIANT** — ONE catalog master table (`mode: 'single' \| 'multi'`); forwards `#expanded` + `#empty-state`; deduplicates the former AdminAllergies/AllergenMultiSelector tables |
+| `AllergyDetailPanel.vue` | `/admin/allergies` | None (prop-driven) | `useAllergyValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 12 tests | ✅ Indirect | **✅ COMPLIANT** — Portable detail (view ✏️🗑 / edit / create / delete-confirm); identical testids at every mount point |
+| `AllergenMultiSelector.vue` | `/admin/allergies`, `/chef` | Parent props | `useAllergyValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 17 tests | ✅ Indirect | **✅ COMPLIANT** — Consumes `AllergyCatalogTable` (multi); mobile fixed summary bar jumps to the statistics panel |
 | `HouseholdAllergies.vue` | `/household/[shortname]/allergies` | `useAllergiesStore()`, `useHouseholdsStore()` | `useAllergyValidation()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
-| `AllergyTypeCard.vue` | `/admin/allergies`, `/household/[shortname]/allergies` | Parent props | `useAllergyValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 12 tests | ✅ Indirect | **✅ COMPLIANT** — Serves view/compact/edit **and create** (`allergyType` optional); household rendered via `UserListItem` `#badge` slot; `<NuxtTime relative>` for timestamps (SSR-safe) |
+| `AllergyTypeCard.vue` | `/admin/allergies`, `/household/[shortname]/allergies` | Parent props + `usePlanStore()` (activeSeason read) | `useAllergyValidation()`, `useTicket()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 13 tests | ✅ Indirect | **✅ COMPLIANT** — Serves view/compact/edit **and create** (`allergyType` optional); household rendered via `UserListItem` `#badge` slot; per-inhabitant age badge (`getTicketTypeConfig`, HouseholdCard pattern); `<NuxtTime relative>` for timestamps (SSR-safe) |
 | `AllergyTypeDisplay.vue` | `/admin/allergies/pdf` | Parent props | `useAllergyValidation()` | ✅ | ✅ | ❌ | N/A | **N/A DISPLAY** |
 | `AllergyManagersList.vue` | `/admin/allergies` | `useUsersStore()` | `useUserValidation()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 
@@ -117,11 +120,11 @@
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
 | `HouseholdBookings.vue` | `/household/[shortname]/bookings` | `usePlanStore()`, `useHouseholdsStore()`, `useBookingsStore()` | `useBookingView()`, `useBooking()` | ✅ | ✅ | ❌ | ✅ Full | **⚠️ MISSING UNIT** - E2E arrow-nav (`HouseholdBookings.e2e.spec.ts`) + day-view + cross-household covered |
-| `BookingGridView.vue` | `/household/[shortname]/bookings` | Parent props | `useBooking()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - ADR-016 week/month grid |
+| `BookingGridView.vue` | `/household/[shortname]/bookings` | Parent props | `useBooking()`, `useBookingUi()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - ADR-016 week/month grid |
 | `BookingViewSwitcher.vue` | `/household/[shortname]/bookings` | Parent props | `useBookingView()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - Day/week/month toggle |
-| `ActionPreview.vue` | `/household/[shortname]/bookings`, `/admin/economy` | Parent props | `useBooking()` | ✅ | ✅ | ✅ | ✅ Indirect | **✅ COMPLIANT** - Shows booking changes before save |
-| `GuestBookingForm.vue` | `/household/[shortname]/bookings`, `/admin/economy` | Parent props | `useBookingValidation()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - Guest ticket form |
-| `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | `useBookingsStore()` | `useBooking()`, `useBookingValidation()` | ✅ | ✅ | ✅ | ✅ Serial | **✅ COMPLIANT** - ADR-016 booking form, admin override support |
+| `ActionPreview.vue` | `/household/[shortname]/bookings`, `/admin/economy` | Parent props | `useBookingUi()` | ✅ | ✅ | ✅ | ✅ Indirect | **✅ COMPLIANT** - Shows booking changes before save |
+| `GuestBookingForm.vue` | `/household/[shortname]/bookings`, `/admin/economy` | Parent props | `useBooking()`, `useBookingUi()`, `useBookingValidation()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - Guest ticket form |
+| `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | `useBookingsStore()`, `useAuthStore()` | `useBooking()`, `useBookingUi()`, `useBookingValidation()` | ✅ | ✅ | ✅ | ✅ Serial | **✅ COMPLIANT** - ADR-016 booking form, admin override support |
 | `DinnerEvent.vue` | `/household/[shortname]/bookings`, `/dinner` | Parent props | `useDinnerEvent()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
 | `DinnerTicket.vue` | `/household/[shortname]/bookings` | Parent props | `useTicket()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
 
@@ -142,9 +145,9 @@
 |-------|------------------|--------------------------|-----------------|---------------------|-----------------|--------|
 | `plan.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** |
 | `households.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** - `setMoveOutDate()`, `lastMoveOutResult`, `moveInhabitant()`, `deleteHousehold()`, `lastMoveResult`, `updateInhabitantPreferences()`, `updateAllInhabitantPreferences()`, `initHouseholdsStore(shortName?, pbsId?)` disambiguation |
-| `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** — Catalog converted from `useFetch` to `useAsyncData` + `useRequestFetch`; `isAllergyTypesInitialized` checks data presence (ADR-007 rule 3); mutations refetch the catalog |
+| `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** — Catalog converted from `useFetch` to `useAsyncData` + `useRequestFetch`; `isAllergyTypesInitialized` checks data presence (ADR-007 rule 3); mutations refetch the catalog; catalog `transform` parses with `AllergyTypeDetailSchema` so dates are domain types (ADR-010) |
 | `users.ts` | ✅ | ✅ | ✅ | ✅ | ❌ | **⚠️ MISSING TESTS** |
-| `auth.ts` | N/A | ✅ | N/A | N/A | ❌ | **✅ COMPLIANT** - Uses `usePermissions()` for role checks, added `isMemberOfHousehold()` |
+| `auth.ts` | N/A | ✅ | N/A | N/A | ❌ | **✅ COMPLIANT** - Uses `usePermissions()` for role checks, added `isMemberOfHousehold()` (session-aware wrapper over `isInHousehold`, ADR-017) |
 | `event.ts` | ❓ | ❓ | ❓ | ❓ | ❌ | **❓ AUDIT NEEDED** |
 | `tickets.ts` | ❓ | ❓ | ❓ | ❓ | ❌ | **❓ AUDIT NEEDED** |
 | `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ❌ | **✅ COMPLIANT** - ADR-016 scaffold methods, `processAdminCorrection()` for admin bypass, `useRequestFetch()` for SSR |
@@ -166,15 +169,15 @@
 | `useHeynaboValidation()` | ✅ | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Heynabo import response schemas |
 | `useMaintenanceValidation()` | ✅ | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Season import response schemas |
 | **Business Logic Composables** |
-| `useBooking()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - ADR-016 `decideOrderAction`, bucket resolvers, `formatActionPreview()`, `resolveUserBookingBuckets()` |
+| `useBooking()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - ADR-016 `decideOrderAction`, bucket resolvers, `resolveUserBookingBuckets()`; ADR-017 isomorphic (explicit imports; badges/action preview moved to `useBookingUi`, `DINNER_STEP_MAP` icon-free) |
 | `useHousehold()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - `isHouseholdActiveOnDay()` residency predicate (ADR-016), `getResidencyStatus()`, consensus, name formatting |
-| `useSeason()` | ✅ | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Exposes pre-configured `splitDinnerEvents`, `getNextDinnerDate`, `getAdjacentDinner` (the last powers `useBookingView` arrow nav) |
-| `useCookingTeam()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
+| `useSeason()` | ✅ | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Exposes pre-configured `splitDinnerEvents`, `getNextDinnerDate`, `getAdjacentDinner` (the last powers `useBookingView` arrow nav) ; ADR-017 explicit imports |
+| `useCookingTeam()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - ADR-017 explicit imports |
 | `useBilling()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Billing business logic |
 | `useHeynabo()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Heynabo import merge logic, `mergeHouseholdForUpdate()`, `resolveInhabitantImportPlan()` (4-bucket inhabitant plan: ADR-016 decide/execute, global deletion + placement routing) |
 | `useOrder()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Order business logic |
-| `useTicket()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Ticket display logic |
-| `useUserRoles()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Role reconciliation logic |
+| `useTicket()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Ticket display logic; `ticketTypeConfig.compactLabel` (V/B/b single source, read by `formatTicketCounts`); `groupInhabitantsByTicketCategory` aggregator; `getTicketTypeConfig` falls back to `determineTicketType` (never silently ADULT) |
+| `useUserRoles` (module) | N/A | N/A | ✅ Domain types | ✅ Unit | **✅ COMPLIANT** - Server-safe `reconcileUserRoles` / `ROLE_OWNERSHIP` only (ADR-017); display moved to `useUserRolesUi` |
 | **UI/Navigation Composables** |
 | `useBookingView()` | ✅ `BookingViewSchema` | N/A | ✅ DateRange | ✅ Full | **✅ COMPLIANT** - ADR-006 URL-synced view/date for booking calendar. Single `findAdjacent(direction)` helper (boundary from `getPeriodBoundary` → `getAdjacentDinner`) replaces per-view switches; `seasonDates` option dropped (implicit via `dinnerDates`) |
 | `useEntityFormManager()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
@@ -182,9 +185,11 @@
 | `useSeasonSelector()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
 | `useQueryParam()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** - Generic query param composable for URL state |
 | `useApiHandler()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
-| `usePermissions()` | N/A | ✅ `SystemRoleSchema` | N/A | ✅ Full | **✅ COMPLIANT** - Permission predicates for auth (imports from generated layer, re-exports enum) |
+| `usePermissions()` | N/A | ✅ `SystemRoleSchema` | N/A | ✅ Full | **✅ COMPLIANT** - Isomorphic permission predicates (ADR-017); session-aware `isMemberOfHousehold` lives on the auth store |
+| `useBookingUi()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Pure UI composable (ADR-017): deadline badges, `STEP_ICONS`, `formatActionPreview`; never server-imported |
+| `useUserRolesUi()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** - Pure UI composable (ADR-017): role labels/icons/`visibleRoles` from the auth store |
 | `useTemporalCalendar()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Uses `MaybeRefOrGetter` + `toValue()` for reactive inputs, shared by ChefCalendarDisplay and DinnerCalendarDisplay (DRY) |
-| `useTheSlopeDesignSystem()` | N/A | N/A | N/A | N/A | **N/A UTILITY** - Design system constants (icons, sizes, typography, buttons) |
+| `useTheSlopeDesignSystem()` | N/A | N/A | N/A | N/A | **N/A UTILITY** - Page layout + design tokens only (ADR-017); no longer reachable from `server/` |
 
 ## ADR Compliance Summary
 
@@ -281,9 +286,10 @@ All components and stores work with domain types:
 - ✅ Chef page (`Chef.e2e.spec.ts` - team tab switching, calendar reactivity)
 - ✅ Household settings (`household.e2e.spec.ts` - move-out date management, tab navigation)
 
+- ✅ Admin allergies (`AdminAllergies.e2e.spec.ts` - catalog CRUD)
+
 **Missing E2E:**
 - ❌ Admin users
-- ❌ Admin allergies (has admin.e2e.spec.ts but needs specific tests)
 - ❌ Admin settings
 - ❌ Household allergies
 - ❌ Household economy

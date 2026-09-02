@@ -1,3 +1,4 @@
+import type {D1Database} from '@cloudflare/workers-types'
 import {fetchSeason, createTeam, updateTeam} from '~~/server/data/prismaRepository'
 import {assignCookingTeamToDinnerEvent} from '~~/server/data/financesRepository'
 import {useSeason} from '~/composables/useSeason'

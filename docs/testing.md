@@ -85,7 +85,7 @@ const season = SeasonFactory.defaultSeason(testSalt)  // Season-2025-17336500000
 
 ### Rule 4: Extract Repeated Patterns
 
-**Location:** `/tests/e2e/testHelpers.ts`
+**Locations:** `/tests/e2e/testHelpers.ts` (Playwright) and `/tests/component/testHelpers.ts` (Vitest)
 
 If you write the same pattern twice → **EXTRACT IT**
 
@@ -108,6 +108,35 @@ console.log('result:', result)
 expect(result).toBe(expectedValue)
 ```
 
+### Rule 6: Component Tests Test REAL Code
+
+**Guiding principle:** a component test exercises the real component tree, the real composables and the real stores. The only thing faked is what the test environment cannot provide - and in practice that is HTTP.
+
+A mock proves nothing about the code it replaces. When a spec renders a hand-written `UserListItem` stand-in, it keeps passing after the real `UserListItem` renames its `#badge` slot - while the page breaks. Every mocked house component is a second copy of a contract, maintained by hand, that the suite has silently stopped checking.
+
+| Layer | In component tests | How |
+|-------|--------------------|-----|
+| Component under test and its children | **REAL** | Render them. Supply the context they need: `mountWithTooltipProvider()` for anything containing `UTooltip` |
+| Composables, validation schemas, utils | **REAL** | Nothing to do |
+| Pinia stores | **REAL** | `setActivePinia(createPinia())` + `clearNuxtData()` in `beforeEach`; the store fetches from the registered endpoints |
+| HTTP | **FAKE** | `registerEndpoint()` per route - specific FIRST, generic LAST |
+| Nuxt runtime the test drives (`useRoute`, `navigateTo`) | FAKE when the test steers it | `mockNuxtImport()` |
+| Browser-only or third-party APIs the environment lacks | FAKE, with a reason | `mockNuxtImport()` + a comment naming the gap |
+
+```typescript
+// ❌ REJECTED: mocking a house component to dodge a provider
+mockComponent('UserListItem', {setup: () => () => h('div')})
+
+// ❌ REJECTED: mocking a store to dodge its fetch
+mockNuxtImport('useUsersStore', () => () => ({allergyManagers: ref([])}))
+
+// ✅ REQUIRED: real component, real store, faked HTTP
+registerEndpoint('/api/admin/users/by-role/ALLERGYMANAGER', () => [])
+const wrapper = await mountWithTooltipProvider(AdminAllergies, {props: {canEdit: true}, isMd: false})
+```
+
+**Every remaining mock needs a comment naming what the environment cannot provide.** "To avoid tooltip issues" is not a reason - it is a missing helper. Specs that still mock stores or house components are debt: migrate them when you touch them.
+
 ## Anti-Patterns Quick Reference
 
 | Anti-Pattern | Correct Approach |
@@ -123,6 +152,8 @@ expect(result).toBe(expectedValue)
 | `<button type="submit">` in `UForm` tests | `formRef?.submit()` + `flushPromises()` (see [Testing UForm Submission](#testing-uform-submission)) |
 | Hardcoded formatted values (`'15/05/2026'`) | Call the same utility the component uses (`formatDate(date)`) |
 | `z.coerce.date()` in form schemas | `z.date()` — strict rejects `null` (coerce turns `null` into 1970-01-01) |
+| `mockComponent()` of a house component | Render it - supply its context (`mountWithTooltipProvider()`) and register its endpoints (Rule 6) |
+| `mockNuxtImport('useXStore', …)` in a component test | Real store + `registerEndpoint()` - fake the HTTP, not the code (Rule 6) |
 
 ---
 
@@ -172,16 +203,51 @@ await doScreenshot(page, 'dropdown-timeout')  // Debug: test-results/
 await doScreenshot(page, 'admin/page', true)  // Docs: docs/screenshots/
 ```
 
+### Component helpers: `/tests/component/testHelpers.ts`
+
+```typescript
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, pollFor} from '~~/tests/component/testHelpers'
+```
+
+| Helper | Use |
+|--------|-----|
+| `mountWithTooltipProvider(Component, {props?, isMd?})` | `mountSuspended` under reka-ui's `TooltipProvider` (the context `UApp` supplies in the app). Returns the component's own wrapper, so `find`, `text`, `emitted` and `props` read the component, not the shell. `isMd` provides the layout breakpoint ref |
+| `withTooltipProvider(Component, props)` | The bare wrapper definition, for the rare spec that needs the root wrapper |
+| `findByTestId(wrapper, id)` / `findAllByTestId(wrapper, id)` | `data-testid` lookups - never hand-build the selector string |
+| `clickByTestId(wrapper, id)` | Click + `await nextTick()` |
+| `pollFor(condition, maxAttempts?)` | Poll a predicate across ticks (store readiness) |
+
+Shared `data-testid` contracts live next to the specs that share them, e.g. `tests/component/components/allergy/allergyTestIds.ts`.
+
 ---
 
 ## Component Testing (Nuxt UI v4+)
 
+### Render Real Components
+
+Rule 6 in practice: mount the component with its real children and let the store fetch from registered endpoints.
+
+```typescript
+registerEndpoint('/api/admin/allergy-type', () => AllergyFactory.createMockAllergyTypesWithInhabitants())
+registerEndpoint('/api/admin/users/by-role/ALLERGYMANAGER', () => [])
+
+const mountAdmin = async (props = {}, isMd = false) => {
+    await useAllergiesStore().loadAllergyTypes()
+    const wrapper = await mountWithTooltipProvider(AdminAllergies, {props: {canEdit: true, ...props}, isMd})
+    await flushPromises()
+    await nextTick()
+    return wrapper
+}
+```
+
+`isMd` provides the layout's breakpoint ref, so one spec runs its cases on both viewports with `describe.each`.
+
 ### Finding Elements
 
 ```typescript
-// ✅ DO: data-testid selectors
-const button = wrapper.find('[data-testid="submit-button"]')
-await button.trigger('click')
+// ✅ DO: data-testid via the shared helpers
+const button = findByTestId(wrapper, 'submit-button')
+await clickByTestId(wrapper, 'submit-button')  // click + nextTick
 
 // ❌ DON'T: Component wrappers (events don't emit)
 const button = wrapper.findAllComponents({ name: 'UButton' })[0]
@@ -192,7 +258,7 @@ await button.trigger('click')  // No events!
 
 ```typescript
 await button.trigger('click')
-await nextTick()  // Always wait for Vue reactivity
+await nextTick()  // Always wait for Vue reactivity (clickByTestId does both)
 ```
 
 ### Event Emissions
@@ -205,6 +271,8 @@ const emitted = wrapper.emitted('update:modelValue')
 const emitted = button.emitted('update:modelValue')  // Always undefined
 ```
 
+`mountWithTooltipProvider()` returns the component's own wrapper, so `wrapper.emitted()` reads the component even though a provider sits above it.
+
 ### Working Pattern
 
 ```typescript
@@ -213,10 +281,8 @@ const TEST_IDS = {
     removeButton: (index: number) => `holiday-range-remove-${index}`
 } as const
 
-const clickAddButton = async (wrapper: any) => {
-    await wrapper.find(`[data-testid="${TEST_IDS.addButton}"]`).trigger('click')
-    await nextTick()
-}
+await clickByTestId(wrapper, TEST_IDS.addButton)
+await clickByTestId(wrapper, TEST_IDS.removeButton(0))
 ```
 
 ### Testing `UForm` Submission
@@ -397,6 +463,12 @@ await pollUntil(
     async () => await page.locator('text=Loading').isVisible(),
     (isVisible) => !isVisible
 )
+
+// ✅ Wait for hydration before the first click/fill after page.goto
+// SSR markup is visible (isVisible passes) seconds before Vue attaches listeners in dev mode;
+// an early click is silently lost. Polls `useNuxtApp().isHydrating === false`.
+await page.goto('/admin/households')
+await waitForHydration(page)
 
 // ❌ AVOID
 await page.waitForLoadState('networkidle')  // Flaky
@@ -608,10 +680,11 @@ test('RELEASE bucket: after-deadline orders are RELEASED not deleted', async ({b
 
 | Issue | Symptom | Fix |
 |-------|---------|-----|
-| Click not emitting | `emitted()` undefined | Use `find('[data-testid="..."]')` not `findAllComponents()` |
+| Click not emitting | `emitted()` undefined | Use `findByTestId()` not `findAllComponents()` |
 | Test pollution | Pass alone, fail together | Add `clearNuxtData()` to `beforeEach()` |
 | Reactive updates | Assertion fails after trigger | Add `await nextTick()` |
 | Linux CI failures | Strict mode violation | Use `getByRole()` or `.first()` for dropdowns |
+| Tooltip provider error | `UTooltip` needs the `TooltipProvider` context `UApp` supplies in the app | Mount via `mountWithTooltipProvider()` (`tests/component/testHelpers.ts`) |
 
 ### Linux vs macOS Differences
 
@@ -666,6 +739,7 @@ npx playwright test --ui
 
 Before completing ANY test task:
 
+- [ ] **Real:** Component tests render real components and stores; only HTTP is faked (`registerEndpoint`), every other mock carries a reason comment
 - [ ] **DRY:** No duplicate code between tests
 - [ ] **Parametrized:** Similar cases use `describe.each()` / `it.each()`
 - [ ] **Factories:** E2E data created via factories

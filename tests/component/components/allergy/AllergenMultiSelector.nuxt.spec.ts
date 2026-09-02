@@ -1,52 +1,30 @@
 // @vitest-environment nuxt
-import { describe, it, expect, vi } from 'vitest'
-import { mountSuspended, mockNuxtImport, mockComponent  } from "@nuxt/test-utils/runtime"
+import { describe, it, expect } from 'vitest'
+import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import AllergenMultiSelector from '~/components/allergy/AllergenMultiSelector.vue'
-import { ref, h } from 'vue'
+import UserListItem from '~/components/shared/UserListItem.vue'
 import { AllergyFactory } from '../../../e2e/testDataFactories/allergyFactory'
+import { ALLERGY_TEST_IDS } from './allergyTestIds'
+import { mountWithTooltipProvider, findByTestId } from '~~/tests/component/testHelpers'
 
-// Mock Heynabo composable to prevent URL resolution issues
-mockNuxtImport('useHeynabo', () => {
-    return () => ({
-        getUserUrl: vi.fn((heynaboId: number) => `/user/${heynaboId}`)
-    })
-})
-
-// Mock UserListItem to avoid tooltip provider issues in tests
-mockComponent('UserListItem', {
-    props: ['inhabitants', 'compact', 'label', 'labelPlural'],
-    setup(props) {
-        const count = Array.isArray(props.inhabitants) ? props.inhabitants.length : 1
-        const names = Array.isArray(props.inhabitants)
-            ? props.inhabitants.map((i: {name: string}) => i.name).join(', ')
-            : props.inhabitants.name
-
-        return () => h('div', { 'data-testid': 'user-list-item' }, [
-            h('span', names),
-            props.label && h('span', ` ${count} ${count === 1 ? props.label : (props.labelPlural || props.label)}`)
-        ])
-    }
-})
+// AllergyTypeCard reads the active season's ticket prices from the plan store - fake its HTTP (Rule 6)
+registerEndpoint('/api/admin/season/active', () => null)
+registerEndpoint('/api/admin/season', () => [])
 
 describe('AllergenMultiSelector', () => {
     // Test data from factory
     const mockAllergyTypes = AllergyFactory.createMockAllergyTypesWithInhabitants()
 
-    // DRY helper
-    const createWrapper = async (props: Record<string, unknown> = {}) => {
-        return await mountSuspended(AllergenMultiSelector, {
+    // DRY helper - renders the real UserListItem (avatar tooltips need the provider)
+    const createWrapper = (props: Record<string, unknown> = {}) =>
+        mountWithTooltipProvider(AllergenMultiSelector, {
             props: {
                 modelValue: [],
                 allergyTypes: mockAllergyTypes,
                 ...props
             },
-            global: {
-                provide: {
-                    isMd: ref(true)
-                }
-            }
+            isMd: true
         })
-    }
 
     describe('View Mode', () => {
         it.each([
@@ -167,10 +145,10 @@ describe('AllergenMultiSelector', () => {
                 showStatistics: true
             })
 
-            const html = wrapper.html()
-            expect(html).toContain('Unikke beboere berørt')
-            expect(html).toContain('Anna')
-            expect(html).toContain('Bob')
+            expect(wrapper.html()).toContain('Unikke beboere berørt')
+            // The "Berørte beboere" list is the first UserListItem in the statistics panel
+            const affected = wrapper.findComponent(UserListItem).props('inhabitants') as {name: string}[]
+            expect(affected.map(i => i.name).sort()).toEqual(['Anna', 'Bob'])
         })
 
         it('shows breakdown by allergen', async () => {
@@ -222,6 +200,28 @@ describe('AllergenMultiSelector', () => {
             expect(viewWrapper.html()).toContain('Gluten')
             expect(editWrapper.html()).toContain('Mælk')
             expect(editWrapper.html()).toContain('Gluten')
+        })
+    })
+
+    // On mobile the statistics panel lands below the list, so a sticky bar
+    // summarises the selection and jumps to the 📊 panel on tap.
+    describe('Sticky Mobile Summary', () => {
+        it.each([
+            { modelValue: [1, 3], expected: true },
+            { modelValue: [], expected: false }
+        ])('bar rendered=$expected with selection=$modelValue', async ({ modelValue, expected }) => {
+            const wrapper = await createWrapper({ mode: 'edit', modelValue, showStatistics: true })
+
+            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.summaryBar).exists()).toBe(expected)
+        })
+
+        it('summarises selected count and unique affected inhabitants', async () => {
+            // Mælk (Anna, Bob) + Gluten (Anna) → 2 selected, 2 unique inhabitants
+            const wrapper = await createWrapper({ mode: 'edit', modelValue: [1, 3], showStatistics: true })
+
+            const bar = findByTestId(wrapper, ALLERGY_TEST_IDS.summaryBar)
+            expect(bar.text()).toContain('2 valgte')
+            expect(bar.text()).toContain('2 beboere')
         })
     })
 })

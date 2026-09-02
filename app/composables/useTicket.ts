@@ -7,6 +7,7 @@ import {calculateAgeOnDate} from '~/utils/date'
  */
 export interface TicketTypeConfig {
     label: string
+    compactLabel: 'V' | 'B' | 'b'
     color: 'primary' | 'success' | 'neutral'
     icon: string
 }
@@ -53,16 +54,19 @@ export const useTicket = () => {
     const ticketTypeConfig = {
         [TicketType.ADULT]: {
             label: 'Voksen',
+            compactLabel: 'V' as const,
             color: 'primary' as const,
             icon: 'i-heroicons-user'
         },
         [TicketType.CHILD]: {
             label: 'Barn',
+            compactLabel: 'B' as const,
             color: 'success' as const,
             icon: 'i-heroicons-user-circle'
         },
         [TicketType.BABY]: {
             label: 'Baby',
+            compactLabel: 'b' as const,
             color: 'neutral' as const,
             icon: 'i-heroicons-face-smile'
         }
@@ -133,8 +137,31 @@ export const useTicket = () => {
         priceAtBooking?: number | null
     ) => {
         const resolved = resolveTicketPrice(birthDate, priceAtBooking, ticketPrices, referenceDate)
-        const ticketType = resolved?.ticketType ?? TicketType.ADULT
+        // Without a resolvable price (e.g. empty price list) the age limits still decide the category
+        const ticketType = resolved?.ticketType ?? determineTicketType(birthDate, ticketPrices, referenceDate)
         return ticketTypeConfig[ticketType]
+    }
+
+    /**
+     * Group inhabitants into ticket categories, classified live from birthDate.
+     * Inhabitant counterpart to useOrder.groupByTicketType (which buckets orders
+     * by their frozen ticketType). Returns all categories in fixed ADULT, CHILD,
+     * BABY order (empty ones included) with the shared display config; each
+     * inhabitant is stamped with its ticketType so results feed formatTicketCounts directly.
+     */
+    const groupInhabitantsByTicketCategory = <T extends {birthDate?: Date | null}>(
+        inhabitants: T[],
+        ticketPrices?: TicketPrice[],
+        referenceDate?: Date
+    ) => {
+        const classified = inhabitants.map(inhabitant => ({
+            ...inhabitant,
+            ticketType: determineTicketType(inhabitant.birthDate, ticketPrices, referenceDate)
+        }))
+        return [TicketType.ADULT, TicketType.CHILD, TicketType.BABY].map(ticketType => {
+            const members = classified.filter(i => i.ticketType === ticketType)
+            return {ticketType, config: ticketTypeConfig[ticketType], inhabitants: members, count: members.length}
+        })
     }
 
     /**
@@ -254,6 +281,7 @@ export const useTicket = () => {
         ticketTypeConfig,
         determineTicketType,
         getTicketTypeConfig,
+        groupInhabitantsByTicketCategory,
         findTicketPriceByType,
         resolveTicketPrice,
         getTicketPriceForInhabitant,

@@ -1,46 +1,33 @@
 <!--
-ONE responsive tree (LAYOUTS.masterDetailPage) - no md:hidden branching, so every
-interaction exists at every breakpoint.
+Allergy catalog - master/detail with a responsive detail MOUNT POINT.
 
-DESKTOP (md+) - 3/9 split
-┌────────────────────────────────────────────────────────────────────────────────┐
-│ Allergi Katalog                    [📄 Plakat]  [👁 Vis][✏️ Rediger][＋ Opret]  │
-├────────────────────────────────────────────────────────────────────────────────┤
-│ ℹ️ Allergi-ansvarlige: [Alice] [Bob]                                            │
-├────────────────────────────────────────────────────────────────────────────────┤
-│ [⧉ Sammenlign]  [↓ Antal]                                                       │
-├──────────────────────────┬─────────────────────────────────────────────────────┤
-│ MASTER  .left (span 3)   │ DETAIL  .center (span 9)                            │
-│ ┌──────────────────────┐ │ ┌─────────────────────────────────────────────────┐ │
-│ │ 🥛 Mælk       2  🆕  │ │ │ Detaljer                            [✏️]  [🗑]  │ │
-│ │ 🥜 Jordnødder 2      │ │ │ 🥜 Jordnødder                                   │ │
-│ │ 🌾 Gluten     1      │ │ │ Allergi med proteiner...                        │ │
-│ └──────────────────────┘ │ │ Berørte beboere (2)                             │ │
-│                          │ │  👤 Anna Testsen · TV 42                        │ │
-│                          │ └─────────────────────────────────────────────────┘ │
-└──────────────────────────┴─────────────────────────────────────────────────────┘
+Selection is the single state; AllergyDetailPanel is the single detail component.
+Only WHERE it mounts differs - guards keep exactly one instance live.
 
-MOBILE (<md) - same components, stacked
-┌────────────────────────────┐
-│ Allergi Katalog            │
-│ [👁 Vis][✏️ Rediger][＋]    │
-├────────────────────────────┤
-│ [⧉ Sammenlign            ] │  full-width tap targets
-│ [↓ Antal                 ] │
-├────────────────────────────┤
-│ 🥛 Mælk         2   🆕     │  MASTER full width
-│ 🥜 Jordnødder   2          │
-├────────────────────────────┤
-│ Detaljer        [✏️]  [🗑] │  DETAIL stacks below
-│ 🥜 Jordnødder              │
-└────────────────────────────┘
+DESKTOP (md+) - LAYOUTS.masterDetailPage 3/9 grid, sticky detail pane
+┌──────────────────────────┬─────────────────────────────────────┐
+│ MASTER (CatalogTable)    │ DETAIL (AllergyDetailPanel)         │
+│ 🥛 Mælk        2  🆕     │ ┌─ sticky top-4 ─────────────────┐  │
+│ 🥜 Jordnødder  2  ◀ sel  │ │ Detaljer            [✏️]  [🗑] │  │
+│ 🌾 Gluten      1         │ │ 🥜 Jordnødder                  │  │
+│ ...long list scrolls...  │ │ Berørte beboere (2)            │  │
+│                          │ └─ follows you as list scrolls ──┘  │
+└──────────────────────────┴─────────────────────────────────────┘
 
-FormModeSelector in header toggles VIEW/EDIT/CREATE. In EDIT/CREATE the detail
-region swaps to AllergyTypeCard mode="edit" (no allergyType = create).
+MOBILE (<md) - the SAME panel docks under the tapped row (UTable #expanded)
+│ [👁] 🥛 Mælk          2  🆕 │
+│ [▼] 🥜 Jordnødder     2     │  ← tap = select = expand (tap again folds away)
+│ ┌─────────────────────────┐ │
+│ │ Detaljer      [✏️] [🗑] │ │  ✏️ → edit form IN PLACE
+│ │ Berørte beboere (2)     │ │  🗑 → cascade confirm IN PLACE
+│ └─────────────────────────┘ │
+│ [👁] 🌾 Gluten        1     │
+
+CREATE on mobile docks under the toolbar (adjacent to the button that opened it)
+and suppresses row expansion, so the toolbar panel is the single live mount.
 Multiselect mode replaces master+detail with AllergenMultiSelector.
 -->
 <script setup lang="ts">
-import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 // Props - canEdit from parent for authorization (Admin OR AllergyManager)
@@ -54,8 +41,9 @@ const props = withDefaults(defineProps<Props>(), {
 // Design system
 const { COLOR, COMPONENTS, SIZES, LAYOUTS, BUTTONS, ICONS } = useTheSlopeDesignSystem()
 
-// Business logic
-const { hasNewAllergyInhabitants } = useAllergy()
+// Responsive mount point for the detail panel - provided by the default layout;
+// false during SSR, so first paint renders the mobile mount
+const isMd = inject<Ref<boolean>>('isMd', ref(false))
 
 // Household shortnames for the detail card - owned here, passed down as a plain map
 const householdsStore = useHouseholdsStore()
@@ -126,15 +114,6 @@ const onModeChange = (mode: FormMode) => {
   editingId.value = mode === FORM_MODES.EDIT ? editTarget : null
 }
 
-// The detail region shows the form in both EDIT and CREATE
-const isFormMode = computed(() => formMode.value !== FORM_MODES.VIEW)
-
-// Type being edited - undefined in CREATE so AllergyTypeCard renders an empty form
-const editingAllergyType = computed(() => {
-  if (formMode.value !== FORM_MODES.EDIT) return undefined
-  return selectedAllergyType.value ?? undefined
-})
-
 // ACTIONS
 const startCreate = () => {
   onModeChange(FORM_MODES.CREATE)
@@ -175,8 +154,13 @@ const cancelDelete = () => {
   isConfirmingDelete.value = false
 }
 
-// Deleting the type cascades to every Allergy row referencing it (ADR-005)
-const affectedInhabitantCount = computed(() => selectedAllergyType.value?.inhabitants?.length ?? 0)
+// The panel face - delete confirm wins over form (edit/create) over view
+const panelMode = computed(() => {
+  if (isConfirmingDelete.value) return 'confirm-delete' as const
+  if (formMode.value === FORM_MODES.CREATE) return 'create' as const
+  if (formMode.value === FORM_MODES.EDIT) return 'edit' as const
+  return 'view' as const
+})
 
 const confirmDelete = async () => {
   const allergyType = selectedAllergyType.value
@@ -204,63 +188,56 @@ const showSuccessToast = (title: string, description?: string) => {
   })
 }
 
-// ACTIONS
-const handleRowClick = (allergyType: AllergyTypeDisplay) => {
-  // Only handle single select mode (multiselect is handled by AllergenMultiSelector)
-  if (!multiselectMode.value) {
-    selectedAllergyTypeId.value = allergyType.id || null
-    // In CREATE mode, switch back to VIEW
-    if (formMode.value === FORM_MODES.CREATE) {
-      onModeChange(FORM_MODES.VIEW)
-    }
+// ACTIONS - catalog selection (single mode); the shared table highlights via modelValue
+const handleSelect = (id: number | number[] | null) => {
+  if (typeof id !== 'number') return
+  // Mobile: tapping the selected row again folds its docked detail away
+  if (!isMd.value && selectedAllergyTypeId.value === id) {
+    selectedAllergyTypeId.value = null
+    return
+  }
+  selectedAllergyTypeId.value = id
+  // In CREATE mode, switch back to VIEW
+  if (formMode.value === FORM_MODES.CREATE) {
+    onModeChange(FORM_MODES.VIEW)
   }
 }
 
-// Helper to check if a row is selected (only used in single-select mode)
-const isRowSelected = (allergyTypeId: number) => {
-  return allergyTypeId === selectedAllergyType.value?.id
-}
-
-// ROW SELECTION for TanStack Table (only used in single-select mode)
-const rowSelection = computed(() => {
-  const selection: Record<number, boolean> = {}
-
-  if (!multiselectMode.value && selectedAllergyType.value) {
-    // Find the index of the selected allergy
-    const index = sortedAllergyTypes.value.findIndex(a => a.id === selectedAllergyType.value?.id)
-    if (index !== -1) {
-      selection[index] = true
-    }
+// MOBILE EXPANSION - derived from the EXPLICIT selection (no auto-expand; the
+// first-item fallback feeds only the desktop pane). CREATE suppresses it so the
+// panel under the toolbar is the single live mount.
+const expanded = computed({
+  get: (): Record<number, boolean> => {
+    if (isMd.value || panelMode.value === 'create' || selectedAllergyTypeId.value === null) return {}
+    const index = sortedAllergyTypes.value.findIndex(at => at.id === selectedAllergyTypeId.value)
+    return index === -1 ? {} : {[index]: true}
+  },
+  set: (value: Record<number, boolean>) => {
+    // UTable-initiated collapse deselects; expansion goes through handleSelect
+    const openIndex = Object.keys(value).find(key => value[Number(key)])
+    selectedAllergyTypeId.value = openIndex !== undefined
+        ? sortedAllergyTypes.value[Number(openIndex)]?.id ?? null
+        : null
   }
-
-  return selection
 })
 
-// TABLE COLUMNS (only used in single-select mode)
-const columns = [
-  {
-    accessorKey: 'icon',
-    header: ''
-  },
-  {
-    accessorKey: 'name',
-    header: 'Allergen'
-  },
-  {
-    accessorKey: 'count',
-    header: 'Antal'
-  },
-  {
-    accessorKey: 'new',
-    header: 'Nyt'
-  }
-]
+// ONE panel, three guarded mount points (desktop pane / mobile expanded row /
+// mobile create under the toolbar) - shared bindings keep them DRY
+const panelProps = computed(() => ({
+  allergyType: panelMode.value === 'create' ? undefined : (selectedAllergyType.value ?? undefined),
+  panelMode: panelMode.value,
+  canEdit: props.canEdit,
+  householdShortNames: householdShortNames.value,
+  isDeleting: isDeleting.value
+}))
 
-// Tighter horizontal cell padding - the catalog lives in the narrow master column
-const tableUi = {
-  ...COMPONENTS.table.ui,
-  td: `${COMPONENTS.table.ui.td} px-1`,
-  th: 'px-1'
+const panelEvents = {
+  edit: startEdit,
+  delete: startDelete,
+  save: handleSubmit,
+  cancel: cancelEdit,
+  'confirm-delete': confirmDelete,
+  'cancel-delete': cancelDelete
 }
 
 // Funny empty state message for allergy catalog
@@ -355,74 +332,29 @@ const catalogEmptyState = {
           :show-new-badge="true"
       />
 
-      <!-- MASTER-DETAIL - stacked on mobile, 1/3 - 2/3 from md -->
-      <div v-else class="flex flex-col md:flex-row gap-4 md:gap-6">
+      <!-- MASTER-DETAIL - LAYOUTS.masterDetailPage: 3/9 grid from md, stacked below.
+           The detail panel docks in the expanded row on mobile, in the sticky pane on md+ -->
+      <div v-else :class="LAYOUTS.masterDetailPage.root">
+        <!-- CREATE (mobile) - docks under the toolbar, adjacent to the button that opened it -->
+        <div v-if="!isMd && panelMode === 'create'" class="mb-2">
+          <AllergyDetailPanel v-bind="panelProps" v-on="panelEvents"/>
+        </div>
+
         <!-- MASTER -->
-        <div class="w-full md:w-1/3 min-w-0">
-          <UTable
-              v-model:row-selection="rowSelection"
-              :columns="columns"
-              :data="sortedAllergyTypes"
+        <div :class="[LAYOUTS.masterDetailPage.left, 'min-w-0']">
+          <AllergyCatalogTable
+              v-model:expanded="expanded"
+              mode="single"
+              :allergy-types="sortedAllergyTypes"
+              :model-value="selectedAllergyType?.id ?? null"
+              :show-new-badge="true"
               :loading="isAllergyTypesLoading"
-              :ui="tableUi"
+              @update:model-value="handleSelect"
           >
-            <!-- Icon cell -->
-            <template #icon-cell="{ row }">
-              <div
-                  :class="[
-                    'flex items-center justify-center p-1 rounded-lg transition-colors',
-                    COMPONENTS.table.clickableCell,
-                    isRowSelected(row.original.id!) && COMPONENTS.table.selectedRow
-                  ]"
-                  @click="handleRowClick(row.original)"
-              >
-                <div class="flex items-center justify-center w-8 h-8 rounded-full ring-1 ring-red-700 shrink-0">
-                  <UIcon
-                      v-if="row.original.icon?.startsWith('i-')"
-                      :name="row.original.icon"
-                      class="text-base"
-                  />
-                  <span v-else class="text-base">
-                    {{ row.original.icon || '🏷️' }}
-                  </span>
-                </div>
-              </div>
+            <!-- DETAIL (mobile) - the panel docks under the tapped row -->
+            <template #expanded>
+              <AllergyDetailPanel v-bind="panelProps" v-on="panelEvents"/>
             </template>
-
-            <!-- Name cell -->
-            <template #name-cell="{ row }">
-              <div
-                  :class="['font-medium', COMPONENTS.table.clickableCell]"
-                  @click="handleRowClick(row.original)"
-              >
-                {{ row.original.name }}
-              </div>
-            </template>
-
-            <!-- Count cell -->
-            <template #count-cell="{ row }">
-              <div
-                  :class="['text-center', COMPONENTS.table.clickableCell]"
-                  @click="handleRowClick(row.original)"
-              >
-                {{ row.original.inhabitants?.length || 0 }}
-              </div>
-            </template>
-
-            <!-- New badge cell - shows if any allergy of this type was recently added -->
-            <template #new-cell="{ row }">
-              <div
-                  :class="['text-center', COMPONENTS.table.clickableCell]"
-                  @click="handleRowClick(row.original)"
-              >
-                <UIcon
-                    v-if="hasNewAllergyInhabitants(row.original)"
-                    :name="ICONS.new"
-                    :class="COMPONENTS.rowIconClass"
-                />
-              </div>
-            </template>
-
             <!-- Empty state -->
             <template #empty-state>
               <UAlert
@@ -451,100 +383,15 @@ const catalogEmptyState = {
                 </template>
               </UAlert>
             </template>
-          </UTable>
+          </AllergyCatalogTable>
         </div>
 
-        <!-- DETAIL / FORM - horizontally centred, starting just below the table headers -->
-        <div class="w-full md:w-2/3 min-w-0 flex justify-center items-start md:pt-10">
-          <!-- DELETE CONFIRM - deleting the type cascades to every registration, so show it -->
-          <div
-              v-if="isConfirmingDelete && selectedAllergyType"
-              data-testid="delete-allergy-type-confirm"
-              class="w-full max-w-2xl space-y-4"
-          >
-            <UAlert
-                :icon="ICONS.warning"
-                :color="COLOR.neutral"
-                variant="outline"
-                :title="`Slet ${selectedAllergyType.name}?`"
-            >
-              <template #description>
-                <ul class="mt-2 space-y-1">
-                  <li class="flex items-center gap-2">
-                    <UBadge :color="COLOR.error" variant="subtle" :size="SIZES.small">
-                      <UIcon :name="ICONS.trash" class="mr-1"/>
-                      Allergien fjernes fra kataloget
-                    </UBadge>
-                  </li>
-                  <li v-if="affectedInhabitantCount > 0" class="flex items-center gap-2">
-                    <UBadge :color="COLOR.error" variant="subtle" :size="SIZES.small">
-                      <UIcon :name="ICONS.users" class="mr-1"/>
-                      {{ affectedInhabitantCount }} beboer{{ affectedInhabitantCount === 1 ? '' : 'e' }} mister registreringen
-                    </UBadge>
-                  </li>
-                </ul>
-              </template>
-            </UAlert>
-
-            <div :class="LAYOUTS.formButtonRow">
-              <UButton
-                  v-bind="BUTTONS.cancel"
-                  :class="LAYOUTS.cardActionButton"
-                  data-testid="cancel-delete-allergy-type"
-                  @click="cancelDelete"
-              >
-                Annuller
-              </UButton>
-              <UButton
-                  v-bind="BUTTONS.save"
-                  :class="LAYOUTS.cardActionButton"
-                  :icon="ICONS.trash"
-                  :loading="isDeleting"
-                  data-testid="confirm-delete-allergy-type"
-                  @click="confirmDelete"
-              >
-                Slet
-              </UButton>
-            </div>
-          </div>
-
-          <!-- EDIT or CREATE - no allergyType means create -->
-          <AllergyTypeCard
-              v-else-if="isFormMode"
-              :allergy-type="editingAllergyType"
-              mode="edit"
-              @save="handleSubmit"
-              @cancel="cancelEdit"
-          />
-
-          <!-- Selected allergy with its actions -->
-          <div v-else-if="selectedAllergyType" class="w-full max-w-2xl space-y-4">
-            <div class="flex items-center justify-between gap-2">
-              <h3 class="text-lg font-semibold">Detaljer</h3>
-              <div v-if="props.canEdit" class="flex items-center gap-2">
-                <UButton
-                    v-bind="BUTTONS.edit"
-                    aria-label="Rediger"
-                    data-testid="edit-allergy-type"
-                    @click="startEdit"
-                />
-                <UButton
-                    v-bind="BUTTONS.edit"
-                    :icon="ICONS.trash"
-                    aria-label="Slet"
-                    data-testid="delete-allergy-type"
-                    @click="startDelete"
-                />
-              </div>
-            </div>
-            <AllergyTypeCard :allergy-type="selectedAllergyType" :household-short-names="householdShortNames"/>
-          </div>
-
-          <!-- No selection -->
-          <div v-else class="flex flex-col items-center justify-center py-12 text-gray-500">
-            <UIcon :name="ICONS.select" class="w-8 h-8 mb-2"/>
-            <p class="text-sm">Vælg en allergi for at se detaljer</p>
-          </div>
+        <!-- DETAIL (md+) - sticky pane that follows the catalog as it scrolls -->
+        <div
+            v-if="isMd"
+            :class="[LAYOUTS.masterDetailPage.center, 'min-w-0 flex justify-center items-start md:sticky md:top-4 self-start']"
+        >
+          <AllergyDetailPanel v-bind="panelProps" v-on="panelEvents"/>
         </div>
       </div>
       </div>

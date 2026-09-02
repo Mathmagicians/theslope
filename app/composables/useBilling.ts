@@ -1,6 +1,7 @@
 import type {DateRange} from '~/types/dateTypes'
 import {createDateRange, formatDateRange} from '~/utils/date'
 import {useSeason} from '~/composables/useSeason'
+import {useTicket} from '~/composables/useTicket'
 import {useBookingValidation, type TicketType, type OrderDisplay, type DinnerEventInfo} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
 import type {CostEntry, HouseholdEntry, InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'
@@ -17,6 +18,7 @@ export const useBilling = () => {
     const {getBillingCutoffDay} = useSeason()
     const {TicketTypeSchema} = useBookingValidation()
     const TicketType = TicketTypeSchema.enum
+    const {ticketTypeConfig} = useTicket()
 
     /**
      * Format ticket counts for display (e.g., "2V 1B")
@@ -35,10 +37,9 @@ export const useBilling = () => {
             }, {} as Partial<Record<TicketType, number>>)
             : input
 
-        const parts: string[] = []
-        if (counts[TicketType.ADULT]) parts.push(`${counts[TicketType.ADULT]}V`)
-        if (counts[TicketType.CHILD]) parts.push(`${counts[TicketType.CHILD]}B`)
-        if (counts[TicketType.BABY]) parts.push(`${counts[TicketType.BABY]}b`)
+        const parts = [TicketType.ADULT, TicketType.CHILD, TicketType.BABY]
+            .filter(type => counts[type])
+            .map(type => `${counts[type]}${ticketTypeConfig[type].compactLabel}`)
         return parts.join(' ') || '-'
     }
 

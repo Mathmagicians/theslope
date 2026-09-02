@@ -46,7 +46,8 @@ const {getTicketPriceSelectItems} = useTicket()
 const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets'))
 
 // Booking logic
-const {getBookingOptions, createBookingBadges, resolveUserBookingBuckets, formatActionPreview} = useBooking()
+const {getBookingOptions, resolveUserBookingBuckets} = useBooking()
+const {createBookingBadges, formatActionPreview} = useBookingUi()
 const {canModifyOrders, canEditDiningMode} = props.deadlines
 
 // Validation schemas

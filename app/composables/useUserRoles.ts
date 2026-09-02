@@ -1,10 +1,9 @@
-import type {ComputedRef} from 'vue'
 import type {SystemRole, ReconcileResult} from '~/composables/useCoreValidation'
 import {z} from 'zod'
 import {SystemRoleSchema} from '~~/prisma/generated/zod'
 
 // ============================================================================
-// MODULE-LEVEL EXPORTS (Server-safe, no client dependencies)
+// MODULE-LEVEL EXPORTS (Server-safe, explicit imports only - ADR-017)
 // ============================================================================
 
 /**
@@ -58,77 +57,5 @@ export const reconcileUserRoles = (
   }
 }
 
-// ============================================================================
-// COMPOSABLE (Client-side only - UI display, auth store integration)
-// ============================================================================
-
-/**
- * Composable for managing user role display and UI integration
- * Provides role labels, icons, colors, visibility predicates
- * NOTE: reconcileUserRoles is exported at module level for server-side use
- */
-export const useUserRoles = () => {
-  const authStore = useAuthStore()
-  const {systemRoles, isAdmin, isAllergyManager} = storeToRefs(authStore)
-  const {ICONS} = useTheSlopeDesignSystem()
-
-  type RoleColor = 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info' | 'neutral'
-
-  interface RoleConfig {
-    label: string
-    icon: string
-    color: RoleColor
-    predicate: ComputedRef<boolean>
-  }
-
-  /**
-   * Get role configuration by role type
-   */
-  const getRoleConfig = (role: string): RoleConfig | null => {
-    switch (role) {
-      case SystemRoleSchema.enum.ADMIN:
-        return {
-          label: 'Admin',
-          icon: 'i-heroicons-shield-check',
-          color: 'primary',
-          predicate: isAdmin
-        }
-      case SystemRoleSchema.enum.ALLERGYMANAGER:
-        return {
-          label: 'Allergichef',
-          icon: ICONS.allergy,
-          color: 'success',
-          predicate: isAllergyManager
-        }
-      default:
-        return null
-    }
-  }
-
-  // Build role labels object for convenience
-  const roleLabels: Record<string, RoleConfig> = {}
-  for (const role of Object.values(SystemRoleSchema.enum)) {
-    const config = getRoleConfig(role)
-    if (config) {
-      roleLabels[role] = config
-    }
-  }
-
-  // Visible roles based on predicates
-  const visibleRoles = computed(() =>
-    systemRoles.value.filter((role: string) => {
-      const config = getRoleConfig(role)
-      return config && config.predicate.value
-    })
-  )
-
-  return {
-    // Role reconciliation
-    ROLE_OWNERSHIP,
-    reconcileUserRoles,
-    // Role display
-    getRoleConfig,
-    roleLabels,
-    visibleRoles
-  }
-}
+// Role display (labels, icons, colors, auth-store visibility) lives in the pure UI
+// composable useUserRolesUi (ADR-017) - this module stays importable from server/.

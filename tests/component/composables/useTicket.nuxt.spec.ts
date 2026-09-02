@@ -1,23 +1,27 @@
 import {describe, it, expect} from 'vitest'
 import {TicketFactory} from '../../e2e/testDataFactories/ticketFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 
 describe('useTicket', () => {
     const referenceDate = new Date('2025-01-15')
     const ticketPrices = TicketFactory.defaultTicketPrices()
+    const {TicketTypeSchema} = useBookingValidation()
+    const TicketType = TicketTypeSchema.enum
 
     describe('ticketTypeConfig', () => {
         it.each([
-            ['ADULT', 'Voksen', 'primary', 'i-heroicons-user'],
-            ['CHILD', 'Barn', 'success', 'i-heroicons-user-circle'],
-            ['BABY', 'Baby', 'neutral', 'i-heroicons-face-smile']
-        ] as const)('GIVEN %s THEN has label=%s color=%s icon=%s',
-            (type, expectedLabel, expectedColor, expectedIcon) => {
+            ['ADULT', 'Voksen', 'primary', 'i-heroicons-user', 'V'],
+            ['CHILD', 'Barn', 'success', 'i-heroicons-user-circle', 'B'],
+            ['BABY', 'Baby', 'neutral', 'i-heroicons-face-smile', 'b']
+        ] as const)('GIVEN %s THEN has label=%s color=%s icon=%s compactLabel=%s',
+            (type, expectedLabel, expectedColor, expectedIcon, expectedCompactLabel) => {
                 const {ticketTypeConfig} = useTicket()
                 const config = ticketTypeConfig[type]
                 expect(config.label).toBe(expectedLabel)
                 expect(config.color).toBe(expectedColor)
                 expect(config.icon).toBe(expectedIcon)
+                expect(config.compactLabel).toBe(expectedCompactLabel)
             }
         )
     })
@@ -125,6 +129,55 @@ describe('useTicket', () => {
             const config = getTicketTypeConfig(new Date('2000-01-01'), ticketPrices, referenceDate, 0)
             expect(config.label).toBe('Voksen')
             expect(config.color).toBe('primary')
+        })
+
+        it.each([
+            // No ticket prices: default age limits classify - children must not become Voksen
+            ['1 year old', new Date('2024-01-01'), 'Baby'],
+            ['8 years old', new Date('2017-01-01'), 'Barn'],
+            ['25 years old', new Date('2000-01-01'), 'Voksen'],
+            ['no birthDate', null, 'Voksen']
+        ])('GIVEN %s WITHOUT ticket prices THEN classifies by default age limits as %s',
+            (_, birthDate, expectedLabel) => {
+                const {getTicketTypeConfig} = useTicket()
+                const config = getTicketTypeConfig(birthDate, undefined, referenceDate)
+                expect(config.label).toBe(expectedLabel)
+            }
+        )
+    })
+
+    describe('groupInhabitantsByTicketCategory', () => {
+        const inhabitantWithAge = (birthDate: Date | null, testSalt: string) =>
+            ({...HouseholdFactory.defaultInhabitantData(testSalt), birthDate})
+
+        const mixedInhabitants = [
+            inhabitantWithAge(new Date('2000-01-01'), 'adult1'),
+            inhabitantWithAge(new Date('2024-01-01'), 'baby1'),
+            inhabitantWithAge(new Date('2017-01-01'), 'child1'),
+            inhabitantWithAge(new Date('2014-01-01'), 'child2')
+        ]
+
+        it.each([
+            ['with ticket prices', ticketPrices],
+            ['without ticket prices (default age limits)', undefined]
+        ])('GIVEN mixed ages %s THEN buckets in fixed order ADULT, CHILD, BABY with counts', (_, prices) => {
+            const {groupInhabitantsByTicketCategory} = useTicket()
+            const groups = groupInhabitantsByTicketCategory(mixedInhabitants, prices, referenceDate)
+            expect(groups.map(g => g.ticketType)).toEqual([TicketType.ADULT, TicketType.CHILD, TicketType.BABY])
+            expect(groups.map(g => g.count)).toEqual([1, 2, 1])
+            expect(groups.map(g => g.inhabitants.length)).toEqual([1, 2, 1])
+        })
+
+        it('GIVEN missing birthDate THEN counts as ADULT and empty categories stay present with count 0', () => {
+            const {groupInhabitantsByTicketCategory} = useTicket()
+            const groups = groupInhabitantsByTicketCategory([inhabitantWithAge(null, 'unknown1')], ticketPrices, referenceDate)
+            expect(groups.map(g => g.count)).toEqual([1, 0, 0])
+        })
+
+        it('GIVEN groups THEN each exposes the shared ticketTypeConfig for display', () => {
+            const {groupInhabitantsByTicketCategory, ticketTypeConfig} = useTicket()
+            const groups = groupInhabitantsByTicketCategory(mixedInhabitants, ticketPrices, referenceDate)
+            groups.forEach(g => expect(g.config).toBe(ticketTypeConfig[g.ticketType]))
         })
     })
 

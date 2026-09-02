@@ -3,13 +3,13 @@
  * DeadlineBadge - Simple, reusable deadline status badge
  *
  * Takes pre-computed badge data and renders it. No business logic here.
- * Use badge factories from useBooking (createBookingBadge, createDiningModeBadge)
+ * Use badge factories from useBookingUi (createBookingBadge, createDiningModeBadge)
  *
  * Usage:
  *   <DeadlineBadge :badge="bookingBadge" />
  *   <DeadlineBadge :badge="diningModeBadge" compact />
  */
-import type {DeadlineBadgeData} from '~/composables/useBooking'
+import type {DeadlineBadgeData} from '~/composables/useBookingUi'
 
 interface Props {
   badge: DeadlineBadgeData

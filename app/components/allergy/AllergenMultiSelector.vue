@@ -79,9 +79,6 @@ const emit = defineEmits<{
 // Design system
 const { COLOR, SIZES, COMPONENTS, TYPOGRAPHY, ICONS } = useTheSlopeDesignSystem()
 
-// Business logic
-const { hasNewAllergyInhabitants } = useAllergy()
-
 // Internal selection state (Set for efficient .has() lookup)
 const selectedAllergyIds = ref<Set<number>>(new Set(props.modelValue))
 
@@ -90,19 +87,14 @@ watch(() => props.modelValue, (newVal) => {
   selectedAllergyIds.value = new Set(newVal)
 }, { immediate: true })
 
-// Toggle individual allergy selection
-const toggleAllergySelection = (allergyId: number) => {
-  if (props.readonly) return
-
-  if (selectedAllergyIds.value.has(allergyId)) {
-    selectedAllergyIds.value.delete(allergyId)
-  } else {
-    selectedAllergyIds.value.add(allergyId)
-  }
-
-  // Emit as array
-  emit('update:modelValue', Array.from(selectedAllergyIds.value))
+// Forward the shared table's selection (readonly is enforced inside the table)
+const handleSelectionChange = (value: number | number[] | null) => {
+  if (Array.isArray(value)) emit('update:modelValue', value)
 }
+
+// Scroll target for the mobile summary bar - the statistics panel below the list
+const statisticsPanel = ref<HTMLElement | null>(null)
+const scrollToStatistics = () => statisticsPanel.value?.scrollIntoView({behavior: 'smooth', block: 'start'})
 
 // Computed for selected allergies
 const selectedAllergies = computed(() =>
@@ -134,36 +126,6 @@ const allergyStatistics = computed(() => {
   }
 })
 
-// Table columns (dynamic based on showNewBadge)
-const columns = computed(() => {
-  const baseColumns = [
-    {
-      accessorKey: 'checkbox',
-      header: ''
-    },
-    {
-      accessorKey: 'icon',
-      header: ''
-    },
-    {
-      accessorKey: 'name',
-      header: 'Allergen'
-    },
-    {
-      accessorKey: 'count',
-      header: 'Antal'
-    }
-  ]
-
-  if (props.showNewBadge) {
-    baseColumns.push({
-      accessorKey: 'new',
-      header: 'Nyt'
-    })
-  }
-
-  return baseColumns
-})
 </script>
 
 <template>
@@ -205,98 +167,38 @@ const columns = computed(() => {
     />
   </div>
 
-  <!-- EDIT MODE: Master-Detail Layout (responsive) -->
-  <div v-else class="flex flex-col md:flex-row gap-4 md:gap-6">
-    <!-- MASTER PANEL (Table) -->
+  <!-- EDIT MODE: Master-Detail Layout (responsive); bottom padding keeps the last
+       rows clear of the fixed summary bar on mobile -->
+  <div v-else class="flex flex-col md:flex-row gap-4 md:gap-6" :class="allergyStatistics ? 'pb-16 md:pb-0' : ''">
+    <!-- MASTER PANEL (shared catalog table) -->
     <div class="md:w-1/3">
-      <UTable
-          :columns="columns"
-          :data="allergyTypes"
-          :ui="{ td: 'py-3' }"
-      >
-        <!-- Checkbox cell -->
-        <template #checkbox-cell="{ row }">
-          <div class="flex items-center justify-center">
-            <UCheckbox
-                :model-value="selectedAllergyIds.has(row.original.id!)"
-                :name="`select-allergen-${row.original.id}`"
-                :disabled="readonly"
-                :color="COLOR.secondary"
-                @change="toggleAllergySelection(row.original.id!)"
-            />
-          </div>
-        </template>
-
-        <!-- Icon cell -->
-        <template #icon-cell="{ row }">
-          <div
-              :class="[
-                'flex items-center justify-center p-2 rounded-lg transition-colors',
-                !readonly && COMPONENTS.table.clickableCell,
-                selectedAllergyIds.has(row.original.id!) && COMPONENTS.table.selectedRow
-              ]"
-              @click="!readonly && toggleAllergySelection(row.original.id!)"
-          >
-            <div class="flex items-center justify-center w-10 h-10 rounded-full ring-1 md:ring-2 ring-red-700">
-              <UIcon
-                  v-if="row.original.icon?.startsWith('i-')"
-                  :name="row.original.icon"
-                  class="text-xl"
-              />
-              <span v-else class="text-xl">
-                {{ row.original.icon || '🏷️' }}
-              </span>
-            </div>
-          </div>
-        </template>
-
-        <!-- Name cell -->
-        <template #name-cell="{ row }">
-          <div
-              :class="[
-                'font-medium',
-                !readonly && COMPONENTS.table.clickableCell
-              ]"
-              @click="!readonly && toggleAllergySelection(row.original.id!)"
-          >
-            {{ row.original.name }}
-          </div>
-        </template>
-
-        <!-- Count cell -->
-        <template #count-cell="{ row }">
-          <div
-              :class="[
-                'text-center',
-                !readonly && COMPONENTS.table.clickableCell
-              ]"
-              @click="!readonly && toggleAllergySelection(row.original.id!)"
-          >
-            {{ row.original.inhabitants?.length || 0 }}
-          </div>
-        </template>
-
-        <!-- New badge cell - checks if any inhabitants have recently updated allergies -->
-        <template v-if="showNewBadge" #new-cell="{ row }">
-          <div
-              :class="[
-                'text-center',
-                !readonly && COMPONENTS.table.clickableCell
-              ]"
-              @click="!readonly && toggleAllergySelection(row.original.id!)"
-          >
-            <UIcon
-                v-if="hasNewAllergyInhabitants(row.original)"
-                :name="ICONS.new"
-                :class="COMPONENTS.rowIconClass"
-            />
-          </div>
-        </template>
-      </UTable>
+      <AllergyCatalogTable
+          mode="multi"
+          :allergy-types="allergyTypes"
+          :model-value="modelValue"
+          :show-new-badge="showNewBadge"
+          :readonly="readonly"
+          @update:model-value="handleSelectionChange"
+      />
     </div>
 
+    <!-- Mobile summary - fixed to the viewport bottom (an overflow-clipping card
+         ancestor keeps position:sticky from ever pinning); taps jump down to 📊 -->
+    <UButton
+        v-if="showStatistics && allergyStatistics"
+        data-testid="compare-summary-bar"
+        :color="COLOR.neutral"
+        variant="outline"
+        block
+        :trailing-icon="ICONS.chevronDown"
+        class="md:hidden fixed bottom-4 inset-x-4 z-50 bg-elevated shadow-lg"
+        @click="scrollToStatistics"
+    >
+      🧮 {{ selectedAllergies.length }} valgte · {{ allergyStatistics.totalInhabitants }} beboer{{ allergyStatistics.totalInhabitants === 1 ? '' : 'e' }} berørt
+    </UButton>
+
     <!-- DETAIL PANEL (Statistics) -->
-    <div v-if="showStatistics" class="flex-1 md:border-l md:pl-6">
+    <div v-if="showStatistics" ref="statisticsPanel" class="flex-1 md:border-l md:pl-6">
       <!-- Statistics panel (with selections) -->
       <div v-if="allergyStatistics" class="space-y-4">
         <h3 :class="TYPOGRAPHY.cardTitle">📊 Statistik</h3>

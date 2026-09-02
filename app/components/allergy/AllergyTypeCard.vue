@@ -15,6 +15,12 @@ const props = defineProps<{
 
 const getHouseholdShortName = (householdId: number) => props.householdShortNames?.[householdId] ?? ''
 
+// Age category badge - the active season's ticket prices carry the age limits
+const {getTicketTypeConfig} = useTicket()
+const {activeSeason} = storeToRefs(usePlanStore())
+const ageBadge = (birthDate: Date | null | undefined) =>
+    getTicketTypeConfig(birthDate ?? null, activeSeason.value?.ticketPrices)
+
 // EMITS
 const emit = defineEmits<{
   save: [data: {name: string, description: string, icon?: string}]
@@ -178,18 +184,28 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
             :key="inhabitant.id"
             class="space-y-2"
         >
-          <!-- Inhabitant with avatar and name; household shows as a per-person badge -->
+          <!-- Inhabitant with avatar and name; household + age category as per-person badges -->
           <UserListItem :inhabitants="inhabitant">
             <template #badge="{inhabitant: listed}">
-              <UBadge
-                  v-if="getHouseholdShortName(listed.householdId)"
-                  :color="COLOR.neutral"
-                  variant="subtle"
-                  :size="SIZES.small"
-                  :icon="ICONS.household"
-              >
-                {{ getHouseholdShortName(listed.householdId) }}
-              </UBadge>
+              <div class="flex items-center gap-1">
+                <UBadge
+                    v-if="getHouseholdShortName(listed.householdId)"
+                    :color="COLOR.neutral"
+                    variant="subtle"
+                    :size="SIZES.small"
+                    :icon="ICONS.household"
+                >
+                  {{ getHouseholdShortName(listed.householdId) }}
+                </UBadge>
+                <UBadge
+                    :color="ageBadge(listed.birthDate).color"
+                    variant="subtle"
+                    :size="SIZES.small"
+                    data-testid="inhabitant-age-badge"
+                >
+                  {{ ageBadge(listed.birthDate).label }}
+                </UBadge>
+              </div>
             </template>
           </UserListItem>
 

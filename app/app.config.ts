@@ -1,6 +1,7 @@
 // Import TicketType enum from generated Zod schemas (ADR-001 compliance)
-// Note: app.config.ts is a build-time file, so we import directly from generated schemas
-import { TicketTypeSchema } from '~~/prisma/generated/zod'
+// Note: app.config.ts is a build-time file (typechecked by the node project, which has no ~~ alias),
+// so we import directly from the generated schemas by relative path
+import { TicketTypeSchema } from '../prisma/generated/zod'
 
 const TicketType = TicketTypeSchema.enum
 

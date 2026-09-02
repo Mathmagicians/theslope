@@ -15,7 +15,7 @@
     "app/**/*",
     "server/**/*",
     "tests/**/*",
-    "types/**/*",
+    "shared/**/*",
     ".nuxt/**/*"
   ]
 }

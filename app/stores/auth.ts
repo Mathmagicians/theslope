@@ -27,7 +27,8 @@ export const useAuthStore = defineStore("Auth", () => {
     const isAdmin = computed(() => user.value ? permissions.isAdmin(user.value) : false)
     const isAllergyManager = computed(() => user.value ? permissions.isAllergyManager(user.value) : false)
     const address = computed(() => user.value?.Inhabitant?.household?.address)
-    const isMemberOfHousehold = (householdId: number) => permissions.isHouseholdMember(householdId)
+    // Session-aware predicate lives here, not in usePermissions (isomorphic, ADR-017)
+    const isMemberOfHousehold = (householdId: number) => user.value ? permissions.isInHousehold(user.value, householdId) : false
 
     return {signIn, greeting, avatar, name, lastName, email, phone, birthDate, inhabitantId, systemRoles, isAdmin, isAllergyManager, isMemberOfHousehold, address, loggedIn, user, session, clear, fetch}
 })

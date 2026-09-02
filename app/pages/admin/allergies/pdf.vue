@@ -1,26 +1,25 @@
 <script setup lang="ts">
-import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
 import {formatDate} from '~/utils/date'
 
-// Inhabitant type from AllergyTypeDetail for local grouping
-type AllergyInhabitant = NonNullable<AllergyTypeDetail['inhabitants']>[number]
-
-// Ticket type determination using composable (respects maximumAgeLimit from ticket prices)
-const {resolveTicketPrice} = useTicket()
-const {TicketTypeSchema} = useBookingValidation()
-const TicketType = TicketTypeSchema.enum
+// Age categories - the active season's ticket prices carry the age limits
+const {groupInhabitantsByTicketCategory, ticketTypeConfig} = useTicket()
+const {formatTicketCounts} = useBilling()
+const {TYPOGRAPHY, COLOR} = useTheSlopeDesignSystem()
 
 // No layout for printing
 definePageMeta({
   layout: false
 })
 
-// STORE
+// STORES
 const store = useAllergiesStore()
 const {allergyTypes, isAllergyTypesLoading} = storeToRefs(store)
+const planStore = usePlanStore()
+const {activeSeason} = storeToRefs(planStore)
 
-// Initialize store
+// Initialize stores
 store.initAllergiesStore()
+planStore.initPlanStore()
 
 // Current date for header (formatted in Danish)
 const currentDate = computed(() => formatDate(new Date(), 'd. MMMM yyyy'))
@@ -35,37 +34,23 @@ const qrCodeDataUrl = computed(() => {
   return `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrCodeUrl.value)}`
 })
 
-// Format inhabitants by allergy with adult/child/baby counts
+// Inhabitants per allergy, classified into age categories (ADULT, CHILD, BABY order)
 const allergyData = computed(() => {
   return allergyTypes.value
       .filter(at => at.inhabitants && at.inhabitants.length > 0)
       .map(allergyType => {
-        const adults: AllergyInhabitant[] = []
-        const children: AllergyInhabitant[] = []
-        const babies: AllergyInhabitant[] = []
-
-        allergyType.inhabitants?.forEach(inhabitant => {
-          const ticketType = resolveTicketPrice(inhabitant.birthDate ?? null, undefined, undefined)?.ticketType ?? TicketType.ADULT
-          if (ticketType === TicketType.BABY) {
-            babies.push(inhabitant)
-          } else if (ticketType === TicketType.CHILD) {
-            children.push(inhabitant)
-          } else {
-            adults.push(inhabitant)
-          }
-        })
-
+        const categories = groupInhabitantsByTicketCategory(
+            allergyType.inhabitants ?? [],
+            activeSeason.value?.ticketPrices
+        )
+        const members = categories.flatMap(category => category.inhabitants)
         return {
           ...allergyType,
-          adults,
-          children,
-          babies,
-          adultCount: adults.length,
-          childCount: children.length,
-          babyCount: babies.length
+          members,
+          ticketCounts: formatTicketCounts(members)
         }
       })
-      .sort((a, b) => (b.adults.length + b.children.length + b.babies.length) - (a.adults.length + a.children.length + a.babies.length))
+      .sort((a, b) => b.members.length - a.members.length)
 })
 
 // Print function
@@ -104,61 +89,51 @@ const printPage = () => {
       <div v-else>
         <!-- Header -->
         <div class="mb-6">
-          <h1 class="text-3xl font-bold text-blue-900 mb-2">
+          <h1 :class="`${TYPOGRAPHY.sectionTitle} mb-2`">
             ALLERGI-LISTE for skrånere
           </h1>
-          <p class="text-lg text-gray-600">pr. {{ currentDate }}</p>
+          <p :class="TYPOGRAPHY.bodyTextMuted">pr. {{ currentDate }}</p>
         </div>
 
         <!-- Main content with QR code -->
         <div class="flex gap-6 mb-6">
           <!-- Allergy table -->
           <div class="flex-1">
-            <table class="allergy-table">
+            <table data-testid="allergy-table" class="w-full border-collapse">
               <thead>
               <tr>
-                <th class="w-1/3">ALLERGEN / INTOLERANCE</th>
-                <th class="w-2/3">PERSON</th>
+                <th class="w-1/3 border-2 border-gray-700 p-3 text-left bg-gray-100 font-bold">ALLERGEN / INTOLERANCE</th>
+                <th class="w-2/3 border-2 border-gray-700 p-3 text-left bg-gray-100 font-bold">PERSON</th>
               </tr>
               </thead>
               <tbody>
               <tr v-for="allergy in allergyData" :key="allergy.id">
-                <td>
-                  <div
-                      :class="{
-                        'allergy-gluten': allergy.name.toLowerCase().includes('gluten'),
-                        'allergy-dairy': allergy.name.toLowerCase().includes('mælk') || allergy.name.toLowerCase().includes('laktose'),
-                        'allergy-nuts': allergy.name.toLowerCase().includes('nød')
-                      }"
-                      class="text-lg mb-2"
-                  >
+                <td class="border-2 border-gray-700 p-3 align-top">
+                  <div :class="`${TYPOGRAPHY.cardTitle} mb-2`">
                     {{ allergy.icon }} {{ allergy.name.toUpperCase() }}
                   </div>
-                  <div class="text-sm text-gray-700 whitespace-pre-line">
+                  <div :class="`${TYPOGRAPHY.bodyTextMuted} whitespace-pre-line`">
                     {{ allergy.description }}
                   </div>
                 </td>
-                <td>
+                <td class="border-2 border-gray-700 p-3 align-top">
                   <div class="space-y-2">
-                    <!-- List inhabitants -->
-                    <div v-if="allergy.adults.length > 0 || allergy.children.length > 0 || allergy.babies.length > 0">
-                      <span v-for="(inhabitant, idx) in [...allergy.adults, ...allergy.children, ...allergy.babies]" :key="inhabitant.id">
-                        {{ inhabitant.name }}
-                        <span v-if="allergy.babies.includes(inhabitant)">(ba)</span>
-                        <span v-if="allergy.children.includes(inhabitant)">(b)</span>
-                        <span v-if="allergy.adults.includes(inhabitant)">(v)</span>
+                    <!-- List inhabitants with compact category marker (V/B/b) -->
+                    <div>
+                      <span v-for="(person, idx) in allergy.members" :key="person.id">
+                        {{ person.name }} ({{ ticketTypeConfig[person.ticketType].compactLabel }})
                         <span
-                            v-if="inhabitant.inhabitantComment"
-                            class="text-xs text-gray-600">
-                          - {{ inhabitant.inhabitantComment }}
+                            v-if="person.inhabitantComment"
+                            :class="`${TYPOGRAPHY.finePrint} text-gray-600`">
+                          - {{ person.inhabitantComment }}
                         </span>
-                        <span v-if="idx < allergy.adults.length + allergy.children.length + allergy.babies.length - 1">, </span>
+                        <span v-if="idx < allergy.members.length - 1">, </span>
                       </span>
                     </div>
 
-                    <!-- Count summary -->
-                    <div class="font-bold mt-2">
-                      [{{ allergy.adultCount }} voksne, {{ allergy.childCount }} børn & {{ allergy.babyCount }} babyer]
+                    <!-- Count summary, e.g. [2V 1B] -->
+                    <div :class="`${TYPOGRAPHY.bodyTextMedium} mt-2`">
+                      [{{ allergy.ticketCounts }}]
                     </div>
                   </div>
                 </td>
@@ -170,32 +145,31 @@ const printPage = () => {
           <!-- QR Code (no-print on screen) -->
           <div v-if="qrCodeDataUrl" class="no-print">
             <img :src="qrCodeDataUrl" alt="QR Code" class="w-40 h-40 border-2 border-gray-300">
-            <p class="text-xs text-gray-600 mt-2 text-center">Scan for online version</p>
+            <p :class="`${TYPOGRAPHY.caption} text-gray-600 mt-2 text-center`">Scan for online version</p>
           </div>
         </div>
 
         <!-- Footer notes -->
-        <div class="allergy-notes text-sm">
-          <p class="font-bold mb-2">Vigtige bemærkninger:</p>
-          <ul class="list-disc list-inside space-y-1">
-            <li>Glutenfri boller findes i fryseren og tages op af madholdet</li>
-            <li>Ved mælkeprodukter i brød, vil mælke-allergikere også have brug for glutenfrit brød (som altid er
-              mælkefrit)
-            </li>
-            <li>Husk at give besked om allergener ved menu-præsentationen</li>
-          </ul>
-        </div>
+        <UAlert :color="COLOR.warning" variant="outline" class="mt-4">
+          <template #description>
+            <p :class="`${TYPOGRAPHY.sectionSubheading} mb-2`">Vigtige bemærkninger:</p>
+            <ul :class="`list-disc list-inside space-y-1 ${TYPOGRAPHY.bodyTextSmall}`">
+              <li>Glutenfri boller findes i fryseren og tages op af madholdet</li>
+              <li>Ved mælkeprodukter i brød, vil mælke-allergikere også have brug for glutenfrit brød (som altid er
+                mælkefrit)
+              </li>
+              <li>Husk at give besked om allergener ved menu-præsentationen</li>
+            </ul>
+          </template>
+        </UAlert>
 
         <!-- Allergy manager contact -->
-        <div class="mt-6 p-4 bg-purple-50 border-l-4 border-purple-500">
-          <p class="text-sm">
-            <span class="font-bold text-purple-900">Allergiansvarlig:</span>
-            <AllergyManagersList class="inline-block ml-2"/>
-          </p>
-          <p class="text-xs text-gray-600 mt-1">
-            Tal med allergiansvarlig for hjælp til at spotte allergener i opskrifterne og udtænke allergihensyn!
-          </p>
-        </div>
+        <AllergyManagersList
+            :color="COLOR.neutral"
+            variant="outline"
+            message="Tal med allergiansvarlig for hjælp til at spotte allergener i opskrifterne og udtænke allergihensyn!"
+            class="mt-6"
+        />
       </div>
     </div>
   </div>
@@ -220,44 +194,5 @@ const printPage = () => {
   .page-break {
     page-break-before: always;
   }
-}
-
-.allergy-table {
-  border-collapse: collapse;
-  width: 100%;
-}
-
-.allergy-table th,
-.allergy-table td {
-  border: 2px solid #333;
-  padding: 12px;
-  text-align: left;
-}
-
-.allergy-table th {
-  background-color: #f3f4f6;
-  font-weight: bold;
-}
-
-.allergy-gluten {
-  color: #16a34a;
-  font-weight: bold;
-}
-
-.allergy-dairy {
-  color: #2563eb;
-  font-weight: bold;
-}
-
-.allergy-nuts {
-  color: #dc2626;
-  font-weight: bold;
-}
-
-.allergy-notes {
-  background-color: #fef3c7;
-  padding: 12px;
-  margin-top: 16px;
-  border-left: 4px solid #f59e0b;
 }
 </style>
