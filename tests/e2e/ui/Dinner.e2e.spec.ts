@@ -5,7 +5,7 @@ import testHelpers from '../testHelpers'
 import {formatDate} from '~/utils/date'
 import {addDays} from 'date-fns/addDays'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, waitForHydration} = testHelpers
 
 /**
  * E2E UI Tests for Dinner Page URL-Based Navigation
@@ -69,6 +69,7 @@ test.describe('Dinner Page URL Navigation', () => {
 
         // WHEN: Navigate to dinner page without date parameter
         await page.goto(dinnerPageUrl)
+        await waitForHydration(page)
 
         // THEN: URL should auto-sync to a valid dinner date (component calculates "next" at runtime)
         await pollUntil(
@@ -105,6 +106,7 @@ test.describe('Dinner Page URL Navigation', () => {
 
         // WHEN: Navigate with invalid date parameter
         await page.goto(`${dinnerPageUrl}?date=99/99/9999`)
+        await waitForHydration(page)
 
         // THEN: URL should auto-sync to a valid dinner date
         await pollUntil(
@@ -139,6 +141,7 @@ test.describe('Dinner Page URL Navigation', () => {
 
         // WHEN: Navigate directly to second event's date (bypassing "next dinner" logic)
         await page.goto(`${dinnerPageUrl}?date=${secondEventDate}`)
+        await waitForHydration(page)
 
         // Wait for dinner detail panel to load
         await pollUntil(
@@ -176,6 +179,7 @@ test.describe('Dinner Page URL Navigation', () => {
 
         // WHEN: Navigate with date that has no dinner event
         await page.goto(`${dinnerPageUrl}?date=${noDinnerDate}`)
+        await waitForHydration(page)
 
         // THEN: URL should auto-sync to one of the valid dinner dates
         await pollUntil(
@@ -210,6 +214,7 @@ test.describe('Dinner Page URL Navigation', () => {
 
         // GIVEN: Load page with first event's date
         await page.goto(`${dinnerPageUrl}?date=${testData.dates.first}`)
+        await waitForHydration(page)
 
         // Wait for dinner detail panel to be visible (confirms first event is loaded)
         await pollUntil(

@@ -230,7 +230,7 @@ async function waitForHydration(page: Page): Promise<void> {
             return nuxtApp?.isHydrating === false
         }),
         (hydrated) => hydrated,
-        10
+        6 // ~15s with doubling backoff - stays inside the 30s test timeout so a stuck page fails here, with this message
     )
 }
 
