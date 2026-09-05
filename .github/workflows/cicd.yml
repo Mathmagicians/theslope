@@ -47,7 +47,7 @@ jobs:
           fetch-depth: 0  # Fetch all history for version calculation
           ref: ${{ inputs.rollback_to || github.sha }}
       - run: ls -la
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version-file: 'package.json'
       - run: npm ci
@@ -218,7 +218,7 @@ jobs:
       contents: read  # Checkout + run smoke tests against deployed URL
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version-file: 'package.json'
       - run: npm ci
