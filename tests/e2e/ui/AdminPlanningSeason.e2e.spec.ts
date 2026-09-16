@@ -200,11 +200,22 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
             // THEN: the season picker grid never renders a date twice - adjacent-month days
             // are disabled and hidden by the shared COMPONENTS.calendarGrid token
+            const dayCells = page.locator('[data-slot="cellTrigger"]')
             await page.locator('[name="seasonDates"] input[name="start"]').click()
-            await expect(page.locator('[data-slot="cellTrigger"]').first()).toBeVisible()
+            await expect(dayCells.first()).toBeVisible()
             await expect(page.locator('[data-slot="cellTrigger"][data-outside-view]:visible')).toHaveCount(0)
             expect(await page.locator('[data-slot="cellTrigger"]:visible').count()).toBeGreaterThan(27)
-            await page.keyboard.press('Escape')
+
+            // Close the popover before touching the form again - it overlays the holiday row.
+            // Escape can land before reka-ui's dismiss listener attaches, so retry until it is gone
+            await pollUntil(
+                async () => {
+                    await page.keyboard.press('Escape')
+                    return await dayCells.first().isHidden()
+                },
+                (isHidden) => isHidden,
+                5
+            )
 
             // WHEN: Add holiday period
             await page.locator('[name="holidayRangeList"] input[name="start"]').fill(holidayStart)
