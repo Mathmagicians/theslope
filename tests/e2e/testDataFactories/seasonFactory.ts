@@ -1,4 +1,4 @@
-import {useSeasonValidation, type Season} from "~/composables/useSeasonValidation"
+import {useSeasonValidation, type Season, type SeasonUpdateResponse} from "~/composables/useSeasonValidation"
 import {useWeekDayMapValidation} from "~/composables/useWeekDayMapValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import type {
@@ -259,15 +259,15 @@ export class SeasonFactory {
     }
 
     /**
-     * Update an existing season via POST /api/admin/season/{id}
-     * Returns the updated season with reconciled dinner events
+     * POST a season and return the full operation envelope (ADR-009):
+     * the saved season plus what reconciliation and re-scaffolding did.
      */
-    static readonly updateSeason = async (
+    static readonly updateSeasonWithResult = async (
         context: BrowserContext,
         season: Season,
         expectedStatus: number = 200
-    ): Promise<Season> => {
-        const {SeasonSchema} = useSeasonValidation()
+    ): Promise<SeasonUpdateResponse> => {
+        const {SeasonUpdateResponseSchema} = useSeasonValidation()
 
         expect(season.id, 'Season must have an ID to update').toBeDefined()
 
@@ -280,13 +280,20 @@ export class SeasonFactory {
 
         expect(status, `Expected ${expectedStatus}, got ${status}. Response: ${JSON.stringify(responseBody)}`).toBe(expectedStatus)
 
-        if (expectedStatus === 200) {
-            const result = SeasonSchema.safeParse(responseBody)
-            expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
-            return result.data!
-        }
+        if (expectedStatus !== 200) return responseBody
 
-        return responseBody
+        const result = SeasonUpdateResponseSchema.safeParse(responseBody)
+        expect(result.success, `API should return a valid SeasonUpdateResponse. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+        return result.data!
+    }
+
+    static readonly updateSeason = async (
+        context: BrowserContext,
+        season: Season,
+        expectedStatus: number = 200
+    ): Promise<Season> => {
+        const result = await this.updateSeasonWithResult(context, season, expectedStatus)
+        return expectedStatus === 200 ? result.season : (result as unknown as Season)
     }
 
     /**

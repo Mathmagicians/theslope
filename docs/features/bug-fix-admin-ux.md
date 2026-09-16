@@ -12,14 +12,15 @@
 | A1 | Wrong age categories in allergy surfaces (children as adults) | **Implemented** (2026-09-01) |
 | C1 | CI break — server-reachable composable relied on app auto-imports; per-context typecheck gate + pure UI composables | ✅ IMPLEMENTED (2026-09-02) |
 | C2 | E2E stability — season list polled past a half-created season; UI specs wait for hydration before interacting | ✅ IMPLEMENTED (2026-09-02) |
-| Alerts on mobile | UAlert ignores screen size → design-system `ALERTS` pattern, every instance migrated, architecture test | ⏳ Mockup signoff |
-| Poster notes | "Vigtige bemærkninger" shared with `/admin/allergies`, editable by ADMIN/ALLERGYMANAGER → `Setting` table + `AllergyNotes` | ⏳ Mockup signoff + migration |
+| Alerts on mobile | UAlert ignores screen size → design-system `ALERTS` pattern, every instance migrated, architecture test | ✅ IMPLEMENTED (2026-09-16) |
+| Poster notes | "Vigtige bemærkninger" shared with `/admin/allergies`, editable by ADMIN/ALLERGYMANAGER → `Setting` table + `AllergyNotes` | 🟡 Shared box ✅ (2026-09-16); editing ⏳ migration |
 | QR code | `uqr` + `QrCode.vue` atom instead of `api.qrserver.com`; prints | ⏳ Mockup signoff |
 | My preferences | notification channels (EMAIL/SMS) + appearance (colors, text scale) → `UserPreference` table, endpoints, dashboard card | ⏳ Mockup signoff + color decision + migration |
-| Planning form | edit/create the allergies way (pencil + Opret), holiday rows editable, live-season save re-scaffolds, Heynabo cleanup on removed dates | ⏳ Mockup signoff |
+| Planning form | edit/create the allergies way (labelled Rediger + Opret), holiday rows editable, live-season save re-scaffolds, Heynabo cleanup on removed dates | ✅ IMPLEMENTED (2026-09-16) |
 | Sorted holidays | holiday list chronological everywhere | ✅ IMPLEMENTED (2026-09-16) |
 | Calendar grid | pickers show adjacent-month days twice → one shared `UCalendar` root token | ✅ IMPLEMENTED (2026-09-16) |
-| Planning buttons | every planning button from the design system | ⏳ Mockup signoff |
+| Planning buttons | every planning button from the design system | ✅ IMPLEMENTED (2026-09-16) |
+| Colour drift sweep | 178 raw Tailwind colour classes (34 files) and 52 literal Nuxt UI colour props (20 files) outside the design system → `TEXT`/`BORDER`/`TYPOGRAPHY`/`BG`/`COLOR` tokens; architecture test forbids raw colour outside `useTheSlopeDesignSystem.ts` | Approved 2026-09-16; runs before the colour presets |
 
 ---
 
@@ -404,6 +405,12 @@ not shown:
   architecture test forbids raw `UAlert` props. No Nuxt UI theme override in `app.config`.
 - **Planning only.** `/admin/teams` keeps `FormModeSelector`; conversion is a follow-up.
 - **Mockups** are ASCII in this doc and repeated in the component header comment (`AdminPlanning.vue`, `SeasonSelector.vue`, `UserProfileCard.vue` style).
+- **Notes box: same look on the admin page and the poster** (2026-09-16): neutral outline with dark text as before, plus the ⚠ icon — `v-bind="ALERTS.legend" :icon="ICONS.warning"`. `AllergyNotes` binds exactly that on both mounts.
+- **Teams page, edit mode with zero teams** (2026-09-16): renders the teams table branch, so its `#empty` slot shows the one empty state + "Opret madhold" CTA; no new component, no second copy of the block. Ships with the QR package.
+- **Booking grid, week or month without dinners** (2026-09-16): `tableData` is empty when there are no events, so the `UTable` `#empty` slot renders the grid’s empty state; no standalone alert. Ships with the QR package.
+- **Edit affordances** (2026-09-16): table rows keep the ghost pencil `BUTTONS.edit`; a form or card’s edit entry is the labelled button `BUTTONS.secondaryAction` + `COLOR.primary` + `ICONS.edit` + "Rediger <navn>" — e.g. "Rediger Forår 2026" (the chef menu card pattern, label names the record like the household "Slet …" button). Applies to the season card (Planning form) and the allergy detail header (QR batch). Rule goes into `docs/ui.md`.
+- **Season card title names the season** (2026-09-16): "Fællesspisning sæson 08/26-07/27" (view), "Rediger fællesspisning sæson …" (edit), "Opret fællesspisning sæson …" (create, name appears once the dates are set); the read-only "Sæson" input is removed — dates are never shown as a form element.
+- **Date picker selection style** (2026-09-16): pickers render selected days through the same `#day` slot and the one DS helper `dayCircleClasses(variant)` the display calendars use; `CALENDAR.picker = {cookingDay: PLANNING_CALENDAR.day.generated, holiday: CALENDAR.holiday}` (references, no new class strings), chosen by a `selection` prop; Nuxt UI’s own selection fill is neutralised; no `:color` prop on pickers. Green stays reserved for holidays.
 - **Colors in "My preferences": OPEN** — curated presets vs user-picked colors vs hybrid, compared under "My preferences"; decided at that
   package's approval gate. Schema, endpoints and store do not depend on it (JSON value typed in the registry).
 - **Editing the live season needs no deactivation.** Saving already reconciles dinner events (ADR-015 [Idempotent Automated Jobs with Rolling
@@ -452,7 +459,7 @@ class, `actions "… shrink-0"`. The design system has no alert token beyond `CO
    The duplicated "Forklaring" legends (`BookingGridView.vue:835`, `DinnerBookingForm.vue:876`) → `DinnerModeLegend.vue` if the repro shows overflow.
 4. **ADR-019 [Design system owns shared UI patterns — components bind tokens, never raw Nuxt UI props]**, enforced by an architecture test.
 
-### Mockup — ⏳ awaiting signoff (mobile padding `p-3`, kind table)
+### Mockup — ✅ signed off, applied 2026-09-16 (padding kept at the theme `p-4`; `callToAction` became the `withActions` modifier)
 
 ```
 BEFORE (<md)                                AFTER (<md)  v-bind="ALERTS.info"
@@ -480,7 +487,7 @@ long words/emails/URLs never break          p-3 md:p-4 · wrap-anywhere · actio
 
 `app/composables/useTheSlopeDesignSystem.ts`, 34 component/page files, `docs/ui.md`, `docs/adr.md` (ADR-019), compliance checklist.
 
-### Classification (⏳ awaiting signoff)
+### Classification — ✅ applied (2026-09-16)
 
 #### (a) Repro — `tests/e2e/ui/MobileViewport.e2e.spec.ts`, 375×812, admin UI session, 7/7 GREEN
 
@@ -504,7 +511,7 @@ and `wrapper: "min-w-0 flex-1"` (`.nuxt/ui/alert.ts:29-39`); only `title`/`descr
 unbroken token (mail/URL) *clipped* inside an alert — no page renders one today; (3) at most 6 of the 56 sites render in the repro
 (the rest are state-gated), so the token change must be covered by component specs, not by this guard; (4) `/dinner`'s 3px makes `<= 0` borderline.
 
-#### (b) Classification — 56 sites / 34 files (theme defaults: `color=primary`, `variant=solid`)
+#### (b) Classification — 56 sites / 34 files, all migrated (theme defaults were `color=primary`, `variant=solid`)
 
 | Site | Props today | Kind | Visual change / note |
 |---|---|---|---|
@@ -568,11 +575,28 @@ unbroken token (mail/URL) *clipped* inside an alert — no page renders one toda
 **Counts:** `emptyState` 12 · `info` 10 · `neutral` 8 · `warning` 8 · `legend` 4 · `error` 4 · `emptyStateCompact` 2 ·
 `callToAction` 1 · dynamic two-kind ternaries 6 · needs the kind gap resolved 1. `success` has **no** static site (only the residency ternary).
 
-**Kind gap — `callToAction` cannot carry a colour (5 sites, 3 colours).** `SeasonStatusDisplay:156` (success/warning/info by season status),
-`[tab].vue:203` (warning), `AdminTeams:460`, `AdminToCreateSeason:6`, `dinner/index.vue:212` (centered empty state + actions) all need
-"this kind **plus** actions". Proposal: make orientation a *modifier* rather than a colour-bearing kind — `ALERTS.withActions` spread over any
-kind (`v-bind="{...ALERTS.warning, ...ALERTS.withActions}"`) or `ALERTS.callToAction(color)` — and keep `emptyState` vertical/centered even when
-it has actions. Not proposed as new kinds: no site needs a colour outside the existing table.
+**Kind gap — resolved as a modifier.** `callToAction` was dropped as a kind: orientation is `ALERTS.withActions`, spread over any kind
+(`v-bind="{...ALERTS.warning, ...ALERTS.withActions}"`), and `emptyState` stays vertical/centred even with a CTA. The five sites that
+needed "this kind **plus** actions" landed as: `SeasonStatusDisplay` (kind by season status + `withActions`), `[tab].vue:180/:203`
+(`info`/`warning` + `withActions`), `AdminTeams` (moved into the table's `#empty` slot), `AdminToCreateSeason` and `dinner/index.vue:212`
+(`emptyState`, CTA centred). No site needed a colour outside the kind table.
+
+**Applied 2026-09-16.** Final kinds: `info` · `neutral` · `success` · `warning` · `error` · `legend` · `emptyState` · `emptyStateCompact`,
+plus the `withActions` modifier. Padding stayed the theme's `p-4` (the mockup's `p-3 md:p-4` was dropped — no visual change);
+`actions: 'flex-wrap'` dropped as a no-op (already in the theme). Shared `ui` per kind: `root 'min-w-0'`, `title`/`description 'wrap-anywhere'`.
+
+**Applied tally, 55 `<UAlert>` sites** (56 − 2 duplicated legends + 1 inside `DinnerModeLegend.vue`):
+`emptyState` 12 · `info` 10 · `warning` 9 · `neutral` 8 · `error` 4 · `legend` 3 · `emptyStateCompact` 2 ·
+dynamic 7 (`ALERTS[residency.color]` ×2, `error|neutral` ternary ×2, `warning|info` ternary, `ALERTS[props.kind]`, `ALERTS[alertConfig.kind]`).
+`withActions` on 3 sites.
+
+**Deltas beyond the table above** (the kind's default won over the site's local pick — on the user's visual-check list):
+`AdminAllergies:360` and `AllergyTypeCard:227` empty states go success → neutral (one `emptyState` kind);
+`dinner/index.vue:212` becomes a centred `emptyState` rather than a left-aligned info alert;
+`ChefMenuCard:600` loses its `p-2`/`text-xs` compact override (decided: dropped);
+and three sites now show the kind's default icon where they had none or another one —
+`pdf.vue:153` (poster notes gain the warning triangle — **check the print**), `dinner/index.vue:308` (info circle beside the emoji title),
+`HouseholdEconomy:413` (`exclamationCircle` → triangle). `OrderHistoryDisplay:77` keeps its `exclamationCircle` via an explicit `:icon`.
 
 #### (c) Not fixed by the alert token
 
@@ -584,6 +608,25 @@ it has actions. Not proposed as new kinds: no site needs a colour outside the ex
 | 3px document overflow while the skeleton renders | `/dinner` `UPageCard` inner `p-4 sm:p-6` | makes the repro's `<= 0` borderline on `/dinner` |
 | Layout inside `#description` (flex rows, `<ul>`, badges, selectors) | `AllergyManagersList:36`, `AllergyDetailPanel:60`, `ActionPreview:37`, `BookingGridView:843`, `DinnerBookingForm:884`, `HouseholdCard:406`, `UserProfileCard:341`, `pdf:154` | `wrap-anywhere` cannot wrap a flex row of badges — each needs its own responsive classes or extraction (`DinnerModeLegend.vue`) |
 | `actions: 'flex-wrap'` in the planned shared `ui` | theme already ships `actions: "flex flex-wrap gap-1.5 shrink-0"` | no-op — drop it from the plan |
+
+#### (d) Verified — 2026-09-16
+
+- **Red first:** `designSystemUsage.unit.spec.ts` failed on 56 sites (no `ALERTS` token) and 53 sites (raw `color`/`variant`/`type`),
+  reported as `file:line`; the two other rules (`UCalendar` → `COMPONENTS.calendarGrid`, no `#empty-state`) were already green.
+  `AdminTeams.e2e.spec.ts`'s new empty-state case failed with `locator('table')` not found — the standalone alert rendered *instead of* the table.
+- **Green:** all 4 architecture rules pass; `npm run test:unit` 2261 passed / 84 files; `npm run lint` clean;
+  `ts:server` and `ts:node` clean; e2e `MobileViewport` + `admin` + `household` + `AdminTeams` + `AdminAllergies` + `AllergyPoster`
+  = **69 passed** (`--workers=4`).
+- **Reuse:** the standalone "Her ser lidt tomt ud!" teams alert moved into the teams table's `#empty` slot (`showAdminTeams` no longer
+  hides the table for a season with no teams), and the two identical "Forklaring" legends became `app/components/dinner/DinnerModeLegend.vue`.
+- **Tests assert usage and behaviour, never token values** (`docs/testing.md` → *Architecture tests*): the architecture rules,
+  `DinnerModeLegend.nuxt.spec.ts` (rendered modes / CTA / hint), `ChefCalendarDisplay.nuxt.spec.ts` (agenda `#empty` text),
+  the `AdminTeams` e2e case, and `MobileViewport.e2e.spec.ts`. The `withActions` `isMd` branch is the one factory case kept in the
+  design-system spec; the class-string assertions written first were removed.
+- **Known-broken gate, not caused by this package:** `npm run ts` fails with `TS2688 Cannot find type definition file for
+  '@cloudflare/workers-types/2023-07-01'` — `@cloudflare/workers-types` is now `^5.20260916.1` and v5 dropped the dated entry points.
+  Fix is one line in `tsconfig.json`: `"@cloudflare/workers-types/2023-07-01"` → `"@cloudflare/workers-types"`. With that entry
+  substituted, a full `vue-tsc` over `app/ server/ tests/ shared/` is clean.
 
 ### Empty states render again — ✅ IMPLEMENTED (2026-09-16)
 
@@ -608,6 +651,43 @@ it has actions. Not proposed as new kinds: no site needs a colour outside the ex
   to `date=18/09/2026` on hydration. Measured on that page: `documentOverflow: 0` at `innerWidth: 375`, no element extending past the
   viewport and no element with `scrollWidth > clientWidth`. The reported "empty state gives horizontal scroll" is therefore **not**
   reproducible on the bookings grid today.
+
+---
+
+### Visual check — Alert tokens and sweep (walk before the package is approved; copied into the PR description)
+
+| Route + state | Viewport | DS element to expect | Expect |
+|---|---|---|---|
+| `/admin/planning`, no season selected | 375px + desktop | `ALERTS.emptyState` | soft neutral, centred, large title, 💤 avatar (was a solid violet block) |
+| `/admin/planning`, season selected, each status | both | `ALERTS[success\|info\|warning\|neutral]` + `ALERTS.withActions` (`SeasonStatusDisplay`) | ACTIVE success/soft; FUTURE info/subtle; CURRENT warning/soft; PAST neutral/subtle. Activate/Deactivate beside the text on desktop, below it on the phone |
+| `/admin/planning` or `/admin/teams` with no seasons | both | `ALERTS.emptyState` + `BUTTONS.primaryAction` CTA (`AdminToCreateSeason`) | soft neutral centred; "Opret ny sæson" centred under the text |
+| `/admin/teams?season=<season without teams>` | both | `UTable #empty` slot → `ALERTS.emptyState` + `create-new-team` CTA | the table renders (header + empty row) with the 💤 empty state and "Opret madhold" inside it |
+| `/admin/teams?mode=edit&season=<season without teams>` | both | master-detail placeholder (no alert) | "Vælg et madhold for at redigere" (URL-only edge case) |
+| `/admin/allergies`, empty catalog | 375px + desktop | `UTable #empty` → `ALERTS.emptyState` + `create-first-allergy-type` | neutral (was green); "Tilføj allergi" unchanged |
+| `/admin/allergies` footer | both | `AllergyManagersList kind="info"` → `ALERTS.info` + its description flex row | unchanged look; managers beside the message on desktop, under it on the phone |
+| `/admin/allergies/pdf` + print preview | desktop + print | `ALERTS.legend` + `:icon="ICONS.warning"` (notes — decided 2026-09-16: unchanged neutral outline, dark text, ⚠ added; same on page and poster), `AllergyManagersList kind="neutral"` → `ALERTS.neutral` | "Vigtige bemærkninger" as before, with a ⚠ next to the heading; managers box subtle |
+| `/admin/users` | both | `ALERTS.info` | violet subtle (was amber outline); `authorized` icon kept |
+| `/admin/system`, a job with an error | both | `ALERTS.error` | soft (stronger red) |
+| `/admin/economy` (3 empty states) | both | `ALERTS.neutral` | unchanged |
+| `/admin/households` create form, Heynabo without addresses | both | `ALERTS.emptyState` | unchanged |
+| `/household/<own>/members`, ⚡ power row expanded | 375px | `ALERTS.warning` (power mode), local wrap patches removed | warning still fits; long sentence wraps, no clipping |
+| `/household/<own>/members`, bottom info alert | both | `ALERTS.info` | violet subtle (was amber soft); icon rows unchanged |
+| `/household/<own>/members`, after saving preferences | both | `errored ? ALERTS.error : ALERTS.neutral` | success path unchanged; error branch soft |
+| `/household/<own>/settings`, pencil → edit move-out | both | `ALERTS.warning` | unchanged; testids intact |
+| `/household/<own>/settings`, after saving a move-out date | both | `errored ? ALERTS.error : ALERTS.neutral` | error branch soft |
+| `/household/<own>/bookings?view=day` | 375px + desktop | `DinnerModeLegend` → `ALERTS.legend` | "Forklaring" outline box; 4 modes + "Blandet"; no "Ændret", no hint |
+| `/household/<own>/bookings?view=week` / `month` | 375px + desktop | `DinnerModeLegend` (grid options) → `ALERTS.legend` | outline "Forklaring" with the "Ændret" marker and the click-a-cell hint |
+| `/household/<other>` as visitor | 375px + desktop | `{...ALERTS.info, ...ALERTS.withActions}` | banner soft; "Admin røre alligevel" beside the text on desktop, below on the phone |
+| `/household/<other>` after admin override | 375px + desktop | `{...ALERTS.warning, ...ALERTS.withActions}` | same orientation behaviour; soft |
+| `/household/<own>/economy` | both | 2 × `ALERTS.neutral`; "Ingen data" `ALERTS.warning` | "Ingen data" soft with the warning triangle |
+| `/dinner` with no active season | both | `ALERTS.emptyState` + `BUTTONS.primaryAction` CTA | centred neutral, large title, "Værsgo, opret en ny sæson" centred below (was a left-aligned info alert) |
+| `/dinner`, dinner without a team | both | `ALERTS.info` | subtle with ⓘ next to the emoji title |
+| `/dinner` day view | 375px | `DinnerModeLegend` → `ALERTS.legend`; released `ALERTS.warning`; claim `ALERTS.info` | legend outline; "Har du brug for flere billetter?" subtle |
+| `/chef`, team without dinners | both | `ALERTS.info` | subtle |
+| `/chef`, dinner without a team | both | `ALERTS.neutral` | subtle |
+| `/chef`, editing a dinner without a menu title | both | `ALERTS.warning` (compact `p-2 text-xs` override removed) | standard alert padding and body text |
+| `/chef`, role banner (chef vs cook) | both | `isChef ? ALERTS.warning : ALERTS.info` | chef unchanged; cook branch subtle; still full width |
+| `/chef/dinner/<cancelled>`, `/login` wrong password, `/admin/economy` order-history errors | both | `ALERTS.error` / `ALERTS.warning` | unchanged |
 
 ---
 
@@ -645,7 +725,7 @@ only text mechanisms are `HELP_TEXTS` and `app.config` (build-time). No settings
   (the poster has no `UApp`). Mounted in the `AdminAllergies` card footer and on the poster (view only). The poster keeps its print table.
 - **ADR-018 [Editable settings and user preferences as key-value stores with code registries]**.
 
-### Mockup — ⏳ awaiting signoff
+### Mockup — ✅ applied 2026-09-16 (notes box in the card footer; edit face pending)
 
 ```
 DESKTOP                                             MOBILE
@@ -687,6 +767,31 @@ Rejected: under the toolbar (competes with the mobile CREATE dock from D1).
 `server/utils/authorizationHelper.ts`, `app/composables/usePermissions.ts`, `app/stores/allergies.ts`, `app/components/allergy/AllergyNotes.vue`,
 `AdminAllergies.vue`, `pages/admin/allergies/pdf.vue`, `allergyTestIds.ts`, compliance docs.
 
+### Notes on the page — ✅ IMPLEMENTED (2026-09-16)
+
+- **Shipped:** the notes box is one component, `app/components/allergy/AllergyNotes.vue` (prop `notes`, one note per line, `ALERTS.legend`
+  + `:icon="ICONS.warning"` — the look decided 2026-09-16), mounted in the `AdminAllergies` card `#footer` and on the poster; the poster's
+  inline `UAlert` (`pdf.vue:154-165`) is gone, so both surfaces render the same markup from the same text.
+- **Text source:** `app/composables/useSetting.ts` — isomorphic (ADR-017 [Isomorphic Composables…]), `DEFAULT_ALLERGY_POSTER_NOTES`
+  (the three bullets) and `splitNotes` (one note per line, blank lines and whitespace dropped). This is the registry default the coming
+  `Setting` store falls back to.
+- **Tests:** `AllergyNotes.nuxt.spec.ts` (bullets per line, empty text renders nothing), `admin-allergies-pdf.nuxt.spec.ts` and
+  `AdminAllergies.nuxt.spec.ts` (three items, both `isMd` branches) with the existing `(V)`/`[1V 1B]` assertions kept, plus one e2e
+  assertion each in `AllergyPoster.e2e.spec.ts` and `AdminAllergies.e2e.spec.ts`. Test-ids `allergy-notes` / `allergy-notes-item`.
+- **Pending:** editing (pencil + `UTextarea` edit face, `canEdit`/`isSaving`/`save`), the `Setting` table and its repository, endpoints,
+  authorization and the `allergies` store slice — everything in Solution above except the shared view face. When it lands, only the text
+  source changes: `AllergyNotes` keeps its `notes` prop.
+
+### Visual check — Notes on the page
+
+| Route + state | Viewport | DS element to expect | Expect |
+|---|---|---|---|
+| `/admin/allergies`, catalog loaded | 375px | `AllergyNotes` → `ALERTS.legend` + `:icon="ICONS.warning"` in the card `#footer` | neutral outline box below the catalog, ⚠ beside "Vigtige bemærkninger:", three bullets; text wraps, no horizontal scroll |
+| `/admin/allergies`, catalog loaded | desktop | same, card `#footer` | box spans the full card under both master and detail panes; sticky detail still scrolls above it |
+| `/admin/allergies`, empty catalog | both | `AllergyNotes` + `UTable #empty` → `ALERTS.emptyState` | notes still render under the empty-state table |
+| `/admin/allergies/pdf` | desktop | `AllergyNotes` (`class="mt-4"`) | identical box to the catalog footer, between the allergy table and the `AllergyManagersList` box; same spacing as before |
+| `/admin/allergies/pdf`, print preview | print | same | notes print (no `no-print`); ⚠ icon and bullets legible in black on white |
+
 ---
 
 ## QR code
@@ -702,7 +807,7 @@ render time, and the block is `no-print`, so the QR never reaches paper. No QR p
 and `app/components/shared/QrCode.vue` (`value`, `size`, `label`; inline `<svg role="img">`, black/white for `print-color-adjust: exact`,
 `data-testid="qr-code"`, no `v-html` — none exists in `app/`). Poster buttons move to `BUTTONS.secondaryAction`/`primaryAction` + `ICONS.arrowLeft`/`printer`.
 
-### Mockup — ⏳ awaiting signoff (print the QR?)
+### Mockup — ✅ signed off 2026-09-16 (QR prints)
 
 ```
 ┌ [← Tilbage]                                   [🖨 Print] ┐  no-print, DS buttons
@@ -781,17 +886,29 @@ maps Nuxt UI semantics onto them (`primary: amber`, `secondary: pink`, `success:
 The stated need (colorblind, elderly) is accessibility; personalization is a different need. The JSON value is typed in the registry, so the
 choice needs no schema change. Hues are signed off from screenshots after implementation.
 
-### Mockup — ⏳ awaiting signoff
+### Mockup — ✅ signed off 2026-09-16 (behind an "Indstillinger" button; colors variant still open)
 
 ```
+DASHBOARD /login (logged in)
 ┌ Hej Anna! 👋 ───────────────────────────────────────────────┐
-│ UserProfileCard (as today)                                  │
-│ ┌ Mine indstillinger ───────────────────────────────────┐   │  new UserPreferencesCard.vue
+│ ┌ UserProfileCard ──────────────────────────────────────┐   │
+│ │ [👤] Anna Hansen      [⚙ Indstillinger] [Heynabo →] [👋 Log ud →] │  new button, BUTTONS.secondaryAction + ICONS.preferences
+│ │      [🛡️ Admin] [💚 Allergichef]                       │   │  (mobile: the three buttons wrap under the name)
+│ │ 📧 anna@…  📱 +45 …  🏠 Lejlighed 42                   │   │
+│ └───────────────────────────────────────────────────────┘   │
+│ Hvad vil du lave i dag? … ActionCards …                     │
+└─────────────────────────────────────────────────────────────┘
+
+AFTER [⚙ Indstillinger] — the card reveals directly under the profile (button shows active; click again = hide)
+┌ Hej Anna! 👋 ───────────────────────────────────────────────┐
+│ ┌ UserProfileCard ─ [⚙ Indstillinger ●] [Heynabo →] [Log ud →] ┐ │
+│ └───────────────────────────────────────────────────────┘   │
+│ ┌ Mine indstillinger ───────────────────────────────────┐   │  UserPreferencesCard.vue, v-if on the toggle
 │ │ 🔔 Notifikationer                                     │   │
 │ │   Vi må kontakte dig via   [✓] E-mail  anna@…         │   │  USwitch per channel; address from User
 │ │                            [ ] SMS     +45 …          │   │  SMS disabled + hint when no phone
 │ │ 🎨 Udseende                                           │   │
-│ │   Farver   ── OPEN: variant A, B or C ──              │   │
+│ │   Farver   ── decision 4: variant A, B or C ──         │   │
 │ │   Tekst    (•) Normal   ( ) Stor         ( ) Større   │   │  URadioGroup → html[data-text-scale]
 │ │   ✓ Gemt                                              │   │  autosave on change, inline state
 │ └───────────────────────────────────────────────────────┘   │
@@ -800,7 +917,7 @@ choice needs no schema change. Hues are signed off from screenshots after implem
 Farver, variant A (presets):   (•) Standard ( ) Høj kontrast ( ) Farveblind-venlig        → html[data-palette]
 Farver, variant B (pick):      Primær [● mocha ▾]  Sekundær [● pink ▾]  (swatches of the named scales) → updateAppConfig(ui.colors)
 Farver, variant C (hybrid):    A's presets + one "Accentfarve" swatch row from a curated accessible list
-mobile: radios/swatches stack (ORIENTATIONS.responsive).
+mobile: radios/swatches stack (ORIENTATIONS.responsive). The toggle state is component-local (ADR-006: no persistence).
 ```
 
 ### TDD
@@ -843,58 +960,83 @@ on removed dates stay published in Heynabo. The endpoint also writes `isActive` 
 - Keep `useEntityFormManager` and `?mode=` sync (ADR-008 [useEntityFormManager Composable Pattern], ADR-006 [URL-Based Navigation and
   Client-Side State]) — deep links `?mode=create|edit` stay valid. Only the controls change:
   - Card header: `SeasonSelector` + `[＋ Opret sæson]` (`BUTTONS.primaryAction`, `create-season`, disabled when CREATE is in `disabledModes`).
-  - `AdminPlanningSeason` header: title + pencil (`BUTTONS.edit`, `edit-season`, view mode + `canEdit`). Titles: Sæson / Rediger sæson / Opret sæson.
+  - `AdminPlanningSeason` header: the title carries the season name (Fællesspisning sæson {navn} / Rediger fællesspisning sæson {navn} / Opret fællesspisning sæson {navn}), so the read-only "Sæson" field goes away; beside it a labelled `Rediger {navn}` (`BUTTONS.secondaryAction` + `COLOR.primary` + `ICONS.edit`, `edit-season`, view mode + `canEdit`).
   - Footer: `LAYOUTS.formButtonRow`, `BUTTONS.cancel` "Annuller", `BUTTONS.save` "Gem" (`type="submit"`, `:loading`). `id="seasonForm"` untouched.
   - Activation controls stay in edit mode as today. No delete for seasons.
+  - Picker selection follows what is picked (`CALENDAR.picker`): season dates in the cooking-day pink `COLOR.secondary`, holiday rows in the green `CALENDAR.holiday` ring, since green marks a holiday in every calendar.
 - **Editable holiday rows**: in edit/create mode each row is a `CalendarDateRangePicker` (`name="holidayRangeList-${i}"`); a change is validated
   against `holidaysSchema` on the replaced list (overlap / inside season) before it is emitted; view mode keeps the read-only rows.
 - **Live season save**: the endpoint ignores `isActive` (activation only via `/active`); after reconciliation, when the season is active and the
   schedule changed, it runs `clipPreferences` + `scaffoldPrebookings` — the same idempotent pair activation runs. Response becomes a
   `SeasonUpdateResponse {season, reconciliation: {created, deleted}, scaffold}` operation envelope (ADR-009 [API Index Endpoint Data Inclusion
   Strategy]) so the toast can report: "Sæson opdateret — N datoer tilføjet, M fjernet. Forudbestillinger er opdateret. Husk at tildele madhold til nye datoer."
-- **Heynabo cleanup**: `reconcileDinnerEventsForSeason` passes `deleteHeynaboEventsAsSystem` (best-effort, ADR-013) — one argument.
+- **Heynabo cleanup**: `reconcileDinnerEventsForSeason` passes `deleteHeynaboEventAsSystem` (best-effort, ADR-013 [External System Integration Pattern]) — the one-argument callback `deleteDinnerEvent` takes.
 - `FormModeSelector` stays for Teams (stray `w` removed); `AdminSeason.vue` deleted.
 
-### Mockup — ⏳ awaiting signoff
+### Mockup — ✅ signed off 2026-09-16
 
 ```
-VIEW (canEdit)                                      EDIT / CREATE
-┌ [Sæson ▾ Forår 2026]        [＋ Opret sæson] ┐    ┌ [Sæson ▾ Forår 2026]     [＋ Opret sæson] ┐ (disabled)
-│ 🟢 Aktiv sæson … (SeasonStatusDisplay)       │    │ 🟢 Aktiv sæson …  [✕ Deaktiver Sæson]     │ (as today: edit mode)
-│ ┌ Sæson                               [✏️] ┐ │    │ ┌ Rediger sæson | Opret sæson ─────────┐ │
-│ │ Vi følger folkeskolernes feriekalender…   │ │    │ │ Hvornår holder fællesspisning fri?    │ │
-│ │ fields disabled … calendar (right/top) …  │ │    │ │ [Start dato ▾][Slut dato ▾] [☀ Tilføj ferie] │  add row (as today)
-│ └───────────────────────────────────────────┘ │    │ │ Valgte ferieperioder                  │ │
-└───────────────────────────────────────────────┘    │ │ ☀ [13/10/2026][17/10/2026] 🗑          │ │  EACH ROW editable
-                                                     │ │ ☀ [21/12/2026][03/01/2027] 🗑          │ │  (CalendarDateRangePicker);
-LIVE SEASON, after Gem:                              │ │ … Billetpriser [🎟 Tilføj billet] … 🗑  │ │  list validated on change
-  toast "Sæson opdateret — 3 datoer tilføjet,        │ ├───────────────────────────────────────┤ │
-  1 fjernet. Forudbestillinger er opdateret.         │ │ fejlliste (if any)                    │ │
-  Husk at tildele madhold til nye datoer."           │ │              [✕ Annuller]  [✓ Gem]   │ │
-                                                     │ └───────────────────────────────────────┘ │
-MOBILE: selector + [＋ Opret sæson] stacked full-   └───────────────────────────────────────────┘
-width (LAYOUTS.cardActionRow/Button); ✏️ stays in the card header. View mode: rows read-only as today.
-Removed on planning: FormModeSelector [👁][✏️][＋]. Kept on Teams. No 🗑 for seasons. Members: no ＋/✏️.
+VIEW (canEdit)                                              EDIT / CREATE
+┌ [Sæson ▾ 08/26-07/27]              [＋ Opret sæson] ┐     ┌ [Sæson ▾ 08/26-07/27]      [＋ Opret sæson] ┐ (disabled)
+│ 🟢 Aktiv sæson … (SeasonStatusDisplay)              │     │ 🟢 Aktiv sæson … [✕ Deaktiver Sæson]        │ (as today: edit mode)
+│ ┌ Fællesspisning sæson 08/26-07/27                ┐ │     │ ┌ Rediger fællesspisning sæson 08/26-07/27 ┐ │  create: "Opret fællesspisning
+│ │                    [✏ Rediger 08/26-07/27]      │ │     │ │ Vi følger folkeskolernes feriekalender…  │ │  sæson <navn>", navn once the
+│ │ Vi følger folkeskolernes feriekalender…         │ │     │ │ Hvornår holder fællesspisning fri?       │ │  dates are valid
+│ │ fields disabled … calendar (right/top) …        │ │     │ │ [Start dato ▾][Slut dato ▾] [☀ Tilføj ferie] │  add row (as today)
+│ └─────────────────────────────────────────────────┘ │     │ │ Valgte ferieperioder                     │ │
+└─────────────────────────────────────────────────────┘     │ │ ☀ [13/10/2026][17/10/2026] 🗑            │ │  EACH ROW editable
+                                                            │ │ ☀ [21/12/2026][03/01/2027] 🗑            │ │  (CalendarDateRangePicker);
+LIVE SEASON, after Gem:                                     │ │ … Billetpriser [🎟 Tilføj billet] … 🗑    │ │  list validated on change
+  toast "Sæson opdateret — 3 datoer tilføjet,               │ ├──────────────────────────────────────────┤ │
+  1 fjernet. Forudbestillinger er opdateret.                │ │ fejlliste (if any)                       │ │
+  Husk at tildele madhold til nye datoer."                  │ │              [✕ Annuller]  [✓ Gem]       │ │
+                                                            │ └──────────────────────────────────────────┘ │
+MOBILE: selector + [＋ Opret sæson] stacked full-width     └──────────────────────────────────────────────┘
+(LAYOUTS.cardActionRow/Button); [✏ Rediger <navn>] stays in the card header. View mode: rows read-only as today.
+Removed on planning: FormModeSelector [👁][✏️][＋] and the disabled "Sæson" input (the name is in the title).
+Kept on Teams. No 🗑 for seasons. Members: no ＋ / ✏.
 ```
 
 ### TDD
 
 | Test | Change |
 |------|--------|
-| `AdminPlanningSeason.nuxt.spec.ts` (new) | `it.each` mode × canEdit: pencil only in view + canEdit, footer only in edit/create; pencil emits `edit`; 'Annuller'/'Gem'; `form#seasonForm` |
+| `AdminPlanningSeason.nuxt.spec.ts` (new) | `it.each` mode × canEdit: `edit-season` only in view + canEdit, footer only in edit/create; the control is labelled `Rediger {navn}` and emits `edit`; title carries the season name, no `input[name="shortName"]`; 'Annuller'/'Gem'; `form#seasonForm` |
 | `AdminPlanning.nuxt.spec.ts` (new) | pattern `AdminAllergies.nuxt.spec.ts`; `create-season` present and `form-mode-edit` absent; member sees neither; edit/cancel/create drive `?mode=`; toast from the envelope |
-| `CalendarDateRangeListPicker.nuxt.spec.ts` | edit mode row is a picker; change emits the updated list; overlap shows `'Ferieperioder må ikke overlappe hinanden'` and does not emit |
+| `CalendarDateRangeListPicker.nuxt.spec.ts` | edit mode row is a picker (`selection="holiday"`); change emits the updated list; overlap shows `'Ferieperioder må ikke overlappe hinanden'` and does not emit |
 | `season.e2e.spec.ts:122` | envelope counts; `isActive` in the body ignored |
 | `tests/e2e/api/serial/admin/seasonLiveEdit.e2e.spec.ts` (new) | own active season inside the 60-day window; add a holiday + a cooking date → orders on the holiday date gone (cascade), the new date scaffolded in the same request, preferences clipped |
 | `tests/e2e/ui/serial/AdminPlanningLiveSeason.e2e.spec.ts` (new) | GIVEN the active season WHEN adding a holiday in the UI THEN the toast reports counts and bookings exist on the new date |
-| `AdminPlanning.e2e`, `AdminPlanningSeason.e2e`, `admin.e2e` | `form-mode-*` → `create-season` / `edit-season`; ring-class assertions dropped; per-tab `editControl` (planning `edit-season`, teams `form-mode-edit`) |
+| `AdminPlanning.e2e`, `AdminPlanningSeason.e2e`, `admin.e2e` | `form-mode-*` → `create-season` / `edit-season`; ring-class assertions dropped; per-tab `editControl` (planning `edit-season`, teams `form-mode-edit`); `holidayRowStartDates` reads the row pickers' `start` inputs |
 | `AdminPlanningSeason.e2e` | edit a holiday row's dates → saved season has the new range |
+| `CalendarDateRangePicker.nuxt.spec.ts` | `selection=cookingDay\|holiday` binds the matching `CALENDAR.picker` preset to the inner `UCalendar` |
+| `designSystemUsage.unit.spec.ts` | every `<UCalendar>` binds the grid directly or through a `calendarPickerProps` preset |
 
 ### Affected Areas
 
-`AdminPlanning.vue`, `admin/planning/AdminPlanningSeason.vue`, `calendar/CalendarDateRangeListPicker.vue`, `form/FormModeSelector.vue`,
+`AdminPlanning.vue`, `admin/planning/AdminPlanningSeason.vue`, `calendar/CalendarDateRangeListPicker.vue`, `calendar/CalendarDateRangePicker.vue`,
+`calendar/CalendarDatePicker.vue`, `form/FormModeSelector.vue`, `useTheSlopeDesignSystem.ts` (`CALENDAR.picker`, `calendarPickerProps`),
 `server/routes/api/admin/season/[id].post.ts`, `server/utils/reconcileDinnerEvents.ts`, `useSeasonValidation.ts` (`SeasonUpdateResponse`),
 `app/stores/plan.ts` (`updateSeason` returns the envelope), delete `admin/AdminSeason.vue`, compliance docs.
+
+### Visual check — Planning form (walk before the package is approved; copied into the PR description)
+
+| Route + state | Viewport | DS element to expect | Expect |
+|---|---|---|---|
+| `/admin/planning` as ADMIN, a season selected | 375px + desktop | `LAYOUTS.cardActionRow` + `BUTTONS.primaryAction` + `COLOR.primary` + `ICONS.plusCircle` | "⊕ Opret sæson" solid beside the season selector, full width on the phone and inline on desktop; the old [👁][✏️][＋] trio is gone |
+| same | 375px + desktop | `BUTTONS.secondaryAction` + `COLOR.primary` + `ICONS.edit` | the card header reads "Fællesspisning sæson 08/26-07/27" with "✏ Rediger 08/26-07/27" beside it; the form has no read-only "Sæson" field any more |
+| `/admin/planning?mode=edit` | 375px + desktop | `LAYOUTS.formButtonRow` + `BUTTONS.cancel` + `BUTTONS.save` | title "Rediger fællesspisning sæson 08/26-07/27"; "✕ Annuller" and "✓ Gem" right-aligned on desktop and stacked with Gem on top on the phone; the error list sits above them |
+| `/admin/planning?mode=create` | 375px + desktop | same footer | title "Opret fællesspisning sæson", and the computed name appears as soon as start and slut are valid |
+| `/admin/planning?mode=edit`, season with holidays | 375px + desktop | row `CalendarDateRangePicker` + `BUTTONS.edit` + `ICONS.trash` | each holiday row is ☀ + [Start dato][Slut dato] + 🗑; a date change lands on that row alone; an overlapping change shows "Ferieperioder må ikke overlappe hinanden" by the add row and the row keeps its old dates |
+| same, a holiday row picker open | 375px + desktop | `CALENDAR.picker.holiday` | selected holiday days are an empty circle with a green ring; adjacent-month days stay hidden |
+| `/admin/planning?mode=edit`, season date picker open | 375px + desktop | `CALENDAR.picker.cookingDay` | the selected season range is filled pink (secondary) |
+| `/household/<own>/settings`, pencil → move-out date | 375px + desktop | `CALENDAR.picker.cookingDay` | the selected date is filled pink; picking a date still works |
+| `/admin/planning?mode=view` | 375px + desktop | read-only rows | holiday rows are disabled inputs "13/10/2026-17/10/2026" with the ☀ leading icon, no 🗑 and no footer buttons |
+| `/admin/planning?mode=edit` on the ACTIVE season: add a holiday over a booked date, then Gem | desktop | toast `ICONS.checkCircle` + `COLOR.success` | "Sæson opdateret — 0 datoer tilføjet, 1 fjernet. Forudbestillinger er opdateret."; adding dates appends "Husk at tildele madhold til nye datoer." |
+| `/admin/planning` as a member | 375px + desktop | — | no "Opret sæson" and no "Rediger …"; the read-only banner shows |
+| `/admin/planning` with no seasons, as ADMIN | 375px + desktop | `ALERTS.emptyState` + `create-first-season` | the empty state with "⊕ Opret ny sæson"; the header keeps "Opret sæson" and shows no "Rediger …" |
+| `/admin/planning?mode=edit`, ACTIVE / FUTURE / PAST season | desktop | `SeasonStatusDisplay` + `ICONS` | the status alert icons are the outline check-circle, calendar and archive-box from `ICONS` |
+| `/admin/teams` | 375px + desktop | `FormModeSelector` | the [👁][✏️][＋] trio is unchanged on Teams |
 
 ---
 
@@ -942,7 +1084,7 @@ ui: {cellTrigger: 'data-[outside-view]:hidden'}}` spread with `v-bind` in all th
 (pink `day.generated`, `day.potential`) beside `CHEF_CALENDAR`/`DINNER_CALENDAR`; `CalendarDisplay` uses `SIZES.calendarCircle` + `CALENDAR.day.shape`.
 Rejected: a `CalendarGrid.vue` atom (generic v-model passthrough for zero behaviour); pickers on `BaseCalendar` (readonly, event-list driven).
 
-### Mockup — ⏳ awaiting signoff (light)
+### Mockup — ✅ applied 2026-09-16
 
 ```
 BEFORE (season/holiday pickers)                 AFTER (all calendars share COMPONENTS.calendarGrid)
@@ -986,6 +1128,27 @@ Mockup: see "Planning form".
 | `TicketPriceListEditor.nuxt.spec.ts`, `AdminToCreateSeason.nuxt.spec.ts` (new) | add/remove emit; CTA only with `canEdit` |
 | `SeasonStatusDisplay.nuxt.spec.ts` | DS props; migrated to the real store + `registerEndpoint` (testing.md Rule 6) |
 | `CalendarDateRangeListPicker.nuxt.spec.ts` | DS props on add/remove |
+
+**Verified (2026-09-16):** 5 new assertions red first (`ticket-price-add`, `ticket-price-remove-${i}`, the disabled gate, `create-first-season` + its `to`); green with 177 vitest tests across `tests/component/components/admin`, `…/calendar`, `…/shared` and `tests/component/architecture`. `SeasonStatusDisplay.nuxt.spec.ts` now drives the real `usePlanStore` (8 tests). `npm run lint`, `npm run ts:server`, `npm run ts:node` clean; `npm run ts` fails only on the pre-existing `TS2688 @cloudflare/workers-types/2023-07-01` from the in-flight Wrangler upgrade. E2E `AdminPlanning`, `AdminPlanningSeason`, `SeasonSelector`, `AdminTeams`, `AllergyPoster` at `--workers=4`: 26-27 of 28 pass; the two `AdminPlanning` stragglers time out on the page loader ("Vi venter på data") under parallel load and pass when that spec runs alone (9 passed).
+
+Behaviour note: `TicketPriceListEditor`'s add card switched from `v-show` to `v-if`, so view mode drops the draft controls out of the DOM and the tab order — same contract as the row trash and as `CalendarDateRangeListPicker`.
+
+### Visual check — Planning buttons (walk before the package is approved; copied into the PR description)
+
+| Route + state | Viewport | DS element to expect | Expect |
+|---|---|---|---|
+| `/admin/planning?mode=edit`, season with holidays | 375px + desktop | `BUTTONS.secondaryAction` + `COLOR.info` + `ICONS.holiday` | "☀ Tilføj ferie" outline, standard size (was `size="lg"`); the margin nudge beside the picker is unchanged, error state still pushes it down |
+| same | 375px + desktop | `BUTTONS.edit` + `ICONS.trash` | each holiday row's 🗑 is a square neutral ghost button (was small red ghost), with an `aria-label` naming the period; the row's leading ☀ icon is unchanged |
+| `/admin/planning?mode=edit`, ticket prices | 375px + desktop | `BUTTONS.secondaryAction` + `COLOR.info` + `ICONS.ticket` | "🎟 Tilføj billet" outline, standard size |
+| same | 375px + desktop | `BUTTONS.edit` + `ICONS.trash` | each billet row's 🗑 is square neutral ghost (was small red ghost); `aria-label` names the ticket type |
+| `/admin/planning?mode=view` (or any view-mode season) | both | — | no "Tilføj billettyper" card at all (it is now removed from the DOM, not just hidden) and no row 🗑; the price list itself is unchanged |
+| `/admin/planning?mode=create` and `?mode=edit`, season start/end + holiday pickers | 375px + desktop | `UInput :trailing-icon="ICONS.calendar"` | a plain calendar glyph inside the field instead of a nested blue button; tapping anywhere on the field still opens the popover, the grid still hides adjacent-month days |
+| `/household/<own>/settings`, pencil → edit move-out date | 375px + desktop | same `:trailing-icon` on `CalendarDatePicker` | same glyph change on the single-date field; picking a date still works |
+| `/admin/planning?mode=edit`, FUTURE or CURRENT season | 375px + desktop | `BUTTONS.primaryAction` + `COLOR.success` + `ICONS.playCircle` + `ICONS.arrowRight` | "▶ Aktiver Sæson →" solid green inside the status alert, small size, beside the text on desktop and under it on the phone; while activating it shows the spinner instead of the old "Arbejder..." label |
+| same, ACTIVE season | both | `DangerButton` (unchanged) | "Deaktiver Sæson" two-click confirm unchanged |
+| `/admin/planning` and `/admin/teams` with no seasons at all, as ADMIN | 375px + desktop | `ALERTS.emptyState` + `BUTTONS.primaryAction` + `COLOR.primary` + `ICONS.plusCircle` | 🧘 empty state with "⊕ Opret ny sæson" solid primary, full width on the phone and inline on desktop; it links to `/admin/planning?mode=create` |
+| same, as a member (no admin role) | both | `ALERTS.emptyState`, no CTA | the empty state text only — the create button is gone |
+| `/admin/allergies/pdf` | desktop | `BUTTONS.secondaryAction` + `COLOR.secondary` + `ICONS.arrowLeft`, `BUTTONS.primaryAction` + `COLOR.primary` + `ICONS.printer` | "← Tilbage" outline and "🖨 Print" solid, both standard size; print preview unchanged (both controls stay `no-print`) |
 
 ---
 
@@ -1042,8 +1205,9 @@ Every endpoint gets an API spec; every UX component gets a BDD e2e (GIVEN/WHEN/T
 | 5 | Planning buttons | mockup "Planning form" ✅; brief approved |
 | 6 | Planning form | mockup ✅; brief approved |
 | 7 | QR code | mockup "Poster" ✅; brief approved; `npm i uqr` |
-| 8 | Poster notes + My preferences (one migration) | mockups ✅; color decision taken; brief approved; migration created and applied by the user |
-| 9 | Ship: ADR-018, ADR-019, compliance docs, `docs/ui.md`, `docs/testing.md`, `pre:all`, full suites, `/dry` | — |
+| 8 | Colour drift sweep | brief approved; runs before the presets so they land on a clean base |
+| 9 | Poster notes editing + My preferences (one migration) | mockups ✅; color decision taken; brief approved; migration created and applied by the user |
+| 10 | Ship: ADR-018, ADR-019, compliance docs, `docs/ui.md`, `docs/testing.md`, `pre:all`, full suites, `/dry` | — |
 
 Per package: red output shown → green output shown → `npm run pre:all` → architect diff review against the package, the coverage matrix
 and the design-system rule → compliance rows in the same change. Agents (`tdd-pair-programmer`, `nuxt-typescript-developer`,

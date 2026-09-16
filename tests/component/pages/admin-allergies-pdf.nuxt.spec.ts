@@ -7,7 +7,8 @@ import {clearNuxtData} from '#app'
 import AllergyPosterPage from '~/pages/admin/allergies/pdf.vue'
 import {useAllergiesStore} from '~/stores/allergies'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
-import {mountWithTooltipProvider} from '~~/tests/component/testHelpers'
+import {ALLERGY_TEST_IDS} from '../components/allergy/allergyTestIds'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId} from '~~/tests/component/testHelpers'
 
 // Endpoint mocks - specific FIRST, generic LAST (docs/testing.md)
 registerEndpoint('/api/admin/season/active', () => null)
@@ -49,5 +50,13 @@ describe('admin/allergies/pdf (allergy poster)', () => {
 
         expect(text).toContain('[1V 1B]')  // Mælk: Anna + Bob
         expect(text).toContain('[1b]')     // Jordnødder: Clara
+    })
+
+    // Same component and same text source as the catalog footer on /admin/allergies
+    it('renders the notes box with the three registry-default notes', async () => {
+        const wrapper = await mountPage()
+
+        expect(findByTestId(wrapper, ALLERGY_TEST_IDS.notes).text()).toContain('Vigtige bemærkninger')
+        expect(findAllByTestId(wrapper, ALLERGY_TEST_IDS.notesItem)).toHaveLength(3)
     })
 })

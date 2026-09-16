@@ -26,6 +26,12 @@ MOBILE (<md) - the SAME panel docks under the tapped row (UTable #expanded)
 CREATE on mobile docks under the toolbar (adjacent to the button that opened it)
 and suppresses row expansion, so the toolbar panel is the single live mount.
 Multiselect mode replaces master+detail with AllergenMultiSelector.
+
+The card FOOTER carries AllergyNotes at both breakpoints - the same box the poster prints:
+├─ footer ────────────────────────────────────────┤
+│ ⚠ Vigtige bemærkninger                          │
+│  • Glutenfri boller findes i fryseren …         │
+└─────────────────────────────────────────────────┘
 -->
 <script setup lang="ts">
 import {FORM_MODES, type FormMode} from '~/types/form'
@@ -40,6 +46,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 // Design system
 const { COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS } = useTheSlopeDesignSystem()
+const {DEFAULT_ALLERGY_POSTER_NOTES} = useSetting()
 
 // Responsive mount point for the detail panel - provided by the default layout;
 // false during SSR, so first paint renders the mobile mount
@@ -393,6 +400,11 @@ const catalogEmptyState = {
         </div>
       </div>
       </div>
+
+      <!-- Notes - the same box the poster prints, below the catalog -->
+      <template #footer>
+        <AllergyNotes :notes="DEFAULT_ALLERGY_POSTER_NOTES"/>
+      </template>
     </UCard>
   </div>
 </template>

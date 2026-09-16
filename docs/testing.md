@@ -360,6 +360,24 @@ it('does not emit save when validation fails', async () => {
 
 ---
 
+## Architecture Tests
+
+`tests/component/architecture/*.unit.spec.ts` read the `.vue` sources and fail on a *pattern*, not on a render. They are
+how a design-system sweep stays swept: once every `<UAlert>` binds an `ALERTS` kind, the test is what stops the 57th one
+from being written with a raw `:color` (ADR-019). `designSystemUsage.unit.spec.ts` guards four rules — every `<UAlert`
+binds `ALERTS.`, none passes a raw `color`/`variant`/`type`, every `<UCalendar` binds `COMPONENTS.calendarGrid`, and no
+template uses the dead Nuxt UI v2 slot name `#empty-state`. Violations are reported as `file:line`, so a failure names
+the sites to fix.
+
+Add one whenever a fix to a Nuxt UI component family becomes a token: add the token, sweep all instances, add the rule.
+
+**Do NOT assert design-token values.** `expect(ui.title).toContain('text-lg')` restates the design and guards nothing —
+the colour, size and padding of a token are the user's visual check. Architecture tests assert *usage*; component specs
+assert *behaviour* (text renders, CTA present or absent, events emitted); e2e asserts no horizontal overflow at 375px
+(`MobileViewport.e2e.spec.ts`). A getter that branches on `isMd` may get one case per branch.
+
+---
+
 ## Composable Testing
 
 ### Mock Nuxt Auto-imports

@@ -3,13 +3,13 @@ import {describe, it, expect} from 'vitest'
 import {ref} from 'vue'
 import type {VueWrapper} from '@vue/test-utils'
 import CalendarDisplay from '~/components/calendar/CalendarDisplay.vue'
-import {CALENDAR, PLANNING_CALENDAR, createResponsiveSizes} from '~/composables/useTheSlopeDesignSystem'
+import {CALENDAR, PLANNING_CALENDAR, createDayCircleClasses} from '~/composables/useTheSlopeDesignSystem'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {mountWithTooltipProvider, expectSharedCalendarGrid} from '~~/tests/component/testHelpers'
 
 const IS_MD = true
-const {calendarCircle} = createResponsiveSizes(ref(IS_MD))
+const dayCircleClasses = createDayCircleClasses(ref(IS_MD))
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 
 // January 2025 starts on a Wednesday, so its Mondays are the 6th, 13th, 20th and 27th
@@ -46,7 +46,7 @@ describe('CalendarDisplay', () => {
     ])('$name', ({isoDate, palette}) => {
         it('renders the design-system circle with its palette', async () => {
             const wrapper = await mountDisplay()
-            expectDayTokens(wrapper, isoDate, [calendarCircle, CALENDAR.day.shape, palette])
+            expectDayTokens(wrapper, isoDate, dayCircleClasses(palette))
         })
     })
 

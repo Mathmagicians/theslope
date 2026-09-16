@@ -455,7 +455,7 @@ const columns = [
 
     <template #default>
       <Loader v-if="isSelectedSeasonLoading || isSeasonsLoading" text="Henter data for fællesspisningssæson"/>
-      <AdminToCreateSeason v-else-if="isNoSeasons"/>
+      <AdminToCreateSeason v-else-if="isNoSeasons" :can-edit="props.canEdit"/>
       <div v-if="showAdminTeams">
         <!-- CREATE MODE: Team count input + preview -->
         <div v-if="formMode === FORM_MODES.CREATE" class="px-4 pb-4 space-y-4">

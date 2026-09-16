@@ -36,7 +36,7 @@ export const useSeasonValidation = () => {
         isRequired: (map: WeekDayMap<boolean>) => Object.values(map).some(Boolean),
         requiredMessage: "Man skal lave mad mindst en dag om ugen"
     })
-    const {DinnerEventDisplaySchema} = useBookingValidation()
+    const {DinnerEventDisplaySchema, ScaffoldResultSchema} = useBookingValidation()
     const {TicketPricesArraySchema} = useTicketPriceValidation()
     const {deserializeCookingTeamDisplay, CookingTeamDisplaySchema} = useCookingTeamValidation()
 
@@ -89,6 +89,21 @@ export const useSeasonValidation = () => {
     }))
     type SerializedSeason = z.infer<typeof SerializedSeasonSchema>
 
+    // What reconciling the season's dinner events changed (ADR-015 idempotent counts)
+    const ReconciliationResultSchema = z.object({
+        created: z.number().int().nonnegative(),
+        idempotent: z.number().int().nonnegative(),
+        deleted: z.number().int().nonnegative()
+    })
+
+    // Operation result of a season update (ADR-009): the season plus what the save
+    // set in motion - dinner event reconciliation and, on the active season, re-scaffolding
+    const SeasonUpdateResponseSchema = z.object({
+        season: SeasonSchema,
+        reconciliation: ReconciliationResultSchema,
+        scaffold: ScaffoldResultSchema.nullable()
+    })
+
     // Serialization and deserialization functions
     const serializeSeason = (season: Season): SerializedSeason => SerializedSeasonSchema.parse(season)
 
@@ -136,6 +151,8 @@ export const useSeasonValidation = () => {
         BaseSeasonSchema,
         SeasonSchema,
         SerializedSeasonSchema,
+        ReconciliationResultSchema,
+        SeasonUpdateResponseSchema,
         serializeSeason,
         deserializeSeason,
         createWeekDayMapFromSelection,
@@ -147,3 +164,5 @@ export const useSeasonValidation = () => {
 export type Season = z.infer<ReturnType<typeof useSeasonValidation>['SeasonSchema']>
 export type SerializedSeason = z.infer<ReturnType<typeof useSeasonValidation>['SerializedSeasonSchema']>
 export type SeasonStatus = z.infer<ReturnType<typeof useSeasonValidation>['SeasonStatusSchema']>
+export type ReconciliationResult = z.infer<ReturnType<typeof useSeasonValidation>['ReconciliationResultSchema']>
+export type SeasonUpdateResponse = z.infer<ReturnType<typeof useSeasonValidation>['SeasonUpdateResponseSchema']>

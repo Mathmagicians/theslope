@@ -16,6 +16,7 @@ at a time behind an explicit approval. The plan document is the deliverable; the
 - A dated **Decisions** section records what the user decided and why; open decisions are marked **OPEN** with the options compared,
   never silently picked.
 - ADR references are always `ADR-NNN [Title]`; new ADRs are proposed in the doc's ADR Notes with the next free number.
+- Prose in the doc follows the `documentation` skill (compact, factual, only what we do); decisions and OPEN items are the one place alternatives are written down.
 
 ## Naming
 
@@ -26,6 +27,9 @@ at a time behind an explicit approval. The plan document is the deliverable; the
 
 - ASCII mockups in the doc (desktop and mobile where they differ) marked `⏳ awaiting signoff` until the user marks them `✅`.
 - The same mockup is repeated in the changed component's header comment (`AdminPlanning.vue`, `SeasonSelector.vue`, `UserProfileCard.vue` style).
+- Parent owns the composition, child owns its layout: the container's header mockup draws how the children are arranged
+  (each child as a labelled box, no internals); each child's header mockup draws its own internals. No drawing line appears
+  in two files.
 - No implementation of a UX package before its mockup is ✅.
 
 ## Investigate before you claim
@@ -84,6 +88,9 @@ matrix and the design-system rule → 5. compliance rows (`docs/adr-compliance-*
 - **A one-liner is never a component.** Extract a component when it owns behaviour, state, or a multi-element template. A single
   span or expression that repeats stays inline; its shared logic lives once in a util or a design-system token (e.g. three
   identical `#week-day` slot bodies calling `translateToDanish` are fine — the mapping is the single source, the wiring is not).
+- An alert plus a button is still not a component. To show the same empty state in two modes, render the existing branch
+  or slot that owns it (e.g. let the table branch render when there are no rows, in edit mode too) instead of extracting
+  a wrapper or copying the block.
 
 ## One e2e runner at a time
 
@@ -94,7 +101,7 @@ matrix and the design-system rule → 5. compliance rows (`docs/adr-compliance-*
 ## Visual check before a package is done
 
 - Every package that changes rendered UI ends with a **Visual check** table the user walks through in the browser, on top of the
-  automated tests: `route (+ query / state to reach it) → viewport (phone 375px and/or desktop) → what changed → what to expect`.
+  automated tests: `route (+ query / state to reach it) → viewport (phone 375px and/or desktop) → DS element to expect (`ALERTS.<kind>`, `BUTTONS.<kind>`, component) → what to expect`.
   The agent produces the list from the files it actually changed; the architect verifies it against the diff and relays it.
   A package is not approved as done until the user has seen every changed surface.
 - Prefer reuse over new code: bind design-system tokens (`ALERTS`, `BUTTONS`, `COMPONENTS.*`), reuse existing components,
@@ -102,3 +109,15 @@ matrix and the design-system rule → 5. compliance rows (`docs/adr-compliance-*
 - The visual-check table of every package on the branch is carried into the **PR description** (the user opens the PR; the
   architect drafts the description text with the table, next to the test results). Keep the same route/state → viewport →
   change → expected columns so the reviewer can walk the app.
+
+## Do not test design-token values
+
+- A test that asserts a token's class string, text size, colour or padding (`expect(ui.title).toContain('text-lg')`) restates
+  the design and guards nothing. Design values are the user's visual-check business.
+- Test **usage** (architecture tests: every site binds the token) and **behaviour** (text renders, CTA present/absent, events
+  emitted, no horizontal overflow at 375px in e2e). A getter that branches on `isMd` may get one case for the branch.
+
+## Signoffs happen in chat
+
+- Anything that needs the user's signoff — a mockup, a decision, a package brief — is presented in the conversation itself,
+  in full (ASCII mockup pasted, options listed). The doc is the record, never the place the user is sent to look.

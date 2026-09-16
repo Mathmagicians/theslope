@@ -152,15 +152,8 @@ test.describe('Season API Tests', () => {
             }
 
             // WHEN: Update season with new holiday
-            const updateResponse = await context.request.post(`/api/admin/season/${seasonId}`, {
-                headers: headers,
-                data: updatedData
-            })
-
-            const status = updateResponse.status()
-            const updatedSeason: Season = await updateResponse.json()
-
-            expect(status, `Expected 200 but got ${status}. Response: ${JSON.stringify(updatedSeason)}`).toBe(200)
+            const result = await SeasonFactory.updateSeasonWithResult(context, updatedData)
+            const updatedSeason = result.season
 
             // THEN: Holiday count should increase
             expect(updatedSeason.holidays).toHaveLength(initialHolidayCount! + 1)
@@ -171,6 +164,31 @@ test.describe('Season API Tests', () => {
 
             // AND: Event count should be less than or equal to initial (holidays may have removed some)
             expect(updatedSeason.dinnerEvents!.length).toBeLessThanOrEqual(initialEventCount)
+
+            // AND: The operation envelope reports what reconciliation did (ADR-009)
+            expect(result.reconciliation.deleted).toBe(initialEventCount - expectedEventCount)
+            expect(result.reconciliation.created).toBe(0)
+            expect(result.reconciliation.idempotent).toBe(expectedEventCount)
+        })
+
+        test("POST should ignore isActive in the body", async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const created = await SeasonFactory.createSeason(context, SeasonFactory.defaultSeason(temporaryAndRandom()))
+            createdSeasonIds.push(created.id!)
+            expect(created.isActive, 'A new season starts inactive').toBe(false)
+
+            try {
+                // WHEN: The body claims the season is active (activation lives in POST /active)
+                const updated = await SeasonFactory.updateSeason(context, {...created, isActive: true})
+
+                // THEN: The season stays inactive
+                expect(updated.isActive).toBe(false)
+                const refetched = await SeasonFactory.getSeason(context, created.id!)
+                expect(refetched.isActive).toBe(false)
+            } finally {
+                // Restore the single-active-season invariant if the endpoint wrote the flag
+                await SeasonFactory.updateSeason(context, {...created, isActive: false})
+            }
         })
 
 // Test for validation

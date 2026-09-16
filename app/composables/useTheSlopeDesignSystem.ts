@@ -666,6 +666,8 @@ export const ICONS = {
     released: 'i-heroicons-arrow-up-tray',
     claim: 'i-heroicons-arrows-right-left',
     archive: 'i-heroicons-archive-box',
+    holiday: 'i-heroicons-sun',
+    printer: 'i-heroicons-printer',
 
     // Empty states & system feedback
     robotDead: 'i-mage-robot-dead',
@@ -1226,6 +1228,22 @@ export const DINNER_STATE_BADGES = {
 } as const
 
 /**
+ * PLANNING_CALENDAR - Pink palette accent colors
+ *
+ * Season planning preview: a generated dinner event is filled, a day that only
+ * matches the cooking pattern is an outline.
+ */
+// The holiday marker every calendar draws: an empty circle with a green ring
+const HOLIDAY_RING = 'ring-2 ring-green-500'
+
+export const PLANNING_CALENDAR = {
+    day: {
+        generated: `font-medium ${BG.pink[800]} ${TEXT.pink[50]}`,
+        potential: 'font-medium border-2 border-pink-300 text-pink-800'
+    }
+} as const
+
+/**
  * CALENDAR - Shared calendar structure and styling
  *
  * Contains shared shapes, typography, and behaviors.
@@ -1251,8 +1269,23 @@ export const CALENDAR = {
         warning: 'ring-2 ring-amber-500',
         onTrack: ''
     },
-    holiday: 'ring-2 ring-green-500',
-    // Base selection behavior - combine with palette-specific color
+    // The holiday marker every calendar draws: an empty circle with a green ring
+    holiday: HOLIDAY_RING,
+    /**
+     * Picker selection presets - what is being picked decides how a selected day reads:
+     * a holiday is the same green ring the preview draws, a season date the filled pink
+     * of a cooking day with a dinner. Rendered through the pickers' `#day` slot.
+     */
+    picker: {
+        cookingDay: PLANNING_CALENDAR.day.generated,
+        holiday: HOLIDAY_RING
+    },
+    /**
+     * A picker draws its selection in the `#day` slot, so the cell trigger keeps its own
+     * selected and range fill out of the way (variant names from `.nuxt/ui/calendar.ts`).
+     */
+    pickerCell: 'data-[selected]:bg-transparent data-[selected]:text-default data-[highlighted]:bg-transparent data-[highlighted]:text-default',
+    // Base selection behaviour - combine with palette-specific color
     selection: {
         base: 'ring-2 md:ring-4',
         // Card behaviors for selectable items (agenda, list views)
@@ -1263,6 +1296,26 @@ export const CALENDAR = {
         }
     }
 } as const
+
+export type CalendarPickerSelection = keyof typeof CALENDAR.picker
+
+/**
+ * The shared calendar day circle: responsive size + shape + the variant the surface adds
+ * (CALENDAR.holiday, PLANNING_CALENDAR.day.generated, CHEF_CALENDAR.day.next, …).
+ * Exposed from the composable because the size depends on `isMd`.
+ */
+export const createDayCircleClasses = (isMd: Ref<boolean>) =>
+    (...variants: (string | false | null | undefined)[]): string[] =>
+        [createResponsiveSizes(isMd).calendarCircle, CALENDAR.day.shape, ...variants.filter((variant): variant is string => Boolean(variant))]
+
+/**
+ * Props for a date picker's UCalendar: the shared grid token with the cell-fill
+ * neutralisation, so the `#day` slot owns how a selected day reads.
+ */
+export const calendarPickerProps = () => ({
+    ...COMPONENTS.calendarGrid,
+    ui: {cellTrigger: `${COMPONENTS.calendarGrid.ui.cellTrigger} ${CALENDAR.pickerCell}`}
+})
 
 /**
  * CHEF_CALENDAR - Ocean palette accent colors
@@ -1302,18 +1355,6 @@ export const DINNER_CALENDAR = {
     selection: 'outline outline-2 md:outline-4 outline-peach-700 outline-offset-2'
 } as const
 
-/**
- * PLANNING_CALENDAR - Pink palette accent colors
- *
- * Season planning preview: a generated dinner event is filled, a day that only
- * matches the cooking pattern is an outline.
- */
-export const PLANNING_CALENDAR = {
-    day: {
-        generated: `font-medium ${BG.pink[800]} ${TEXT.pink[50]}`,
-        potential: 'font-medium border-2 border-pink-300 text-pink-800'
-    }
-} as const
 
 /**
  * DEADLINE_BADGES - Chef deadline indicator badges
@@ -1504,6 +1545,7 @@ export const getRandomEmptyMessage = (context: keyof typeof EMPTY_STATE_MESSAGES
 export const useTheSlopeDesignSystem = () => {
     // Inject responsive breakpoint from layout
     const isMd = inject<Ref<boolean>>('isMd', ref(false))
+    const dayCircleClasses = createDayCircleClasses(isMd)
 
     return {
         // For NuxtUI components
@@ -1512,6 +1554,8 @@ export const useTheSlopeDesignSystem = () => {
         TICKET_TYPE_COLORS,
         DINNER_STATE_BADGES,
         CALENDAR,
+        calendarPickerProps,
+        dayCircleClasses,
         CHEF_CALENDAR,
         DINNER_CALENDAR,
         PLANNING_CALENDAR,

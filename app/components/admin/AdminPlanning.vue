@@ -1,84 +1,28 @@
 <!--
-UX MOCKUP: Admin Planning with Active Season Management
+UX MOCKUP: /admin/planning card (signed off 2026-09-16) - composition only.
+The season form draws its own layout in AdminPlanningSeason.vue.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-VIEWING ACTIVE SEASON (Forår 2025)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+DESKTOP                                                  MOBILE (<md)
+┌ UCard admin-planning ────────────────────────────────┐ ┌────────────────────────┐
+│ [Sæson ▾ 08/26-07/27]           [＋ Opret sæson]     │ │ [Sæson ▾ 08/26-07/27]  │ stacked,
+│                                                      │ │ [＋ Opret sæson]       │ full width
+│ ┌ SeasonStatusDisplay ─────────────────────────────┐ │ │ ┌ SeasonStatusDisplay ┐│ (LAYOUTS
+│ │ 🟢 Aktiv sæson …   [✕ Deaktiver Sæson] (in edit) │ │ │ └─────────────────────┘│  .cardActionRow
+│ └──────────────────────────────────────────────────┘ │ │ ┌ AdminPlanningSeason ┐│  / …Button)
+│ ┌ AdminPlanningSeason ─────────────────────────────┐ │ │ └─────────────────────┘│
+│ └──────────────────────────────────────────────────┘ │ └────────────────────────┘
+└──────────────────────────────────────────────────────┘
 
-│ Vis fællesspisning sæson                                             │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                       │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │ 🟢 AKTIV SÆSON                                                │  │
-│  │ Denne sæson er synlig for alle beboere og kan bookes         │  │
-│  └───────────────────────────────────────────────────────────────┘  │
-│                                                                       │
-│  Sæson: [Forår 2025]        Periode: 01/01/2025 - 30/06/2025       │
-│  ...                                                                 │
-│                                                                       │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                         [Edit]        │
-└─────────────────────────────────────────────────────────────────────┘
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-VIEWING FUTURE SEASON (Efterår 2025)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-│ Vis fællesspisning sæson                                             │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                       │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │ ⏳ FREMTIDIG SÆSON                                            │  │
-│  │ Denne sæson starter om 45 dage. Kun synlig for admins.       │  │
-│  └───────────────────────────────────────────────────────────────┘  │
-│                                                                       │
-│  Sæson: [Efterår 2025]      Periode: 01/08/2025 - 31/12/2025       │
-│  ...                                                                 │
-│                                                                       │
-│  ┌────────────────────────────────────────────────────────────────┐ │
-│  │ 💡 Gør denne sæson aktiv?                                     │ │
-│  │                                                                │ │
-│  │ Når du aktiverer denne sæson:                                 │ │
-│  │ • Beboere kan se og booke fællesspisninger                    │ │
-│  │ • Nuværende aktive sæson (Forår 2025) deaktiveres            │ │
-│  │                                                                │ │
-│  │                   [✓ Aktiver denne sæson]                     │ │
-│  └────────────────────────────────────────────────────────────────┘ │
-│                                                                       │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                         [Edit]        │
-└─────────────────────────────────────────────────────────────────────┘
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-VIEWING PAST SEASON (Efterår 2024)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-│ Vis fællesspisning sæson                                             │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                       │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │ 📁 ARKIVERET SÆSON                                            │  │
-│  │ Denne sæson er afsluttet. Kun synlig for admins.             │  │
-│  └───────────────────────────────────────────────────────────────┘  │
-│                                                                       │
-│  Sæson: [Efterår 2024]      Periode: 01/08/2024 - 31/12/2024       │
-│  ...                                                                 │
-│                                                                       │
-│  ┌────────────────────────────────────────────────────────────────┐ │
-│  │ ℹ️  Arkiverede sæsoner                                         │ │
-│  │                                                                │ │
-│  │ Gamle sæsoner kan ikke genaktiveres. De bevares til           │ │
-│  │ regnskab og historik.                                         │ │
-│  └────────────────────────────────────────────────────────────────┘ │
-│                                                                       │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                         [Edit]        │
-└─────────────────────────────────────────────────────────────────────┘
+No seasons at all: AdminToCreateSeason. None selected: ALERTS.emptyState "Her ser lidt tomt ud!".
+"Opret sæson" is disabled while CREATE is in disabledModes; members see neither ＋ nor ✏.
+After Gem on the live season the toast reads "Sæson opdateret — 3 datoer tilføjet, 1 fjernet.
+Forudbestillinger er opdateret. Husk at tildele madhold til nye datoer."
+Removed here: FormModeSelector [👁][✏️][＋] (kept on Teams). No 🗑 for seasons.
 -->
 
 <script setup lang="ts">
 import {FORM_MODES} from "~/types/form"
-import type {Season} from "~/composables/useSeasonValidation"
+import type {Season, SeasonUpdateResponse} from "~/composables/useSeasonValidation"
 
 // Props - canEdit from parent for authorization
 interface Props {
@@ -88,7 +32,7 @@ const props = withDefaults(defineProps<Props>(), {
   canEdit: false
 })
 
-const {ALERTS} = useTheSlopeDesignSystem()
+const {ALERTS, BUTTONS, COLOR, ICONS, LAYOUTS} = useTheSlopeDesignSystem()
 const {getDefaultSeason, getDefaultHolidays} = useSeason()
 const toast = useToast()
 const store = usePlanStore()
@@ -141,14 +85,25 @@ const showAdminSeason = computed(() => {
   return !isSelectedSeasonLoading.value && (!isNoSeasons.value || formMode.value === FORM_MODES.CREATE) && currentModel.value
 })
 
+const canEditSeason = computed(() => props.canEdit && !disabledModes.value.includes(FORM_MODES.EDIT))
+
 // UTILITY
 const showSuccessToast = (title: string, description?: string) => {
   toast.add({
     title,
     description,
-    icon: 'i-heroicons-check-circle',
-    color: 'success'
+    icon: ICONS.checkCircle,
+    color: COLOR.success
   })
+}
+
+// Report what the save set in motion: reconciled dates, and on the live season the re-scaffolding
+const describeSeasonUpdate = (result: SeasonUpdateResponse): string => {
+  const {created, deleted} = result.reconciliation
+  const sentences = [`${created} datoer tilføjet, ${deleted} fjernet.`]
+  if (result.scaffold) sentences.push('Forudbestillinger er opdateret.')
+  if (created > 0) sentences.push('Husk at tildele madhold til nye datoer.')
+  return sentences.join(' ')
 }
 
 // SEASON-SPECIFIC BUSINESS LOGIC
@@ -159,9 +114,10 @@ const handleSeasonUpdate = async (updatedSeason: Season) => {
     if (!createdSeason) return
     showSuccessToast('Sæson oprettet')
   } else if (formMode.value === FORM_MODES.EDIT && updatedSeason.id) {
-    // Update season (POST reconciles dinner events if schedule changed per ADR-015)
-    await updateSeason(updatedSeason)
-    showSuccessToast('Sæson opdateret')
+    // Update season (POST reconciles dinner events and re-scaffolds the live season per ADR-015)
+    const result = await updateSeason(updatedSeason)
+    if (!result) return
+    showSuccessToast('Sæson opdateret', describeSeasonUpdate(result))
   }
   await onModeChange(FORM_MODES.VIEW)
 }
@@ -199,19 +155,26 @@ const handleDeactivateSeason = async () => {
       class="w-full px-0"
   >
     <template #header>
-      <div class=" flex flex-col md:flex-row items-center justify-between w-full gap-4">
-        <!-- Left aligned on mobile, spread across on desktop -->
-        <div class="w-full md:w-auto flex flex-row items-center gap-2">
-          <SeasonSelector
-              :model-value="selectedSeasonId"
-              :seasons="seasons"
-              :loading="isSeasonsLoading"
-              class="w-full md:w-auto"
-              :disabled="disabledModes.includes(FORM_MODES.CREATE)"
-              @update:model-value="handleSeasonChange"
-          />
-          <FormModeSelector v-if="props.canEdit" v-model="formMode" :disabled-modes="disabledModes"/>
-        </div>
+      <div :class="LAYOUTS.cardActionRow">
+        <SeasonSelector
+            :model-value="selectedSeasonId"
+            :seasons="seasons"
+            :loading="isSeasonsLoading"
+            class="w-full md:w-auto"
+            :disabled="disabledModes.includes(FORM_MODES.CREATE)"
+            @update:model-value="handleSeasonChange"
+        />
+        <UButton
+            v-if="props.canEdit"
+            v-bind="BUTTONS.primaryAction"
+            :class="LAYOUTS.cardActionButton"
+            :color="COLOR.primary"
+            :icon="ICONS.plusCircle"
+            :disabled="disabledModes.includes(FORM_MODES.CREATE)"
+            data-testid="create-season"
+            @click="onModeChange(FORM_MODES.CREATE)">
+          Opret sæson
+        </UButton>
       </div>
     </template>
     <template #default>
@@ -230,12 +193,14 @@ const handleDeactivateSeason = async () => {
 v-if="currentModel && showAdminSeason"
                              v-model="currentModel"
                              :mode="formMode"
+                             :can-edit="canEditSeason"
                              @update="handleSeasonUpdate"
                              @cancel="handleCancel"
+                             @edit="onModeChange(FORM_MODES.EDIT)"
         />
       </div>
       <Loader v-else-if="isSelectedSeasonLoading" text="Henter data for fællesspisningssæson"/>
-      <AdminToCreateSeason v-else-if="isNoSeasons"/>
+      <AdminToCreateSeason v-else-if="isNoSeasons" :can-edit="props.canEdit"/>
       <UAlert
           v-else
           v-bind="ALERTS.emptyState"

@@ -7,7 +7,6 @@
  *
  * All operations are idempotent (ADR-015).
  */
-import type {D1Database} from '@cloudflare/workers-types'
 import {consumeDinners} from '~~/server/utils/consumeDinners'
 import {closeOrders} from '~~/server/utils/closeOrders'
 import {createTransactions} from '~~/server/utils/createTransactions'

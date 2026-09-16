@@ -1,7 +1,7 @@
 # ADR Compliance - Frontend Routes & Components
 
 **Generated:** 2025-11-11
-**Last Updated:** 2026-09-16 (Nuxt UI 4 `#empty` table slot — six `UTable`s migrated off the v2 `#empty-state` name)
+**Last Updated:** 2026-09-16 (Planning form: pencil + "Opret sæson" replace `FormModeSelector` on `/admin/planning`, editable holiday rows, `CALENDAR.picker` selection presets)
 
 ## Legend
 
@@ -23,14 +23,14 @@
 | Route | Page Component | ADR-007 Store | ADR-008 FormManager | ADR-006 URL Nav | E2E Tests | Component Tests | Status |
 |-------|----------------|---------------|---------------------|-----------------|-----------|-----------------|--------|
 | **Admin Routes** |
-| `/admin/planning` | `admin/[tab].vue` → `AdminPlanning.vue` | ✅ `usePlanStore()` | ✅ Full usage | ✅ `?mode=` | ✅ | ⚠️ | **✅ COMPLIANT** |
+| `/admin/planning` | `admin/[tab].vue` → `AdminPlanning.vue` | ✅ `usePlanStore()` | ✅ Full usage | ✅ `?mode=` | ✅ | ✅ | **✅ COMPLIANT** |
 | `/admin/teams` | `admin/[tab].vue` → `AdminTeams.vue` | ✅ `usePlanStore()` | ✅ Partial usage | ✅ `?mode=` | ✅ | ❌ | **⚠️ MISSING TESTS** |
 | `/admin/households` | `admin/[tab].vue` → `AdminHouseholds.vue` | ✅ `useHouseholdsStore()` | ❓ | ✅ `?mode=` | ✅ | ⚠️ | **⚠️ AUDIT NEEDED** |
 | `/admin/allergies` | `admin/[tab].vue` → `AdminAllergies.vue` | ✅ `useAllergiesStore()` | N/A | ✅ tabs | ✅ | ✅ | **✅ COMPLIANT** |
 | `/admin/users` | `admin/[tab].vue` → `AdminUsers.vue` | ✅ `useUsersStore()` | N/A | ✅ tabs | ✅ | ❌ | **⚠️ E2E ONLY** |
 | `/admin/economy` | `admin/[tab].vue` → `AdminEconomy.vue` | ✅ `usePlanStore()`, `useBookingsStore()` | N/A | ✅ tabs | ✅ Serial | ❌ | **⚠️ E2E ONLY** - Admin corrections feature |
 | `/admin/settings` | `admin/[tab].vue` → `AdminSettings.vue` | N/A | N/A | ✅ tabs | ❌ | ❌ | **❌ NO TESTS** |
-| `/admin/allergies/pdf` | `admin/allergies/pdf.vue` | ✅ `useAllergiesStore()`, `usePlanStore()` | N/A | N/A | ✅ Smoke | ✅ 2 tests | **✅ COMPLIANT** — Age categories via `groupInhabitantsByTicketCategory` + `formatTicketCounts` (V/B/b), active-season age limits, DS typography |
+| `/admin/allergies/pdf` | `admin/allergies/pdf.vue` | ✅ `useAllergiesStore()`, `usePlanStore()` | N/A | N/A | ✅ Smoke | ✅ 3 tests | **✅ COMPLIANT** — Age categories via `groupInhabitantsByTicketCategory` + `formatTicketCounts` (V/B/b), active-season age limits, DS typography; the no-print controls bind `BUTTONS.secondaryAction` + `ICONS.arrowLeft` (Tilbage) and `BUTTONS.primaryAction` + `ICONS.printer` (Print); notes render through `AllergyNotes` (shared with the catalog footer) |
 | **Household Routes** |
 | `/household/[shortname]` | `household/[shortname]/index.vue` | ✅ `useHouseholdsStore()` | N/A | ✅ path + `?pbs=` | ✅ | ⚠️ | **⚠️ REVIEW** - ADR-006 preserves `?pbs` on redirect |
 | `/household/[shortname]/bookings` | `household/[shortname]/[tab].vue` → `HouseholdBookings.vue` | ✅ Multiple stores | N/A | ✅ tabs + `?pbs=` | ✅ | ❌ | **⚠️ MISSING TESTS** |
@@ -50,16 +50,16 @@
 
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
-| `AdminPlanning.vue` | `/admin/planning` | `usePlanStore()` | `useEntityFormManager()`, `useSeasonValidation()` | ✅ | ✅ | ⚠️ Indirect | ✅ Full | **✅ COMPLIANT** |
-| `AdminPlanningSeason.vue` | `/admin/planning` | Parent props | `useSeasonValidation()`, `useSeason()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
-| `AdminToCreateSeason.vue` | `/admin/planning` | `usePlanStore()` | `useSeasonValidation()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
-| `TicketPriceListEditor.vue` | `/admin/planning` | Parent props | `useTicketPriceValidation()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
+| `AdminPlanning.vue` | `/admin/planning` | `usePlanStore()` | `useEntityFormManager()`, `useSeasonValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 7 tests | ✅ Full | **✅ COMPLIANT** — Card header is `LAYOUTS.cardActionRow` with `SeasonSelector` + `create-season` (`BUTTONS.primaryAction` + `ICONS.plusCircle`); `AdminPlanningSeason` `@edit` drives `?mode=edit` through `useEntityFormManager` (ADR-006/ADR-008); the save toast reports the `SeasonUpdateResponse` counts |
+| `AdminPlanningSeason.vue` | `/admin/planning` | `usePlanStore()` (saving state) | `useSeasonValidation()`, `useSeason()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 16 tests | ✅ Indirect | **✅ COMPLIANT** — Title carries the season name (view / Rediger / Opret); `edit-season` (`BUTTONS.secondaryAction` + `ICONS.edit`, labelled `Rediger {shortName}`) in the card header in view mode with `canEdit`; footer `LAYOUTS.formButtonRow` with `BUTTONS.cancel` / `BUTTONS.save`; `id="seasonForm"` unchanged |
+| `AdminToCreateSeason.vue` | `/admin/planning`, `/admin/teams` | None (prop-driven) | `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 2 tests | ❌ | **✅ COMPLIANT** — `canEdit` gates the `create-first-season` CTA (`BUTTONS.primaryAction` + `ICONS.plusCircle`); both hosts pass `:can-edit` |
+| `TicketPriceListEditor.vue` | `/admin/planning` | Parent props | `useTicketPriceValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 4 tests | ✅ Indirect | **✅ COMPLIANT** — `BUTTONS.secondaryAction` + `ICONS.ticket` add, `BUTTONS.edit` + `ICONS.trash` row remove; `name=` hooks replaced by `ticket-price-add` / `ticket-price-remove-${i}` |
 
 ### Admin Team Components
 
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
-| `AdminTeams.vue` | `/admin/teams` | `usePlanStore()`, `useHouseholdsStore()` | `useEntityFormManager()`, `useCookingTeam()`, `useQueryParam()` | ✅ | ✅ | ❌ | ✅ Full | **⚠️ MISSING UNIT** — `?team=` query param bleeds to other tabs (parked); empty state uses the `#empty` table slot (unreachable behind the `isNoTeams` alert) |
+| `AdminTeams.vue` | `/admin/teams` | `usePlanStore()`, `useHouseholdsStore()` | `useEntityFormManager()`, `useCookingTeam()`, `useQueryParam()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Full | **⚠️ MISSING UNIT** — `?team=` query param bleeds to other tabs (parked); the standalone "tomt" alert is gone: `showAdminTeams` renders the table for a season with no teams so its `#empty` slot (`ALERTS.emptyState` + `create-new-team`) is reachable, covered by `AdminTeams.e2e.spec.ts` |
 | `CookingTeamCard.vue` | `/admin/teams` | `usePlanStore()`, `useHouseholdsStore()` | `useCookingTeam()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** — Uses shared InhabitantSelector + TeamMemberAddForm |
 | `TeamMemberAddForm.vue` | `/admin/teams` (via CookingTeamCard) | None | `useCookingTeamValidation()` | ✅ | ✅ | ✅ 13 tests | ✅ Indirect | **✅ COMPLIANT** |
 | `InhabitantSelector.vue` | `/admin/teams`, future `/admin/households` | None | - | ✅ | ✅ | ✅ 22 tests | ✅ Indirect | **✅ COMPLIANT** — Moved to `shared/`; generic slots; empty state uses the `#empty` table slot |
@@ -79,23 +79,24 @@
 
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
-| `AdminAllergies.vue` | `/admin/allergies` | `useAllergiesStore()`, `useHouseholdsStore()` | `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 35 tests | ✅ Full | **✅ COMPLIANT** — Master/detail with a responsive detail mount point: `AllergyDetailPanel` in the sticky pane (md+) or docked under the tapped row (`#expanded`, `<md`); selection is the single state; spec parametrized over `isMd`; owns the households lookup; empty catalog CTA renders through the `#empty` table slot |
+| `AdminAllergies.vue` | `/admin/allergies` | `useAllergiesStore()`, `useHouseholdsStore()` | `useTheSlopeDesignSystem()`, `useSetting()` | ✅ | ✅ | ✅ 37 tests | ✅ Full | **✅ COMPLIANT** — Master/detail with a responsive detail mount point: `AllergyDetailPanel` in the sticky pane (md+) or docked under the tapped row (`#expanded`, `<md`); selection is the single state; spec parametrized over `isMd`; owns the households lookup; empty catalog CTA renders through the `#empty` table slot; card `#footer` carries `AllergyNotes` |
 | `AllergyCatalogTable.vue` | `/admin/allergies`, `/chef` (via `AllergenMultiSelector`) | Parent props | `useAllergy()`, `useAllergyValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 17 tests | ✅ Indirect | **✅ COMPLIANT** — ONE catalog master table (`mode: 'single' \| 'multi'`); forwards `#expanded` + `#empty`; deduplicates the former AdminAllergies/AllergenMultiSelector tables |
 | `AllergyDetailPanel.vue` | `/admin/allergies` | None (prop-driven) | `useAllergyValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 12 tests | ✅ Indirect | **✅ COMPLIANT** — Portable detail (view ✏️🗑 / edit / create / delete-confirm); identical testids at every mount point |
 | `AllergenMultiSelector.vue` | `/admin/allergies`, `/chef` | Parent props | `useAllergyValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 17 tests | ✅ Indirect | **✅ COMPLIANT** — Consumes `AllergyCatalogTable` (multi); mobile fixed summary bar jumps to the statistics panel |
 | `HouseholdAllergies.vue` | `/household/[shortname]/allergies` | `useAllergiesStore()`, `useHouseholdsStore()` | `useAllergyValidation()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 | `AllergyTypeCard.vue` | `/admin/allergies`, `/household/[shortname]/allergies` | Parent props + `usePlanStore()` (activeSeason read) | `useAllergyValidation()`, `useTicket()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 13 tests | ✅ Indirect | **✅ COMPLIANT** — Serves view/compact/edit **and create** (`allergyType` optional); household rendered via `UserListItem` `#badge` slot; per-inhabitant age badge (`getTicketTypeConfig`, HouseholdCard pattern); `<NuxtTime relative>` for timestamps (SSR-safe) |
 | `AllergyTypeDisplay.vue` | `/admin/allergies/pdf` | Parent props | `useAllergyValidation()` | ✅ | ✅ | ❌ | N/A | **N/A DISPLAY** |
-| `AllergyManagersList.vue` | `/admin/allergies` | `useUsersStore()` | `useUserValidation()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
+| `AllergyNotes.vue` | `/admin/allergies` (card `#footer`), `/admin/allergies/pdf` | None (prop-driven) | `useSetting()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 2 tests | ✅ Indirect | **✅ COMPLIANT** — ONE "Vigtige bemærkninger" box for both surfaces; `notes` prop, one note per line via `splitNotes`; `ALERTS.legend` + `ICONS.warning`; no `UTooltip` (the poster has no `UApp`); margins belong to the mount point. View face only — the edit face ships with the settings package |
+| `AllergyManagersList.vue` | `/admin/allergies`, `/household/[shortname]/allergies`, `/admin/allergies/pdf` | `useUsersStore()` | `useUserValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** — API is now `kind?: AlertKind` (default `info`; poster passes `neutral`) instead of `color`/`variant`; its description `:ui` merges on top of the kind (ADR-019) |
 
 ### Form & Shared Components
 
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
-| `FormModeSelector.vue` | All CRUD admin routes | None | - | N/A | N/A | ✅ Full | ✅ Indirect | **✅ COMPLIANT** |
+| `FormModeSelector.vue` | `/admin/teams` | None | - | N/A | N/A | ✅ Full | ✅ Indirect | **✅ COMPLIANT** — `/admin/planning` uses the pencil + "Opret sæson" pair instead |
 | `SeasonSelector.vue` | `/admin/planning`, `/admin/teams` | `usePlanStore()` | `useSeasonSelector()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** |
 | `TableSearchPagination.vue` | `/admin/users`, `/admin/households` | None | `useTheSlopeDesignSystem()` | N/A | N/A | ✅ | ✅ Indirect | **✅ COMPLIANT** |
-| `SeasonStatusDisplay.vue` | `/admin/planning` | `usePlanStore()` | `useSeasonValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ | ✅ Indirect | **✅ COMPLIANT** |
+| `SeasonStatusDisplay.vue` | `/admin/planning` | `usePlanStore()` | `useSeasonValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ | ✅ Indirect | **✅ COMPLIANT** — `alertConfig` maps season status → `ALERTS` kind (ACTIVE success, FUTURE info, CURRENT warning, PAST neutral) + `withActions` (ADR-019); activate = `BUTTONS.primaryAction` + `COLOR.success` + `ICONS.playCircle`/`ICONS.arrowRight` with `:loading`; spec migrated off the mocked store to the real `usePlanStore` + `registerEndpoint` (testing.md Rule 6) |
 | `UserView.vue` | All routes (PageHeader) | `useAuthStore()` | `useUserValidation()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 | `UserListItem.vue` | `/admin/users`, `/admin/allergies` | Parent props | `useUserValidation()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ `label`/`labelPlural` declared but not rendered (removed in #62)** |
 | `DangerButton.vue` | `/household/[shortname]/settings`, `/admin/economy` | None | - | N/A | N/A | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - Two-click confirm pattern for destructive actions |
@@ -104,9 +105,9 @@
 
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
-| `CalendarDatePicker.vue` | `/household/[shortname]/settings` | None | `useDateRangeValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** - Single date picker with UCalendar + validation; shares `COMPONENTS.calendarGrid` (no adjacent-month duplicates) |
-| `CalendarDateRangePicker.vue` | `/admin/planning` | None | `useDateRangeValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** — shares `COMPONENTS.calendarGrid` (no adjacent-month duplicates) |
-| `CalendarDateRangeListPicker.vue` | `/admin/planning` | None | `useDateRange()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** — holidays kept chronological via `sortDateRanges` |
+| `CalendarDatePicker.vue` | `/household/[shortname]/settings` | None | `useDateRangeValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** - Single date picker with UCalendar + validation; binds `calendarPickerProps('cookingDay')` (grid + selection preset); input opens the popover with `:trailing-icon="ICONS.calendar"` instead of a nested button |
+| `CalendarDateRangePicker.vue` | `/admin/planning` | None | `useDateRangeValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** — `selection` prop picks the `CALENDAR.picker` preset (`cookingDay` pink, `holiday` green ring) and `calendarPickerProps` merges it with `COMPONENTS.calendarGrid`; both date inputs use `:trailing-icon="ICONS.calendar"` |
+| `CalendarDateRangeListPicker.vue` | `/admin/planning` | None | `useSeasonValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 13 tests | ✅ Indirect | **✅ COMPLIANT** — Edit/create renders each row as a `CalendarDateRangePicker` (`selection="holiday"`, `name="holidayRangeList-${i}"`) validated against `holidaysSchema` before it reaches the model; view keeps read-only rows; holidays kept chronological via `sortDateRanges`; testids shared via `tests/component/components/admin/planningTestIds.ts` |
 | `WeekDayMapDisplay.vue` | `/admin/planning`, `/admin/teams` | None | `useWeekday()` | ✅ | ✅ | ✅ 9 tests | ✅ Indirect | **✅ COMPLIANT** — Added `hideRestricted` prop; compact view only renders active days |
 | `WeekDayMapDinnerModeDisplay.vue` | `/household/[shortname]/settings` | None | `useWeekday()`, `useDinnerMode()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 | `BaseCalendar.vue` | All calendar displays | None | `useTheSlopeDesignSystem()`, `useCalendarEvents()` | N/A | N/A | ❌ | N/A | **N/A DISPLAY** — spreads `COMPONENTS.calendarGrid` |
@@ -120,11 +121,12 @@
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
 | `HouseholdBookings.vue` | `/household/[shortname]/bookings` | `usePlanStore()`, `useHouseholdsStore()`, `useBookingsStore()` | `useBookingView()`, `useBooking()` | ✅ | ✅ | ❌ | ✅ Full | **⚠️ MISSING UNIT** - E2E arrow-nav (`HouseholdBookings.e2e.spec.ts`) + day-view + cross-household covered |
-| `BookingGridView.vue` | `/household/[shortname]/bookings` | Parent props | `useBooking()`, `useBookingUi()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - ADR-016 week/month grid; empty state renamed to the `#empty` table slot but unreachable (`tableData` always has the power row) |
+| `BookingGridView.vue` | `/household/[shortname]/bookings` | Parent props | `useBooking()`, `useBookingUi()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - ADR-016 week/month grid; empty state renamed to the `#empty` table slot but unreachable (`tableData` always has the power row); legend delegated to `DinnerModeLegend` |
 | `BookingViewSwitcher.vue` | `/household/[shortname]/bookings` | Parent props | `useBookingView()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - Day/week/month toggle |
 | `ActionPreview.vue` | `/household/[shortname]/bookings`, `/admin/economy` | Parent props | `useBookingUi()` | ✅ | ✅ | ✅ | ✅ Indirect | **✅ COMPLIANT** - Shows booking changes before save |
 | `GuestBookingForm.vue` | `/household/[shortname]/bookings`, `/admin/economy` | Parent props | `useBooking()`, `useBookingUi()`, `useBookingValidation()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - Guest ticket form |
-| `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | `useBookingsStore()`, `useAuthStore()` | `useBooking()`, `useBookingUi()`, `useBookingValidation()` | ✅ | ✅ | ✅ | ✅ Serial | **✅ COMPLIANT** - ADR-016 booking form, admin override support |
+| `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | `useBookingsStore()`, `useAuthStore()` | `useBooking()`, `useBookingUi()`, `useBookingValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ | ✅ Serial | **✅ COMPLIANT** - ADR-016 booking form, admin override support; legend delegated to `DinnerModeLegend` |
+| `DinnerModeLegend.vue` | `/household/[shortname]/bookings` (day + grid), `/dinner` | Parent props | `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 4 tests | ✅ Indirect | **✅ COMPLIANT** — THE "Forklaring" panel (`ALERTS.legend`); deduplicates the identical legends in `BookingGridView` and `DinnerBookingForm`; `modes`/`showNoConsensus`/`showModified`/`hint` props |
 | `DinnerEvent.vue` | `/household/[shortname]/bookings`, `/dinner` | Parent props | `useDinnerEvent()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
 | `DinnerTicket.vue` | `/household/[shortname]/bookings` | Parent props | `useTicket()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
 
@@ -143,7 +145,7 @@
 
 | Store | ADR-007 useFetch | ADR-007 Status Computeds | ADR-007 isReady | ADR-007 watch:false | Component Tests | Status |
 |-------|------------------|--------------------------|-----------------|---------------------|-----------------|--------|
-| `plan.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** |
+| `plan.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** — `updateSeason()` returns the parsed `SeasonUpdateResponse` envelope (ADR-009) and refreshes the season list and selection |
 | `households.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** - `setMoveOutDate()`, `lastMoveOutResult`, `moveInhabitant()`, `deleteHousehold()`, `lastMoveResult`, `updateInhabitantPreferences()`, `updateAllInhabitantPreferences()`, `initHouseholdsStore(shortName?, pbsId?)` disambiguation |
 | `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** — Catalog converted from `useFetch` to `useAsyncData` + `useRequestFetch`; `isAllergyTypesInitialized` checks data presence (ADR-007 rule 3); mutations refetch the catalog; catalog `transform` parses with `AllergyTypeDetailSchema` so dates are domain types (ADR-010) |
 | `users.ts` | ✅ | ✅ | ✅ | ✅ | ❌ | **⚠️ MISSING TESTS** |
@@ -159,7 +161,7 @@
 | **Validation Composables** |
 | `useCoreValidation()` | ✅ | ✅ `SystemRoleSchema`, `DinnerModeSchema` | ✅ User, Inhabitant, Household (Display + Detail) | ✅ Full | **✅ COMPLIANT** - Merged useUserValidation + useHouseholdValidation via fragment pattern (ADR-001) |
 | `useBookingValidation()` | ✅ | ✅ `OrderStateSchema`, `DinnerModeSchema` | ✅ Order, DinnerEvent, DesiredOrder, ScaffoldResult, HouseholdUpdateResponse | ✅ Full | **✅ COMPLIANT** - ADR-016 schemas, operation result types (ADR-009) |
-| `useSeasonValidation()` | ✅ | ✅ | ✅ SerializedSeason | ✅ Full | **✅ COMPLIANT** — holidays serialized/deserialized in chronological order |
+| `useSeasonValidation()` | ✅ | ✅ | ✅ SerializedSeason, SeasonUpdateResponse | ✅ Full | **✅ COMPLIANT** — holidays serialized/deserialized in chronological order; owns the `SeasonUpdateResponse` operation result (ADR-009) |
 | `useCookingTeamValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
 | `useAllergyValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
 | `useTicketPriceValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
@@ -178,6 +180,7 @@
 | `useOrder()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Order business logic |
 | `useTicket()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Ticket display logic; `ticketTypeConfig.compactLabel` (V/B/b single source, read by `formatTicketCounts`); `groupInhabitantsByTicketCategory` aggregator; `getTicketTypeConfig` falls back to `determineTicketType` (never silently ADULT) |
 | `useUserRoles` (module) | N/A | N/A | ✅ Domain types | ✅ Unit | **✅ COMPLIANT** - Server-safe `reconcileUserRoles` / `ROLE_OWNERSHIP` only (ADR-017); display moved to `useUserRolesUi` |
+| `useSetting()` | N/A | N/A | N/A | ✅ Via `AllergyNotes.nuxt.spec.ts` | **✅ COMPLIANT** - Isomorphic (ADR-017): `DEFAULT_ALLERGY_POSTER_NOTES` registry default + `splitNotes`; `Setting` store and endpoints pending |
 | **UI/Navigation Composables** |
 | `useBookingView()` | ✅ `BookingViewSchema` | N/A | ✅ DateRange | ✅ Full | **✅ COMPLIANT** - ADR-006 URL-synced view/date for booking calendar. Single `findAdjacent(direction)` helper (boundary from `getPeriodBoundary` → `getAdjacentDinner`) replaces per-view switches; `seasonDates` option dropped (implicit via `dinnerDates`) |
 | `useEntityFormManager()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
@@ -189,7 +192,7 @@
 | `useBookingUi()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Pure UI composable (ADR-017): deadline badges, `STEP_ICONS`, `formatActionPreview`; never server-imported |
 | `useUserRolesUi()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** - Pure UI composable (ADR-017): role labels/icons/`visibleRoles` from the auth store |
 | `useTemporalCalendar()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Uses `MaybeRefOrGetter` + `toValue()` for reactive inputs, shared by ChefCalendarDisplay and DinnerCalendarDisplay (DRY) |
-| `useTheSlopeDesignSystem()` | N/A | N/A | N/A | N/A | **N/A UTILITY** - Page layout + design tokens only (ADR-017); no longer reachable from `server/` |
+| `useTheSlopeDesignSystem()` | N/A | N/A | N/A | ✅ `withActions` branch | **N/A UTILITY** - Page layout + design tokens only (ADR-017); no longer reachable from `server/`. Owns `ALERTS` (+ `AlertKind`, `withActions`) alongside `BUTTONS`, `COMPONENTS.calendarGrid` and `CALENDAR.picker` (+ `calendarPickerProps`, `CalendarPickerSelection`); usage enforced by `tests/component/architecture/designSystemUsage.unit.spec.ts` (ADR-019) |
 
 ## ADR Compliance Summary
 
@@ -388,6 +391,7 @@ Use this checklist when creating/reviewing frontend components.
 
 **UI & Presentation:**
 - [ ] **CRITICAL:** Use NuxtUI components (UButton, UInput, UCard, USelect, UCheckbox, etc.) instead of hand-coded HTML (Nuxt stack principle)
+- [ ] **CRITICAL:** Bind design-system tokens, never raw Nuxt UI props, on a family that has one (`v-bind="ALERTS.<kind>"`, `v-bind="BUTTONS.<role>"`, `v-bind="COMPONENTS.calendarGrid"`) — enforced by `tests/component/architecture/designSystemUsage.unit.spec.ts` (ADR-019)
 - [ ] **CRITICAL:** Mobile-first responsive design - 90% of users on mobile
 - [ ] **CRITICAL:** DRY components - extract repeated logic into reusable atomic components
 - [ ] **CRITICAL:** Clean template structure - use single if-else instead of checking same condition multiple times (e.g., `v-if="isTitle"` / `v-else` instead of `v-if="isTitle"` / `v-else-if="!isTitle && ..."`)

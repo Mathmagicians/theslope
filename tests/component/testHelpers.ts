@@ -100,5 +100,6 @@ export const expectSharedCalendarGrid = (wrapper: Pick<VueWrapper, 'findComponen
         weekStartsOn: 1,
         weekdayFormat: 'short'
     })
-    expect(calendar.props('ui')).toMatchObject({cellTrigger: 'data-[outside-view]:hidden'})
+    // A picker's selection preset appends to the same cellTrigger, so assert the rule is there
+    expect(calendar.props('ui').cellTrigger).toContain('data-[outside-view]:hidden')
 }

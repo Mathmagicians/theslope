@@ -4,7 +4,8 @@ import {formatDate} from '~/utils/date'
 // Age categories - the active season's ticket prices carry the age limits
 const {groupInhabitantsByTicketCategory, ticketTypeConfig} = useTicket()
 const {formatTicketCounts} = useBilling()
-const {TYPOGRAPHY, ALERTS} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, BUTTONS, COLOR, ICONS} = useTheSlopeDesignSystem()
+const {DEFAULT_ALLERGY_POSTER_NOTES} = useSetting()
 
 // No layout for printing
 definePageMeta({
@@ -68,16 +69,17 @@ const printPage = () => {
       <!-- No-print controls -->
       <div class="no-print mb-6 flex justify-between items-center">
         <UButton
-            icon="i-heroicons-arrow-left"
+            v-bind="BUTTONS.secondaryAction"
+            :color="COLOR.secondary"
+            :icon="ICONS.arrowLeft"
             to="/admin/allergies"
-            variant="outline"
-            color="secondary"
         >
           Tilbage
         </UButton>
         <UButton
-            icon="i-heroicons-printer"
-            color="primary"
+            v-bind="BUTTONS.primaryAction"
+            :color="COLOR.primary"
+            :icon="ICONS.printer"
             @click="printPage"
         >
           Print
@@ -149,19 +151,8 @@ const printPage = () => {
           </div>
         </div>
 
-        <!-- Footer notes -->
-        <UAlert v-bind="ALERTS.warning" class="mt-4">
-          <template #description>
-            <p :class="`${TYPOGRAPHY.sectionSubheading} mb-2`">Vigtige bemærkninger:</p>
-            <ul :class="`list-disc list-inside space-y-1 ${TYPOGRAPHY.bodyTextSmall}`">
-              <li>Glutenfri boller findes i fryseren og tages op af madholdet</li>
-              <li>Ved mælkeprodukter i brød, vil mælke-allergikere også have brug for glutenfrit brød (som altid er
-                mælkefrit)
-              </li>
-              <li>Husk at give besked om allergener ved menu-præsentationen</li>
-            </ul>
-          </template>
-        </UAlert>
+        <!-- Footer notes - same component and text source as the catalog footer -->
+        <AllergyNotes :notes="DEFAULT_ALLERGY_POSTER_NOTES" class="mt-4"/>
 
         <!-- Allergy manager contact -->
         <AllergyManagersList

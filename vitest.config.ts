@@ -18,6 +18,14 @@ export default defineConfig({
                     },
                 },
             },
+            {
+                test: {
+                    // Standalone Nitro workers under workers/ — plain node, no Nuxt runtime
+                    name: 'workers',
+                    include: ['workers/**/*.unit.spec.ts'],
+                    environment: 'node',
+                },
+            },
             await defineVitestProject({
                 test: {
                     name: 'nuxt',

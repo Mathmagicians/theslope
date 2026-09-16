@@ -57,6 +57,10 @@ const BINDS_ALERT_TOKEN = /\bALERTS[.[]/
 /** ` color=`, ` :variant=`, ` type=` - a raw Nuxt UI prop the token should own */
 const RAW_ALERT_PROP = /(?:^|\s)(?::|v-bind:)?(?:color|variant|type)=/
 
+// The grid token reaches a UCalendar directly, or through a picker preset built from it
+// (calendarPickerProps merges COMPONENTS.calendarGrid with a CALENDAR.picker selection)
+const BINDS_CALENDAR_GRID = /v-bind="(COMPONENTS\.calendarGrid|calendarProps)"/
+
 const report = (violations: string[]) => violations.join('\n')
 
 describe('ADR-019: components bind design-system tokens, never raw Nuxt UI props', () => {
@@ -78,11 +82,11 @@ describe('ADR-019: components bind design-system tokens, never raw Nuxt UI props
         expect(report(violations)).toBe('')
     })
 
-    it('every <UCalendar> binds COMPONENTS.calendarGrid', () => {
+    it('every <UCalendar> binds the shared calendar grid', () => {
         const violations = vueFiles.flatMap(file =>
             openingTags(readVue(file), 'UCalendar')
-                .filter(tag => !tag.text.includes('COMPONENTS.calendarGrid'))
-                .map(tag => `app/${file}:${tag.line} - no calendarGrid token (use v-bind="COMPONENTS.calendarGrid")`)
+                .filter(tag => !BINDS_CALENDAR_GRID.test(tag.text))
+                .map(tag => `app/${file}:${tag.line} - no calendarGrid token (use v-bind="COMPONENTS.calendarGrid" or a calendarPickerProps preset)`)
         )
         expect(report(violations)).toBe('')
     })

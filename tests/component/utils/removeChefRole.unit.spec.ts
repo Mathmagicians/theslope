@@ -1,5 +1,4 @@
 import {describe, it, expect, vi, beforeEach} from 'vitest'
-import type {D1Database} from '@cloudflare/workers-types'
 import {fetchDinnerEvents, updateDinnerEvent, updateDinnerEventAllergens} from '~~/server/data/financesRepository'
 import {deleteHeynaboEventAsSystem} from '~~/server/integration/heynabo/heynaboClient'
 import {removeChefRole, removeChefRoleForInhabitants} from '~~/server/utils/removeChefRole'

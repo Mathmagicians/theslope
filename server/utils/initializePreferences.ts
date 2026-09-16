@@ -11,7 +11,6 @@
  *
  * Idempotent (ADR-015).
  */
-import type {D1Database} from '@cloudflare/workers-types'
 import {fetchSeason, fetchInhabitants, updateInhabitantPreferencesBulk} from '~~/server/data/prismaRepository'
 import {useSeason} from '~/composables/useSeason'
 import type {InitPreferencesResult} from '~/composables/useBookingValidation'

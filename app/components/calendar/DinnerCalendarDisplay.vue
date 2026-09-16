@@ -4,7 +4,7 @@
  *
  * Layout (Monitor Style):
  * ┌─────────────────────────────────────────────────────────────┐
- * │              COUNTDOWN TIMER (Train Station Style)          │
+ * │  | { label: string; type: 'circle'; circleClass: string[] }            COUNTDOWN TIMER (Train Station Style)          │
  * │  ┌───────────────────────────────────────────────────────┐  │
  * │  │         DAGENS FÆLLESSPISNING                         │  │
  * │  │              MAN 15/11                                │  │
@@ -64,7 +64,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const {getHolidayDatesFromDateRangeList} = useSeason()
 const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
-const {CALENDAR, DINNER_CALENDAR, SIZES, ICONS, BOOKING_LOCK_STATUS, getLockStatusConfig} = useTheSlopeDesignSystem()
+const {CALENDAR, DINNER_CALENDAR, SIZES, ICONS, BOOKING_LOCK_STATUS, getLockStatusConfig, dayCircleClasses} = useTheSlopeDesignSystem()
 
 const holidayDates = computed(() => getHolidayDatesFromDateRangeList(props.holidays))
 
@@ -121,17 +121,17 @@ const getDayColorClass = (type: DayType): string => {
 
 // Legend item types
 type LegendItem =
-  | { label: string; type: 'circle'; circleClass: string }
+  | { label: string; type: 'circle'; circleClass: string[] }
   | { label: string; type: 'chip'; chipColor: NuxtUIColor; showCount: boolean }
 
 // Legend items using design system classes
 const legendItems = computed((): LegendItem[] => {
   const items: LegendItem[] = [
-    { label: 'Næste fællesspisning', type: 'circle', circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.next}` },
-    { label: 'Valgt dato', type: 'circle', circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.next} ${DINNER_CALENDAR.selection}` },
-    { label: 'Planlagt fællesspisning', type: 'circle', circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${DINNER_CALENDAR.day.future}` },
-    { label: 'Tidligere fællesspisning', type: 'circle', circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.day.past}` },
-    { label: 'Ferie', type: 'circle', circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.holiday}` }
+    { label: 'Næste fællesspisning', type: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.next) },
+    { label: 'Valgt dato', type: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.next, DINNER_CALENDAR.selection) },
+    { label: 'Planlagt fællesspisning', type: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.future) },
+    { label: 'Tidligere fællesspisning', type: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past) },
+    { label: 'Ferie', type: 'circle', circleClass: dayCircleClasses(CALENDAR.holiday) }
   ]
 
   if (props.lockStatus) {
@@ -207,7 +207,7 @@ const isSelected = (day: DateValue): boolean => {
               <!-- Holiday takes precedence (green ring) -->
               <div
                 v-if="isHoliday(day)"
-                :class="[SIZES.calendarCircle, CALENDAR.day.shape, CALENDAR.holiday]"
+                :class="dayCircleClasses(CALENDAR.holiday)"
               >
                 {{ day.day }}
               </div>
@@ -222,7 +222,7 @@ const isSelected = (day: DateValue): boolean => {
                 :data-testid="`calendar-dinner-date-${day.day}`"
               >
                 <div
-                  :class="[SIZES.calendarCircle, CALENDAR.day.shape, getDayColorClass(getDayType(eventLists)!), isSelected(day) ? DINNER_CALENDAR.selection : '']"
+                  :class="dayCircleClasses(getDayColorClass(getDayType(eventLists)!), isSelected(day) && DINNER_CALENDAR.selection)"
                   @click="handleDateClick(day)"
                 >
                   {{ day.day }}
@@ -233,12 +233,7 @@ const isSelected = (day: DateValue): boolean => {
               <div
                 v-else-if="getDayType(eventLists)"
                 :data-testid="`calendar-dinner-date-${day.day}`"
-                :class="[
-                  SIZES.calendarCircle,
-                  CALENDAR.day.shape,
-                  getDayColorClass(getDayType(eventLists)!),
-                  isSelected(day) ? DINNER_CALENDAR.selection : ''
-                ]"
+                :class="dayCircleClasses(getDayColorClass(getDayType(eventLists)!), isSelected(day) && DINNER_CALENDAR.selection)"
                 @click="handleDateClick(day)"
               >
                 {{ day.day }}
@@ -254,7 +249,7 @@ const isSelected = (day: DateValue): boolean => {
                 <div v-for="legendItem in legendItems" :key="legendItem.label" class="flex items-center gap-4">
                   <!-- Chip for lock indicators (text shows released count badge only for "ledige billetter") -->
                   <UChip v-if="legendItem.type === 'chip'" show :size="SIZES.lockChip" :color="legendItem.chipColor" :text="legendItem.showCount ? '1' : undefined">
-                    <div :class="[SIZES.calendarCircle, CALENDAR.day.shape, DINNER_CALENDAR.day.future]">1</div>
+                    <div :class="dayCircleClasses(DINNER_CALENDAR.day.future)">1</div>
                   </UChip>
                   <!-- Circle for other indicators -->
                   <div v-else :class="legendItem.circleClass">

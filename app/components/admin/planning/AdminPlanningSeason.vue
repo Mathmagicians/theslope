@@ -1,10 +1,37 @@
+<!--
+UX MOCKUP: season form (signed off 2026-09-16) - this component's own layout.
+Where the form sits on the page: see AdminPlanning.vue.
+
+VIEW (canEdit)                                    EDIT / CREATE
+┌ Fællesspisning sæson 08/26-07/27             ┐   ┌ Rediger fællesspisning sæson 08/26-07/27  ┐
+│                     [✏ Rediger 08/26-07/27]  │   │ (create: Opret fællesspisning sæson <navn>,│
+│ Vi følger folkeskolernes feriekalender…      │   │  navn as soon as the dates are valid)      │
+│ [Start dato][Slut dato]            (disabled)│   │ Vi følger folkeskolernes feriekalender…    │
+│ Ugedage · ferier (read-only) · billetpriser  │   │ [Start dato ▾][Slut dato ▾]                │
+│ CalendarDisplay right (above on mobile)      │   │ Hvilke ugedage skal der være fællesspisning?│
+└──────────────────────────────────────────────┘   │ Hvornår holder fællesspisning fri?         │
+                                                   │ [Start dato ▾][Slut dato ▾][☀ Tilføj ferie]│
+                                                   │ ☀ [13/10/2026][17/10/2026] 🗑              │ each row a
+                                                   │ ☀ [21/12/2026][03/01/2027] 🗑              │ picker
+                                                   │ Billetpriser  [🎟 Tilføj billet] … 🗑       │
+                                                   │ CalendarDisplay right (above on mobile)    │
+                                                   ├────────────────────────────────────────────┤
+                                                   │ fejlliste (if any)                         │
+                                                   │                [✕ Annuller]  [✓ Gem]       │
+                                                   └────────────────────────────────────────────┘
+
+The season name lives in the title, so there is no read-only "Sæson" field. No 🗑 for the season.
+-->
+
 <script setup lang="ts">
 import type {Season} from "~/composables/useSeasonValidation"
 import type {FormMode} from "~/types/form"
+import {FORM_MODES} from "~/types/form"
 import type {WeekDayMap} from "~/types/dateTypes"
 
 //COMPONENT DEPENDENCIES
 const {SeasonSchema, createSeasonName} = useSeason()
+const {BUTTONS, COLOR, ICONS, LAYOUTS} = useTheSlopeDesignSystem()
 const appConfig = useAppConfig()
 const {theslope} = appConfig  //some default values
 
@@ -13,17 +40,17 @@ const planStore = usePlanStore()
 const {isSavingSeasonFlowInProgress: isSavingSeason} = storeToRefs(planStore)
 
 // COMPONENT DEFINITION
-const props = defineProps<{ mode: FormMode }>()
+const props = withDefaults(defineProps<{ mode: FormMode, canEdit?: boolean }>(), {
+  canEdit: false
+})
 const model = defineModel<Season>({required: true})
 const emit = defineEmits<{
   cancel: [],
+  edit: [],
   update: [season: Season]
 }>()
 
-// COMPUTED STATE
-const shortName = computed(() => createSeasonName(model.value.seasonDates))
-
-const isViewMode = computed(() => props.mode === 'view')
+const isViewMode = computed(() => props.mode === FORM_MODES.VIEW)
 
 // Update shortName when seasonDates changes
 watch(() => model.value.seasonDates, (newDates) => {
@@ -32,40 +59,26 @@ watch(() => model.value.seasonDates, (newDates) => {
   }
 }, {deep: true})
 
-const formTitle = computed(() => {
-  let action: string
-  switch (props.mode) {
-    case 'create':
-      action = 'Opret ny'
-      break
-    case 'edit':
-      action = 'Rediger'
-      break
-    case 'view':
-    default:
-      action = 'Vis'
-  }
-  return `${action} fællesspisning sæson`
-})
+// One label and one verb per mode - the title, and the edit control, read from the same words
+const SEASON_LABEL = 'fællesspisning sæson'
+const MODE_VERBS: Record<FormMode, string> = {
+  [FORM_MODES.VIEW]: '',
+  [FORM_MODES.EDIT]: 'Rediger',
+  [FORM_MODES.CREATE]: 'Opret'
+}
+
+// The season's name lives in the title (create shows it as soon as the dates are valid)
+const formTitle = computed(() =>
+    capitalize([MODE_VERBS[props.mode], SEASON_LABEL, model.value.shortName].filter(Boolean).join(' '))
+)
+
+const editLabel = computed(() => `${MODE_VERBS[FORM_MODES.EDIT]} ${model.value.shortName}`)
 
 // ACTIONS
 const onSubmitSeason = () => {
   // Use model.value directly to ensure v-model changes are included
   emit('update', model.value)
 }
-
-// UI METHODS
-const buttonText = computed(() => {
-  if (isSavingSeason.value) return 'Arbejder...'
-  switch (props.mode) {
-    case 'create':
-      return 'Opret ny sæson'
-    case 'edit':
-      return 'Gem ændringer'
-    default:
-      return 'OK'
-  }
-})
 </script>
 
 <template>
@@ -75,10 +88,24 @@ const buttonText = computed(() => {
           v-show="model"
           class="w-full ring-none ring-0 shadow-none" padding="px-0">
         <template #header>
-          <h2 class="text-lg font-semibold">{{ formTitle }}</h2>
-          <h3 class="text-sm">Vi følger folkeskolernes feriekalender i
-            <a :href="theslope.holidayUrl" class="text-blue-500 underline" target="_blank">Lejre Kommune.</a>
-          </h3>
+          <div :class="LAYOUTS.cardActionRow" class="md:justify-between">
+            <div>
+              <h2 class="text-lg font-semibold">{{ formTitle }}</h2>
+              <h3 class="text-sm">Vi følger folkeskolernes feriekalender i
+                <a :href="theslope.holidayUrl" class="text-blue-500 underline" target="_blank">Lejre Kommune.</a>
+              </h3>
+            </div>
+            <UButton
+                v-if="isViewMode && props.canEdit"
+                v-bind="BUTTONS.secondaryAction"
+                :class="LAYOUTS.cardActionButton"
+                :color="COLOR.primary"
+                :icon="ICONS.edit"
+                data-testid="edit-season"
+                @click="emit('edit')">
+              {{ editLabel }}
+            </UButton>
+          </div>
         </template>
 
         <template #default>
@@ -86,13 +113,6 @@ const buttonText = computed(() => {
             <!-- Form Section - Below on mobile, Left on desktop -->
             <div class="grow">
               <div class="space-y-4">
-                <UFormField label="Sæson" name="shortName">
-                  <UInput
-disabled
-                          name="shortName"
-                          :model-value="shortName"/>
-                </UFormField>
-
                 <!-- Season date picker -->
                 <CalendarDateRangePicker
                     v-model="model.seasonDates"
@@ -178,7 +198,7 @@ class="mx-auto"
         </template>
 
         <template #footer>
-          <div v-if="!isViewMode" class="flex justify-between items-center gap-4">
+          <div v-if="!isViewMode" class="space-y-4">
             <div v-if="errors.length > 0" class="text-red-500 text-sm space-y-1">
               <div class="font-semibold">Formen indeholder fejl, som skal rettes:</div>
               <ul class="list-disc list-inside">
@@ -187,12 +207,17 @@ class="mx-auto"
                 </li>
               </ul>
             </div>
-            <div class="flex gap-4 ml-auto">
-              <UButton data-testid="cancel-season" color="secondary" variant="soft" @click="emit('cancel')">
+            <div :class="LAYOUTS.formButtonRow">
+              <UButton v-bind="BUTTONS.cancel" data-testid="cancel-season" @click="emit('cancel')">
                 Annuller
               </UButton>
-              <UButton data-testid="submit-season" type="submit" color="info" icon="i-heroicons-check-circle" :loading="isSavingSeason" :disabled="isSavingSeason">
-                {{ buttonText }}
+              <UButton
+                  v-bind="BUTTONS.save"
+                  data-testid="submit-season"
+                  type="submit"
+                  :loading="isSavingSeason"
+                  :disabled="isSavingSeason">
+                Gem
               </UButton>
             </div>
           </div>

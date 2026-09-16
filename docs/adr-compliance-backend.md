@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2026-03-05 (Household self-service update endpoint for move-out date + residency fields)
+**Last Updated:** 2026-09-16 (Season update returns an operation envelope; the live season re-scaffolds on save)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -51,10 +51,10 @@
 | `/api/admin/household/inhabitants/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateInhabitant() → InhabitantUpdateResponse (ADR-015: triggers scaffoldPrebookings on preference/birthDate/householdId change). Accepts `householdId` for admin move (validates same-address via heynaboId) |
 | `/api/admin/household/inhabitants/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchInhabitants() → Inhabitant[] with deserialization                                           |
 | `/api/admin/household/inhabitants/index.put.ts` | ✅ | ✅ | ✅ | ✅ | saveInhabitant() → Inhabitant with deserializeInhabitant()                                       |
-| **Admin - Seasons** | | | | | **✅ FULLY COMPLIANT**                                                                            |
+| **Admin - Seasons** | | | | | **✅ FULLY COMPLIANT (2026-09-16)** - Live season edit re-scaffolds in the same request |
 | `/api/admin/season/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteSeason() → Season                                                                          |
 | `/api/admin/season/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchSeason() → Season                                                                           |
-| `/api/admin/season/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateSeason() → Season                                                                          |
+| `/api/admin/season/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateSeason() → SeasonUpdateResponse (ADR-009 envelope: season + reconciliation + scaffold). `isActive` in the body is ignored (activation lives in `/active`). On the ACTIVE season a schedule change also runs `clipPreferences` + `scaffoldPrebookings` (ADR-015). Reconciliation deletes the Heynabo events of removed dates (ADR-013) |
 | `/api/admin/season/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchSeasons() → Season[]                                                                        |
 | `/api/admin/season/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createSeason() → Season                                                                          |
 | `/api/admin/season/active.get.ts` | ✅ | ✅ | ✅ | ✅ | Returns active season ID (number \| null)                                                        |

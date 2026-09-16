@@ -11,7 +11,6 @@
  * Multi-period support: Processes ALL unbilled transactions, grouping by
  * actual billing period (based on dinner date). Handles catch-up scenarios.
  */
-import type {D1Database} from '@cloudflare/workers-types'
 import {generateBilling} from '~~/server/utils/generateBilling'
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'

@@ -14,5 +14,6 @@ test.describe('Allergy poster', () => {
 
         await expect(page.locator('h1')).toContainText('ALLERGI-LISTE')
         await expect(page.getByTestId('allergy-table')).toBeVisible()
+        await expect(page.getByTestId('allergy-notes')).toContainText('Vigtige bemærkninger')
     })
 })

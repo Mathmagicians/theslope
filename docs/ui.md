@@ -59,9 +59,11 @@ const { COLOR, TYPOGRAPHY, LAYOUTS, BACKGROUNDS, COMPONENTS, SIZES } = useTheSlo
 ```vue
 <UButton :color="COLOR.primary">Save</UButton>
 <UBadge :color="COLOR.success">Active</UBadge>
-<UAlert :color="COLOR.warning">Warning!</UAlert>
 <UBadge :color="COLOR.mocha">Mocha Mousse</UBadge>
 ```
+
+> ⚠️ Not every component takes a raw `:color`. Families with a design-system token (`UAlert` → `ALERTS`,
+> `UCalendar` → `COMPONENTS.calendarGrid`) bind the token instead — see **ALERTS** below and ADR-019.
 
 **2. For responsive sizes (NEW!):**
 ```vue
@@ -110,6 +112,52 @@ const { COLOR, TYPOGRAPHY, LAYOUTS, BACKGROUNDS, COMPONENTS, SIZES } = useTheSlo
 <UBadge :color="TICKET_TYPE_COLORS[ticketType]">{{ label }}</UBadge>
 ```
 
+### ALERTS — the one alert pattern (ADR-019)
+
+Every `<UAlert>` in `app/` binds a **kind**. The kind owns colour, variant, default icon and the `ui` that lets long
+Danish sentences, e-mail addresses and URLs wrap instead of clipping inside the alert's `overflow-hidden` root.
+The site passes only domain props: `:title`, `:description`, an `:icon` override, `:avatar`, `data-testid`, a margin `class`.
+
+| Kind | Used for |
+|------|----------|
+| `info` | Prose, banners, "how this works" |
+| `neutral` | Quiet system feedback: nothing here yet, read-only, last result |
+| `success` | Something went right and stays right |
+| `warning` | Look before acting: deadlines, power mode, poster notes |
+| `error` | Something failed or is cancelled |
+| `legend` | "Forklaring" panels — a bordered box around badges, lists and selectors |
+| `emptyState` | Centred, large, emoji avatar — stays vertical even with a CTA |
+| `emptyStateCompact` | Empty state inside a panel or a row |
+
+`withActions` is a **modifier**, not a kind: spread it after a kind when the alert carries action buttons, and they
+sit beside the text on desktop, below it on a phone. Empty states keep their CTA centred and do not take it.
+
+```vue
+<UAlert v-bind="ALERTS.warning" title="Fraflytning" :description="text"/>
+
+<!-- colour chosen at runtime: pick between kinds, never a raw :color -->
+<UAlert v-bind="errored ? ALERTS.error : ALERTS.neutral" title="Sidste ændring"/>
+
+<!-- with actions -->
+<UAlert v-bind="{...ALERTS.info, ...ALERTS.withActions}" title="Du besøger en anden husstand">
+  <template #actions><UButton>Admin røre alligevel</UButton></template>
+</UAlert>
+```
+
+A component that takes the kind from its parent types the prop as `AlertKind`
+(`AllergyManagersList.vue`: `kind?: AlertKind`, default `'info'`; the poster passes `kind="neutral"`).
+When a site must add to the kind's `ui`, it **merges** on top so the wrap classes survive:
+
+```ts
+const alertUi = computed(() => ({
+  ...ALERTS[props.kind].ui,
+  description: `${ALERTS[props.kind].ui.description} flex flex-col md:flex-row md:items-center gap-3`
+}))
+```
+
+`tests/component/architecture/designSystemUsage.unit.spec.ts` fails the build on a `<UAlert` without an `ALERTS`
+token or with a raw `color`/`variant`/`type` prop.
+
 **Available exports:**
 - `COLOR` - NuxtUI component color prop values ('primary', 'mocha', 'success', etc.)
 - `SIZES` - Responsive size patterns for NuxtUI components (standard, small, large)
@@ -118,6 +166,10 @@ const { COLOR, TYPOGRAPHY, LAYOUTS, BACKGROUNDS, COMPONENTS, SIZES } = useTheSlo
 - `BACKGROUNDS` - Background+text combinations (hero, card, landing sections)
 - `COMPONENTS` - Complete component styling (kitchen panels, stats bar)
 - `COMPONENTS.calendarGrid` - Shared `UCalendar` root config (`v-bind` it) - Monday-first, no padding weeks, adjacent-month days disabled and hidden
+- `ALERTS` - Shared `UAlert` config (`v-bind` a kind) + the `withActions` modifier; `AlertKind` types a kind prop
+- `BUTTONS` - Standardized button configs with responsive sizing (`v-bind` it): `edit` (square ghost row action - pair with `ICONS.trash` + an `aria-label` for a row delete), `cancel`, `save`, `primaryAction`, `secondaryAction`, `more`; the caller supplies `:color` and, for the action pair, `:icon`
+- `ICONS` - Icon names for `:icon`, `:trailing-icon` and `<UIcon :name>`, including `ICONS.holiday` (season holiday rows), `ICONS.printer` (the allergy poster) and `ICONS.calendar` (date inputs bind it as `:trailing-icon`)
+- `CALENDAR.picker` - Date picker selection presets: `cookingDay` (`COLOR.secondary`, the cooking-day pink) and `holiday` (the green `CALENDAR.holiday` ring on a transparent cell). Green marks holidays, so a cooking-day pick is pink. `calendarPickerProps(selection)` merges the preset with `COMPONENTS.calendarGrid`; the pickers bind it through their `selection` prop
 - `PLANNING_CALENDAR` - Season planning day palette (`day.generated` filled, `day.potential` outline)
 - `BG` - Background color scale (low-level, use BACKGROUNDS instead)
 - `TEXT` - Text color scale (low-level, use TYPOGRAPHY instead)

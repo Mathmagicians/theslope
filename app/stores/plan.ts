@@ -1,4 +1,4 @@
-import type {Season} from '~/composables/useSeasonValidation'
+import type {Season, SeasonUpdateResponse} from '~/composables/useSeasonValidation'
 import type {CookingTeamDisplay, CookingTeamDetail, CookingTeamAssignment, CookingTeamCreate, CookingTeamUpdate, CookingTeamAssignmentCreate, TeamRole} from '~/composables/useCookingTeamValidation'
 import {ROLE_ICONS} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay, DinnerEventDetail, MenuSwapStrategy} from '~/composables/useBookingValidation'
@@ -7,7 +7,7 @@ import {FORM_MODES, type FormMode} from '~/types/form'
 export const usePlanStore = defineStore("Plan", () => {
         // DEPENDENCIES
         const {handleApiError} = useApiHandler()
-        const {SeasonSchema} = useSeasonValidation()
+        const {SeasonSchema, SeasonUpdateResponseSchema} = useSeasonValidation()
         const authStore = useAuthStore()
         const {isAdmin} = storeToRefs(authStore)
 
@@ -98,10 +98,11 @@ export const usePlanStore = defineStore("Plan", () => {
         // Save season operation - useAsyncData pattern for loading state
         const saveSeasonParams = ref<{ season: Season | null, isCreate: boolean }>({ season: null, isCreate: false })
         const {
+            data: saveSeasonData,
             status: saveSeasonStatus,
             error: saveSeasonError,
             execute: executeSaveSeason
-        } = useAsyncData(
+        } = useAsyncData<Season | SeasonUpdateResponse | null>(
             'plan-store-save-season',
             async () => {
                 const { season, isCreate } = saveSeasonParams.value
@@ -113,7 +114,7 @@ export const usePlanStore = defineStore("Plan", () => {
                         headers: { 'Content-Type': 'application/json' }
                     })
                 } else {
-                    return await $fetch<Season>(`/api/admin/season/${season.id}`, {
+                    return await $fetch<SeasonUpdateResponse>(`/api/admin/season/${season.id}`, {
                         method: 'POST',
                         body: season,
                         headers: { 'Content-Type': 'application/json' }
@@ -333,7 +334,8 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
-        const updateSeason = async (season: Season): Promise<Season | null> => {
+        // Returns the operation envelope (ADR-009) so callers can report what the save changed
+        const updateSeason = async (season: Season): Promise<SeasonUpdateResponse | null> => {
             saveSeasonParams.value = { season, isCreate: false }
             await executeSaveSeason()
 
@@ -342,11 +344,13 @@ export const usePlanStore = defineStore("Plan", () => {
                 return null
             }
 
+            const result = SeasonUpdateResponseSchema.parse(saveSeasonData.value)
+
             await loadSeasons()
             if (selectedSeasonId.value) {
                 await refreshSelectedSeason()
             }
-            return season
+            return result
         }
 
         // Shared implementation for activate/deactivate

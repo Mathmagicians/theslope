@@ -61,6 +61,9 @@ test.describe('AdminAllergies - catalog CRUD', () => {
         const name = `Peanuts-${testSalt}-Create`
 
         await gotoCatalog(page)
+        // The card footer carries the same notes box as the poster
+        await expect(page.getByTestId('allergy-notes')).toContainText('Vigtige bemærkninger')
+
         await page.getByTestId('create-allergy-type').click()
         await expect(page.getByTestId('allergy-type-form')).toBeVisible()
 

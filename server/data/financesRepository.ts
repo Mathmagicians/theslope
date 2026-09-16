@@ -1,4 +1,3 @@
-import type {D1Database} from '@cloudflare/workers-types'
 import eventHandlerHelper from "../utils/eventHandlerHelper"
 import {getPrismaClientConnection} from "../utils/database"
 import {chunkArray, groupBy} from '~/utils/batchUtils'

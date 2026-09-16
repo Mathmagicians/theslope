@@ -1,4 +1,3 @@
-import type {D1Database} from '@cloudflare/workers-types'
 import {Prisma as _PrismaSkip, Prisma} from '@prisma/client'
 import {getPrismaClientConnection} from './allergyRepository'
 import type {

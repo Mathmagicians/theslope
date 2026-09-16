@@ -236,8 +236,8 @@ test.describe('Admin season URL persistence', () => {
  * Admin authorization tests - parametrized for admin vs member contexts
  *
  * Tests that:
- * - Admin users can see FormModeSelector and edit controls
- * - Member users see "admin-readonly-banner" and NO FormModeSelector
+ * - Admin users see the tab's edit control (planning: the season pencil, teams: FormModeSelector)
+ * - Member users see "admin-readonly-banner" and the edit control is absent
  */
 test.describe('Admin page authorization', () => {
   // Parametrized user contexts
@@ -246,22 +246,22 @@ test.describe('Admin page authorization', () => {
       role: 'admin',
       storageState: adminUIFile,
       expectBanner: false,
-      expectFormModeSelector: true,
+      expectEditControls: true,
       description: 'Admin user can edit'
     },
     {
       role: 'member',
       storageState: memberUIFile,
       expectBanner: true,
-      expectFormModeSelector: false,
+      expectEditControls: false,
       description: 'Member user is read-only'
     }
   ] as const
 
-  // Tabs with edit controls to test
+  // Tabs with edit controls to test - each tab names the control that opens its form
   const tabsWithEditControls = [
-    { path: 'planning', selector: '[data-testid="admin-planning"]' },
-    { path: 'teams', selector: '[data-testid="admin-teams"]' }
+    { path: 'planning', selector: '[data-testid="admin-planning"]', editControl: 'edit-season' },
+    { path: 'teams', selector: '[data-testid="admin-teams"]', editControl: 'form-mode-edit' }
   ]
 
   for (const userContext of userContexts) {
@@ -269,13 +269,13 @@ test.describe('Admin page authorization', () => {
       test.use({ storageState: userContext.storageState })
 
       test.beforeAll(async ({browser}) => {
-        // Ensure singleton active season exists (needed for FormModeSelector to appear)
+        // Ensure singleton active season exists (needed for the edit control to appear)
         const context = await validatedBrowserContext(browser)
         await SeasonFactory.createActiveSeason(context)
       })
 
       for (const tab of tabsWithEditControls) {
-        test(`${tab.path} tab - banner: ${userContext.expectBanner}, FormModeSelector: ${userContext.expectFormModeSelector}`, async ({ page }) => {
+        test(`${tab.path} tab - banner: ${userContext.expectBanner}, edit control: ${userContext.expectEditControls}`, async ({ page }) => {
           await page.goto(`/admin/${tab.path}`)
           await doScreenshot(page, `admin-auth-${userContext.role}-${tab.path}-initial`)
 
@@ -296,12 +296,12 @@ test.describe('Admin page authorization', () => {
             await expect(bannerLocator).not.toBeVisible()
           }
 
-          // Check FormModeSelector (edit/create buttons)
-          const formModeSelectorLocator = page.locator('[data-testid="form-mode-edit"]')
-          if (userContext.expectFormModeSelector) {
-            await expect(formModeSelectorLocator).toBeVisible()
+          // Check the tab's edit control
+          const editControlLocator = page.locator(`[data-testid="${tab.editControl}"]`)
+          if (userContext.expectEditControls) {
+            await expect(editControlLocator).toBeVisible()
           } else {
-            await expect(formModeSelectorLocator).not.toBeVisible()
+            await expect(editControlLocator).not.toBeVisible()
           }
         })
       }

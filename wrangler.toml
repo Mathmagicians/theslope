@@ -1,7 +1,7 @@
 #:schema node_modules/wrangler/config-schema.json
 # Top-level configuration: Used for LOCAL development (nuxt dev, wrangler dev)
 name = "theslope-local"
-compatibility_date = "2025-10-01"
+compatibility_date = "2026-09-16"   # = COMPATIBILITY_DATE in workers/common/cloudflare.ts (nuxt.config.ts reads it from there)
 compatibility_flags = ["nodejs_compat"]
 main = "./.output/server/index.mjs"
 assets = { directory = "./.output/public/", binding = "ASSETS" }

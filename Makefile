@@ -234,7 +234,12 @@ version-info: ## Output all version components as env vars
 # ============================================================================
 # DEPLOYMENT & LOGS
 # ============================================================================
-.PHONY: deploy-dev deploy-prod logs-dev logs-prod
+# Workers: "theslope" = the Nuxt app (root wrangler.toml); every other worker is a Nitro app in workers/<name>/
+WORKERS := sender
+worker_cfg = workers/$(1)/wrangler.toml
+
+.PHONY: deploy-dev deploy-prod logs-dev logs-prod deploy-theslope-dev deploy-theslope-prod \
+        deploy-sender-dev logs-sender-dev typegen
 
 # Deploy macro: $(1)=npm script, $(2)=environment name
 # Uses env vars if set (CI), otherwise calculates via version-info (local)
@@ -247,17 +252,56 @@ define deploy_to
 	echo "Deployed version $${NUXT_PUBLIC_RELEASE_VERSION:-$$RELEASE_VERSION} to $(2)."
 endef
 
-deploy-dev: ## Deploy to dev with version info
+# Nitro worker macros: $(1)=worker, $(2)=env — same artefact shape as the app (.output/server/index.mjs)
+define worker_deploy
+	@npx nitro build --dir workers/$(1) && npx wrangler deploy -c $(call worker_cfg,$(1)) --env $(2)
+endef
+define worker_tail
+	@npx wrangler tail -c $(call worker_cfg,$(1)) --env $(2) --format pretty
+endef
+
+deploy-theslope-dev: ## Deploy the app to dev with version info
 	$(call deploy_to,deploy,dev)
 
-deploy-prod: ## Deploy to prod with version info
+deploy-theslope-prod: ## Deploy the app to prod with version info
 	$(call deploy_to,deploy:prod,prod)
 
-logs-dev: ## Tail dev logs
+deploy-sender-dev: ## Build + deploy theslope-sender to dev
+	$(call worker_deploy,sender,dev)
+
+# CI entry points — names unchanged. Prerequisites run in order: consumers first, the app (producer) last.
+deploy-dev: $(foreach w,$(WORKERS),deploy-$(w)-dev) deploy-theslope-dev ## Deploy ALL workers to dev
+# prod has no sender yet: [env.prod] and deploy-sender-prod arrive with the "Pipe hardening + prod" package
+deploy-prod: deploy-theslope-prod ## Deploy ALL workers to prod
+
+logs-dev: ## Tail app logs (dev)
 	@npx wrangler tail theslope --env dev --format pretty
 
-logs-prod: ## Tail prod logs
+logs-prod: ## Tail app logs (prod)
 	@npx wrangler tail theslope --env prod --format pretty
+
+logs-sender-dev: ## Tail theslope-sender logs (dev)
+	$(call worker_tail,sender,dev)
+
+typegen: ## Regenerate wrangler binding typings for every worker (root + workers/*)
+	@npx wrangler types shared/types/worker-configuration.d.ts && $(foreach w,$(WORKERS),npx wrangler types workers/$(w)/worker-configuration.d.ts -c $(call worker_cfg,$(w)) &&) true
+
+# ============================================================================
+# SENDER — verify the delivery pipe end to end (first iteration: a real e-mail)
+# ============================================================================
+.PHONY: sender-verify-email-dev queues-info-dev
+
+# $(1)=env file, $(2)=env. Reads from the env file (with_env, like heynabo-login-*): CLOUDFLARE_ACCOUNT_ID,
+# CLOUDFLARE_API_TOKEN (Queues Edit), QUEUE_ID_SENDER, SENDER_TEST_EMAIL, SENDER_REPLY_TO (optional); from is pinned per env in the script
+define sender_verify_email
+	$(call with_env,$(1),workers/sender/scripts/verify-email.sh $(2))
+endef
+
+sender-verify-email-dev: ## Publish one TEST e-mail to the dev queue and watch the sender deliver it (real e-mail to SENDER_TEST_EMAIL)
+	$(call sender_verify_email,$(ENV_dev),dev)
+
+queues-info-dev: ## Backlog of the dev sender queue + its DLQ
+	@npx wrangler queues info theslope-sender-dev && npx wrangler queues info theslope-sender-dlq-dev
 
 # ============================================================================
 # THESLOPE API

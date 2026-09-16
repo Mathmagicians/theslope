@@ -19,6 +19,9 @@ export const ALLERGY_TEST_IDS = {
     sort: 'sort-by-count',
     // AllergenMultiSelector
     summaryBar: 'compare-summary-bar',
+    // AllergyNotes - catalog footer and poster
+    notes: 'allergy-notes',
+    notesItem: 'allergy-notes-item',
     // AllergyCatalogTable rows
     row: (allergyTypeId: number) => `allergy-row-${allergyTypeId}`
 } as const

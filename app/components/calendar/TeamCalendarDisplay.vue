@@ -42,7 +42,7 @@ const emit = defineEmits<{
 const {getTeamColor} = useCookingTeam()
 const {createEventList} = useCalendarEvents()
 const {getHolidayDatesFromDateRangeList} = useSeason()
-const {CALENDAR, SIZES} = useTheSlopeDesignSystem()
+const {CALENDAR, dayCircleClasses} = useTheSlopeDesignSystem()
 
 // Expand holiday ranges into individual dates
 const holidayDates = computed(() => {
@@ -109,7 +109,7 @@ const getCalendarDayClasses = (day: DateValue) => [
           <!-- Holiday takes precedence (green ring) -->
           <div
             v-if="isHoliday(day)"
-            :class="[SIZES.calendarCircle, CALENDAR.day.shape, CALENDAR.holiday]"
+            :class="dayCircleClasses(CALENDAR.holiday)"
           >
             {{ day.day }}
           </div>
@@ -152,7 +152,7 @@ const getCalendarDayClasses = (day: DateValue) => [
 
             <!-- Holidays -->
             <div v-if="holidays && holidays.length > 0" class="flex items-center gap-3">
-              <div :class="[SIZES.calendarCircle, CALENDAR.day.shape, CALENDAR.holiday, 'shrink-0']">
+              <div :class="dayCircleClasses(CALENDAR.holiday, 'shrink-0')">
                 1
               </div>
               <span>Ferie</span>

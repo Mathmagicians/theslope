@@ -1,13 +1,9 @@
-import type {D1Database} from '@cloudflare/workers-types'
-import type {Season} from '~/composables/useSeasonValidation'
+import type {Season, ReconciliationResult} from '~/composables/useSeasonValidation'
 import {useSeason} from '~/composables/useSeason'
 import {saveDinnerEvents, fetchDinnerEvents, deleteDinnerEvent} from '~~/server/data/financesRepository'
+import {deleteHeynaboEventAsSystem} from '~~/server/integration/heynabo/heynaboClient'
 
-export type ReconciliationResult = {
-    created: number
-    idempotent: number
-    deleted: number
-}
+export type {ReconciliationResult}
 
 /**
  * Reconcile dinner events for a season against its current config.
@@ -36,7 +32,8 @@ export async function reconcileDinnerEventsForSeason(
 
     if (reconciliation.delete.length > 0) {
         const idsToDelete = reconciliation.delete.map(e => e.id)
-        await deleteDinnerEvent(d1Client, idsToDelete)
+        // ADR-013: announced dinners on removed dates are deleted in Heynabo too (best-effort)
+        await deleteDinnerEvent(d1Client, idsToDelete, deleteHeynaboEventAsSystem)
         console.info(`${log} Deleted ${reconciliation.delete.length} dinner events`)
     }
 

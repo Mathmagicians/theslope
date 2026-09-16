@@ -1,11 +1,12 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { defineNuxtConfig } from 'nuxt/config'
+import { nitroBase } from './workers/common/nitro.base'
 
 export default defineNuxtConfig({
     colorMode: {
         preference: 'light'
     },
-    compatibilityDate: '2025-10-01',
+    compatibilityDate: nitroBase.compatibilityDate,
     components: [
         {
             path: '~/components',
@@ -20,7 +21,7 @@ export default defineNuxtConfig({
     },
 
     nitro: {
-        preset: "cloudflare_module",
+        preset: nitroBase.preset,
         experimental: {
             wasm: true,
             tasks: true  // Enable Nitro scheduled tasks (still experimental)

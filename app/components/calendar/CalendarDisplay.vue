@@ -2,7 +2,7 @@
 /**
  * CalendarDisplay - Shows potential cooking days and actual generated events
  *
- * Displays (design-system day circle: SIZES.calendarCircle + CALENDAR.day.shape):
+ * Displays (design-system day circle: dayCircleClasses(variant)):
  * - Holidays (CALENDAR.holiday - green ring)
  * - Potential cooking days (PLANNING_CALENDAR.day.potential - pink outline) - days matching
  *   cookingDays pattern minus holidays
@@ -27,7 +27,7 @@ interface Props {
 const props = defineProps<Props>()
 const {createEventList} = useCalendarEvents()
 const {getHolidayDatesFromDateRangeList, computeCookingDates} = useSeason()
-const {CALENDAR, PLANNING_CALENDAR, SIZES} = useTheSlopeDesignSystem()
+const {PLANNING_CALENDAR, CALENDAR, dayCircleClasses} = useTheSlopeDesignSystem()
 
 // Expand holiday ranges into individual dates
 const holidayDates = computed(() => getHolidayDatesFromDateRangeList(props.holidays))
@@ -80,7 +80,7 @@ const hasGeneratedEvent = (eventLists: DayEventList[]) => {
       <!-- Holiday takes precedence (green ring) -->
       <div
         v-if="isHoliday(day)"
-        :class="[SIZES.calendarCircle, CALENDAR.day.shape, CALENDAR.holiday]"
+        :class="dayCircleClasses(CALENDAR.holiday)"
       >
         {{ day.day }}
       </div>
@@ -88,7 +88,7 @@ const hasGeneratedEvent = (eventLists: DayEventList[]) => {
       <!-- Potential cooking day with optional generated event (filled vs outline) -->
       <div
         v-else-if="hasPotentialCooking(eventLists)"
-        :class="[SIZES.calendarCircle, CALENDAR.day.shape, hasGeneratedEvent(eventLists) ? PLANNING_CALENDAR.day.generated : PLANNING_CALENDAR.day.potential]"
+        :class="dayCircleClasses(hasGeneratedEvent(eventLists) ? PLANNING_CALENDAR.day.generated : PLANNING_CALENDAR.day.potential)"
       >
         {{ day.day }}
       </div>

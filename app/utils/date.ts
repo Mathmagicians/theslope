@@ -7,6 +7,7 @@ import {
 import {da} from "date-fns/locale"
 import type {DateRange, WeekDay, WeekDayMap} from "~/types/dateTypes"
 import {WEEKDAYS} from "~/types/dateTypes"
+import {capitalize} from "~/utils/utils"
 import {CalendarDate, type DateValue, toZoned, toCalendarDateTime, Time} from '@internationalized/date'
 
 export const DATE_SETTINGS =
@@ -171,8 +172,7 @@ export function translateToDanish(day: string): string {
  */
 export function formatWeekdayCompact(day: WeekDay, ultraCompact: boolean = false): string {
     const length = ultraCompact ? 1 : 3
-    const abbreviated = day.substring(0, length)
-    return abbreviated.charAt(0).toUpperCase() + abbreviated.slice(1)
+    return capitalize(day.substring(0, length))
 }
 
 /**

@@ -16,7 +16,6 @@
  *
  * ADR-014: TRUE batch for creates and deletes, chunked Promise.all for updates
  */
-import type {D1Database} from '@cloudflare/workers-types'
 import {importFromHeynabo} from '~~/server/integration/heynabo/heynaboClient'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {useHeynaboValidation, type HeynaboImportResponse} from '~/composables/useHeynaboValidation'

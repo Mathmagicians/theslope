@@ -3,6 +3,7 @@ import type {TicketPrice} from "~/composables/useTicketPriceValidation"
 import {getErrorMessage, mapZodErrorsToFormErrors} from "~/utils/validtation"
 
 // COMPONENT DEPENDENCIES
+const {BUTTONS, COLOR, ICONS} = useTheSlopeDesignSystem()
 const {TicketTypeSchema, TicketPricesArraySchema, createTicketPrice} = useTicketPriceValidation()
 const TICKET_TYPES = TicketTypeSchema.options
 const TicketType = TicketTypeSchema.enum
@@ -82,7 +83,8 @@ const onAddTicketPrice = () => {
 <template>
   <div>
     <!-- Add new ticket price -->
-    <UCard v-show="!props.disabled" class="mb-4">
+    <!-- v-if, not v-show: view mode drops the draft controls out of the DOM and the tab order, as the row trash does -->
+    <UCard v-if="!props.disabled" class="mb-4">
       <template #header>
         <h3 class="text-sm font-semibold">Tilføj billettyper</h3>
       </template>
@@ -138,10 +140,10 @@ const onAddTicketPrice = () => {
       <template #footer>
         <div class="flex justify-end">
           <UButton
-              name="addTicketPrice"
-              color="info"
-              icon="i-heroicons-ticket"
-              variant="outline"
+              v-bind="BUTTONS.secondaryAction"
+              data-testid="ticket-price-add"
+              :color="COLOR.info"
+              :icon="ICONS.ticket"
               @click="onAddTicketPrice">
             Tilføj billet
           </UButton>
@@ -164,16 +166,15 @@ const onAddTicketPrice = () => {
                   :ui="{ base: 'truncate-none' }"
               >
                 <template #leading>
-                  <UIcon name="i-heroicons-ticket"/>
+                  <UIcon :name="ICONS.ticket"/>
                 </template>
               </UInput>
               <UButton
                   v-if="!props.disabled"
-                  :name="`removeTicketPrice-${index}`"
-                  color="error"
-                  icon="i-heroicons-trash"
-                  size="sm"
-                  variant="ghost"
+                  v-bind="BUTTONS.edit"
+                  :data-testid="`ticket-price-remove-${index}`"
+                  :icon="ICONS.trash"
+                  :aria-label="`Fjern ${formatTicketType(ticket.ticketType)}-billet`"
                   class="mt-1"
                   @click="model.splice(index, 1)"/>
             </div>
