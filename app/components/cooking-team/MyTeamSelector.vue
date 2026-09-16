@@ -36,7 +36,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { COLOR, SIZES, ORIENTATIONS } = useTheSlopeDesignSystem()
+const { SIZES, ORIENTATIONS, ICONS, ALERTS } = useTheSlopeDesignSystem()
 const { getTeamColor, getTeamShortName } = useCookingTeam()
 
 // Tab orientation using design system helper:
@@ -80,10 +80,8 @@ const teamTabs = computed(() => {
     <!-- Empty state -->
     <UAlert
       v-if="teams.length === 0"
-      type="info"
-      variant="soft"
-      :color="COLOR.info"
-      icon="i-heroicons-user-group"
+      v-bind="ALERTS.info"
+      :icon="ICONS.userGroup"
     >
       <template #title>
         Ingen madhold

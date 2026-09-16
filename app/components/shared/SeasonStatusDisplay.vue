@@ -63,7 +63,7 @@ const emit = defineEmits<{
 
 const planStore = usePlanStore()
 const {getSeasonStatus, canSeasonBeActive} = useSeason()
-const {ICONS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, TYPOGRAPHY, ALERTS} = useTheSlopeDesignSystem()
 
 // Reactively get season from store - updates when store changes
 const season = computed(() => {
@@ -104,34 +104,30 @@ const alertConfig = computed(() => {
   switch (status.value) {
     case SEASON_STATUS.ACTIVE:
       return {
-        color: 'success' as const,
+        kind: 'success' as const,
         icon: 'i-heroicons-check-circle-solid',
-        variant: 'subtle' as const,
         title: `Aktiv sæson ${emoji}`,
         description: 'Denne sæson er synlig for alle brugere, som kan se og booke fællesspisninger. Kun én sæson kan være aktiv ad gangen.'
       }
     case SEASON_STATUS.FUTURE:
       return {
-        color: 'success' as const,
+        kind: 'info' as const,
         icon: 'i-heroicons-calendar',
-        variant: 'outline' as const,
         title: `Fremtidig sæson ${emoji}`,
         description: 'Denne sæson er kun synlig for administratorer. Når du aktiverer sæsonen, kan beboere se og booke fællesspisninger.'
       }
     case SEASON_STATUS.CURRENT:
       return {
-        color: 'success' as const,
+        kind: 'warning' as const,
         icon: 'i-heroicons-calendar',
-        variant: 'outline' as const,
         title: `Inaktiv sæson ${emoji}`,
         description: 'Datoerne for denne sæson siger det er nu! Men den er ikke aktiveret. Aktiver sæsonen for at gøre den synlig for beboere.'
       }
     case SEASON_STATUS.PAST:
     default:
       return {
-        color: 'neutral' as const,
+        kind: 'neutral' as const,
         icon: 'i-heroicons-archive-box-solid',
-        variant: 'outline' as const,
         title: `Arkiveret sæson ${emoji}`,
         description: 'Denne sæson er afsluttet og kun synlig for administratorer. Gamle sæsoner kan ikke genaktiveres.'
       }
@@ -155,11 +151,10 @@ const showButton = computed(() => {
 <template>
   <UAlert
     v-if="alertConfig"
-    :color="alertConfig.color"
+    v-bind="{...ALERTS[alertConfig.kind], ...ALERTS.withActions}"
     :icon="alertConfig.icon"
     :title="alertConfig.title"
     :description="alertConfig.description"
-    :variant="alertConfig.variant"
   >
     <template v-if="showButton" #actions>
       <UFormField :hint="season?.isActive ? 'Fællesspisnings sæson er i gang' : 'Denne sæson er ikke aktiv'" :ui="{hint: TYPOGRAPHY.bodyTextMuted}">

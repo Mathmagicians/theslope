@@ -17,7 +17,7 @@ const {users, isUsersLoading, isUsersErrored, usersError} = storeToRefs(store)
 
 // Use existing role badge definitions
 const {roleLabels} = useUserRolesUi()
-const {COMPONENTS, ICONS} = useTheSlopeDesignSystem()
+const {COMPONENTS, ICONS, ALERTS} = useTheSlopeDesignSystem()
 
 // Search/filter state
 const searchQuery = ref('')
@@ -149,10 +149,10 @@ const pagination = ref({
     <template #header>
       <div class="px-6">
         <UAlert
+            v-bind="ALERTS.info"
+            icon="i-hugeicons-authorized"
             title=" Brugere"
             description="Her kan du se de brugere, som vi har importeret fra Heynabo. Du kan også se, hvilke systemroller brugerne har. Brug System-fanen til at køre Heynabo import."
-            icon="i-hugeicons-authorized"
-            variant="outline"
         />
       </div>
     </template>

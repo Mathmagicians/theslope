@@ -41,7 +41,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR, SIZES, ORIENTATIONS, TYPOGRAPHY } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, ORIENTATIONS, TYPOGRAPHY, ALERTS } = useTheSlopeDesignSystem()
 
 // Business logic from useBooking
 const { getStepConfig } = useBooking()
@@ -96,8 +96,7 @@ const steps = computed(() => {
     <!-- Cancelled: Empty state -->
     <UAlert
       v-if="isCancelled"
-      :color="COLOR.error"
-      variant="soft"
+      v-bind="ALERTS.error"
       icon="i-heroicons-x-circle"
     >
       <template #title>

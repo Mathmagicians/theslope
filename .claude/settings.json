@@ -13,7 +13,13 @@
       "WebFetch(domain:nuxt.com)",
       "WebFetch(domain:ui4.nuxt.com)",
       "WebFetch(domain:ui.nuxt.com)",
-      "Bash(npx wrangler d1 execute=:* --remote=:* --command :*SELECT:*)"
+      "Bash(npx wrangler d1 execute=:* --remote=:* --command :*SELECT:*)",
+      "Bash(npx wrangler queues --help)",
+      "Bash(wrangler queues --help)",
+      "Bash(npx wrangler queues list:*)",
+      "Bash(wrangler queues list:*)",
+      "Bash(npx wrangler queues info:*)",
+      "Bash(wrangler queues info:*)"
     ],
     "deny": [
       "Read(./.cookies.txt)",
@@ -24,7 +30,25 @@
       "Bash(npm run dev:*)",
       "Bash(git stash:*)",
       "Bash(python:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(npx wrangler queues create:*)",
+      "Bash(wrangler queues create:*)",
+      "Bash(npx wrangler queues update:*)",
+      "Bash(wrangler queues update:*)",
+      "Bash(npx wrangler queues delete:*)",
+      "Bash(wrangler queues delete:*)",
+      "Bash(npx wrangler queues purge:*)",
+      "Bash(wrangler queues purge:*)",
+      "Bash(npx wrangler queues pause-delivery:*)",
+      "Bash(wrangler queues pause-delivery:*)",
+      "Bash(npx wrangler queues resume-delivery:*)",
+      "Bash(wrangler queues resume-delivery:*)",
+      "Bash(npx wrangler queues consumer:*)",
+      "Bash(wrangler queues consumer:*)",
+      "Bash(npx wrangler queues subscription:*)",
+      "Bash(wrangler queues subscription:*)",
+      "Bash(npx wrangler email:*)",
+      "Bash(wrangler email:*)"
     ],
     "ask": [
       "Bash(npx wrangler :* --remote :*)"

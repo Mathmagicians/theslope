@@ -20,7 +20,7 @@ interface Props {
 const props = defineProps<Props>()
 
 // Design system
-const { COLOR, ICONS } = useTheSlopeDesignSystem()
+const { COLOR, ICONS, ALERTS } = useTheSlopeDesignSystem()
 
 // Team utilities
 const { getTeamShortName } = useCookingTeam()
@@ -73,10 +73,8 @@ const roleConfig = computed(() => {
 <template>
   <UAlert
     v-if="userRole && roleConfig"
-    :color="isChef ? COLOR.warning : COLOR.info"
-    variant="soft"
+    v-bind="isChef ? ALERTS.warning : ALERTS.info"
     :icon="roleConfig.icon"
-    :ui="{ root: 'w-full' }"
   >
     <template #title>
       {{ roleConfig.title }}

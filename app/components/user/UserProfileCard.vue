@@ -60,7 +60,7 @@ const props = withDefaults(defineProps<Props>(), {
   showRoleManager: false
 })
 
-const {TYPOGRAPHY, SIZES, ICONS, IMG, COMPONENTS} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, SIZES, ICONS, IMG, COMPONENTS, ALERTS} = useTheSlopeDesignSystem()
 const {roleLabels} = useUserRolesUi()
 const {getUserUrl} = useHeynabo()
 const authStore = useAuthStore()
@@ -332,11 +332,9 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
 
         <!-- Info alert -->
         <UAlert
-          icon="i-heroicons-shield-check"
-          color="info"
-          variant="soft"
+          v-bind="ALERTS.info"
+          :icon="ICONS.authorize"
           title="Om systemroller"
-          :ui="{ description: 'text-sm' }"
         >
           <template #description>
             <ul class="list-disc list-inside space-y-1 mt-1">

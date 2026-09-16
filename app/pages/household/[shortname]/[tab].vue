@@ -130,7 +130,7 @@ const ribbon = computed(() => {
 
 // Format household title: address + family name
 const { formatHouseholdFamilyName } = useHousehold()
-const { TYPOGRAPHY, ICONS, COMPONENTS, COLOR } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, ICONS, COMPONENTS, COLOR, ALERTS } = useTheSlopeDesignSystem()
 const householdAddress = computed(() => selectedHousehold.value?.address ?? '')
 const householdFamilyName = computed(() =>
   selectedHousehold.value?.inhabitants
@@ -179,10 +179,9 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
           <!-- Visitor banner: non-member, admin override NOT active -->
           <UAlert
             v-if="!isMember && !adminOverrideActive"
+            v-bind="{...ALERTS.info, ...ALERTS.withActions}"
             data-testid="visitor-banner"
             icon="i-heroicons-eye"
-            color="info"
-            variant="subtle"
             title="Du besøger nu en anden husstand end din egen"
             description="Kigge, ikke røre"
           >
@@ -202,10 +201,9 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
           <!-- Admin override active banner -->
           <UAlert
             v-if="adminOverrideActive"
+            v-bind="{...ALERTS.warning, ...ALERTS.withActions}"
             data-testid="admin-override-active"
             :icon="ICONS.authorize"
-            color="warning"
-            variant="subtle"
             title="Admin rører, men forsigtigt"
           >
             <template #actions>

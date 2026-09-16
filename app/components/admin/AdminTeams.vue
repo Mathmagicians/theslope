@@ -137,7 +137,6 @@ const store = usePlanStore()
 const {
   isSeasonsLoading,
   isSelectedSeasonLoading,
-  isPlanStoreReady,
   isNoSeasons,
   selectedSeason,
   activeSeason,
@@ -155,7 +154,6 @@ const {
 
 // Get teams from selected season - ALWAYS show live data
 const teams = computed(() => selectedSeason.value?.CookingTeams ?? [])
-const isNoTeams = computed(() => teams.value.length === 0)
 
 // FORM MANAGEMENT - useEntityFormManager for URL/mode management only
 const {formMode, onModeChange: baseOnModeChange} = useEntityFormManager<CookingTeamDisplay[]>({
@@ -245,7 +243,8 @@ const teamTabs = computed(() => {
 })
 
 const showAdminTeams = computed(() => {
-  return !isSelectedSeasonLoading.value && selectedSeason.value && (!isNoTeams.value || formMode.value === FORM_MODES.CREATE)
+  // A season with no teams still renders: the table shows its own #empty slot
+  return !isSelectedSeasonLoading.value && !!selectedSeason.value
 })
 
 // Action button loading state - used for both :loading and :disabled (NuxtUI pattern)
@@ -402,7 +401,7 @@ interface TableRow {
   original: CookingTeamDisplay
 }
 
-const {ICONS} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, BUTTONS, ALERTS} = useTheSlopeDesignSystem()
 
 const columns = [
   {
@@ -457,22 +456,6 @@ const columns = [
     <template #default>
       <Loader v-if="isSelectedSeasonLoading || isSeasonsLoading" text="Henter data for fællesspisningssæson"/>
       <AdminToCreateSeason v-else-if="isNoSeasons"/>
-      <UAlert
-          v-else-if="isPlanStoreReady && isNoTeams && formMode !== FORM_MODES.CREATE"
-          title="Her ser lidt tomt ud!"
-          description="Ingen madhold oprettet endnu ..."
-          :avatar="{text: '💤'}"
-          :actions="[
-      {
-        label: 'Opret nye madhold',
-        color: 'secondary',
-        variant: 'solid',
-        to: '/admin/teams?mode=create',
-        icon: 'i-heroicons-plus-circle',
-      }
-    ]"
-          color="info"
-          class="space-y-4"/>
       <div v-if="showAdminTeams">
         <!-- CREATE MODE: Team count input + preview -->
         <div v-if="formMode === FORM_MODES.CREATE" class="px-4 pb-4 space-y-4">
@@ -628,23 +611,28 @@ v-else
               </div>
             </template>
 
+            <!-- The table owns its empty state: no separate alert rendered instead of the table -->
             <template #empty>
-              <div class="flex flex-col items-center justify-center py-6 gap-3">
-                <UIcon name="i-heroicons-user-group" class="w-8 h-8 text-gray-400"/>
-                <p data-testid="teams-empty-state" class="text-sm text-gray-500">Ingen madhold endnu. Opret nogle
-                  madhold
-                  for at komme i gang!</p>
-                <UButton
-                    v-if="props.canEdit && !disabledModes.includes(FORM_MODES.CREATE)"
-                    name="create-new-team"
-                    color="secondary"
-                    size="sm"
-                    icon="i-heroicons-plus-circle"
-                    @click="onModeChange(FORM_MODES.CREATE)"
-                >
-                  Opret madhold
-                </UButton>
-              </div>
+              <UAlert
+                  v-bind="ALERTS.emptyState"
+                  data-testid="teams-empty-state"
+                  :avatar="{text: '💤', size: SIZES.emptyStateAvatar}"
+                  title="Her ser lidt tomt ud!"
+                  description="Ingen madhold oprettet endnu - opret nogle madhold for at komme i gang!"
+              >
+                <template v-if="props.canEdit && !disabledModes.includes(FORM_MODES.CREATE)" #actions>
+                  <UButton
+                      v-bind="BUTTONS.primaryAction"
+                      name="create-new-team"
+                      data-testid="create-new-team"
+                      color="secondary"
+                      :icon="ICONS.plusCircle"
+                      @click="onModeChange(FORM_MODES.CREATE)"
+                  >
+                    Opret madhold
+                  </UButton>
+                </template>
+              </UAlert>
             </template>
           </UTable>
 

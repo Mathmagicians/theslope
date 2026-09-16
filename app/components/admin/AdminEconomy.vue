@@ -27,7 +27,7 @@ const props = withDefaults(defineProps<{
 
 const {formatPrice} = useTicket()
 const {groupByCostEntry, groupByHouseholdEntry, calculateCurrentBillingPeriod, controlInvoices, formatTicketCounts} = useBilling()
-const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS} = useTheSlopeDesignSystem()
 const {OrderDisplaySchema} = useBookingValidation()
 
 // Plan store for future dinners
@@ -607,9 +607,7 @@ const dinnerBreakdownStats = computed(() => {
           </template>
           <template #empty>
             <UAlert
-                :icon="ICONS.robotHappy"
-                color="neutral"
-                variant="subtle"
+                v-bind="ALERTS.neutral"
                 title="Ingen fremtidige bestillinger"
                 description="Der er ingen bookede middage i fremtiden endnu."
             />
@@ -739,9 +737,7 @@ const dinnerBreakdownStats = computed(() => {
                       </template>
                       <template #empty>
                         <UAlert
-                            :icon="ICONS.robotHappy"
-                            color="neutral"
-                            variant="subtle"
+                            v-bind="ALERTS.neutral"
                             title="Tomt her!"
                             description="Ingen transaktioner i denne periode endnu."
                         />
@@ -875,9 +871,7 @@ const dinnerBreakdownStats = computed(() => {
                         </div>
                         <UAlert
                             v-else
-                            :icon="ICONS.robotHappy"
-                            color="neutral"
-                            variant="subtle"
+                            v-bind="ALERTS.neutral"
                             title="Tomt her!"
                             description="Ingen transaktioner på denne faktura."
                         />

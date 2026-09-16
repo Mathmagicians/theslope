@@ -2,7 +2,7 @@
 import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
 
 // Design system
-const { COLOR, COMPONENTS, SIZES, LAYOUTS, BUTTONS, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { COLOR, COMPONENTS, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 // PROPS - allergyType absent in edit mode means CREATE.
 // householdShortNames is supplied by the parent (ADR-007: no server data in this card).
@@ -226,10 +226,8 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
     <!-- Empty State -->
     <UAlert
       v-else
-      variant="soft"
-      :color="COLOR.success"
+      v-bind="ALERTS.emptyState"
       :avatar="{ text: emptyStateMessage!.emoji, size: SIZES.emptyStateAvatar }"
-      :ui="COMPONENTS.emptyStateAlert"
     >
       <template #title>
         {{ emptyStateMessage!.text }}

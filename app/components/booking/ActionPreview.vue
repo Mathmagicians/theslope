@@ -23,15 +23,14 @@ const props = withDefaults(defineProps<Props>(), {
   title: 'Du er ved at ændre familiens booking'
 })
 
-const {ICONS, COLOR, SIZES} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, ALERTS} = useTheSlopeDesignSystem()
 </script>
 
 <template>
   <UAlert
     v-if="props.items.length > 0"
+    v-bind="ALERTS.legend"
     :icon="ICONS.ticket"
-    :color="COLOR.neutral"
-    variant="outline"
     :title="props.title"
   >
     <template #description>

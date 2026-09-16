@@ -51,7 +51,7 @@ import {useDinnerDateParam, useBookingView} from '~/composables/useBookingView'
 import {useQueryParam} from '~/composables/useQueryParam'
 
 // Design system
-const { COLOR, BACKGROUNDS, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { COLOR, BACKGROUNDS, ICONS, ALERTS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 // Fun empty state for no team assigned
 const noTeamMessage = getRandomEmptyMessage('noTeamAssigned')
@@ -210,9 +210,7 @@ useHead({
   <UPage v-else-if="isSelectedSeasonInitialized && !selectedSeason">
     <div :class="`p-4 md:p-8 ${BACKGROUNDS.card}`">
       <UAlert
-        type="info"
-        variant="soft"
-        :color="COLOR.info"
+        v-bind="ALERTS.emptyState"
         :icon="ICONS.robotDead"
       >
         <template #title>
@@ -307,8 +305,7 @@ useHead({
           />
           <UAlert
             v-else
-            variant="soft"
-            :color="COLOR.info"
+            v-bind="ALERTS.info"
           >
             <template #title>{{ noTeamMessage.emoji }} {{ noTeamMessage.text }}</template>
           </UAlert>

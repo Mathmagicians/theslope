@@ -90,7 +90,7 @@ const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Design system
-const { WEEKDAY, COMPONENTS, COLOR, ICONS, BUTTONS, SIZES } = useTheSlopeDesignSystem()
+const { WEEKDAY, COMPONENTS, COLOR, ICONS, BUTTONS, SIZES, ALERTS } = useTheSlopeDesignSystem()
 const { powerMode } = COMPONENTS
 
 // Prepare table data with synthetic "all members" power row + individual inhabitants
@@ -323,13 +323,10 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
               <!-- Power mode warning alert -->
               <UAlert
                   v-if="row.original.isSynthetic"
-                  :icon="COMPONENTS.powerMode.alert.icon"
-                  :color="COMPONENTS.powerMode.alert.color"
-                  :variant="COMPONENTS.powerMode.alert.variant"
+                  v-bind="ALERTS.warning"
+                  :icon="COMPONENTS.powerMode.icon"
                   title="Du er ved at aktivere power mode"
                   :description="`Her kan du editere hele familien på en gang. Ændringer påvirker alle ${household.inhabitants.length} medlemmer i husstanden. Individuelle præferencer overskrives.`"
-                  class="min-w-0"
-                  :ui="{ title: 'break-words', description: 'break-words' }"
               />
 
               <!-- Preference editor -->
@@ -388,9 +385,8 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
       <!-- Last operation result (persistent, subtle) -->
       <UAlert
           v-if="lastPreferenceResult"
+          v-bind="lastPreferenceResult.errored > 0 ? ALERTS.error : ALERTS.neutral"
           :icon="lastPreferenceResult.errored > 0 ? ICONS.robotDead : ICONS.robotHappy"
-          :color="lastPreferenceResult.errored > 0 ? 'error' : 'neutral'"
-          variant="subtle"
           title="Sidste ændring"
           :description="`Du har ændret præferencer, og familiens bookinger har ændret sig: ${formatScaffoldResult(lastPreferenceResult, 'past')}`"
           data-testid="last-result-alert"
@@ -398,9 +394,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
 
       <!-- Info alert -->
       <UAlert
-          icon="i-heroicons-information-circle"
-          color="primary"
-          variant="soft"
+          v-bind="ALERTS.info"
           title="Sådan redigerer du præferencer"
       >
         <template #description>

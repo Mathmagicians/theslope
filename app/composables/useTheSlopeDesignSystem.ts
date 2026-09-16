@@ -1,5 +1,5 @@
 import type {WeekDay} from '~/types/dateTypes'
-import type {AvatarProps, ButtonProps, BadgeProps, ChipProps} from '@nuxt/ui'
+import type {AlertProps, AvatarProps, ButtonProps, BadgeProps, ChipProps} from '@nuxt/ui'
 
 // NuxtUI size types extracted from component props
 export type NuxtUISize = NonNullable<ButtonProps['size']>
@@ -398,20 +398,6 @@ export const COMPONENTS = {
         RELEASED: `${BG.gray[500]} ${TEXT.white} ${BORDER.gray[600]} border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border`
     },
 
-    // Empty state alert - centered with large text and emoji
-    emptyStateAlert: {
-        root: 'text-center',
-        title: 'text-lg md:text-xl font-semibold',
-        description: 'text-sm md:text-base'
-    },
-
-    // Empty state alert compact - subtle inline empty state (mocha/past color)
-    emptyStateAlertCompact: {
-        root: `text-center py-2 ${BG.mocha[100]} ${TEXT.mocha[900]} rounded-lg`,
-        title: 'text-sm font-normal',
-        description: 'text-xs'
-    },
-
     // Responsive row icon sizing (matches birthday cake pattern)
     rowIconClass: 'size-4 md:size-6',
 
@@ -422,11 +408,7 @@ export const COMPONENTS = {
         buttonIcon: 'i-heroicons-bolt',
         iconClass: 'size-4 md:size-6 text-warning-500',
         ticketConfig: {label: 'Powermode!', color: 'warning' as const, icon: 'i-heroicons-bolt'},
-        alert: {
-            color: 'warning' as const,
-            variant: 'soft' as const,
-            icon: 'i-fluent-emoji-high-contrast-woman-superhero'
-        },
+        // Power-mode alerts bind ALERTS.warning and override the icon with `powerMode.icon`
         card: {
             color: 'warning' as const,
             variant: 'outline' as const
@@ -717,11 +699,14 @@ export const ICONS = {
     book: 'i-heroicons-book-open'
 } as const
 
+/** Residency colours double as alert kinds, so a residency alert is `v-bind="ALERTS[residency.color]"` */
+export type ResidencyAlertKind = Extract<AlertKind, 'success' | 'error' | 'neutral'>
+
 /** Residency status → display config (ribbon, alert, badge). null = active, no display needed */
-export const RESIDENCY_CONFIG: Record<import('~/composables/useHousehold').ResidencyStatus, { type: RibbonType, prefix: string, description: string, icon: string, color: NuxtUIColor, dateField: 'movedInDate' | 'moveOutDate' } | null> = {
-    'pending':   { type: 'new',    prefix: 'Indflytter',  description: 'Familien flytter ind d.',    icon: ICONS.moveIn,  color: COLOR.success as NuxtUIColor, dateField: 'movedInDate' },
-    'leaving':   { type: 'cancel', prefix: 'Fraflytter',  description: 'Familien fraflytter d.',     icon: ICONS.moveOut, color: COLOR.error as NuxtUIColor,   dateField: 'moveOutDate' },
-    'moved-out': { type: 'past',   prefix: 'Fraflyttet',  description: 'Familien er fraflyttet d.',  icon: ICONS.moveOut, color: COLOR.neutral as NuxtUIColor, dateField: 'moveOutDate' },
+export const RESIDENCY_CONFIG: Record<import('~/composables/useHousehold').ResidencyStatus, { type: RibbonType, prefix: string, description: string, icon: string, color: ResidencyAlertKind, dateField: 'movedInDate' | 'moveOutDate' } | null> = {
+    'pending':   { type: 'new',    prefix: 'Indflytter',  description: 'Familien flytter ind d.',    icon: ICONS.moveIn,  color: COLOR.success, dateField: 'movedInDate' },
+    'leaving':   { type: 'cancel', prefix: 'Fraflytter',  description: 'Familien fraflytter d.',     icon: ICONS.moveOut, color: COLOR.error,   dateField: 'moveOutDate' },
+    'moved-out': { type: 'past',   prefix: 'Fraflyttet',  description: 'Familien er fraflyttet d.',  icon: ICONS.moveOut, color: COLOR.neutral, dateField: 'moveOutDate' },
     'active':    null
 }
 
@@ -951,6 +936,94 @@ const createResponsiveButtons = (isMd: Ref<boolean>) => {
         }
     }
 }
+
+type AlertUi = {root: string, title: string, description: string}
+type AlertKindConfig = {
+    color: NonNullable<AlertProps['color']>
+    variant: NonNullable<AlertProps['variant']>
+    icon?: string
+    ui: AlertUi
+}
+
+/**
+ * Nuxt UI's alert root is `overflow-hidden` and its title/description carry no wrap class,
+ * so an unbreakable token (a mail address, a URL) is clipped instead of wrapped on a phone.
+ * `wrap-anywhere` counts in min-content sizing where `break-words` does not, and `min-w-0`
+ * lets the alert shrink inside a flex parent rather than pushing past the viewport.
+ */
+const alertUi = (extra: Partial<AlertUi> = {}): AlertUi => ({
+    root: ['min-w-0', extra.root].filter(Boolean).join(' '),
+    title: ['wrap-anywhere', extra.title].filter(Boolean).join(' '),
+    description: ['wrap-anywhere', extra.description].filter(Boolean).join(' ')
+})
+
+/**
+ * createResponsiveAlerts - THE alert pattern (ADR-019)
+ *
+ * `v-bind` a kind and pass only domain props: `:title`, `:description`, an `:icon` override,
+ * `:avatar`, `data-testid`, a margin `class`. Colour and variant belong to the kind, never to
+ * the site - `tests/component/architecture/designSystemUsage.unit.spec.ts` enforces that.
+ *
+ * @example <UAlert v-bind="ALERTS.warning" title="Fraflytning" />
+ * @example <UAlert v-bind="{...ALERTS.warning, ...ALERTS.withActions}"><template #actions>…
+ * @example <UAlert v-bind="errored ? ALERTS.error : ALERTS.neutral" />   // colour by state
+ *
+ * @param isMd - Responsive breakpoint ref
+ */
+export const createResponsiveAlerts = (isMd: Ref<boolean>) => ({
+    /** Prose, banners, "how this works" */
+    info: {color: 'info', variant: 'subtle', icon: ICONS.info, ui: alertUi()} satisfies AlertKindConfig,
+
+    /** Quiet system feedback: nothing here yet, read-only, last result */
+    neutral: {color: 'neutral', variant: 'subtle', icon: ICONS.robotHappy, ui: alertUi()} satisfies AlertKindConfig,
+
+    /** Something went right and stays right (active season, residency confirmed) */
+    success: {color: 'success', variant: 'soft', icon: ICONS.checkCircle, ui: alertUi()} satisfies AlertKindConfig,
+
+    /** The user should look before acting (deadlines, power mode, poster notes) */
+    warning: {color: 'warning', variant: 'soft', icon: ICONS.warning, ui: alertUi()} satisfies AlertKindConfig,
+
+    /** Something failed or is cancelled */
+    error: {color: 'error', variant: 'soft', icon: ICONS.exclamationCircle, ui: alertUi()} satisfies AlertKindConfig,
+
+    /** "Forklaring" panels: a bordered box around badges, lists and selectors. Icon per site */
+    legend: {color: 'neutral', variant: 'outline', ui: alertUi()} satisfies AlertKindConfig,
+
+    /** Empty state - centred, large, emoji avatar. Stays vertical even with a CTA in #actions */
+    emptyState: {
+        color: 'neutral',
+        variant: 'soft',
+        ui: alertUi({
+            root: 'text-center',
+            title: 'text-lg md:text-xl font-semibold',
+            description: 'text-sm md:text-base'
+        })
+    } satisfies AlertKindConfig,
+
+    /** Empty state inside a panel or a row - compact, mocha tinted */
+    emptyStateCompact: {
+        color: 'neutral',
+        variant: 'soft',
+        ui: alertUi({
+            root: `text-center py-2 ${BG.mocha[100]} ${TEXT.mocha[900]} rounded-lg`,
+            title: 'text-sm font-normal',
+            description: 'text-xs'
+        })
+    } satisfies AlertKindConfig,
+
+    /**
+     * Modifier, not a kind: spread AFTER a kind when the alert carries action buttons.
+     * Actions sit beside the text on desktop and below it on a phone.
+     * @example <UAlert v-bind="{...ALERTS.info, ...ALERTS.withActions}">
+     */
+    get withActions() {
+        return {orientation: (isMd.value ? 'horizontal' : 'vertical') as NonNullable<AlertProps['orientation']>}
+    }
+})
+
+export type ResponsiveAlerts = ReturnType<typeof createResponsiveAlerts>
+/** The alert kinds a component may take as a prop (`kind?: AlertKind`) */
+export type AlertKind = Exclude<keyof ResponsiveAlerts, 'withActions'>
 
 /**
  * createOrientations - Responsive orientation patterns for UFieldGroup
@@ -1479,6 +1552,9 @@ export const useTheSlopeDesignSystem = () => {
 
         // Responsive buttons (standardized button configs with sizing)
         BUTTONS: createResponsiveButtons(isMd),
+
+        // Responsive alerts (ADR-019: v-bind a kind, never raw color/variant)
+        ALERTS: createResponsiveAlerts(isMd),
 
         // Low-level builders (only if you need custom combinations)
         BG,

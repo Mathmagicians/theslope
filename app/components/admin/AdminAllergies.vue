@@ -39,7 +39,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR, COMPONENTS, SIZES, LAYOUTS, BUTTONS, ICONS } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS } = useTheSlopeDesignSystem()
 
 // Responsive mount point for the detail panel - provided by the default layout;
 // false during SSR, so first paint renders the mobile mount
@@ -358,10 +358,8 @@ const catalogEmptyState = {
             <!-- Empty state -->
             <template #empty>
               <UAlert
-                  variant="soft"
-                  :color="COLOR.success"
+                  v-bind="ALERTS.emptyState"
                   :avatar="{ text: catalogEmptyState.emoji, size: SIZES.emptyStateAvatar }"
-                  :ui="COMPONENTS.emptyStateAlert"
               >
                 <template #title>
                   {{ catalogEmptyState.text }}

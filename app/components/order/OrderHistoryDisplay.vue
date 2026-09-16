@@ -17,7 +17,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const {OrderDetailSchema, OrderAuditActionSchema} = useBookingValidation()
-const {ICONS, TYPOGRAPHY, SIZES, COLOR} = useTheSlopeDesignSystem()
+const {ICONS, TYPOGRAPHY, SIZES, COLOR, ALERTS} = useTheSlopeDesignSystem()
 
 // Lazy-load order detail with history
 const {data: orderDetail, status, error} = useAsyncData<OrderDetail | null>(
@@ -74,10 +74,10 @@ const timelineItems = computed(() =>
   </div>
 
   <!-- Order deleted -->
-  <UAlert v-else-if="!orderId" color="warning" variant="soft" :icon="ICONS.exclamationCircle" title="Ordre slettet"/>
+  <UAlert v-else-if="!orderId" v-bind="ALERTS.warning" :icon="ICONS.exclamationCircle" title="Ordre slettet"/>
 
   <!-- Error -->
-  <UAlert v-else-if="error" color="error" variant="soft" :icon="ICONS.exclamationCircle" title="Kunne ikke hente historik"/>
+  <UAlert v-else-if="error" v-bind="ALERTS.error" title="Kunne ikke hente historik"/>
 
   <!-- Timeline -->
   <UTimeline v-else-if="timelineItems.length > 0" :items="timelineItems" :size="SIZES.small"/>

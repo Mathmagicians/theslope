@@ -7,7 +7,7 @@ const {loggedIn, greeting} = storeToRefs(authStore)
 const {signIn} = authStore
 const {LoginSchema} = useCoreValidation()
 const {handleApiError} = useApiHandler()
-const {TYPOGRAPHY, LAYOUTS, COLOR, BG, ICONS} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, LAYOUTS, BG, ICONS, ALERTS} = useTheSlopeDesignSystem()
 
 const householdShortName = computed(() => authStore.user?.Inhabitant?.household?.shortName || null)
 const householdPbsId = computed(() => authStore.user?.Inhabitant?.household?.pbsId || null)
@@ -49,9 +49,8 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
 
             <UAlert
               v-if="loginError"
-              color="error"
-              variant="soft"
-              icon="i-mage-robot-dead"
+              v-bind="ALERTS.error"
+              :icon="ICONS.robotDead"
               class="mb-4"
             >
               <template #title>Login mislykkedes</template>

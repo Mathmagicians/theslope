@@ -4,7 +4,7 @@ import {formatDate} from '~/utils/date'
 // Age categories - the active season's ticket prices carry the age limits
 const {groupInhabitantsByTicketCategory, ticketTypeConfig} = useTicket()
 const {formatTicketCounts} = useBilling()
-const {TYPOGRAPHY, COLOR} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, ALERTS} = useTheSlopeDesignSystem()
 
 // No layout for printing
 definePageMeta({
@@ -150,7 +150,7 @@ const printPage = () => {
         </div>
 
         <!-- Footer notes -->
-        <UAlert :color="COLOR.warning" variant="outline" class="mt-4">
+        <UAlert v-bind="ALERTS.warning" class="mt-4">
           <template #description>
             <p :class="`${TYPOGRAPHY.sectionSubheading} mb-2`">Vigtige bemærkninger:</p>
             <ul :class="`list-disc list-inside space-y-1 ${TYPOGRAPHY.bodyTextSmall}`">
@@ -165,8 +165,7 @@ const printPage = () => {
 
         <!-- Allergy manager contact -->
         <AllergyManagersList
-            :color="COLOR.neutral"
-            variant="outline"
+            kind="neutral"
             message="Tal med allergiansvarlig for hjælp til at spotte allergener i opskrifterne og udtænke allergihensyn!"
             class="mt-6"
         />

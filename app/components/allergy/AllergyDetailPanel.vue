@@ -38,7 +38,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {COLOR, SIZES, LAYOUTS, BUTTONS, ICONS} = useTheSlopeDesignSystem()
+const {COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS} = useTheSlopeDesignSystem()
 
 // Deleting the type cascades to every Allergy row referencing it (ADR-005)
 const affectedInhabitantCount = computed(() => props.allergyType?.inhabitants?.length ?? 0)
@@ -52,9 +52,8 @@ const affectedInhabitantCount = computed(() => props.allergyType?.inhabitants?.l
       class="w-full max-w-2xl space-y-4"
   >
     <UAlert
+        v-bind="ALERTS.legend"
         :icon="ICONS.warning"
-        :color="COLOR.neutral"
-        variant="outline"
         :title="`Slet ${allergyType.name}?`"
     >
       <template #description>

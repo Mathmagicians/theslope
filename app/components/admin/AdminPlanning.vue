@@ -88,6 +88,7 @@ const props = withDefaults(defineProps<Props>(), {
   canEdit: false
 })
 
+const {ALERTS} = useTheSlopeDesignSystem()
 const {getDefaultSeason, getDefaultHolidays} = useSeason()
 const toast = useToast()
 const store = usePlanStore()
@@ -236,9 +237,9 @@ v-if="currentModel && showAdminSeason"
       <Loader v-else-if="isSelectedSeasonLoading" text="Henter data for fællesspisningssæson"/>
       <AdminToCreateSeason v-else-if="isNoSeasons"/>
       <UAlert
-v-else
+          v-else
+          v-bind="ALERTS.emptyState"
           :avatar="{text: '💤'}"
-          color="info" class="space-y-4"
           title="Her ser lidt tomt ud!"
           description="Vælg en fællesspisningssæson for at komme i gang"/>
     </template>

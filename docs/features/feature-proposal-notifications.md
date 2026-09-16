@@ -10,7 +10,7 @@
 | Proposal doc revision | this document, signed off | ✅ 2026-09-16 |
 | Cloudflare prerequisites | Email Service enabled + sender verified, dev queue + DLQ, operator API token | user-run |
 | E-mail through the pipe | `workers/sender/` (Nitro), contract v1, `make deploy-sender-dev && make sender-verify-email-dev` → a real e-mail | first code package |
-| Pipe hardening + prod | transport policy, SMS plumbing (not shipped), `/health`, prod env, `deploy-dev\|prod` deploy all workers | |
+| Pipe hardening + prod | `/health`, prod env, `deploy-dev\|prod` deploy all workers | |
 | App adopts the shared base | `nuxt.config.ts` reads Nitro settings from `workers/common/` | |
 | Billing archive | monthly billing writes the period CSV to R2, on-demand archive endpoint | |
 | Docs and ADRs | ADR-018, ADR-019, ops-runbook, compliance tables, release plan | |
@@ -36,7 +36,7 @@ Expected volume: **10–50 notifications/day** once the trigger catalog lands (c
 | **Secrets: the existing two processes, untouched** (GitHub env for CI time, Cloudflare dashboard for runtime). No Make target. The sender has **no secrets this release** | ✅ | Secrets |
 | **App renders.** Templates with placeholders live in theslope's config; the job that raises a signal fills them and emits a complete message (`to`, `from` no-reply, `replyTo`, subject, body, attachments). The sender is **transport only** | ✅ | Contract |
 | `meta.kind` is an opaque string in the contract; the trigger catalog is app-owned → a new trigger never needs a sender deploy | ✅ | Contract |
-| **SMS: plumbing only, not shipped this release.** Contract channel, provider port, policy, tests in place; an SMS message is acked with `[SMS] channel not enabled`. Gateway adapter + token = later package | ✅ | Sender |
+| **SMS: plumbing only, not shipped this release.** Contract channel, provider port, tests in place; an SMS message is acked with `[SMS] channel not enabled`. Gateway adapter + token = later package | ✅ | Sender |
 | Accountant CSV: monthly billing **archives to R2** (idempotent per period) **and** the message inlines the CSV as a base64 attachment → self-contained, sender never touches storage | ✅ | Billing archive |
 | Environments `local` (miniflare) / `dev` (= test, dev.skraaningen.dk) / `prod` — same three blocks as the app's `wrangler.toml` | ✅ | |
 | `COMPATIBILITY_DATE` starts at the app's current `2025-10-01` for every worker; bumping is a separate, verified step | ✅ | |
@@ -48,7 +48,8 @@ Expected volume: **10–50 notifications/day** once the trigger catalog lands (c
 | **Wrangler config test** (a vitest spec parsing both `wrangler.toml` files and cross-checking queue names/compat/naming) — **out**. Review instead; a queue-name mismatch surfaces operationally (`sender-verify-email-*`, `queues-info-*`) | ✅ decided out | Wrangler config test |
 | R2 bucket names **`theslope-backups` / `theslope-backups-prod`** (from `feature-proposal-backup-export.md`), key prefix `billing/YYYY-MM/` | ✅ (user) | Billing archive |
 | Test-mail target name **`sender-verify-email-dev\|prod`** (channel in the name; no `channel=` parameter) | ✅ (user) | Makefile |
-| **Recipient allowlist, fail-closed**: `RECIPIENT_ALLOWLIST` wrangler var per env — dev `test@mathmagicians.dk`, prod `"*"` (= everyone, set on purpose), empty/missing = deliver nothing (ack + warn). Dev shares the local D1 data, so this is what keeps a dev run away from residents | ✅ (user) | Sender |
+| **Sender/recipient restrictions live on the `[[send_email]]` binding, not in code** (supersedes the fail-closed `RECIPIENT_ALLOWLIST` var decided earlier the same day): `allowed_sender_addresses = ["no-reply@skraaningen.dk"]` in every env; `allowed_destination_addresses = ["test@mathmagicians.dk"]` in **dev only** (a verified destination address); prod omits it (= everyone). Platform-enforced, zero code, no vars; `utils/policy.ts` is dropped. Dev shares the local D1 data, so the dev list is what keeps a dev run away from residents | ✅ (user) | Sender |
+| **Email Service is set up with wrangler, not the dashboard**: `wrangler email sending enable skraaningen.dk` (DNS auto-provisioned), `dns get`, `settings`, and `wrangler email sending send …` proves the service before any code exists; a destination address is verified with `wrangler email routing addresses create <email>` | ✅ | Prerequisites |
 | **Environment visible in the mail**: the app's template signature ends with the sending site (`DEPLOY_URL`, e.g. `— Skråningen · dev.skraaningen.dk`); the sender adds nothing to subjects or bodies (no `[dev]` prefix) | ✅ (user) | Next task (templates) + `verify-email.sh` |
 | Chef deadline reminders/overdue → **chef only**; new **`PLANNINGMANAGER`** role receives chefless-dinner alerts; where they are shown (`/admin/teams` vs chef page) and alarms on the post-login landing page | ✅ decided / **OPEN** placement — **next task** | Next task |
 | "Shift start" for 24 h / 1 h team reminders (dinner start vs configurable cooking offset) | **OPEN** — next task | Next task |
@@ -131,8 +132,7 @@ theslope/                                   # one repo · one package.json · on
 │       ├── utils/                          # Nitro-auto-imported into plugins/routes; modules import each other EXPLICITLY (unit-testable)
 │       │   ├── env.ts                      # Env type + parseEnv(env) (zod, fail fast)
 │       │   ├── consumeBatch.ts             # per message: safeParse → deliver → ack | retry(backoff)
-│       │   ├── delivery.ts                 # deliver(msg, providers, policy); RetryableError / TerminalError
-│       │   ├── policy.ts                   # from-domain allowlist, non-prod recipient allowlist, subject env-tag
+│       │   ├── delivery.ts                 # deliver(msg, providers); RetryableError / TerminalError (sender/recipient limits are on the binding)
 │       │   ├── mask.ts                     # maskEmail / maskMsisdn (ADR-004)
 │       │   └── providers/
 │       │       ├── types.ts                # EmailProvider / SmsProvider ports
@@ -347,7 +347,7 @@ Example — the accountant mail the billing trigger (next task) will emit; `veri
 └─────────────────────────────────────────┬─────────────────────────────────────────────────┘
                                           ▼  [queue] theslope-sender-{dev,prod}
 ┌──────────────────────── theslope-sender (Nitro worker, consumer) ─────────────────────────┐
-│ cloudflare:queue hook → consumeBatch: parse contract → policy → deliver → ack | retry     │
+│ cloudflare:queue hook → consumeBatch: parse contract → deliver → ack | retry              │
 │   ├── EmailProvider port → CloudflareEmailProvider (env.EMAIL.send)                       │
 │   └── SmsProvider port   → smsNotEnabled (this release) → GatewayAPI adapter (later)      │
 │ retries exhausted (30/60/120 s) → [queue] theslope-sender-dlq-{dev,prod} (14 d)           │
@@ -355,8 +355,8 @@ Example — the accountant mail the billing trigger (next task) will emit; `veri
 ```
 
 - **Consumer** (`utils/consumeBatch.ts`, called from `plugins/queue.ts`): per message `safeParse` → a body that fails the contract can never be delivered, so it is acked with `console.error('📮 > SENDER > [CONTRACT] rejected', {msgId, issues})` (body never logged) | `deliver()` → ack + `console.info('📮 > SENDER > [EMAIL] delivered', {dedupeKey, to: masked, providerMessageId, attempt})` | `RetryableError` → `msg.retry({delaySeconds: 30 * 2 ** (attempts-1)})` (30/60/120 s → DLQ) | `TerminalError` → ack + `console.error`. `consumeBatch` **never rejects** — every message is explicitly acked or retried; a rejection would retry the whole batch including delivered messages. Recipients only masked (ADR-004).
-- **SMS this release**: `providers/smsNotEnabled.ts` implements the `SmsProvider` port and throws `TerminalError('SMS_NOT_ENABLED')` → ack + `console.warn('📮 > SENDER > [SMS] channel not enabled in this release', {dedupeKey})`. Contract, policy, masking and tests for SMS are in place now; the GatewayAPI adapter replaces the stub in a later package.
-- **Policy** (`utils/policy.ts`, transport-level safety): `from` domain ∈ `ALLOWED_FROM_DOMAINS` (var) else terminal. **Recipient allowlist, fail-closed**: `RECIPIENT_ALLOWLIST` (var) is `"*"` (deliver to everyone — prod sets this on purpose), a comma-separated list of e-mails/msisdns (only those are delivered; dev = `test@mathmagicians.dk`), or empty/missing (deliver **nothing**: ack + `console.warn('📮 > SENDER > [POLICY] suppressed', {dedupeKey, to: masked})`). Dev shares the local D1 data, so this is what keeps a dev run away from residents; a forgotten var can never reach them and `make sender-verify-email-<env>` exposes it immediately. The sender never alters subjects or bodies — which environment sent a mail is stated by the app's template signature (`— Skråningen · dev.skraaningen.dk`, from `DEPLOY_URL`).
+- **SMS this release**: `providers/smsNotEnabled.ts` implements the `SmsProvider` port and throws `TerminalError('SMS_NOT_ENABLED')` → ack + `console.warn('📮 > SENDER > [SMS] channel not enabled in this release', {dedupeKey})`. Contract, masking and tests for SMS are in place now; the GatewayAPI adapter replaces the stub in a later package.
+- **Sender/recipient restrictions are on the binding, not in code**: `[[send_email]]` carries `allowed_sender_addresses = ["no-reply@skraaningen.dk"]` in every env and `allowed_destination_addresses = ["test@mathmagicians.dk"]` in dev only (prod omits it = everyone). A message outside those limits fails inside `env.EMAIL.send()` with a terminal `E_*` code → ack + `console.error` with the masked recipient. Dev shares the local D1 data, so the dev list is what keeps a dev run away from residents. The sender never alters subjects or bodies — which environment sent a mail is stated by the app's template signature (`— Skråningen · dev.skraaningen.dk`, from `DEPLOY_URL`).
 - **Error taxonomy** (verified codes): Email retryable = `E_RATE_LIMIT_EXCEEDED`, `E_DAILY_LIMIT_EXCEEDED`, `E_INTERNAL_SERVER_ERROR`, network; terminal = every other `E_*` (`E_SENDER_NOT_VERIFIED` fires on every message → immediately visible). Retryable failures that exhaust `max_retries = 3` are DLQ-routed — the DLQ is exclusively "provider down / throttling", which an operator can act on (`wrangler queues` inspect + redeliver). **The DLQ retains full message bodies (PII) for 14 days** — that is the triage tool; note in the runbook.
 - **Email provider**: `EmailProvider.send(EmailMessage) → {providerMessageId}` over `env.EMAIL.send({from, to: toName ? {email, name} : to, replyTo, subject, text, html, attachments: [{content: contentBase64, filename, type: contentType, disposition: 'attachment'}]})`.
 
@@ -377,8 +377,6 @@ compatibility_flags = ["nodejs_compat"]
 enabled = true
 [vars]
 ENVIRONMENT = "local"
-ALLOWED_FROM_DOMAINS = "skraaningen.dk"
-RECIPIENT_ALLOWLIST = "*"                # local = miniflare only (simulated send_email); dev: "test@mathmagicians.dk"; prod: "*"; empty = deliver nothing
 [[queues.consumers]]
 queue = "theslope-sender-local"          # queueName('sender','local') — must equal the root producer
 max_batch_size = 10
@@ -387,9 +385,10 @@ max_retries = 3
 dead_letter_queue = "theslope-sender-dlq-local"
 [[send_email]]
 name = "EMAIL"
+allowed_sender_addresses = ["no-reply@skraaningen.dk"]        # platform-enforced `from`
 
-[env.dev]   name = "theslope-sender-dev"   # ENVIRONMENT="dev",  RECIPIENT_ALLOWLIST="test@mathmagicians.dk"; consumer on -dev / dlq-dev; send_email
-[env.prod]  name = "theslope-sender-prod"  # ENVIRONMENT="prod", RECIPIENT_ALLOWLIST="*";                      consumer on -prod / dlq-prod; send_email
+[env.dev]   name = "theslope-sender-dev"   # ENVIRONMENT="dev";  consumer on -dev / dlq-dev; send_email + allowed_destination_addresses = ["test@mathmagicians.dk"]
+[env.prod]  name = "theslope-sender-prod"  # ENVIRONMENT="prod"; consumer on -prod / dlq-prod; send_email (no destination limit = everyone)
 ```
 
 Vars, bindings and consumers are not inherited by wrangler environments — the three blocks repeat them. **No secrets** in this release; SMS vars (`SMS_SENDER_ID`, `GATEWAYAPI_BASE_URL`) and the `GATEWAYAPI_TOKEN` secret arrive with the gateway adapter package.
@@ -409,7 +408,7 @@ bucket_name = "theslope-backups"          # resourceName('backups', env): local 
 
 ## `sender-verify-email` — publish one e-mail and watch it get delivered
 
-`.env.{dev,prod}` (read by `with_env`, like `HEY_NABO_*` for `heynabo-login-*`): `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (operator's token; needs **Queues Edit**), `QUEUE_ID_SENDER` (from `npx wrangler queues info theslope-sender-<env>`), `SENDER_TEST_EMAIL` (= `test@mathmagicians.dk`, must be in the env's `RECIPIENT_ALLOWLIST`), `SENDER_FROM=no-reply@skraaningen.dk`, `SENDER_REPLY_TO`.
+`.env.{dev,prod}` (read by `with_env`, like `HEY_NABO_*` for `heynabo-login-*`): `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` (operator's token; needs **Queues Edit**), `QUEUE_ID_SENDER` (from `npx wrangler queues info theslope-sender-<env>`), `SENDER_TEST_EMAIL` (= `test@mathmagicians.dk`, the verified address in dev's `allowed_destination_addresses`), `SENDER_FROM=no-reply@skraaningen.dk`, `SENDER_REPLY_TO`.
 
 `workers/sender/scripts/verify-email.sh <env>` (bash + curl + jq):
 
@@ -438,12 +437,12 @@ The final proof is the operator's inbox (`SENDER_TEST_EMAIL`); the script prints
 | Package | Goal | Creates / modifies | Red tests first | User actions |
 |---|---|---|---|---|
 | **Proposal doc revision** | this document signed off | `docs/features/feature-proposal-notifications.md` | — | review + sign off (incl. the OPEN rows) |
-| **Cloudflare prerequisites** | dev resources exist (prod later, same commands) | `.env.dev` local keys | — | Email Service enabled for `skraaningen.dk` + `no-reply@skraaningen.dk` verified; operator API token with Queues Edit; `wrangler queues create theslope-sender-dev` + `theslope-sender-dlq-dev`; `wrangler queues update theslope-sender-dlq-dev --message-retention-period-secs 1209600` |
-| **E-mail through the pipe** | `make deploy-sender-dev && make sender-verify-email-dev` → `[EMAIL] delivered` observed, real e-mail in the inbox | `workers/common/{cloudflare,nitro.base}.ts` (tiny; the sender is built on them from day one); `workers/sender/{contract.ts, nitro.config.ts, tsconfig.json, wrangler.toml (local + dev), plugins/queue.ts, utils/{env,consumeBatch,delivery,mask}.ts, utils/providers/{types,cloudflareEmail,index}.ts, test/**, scripts/verify-email.sh}`; Makefile: `deploy-sender-dev`, `logs-sender-dev`, `sender-verify-email-dev`, `queues-info-dev`; root `vitest.config.ts` project `workers`; npm `test:workers`, `ts:workers`, `pre:all` | `contract` accept/reject matrix; `consumeBatch` ack/retry/reject; `providers` e-mail E_* taxonomy; `fixtures.ts` | `make deploy-sender-dev`, `make sender-verify-email-dev`, check inbox. Verify `nitro build --dir` resolves the root `node_modules` from a clean checkout (fallback: `nodeModulesDirs` in `nitro.config.ts`) |
-| **Pipe hardening + prod** | policy, SMS plumbing, health, prod env, CI aggregation | `utils/policy.ts` (from-domain allowlist, fail-closed `RECIPIENT_ALLOWLIST`), `providers/smsNotEnabled.ts`, `routes/health.get.ts`, `wrangler.toml` `[env.prod]`; Makefile: `deploy-sender-prod`, `logs-sender-prod`, `sender-verify-email-prod`, `queues-info-prod`, `typegen`, `deploy-theslope-*` + `deploy-dev\|prod` aggregation (CI unchanged) | `delivery` policy spec (allowlist `*` / list / empty); `consumeBatch` SMS-not-enabled case | prod queue + DLQ created; `make deploy-dev` (both workers) |
+| **Cloudflare prerequisites** | dev resources exist (prod later, same commands) | `.env.dev` local keys | — | `npx wrangler email sending enable skraaningen.dk` → `dns get` / `settings` show verified; `npx wrangler email routing addresses create test@mathmagicians.dk` (confirm the mail); `npx wrangler email sending send --from no-reply@skraaningen.dk --to test@mathmagicians.dk --subject … --text …` proves the service; `wrangler queues create theslope-sender-dev` + `theslope-sender-dlq-dev`; `wrangler queues update theslope-sender-dlq-dev --message-retention-period-secs 1209600`; operator API token with Queues Edit |
+| **E-mail through the pipe** | `make deploy-sender-dev && make sender-verify-email-dev` → `[EMAIL] delivered` observed, real e-mail in the inbox | `workers/common/{cloudflare,nitro.base}.ts` (tiny; the sender is built on them from day one); `workers/sender/{contract.ts, nitro.config.ts, tsconfig.json, wrangler.toml (local + dev, binding restrictions), plugins/queue.ts, utils/{env,consumeBatch,delivery,mask}.ts, utils/providers/{types,cloudflareEmail,smsNotEnabled,index}.ts, test/**, scripts/verify-email.sh}`; Makefile: `deploy-sender-dev`, `logs-sender-dev`, `sender-verify-email-dev`, `queues-info-dev`; root `vitest.config.ts` project `workers`; npm `test:workers`, `ts:workers`, `pre:all` | `contract` accept/reject matrix; `consumeBatch` ack/retry/reject + SMS-not-enabled; `providers` e-mail E_* taxonomy; `fixtures.ts` | `make deploy-sender-dev`, `make sender-verify-email-dev`, check inbox. Verify `nitro build --dir` resolves the root `node_modules` from a clean checkout (fallback: `nodeModulesDirs` in `nitro.config.ts`) |
+| **Pipe hardening + prod** | health, prod env, CI aggregation | `routes/health.get.ts`, `wrangler.toml` `[env.prod]` (`allowed_sender_addresses`, no destination limit); Makefile: `deploy-sender-prod`, `logs-sender-prod`, `sender-verify-email-prod`, `queues-info-prod`, `typegen`, `deploy-theslope-*` + `deploy-dev\|prod` aggregation (CI unchanged) | — (`sender-verify-email-prod` is the proof) | prod queue + DLQ created; `make deploy-dev` (both workers) |
 | **App adopts the shared base** | `nuxt.config.ts` reads `compatibilityDate` + `nitro.preset` from `workers/common/nitro.base.ts` | `nuxt.config.ts` | — (`npm run pre:all` green, `make deploy-dev` unchanged) | none |
 | **Billing archive** | monthly billing stores the period CSV in R2, idempotently, never failing billing; on-demand archive endpoint | app `wrangler.toml` bindings ×3 (`SENDER` producer, `ARCHIVE`), `shared/types/cloudflare.d.ts`, `getBillingArchiveKey`, `billingArchive.ts`, `runMonthlyBilling`, task + `monthly.post.ts`, `archive.post.ts`, `BillingFactory.archiveBillingPeriod`, `r2-get-billing-*` | unit: key builder, sha256; API spec `billing-archive.e2e.spec.ts` | `wrangler r2 bucket create theslope-backups` + `theslope-backups-prod`; none locally (miniflare R2 under `nuxt dev`) |
-| **Docs and ADRs** | ADRs, runbook, compliance and release plan updated | `docs/adr.md` ADR-018 + ADR-019 (below); `docs/ops-runbook.md` "Workers & deploy order", "Runtime secrets per worker (Cloudflare side)", "Sender" (queue, DLQ triage incl. the PII-14 d note, sender verification, `sender-verify-email`, allowlist semantics), "Billing archive"; compliance tables; `release-plan-v0.9.md` (M5/M6 split, SMS deferred) | — | review |
+| **Docs and ADRs** | ADRs, runbook, compliance and release plan updated | `docs/adr.md` ADR-018 + ADR-019 (below); `docs/ops-runbook.md` "Workers & deploy order", "Runtime secrets per worker (Cloudflare side)", "Sender" (queue, DLQ triage incl. the PII-14 d note, Email Service setup via `wrangler email sending`, binding restrictions per env, `sender-verify-email`), "Billing archive"; compliance tables; `release-plan-v0.9.md` (M5/M6 split, SMS deferred) | — | review |
 | *(later)* **SMS gateway adapter** | ship SMS | `providers/gatewayApiSms.ts` replacing `smsNotEnabled`, vars `SMS_SENDER_ID`/`GATEWAYAPI_BASE_URL`, provider spec (status taxonomy: 429/5xx retryable; 400/422, 401/403, 402 terminal), `sender-verify-sms-dev\|prod` real delivery | provider spec | GatewayAPI EU account; `GATEWAYAPI_TOKEN` set in the Cloudflare dashboard (runtime-secret pattern); DK carrier acceptance of the 11-char sender ID `Skraaningen` verified by the first real SMS |
 
 Per-package gate: red run shown → green run shown → `npm run pre:all` → diff review against the brief and the coverage matrix → compliance rows updated in the same change → **the user commits**.
@@ -453,7 +452,7 @@ Per-package gate: red run shown → green run shown → `npm run pre:all` → di
 | Change | Required tests | Spec |
 |---|---|---|
 | `workers/sender/contract.ts` | unit | `test/contract.unit.spec.ts` — accept/reject matrix (`describe.each`); `EnvironmentSchema` ↔ `ENVIRONMENTS` parity |
-| `utils/consumeBatch.ts`, `delivery.ts`, `policy.ts`, `mask.ts` | unit | `test/consumeBatch.unit.spec.ts`, `test/delivery.unit.spec.ts` |
+| `utils/consumeBatch.ts`, `delivery.ts`, `mask.ts` | unit | `test/consumeBatch.unit.spec.ts`, `test/delivery.unit.spec.ts` |
 | `utils/providers/*` (Cloudflare e-mail, `smsNotEnabled`) | unit (fake `EMAIL` binding with E_* codes) | `test/providers.unit.spec.ts` |
 | `routes/health.get.ts` | smoke (`GET /health`) | in `sender-verify` output |
 | `scripts/verify-email.sh` + Make targets | verified by running them (`make sender-verify-email-dev`) | Verification |
@@ -534,7 +533,7 @@ Sources: developers.cloudflare.com (email-service, queues limits/javascript-apis
 ## Risks / open items
 
 - **Email Service is public beta** (Apr 2026): `env.EMAIL.send()` signature/error codes may drift before GA. Contained — only `providers/cloudflareEmail.ts` touches it; Resend swap = one adapter + one secret. Re-verify binding key + typed errors against current docs in the prerequisites package.
-- **Zone enablement + sender verification are dashboard steps** — cannot be IaC'd; prerequisites checklist + runbook.
+- **Email Service setup is scriptable** (`wrangler email sending enable|dns|settings|send`, `wrangler email routing addresses create`) but one-time and account-level — documented as command lines in the prerequisites + runbook, not Make targets (they are not repeatable operations).
 - **No full local loop** (two workers, one `nuxt dev`): accepted — producer E2E against the miniflare queue sink, consumer via unit tests, dev environment proves integration (`sender-verify-email-dev`). Optional for built artefacts: `wrangler dev -c wrangler.toml -c workers/sender/wrangler.toml` shares the local queue.
 - **`nitro build --dir workers/sender`** must resolve the root `node_modules` from a clean checkout — verified in the first code package; fallback `nodeModulesDirs` in `nitro.config.ts`.
 - **`CLOUDFLARE_API_TOKEN` scope** for `sender-verify` must include Queues Edit — confirm the operator token or mint a dedicated one (prerequisites).

@@ -126,7 +126,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { TYPOGRAPHY, SIZES, ICONS, COLOR, BUTTONS, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS, BG, TEXT } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, SIZES, ICONS, ALERTS, BUTTONS, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS, BG, TEXT } = useTheSlopeDesignSystem()
 
 // Hero panel button colors (ChefMenuCard sits on hero background with food image)
 const HERO_BUTTON = COMPONENTS.heroPanel.light
@@ -599,10 +599,9 @@ const handleCardClick = () => {
         <!-- Warning when menu title missing -->
         <UAlert
           v-if="isEditing && canAnnounce && !canAdvanceState"
-          :color="COLOR.warning"
-          variant="soft"
+          v-bind="ALERTS.warning"
           :icon="ICONS.info"
-          :ui="{ root: 'p-2 mt-2', description: 'text-xs' }"
+          class="mt-2"
         >
           <template #description>Chefkokken skal oprette en menu, før den kan publiceres</template>
         </UAlert>

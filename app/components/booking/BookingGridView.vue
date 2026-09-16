@@ -124,7 +124,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, getRandomEmptyMessage, getOrderStateColor, getLockStatusConfig, getResidencyDisplay} = useTheSlopeDesignSystem()
+const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEmptyMessage, getOrderStateColor, getLockStatusConfig, getResidencyDisplay} = useTheSlopeDesignSystem()
 const emptyState = getRandomEmptyMessage('noDinners')
 
 // Ticket price formatting
@@ -576,8 +576,7 @@ const getEventSummary = (eventId: number) => {
     <!-- Residency alert: grid views only (week/month). Day view delegates to DinnerBookingForm. -->
     <UAlert
       v-if="residencyAlert && view !== 'day'"
-      :color="residencyAlert.color"
-      variant="soft"
+      v-bind="ALERTS[residencyAlert.color]"
       :icon="residencyAlert.icon"
       :title="residencyAlert.alertTitle"
       :description="residencyAlert.alertDescription"
@@ -610,10 +609,8 @@ const getEventSummary = (eventId: number) => {
       <!-- Empty state -->
       <template #empty>
         <UAlert
-          variant="soft"
-          :color="COLOR.neutral"
+          v-bind="ALERTS.emptyState"
           :avatar="{ text: emptyState.emoji, size: SIZES.emptyStateAvatar }"
-          :ui="COMPONENTS.emptyStateAlert"
         >
           <template #title>{{ emptyState.text }}</template>
           <template #description>
@@ -832,29 +829,11 @@ const getEventSummary = (eventId: number) => {
     </UTable>
 
     <!-- Legend: hidden in day view (DinnerBookingForm has its own) -->
-    <UAlert
+    <DinnerModeLegend
       v-if="view !== 'day'"
-      :color="COLOR.neutral"
-      variant="subtle"
-      :icon="ICONS.info"
+      show-modified
+      hint="Klik på en celle for at ændre din booking, den cykler igennem mulighederne. Når du er færdig, husk at trykke gem."
       class="mt-4"
-    >
-      <template #title>Forklaring</template>
-      <template #description>
-        <div class="flex flex-wrap gap-x-6 gap-y-2">
-          <DinnerModeSelector :model-value="DinnerModeEnum.DINEIN" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" />
-          <DinnerModeSelector :model-value="DinnerModeEnum.DINEINLATE" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" />
-          <DinnerModeSelector :model-value="DinnerModeEnum.TAKEAWAY" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" />
-          <DinnerModeSelector :model-value="DinnerModeEnum.NONE" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" />
-          <DinnerModeSelector :model-value="DinnerModeEnum.DINEIN" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" :consensus="false" />
-          <!-- Modified indicator: show border accent with custom label -->
-          <div class="flex flex-col items-center gap-0.5">
-            <DinnerModeSelector :model-value="DinnerModeEnum.DINEIN" :form-mode="FORM_MODES.VIEW" :size="SIZES.xs" :is-modified="true" />
-            <span :class="TYPOGRAPHY.finePrint">Ændret</span>
-          </div>
-        </div>
-        <p :class="[TYPOGRAPHY.finePrint, 'mt-2 text-muted']">Klik på en celle for at ændre din booking, den cykler igennem mulighederne. Når du er færdig, husk at trykke gem.</p>
-      </template>
-    </UAlert>
+    />
   </div>
 </template>

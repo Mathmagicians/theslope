@@ -30,7 +30,7 @@ const emit = defineEmits<{
     cancel: []
 }>()
 
-const {BUTTONS, SIZES, COLOR, ICONS, COMPONENTS, TYPOGRAPHY} = useTheSlopeDesignSystem()
+const {BUTTONS, SIZES, COLOR, ICONS, ALERTS, TYPOGRAPHY} = useTheSlopeDesignSystem()
 const {HouseholdCreateFormSchema} = useCoreValidation()
 
 const formRef = useTemplateRef<Form<HouseholdCreateFormData>>('formRef')
@@ -134,10 +134,8 @@ const handleCancel = () => emit('cancel')
     <!-- Empty state: no Heynabo addresses yet (first-run / not synced) -->
     <UAlert
         v-if="addressOptions.length === 0"
-        :color="COLOR.neutral"
-        variant="soft"
+        v-bind="ALERTS.emptyState"
         :avatar="{text: '🏠', size: SIZES.emptyStateAvatar}"
-        :ui="COMPONENTS.emptyStateAlert"
     >
         <template #title>I mangler nogen huse at bo i, admin skal synkronisere først med Heynabo</template>
     </UAlert>

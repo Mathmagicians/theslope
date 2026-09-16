@@ -38,7 +38,7 @@ import type { TeamRole, CookingTeamAssignment } from '~/composables/useCookingTe
 import { ROLE_LABELS, ROLE_ICONS } from '~/composables/useCookingTeamValidation'
 
 // Design system
-const { COLOR, COMPONENTS, SIZES, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { SIZES, ICONS, ALERTS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 type DisplayMode = 'monitor' | 'regular' | 'edit'
 
@@ -224,10 +224,8 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
   <!-- No team state (funny message) -->
   <UAlert
     v-else-if="isNoTeam"
-    variant="soft"
-    :color="COLOR.neutral"
+    v-bind="ALERTS.emptyState"
     :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar }"
-    :ui="COMPONENTS.emptyStateAlert"
   >
     <template #title>
       {{ emptyStateMessage.text }}
@@ -301,10 +299,8 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
     </div>
     <UAlert
       v-else
-      variant="soft"
-      :color="COLOR.neutral"
+      v-bind="ALERTS.emptyState"
       :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar }"
-      :ui="COMPONENTS.emptyStateAlert"
     >
       <template #title>
         {{ emptyStateMessage.text }}

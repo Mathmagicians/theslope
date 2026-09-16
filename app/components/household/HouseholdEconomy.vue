@@ -25,7 +25,7 @@ const props = defineProps<Props>()
 // Composables
 const {formatPrice} = useTicket()
 const {groupByCostEntry, calculateCurrentBillingPeriod, formatTicketCounts} = useBilling()
-const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS} = useTheSlopeDesignSystem()
 const {OrderStateSchema} = useBookingValidation()
 const {HouseholdBillingResponseSchema} = useBillingValidation()
 
@@ -286,9 +286,7 @@ const upcomingPeriodStart = computed(() => {
           </template>
           <template #empty>
             <UAlert
-                :icon="ICONS.robotHappy"
-                color="neutral"
-                variant="subtle"
+                v-bind="ALERTS.neutral"
                 title="Ingen kommende bestillinger"
                 description="Du har ikke booket nogen middage endnu - hop over til Tilmeldinger!"
             />
@@ -399,9 +397,7 @@ const upcomingPeriodStart = computed(() => {
           </template>
           <template #empty>
             <UAlert
-                :icon="ICONS.robotHappy"
-                color="neutral"
-                variant="subtle"
+                v-bind="ALERTS.neutral"
                 title="Ingen faktureringsperioder"
                 description="Der er ingen transaktioner endnu - PBS-robotten sover stadig!"
             />
@@ -412,9 +408,7 @@ const upcomingPeriodStart = computed(() => {
 
     <UAlert
         v-else
-        :icon="ICONS.exclamationCircle"
-        color="warning"
-        variant="subtle"
+        v-bind="ALERTS.warning"
         title="Ingen data"
         description="Kunne ikke hente økonomioversigt."
     />

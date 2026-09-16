@@ -35,7 +35,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, ALERTS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 // Maintenance helpers
 const {
@@ -376,9 +376,7 @@ const jobDefinitions = computed(() => {
           <!-- Error state -->
           <UAlert
             v-else-if="job.hasError && job.error"
-            :color="COLOR.error"
-            variant="subtle"
-            :icon="ICONS.exclamationCircle"
+            v-bind="ALERTS.error"
           >
             <template #title>Fejl</template>
             <template #description>{{ job.error.message }}</template>
