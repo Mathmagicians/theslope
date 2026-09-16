@@ -585,6 +585,30 @@ it has actions. Not proposed as new kinds: no site needs a colour outside the ex
 | Layout inside `#description` (flex rows, `<ul>`, badges, selectors) | `AllergyManagersList:36`, `AllergyDetailPanel:60`, `ActionPreview:37`, `BookingGridView:843`, `DinnerBookingForm:884`, `HouseholdCard:406`, `UserProfileCard:341`, `pdf:154` | `wrap-anywhere` cannot wrap a flex row of badges — each needs its own responsive classes or extraction (`DinnerModeLegend.vue`) |
 | `actions: 'flex-wrap'` in the planned shared `ui` | theme already ships `actions: "flex flex-wrap gap-1.5 shrink-0"` | no-op — drop it from the plan |
 
+### Empty states render again — ✅ IMPLEMENTED (2026-09-16)
+
+- **Root cause:** six `UTable`s used the Nuxt UI **v2** slot name `#empty-state`. Nuxt UI 4.3 has exactly one empty slot, `#empty`
+  (`Table.vue:426-430`, typed `Table.vue.d.ts:173`; the string `empty-state` exists nowhere in the package), so every one of those
+  templates was dead and the tables fell back to the built-in "No data" text.
+- **Sites renamed** `#empty-state` → `#empty`: `BookingGridView.vue:611`, `AllergyCatalogTable.vue:181-182` (forward
+  `v-if="$slots.empty" #empty`), `AdminAllergies.vue:359`, `AdminHouseholds.vue:235`, `AdminTeams.vue:631`,
+  `ChefCalendarDisplay.vue:345`, `InhabitantSelector.vue:141`. The `teams-empty-state` **testid** is unchanged.
+- **Tests:** `AdminAllergies.nuxt.spec.ts` (empty catalog message + `create-first-allergy-type` gated on `canEdit`),
+  `AllergyCatalogTable.nuxt.spec.ts` (`#empty` forwarded only with zero rows), `InhabitantSelector.nuxt.spec.ts` (empty text for
+  "no inhabitants" and "search without matches"), `AdminHouseholds.e2e.spec.ts` (search with no matches). Red 5/74 → green 116/116;
+  e2e 19 passed (`MobileViewport` + `AdminAllergies` + `AdminHouseholds`, `--workers=4`).
+- **Two of the six remain unreachable** — the rename is correct but nothing renders them, because `UTable` only shows `#empty` when
+  `data.length === 0`: `AdminTeams.vue:631` sits behind `v-else-if isNoTeams` (`:460`), which shows the "Her ser lidt tomt ud!" alert
+  *instead of* the table; `BookingGridView.vue:611`'s `data` is `tableData` (power row + inhabitants + guests), which is never empty —
+  probed with zero dinner events: `{"hasEmptySlot":false,"bodyRows":2}`. Making the grid's empty state reachable needs
+  `tableData` to return `[]` when `flatEvents` is empty — a UX change (an event-less week would show the alert instead of a blank grid),
+  parked for signoff.
+- **Overflow measurement (empty bookings week, 375×812, temporary probe, deleted):** the state cannot be reached from the URL either —
+  `useDinnerDateParam` (`useBookingView.ts:19-38`) validates `?date` against the season's dinner dates, so `date=01/01/2020` was rewritten
+  to `date=18/09/2026` on hydration. Measured on that page: `documentOverflow: 0` at `innerWidth: 375`, no element extending past the
+  viewport and no element with `scrollWidth > clientWidth`. The reported "empty state gives horizontal scroll" is therefore **not**
+  reproducible on the bookings grid today.
+
 ---
 
 ## Poster notes

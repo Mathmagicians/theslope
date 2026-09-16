@@ -215,4 +215,29 @@ describe('AdminAllergies', () => {
             expect(findByTestId(wrapper, ALLERGY_TEST_IDS.edit).exists()).toBe(false)
         })
     })
+
+    // An empty catalog renders the page's own empty state in the master table,
+    // with the create CTA as the way out (edit rights only)
+    describe('empty catalog', () => {
+        const mountEmpty = async (props: Record<string, unknown> = {}) => {
+            allergyTypesEndpoint.mockReturnValue([])
+            return mountAdmin(props)
+        }
+
+        it('renders the empty-state message', async () => {
+            const wrapper = await mountEmpty()
+
+            expect(wrapper.text()).toContain('Kataloget er tomt')
+            expect(wrapper.text()).toContain('Tilføj allergener for at komme i gang')
+        })
+
+        it.each([
+            {canEdit: true, expected: true},
+            {canEdit: false, expected: false}
+        ])('create CTA with canEdit=$canEdit', async ({canEdit, expected}) => {
+            const wrapper = await mountEmpty({canEdit})
+
+            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.createFirst).exists()).toBe(expected)
+        })
+    })
 })

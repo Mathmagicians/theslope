@@ -14,6 +14,7 @@ export const ALLERGY_TEST_IDS = {
     confirmDelete: 'confirm-delete-allergy-type',
     // AdminAllergies toolbar
     create: 'create-allergy-type',
+    createFirst: 'create-first-allergy-type',
     compare: 'multiselect-toggle',
     sort: 'sort-by-count',
     // AllergenMultiSelector

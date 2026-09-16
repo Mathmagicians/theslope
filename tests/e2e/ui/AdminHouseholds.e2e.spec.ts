@@ -4,7 +4,7 @@ import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import testHelpers from '../testHelpers'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, temporaryAndRandom, saltedId, doScreenshot, waitForHydration} = testHelpers
+const {validatedBrowserContext, pollUntil, temporaryAndRandom, salt, saltedId, doScreenshot, waitForHydration} = testHelpers
 
 /**
  * UI TEST STRATEGY:
@@ -175,6 +175,16 @@ test.describe('AdminHouseholds View', () => {
         // THEN: Empty household is visible (use data-testid for exact match)
         const emptyHouseholdCell = page.locator(`[data-testid="household-address-${householdEmpty.id}"]`)
         await expect(emptyHouseholdCell, 'Empty household row should be visible').toBeVisible()
+
+        // WHEN: Searching for something no household matches
+        const noMatch = salt('no-such-address', testSalt)
+        await page.locator('[data-testid="household-search"]').fill(noMatch)
+
+        // THEN: The table's own empty state replaces the rows (UTable #empty slot)
+        await expect(
+            page.getByText(`Ingen husstande matcher søgningen "${noMatch}"`),
+            'Search with no matches should render the empty state'
+        ).toBeVisible()
     })
 
     test('GIVEN two households at same address WHEN admin moves inhabitant THEN inhabitant appears in target', async ({page, browser}) => {

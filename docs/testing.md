@@ -154,6 +154,7 @@ const wrapper = await mountWithTooltipProvider(AdminAllergies, {props: {canEdit:
 | `z.coerce.date()` in form schemas | `z.date()` — strict rejects `null` (coerce turns `null` into 1970-01-01) |
 | `mockComponent()` of a house component | Render it - supply its context (`mountWithTooltipProvider()`) and register its endpoints (Rule 6) |
 | `mockNuxtImport('useXStore', …)` in a component test | Real store + `registerEndpoint()` - fake the HTTP, not the code (Rule 6) |
+| `#empty-state` on a `UTable` (Nuxt UI v2 name - silently never renders) | `#empty` (Nuxt UI 4 slot name); assert the empty text, not just the absence of rows |
 
 ---
 

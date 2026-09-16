@@ -1,5 +1,11 @@
-import {describe, it, expect} from 'vitest'
-import {getRandomEmptyMessage, EMPTY_STATE_MESSAGES} from '~/composables/useTheSlopeDesignSystem'
+import {describe, it, expect, afterEach} from 'vitest'
+import {ref} from 'vue'
+import {
+    getRandomEmptyMessage,
+    EMPTY_STATE_MESSAGES,
+    createResponsiveAlerts,
+    type AlertKind
+} from '~/composables/useTheSlopeDesignSystem'
 
 const contexts = Object.keys(EMPTY_STATE_MESSAGES) as Array<keyof typeof EMPTY_STATE_MESSAGES>
 
