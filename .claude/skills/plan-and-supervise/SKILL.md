@@ -84,3 +84,21 @@ matrix and the design-system rule → 5. compliance rows (`docs/adr-compliance-*
 - **A one-liner is never a component.** Extract a component when it owns behaviour, state, or a multi-element template. A single
   span or expression that repeats stays inline; its shared logic lives once in a util or a design-system token (e.g. three
   identical `#week-day` slot bodies calling `translateToDanish` are fine — the mapping is the single source, the wiring is not).
+
+## One e2e runner at a time
+
+- Never let two agents run Playwright concurrently: they share the local dev server and the D1 database, so one agent's
+  `beforeAll` season activation or a server restart shows up as random timeouts in the other's suite. Sequence packages that
+  run e2e; if a suite looks flaky, rerun it alone before blaming the change. No DB reseed between test runs.
+
+## Visual check before a package is done
+
+- Every package that changes rendered UI ends with a **Visual check** table the user walks through in the browser, on top of the
+  automated tests: `route (+ query / state to reach it) → viewport (phone 375px and/or desktop) → what changed → what to expect`.
+  The agent produces the list from the files it actually changed; the architect verifies it against the diff and relays it.
+  A package is not approved as done until the user has seen every changed surface.
+- Prefer reuse over new code: bind design-system tokens (`ALERTS`, `BUTTONS`, `COMPONENTS.*`), reuse existing components,
+  slots and helpers; a table's own empty slot (`#empty`) is preferred over a standalone alert whenever a table is on the surface.
+- The visual-check table of every package on the branch is carried into the **PR description** (the user opens the PR; the
+  architect drafts the description text with the table, next to the test results). Keep the same route/state → viewport →
+  change → expected columns so the reviewer can walk the app.

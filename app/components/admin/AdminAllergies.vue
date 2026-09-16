@@ -356,7 +356,7 @@ const catalogEmptyState = {
               <AllergyDetailPanel v-bind="panelProps" v-on="panelEvents"/>
             </template>
             <!-- Empty state -->
-            <template #empty-state>
+            <template #empty>
               <UAlert
                   variant="soft"
                   :color="COLOR.success"

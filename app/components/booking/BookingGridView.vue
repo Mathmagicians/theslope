@@ -608,7 +608,7 @@ const getEventSummary = (eventId: number) => {
       }"
     >
       <!-- Empty state -->
-      <template #empty-state>
+      <template #empty>
         <UAlert
           variant="soft"
           :color="COLOR.neutral"

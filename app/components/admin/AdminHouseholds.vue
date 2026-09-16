@@ -232,7 +232,7 @@ class="w-full px-0"
         />
       </template>
 
-      <template #empty-state>
+      <template #empty>
         <div class="flex flex-col items-center justify-center py-6 gap-3">
           <UIcon name="i-heroicons-home" class="w-8 h-8 text-gray-400"/>
           <p v-if="searchQuery" class="text-sm text-gray-500">Ingen husstande matcher søgningen "{{ searchQuery }}"</p>

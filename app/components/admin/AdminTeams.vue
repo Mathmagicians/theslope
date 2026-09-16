@@ -628,7 +628,7 @@ v-else
               </div>
             </template>
 
-            <template #empty-state>
+            <template #empty>
               <div class="flex flex-col items-center justify-center py-6 gap-3">
                 <UIcon name="i-heroicons-user-group" class="w-8 h-8 text-gray-400"/>
                 <p data-testid="teams-empty-state" class="text-sm text-gray-500">Ingen madhold endnu. Opret nogle

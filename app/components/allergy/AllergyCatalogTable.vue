@@ -178,8 +178,8 @@ const clickableCellClass = computed(() => props.readonly ? '' : COMPONENTS.table
     </template>
 
     <!-- Empty state owned by the parent -->
-    <template v-if="$slots['empty-state']" #empty-state>
-      <slot name="empty-state"/>
+    <template v-if="$slots.empty" #empty>
+      <slot name="empty"/>
     </template>
   </UTable>
 </template>
