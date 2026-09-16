@@ -105,18 +105,16 @@ export default defineNuxtConfig({
 
 
     runtimeConfig: {
-        HEY_NABO_USERNAME: process.env.NUXT_HEY_NABO_USERNAME || '', //Set in NUXT_HEYNABO_USERNAME env variable
-        HEY_NABO_PASSWORD: process.env.NUXT_HEY_NABO_PASSWORD, //Set in NUXT_HEYNABO_PASSWORD env variable
         // GitHub integration for user feedback
         GITHUB_TOKEN: '',  // Set via NUXT_GITHUB_TOKEN env variable
         GITHUB_OWNER: 'Mathmagicians',  // Override via NUXT_GITHUB_OWNER if needed
         GITHUB_REPO: 'theslope',  // Override via NUXT_GITHUB_REPO if needed
-        // Notifications (sender events). Defaults = local; wrangler [env.*.vars] NUXT_NOTIFICATIONS_* set dev/prod.
+        // Notifications (sender events): mailboxes only — NUXT_NOTIFICATIONS_* from .env locally, worker secrets deployed;
+        // an unset mailbox means the mail that needs it reports degraded. Environment and site derive from DEPLOY_URL / the
+        // request (deploymentFromUrl); sender address and display name derive from the environment (senderAddress, senderDisplayName).
         notifications: {
-            environment: 'local',                    // local | dev | prod — the contract's meta.environment
-            from: 'no-reply.dev@skraaningen.dk',     // pinned per environment by the sender binding's allowed_sender_addresses
-            fromName: 'Skråningen dev',
-            replyTo: ''                              // Worker secret NUXT_NOTIFICATIONS_REPLY_TO per environment
+            accountantEmail: process.env.NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL || '',   // receives the monthly billing CSV
+            adminEmail: process.env.NUXT_NOTIFICATIONS_ADMIN_EMAIL || ''              // reply-to of every mail, test mail recipient, cc on the monthly billing mail
         },
         // Public keys that are exposed to the client
         public: {

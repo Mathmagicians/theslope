@@ -8,8 +8,8 @@ import {vi} from 'vitest'
 import type {Mock} from 'vitest'
 import type {EmailMessage as EmailNotification, SmsMessage} from '~/contract'
 
-/** The fields the contract requires — `attachments` is left to the schema default. */
-type RequiredEmailFields = Omit<EmailNotification, 'attachments' | 'toName' | 'fromName' | 'replyTo' | 'html'>
+/** The fields the contract requires — `cc` and `attachments` are left to the schema defaults. */
+type RequiredEmailFields = Omit<EmailNotification, 'cc' | 'attachments' | 'toName' | 'fromName' | 'replyTo' | 'html'>
 
 /** Marker planted in the invalid body — a spec asserts it never reaches a log argument (ADR-004). */
 export const SECRET_BODY_MARKER = 'hemmeligt-indhold-der-aldrig-maa-logges'
@@ -45,6 +45,7 @@ export const MessageFactory = {
         ...MessageFactory.minimalEmail(salt),
         toName: 'Anna Hansen',
         fromName: 'Skråningen dev',
+        cc: ['admin@skraaningen.dk'],
         replyTo: 'kasserer@skraaningen.dk',
         html: '<p>Hej!</p>',
         attachments: []

@@ -9,9 +9,7 @@ ENV_local := .env
 ENV_dev   := .env.dev
 ENV_prod  := .env.prod
 
-URL_local := http://localhost:3000
-URL_dev   := https://dev.skraaningen.dk
-URL_prod  := https://skraaningen.dk
+# BASE_URL (the app's URL) and the credentials come from these files — or from the environment in CI
 
 CSV_TEST := .theslope/order-import/test_import_orders.csv
 CSV_PROD := .theslope/order-import/skraaningen_2025_december_framelding.csv
@@ -31,10 +29,16 @@ define with_env
 	@if [ -f "$(1)" ]; then set -a; source "$(1)"; set +a; fi; $(2)
 endef
 
+# Source the env file when present (CI provides the variables directly) and require BASE_URL
+define require_base_url
+	if [ -f "$(1)" ]; then set -a; source "$(1)"; set +a; fi; : "$${BASE_URL:?BASE_URL missing — set it in $(1)}"
+endef
+
+# $(1)=env file, $(2)=curl args. Logs in with HEY_NABO_* and calls $$BASE_URL
 define theslope_call
-	@source $(1) && curl -s -c .cookies.txt "$(2)/api/auth/login" -H "Content-Type: application/json" \
+	@$(call require_base_url,$(1)) && curl -s -c .cookies.txt "$$BASE_URL/api/auth/login" -H "Content-Type: application/json" \
 		-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq -e '.email' > /dev/null && \
-	curl -s -b .cookies.txt -H "Content-Type: application/json" $(3) | jq
+	curl -s -b .cookies.txt -H "Content-Type: application/json" $(2) | jq
 endef
 
 define heynabo_call
@@ -290,27 +294,43 @@ logs-prod: ## Tail app logs (prod)
 logs-sender-dev: ## Tail theslope-sender logs (dev)
 	$(call worker_tail,sender,dev)
 
-typegen: ## Regenerate wrangler binding typings for every worker (root + workers/*)
-	@npx wrangler types shared/types/worker-configuration.d.ts && $(foreach w,$(WORKERS),npx wrangler types workers/$(w)/worker-configuration.d.ts -c $(call worker_cfg,$(w)) &&) true
+typegen: ## Regenerate wrangler binding typings for every worker from wrangler.toml (the local .env is not read) (root + workers/*)
+	@CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false npx wrangler types shared/types/worker-configuration.d.ts && $(foreach w,$(WORKERS),CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false npx wrangler types workers/$(w)/worker-configuration.d.ts -c $(call worker_cfg,$(w)) &&) true
 
 # ============================================================================
 # SENDER EVENTS — trigger a notification event on an environment (the cron twins' pattern, via theslope_call)
 # ============================================================================
-.PHONY: theslope-sender-event-test-local theslope-sender-event-test-dev theslope-sender-event-test-prod queues-info-dev
+.PHONY: theslope-sender-event-test-local theslope-sender-event-test-dev theslope-sender-event-test-prod \
+        theslope-sender-event-monthly-billing-local theslope-sender-event-monthly-billing-dev theslope-sender-event-monthly-billing-prod queues-info-dev
 
-# $(1)=env file, $(2)=URL. theslope_call logs in with HEY_NABO_* from the env file; SENDER_TEST_EMAIL is the recipient
+# $(1)=env file. The mail goes to the environment's admin mailbox
 define theslope_sender_event_test
-	$(call theslope_call,$(1),$(2),-X POST "$(2)/api/admin/sender/event/test" -d "{\"to\":\"$$SENDER_TEST_EMAIL\"}")
+	$(call theslope_call,$(1),-X POST "$$BASE_URL/api/admin/sender/event/test")
 endef
 
 theslope-sender-event-test-local: ## Test event on localhost (lands in the miniflare queue sink)
-	$(call theslope_sender_event_test,$(ENV_local),$(URL_local))
+	$(call theslope_sender_event_test,$(ENV_local))
 
 theslope-sender-event-test-dev: ## Test event on dev → real mail from Skråningen dev <no-reply.dev@skraaningen.dk>
-	$(call theslope_sender_event_test,$(ENV_dev),$(URL_dev))
+	$(call theslope_sender_event_test,$(ENV_dev))
 
-theslope-sender-event-test-prod: ## Test event on prod → real mail from Skråningen <no-reply@skraaningen.dk>
-	$(call theslope_sender_event_test,$(ENV_prod),$(URL_prod))
+theslope-sender-event-test-prod: ## Test event on prod → real mail from Skråningen prod <no-reply@skraaningen.dk>
+	$(call theslope_sender_event_test,$(ENV_prod))
+
+# $(1)=env file; bpid=<billingPeriodSummaryId> (GET /api/admin/billing/periods lists them)
+define theslope_sender_event_monthly_billing
+	@test -n "$(bpid)" || { echo "usage: make $@ bpid=<billingPeriodSummaryId>"; exit 1; }
+	$(call theslope_call,$(1),-X POST "$$BASE_URL/api/admin/sender/event/monthly-billing" -d "{\"billingPeriodSummaryId\":$(bpid)}")
+endef
+
+theslope-sender-event-monthly-billing-local: ## Re-send the accountant mail for a period on localhost (miniflare queue sink)
+	$(call theslope_sender_event_monthly_billing,$(ENV_local))
+
+theslope-sender-event-monthly-billing-dev: ## Re-send the accountant mail for a period on dev → real mail, CSV attached
+	$(call theslope_sender_event_monthly_billing,$(ENV_dev))
+
+theslope-sender-event-monthly-billing-prod: ## Re-send the accountant mail for a period on prod
+	$(call theslope_sender_event_monthly_billing,$(ENV_prod))
 
 queues-info-dev: ## Backlog of the dev sender queue
 	@npx wrangler queues info theslope-sender-dev
@@ -321,35 +341,35 @@ queues-info-dev: ## Backlog of the dev sender queue
 .PHONY: theslope-login-local theslope-login-dev theslope-login-prod theslope-admin-get-households theslope-admin-import theslope-put-user
 
 theslope-login-local: ## Login to localhost
-	@source $(ENV_local) && curl -s -c .cookies.txt "$(URL_local)/api/auth/login" \
+	@$(call require_base_url,$(ENV_local)) && curl -s -c .cookies.txt "$$BASE_URL/api/auth/login" \
 		-H "Content-Type: application/json" \
 		-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq
 
 theslope-login-dev: ## Login to dev
-	@source $(ENV_dev) && curl -s -c .cookies.txt "$(URL_dev)/api/auth/login" \
+	@$(call require_base_url,$(ENV_dev)) && curl -s -c .cookies.txt "$$BASE_URL/api/auth/login" \
 		-H "Content-Type: application/json" \
 		-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq
 
 theslope-login-prod: ## Login to prod
-	@source $(ENV_prod) && curl -s -c .cookies.txt "$(URL_prod)/api/auth/login" \
+	@$(call require_base_url,$(ENV_prod)) && curl -s -c .cookies.txt "$$BASE_URL/api/auth/login" \
 		-H "Content-Type: application/json" \
 		-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq
 
 theslope-admin-get-households:
-	@curl -s -b .cookies.txt $(URL_local)/api/admin/household | jq
+	@$(call require_base_url,$(ENV_local)) && curl -s -b .cookies.txt $$BASE_URL/api/admin/household | jq
 
 theslope-admin-import:
-	@curl -s -b .cookies.txt $(URL_local)/api/admin/heynabo/import | jq
+	@$(call require_base_url,$(ENV_local)) && curl -s -b .cookies.txt $$BASE_URL/api/admin/heynabo/import | jq
 
 theslope-put-user:
-	@curl -b .cookies.txt -X PUT "$(URL_local)/api/admin/users" \
+	@$(call require_base_url,$(ENV_local)) && curl -b .cookies.txt -X PUT "$$BASE_URL/api/admin/users" \
 		--url-query "email=andemad@andeby.dk" \
 		--url-query "phone=+4512345678" \
 		--url-query "systemRole=ADMIN" \
 		-H "Content-Type: application/json" -d '{"role": "admin"}' | jq
 
 theslope-import-orders-dev-manual: theslope-login-dev
-	@curl -b .cookies.txt -X POST "$(URL_local)/api/admin/billing/import" \
+	@$(call require_base_url,$(ENV_dev)) && curl -b .cookies.txt -X POST "$$BASE_URL/api/admin/billing/import" \
 		-H "Content-Type: application/json" \
 		-d '{"csvContent": $(shell cat $(CSV_TEST) | jq -Rs .)}' | jq
 
@@ -358,36 +378,38 @@ theslope-import-orders-dev-manual: theslope-login-dev
 # ============================================================================
 .PHONY: theslope-import-orders-local theslope-import-orders-dev theslope-import-orders-prod
 
+# $(1)=env file, $(2)=CSV
 define theslope_import_orders
-	$(call theslope_call,$(1),$(2),-X POST "$(2)/api/admin/billing/import" -d "{\"csvContent\": $$(cat $(3) | jq -Rs .)}")
+	$(call theslope_call,$(1),-X POST "$$BASE_URL/api/admin/billing/import" -d "{\"csvContent\": $$(cat $(2) | jq -Rs .)}")
 endef
 
 theslope-import-orders-local: ## Import orders CSV to localhost
-	$(call theslope_import_orders,$(ENV_local),$(URL_local),$(CSV_TEST))
+	$(call theslope_import_orders,$(ENV_local),$(CSV_TEST))
 
 theslope-import-orders-dev: ## Import orders CSV to dev
-	$(call theslope_import_orders,$(ENV_dev),$(URL_dev),$(CSV_TEST))
+	$(call theslope_import_orders,$(ENV_dev),$(CSV_TEST))
 
 theslope-import-orders-prod: ## Import orders CSV to production
-	$(call theslope_import_orders,$(ENV_prod),$(URL_prod),$(CSV_PROD))
+	$(call theslope_import_orders,$(ENV_prod),$(CSV_PROD))
 
 # ============================================================================
 # SEASON IMPORT (Calendar + Teams CSV)
 # ============================================================================
 .PHONY: theslope-import-season-local theslope-import-season-dev theslope-import-season-prod
 
+# $(1)=env file, $(2)=calendar CSV, $(3)=teams CSV
 define theslope_import_season
-	$(call theslope_call,$(1),$(2),-X POST "$(2)/api/admin/season/import" -d "{\"calendarCsv\": $$(cat $(3) | jq -Rs .)$(COMMA) \"teamsCsv\": $$(cat $(4) | jq -Rs .)}")
+	$(call theslope_call,$(1),-X POST "$$BASE_URL/api/admin/season/import" -d "{\"calendarCsv\": $$(cat $(2) | jq -Rs .)$(COMMA) \"teamsCsv\": $$(cat $(3) | jq -Rs .)}")
 endef
 
 theslope-import-season-local: ## Import season CSV to localhost
-	$(call theslope_import_season,$(ENV_local),$(URL_local),$(CALENDAR_CSV),$(TEAMS_CSV_TEST))
+	$(call theslope_import_season,$(ENV_local),$(CALENDAR_CSV),$(TEAMS_CSV_TEST))
 
 theslope-import-season-dev: ## Import season CSV to dev
-	$(call theslope_import_season,$(ENV_dev),$(URL_dev),$(CALENDAR_CSV),$(TEAMS_CSV_TEST))
+	$(call theslope_import_season,$(ENV_dev),$(CALENDAR_CSV),$(TEAMS_CSV_TEST))
 
 theslope-import-season-prod: ## Import season CSV to production
-	$(call theslope_import_season,$(ENV_prod),$(URL_prod),$(CALENDAR_CSV),$(TEAMS_CSV_PROD))
+	$(call theslope_import_season,$(ENV_prod),$(CALENDAR_CSV),$(TEAMS_CSV_PROD))
 
 # ============================================================================
 # HEYNABO API
@@ -445,7 +467,7 @@ heynabo-get-nhbrs-prod: ## List all neighbors (prod) - uses /admin/users/ matchi
 	$(call heynabo_call,$(ENV_prod),"$$NUXT_PUBLIC_HEY_NABO_API/admin/users/")
 
 heynabo-nuke-test-events: ## Nuke all test events from Heynabo (patterns: Test Menu-, Updated Delicious Pasta-)
-	$(call theslope_call,$(ENV_local),$(URL_local),-X POST "$(URL_local)/api/test/heynabo/cleanup" -d '{"nuke": true}')
+	$(call theslope_call,$(ENV_local),-X POST "$$BASE_URL/api/test/heynabo/cleanup" -d '{"nuke": true}')
 
 # ============================================================================
 # HEAL USER BOOKINGS (bugfix - one-time healing)
@@ -455,13 +477,13 @@ heynabo-nuke-test-events: ## Nuke all test events from Heynabo (patterns: Test M
 .PHONY: heal-local heal-dev heal-prod
 
 heal-local: ## Heal user bookings (local) - hid=householdId dryrun=true|false
-	$(call theslope_call,$(ENV_local),$(URL_local),-X POST "$(URL_local)/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
+	$(call theslope_call,$(ENV_local),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
 
 heal-dev: ## Heal user bookings (dev) - hid=householdId dryrun=true|false
-	$(call theslope_call,$(ENV_dev),$(URL_dev),-X POST "$(URL_dev)/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
+	$(call theslope_call,$(ENV_dev),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
 
 heal-prod: ## Heal user bookings (prod) - hid=householdId dryrun=true|false
-	$(call theslope_call,$(ENV_prod),$(URL_prod),-X POST "$(URL_prod)/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
+	$(call theslope_call,$(ENV_prod),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
 
 # ============================================================================
 # REGENERATE DINNER EVENTS (reconcile with season config - fixes stale holiday events)
@@ -470,13 +492,13 @@ heal-prod: ## Heal user bookings (prod) - hid=householdId dryrun=true|false
 .PHONY: regen-dinner-events-local regen-dinner-events-dev regen-dinner-events-prod
 
 regen-dinner-events-local: ## Regenerate dinner events (local) - sid=seasonId
-	$(call theslope_call,$(ENV_local),$(URL_local),-X POST "$(URL_local)/api/admin/season/$(sid)/generate-dinner-events")
+	$(call theslope_call,$(ENV_local),-X POST "$$BASE_URL/api/admin/season/$(sid)/generate-dinner-events")
 
 regen-dinner-events-dev: ## Regenerate dinner events (dev) - sid=seasonId
-	$(call theslope_call,$(ENV_dev),$(URL_dev),-X POST "$(URL_dev)/api/admin/season/$(sid)/generate-dinner-events")
+	$(call theslope_call,$(ENV_dev),-X POST "$$BASE_URL/api/admin/season/$(sid)/generate-dinner-events")
 
 regen-dinner-events-prod: ## Regenerate dinner events (prod) - sid=seasonId
-	$(call theslope_call,$(ENV_prod),$(URL_prod),-X POST "$(URL_prod)/api/admin/season/$(sid)/generate-dinner-events")
+	$(call theslope_call,$(ENV_prod),-X POST "$$BASE_URL/api/admin/season/$(sid)/generate-dinner-events")
 
 # ============================================================================
 # TESTING
@@ -495,16 +517,16 @@ e2e-team: ## Run team E2E tests
 e2e-season: ## Run season E2E tests
 	@npx playwright test tests/e2e/api/admin/season.e2e.spec.ts --reporter=line
 
-# Smoke macro: $(1)=env file, $(2)=BASE_URL — sources env, sets BASE_URL + SHOULD_NOT_MUTATE, runs smoke suite
+# Smoke macro: $(1)=env file — BASE_URL from the env file, SHOULD_NOT_MUTATE, runs the smoke suite
 define run_smoke
-	$(call with_env,$(1),BASE_URL=$(2) SHOULD_NOT_MUTATE=true npm run test:e2e:smoke)
+	@$(call require_base_url,$(1)) && SHOULD_NOT_MUTATE=true npm run test:e2e:smoke
 endef
 
-smoke-dev: ## Run smoke tests against dev (https://dev.skraaningen.dk)
-	$(call run_smoke,$(ENV_dev),$(URL_dev))
+smoke-dev: ## Run smoke tests against dev (BASE_URL from .env.dev)
+	$(call run_smoke,$(ENV_dev))
 
-smoke-prod: ## Run smoke tests against prod (https://skraaningen.dk)
-	$(call run_smoke,$(ENV_prod),$(URL_prod))
+smoke-prod: ## Run smoke tests against prod (BASE_URL from .env.prod)
+	$(call run_smoke,$(ENV_prod))
 
 # ============================================================================
 # UTILITIES

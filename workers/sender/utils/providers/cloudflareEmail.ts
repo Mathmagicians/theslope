@@ -22,6 +22,7 @@ const errorCode = (error: unknown): string | undefined => {
 const toBindingMessage = (msg: EmailMessage): EmailMessageBuilder => ({
     from: msg.fromName === undefined ? msg.from : {email: msg.from, name: msg.fromName},
     to: msg.toName === undefined ? msg.to : {email: msg.to, name: msg.toName},
+    ...(msg.cc.length === 0 ? {} : {cc: msg.cc}),
     ...(msg.replyTo === undefined ? {} : {replyTo: msg.replyTo}),
     subject: msg.subject,
     text: msg.text,

@@ -1,8 +1,9 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 import {emit} from '~~/server/utils/sender/emit'
 import {buildTestEmail} from '~~/server/utils/sender/events/test'
+import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
 
-const message = () => buildTestEmail({to: 'anna@example.com', from: 'no-reply.dev@skraaningen.dk', fromName: 'Skråningen dev', site: 'dev.skraaningen.dk', environment: 'dev'})
+const message = () => buildTestEmail(NotificationFactory.config())
 
 const fakeQueue = (send = vi.fn().mockResolvedValue(undefined)) => ({send} as unknown as Queue)
 

@@ -8,7 +8,6 @@ assets = { directory = "./.output/public/", binding = "ASSETS" }
 
 [vars]
 NUXT_PUBLIC_HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
-DB_D1_NAME = "theslope"
 
 [limits]
 # Increase the default CPU time limit to 60s
@@ -31,6 +30,11 @@ migrations_dir = "migrations"
 binding = "SENDER"
 queue = "theslope-sender-dev"
 
+# Billing archive (R2): the monthly billing CSV per period. Local + dev share one bucket, prod has its own.
+[[r2_buckets]]
+binding = "ARCHIVE"
+bucket_name = "theslope-archive-dev"
+
 # Cron Triggers - must match scheduledTasks in nuxt.config.ts
 # These patterns invoke Nitro scheduled tasks
 [triggers]
@@ -46,10 +50,6 @@ routes = [
 [env.dev.vars]
 DEPLOY_URL = "https://dev.skraaningen.dk"
 NUXT_PUBLIC_HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
-DB_D1_NAME = "theslope"
-NUXT_NOTIFICATIONS_ENVIRONMENT = "dev"
-NUXT_NOTIFICATIONS_FROM = "no-reply.dev@skraaningen.dk"
-NUXT_NOTIFICATIONS_FROM_NAME = "Skråningen dev"
 
 [[env.dev.d1_databases]]
 binding = "DB"
@@ -60,6 +60,10 @@ migrations_dir = "migrations"
 [[env.dev.queues.producers]]
 binding = "SENDER"
 queue = "theslope-sender-dev"
+
+[[env.dev.r2_buckets]]
+binding = "ARCHIVE"
+bucket_name = "theslope-archive-dev"
 
 [env.dev.triggers]
 crons = ["0 1 * * *", "0 2 * * *", "0 3 18 * *"]
@@ -76,10 +80,6 @@ routes = [
 [env.prod.vars]
 DEPLOY_URL = "https://www.skraaningen.dk"
 NUXT_PUBLIC_HEY_NABO_API = "https://skraaningeni.spaces.heynabo.com/api"
-DB_D1_NAME = "theslope-prod"
-NUXT_NOTIFICATIONS_ENVIRONMENT = "prod"
-NUXT_NOTIFICATIONS_FROM = "no-reply@skraaningen.dk"
-NUXT_NOTIFICATIONS_FROM_NAME = "Skråningen"
 
 [[env.prod.d1_databases]]
 binding = "DB"
@@ -90,6 +90,10 @@ migrations_dir = "migrations"
 [[env.prod.queues.producers]]
 binding = "SENDER"
 queue = "theslope-sender-prod"
+
+[[env.prod.r2_buckets]]
+binding = "ARCHIVE"
+bucket_name = "theslope-archive-prod"
 
 [env.prod.triggers]
 crons = ["0 1 * * *", "0 2 * * *", "0 3 18 * *"]

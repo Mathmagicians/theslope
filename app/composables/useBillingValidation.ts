@@ -5,6 +5,9 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {DinnerEventInfo} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+import {useNotificationValidation} from '~/composables/useNotificationValidation'
+
+const {SenderEmitResultSchema} = useNotificationValidation()
 
 /**
  * Validation schemas for Billing domain (CSV Import/Export, BillingPeriodSummary)
@@ -378,12 +381,25 @@ export const useBillingValidation = () => {
 
     const InvoiceCreatedSchema = InvoiceDisplaySchema.pick({id: true, householdId: true, pbsId: true})
 
+    /** Result of archiving a period's CSV to R2 (server/utils/billingArchive.ts) */
+    const BillingArchiveResultSchema = z.object({
+        key: z.string(),
+        filename: z.string(),
+        sizeBytes: z.number().int().min(0),
+        archived: z.boolean(),
+        /** true when the ARCHIVE binding is missing in this environment */
+        degraded: z.boolean()
+    })
+
     const BillingGenerationResultSchema = z.object({
         billingPeriodSummaryId: z.number().int().positive(),
         billingPeriod: z.string(),
         invoiceCount: z.number().int().min(0),
         transactionCount: z.number().int().min(0),
-        totalAmount: z.number().int().min(0)
+        totalAmount: z.number().int().min(0),
+        /** Side effects of runMonthlyBilling per period; absent on generateBilling's own result */
+        archive: BillingArchiveResultSchema.optional(),
+        notification: SenderEmitResultSchema.optional()
     })
 
     /**
@@ -710,6 +726,7 @@ export const useBillingValidation = () => {
         generateCsvRow,
         generateBillingCsv,
         generateCsvFilename,
+        BillingArchiveResultSchema,
 
         // Monthly Billing Generation
         BillingPeriodSummaryCreateSchema,
@@ -763,6 +780,7 @@ export type BillingPeriodSummaryCreate = z.infer<ReturnType<typeof useBillingVal
 export type BillingPeriodSummaryId = z.infer<ReturnType<typeof useBillingValidation>['BillingPeriodSummaryIdSchema']>
 export type InvoiceCreated = z.infer<ReturnType<typeof useBillingValidation>['InvoiceCreatedSchema']>
 export type BillingGenerationResult = z.infer<ReturnType<typeof useBillingValidation>['BillingGenerationResultSchema']>
+export type BillingArchiveResult = z.infer<ReturnType<typeof useBillingValidation>['BillingArchiveResultSchema']>
 export type MonthlyBillingResponse = z.infer<ReturnType<typeof useBillingValidation>['MonthlyBillingResponseSchema']>
 
 // Household Billing types

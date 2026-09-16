@@ -10,13 +10,13 @@
 | Proposal doc revision | this document, signed off | ✅ 2026-09-16 |
 | Cloudflare prerequisites | Email Service enabled + sender verified, dev queue, operator API token | user-run |
 | E-mail through the pipe | `workers/sender/` (Nitro), contract v1 — built and reviewed | ✅ 2026-09-16 (54 tests, gates green) |
-| Test event through the app | `SENDER` producer binding, `server/utils/sender/events/test.ts` + `POST /api/admin/sender/event/test`, `make theslope-sender-event-test-dev` → a real e-mail confirmed in the inbox; CF-review fixes on the sender | next |
+| Test event through the app | `SENDER` producer binding, `server/utils/sender/events/test.ts` + `POST /api/admin/sender/event/test`, `make theslope-sender-event-test-dev` → a real e-mail confirmed in the inbox; CF-review fixes on the sender | ✅ 2026-09-16 — real mail received on dev |
 | Prod env for the sender | `[env.prod]`, `deploy-sender-prod`, `theslope-sender-event-test-prod` | |
 | App adopts the shared base | `nuxt.config.ts` reads `compatibilityDate` + `nitro.preset` from `workers/common/cloudflare.ts`; all workers on `2026-09-16`; runtime types via `make typegen` | ✅ 2026-09-16 (verified by CI e2e + dev smoke on next deploy) |
-| Billing archive | monthly billing writes the period CSV to R2, on-demand archive endpoint | |
+| Accountant mail on monthly billing | templates per kind in app.config (`app/config/notificationTemplates.ts`) + `fillTemplate`; `composeEmail` shared by every event; `cc` in the contract; `events/monthly-billing.ts` (CSV attached, cc admin) raised by `runMonthlyBilling` and `POST /api/admin/sender/event/monthly-billing`; CSV archived to R2 (`billingArchive.ts`); `make theslope-sender-event-monthly-billing-*` | ✅ 2026-09-16 code + unit specs (gates green); e2e + dev mail pending |
 | Docs and ADRs | ADR-018, ADR-019, ops-runbook, compliance tables, release plan | |
 | *(later)* SMS gateway adapter | GatewayAPI provider + token, real SMS delivery | not this release |
-| *(next task)* Triggers + UX | chef reminders, `PLANNINGMANAGER`, landing-page alarms, templates, producer call sites | separate proposal |
+| *(next task)* Triggers + UX | chef reminders, `PLANNINGMANAGER`, landing-page alarms, producer call sites | separate proposal |
 
 ## Problem
 
@@ -40,8 +40,13 @@ Expected volume: **10–50 notifications/day** once the trigger catalog lands (c
 | `meta.kind` is an opaque string in the contract; the trigger catalog is app-owned → a new trigger never needs a sender deploy | ✅ | Contract |
 | **SMS: plumbing only, not shipped this release.** Contract channel, provider port, tests in place; an SMS message is acked with `[SMS] channel not enabled`. Gateway adapter + token = later package | ✅ | Sender |
 | Accountant CSV: monthly billing **archives to R2** (idempotent per period) **and** the message inlines the CSV as a base64 attachment → self-contained, sender never touches storage | ✅ | Billing archive |
-| **Environment consistency**: `local` = miniflare simulation for every binding (D1 copy, queue sink — verified 2026-09-16: local writes land in `.wrangler/state`, the remote dev D1 has tonight's cron JobRun and different row counts), `dev` = dev resources, `prod` = prod resources; no `remote = true` anywhere. Make targets call the **deployed** environment (`URL_dev` / `URL_prod`) with the existing `theslope_call` login pattern | ✅ (user, 2026-09-16) | Layout |
-| **Sender events**: every notification trigger is a function in `server/utils/sender/events/<event>.ts` used by both its cron path and its HTTP twin `POST /api/admin/sender/event/<event>` — the `/api/admin/maintenance/*` pattern. First event: `test` (a real e-mail to a given mailbox); `monthly-billing` (accountant mail) follows in its own package | ✅ (user) | Sender events |
+| **Environment consistency**: `local` = miniflare simulation for every binding (D1 copy, queue sink — verified 2026-09-16: local writes land in `.wrangler/state`, the remote dev D1 has tonight's cron JobRun and different row counts), `dev` = dev resources, `prod` = prod resources; no `remote = true` anywhere. Make targets call the **deployed** environment (`BASE_URL` from `.env.<env>`, no URLs in the Makefile) with the existing `theslope_call` login pattern | ✅ (user, 2026-09-16) | Layout |
+| **Sender events**: every notification trigger is a function in `server/utils/sender/events/<event>.ts` used by both its cron path and its HTTP twin `POST /api/admin/sender/event/<event>` — the `/api/admin/maintenance/*` pattern. First event: `test` (a real e-mail to a given mailbox); second: `monthly-billing` (accountant mail) | ✅ (user) | Sender events |
+| **Templates per event** (user, 2026-09-16): one `{subject, text}` per kind in `app/config/notificationTemplates.ts`, spread into `app.config.ts` `theslope.notifications` with the signature `— Skråningen · {{site}}`; `composeEmail(config, {kind, to, cc?, values, attachments?})` fills `{{placeholders}}` from the event's values plus the built-ins `site`, `environment`, `dedupeKey`, appends the signature, base64-encodes text attachments; a placeholder without a value or a value without a placeholder throws (unit specs catch template drift). Config = `runtimeConfig.notifications` + app.config, parsed once per call site by `getNotificationConfig()` | ✅ | Templates |
+| **Test event sends to the admin mailbox** (`NUXT_NOTIFICATIONS_ADMIN_EMAIL`), no request body; `SENDER_TEST_EMAIL` dropped from `.env.<env>` | ✅ (user, 2026-09-16) | Sender events |
+| **`cc`** in the contract (`z.array(EmailAddressSchema).max(10).default([])`), mapped to the binding's `cc` | ✅ (user) | Contract |
+| **Accountant mail** `BILLING_PERIOD_CLOSED`: to `NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL`, cc `NUXT_NOTIFICATIONS_ADMIN_EMAIL` (worker secrets), values `billingPeriod` / `householdCount` / `totalAmount` (da-DK kroner) / `summaryUrl` (`https://<site>/public/billing/<shareToken>`), the period CSV attached (`generateCsvFilename` / `generateBillingCsv`), `correlationId` = billingPeriod. Without an accountant mailbox: warn + `{queued: false, degraded: true}` | ✅ (user) | Billing |
+| **R2 archive inside the monthly run** — no separate archive endpoint: `runMonthlyBilling` archives and mails per closed period and reports both in `results[].archive` / `.notification`; a period is re-sent through the sender event | ✅ | Billing archive |
 | **The proof of the pipe is `make theslope-sender-event-test-dev`**: calls the deployed dev app → `env.SENDER.send()` → real queue → deployed sender → real mail from `Skråningen dev <no-reply.dev@skraaningen.dk>`, confirmed in the inbox. Replaces the curl-to-Queues-API script (Cloudflare REST API where a binding exists is an anti-pattern) | ✅ (user) | Make |
 | **Health contract for every worker** (user, 2026-09-16): `workers/common/health.ts` defines the report; the app serves it at `/api/public/health`, the sender at `/sender/health` under the app's hostname (route `<host>/sender/*`, `workers_dev = false`); the smoke job checks every worker against `EXPECTED_VERSION`; `make deploy-sender-*` bakes the same version vars as the app (`with_version`) | ✅ | Health |
 | Cloudflare review (`workers-best-practices`, `wrangler` skills): `Env` typed from the generated `worker-configuration.d.ts` (no hand-written `Env`); `observability.traces.enabled = true` on both workers | ✅ (user: "green on cf review") | Sender |
@@ -51,9 +56,9 @@ Expected volume: **10–50 notifications/day** once the trigger catalog lands (c
 | First iteration ends with a real e-mail through the deployed pipe; nothing app-side is built before that is seen | ✅ | Packages |
 | Every package runs behind a brief approved in the main loop (plan-and-supervise) | ✅ | Packages |
 | **Wrangler config test** (a vitest spec parsing both `wrangler.toml` files and cross-checking queue names/compat/naming) — **out**. Review instead; a queue-name mismatch surfaces operationally (`theslope-sender-event-test-*`, `queues-info-*`) | ✅ decided out | Wrangler config test |
-| R2 bucket names **`theslope-backups` / `theslope-backups-prod`** (from `feature-proposal-backup-export.md`), key prefix `billing/YYYY-MM/` | ✅ (user) | Billing archive |
+| R2 bucket names **`theslope-archive-dev` / `theslope-archive-prod`** (binding `ARCHIVE`; local + dev share the dev bucket), key prefix `billing/YYYY-MM/` | ✅ (user, 2026-09-16) | Billing archive |
 | **Sender/recipient restrictions live on the `[[send_email]]` binding, not in code** (supersedes the fail-closed `RECIPIENT_ALLOWLIST` var decided earlier the same day): `allowed_sender_addresses` per env (`no-reply.dev@skraaningen.dk` in local/dev, `no-reply@skraaningen.dk` in prod); `allowed_destination_addresses = ["<dev test mailbox>"]` in **dev only** (a verified destination address); prod omits it (= everyone). Platform-enforced, zero code, no vars; `utils/policy.ts` is dropped. Dev shares the local D1 data, so the dev list is what keeps a dev run away from residents | ✅ (user) | Sender |
-| **Addresses**: `from` is **per environment — dev `Skråningen dev <no-reply.dev@skraaningen.dk>`, prod `Skråningen <no-reply@skraaningen.dk>`** (address + display name `fromName`, both from the app's vars `NUXT_NOTIFICATIONS_FROM` / `NUXT_NOTIFICATIONS_FROM_NAME`) — so the sender line alone tells the environments apart; pinned per env by the binding's `allowed_sender_addresses`, read by the app from its Cloudflare var `NUXT_NOTIFICATIONS_FROM`; **`replyTo` likewise a per-environment Cloudflare var on the app** (`NUXT_NOTIFICATIONS_REPLY_TO`), both in the root `wrangler.toml` `[env.*.vars]` → `runtimeConfig.notifications.*` → every composed message | ✅ (user) | Next task (producer) |
+| **Addresses**: `from` is **per environment — dev `Skråningen dev <no-reply.dev@skraaningen.dk>`, prod `Skråningen prod <no-reply@skraaningen.dk>`** (address `senderAddress(environment)` and display name `senderDisplayName(environment)` = `Skråningen <environment>`, both derived in `app/config/notificationTemplates.ts`; **environment and site derived from `DEPLOY_URL`** — the existing per-env wrangler var — or the request origin locally (`deploymentFromUrl`); user 2026-09-16: no notifications environment var, no environment or port literals in `nuxt.config.ts`, `runtimeConfig.notifications` holds mailboxes only, an unset mailbox → degraded with the variable name in the log) — so the sender line alone tells the environments apart; pinned per env by the binding's `allowed_sender_addresses`; **`replyTo` = the admin mailbox** (`NUXT_NOTIFICATIONS_ADMIN_EMAIL`, worker secret; user 2026-09-17) on every composed message | ✅ (user) | Next task (producer) |
 | **Email Service is set up with wrangler**: `wrangler email sending enable skraaningen.dk` (DNS auto-provisioned), `dns get`, `settings`, and `wrangler email sending send …` proves the service before any code exists; a destination address is verified with `wrangler email routing addresses create <email>` | ✅ | Prerequisites |
 | **Environment visible in the mail**: the app's template signature ends with the sending site (`DEPLOY_URL`, e.g. `— Skråningen · dev.skraaningen.dk`); the sender adds nothing to subjects or bodies (no `[dev]` prefix) | ✅ (user) | Next task (templates) + `verify-email.sh` |
 | Chef deadline reminders/overdue → **chef only**; new **`PLANNINGMANAGER`** role receives chefless-dinner alerts; where they are shown (`/admin/teams` vs chef page) and alarms on the post-login landing page | ✅ decided / **OPEN** placement — **next task** | Next task |
@@ -92,7 +97,7 @@ No per-worker `package.json`, no npm workspaces (they would split lockfiles and 
 | **CI time** — tests (Heynabo logins), deploy authentication | GitHub environment `CLOUDFLARE_THESLOPE` (+ `dev`/`prod`) → job `env:` | `.github/workflows/cicd.yml:34-41`, `:230-232`; `docs/ops-runbook.md` "GitHub Secrets & Variables" |
 | **Runtime** — the deployed worker (`HEY_NABO_USERNAME/PASSWORD`, `NUXT_SESSION_PASSWORD`) | Cloudflare Worker secrets, set **out of band** by an admin with `npx wrangler secret put <NAME> --env <env>`. Nothing in the repo or CI calls `wrangler secret put`; `wrangler deploy` uploads no env vars; the code reads them from the runtime env (`server/integration/heynabo/heynaboClient.ts:22-25`; nuxt-auth-utils via `NUXT_SESSION_PASSWORD`) | grep `secret put` → 0 hits in Makefile / cicd.yml / package.json |
 
-Two processes for two consumers — neither may hold the other's material. The sender follows the runtime pattern: when SMS ships, `GATEWAYAPI_TOKEN` is set with `npx wrangler secret put GATEWAYAPI_TOKEN -c workers/sender/wrangler.toml --env dev|prod`, exactly like the app's secrets; the app's `NUXT_NOTIFICATIONS_REPLY_TO` (producer task) the same way with `--env dev|prod`. This release the sender has none. Local *ops credentials* are a different, existing house pattern: Make targets read `.env.<env>` through `with_env` (`Makefile:30`, `heynabo-login-dev`, `smoke-dev`); `theslope-sender-event-test-*` reads `HEY_NABO_*` + `SENDER_TEST_EMAIL` the same way and sets nothing. Doc gap: the runbook documents the GitHub side only — the Docs package adds the Cloudflare-side runtime-secrets table per worker.
+Two processes for two consumers — neither may hold the other's material. The sender follows the runtime pattern: when SMS ships, `GATEWAYAPI_TOKEN` is set with `npx wrangler secret put GATEWAYAPI_TOKEN -c workers/sender/wrangler.toml --env dev|prod`, exactly like the app's secrets; the app's mailboxes (`NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL`, `NUXT_NOTIFICATIONS_ADMIN_EMAIL`) the same way with `--env dev|prod`. This release the sender has none. Local *ops credentials* are a different, existing house pattern: Make targets read `.env.<env>` through `with_env` (`Makefile:30`, `heynabo-login-dev`, `smoke-dev`); `theslope-sender-event-test-*` reads `HEY_NABO_*` the same way and sets nothing. Doc gap: the runbook documents the GitHub side only — the Docs package adds the Cloudflare-side runtime-secrets table per worker.
 
 ### Shared vs independent
 
@@ -225,19 +230,19 @@ House style is *macro for the recipe, explicit target per env* (`run_smoke` → 
 +# ============================================================================
 +.PHONY: theslope-sender-event-test-local theslope-sender-event-test-dev theslope-sender-event-test-prod queues-info-dev queues-info-prod
 +
-+# $(1)=env file, $(2)=URL. theslope_call logs in with HEY_NABO_* from the env file; SENDER_TEST_EMAIL is the recipient
++# $(1)=env file. theslope_call logs in with HEY_NABO_* and calls $BASE_URL from the env file; the mail goes to the environment's admin mailbox
 +define theslope_sender_event_test
-+	$(call theslope_call,$(1),$(2),-X POST "$(2)/api/admin/sender/event/test" -d "{\"to\":\"$$SENDER_TEST_EMAIL\"}")
++	$(call theslope_call,$(1),-X POST "$$BASE_URL/api/admin/sender/event/test")
 +endef
 +
 +theslope-sender-event-test-local: ## Test event on localhost (lands in the miniflare queue sink)
-+	$(call theslope_sender_event_test,$(ENV_local),$(URL_local))
++	$(call theslope_sender_event_test,$(ENV_local))
 +
 +theslope-sender-event-test-dev: ## Test event on dev → real mail from Skråningen dev <no-reply.dev@skraaningen.dk>
-+	$(call theslope_sender_event_test,$(ENV_dev),$(URL_dev))
++	$(call theslope_sender_event_test,$(ENV_dev))
 +
 +theslope-sender-event-test-prod: ## Test event on prod → real mail from Skråningen <no-reply@skraaningen.dk>
-+	$(call theslope_sender_event_test,$(ENV_prod),$(URL_prod))
++	$(call theslope_sender_event_test,$(ENV_prod))
 +
 +queues-info-dev: ## Backlog of the dev sender queue
 +	@npx wrangler queues info theslope-sender-dev
@@ -307,7 +312,7 @@ const EmailMessageSchema = z.object({
     to: EmailAddressSchema,
     toName: z.string().max(100).optional(),
     from: EmailAddressSchema,                     // per environment (no-reply.dev@ / no-reply@skraaningen.dk); the binding enforces it
-    fromName: z.string().min(1).max(100).optional(), // display name: `Skråningen dev` / `Skråningen`
+    fromName: z.string().min(1).max(100).optional(), // display name: `Skråningen <environment>`
     replyTo: EmailAddressSchema.optional(),
     subject: z.string().min(1).max(200),
     text: z.string().min(1).max(50_000),
@@ -336,7 +341,7 @@ export type SmsMessage = z.infer<typeof SmsMessageSchema>
 Example — the accountant mail the billing trigger (next task) will emit; `events/test.ts` emits the `TEST` shape:
 
 ```json
-{"v":1,"channel":"EMAIL","to":"revisor@example.dk","from":"no-reply@skraaningen.dk","fromName":"Skråningen","replyTo":"kasserer@skraaningen.dk",
+{"v":1,"channel":"EMAIL","to":"revisor@example.dk","from":"no-reply@skraaningen.dk","fromName":"Skråningen prod","replyTo":"kasserer@skraaningen.dk",
  "subject":"Skråningen: PBS-opgørelse 17/08/2026-16/09/2026",
  "text":"Hej,\n\nVedhæftet er PBS-opgørelsen for perioden ... 64 husstande, i alt 41.230,00 kr.\n\nOversigt: https://skraaningen.dk/public/billing/<token>\n\n— Skråningen",
  "attachments":[{"filename":"PBS-Opgørelse-Skråningen-2026-08.csv","contentType":"text/csv; charset=utf-8","contentBase64":"IktLdW5kZS..."}],
@@ -405,7 +410,7 @@ binding = "SENDER"
 queue = "theslope-sender-dev"             # local + dev; theslope-sender-prod in [env.prod]
 [[r2_buckets]]
 binding = "ARCHIVE"
-bucket_name = "theslope-backups"          # local + dev share; prod: theslope-backups-prod
+bucket_name = "theslope-archive-dev"          # local + dev share; prod: theslope-archive-prod
 ```
 
 `shared/types/cloudflare.d.ts` += `SENDER: Queue; ARCHIVE: R2Bucket` on both augmentations (this file, not the unreferenced root `worker-configuration.d.ts`, is the app's binding typing). Under `nuxt dev`, `nitro-cloudflare-dev` (`getPlatformProxy`) simulates both bindings: local sends land in a queue nothing consumes — the intended E2E sink. The full produce→consume loop cannot run under `nuxt dev` (the consumer is a separate worker); **dev.skraaningen.dk is the integration environment**, `make theslope-sender-event-test-dev` proves it.
@@ -415,34 +420,44 @@ bucket_name = "theslope-backups"          # local + dev share; prod: theslope-ba
 Pattern (= `/api/admin/maintenance/*`): the trigger logic lives once in `server/utils/sender/events/<event>.ts`; the cron path and the admin endpoint both call it.
 
 ```
+app/config/notificationTemplates.ts   NOTIFICATION_TEMPLATES {TEST, BILLING_PERIOD_CLOSED}: {subject, text} with {{placeholders}}; NOTIFICATION_SIGNATURE
+app/app.config.ts                     theslope.notifications = {signature, templates}
+app/utils/template.ts                 fillTemplate(template, values) — throws on a placeholder without a value; templatePlaceholders(template)
+
 server/utils/sender/
-├── emit.ts                  emit(queue: Queue | undefined, message: NotificationMessage): Promise<SenderEmitResult>
+├── config.ts                getNotificationConfig(event?): NotificationConfig — {environment, site} = deploymentFromUrl(DEPLOY_URL ?? request origin)
+│                            + runtimeConfig.notifications (accountantEmail, adminEmail — NUXT_NOTIFICATIONS_* secrets, '' when unset)
+│                            + from = senderAddress(environment), fromName = senderDisplayName(environment) + app.config (signature, templates)
+│                            missingAddress(config, recipient) names the unset variable an event reports degraded on
+├── compose.ts               composeEmail(config, {kind, to, cc?, values?, attachments?, correlationId?}) → EmailMessage; replyTo = adminEmail
+│                            — template of the kind + built-ins site/environment/dedupeKey, signature appended, text attachments → base64,
+│                            dedupeKey {kind}:EMAIL:{maskEmail(to)}:{uuid}; throws on an unknown kind or a value no template uses
+├── emit.ts                  emit(queue: Queue | undefined, message: unknown): Promise<SenderEmitResult>
 │                            — validates against the contract, env.SENDER.send(message); never throws:
 │                            missing binding → console.warn + {queued: false, degraded: true}
 └── events/
-    ├── test.ts              emitTestEmail(queue, {to, replyTo?, from, fromName, site}) → the TEST message, dedupeKey TEST:EMAIL:<to-hash>:<iso>
-    └── monthly-billing.ts   (later package) emitBillingPeriodClosed(queue, summary, csv, …) — called from runMonthlyBilling and its HTTP twin
+    ├── test.ts              emitTestEmail(queue, config) → TEST to config.adminEmail; degraded without it
+    └── monthly-billing.ts   emitBillingPeriodClosed(queue, config, summary) → BILLING_PERIOD_CLOSED to accountantEmail, cc adminEmail,
+                             CSV attached; degraded without accountantEmail. Called by runMonthlyBilling and its HTTP twin
 
 server/routes/api/admin/sender/event/
-├── test.post.ts             body {to, replyTo?} (SenderEventTestBodySchema) → emitTestEmail → SenderEmitResult; ADR-002; admin (existing /api/admin POST rule)
-└── monthly-billing.post.ts  (later package)
+├── test.post.ts             no body → emitTestEmail → SenderEmitResult; admin (existing /api/admin POST rule)
+└── monthly-billing.post.ts  body {billingPeriodSummaryId} (SenderEventMonthlyBillingBodySchema) → fetchBillingPeriodSummary (404) → emitBillingPeriodClosed
 ```
 
-- `from`/`fromName` come from `runtimeConfig.notifications` (`NUXT_NOTIFICATIONS_FROM` / `_FROM_NAME` wrangler vars per environment); `replyTo` from the body, else `runtimeConfig.notifications.replyTo` (the secret, when set), else omitted; `site` = `getRequestURL(event).host` for HTTP twins, `DEPLOY_URL` for cron paths.
-- `app/composables/useNotificationValidation.ts` re-exports the contract (`~~/workers/sender/contract`) and defines `SenderEventTestBodySchema`, `SenderEmitResultSchema` (`{queued, dedupeKey, degraded}`).
-- `shared/types/cloudflare.d.ts` += `SENDER: Queue` (H3EventContext + TaskContext).
+- `app/composables/useNotificationValidation.ts` re-exports the contract (`~~/workers/sender/contract`) and defines `NotificationConfigSchema`, `SenderEventMonthlyBillingBodySchema`, `SenderEmitResultSchema` (`{queued, dedupeKey, degraded}`).
+- `shared/types/cloudflare.d.ts` += `SENDER: Queue`, `ARCHIVE: R2Bucket` (H3EventContext + TaskContext).
 
-Make (per environment, `theslope_call`): `theslope-sender-event-test-local|dev|prod` → `POST $(URL_<env>)/api/admin/sender/event/test -d '{"to": "$SENDER_TEST_EMAIL"}'`, prints `{queued, dedupeKey}`. On dev/prod the deployed sender delivers; `make logs-sender-<env>` shows `[EMAIL] delivered <dedupeKey>`; the inbox is the confirmation. `.env.<env>` provides `HEY_NABO_USERNAME/PASSWORD` (already there) and `SENDER_TEST_EMAIL`.
+Make (per environment, `theslope_call`): `theslope-sender-event-test-local|dev|prod` → `POST $BASE_URL/api/admin/sender/event/test` (to the admin mailbox); `theslope-sender-event-monthly-billing-local|dev|prod bpid=<billingPeriodSummaryId>` → `POST …/event/monthly-billing`. Both print `{queued, dedupeKey}`. On dev/prod the deployed sender delivers; `make logs-sender-<env>` shows `[EMAIL] delivered <dedupeKey>`; the inbox is the confirmation. `.env.<env>` provides `HEY_NABO_USERNAME/PASSWORD` (already there).
 
 ## Billing CSV archive (R2)
 
-- **Key scheme** (pure, unit-tested, in `useBilling`): `getBillingArchiveKey(cutoffDate) → 'billing/2026-08/pbs-opgoerelse-2026-08.csv'` (ASCII; `billingPeriod`'s `dd/MM/yyyy-dd/MM/yyyy` contains slashes and must not be a key). The human filename `PBS-Opgørelse-Skråningen-….csv` (`generateCsvFilename`) goes to `customMetadata.filename` and later to the mail attachment.
-- **`server/utils/billingArchive.ts`**: `archiveBillingCsv(bucket: R2Bucket | undefined, summary: BillingPeriodSummaryDetail, jobRunId?: number): Promise<BillingArchiveResult>` → `generateBillingCsv(summary)` → `bucket.put(key, csv, {httpMetadata: {contentType: 'text/csv; charset=utf-8'}, customMetadata: {billingPeriod, filename, sha256, jobRunId}})`. **Never throws**: missing binding → `console.warn` + `{archived: false, degraded: true}`; put failure → `console.error` + `{archived: false}`. Idempotent: same key overwritten on re-run (ADR-015). Log tag `💰 > BILLING > [ARCHIVE]`.
-- **`BillingArchiveResultSchema`** = `{key, filename, sizeBytes, sha256, archived, degraded}`; `BillingGenerationResultSchema += archive: BillingArchiveResultSchema.nullable()` (operation-result type, ADR-009).
-- **`runMonthlyBilling(d1Client, triggeredBy, archive?: R2Bucket)`** (`server/utils/monthlyBillingService.ts`): after `generateBilling`, per result `fetchBillingPeriodSummary(d1, result.billingPeriodSummaryId)` → `archiveBillingCsv`. Billing success never depends on the archive. `server/tasks/monthly-billing.ts` and `server/routes/api/admin/maintenance/monthly.post.ts` pass the binding.
-- **`POST /api/admin/billing/periods/[id]/archive`** (ADR-002 two-try-catch, `getValidatedRouterParams`, `Promise<BillingArchiveResult>`, 404 when the period is missing): backfill of historic periods and the E2E-testable surface. Row in `docs/adr-compliance-backend.md`.
-- Tests: unit (`getBillingArchiveKey` parametrized, sha256 helper); API spec `tests/e2e/api/admin/billing-archive.e2e.spec.ts` via `BillingFactory` (+ `archiveBillingPeriod(context, id)`): 200 + key format; second call → same key (idempotent); the monthly-billing spec asserts `results[].archive.archived === true` under `nuxt dev` (miniflare R2).
-- Make: `r2-get-billing-dev|prod period=YYYY-MM` → `wrangler r2 object get theslope-backups[-prod]/billing/<period>/pbs-opgoerelse-<period>.csv --file …`.
+- **Key scheme** (`server/utils/billingArchive.ts`, unit-tested): `getBillingArchiveKey(cutoffDate) → 'billing/2026-08/pbs-opgoerelse-2026-08.csv'` (ASCII; `billingPeriod`'s `dd/MM/yyyy-dd/MM/yyyy` contains slashes and is not a key). The human filename `PBS-Opgørelse-Skråningen-….csv` (`generateCsvFilename`) goes to `customMetadata.filename` and to the mail attachment.
+- **`archiveBillingCsv(bucket: R2Bucket | undefined, summary, jobRunId?): Promise<BillingArchiveResult>`** → `generateBillingCsv(summary)` → `bucket.put(key, csv, {httpMetadata: {contentType: 'text/csv; charset=utf-8'}, customMetadata: {billingPeriod, filename, jobRunId}})`. **Never throws**: missing binding → `console.warn` + `{archived: false, degraded: true}`; put failure → `console.error` + `{archived: false}`. Idempotent: same key overwritten on re-run (ADR-015). Log tag `💰 > BILLING > [ARCHIVE]`.
+- **`BillingArchiveResultSchema`** = `{key, filename, sizeBytes, archived, degraded}`; `BillingGenerationResultSchema += archive?: BillingArchiveResult, notification?: SenderEmitResult` (operation-result type, ADR-009; absent on `generateBilling`'s own result).
+- **`runMonthlyBilling(d1Client, triggeredBy, {queue, archive, notifications})`** (`server/utils/monthlyBillingService.ts`): after `generateBilling`, per result `fetchBillingPeriodSummary` → `archiveBillingCsv` → `emitBillingPeriodClosed`. Billing success depends on neither. `server/tasks/monthly-billing.ts` and `server/routes/api/admin/maintenance/monthly.post.ts` pass `env.SENDER`, `env.ARCHIVE`, `getNotificationConfig()`.
+- Tests: `tests/component/utils/billingArchive.unit.spec.ts` (key, put, degraded, put failure); `maintenance.e2e.spec.ts` asserts `results[].archive.archived` and `results[].notification.queued` under `nuxt dev` (miniflare R2 + queue sink).
+- Fetch an archived period: `npx wrangler r2 object get theslope-archive-<env>/billing/<YYYY-MM>/pbs-opgoerelse-<YYYY-MM>.csv --file …`.
 
 ## Work packages (one at a time, each behind an approved brief)
 
@@ -453,10 +468,10 @@ Make (per environment, `theslope_call`): `theslope-sender-event-test-local|dev|p
 | **Proposal doc revision** | this document signed off | `docs/features/feature-proposal-notifications.md` | — | review + sign off (incl. the OPEN rows) |
 | **Cloudflare prerequisites** | dev resources exist (prod later, same commands) | `.env.dev` local keys | — | `npx wrangler email sending enable skraaningen.dk` → `dns get` / `settings` show verified; `npx wrangler email routing addresses create <dev test mailbox>` (confirm the mail); `npx wrangler email sending send --from no-reply@skraaningen.dk --to <dev test mailbox> --subject … --text …` proves the service; `wrangler queues create theslope-sender-dev`; operator API token with Queues Edit |
 | **E-mail through the pipe** ✅ | sender built, 54 tests, gates green (2026-09-16) | `workers/common/cloudflare.ts` (tiny; the sender is built on them from day one); `workers/sender/{contract.ts, nitro.config.ts, tsconfig.json, wrangler.toml (local + dev, binding restrictions), plugins/queue.ts, utils/{env,consumeBatch,delivery,mask}.ts, utils/providers/{types,cloudflareEmail,smsNotEnabled,index}.ts, test/**, scripts/verify-email.sh}`; Makefile: `deploy-sender-dev`, `logs-sender-dev`, `sender-verify-email-dev`, `queues-info-dev`; root `vitest.config.ts` project `sender`; npm `test:workers`, `ts:workers`, `pre:all` | `contract` accept/reject matrix; `consumeBatch` ack/retry/reject + SMS-not-enabled; `providers` e-mail E_* taxonomy; `fixtures.ts` | `make deploy-sender-dev`, `make sender-verify-email-dev`, check inbox. Verify `nitro build --dir` resolves the root `node_modules` from a clean checkout (fallback: `nodeModulesDirs` in `nitro.config.ts`) |
-| **Test event through the app** | `make theslope-sender-event-test-dev` delivers a real mail from the deployed pipe, confirmed in the inbox; sender green on the Cloudflare review | root `wrangler.toml` (`SENDER` producer ×3, `NUXT_NOTIFICATIONS_FROM/_FROM_NAME` vars ×3, `observability.traces`), `nuxt.config.ts` (`runtimeConfig.notifications`), `shared/types/cloudflare.d.ts`, `app/composables/useNotificationValidation.ts`, `server/utils/sender/{emit,events/test}.ts`, `server/routes/api/admin/sender/event/test.post.ts`, Makefile `theslope-sender-event-test-{local,dev,prod}` (drop `sender-verify-email-*` + `scripts/verify-email.sh`), sender: `utils/env.ts` on generated `Env`, `wrangler.toml` traces + `workers_dev = false` + top-level queue `theslope-sender-dev`, `docs/adr-compliance-backend.md` row | unit: `emit` (never throws, degraded), `events/test` (contract-valid, from/fromName/site/replyTo); API spec `tests/e2e/api/parallel/admin/sender-event-test.e2e.spec.ts` (admin 200 `{queued:true, dedupeKey}` — local sink; non-admin 403; bad body 400) | `.env.dev` `SENDER_TEST_EMAIL`; `make deploy-dev`; `make theslope-sender-event-test-dev`; confirm the inbox |
+| **Test event through the app** | `make theslope-sender-event-test-dev` delivers a real mail from the deployed pipe, confirmed in the inbox; sender green on the Cloudflare review | root `wrangler.toml` (`SENDER` producer ×3, `observability.traces`), `nuxt.config.ts` (`runtimeConfig.notifications`), `shared/types/cloudflare.d.ts`, `app/composables/useNotificationValidation.ts`, `server/utils/sender/{emit,events/test}.ts`, `server/routes/api/admin/sender/event/test.post.ts`, Makefile `theslope-sender-event-test-{local,dev,prod}` (drop `sender-verify-email-*` + `scripts/verify-email.sh`), sender: `utils/env.ts` on generated `Env`, `wrangler.toml` traces + `workers_dev = false` + top-level queue `theslope-sender-dev`, `docs/adr-compliance-backend.md` row | unit: `emit` (never throws, degraded), `events/test` (contract-valid, from/fromName/site/replyTo); API spec `tests/e2e/api/parallel/admin/sender-event-test.e2e.spec.ts` (admin 200 `{queued:true, dedupeKey}` — local sink; non-admin 403) | `make deploy-dev`; `make theslope-sender-event-test-dev`; confirm the admin mailbox |
 | **Prod env for the sender** | prod deployable | `wrangler.toml` `[env.prod]` (`allowed_sender_addresses = no-reply@`, no destination limit); Makefile: `deploy-sender-prod`, `logs-sender-prod`, `sender-verify-email-prod`, `queues-info-prod`, `typegen`, `deploy-theslope-*` + `deploy-dev\|prod` aggregation (CI unchanged) | — (`theslope-sender-event-test-prod` is the proof) | `make deploy-prod`; `make theslope-sender-event-test-prod` |
 | **App adopts the shared base** | `nuxt.config.ts` reads `compatibilityDate` + `nitro.preset` from `workers/common/cloudflare.ts` | `nuxt.config.ts` | — (`npm run pre:all` green, `make deploy-dev` unchanged) | none |
-| **Billing archive** | monthly billing stores the period CSV in R2, idempotently, never failing billing; on-demand archive endpoint | app `wrangler.toml` bindings ×3 (`SENDER` producer, `ARCHIVE`), `shared/types/cloudflare.d.ts`, `getBillingArchiveKey`, `billingArchive.ts`, `runMonthlyBilling`, task + `monthly.post.ts`, `archive.post.ts`, `BillingFactory.archiveBillingPeriod`, `r2-get-billing-*` | unit: key builder, sha256; API spec `billing-archive.e2e.spec.ts` | `wrangler r2 bucket create theslope-backups` + `theslope-backups-prod`; none locally (miniflare R2 under `nuxt dev`) |
+| **Accountant mail on monthly billing** ✅ | templated events, cc, shared compose, R2 archive (2026-09-16) | `app/utils/template.ts`, `app/config/notificationTemplates.ts` + `app.config.ts`, `workers/sender/contract.ts` (`cc`) + `cloudflareEmail.ts`, `server/utils/sender/{config,compose}.ts`, `events/{test,monthly-billing}.ts`, `server/utils/billingArchive.ts`, `monthlyBillingService.ts` + task + `maintenance/monthly.post.ts`, `sender/event/monthly-billing.post.ts`, `useNotificationValidation` + `useBillingValidation` schemas, Makefile `theslope-sender-event-monthly-billing-*`, CI env placeholders | `template`, `compose`, `events/test`, `events/monthly-billing`, `billingArchive` unit specs; contract/provider cc cases; serial API spec for the endpoint; maintenance spec side effects | `wrangler secret put NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL\|_ADMIN_EMAIL --env dev` ✅; `.env` mailboxes for local e2e; `make deploy-dev`; `make theslope-sender-event-monthly-billing-dev bpid=<id>` → mail with CSV in the test mailbox |
 | **Docs and ADRs** | ADRs, runbook, compliance and release plan updated | `docs/adr.md` ADR-018 + ADR-019 (below); `docs/ops-runbook.md` "Workers & deploy order", "Runtime secrets per worker (Cloudflare side)", "Sender" (queue, failures in logs, Email Service setup via `wrangler email sending`, binding restrictions per env, `sender-verify-email`), "Billing archive"; compliance tables; `release-plan-v0.9.md` (M5/M6 split, SMS deferred) | — | review |
 | *(later)* **SMS gateway adapter** | ship SMS | `providers/gatewayApiSms.ts` replacing `smsNotEnabled`, vars `SMS_SENDER_ID`/`GATEWAYAPI_BASE_URL`, provider spec (status taxonomy: 429/5xx retryable; 400/422, 401/403, 402 terminal), an SMS test event (`theslope-sender-event-test-*` with an SMS recipient) real delivery | provider spec | GatewayAPI EU account; `GATEWAYAPI_TOKEN` set with `wrangler secret put -c workers/sender/wrangler.toml --env …` (runtime-secret pattern); DK carrier acceptance of the 11-char sender ID `Skraaningen` verified by the first real SMS |
 
@@ -470,13 +485,14 @@ Per-package gate: red run shown → green run shown → `npm run pre:all` → di
 | `utils/consumeBatch.ts`, `delivery.ts` | unit | `test/consumeBatch.unit.spec.ts`, `test/delivery.unit.spec.ts` |
 | `workers/common/{health,mask}.ts` | unit | `tests/component/workers/common/{health,mask}.unit.spec.ts` |
 | `utils/providers/*` (Cloudflare e-mail, `smsNotEnabled`) | unit (fake `EMAIL` binding with E_* codes) | `test/providers.unit.spec.ts` |
-| `server/utils/sender/emit.ts`, `events/test.ts` | unit | `tests/component/utils/sender/*.unit.spec.ts` |
+| `server/utils/sender/{emit,compose}.ts`, `events/{test,monthly-billing}.ts` | unit | `tests/component/utils/sender/**/*.unit.spec.ts` (config via `NotificationFactory`, real templates) |
+| `app/utils/template.ts` | unit | `tests/component/utils/template.unit.spec.ts` |
+| `server/utils/billingArchive.ts` | unit (fake `R2Bucket`) | `tests/component/utils/billingArchive.unit.spec.ts` |
+| `POST /api/admin/sender/event/monthly-billing` (new endpoint) | Playwright API spec, serial (needs a billing period) | `tests/e2e/api/serial/admin/sender-event-monthly-billing.e2e.spec.ts` |
 | `POST /api/admin/sender/event/test` (new endpoint) | Playwright API spec | `tests/e2e/api/parallel/admin/sender-event-test.e2e.spec.ts` |
 | Make targets | verified by running them (`make theslope-sender-event-test-dev`) | Verification |
 | every `wrangler.toml` | validated by `make deploy-*`; no unit spec (wrangler config test decided out) | Verification |
-| `POST /api/admin/billing/periods/[id]/archive` (new endpoint) | Playwright API spec | `tests/e2e/api/admin/billing-archive.e2e.spec.ts` (parallel, salted, `BillingFactory`) |
-| `runMonthlyBilling` archive step | existing monthly-billing API spec extended (`results[].archive`) | `tests/e2e/api/serial/…` (already serial) |
-| `getBillingArchiveKey`, sha256 helper | unit | `tests/component/composables/useBilling.unit.spec.ts` (+ cases) |
+| `runMonthlyBilling` side effects | existing maintenance API spec extended (`results[].archive.archived`, `results[].notification.queued`) | `tests/e2e/api/serial/admin/maintenance.e2e.spec.ts` |
 
 No UX component changes → no BDD/component specs, no test-id changes.
 
@@ -565,7 +581,7 @@ Trigger catalog (each = one config template + one producer call site emitting co
 App-side design carried over from the 2026-08-31 draft (unchanged, to be re-validated in that task):
 
 - **Preference model:** `User.notificationChannels String @default("[\"EMAIL\"]")` — JSON array of new enum `NotificationChannel { EMAIL SMS }`, mirroring the `systemRoles` JSON-array pattern; addresses resolved from `User.email` / `User.phone` at enqueue time (Heynabo-owned, zero drift). Serialization touchpoints: `UserFragmentSchema`, `SerializedUserInputSchema` / `serializeUserInput` / `deserializeUser` / `deserializeUserDetail`, `serializeUserPartial` (ADR-012 `Prisma.skip`) + `USER_DISPLAY_SELECT` + `deserializeToUserDisplay`, `userFactory.defaultUserData`. Migration `make prisma-create-migration name=notifications`.
-- **Producer:** `server/utils/notifications/notificationService.ts` — `notifyUsers(queue, users, rendering)` **never throws** (missing binding → warn + degraded result); `normalizeToMsisdn`, `resolveDeliveries` pure; chunked `sendBatch` ≤100. Templates with placeholders in theslope's config (`app.config.ts` `theslope.notifications`); `from`, `replyTo` and the accountant address are Cloudflare vars per environment on the app (`NUXT_NOTIFICATIONS_FROM` = `no-reply.dev@skraaningen.dk` / `no-reply@skraaningen.dk`, `NUXT_NOTIFICATIONS_FROM_NAME` = `Skråningen dev` / `Skråningen`, `NUXT_NOTIFICATIONS_REPLY_TO`, `NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL` in the root `wrangler.toml` `[env.*.vars]` → `runtimeConfig.notifications.*`). **Every template's signature states the sending site** (`— Skråningen · dev.skraaningen.dk` / `www.skraaningen.dk`, from `DEPLOY_URL`) so dev mail is never mistaken for prod mail.
+- **Producer:** `server/utils/notifications/notificationService.ts` — `notifyUsers(queue, users, rendering)` **never throws** (missing binding → warn + degraded result); `normalizeToMsisdn`, `resolveDeliveries` pure; chunked `sendBatch` ≤100. Templates with placeholders in theslope's config (`app.config.ts` `theslope.notifications`); sender address and display name derive from the environment (`senderAddress`, `senderDisplayName`), `replyTo` is the admin mailbox, the mailboxes are worker secrets (`NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL`, `NUXT_NOTIFICATIONS_ADMIN_EMAIL` → `runtimeConfig.notifications.*`). **Every template's signature states the sending site** (`— Skråningen · dev.skraaningen.dk` / `www.skraaningen.dk`, from `DEPLOY_URL`) so dev mail is never mistaken for prod mail.
 - **Endpoints:** `POST /api/user/notifications/channels` (session user only, 400 `'SMS kræver et telefonnummer'` when phone missing, patches the session snapshot), `POST /api/user/notifications/test` (200-with-warning when degraded, not 503). ADR-002 two-try-catch; row in `usePermissions.ts`.
 - **Store:** `auth.ts` `updateMyNotificationChannels`, `sendTestNotification` (all `$fetch` in stores, toasts in store per the `updateUserRoles` precedent).
 - **UI mockup — `UserProfileCard.vue` footer** (`isCurrentUser` only) ⏳ awaiting signoff:

@@ -2,13 +2,13 @@ import {test, expect} from '@playwright/test'
 import {SenderFactory} from '~~/tests/e2e/testDataFactories/senderFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext} = testHelpers
 
 test.describe('POST /api/admin/sender/event/test', () => {
-    test('GIVEN admin WHEN triggering the test event THEN the message is queued with a TEST dedupeKey', async ({browser}) => {
+    test('GIVEN admin WHEN triggering the test event THEN the mail to the admin mailbox is queued with a TEST dedupeKey', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        const result = await SenderFactory.triggerTestEvent(context, SenderFactory.defaultTestEventBody(temporaryAndRandom()))
+        const result = await SenderFactory.triggerTestEvent(context)
 
         expect(result).not.toBeNull()
         expect(result!.queued).toBe(true)
@@ -19,18 +19,6 @@ test.describe('POST /api/admin/sender/event/test', () => {
     test('GIVEN a member WHEN triggering the test event THEN 403', async ({browser}) => {
         const context = await memberValidatedBrowserContext(browser)
 
-        await SenderFactory.triggerTestEvent(context, SenderFactory.defaultTestEventBody(temporaryAndRandom()), 403)
+        await SenderFactory.triggerTestEvent(context, 403)
     })
-
-    const invalidBodies: Array<[string, unknown]> = [
-        ['not an e-mail address', {to: 'not-an-email'}],
-        ['missing recipient', {}],
-        ['invalid reply-to', {...SenderFactory.defaultTestEventBody(), replyTo: 'nope'}]
-    ]
-    for (const [name, body] of invalidBodies) {
-        test(`GIVEN ${name} WHEN triggering the test event THEN 400`, async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            await SenderFactory.triggerTestEvent(context, body, 400)
-        })
-    }
 })

@@ -15,7 +15,7 @@
     "postinstall": "nuxt prepare",
     "deploy": "npm run build && wrangler deploy --env dev",
     "deploy:prod": "npm run build && wrangler deploy --env prod",
-    "cf-typegen": "wrangler types shared/types/worker-configuration.d.ts",
+    "cf-typegen": "CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false wrangler types shared/types/worker-configuration.d.ts",
     "lint": "npx eslint .",
     "lint-fix": "npx eslint . --fix",
     "ts": "npx vue-tsc --noEmit",

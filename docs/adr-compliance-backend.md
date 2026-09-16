@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2026-09-16 (Season update returns an operation envelope; the live season re-scaffolds on save)
+**Last Updated:** 2026-09-16 (Sender event `monthly-billing`: accountant mail with the period CSV, cc admin; monthly billing archives the CSV to R2 and raises the event)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -82,7 +82,9 @@
 | **Household - Bookings** | | | | | **✅ FULLY COMPLIANT (2026-01-13)** - ADR-016 unified booking through scaffold                   |
 | `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ✅ | ADR-016 unified booking endpoint, `requireHouseholdAccess()`, returns ScaffoldOrdersResponse     |
 | **Admin - Sender events** | | | | | **✅ FULLY COMPLIANT (2026-09-16)** - HTTP twins of notification triggers; message contract from `useNotificationValidation` (re-export of `workers/sender/contract.ts`) |
-| `/api/admin/sender/event/test.post.ts` | ✅ | ✅ | N/A | ✅ | `emitTestEmail()` → `emit()` (never throws; degraded when `SENDER` is unbound) → `SenderEmitResult`; admin via route table; `tests/e2e/api/parallel/admin/sender-event-test.e2e.spec.ts` |
+| `/api/admin/sender/event/test.post.ts` | ✅ | N/A (no body) | N/A | ✅ | `emitTestEmail(queue, config)` → `composeEmail` (TEST template) to `config.adminEmail` → `emit()` (never throws; degraded without admin mailbox or `SENDER`) → `SenderEmitResult`; admin via route table; `tests/e2e/api/parallel/admin/sender-event-test.e2e.spec.ts` |
+| `/api/admin/sender/event/monthly-billing.post.ts` | ✅ | ✅ | ✅ | ✅ | Body `{billingPeriodSummaryId}`; `fetchBillingPeriodSummary()` → 404 when missing → `emitBillingPeriodClosed(queue, config, summary)` (CSV attached, cc admin; degraded without accountant mailbox) → `SenderEmitResult`; serial `tests/e2e/api/serial/admin/sender-event-monthly-billing.e2e.spec.ts` |
+| `/api/admin/maintenance/monthly.post.ts` | ✅ | N/A | ✅ | ✅ | `runMonthlyBilling(db, triggeredBy, {queue, archive, notifications})`; per closed period `archiveBillingCsv()` (R2) + `emitBillingPeriodClosed()`; both report in `results[].archive` / `.notification`, never fail billing; asserted in `maintenance.e2e.spec.ts` |
 | **Household - Update** | | | | | **✅ FULLY COMPLIANT (2026-03-04)** - Self-service household update with admin bypass            |
 | `/api/household/[id]/update.post.ts` | ✅ | ✅ | ✅ | ✅ | updateHousehold() + `rescaffoldOnFieldChange()`, `requireHouseholdAccess()`, `?adminBypass=true`, returns HouseholdUpdateResponse |
 | **Teams (Public)** |

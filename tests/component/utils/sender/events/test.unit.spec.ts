@@ -1,56 +1,51 @@
-import {describe, expect, it} from 'vitest'
-import {buildTestEmail, type TestEmailInput} from '~~/server/utils/sender/events/test'
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
+import {buildTestEmail, emitTestEmail} from '~~/server/utils/sender/events/test'
 import {useNotificationValidation} from '~/composables/useNotificationValidation'
-import {maskEmail} from '~~/workers/common/mask'
+import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
 
 const {NotificationMessageSchema} = useNotificationValidation()
 
-const ENVIRONMENT_INPUTS: Array<[string, TestEmailInput]> = [
-    ['dev', {to: 'anna@example.com', from: 'no-reply.dev@skraaningen.dk', fromName: 'Skråningen dev', site: 'dev.skraaningen.dk', environment: 'dev'}],
-    ['prod', {to: 'anna@example.com', from: 'no-reply@skraaningen.dk', fromName: 'Skråningen', site: 'www.skraaningen.dk', environment: 'prod'}]
-]
-
 describe('buildTestEmail', () => {
-    describe.each(ENVIRONMENT_INPUTS)('for %s', (_env, input) => {
-        const message = buildTestEmail(input)
+    describe.each([
+        ['dev', NotificationFactory.config()],
+        ['prod', NotificationFactory.config({environment: 'prod', site: 'www.skraaningen.dk'})]
+    ])('for %s', (environment, config) => {
+        const message = buildTestEmail(config)
 
-        it('is a contract-valid EMAIL message', () => {
+        it('is a contract-valid TEST e-mail to the admin mailbox from the environment\'s sender', () => {
             expect(NotificationMessageSchema.safeParse(message).success).toBe(true)
-            expect(message.channel).toBe('EMAIL')
+            expect(message).toMatchObject({channel: 'EMAIL', to: config.adminEmail, from: config.from, fromName: config.fromName, replyTo: config.adminEmail, meta: {kind: 'TEST', environment}})
         })
 
-        it('carries the sender address and display name of the environment', () => {
-            expect(message.from).toBe(input.from)
-            expect(message.fromName).toBe(input.fromName)
-            expect(message.to).toBe(input.to)
-        })
-
-        it('signs with the sending site so a reader can tell the environment apart', () => {
-            expect(message.text).toContain(`— Skråningen · ${input.site}`)
-            expect(message.subject).toContain(input.environment)
-        })
-
-        it('has TEST metadata with a dedupeKey that identifies this send', () => {
-            expect(message.meta.kind).toBe('TEST')
-            expect(message.meta.source).toBe('theslope-app')
-            expect(message.meta.environment).toBe(input.environment)
-            expect(message.meta.dedupeKey).toMatch(new RegExp(`^TEST:EMAIL:${maskEmail(input.to).replace(/[.*]/g, '\\$&')}:[0-9a-f-]{36}$`))
-            expect(message.meta.dedupeKey).not.toContain(input.to)
+        it('names the environment in the subject and the site in the signature', () => {
+            expect(message.subject).toContain(environment)
+            expect(message.text).toContain(`— Skråningen · ${config.site}`)
             expect(message.text).toContain(message.meta.dedupeKey)
         })
     })
+})
 
-    it.each([
-        ['omits replyTo when none is given', undefined],
-        ['carries replyTo when given', 'kasserer@skraaningen.dk']
-    ])('%s', (_name, replyTo) => {
-        const message = buildTestEmail({...ENVIRONMENT_INPUTS[0]![1], replyTo})
-        expect(message.replyTo).toBe(replyTo)
+describe('emitTestEmail', () => {
+    const logs = {warn: vi.spyOn(console, 'warn'), info: vi.spyOn(console, 'info')}
+    beforeEach(() => Object.values(logs).forEach(spy => spy.mockImplementation(() => {})))
+    afterEach(() => Object.values(logs).forEach(spy => spy.mockClear()))
+
+    it('queues the mail through the binding', async () => {
+        const queue = {send: vi.fn().mockResolvedValue(undefined)} as unknown as Queue
+
+        const result = await emitTestEmail(queue, NotificationFactory.config())
+
+        expect(result.queued).toBe(true)
+        expect(queue.send).toHaveBeenCalledOnce()
     })
 
-    it('produces distinct dedupeKeys for consecutive sends', () => {
-        const a = buildTestEmail(ENVIRONMENT_INPUTS[0]![1])
-        const b = buildTestEmail(ENVIRONMENT_INPUTS[0]![1])
-        expect(a.meta.dedupeKey).not.toBe(b.meta.dedupeKey)
+    it('reports degraded without touching the binding when no admin mailbox is configured', async () => {
+        const queue = {send: vi.fn()} as unknown as Queue
+
+        const result = await emitTestEmail(queue, NotificationFactory.config({adminEmail: ''}))
+
+        expect(result).toMatchObject({queued: false, degraded: true})
+        expect(queue.send).not.toHaveBeenCalled()
+        expect(logs.warn).toHaveBeenCalledOnce()
     })
 })

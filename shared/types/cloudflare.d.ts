@@ -8,6 +8,7 @@ declare module 'h3' {
       env: {
         DB: D1Database
         SENDER: Queue
+        ARCHIVE: R2Bucket
       }
     }
   }
@@ -19,6 +20,7 @@ declare module 'nitropack' {
       env?: {
         DB?: D1Database
         SENDER?: Queue
+        ARCHIVE?: R2Bucket
       }
     }
   }

@@ -13,6 +13,7 @@ describe('createCloudflareEmailProvider', () => {
         expect(binding.send).toHaveBeenCalledWith({
             from: {email: email.from, name: email.fromName},
             to: {email: email.to, name: email.toName},
+            cc: email.cc,
             replyTo: email.replyTo,
             subject: email.subject,
             text: email.text,
@@ -25,7 +26,7 @@ describe('createCloudflareEmailProvider', () => {
         const binding = fakeEmailBinding()
         const email = MessageFactory.minimalEmail('salt')
 
-        await createCloudflareEmailProvider(binding).send({...email, attachments: []})
+        await createCloudflareEmailProvider(binding).send({...email, cc: [], attachments: []})
 
         expect(binding.send).toHaveBeenCalledWith({
             from: email.from,

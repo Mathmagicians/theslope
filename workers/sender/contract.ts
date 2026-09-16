@@ -65,6 +65,7 @@ export const EmailMessageSchema = z.object({
     channel: z.literal('EMAIL'),
     to: EmailAddressSchema,
     toName: z.string().max(100).optional(),
+    cc: z.array(EmailAddressSchema).max(10).default([]),
     /** App config decides the sender; the `[[send_email]]` binding enforces which addresses are allowed. */
     from: EmailAddressSchema,
     /** Display name shown next to `from`, per environment (`Skråningen dev` / `Skråningen`). */

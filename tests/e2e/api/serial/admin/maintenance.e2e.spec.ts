@@ -255,6 +255,12 @@ test.describe('Daily Maintenance API', () => {
         expect(billingResult.billingPeriod).toBeDefined()
         expect(billingResult.transactionCount).toBeGreaterThanOrEqual(2)
 
+        // Side effects of a closed period under nuxt dev: CSV in miniflare R2 (ARCHIVE), accountant mail in the miniflare queue sink (SENDER)
+        expect(billingResult.archive?.archived, 'period CSV archived').toBe(true)
+        expect(billingResult.archive?.key).toMatch(/^billing\/\d{4}-\d{2}\/pbs-opgoerelse-\d{4}-\d{2}\.csv$/)
+        expect(billingResult.notification?.queued, 'accountant mail queued').toBe(true)
+        expect(billingResult.notification?.dedupeKey).toMatch(/^BILLING_PERIOD_CLOSED:EMAIL:/)
+
         // GET billing period by ID from generate response
         const createdPeriodId = billingResponse!.results[0]!.billingPeriodSummaryId
         const periodDetail = await BillingFactory.getBillingPeriodById(context, createdPeriodId)

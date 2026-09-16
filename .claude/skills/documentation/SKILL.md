@@ -26,6 +26,7 @@ Documentation states what we do and how. The reader is a future admin or develop
   trailing `# expect: …` comment where the outcome is not obvious.
 - Present tense, active voice, plain nouns as headings ("Addresses", "Secrets", "Deploy and verify").
 - No loaded or evaluative words: *deliberately, simply, cheap, worth, clean, robust, safe, obvious, just, of course*.
+  No quantifier fluff: *every, all, always, never* — state the thing ("the log line carries …", not "every line carries …").
   No emphasis for persuasion; bold only for the one value the reader must not miss.
 - No narration of history ("earlier the same day", "superseded"), no meta-comments about the doc itself.
 - Names as they are in code and infra: target names, env names, file paths, exact casing.

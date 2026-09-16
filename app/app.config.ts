@@ -2,6 +2,7 @@
 // Note: app.config.ts is a build-time file (typechecked by the node project, which has no ~~ alias),
 // so we import directly from the generated schemas by relative path
 import { TicketTypeSchema } from '../prisma/generated/zod'
+import { NOTIFICATION_SIGNATURE, NOTIFICATION_TEMPLATES } from './config/notificationTemplates'
 
 const TicketType = TicketTypeSchema.enum
 
@@ -41,7 +42,11 @@ export default defineAppConfig({
             dailyMaintenance: { cron: '0 2 * * *', description: 'Dagligt kl. 03:00' },
             monthlyBilling: { cron: '0 3 18 * *', description: 'D. 18. hver måned kl. 04:00 (dagen efter cutoff)' }
         },
-        prebookingWindowDays: 60  // Rolling window: scaffold pre-bookings for dinners within next N days
+        prebookingWindowDays: 60,  // Rolling window: scaffold pre-bookings for dinners within next N days
+        notifications: {
+            signature: NOTIFICATION_SIGNATURE,
+            templates: NOTIFICATION_TEMPLATES  // per kind, {{placeholders}} filled by server/utils/sender/compose.ts
+        }
     },
     ui: {
         colors: {

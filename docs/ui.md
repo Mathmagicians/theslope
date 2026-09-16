@@ -250,6 +250,50 @@ literal colour in a component prop (`color="primary"`, `:color="'error'"`). It r
 - `getKitchenPanelClasses(mode)` - Helper for kitchen panels
 - `TICKET_TYPE_COLORS` - Ticket type to color mapping
 
+## Palettes
+
+A palette preset redeclares `--color-<family>-<step>` under `html[data-palette="…"]`, so one attribute
+on `<html>` reaches Nuxt UI's semantics and the design system's utilities together. Generated values live
+only in `app/assets/css/palettes/*.css`; `main.css` imports them next to its other imports and keeps its
+own `@theme static` as the published palette.
+
+**Tydelig** (`tydelig.css`) is TheSlope's own hues at the lightness EN 301 549 → WCAG 2.1 AA asks for.
+The generator walks each step of a failing pair along OKLCH lightness with the hue and the chroma held,
+so Mocha Mousse stays Mocha Mousse and reads at 4.5:1. The eight neutral surfaces (`page`, `BG.panel`,
+`BG.panelNested`, `BG.inset`, `BG.ticket`, `BG.invoiceGround`, `BG.invoiceStat`, `BG.budgetHead`) keep
+their published value, because a surface is the ground every other pair stands on. The light block
+carries 25 steps, the dark block 34 — the dark block also restates a step the light block moved where
+dark mode wants the published value back.
+
+```bash
+npx jiti scripts/palettes/generate.ts     # rewrites app/assets/css/palettes/tydelig.css
+```
+
+Two runs write the same bytes. `tests/component/architecture/designSystemContrast.unit.spec.ts` measures
+every preset against the inventory the generator solves (`designSystemPairs.ts`), at the level the
+preset's name promises. To see a preset in the browser before the appearance preference ships:
+
+```js
+document.documentElement.dataset.palette = 'tydelig'   // back to Standard: delete document.documentElement.dataset.palette
+document.documentElement.classList.toggle('dark')      // the dark block
+```
+
+### What the contrast criteria cover
+
+| Rule | Scope |
+|---|---|
+| **1.4.3 Contrast (Minimum)** | 4.5:1 for body text, 3:1 for large-scale text — 24px, or 18.66px at `font-bold` and heavier. A token states its own size, and the bare class decides, since a `md:` face is the larger one. `TYPOGRAPHY.sectionIconLight` (`text-2xl`) is measured at 3:1 |
+| **1.4.11 Non-text Contrast** | 3:1 for the edges that identify a control or carry meaning: input and card borders, the green holiday ring, the amber and red deadline rings, the segmented-control ring, the calendar selection outlines |
+
+Four edge tokens draw a boundary the layout already states, and sit outside 1.4.11:
+
+| Token | Why |
+|---|---|
+| `LAYOUTS.sectionDivider` | A rule between page sections; the heading and the gap separate them |
+| `LAYOUTS.panelDivider` | The rule above a detail panel's action row; the buttons carry their own edges |
+| `COMPONENTS.economyTable.level{1,2,3}.border` | The nesting tint of a tree row, alongside its indentation, icon and heading |
+| `COMPONENTS.economyTable.level{1,2,3}.header` / `.footer` / `.statBox` / `.tableHead` | Banding of a table's header, footer and stat boxes — a surface, measured for its ink in the text groups |
+
 ## Color Usage Guidelines
 
 ### Site Identity & Brand Colors

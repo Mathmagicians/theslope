@@ -411,6 +411,7 @@ not shown:
 - **Edit affordances** (2026-09-16): table rows and detail panels keep the ghost pencil `BUTTONS.edit` (the allergy detail header was briefly labelled and reverted the same day); a form card’s edit entry is the labelled button `BUTTONS.secondaryAction` + `COLOR.primary` + `ICONS.edit` + "Rediger <navn>" — e.g. "Rediger Forår 2026" (the chef menu card pattern, label names the record like the household "Slet …" button). Applies to the season card (Planning form) only. Rule lives in `docs/ui.md`.
 - **Season card title names the season** (2026-09-16): "Fællesspisning sæson 08/26-07/27" (view), "Rediger fællesspisning sæson …" (edit), "Opret fællesspisning sæson …" (create, name appears once the dates are set); the read-only "Sæson" input is removed — dates are never shown as a form element.
 - **Date picker selection style** (2026-09-16): pickers render selected days through the same `#day` slot and the one DS helper `dayCircleClasses(variant)` the display calendars use; `CALENDAR.picker = {cookingDay: PLANNING_CALENDAR.day.generated, holiday: CALENDAR.holiday}` (references, no new class strings), chosen by a `selection` prop; Nuxt UI’s own selection fill is neutralised; no `:color` prop on pickers. Green stays reserved for holidays.
+- **Tydelig, the AA preset** (2026-09-16): a fourth palette option — TheSlope’s own hues with every failing step darkened by procedure until WCAG 2.1 AA holds, generated into `app/assets/css/palettes/tydelig.css` and applied as CSS variables under `html[data-palette="tydelig"]`; no token or component changes. The options read Standard / Tydelig / Høj kontrast / Farveblind-venlig; the AA badge sits on Tydelig. After the visual comparison the user decides whether Standard stays or Tydelig replaces it as the base.
 - **Colors in "My preferences"** (decided 2026-09-16): the Farver control carries a small 🇪🇺 flag and a green check naming the verified level (`EN 301 549 · WCAG 2.1 AA`, `AAA` for Høj kontrast), sourced from the same registry the contrast test asserts. Presets, criteria from EN 301 549 / WCAG 2.1 (AA default, AAA for Høj kontrast), verified by a contrast-ratio unit test over the design-system token pairs. Høj kontrast keeps TheSlope’s hues and tunes lightness; Farveblind-venlig maps the Color Universal Design set onto the meaning-bearing tokens (green, red, orange, pink, yellow). A node generator under `scripts/` emits `app/assets/css/palettes/high-contrast.css` and `colorblind.css`; `main.css` only imports them — generated CSS never lives in a hand-written file.
   package's approval gate. Schema, endpoints and store do not depend on it (JSON value typed in the registry).
 - **Editing the live season needs no deactivation.** Saving already reconciles dinner events (ADR-015 [Idempotent Automated Jobs with Rolling
@@ -1030,6 +1031,146 @@ maps Nuxt UI semantics onto them (`primary: amber`, `secondary: pink`, `success:
 The stated need (colorblind, elderly) is accessibility; personalization is a different need. The JSON value is typed in the registry, so the
 choice needs no schema change. Hues are signed off from screenshots after implementation.
 
+### Contrast test — step 1 ✅ (2026-09-16, tests + docs only)
+
+The criterion the presets are generated against, automated. `tests/component/architecture/designSystemContrast.unit.spec.ts` turns
+EN 301 549 → WCAG 2.1 into a check of the design system: it resolves every colour a token names through the same stylesheets the browser
+reads — `main.css` `@theme static`, Tailwind 4's oklch defaults, `app.config.ts` `ui.colors`, Nuxt UI's `--ui-*` semantics — composites the
+alpha surfaces, and measures `(L1 + 0.05) / (L2 + 0.05)`. The colour maths (`hexToRgb`, `oklchToHex`, `relativeLuminance`, `contrastRatio`,
+`composite`) is exported from `tests/component/architecture/contrast.ts` so **the palette generator reuses the functions it is measured by**
+— no colour dependency, no second implementation. The OKLCH conversion is anchored against Tailwind's published hex
+(`oklch(72.3% 0.219 149.579)` → `#00c950`, `oklch(55.1% 0.027 264.364)` → `#6a7282`, `oklch(63.7% 0.237 25.331)` → `#fb2c36`).
+
+**Pair inventory** — derived by walking the exported tokens, so a token added tomorrow is measured tomorrow. Light and dark are separate pairs.
+
+| Group | What is measured | Threshold |
+|---|---|---|
+| **text on surface** | Every foreground token (`TEXT.ink/strong/toned/muted/dimmed/timestamp/menuBody`, `TYPOGRAPHY.*`, `COMPONENTS.*` icon and heading ink) on `page` (`bg-default`), `BG.panel`, `BG.panelNested`, `BG.inset`, `BG.ticket`, `BG.invoiceGround`, `BG.invoiceStat`, `BG.budgetHead` | 4.5 (7 in Høj kontrast) |
+| **paired token** | A token that carries **both** its ink and its fill — `BACKGROUNDS.*`, `PANTONE_CHIPS`, `COMPONENTS.kitchenPanel`, `CALENDAR`/`CHEF_CALENDAR`/`DINNER_CALENDAR`/`PLANNING_CALENDAR` day styles, `ALERTS.emptyStateCompact` — plus the eleven light-ink tokens whose fill has one owner (`TYPOGRAPHY.footerText` on `BACKGROUNDS.appShell`, the countdown ink on `CALENDAR.countdown.container`, …) | 4.5 (7) |
+| **edge on surface** | Every `BORDER.*`/`RING.*` rung, `LAYOUTS.*Divider`, `COMPONENTS.segmentedActive`, the calendar rings and selections, and the economy-tree header/footer/statBox fills, against `page` and `BG.panel` | 3 (1.4.11 has no AAA level) |
+| **semantic slot** | The 13 Nuxt UI slots of `app.config.ts`: `text-<slot>` on the page, `text-<slot>` on the soft `bg-<slot>/10` alert/badge surface, `text-inverted` on the solid `bg-<slot>` | 4.5 (7) |
+
+Two reductions keep the inventory honest rather than merely large, both commented in the spec: a **palette rung** (`TEXT.gray[500]`) is half a
+pair — docs/ui.md calls `BG`/`TEXT`/`BORDER`/`RING` low-level builders, and a text rung carries no dark face — so text rungs are measured where a
+token pairs them with a fill, while border and ring rungs stay in the edge group (being visible against an unknown surface *is* an edge's
+contract). And surfaces that resolve to the same colour in a mode are folded into the first name that carries it (`BG.panel`,
+`BG.invoiceGround` and `BG.budgetHead` are all `neutral-50` in light).
+
+**Default-theme result (measured 2026-09-16, before the scoping of step 2): 438 pairs, 191 pass, 247 fail.**
+The scoped numbers are in "Tydelig — step 2" below.
+
+| Group | Pairs | Pass | Fail | Worst |
+|---|---:|---:|---:|---|
+| text on surface | 153 | 84 | 69 | `TEXT.dimmed` 1.82 (dark, `BG.panelNested`) |
+| paired token | 86 | 53 | 33 | `BACKGROUNDS.hero.pink` / `landing.section1` 2.32 |
+| edge on surface | 121 | 44 | 77 | `BORDER.gray[700]` 1.00 (dark, page); every economy-tree fill 1.00–1.34 |
+| semantic slot | 78 | 10 | 68 | `slot.yellow` 1.80; `slot.success` 2.03; `slot.secondary` 2.31 |
+
+The shape of the finding is one sentence: **TheSlope's Pantone palette is a warm pastel set whose 500/400 rungs sit at 2–4:1 on white**, so
+in light mode **all 39 slot pairs fail** (13 slots × page / soft / solid) and only 10 of the 39 dark pairs pass (`success` and `yellow` fully,
+the page and solid faces of `peach` and `ocean`); the hero pairings miss it too (`hero.mocha` 3.55, `hero.orange` 2.64, `hero.pink` 2.32), and the
+Tailwind-default borders miss 1.4.11 (`BORDER.gray[200]` 1.24 on the page). Every miss is listed per pair in `KNOWN_FINDINGS` with its ratio and
+runs as `it.fails`, so a fix breaks the build and asks for the entry to be deleted, and a new miss cannot be hidden by adding one. The full
+247-pair list is the map the palette generator works from; the questions it puts to the colour decision:
+
+1. Does the **default** theme move to AA (retune the 500/400 rungs, or point `text-<slot>` at 600/700), or does AA become the promise of the
+   presets only, with the default accepted as-is?
+2. Are `TEXT.dimmed`, `LAYOUTS.sectionDivider` and the economy-tree fills **decorative** (1.4.3/1.4.11 exempt) or content? If decorative, they
+   leave the inventory by an explicit exemption in the spec, not by a lowered threshold.
+   → **Answered in step 2** for the dividers and the economy-tree banding (exempt, named per token); `TEXT.dimmed` stays content and is fixed by
+   the preset.
+3. The brand surfaces (landing rainbow, hero, kitchen panels) are large text in practice — should they be measured at the 3:1 large-text rung of
+   1.4.3 instead of 4.5? That is a per-token decision, not a global one.
+   → **Open.** Step 2 applies the large-text rung where a token states its own size (`TYPOGRAPHY.sectionIconLight`). The brand surfaces carry the
+   fill, and the size comes from the `TYPOGRAPHY` token rendered inside them, so each one is still a decision to take.
+
+Two Nuxt UI observations fell out of the same resolution work and are recorded here, not fixed: `--ui-neutral` is never emitted (the colours
+plugin destructures `neutral` out), and `mocha`/`bonbon` are declared in `nuxt.config.ts` `ui.theme.colors` but never mapped in `app.config.ts`
+`ui.colors` — so `bg-mocha` and `bg-bonbon` paint nothing. Neither is reached today (`COLOR.mocha` sites use `BG.mocha[500]` = `bg-amber-500`,
+and Nuxt UI's own neutral compound variants use `text-highlighted`/`bg-elevated`), but a future `:color="COLOR.mocha"` would be invisible.
+
+**Preset status:** `app/assets/css/palettes/high-contrast.css` (AAA) and `colorblind.css` (AA) do not exist yet, so their 401 cases each are
+**skipped by name** (`describe.skipIf`) — 802 skipped, 0 faked. They go green the moment the generator emits the files.
+
+### Tydelig — step 2 ✅ (2026-09-16, the AA preset + its generator)
+
+**Scoped to the standard first.** Two rules moved the inventory onto what WCAG 2.1 actually asks, both stated in
+`designSystemPairs.ts` and in docs/ui.md "Palettes": **1.4.3 large-scale text** — a token whose own classes set 24px, or
+18.66px at `font-bold` and heavier, is measured at 3:1 (today `TYPOGRAPHY.sectionIconLight`, `text-2xl`, light 3.55 and
+dark 3.01) — and **1.4.11 decorative edges** — `LAYOUTS.sectionDivider`, `LAYOUTS.panelDivider` and the economy tree's
+`border` / `header` / `footer` / `statBox` / `tableHead` draw a boundary the indentation, heading and icon already
+state, so they sit outside non-text contrast. Their ink stays measured in the text groups. A new case guards the
+baseline itself: **every listed finding still names a pair**, so a scoping rule that removes a pair removes its line.
+
+**Default theme after scoping: 401 pairs, 193 pass, 208 fail** (was 438 / 191 / 247).
+
+| Group | Pairs | Pass | Fail | Moved by the scoping |
+|---|---:|---:|---:|---|
+| text on surface | 153 | 84 | 69 | — |
+| paired token | 86 | 55 | 31 | 2 to pass (large text) |
+| edge on surface | 84 | 44 | 40 | 37 pairs out (decorative) |
+| semantic slot | 78 | 10 | 68 | — |
+
+**The preset.** `scripts/palettes/generate.ts` (run with `npx jiti scripts/palettes/generate.ts`; jiti is already a Nuxt
+dependency) reads the inventory the spec asserts, and for each pair walks the `--color-<family>-<step>` behind its ink or
+its fill along OKLCH lightness — hue and chroma held — until the pair clears its threshold. Each side keeps the side it
+is on, a dark ink darker and a light ink lighter, so a scale stays a scale and `pink-50` on `bg-pink-500` is answered by
+darkening the fill. The eight neutral surfaces are held. Every pair constrains its variable, the ones that pass today
+included, so the preset never trades one pair for another; where two pairs ask one variable for opposite things, the
+variable goes the way that answers more of them. Output: `app/assets/css/palettes/tydelig.css`, **25 steps in the light
+block across 14 families, 34 in the dark block**, imported by `main.css`. Two runs write the same bytes.
+
+| Family | Light block | Dark block |
+|---|---|---|
+| amber | 500 `#a47864`→`#8c614e` | 400 `#ae8a71`→`#ddb89d`, 500 →`#835a46`, 600 `#8d5f52`→`#b48375`, 800 back to `#633f3d` |
+| blue | 400 `#33becc`→`#00808e`, 500 `#25a6b5`→`#007685`, 600 `#228698`→`#007385` | 400 →`#4dd1e0`, 500 →`#007c8b`, 700 `#226d7d`→`#5298a9` |
+| caramel | 500 `#b76a4a`→`#a15737` | 400 `#ca815a`→`#f9ac84` |
+| gray | 200 `#e5e7eb`→`#8b8c90`, 300 `#d1d5dc`→`#898c93`, 400 `#99a1af`→`#616976`, 500 `#6a7282`→`#616878` | 200 and 300 back to published, 400 →`#b5bdcc`, 500 →`#b4bdce`, 600 `#4a5565`→`#8390a1`, 700 `#364153`→`#838fa4` |
+| green | 500 `#00c950`→`#007c00` | 400 and 500 back to published |
+| orange | 200 `#f9ceaf`→`#ac8467`, 500 `#ec6a37`→`#bb3d00` | 200 back to published, 400 `#ef7e48`→`#ffaa74`, 500 →`#ffa875` |
+| party | 500 `#e84c76`→`#c6295b`, 700 `#c4516c`→`#b94763` | 400 `#f17999`→`#ffa3c2` |
+| peach | 400 `#ff9b5e`→`#b85a14`, 500 `#fe7320`→`#c23a00`, 600 `#ef5616`→`#c62d00` | 400 →`#ffab6d`, 700 `#c63f14`→`#ed633d` |
+| pink | 300 `#fab0c7`→`#be788f`, 500 `#fa7b95`→`#b83f5e` | 300 back to published, 400 `#f77da1`→`#ffa3c6`, 500 →`#bd4461`, 800 `#a9284b`→`#ffa2ba` |
+| red | 500 `#c4746f`→`#a25551` | 400 `#d69c96`→`#ecb1aa`, 500 →`#c97973`, 700 `#904040`→`#cd7674` |
+| sky | 500 `#3c8c9e`→`#207586`, 600 `#357385`→`#327082` | 400 `#52a5b6`→`#7accde` |
+| violet | 500 `#de5697`→`#b93277` | 400 `#e97db3`→`#ffa0d6`, 500 →`#ff9ddd` |
+| winery | 500 `#d65c72`→`#b84059` | 400 `#e68494`→`#ffa5b4` |
+| yellow | 500 `#eab308`→`#946000` | 400 back to published |
+
+**Tydelig result: 401 pairs, 385 pass, 16 fail** — text on surface 153/153, semantic slot 78/78, edge on surface 80/84,
+paired token 74/86. Light mode carries 14 of the 16 passes that light mode can carry; the two light misses are the ocean
+and peach countdown accents on the near-black countdown container, whose step the light mode also darkens for the
+calendar day fill.
+
+**The 16 are one variable asked to be two things**, listed per pair in `PRESET_FINDINGS` and run as `it.fails`. Twelve of
+the fourteen dark ones are a token with **no `dark:` face**: `COMPONENTS.kitchenPanel.*` paints `bg-orange-500 text-white`
+in both modes while dark mode also draws `text-warning-500` in that orange on a dark page, and the same shape repeats for
+`CHEF_CALENDAR.day.next` / `DINNER_CALENDAR.day.next` (`bg-ocean-400`/`bg-peach-400` + white), `CALENDAR.picker.cookingDay`
+and `PLANNING_CALENDAR.day.generated` (`bg-pink-800 text-pink-50`), `BACKGROUNDS.hero.orange` and `landing.section2`,
+`PANTONE_CHIPS[1]`. `BORDER.gray.800` is `BG.inset`'s own dark fill, which a preset holds. **A dark face on those eight
+tokens closes all sixteen** — a token change, which the "Tydelig, the AA preset" decision puts outside this package.
+
+**Screenshots** (`test-results/palettes/<page>-<viewport>-<default|tydelig>.png`, 32 files, desktop 1440×900 and 375×812):
+`admin-planning`, `admin-allergies`, `admin-teams`, `household-bookings`, `dinner`, `chef`, `login`, `landing`.
+
+### Visual check — Tydelig
+
+Set the preset from the console on any page: `document.documentElement.dataset.palette = 'tydelig'`, back to Standard with
+`delete document.documentElement.dataset.palette`, dark with `document.documentElement.classList.toggle('dark')`.
+
+| Route + state | Viewport | DS element to expect | Expect |
+|---|---|---|---|
+| `/` landing, scrolled | 375px + desktop | `BACKGROUNDS.landing.section1-4`, `PANTONE_CHIPS` | The rainbow deepens: pink `#fa7b95`→`#b83f5e`, orange `#ec6a37`→`#bb3d00`, ocean `#3c8c9e`→`#207586`; the near-white section text now reads on each band. The ticker chips keep their tint |
+| `/admin/planning`, view mode | desktop | `CALENDAR.holiday` ring, `PLANNING_CALENDAR.day.generated`, `BUTTONS.primaryAction` | The green holiday ring darkens to `#007c00` and separates from white; generated cooking days keep their pink fill; `Opret sæson` and `Rediger` go from mocha `#a47864` to `#8c614e` |
+| `/admin/planning?mode=edit`, holiday rows | 375px | `CalendarDateRangePicker` inputs, `LAYOUTS.sectionDivider` | Input borders go from `gray-200` to a mid grey `#8b8c90` and the field edges become visible; the section rules darken with them |
+| `/admin/allergies`, a row tapped | 375px + desktop | `AllergyCatalogTable`, `AllergyTypeDetailPanel`, `TEXT.dimmed` | Muted and dimmed greys darken (`gray-400` `#99a1af`→`#616976`, `gray-500`→`#616878`); timestamps and placeholder text read on the panel |
+| `/admin/teams`, a team card | desktop | `CookingTeamCard`, `TeamCalendarDisplay`, `COMPONENTS.segmentedActive` | Team colours darken one notch; the segmented control's `orange-200` ring becomes a visible edge `#ac8467` |
+| `/household/<own>/bookings?view=week` | 375px + desktop | `BookingGridView`, `DinnerTicket`, deadline badges | Deadline rings (`red-500`, `amber-500`) darken and separate from the page; ticket fills keep their hue |
+| `/dinner` | desktop | `DinnerCalendarDisplay`, `COMPONENTS.kitchenPanel` | Peach day fills darken (`#ff9b5e`→`#b85a14`) so the white day number reads; kitchen panels darken with `warning`/`party` |
+| `/chef` | 375px + desktop | `ChefCalendarDisplay`, `CALENDAR.countdown` | Ocean accents darken; **the countdown accent on the near-black container is one of the two light-mode misses — check it reads** |
+| Any page, dark mode | desktop | `TEXT.muted`, `BORDER.gray.*`, slot inks | Greys lighten instead (`gray-400`→`#b5bdcc`, `gray-700`→`#838fa4`); every `text-<slot>` lightens |
+| `/dinner` + `/chef`, dark mode | desktop | `COMPONENTS.kitchenPanel.*`, `*_CALENDAR.day.next` | **The known misses:** white on `orange-500`/`ocean-400`/`peach-400` stays low-contrast, because those tokens have no dark face |
+
 ### Mockup — ✅ signed off 2026-09-16 (behind an "Indstillinger" button; colors variant still open)
 
 ```
@@ -1052,7 +1193,7 @@ AFTER [⚙ Indstillinger] — the card reveals directly under the profile (butto
 │ │   Vi må kontakte dig via   [✓] E-mail  anna@…         │   │  USwitch per channel; address from User
 │ │                            [ ] SMS     +45 …          │   │  SMS disabled + hint when no phone
 │ │ 🎨 Udseende                                           │   │
-│ │   Farver   (•) Standard ( ) Høj kontrast ( ) Farveblind-venlig │  URadioGroup → html[data-palette]
+│ │   Farver   (•) Standard ( ) Tydelig ( ) Høj kontrast ( ) Farveblind-venlig │  URadioGroup → html[data-palette]
 │ │            🇪🇺 EN 301 549 · WCAG 2.1 AA ✓                 │   │  small flag + green check (UBadge COLOR.success + ICONS.checkCircle);
 │ │                                                       │   │  level text per preset comes from the contrast test’s verified level
 │ │   Tekst    (•) Normal   ( ) Stor         ( ) Større   │   │  URadioGroup → html[data-text-scale]

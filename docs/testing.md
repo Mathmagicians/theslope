@@ -371,6 +371,36 @@ the sites to fix.
 
 Add one whenever a fix to a Nuxt UI component family becomes a token: add the token, sweep all instances, add the rule.
 
+### `designSystemContrast.unit.spec.ts` — the palette's contrast, not its class strings
+
+The one architecture test that reads *values* instead of sources, and it is still a property, not a token value: it
+encodes **EN 301 549 → WCAG 2.1** contrast. It resolves every colour the design system names through the same
+stylesheets the browser reads (`main.css` `@theme static`, Tailwind 4's oklch defaults, `app.config.ts` `ui.colors`,
+Nuxt UI's `--ui-*` semantics), composites the alpha surfaces (`bg-primary/10`, `bg-gray-800/50`), and measures
+`(L1 + 0.05) / (L2 + 0.05)` for every pair the tokens define — light **and** dark. Thresholds: **4.5:1** body text
+(1.4.3 AA), **3:1** borders, rings and outlines (1.4.11 AA), **7:1** for the `Høj kontrast` palette preset (1.4.6 AAA).
+The colour maths lives in `tests/component/architecture/contrast.ts` (`hexToRgb`, `oklchToHex`, `relativeLuminance`,
+`contrastRatio`, `composite`) so the palette generator reuses the same functions it is measured by — no colour
+dependency, no second implementation.
+
+The pairs are **derived by walking the exported tokens**, so a token added tomorrow is measured tomorrow. Four groups:
+text on the neutral surfaces (`BG.panel`, `BG.inset`, …), a token that carries both its ink and its fill (hero
+backgrounds, calendar days, kitchen panels, Pantone chips), borders/rings against the page and `BG.panel`, and the Nuxt
+UI semantic slots (`text-<slot>` on the page and on the soft `bg-<slot>/10` alert surface, `text-inverted` on the solid
+fill). Two scoping rules keep the inventory on the standard: a token whose own classes make its text large-scale
+(24px, or 18.66px bold) is measured at the 3:1 rung of 1.4.3, and the dividers and table banding listed in docs/ui.md
+"Palettes" sit outside 1.4.11.
+
+Palette presets under `app/assets/css/palettes/` are measured the same way, at the level the preset's name promises,
+with the pairs a preset cannot answer listed per preset in `PRESET_FINDINGS`; a preset that does not exist yet has its
+cases **skipped by name** via `describe.skipIf`, never faked.
+
+**When it fails, fix the token — never the threshold.** Pairs the default theme misses today are listed in
+`KNOWN_FINDINGS` with the ratio measured on 2026-09-16 and run as `it.fails`. That cuts both ways: a green pair that
+starts failing breaks its own case, and a listed pair that starts passing breaks its `it.fails` and asks for the entry
+to be deleted. Never add an entry to silence a new failure — a new miss is a regression, and the baseline is a
+record of one dated decision, not a mute button.
+
 **Do NOT assert design-token values.** `expect(ui.title).toContain('text-lg')` restates the design and guards nothing —
 the colour, size and padding of a token are the user's visual check. Architecture tests assert *usage*; component specs
 assert *behaviour* (text renders, CTA present or absent, events emitted); e2e asserts no horizontal overflow at 375px

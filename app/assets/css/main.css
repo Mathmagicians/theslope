@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
 
+/* Palette presets - generated, one `html[data-palette="…"]` block each. See docs/ui.md "Palettes" */
+@import "./palettes/tydelig.css";
+
 @theme static {
     /* Custom amber color palette */
     --color-amber-50: #f8f5f2;

@@ -36,9 +36,10 @@ jobs:
       HEY_NABO_PASSWORD: ${{ secrets.HEY_NABO_PASSWORD }}
       HEY_NABO_EJ_ADMIN_USERNAME: ${{ secrets.HEY_NABO_EJ_ADMIN_USERNAME }}
       NUXT_PUBLIC_HEY_NABO_API: ${{ vars.NUXT_PUBLIC_HEY_NABO_API }}
-      DB_D1_NAME: ${{ vars.DB_D1_NAME }}
-      DB_D1_ID: ${{ secrets.DB_D1_ID }}
       NUXT_SESSION_PASSWORD: ${{ secrets.NUXT_SESSION_PASSWORD }}
+      # Mails under nuxt dev land in the miniflare queue sink — the e2e job needs mailboxes, not real ones
+      NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL: accountant@example.com
+      NUXT_NOTIFICATIONS_ADMIN_EMAIL: admin@example.com
       CI: true
 
     steps:
@@ -226,7 +227,7 @@ jobs:
         run: npx playwright install chromium
       - name: Run smoke tests
         env:
-          BASE_URL: ${{ vars.BASE_URL }}
+          BASE_URL: ${{ needs.CICD.outputs.deployed_url }}
           HEY_NABO_USERNAME: ${{ secrets.HEY_NABO_USERNAME }}
           HEY_NABO_PASSWORD: ${{ secrets.HEY_NABO_PASSWORD }}
           HEY_NABO_EJ_ADMIN_USERNAME: ${{ secrets.HEY_NABO_EJ_ADMIN_USERNAME }}
