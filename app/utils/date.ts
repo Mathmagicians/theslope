@@ -92,9 +92,13 @@ export function compareDateRanges(a: DateRange, b: DateRange): number {
     return a.start.getTime() - b.start.getTime()
 }
 
+export function sortDateRanges(ranges: DateRange[]): DateRange[] {
+    return ranges.toSorted(compareDateRanges)
+}
+
 export function areRangesOverlapping(ranges: DateRange[]): boolean {
     if (ranges.length < 2) return false
-    return ranges.toSorted(compareDateRanges)
+    return sortDateRanges(ranges)
         .reduce((acc, current, index, sorted) => {
             if (index === 0) return acc
             const prev = sorted[index - 1]

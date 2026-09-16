@@ -258,5 +258,36 @@ describe('useSeasonValidation', () => {
       expect(team2!.affinity).toBeUndefined()
     })
 
+    describe('holiday ordering', () => {
+      const earlier = createDateRange(new Date(2025, 0, 5), new Date(2025, 0, 10))
+      const later = createDateRange(new Date(2025, 0, 20), new Date(2025, 0, 25))
+      const asStoredHoliday = (range: typeof earlier) => ({start: formatDate(range.start), end: formatDate(range.end)})
+
+      const seasonWithUnsortedHolidays = (): Season => ({
+        ...SeasonFactory.defaultSeason(),
+        seasonDates: createDateRange(new Date(2025, 0, 1), new Date(2025, 0, 31)),
+        holidays: [later, earlier]
+      })
+
+      it('should serialize holidays chronologically', () => {
+        const serialized = serializeSeason(seasonWithUnsortedHolidays())
+
+        const storedHolidays = JSON.parse(serialized.holidays) as { start: string, end: string }[]
+        expect(storedHolidays).toEqual([asStoredHoliday(earlier), asStoredHoliday(later)])
+      })
+
+      it('should deserialize holidays chronologically', () => {
+        const serialized = {
+          ...serializeSeason(seasonWithUnsortedHolidays()),
+          holidays: JSON.stringify([asStoredHoliday(later), asStoredHoliday(earlier)])
+        }
+
+        const deserialized = deserializeSeason(serialized)
+
+        expect(deserialized.holidays[0]!.start.getTime()).toBeLessThan(deserialized.holidays[1]!.start.getTime())
+        expect(deserialized.holidays[0]!.start.getTime()).toBe(earlier.start.getTime())
+      })
+    })
+
   })
 })

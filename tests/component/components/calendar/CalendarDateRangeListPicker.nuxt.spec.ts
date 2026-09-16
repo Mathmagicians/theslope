@@ -2,6 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import { mountSuspended } from "@nuxt/test-utils/runtime"
 import {findByTestId} from '~~/tests/component/testHelpers'
+import {formatDateRange} from '~/utils/date'
 import CalendarDateRangeListPicker from '~/components/calendar/CalendarDateRangeListPicker.vue'
 import { nextTick, ref } from 'vue'
 
@@ -73,6 +74,21 @@ describe('CalendarDateRangeListPicker', () => {
 
         const holidayInput = findByTestId(wrapper, ELEMENT_TESTIDS.holidayListItem(0))
         expect(holidayInput.exists()).toBe(true)
+    })
+
+    it('inserts an earlier range before an existing later one', async () => {
+        const later = {start: new Date(2025, 0, 10), end: new Date(2025, 0, 12)}
+        const earlier = {start: new Date(2025, 0, 1), end: new Date(2025, 0, 3)}
+        const wrapper = await createWrapper([later])
+
+        await setDateRange(wrapper, earlier.start, earlier.end)
+        await clickAddButton(wrapper)
+
+        const emitted = wrapper.emitted('update:modelValue')
+        expect(emitted![0]![0]).toEqual([earlier, later])
+
+        const firstRow = findByTestId(wrapper, ELEMENT_TESTIDS.holidayListItem(0))
+        expect(firstRow.find('input').element.value).toBe(formatDateRange(earlier))
     })
 
     it('validates overlapping ranges', async () => {

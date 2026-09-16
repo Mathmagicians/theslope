@@ -125,7 +125,7 @@ The schema defines entity relationships, onDelete behaviors (CASCADE vs SET NULL
 - Include clear summary of what was updated and why
 
 ### Collaboration Approach
-- **Planning and Strategy**: Discuss features, create a detailed written plan
+- **Planning and Strategy**: Discuss features, create a detailed written plan — follow `.claude/skills/plan-and-supervise/SKILL.md` (named packages, mockup signoff, per-package approval gate, coverage matrix)
 - **Implementation**:
   - You write the core application code
   - Claude helps with test boilerplate, debugging, and refactoring

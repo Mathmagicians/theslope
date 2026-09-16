@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type {DateRange} from "~/types/dateTypes"
-import {createDateRange, formatDateRange} from "~/utils/date"
+import {createDateRange, formatDateRange, sortDateRanges} from "~/utils/date"
 import {mapZodErrorsToFormErrors} from "~/utils/validtation"
 
 // COMPONENT DEPENDENCIES
@@ -36,7 +36,7 @@ watch(defaultDate, (newDate) => {
 const onAddHolidayRange = () => {
   if (addedRange.value.start && addedRange.value.end) {
     const newHoliday = createDateRange(addedRange.value.start, addedRange.value.end)
-    const newHolidays = [...model.value, newHoliday]
+    const newHolidays = sortDateRanges([...model.value, newHoliday])
     const validation = holidaysSchema.safeParse(newHolidays)
     if (validation.success) {
       model.value = newHolidays

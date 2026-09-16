@@ -1,9 +1,9 @@
-import {test, expect} from '@playwright/test'
+import {test, expect, type Page} from '@playwright/test'
 import {authFiles} from '../config'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import testHelpers from '../testHelpers'
-import {formatDate, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
+import {formatDate, parseDate, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
 import type {Season} from '~/composables/useSeasonValidation'
 import {addDays} from 'date-fns/addDays'
 
@@ -37,6 +37,10 @@ const generateUniqueSeasonDates = () => {
     const holidayDate1 = addDays(date1, 2)
     const holidayDate2 = addDays(holidayDate1, 2)
 
+    // Second holiday starting BEFORE the first one (season start, 1 day duration) - no overlap
+    const earlierHolidayDate1 = date1
+    const earlierHolidayDate2 = addDays(date1, 1)
+
     // Search pattern based on start date: MM/yy
     const searchPattern = `${String(date1.getMonth() + 1).padStart(2, '0')}/${String(date1.getFullYear()).slice(-2)}`
 
@@ -45,12 +49,26 @@ const generateUniqueSeasonDates = () => {
         endDate: formatDate(date2),
         holidayStart: formatDate(holidayDate1),
         holidayEnd: formatDate(holidayDate2),
+        earlierHolidayStart: formatDate(earlierHolidayDate1),
+        earlierHolidayEnd: formatDate(earlierHolidayDate2),
         seasonStartDate: date1,  // Raw Date for API
         seasonEndDate: date2,    // Raw Date for API
         holidayPeriod: {start: holidayDate1, end: holidayDate2}, // Single-day holiday on start
         searchPattern
     }
 }
+
+/**
+ * Start dates (as timestamps) of the holiday rows, in DOM order.
+ * Row inputs show `formatDateRange(range)` = `<start>-<end>` with DATE_SETTINGS.DATE_MASK.
+ */
+const holidayRowStartDates = async (page: Page): Promise<number[]> => {
+    const rowInputs = await page.locator('input[name^="holidayRangeList-"]').all()
+    const rowValues = await Promise.all(rowInputs.map(input => input.inputValue()))
+    return rowValues.map(value => parseDate(value.split('-')[0]!).getTime())
+}
+
+const ascending = (timestamps: number[]) => [...timestamps].sort((a, b) => a - b)
 
 /**
  * UI TEST STRATEGY:
@@ -173,7 +191,10 @@ test.describe('AdminPlanningSeason Form UI', () => {
             )
             await expect(page.locator('form#seasonForm')).toBeVisible()
 
-            const {startDate, endDate, holidayStart, holidayEnd, searchPattern} = generateUniqueSeasonDates()
+            const {
+                startDate, endDate, holidayStart, holidayEnd,
+                earlierHolidayStart, earlierHolidayEnd, searchPattern
+            } = generateUniqueSeasonDates()
             await page.locator('[name="seasonDates"] input[name="start"]').fill(startDate)
             await page.locator('[name="seasonDates"] input[name="end"]').fill(endDate)
 
@@ -191,6 +212,20 @@ test.describe('AdminPlanningSeason Form UI', () => {
             await expect(page.locator('[name^="holidayRangeList-0"]')).toBeVisible()
             await expect(page.getByTestId('holiday-range-remove-0')).toBeVisible()
 
+            // WHEN: Add a second holiday period starting BEFORE the first one
+            const rowCountBefore = (await holidayRowStartDates(page)).length
+            await page.locator('[name="holidayRangeList"] input[name="start"]').fill(earlierHolidayStart)
+            await page.locator('[name="holidayRangeList"] input[name="end"]').fill(earlierHolidayEnd)
+            await page.getByTestId('holiday-range-add').click()
+
+            // THEN: The list is chronological (create mode may seed default holidays, so assert order, not indexes)
+            const rowStartDates = await pollUntil(
+                () => holidayRowStartDates(page),
+                (starts) => starts.length > rowCountBefore
+            )
+            expect(rowStartDates.length).toBeGreaterThanOrEqual(2)
+            expect(rowStartDates).toEqual(ascending(rowStartDates))
+
             // Submit and verify via API
             await page.getByTestId('submit-season').click()
 
@@ -203,7 +238,9 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
             expect(createdSeason).toBeDefined()
             if (createdSeason) {
-                expect(createdSeason.holidays.length).toBeGreaterThan(0)
+                expect(createdSeason.holidays.length).toBeGreaterThanOrEqual(2)
+                const savedStartDates = createdSeason.holidays.map(holiday => holiday.start.getTime())
+                expect(savedStartDates).toEqual(ascending(savedStartDates))
                 createdSeasonIds.push(createdSeason.id!)
             }
         })

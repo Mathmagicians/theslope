@@ -10,6 +10,7 @@ import {
     parseDate,
     excludeDatesFromInterval,
     areRangesOverlapping,
+    sortDateRanges,
     selectWeekNumbersFromListThatFitInsideDateRange,
     formatCalendarDate,
     calculateAgeOnDate,
@@ -251,6 +252,54 @@ describe('isDateRangeInside', () => {
         }
 
         expect(isDateRangeInside(base, range)).toBe(false)
+    })
+})
+
+describe('sortDateRanges', () => {
+    const jan = (day: number) => new Date(2025, 0, day)
+
+    const sortCases: { description: string, input: DateRange[], expected: DateRange[] }[] = [
+        {
+            description: 'sorts ranges ascending by start',
+            input: [
+                createDateRange(jan(10), jan(12)),
+                createDateRange(jan(1), jan(3)),
+                createDateRange(jan(5), jan(6))
+            ],
+            expected: [
+                createDateRange(jan(1), jan(3)),
+                createDateRange(jan(5), jan(6)),
+                createDateRange(jan(10), jan(12))
+            ]
+        },
+        {
+            description: 'passes an empty list through',
+            input: [],
+            expected: []
+        },
+        {
+            description: 'passes a single range through',
+            input: [createDateRange(jan(1), jan(3))],
+            expected: [createDateRange(jan(1), jan(3))]
+        },
+        {
+            description: 'keeps input order for equal starts',
+            input: [createDateRange(jan(1), jan(9)), createDateRange(jan(1), jan(3))],
+            expected: [createDateRange(jan(1), jan(9)), createDateRange(jan(1), jan(3))]
+        }
+    ]
+
+    it.each(sortCases)('$description', ({input, expected}) => {
+        expect(sortDateRanges(input)).toEqual(expected)
+    })
+
+    it('does not mutate the input array', () => {
+        const input = [createDateRange(jan(10), jan(12)), createDateRange(jan(1), jan(3))]
+        const inputOrder = [...input]
+
+        sortDateRanges(input)
+
+        expect(input).toEqual(inputOrder)
     })
 })
 

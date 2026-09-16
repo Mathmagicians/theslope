@@ -1,6 +1,6 @@
 import {z} from 'zod'
 import {dateRangeSchema} from '~/composables/useDateRangeValidation'
-import {formatDate, parseDate, isDateRangeInside, areRangesOverlapping, formatDateRange, DATE_SETTINGS} from '~/utils/date'
+import {formatDate, parseDate, isDateRangeInside, areRangesOverlapping, sortDateRanges, formatDateRange, DATE_SETTINGS} from '~/utils/date'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
@@ -77,7 +77,8 @@ export const useSeasonValidation = () => {
     const SerializedSeasonSchema = SeasonSchema.transform((season: Season) => ({
         ...season,
         cookingDays: serializeWeekDayMap(season.cookingDays),
-        holidays: JSON.stringify(season.holidays.map(holiday => ({
+        // Canonical chronological storage: imports and legacy rows read back ordered
+        holidays: JSON.stringify(sortDateRanges(season.holidays).map(holiday => ({
             start: formatDate(holiday.start),
             end: formatDate(holiday.end)
         }))),
@@ -102,10 +103,10 @@ export const useSeasonValidation = () => {
                 end: parseDate(parsedSeasonDates.end)
             }, DATE_SETTINGS.SEASON_NAME_MASK),
             cookingDays: deserializeWeekDayMap(serialized.cookingDays as string),
-            holidays: (JSON.parse(serialized.holidays as string) as { start: string; end: string }[]).map((holiday) => ({
+            holidays: sortDateRanges((JSON.parse(serialized.holidays as string) as { start: string; end: string }[]).map((holiday) => ({
                 start: parseDate(holiday.start),
                 end: parseDate(holiday.end)
-            })),
+            }))),
             seasonDates: {
                 start: parseDate(parsedSeasonDates.start),
                 end: parseDate(parsedSeasonDates.end)
