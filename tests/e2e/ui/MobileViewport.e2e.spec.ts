@@ -15,7 +15,8 @@ const {validatedBrowserContext, pollUntil, doScreenshot, waitForHydration, getSe
  * A screenshot of each page lands in test-results/mobile/ so the cause of an overflow
  * (alert text that never wraps, action buttons, a wide table) can be read off the image.
  *
- * Expected RED on the pages that overflow today - that is the repro. Green after the sweep.
+ * Measured 2026-09-16: green on all 7 pages - the alert theme clips (root overflow-hidden) instead of
+ * scrolling the document, see "Alerts on mobile > Classification" in docs/features/bug-fix-admin-ux.md.
  */
 test.describe('Mobile viewport - no horizontal overflow', () => {
     const MOBILE_VIEWPORT = {width: 375, height: 812}

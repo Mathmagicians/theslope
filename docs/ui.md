@@ -117,6 +117,8 @@ const { COLOR, TYPOGRAPHY, LAYOUTS, BACKGROUNDS, COMPONENTS, SIZES } = useTheSlo
 - `LAYOUTS` - Layout patterns (footer, sectionDivider, grids)
 - `BACKGROUNDS` - Background+text combinations (hero, card, landing sections)
 - `COMPONENTS` - Complete component styling (kitchen panels, stats bar)
+- `COMPONENTS.calendarGrid` - Shared `UCalendar` root config (`v-bind` it) - Monday-first, no padding weeks, adjacent-month days disabled and hidden
+- `PLANNING_CALENDAR` - Season planning day palette (`day.generated` filled, `day.potential` outline)
 - `BG` - Background color scale (low-level, use BACKGROUNDS instead)
 - `TEXT` - Text color scale (low-level, use TYPOGRAPHY instead)
 - `BORDER` - Border color scale (low-level, use LAYOUTS instead)

@@ -104,13 +104,13 @@
 
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
-| `CalendarDatePicker.vue` | `/household/[shortname]/settings` | None | `useDateRangeValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** - Single date picker with UCalendar + validation |
-| `CalendarDateRangePicker.vue` | `/admin/planning` | None | `useDateRange()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** |
+| `CalendarDatePicker.vue` | `/household/[shortname]/settings` | None | `useDateRangeValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** - Single date picker with UCalendar + validation; shares `COMPONENTS.calendarGrid` (no adjacent-month duplicates) |
+| `CalendarDateRangePicker.vue` | `/admin/planning` | None | `useDateRangeValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** — shares `COMPONENTS.calendarGrid` (no adjacent-month duplicates) |
 | `CalendarDateRangeListPicker.vue` | `/admin/planning` | None | `useDateRange()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** — holidays kept chronological via `sortDateRanges` |
 | `WeekDayMapDisplay.vue` | `/admin/planning`, `/admin/teams` | None | `useWeekday()` | ✅ | ✅ | ✅ 9 tests | ✅ Indirect | **✅ COMPLIANT** — Added `hideRestricted` prop; compact view only renders active days |
 | `WeekDayMapDinnerModeDisplay.vue` | `/household/[shortname]/settings` | None | `useWeekday()`, `useDinnerMode()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
-| `BaseCalendar.vue` | All calendar displays | None | - | N/A | N/A | ❌ | N/A | **N/A DISPLAY** |
-| `CalendarDisplay.vue` | `/admin/planning` (via `AdminSeason`, `AdminPlanningSeason`) | None | `useSeason()`, `useCalendarEvents()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** - potential-cooking/generated-events preview |
+| `BaseCalendar.vue` | All calendar displays | None | `useTheSlopeDesignSystem()`, `useCalendarEvents()` | N/A | N/A | ❌ | N/A | **N/A DISPLAY** — spreads `COMPONENTS.calendarGrid` |
+| `CalendarDisplay.vue` | `/admin/planning` | None | `useSeason()`, `useCalendarEvents()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ `CalendarDisplay.nuxt.spec.ts` | ❌ | **✅ COMPLIANT** - potential-cooking/generated-events preview on `PLANNING_CALENDAR` + `SIZES.calendarCircle` |
 | `ChefCalendarDisplay.vue` | `/chef` | Parent props | `useTemporalCalendar()` | ✅ | ✅ | ❌ | ✅ | **⚠️ E2E ONLY** - Uses MaybeRefOrGetter for reactivity |
 | `DinnerCalendarDisplay.vue` | `/dinner`, `/household/[shortname]/bookings` | Parent props | `useTemporalCalendar()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ E2E ONLY** - DRY with ChefCalendarDisplay |
 | `TeamCalendarDisplay.vue` | `/admin/teams`, `/chef` | Parent props | - | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |

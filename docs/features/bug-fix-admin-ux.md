@@ -18,7 +18,7 @@
 | My preferences | notification channels (EMAIL/SMS) + appearance (colors, text scale) → `UserPreference` table, endpoints, dashboard card | ⏳ Mockup signoff + color decision + migration |
 | Planning form | edit/create the allergies way (pencil + Opret), holiday rows editable, live-season save re-scaffolds, Heynabo cleanup on removed dates | ⏳ Mockup signoff |
 | Sorted holidays | holiday list chronological everywhere | ✅ IMPLEMENTED (2026-09-16) |
-| Calendar grid | pickers show adjacent-month days twice → one shared `UCalendar` root token | ⏳ Mockup signoff (light) |
+| Calendar grid | pickers show adjacent-month days twice → one shared `UCalendar` root token | ✅ IMPLEMENTED (2026-09-16) |
 | Planning buttons | every planning button from the design system | ⏳ Mockup signoff |
 
 ---
@@ -480,6 +480,111 @@ long words/emails/URLs never break          p-3 md:p-4 · wrap-anywhere · actio
 
 `app/composables/useTheSlopeDesignSystem.ts`, 34 component/page files, `docs/ui.md`, `docs/adr.md` (ADR-019), compliance checklist.
 
+### Classification (⏳ awaiting signoff)
+
+#### (a) Repro — `tests/e2e/ui/MobileViewport.e2e.spec.ts`, 375×812, admin UI session, 7/7 GREEN
+
+`scrollWidth - innerWidth` is **0 on every page**: the alert theme's `root` carries `overflow-hidden` and its `wrapper` carries
+`min-w-0 flex-1`, so an over-wide alert clips instead of scrolling the document. Second measurement (temporary probe, deleted):
+per-element `scrollWidth - clientWidth` + box-wider-than-viewport.
+
+| Page | overflow px | Alerts rendered (root/child clip) | Other clipping measured | Screenshot |
+|---|---|---|---|---|
+| `/admin/allergies` | 0 ✅ | 1 — `AllergyManagersList` w=343, clip 0/0 | none | `test-results/mobile/alerts-admin-allergies-*.png` |
+| `/admin/allergies/pdf` | 0 ✅ | 2 — poster notes + managers, w=311, clip 0/0 | `div.flex.gap-6` (table+QR column) clipped 27px | `…alerts-admin-allergies-pdf-*.png` |
+| `/admin/system` | 0 ✅ | 0 (error alert only on job error) | job-history `UTable` wrapper scrolls 1596px; settings-tree `span.truncate` clips `holidayUrl: https://www.lejre.dk/…` by 273px | `…alerts-admin-system-*.png` |
+| `/admin/users` | 0 ✅ | 1 — `AdminUsers:151` w=295, clip 0/0, description wraps over 5 lines | `UTable` wrapper scrolls 576px (mail column cut in the screenshot) | `…alerts-admin-users-*.png` |
+| `/dinner` | 0 ✅ (3px in the probe) | screenshot: `DinnerBookingForm:876` legend (mode row wraps to 2 lines) + `AllergenMultiSelector:162` compact empty state, both fit | while `DinnerDetailPanel` shows its skeleton, `UPageCard` inner `p-4 sm:p-6` is 3px wider → doc overflow 3px | `…alerts-dinner-*.png` |
+| `/household/<own>/settings` | 0 ✅ | 0 (edit + last-result alerts are state-gated) | none | `…alerts-household-settings-*.png` |
+| `/login` | 0 ✅ | 0 (error alert only on failed login) | none | `…alerts-login-*.png` |
+
+**Consequences for the sweep:** (1) the guard is green today, so it guards *against regression*, it does not prove the bug;
+(2) the mockup's "actions don't wrap" premise does not hold — the generated theme already ships `actions: "flex flex-wrap gap-1.5 shrink-0"`
+and `wrapper: "min-w-0 flex-1"` (`.nuxt/ui/alert.ts:29-39`); only `title`/`description` lack a wrap class, so the residual defect is a long
+unbroken token (mail/URL) *clipped* inside an alert — no page renders one today; (3) at most 6 of the 56 sites render in the repro
+(the rest are state-gated), so the token change must be covered by component specs, not by this guard; (4) `/dinner`'s 3px makes `<= 0` borderline.
+
+#### (b) Classification — 56 sites / 34 files (theme defaults: `color=primary`, `variant=solid`)
+
+| Site | Props today | Kind | Visual change / note |
+|---|---|---|---|
+| `AdminAllergies.vue:360` | soft, `COLOR.success`, avatar, `:ui=emptyStateAlert`, `#actions` | `emptyState` | empty state **with** a CTA button — see kind gap below |
+| `AdminEconomy.vue:609` | neutral/subtle/`robotHappy`, title+desc | `neutral` | none |
+| `AdminEconomy.vue:741` | neutral/subtle/`robotHappy` | `neutral` | none |
+| `AdminEconomy.vue:876` | neutral/subtle/`robotHappy` | `neutral` | none |
+| `AdminPlanning.vue:238` | `color=info`, **no variant → solid**, avatar 💤, `class="space-y-4"` | `emptyState` | solid info → soft/centered; drop no-op `space-y-4` |
+| `AdminSystem.vue:377` | `COLOR.error`/subtle/`exclamationCircle` | `error` | subtle → soft |
+| `AdminTeams.vue:460` | `color=info`, no variant → solid, avatar 💤, `:actions`, `space-y-4` | `emptyState` | solid → soft; empty state **with** `:actions`; drop `space-y-4` |
+| `AdminToCreateSeason.vue:6` | `color=info`, no variant → solid, avatar 🧘, `:actions`, `space-y-4` | `emptyState` | as above |
+| `AdminUsers.vue:151` | outline, icon `authorized`, title+desc | `info` | outline → subtle; keep domain icon |
+| `HouseholdCreateForm.vue:135` | neutral/soft/avatar 🏠/`:ui=emptyStateAlert` | `emptyState` | none |
+| `AllergenMultiSelector.vue:162` | no color/variant → **primary/solid**, `:ui=emptyStateAlertCompact` | `emptyStateCompact` | none (compact `ui` already overrides bg) |
+| `AllergenMultiSelector.vue:206` | `COLOR.primary`, no variant → solid, numeric avatar | `info` | **primary/solid → info/subtle** (amber → violet); avatar stays |
+| `AllergenMultiSelector.vue:251` | no color/variant, `:ui=emptyStateAlertCompact` | `emptyStateCompact` | none |
+| `AllergyDetailPanel.vue:54` | neutral/outline/`ICONS.warning`, `#description` = `<ul>`+badges | `legend` | none; **layout in `#description`** |
+| `AllergyManagersList.vue:28` | `props.color=info`/`props.variant=subtle`, `:ui={description: flex flex-col md:flex-row}` | `info` | drop the `color`/`variant` props from the component API; the `:ui` flex row must survive the merge; **layout in `#description`** |
+| `AllergyTypeCard.vue:227` | soft/success/avatar/`:ui=emptyStateAlert` | `emptyState` | none |
+| `ActionPreview.vue:30` | neutral/outline/`ICONS.ticket`, `#description` = `<ul>`+badges | `legend` | none; **layout in `#description`** |
+| `BookingGridView.vue:577` | `residencyAlert.color` (success\|error\|neutral)/soft, `class="mx-2 mt-2"` | `success`·`error`·`neutral` (dynamic) | `v-bind="ALERTS[residencyKind]"` keyed off `RESIDENCY_CONFIG`; keep testid `outside-residency-alert` |
+| `BookingGridView.vue:612` | soft/neutral/avatar/`:ui=emptyStateAlert` | `emptyState` | none |
+| `BookingGridView.vue:835` | neutral/subtle/`ICONS.info`, "Forklaring", `#description` = flex row of `DinnerModeSelector` | `legend` | subtle → outline; **duplicate of `DinnerBookingForm:876` → `DinnerModeLegend.vue`** |
+| `GuestBookingForm.vue:190` | neutral/soft/avatar/`:ui=emptyStateAlert` | `emptyState` | none |
+| `ChefMenuCard.vue:600` | warning/soft/`ICONS.info`, `:ui={root:'p-2 mt-2', description:'text-xs'}` | `warning` | local `:ui` fights the kind's `p-3 md:p-4` — keep compact override or accept p-3 (decide) |
+| `DinnerStatusStepper.vue:97` | error/soft/`x-circle` | `error` | none |
+| `TeamRoleStatus.vue:74` | `isChef ? warning : info`/soft, `:ui={root:'w-full'}` | `warning`\|`info` (ternary) | `w-full` is already in the theme root → delete |
+| `CookingTeamCard.vue:225` | soft/neutral/avatar/`:ui=emptyStateAlert` | `emptyState` | none |
+| `CookingTeamCard.vue:302` | soft/neutral/avatar/`:ui=emptyStateAlert` | `emptyState` | none |
+| `MyTeamSelector.vue:81` | **`type="info"` (invalid)**, soft, `COLOR.info`, `user-group` | `info` | drop `type`; soft → subtle |
+| `DinnerBookingForm.vue:538` | `residencyAlert.color`/soft, testid `outside-residency-alert` | `success`·`error`·`neutral` (dynamic) | same map as `BookingGridView:577` |
+| `DinnerBookingForm.vue:548` | neutral/soft/avatar/`:ui=emptyStateAlert` | `emptyState` | none |
+| `DinnerBookingForm.vue:575` | warning/soft/`ICONS.released` | `warning` | none |
+| `DinnerBookingForm.vue:586` | info/soft/`ICONS.claim` (one-liner) | `info` | soft → subtle |
+| `DinnerBookingForm.vue:794` | `COMPONENTS.powerMode.alert` (warning/soft/superhero) | `warning` | `powerMode.alert` should shrink to the icon once `ALERTS.warning` exists (token overlap) |
+| `DinnerBookingForm.vue:876` | neutral/subtle/`ICONS.info`, "Forklaring" + flex row | `legend` | subtle → outline; **duplicate of `BookingGridView:835`** |
+| `HouseholdBookings.vue:273` | `ICONS.calendar`/neutral/soft | `neutral` | soft → subtle |
+| `HouseholdBookings.vue:286` | `ICONS.calendar`/**primary**/subtle, testid `household-bookings-empty` | `info` | **primary → info** (amber → violet) |
+| `HouseholdCard.vue:324` | `powerMode.alert`, `class="min-w-0"`, `:ui={title/description:'break-words'}` | `warning` | local patches deleted (kind ships `min-w-0` + `wrap-anywhere`) |
+| `HouseholdCard.vue:389` | `errored>0 ? error : neutral`/subtle, testid `last-result-alert` | `error`\|`neutral` (ternary) | error branch subtle → soft |
+| `HouseholdCard.vue:400` | **primary**/soft/`information-circle`, `#description` = icon rows | `info` | **primary → info**; **layout in `#description`** |
+| `HouseholdEconomy.vue:288` | neutral/subtle/`robotHappy` | `neutral` | none |
+| `HouseholdEconomy.vue:401` | neutral/subtle/`robotHappy` | `neutral` | none |
+| `HouseholdEconomy.vue:413` | warning/subtle/`exclamationCircle` | `warning` | subtle → soft |
+| `HouseholdSettings.vue:202` | warning/soft, `editAlert.icon/title/description/testid` | `warning` | none; testids `move-out-warning`/`move-out-change-warning` unchanged |
+| `HouseholdSettings.vue:271` | `errored>0 ? error : neutral`/subtle, testid `last-move-out-result-alert` | `error`\|`neutral` (ternary) | error branch subtle → soft |
+| `Login.vue:50` | error/soft/`mage-robot-dead`, `class="mb-4"` | `error` | none (keep spacing class) |
+| `OrderHistoryDisplay.vue:77` | warning/soft/`exclamationCircle`, title only | `warning` | none |
+| `OrderHistoryDisplay.vue:80` | error/soft/`exclamationCircle`, title only | `error` | none |
+| `SeasonStatusDisplay.vue:156` | `alertConfig.color/variant/icon` (success+subtle\|outline…), `#actions` = `UFormField`+`DangerButton` | `success`·`warning`·`info` + actions | **kind gap** (below); `#actions` holds a form field, not a button row |
+| `UserProfileCard.vue:334` | info/soft/`shield-check`, `:ui={description:'text-sm'}`, `#description` = `<ul>` | `info` | soft → subtle; `text-sm` already the theme default → drop; **layout in `#description`** |
+| `pages/admin/[tab].vue:154` | neutral/soft/`eye`, testid `admin-readonly-banner` | `neutral` | soft → subtle; keep `eye` icon + testid |
+| `pages/admin/allergies/pdf.vue:153` | warning/outline, `#description` = heading + `<ul>` | `warning` | outline → soft — **check print**: the poster is print-first and has no `UApp`; **layout in `#description`** |
+| `pages/chef/index.vue:320` | **`type="info"` (invalid)**, soft, `COLOR.info`, `calendarDays` | `info` | drop `type`; soft → subtle |
+| `pages/chef/index.vue:397` | soft/neutral/`userGroup`, title only | `neutral` | soft → subtle |
+| `pages/dinner/index.vue:212` | **`type="info"` (invalid)**, soft, `COLOR.info`, `robotDead`, `#actions` = `UButton size=lg` | `emptyState` + actions | drop `type`; empty state **with** `#actions` — kind gap |
+| `pages/dinner/index.vue:308` | soft/`COLOR.info`, `#title` only (emoji + fun text) | `info` | soft → subtle |
+| `pages/household/[shortname]/[tab].vue:180` | info/subtle/`eye`, testid `visitor-banner`, `#actions` = `DangerButton` | `callToAction` | subtle → soft; vertical <md, horizontal md+ |
+| `pages/household/[shortname]/[tab].vue:203` | **warning**/subtle/`authorize`, testid `admin-override-active`, `#actions` = `UButton` | `callToAction` + warning | **kind gap** (below) |
+
+**Counts:** `emptyState` 12 · `info` 10 · `neutral` 8 · `warning` 8 · `legend` 4 · `error` 4 · `emptyStateCompact` 2 ·
+`callToAction` 1 · dynamic two-kind ternaries 6 · needs the kind gap resolved 1. `success` has **no** static site (only the residency ternary).
+
+**Kind gap — `callToAction` cannot carry a colour (5 sites, 3 colours).** `SeasonStatusDisplay:156` (success/warning/info by season status),
+`[tab].vue:203` (warning), `AdminTeams:460`, `AdminToCreateSeason:6`, `dinner/index.vue:212` (centered empty state + actions) all need
+"this kind **plus** actions". Proposal: make orientation a *modifier* rather than a colour-bearing kind — `ALERTS.withActions` spread over any
+kind (`v-bind="{...ALERTS.warning, ...ALERTS.withActions}"`) or `ALERTS.callToAction(color)` — and keep `emptyState` vertical/centered even when
+it has actions. Not proposed as new kinds: no site needs a colour outside the existing table.
+
+#### (c) Not fixed by the alert token
+
+| Finding | Where | Note |
+|---|---|---|
+| `UTable` wrapper scrolls far wider than the phone | `/admin/users` (576px), `/admin/system` job history (1596px) | mail/result columns cut off in the screenshots — table/responsive-column concern |
+| `span.truncate` clips a long URL by 273px | `/admin/system` settings tree (`holidayUrl`) | tree cell, not an alert |
+| Poster table + QR flex row clipped 27px | `/admin/allergies/pdf` `div.flex.gap-6.mb-6` | poster layout; print-first page |
+| 3px document overflow while the skeleton renders | `/dinner` `UPageCard` inner `p-4 sm:p-6` | makes the repro's `<= 0` borderline on `/dinner` |
+| Layout inside `#description` (flex rows, `<ul>`, badges, selectors) | `AllergyManagersList:36`, `AllergyDetailPanel:60`, `ActionPreview:37`, `BookingGridView:843`, `DinnerBookingForm:884`, `HouseholdCard:406`, `UserProfileCard:341`, `pdf:154` | `wrap-anywhere` cannot wrap a flex row of badges — each needs its own responsive classes or extraction (`DinnerModeLegend.vue`) |
+| `actions: 'flex-wrap'` in the planned shared `ui` | theme already ships `actions: "flex flex-wrap gap-1.5 shrink-0"` | no-op — drop it from the plan |
+
 ---
 
 ## Poster notes
@@ -829,6 +934,8 @@ BEFORE (season/holiday pickers)                 AFTER (all calendars share COMPO
 | `CalendarDateRangePicker.nuxt.spec.ts`, `CalendarDatePicker.nuxt.spec.ts` | inner `UCalendar` receives `COMPONENTS.calendarGrid` (shared helper `expectSharedCalendarGrid`) |
 | `CalendarDisplay.nuxt.spec.ts` (new) | generated / potential / holiday cells carry the palette + circle classes |
 | `AdminPlanningSeason.e2e.spec.ts` | open the season picker → zero visible `[data-outside-view]` cells |
+
+**Verified (2026-09-16):** red 13-14 duplicate cells in the season picker → 0 after the token; 34 calendar component tests, 9 `AdminPlanningSeason` e2e tests and `npm run pre:all` all green.
 
 ---
 

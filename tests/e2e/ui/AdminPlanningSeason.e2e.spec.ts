@@ -8,7 +8,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import {addDays} from 'date-fns/addDays'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil} = testHelpers
+const {validatedBrowserContext, pollUntil, waitForHydration} = testHelpers
 
 /**
  * Calculate expected dinner event count for a season
@@ -190,6 +190,8 @@ test.describe('AdminPlanningSeason Form UI', () => {
                 10
             )
             await expect(page.locator('form#seasonForm')).toBeVisible()
+            // The picker popover only opens once Vue has attached its trigger listener
+            await waitForHydration(page)
 
             const {
                 startDate, endDate, holidayStart, holidayEnd,
@@ -200,20 +202,23 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
             // THEN: the season picker grid never renders a date twice - adjacent-month days
             // are disabled and hidden by the shared COMPONENTS.calendarGrid token
-            const dayCells = page.locator('[data-slot="cellTrigger"]')
+            // Scope to the picker popover - the page also renders the season preview calendar.
+            // Hidden leading cells are not addressable, so count only the :visible ones
+            const seasonPicker = page.getByRole('dialog')
+            const visibleDayCells = seasonPicker.locator('[data-slot="cellTrigger"]:visible')
             await page.locator('[name="seasonDates"] input[name="start"]').click()
-            await expect(dayCells.first()).toBeVisible()
-            await expect(page.locator('[data-slot="cellTrigger"][data-outside-view]:visible')).toHaveCount(0)
-            expect(await page.locator('[data-slot="cellTrigger"]:visible').count()).toBeGreaterThan(27)
+            await expect(visibleDayCells.first()).toBeVisible()
+            await expect(seasonPicker.locator('[data-slot="cellTrigger"][data-outside-view]:visible')).toHaveCount(0)
+            expect(await visibleDayCells.count()).toBeGreaterThan(27)
 
             // Close the popover before touching the form again - it overlays the holiday row.
             // Escape can land before reka-ui's dismiss listener attaches, so retry until it is gone
             await pollUntil(
                 async () => {
                     await page.keyboard.press('Escape')
-                    return await dayCells.first().isHidden()
+                    return await seasonPicker.count()
                 },
-                (isHidden) => isHidden,
+                (count) => count === 0,
                 5
             )
 
