@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { mountSuspended } from "@nuxt/test-utils/runtime"
 import CalendarDatePicker from '~/components/calendar/CalendarDatePicker.vue'
 import { nextTick, ref } from 'vue'
+import { openPopover, expectSharedCalendarGrid } from '~~/tests/component/testHelpers'
 
 const JAN_1 = new Date(2025, 0, 1)
 
@@ -39,6 +40,12 @@ describe('CalendarDatePicker', () => {
   it('renders default label', async () => {
     const wrapper = await mountPicker(JAN_1)
     expect(wrapper.html()).toContain('Dato')
+  })
+
+  it('configures its calendar from the shared design-system grid token', async () => {
+    const wrapper = await mountPicker(JAN_1)
+    await openPopover(wrapper)
+    expectSharedCalendarGrid(wrapper)
   })
 
   it('shows error for invalid date format', async () => {

@@ -3,6 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { mountSuspended } from "@nuxt/test-utils/runtime"
 import CalendarDateRangePicker from '~/components/calendar/CalendarDateRangePicker.vue'
 import { nextTick, ref } from 'vue'
+import { openPopover, expectSharedCalendarGrid } from '~~/tests/component/testHelpers'
 
 const JAN_1 = new Date(2025, 0, 1)
 const JAN_5 = new Date(2025, 0, 5)
@@ -46,6 +47,12 @@ describe('CalendarDateRangePicker', () => {
     await nextTick()
     const vm = wrapper.vm as unknown as PickerVm
     expect(vm.errors.size).toBeGreaterThan(0)
+  })
+
+  it('configures its calendar from the shared design-system grid token', async () => {
+    const wrapper = await mountPicker({ start: JAN_1, end: JAN_5 })
+    await openPopover(wrapper)
+    expectSharedCalendarGrid(wrapper)
   })
 
   it('rejects end before start', async () => {

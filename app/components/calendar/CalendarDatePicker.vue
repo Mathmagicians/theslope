@@ -12,7 +12,7 @@ const props = withDefaults(defineProps<{ label?: string, name?: string }>(), {
 const emit = defineEmits(['update:model-value'])
 
 // DESIGN SYSTEM
-const {SIZES} = useTheSlopeDesignSystem()
+const {SIZES, COMPONENTS, COLOR} = useTheSlopeDesignSystem()
 
 // STATE
 const errors = ref<Map<string, string[]>>(new Map())
@@ -117,12 +117,10 @@ defineExpose({
     }">
     <template #content>
       <UCalendar
+        v-bind="COMPONENTS.calendarGrid"
         v-model="pickerDate"
         :size="SIZES.calendar"
-        :week-starts-on="1"
-        :fixed-weeks="false"
-        weekday-format="short"
-        color="success"
+        :color="COLOR.success"
       >
         <template #week-day="{ day }">
           <span class="text-sm text-muted uppercase">

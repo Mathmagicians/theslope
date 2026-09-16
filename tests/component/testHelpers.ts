@@ -1,7 +1,8 @@
 import {nextTick, h, defineComponent, ref, type Component} from 'vue'
+import {expect} from 'vitest'
 import {TooltipProvider} from 'reka-ui'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
-import type {BaseWrapper} from '@vue/test-utils'
+import {flushPromises, type BaseWrapper, type VueWrapper} from '@vue/test-utils'
 
 /**
  * Generic polling function for component tests
@@ -73,4 +74,31 @@ export const mountWithTooltipProvider = async <T extends MountableComponent>(
         isMd === undefined ? {} : {global: {provide: {isMd: ref(isMd)}}}
     )
     return root.findComponent(component)
+}
+
+/**
+ * Opens a UPopover by clicking its trigger, then lets reka-ui mount the teleported content.
+ */
+export const openPopover = async (wrapper: Searchable) => {
+    await wrapper.find('[aria-expanded]').trigger('click')
+    await flushPromises()
+    await nextTick()
+}
+
+/**
+ * Asserts the UCalendar below `wrapper` was configured from the ONE shared design-system
+ * root token (COMPONENTS.calendarGrid). The literals ARE the contract: Monday-first, no
+ * padding weeks, and adjacent-month days both disabled and hidden - so a date never renders
+ * twice across two neighbouring month grids.
+ */
+export const expectSharedCalendarGrid = (wrapper: Pick<VueWrapper, 'findComponent'>) => {
+    const calendar = wrapper.findComponent({name: 'UCalendar'})
+    expect(calendar.exists()).toBe(true)
+    expect(calendar.props()).toMatchObject({
+        disableDaysOutsideCurrentView: true,
+        fixedWeeks: false,
+        weekStartsOn: 1,
+        weekdayFormat: 'short'
+    })
+    expect(calendar.props('ui')).toMatchObject({cellTrigger: 'data-[outside-view]:hidden'})
 }

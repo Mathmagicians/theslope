@@ -198,6 +198,14 @@ test.describe('AdminPlanningSeason Form UI', () => {
             await page.locator('[name="seasonDates"] input[name="start"]').fill(startDate)
             await page.locator('[name="seasonDates"] input[name="end"]').fill(endDate)
 
+            // THEN: the season picker grid never renders a date twice - adjacent-month days
+            // are disabled and hidden by the shared COMPONENTS.calendarGrid token
+            await page.locator('[name="seasonDates"] input[name="start"]').click()
+            await expect(page.locator('[data-slot="cellTrigger"]').first()).toBeVisible()
+            await expect(page.locator('[data-slot="cellTrigger"][data-outside-view]:visible')).toHaveCount(0)
+            expect(await page.locator('[data-slot="cellTrigger"]:visible').count()).toBeGreaterThan(27)
+            await page.keyboard.press('Escape')
+
             // WHEN: Add holiday period
             await page.locator('[name="holidayRangeList"] input[name="start"]').fill(holidayStart)
             await page.locator('[name="holidayRangeList"] input[name="end"]').fill(holidayEnd)

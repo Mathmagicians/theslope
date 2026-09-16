@@ -468,9 +468,15 @@ export const COMPONENTS = {
     },
 
 
-    // Calendar UI configuration (UCalendar)
-    calendar: {
-        cellTrigger: 'data-[outside-view]:hidden'
+    // Shared UCalendar root: Monday-first, no padding weeks, and other-month days both disabled
+    // (reka data-outside-view) and hidden, so a day number never appears twice across
+    // neighbouring month grids. Spread with v-bind at every UCalendar call site.
+    calendarGrid: {
+        weekStartsOn: 1,
+        fixedWeeks: false,
+        weekdayFormat: 'short',
+        disableDaysOutsideCurrentView: true,
+        ui: {cellTrigger: 'data-[outside-view]:hidden'}
     },
 
     // Economy table hierarchy - ready-to-grab classes for each nesting level
@@ -1224,6 +1230,19 @@ export const DINNER_CALENDAR = {
 } as const
 
 /**
+ * PLANNING_CALENDAR - Pink palette accent colors
+ *
+ * Season planning preview: a generated dinner event is filled, a day that only
+ * matches the cooking pattern is an outline.
+ */
+export const PLANNING_CALENDAR = {
+    day: {
+        generated: `font-medium ${BG.pink[800]} ${TEXT.pink[50]}`,
+        potential: 'font-medium border-2 border-pink-300 text-pink-800'
+    }
+} as const
+
+/**
  * DEADLINE_BADGES - Chef deadline indicator badges
  *
  * Small colored chips showing deadline types and urgency in agenda view.
@@ -1422,6 +1441,7 @@ export const useTheSlopeDesignSystem = () => {
         CALENDAR,
         CHEF_CALENDAR,
         DINNER_CALENDAR,
+        PLANNING_CALENDAR,
         DEADLINE_BADGES,
         ALARM_TO_BADGE,
         URGENCY_TO_BADGE,
