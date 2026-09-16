@@ -1,6 +1,6 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { defineNuxtConfig } from 'nuxt/config'
-import { nitroBase } from './workers/common/nitro.base'
+import { nitroBase } from './workers/common/cloudflare'
 
 export default defineNuxtConfig({
     colorMode: {
@@ -111,6 +111,13 @@ export default defineNuxtConfig({
         GITHUB_TOKEN: '',  // Set via NUXT_GITHUB_TOKEN env variable
         GITHUB_OWNER: 'Mathmagicians',  // Override via NUXT_GITHUB_OWNER if needed
         GITHUB_REPO: 'theslope',  // Override via NUXT_GITHUB_REPO if needed
+        // Notifications (sender events). Defaults = local; wrangler [env.*.vars] NUXT_NOTIFICATIONS_* set dev/prod.
+        notifications: {
+            environment: 'local',                    // local | dev | prod — the contract's meta.environment
+            from: 'no-reply.dev@skraaningen.dk',     // pinned per environment by the sender binding's allowed_sender_addresses
+            fromName: 'Skråningen dev',
+            replyTo: ''                              // Worker secret NUXT_NOTIFICATIONS_REPLY_TO per environment
+        },
         // Public keys that are exposed to the client
         public: {
             RELEASE_VERSION: process.env.NUXT_PUBLIC_RELEASE_VERSION || "",  // Baked at build time

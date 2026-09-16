@@ -128,8 +128,8 @@ describe('AdminAllergies', () => {
                 expect(wrapper.text()).toContain('Afslut sammenligning')
             })
 
-            // Same AllergyNotes component and text source as the poster, docked in the card footer
-            it('renders the notes box in the card footer', async () => {
+            // Same AllergyNotes component and text source as the poster, in the card header above the managers list
+            it('renders the notes box in the card header', async () => {
                 const wrapper = await mount()
 
                 expect(findByTestId(wrapper, ALLERGY_TEST_IDS.notes).text()).toContain('Vigtige bemærkninger')

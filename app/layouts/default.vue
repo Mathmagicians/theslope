@@ -8,6 +8,8 @@ useHead({
   ]
 })
 
+const {BACKGROUNDS} = useTheSlopeDesignSystem()
+
 const isMd: Ref<boolean> = ref(false)
 const checkMdBreakpoint = () => {
   if (import.meta.client) {
@@ -33,9 +35,7 @@ provide('isMd', isMd) //exposes the reactive variable to all children - it detec
 </script>
 
 <template>
-  <div
-      class="min-h-screen w-full
-  font-sans flex flex-col bg-amber-500 dark:bg-amber-800 space-y-1 ">
+  <div :class="['min-h-screen w-full font-sans flex flex-col space-y-1', BACKGROUNDS.appShell]">
     <PageHeader class="my-2 flex-shrink-0"/>
     <div class="flex-grow">
       <slot/>

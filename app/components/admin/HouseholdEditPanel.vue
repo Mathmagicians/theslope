@@ -28,7 +28,7 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const {SIZES, ICONS, TYPOGRAPHY, BUTTONS} = useTheSlopeDesignSystem()
+const {SIZES, ICONS, TYPOGRAPHY, BUTTONS, COLOR, TEXT, BG, LAYOUTS} = useTheSlopeDesignSystem()
 
 // ========== RESIDENS ==========
 
@@ -68,26 +68,26 @@ const householdLabel = computed(() => `${props.household.shortName} (PBS ${props
 </script>
 
 <template>
-  <div class="p-4 md:p-6 bg-neutral-50 dark:bg-neutral-900 space-y-6">
+  <div :class="['p-4 md:p-6 space-y-6', BG.panel]">
 
     <!-- STAMDATA -->
     <section>
       <h3 :class="TYPOGRAPHY.cardTitle" class="mb-3">Stamdata</h3>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
         <div>
-          <span class="text-neutral-500">PBS-nummer</span>
+          <span :class="TEXT.neutral[500]">PBS-nummer</span>
           <div class="font-medium">{{ household.pbsId }}</div>
         </div>
         <div>
-          <span class="text-neutral-500">Adresse</span>
-          <div class="font-medium">{{ household.address }} <UBadge color="neutral" variant="outline" :size="SIZES.small">Heynabo</UBadge></div>
+          <span :class="TEXT.neutral[500]">Adresse</span>
+          <div class="font-medium">{{ household.address }} <UBadge :color="COLOR.neutral" variant="outline" :size="SIZES.small">Heynabo</UBadge></div>
         </div>
         <div>
-          <span class="text-neutral-500">Heynabo-ID</span>
+          <span :class="TEXT.neutral[500]">Heynabo-ID</span>
           <div class="font-medium">{{ household.heynaboId }}</div>
         </div>
         <div>
-          <span class="text-neutral-500">Forkortelse</span>
+          <span :class="TEXT.neutral[500]">Forkortelse</span>
           <div class="font-medium">{{ household.shortName }}</div>
         </div>
       </div>
@@ -105,7 +105,7 @@ const householdLabel = computed(() => `${props.household.shortName} (PBS ${props
       >
         {{ residency.badgeText }}
       </UBadge>
-      <span v-else class="text-sm text-neutral-500">Aktiv beboer</span>
+      <span v-else :class="[TYPOGRAPHY.bodyTextSmall, TEXT.neutral[500]]">Aktiv beboer</span>
     </section>
 
     <!-- BEBOERE -->
@@ -124,7 +124,7 @@ const householdLabel = computed(() => `${props.household.shortName} (PBS ${props
           <template v-for="h in [getHouseholdForInhabitant(row.original.id)]" :key="h?.id">
             <UBadge
                 v-if="h"
-                :color="h.id === household.id ? 'success' : 'neutral'"
+                :color="h.id === household.id ? COLOR.success : COLOR.neutral"
                 :variant="h.id === household.id ? 'solid' : 'outline'"
                 :size="SIZES.small"
                 class="w-fit"
@@ -135,10 +135,10 @@ const householdLabel = computed(() => `${props.household.shortName} (PBS ${props
         </template>
 
         <template #actions="{ row }">
-          <span v-if="isInThisHousehold(row.original.id)" class="text-xs text-neutral-500">I denne husstand</span>
+          <span v-if="isInThisHousehold(row.original.id)" :class="[TYPOGRAPHY.finePrint, TEXT.neutral[500]]">I denne husstand</span>
           <UButton
               v-else
-              color="primary"
+              :color="COLOR.primary"
               variant="soft"
               :size="SIZES.small"
               :loading="loading"
@@ -152,7 +152,7 @@ const householdLabel = computed(() => `${props.household.shortName} (PBS ${props
     </section>
 
     <!-- FOOTER -->
-    <div class="flex flex-col-reverse md:flex-row md:justify-between gap-2 pt-4 border-t border-neutral-200 dark:border-neutral-700">
+    <div :class="['flex flex-col-reverse md:flex-row md:justify-between gap-2 pt-4', LAYOUTS.panelDivider]">
       <DangerButton
           :label="`Slet ${householdLabel}`"
           :confirm-label="`Tryk igen for at slette ${householdLabel} (${inhabitantCount} beboere slettes)...`"

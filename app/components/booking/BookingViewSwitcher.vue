@@ -20,7 +20,7 @@ import {type BookingView, BookingViewSchema} from '~/composables/useBookingView'
 
 const model = defineModel<BookingView>({default: 'day'})
 
-const {COLOR, ICONS, SIZES} = useTheSlopeDesignSystem()
+const {COLOR, ICONS, SIZES, COMPONENTS} = useTheSlopeDesignSystem()
 
 const VIEW_CONFIG: Record<BookingView, { label: string; icon: string }> = {
     day: {label: 'Dag', icon: ICONS.calendar},
@@ -43,7 +43,7 @@ const getVariant = (view: BookingView) => isSelected(view) ? 'solid' : 'outline'
       :variant="getVariant(view)"
       :color="COLOR.primary"
       :active="isSelected(view)"
-      active-class="ring-2 border-2 ring-orange-200 shadow-md"
+      :active-class="COMPONENTS.segmentedActive"
       @click="model = view"
     >
       <template #leading>

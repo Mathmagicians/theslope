@@ -27,11 +27,12 @@ CREATE on mobile docks under the toolbar (adjacent to the button that opened it)
 and suppresses row expansion, so the toolbar panel is the single live mount.
 Multiselect mode replaces master+detail with AllergenMultiSelector.
 
-The card FOOTER carries AllergyNotes at both breakpoints - the same box the poster prints:
-├─ footer ────────────────────────────────────────┤
+The card HEADER carries AllergyNotes above the managers list, in the poster's order - the same box the poster prints:
+┌ Allergi Katalog                    [📄 Plakat] ┐
 │ ⚠ Vigtige bemærkninger                          │
 │  • Glutenfri boller findes i fryseren …         │
-└─────────────────────────────────────────────────┘
+│ ⓘ Spørgsmål om allergier? (AllergyManagersList) │
+├─ toolbar + master/detail ───────────────────────┤
 -->
 <script setup lang="ts">
 import {FORM_MODES, type FormMode} from '~/types/form'
@@ -274,7 +275,7 @@ const catalogEmptyState = {
             <div class="text-lg font-semibold">Allergi Katalog</div>
             <div class="flex items-center gap-2">
               <UButton
-                  color="secondary"
+                  :color="COLOR.secondary"
                   variant="outline"
                   :icon="ICONS.document"
                   to="/admin/allergies/pdf"
@@ -286,6 +287,7 @@ const catalogEmptyState = {
               </UButton>
             </div>
           </div>
+          <AllergyNotes :notes="DEFAULT_ALLERGY_POSTER_NOTES"/>
           <AllergyManagersList/>
         </div>
       </template>
@@ -401,10 +403,6 @@ const catalogEmptyState = {
       </div>
       </div>
 
-      <!-- Notes - the same box the poster prints, below the catalog -->
-      <template #footer>
-        <AllergyNotes :notes="DEFAULT_ALLERGY_POSTER_NOTES"/>
-      </template>
     </UCard>
   </div>
 </template>

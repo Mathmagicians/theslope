@@ -77,7 +77,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { COLOR, SIZES, ALERTS, TYPOGRAPHY, ICONS } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, ALERTS, TYPOGRAPHY, ICONS, BG } = useTheSlopeDesignSystem()
 
 // Internal selection state (Set for efficient .has() lookup)
 const selectedAllergyIds = ref<Set<number>>(new Set(props.modelValue))
@@ -224,7 +224,7 @@ const allergyStatistics = computed(() => {
           <h4 :class="TYPOGRAPHY.sectionSubheading">Fordeling pr. allergen</h4>
           <div
 v-for="item in allergyStatistics.breakdownByAllergy" :key="item.name"
-               class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded">
+               :class="['flex items-center justify-between p-2 rounded', BG.inset]">
             <div class="flex items-center gap-2">
               <span class="text-lg">{{ item.icon || '�️' }}</span>
               <span :class="TYPOGRAPHY.bodyTextSmall">{{ item.name }}</span>

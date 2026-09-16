@@ -239,22 +239,26 @@ WORKERS := sender
 worker_cfg = workers/$(1)/wrangler.toml
 
 .PHONY: deploy-dev deploy-prod logs-dev logs-prod deploy-theslope-dev deploy-theslope-prod \
-        deploy-sender-dev logs-sender-dev typegen
+        run-sender-local deploy-sender-dev logs-sender-dev typegen
 
 # Deploy macro: $(1)=npm script, $(2)=environment name
 # Uses env vars if set (CI), otherwise calculates via version-info (local)
-define deploy_to
+# Version env for a deploy (baked into every worker's health report): CI-provided vars, else version-info. $(1)=command
+define with_version
 	@if [ -z "$$NUXT_PUBLIC_RELEASE_VERSION" ]; then eval $$(make version-info); fi && \
 	GITHUB_SHA=$${GITHUB_SHA:-$$COMMIT_SHA} \
 	NUXT_PUBLIC_RELEASE_VERSION=$${NUXT_PUBLIC_RELEASE_VERSION:-$$RELEASE_VERSION} \
 	NUXT_PUBLIC_RELEASE_DATE=$${NUXT_PUBLIC_RELEASE_DATE:-$$RELEASE_DATE} \
-	npm run $(1) && \
-	echo "Deployed version $${NUXT_PUBLIC_RELEASE_VERSION:-$$RELEASE_VERSION} to $(2)."
+	$(1)
+endef
+
+define deploy_to
+	$(call with_version,npm run $(1) && echo "Deployed version $${NUXT_PUBLIC_RELEASE_VERSION:-$$RELEASE_VERSION} to $(2).")
 endef
 
 # Nitro worker macros: $(1)=worker, $(2)=env — same artefact shape as the app (.output/server/index.mjs)
 define worker_deploy
-	@npx nitro build --dir workers/$(1) && npx wrangler deploy -c $(call worker_cfg,$(1)) --env $(2)
+	$(call with_version,npx nitro build --dir workers/$(1) && npx wrangler deploy -c $(call worker_cfg,$(1)) --env $(2) && echo "Deployed theslope-$(1) version $${NUXT_PUBLIC_RELEASE_VERSION:-$$RELEASE_VERSION} to $(2).")
 endef
 define worker_tail
 	@npx wrangler tail -c $(call worker_cfg,$(1)) --env $(2) --format pretty
@@ -265,6 +269,9 @@ deploy-theslope-dev: ## Deploy the app to dev with version info
 
 deploy-theslope-prod: ## Deploy the app to prod with version info
 	$(call deploy_to,deploy:prod,prod)
+
+run-sender-local: ## Run theslope-sender locally (miniflare, port 3100 from its wrangler.toml [dev] block)
+	@npx nitro build --dir workers/sender && npx wrangler dev -c $(call worker_cfg,sender)
 
 deploy-sender-dev: ## Build + deploy theslope-sender to dev
 	$(call worker_deploy,sender,dev)
@@ -287,21 +294,26 @@ typegen: ## Regenerate wrangler binding typings for every worker (root + workers
 	@npx wrangler types shared/types/worker-configuration.d.ts && $(foreach w,$(WORKERS),npx wrangler types workers/$(w)/worker-configuration.d.ts -c $(call worker_cfg,$(w)) &&) true
 
 # ============================================================================
-# SENDER — verify the delivery pipe end to end (first iteration: a real e-mail)
+# SENDER EVENTS — trigger a notification event on an environment (the cron twins' pattern, via theslope_call)
 # ============================================================================
-.PHONY: sender-verify-email-dev queues-info-dev
+.PHONY: theslope-sender-event-test-local theslope-sender-event-test-dev theslope-sender-event-test-prod queues-info-dev
 
-# $(1)=env file, $(2)=env. Reads from the env file (with_env, like heynabo-login-*): CLOUDFLARE_ACCOUNT_ID,
-# CLOUDFLARE_API_TOKEN (Queues Edit), QUEUE_ID_SENDER, SENDER_TEST_EMAIL, SENDER_REPLY_TO (optional); from is pinned per env in the script
-define sender_verify_email
-	$(call with_env,$(1),workers/sender/scripts/verify-email.sh $(2))
+# $(1)=env file, $(2)=URL. theslope_call logs in with HEY_NABO_* from the env file; SENDER_TEST_EMAIL is the recipient
+define theslope_sender_event_test
+	$(call theslope_call,$(1),$(2),-X POST "$(2)/api/admin/sender/event/test" -d "{\"to\":\"$$SENDER_TEST_EMAIL\"}")
 endef
 
-sender-verify-email-dev: ## Publish one TEST e-mail to the dev queue and watch the sender deliver it (real e-mail to SENDER_TEST_EMAIL)
-	$(call sender_verify_email,$(ENV_dev),dev)
+theslope-sender-event-test-local: ## Test event on localhost (lands in the miniflare queue sink)
+	$(call theslope_sender_event_test,$(ENV_local),$(URL_local))
 
-queues-info-dev: ## Backlog of the dev sender queue + its DLQ
-	@npx wrangler queues info theslope-sender-dev && npx wrangler queues info theslope-sender-dlq-dev
+theslope-sender-event-test-dev: ## Test event on dev → real mail from Skråningen dev <no-reply.dev@skraaningen.dk>
+	$(call theslope_sender_event_test,$(ENV_dev),$(URL_dev))
+
+theslope-sender-event-test-prod: ## Test event on prod → real mail from Skråningen <no-reply@skraaningen.dk>
+	$(call theslope_sender_event_test,$(ENV_prod),$(URL_prod))
+
+queues-info-dev: ## Backlog of the dev sender queue
+	@npx wrangler queues info theslope-sender-dev
 
 # ============================================================================
 # THESLOPE API

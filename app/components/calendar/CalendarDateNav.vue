@@ -30,7 +30,7 @@ withDefaults(defineProps<Props>(), {
   color: 'neutral'
 })
 
-const {ICONS, SIZES} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, COLOR} = useTheSlopeDesignSystem()
 
 const emit = defineEmits<{
   prev: []
@@ -53,7 +53,7 @@ const emit = defineEmits<{
       @click="emit('prev')"
     />
     <UButton
-      color="mocha"
+      :color="COLOR.mocha"
       :variant="open ? 'outline' : 'ghost'"
       :size="SIZES.md"
       :disabled="disabled"

@@ -205,7 +205,7 @@ const handleCancel = () => emit('cancel')
   >
     <template #default="{ errors }">
       <UCard
-      color="info"
+      :color="COLOR.info"
       variant="soft"
       :ui="{body: 'p-4 flex flex-col gap-4', footer: 'p-4'}"
     >

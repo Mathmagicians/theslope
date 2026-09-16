@@ -401,7 +401,7 @@ interface TableRow {
   original: CookingTeamDisplay
 }
 
-const {ICONS, SIZES, BUTTONS, ALERTS} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, TEXT, BG} = useTheSlopeDesignSystem()
 
 const columns = [
   {
@@ -482,8 +482,8 @@ const columns = [
           </div>
         </div>
 
-        <!-- EDIT MODE: Master-Detail Layout -->
-        <div v-else-if="formMode === FORM_MODES.EDIT" class="px-4 pb-4 space-y-6 md:space-y-4">
+        <!-- EDIT MODE: Master-Detail Layout (with no teams the table branch below owns the empty state) -->
+        <div v-else-if="formMode === FORM_MODES.EDIT && displayedTeams.length > 0" class="px-4 pb-4 space-y-6 md:space-y-4">
           <!-- MOBILE: Dropdown team selector (only visible on mobile) -->
           <div class="block md:hidden">
             <USelect
@@ -549,7 +549,7 @@ const columns = [
 
               <div
 v-else
-                   class="flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg text-gray-500">
+                   :class="['flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg', TEXT.gray[500]]">
                 <UIcon name="i-heroicons-arrow-left" class="text-4xl mb-2"/>
                 <p>Vælg et madhold for at redigere</p>
               </div>
@@ -557,7 +557,7 @@ v-else
           </div>
         </div>
 
-        <!-- VIEW MODE: Table with team assignments -->
+        <!-- VIEW MODE, and EDIT MODE with no teams: the table and its own #empty slot -->
         <div v-else class="px-4 pb-4 space-y-6">
           <UTable
               v-model:expanded="expanded"
@@ -599,7 +599,7 @@ v-else
 
             <!-- Expanded row content: Full team card (single expansion, selectedSeason guaranteed by showAdminTeams) -->
             <template #expanded>
-              <div v-if="expandedTeam?.id" class="p-4 bg-neutral-50 dark:bg-neutral-900">
+              <div v-if="expandedTeam?.id" :class="['p-4', BG.panel]">
                 <CookingTeamCard
                     :team-id="expandedTeam.id"
                     :team-number="displayedTeams.findIndex(t => t.id === expandedTeam!.id) + 1"
@@ -625,7 +625,7 @@ v-else
                       v-bind="BUTTONS.primaryAction"
                       name="create-new-team"
                       data-testid="create-new-team"
-                      color="secondary"
+                      :color="COLOR.secondary"
                       :icon="ICONS.plusCircle"
                       @click="onModeChange(FORM_MODES.CREATE)"
                   >
@@ -650,18 +650,19 @@ v-else
 
     <template #footer>
       <div v-if="formMode === FORM_MODES.CREATE" class="flex gap-2">
-        <UButton color="secondary" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
+        <UButton :color="COLOR.secondary" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
           {{ isActionLoading ? 'Arbejder...' : 'Opret madhold' }}
         </UButton>
-        <UButton color="neutral" variant="ghost" @click="handleCancel">
+        <UButton :color="COLOR.neutral" variant="ghost" @click="handleCancel">
           Annuller
         </UButton>
       </div>
 
-      <div v-else-if="formMode === FORM_MODES.EDIT" class="flex gap-2">
+      <!-- The empty state carries the only CTA when there is nothing to edit yet -->
+      <div v-else-if="formMode === FORM_MODES.EDIT && displayedTeams.length > 0" class="flex gap-2">
         <UButton
             data-testid="add-team-button"
-            color="secondary"
+            :color="COLOR.secondary"
             icon="i-heroicons-plus-circle"
             :loading="isActionLoading"
             :disabled="isActionLoading"
@@ -669,7 +670,7 @@ v-else
         >
           {{ isActionLoading ? 'Arbejder...' : 'Tilføj madhold' }}
         </UButton>
-        <UButton color="secondary" variant="ghost" @click="handleCancel">
+        <UButton :color="COLOR.secondary" variant="ghost" @click="handleCancel">
           Annuller
         </UButton>
       </div>

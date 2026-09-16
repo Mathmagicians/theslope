@@ -59,4 +59,13 @@ describe('admin/allergies/pdf (allergy poster)', () => {
         expect(findByTestId(wrapper, ALLERGY_TEST_IDS.notes).text()).toContain('Vigtige bemærkninger')
         expect(findAllByTestId(wrapper, ALLERGY_TEST_IDS.notesItem)).toHaveLength(3)
     })
+
+    // The poster renders the QR itself (no external image service), so it survives offline and prints
+    it('renders the QR code for the poster URL', async () => {
+        const wrapper = await mountPage()
+        const qr = findByTestId(wrapper, ALLERGY_TEST_IDS.qr)
+
+        expect(qr.exists()).toBe(true)
+        expect(qr.attributes('aria-label')).toContain('/admin/allergies/pdf')
+    })
 })

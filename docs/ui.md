@@ -63,7 +63,7 @@ const { COLOR, TYPOGRAPHY, LAYOUTS, BACKGROUNDS, COMPONENTS, SIZES } = useTheSlo
 ```
 
 > ⚠️ Not every component takes a raw `:color`. Families with a design-system token (`UAlert` → `ALERTS`,
-> `UCalendar` → `COMPONENTS.calendarGrid`) bind the token instead — see **ALERTS** below and ADR-019.
+> `UCalendar` → `COMPONENTS.calendarGrid`) bind the token instead — see **ALERTS** below and ADR-018.
 
 **2. For responsive sizes (NEW!):**
 ```vue
@@ -112,7 +112,48 @@ const { COLOR, TYPOGRAPHY, LAYOUTS, BACKGROUNDS, COMPONENTS, SIZES } = useTheSlo
 <UBadge :color="TICKET_TYPE_COLORS[ticketType]">{{ label }}</UBadge>
 ```
 
-### ALERTS — the one alert pattern (ADR-019)
+### Edit affordances — where a pencil is a glyph and where it is a label
+
+| Surface | Button | Shape |
+|---|---|---|
+| A row in a table or list | `v-bind="BUTTONS.edit"` + `aria-label="Rediger"` | square ghost pencil, no text |
+| A form card (today: the season card; detail panels keep the pencil) | `v-bind="BUTTONS.secondaryAction"` + `:color="COLOR.primary"` + `:icon="ICONS.edit"` | labelled "Rediger &lt;navn&gt;" |
+
+The label names the record, the way the household delete button names the household.
+
+```vue
+<!-- row action -->
+<UButton v-bind="BUTTONS.edit" aria-label="Rediger" data-testid="edit-allergy-type" @click="emit('edit')"/>
+
+<!-- a record's edit entry -->
+<UButton
+    v-bind="BUTTONS.secondaryAction"
+    :color="COLOR.primary"
+    :icon="ICONS.edit"
+    data-testid="edit-allergy-type"
+    @click="emit('edit')"
+>
+  Rediger {{ shortName }}
+</UButton>
+```
+
+Sites: the season card on `/admin/planning`, the "Detaljer" header of `AllergyDetailPanel`.
+
+### QrCode — a QR code with no image service
+
+`app/components/shared/QrCode.vue` encodes `value` with `uqr` through `encodeQrPath()` (`app/utils/qr.ts`) and draws one inline
+`<svg role="img">`: a white `<rect>` under one black `<path>` of 1x1 module rects, `data-testid="qr-code"`.
+
+| Prop | Value |
+|---|---|
+| `value` | what the code encodes; also the tail of `aria-label` |
+| `size` | rendered edge in pixels, default 160 |
+| `label` | what the code is for, read out before the value |
+
+The colours are literal `#000000`/`#ffffff`, so the code prints under `print-color-adjust: exact`. The page owns the caption and
+the surrounding layout. Site: `/admin/allergies/pdf`.
+
+### ALERTS — the one alert pattern (ADR-018)
 
 Every `<UAlert>` in `app/` binds a **kind**. The kind owns colour, variant, default icon and the `ui` that lets long
 Danish sentences, e-mail addresses and URLs wrap instead of clipping inside the alert's `overflow-hidden` root.
@@ -158,22 +199,54 @@ const alertUi = computed(() => ({
 `tests/component/architecture/designSystemUsage.unit.spec.ts` fails the build on a `<UAlert` without an `ALERTS`
 token or with a raw `color`/`variant`/`type` prop.
 
+### Colour comes from the design system
+
+`app/composables/useTheSlopeDesignSystem.ts` owns every colour value in the app. A `.vue` file references a token;
+`app/components/icons/Logo.vue` holds the brand SVG's hex values.
+
+| At the site | Take |
+|---|---|
+| A NuxtUI `color` prop (`color`, `ring-color`, `initial-color`, `loading-color`) | `:color="COLOR.<name>"`, or the domain token that already answers it (`TICKET_TYPE_COLORS`, `ORDER_STATE_COLORS`, `DINNER_STATE_BADGES`, `ALERTS`, `RESIDENCY_CONFIG`) |
+| Text volume, loudest to quietest | `TEXT.ink` → `TEXT.strong` → `TEXT.toned` → `TEXT.muted` → `TEXT.dimmed`, or a `TYPOGRAPHY` style that carries its own colour (`bodyTextMuted`, `sectionSubheading`) |
+| A recessed surface | `BG.panel` (an expanded row and the detail panel under it), `BG.panelNested` (a block that reads above a panel), `BG.panelHover` (a list row's hover face), `BG.inset` (a box inside a card) |
+| A surface or line with one owner | `BG.ticket`, `BG.budgetHead`, `BG.invoiceGround`, `BG.invoiceStat`, `TEXT.timestamp`, `TEXT.menuBody`, `LAYOUTS.panelDivider` |
+| A palette fill, ink, border or ring | `BG.<family>[shade]`, `TEXT.<family>[shade]`, `BORDER.<family>[shade]`, `RING.<family>[shade]` |
+| A surface a domain constant already describes | `COMPONENTS.economyTable.level<n>` (`header`, `statBox`, `icon`, `border`, `footer`, `tableHead`), `CALENDAR`/`CHEF_CALENDAR`/`DINNER_CALENDAR`/`PLANNING_CALENDAR`, `getRibbonClasses`, `getKitchenPanelClasses`, `getPantoneChip`, `BACKGROUNDS` |
+
+A token carries one rendered value, light rung and dark rung together. Two surfaces that draw different values take
+two tokens, named by where they are used.
+
+```vue
+<UBadge :color="COLOR.success" variant="subtle">Igangværende</UBadge>
+<span :class="[TYPOGRAPHY.finePrint, TEXT.muted]">{{ count }} beboere</span>
+<div :class="['p-4', BG.panel]"><!-- expanded row --></div>
+<div :class="`rounded-full ring-2 ${RING.amber[500]}`"><!-- chef portrait --></div>
+```
+
+`tests/component/architecture/designSystemUsage.unit.spec.ts` reads every `.vue` under `app/` and fails on a Tailwind
+palette shade (`bg-gray-50`, `dark:text-neutral-400`, `ring-red-700`, including `dark:`/`hover:`/`md:` forms) and on a
+literal colour in a component prop (`color="primary"`, `:color="'error'"`). It reports `file:line`.
+
 **Available exports:**
 - `COLOR` - NuxtUI component color prop values ('primary', 'mocha', 'success', etc.)
 - `SIZES` - Responsive size patterns for NuxtUI components (standard, small, large)
 - `TYPOGRAPHY` - Text styling patterns (heroTitle, footerText, finePrint, etc.)
-- `LAYOUTS` - Layout patterns (footer, sectionDivider, grids)
+- `LAYOUTS` - Layout patterns (footer, grids, `sectionDivider`, `panelDivider` for the rule above a detail panel's action row)
 - `BACKGROUNDS` - Background+text combinations (hero, card, landing sections)
 - `COMPONENTS` - Complete component styling (kitchen panels, stats bar)
 - `COMPONENTS.calendarGrid` - Shared `UCalendar` root config (`v-bind` it) - Monday-first, no padding weeks, adjacent-month days disabled and hidden
 - `ALERTS` - Shared `UAlert` config (`v-bind` a kind) + the `withActions` modifier; `AlertKind` types a kind prop
-- `BUTTONS` - Standardized button configs with responsive sizing (`v-bind` it): `edit` (square ghost row action - pair with `ICONS.trash` + an `aria-label` for a row delete), `cancel`, `save`, `primaryAction`, `secondaryAction`, `more`; the caller supplies `:color` and, for the action pair, `:icon`
+- `BUTTONS` - Standardized button configs with responsive sizing (`v-bind` it): `edit` (square ghost row action - pair with `ICONS.trash` + an `aria-label` for a row delete), `cancel`, `save`, `primaryAction`, `secondaryAction`, `more`; the caller supplies `:color` and, for the action pair, `:icon`. See **Edit affordances** for which of `edit` and `secondaryAction` a surface takes
 - `ICONS` - Icon names for `:icon`, `:trailing-icon` and `<UIcon :name>`, including `ICONS.holiday` (season holiday rows), `ICONS.printer` (the allergy poster) and `ICONS.calendar` (date inputs bind it as `:trailing-icon`)
-- `CALENDAR.picker` - Date picker selection presets: `cookingDay` (`COLOR.secondary`, the cooking-day pink) and `holiday` (the green `CALENDAR.holiday` ring on a transparent cell). Green marks holidays, so a cooking-day pick is pink. `calendarPickerProps(selection)` merges the preset with `COMPONENTS.calendarGrid`; the pickers bind it through their `selection` prop
+- `dayCircleClasses(...variants)` - THE calendar day circle (responsive size + `CALENDAR.day.shape` + the variants a surface adds). Every calendar day renders through it: `CalendarDisplay`, `TeamCalendarDisplay`, `DinnerCalendarDisplay`, `ChefCalendarDisplay` and both date pickers
+- `CALENDAR.picker` - What a picked day looks like: `holiday` is `CALENDAR.holiday` (the green ring the preview draws), `cookingDay` is `PLANNING_CALENDAR.day.generated` (the filled pink of a cooking day with a dinner). The pickers draw it in their `#day` slot; `calendarPickerProps()` adds `CALENDAR.pickerCell` to `COMPONENTS.calendarGrid` so the cell trigger keeps its own fill out of the way
 - `PLANNING_CALENDAR` - Season planning day palette (`day.generated` filled, `day.potential` outline)
-- `BG` - Background color scale (low-level, use BACKGROUNDS instead)
-- `TEXT` - Text color scale (low-level, use TYPOGRAPHY instead)
+- `BG` - Background scale per family, plus the surface-depth tokens `panel`, `panelNested`, `panelHover` and `inset`, and the single-owner surfaces `ticket`, `budgetHead`, `invoiceGround` and `invoiceStat`
+- `TEXT` - Text scale per family, plus the foreground-volume tokens `ink`, `strong`, `toned`, `muted` and `dimmed`, and the single-owner lines `timestamp` and `menuBody`
 - `BORDER` - Border color scale (low-level, use LAYOUTS instead)
+- `RING` - Ring color scale for `ring-*` utilities: selection outlines, marker circles, armed confirm states
+- `COMPONENTS.segmentedActive` - The selected item in a segmented control (`FormModeSelector`, `BookingViewSwitcher`)
+- `PANTONE_CHIPS` / `getPantoneChip(index)` - One tinted chip per brand family, cycled by index (landing ticker)
 - `getKitchenPanelClasses(mode)` - Helper for kitchen panels
 - `TICKET_TYPE_COLORS` - Ticket type to color mapping
 

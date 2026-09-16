@@ -53,7 +53,7 @@ const props = withDefaults(defineProps<Props>(), {
   adminBypass: false
 })
 
-const {TYPOGRAPHY, ICONS, SIZES, LAYOUTS, BUTTONS, ALERTS, getResidencyDisplay} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, ICONS, SIZES, LAYOUTS, BUTTONS, ALERTS, COLOR, BG, getResidencyDisplay} = useTheSlopeDesignSystem()
 
 // Store integration
 const householdsStore = useHouseholdsStore()
@@ -236,7 +236,7 @@ const getCalendarFeedForUser = async () => {
             label="Sæt fraflytningsdato"
             confirm-label="Klik igen for at bekræfte fraflytning"
             :icon="ICONS.moveOut"
-            initial-color="error"
+            :initial-color="COLOR.error"
             initial-variant="soft"
             :loading="isSaving"
             :disabled="!moveOutDate"
@@ -286,14 +286,14 @@ const getCalendarFeedForUser = async () => {
 
       <UButton
         :icon="ICONS.calendar"
-        color="primary"
+        :color="COLOR.primary"
         :size="SIZES.standard"
         @click="getCalendarFeedForUser"
       >
         Hent kalender (.ical)
       </UButton>
 
-      <div v-if="calendarFeed" class="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded">
+      <div v-if="calendarFeed" :class="['mt-4 p-4 rounded', BG.inset]">
         <p :class="TYPOGRAPHY.bodyTextMuted" class="mb-2">Kalenderfeed genereret:</p>
         <a
           href="/api/calendar/feed"

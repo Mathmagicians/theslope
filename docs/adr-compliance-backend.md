@@ -62,6 +62,7 @@
 | `/api/admin/season/[id]/assign-team-affinities.post.ts` | ✅ | ✅ | ✅ | ✅ | Returns AssignAffinitiesResponse                                                                 |
 | `/api/admin/season/import.post.ts` | ✅ | ✅ | ✅ | ✅ | CSV import with ADR-002/015 patterns, job tracking, uses teamService                             |
 | `/api/admin/season/[id]/scaffold-prebookings.post.ts` | ✅ | ✅ | ✅ | ✅ | scaffoldPrebookings() → ScaffoldResult (ADR-015 idempotent)                                      |
+| `server/utils/reconcileDinnerEvents.ts` | ✅ | N/A | ✅ | ✅ Unit | reconcileDinnerEventsForSeason() → ReconciliationResult; unit-covered in `tests/component/composables/useSeason.nuxt.spec.ts` incl. Heynabo deletion of dropped dinner dates (ADR-013 best-effort) |
 | **Admin - Allergy Types** | | | | | **✅ FULLY COMPLIANT**                                                                            |
 | `/api/admin/allergy-type/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchAllergyTypes() validates with AllergyTypDetailSchema                                        |
 | `/api/admin/allergy-type/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchAllergyType() validates with AllergyTypeDisplaySchema                                       |
@@ -80,6 +81,8 @@
 | `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | updateInhabitantPreferences() for non-admin users, triggers scaffoldPrebookings                  |
 | **Household - Bookings** | | | | | **✅ FULLY COMPLIANT (2026-01-13)** - ADR-016 unified booking through scaffold                   |
 | `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ✅ | ADR-016 unified booking endpoint, `requireHouseholdAccess()`, returns ScaffoldOrdersResponse     |
+| **Admin - Sender events** | | | | | **✅ FULLY COMPLIANT (2026-09-16)** - HTTP twins of notification triggers; message contract from `useNotificationValidation` (re-export of `workers/sender/contract.ts`) |
+| `/api/admin/sender/event/test.post.ts` | ✅ | ✅ | N/A | ✅ | `emitTestEmail()` → `emit()` (never throws; degraded when `SENDER` is unbound) → `SenderEmitResult`; admin via route table; `tests/e2e/api/parallel/admin/sender-event-test.e2e.spec.ts` |
 | **Household - Update** | | | | | **✅ FULLY COMPLIANT (2026-03-04)** - Self-service household update with admin bypass            |
 | `/api/household/[id]/update.post.ts` | ✅ | ✅ | ✅ | ✅ | updateHousehold() + `rescaffoldOnFieldChange()`, `requireHouseholdAccess()`, `?adminBypass=true`, returns HouseholdUpdateResponse |
 | **Teams (Public)** |

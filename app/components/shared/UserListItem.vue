@@ -50,7 +50,7 @@ interface Props {
   labelPlural?: string  // Plural form of label
 }
 
-const {ICONS} = useTheSlopeDesignSystem()
+const {ICONS, COLOR, TYPOGRAPHY, TEXT} = useTheSlopeDesignSystem()
 
 const props = withDefaults(defineProps<Props>(), {
   compact: false,
@@ -149,7 +149,7 @@ const {getUserUrl} = useHeynabo()
   <!-- GROUP MODE -->
   <div v-if="isGroup" class="flex flex-col gap-1">
     <!-- Description (shows above) -->
-    <span v-if="description && !compact" class="text-xs text-gray-500 dark:text-gray-400">{{ description }}</span>
+    <span v-if="description && !compact" :class="[TYPOGRAPHY.finePrint, TEXT.muted]">{{ description }}</span>
 
     <!-- Avatars + Names row -->
     <div class="flex items-center gap-2">
@@ -188,7 +188,7 @@ const {getUserUrl} = useHeynabo()
       </span>
 
       <!-- Count badge (when showNames=false) -->
-      <UBadge v-if="!showNames" size="sm" color="primary">
+      <UBadge v-if="!showNames" size="sm" :color="COLOR.primary">
         {{ count }}
       </UBadge>
     </div>

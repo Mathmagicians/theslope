@@ -1,6 +1,6 @@
 <script setup lang="ts">
 
-const {ALERTS} = useTheSlopeDesignSystem()
+const {ALERTS, COLOR} = useTheSlopeDesignSystem()
 
 // AUTHORIZATION - Admin role check for edit actions (ADR pattern from household page)
 const authStore = useAuthStore()
@@ -170,7 +170,7 @@ useHead({
           label: 'hidden md:inline',
           list: 'sticky top-12 md:top-16 z-20 rounded-none md:rounded-lg'
         }"
-        color="primary"
+        :color="COLOR.primary"
     >
       <template #content="{ item }">
         <ViewError

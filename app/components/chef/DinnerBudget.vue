@@ -41,7 +41,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system - TYPOGRAPHY for consistent text styling
-const { TYPOGRAPHY } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, BG } = useTheSlopeDesignSystem()
 
 // Kitchen config from app.config.ts
 const appConfig = useAppConfig()
@@ -155,7 +155,7 @@ const revenueByType = computed(() => groupByTicketType(activeOrders.value))
       <div class="overflow-x-auto">
         <table class="w-full">
           <thead>
-            <tr class="border-b bg-neutral-50 dark:bg-neutral-800">
+            <tr :class="['border-b', BG.budgetHead]">
               <th :class="`px-4 py-2 text-left ${TYPOGRAPHY.caption} opacity-60`">Billettype</th>
               <th :class="`px-4 py-2 text-right ${TYPOGRAPHY.caption} opacity-60`">Antal</th>
               <th :class="`px-4 py-2 text-right ${TYPOGRAPHY.caption} opacity-60`">Stk pris</th>

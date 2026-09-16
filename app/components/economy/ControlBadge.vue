@@ -20,17 +20,17 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 const {formatPrice} = useTicket()
-const {ICONS, SIZES} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, COLOR} = useTheSlopeDesignSystem()
 
 const isValid = computed(() => props.computed === props.expected)
 </script>
 
 <template>
-  <UBadge v-if="isValid" color="success" variant="subtle" :size="SIZES.small">
+  <UBadge v-if="isValid" :color="COLOR.success" variant="subtle" :size="SIZES.small">
     <UIcon :name="ICONS.robotHappy" :class="SIZES.smallBadgeIcon"/>
     <span v-if="showAmount">{{ formatPrice(computed) }} kr</span>
   </UBadge>
-  <UBadge v-else color="error" variant="subtle" :size="SIZES.small">
+  <UBadge v-else :color="COLOR.error" variant="subtle" :size="SIZES.small">
     <UIcon :name="ICONS.robotDead" :class="SIZES.smallBadgeIcon"/>
     <span v-if="showAmount">{{ formatPrice(computed) }} kr ≠ {{ formatPrice(expected) }} kr</span>
   </UBadge>

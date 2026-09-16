@@ -53,7 +53,7 @@ const copyCsvLink = async () => {
         @click.stop
     >
       <UButton
-          color="neutral"
+          :color="COLOR.neutral"
           variant="ghost"
           :icon="ICONS.externalLink"
           :size="SIZES.small"

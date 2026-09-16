@@ -3,7 +3,7 @@ import type {TicketPrice} from "~/composables/useTicketPriceValidation"
 import {getErrorMessage, mapZodErrorsToFormErrors} from "~/utils/validtation"
 
 // COMPONENT DEPENDENCIES
-const {BUTTONS, COLOR, ICONS} = useTheSlopeDesignSystem()
+const {BUTTONS, COLOR, ICONS, TYPOGRAPHY, TEXT} = useTheSlopeDesignSystem()
 const {TicketTypeSchema, TicketPricesArraySchema, createTicketPrice} = useTicketPriceValidation()
 const TICKET_TYPES = TicketTypeSchema.options
 const TicketType = TicketTypeSchema.enum
@@ -132,7 +132,7 @@ const onAddTicketPrice = () => {
               placeholder="F.eks. 'Fra 11 år og opefter'"/>
         </UFormField>
 
-        <p v-if="getErrorMessage(errors, ['_'])" class="text-red-500 text-sm">
+        <p v-if="getErrorMessage(errors, ['_'])" :class="[TEXT.red[500], TYPOGRAPHY.bodyTextSmall]">
           {{ getErrorMessage(errors, ['_']) }}
         </p>
       </div>
@@ -178,14 +178,14 @@ const onAddTicketPrice = () => {
                   class="mt-1"
                   @click="model.splice(index, 1)"/>
             </div>
-            <p v-if="ticket.description" class="text-sm text-gray-500 ml-1">
+            <p v-if="ticket.description" :class="[TYPOGRAPHY.bodyTextSmall, TEXT.gray[500], 'ml-1']">
               {{ ticket.description }}
             </p>
           </div>
         </UFormField>
       </li>
     </ul>
-    <h3 v-else class="text-md mx-auto text-gray-500">
+    <h3 v-else :class="['text-md mx-auto', TEXT.gray[500]]">
       Ingen billetpriser defineret endnu.
     </h3>
   </div>

@@ -126,7 +126,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { TYPOGRAPHY, SIZES, ICONS, ALERTS, BUTTONS, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS, BG, TEXT } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, SIZES, ICONS, ALERTS, BUTTONS, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS, BG, TEXT, BORDER, RING } = useTheSlopeDesignSystem()
 
 // Hero panel button colors (ChefMenuCard sits on hero background with food image)
 const HERO_BUTTON = COMPONENTS.heroPanel.light
@@ -378,7 +378,7 @@ const handleCardClick = () => {
 
       <!-- Menu title -->
       <div class="flex-1 min-w-0">
-        <div :class="['text-sm truncate', hasMenuTitle ? 'font-medium' : 'italic text-neutral-500']">
+        <div :class="['text-sm truncate', hasMenuTitle ? 'font-medium' : `italic ${TEXT.neutral[500]}`]">
           {{ menuTitle }}
         </div>
       </div>
@@ -415,7 +415,7 @@ const handleCardClick = () => {
     v-else
     :name="`chef-menu-card-${dinnerEvent.id}`"
     :class="LAYOUTS.cardResponsive"
-    :ui="{ root: 'ring-amber-500 relative overflow-hidden', header: `p-0 ${BACKGROUNDS.hero.mocha}` }"
+    :ui="{ root: `${RING.amber[500]} relative overflow-hidden`, header: `p-0 ${BACKGROUNDS.hero.mocha}` }"
   >
     <!-- Cancelled ribbon -->
     <div
@@ -450,7 +450,7 @@ const handleCardClick = () => {
           <template #default>
             <div class="flex flex-col md:flex-row md:items-center gap-2">
               <!-- Menu title -->
-              <div :class="['text-lg font-medium md:flex-1', hasMenuTitle ? '' : 'italic text-neutral-500']" data-testid="chef-menu-title">
+              <div :class="['text-lg font-medium md:flex-1', hasMenuTitle ? '' : `italic ${TEXT.neutral[500]}`]" data-testid="chef-menu-title">
                 {{ menuTitle }}
               </div>
 
@@ -552,7 +552,7 @@ const handleCardClick = () => {
           </template>
         </UCollapsible>
 
-        <div v-if="dinnerEvent.menuDescription" class="text-sm text-neutral-600 dark:text-neutral-400 mt-1" data-testid="chef-menu-description">
+        <div v-if="dinnerEvent.menuDescription" :class="[TYPOGRAPHY.bodyTextSmall, TEXT.menuBody, 'mt-1']" data-testid="chef-menu-description">
           {{ dinnerEvent.menuDescription }}
         </div>
 
@@ -560,13 +560,13 @@ const handleCardClick = () => {
         <div class="pt-4 mt-4 flex items-center gap-3 flex-wrap">
           <div
             class="flex items-center gap-3 cursor-pointer"
-            :class="{ [`${BG.mocha[950]} border-2 border-dashed border-amber-600 rounded-lg p-3 -skew-x-1 w-fit`]: !dinnerEvent.chef }"
+            :class="{ [`${BG.mocha[950]} border-2 border-dashed ${BORDER.amber[600]} rounded-lg p-3 -skew-x-1 w-fit`]: !dinnerEvent.chef }"
             :data-testid="dinnerEvent.chef ? 'chef-display' : 'chef-wanted'"
             @click="roleAssignmentRef?.open()"
           >
             <!-- Portrait frame around avatar -->
             <div class="relative">
-              <div class="rounded-full ring-2 md:ring-4 ring-amber-500">
+              <div :class="`rounded-full ring-2 md:ring-4 ${RING.amber[500]}`">
                 <UserListItem
                   v-if="dinnerEvent.chef"
                   :inhabitants="dinnerEvent.chef"
@@ -577,7 +577,7 @@ const handleCardClick = () => {
                 <UAvatar v-else :icon="ICONS.help" :size="SIZES.standard" :ui="{ icon: TEXT.mocha[50] }" :class="BG.mocha[800]" />
               </div>
               <!-- Chef hat on top -->
-              <UIcon :name="ICONS.chef" class="absolute -top-5 md:-top-7 left-1/2 -translate-x-1/2 text-amber-500 text-xl md:text-3xl -rotate-9 drop-shadow-md" />
+              <UIcon :name="ICONS.chef" :class="`absolute -top-5 md:-top-7 left-1/2 -translate-x-1/2 ${TEXT.mocha[500]} text-xl md:text-3xl -rotate-9 drop-shadow-md`" />
             </div>
             <!-- Name or WANTED -->
             <div class="flex flex-col">

@@ -121,3 +121,15 @@ matrix and the design-system rule → 5. compliance rows (`docs/adr-compliance-*
 
 - Anything that needs the user's signoff — a mockup, a decision, a package brief — is presented in the conversation itself,
   in full (ASCII mockup pasted, options listed). The doc is the record, never the place the user is sent to look.
+
+## Token sweeps are value-preserving
+
+- Moving colours, sizes or spacing into design-system tokens must not change one rendered class. Two sites with different
+  values (`dark:bg-gray-800` vs `dark:bg-gray-900`, `/50` alpha, a different grey step) get two tokens, named by where they
+  are used; unifying them is a separate design decision the user takes from a visual proposal. Prove it: compare the set of
+  classes each template renders before and after the sweep.
+
+## ADR numbers are taken at write time
+
+- A plan or proposal refers to a future ADR by title only ("the settings ADR"). The number is the next free one in
+  `docs/adr.md` at the moment the ADR is written; numbers grow by one per decision and are never reserved or hardcoded.

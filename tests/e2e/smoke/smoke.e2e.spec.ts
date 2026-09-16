@@ -5,6 +5,7 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useHeynaboValidation} from '~/composables/useHeynaboValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
+import {HealthReportSchema} from '~~/workers/common/health'
 
 const {validatedBrowserContext, headers} = testHelpers
 const {DailyMaintenanceResultSchema} = useBookingValidation()
@@ -29,22 +30,6 @@ let activeSeason: Season
 test.beforeAll(async ({browser}) => {
     const context = await validatedBrowserContext(browser)
 
-    // Verify deployment version matches expected (CI/CD sets EXPECTED_VERSION)
-    const healthResponse = await context.request.get('/api/public/health')
-    expect(healthResponse.status()).toBe(200)
-    const health = await healthResponse.json()
-    expect(health.status).toBe('ok')
-
-    const expectedVersion = process.env.EXPECTED_VERSION
-    if (expectedVersion) {
-        // CI/CD: verify we're testing the correct deployment
-        expect(health.version).toBe(expectedVersion)
-        console.info(`✅ Version verified: ${health.version}`)
-    } else {
-        // Local: just log the version
-        console.info(`ℹ️ Testing version: ${health.version}`)
-    }
-
     // Env-aware: Creates singleton locally, fetches existing on dev/prod
     // See SeasonFactory.createActiveSeason for SHOULD_NOT_MUTATE handling
     activeSeason = await SeasonFactory.createActiveSeason(context)
@@ -52,6 +37,30 @@ test.beforeAll(async ({browser}) => {
     expect(activeSeason).toBeDefined()
     expect(activeSeason.id).toBeGreaterThan(0)
     expect(activeSeason.isActive).toBe(true)
+})
+
+/** Every worker answers the same health report (workers/common/health.ts) and must run the expected version. */
+const WORKER_HEALTH: Array<[string, string]> = [
+    ['theslope', '/api/public/health'],
+    ['theslope-sender', '/sender/health']
+]
+
+test.describe('@smoke Worker health', () => {
+    for (const [worker, path] of WORKER_HEALTH) {
+        test(`@smoke ${worker} reports health and the expected version`, async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const response = await context.request.get(path)
+            expect(response.status(), `${worker} ${path}`).toBe(200)
+
+            const health = HealthReportSchema.parse(await response.json())
+            const expectedVersion = process.env.EXPECTED_VERSION
+            if (expectedVersion) {
+                // CI/CD: verify every worker runs the deployment under test
+                expect(health.version, `${worker} version`).toBe(expectedVersion)
+            }
+            console.info(`ℹ️ ${worker} version: ${health.version}`)
+        })
+    }
 })
 
 test.describe('@smoke API Health Checks', () => {

@@ -46,7 +46,7 @@ const emit = defineEmits<{
 
 const {formatPrice, ticketTypeConfig} = useTicket()
 const {formatOrder} = useOrder()
-const {TYPOGRAPHY, ICONS, SIZES, COMPONENTS} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, ICONS, SIZES, COMPONENTS, COLOR} = useTheSlopeDesignSystem()
 const {OrderStateSchema} = useBookingValidation()
 const OrderState = OrderStateSchema.enum
 
@@ -88,7 +88,7 @@ const formatted = computed(() => {
       <div>
         <UButton
             v-if="orderId"
-            color="neutral"
+            :color="COLOR.neutral"
             variant="ghost"
             :icon="isHistoryExpanded ? ICONS.chevronUp : ICONS.clipboard"
             square

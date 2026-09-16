@@ -108,9 +108,15 @@ test.describe('AdminPlanning on the live season - Serial UI', () => {
         await page.getByTestId('submit-season').click()
         expect((await savePromise).status()).toBe(200)
 
-        // THEN: the toast reports the reconciliation and the re-scaffolding
-        await expect(page.getByText(/1 fjernet/)).toBeVisible({timeout: 30_000})
-        await expect(page.getByText(/Forudbestillinger er opdateret/)).toBeVisible()
+        // THEN: the toast reports the reconciliation and the re-scaffolding.
+        // Nuxt UI renders the toast text in both the live region and the visible toast,
+        // so count the matches instead of asserting on a single element
+        const toastMatches = await pollUntil(
+            () => page.getByText(/1 fjernet. Forudbestillinger er opdateret/).count(),
+            (count) => count > 0,
+            10
+        )
+        expect(toastMatches).toBeGreaterThan(0)
 
         // AND: the dinner on the holiday date is gone, the next one keeps its bookings
         const ordersOnHoliday = await OrderFactory.getAllOrdersForEvents(context, holidayEvent.id)

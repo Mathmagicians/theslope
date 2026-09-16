@@ -38,7 +38,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS} = useTheSlopeDesignSystem()
+const {COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, TEXT} = useTheSlopeDesignSystem()
 
 // Deleting the type cascades to every Allergy row referencing it (ADR-005)
 const affectedInhabitantCount = computed(() => props.allergyType?.inhabitants?.length ?? 0)
@@ -107,7 +107,7 @@ const affectedInhabitantCount = computed(() => props.allergyType?.inhabitants?.l
 
   <!-- Selected allergy with its actions -->
   <div v-else-if="allergyType" class="w-full max-w-2xl space-y-4">
-    <div class="flex items-center justify-between gap-2">
+    <div class="flex flex-wrap items-center justify-between gap-2">
       <h3 class="text-lg font-semibold">Detaljer</h3>
       <div v-if="canEdit" class="flex items-center gap-2">
         <UButton
@@ -129,7 +129,7 @@ const affectedInhabitantCount = computed(() => props.allergyType?.inhabitants?.l
   </div>
 
   <!-- No selection -->
-  <div v-else class="flex flex-col items-center justify-center py-12 text-gray-500">
+  <div v-else :class="['flex flex-col items-center justify-center py-12', TEXT.gray[500]]">
     <UIcon :name="ICONS.select" class="w-8 h-8 mb-2"/>
     <p class="text-sm">Vælg en allergi for at se detaljer</p>
   </div>

@@ -85,7 +85,7 @@ watch(() => props.consensus, () => {
 })
 
 // Design system
-const { WEEKDAY, ORIENTATIONS, ICONS, SIZES, TYPOGRAPHY } = useTheSlopeDesignSystem()
+const { WEEKDAY, ORIENTATIONS, ICONS, SIZES, TYPOGRAPHY, TEXT } = useTheSlopeDesignSystem()
 
 // Responsive size: use prop if provided, otherwise use responsive default
 const responsiveSize = computed(() => props.size ?? SIZES.small)
@@ -254,7 +254,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
         :name="name"
         :data-testid="name"
       >
-        <div :class="`${iconSizeClass} flex items-center justify-center text-xs font-medium text-gray-900 dark:text-white`">
+        <div :class="`${iconSizeClass} flex items-center justify-center ${TYPOGRAPHY.caption} ${TEXT.ink}`">
           {{ WEEKDAY.getLabel(modelValue as WeekDay) }}
         </div>
       </UBadge>

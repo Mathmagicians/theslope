@@ -44,6 +44,7 @@ const emit = defineEmits<{
 }>()
 
 const {getSeasonStatus, sortSeasonsByActivePriority} = useSeason()
+const {COLOR} = useTheSlopeDesignSystem()
 
 // Inject responsive breakpoint
 const isMd = inject<Ref<boolean>>('isMd')
@@ -106,7 +107,7 @@ const selectedSeasonId = computed({
       v-model="selectedSeasonId"
       arrow
       data-testid="season-selector"
-      color="secondary"
+      :color="COLOR.secondary"
       :loading="props.loading"
       :placeholder="seasons?.length > 0 ? 'Vælg sæson' : '💤 Ingen sæsoner'"
       :items="sortedSeasonsWithIcons"

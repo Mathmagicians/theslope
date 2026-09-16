@@ -22,7 +22,7 @@ type NavItem = NavigationMenuItem & { active: boolean }
 const route = useRoute()
 const {loggedIn, greeting, avatar} = storeToRefs(useAuthStore())
 const {myHousehold} = storeToRefs(useHouseholdsStore())
-const {ICONS, NAVIGATION} = useTheSlopeDesignSystem()
+const {ICONS, NAVIGATION, BACKGROUNDS} = useTheSlopeDesignSystem()
 
 // Check if route is active
 const isActive = (to: string): boolean => route.path.startsWith(to)
@@ -84,7 +84,7 @@ const visibleDrawerLinks = computed((): NavItem[] => {
   <div class="sticky top-0 md:top-4 z-30 flex items-center justify-center">
     <UHeader
         :ui="{
-          root: 'bg-blue-100 md:bg-blue-100/80 dark:bg-blue-900 md:dark:bg-blue-900/80 shadow-sm md:rounded-lg',
+          root: `${BACKGROUNDS.header} shadow-sm md:rounded-lg`,
           toggle: 'md:hidden',
           left: 'md:flex-1',
           center: 'hidden md:flex',

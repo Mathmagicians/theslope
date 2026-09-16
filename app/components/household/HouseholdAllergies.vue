@@ -34,7 +34,7 @@ import type {AllergyDisplay, AllergyTypeDisplay} from '~/composables/useAllergyV
 import type {TicketTypeConfig} from '~/composables/useTicket'
 
 // Design system
-const {SIZES} = useTheSlopeDesignSystem()
+const {SIZES, COLOR} = useTheSlopeDesignSystem()
 
 // Ticket type config for display (label, color, icon); active season prices carry the age limits
 const {getTicketTypeConfig} = useTicket()
@@ -232,7 +232,7 @@ const columns = computed(() => [
           <!-- Expand/Edit column (pencil icon) -->
           <template #expand-cell="{ row }">
             <UButton
-                color="neutral"
+                :color="COLOR.neutral"
                 variant="ghost"
                 :icon="row.getIsExpanded() ? 'i-heroicons-chevron-down' : 'i-heroicons-pencil'"
                 square

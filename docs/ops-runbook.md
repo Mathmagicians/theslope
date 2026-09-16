@@ -19,7 +19,7 @@ Operational procedures for TheSlope infrastructure on Cloudflare.
 | Worker | What | Config | Deploy |
 |--------|------|--------|--------|
 | `theslope-{env}` | The Nuxt app (HTTP + cron tasks) | `wrangler.toml` (root) | `make deploy-theslope-{env}` |
-| `theslope-sender-{env}` | E-mail delivery: consumes the `theslope-sender-{env}` queue, sends via Cloudflare Email Service. Nitro app, no Vue. | `workers/sender/wrangler.toml` | `make deploy-sender-{env}` |
+| `theslope-sender-{env}` | E-mail delivery: consumes the `theslope-sender-{env}` queue, sends via Cloudflare Email Service. Nitro app, no Vue. Health: `<host>/sender/health` (route `<host>/sender/*`) | `workers/sender/wrangler.toml` | `make deploy-sender-{env}` |
 
 `make deploy-dev` / `make deploy-prod` (what CI runs) deploy **all** workers — the sender first, the app last. See [Sender](#sender-e-mail-delivery-worker).
 
@@ -27,15 +27,15 @@ Operational procedures for TheSlope infrastructure on Cloudflare.
 
 ## Sender (e-mail delivery worker)
 
-Design: `docs/features/feature-proposal-notifications.md`. The app puts a complete message (`to`, `from`, `replyTo`, subject, body, attachments) on a Cloudflare Queue; `theslope-sender` consumes the queue and delivers through the `send_email` binding. Retries 3× (30/60/120 s), then the message lands in the dead-letter queue (kept 14 days).
+Design: `docs/features/feature-proposal-notifications.md`. The app puts a complete message (`to`, `from`, `replyTo`, subject, body, attachments) on a Cloudflare Queue; `theslope-sender` consumes the queue and delivers through the `send_email` binding. Retries 3× (30/60/120 s); the last attempt logs an error and acknowledges the message.
 
 ### Resources per environment
 
-| Environment | Worker | Queue | Dead-letter queue | `send_email` binding |
-|-------------|--------|-------|-------------------|------------------------|
-| local (miniflare) | `theslope-sender-local` | `theslope-sender-local` | `theslope-sender-dlq-local` | sender `no-reply.dev@skraaningen.dk` |
-| dev | `theslope-sender-dev` | `theslope-sender-dev` | `theslope-sender-dlq-dev` | sender `no-reply.dev@skraaningen.dk`; destinations limited to the dev test mailbox (dev shares the local D1 data) |
-| prod | `theslope-sender-prod` | `theslope-sender-prod` | `theslope-sender-dlq-prod` | sender `no-reply@skraaningen.dk` |
+| Environment | Worker | Queue | `send_email` binding |
+|-------------|--------|-------|------------------------|
+| local (miniflare) | `theslope-sender-local` | `theslope-sender-dev` (simulated) | sender `no-reply.dev@skraaningen.dk` |
+| dev | `theslope-sender-dev` | `theslope-sender-dev` | sender `no-reply.dev@skraaningen.dk`; destinations limited to the dev test mailbox (dev shares the local D1 data) |
+| prod | `theslope-sender-prod` | `theslope-sender-prod` | sender `no-reply@skraaningen.dk` |
 
 Cloudflare enforces the limits on the binding (`allowed_sender_addresses` / `allowed_destination_addresses` in `workers/sender/wrangler.toml`). A message outside them fails with an `E_*` error, is logged with a masked recipient and acknowledged.
 
@@ -59,29 +59,24 @@ npx wrangler email routing addresses list                 # expect: verified
 npx wrangler email sending send --from no-reply.dev@skraaningen.dk --to <dev test mailbox> \
     --subject "Skråningen: Email Service test" --text "Afsendt direkte via wrangler."
 
-# 4. Queue + dead-letter queue — once per environment (dev shown; prod: same with -prod). Do this before the first deploy.
+# 4. Queue — once per environment (dev shown; prod: same with -prod). Do this before the first deploy.
 npx wrangler queues create theslope-sender-dev
-npx wrangler queues create theslope-sender-dlq-dev
-npx wrangler queues update theslope-sender-dlq-dev --message-retention-period-secs 1209600   # 14 days
-npx wrangler queues info theslope-sender-dev              # note the queue id (needed below)
+npx wrangler queues info theslope-sender-dev              # expect: Queue ID + 0 consumers until the first deploy
 ```
 
 ### Local operator file `.env.dev` / `.env.prod` (gitignored — read by `make` via `with_env`)
 
 | Key | Value |
 |-----|-------|
-| `CLOUDFLARE_ACCOUNT_ID` | account id — `npx wrangler whoami` |
-| `CLOUDFLARE_API_TOKEN` | an operator token with **Account · Queues · Edit** (publishes the test message) |
-| `QUEUE_ID_SENDER` | id from `wrangler queues info theslope-sender-<env>` |
+| `HEY_NABO_USERNAME` / `HEY_NABO_PASSWORD` | the admin login `theslope_call` uses (already present for the other `theslope-*` targets) |
 | `SENDER_TEST_EMAIL` | where the test mail is delivered — the dev test mailbox (must be on the confirmed destination list, step 2 above) |
-| `SENDER_REPLY_TO` | reply-to header of the test mail (optional) |
 
 ### Addresses
 
 | Address | Value | Where it lives |
 |---------|-------|----------------|
-| `from` | dev: `no-reply.dev@skraaningen.dk` · prod: `no-reply@skraaningen.dk` — the address tells you which environment sent the mail. Bounces go to Cloudflare on `cf-bounce.skraaningen.dk` | pinned per environment by `allowed_sender_addresses` (`workers/sender/wrangler.toml`); the app reads `NUXT_NOTIFICATIONS_FROM` from the root `wrangler.toml` `[env.*.vars]`; `verify-email.sh` derives it from the env argument |
-| `replyTo` | the mailbox that receives replies when a resident answers a mail — one per environment. A mail header only | Worker secret `NUXT_NOTIFICATIONS_REPLY_TO` on the app (`theslope-dev` / `theslope-prod`), read at runtime as `runtimeConfig.notifications.replyTo` (same mechanism as `NUXT_SESSION_PASSWORD`); the test mail takes it from `SENDER_REPLY_TO` in `.env.<env>` |
+| `from` | dev: `Skråningen dev <no-reply.dev@skraaningen.dk>` · prod: `Skråningen <no-reply@skraaningen.dk>` — the sender line tells you which environment sent the mail. Bounces go to Cloudflare on `cf-bounce.skraaningen.dk` | address pinned per environment by `allowed_sender_addresses` (`workers/sender/wrangler.toml`); the app reads address and display name from `NUXT_NOTIFICATIONS_FROM` / `NUXT_NOTIFICATIONS_FROM_NAME` in the root `wrangler.toml` `[env.*.vars]` (`NUXT_NOTIFICATIONS_ENVIRONMENT` names the environment) |
+| `replyTo` | the mailbox that receives replies when a resident answers a mail — one per environment. A mail header only | Worker secret `NUXT_NOTIFICATIONS_REPLY_TO` on the app (`theslope-dev` / `theslope-prod`), read at runtime as `runtimeConfig.notifications.replyTo` (same mechanism as `NUXT_SESSION_PASSWORD`); the test event uses it when set |
 
 ### Secrets (admin, wrangler)
 
@@ -99,25 +94,21 @@ The app's other runtime secrets (`NUXT_SESSION_PASSWORD`, `HEY_NABO_USERNAME`, `
 ### Deploy and verify
 
 ```bash
-make deploy-sender-dev          # nitro build + wrangler deploy (also part of make deploy-dev)
-make sender-verify-email-dev    # publishes one TEST e-mail to the queue, waits for "[EMAIL] delivered <id>" in the
-                                # sender's logs, checks backlog 0 — then look for the id in the test mailbox
-make logs-sender-dev            # tail the sender
-make queues-info-dev            # backlog of queue + dead-letter queue
+make deploy-dev                 # both workers: sender first, then the app (the CI target)
+make theslope-sender-event-test-dev      # admin login on dev.skraaningen.dk → POST /api/admin/sender/event/test {to: SENDER_TEST_EMAIL}
+                                # → prints {queued, dedupeKey}; the mail arrives in the test mailbox with that id in its text
+make logs-sender-dev            # tail the sender: 📮 > SENDER > [EMAIL] delivered {dedupeKey, …}
+make queues-info-dev            # backlog of the queue
+make run-sender-local           # run the sender on this machine (miniflare, port 3100) → http://localhost:3100/sender/health
 ```
 
-Same for prod with `-prod`. A mail from dev is recognisable twice over: sender `no-reply.dev@skraaningen.dk` and the signature `— Skråningen · dev.skraaningen.dk`; prod sends from `no-reply@skraaningen.dk` and signs `www.skraaningen.dk`.
+Sender events are the HTTP twins of notification triggers, one function each under `server/utils/sender/events/` used by the cron path and by `POST /api/admin/sender/event/<event>`; `make sender-event-<event>-<env>` calls them. On `local` the queue is a miniflare sink.
 
-### Dead-letter queue triage
+Same for prod with `-prod`. A mail from dev is recognisable twice over: sender `Skråningen dev <no-reply.dev@skraaningen.dk>` and the signature `— Skråningen · dev.skraaningen.dk`; prod sends as `Skråningen <no-reply@skraaningen.dk>` and signs `www.skraaningen.dk`.
 
-Messages reach `theslope-sender-dlq-<env>` after 3 retryable failures (provider throttling or outage — `E_RATE_LIMIT_EXCEEDED`, `E_DAILY_LIMIT_EXCEEDED`, `E_INTERNAL_SERVER_ERROR`, network). **The DLQ holds full message bodies (recipient addresses, text) for 14 days.**
+### Failures
 
-```bash
-npx wrangler queues info theslope-sender-dlq-<env>       # backlog
-npx wrangler queues purge theslope-sender-dlq-<env>      # drop the messages once handled
-```
-
-Every log line carries the message's `dedupeKey` (`<kind>:<channel>:<recipient>:<subject>`), so one grep connects the app's producer log, the sender's log and the DLQ body.
+A retryable failure (`E_RATE_LIMIT_EXCEEDED`, `E_DAILY_LIMIT_EXCEEDED`, `E_INTERNAL_SERVER_ERROR`, network) is retried 3× at 30/60/120 s; the last attempt logs `[EMAIL] failed after 4 attempts` with the masked recipient and acknowledges the message. Every other failure is logged and acknowledged on the first attempt. `make logs-sender-<env>` shows them; every line carries the message's `dedupeKey` (`<kind>:<channel>:<masked recipient>:<message id>`), which connects the app's producer log and the sender's log.
 
 ---
 
@@ -343,8 +334,9 @@ make deploy-theslope-dev     # The app alone (dev / prod)
 make deploy-sender-dev       # The sender alone (dev / prod)
 make logs-dev                # Tail the app (dev / prod)
 make logs-sender-dev         # Tail the sender (dev / prod)
-make sender-verify-email-dev # Send + verify one test e-mail through the queue (dev / prod)
-make queues-info-dev         # Sender queue + DLQ backlog (dev / prod)
+make theslope-sender-event-test-dev   # Test event: one real mail through the deployed pipe (local / dev / prod)
+make run-sender-local        # Run the sender locally (miniflare, port 3100)
+make queues-info-dev         # Sender queue backlog (dev / prod)
 make typegen                 # Regenerate wrangler binding typings for every worker
 make version                 # Output current version
 make version-info            # Output all version env vars
@@ -353,8 +345,11 @@ make version-info            # Output all version env vars
 ### Verify Deployment
 
 ```bash
-curl -s https://www.skraaningen.dk/api/public/health | jq '.version'
+curl -s https://www.skraaningen.dk/api/public/health | jq '.version'   # the app
+curl -s https://www.skraaningen.dk/sender/health | jq '.version'       # the sender — same report, same version
 ```
+
+The smoke job (`npm run test:e2e:smoke`, CI after every deploy) checks both against `EXPECTED_VERSION`.
 
 ### Rollback Process
 

@@ -14,7 +14,7 @@ const {households, isHouseholdsLoading, isHouseholdsErrored, householdsError} = 
 
 householdsStore.initHouseholdsStore()
 
-const {COMPONENTS, SIZES, BUTTONS, ICONS, getResidencyDisplay} = useTheSlopeDesignSystem()
+const {COMPONENTS, SIZES, BUTTONS, ICONS, TYPOGRAPHY, TEXT, getResidencyDisplay} = useTheSlopeDesignSystem()
 
 // Row expansion for edit panel
 const expanded = ref<Record<string, boolean>>({})
@@ -234,9 +234,9 @@ class="w-full px-0"
 
       <template #empty>
         <div class="flex flex-col items-center justify-center py-6 gap-3">
-          <UIcon name="i-heroicons-home" class="w-8 h-8 text-gray-400"/>
-          <p v-if="searchQuery" class="text-sm text-gray-500">Ingen husstande matcher søgningen "{{ searchQuery }}"</p>
-          <p v-else class="text-sm text-gray-500">💤 Ingen er flyttet ind i appen endnu. Vent lige, lad os se om der kommer nogen snart ...</p>
+          <UIcon name="i-heroicons-home" :class="['w-8 h-8', TEXT.gray[400]]"/>
+          <p v-if="searchQuery" :class="[TYPOGRAPHY.bodyTextSmall, TEXT.gray[500]]">Ingen husstande matcher søgningen "{{ searchQuery }}"</p>
+          <p v-else :class="[TYPOGRAPHY.bodyTextSmall, TEXT.gray[500]]">💤 Ingen er flyttet ind i appen endnu. Vent lige, lad os se om der kommer nogen snart ...</p>
         </div>
       </template>
     </UTable>

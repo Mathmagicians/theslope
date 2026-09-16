@@ -191,7 +191,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
                 label="Admin røre alligevel"
                 confirm-label="Klik igen for at låse op"
                 :icon="ICONS.authorize"
-                initial-color="info"
+                :initial-color="COLOR.info"
                 initial-variant="subtle"
                 @confirm="adminOverrideActive = true"
               />
@@ -225,7 +225,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
           :items="tabItems"
           class="mt-1 mb-1 md:mt-0 md:mb-4"
           :ui="{ label: 'hidden md:inline' }"
-          color="primary"
+          :color="COLOR.primary"
       >
         <template #content="{ item }">
           <component :is="asyncComponents[item.value]" :household="selectedHousehold" :can-edit="canEdit" :admin-bypass="adminOverrideActive"/>

@@ -174,7 +174,31 @@ export const BG = {
     blue: {
         100: 'bg-blue-100',     // Header
         500: 'bg-blue-500'
-    }
+    },
+    red: {
+        100: 'bg-red-100'       // Error overlay
+    },
+
+    // Surface depth - how deep a surface sits under the card it belongs to. One token carries
+    // exactly one rendered value (light and dark), so a surface that has always drawn its own
+    // pair keeps its own token rather than being folded into a neighbour.
+    /** Recessed: an expanded table row and the detail panel under it */
+    panel: 'bg-neutral-50 dark:bg-neutral-900',
+    /** One step up: a block that has to read above a panel (the economy tree's nested breakdown) */
+    panelNested: 'bg-neutral-100 dark:bg-neutral-800',
+    /** The hover face of a list row that lifts under the pointer. A variant prefix cannot be
+     *  composed onto a token, so the pair lives here rather than at the site */
+    panelHover: 'hover:bg-gray-50 dark:hover:bg-gray-800',
+    /** An inset box inside a card: a member list, a selected row, the calendar-feed box */
+    inset: 'bg-gray-50 dark:bg-gray-800',
+    /** The face of a dinner ticket - the inset box, half-lit in the dark */
+    ticket: 'bg-gray-50 dark:bg-gray-800/50',
+    /** The ground the public invoice page sits on */
+    invoiceGround: 'bg-neutral-50 dark:bg-neutral-950',
+    /** A stat box on the public invoice page */
+    invoiceStat: 'bg-neutral-100 dark:bg-neutral-900',
+    /** The head row of the chef's budget table */
+    budgetHead: 'bg-neutral-50 dark:bg-neutral-800'
 } as const
 
 /**
@@ -190,6 +214,7 @@ export const BG = {
 export const TEXT = {
     mocha: {
         50: 'text-amber-50',
+        500: 'text-amber-500',    // Chef hat accent
         900: 'text-amber-900',
         950: 'text-amber-950'
     },
@@ -218,14 +243,44 @@ export const TEXT = {
         800: 'text-ocean-800'     // Chef calendar - future cookings
     },
     gray: {
+        400: 'text-gray-400',
+        500: 'text-gray-500',
         600: 'text-gray-600',
         700: 'text-gray-700',
         900: 'text-gray-900'
     },
+    neutral: {
+        400: 'text-neutral-400',  // Economy tree - the "no value" dash
+        500: 'text-neutral-500'   // Household edit panel labels, chef menu placeholder
+    },
     blue: {
+        500: 'text-blue-500',     // External link
         900: 'text-blue-900'
     },
-    white: 'text-white'
+    red: {
+        500: 'text-red-500',      // Inline validation error
+        700: 'text-red-700',
+        900: 'text-red-900'
+    },
+    white: 'text-white',
+
+    // Foreground volume - how loud a line of text reads against the surface it sits on.
+    // One token carries exactly one rendered value; a line that has always had its own
+    // light/dark pair keeps its own token.
+    /** Full contrast: a form field heading, a dinner-mode glyph */
+    ink: 'text-gray-900 dark:text-white',
+    /** A section sub-heading and the prose that belongs to it */
+    strong: 'text-gray-700 dark:text-gray-300',
+    /** Secondary body text: descriptions, sub-lines under a title */
+    toned: 'text-gray-600 dark:text-gray-400',
+    /** Supporting text: counts, empty-state prose */
+    muted: 'text-gray-500 dark:text-gray-400',
+    /** Recedes: a decorative glyph, a column separator, a stack trace */
+    dimmed: 'text-gray-400 dark:text-gray-500',
+    /** The "last changed" line on an allergy row - holds its weight in the dark */
+    timestamp: 'text-gray-500 dark:text-gray-500',
+    /** The menu description on a chef's menu card */
+    menuBody: 'text-neutral-600 dark:text-neutral-400'
 } as const
 
 /**
@@ -234,6 +289,7 @@ export const TEXT = {
 export const BORDER = {
     gray: {
         200: 'border-gray-200',
+        300: 'border-gray-300',    // Poster - QR frame
         500: 'border-gray-500',
         600: 'border-gray-600',
         700: 'border-gray-700',
@@ -253,7 +309,30 @@ export const BORDER = {
         500: 'border-red-500'      // Deadline - critical
     },
     amber: {
-        500: 'border-amber-500'    // Deadline - warning
+        500: 'border-amber-500',   // Deadline - warning
+        600: 'border-amber-600'    // Chef menu - missing chef frame
+    }
+} as const
+
+/**
+ * RING - Ring color scale
+ *
+ * Same shape as BORDER, for the `ring-*` utilities: selection outlines, marker circles
+ * and armed confirm states.
+ */
+export const RING = {
+    red: {
+        500: 'ring-red-500',       // Deadline - critical, DangerButton armed
+        700: 'ring-red-700'        // Allergen marker circle
+    },
+    green: {
+        500: 'ring-green-500'      // Holiday marker, DangerButton undo
+    },
+    amber: {
+        500: 'ring-amber-500'      // Deadline - warning, chef portrait
+    },
+    orange: {
+        200: 'ring-orange-200'     // Selected item in a segmented control
     }
 } as const
 
@@ -271,7 +350,7 @@ export const TYPOGRAPHY = {
     heroTitle: 'text-2xl md:text-4xl font-extrabold uppercase',
     sectionTitle: 'text-xl md:text-3xl font-bold uppercase',
     cardTitle: 'text-lg font-semibold',
-    sectionSubheading: 'text-sm font-semibold text-gray-700 dark:text-gray-300',
+    sectionSubheading: `text-sm font-semibold ${TEXT.strong}`,
     sectionSubheadingLight: 'text-md font-semibold text-amber-50 dark:text-amber-100',
     sectionIconLight: 'text-2xl text-amber-50 dark:text-amber-100',
 
@@ -279,8 +358,8 @@ export const TYPOGRAPHY = {
     bodyText: 'text-base',
     bodyTextSmall: 'text-sm',
     bodyTextMedium: 'text-sm font-medium',
-    bodyTextMuted: 'text-sm text-gray-600 dark:text-gray-400',
-    bodyTextPlaceholder: 'text-sm text-gray-500',
+    bodyTextMuted: `text-sm ${TEXT.toned}`,
+    bodyTextPlaceholder: `text-sm ${TEXT.gray[500]}`,
 
     // Small text
     finePrint: 'text-xs',
@@ -346,7 +425,9 @@ export const LAYOUTS = {
     sectionContentCompact: 'px-4 py-3 space-y-3',                    // Compact variant
 
     // Dividers
-    sectionDivider: 'border-t border-gray-200 dark:border-gray-800'
+    sectionDivider: 'border-t border-gray-200 dark:border-gray-800',
+    /** The rule above a detail panel's action row */
+    panelDivider: 'border-t border-neutral-200 dark:border-neutral-700'
 } as const
 
 /**
@@ -373,14 +454,36 @@ export const BACKGROUNDS = {
         orange: `${BG.orange[500]} ${TEXT.orange[100]}`   // Accent
     },
 
-    // Navigation
-    header: `${BG.blue[100]} ${TEXT.blue[900]}`,
+    // The app shell behind every page
+    appShell: `${BG.mocha[500]} dark:bg-amber-800`,
+
+    // Navigation - the sticky header bar. Translucent from md up, where it floats as a rounded card
+    header: `${BG.blue[100]} md:bg-blue-100/80 dark:bg-blue-900 md:dark:bg-blue-900/80`,
 
     // Cards
     card: 'bg-white',
     cardSubtle: `${BG.gray[50]}`,
     cardDark: `${BG.gray[900]} ${TEXT.white}`
 } as const
+
+/**
+ * PANTONE_CHIPS - One tinted chip per brand family, cycled by index
+ *
+ * The landing ticker walks this list so consecutive words carry the whole palette.
+ * Border, fill and ink come from the same family, so a chip reads as one colour.
+ */
+export const PANTONE_CHIPS = [
+    'border-amber-900 bg-amber-100 text-amber-900',     // Mocha Mousse (PRIMARY)
+    'border-pink-800 bg-pink-100 text-pink-800',        // Pink Lemonade
+    'border-orange-600 bg-orange-100 text-orange-800',  // Mandarin Orange
+    'border-party-800 bg-party-50 text-party-900',      // Party Punch
+    'border-ocean-600 bg-ocean-50 text-ocean-900',      // Ocean/Sky
+    'border-peach-700 bg-peach-50 text-peach-950',      // Peach Cobbler
+    'border-violet-800 bg-violet-100 text-violet-900'   // Bonbon
+] as const
+
+/** The Pantone chip for a position in a list, wrapping at the end of the palette */
+export const getPantoneChip = (index: number): string => PANTONE_CHIPS[index % PANTONE_CHIPS.length]!
 
 /**
  * COMPONENTS - Complete component styling
@@ -400,6 +503,10 @@ export const COMPONENTS = {
 
     // Responsive row icon sizing (matches birthday cake pattern)
     rowIconClass: 'size-4 md:size-6',
+
+    // The selected item in a segmented control (form mode, booking view) - a ring, not a fill,
+    // so the item's own colour still reads through
+    segmentedActive: `ring-2 border-2 ${RING.orange[200]} shadow-md`,
 
     // Power mode - family-wide bulk editing pattern
     powerMode: {
@@ -469,14 +576,17 @@ export const COMPONENTS = {
             icon: 'text-xl text-ocean-600 dark:text-ocean-400',
             statBox: 'bg-white dark:bg-neutral-900 rounded-lg',
             border: 'border-ocean-50 dark:border-ocean-800',
-            footer: 'bg-ocean-50 dark:bg-ocean-800'
+            footer: 'bg-ocean-50 dark:bg-ocean-800',
+            // The head of a table nested under this level - one step stronger than the header
+            tableHead: 'bg-ocean-100 dark:bg-ocean-900'
         },
         level2: {
             header: 'bg-peach-100 dark:bg-peach-900',
             icon: 'text-xl text-peach-600 dark:text-peach-400',
             statBox: 'bg-white dark:bg-neutral-900 rounded-lg',
             border: 'border-peach-100 dark:border-peach-900',
-            footer: 'bg-peach-100 dark:bg-peach-900'
+            footer: 'bg-peach-100 dark:bg-peach-900',
+            tableHead: 'bg-peach-100 dark:bg-peach-900'
         },
         level3: {
             header: 'bg-neutral-50 dark:bg-neutral-900',
@@ -960,7 +1070,7 @@ const alertUi = (extra: Partial<AlertUi> = {}): AlertUi => ({
 })
 
 /**
- * createResponsiveAlerts - THE alert pattern (ADR-019)
+ * createResponsiveAlerts - THE alert pattern (ADR-018)
  *
  * `v-bind` a kind and pass only domain props: `:title`, `:description`, an `:icon` override,
  * `:avatar`, `data-testid`, a margin `class`. Colour and variant belong to the kind, never to
@@ -1234,7 +1344,7 @@ export const DINNER_STATE_BADGES = {
  * matches the cooking pattern is an outline.
  */
 // The holiday marker every calendar draws: an empty circle with a green ring
-const HOLIDAY_RING = 'ring-2 ring-green-500'
+const HOLIDAY_RING = `ring-2 ${RING.green[500]}`
 
 export const PLANNING_CALENDAR = {
     day: {
@@ -1265,8 +1375,8 @@ export const CALENDAR = {
         dot: 'w-3 h-3 rounded-full animate-pulse'
     },
     deadline: {
-        critical: 'ring-2 ring-red-500',
-        warning: 'ring-2 ring-amber-500',
+        critical: `ring-2 ${RING.red[500]}`,
+        warning: `ring-2 ${RING.amber[500]}`,
         onTrack: ''
     },
     // The holiday marker every calendar draws: an empty circle with a green ring
@@ -1567,6 +1677,8 @@ export const useTheSlopeDesignSystem = () => {
         getLockStatusConfig,
         ORDER_STATE_COLORS,
         getOrderStateColor,
+        PANTONE_CHIPS,
+        getPantoneChip,
         ICONS,
         IMG,
 
@@ -1597,13 +1709,14 @@ export const useTheSlopeDesignSystem = () => {
         // Responsive buttons (standardized button configs with sizing)
         BUTTONS: createResponsiveButtons(isMd),
 
-        // Responsive alerts (ADR-019: v-bind a kind, never raw color/variant)
+        // Responsive alerts (ADR-018: v-bind a kind, never raw color/variant)
         ALERTS: createResponsiveAlerts(isMd),
 
         // Low-level builders (only if you need custom combinations)
         BG,
         TEXT,
         BORDER,
+        RING,
 
         // Helpers
         getKitchenPanelClasses,

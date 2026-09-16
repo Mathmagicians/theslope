@@ -24,7 +24,7 @@
     "ts:workers": "npx nitro prepare --dir workers/sender && npx vue-tsc --noEmit -p workers/sender/tsconfig.json",
     "pre:all": "npm run lint && npm run ts && npm run ts:server && npm run ts:node && npm run ts:workers",
     "test:unit": "npx vitest --run",
-    "test:workers": "vitest --run --project workers",
+    "test:workers": "vitest --run --project sender",
     "test:e2e": "npx playwright test --reporter=html,line",
     "test:e2e:api": "npx playwright test --project=chromium-api --project=chromium-api-serial --reporter=html,line",
     "test:e2e:api:seq": "npx playwright test --project=chromium-api-serial --no-deps --reporter=html,line",

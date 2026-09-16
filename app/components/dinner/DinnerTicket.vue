@@ -66,7 +66,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const isGuest = computed(() => props.guestCount !== undefined)
 
-const {TYPOGRAPHY, ICONS, SIZES, COLOR, getOrderStateColor} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, ICONS, SIZES, COLOR, TEXT, BG, getOrderStateColor} = useTheSlopeDesignSystem()
 const {formatPrice} = useTicket()
 
 // Accent color from design system
@@ -101,12 +101,11 @@ const badgeText = computed(() => {
 
 <template>
   <div
-    class="relative overflow-hidden rounded-lg bg-gray-50 dark:bg-gray-800/50 p-2 md:p-3 w-full"
-    :class="accentClass"
+    :class="[`relative overflow-hidden rounded-lg ${BG.ticket} p-2 md:p-3 w-full`, accentClass]"
   >
     <!-- 🎟️ Watermark - sized to look like the ticket border -->
     <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-      <UIcon name="i-heroicons-ticket-solid" class="w-full h-[140%] opacity-[0.12] text-gray-400 dark:text-gray-500" />
+      <UIcon name="i-heroicons-ticket-solid" :class="`w-full h-[140%] opacity-[0.12] ${TEXT.dimmed}`" />
     </div>
 
     <!-- Ticket content -->
@@ -169,7 +168,7 @@ const badgeText = computed(() => {
       <!-- ROW 2 (optional): [Provenance] [Allergy names] -->
       <div v-if="hasExtraRow" class="flex items-center gap-2 pl-7 md:pl-8">
         <!-- Provenance household -->
-        <span v-if="provenanceHousehold" :class="[TYPOGRAPHY.finePrint, 'text-gray-500']">
+        <span v-if="provenanceHousehold" :class="[TYPOGRAPHY.finePrint, TEXT.gray[500]]">
           fra {{ provenanceHousehold }}
         </span>
 

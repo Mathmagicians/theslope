@@ -19,6 +19,8 @@ export const ALLERGY_TEST_IDS = {
     sort: 'sort-by-count',
     // AllergenMultiSelector
     summaryBar: 'compare-summary-bar',
+    // Shared QrCode on the poster
+    qr: 'qr-code',
     // AllergyNotes - catalog footer and poster
     notes: 'allergy-notes',
     notesItem: 'allergy-notes-item',

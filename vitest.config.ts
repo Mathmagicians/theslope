@@ -20,10 +20,13 @@ export default defineConfig({
             },
             {
                 test: {
-                    // Standalone Nitro workers under workers/ — plain node, no Nuxt runtime
-                    name: 'workers',
-                    include: ['workers/**/*.unit.spec.ts'],
+                    // Standalone Nitro worker (workers/sender) — plain node, no Nuxt runtime; ~ = the worker's root, as Nitro resolves it
+                    name: 'sender',
+                    include: ['workers/sender/**/*.unit.spec.ts'],
                     environment: 'node',
+                    alias: {
+                        '~/': fileURLToPath(new URL('./workers/sender/', import.meta.url)),
+                    },
                 },
             },
             await defineVitestProject({

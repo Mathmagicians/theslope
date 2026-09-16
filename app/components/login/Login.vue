@@ -7,7 +7,7 @@ const {loggedIn, greeting} = storeToRefs(authStore)
 const {signIn} = authStore
 const {LoginSchema} = useCoreValidation()
 const {handleApiError} = useApiHandler()
-const {TYPOGRAPHY, LAYOUTS, BG, ICONS, ALERTS} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, LAYOUTS, BG, ICONS, ALERTS, COLOR} = useTheSlopeDesignSystem()
 
 const householdShortName = computed(() => authStore.user?.Inhabitant?.household?.shortName || null)
 const householdPbsId = computed(() => authStore.user?.Inhabitant?.household?.pbsId || null)
@@ -69,7 +69,7 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
               <UFormField label="Adgangskode" name="password">
                 <UInput
                   v-model="state.password"
-                  color="secondary"
+                  :color="COLOR.secondary"
                   type="password"
                   placeholder="Indtast din Heynabo adgangskode"
                 />
@@ -79,7 +79,7 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
             <template #footer>
               <UButton
                 type="submit"
-                color="secondary"
+                :color="COLOR.secondary"
                 :loading="isLoading"
                 block
               >

@@ -1,18 +1,13 @@
 /**
  * Health Check Endpoint
  *
- * Returns system information for monitoring and smoke tests.
+ * Returns system information for monitoring and smoke tests — the report every worker answers with
+ * (workers/common/health.ts; the sender serves it at /sender/health).
  * Public endpoint - no authentication required.
  */
+import {buildHealthReport} from '~~/workers/common/health'
+
 export default defineEventHandler(async () => {
     const config = useRuntimeConfig()
-
-    return {
-        status: 'ok',
-        timestamp: new Date().toISOString(),
-        version: config.public.RELEASE_VERSION || config.public.COMMIT_ID || 'development',
-        releaseDate: config.public.RELEASE_DATE || null,
-        sha: config.public.COMMIT_ID || null,
-        isRelease: !!config.public.RELEASE_VERSION
-    }
+    return buildHealthReport(config.public)
 })

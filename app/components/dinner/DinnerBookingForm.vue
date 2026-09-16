@@ -823,7 +823,7 @@ const actionPreviewItems = computed(() => {
           <!-- Order history toggle + display (in body, near the content it reveals) -->
           <div v-if="row.original.order?.id">
             <UButton
-                color="neutral"
+                :color="COLOR.neutral"
                 variant="ghost"
                 :icon="historyOrderId === row.original.order.id ? ICONS.chevronUp : ICONS.clipboard"
                 square

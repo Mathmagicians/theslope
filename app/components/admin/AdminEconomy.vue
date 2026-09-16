@@ -27,7 +27,7 @@ const props = withDefaults(defineProps<{
 
 const {formatPrice} = useTicket()
 const {groupByCostEntry, groupByHouseholdEntry, calculateCurrentBillingPeriod, controlInvoices, formatTicketCounts} = useBilling()
-const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG} = useTheSlopeDesignSystem()
 const {OrderDisplaySchema} = useBookingValidation()
 
 // Plan store for future dinners
@@ -477,7 +477,7 @@ const dinnerBreakdownStats = computed(() => {
           <template #expand-cell="{ row }">
             <UButton
                 v-if="row.original.items.length > 0"
-                color="neutral"
+                :color="COLOR.neutral"
                 variant="ghost"
                 :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                 square
@@ -490,7 +490,7 @@ const dinnerBreakdownStats = computed(() => {
           <template #totalAmount-cell="{ row }">{{ formatPrice(row.original.totalAmount) }} kr</template>
           <template #expanded="{ row }">
             <!-- Group orders by household within this dinner -->
-            <div class="p-4 bg-neutral-50 dark:bg-neutral-900">
+            <div :class="['p-4', BG.panel]">
               <CostEntry
                   :entry="row.original"
                   :level="2"
@@ -527,7 +527,7 @@ const dinnerBreakdownStats = computed(() => {
                           data-testid="admin-correction-household-select"
                       />
                       <UButton
-                          color="neutral"
+                          :color="COLOR.neutral"
                           variant="ghost"
                           :icon="ICONS.xMark"
                           :size="SIZES.small"
@@ -575,7 +575,7 @@ const dinnerBreakdownStats = computed(() => {
                     <template #expand-cell="{ row: householdRow }">
                       <UButton
                           v-if="householdRow.original.items.length > 0"
-                          color="neutral"
+                          :color="COLOR.neutral"
                           variant="ghost"
                           :icon="householdRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                           square
@@ -589,7 +589,7 @@ const dinnerBreakdownStats = computed(() => {
 
                     <!-- Expanded household: individual order line items -->
                     <template #expanded="{ row: householdRow }">
-                      <div class="p-2 bg-neutral-100 dark:bg-neutral-800 space-y-1">
+                      <div :class="['p-2 space-y-1', BG.panelNested]">
                         <CostLine
                             v-for="order in householdRow.original.items"
                             :key="order.id"
@@ -642,7 +642,7 @@ const dinnerBreakdownStats = computed(() => {
         >
           <template #expand-cell="{ row }">
             <UButton
-                color="neutral"
+                :color="COLOR.neutral"
                 variant="ghost"
                 :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                 square
@@ -652,11 +652,11 @@ const dinnerBreakdownStats = computed(() => {
             />
           </template>
           <template #status-cell="{ row }">
-            <UBadge v-if="row.original.isVirtual" color="success" variant="subtle" :size="SIZES.small">
+            <UBadge v-if="row.original.isVirtual" :color="COLOR.success" variant="subtle" :size="SIZES.small">
               <UIcon :name="ICONS.ellipsisCircle" :class="SIZES.smallBadgeIcon"/>
               Igangværende
             </UBadge>
-            <UBadge v-else color="neutral" variant="subtle" :size="SIZES.small">
+            <UBadge v-else :color="COLOR.neutral" variant="subtle" :size="SIZES.small">
               <UIcon :name="ICONS.check" :class="SIZES.smallBadgeIcon"/>
               Afsluttet
             </UBadge>
@@ -667,7 +667,7 @@ const dinnerBreakdownStats = computed(() => {
           <template #totalAmount-cell="{ row }">{{ formatPrice(row.original.totalAmount) }} kr</template>
           <template #control-cell="{ row }">
             <!-- Virtual: ongoing, no control -->
-            <span v-if="row.original.isVirtual" class="text-neutral-400">—</span>
+            <span v-if="row.original.isVirtual" :class="TEXT.neutral[400]">—</span>
             <!-- Closed: show control badge (pre-computed from list endpoint) -->
             <ControlBadge
                 v-else
@@ -680,12 +680,12 @@ const dinnerBreakdownStats = computed(() => {
                 v-if="!row.original.isVirtual && row.original.shareToken"
                 :share-token="row.original.shareToken"
             />
-            <span v-else class="text-neutral-400">—</span>
+            <span v-else :class="TEXT.neutral[400]">—</span>
           </template>
 
           <!-- Expanded: Virtual row shows current period transactions, closed rows show invoices -->
           <template #expanded="{ row }">
-            <div class="p-4 bg-neutral-50 dark:bg-neutral-900 space-y-4">
+            <div :class="['p-4 space-y-4', BG.panel]">
               <!-- VIRTUAL ROW: Same structure as closed - header + household table -->
               <template v-if="row.original.isVirtual">
                 <CostEntry
@@ -706,7 +706,7 @@ const dinnerBreakdownStats = computed(() => {
                       <template #expand-cell="{ row: householdRow }">
                         <UButton
                             v-if="householdRow.original.items.length > 0"
-                            color="neutral"
+                            :color="COLOR.neutral"
                             variant="ghost"
                             :icon="householdRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                             square
@@ -719,12 +719,12 @@ const dinnerBreakdownStats = computed(() => {
                       <template #address-cell="{ row: householdRow }">{{ householdRow.original.address }}</template>
                       <template #totalAmount-cell="{ row: householdRow }">{{ formatPrice(householdRow.original.totalAmount) }} kr</template>
                       <template #control-cell>
-                        <span class="text-neutral-400">—</span>
+                        <span :class="TEXT.neutral[400]">—</span>
                       </template>
 
                       <!-- Expanded household: transactions list -->
                       <template #expanded="{ row: householdRow }">
-                        <div class="p-2 bg-neutral-100 dark:bg-neutral-800 space-y-1">
+                        <div :class="['p-2 space-y-1', BG.panelNested]">
                           <CostLine
                               v-for="tx in householdRow.original.items"
                               :key="tx.id"
@@ -771,7 +771,7 @@ const dinnerBreakdownStats = computed(() => {
                     >
                     <template #expand-cell="{ row: invoiceRow }">
                       <UButton
-                          color="neutral"
+                          :color="COLOR.neutral"
                           variant="ghost"
                           :icon="invoiceRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                           square
@@ -792,7 +792,7 @@ const dinnerBreakdownStats = computed(() => {
 
                     <!-- Expanded invoice: transactions table grouped by dinner -->
                     <template #expanded="{ row: invoiceRow }">
-                      <div class="p-2 bg-neutral-100 dark:bg-neutral-800">
+                      <div :class="['p-2', BG.panelNested]">
                         <!-- Level 2: Dinner breakdown with stat box header (Peach palette) -->
                         <div v-if="invoiceTransactionsGrouped.length > 0 || isInvoiceTransactionsLoading" class="rounded-lg overflow-hidden border border-default">
                           <!-- Header row: title + stat boxes -->
@@ -835,14 +835,14 @@ const dinnerBreakdownStats = computed(() => {
                                 {accessorKey: 'ticketCounts', header: 'Kuverter'},
                                 {accessorKey: 'totalAmount', header: 'Beløb'}
                               ]"
-                              :ui="{...COMPONENTS.table.ui, thead: 'bg-peach-100 dark:bg-peach-900'}"
+                              :ui="{...COMPONENTS.table.ui, thead: COMPONENTS.economyTable.level2.tableHead}"
                               :loading="isInvoiceTransactionsLoading"
                               row-key="dinnerEvent.id"
                           >
                           <template #expand-cell="{ row: dinnerRow }">
                             <UButton
                                 v-if="dinnerRow.original.items.length > 0"
-                                color="neutral"
+                                :color="COLOR.neutral"
                                 variant="ghost"
                                 :icon="dinnerRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                                 square
@@ -856,7 +856,7 @@ const dinnerBreakdownStats = computed(() => {
 
                           <!-- Expanded dinner: individual transactions with history -->
                           <template #expanded="{ row: dinnerRow }">
-                            <div class="p-2 bg-neutral-50 dark:bg-neutral-900 space-y-1">
+                            <div :class="['p-2 space-y-1', BG.panel]">
                               <CostLine
                                   v-for="tx in dinnerRow.original.items"
                                   :key="tx.id"

@@ -1,5 +1,5 @@
 // D1Database is a global from shared/types/worker-configuration.d.ts (`make typegen`, generated from wrangler.toml).
-// The `export {}` keeps this file a module so the blocks below augment h3 / nitropack instead of redeclaring them.
+// The `export {}` keeps this file a module, which makes the blocks below augment h3 / nitropack.
 export {}
 
 declare module 'h3' {
@@ -7,6 +7,7 @@ declare module 'h3' {
     cloudflare: {
       env: {
         DB: D1Database
+        SENDER: Queue
       }
     }
   }
@@ -17,6 +18,7 @@ declare module 'nitropack' {
     cloudflare?: {
       env?: {
         DB?: D1Database
+        SENDER?: Queue
       }
     }
   }

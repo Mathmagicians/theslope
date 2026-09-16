@@ -364,7 +364,7 @@ it('does not emit save when validation fails', async () => {
 
 `tests/component/architecture/*.unit.spec.ts` read the `.vue` sources and fail on a *pattern*, not on a render. They are
 how a design-system sweep stays swept: once every `<UAlert>` binds an `ALERTS` kind, the test is what stops the 57th one
-from being written with a raw `:color` (ADR-019). `designSystemUsage.unit.spec.ts` guards four rules — every `<UAlert`
+from being written with a raw `:color` (ADR-018). `designSystemUsage.unit.spec.ts` guards four rules — every `<UAlert`
 binds `ALERTS.`, none passes a raw `color`/`variant`/`type`, every `<UCalendar` binds `COMPONENTS.calendarGrid`, and no
 template uses the dead Nuxt UI v2 slot name `#empty-state`. Violations are reported as `file:line`, so a failure names
 the sites to fix.

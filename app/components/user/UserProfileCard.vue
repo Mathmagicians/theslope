@@ -60,7 +60,7 @@ const props = withDefaults(defineProps<Props>(), {
   showRoleManager: false
 })
 
-const {TYPOGRAPHY, SIZES, ICONS, IMG, COMPONENTS, ALERTS} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, SIZES, ICONS, IMG, COMPONENTS, ALERTS, COLOR} = useTheSlopeDesignSystem()
 const {roleLabels} = useUserRolesUi()
 const {getUserUrl} = useHeynabo()
 const authStore = useAuthStore()
@@ -254,7 +254,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
         <UButton
           v-if="isViewMode && canEditRoles"
           :icon="ICONS.edit"
-          color="neutral"
+          :color="COLOR.neutral"
           variant="ghost"
           size="sm"
           data-testid="edit-roles-btn"
@@ -267,7 +267,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
         <div v-if="isEditMode" class="flex gap-2">
           <UButton
             :icon="ICONS.check"
-            color="primary"
+            :color="COLOR.primary"
             variant="soft"
             size="sm"
             :loading="isSavingRoles"
@@ -278,7 +278,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
           </UButton>
           <UButton
             :icon="ICONS.xMark"
-            color="neutral"
+            :color="COLOR.neutral"
             variant="ghost"
             size="sm"
             :disabled="isSavingRoles"

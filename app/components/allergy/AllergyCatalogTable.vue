@@ -37,7 +37,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {COLOR, COMPONENTS, ICONS} = useTheSlopeDesignSystem()
+const {COLOR, COMPONENTS, ICONS, RING} = useTheSlopeDesignSystem()
 
 // Business logic
 const {hasNewAllergyInhabitants} = useAllergy()
@@ -119,7 +119,7 @@ const clickableCellClass = computed(() => props.readonly ? '' : COMPONENTS.table
           ]"
           @click="handleRowClick(row.original.id!)"
       >
-        <div class="flex items-center justify-center w-8 h-8 rounded-full ring-1 ring-red-700 shrink-0">
+        <div :class="['flex items-center justify-center w-8 h-8 rounded-full ring-1 shrink-0', RING.red[700]]">
           <UIcon
               v-if="row.original.icon?.startsWith('i-')"
               :name="row.original.icon"

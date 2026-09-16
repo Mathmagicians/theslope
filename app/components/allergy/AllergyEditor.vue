@@ -158,7 +158,7 @@ const handleCommentSave = (typeId: number) => {
           >
             <template #trailing>
               <UButton
-                color="success"
+                :color="COLOR.success"
                 variant="ghost"
                 :icon="ICONS.check"
                 :size="SIZES.small"
@@ -170,7 +170,7 @@ const handleCommentSave = (typeId: number) => {
             </template>
           </UInput>
           <UButton
-            color="error"
+            :color="COLOR.error"
             variant="soft"
             icon="i-heroicons-trash"
             size="sm"

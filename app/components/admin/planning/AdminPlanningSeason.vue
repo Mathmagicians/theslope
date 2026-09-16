@@ -31,7 +31,7 @@ import type {WeekDayMap} from "~/types/dateTypes"
 
 //COMPONENT DEPENDENCIES
 const {SeasonSchema, createSeasonName} = useSeason()
-const {BUTTONS, COLOR, ICONS, LAYOUTS} = useTheSlopeDesignSystem()
+const {BUTTONS, COLOR, ICONS, LAYOUTS, TYPOGRAPHY, TEXT} = useTheSlopeDesignSystem()
 const appConfig = useAppConfig()
 const {theslope} = appConfig  //some default values
 
@@ -92,7 +92,7 @@ const onSubmitSeason = () => {
             <div>
               <h2 class="text-lg font-semibold">{{ formTitle }}</h2>
               <h3 class="text-sm">Vi følger folkeskolernes feriekalender i
-                <a :href="theslope.holidayUrl" class="text-blue-500 underline" target="_blank">Lejre Kommune.</a>
+                <a :href="theslope.holidayUrl" :class="[TEXT.blue[500], 'underline']" target="_blank">Lejre Kommune.</a>
               </h3>
             </div>
             <UButton
@@ -130,7 +130,7 @@ const onSubmitSeason = () => {
                 <!-- Pick holidays -->
                 <USeparator/>
                 <div class="space-y-2">
-                  <h4 class="text-sm font-medium text-gray-900 dark:text-white">
+                  <h4 :class="[TYPOGRAPHY.bodyTextMedium, TEXT.ink]">
                     Hvornår holder fællesspisning fri?
                   </h4>
                   <CalendarDateRangeListPicker
@@ -174,7 +174,7 @@ label="Hvor mange dage i træk laver madholdene mad?"
 
                 <!-- Ticket prices -->
                 <div class="space-y-2">
-                  <h4 class="text-sm font-medium text-gray-900 dark:text-white">
+                  <h4 :class="[TYPOGRAPHY.bodyTextMedium, TEXT.ink]">
                     Billetpriser
                   </h4>
                   <TicketPriceListEditor
@@ -199,7 +199,7 @@ class="mx-auto"
 
         <template #footer>
           <div v-if="!isViewMode" class="space-y-4">
-            <div v-if="errors.length > 0" class="text-red-500 text-sm space-y-1">
+            <div v-if="errors.length > 0" :class="[TEXT.red[500], TYPOGRAPHY.bodyTextSmall, 'space-y-1']">
               <div class="font-semibold">Formen indeholder fejl, som skal rettes:</div>
               <ul class="list-disc list-inside">
                 <li v-for="error in errors" :key="error.name">

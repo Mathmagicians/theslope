@@ -38,7 +38,7 @@ import type { TeamRole, CookingTeamAssignment } from '~/composables/useCookingTe
 import { ROLE_LABELS, ROLE_ICONS } from '~/composables/useCookingTeamValidation'
 
 // Design system
-const { SIZES, ICONS, ALERTS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { SIZES, ICONS, ALERTS, COLOR, TYPOGRAPHY, TEXT, BG, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 type DisplayMode = 'monitor' | 'regular' | 'edit'
 
@@ -236,7 +236,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
   </UAlert>
 
   <!-- MONITOR MODE: Large display for kitchen monitors -->
-  <div v-else-if="mode === 'monitor'" class="bg-violet-850 py-4 md:py-6">
+  <div v-else-if="mode === 'monitor'" class="py-4 md:py-6">
     <!-- Team name header (always visible) -->
     <div class="mb-3 md:mb-4 px-3 md:px-4 flex items-center gap-2 flex-wrap">
       <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
@@ -256,7 +256,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
       <div v-if="roleGroups.CHEF.length > 0" class="flex items-start gap-3 md:gap-4">
         <div class="flex flex-col items-center">
           <span class="text-2xl md:text-3xl">{{ ROLE_ICONS.CHEF }}</span>
-          <span class="text-xs text-gray-500 dark:text-gray-400">Chefkokke</span>
+          <span :class="[TYPOGRAPHY.finePrint, TEXT.muted]">Chefkokke</span>
         </div>
         <UserListItem
           :inhabitants="roleGroups.CHEF.map(m => m.inhabitant)"
@@ -271,7 +271,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
       <div v-if="roleGroups.COOK.length > 0" class="flex items-start gap-3 md:gap-4">
         <div class="flex flex-col items-center">
           <span class="text-2xl md:text-3xl">{{ ROLE_ICONS.COOK }}</span>
-          <span class="text-xs text-gray-500 dark:text-gray-400">Kokke</span>
+          <span :class="[TYPOGRAPHY.finePrint, TEXT.muted]">Kokke</span>
         </div>
         <UserListItem
           :inhabitants="roleGroups.COOK.map(m => m.inhabitant)"
@@ -286,7 +286,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
       <div v-if="roleGroups.JUNIORHELPER.length > 0" class="flex items-start gap-3 md:gap-4">
         <div class="flex flex-col items-center">
           <span class="text-2xl md:text-3xl">{{ ROLE_ICONS.JUNIORHELPER }}</span>
-          <span class="text-xs text-gray-500 dark:text-gray-400">Kokkespirer</span>
+          <span :class="[TYPOGRAPHY.finePrint, TEXT.muted]">Kokkespirer</span>
         </div>
         <UserListItem
           :inhabitants="roleGroups.JUNIORHELPER.map(m => m.inhabitant)"
@@ -397,18 +397,18 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
       <div class="flex flex-col md:flex-row gap-2 md:gap-4">
         <!-- LEFT: Team members -->
         <div :class="isEditable ? 'w-full md:w-1/2' : 'w-full'" class="space-y-4">
-          <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Holdmedlemmer</h4>
+          <h4 :class="TYPOGRAPHY.sectionSubheading">Holdmedlemmer</h4>
           <div class="flex flex-col gap-4">
             <div
               v-for="(members, role) in roleGroups"
               :key="role"
               class="space-y-2"
             >
-              <h5 class="text-xs font-medium text-gray-600 dark:text-gray-400">
+              <h5 :class="[TYPOGRAPHY.caption, TEXT.toned]">
                 {{ ROLE_LABELS[role] }}
               </h5>
 
-              <div v-if="members.length > 0" class="flex flex-col gap-2 p-3 bg-gray-50 dark:bg-gray-800">
+              <div v-if="members.length > 0" :class="['flex flex-col gap-2 p-3', BG.inset]">
                 <div v-for="member in members" :key="member.id" class="flex items-center gap-2 flex-wrap">
                   <UAvatar
                     :src="member.inhabitant?.pictureUrl ?? undefined"
@@ -433,7 +433,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                   <WeekDayMapDisplay v-if="member.affinity" :model-value="member.affinity" compact disabled :color="teamColor" />
                   <UButton
                     v-if="isEditable && member.id"
-                    color="winery"
+                    :color="COLOR.winery"
                     variant="ghost"
                     size="xs"
                     icon="i-heroicons-x-mark"
@@ -442,7 +442,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                 </div>
               </div>
 
-              <div v-else class="text-sm text-gray-500 italic p-3">
+              <div v-else :class="[TYPOGRAPHY.bodyTextSmall, TEXT.gray[500], 'italic p-3']">
                 Ingen {{ ROLE_LABELS[role].toLowerCase() }}
               </div>
             </div>
@@ -451,7 +451,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
 
         <!-- RIGHT: Inhabitant finder (EDIT mode only) -->
         <div v-if="isEditable" class="w-full md:w-1/2 space-y-4">
-          <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Tilføj medlemmer</h4>
+          <h4 :class="TYPOGRAPHY.sectionSubheading">Tilføj medlemmer</h4>
           <InhabitantSelector
             v-if="teamId && seasonId"
             :inhabitants="inhabitantsWithAssignments"
@@ -464,7 +464,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             <!-- Status: one badge per team assignment, or LEDIG -->
             <template #status="{ row }">
               <div v-if="getAssignmentsFor(row.original.id).length === 0">
-                <UBadge color="success" variant="outline" :size="SIZES.small">LEDIG</UBadge>
+                <UBadge :color="COLOR.success" variant="outline" :size="SIZES.small">LEDIG</UBadge>
               </div>
               <div v-else class="flex flex-col gap-1">
                 <div v-for="(a, idx) in getAssignmentsFor(row.original.id)" :key="idx" class="flex flex-col gap-0.5">
@@ -479,7 +479,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             <!-- Actions: Tilføj or Rediger, both expand the form -->
             <template #actions="{ row }">
               <UButton
-                color="primary"
+                :color="COLOR.primary"
                 variant="soft"
                 :size="SIZES.small"
                 @click="row.toggleExpanded()"
@@ -493,7 +493,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
 
             <!-- Expanded row: add/edit member form, pre-filled for existing members -->
             <template #expanded="{ row }">
-              <div class="p-4 bg-neutral-50 dark:bg-neutral-900">
+              <div :class="['p-4', BG.panel]">
                 <TeamMemberAddForm
                   :team-affinity="affinity"
                   :team-color="teamColor"
@@ -506,7 +506,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
               </div>
             </template>
           </InhabitantSelector>
-          <div v-else class="p-6 border-2 border-dashed text-center text-gray-500">
+          <div v-else :class="['p-6 border-2 border-dashed text-center', TEXT.gray[500]]">
             <UIcon name="i-heroicons-users" class="text-4xl mb-2" />
             <p class="text-sm">Hold skal gemmes før medlemmer kan tilføjes</p>
           </div>
@@ -538,7 +538,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             :dinner-events="dinnerEvents"
             :holidays="holidays"
           />
-          <div v-else class="p-6 border-2 border-dashed text-center text-gray-500">
+          <div v-else :class="['p-6 border-2 border-dashed text-center', TEXT.gray[500]]">
             <UIcon name="i-heroicons-calendar" class="text-4xl mb-2" />
             <p class="text-sm">Ingen fællesspisninger tildelt endnu</p>
           </div>

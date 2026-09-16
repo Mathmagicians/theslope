@@ -14,8 +14,10 @@ DB_D1_NAME = "theslope"
 # Increase the default CPU time limit to 60s
 cpu_ms=180_000
 
-# Workers Logs
+# Workers Logs + Traces
 [observability]
+enabled = true
+[observability.traces]
 enabled = true
 
 [[d1_databases]]
@@ -23,6 +25,11 @@ binding = "DB"
 database_name = "theslope"
 database_id = "3ed9b6b3-b9b9-45db-aa72-58f64c682142"
 migrations_dir = "migrations"
+
+# Notification queue (producer). Consumed by theslope-sender (workers/sender). Local = miniflare sink, like D1 above.
+[[queues.producers]]
+binding = "SENDER"
+queue = "theslope-sender-dev"
 
 # Cron Triggers - must match scheduledTasks in nuxt.config.ts
 # These patterns invoke Nitro scheduled tasks
@@ -40,12 +47,19 @@ routes = [
 DEPLOY_URL = "https://dev.skraaningen.dk"
 NUXT_PUBLIC_HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
 DB_D1_NAME = "theslope"
+NUXT_NOTIFICATIONS_ENVIRONMENT = "dev"
+NUXT_NOTIFICATIONS_FROM = "no-reply.dev@skraaningen.dk"
+NUXT_NOTIFICATIONS_FROM_NAME = "Skråningen dev"
 
 [[env.dev.d1_databases]]
 binding = "DB"
 database_name = "theslope"
 database_id = "3ed9b6b3-b9b9-45db-aa72-58f64c682142"
 migrations_dir = "migrations"
+
+[[env.dev.queues.producers]]
+binding = "SENDER"
+queue = "theslope-sender-dev"
 
 [env.dev.triggers]
 crons = ["0 1 * * *", "0 2 * * *", "0 3 18 * *"]
@@ -63,12 +77,19 @@ routes = [
 DEPLOY_URL = "https://www.skraaningen.dk"
 NUXT_PUBLIC_HEY_NABO_API = "https://skraaningeni.spaces.heynabo.com/api"
 DB_D1_NAME = "theslope-prod"
+NUXT_NOTIFICATIONS_ENVIRONMENT = "prod"
+NUXT_NOTIFICATIONS_FROM = "no-reply@skraaningen.dk"
+NUXT_NOTIFICATIONS_FROM_NAME = "Skråningen"
 
 [[env.prod.d1_databases]]
 binding = "DB"
 database_name = "theslope-prod"
 database_id = "495e319b-3b88-4cc8-949a-64a96ba2c019"
 migrations_dir = "migrations"
+
+[[env.prod.queues.producers]]
+binding = "SENDER"
+queue = "theslope-sender-prod"
 
 [env.prod.triggers]
 crons = ["0 1 * * *", "0 2 * * *", "0 3 18 * *"]

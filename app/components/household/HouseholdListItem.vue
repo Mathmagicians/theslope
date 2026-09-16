@@ -10,6 +10,8 @@ const props = withDefaults(defineProps<Props>(), {
     compact: false
 })
 
+const {COLOR, TEXT, BG} = useTheSlopeDesignSystem()
+
 const hasInhabitants = computed(() => props.household.inhabitants?.length > 0)
 </script>
 
@@ -31,7 +33,7 @@ const hasInhabitants = computed(() => props.household.inhabitants?.length > 0)
                 :key="inhabitant.id"
                 size="md"
                 variant="subtle"
-                color="secondary"
+                :color="COLOR.secondary"
             >
                 {{ inhabitant.name }}
             </UBadge>
@@ -49,14 +51,14 @@ const hasInhabitants = computed(() => props.household.inhabitants?.length > 0)
             <div
                 v-for="inhabitant in household.inhabitants"
                 :key="inhabitant.id"
-                class="flex items-center gap-2 p-2 rounded hover:bg-gray-50 dark:hover:bg-gray-800"
+                :class="['flex items-center gap-2 p-2 rounded', BG.panelHover]"
             >
-                <UIcon name="i-heroicons-user" class="text-gray-400" />
+                <UIcon name="i-heroicons-user" :class="TEXT.gray[400]" />
                 <span>{{ inhabitant.name }}</span>
             </div>
         </div>
 
-        <div v-else class="text-gray-500 dark:text-gray-400 italic">
+        <div v-else :class="[TEXT.muted, 'italic']">
             No inhabitants
         </div>
     </UCard>

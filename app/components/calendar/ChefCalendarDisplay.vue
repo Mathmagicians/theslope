@@ -92,7 +92,7 @@ const emit = defineEmits<{
 const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
 const {sortDinnerEventsByTemporal} = useSeason()
 const {getChefDeadlineAlarm} = useBooking()
-const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS, URGENCY_TO_CHIP_COLOR, dayCircleClasses} = useTheSlopeDesignSystem()
+const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS, TEXT, URGENCY_TO_CHIP_COLOR, dayCircleClasses} = useTheSlopeDesignSystem()
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
@@ -344,8 +344,8 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => {
 
             <template #empty>
               <div class="flex flex-col items-center justify-center py-6 gap-3">
-                <UIcon name="i-heroicons-calendar" class="w-8 h-8 text-gray-400"/>
-                <p class="text-sm text-gray-500">Ingen fællesspisninger planlagt for dette hold</p>
+                <UIcon name="i-heroicons-calendar" :class="['w-8 h-8', TEXT.gray[400]]"/>
+                <p :class="[TYPOGRAPHY.bodyTextSmall, TEXT.gray[500]]">Ingen fællesspisninger planlagt for dette hold</p>
               </div>
             </template>
           </UTable>

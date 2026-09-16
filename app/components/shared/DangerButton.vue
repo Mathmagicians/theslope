@@ -15,7 +15,7 @@
 import type { NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
 import type { ButtonProps } from '@nuxt/ui'
 
-const { ICONS, SIZES } = useTheSlopeDesignSystem()
+const { ICONS, SIZES, RING } = useTheSlopeDesignSystem()
 
 type ButtonSize = ButtonProps['size']
 type ButtonVariant = ButtonProps['variant']
@@ -197,7 +197,7 @@ watch(() => props.loading, (newLoading) => {
       :disabled="disabled || loading"
       :loading="loading"
       :style="countdownGradient"
-      :class="isConfirmMode && !loading ? `ring-2 ${undo ? 'ring-green-500' : 'ring-red-500'} text-white` : ''"
+      :class="isConfirmMode && !loading ? `ring-2 ${undo ? RING.green[500] : RING.red[500]} text-white` : ''"
       @click="handleClick"
     >
       {{ displayText }}

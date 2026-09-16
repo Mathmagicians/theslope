@@ -25,7 +25,7 @@ const props = defineProps<Props>()
 // Composables
 const {formatPrice} = useTicket()
 const {groupByCostEntry, calculateCurrentBillingPeriod, formatTicketCounts} = useBilling()
-const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG} = useTheSlopeDesignSystem()
 const {OrderStateSchema} = useBookingValidation()
 const {HouseholdBillingResponseSchema} = useBillingValidation()
 
@@ -245,7 +245,7 @@ const upcomingPeriodStart = computed(() => {
             <UIcon :name="ICONS.calendar" :size="SIZES.standardIconSize"/>
             <div class="flex flex-col md:flex-row md:items-center md:gap-2">
               <h3 :class="TYPOGRAPHY.cardTitle">Kommende</h3>
-              <span class="hidden md:inline text-gray-400">|</span>
+              <span :class="['hidden md:inline', TEXT.gray[400]]">|</span>
               <p :class="TYPOGRAPHY.bodyTextMuted">{{ formatDate(upcomingPeriodStart) }} → ...</p>
             </div>
           </div>
@@ -261,7 +261,7 @@ const upcomingPeriodStart = computed(() => {
           <template #expand-cell="{ row }">
             <UButton
                 v-if="row.original.items.length > 0"
-                color="neutral"
+                :color="COLOR.neutral"
                 variant="ghost"
                 :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                 square
@@ -321,7 +321,7 @@ const upcomingPeriodStart = computed(() => {
           <template #expand-cell="{ row }">
             <UButton
                 v-if="row.original.groups.length > 0"
-                color="neutral"
+                :color="COLOR.neutral"
                 variant="ghost"
                 :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                 square
@@ -331,11 +331,11 @@ const upcomingPeriodStart = computed(() => {
             />
           </template>
           <template #status-cell="{ row }">
-            <UBadge v-if="!row.original.isClosed" color="success" variant="subtle" :size="SIZES.small">
+            <UBadge v-if="!row.original.isClosed" :color="COLOR.success" variant="subtle" :size="SIZES.small">
               <UIcon :name="ICONS.ellipsisCircle" :class="SIZES.smallBadgeIcon"/>
               Igangværende
             </UBadge>
-            <UBadge v-else color="neutral" variant="subtle" :size="SIZES.small">
+            <UBadge v-else :color="COLOR.neutral" variant="subtle" :size="SIZES.small">
               <UIcon :name="ICONS.check" :class="SIZES.smallBadgeIcon"/>
               Afsluttet
             </UBadge>
@@ -360,13 +360,13 @@ const upcomingPeriodStart = computed(() => {
                 <UTable
                     :data="items"
                     :columns="dinnerColumns"
-                    :ui="{...COMPONENTS.table.ui, thead: 'bg-ocean-100 dark:bg-ocean-900'}"
+                    :ui="{...COMPONENTS.table.ui, thead: COMPONENTS.economyTable.level1.tableHead}"
                     row-key="dinnerEvent.id"
                 >
                   <template #expand-cell="{ row: dinnerRow }">
                     <UButton
                         v-if="dinnerRow.original.items.length > 0"
-                        color="neutral"
+                        :color="COLOR.neutral"
                         variant="ghost"
                         :icon="dinnerRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                         square
@@ -380,7 +380,7 @@ const upcomingPeriodStart = computed(() => {
 
                   <!-- Expanded dinner: individual transactions with history -->
                   <template #expanded="{ row: dinnerRow }">
-                    <div class="p-2 bg-neutral-50 dark:bg-neutral-900 space-y-1">
+                    <div :class="['p-2 space-y-1', BG.panel]">
                       <CostLine
                           v-for="tx in dinnerRow.original.items"
                           :key="tx.id"

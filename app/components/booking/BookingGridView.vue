@@ -350,6 +350,10 @@ const columnPinning = ref({
 // ============================================================================
 
 const tableData = computed((): GridRow[] => {
+  // No dinners in the period means no grid: the synthetic power row would otherwise keep
+  // the table populated and its #empty slot unreachable.
+  if (flatEvents.value.length === 0) return []
+
   const inhabitants = props.household.inhabitants
   const rows: GridRow[] = []
 

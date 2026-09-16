@@ -2,7 +2,7 @@
 import type {AlertKind} from '~/composables/useTheSlopeDesignSystem'
 
 const props = withDefaults(defineProps<{
-  /** Which ALERTS kind to wear - the poster wants the quiet neutral face (ADR-019) */
+  /** Which ALERTS kind to wear - the poster wants the quiet neutral face (ADR-018) */
   kind?: AlertKind
   message?: string
 }>(), {

@@ -21,7 +21,7 @@ const route = useRoute()
 const token = computed(() => route.params.token as string)
 
 const {formatPrice} = useTicket()
-const {COMPONENTS, ICONS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
+const {COMPONENTS, ICONS, SIZES, TYPOGRAPHY, BG} = useTheSlopeDesignSystem()
 const {BillingPeriodSummaryDetailSchema} = useBillingValidation()
 const {handleApiError} = useApiHandler()
 
@@ -57,7 +57,7 @@ const columns = [
 </script>
 
 <template>
-  <div class="min-h-screen bg-neutral-50 dark:bg-neutral-950 py-8">
+  <div :class="['min-h-screen py-8', BG.invoiceGround]">
     <div class="max-w-6xl mx-auto px-4">
       <!-- Error States -->
       <UCard v-if="isNotFound" class="text-center">
@@ -84,19 +84,19 @@ const columns = [
           </template>
 
           <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div class="text-center p-4 bg-neutral-100 dark:bg-neutral-900 rounded-lg">
+            <div :class="['text-center p-4 rounded-lg', BG.invoiceStat]">
               <p :class="TYPOGRAPHY.bodyTextMuted">Forbrugsperiode</p>
               <p :class="TYPOGRAPHY.cardTitle">{{ billing.billingPeriod.replace('-', ' - ') }}</p>
             </div>
-            <div class="text-center p-4 bg-neutral-100 dark:bg-neutral-900 rounded-lg">
+            <div :class="['text-center p-4 rounded-lg', BG.invoiceStat]">
               <p :class="TYPOGRAPHY.bodyTextMuted">Opgørelsesdato</p>
               <p :class="TYPOGRAPHY.cardTitle">{{ formatDate(billing.cutoffDate) }}</p>
             </div>
-            <div class="text-center p-4 bg-neutral-100 dark:bg-neutral-900 rounded-lg">
+            <div :class="['text-center p-4 rounded-lg', BG.invoiceStat]">
               <p :class="TYPOGRAPHY.bodyTextMuted">PBS opkræves</p>
               <p :class="TYPOGRAPHY.cardTitle">{{ formatDate(billing.paymentDate, 'MMMM yyyy') }}</p>
             </div>
-            <div class="text-center p-4 bg-neutral-100 dark:bg-neutral-900 rounded-lg">
+            <div :class="['text-center p-4 rounded-lg', BG.invoiceStat]">
               <p :class="TYPOGRAPHY.bodyTextMuted">Total</p>
               <p :class="TYPOGRAPHY.cardTitle">{{ formatPrice(billing.totalAmount) }} kr</p>
             </div>

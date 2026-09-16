@@ -155,7 +155,7 @@ const diningModeStats = computed((): ExtendedDiningModeStats[] => {
 })
 
 // Use design system for kitchen panel colors
-const { getKitchenPanelClasses, COMPONENTS, ICONS, TYPOGRAPHY } = useTheSlopeDesignSystem()
+const { getKitchenPanelClasses, COMPONENTS, ICONS, TYPOGRAPHY, TEXT } = useTheSlopeDesignSystem()
 
 // Get background color classes for each dining mode
 const getModeClasses = (key: string) => {
@@ -171,13 +171,13 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
     <!-- Top bar: LAV MAD - 100% -->
     <div :class="COMPONENTS.kitchenStatsBar">
       <div class="text-center">
-        <div class="text-xs md:text-sm font-semibold text-gray-600 dark:text-gray-400">
+        <div :class="['text-xs md:text-sm font-semibold', TEXT.toned]">
           FÆLLES MAD - 100% ØKOLOGI OG 💚
         </div>
         <div class="text-2xl md:text-3xl lg:text-4xl font-bold">
           {{ Math.round(totalPortions) }} KUVERTER
         </div>
-        <div class="text-xs md:text-sm text-gray-600 dark:text-gray-400 flex flex-wrap justify-center gap-x-2">
+        <div :class="['text-xs md:text-sm flex flex-wrap justify-center gap-x-2', TEXT.toned]">
           <span class="whitespace-nowrap">Voksen: {{ ticketTypeBreakdown.adult }}</span>
           <span class="whitespace-nowrap">| Barn: {{ ticketTypeBreakdown.child }}</span>
           <span class="whitespace-nowrap">| Baby: {{ ticketTypeBreakdown.baby }}</span>

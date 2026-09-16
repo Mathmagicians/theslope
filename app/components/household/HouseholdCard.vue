@@ -265,7 +265,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
                 :inhabitants="household.inhabitants"
                 compact
                 :show-names="false"
-                ring-color="warning"
+                :ring-color="COLOR.warning"
                 label="beboere"
             />
             <!-- Regular mode: show single inhabitant -->
@@ -273,7 +273,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
                 v-else
                 :inhabitants="household.inhabitants.find(i => i.id === row.original.id) ?? household.inhabitants[0]!"
                 compact
-                ring-color="primary"
+                :ring-color="COLOR.primary"
             />
             <!-- Ticket badge - mobile only (under name) -->
             <UBadge
