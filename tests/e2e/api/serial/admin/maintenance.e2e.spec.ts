@@ -260,8 +260,9 @@ test.describe('Daily Maintenance API', () => {
         expect(periodState, 'every closed period is reported').toBeDefined()
         expect(periodState!.csvUploaded, 'period CSV archived').toBe(true)
         expect(periodState!.emailSent, 'accountant mail queued').toBe(true)
-        expect(periodState!.archive?.key).toMatch(/^billing\/\d{4}-\d{2}\/pbs-opgoerelse-\d{4}-\d{2}\.csv$/)
-        expect(periodState!.notification?.dedupeKey).toMatch(/^BILLING_PERIOD_CLOSED:EMAIL:/)
+        expect(periodState!.archive?.key).toMatch(/^billing\/\d{4}-\d{2}\/pbs-opgoerelse-\d{4}-\d{2}-v\d+\.csv$/)
+        // v1 closes the period, a later version (catch-up into an existing period) is mailed as an update
+        expect(periodState!.notification?.dedupeKey).toMatch(new RegExp(`^BILLING_PERIOD_${periodState!.version > 1 ? 'UPDATED' : 'CLOSED'}:EMAIL:`))
 
         // ADR-015: a re-run bills nothing new and redoes no side effect — the period keeps its end state
         const rerun = await BillingFactory.generateBilling(context)

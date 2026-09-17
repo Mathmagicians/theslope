@@ -4,7 +4,7 @@ import {useSeason} from '~/composables/useSeason'
 import {useTicket} from '~/composables/useTicket'
 import {useBookingValidation, type TicketType, type OrderDisplay, type DinnerEventInfo} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
-import type {CostEntry, HouseholdEntry, InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'
+import type {BillingSideEffectStamps, CostEntry, HouseholdEntry, InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'
 
 const LINK_TRANSACTION_BATCH_SIZE = 90
 
@@ -316,6 +316,16 @@ export const useBilling = () => {
         }
     }
 
+    /**
+     * What a closed billing period still needs (ADR-015: the monthly run converges every period). A side effect is
+     * current when its delivered version equals the period's content version; catch-up billing bumps the version,
+     * so the period gets a fresh archive and a fresh mail.
+     */
+    const decideBillingSideEffects = ({version, archivedVersion, notifiedVersion}: BillingSideEffectStamps): {archive: boolean, notify: boolean} => ({
+        archive: archivedVersion < version,
+        notify: notifiedVersion < version
+    })
+
     return {
         calculateClosedBillingPeriod,
         calculateCurrentBillingPeriod,
@@ -328,7 +338,9 @@ export const useBilling = () => {
         createControlSum,
         controlInvoices,
         controlTransactions,
-        controlOrders
+        controlOrders,
+        // Monthly run side effects (ADR-015)
+        decideBillingSideEffects
     }
 }
 

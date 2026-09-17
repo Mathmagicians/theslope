@@ -73,24 +73,8 @@ export default defineNuxtConfig({
     },
 
     icon: {
-        // Server-side bundling - embed icons in build to eliminate runtime CDN requests
-        serverBundle: {
-            collections: [
-                'heroicons',                    // Primary collection (23 icons)
-                'fluent-emoji-high-contrast',   // Power mode icon
-                'fluent-mdl2',                  // Team favorite icon
-                'lucide',                       // Sorting arrows
-                'pajamas',                      // Admin/user icons
-                'guidance',                     // Contact icons
-                'healthicons',                  // Death/allergy icons
-                'hugeicons',                    // Authorization icon
-                'mage',                         // Robot icon
-                'material-symbols',             // Celebration icon
-                'mdi',                          // Allergy icon
-                'streamline',                   // Dining icon
-                'tdesign'                       // Wave icon
-            ]
-        },
+        // Server-side bundling (icons embedded in the build); the collections are the installed @iconify-json/* packages (package.json)
+        serverBundle: {},
         // Client-side settings - automatic tree-shaking
         clientBundle: {
             scan: true,  // Only bundle icons actually used in components

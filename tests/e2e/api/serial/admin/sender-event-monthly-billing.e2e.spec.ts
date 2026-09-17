@@ -24,7 +24,9 @@ test.describe('POST /api/admin/sender/event/monthly-billing', () => {
 
         expect(result).not.toBeNull()
         expect(result!.queued).toBe(true)
-        expect(result!.dedupeKey).toMatch(/^BILLING_PERIOD_CLOSED:EMAIL:/)
+        // the mail kind follows the period's version: v1 closes it, a later version is an update
+        const {version} = await BillingFactory.getBillingPeriodById(context, billingPeriodSummaryId)
+        expect(result!.dedupeKey).toMatch(new RegExp(`^BILLING_PERIOD_${version > 1 ? 'UPDATED' : 'CLOSED'}:EMAIL:`))
     })
 
     test('GIVEN an unknown period THEN 404', async ({browser}) => {

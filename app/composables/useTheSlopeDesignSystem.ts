@@ -155,10 +155,15 @@ export const BG = {
         200: 'bg-ocean-200',    // Chef calendar - future cookings
         300: 'bg-ocean-300',    // Chef calendar - countdown
         400: 'bg-ocean-400',    // Chef calendar - next cooking
-        500: 'bg-ocean-500',    // Landing section
+        500: 'bg-ocean-500',    // Rainbow stop 3
         600: 'bg-ocean-600',
         700: 'bg-ocean-700',
         800: 'bg-ocean-800'
+    },
+    // Bonbon is the Pantone name of the violet scale. `bg-bonbon-*` paints nothing - the alias
+    // is declared in nuxt.config but never mapped in app.config - so the token names the scale
+    bonbon: {
+        500: 'bg-violet-500'    // Rainbow stop 4
     },
     gray: {
         50: 'bg-gray-50',
@@ -264,6 +269,13 @@ export const TEXT = {
     },
     white: 'text-white',
 
+    /**
+     * Dark ink for a vibrant fill. `ink` cannot serve here: its `dark:text-white` face would
+     * turn white again on a fill that has no dark face of its own, and `text-gray-900` reads
+     * 4.01:1 on Party Punch. Black clears 4.5:1 on every brand fill, in both modes.
+     */
+    black: 'text-black',
+
     // Foreground volume - how loud a line of text reads against the surface it sits on.
     // One token carries exactly one rendered value; a line that has always had its own
     // light/dark pair keeps its own token.
@@ -300,10 +312,15 @@ export const BORDER = {
     },
     ocean: {
         400: 'border-ocean-400',   // Chef calendar - countdown, rings
+        600: 'border-ocean-600',   // Kitchen panel divider - SPIS SENT
         700: 'border-ocean-700'    // Chef calendar - selected state
     },
+    pink: {
+        600: 'border-pink-600'     // Kitchen panel divider - TAKE AWAY
+    },
     orange: {
-        500: 'border-orange-500'
+        500: 'border-orange-500',
+        600: 'border-orange-600'   // Kitchen panel divider - SPIS SAMMEN
     },
     red: {
         500: 'border-red-500'      // Deadline - critical
@@ -431,28 +448,61 @@ export const LAYOUTS = {
 } as const
 
 /**
+ * PANTONE_FAMILIES - the order of the brand rainbow, by hue
+ *
+ * One list is the single source of order. `HERO` and `CHIPS` are records keyed by family;
+ * `RAINBOW` and `PANTONE_CHIPS` map this list, so the ticker tints announce the solid bands
+ * that follow them down the page, and a reordering is one edit.
+ */
+export const PANTONE_FAMILIES = ['pink', 'orange', 'ocean', 'bonbon', 'party', 'peach', 'mocha'] as const
+
+export type PantoneFamily = typeof PANTONE_FAMILIES[number]
+
+/**
+ * HERO - the brand fill set: one fill, one ink, per family
+ *
+ * The landing rainbow, the dinner and chef headers and the kitchen panels paint these same
+ * surfaces, so each family pairs its fill with its ink here and every consumer inherits both.
+ *
+ * The five vibrant stops carry `TEXT.black`: white and the 50/100 rungs read 2.1-4.4:1 on them,
+ * black reads 5.7-8.3:1 and is the one ink that clears 4.5:1 on all of them, in both modes.
+ * Peach and Mocha are light fills with their own dark ink and sit outside the walked rainbow.
+ */
+const HERO: Record<PantoneFamily, string> = {
+    pink: `${BG.pink[500]} ${TEXT.black}`,            // Pink Lemonade   8.33:1
+    orange: `${BG.orange[500]} ${TEXT.black}`,        // Mandarin Orange 6.68:1
+    ocean: `${BG.ocean[500]} ${TEXT.black}`,          // Ocean           7.2:1
+    bonbon: `${BG.bonbon[500]} ${TEXT.black}`,        // Bonbon          5.88:1
+    party: `${BG.party[500]} ${TEXT.black}`,          // Party Punch     5.73:1
+    peach: `${BG.peach[300]} ${TEXT.peach[950]}`,     // Countdown       9.01:1
+    mocha: `${BG.mocha[500]} ${TEXT.mocha[50]}`       // The frame: title bar, ticker, dinner header
+}
+
+/**
+ * RAINBOW - the vibrant stops, in hue order, walked by index
+ *
+ * The landing bands take the first four; the kitchen panels take the first three. `party` is
+ * the spare stop a fifth band or panel reaches without a new decision.
+ */
+export const RAINBOW = [HERO.pink, HERO.orange, HERO.ocean, HERO.bonbon, HERO.party] as const
+
+/** The rainbow stop for a position in a list, wrapping at the end of the palette */
+export const getRainbowBand = (index: number): string => RAINBOW[index % RAINBOW.length]!
+
+/**
  * BACKGROUNDS - Background patterns for sections
  *
  * Complete background styling for major page sections.
  */
 export const BACKGROUNDS = {
-    // Landing page sections
+    // The landing frame. The bands themselves walk `RAINBOW` from the page
     landing: {
-        titleBar: `${BG.mocha[500]} ${TEXT.mocha[50]}`,
-        ticker: `${BG.mocha[500]} ${TEXT.mocha[50]}`,
-        section1: `${BG.pink[500]} ${TEXT.pink[50]}`,
-        section2: `${BG.orange[500]} ${TEXT.orange[100]}`,
-        section3: `${BG.party[700]} ${TEXT.party[50]}`,
-        section4: `${BG.ocean[500]} ${TEXT.ocean[50]}`
+        titleBar: HERO.mocha,
+        ticker: HERO.mocha
     },
 
     // Hero sections (family-facing)
-    hero: {
-        mocha: `${BG.mocha[500]} ${TEXT.mocha[50]}`,      // PRIMARY
-        peach: `${BG.peach[300]} ${TEXT.peach[950]}`,     // Countdown
-        pink: `${BG.pink[500]} ${TEXT.pink[50]}`,         // Accent
-        orange: `${BG.orange[500]} ${TEXT.orange[100]}`   // Accent
-    },
+    hero: HERO,
 
     // The app shell behind every page
     appShell: `${BG.mocha[500]} dark:bg-amber-800`,
@@ -472,18 +522,23 @@ export const BACKGROUNDS = {
  * The landing ticker walks this list so consecutive words carry the whole palette.
  * Border, fill and ink come from the same family, so a chip reads as one colour.
  */
-export const PANTONE_CHIPS = [
-    'border-amber-900 bg-amber-100 text-amber-900',     // Mocha Mousse (PRIMARY)
-    'border-pink-800 bg-pink-100 text-pink-800',        // Pink Lemonade
-    'border-orange-600 bg-orange-100 text-orange-800',  // Mandarin Orange
-    'border-party-800 bg-party-50 text-party-900',      // Party Punch
-    'border-ocean-600 bg-ocean-50 text-ocean-900',      // Ocean/Sky
-    'border-peach-700 bg-peach-50 text-peach-950',      // Peach Cobbler
-    'border-violet-800 bg-violet-100 text-violet-900'   // Bonbon
-] as const
+const CHIPS: Record<PantoneFamily, string> = {
+    pink: 'border-pink-800 bg-pink-100 text-pink-800',
+    orange: 'border-orange-600 bg-orange-100 text-orange-800',
+    ocean: 'border-ocean-600 bg-ocean-50 text-ocean-900',
+    bonbon: 'border-violet-800 bg-violet-100 text-violet-900',
+    party: 'border-party-800 bg-party-50 text-party-900',
+    peach: 'border-peach-700 bg-peach-50 text-peach-950',
+    mocha: 'border-amber-900 bg-amber-100 text-amber-900'
+}
+
+export const PANTONE_CHIPS = PANTONE_FAMILIES.map(family => CHIPS[family])
 
 /** The Pantone chip for a position in a list, wrapping at the end of the palette */
 export const getPantoneChip = (index: number): string => PANTONE_CHIPS[index % PANTONE_CHIPS.length]!
+
+/** The box every kitchen panel draws: a right divider, padding, a centred column that may shrink */
+const KITCHEN_PANEL_BOX = 'border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border'
 
 /**
  * COMPONENTS - Complete component styling
@@ -494,11 +549,17 @@ export const COMPONENTS = {
     // Kitchen panels (functional data) - Vibrant Pantone colors
     kitchenStatsBar: `${BG.mocha[50]} ${TEXT.gray[900]} px-0 py-4 md:p-6`,
 
+    /**
+     * The dining modes walk `RAINBOW` from its first stop, so a panel is the same brand surface
+     * the landing band paints and the panel owns only its edge and its box. Each divider is its
+     * own family one rung deeper. TIL SALG stays grey: it is a ticket on offer, not a dining
+     * mode, and the neutral fill is what says so. Dark ink reads 8.07:1 on it.
+     */
     kitchenPanel: {
-        TAKEAWAY: `bg-warning-500 ${TEXT.white} border-warning-600 border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border`,
-        DINEIN: `${BG.party[700]} ${TEXT.white} border-party-800 border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border`,
-        DINEINLATE: `${BG.orange[500]} ${TEXT.white} border-orange-600 border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border`,
-        RELEASED: `${BG.gray[500]} ${TEXT.white} ${BORDER.gray[600]} border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border`
+        TAKEAWAY: `${getRainbowBand(0)} ${BORDER.pink[600]} ${KITCHEN_PANEL_BOX}`,
+        DINEIN: `${getRainbowBand(1)} ${BORDER.orange[600]} ${KITCHEN_PANEL_BOX}`,
+        DINEINLATE: `${getRainbowBand(2)} ${BORDER.ocean[600]} ${KITCHEN_PANEL_BOX}`,
+        RELEASED: `${BG.gray[400]} ${TEXT.black} ${BORDER.gray[500]} ${KITCHEN_PANEL_BOX}`
     },
 
     // Responsive row icon sizing (matches birthday cake pattern)
@@ -663,7 +724,7 @@ export const COMPONENTS = {
  * @example
  * ```ts
  * const classes = getKitchenPanelClasses('DINEIN')
- * // Returns: 'bg-party-700 text-white border-party-800 ...'
+ * // Returns: 'bg-orange-500 text-black border-orange-600 ...'
  * ```
  */
 export function getKitchenPanelClasses(
@@ -1679,6 +1740,8 @@ export const useTheSlopeDesignSystem = () => {
         getOrderStateColor,
         PANTONE_CHIPS,
         getPantoneChip,
+        RAINBOW,
+        getRainbowBand,
         ICONS,
         IMG,
 

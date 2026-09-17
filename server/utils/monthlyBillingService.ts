@@ -17,15 +17,16 @@
 import {generateBilling} from '~~/server/utils/generateBilling'
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
 import {fetchBillingPeriodSummaries, fetchBillingPeriodSummary} from '~~/server/data/prismaRepository'
-import {fetchDeliveries, recordDelivery} from '~~/server/data/deliveryRepository'
+import {fetchDeliveries, recordDelivery} from '~~/server/data/financesRepository'
 import {archiveBillingCsv} from '~~/server/utils/billingArchive'
-import {decideBillingSideEffects} from '~~/server/utils/billingSideEffects'
+import {useBilling} from '~/composables/useBilling'
 import {emitBillingPeriodClosed} from '~~/server/utils/sender/events/monthly-billing'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import type {BillingPeriodSideEffects, BillingPeriodSummaryDetail, MonthlyBillingResponse} from '~/composables/useBillingValidation'
 import type {NotificationConfig, SenderEmitResult} from '~/composables/useNotificationValidation'
 import {deliveredVersions} from '~/composables/useDeliveryValidation'
 
+const {decideBillingSideEffects} = useBilling()
 const LOG = '💰 > MONTHLY > [BILLING]'
 
 /** The bindings and config the side effects need — from cloudflare.env and getNotificationConfig() at the call site */
