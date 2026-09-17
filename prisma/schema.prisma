@@ -23,6 +23,12 @@ enum SystemRole {
   ALLERGYMANAGER
 }
 
+// Channels a user receives notifications on (the systemRoles JSON-array pattern)
+enum NotificationChannel {
+  EMAIL
+  SMS
+}
+
 enum Role {
   CHEF
   COOK
@@ -116,16 +122,17 @@ model Allergy {
 
 // Represents the login and contact credentials of a Heynabo standalone user, together with system roles
 model User {
-  id           Int            @id @default(autoincrement())
-  email        String         @unique
-  phone        String?
-  passwordHash String
-  systemRoles  String         @default("[]") // JSON stringified array of SystemRole
-  Inhabitant   Inhabitant?
-  bookedOrders Order[]        @relation("BookedByUser")
-  orderHistory OrderHistory[]
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id                   Int            @id @default(autoincrement())
+  email                String         @unique
+  phone                String?
+  passwordHash         String
+  systemRoles          String         @default("[]") // JSON stringified array of SystemRole
+  notificationChannels String         @default("[\"EMAIL\"]") // JSON stringified array of NotificationChannel
+  Inhabitant           Inhabitant?
+  bookedOrders         Order[]        @relation("BookedByUser")
+  orderHistory         OrderHistory[]
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
 }
 
 // Represents a member of a household, that can participate in the dinners and cooking
@@ -271,6 +278,33 @@ model BillingPeriodSummary {
   paymentDate    DateTime // 1st of collection month
   invoices       Invoice[]
   createdAt      DateTime  @default(now())
+  version        Int       @default(1) // content version, bumped by generation when catch-up billing changes the period (ADR-015)
+}
+
+// A delivery fact: a version of a subject reached a channel — the CSV archived to R2, a mail queued. Append-only,
+// one row per delivery; archive and mail are separate async steps and separate rows.
+model Delivery {
+  id          Int             @id @default(autoincrement())
+  subjectType DeliverySubject
+  subjectId   Int
+  version     Int // the subject's content version the delivery was made for
+  kind        DeliveryKind
+  reference   String // the R2 key, or the message's dedupeKey
+  jobRunId    Int?
+  jobRun      JobRun?         @relation(fields: [jobRunId], references: [id], onDelete: SetNull) // null: re-sent by an admin
+  deliveredAt DateTime        @default(now())
+
+  @@index([subjectType, subjectId, kind])
+}
+
+enum DeliverySubject {
+  BILLING_PERIOD
+}
+
+enum DeliveryKind {
+  ARCHIVE
+  EMAIL
+  SMS
 }
 
 // Cooking teams are seasonal, and created by the system administrator
@@ -348,15 +382,16 @@ model OrderHistory {
 }
 
 model JobRun {
-  id            Int       @id @default(autoincrement())
+  id            Int        @id @default(autoincrement())
   jobType       JobType
   status        JobStatus
-  startedAt     DateTime  @default(now())
+  startedAt     DateTime   @default(now())
   completedAt   DateTime?
   durationMs    Int?
   resultSummary String? // JSON - flexible per job type
   errorMessage  String?
-  triggeredBy   String    @default("CRON") // "CRON" | "ADMIN:<userId>"
+  triggeredBy   String     @default("CRON") // "CRON" | "ADMIN:<userId>"
+  deliveries    Delivery[]
 
   @@index([jobType, startedAt])
 }
