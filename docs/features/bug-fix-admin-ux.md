@@ -840,7 +840,9 @@ only text mechanisms are `HELP_TEXTS` and `app.config` (build-time). No settings
   admin rule — coarse gate, per-key check in the endpoint, so key names stay out of the route table.
 - **Store**: `allergies.ts` += `posterNotes` (`useAsyncData`, `SettingDetailSchema` transform, own `isPosterNotesLoading` /
   `isPosterNotesErrored` / `isPosterNotesInitialized`, `loadPosterNotes`, `savePosterNotes`). The slice stays out of `isAllergyStoreReady`, so the
-  poster prints its notes while the catalog loads, and falls back to the registry default.
+  poster prints its notes while the catalog loads, and falls back to the registry default. `savePosterNotes` takes the POST response as the new
+  value: `refresh()` resolves on a failed request, so reading the row back in a second round trip put the box one failure away from the registry
+  default while the success toast had already fired — the bug the user hit on 2026-09-18 (old notes on screen after Gem).
 - **UI**: `app/components/allergy/AllergyNotes.vue` — prop-driven (`notes`, `canEdit`, `isSaving`; emits `save`); view face
   `{...ALERTS.legend, ...ALERTS.withActions}` + `ICONS.warning` with one bullet per line, pencil `BUTTONS.edit` +
   `aria-label="Rediger bemærkninger"` in `#actions` when `canEdit`; edit face `UTextarea` rows 5 over `LAYOUTS.formButtonRow` with
@@ -880,32 +882,39 @@ Rejected: under the toolbar (competes with the mobile CREATE dock from D1).
 | `useSettingValidation.unit.spec.ts` (new) | 🟢 keys, `SettingDetailSchema` (date coercion, nullable author), registry entry per key, value schema, default, `canWrite` for ADMIN / ALLERGYMANAGER / member, `splitNotes` |
 | `usePermissions.unit.spec.ts` | 🟢 `/api/admin/setting/` POST and GET resolve; the setting rule sits before the generic admin rule |
 | `tests/e2e/api/parallel/admin/setting.e2e.spec.ts` + `settingFactory.ts` (new) | 🟢 registered key never 404s, registry default reads back, admin POST round-trip with `updatedByUserId`, member 403 then ALLERGYMANAGER 200 (`UserFactory.withSystemRoles` + `freshMemberContext`), unknown key 400, empty / wrong type / over-long value 400; restore in `afterAll` |
-| `allergies.nuxt.spec.ts` | 🟢 `posterNotes` loads, `savePosterNotes` posts and refetches, the registry default, errors exposed |
+| `allergies.nuxt.spec.ts` | 🟢 `posterNotes` loads, `savePosterNotes` posts and shows the stored text — including when a later read of the row fails (the regression guard for the old-notes-after-Gem bug), the registry default, errors exposed |
 | `AllergyNotes.nuxt.spec.ts` | 🟢 bullets per line, pencil gating, textarea seeded, Annuller restores, Gem emits the trimmed text, the editor waits for the parent's `isSaving`; `describe.each` over `isMd` |
 | `AdminAllergies.nuxt.spec.ts` | 🟢 setting endpoint registered (real store), stored notes render, the edit round trip posts, no pencil without `canEdit` |
-| `AdminAllergies.e2e.spec.ts` | 🟢 admin adds a line → Gem → bullets and the poster show it; a member without the role sees no pencil; restore in `afterAll` |
+| `AdminAllergies.e2e.spec.ts` | 🟢 an allergy manager adds a line → Gem → the rendered `allergy-notes-item` bullets carry it with no reload, again after a reload, and on the poster; a member without the role sees no pencil; roles arranged with `UserFactory.withSystemRoles` + `freshMemberContext`; restore in `afterAll` |
 | `admin-allergies-pdf.nuxt.spec.ts`, `AllergyPoster.e2e.spec.ts` | 🟢 stored notes rendered, no pencil on the poster; existing `(V)` / `[1V 1B]` assertions kept |
 
 ### Affected Areas
 
-`prisma/schema.prisma`, `app/composables/useSetting*.ts`, `server/data/settingsRepository.ts`, `server/routes/api/admin/setting/`,
-`server/utils/authorizationHelper.ts`, `app/composables/usePermissions.ts`, `app/stores/allergies.ts`, `app/components/allergy/AllergyNotes.vue`,
-`AdminAllergies.vue`, `pages/admin/allergies/pdf.vue`, `allergyTestIds.ts`, compliance docs.
+`prisma/schema.prisma`, `app/composables/useSettingValidation.ts` (ONE file — `useSetting.ts` merged into it),
+`server/data/settingsRepository.ts`, `server/routes/api/admin/setting/`, `server/utils/authorizationHelper.ts`,
+`app/composables/usePermissions.ts`, `app/stores/allergies.ts`, `app/components/allergy/AllergyNotes.vue`, `AdminAllergies.vue`,
+`pages/admin/allergies/pdf.vue`, `allergyTestIds.ts`, `tests/e2e/testDataFactories/settingFactory.ts`, `userFactory.ts`
+(`getUsers`, `setSystemRoles`, `withSystemRoles`), `tests/e2e/testHelpers.ts` (`freshMemberContext`), compliance docs.
 
 ### Notes on the page — ✅ IMPLEMENTED (2026-09-16)
 
 - **Shipped:** the notes box is one component, `app/components/allergy/AllergyNotes.vue` (prop `notes`, one note per line, `ALERTS.legend`
   + `:icon="ICONS.warning"` — the look decided 2026-09-16), mounted in the `AdminAllergies` card header above the managers list and on the poster; the poster's
   inline `UAlert` (`pdf.vue:154-165`) is gone, so both surfaces render the same markup from the same text.
-- **Text source:** `app/composables/useSetting.ts` — isomorphic (ADR-017 [Isomorphic Composables…]), `DEFAULT_ALLERGY_POSTER_NOTES`
-  (the three bullets) and `splitNotes` (one note per line, blank lines and whitespace dropped). This is the registry default the coming
-  `Setting` store falls back to.
+- **Text source:** `app/composables/useSettingValidation.ts` — isomorphic (ADR-017 [Isomorphic Composables…]), `DEFAULT_ALLERGY_POSTER_NOTES`
+  (the three bullets) and `splitNotes` (one note per line, blank lines and whitespace dropped). This is the registry default the `Setting`
+  store falls back to.
 - **Tests:** `AllergyNotes.nuxt.spec.ts` (bullets per line, empty text renders nothing), `admin-allergies-pdf.nuxt.spec.ts` and
   `AdminAllergies.nuxt.spec.ts` (three items, both `isMd` branches) with the existing `(V)`/`[1V 1B]` assertions kept, plus one e2e
   assertion each in `AllergyPoster.e2e.spec.ts` and `AdminAllergies.e2e.spec.ts`. Test-ids `allergy-notes` / `allergy-notes-item`.
-- **Pending:** editing (pencil + `UTextarea` edit face, `canEdit`/`isSaving`/`save`), the `Setting` table and its repository, endpoints,
-  authorization and the `allergies` store slice — everything in Solution above except the shared view face. When it lands, only the text
-  source changes: `AllergyNotes` keeps its `notes` prop.
+- **Editing — ✅ IMPLEMENTED (2026-09-18):** the text moved from the registry default into the `Setting` row, and only the source changed —
+  `AllergyNotes` keeps its `notes` prop and gained `canEdit`, `isSaving` and `save`. Test-ids added: `edit-allergy-notes`,
+  `allergy-notes-textarea`, `save-allergy-notes`, `cancel-allergy-notes`.
+- **Bug found and fixed in the same package (2026-09-18):** Gem toasted "Bemærkninger gemt" while the old bullets stayed on screen. The store
+  read the row back after the POST, and `useAsyncData`'s `refresh()` resolves on a failed request — it leaves `data` null, so `posterNotes` fell
+  through to the registry default. The POST already returns the stored row (ADR-009), so `savePosterNotes` now takes the response as the new
+  value and the second round trip is gone. Guarded by a store spec that fails the read after the save, and by an e2e that asserts the rendered
+  `allergy-notes-item` bullets with no reload and again after one.
 
 ### Visual check — Notes on the page
 
@@ -916,6 +925,19 @@ Rejected: under the toolbar (competes with the mobile CREATE dock from D1).
 | `/admin/allergies`, empty catalog | both | `AllergyNotes` + `UTable #empty` → `ALERTS.emptyState` | notes still render under the empty-state table |
 | `/admin/allergies/pdf` | desktop | `AllergyNotes` (`class="mt-4"`) | identical box to the catalog footer, between the allergy table and the `AllergyManagersList` box; same spacing as before |
 | `/admin/allergies/pdf`, print preview | print | same | notes print (no `no-print`); ⚠ icon and bullets legible in black on white |
+
+### Visual check — Poster notes
+
+| Route + state | Viewport | DS element to expect | Expect |
+|---|---|---|---|
+| `/admin/allergies` as ADMIN or ALLERGYMANAGER, view face | 375px | `AllergyNotes` → `{...ALERTS.legend, ...ALERTS.withActions}`, pencil `BUTTONS.edit` (`edit-allergy-notes`) | pencil sits below the bullets (vertical actions on a phone), square ghost, no label; bullets carry the stored text |
+| `/admin/allergies` as ADMIN or ALLERGYMANAGER, view face | desktop | same, `withActions` horizontal | pencil sits to the right of the text, on the same row |
+| `/admin/allergies`, pencil clicked | 375px | `UTextarea` rows 5 + `TYPOGRAPHY.finePrint` hint + `LAYOUTS.formButtonRow` | bullets are replaced in place by the textarea carrying the current text, one note per line; "Én bemærkning per linje" under it; Annuller above Gem (column-reverse), both full width; no pencil while editing |
+| `/admin/allergies`, pencil clicked | desktop | same | Annuller then Gem on one row, right-aligned |
+| `/admin/allergies`, Gem clicked | both | `BUTTONS.save` with `:loading` | Gem spins while the save runs, the editor stays open, then the bullets come back with the new line and a "Bemærkninger gemt" toast |
+| `/admin/allergies`, Annuller clicked after typing | both | view face | the bullets return unchanged; reopening the pencil shows the stored text, not what was typed |
+| `/admin/allergies` as a member | both | `AllergyNotes` view face | bullets render, no pencil anywhere in the box |
+| `/admin/allergies/pdf` any role | 375px + desktop | `AllergyNotes` (`class="mt-4"`) | the same bullets as the catalog, no pencil; print preview still shows them |
 
 ---
 
