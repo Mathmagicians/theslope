@@ -17,6 +17,12 @@ describe('buildTestEmail', () => {
             expect(message).toMatchObject({channel: 'EMAIL', to: config.adminEmail, from: config.from, fromName: config.fromName, replyTo: config.adminEmail, meta: {kind: 'TEST', environment}})
         })
 
+        it('addresses the recipient the caller names, keeping the admin mailbox as Reply-To', () => {
+            const mine = buildTestEmail(config, 'anna@example.com')
+
+            expect(mine).toMatchObject({to: 'anna@example.com', replyTo: config.adminEmail, meta: {kind: 'TEST'}})
+        })
+
         it('names the environment in the subject and the site in the signature', () => {
             expect(message.subject).toContain(environment)
             expect(message.text).toContain(`— Skråningen · ${config.site}`)
@@ -36,6 +42,15 @@ describe('emitTestEmail', () => {
         const result = await emitTestEmail(queue, NotificationFactory.config())
 
         expect(result.queued).toBe(true)
+        expect(queue.send).toHaveBeenCalledOnce()
+    })
+
+    it('queues to a named recipient even when no admin mailbox is configured', async () => {
+        const queue = {send: vi.fn().mockResolvedValue(undefined)} as unknown as Queue
+
+        const result = await emitTestEmail(queue, NotificationFactory.config({adminEmail: ''}), 'anna@example.com')
+
+        expect(result).toMatchObject({queued: true, degraded: false})
         expect(queue.send).toHaveBeenCalledOnce()
     })
 

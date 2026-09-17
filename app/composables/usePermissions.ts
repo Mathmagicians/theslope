@@ -53,6 +53,10 @@ export const ROUTE_PERMISSIONS: Array<{
     // Allergy types: ADMIN or ALLERGYMANAGER can mutate
     { prefix: '/api/admin/allergy-type', methods: ['PUT', 'POST', 'DELETE'], check: canMutateAllergies },
 
+    // Settings: a coarse gate, because the writer is declared per key in SETTING_REGISTRY
+    // and checked in the endpoint. Key names never enter this table.
+    { prefix: '/api/admin/setting/', methods: ['POST'], check: isAuthenticated },
+
     // All other admin mutations: ADMIN only
     { prefix: '/api/admin/', methods: ['PUT', 'POST', 'DELETE'], check: isAdmin },
 
@@ -65,6 +69,9 @@ export const ROUTE_PERMISSIONS: Array<{
     { prefix: '/api/household/', methods: null, check: isAuthenticated },
     { prefix: '/api/team/', methods: null, check: isAuthenticated },
     { prefix: '/api/chef/', methods: null, check: isAuthenticated },
+
+    // Own settings: the endpoints under /api/user/ write the session user only, never an id from the path
+    { prefix: '/api/user/', methods: null, check: isAuthenticated },
 
     // ===== FALLBACK =====
 

@@ -19,6 +19,9 @@ const errorCode = (error: unknown): string | undefined => {
     return typeof code === 'string' ? code : undefined
 }
 
+/** The contract carries attachments as base64 (JSON-safe); the binding takes bytes — a string would be sent as the file's text */
+const decodeBase64 = (base64: string): Uint8Array => Uint8Array.from(atob(base64), character => character.charCodeAt(0))
+
 const toBindingMessage = (msg: EmailMessage): EmailMessageBuilder => ({
     from: msg.fromName === undefined ? msg.from : {email: msg.from, name: msg.fromName},
     to: msg.toName === undefined ? msg.to : {email: msg.to, name: msg.toName},
@@ -28,7 +31,7 @@ const toBindingMessage = (msg: EmailMessage): EmailMessageBuilder => ({
     text: msg.text,
     ...(msg.html === undefined ? {} : {html: msg.html}),
     attachments: msg.attachments.map(attachment => ({
-        content: attachment.contentBase64,
+        content: decodeBase64(attachment.contentBase64),
         filename: attachment.filename,
         type: attachment.contentType,
         disposition: 'attachment'

@@ -225,6 +225,7 @@ export const TEXT = {
     },
     peach: {
         50: 'text-peach-50',
+        200: 'text-peach-200',    // Dinner calendar - countdown accent
         300: 'text-peach-300',    // Countdown timer
         400: 'text-peach-400',    // Countdown timer
         600: 'text-peach-600',    // Calendar - rings
@@ -242,6 +243,7 @@ export const TEXT = {
     },
     ocean: {
         50: 'text-ocean-50',
+        200: 'text-ocean-200',    // Chef calendar - countdown accent
         300: 'text-ocean-300',    // Chef calendar - countdown timer
         400: 'text-ocean-400',    // Chef calendar - countdown timer
         600: 'text-ocean-600',    // Chef calendar - rings
@@ -287,8 +289,9 @@ export const TEXT = {
     toned: 'text-gray-600 dark:text-gray-400',
     /** Supporting text: counts, empty-state prose */
     muted: 'text-gray-500 dark:text-gray-400',
-    /** Recedes: a decorative glyph, a column separator, a stack trace */
-    dimmed: 'text-gray-400 dark:text-gray-500',
+    /** Recedes: a decorative glyph, a column separator, a stack trace. One rung deeper than
+     *  `muted` in each mode, and off the 400 rung the RELEASED kitchen panel fills with */
+    dimmed: 'text-gray-500 dark:text-gray-400',
     /** The "last changed" line on an allergy row - holds its weight in the dark */
     timestamp: 'text-gray-500 dark:text-gray-500',
     /** The menu description on a chef's menu card */
@@ -305,7 +308,7 @@ export const BORDER = {
         500: 'border-gray-500',
         600: 'border-gray-600',
         700: 'border-gray-700',
-        800: 'border-gray-800'
+        800: 'border-gray-800 dark:border-gray-600'
     },
     peach: {
         400: 'border-peach-400'    // Calendar - countdown, rings
@@ -326,7 +329,7 @@ export const BORDER = {
         500: 'border-red-500'      // Deadline - critical
     },
     amber: {
-        500: 'border-amber-500',   // Deadline - warning
+        500: 'border-amber-500 dark:border-amber-300',   // Deadline - warning
         600: 'border-amber-600'    // Chef menu - missing chef frame
     }
 } as const
@@ -346,7 +349,7 @@ export const RING = {
         500: 'ring-green-500'      // Holiday marker, DangerButton undo
     },
     amber: {
-        500: 'ring-amber-500'      // Deadline - warning, chef portrait
+        500: 'ring-amber-500 dark:ring-amber-300'   // Deadline - warning, chef portrait
     },
     orange: {
         200: 'ring-orange-200'     // Selected item in a segmented control
@@ -545,6 +548,13 @@ const KITCHEN_PANEL_BOX = 'border-r last:border-r-0 p-3 md:p-4 text-center min-w
  *
  * Ready-to-use complete styling for common components.
  */
+/** What every choice label reads as: the body size in regular weight, under its section heading */
+const CHOICE_LABEL_UI = {
+    label: 'font-normal text-base',
+    legend: 'font-normal',
+    description: 'text-sm'
+} as const
+
 export const COMPONENTS = {
     // Kitchen panels (functional data) - Vibrant Pantone colors
     kitchenStatsBar: `${BG.mocha[50]} ${TEXT.gray[900]} px-0 py-4 md:p-6`,
@@ -569,12 +579,28 @@ export const COMPONENTS = {
     // so the item's own colour still reads through
     segmentedActive: `ring-2 border-2 ${RING.orange[200]} shadow-md`,
 
+    /**
+     * A choice control inside a form section (`URadioGroup`, `USwitch`): `v-bind` a shape so an
+     * option reads as a choice, not as a heading. Nuxt UI paints the label `font-medium` at the
+     * control's size, which outweighs the section heading above it (`TYPOGRAPHY.sectionSubheading`),
+     * so every shape puts the label back on the body size in regular weight.
+     */
+    choiceGroup: {
+        /** One option under the other */
+        stacked: {ui: {...CHOICE_LABEL_UI, fieldset: 'flex flex-col gap-2'}},
+        /** Side by side from md up, stacked on a phone */
+        inline: {ui: {...CHOICE_LABEL_UI, fieldset: 'flex flex-col md:flex-row gap-2 md:gap-4'}},
+        /** One control on its own row, with no fieldset of its own (`USwitch`) */
+        single: {ui: CHOICE_LABEL_UI}
+    },
+
     // Power mode - family-wide bulk editing pattern
     powerMode: {
         color: 'warning' as const,
         icon: 'i-fluent-emoji-high-contrast-woman-superhero',
         buttonIcon: 'i-heroicons-bolt',
-        iconClass: 'size-4 md:size-6 text-warning-500',
+        // The 600 rung, so the 500 the second rainbow stop fills with stays free
+        iconClass: 'size-4 md:size-6 text-warning-600 dark:text-warning-400',
         ticketConfig: {label: 'Powermode!', color: 'warning' as const, icon: 'i-heroicons-bolt'},
         // Power-mode alerts bind ALERTS.warning and override the icon with `powerMode.icon`
         card: {
@@ -588,7 +614,7 @@ export const COMPONENTS = {
         color: 'info' as const,
         addIcon: 'i-heroicons-user-plus',      // For "add guest" rows
         orderIcon: 'i-heroicons-ticket',        // For existing guest orders
-        iconClass: 'size-4 md:size-6 text-info-500'
+        iconClass: 'size-4 md:size-6 text-info-600'
     },
 
     // Table interactions - row selection and click patterns
@@ -614,6 +640,19 @@ export const COMPONENTS = {
         destructive: {
             color: 'error' as const,
             variant: 'outline' as const
+        },
+        /**
+         * A header toggle that reveals a panel under its card. Spread over `BUTTONS.secondaryAction`
+         * so the button keeps its responsive size: closed it reads as one of the card's actions,
+         * open it is filled, which is how the card says the panel below belongs to it.
+         */
+        toggle: {
+            color: 'primary' as const,
+            variant: NOISE.medium
+        },
+        toggleActive: {
+            color: 'primary' as const,
+            variant: NOISE.loud
         }
     },
 
@@ -794,6 +833,8 @@ export const ICONS = {
     chef: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
     household: 'i-heroicons-home',
     preferences: 'i-heroicons-adjustments-horizontal',
+    /** The cog that opens a user's own settings ("Mine indstillinger") - `preferences` is the sliders glyph */
+    settings: 'i-heroicons-cog-6-tooth',
     allergy: 'i-mdi-food-allergy-off-outline',
     economy: 'i-heroicons-currency-dollar',
     login: 'i-guidance-entry',
@@ -851,6 +892,11 @@ export const ICONS = {
     mail: 'i-guidance-mail',
     phone: 'i-guidance-phone',
     identification: 'i-heroicons-identification',
+
+    // Own settings (Mine indstillinger)
+    notification: 'i-heroicons-bell',
+    palette: 'i-lucide-palette',
+    textScale: 'i-lucide-a-large-small',
 
     // Time & info
     clock: 'i-heroicons-clock',
@@ -1410,7 +1456,7 @@ const HOLIDAY_RING = `ring-2 ${RING.green[500]}`
 export const PLANNING_CALENDAR = {
     day: {
         generated: `font-medium ${BG.pink[800]} ${TEXT.pink[50]}`,
-        potential: 'font-medium border-2 border-pink-300 text-pink-800'
+        potential: 'font-medium border-2 border-pink-300 text-pink-800 dark:text-pink-300'
     }
 } as const
 
@@ -1493,12 +1539,12 @@ export const calendarPickerProps = () => ({
  */
 export const CHEF_CALENDAR = {
     day: {
-        next: `text-white font-bold ${BG.ocean[400]}`,
+        next: `text-white dark:text-black font-bold ${BG.ocean[400]}`,
         future: `font-medium ${BG.ocean[200]} ${TEXT.ocean[800]}`
     },
     countdown: {
         border: 'border-ocean-400',
-        accent: TEXT.ocean[400],
+        accent: TEXT.ocean[200],
         accentLight: TEXT.ocean[50],
         accentMedium: TEXT.ocean[300],
         dot: BG.ocean[400]
@@ -1512,12 +1558,12 @@ export const CHEF_CALENDAR = {
  */
 export const DINNER_CALENDAR = {
     day: {
-        next: `text-white font-bold ${BG.peach[400]}`,
+        next: `text-white dark:text-black font-bold ${BG.peach[400]}`,
         future: `font-medium ${BG.peach[200]} ${TEXT.peach[800]}`
     },
     countdown: {
         border: BORDER.peach[400],
-        accent: TEXT.peach[400],
+        accent: TEXT.peach[200],
         accentLight: TEXT.peach[50],
         accentMedium: TEXT.peach[300],
         dot: BG.peach[400]

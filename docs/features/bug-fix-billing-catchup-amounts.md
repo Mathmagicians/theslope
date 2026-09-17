@@ -1,6 +1,6 @@
 # Bug Fix: Catch-up billing keeps invoice amounts and period totals at their first value
 
-**Status:** Proposed | **Date:** 2026-09-17 | **Updated:** 2026-09-17
+**Status:** Parked (2026-09-18, process alignment first) | **Date:** 2026-09-17 | **Updated:** 2026-09-18
 **Branch:** `bugfix/admin-ux` (found while building the accountant mail; see `feature-proposal-notifications.md`)
 
 ## Fix Inventory

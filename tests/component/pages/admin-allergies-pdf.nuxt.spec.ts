@@ -10,7 +10,17 @@ import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ALLERGY_TEST_IDS} from '../components/allergy/allergyTestIds'
 import {mountWithTooltipProvider, findByTestId, findAllByTestId} from '~~/tests/component/testHelpers'
 
+// The poster prints the same Setting row the catalog footer edits
+const POSTER_NOTES_ENDPOINT = '/api/admin/setting/allergy-poster-notes'
+const STORED_NOTES = 'Glutenfri boller findes i fryseren\nHusk at give besked ved menu-præsentationen'
+
 // Endpoint mocks - specific FIRST, generic LAST (docs/testing.md)
+registerEndpoint(POSTER_NOTES_ENDPOINT, () => ({
+    key: 'allergy-poster-notes',
+    value: STORED_NOTES,
+    updatedAt: new Date('2026-09-18T10:00:00.000Z').toISOString(),
+    updatedByUserId: 3
+}))
 registerEndpoint('/api/admin/season/active', () => null)
 registerEndpoint('/api/admin/season', () => [])
 registerEndpoint('/api/admin/allergy-type', () => AllergyFactory.createMockAllergyTypesWithInhabitants())
@@ -21,7 +31,9 @@ registerEndpoint('/api/admin/users', () => [])
 // The poster has no layout (no UApp), so the real AllergyManagersList gets its
 // tooltip provider from the mount helper.
 const mountPage = async () => {
-    await useAllergiesStore().loadAllergyTypes()
+    const store = useAllergiesStore()
+    await store.loadAllergyTypes()
+    await store.loadPosterNotes()
     const wrapper = await mountWithTooltipProvider(AllergyPosterPage)
     await flushPromises()
     return wrapper
@@ -52,12 +64,20 @@ describe('admin/allergies/pdf (allergy poster)', () => {
         expect(text).toContain('[1b]')     // Jordnødder: Clara
     })
 
-    // Same component and same text source as the catalog footer on /admin/allergies
-    it('renders the notes box with the three registry-default notes', async () => {
+    // Same component and same text source (the Setting row) as the catalog footer on /admin/allergies
+    it('renders the notes box with the stored notes', async () => {
         const wrapper = await mountPage()
 
         expect(findByTestId(wrapper, ALLERGY_TEST_IDS.notes).text()).toContain('Vigtige bemærkninger')
-        expect(findAllByTestId(wrapper, ALLERGY_TEST_IDS.notesItem)).toHaveLength(3)
+        expect(findAllByTestId(wrapper, ALLERGY_TEST_IDS.notesItem).map(item => item.text()))
+            .toEqual(STORED_NOTES.split('\n'))
+    })
+
+    // The poster is read-only: the notes are edited on /admin/allergies
+    it('renders no pencil on the notes', async () => {
+        const wrapper = await mountPage()
+
+        expect(findByTestId(wrapper, ALLERGY_TEST_IDS.editNotes).exists()).toBe(false)
     })
 
     // The poster renders the QR itself (no external image service), so it survives offline and prints

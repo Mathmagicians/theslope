@@ -24,6 +24,10 @@ export const ALLERGY_TEST_IDS = {
     // AllergyNotes - catalog footer and poster
     notes: 'allergy-notes',
     notesItem: 'allergy-notes-item',
+    editNotes: 'edit-allergy-notes',
+    saveNotes: 'save-allergy-notes',
+    cancelNotes: 'cancel-allergy-notes',
+    notesTextarea: 'allergy-notes-textarea',
     // AllergyCatalogTable rows
     row: (allergyTypeId: number) => `allergy-row-${allergyTypeId}`
 } as const

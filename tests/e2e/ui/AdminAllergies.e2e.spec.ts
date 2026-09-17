@@ -1,11 +1,44 @@
-import {test, expect} from '@playwright/test'
+import {test, expect, type Page} from '@playwright/test'
 import {authFiles} from '../config'
 import testHelpers from '../testHelpers'
 import {AllergyFactory} from '../testDataFactories/allergyFactory'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
+import {SettingFactory} from '../testDataFactories/settingFactory'
+import {UserFactory} from '../testDataFactories/userFactory'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, temporaryAndRandom} = testHelpers
+const {
+    validatedBrowserContext,
+    memberValidatedBrowserContext,
+    freshMemberContext,
+    getSessionUserInfo,
+    pollUntil,
+    temporaryAndRandom
+} = testHelpers
+
+const {SystemRoleSchema} = useCoreValidation()
+
+const NOTES_KEY = 'allergy-poster-notes'
+
+/**
+ * The catalog is master/detail with a client-only desktop detail pane. The container
+ * testid is in the SSR HTML before listeners exist, so the pane's content is the signal
+ * that the page is hydrated and interactive.
+ */
+const gotoCatalog = async (page: Page) => {
+    await page.goto('/admin/allergies')
+    await pollUntil(
+        async () => page.locator('[data-testid="admin-allergies"]').isVisible(),
+        (isVisible) => isVisible,
+        10
+    )
+    await pollUntil(
+        async () => (await page.getByText('Detaljer').count()) + (await page.getByText('Vælg en allergi').count()),
+        (paneCount) => paneCount > 0,
+        10
+    )
+}
 
 /**
  * E2E UI tests for the admin allergy catalog (/admin/allergies).
@@ -31,24 +64,7 @@ test.describe('AdminAllergies - catalog CRUD', () => {
         await AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
     })
 
-    const gotoCatalog = async (page: import('@playwright/test').Page) => {
-        await page.goto('/admin/allergies')
-        await pollUntil(
-            async () => page.locator('[data-testid="admin-allergies"]').isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
-        // The container above is in the SSR HTML before listeners exist. The desktop
-        // detail pane mounts only client-side (isMd resolves after mount), so its
-        // content is the signal that the page is hydrated and interactive.
-        await pollUntil(
-            async () => (await page.getByText('Detaljer').count()) + (await page.getByText('Vælg en allergi').count()),
-            (paneCount) => paneCount > 0,
-            10
-        )
-    }
-
-    const selectRow = async (page: import('@playwright/test').Page, allergyTypeId: number) => {
+    const selectRow = async (page: Page, allergyTypeId: number) => {
         const row = page.getByTestId(`allergy-row-${allergyTypeId}`)
         await expect(row).toBeVisible({timeout: 10000})
         await row.click()
@@ -130,5 +146,70 @@ test.describe('AdminAllergies - catalog CRUD', () => {
             () => AllergyFactory.getAllergyTypes(context),
             (allTypes) => !allTypes.some(t => t.id === allergyType.id)
         )
+    })
+})
+
+/**
+ * "Vigtige bemærkninger" is one Setting row read by the catalog card header and printed on
+ * the poster. ADMIN and ALLERGYMANAGER edit it in place; everyone else reads it.
+ *
+ * The row is global, so the suite restores the registry default afterwards.
+ */
+test.describe('AdminAllergies - poster notes', () => {
+    test.afterAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        await SettingFactory.restoreDefault(context, NOTES_KEY)
+    })
+
+    /** The rendered bullets - the notes the user actually reads, not the textarea they typed into */
+    const renderedNotes = (page: Page) => page.getByTestId('allergy-notes-item')
+
+    test('GIVEN an allergy manager WHEN adding a note and saving THEN the bullets, a reload and the poster show it', async ({browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
+        const memberSession = await memberValidatedBrowserContext(browser)
+        const {userId} = await getSessionUserInfo(memberSession)
+        const newNote = `Husk allergener ${temporaryAndRandom()}`
+
+        await UserFactory.withSystemRoles(adminContext, userId, [SystemRoleSchema.enum.ALLERGYMANAGER], async () => {
+            const context = await freshMemberContext(browser)
+            const page = await context.newPage()
+
+            await gotoCatalog(page)
+            await page.getByTestId('edit-allergy-notes').click()
+
+            const textarea = page.getByTestId('allergy-notes-textarea')
+            await expect(textarea).toBeVisible()
+            await textarea.fill(`${await textarea.inputValue()}\n${newNote}`)
+            await page.getByTestId('save-allergy-notes').click()
+
+            // The bullets the user reads carry the new line, and the editor is gone
+            await expect(renderedNotes(page).filter({hasText: newNote})).toHaveCount(1)
+            await expect(page.getByTestId('allergy-notes-textarea')).toHaveCount(0)
+
+            // The row, not a screenful of state: it survives a reload
+            await page.reload()
+            await expect(renderedNotes(page).filter({hasText: newNote})).toHaveCount(1)
+
+            // The poster prints the same row
+            await page.goto('/admin/allergies/pdf')
+            await expect(renderedNotes(page).filter({hasText: newNote})).toHaveCount(1)
+        })
+    })
+
+    // The environment's member may hold ALLERGYMANAGER, so the test states the role it needs
+    test('GIVEN a member without the allergy role WHEN viewing the catalog THEN the notes have no pencil', async ({browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
+        const memberSession = await memberValidatedBrowserContext(browser)
+        const {userId} = await getSessionUserInfo(memberSession)
+
+        await UserFactory.withSystemRoles(adminContext, userId, [], async () => {
+            const context = await freshMemberContext(browser)
+            const page = await context.newPage()
+
+            await gotoCatalog(page)
+
+            await expect(page.getByTestId('allergy-notes')).toContainText('Vigtige bemærkninger')
+            await expect(page.getByTestId('edit-allergy-notes')).toHaveCount(0)
+        })
     })
 })

@@ -81,7 +81,6 @@
     "@playwright/test": "^1.57.0",
     "@types/node": "^22.19.3",
     "@vue/test-utils": "^2.4.6",
-    "baseline-browser-mapping": "^2.9.11",
     "eslint": "^9.39.2",
     "happy-dom": "^20.9.0",
     "nitro-cloudflare-dev": "^0.2.1",

@@ -30,6 +30,8 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
         name: string
         path: () => string
         ready: (page: Page) => Locator
+        /** Reveals what the page hides behind a control, so the measurement covers it too */
+        reveal?: (page: Page) => Promise<void>
     }
 
     const PAGES: MobilePageCase[] = [
@@ -39,7 +41,16 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
         {name: 'admin-users', path: () => '/admin/users', ready: (page) => page.getByTestId('admin-users')},
         {name: 'dinner', path: () => '/dinner', ready: (page) => page.getByTestId('dinner-detail-panel')},
         {name: 'household-settings', path: () => ownHouseholdSettingsUrl, ready: (page) => page.getByTestId('household-settings')},
-        {name: 'login', path: () => '/login', ready: (page) => page.locator('button[name="logout-button"]')}
+        {
+            name: 'login',
+            path: () => '/login',
+            ready: (page) => page.locator('button[name="logout-button"]'),
+            // The settings card sits behind the ⚙ in the profile card header
+            reveal: async (page) => {
+                await page.getByTestId('pref-toggle').click()
+                await page.getByTestId('pref-card').waitFor({state: 'visible'})
+            }
+        }
     ]
 
     test.beforeAll(async ({browser}) => {
@@ -58,7 +69,7 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
     const measureHorizontalOverflow = (page: Page) =>
         page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
 
-    for (const {name, path, ready} of PAGES) {
+    for (const {name, path, ready, reveal} of PAGES) {
         test(`GIVEN a 375px viewport WHEN ${name} renders THEN the page does not scroll horizontally`, async ({page}) => {
             const url = path()
 
@@ -70,6 +81,7 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
                 (isVisible) => isVisible,
                 8
             )
+            await reveal?.(page)
 
             // Evidence for the classification table - taken before the assertion so it exists on failure
             await doScreenshot(page, `mobile/alerts-${name}`)

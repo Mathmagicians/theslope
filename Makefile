@@ -63,6 +63,12 @@ help: ## Show this help
 # ============================================================================
 # D1 — SCHEMA, MIGRATIONS, SEEDS, QUERIES
 # ============================================================================
+# --- Design system → palette presets (app/assets/css/palettes/*.css, generated, committed)
+.PHONY: palettes
+
+palettes: ## Regenerate the palette presets from the design system (rerun after a change to main.css scales, app.config ui.colors or a fill/ink token)
+	@npx jiti scripts/palettes/generate.ts
+
 # --- Schema → migration files → Prisma client + zod (prisma/generated, committed)
 .PHONY: d1-prisma-zod d1-prisma d1-create-migration d1-flatten-migrations
 
@@ -414,13 +420,13 @@ define theslope_sender_event_monthly_billing
 	$(call theslope_call,$(1),-X POST "$$BASE_URL/api/admin/sender/event/monthly-billing" -d "{\"billingPeriodSummaryId\":$(bpid)}")
 endef
 
-theslope-sender-event-monthly-billing-local: ## Re-send the accountant mail for a period on localhost (miniflare queue sink)
+theslope-sender-event-monthly-billing-local: ## Re-send the accountant mail for a period on localhost (miniflare queue sink) — bpid=<billingPeriodSummaryId>
 	$(call theslope_sender_event_monthly_billing,$(ENV_local))
 
-theslope-sender-event-monthly-billing-dev: ## Re-send the accountant mail for a period on dev → real mail, CSV attached
+theslope-sender-event-monthly-billing-dev: ## Re-send the accountant mail for a period on dev → real mail, CSV attached — bpid=<billingPeriodSummaryId>
 	$(call theslope_sender_event_monthly_billing,$(ENV_dev))
 
-theslope-sender-event-monthly-billing-prod: ## Re-send the accountant mail for a period on prod
+theslope-sender-event-monthly-billing-prod: ## Re-send the accountant mail for a period on prod — bpid=<billingPeriodSummaryId>
 	$(call theslope_sender_event_monthly_billing,$(ENV_prod))
 
 queues-info-dev: ## Backlog of the dev sender queue

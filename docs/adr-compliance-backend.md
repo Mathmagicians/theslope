@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2026-09-16 (Sender event `monthly-billing`: accountant mail with the period CSV, cc admin; monthly billing archives the CSV to R2 and raises the event)
+**Last Updated:** 2026-09-18 (Settings: `GET`/`POST /api/admin/setting/[key]` on the `Setting` table, with keys, value schemas, defaults and writers declared in `SETTING_REGISTRY`; `requireSettingWriteAccess()` runs the per-key writer)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -69,6 +69,10 @@
 | `/api/admin/allergy-type/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createAllergyType() validates with AllergyTypeDisplaySchema                                      |
 | `/api/admin/allergy-type/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateAllergyType() validates with AllergyTypeDisplaySchema                                      |
 | `/api/admin/allergy-type/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteAllergyType() validates with AllergyTypeDisplaySchema                                      |
+| **Admin - Settings** | | | | | **✅ FULLY COMPLIANT (2026-09-18)** - Key-value store with a code registry (`SETTING_REGISTRY` in `useSettingValidation`) |
+| `/api/admin/setting/[key].get.ts` | ✅ | ✅ | ✅ | ✅ | `fetchSetting()` → SettingDetail; every authenticated user reads (the poster is member-facing). A registered key answers with the registry default (`updatedAt`/`updatedByUserId` null) when it has no row; an unregistered key is 400 |
+| `/api/admin/setting/[key].post.ts` | ✅ | ✅ | ✅ | ✅ | `upsertSetting()` → SettingDetail; body validated with the key's own `valueSchema`; `requireSettingWriteAccess(event, key)` runs the key's `canWrite` (403); the session user is stored as `updatedByUserId` |
+| `server/data/settingsRepository.ts` | ✅ | N/A | ✅ | ✅ | `fetchSetting` / `upsertSetting`, keyed on `Setting.key` (ADR-010 rule 5). The `value` column holds JSON for every key: `JSON.stringify` on write, `JSON.parse` + the key's `valueSchema` on read |
 | **Household - Allergies** | | | | | **✅ FULLY COMPLIANT **                                                                           |
 | `/api/household/allergy/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteAllergy() → AllergyResponse                                                                |
 | `/api/household/allergy/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchAllergiesForInhabitant/fetchAllergiesForHousehold() → AllergyWithRelations[]                |
@@ -87,6 +91,9 @@
 | `/api/admin/maintenance/monthly.post.ts` | ✅ | N/A | ✅ | ✅ | `runMonthlyBilling(db, triggeredBy, {queue, archive, notifications})`; after generation every closed period converges (ADR-015): `useBilling().decideBillingSideEffects({version, archivedVersion, notifiedVersion})` (delivered versions from `Delivery` via `fetchDeliveries`, `financesRepository.ts`) → `archiveBillingCsv()` (R2, one object per version) / `notifyBillingPeriod()` (queue; v1 CLOSED, later UPDATED), each recorded as a `Delivery` row with the run's `jobRunId`; response `periods[]` with `version` / `csvUploaded` / `emailSent`; billing completes independently of the side effects; `maintenance.e2e.spec.ts` asserts the end state and that a second run reports the same state |
 | **Household - Update** | | | | | **✅ FULLY COMPLIANT (2026-03-04)** - Self-service household update with admin bypass            |
 | `/api/household/[id]/update.post.ts` | ✅ | ✅ | ✅ | ✅ | updateHousehold() + `rescaffoldOnFieldChange()`, `requireHouseholdAccess()`, `?adminBypass=true`, returns HouseholdUpdateResponse |
+| **User - Own settings** | | | | | **✅ FULLY COMPLIANT (2026-09-17)** - Session user only, no id in the path; route rule `{prefix: '/api/user/', methods: null, check: isAuthenticated}` before the generic `/api/` rule |
+| `/api/user/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | `requireUserSession` → `readValidatedBody(UserPreferencesUpdateSchema)` → 400 `SMS kræver et telefonnummer` without a phone → `saveUser(delta, id)` (`serializeUserPartial` + `Prisma.skip`, ADR-012) → `replaceUserSession` with the saved user (Heynabo token kept) → `UserDetail`; `tests/e2e/api/parallel/user/preferences.e2e.spec.ts` |
+| `/api/user/notifications/test.post.ts` | ✅ | N/A (no body) | N/A | ✅ | `emitTestEmail(queue, config, session user's email)` — the member twin of the admin test event; 200 with the degraded result when `SENDER` is missing → `SenderEmitResult` |
 | **Teams (Public)** |
 | `/api/team/index.get.ts` | ❌ | ✅ | |
 | `/api/team/[id].get.ts` | ❌ | ✅ | |
@@ -106,7 +113,7 @@
 | `/api/admin/heynabo/import.get.ts` | ✅ | ✅ | ✅ | ✅ | GET endpoint with proper business logic try-catch, uses transformation functions from composable |
 | **Authorization Infrastructure** | | | | | **✅ COMPLIANT (2025-12-23)** - Route-level + resource-level authorization                       |
 | `server/middleware/2.authorize.ts` | N/A | N/A | N/A | ✅ | Route-level authorization middleware, uses `usePermissions` composable                           |
-| `server/utils/authorizationHelper.ts` | N/A | N/A | N/A | ✅ | `requireHouseholdAccess()`, `requireRoutePermission()` helpers with ADR-004 logging              |
+| `server/utils/authorizationHelper.ts` | N/A | N/A | N/A | ✅ | `requireHouseholdAccess()`, `requireRoutePermission()`, `requireSettingWriteAccess()` helpers with ADR-004 logging. The settings helper runs the key's `canWrite` from `SETTING_REGISTRY`, so the route table carries the coarse rule `{prefix: '/api/admin/setting/', methods: ['POST'], check: isAuthenticated}` and never a key name |
 | **User Feedback** | | | | | **✅ FULLY COMPLIANT (2025-12-29)**                                                               |
 | `/api/feedback.post.ts` | ✅ | ✅ | N/A | ❌ | Creates GitHub issue via PAT, requires auth (Inhabitant), ADR-002 separate try-catch            |
 | `server/integration/github/githubClient.ts` | ✅ | ✅ | N/A | ❌ | GitHub API client with Zod validation, uses `useRuntimeConfig()`                                 |

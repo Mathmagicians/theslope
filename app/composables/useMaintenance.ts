@@ -1,7 +1,7 @@
 import {useMaintenanceValidation, type JobType, type JobStatus} from '~/composables/useMaintenanceValidation'
 import {useBookingValidation, type DailyMaintenanceResult} from '~/composables/useBookingValidation'
 import {useHeynaboValidation, type HeynaboImportResponse} from '~/composables/useHeynaboValidation'
-import {useBillingValidation, type BillingGenerationResult} from '~/composables/useBillingValidation'
+import {useBillingValidation, type MonthlyBillingJobResult} from '~/composables/useBillingValidation'
 import {useBooking} from '~/composables/useBooking'
 
 /**
@@ -14,7 +14,7 @@ export const useMaintenance = () => {
     const {DailyMaintenanceResultSchema} = useBookingValidation()
     const {formatScaffoldResult} = useBooking()
     const {HeynaboImportResponseSchema} = useHeynaboValidation()
-    const {BillingGenerationResultSchema} = useBillingValidation()
+    const {MonthlyBillingJobResultSchema} = useBillingValidation()
 
     /**
      * Human-readable labels for job types (Danish)
@@ -92,9 +92,9 @@ export const useMaintenance = () => {
 
     /**
      * Parse and validate resultSummary JSON based on job type
-     * Monthly billing returns {results: BillingGenerationResult[]}
+     * Monthly billing returns {results, periods} (MonthlyBillingJobResult)
      */
-    const parseResultSummary = (jobType: JobType, resultSummary: string | null): DailyMaintenanceResult | HeynaboImportResponse | BillingGenerationResult[] | Record<string, unknown> | null => {
+    const parseResultSummary = (jobType: JobType, resultSummary: string | null): DailyMaintenanceResult | HeynaboImportResponse | MonthlyBillingJobResult | Record<string, unknown> | null => {
         if (!resultSummary) return null
 
         try {
@@ -106,7 +106,7 @@ export const useMaintenance = () => {
                 case JobType.HEYNABO_IMPORT:
                     return HeynaboImportResponseSchema.parse(parsed)
                 case JobType.MONTHLY_BILLING:
-                    return parsed.results.map((r: unknown) => BillingGenerationResultSchema.parse(r))
+                    return MonthlyBillingJobResultSchema.parse(parsed)
                 default:
                     return parsed as Record<string, unknown>
             }
@@ -163,15 +163,22 @@ export const useMaintenance = () => {
      * Aggregates totals across all billing periods
      */
     const {formatPrice} = useTicket()
-    const formatMonthlyBillingStats = (results: BillingGenerationResult[]): { label: string; value: string }[] => {
+    const formatMonthlyBillingStats = ({results, periods}: MonthlyBillingJobResult): { label: string; value: string }[] => {
         const totalInvoices = results.reduce((sum, r) => sum + r.invoiceCount, 0)
         const totalTransactions = results.reduce((sum, r) => sum + r.transactionCount, 0)
         const totalAmount = results.reduce((sum, r) => sum + r.totalAmount, 0)
+        // Side effects of this run (ADR-015): CSVs put in R2, accountant mails queued, periods still behind
+        const csvUploaded = periods.filter(p => p.archive?.archived).length
+        const mailsSent = periods.filter(p => p.notification?.queued).length
+        const pending = periods.filter(p => !p.csvUploaded || !p.emailSent).length
         return [
             { label: 'Perioder', value: `${results.length}` },
             { label: 'PBS Fakturaer', value: `${totalInvoices}` },
             { label: 'Transaktioner', value: `${totalTransactions}` },
-            { label: 'Total', value: `${formatPrice(totalAmount)} kr` }
+            { label: 'Total', value: `${formatPrice(totalAmount)} kr` },
+            { label: 'CSV uploadet', value: `${csvUploaded}` },
+            { label: 'Mails sendt', value: `${mailsSent}` },
+            { label: 'Afventer', value: `${pending}` }
         ]
     }
 
@@ -194,8 +201,7 @@ export const useMaintenance = () => {
                 return stats.map(s => `${s.label}: ${s.value}`).join(', ')
             }
             case JobType.MONTHLY_BILLING: {
-                const results = parsed as BillingGenerationResult[]
-                const stats = formatMonthlyBillingStats(results)
+                const stats = formatMonthlyBillingStats(parsed as MonthlyBillingJobResult)
                 return stats.map(s => `${s.label}: ${s.value}`).join(', ')
             }
             case JobType.MAINTENANCE_IMPORT:

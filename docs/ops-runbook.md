@@ -148,7 +148,7 @@ Same for prod with `-prod`. A mail from dev is recognisable twice over: sender `
 
 ### Failures
 
-A retryable failure (`E_RATE_LIMIT_EXCEEDED`, `E_DAILY_LIMIT_EXCEEDED`, `E_INTERNAL_SERVER_ERROR`, network) is retried 3× at 30/60/120 s; the last attempt logs `[EMAIL] failed after 4 attempts` with the masked recipient and acknowledges the message. Every other failure is logged and acknowledged on the first attempt. `make logs-sender-<env>` shows them. The log line carries the message's `dedupeKey` (`<kind>:<channel>:<masked recipient>:<message id>`), which connects the app's producer log and the sender's log.
+`E_RECIPIENT_NOT_ALLOWED`: a `to` or `cc` outside the binding's `allowed_destination_addresses` (on dev the test mailbox only, `workers/sender/wrangler.toml`) — the app reports the mail as sent (its act ends at the queue), the sender logs the code with the masked recipient and acknowledges; fix the mailbox secret (`NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL` / `_ADMIN_EMAIL`) or the allow-list and re-send with `make theslope-sender-event-monthly-billing-<env> bpid=<id>`. A retryable failure (`E_RATE_LIMIT_EXCEEDED`, `E_DAILY_LIMIT_EXCEEDED`, `E_INTERNAL_SERVER_ERROR`, network) is retried 3× at 30/60/120 s; the last attempt logs `[EMAIL] failed after 4 attempts` with the masked recipient and acknowledges the message. Every other failure is logged and acknowledged on the first attempt. `make logs-sender-<env>` shows them. The log line carries the message's `dedupeKey` (`<kind>:<channel>:<masked recipient>:<message id>`), which connects the app's producer log and the sender's log.
 
 ---
 
@@ -432,7 +432,8 @@ make d1-migrate-prod                         # before make deploy-prod
 - The flattened file is named from the text after the last underscore of the migration directory: `name=delivery_and_versions` gives `0015_versions.sql`. A one-word name keeps both names equal.
 - A data line (backfill) is written into the Prisma source file `prisma/migrations/<stamp>_<change>/migration.sql`, convergent (`WHERE NOT EXISTS …`, `max(…)`), and the flattened copy is regenerated: `rm migrations/NNNN_<change>.sql && make d1-flatten-migrations`.
 - D1 stores `DateTime` as ISO-8601 text (`2026-06-16T22:00:00.000+00:00`); a date literal in SQL compares as text (`"cutoffDate" < '2026-09-17'`).
-- Prisma rebuilds a SQLite table for a column change (`CREATE TABLE "new_…"`, copy, drop, rename, inside `PRAGMA defer_foreign_keys`); D1 runs this pattern (migrations `0002`–`0011`, `0015`).
+- Prisma emits a table rebuild for every required column (`CREATE TABLE "new_…"`, copy, `DROP TABLE`, rename). On D1 the `PRAGMA foreign_keys=OFF` around it is a no-op inside the migration transaction, so `DROP TABLE` fires every child's `ON DELETE` action (2026-09-17: `0015` as generated nulled every `Inhabitant.userId`, `Order.bookedByUserId`, `OrderHistory.performedByUserId`, `Invoice.billingPeriodSummaryId` on local and dev). The rebuild is rewritten by hand in the Prisma source to `ALTER TABLE … ADD COLUMN … NOT NULL DEFAULT <constant>`; `tests/component/architecture/migrations.unit.spec.ts` fails a migration after `0014` that drops a table.
+- `make d1-migrate-<env>` counts the child rows without a parent on the `SET NULL` links before and after the apply and fails when a count changed; `make d1-verify-<env>` prints the counts on their own. Recovery of a deployed database: `make d1-time-travel-<env> ts=<RFC3339>` (30 days); local: `make d1-copy-dev-to-local` with the local app stopped.
 - Reading a database for a check: `npx wrangler d1 execute theslope --local --command "SELECT …"` (`--remote --env dev|prod` for the deployed ones).
 
 ## Database Seeding

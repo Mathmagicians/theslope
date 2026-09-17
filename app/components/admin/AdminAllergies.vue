@@ -27,9 +27,10 @@ CREATE on mobile docks under the toolbar (adjacent to the button that opened it)
 and suppresses row expansion, so the toolbar panel is the single live mount.
 Multiselect mode replaces master+detail with AllergenMultiSelector.
 
-The card HEADER carries AllergyNotes above the managers list, in the poster's order - the same box the poster prints:
+The card HEADER carries AllergyNotes above the managers list, in the poster's order - the same
+box, from the same Setting row, that the poster prints. The pencil edits it in place:
 ┌ Allergi Katalog                    [📄 Plakat] ┐
-│ ⚠ Vigtige bemærkninger                          │
+│ ⚠ Vigtige bemærkninger                    [✏️] │
 │  • Glutenfri boller findes i fryseren …         │
 │ ⓘ Spørgsmål om allergier? (AllergyManagersList) │
 ├─ toolbar + master/detail ───────────────────────┤
@@ -47,7 +48,6 @@ const props = withDefaults(defineProps<Props>(), {
 
 // Design system
 const { COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS } = useTheSlopeDesignSystem()
-const {DEFAULT_ALLERGY_POSTER_NOTES} = useSetting()
 
 // Responsive mount point for the detail panel - provided by the default layout;
 // false during SSR, so first paint renders the mobile mount
@@ -68,9 +68,10 @@ const {
   allergyTypes,
   isAllergyTypesLoading,
   isAllergyTypesErrored,
-  allergyTypesError
+  allergyTypesError,
+  posterNotes
 } = storeToRefs(store)
-const {createAllergyType, updateAllergyType, deleteAllergyType} = store
+const {createAllergyType, updateAllergyType, deleteAllergyType, savePosterNotes} = store
 
 // Initialize store
 store.initAllergiesStore()
@@ -248,6 +249,21 @@ const panelEvents = {
   'cancel-delete': cancelDelete
 }
 
+// POSTER NOTES - the one Setting row this card and the poster share
+const isSavingNotes = ref(false)
+
+const handleNotesSave = async (notes: string) => {
+  isSavingNotes.value = true
+  try {
+    await savePosterNotes(notes)
+    showSuccessToast('Bemærkninger gemt')
+  } catch (error) {
+    console.error('🥜 > AdminAllergies > Error saving poster notes:', error)
+  } finally {
+    isSavingNotes.value = false
+  }
+}
+
 // Funny empty state message for allergy catalog
 const catalogEmptyState = {
   emoji: '🎉',
@@ -287,7 +303,12 @@ const catalogEmptyState = {
               </UButton>
             </div>
           </div>
-          <AllergyNotes :notes="DEFAULT_ALLERGY_POSTER_NOTES"/>
+          <AllergyNotes
+              :notes="posterNotes"
+              :can-edit="props.canEdit"
+              :is-saving="isSavingNotes"
+              @save="handleNotesSave"
+          />
           <AllergyManagersList/>
         </div>
       </template>

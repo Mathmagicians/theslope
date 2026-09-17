@@ -19,8 +19,14 @@
  * │  # 40                    │  # 35               │  Baby: 1 # 20│  # 5       │
  * │    🌾 Maria (2)          │   🥛 Anna (3)       │  🌾 Peter    │            │
  * └──────────────────────────┴─────────────────────┴──────────────┴────────────┘
+ *    pink + black              orange + black        ocean + black  gray + black
+ *    RAINBOW[0]                RAINBOW[1]            RAINBOW[2]     neutral
  *
  * Each panel: % + kuverter + ticket breakdown (Voksen/Barn/Baby + total) + allergy flags.
+ *
+ * The three dining modes walk the brand rainbow in its order; TIL SALG stays grey, because a
+ * released ticket on offer is not a dining mode. Fill, ink and divider come from
+ * `COMPONENTS.kitchenPanel` (ADR-018); this component owns the layout and the numbers.
  */
 import type {OrderDetail} from '~/composables/useBookingValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'

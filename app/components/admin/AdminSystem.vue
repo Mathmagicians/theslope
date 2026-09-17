@@ -210,7 +210,7 @@ const dailyMaintenanceStats = computed(() => {
 const monthlyBillingStats = computed(() => {
   if (!hasMonthlyBillingResult.value || !monthlyBillingResult.value?.results) return []
   return formatStatsWithIcons(
-    formatMonthlyBillingStats(monthlyBillingResult.value.results),
+    formatMonthlyBillingStats(monthlyBillingResult.value),
     jobIconsMap.MONTHLY_BILLING,
     getJobRunTimestamp(monthlyBillingResult.value.jobRunId)
   )

@@ -11,9 +11,17 @@ import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ALLERGY_TEST_IDS} from '../allergy/allergyTestIds'
 import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId} from '~~/tests/component/testHelpers'
 
+// The one Setting row the catalog footer and the poster read
+const POSTER_NOTES_ENDPOINT = '/api/admin/setting/allergy-poster-notes'
+
 // Endpoint mocks - specific FIRST, generic LAST (docs/testing.md)
 const allergyTypesEndpoint = vi.fn()
+const posterNotesGetEndpoint = vi.fn()
+const posterNotesPostEndpoint = vi.fn()
 registerEndpoint('/api/admin/allergy-type', allergyTypesEndpoint)
+// Generic (GET) registered BEFORE method-specific so POST wins (reverse-order lookup)
+registerEndpoint(POSTER_NOTES_ENDPOINT, posterNotesGetEndpoint)
+registerEndpoint(POSTER_NOTES_ENDPOINT, {handler: posterNotesPostEndpoint, method: 'POST'})
 registerEndpoint('/api/admin/users/by-role/ALLERGYMANAGER', () => [])
 registerEndpoint('/api/admin/users', () => [])
 registerEndpoint('/api/admin/household', () => [])
@@ -24,6 +32,15 @@ registerEndpoint('/api/admin/season', () => [])
 // several seconds under full-suite parallelism on a loaded machine) - size the timeout accordingly
 vi.setConfig({testTimeout: 15_000})
 
+// The stored notes - two lines, so the assertions cannot pass on the three-bullet registry default
+const STORED_NOTES = 'Glutenfri boller findes i fryseren\nHusk at give besked ved menu-præsentationen'
+const aNotesRow = (value: string) => ({
+    key: 'allergy-poster-notes',
+    value,
+    updatedAt: new Date('2026-09-18T10:00:00.000Z').toISOString(),
+    updatedByUserId: 3
+})
+
 const mockAllergyTypes = AllergyFactory.createMockAllergyTypesWithInhabitants()
 const [firstType] = mockAllergyTypes
 const firstRow = ALLERGY_TEST_IDS.row(firstType!.id!)
@@ -32,7 +49,9 @@ const firstRow = ALLERGY_TEST_IDS.row(firstType!.id!)
 // covers what the component renders once the catalog is loaded. Children render for real
 // (AllergyManagersList, UserListItem) - the mount helper supplies the tooltip provider.
 const mountAdmin = async (props: Record<string, unknown> = {}, isMd = false) => {
-    await useAllergiesStore().loadAllergyTypes()
+    const store = useAllergiesStore()
+    await store.loadAllergyTypes()
+    await store.loadPosterNotes()
 
     const wrapper = await mountWithTooltipProvider(AdminAllergies, {props: {canEdit: true, ...props}, isMd})
     await flushPromises()
@@ -56,6 +75,8 @@ describe('AdminAllergies', () => {
         clearNuxtData()
         vi.clearAllMocks()
         allergyTypesEndpoint.mockReturnValue(mockAllergyTypes)
+        posterNotesGetEndpoint.mockReturnValue(aNotesRow(STORED_NOTES))
+        posterNotesPostEndpoint.mockReturnValue(aNotesRow(STORED_NOTES))
     })
 
     describe.each(VIEWPORTS)('on $viewport', ({isMd}) => {
@@ -128,12 +149,25 @@ describe('AdminAllergies', () => {
                 expect(wrapper.text()).toContain('Afslut sammenligning')
             })
 
-            // Same AllergyNotes component and text source as the poster, in the card header above the managers list
-            it('renders the notes box in the card header', async () => {
+            // Same AllergyNotes component and text source (the Setting row) as the poster,
+            // in the card header above the managers list
+            it('renders the stored notes in the card header', async () => {
                 const wrapper = await mount()
 
                 expect(findByTestId(wrapper, ALLERGY_TEST_IDS.notes).text()).toContain('Vigtige bemærkninger')
-                expect(findAllByTestId(wrapper, ALLERGY_TEST_IDS.notesItem)).toHaveLength(3)
+                expect(findAllByTestId(wrapper, ALLERGY_TEST_IDS.notesItem).map(item => item.text()))
+                    .toEqual(STORED_NOTES.split('\n'))
+            })
+
+            it('writes the edited notes back to the setting', async () => {
+                const wrapper = await mount()
+
+                await clickByTestId(wrapper, ALLERGY_TEST_IDS.editNotes)
+                await findByTestId(wrapper, ALLERGY_TEST_IDS.notesTextarea).setValue('Kun én bemærkning')
+                await clickByTestId(wrapper, ALLERGY_TEST_IDS.saveNotes)
+                await flushPromises()
+
+                expect(posterNotesPostEndpoint).toHaveBeenCalled()
             })
 
             it('opens an empty form from the create button', async () => {
@@ -199,6 +233,14 @@ describe('AdminAllergies', () => {
                 await openDetail(wrapper)
 
                 expect(findByTestId(wrapper, testId).exists()).toBe(false)
+            })
+
+            // A member reads the notes on the catalog the same way they read them on the poster
+            it('hides the notes pencil when canEdit is false, keeping the bullets', async () => {
+                const wrapper = await mount({canEdit: false})
+
+                expect(findByTestId(wrapper, ALLERGY_TEST_IDS.editNotes).exists()).toBe(false)
+                expect(findAllByTestId(wrapper, ALLERGY_TEST_IDS.notesItem)).toHaveLength(2)
             })
         })
     })

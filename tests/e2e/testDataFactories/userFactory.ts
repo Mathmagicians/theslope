@@ -4,6 +4,8 @@ import testHelpers from "../testHelpers"
 import type {UserDetail, UserCreate} from "~/composables/useCoreValidation"
 import {useCoreValidation} from "~/composables/useCoreValidation"
 import {HouseholdFactory} from "./householdFactory"
+import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS, type UserPreferencesUpdate} from "~/composables/useUserPreferenceValidation"
+import {useNotificationValidation, type SenderEmitResult} from "~/composables/useNotificationValidation"
 
 const {salt, headers} = testHelpers
 const {SystemRoleSchema} = useCoreValidation()
@@ -15,7 +17,9 @@ export class UserFactory {
         email: 'minnie-admin-users@andeby.dk',
         phone: '+4512345678',
         passwordHash: 'caramba',
-        systemRoles: [] // Regular user has empty roles array
+        systemRoles: [], // Regular user has empty roles array
+        notificationChannels: [...DEFAULT_NOTIFICATION_CHANNELS],
+        appearance: {...DEFAULT_APPEARANCE}
     }
 
     static readonly defaultUser = (testSalt: string = testHelpers.temporaryAndRandom()): UserCreate => {
@@ -42,8 +46,10 @@ export class UserFactory {
         const userDetail: UserDetail = {
             id: overrides?.id ?? 1,
             email: overrides?.email ?? userData.email,
-            phone: overrides?.phone ?? userData.phone,
+            phone: overrides?.phone !== undefined ? overrides.phone : userData.phone,
             systemRoles: overrides?.systemRoles ?? userData.systemRoles,
+            notificationChannels: overrides?.notificationChannels ?? userData.notificationChannels,
+            appearance: overrides?.appearance ?? userData.appearance,
             createdAt: overrides?.createdAt ?? new Date(),
             updatedAt: overrides?.updatedAt ?? new Date(),
             Inhabitant: overrides?.Inhabitant ?? {
@@ -106,6 +112,100 @@ export class UserFactory {
                 console.warn(`Failed to cleanup user ${id}: status ${response.status()}`)
             }
         }))
+    }
+
+    /**
+     * POST /api/user/preferences - the session user's own notification channels and appearance.
+     * Returns the updated UserDetail on 200, null on an expected error status.
+     */
+    static readonly updateMyPreferences = async (
+        context: BrowserContext,
+        preferences: UserPreferencesUpdate,
+        expectedStatus: number = 200
+    ): Promise<UserDetail | null> => {
+        const response = await context.request.post('/api/user/preferences', {headers, data: preferences})
+
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+        if (expectedStatus !== 200) return null
+        const {UserDetailSchema} = useCoreValidation()
+        return UserDetailSchema.parse(await response.json())
+    }
+
+    /** POST /api/user/notifications/test - one test message to the session user */
+    static readonly sendTestNotification = async (
+        context: BrowserContext,
+        expectedStatus: number = 200
+    ): Promise<SenderEmitResult | null> => {
+        const response = await context.request.post('/api/user/notifications/test', {headers})
+
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+        if (expectedStatus !== 200) return null
+        const {SenderEmitResultSchema} = useNotificationValidation()
+        return SenderEmitResultSchema.parse(await response.json())
+    }
+
+    /** The user snapshot the session carries (GET /api/_auth/session) */
+    static readonly getSessionUser = async (context: BrowserContext): Promise<UserDetail> => {
+        const response = await context.request.get('/api/_auth/session', {headers})
+        expect(response.status()).toBe(200)
+        const {UserDetailSchema} = useCoreValidation()
+        return UserDetailSchema.parse((await response.json()).user)
+    }
+
+    /** POST /api/admin/users/:id - the admin path used to arrange a member's phone for a test */
+    static readonly setPhone = async (context: BrowserContext, userId: number, phone: string | null): Promise<void> => {
+        const response = await context.request.post(`/api/admin/users/${userId}`, {headers, data: {phone}})
+        expect(response.status(), 'Unexpected status setting phone').toBe(200)
+    }
+
+    /** GET /api/admin/users - the stored users, for a test that needs a user's persisted roles */
+    static readonly getUsers = async (context: BrowserContext): Promise<UserDetail[]> => {
+        const response = await context.request.get('/api/admin/users', {headers})
+        expect(response.status(), 'Unexpected status listing users').toBe(200)
+        return await response.json()
+    }
+
+    /**
+     * POST /api/admin/users/:id - the admin path used to arrange a user's roles for a test.
+     * ALLERGYMANAGER is TheSlope-owned, so it survives the user's next login; a spec that
+     * grants it restores the original roles afterwards.
+     */
+    static readonly setSystemRoles = async (
+        context: BrowserContext,
+        userId: number,
+        systemRoles: string[]
+    ): Promise<void> => {
+        const response = await context.request.post(`/api/admin/users/${userId}`, {headers, data: {systemRoles}})
+        expect(response.status(), 'Unexpected status setting system roles').toBe(200)
+    }
+
+    /**
+     * Run `body` with the user holding exactly `systemRoles`, then put the stored roles back.
+     * Lets a test state the role it needs instead of depending on what the environment granted.
+     * Roles live in the session snapshot, so `body` logs in again (`freshMemberContext`) to see them.
+     */
+    static readonly withSystemRoles = async <T>(
+        adminContext: BrowserContext,
+        userId: number,
+        systemRoles: string[],
+        body: () => Promise<T>
+    ): Promise<T> => {
+        const stored = (await UserFactory.getUsers(adminContext)).find(user => user.id === userId)
+        expect(stored, `User ${userId} must exist to arrange its roles`).toBeDefined()
+        const originalRoles = [...(stored!.systemRoles ?? [])]
+
+        await UserFactory.setSystemRoles(adminContext, userId, systemRoles)
+        try {
+            return await body()
+        } finally {
+            await UserFactory.setSystemRoles(adminContext, userId, originalRoles)
+        }
     }
 
     static readonly createAdmin = (testSalt: string = testHelpers.temporaryAndRandom()): UserCreate => {

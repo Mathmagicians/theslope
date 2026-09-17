@@ -37,21 +37,18 @@ describe('createCloudflareEmailProvider', () => {
         })
     })
 
-    it('maps attachments to the binding shape with an attachment disposition', async () => {
+    it('hands the binding the attachment bytes (the contract carries base64; a string would be sent as the file text)', async () => {
         const binding = fakeEmailBinding()
         const email = MessageFactory.emailWithAttachment(12, 'salt')
         const [attachment] = email.attachments
 
         await createCloudflareEmailProvider(binding).send(email)
 
-        expect(binding.send).toHaveBeenCalledWith(expect.objectContaining({
-            attachments: [{
-                content: attachment!.contentBase64,
-                filename: attachment!.filename,
-                type: attachment!.contentType,
-                disposition: 'attachment'
-            }]
-        }))
+        const sent = binding.send.mock.calls[0]![0] as {attachments: Array<{content: unknown, filename: string, type: string, disposition: string}>}
+        const [sentAttachment] = sent.attachments
+        expect(sentAttachment).toMatchObject({filename: attachment!.filename, type: attachment!.contentType, disposition: 'attachment'})
+        expect(sentAttachment!.content).toBeInstanceOf(Uint8Array)
+        expect(Buffer.from(sentAttachment!.content as Uint8Array)).toEqual(Buffer.from(attachment!.contentBase64, 'base64'))
     })
 
     it.each([

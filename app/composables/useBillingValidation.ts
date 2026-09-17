@@ -429,11 +429,15 @@ export const useBillingValidation = () => {
      * Returns array of results (one per billing period processed)
      * Normal monthly run = 1 period, catch-up = multiple periods
      */
-    const MonthlyBillingResponseSchema = z.object({
+    /** What a monthly run did — stored in JobRun.resultSummary and returned by POST /api/admin/maintenance/monthly */
+    const MonthlyBillingJobResultSchema = z.object({
         /** What this run billed (one per period with unbilled transactions) */
         results: z.array(BillingGenerationResultSchema),
-        /** Every closed period after this run: CSV in R2 and accountant mail, done or redone as needed */
-        periods: z.array(BillingPeriodSideEffectsSchema),
+        /** Every closed period after this run: CSV in R2 and accountant mail, done or redone as needed ([] on runs stored before 2026-09-17) */
+        periods: z.array(BillingPeriodSideEffectsSchema).default([])
+    })
+
+    const MonthlyBillingResponseSchema = MonthlyBillingJobResultSchema.extend({
         jobRunId: z.number().int().positive()
     })
 
@@ -761,6 +765,7 @@ export const useBillingValidation = () => {
         BillingPeriodSummaryIdSchema,
         InvoiceCreatedSchema,
         BillingGenerationResultSchema,
+        MonthlyBillingJobResultSchema,
         MonthlyBillingResponseSchema,
 
         // Household Billing
@@ -811,6 +816,7 @@ export type BillingGenerationResult = z.infer<ReturnType<typeof useBillingValida
 export type BillingArchiveResult = z.infer<ReturnType<typeof useBillingValidation>['BillingArchiveResultSchema']>
 export type BillingSideEffectStamps = z.infer<ReturnType<typeof useBillingValidation>['BillingSideEffectStampsSchema']>
 export type BillingPeriodSideEffects = z.infer<ReturnType<typeof useBillingValidation>['BillingPeriodSideEffectsSchema']>
+export type MonthlyBillingJobResult = z.infer<ReturnType<typeof useBillingValidation>['MonthlyBillingJobResultSchema']>
 export type MonthlyBillingResponse = z.infer<ReturnType<typeof useBillingValidation>['MonthlyBillingResponseSchema']>
 
 // Household Billing types

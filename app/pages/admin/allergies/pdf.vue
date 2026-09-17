@@ -5,7 +5,6 @@ import {formatDate} from '~/utils/date'
 const {groupInhabitantsByTicketCategory, ticketTypeConfig} = useTicket()
 const {formatTicketCounts} = useBilling()
 const {TYPOGRAPHY, BUTTONS, COLOR, ICONS, TEXT, BG, BORDER} = useTheSlopeDesignSystem()
-const {DEFAULT_ALLERGY_POSTER_NOTES} = useSetting()
 
 // No layout for printing
 definePageMeta({
@@ -14,7 +13,7 @@ definePageMeta({
 
 // STORES
 const store = useAllergiesStore()
-const {allergyTypes, isAllergyTypesLoading} = storeToRefs(store)
+const {allergyTypes, isAllergyTypesLoading, posterNotes} = storeToRefs(store)
 const planStore = usePlanStore()
 const {activeSeason} = storeToRefs(planStore)
 
@@ -149,8 +148,8 @@ const printPage = () => {
           </div>
         </div>
 
-        <!-- Footer notes - same component and text source as the catalog footer -->
-        <AllergyNotes :notes="DEFAULT_ALLERGY_POSTER_NOTES" class="mt-4"/>
+        <!-- Footer notes - same component and same Setting row as the catalog header; edited there -->
+        <AllergyNotes :notes="posterNotes" class="mt-4"/>
 
         <!-- Allergy manager contact -->
         <AllergyManagersList

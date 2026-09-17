@@ -7,8 +7,10 @@
 │ ┌─────────────────────────────────────────────────────────────────────────┐ │
 │ │ #header                                                                 │ │
 │ │                                                                         │ │
-│ │  [👤] Anna Hansen                        [Heynabo →] [👋 Log ud →]     │ │
+│ │  [👤] Anna Hansen      [⚙ Indstillinger] [Heynabo →] [👋 Log ud →]     │ │
 │ │       [🛡️ Admin] [💚 Allergichef]                                      │ │
+│ │                        ↑ own settings, current user only; filled while  │ │
+│ │                          the parent shows UserPreferencesCard below     │ │
 │ │                                                                         │ │
 │ ├─────────────────────────────────────────────────────────────────────────┤ │
 │ │ #default                                                                │ │
@@ -27,7 +29,7 @@
 │ │  [👤] Anna Hansen                                                      │ │
 │ │       [🛡️ Admin] [💚 Allergichef]                                      │ │
 │ │                                                                         │ │
-│ │  [Heynabo →] [👋 Log ud →]                                             │ │
+│ │  [⚙ Indstillinger] [Heynabo →] [👋 Log ud →]    (the three wrap here)   │ │
 │ │                                                                         │ │
 │ ├─────────────────────────────────────────────────────────────────────────┤ │
 │ │ #default                                                                │ │
@@ -40,7 +42,8 @@
 │ └─────────────────────────────────────────────────────────────────────────┘ │
 │                                                                             │
 │ Used in:                                                                    │
-│ - Login.vue (dashboard, showActions=true)                                   │
+│ - Login.vue (dashboard, showActions=true; owns `preferencesOpen` and        │
+│   renders UserPreferencesCard under this card on `toggle-preferences`)      │
 │ - AdminUsers.vue (expanded row, showActions=false)                          │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -53,14 +56,19 @@ interface Props {
   user: UserDetail | UserDisplay
   showActions?: boolean
   showRoleManager?: boolean
+  /** Whether the settings panel the parent renders under this card is open (ADR-006: no persistence) */
+  preferencesOpen?: boolean
 }
+
+const emit = defineEmits<{'toggle-preferences': []}>()
 
 const props = withDefaults(defineProps<Props>(), {
   showActions: false,
-  showRoleManager: false
+  showRoleManager: false,
+  preferencesOpen: false
 })
 
-const {TYPOGRAPHY, SIZES, ICONS, IMG, COMPONENTS, ALERTS, COLOR} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, SIZES, ICONS, IMG, BUTTONS, COMPONENTS, ALERTS, COLOR} = useTheSlopeDesignSystem()
 const {roleLabels} = useUserRolesUi()
 const {getUserUrl} = useHeynabo()
 const authStore = useAuthStore()
@@ -183,6 +191,18 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
 
         <!-- Right: Action buttons -->
         <UFieldGroup  :size="SIZES.standard" class="gap-2 md:gap-4 md:justify-end">
+          <!-- Own settings: reveals UserPreferencesCard under this card -->
+          <UButton
+            v-if="shouldShowActions"
+            v-bind="{...BUTTONS.secondaryAction, ...(preferencesOpen ? COMPONENTS.cardAction.toggleActive : COMPONENTS.cardAction.toggle)}"
+            :icon="ICONS.settings"
+            :aria-pressed="preferencesOpen"
+            data-testid="pref-toggle"
+            @click="emit('toggle-preferences')"
+          >
+            Indstillinger
+          </UButton>
+
           <!-- Heynabo profile link -->
           <UButton
             v-if="heynaboProfileUrl"

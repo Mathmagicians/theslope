@@ -57,6 +57,21 @@ const memberValidatedBrowserContext = (browser: Browser, baseURL?: string) =>
     createAuthContext(browser, authFiles.memberFile, baseURL)
 
 /**
+ * A context whose member session was minted just now, so it carries the roles the database
+ * holds rather than the roles the stored session file was created with. Use it in a test that
+ * changes the member's roles - the session snapshot is written at login and never refreshed.
+ */
+const freshMemberContext = async (browser: Browser): Promise<BrowserContext> => {
+    const context = await browser.newContext()
+    const response = await context.request.post('/api/auth/login', {
+        headers,
+        data: {email: process.env.HEY_NABO_EJ_ADMIN_USERNAME, password: process.env.HEY_NABO_PASSWORD}
+    })
+    expect(response.status(), 'Fresh member login failed').toBe(200)
+    return context
+}
+
+/**
  * Generic polling function with exponential backoff
  * Repeatedly calls fetchFn until condition returns true or max attempts reached
  *
@@ -241,6 +256,7 @@ const testHelpers = {
     headers,
     validatedBrowserContext,
     memberValidatedBrowserContext,
+    freshMemberContext,
     pollUntil,
     doScreenshot,
     selectDropdownOption,

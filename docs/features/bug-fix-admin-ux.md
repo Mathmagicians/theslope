@@ -1,3 +1,4 @@
+| — | `pref-cancel` |
 # Bug Fix: Admin UX — allergy catalog, alerts, poster, planning, preferences
 
 **Status:** In progress | **Date:** 2026-09-01 | **Updated:** 2026-09-16
@@ -13,9 +14,9 @@
 | C1 | CI break — server-reachable composable relied on app auto-imports; per-context typecheck gate + pure UI composables | ✅ IMPLEMENTED (2026-09-02) |
 | C2 | E2E stability — season list polled past a half-created season; UI specs wait for hydration before interacting | ✅ IMPLEMENTED (2026-09-02) |
 | Alerts on mobile | UAlert ignores screen size → design-system `ALERTS` pattern, every instance migrated, architecture test | ✅ IMPLEMENTED (2026-09-16) |
-| Poster notes | "Vigtige bemærkninger" shared with `/admin/allergies`, editable by ADMIN/ALLERGYMANAGER → `Setting` table + `AllergyNotes` | 🟡 Shared box ✅ (2026-09-16); editing ⏳ migration |
+| Poster notes | "Vigtige bemærkninger" shared with `/admin/allergies`, editable by ADMIN/ALLERGYMANAGER → `Setting` table + `AllergyNotes` | ✅ IMPLEMENTED (2026-09-18) |
 | QR code | `uqr` + `QrCode.vue` atom instead of `api.qrserver.com`; prints | ✅ IMPLEMENTED (2026-09-16) |
-| My preferences | notification channels (EMAIL/SMS) + appearance (colors, text scale) → `UserPreference` table, endpoints, dashboard card | ⏳ Mockup signoff + color decision + migration |
+| My preferences | notification channels (EMAIL/SMS) + appearance (colours, text scale) → two `User` columns, one endpoint, dashboard card | ✅ IMPLEMENTED (2026-09-17) |
 | Planning form | edit/create the allergies way (labelled Rediger + Opret), holiday rows editable, live-season save re-scaffolds, Heynabo cleanup on removed dates | ✅ IMPLEMENTED (2026-09-16) |
 | Sorted holidays | holiday list chronological everywhere | ✅ IMPLEMENTED (2026-09-16) |
 | Calendar grid | pickers show adjacent-month days twice → one shared `UCalendar` root token | ✅ IMPLEMENTED (2026-09-16) |
@@ -397,10 +398,9 @@ not shown:
 
 - **Editable content lives in the database.** Nuxt `app.config` and `runtimeConfig` are build/deploy-time: `nuxt/dist/app/config.js` hands
   each request a `klona` copy and Nitro deep-freezes its copy; nothing persists. `updateAppConfig()` is in-memory reactivity only.
-- **Two tables, one pattern.** `Setting` (global, key `@id`) and `UserPreference` (`@@id [userId, key]`, CASCADE with the user) share the
-  same key + JSON-value shape and a code registry per table (keys, value schema, default, writer). One migration bundles both. Not one table:
-  SQLite treats NULLs as distinct in UNIQUE (global rows with `userId NULL` would duplicate), the cascade differs, the authorization differs,
-  and no query spans both scopes.
+- **Community values in a table, per-user values in columns** (amended 2026-09-17): `Setting` (global, key `@id`, JSON value typed by a code
+  registry) holds what a role edits for everyone; a user's own settings are columns on `User` (`notificationChannels`, `appearance`), so the
+  session snapshot carries them and one save writes the record. Migration `0016_settings` bundles both.
 - **Shared design lives in `useTheSlopeDesignSystem`.** Alerts get a responsive `ALERTS` pattern, every `UAlert` migrates to it, and an
   architecture test forbids raw `UAlert` props. No Nuxt UI theme override in `app.config`.
 - **Planning only.** `/admin/teams` keeps `FormModeSelector`; conversion is a follow-up.
@@ -817,7 +817,7 @@ only text mechanisms are `HELP_TEXTS` and `app.config` (build-time). No settings
 
 ### Solution
 
-- **Schema** (bundled with "My preferences" in one migration):
+- **Schema** (migration `0016_settings`, which also adds `User.appearance` for "My preferences"):
 
   ```prisma
   model Setting {            // global, role-editable; value = JSON typed per key in SETTING_REGISTRY
@@ -828,21 +828,28 @@ only text mechanisms are `HELP_TEXTS` and `app.config` (build-time). No settings
     updatedBy       User?    @relation("SettingUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
   }
   ```
-- **Registry** (isomorphic, ADR-017 [Isomorphic Composables…]): `useSettingValidation.ts` (`SETTING_KEYS = ['allergy-poster-notes']`, key/detail
-  schemas — one entity type, Display ≡ Detail) and `useSetting.ts` (`SETTING_REGISTRY[key] = {valueSchema, defaultValue, canWrite}`; default = today's
-  three bullets; writer = `canMutateAllergies`; `splitNotes`). Values are JSON strings; the repository parses with the registry schema (ADR-010).
-- **Server**: `server/data/settingsRepository.ts` (`fetchSetting`, `upsertSetting`), `GET /api/admin/setting/[key]` (row or registry default with
-  `updatedAt: null`, never 404 for a registered key; all authenticated — the poster is member-readable), `POST /api/admin/setting/[key]`
-  (`requireSettingWriteAccess(event, key)` in `authorizationHelper.ts`, 403). Route table: `{prefix: '/api/admin/setting/', methods: ['POST'],
-  check: isAuthenticated}` before the generic admin rule — coarse gate, per-key check in the endpoint; prefix matching is substring-based, so key
-  names never go into the route table.
-- **Store**: `allergies.ts` += `posterNotes` (`useAsyncData`, transform parse, own status computeds, `loadPosterNotes`, `savePosterNotes`).
-- **UI**: `app/components/allergy/AllergyNotes.vue` — prop-driven (`notes`, `canEdit`, `isSaving`; emits `save`); view face `ALERTS.warning`
-  with one bullet per line, pencil `BUTTONS.edit` in `#actions` when `canEdit`; edit face `UTextarea` + `LAYOUTS.formButtonRow`; no `UTooltip`
-  (the poster has no `UApp`). Mounted in the `AdminAllergies` card header above the managers list (the poster’s order) and on the poster (view only). The poster keeps its print table.
-- **ADR-0xx (next free number when it ships) [Editable settings and user preferences as key-value stores with code registries]**.
+- **Registry** (isomorphic, ADR-017 [Isomorphic Composables…]): ONE file, `app/composables/useSettingValidation.ts` — `SETTING_KEYS =
+  ['allergy-poster-notes']`, `SettingKeySchema`, `SettingDetailSchema` (one entity type, Display ≡ Detail; `updatedAt` and `updatedByUserId`
+  nullable for an unwritten key), `SETTING_REGISTRY[key] = {valueSchema, defaultValue, canWrite}` with the three bullets as the default and
+  `canMutateAllergies` as the writer, plus `DEFAULT_ALLERGY_POSTER_NOTES` and `splitNotes`. It mirrors `useUserPreferenceValidation.ts` on the
+  user side. Values are JSON strings; the repository parses with the registry schema (ADR-010).
+- **Server**: `server/data/settingsRepository.ts` (`fetchSetting`, `upsertSetting`, upserting on the primary key), `GET /api/admin/setting/[key]`
+  (row or registry default with `updatedAt: null`, never 404 for a registered key, 400 for an unregistered one; all authenticated — the poster is
+  member-readable), `POST /api/admin/setting/[key]` (body validated with the key's own `valueSchema`, then `requireSettingWriteAccess(event, key)`
+  in `authorizationHelper.ts`, 403). Route table: `{prefix: '/api/admin/setting/', methods: ['POST'], check: isAuthenticated}` before the generic
+  admin rule — coarse gate, per-key check in the endpoint, so key names stay out of the route table.
+- **Store**: `allergies.ts` += `posterNotes` (`useAsyncData`, `SettingDetailSchema` transform, own `isPosterNotesLoading` /
+  `isPosterNotesErrored` / `isPosterNotesInitialized`, `loadPosterNotes`, `savePosterNotes`). The slice stays out of `isAllergyStoreReady`, so the
+  poster prints its notes while the catalog loads, and falls back to the registry default.
+- **UI**: `app/components/allergy/AllergyNotes.vue` — prop-driven (`notes`, `canEdit`, `isSaving`; emits `save`); view face
+  `{...ALERTS.legend, ...ALERTS.withActions}` + `ICONS.warning` with one bullet per line, pencil `BUTTONS.edit` +
+  `aria-label="Rediger bemærkninger"` in `#actions` when `canEdit`; edit face `UTextarea` rows 5 over `LAYOUTS.formButtonRow` with
+  `BUTTONS.cancel` / `BUTTONS.save`, closing when the parent's `isSaving` resolves; no `UTooltip` (the poster has no `UApp`). Mounted in the
+  `AdminAllergies` card header above the managers list (the poster's order), which toasts "Bemærkninger gemt", and on the poster (view only).
+  The poster keeps its print table.
+- **ADR-0xx (next free number when it ships) [Editable settings as a key-value store with a code registry]**.
 
-### Mockup — ✅ applied 2026-09-16 (notes box in the card header, poster order; edit face pending)
+### Mockup — ✅ applied (box in the card header 2026-09-16, edit face 2026-09-18)
 
 ```
 DESKTOP                                             MOBILE
@@ -870,14 +877,14 @@ Rejected: under the toolbar (competes with the mobile CREATE dock from D1).
 
 | Test | Change |
 |------|--------|
-| `useSettingValidation.unit`, `useSetting.unit` (new) | keys, value schema, default, `canWrite` for ADMIN / ALLERGYMANAGER / member |
-| `usePermissions.unit` | route resolution for `/api/admin/setting/` POST and GET |
-| `tests/e2e/api/parallel/admin/setting.e2e.spec.ts` + `settingFactory.ts` (new) | GET default 200, admin POST round-trip, member POST 403, unknown key 400, empty 400; restore in `afterAll` |
-| `allergies.nuxt.spec.ts` | `posterNotes` load + save |
-| `AllergyNotes.nuxt.spec.ts` (new) | bullets per line, pencil gating, edit/save/cancel emits |
-| `AdminAllergies.nuxt.spec.ts` | setting endpoint registered (same change as the store), footer notes, save |
-| `AdminAllergies.e2e.spec.ts` | allergy manager edits → saves → bullets; restore |
-| `admin-allergies-pdf.nuxt.spec.ts`, `AllergyPoster.e2e.spec.ts` | notes rendered; member sees no pencil; existing `(V)`/`[1V 1B]` assertions kept |
+| `useSettingValidation.unit.spec.ts` (new) | 🟢 keys, `SettingDetailSchema` (date coercion, nullable author), registry entry per key, value schema, default, `canWrite` for ADMIN / ALLERGYMANAGER / member, `splitNotes` |
+| `usePermissions.unit.spec.ts` | 🟢 `/api/admin/setting/` POST and GET resolve; the setting rule sits before the generic admin rule |
+| `tests/e2e/api/parallel/admin/setting.e2e.spec.ts` + `settingFactory.ts` (new) | 🟢 registered key never 404s, registry default reads back, admin POST round-trip with `updatedByUserId`, member 403 then ALLERGYMANAGER 200 (`UserFactory.withSystemRoles` + `freshMemberContext`), unknown key 400, empty / wrong type / over-long value 400; restore in `afterAll` |
+| `allergies.nuxt.spec.ts` | 🟢 `posterNotes` loads, `savePosterNotes` posts and refetches, the registry default, errors exposed |
+| `AllergyNotes.nuxt.spec.ts` | 🟢 bullets per line, pencil gating, textarea seeded, Annuller restores, Gem emits the trimmed text, the editor waits for the parent's `isSaving`; `describe.each` over `isMd` |
+| `AdminAllergies.nuxt.spec.ts` | 🟢 setting endpoint registered (real store), stored notes render, the edit round trip posts, no pencil without `canEdit` |
+| `AdminAllergies.e2e.spec.ts` | 🟢 admin adds a line → Gem → bullets and the poster show it; a member without the role sees no pencil; restore in `afterAll` |
+| `admin-allergies-pdf.nuxt.spec.ts`, `AllergyPoster.e2e.spec.ts` | 🟢 stored notes rendered, no pencil on the poster; existing `(V)` / `[1V 1B]` assertions kept |
 
 ### Affected Areas
 
@@ -985,51 +992,45 @@ have asked for readable colors and larger text. Nothing in the schema holds per-
 
 ### Solution
 
-- **Schema** (same migration as `Setting`):
+- **Schema** — two columns on `User`, beside `systemRoles` (migration `0016_settings`, which also creates `Setting`):
 
   ```prisma
-  model UserPreference {     // per login; value = JSON typed per key in USER_PREFERENCE_REGISTRY
-    userId    Int
-    key       String
-    value     String
-    updatedAt DateTime @updatedAt
-    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)   // user-owned (ADR-005 strong; HN deletes users, ADR-013)
-    @@id([userId, key])
-  }
-  enum NotificationChannel { EMAIL SMS }   // declared for the notifications worker's wire-parity test; no column uses it
+  notificationChannels String @default("[\"EMAIL\"]")                                        // JSON array of NotificationChannel
+  appearance           String @default("{\"palette\":\"default\",\"textScale\":\"normal\"}") // JSON, typed by AppearanceSchema
+  enum NotificationChannel { EMAIL SMS }
   ```
-  Amends `feature-proposal-notifications.md` (lines 23, 110-144): `User.notificationChannels` column → preference key `notification-channels`;
-  the producer resolves channels via `fetchUserPreferences`.
-- **Registry**: `useUserPreferenceValidation.ts` (`USER_PREFERENCE_KEYS = ['notification-channels', 'appearance']`, value schemas,
-  `UserPreferencesSchema` = complete map with defaults) and `useUserPreference.ts` (`USER_PREFERENCE_REGISTRY`, `withDefaults(rows)`).
-  Defaults: channels `['EMAIL']`; appearance per the color decision below + `textScale: 'normal'`.
-- **Server**: `settingsRepository.ts` += `fetchUserPreferences(d1, userId)`, `upsertUserPreference(d1, userId, key, value)`;
-  `GET /api/user/preference` (session user, all keys with defaults), `POST /api/user/preference/[key]` (owner = session user, no id param);
-  route rule `{prefix: '/api/user/', methods: null, check: isAuthenticated}`.
-- **Store**: `app/stores/preferences.ts` (`useUserPreferencesStore`: fetch when logged in, `appearance`, `notificationChannels`, status computeds,
-  `savePreference(key, value)` optimistic → POST → refresh).
-- **UI**: `app/components/user/UserPreferencesCard.vue` on the dashboard (`Login.vue`, under `UserProfileCard`): `USwitch` per channel (SMS
-  disabled with a hint when `user.phone` is empty), color control per the decision below, `URadioGroup` text scale, autosave with inline state.
-  Applied on every page from `layouts/default.vue` via `useHead({htmlAttrs})` (SSR renders the attribute, no flash):
-  `html[data-text-scale="large"] {font-size: 112.5%}`, `larger` 125%.
+  The column is what `feature-proposal-notifications.md` (lines 23, 110-144) describes: the producer reads `User.notificationChannels`.
+- **Registry** (isomorphic, ADR-017 [Isomorphic Composables…]): `app/composables/useUserPreferenceValidation.ts` — `PaletteSchema`
+  (`default` | `tydelig`), `TextScaleSchema` (`normal` | `large` | `larger`), `AppearanceSchema` with `DEFAULT_APPEARANCE`,
+  `DEFAULT_NOTIFICATION_CHANNELS`, `PALETTES` (one entry per preset carrying the level the contrast test verifies: `default` none,
+  `tydelig` `AA`), `UserPreferencesUpdateSchema` (partial of both fields), and `NotificationChannelSchema` re-exported from the
+  generated layer. Danish labels and the badge wording live in the component.
+- **Domain types** (ADR-010 [Domain-Driven Serialization]): both columns travel through the User schemas — `UserFragmentSchema` carries
+  them with the column defaults, `SerializedUserInputSchema` holds the JSON strings, `serializeUserInput` / `deserializeUser` /
+  `deserializeUserDetail` convert, `serializeUserPartial` writes them with `Prisma.skip` (ADR-012), and `UserSessionSchema` carries them
+  into the session.
+- **Server**: `POST /api/user/preferences` writes both fields of the session user in one save — `requireUserSession`,
+  `readValidatedBody(UserPreferencesUpdateSchema)`, 400 `SMS kræver et telefonnummer` when SMS is asked for and `User.phone` is empty,
+  `saveUser(delta, id)`, then the session snapshot is replaced with the saved user (the Heynabo token in `passwordHash` kept, as
+  `login.post.ts` builds it), response `UserDetail` (ADR-009). `POST /api/user/notifications/test` sends the `TEST` template to the
+  session user's own mailbox through the same sender event as the admin twin (`emitTestEmail(queue, config, recipient)`), and answers 200
+  with the degraded result where the pipe is unconfigured. Route table: `{prefix: '/api/user/', methods: null, check: isAuthenticated}`
+  before the generic `/api/` rule.
+- **Store**: `app/stores/auth.ts` — `notificationChannels` and `appearance` (each falling back to the column default, so a session
+  snapshot written before the columns existed reads as the default and a save keeps it), `savePreferences(update)` → POST →
+  `fetch()` → toast `Indstillinger gemt`, `sendTestNotification()` → POST → toast per result.
+- **UI**: `app/components/user/UserPreferencesCard.vue` on the dashboard (`Login.vue`, under `UserProfileCard`): view face with the pencil,
+  edit face with a `USwitch` per channel (SMS disabled with a hint when `User.phone` is empty), a `URadioGroup` for the palette and one for
+  the text scale, `Annuller` / `Gem`. The appearance reaches every page from `layouts/default.vue` through `useHead({htmlAttrs})`:
+  `data-palette` and `data-text-scale`, each omitted on its default value, rendered by SSR. `main.css` carries
+  `html[data-text-scale="large"] {font-size: 112.5%}` and `larger` 125%.
 
-### Colors — OPEN decision (taken at this package's approval gate)
+### Colors — ✅ decided 2026-09-16 (A, curated presets)
 
-How color reaches the screen today: `main.css` `@theme static` declares the Pantone scales as `--color-<name>-<n>`; `app.config.ts ui.colors`
-maps Nuxt UI semantics onto them (`primary: amber`, `secondary: pink`, `success: green`, …); the design system also uses scales directly
-(`BG.peach[50]`, `bg-pink-800`, ocean chef calendar, mocha past days, ticket-type and order-state colors, the green holiday ring).
-
-| | A — curated presets | B — user picks colors | C — hybrid |
-|---|---|---|---|
-| UI | radio: Standard / Høj kontrast / Farveblind-venlig | swatch pickers for `primary`/`secondary` from the named scales (Nuxt UI needs 50–950 scales, so no free hex wheel) | A's radio + one curated accent swatch row |
-| Mechanism | `html[data-palette]` overrides `--color-*` in `main.css` → reaches Nuxt UI semantics AND design-system utilities; SSR attribute, no flash | `updateAppConfig({ui: {colors: {primary}}})` from a plugin after the preference loads (per-request copy on SSR, reactive on the client; Nuxt UI regenerates `--ui-color-*`) | both |
-| Reach | whole app, consistently | only components using semantic `color=` props; design-system palette utilities keep their hue → mixed look | presets whole app; accent semantic only |
-| Accessibility | contrast and red/green safety designed once (Okabe-Ito basis for colorblind; darker text and borders for high contrast) | none guaranteed; low-contrast picks possible; success/error stay green/red unless pickable, and picking them breaks meaning | presets carry it; accent list pre-vetted |
-| Cost | design two presets across the scales the DS uses; three visual states to sign off | small code; N×M states, hard to screenshot-verify | A plus a vetted list |
-| Value schema | `{palette, textScale}` | `{primary, secondary, textScale}` | `{palette, accent?, textScale}` |
-
-The stated need (colorblind, elderly) is accessibility; personalization is a different need. The JSON value is typed in the registry, so the
-choice needs no schema change. Hues are signed off from screenshots after implementation.
+`html[data-palette]` redeclares `--color-<family>-<step>`, so one attribute on `<html>` reaches Nuxt UI's semantics and the design
+system's utilities together, and SSR writes it. The registry names one preset per generated block together with the level
+`designSystemContrast.unit.spec.ts` verifies it at, and the card shows that level as the option's badge: `Tydelig` carries
+`🇪🇺 EN 301 549 · WCAG 2.1 AA ✓`, `Farveglad` carries none.
 
 ### Contrast test — step 1 ✅ (2026-09-16, tests + docs only)
 
@@ -1092,6 +1093,7 @@ and Nuxt UI's own neutral compound variants use `text-highlighted`/`bg-elevated`
 
 **Preset status:** `app/assets/css/palettes/high-contrast.css` (AAA) and `colorblind.css` (AA) do not exist yet, so their 401 cases each are
 **skipped by name** (`describe.skipIf`) — 802 skipped, 0 faked. They go green the moment the generator emits the files.
+(2026-09-18: `colorblind.css` exists and measures 418 / 418; `high-contrast.css` keeps its 418 skipped cases.)
 
 ### Tydelig — step 2 ✅ (2026-09-16, the AA preset + its generator)
 
@@ -1212,7 +1214,7 @@ Set the preset from the console on any page: `document.documentElement.dataset.p
 
 | Route + state | Viewport | DS element to expect | Expect |
 |---|---|---|---|
-| `/` landing, scrolled | 375px + desktop | `BACKGROUNDS.landing.section1-4`, `PANTONE_CHIPS` | Four distinct bands, each a step deeper: pink 2.32→4.95, orange 2.64→4.67, party 4.07→4.29, ocean 2.78→5.09. The near-white section titles read on every band. The ticker chips keep their tint |
+| `/` landing, scrolled | 375px + desktop | `getRainbowBand(0-3)`, `PANTONE_CHIPS` | Four distinct bands in hue order with black headings: pink 8.33, orange 6.68→6.27, ocean 7.2, bonbon 5.88. The ticker chips keep their tint |
 | `/admin/planning`, view mode | desktop | `CALENDAR.holiday` ring, `PLANNING_CALENDAR.day.generated`, `BUTTONS.primaryAction` | Holiday ring darkens to `#007c00` and separates from white; generated cooking days keep their pink fill; `Opret sæson` / `Rediger` go mocha `#a47864`→`#8c614e` |
 | `/admin/planning?mode=edit`, holiday rows | 375px | `CalendarDateRangePicker` inputs, `LAYOUTS.sectionDivider` | Input borders `gray-200`→`#8b8c90`; the field edges become visible; section rules darken with them |
 | `/admin/allergies`, a row tapped | 375px + desktop | `AllergyCatalogTable`, `AllergyDetailPanel`, `TEXT.dimmed` | Muted and dimmed greys darken (`gray-400` `#99a1af`→`#616976`); timestamps and placeholder text read on the panel |
@@ -1222,59 +1224,330 @@ Set the preset from the console on any page: `document.documentElement.dataset.p
 | `/chef?team=<id>`, calendar open | 375px + desktop | `ChefCalendarDisplay`, `CALENDAR.countdown`, `BUTTONS.primaryAction` | Ocean day circles darken; `Rediger menu` goes deep orange; **the countdown accent on the near-black container is one of the two light-mode misses — check it reads** |
 | `/chef?team=<id>&view=agenda:open` | desktop | Agenda list, `KitchenPreparation` | The dinner cards keep their state chips; the kitchen row deepens |
 | Any page, dark mode | desktop | `TEXT.muted`, `BORDER.gray.*`, slot inks | Greys lighten instead (`gray-400`→`#b5bdcc`, `gray-700`→`#838fa4`); every `text-<slot>` lightens |
-| `/dinner` + `/chef`, dark mode | desktop | `COMPONENTS.kitchenPanel.*`, `*_CALENDAR.day.next` | **The known misses:** white on `orange-500`/`ocean-400`/`peach-400` stays low-contrast — those tokens have no dark face |
+| `/dinner` + `/chef`, dark mode | desktop | `COMPONENTS.kitchenPanel.*`, `*_CALENDAR.day.next` | The panels carry the rainbow with black ink in both modes; `*_CALENDAR.day.next` switches to `dark:text-black` on its ocean and peach fill |
 
-### Mockup — ✅ signed off 2026-09-16 (behind an "Indstillinger" button; colors variant still open)
+### The brand rainbow — ✅ IMPLEMENTED (2026-09-17)
+
+**Decided by the user.** One ordered brand rainbow, walked by index, in hue order. The landing bands and the kitchen
+panels walk the same list, and the ticker chips carry the same order, so the tints announce the solids below them.
+TIL SALG stays grey: a released ticket on offer reads as neutral beside the three dining modes. The ink on every
+vibrant fill is `TEXT.black`.
+
+**`PANTONE_FAMILIES` is the single source of order.** `HERO` and `CHIPS` are records keyed by family; `RAINBOW` and
+`PANTONE_CHIPS` map the list. Tailwind scans the literal class strings inside the records.
+
+| Token | Old | New |
+|---|---|---|
+| `TEXT.black` | — | `text-black` |
+| `BG.bonbon[500]` | — | `bg-violet-500` (the Bonbon scale; `bg-bonbon-*` paints nothing) |
+| `BORDER.pink[600]` / `BORDER.orange[600]` / `BORDER.ocean[600]` | — | `border-pink-600` / `border-orange-600` / `border-ocean-600` |
+| `PANTONE_FAMILIES` | — | `['pink','orange','ocean','bonbon','party','peach','mocha']` |
+| `HERO.pink` | — | `bg-pink-500 text-black` |
+| `HERO.orange` | — | `bg-orange-500 text-black` |
+| `HERO.ocean` | — | `bg-ocean-500 text-black` |
+| `HERO.bonbon` | — | `bg-violet-500 text-black` |
+| `HERO.party` | — | `bg-party-500 text-black` |
+| `BACKGROUNDS.hero.pink` | `bg-pink-500 text-pink-50` | `HERO.pink` |
+| `BACKGROUNDS.hero.orange` | `bg-orange-500 text-orange-100` | `HERO.orange` |
+| `BACKGROUNDS.hero.peach` | `bg-peach-300 text-peach-950` | unchanged |
+| `BACKGROUNDS.hero.mocha` | `bg-amber-500 text-amber-50` | unchanged |
+| `BACKGROUNDS.landing.titleBar` / `.ticker` | `bg-amber-500 text-amber-50` | `HERO.mocha` |
+| `BACKGROUNDS.landing.section1-4` | four fill+ink strings | deleted; `pages/index.vue` loops `getRainbowBand(i)` |
+| `COMPONENTS.kitchenPanel.TAKEAWAY` | `bg-warning-500 text-white border-warning-600 …` | `RAINBOW[0] border-pink-600 …` |
+| `COMPONENTS.kitchenPanel.DINEIN` | `bg-party-700 text-white border-party-800 …` | `RAINBOW[1] border-orange-600 …` |
+| `COMPONENTS.kitchenPanel.DINEINLATE` | `bg-orange-500 text-white border-orange-600 …` | `RAINBOW[2] border-ocean-600 …` |
+| `COMPONENTS.kitchenPanel.RELEASED` | `bg-gray-500 text-white border-gray-600 …` | `bg-gray-400 text-black border-gray-500 …` |
+| `PANTONE_CHIPS` | seven literals, mocha first | `PANTONE_FAMILIES.map(f => CHIPS[f])` |
+| `COMPONENTS.powerMode.iconClass` | `… text-warning-500` | `… text-warning-600` |
+| `TEXT.dimmed` | `text-gray-400 dark:text-gray-500` | `text-gray-500 dark:text-gray-600` |
+
+`KITCHEN_PANEL_BOX` holds the padding, the divider and the centring the four panels repeated verbatim.
+
+**The ink fix.** The last two rows free the two rungs the vibrant fills use: `orange-500` carries `TEXT.black` under
+band 1 and the SPISESAL panel while `powerMode.iconClass` drew the same rung as ink on the page, and `gray-400`
+carries TIL SALG while `TEXT.dimmed` drew it. In light mode the fix earns four pairs: `TEXT.dimmed` goes 2.6 → **4.84**
+on the page, and Tydelig leaves `orange-500` at `#e66532` and `gray-400` at its published value. Each token carries its
+own dark face — `dark:text-gray-400` and `dark:text-warning-400` — so dark mode gains ten pairs with it.
+
+**Counts.** Default theme **418 pairs, 247 pass, 171 fail** (was 401 / 197 / 204 before the dark-ink work).
+**Tydelig 418 pairs, 418 pass, 0 fail** (was 401 / 385 / 16): the preset meets EN 301 549 → WCAG 2.1 AA on every pair
+the design system defines, in light and dark.
+
+| Group | Pairs | Default pass | Tydelig pass |
+|---|---:|---:|---:|
+| text on surface | 153 | 99 | 153 |
+| paired token | 94 | 85 | 94 |
+| edge on surface | 93 | 53 | 93 |
+| semantic slot | 78 | 10 | 78 |
+
+**The bands, measured (light).** Slot re-pointing takes the white button label off the 500 rung, so three of the
+four band fills keep their published value under Tydelig.
+
+| Band / panel | Fill | Bar | Default | Tydelig |
+|---|---|---:|---:|---:|
+| band 0 · TAKEAWAY | pink-500, unmoved | 4.5 | **8.33** | **8.33** |
+| band 1 · SPISESAL | orange-500 `#ec6a37`→`#e66532` | 4.5 | **6.68** | **6.27** |
+| band 2 · SPIS SENT | ocean-500, unmoved | 4.5 | **7.2** | **7.2** |
+| band 3 | bonbon-500, unmoved | 3 | **5.88** | **5.88** |
+| spare stop | party-500, unmoved | 3 | **5.73** | **5.73** |
+| TIL SALG | gray-400, unmoved | 4.5 | **8.07** | **8.07** |
+| `landing.titleBar` / `ticker` / `hero.mocha` | amber-500 `#a47864`→`#8f6551` | 3 / 4.5 / 4.5 | 3.55 | **4.66** |
+| `hero.peach` | peach-300, unmoved | 3 | **9.01** | **9.01** |
+
+Seven of the eight brand fills keep their published value under Tydelig; `orange-500` moves one shade.
+
+**The AA closure.** Each remaining miss was one `--color-<family>-<step>` asked to be a fill and ink at once in the same
+mode. A preset moves values, not class strings, so each is closed by a token. `PRESET_FINDINGS` is empty and the
+generator converges in one round.
+
+| Token | Old | New | Closes |
+|---|---|---|---|
+| `CHEF_CALENDAR.day.next` | `text-white font-bold bg-ocean-400` | `text-white dark:text-black font-bold bg-ocean-400` | its own dark pair, 1.89 → 11.14 |
+| `DINNER_CALENDAR.day.next` | `text-white font-bold bg-peach-400` | `text-white dark:text-black font-bold bg-peach-400` | its own dark pair, 1.89 → 11.14 |
+| `PLANNING_CALENDAR.day.potential` | `font-medium border-2 border-pink-300 text-pink-800` | `… text-pink-800 dark:text-pink-300` | frees `pink-800`: `PANTONE_CHIPS[0]`, `CALENDAR.picker.cookingDay`, `PLANNING_CALENDAR.day.generated` |
+| `BORDER.amber[500]` | `border-amber-500` | `border-amber-500 dark:border-amber-300` | its dark edge on the page |
+| `RING.amber[500]` | `ring-amber-500` | `ring-amber-500 dark:ring-amber-300` | its dark ring, and `CALENDAR.deadline.warning` with it |
+| `BORDER.gray[800]` | `border-gray-800` | `border-gray-800 dark:border-gray-600` | its dark edge; `gray-800` stays `BG.inset`'s dark fill |
+| `CHEF_CALENDAR.countdown.accent` | `TEXT.ocean[400]` | `TEXT.ocean[200]` (new rung `text-ocean-200`) | its **light** pair on the near-black container |
+| `DINNER_CALENDAR.countdown.accent` | `TEXT.peach[400]` | `TEXT.peach[200]` (new rung `text-peach-200`) | its **light** pair on the near-black container |
+| `COMPONENTS.guestRow.iconClass` | `… text-info-500` | `… text-info-600` | frees `violet-500`: band 3 holds 5.88 under Tydelig |
+| `TEXT.dimmed` | `text-gray-500 dark:text-gray-600` | `text-gray-500 dark:text-gray-400` | its five dark pairs |
+| `COMPONENTS.powerMode.iconClass` | `… text-warning-600` | `… text-warning-600 dark:text-warning-400` | its five dark pairs |
+
+The two countdown accents took a **light** rung, not a `dark:` face: their miss is in light mode, where `blue-400` and
+`peach-400` carry white ink on `*_CALENDAR.day.next` and so stay dark, while the accent needs a light ink on the
+near-black countdown container. The 200 rung is drawn by the accent alone and reads 12.48 (ocean) and 12.38 (peach) on
+that container at published values.
+
+**Screenshots** (`test-results/rainbow/<page>-<viewport>-<default\|tydelig>.png`, 12 files, desktop 1440×900 and
+375×812), against a seeded season: all days cooking, a 2-day deadline, the member as chef of a team, household
+preferences DINEIN and TAKEAWAY, `scaffold-prebookings` run.
 
 ```
-DASHBOARD /login (logged in)
-┌ Hej Anna! 👋 ───────────────────────────────────────────────┐
-│ ┌ UserProfileCard ──────────────────────────────────────┐   │
-│ │ [👤] Anna Hansen      [⚙ Indstillinger] [Heynabo →] [👋 Log ud →] │  new button, BUTTONS.secondaryAction + ICONS.preferences
-│ │      [🛡️ Admin] [💚 Allergichef]                       │   │  (mobile: the three buttons wrap under the name)
-│ │ 📧 anna@…  📱 +45 …  🏠 Lejlighed 42                   │   │
-│ └───────────────────────────────────────────────────────┘   │
-│ Hvad vil du lave i dag? … ActionCards …                     │
-└─────────────────────────────────────────────────────────────┘
-
-AFTER [⚙ Indstillinger] — the card reveals directly under the profile (button shows active; click again = hide)
-┌ Hej Anna! 👋 ───────────────────────────────────────────────┐
-│ ┌ UserProfileCard ─ [⚙ Indstillinger ●] [Heynabo →] [Log ud →] ┐ │
-│ └───────────────────────────────────────────────────────┘   │
-│ ┌ Mine indstillinger ───────────────────────────────────┐   │  UserPreferencesCard.vue, v-if on the toggle
-│ │ 🔔 Notifikationer                                     │   │
-│ │   Vi må kontakte dig via   [✓] E-mail  anna@…         │   │  USwitch per channel; address from User
-│ │                            [ ] SMS     +45 …          │   │  SMS disabled + hint when no phone
-│ │ 🎨 Udseende                                           │   │
-│ │   Farver   (•) Standard ( ) Tydelig ( ) Høj kontrast ( ) Farveblind-venlig │  URadioGroup → html[data-palette]
-│ │            🇪🇺 EN 301 549 · WCAG 2.1 AA ✓                 │   │  small flag + green check (UBadge COLOR.success + ICONS.checkCircle);
-│ │                                                       │   │  level text per preset comes from the contrast test’s verified level
-│ │   Tekst    (•) Normal   ( ) Stor         ( ) Større   │   │  URadioGroup → html[data-text-scale]
-│ │   ✓ Gemt                                              │   │  autosave on change, inline state
-│ └───────────────────────────────────────────────────────┘   │
-│ Hvad vil du lave i dag? … ActionCards …                     │
-└─────────────────────────────────────────────────────────────┘
-Farver, variant A (presets):   (•) Standard ( ) Høj kontrast ( ) Farveblind-venlig        → html[data-palette]
-Farver, variant B (pick):      Primær [● mocha ▾]  Sekundær [● pink ▾]  (swatches of the named scales) → updateAppConfig(ui.colors)
-Farver, variant C (hybrid):    A's presets + one "Accentfarve" swatch row from a curated accessible list
-mobile: radios/swatches stack (ORIENTATIONS.responsive). The toggle state is component-local (ADR-006: no persistence).
+test-results/rainbow/landing-desktop-default.png    test-results/rainbow/landing-desktop-tydelig.png
+test-results/rainbow/landing-375-default.png        test-results/rainbow/landing-375-tydelig.png
+test-results/rainbow/chef-desktop-default.png       test-results/rainbow/chef-desktop-tydelig.png
+test-results/rainbow/chef-375-default.png           test-results/rainbow/chef-375-tydelig.png
+test-results/rainbow/dinner-desktop-default.png     test-results/rainbow/dinner-desktop-tydelig.png
+test-results/rainbow/dinner-375-default.png         test-results/rainbow/dinner-375-tydelig.png
 ```
+
+### Visual check — The brand rainbow
+
+Set the preset from the console on any page: `document.documentElement.dataset.palette = 'tydelig'`, back to Standard
+with `delete document.documentElement.dataset.palette`, dark with `document.documentElement.classList.toggle('dark')`.
+
+| Route + state | Viewport | DS element to expect | Expect |
+|---|---|---|---|
+| `/` landing, scrolled | 375px + desktop | `getRainbowBand(0-3)`, `TYPOGRAPHY.sectionTitle` | Four bands in hue order: pink, orange, ocean, bonbon. Black headings on each. The mocha title bar and ticker frame them |
+| `/` ticker | 375px + desktop | `PANTONE_CHIPS` | The chips run pink, orange, ocean, bonbon, party, peach, mocha — the order of the bands below |
+| `/dinner?date=<a dinner>` | 375px + desktop | `COMPONENTS.kitchenPanel.*` | TAKEAWAY pink, SPISESAL orange, SPIS SENT ocean, TIL SALG grey, each with black labels and numbers. The grey panel reads as neutral beside the three |
+| `/dinner?date=<a dinner>` | 375px | `COMPONENTS.kitchenPanel.*` | The four panels stack; the dividers follow their own family one rung deeper |
+| `/chef?team=<id>&cal=open` | 375px + desktop | `KitchenPreparation`, `CALENDAR.countdown` | The panel row carries the rainbow; the countdown accent on the near-black container is one of the two light-mode misses — check it reads |
+| `/`, Tydelig | desktop | `getRainbowBand(0-3)` | Pink, ocean and party hold their published value; orange deepens to `#bb3d00` and bonbon to `#b93277` |
+| `/admin/planning`, Tydelig | desktop | `BUTTONS.primaryAction`, `CALENDAR.holiday` | Solid buttons take the 600 rung; the holiday ring darkens to `#00a328` |
+| Any page, dark mode | desktop | `COMPONENTS.kitchenPanel.*`, `getRainbowBand(i)` | The bands and the panels paint the same fills with the same black ink |
+| `/chef`, `/dinner` | 375px + desktop | `CHEF_CALENDAR.countdown.accent`, `DINNER_CALENDAR.countdown.accent` | The countdown date and number sit one rung paler on the near-black card: `text-ocean-200` on `/chef`, `text-peach-200` on `/dinner`. The small time value keeps the 300 rung |
+| `/chef`, `/dinner`, dark mode | desktop | `CHEF_CALENDAR.day.next`, `DINNER_CALENDAR.day.next` | The next-dinner circle keeps its ocean and peach fill and switches its label to black |
+| `/admin/planning`, dark mode | desktop | `PLANNING_CALENDAR.day.potential` | The potential cooking day draws `text-pink-300` inside its pink-300 border |
+| Any calendar, dark mode | desktop | `CALENDAR.deadline.warning`, `RING.amber[500]`, `BORDER.amber[500]` | The warning ring and the chef-portrait frame lift to `amber-300` and separate from the dark page |
+| Any card, dark mode | desktop | `BORDER.gray[800]` | The card edge lifts to `gray-600` while `BG.inset` keeps its `gray-800` fill |
+| A guest row, any page | 375px + desktop | `COMPONENTS.guestRow.iconClass` | The guest glyph reads one rung deeper (`text-info-600`), which holds band 3 at its published bonbon |
+| Any page with muted text, dark mode | desktop | `TEXT.dimmed`, `COMPONENTS.powerMode.iconClass` | Timestamps, placeholders and the power-mode bolt lighten in the dark (`gray-400`, `warning-400`) and darken in the light (`gray-500`, `warning-600`) |
+
+### Farveblind — ✅ IMPLEMENTED (2026-09-18)
+
+The third preset, key `colorblind`, label **Farveblind**, in `app/assets/css/palettes/colorblind.css` under
+`html[data-palette="colorblind"]` and its `.dark` mirror. The generator became multi-preset: a `PRESETS` list of
+`{name, level, generatedOn, hues, header}`, one file per entry, one `npx jiti scripts/palettes/generate.ts` for both.
+Tydelig regenerates byte-identical — the diff against the committed file is empty before and after the refactor, and
+three consecutive runs give the same md5 for both files.
+
+**Two passes.** The hue map first: each anchor keeps its OKLCH hue and chroma, walks the published family's lightness
+ladder rung by rung, and gives up chroma where sRGB cannot show it at that rung (`clampChromaToGamut`, a bisection in
+`contrast.ts`, so a clipped channel never bends the anchor). Then the Tydelig AA pass on top — the same slot
+re-pointing and the same lightness bisection — with one addition: a hue-mapped rung takes the gamut-clamped move, so
+the widest hue drift from an anchor, across every rung of the six mapped families in both modes, is **2.1°** (at
+`orange-50`, where the 8-bit hex dominates).
+
+| Family | Meaning | Anchor | Old 500 → new 500 | Published as |
+|---|---|---|---|---|
+| `green` | success, active season, CHILD ticket, holiday ring | bluish green `#009E73` | `#00c950` → `#039f75` | `--color-green-*`, 11 rungs |
+| `red` | error, released orders, cancellations, delete confirm | vermillion `#D55E00` | `#c4746f` → `#dd6514` | `--color-red-*`, 11 rungs |
+| `orange` | warning, power mode, deadline ring, CTAs | orange `#E69F00` | `#ec6a37` → `#bc8100` | `--color-orange-*`, 11 rungs |
+| `yellow` | deadline chips | yellow `#F0E442` | `#eab308` → `#cdc100` | `--color-yellow-*`, 11 rungs |
+| `pink` | secondary, generated cooking days, picker selection | reddish purple `#CC79A7` | `#fa7b95` → `#df8ab9` | `--color-pink-*`, 11 rungs |
+| `info` slot | info alerts, guest rows, claimed orders | blue `#0072B2` | `#de5697` → `#3a96d9` | `--ui-color-info-*`, 11 rungs |
+
+**Scale or slot.** Two of the six carry a brand band as well, and the distance to the anchor decides. Mandarin Orange
+is 36° from the CUD orange, so the `orange` scale moves and landing band 1 with it: `#ec6a37` → `#bc8100`, **6.28:1**
+against its black ink where the published value reads 6.68:1. Bonbon is 110° from the CUD blue, so the preset moves
+the slot instead — `--ui-color-info-<step>` is the variable Nuxt UI's colours plugin points the `info` scale at, so
+`bg-info` and `text-info-600` take the blue and `--color-violet-*` keeps painting band 3 and the Bonbon chip at their
+published `#de5697` (5.88:1). Pink Lemonade is 22° from reddish purple, so the `pink` scale moves and band 0 with it:
+`#fa7b95` → `#df8ab9` at **8.47:1**, and the cooking-day circle (`pink-800`) and the picker selection move with the
+meaning they carry. The measurement follows: `createResolver` now layers an override on the slot family itself, and
+`parseColourScales` reads `--ui-color-<slot>-<step>` as a family's rung.
+
+**Counts.** Light block **77 steps, 13 slots**; dark block **34 steps, 13 slots** (Tydelig: 21 / 13 and 36 / 13). The
+hue map alone meets AA on 244 of the 418 pairs; after the AA walk the preset meets **418 of 418**, in light and dark,
+converging in 2 rounds. `PRESET_FINDINGS` stays empty for both presets.
+
+**What the simulation shows.** `designSystemColourVision.unit.spec.ts` measures 12 meaning pairs × 3 vision types ×
+2 modes = 72 cases per palette, at ΔE ≥ 0.075 in Oklab — the separation the CUD set keeps on its own closest pair.
+The default theme clears 57 of 72, Farveblind 54; the 33 misses are listed in `FINDINGS` with their distance.
+Farveblind wins the pairs that move to the blue axis (`info vs secondary` dark, 0.018 → 0.215 tritanopia; the order
+states against `claimed`) and misses on three that AA takes away:
+
+| Pair | Vision | Default | Farveblind | Why |
+|---|---|---|---:|---|
+| `error vs warning` | protanopia, deuteranopia | 0.073 / 0.084 | **0.019 / 0.025** | The CUD set keeps vermillion and orange apart by lightness (0.62 against 0.75). A solid slot fill is both `text-<slot>` on the page and the fill under `text-inverted`, so 4.5:1 puts every slot at the same end of the range and leaves the hue axis a deuteranope has lost |
+| `ADULT vs CHILD` | protanopia, deuteranopia | 0.211 / 0.128 | **0.030 / 0.041** | `primary` is Mocha Mousse, a brand family the hue map leaves untouched, and at the contrast ceiling it sits beside the bluish green |
+| `CHILD vs BABY` | tritanopia | 0.144 | **0.014** | `neutral` is the Ocean teal, and the CUD bluish green sits beside it for a tritanope once both are at the ceiling |
+
+Measured the same day: re-pointing each meaning slot at the rung that spreads the meanings furthest, instead of the
+uniform 600/300, lifts the worst pair from 0.019 to **0.078** in light and **0.056** in dark, and pays for it with
+near-black meaning fills (`#00533b` success, `#3e1600` error). The three decisions that close the rest are the
+user's: whether a meaning may spend lightness, whether `neutral` stays a teal, and whether `primary` carries a
+meaning at all.
+
+**Registry and card.** `PaletteSchema` gains `colorblind`; `PALETTES` gains `colourSafe`, `false` for `default` and
+`tydelig`, `true` for `colorblind`; `PALETTE_LABELS.colorblind = 'Farveblind'` and the radio renders the registry.
+`main.css` imports `./palettes/colorblind.css` next to `tydelig.css`.
+
+**One level, one place.** The level used to sit in three copies — the registry the badge reads, the palette list in
+`designSystemContrast.unit.spec.ts`, and the generator's presets — so flipping the registry to AAA changed the badge
+and nothing else. `tests/component/architecture/palettes.ts` now derives the measured list from `PALETTES`
+(`id`, `label`, the promised level, `file = app/assets/css/palettes/<id>.css`, `colourSafe`); the contrast spec
+asserts every pair at the registry's level, the colour-vision spec runs its meaning pairs for every `colourSafe`
+entry, and a registry entry with no generated file fails the case *publishes the stylesheet its badge claims*
+instead of skipping. One case, *the generator solves the presets the registry badges, at the level it badges them*,
+compares `PRESETS` in `scripts/palettes/presets.ts` to the registry entries that carry a level.
+
+**Regenerating is checked.** The generator split in two: `scripts/palettes/render.ts` is pure (`renderPreset(preset)`
+returns the file text, `solvePreset` adds the run report) and `scripts/palettes/generate.ts` is the CLI that writes
+each file and prints. The case *is generated from the preset the generator holds today* renders each preset again and
+compares it to the committed file, failing with `run make palettes (npx jiti scripts/palettes/generate.ts) and commit
+the result`. It costs 0.1-0.6 s per preset and the architecture project runs in ~2.7 s.
+
+### Visual check — Farveblind
+
+Set the preset from the console on any page: `document.documentElement.dataset.palette = 'colorblind'`, back to
+Standard with `delete document.documentElement.dataset.palette`, dark with
+`document.documentElement.classList.toggle('dark')`.
+
+| Route + state | Viewport | DS element to expect | Expect |
+|---|---|---|---|
+| `/` landing, scrolled | 375px + desktop | `getRainbowBand(0-3)`, `PANTONE_CHIPS` | Band 0 is a mauve pink and band 1 a golden orange; band 2 ocean and band 3 bonbon are unchanged, and the Bonbon chip keeps its published violet |
+| `/admin/planning`, edit | 375px + desktop | `CALENDAR.holiday`, `PLANNING_CALENDAR.day.generated` | The holiday ring is a bluish green and the generated cooking day a reddish purple; the two read apart on one calendar |
+| `/admin/planning` | desktop | `BUTTONS.primaryAction`, `SeasonStatusDisplay` | Solid buttons take the 600 rung; the ACTIVE season alert is bluish green, the CURRENT one golden |
+| A page with an alert of each kind | 375px + desktop | `ALERTS.success`, `ALERTS.warning`, `ALERTS.error`, `ALERTS.info` | Success bluish green, warning golden, error vermillion, info blue — the info alert is the one that changes most against the default theme |
+| `/household/<x>/bookings`, a released ticket | 375px + desktop | `ORDER_STATE_COLORS`, `DinnerTicket` | A released ticket reads vermillion, a claimed one blue, a normal one mocha |
+| `/household/<x>/bookings`, a guest row | 375px + desktop | `COMPONENTS.guestRow.iconClass` | The guest glyph is blue, not magenta |
+| Any calendar with a deadline | 375px + desktop | `CALENDAR.deadline.critical`, `CALENDAR.deadline.warning` | The critical ring is vermillion and the warning ring keeps the untouched amber |
+| `/admin/allergies`, a ticket-type badge per age | desktop | `TICKET_TYPE_COLORS` | Voksen mocha, Barn bluish green, Baby ocean — the three are told apart by their labels first |
+| `/dinner?date=<a dinner>` | 375px + desktop | `COMPONENTS.kitchenPanel.*` | TAKEAWAY mauve, SPISESAL golden, SPIS SENT ocean, TIL SALG grey, each with black labels |
+| Any page, dark mode | desktop | `ALERTS.*`, `getRainbowBand(i)` | The dark block lifts the same six families; the bands paint the same fills with the same black ink |
+| `/login` → `Rediger` | 375px + desktop | `URadioGroup`, `UBadge` `COLOR.success` | Three options read Farveglad / Tydelig / Farveblind, and the EU badge sits on Tydelig and Farveblind |
+
+### Mockup — ✅ signed off 2026-09-16 (behind the [⚙ Indstillinger] button), card faces ✅ 2026-09-17
+
+`Login.vue` owns the composition and draws it in its own header comment; `UserProfileCard.vue` draws the ⚙ in its
+header row; `UserPreferencesCard.vue` draws the two faces below. No drawing line appears in two files.
+
+```
+DASHBOARD /login (logged in)                             AFTER [⚙ Indstillinger] (button filled while open)
+┌ Hej Anna! 👋 ──────────────────────────────────┐       ┌ Hej Anna! 👋 ──────────────────────────────────┐
+│ ┌ UserProfileCard ───────────────────────────┐ │       │ ┌ UserProfileCard ─ [⚙ Indstillinger ●] … ─┐  │
+│ │ [👤] Anna  [⚙ Indstillinger] [Heynabo →]   │ │       │ └──────────────────────────────────────────┘  │
+│ │            [👋 Log ud →]                   │ │       │ ┌ UserPreferencesCard ─────────────────────┐  │
+│ └────────────────────────────────────────────┘ │       │ └──────────────────────────────────────────┘  │
+│ Hvad vil du lave i dag? … ActionCards …        │       │ Hvad vil du lave i dag? … ActionCards …       │
+└────────────────────────────────────────────────┘       └───────────────────────────────────────────────┘
+The ⚙ shows for the current user only (shouldShowActions); on a phone the three buttons wrap under the name.
+Open state is a ref in Login.vue (ADR-006: no persistence); clicking again hides the card.
+```
+
+```
+VIEW  (revealed under UserProfileCard)                   EDIT  (after ✏️ Rediger)
+┌ Mine indstillinger                   [✏️ Rediger] ┐    ┌ Mine indstillinger ───────────────────────┐
+│ 🔔 Notifikationer  [📧 E-mail] [📱 SMS]          │    │ 🔔 Notifikationer                         │
+│ 🎨 Farvevalg       Tydelig  🇪🇺 EN 301 549·AA ✓  │    │    E-mail   anna@…            [———●] ON   │
+│ 🔤 Tekst           Normal                        │    │    SMS      +45 …             [●———] OFF  │
+│                        [📨 Send testbesked]      │    │             (kræver telefonnummer …)      │
+└──────────────────────────────────────────────────┘    │ 🎨 Farvevalg (•) Farveglad                │
+                                                        │             ( ) Tydelig  🇪🇺 EN 301 549 ✓ │
+  badges when a channel is on, "Ingen notifikationer"   │ 🔤 Tekst    (•) Normal ( ) Stor ( ) Større │
+  when none; Send testbesked disabled with no channel   │                  [✕ Annuller]   [✓ Gem]   │
+                                                        └───────────────────────────────────────────┘
+Phone width: the radios stack and the button row is LAYOUTS.formButtonRow (Annuller under Gem).
+```
+
+### Decisions (2026-09-17)
+
+- **The card is revealed by `[⚙ Indstillinger]`** in the `UserProfileCard` header action group, for the current user only. The
+  parent owns the open state: `Login.vue` holds the ref, passes `:preferences-open`, listens to `@toggle-preferences` and renders
+  the card under the profile card. Inside the card the pencil opens the edit face, as the role manager on the same page does.
+- **The values are two `User` columns**, `notificationChannels` and `appearance`, read and written as one record.
+- **One endpoint saves both**: `POST /api/user/preferences` on `Gem`. `POST /api/user/notifications/test` sends a test message to the
+  session user.
+- **The EU badge names the preset that earned it**: `Tydelig` carries `EN 301 549 · WCAG 2.1 AA`, `Farveglad` carries none. The level
+  comes from `PALETTES`, which `designSystemContrast.unit.spec.ts` measures.
+- **Danish labels**: `Farvevalg` names the colour control; the presets read `Farveglad` (`default`) and `Tydelig` (`tydelig`);
+  `Tekst` names the text scale. Keys stay `default` / `tydelig`.
+
+### Test-id contract
+
+| Proposed in `feature-proposal-notifications.md` | Built |
+|---|---|
+| `channel-toggle-EMAIL` / `channel-toggle-SMS` | `pref-channel-EMAIL` / `pref-channel-SMS` |
+| `edit-channels-btn` | `pref-edit` |
+| `save-channels-btn` | `pref-save` |
+| — | `pref-cancel` |
+| `send-test-notification-btn` | `pref-send-test` |
+| — | `pref-toggle` (the ⚙ in the `UserProfileCard` header), `pref-card`, `pref-palette-<key>`, `pref-text-scale-<key>` |
+
+`tests/component/components/user/userPreferencesTestIds.ts` holds the contract for the component specs and the e2e specs.
 
 ### TDD
 
 | Test | Change |
 |------|--------|
-| `useUserPreferenceValidation.unit`, `useUserPreference.unit` (new) | keys, value schemas, defaults, `withDefaults` |
-| `tests/e2e/api/parallel/user/userPreference.e2e.spec.ts` + `userPreferenceFactory.ts` (new) | member GET defaults; POST channels round-trip; invalid value 400; admin GET returns the admin's own row |
-| `preferences.nuxt.spec.ts` (new) | store load/save with `registerEndpoint` |
-| `UserPreferencesCard.nuxt.spec.ts` (new) | switches, color control, text scale, saved state; real store |
-| `UserPreferences.e2e.spec.ts` (new) | GIVEN a member WHEN toggling SMS and changing colors THEN `html` attributes change and persist across reload; restore in `afterAll` |
+| `useUserPreferenceValidation.unit.spec.ts` (new) | enum options, `AppearanceSchema` defaults and rejection, `PALETTES` keys and levels, `UserPreferencesUpdateSchema` partial |
+| `useCoreValidation.unit.spec.ts` | both columns: fragment defaults, `serializeUserInput`, `deserializeUser`, `deserializeUserDetail`, `UserUpdateSchema`, the session |
+| `usePermissions.unit.spec.ts` | `/api/user/` resolves for a member and sits before the generic `/api/` rule |
+| `sender/events/test.unit.spec.ts` | the named recipient, and a named recipient without an admin mailbox |
+| `UserPreferencesCard.nuxt.spec.ts` (new) | view face, stale session falls back to the defaults, empty state, pencil, SMS hint without a phone, badge only on `Tydelig`, `Annuller`, `Gem` posts both fields, `Send testbesked`; real component + real auth store, `describe.each` over `isMd` |
+| `tests/e2e/api/parallel/user/preferences.e2e.spec.ts` (new) | round-trip in the response and the session, appearance-only save, SMS without a phone 400, unlisted palette 400, anonymous 401, test message queued |
+| `UserProfileCard.nuxt.spec.ts` (new) | the ⚙ renders for the current user with actions only, emits `toggle-preferences`, reports `aria-pressed` from `preferencesOpen`; real components and stores |
+| `UserPreferences.e2e.spec.ts` (new) | GIVEN a member on the dashboard WHEN opening the ⚙, picking Tydelig and Stor THEN `html` carries both attributes, after a reload too; picking the defaults removes them |
+| `MobileViewport.e2e.spec.ts` | `/login` at 375px opens the ⚙ (`reveal` hook) so the measurement covers the card |
+
+### Visual check
+
+| Route + state | Viewport | DS element to expect | Expect |
+|---|---|---|---|
+| `/login`, logged in | 375px + desktop | `BUTTONS.secondaryAction` + `ICONS.settings` (`pref-toggle`) | `[⚙ Indstillinger]` sits between the name and `[Heynabo →] [👋 Log ud →]`; on a phone the three wrap under the name. No settings card yet |
+| `/admin/users`, a row expanded | desktop | the same header | No ⚙ on another member's card (`shouldShowActions`) |
+| `/login` → `⚙ Indstillinger` | 375px + desktop | `UCard` + `BUTTONS.edit` (`pref-edit`) | The button fills, and "Mine indstillinger" appears directly under the profile card: the saved channels as badges, `Farvevalg` and `Tekst` on one line each, `Send testbesked`. Clicking the ⚙ again hides it |
+| `/login`, ⚙ open, no channel on | desktop | `TYPOGRAPHY.bodyTextMuted` | "Ingen notifikationer", `Send testbesked` disabled |
+| `/login` → ⚙ → `Rediger` | 375px | `USwitch`, `URadioGroup`, `LAYOUTS.formButtonRow` | Switches carry the address and the number; radios stack; `Gem` above `Annuller` |
+| `/login` → ⚙ → `Rediger`, member without a phone | desktop | `TYPOGRAPHY.finePrint` | The SMS switch is disabled and "SMS kræver telefonnummer i Heynabo" reads under the row |
+| `/login` → ⚙ → `Rediger` | desktop | `UBadge` `COLOR.success`, `TYPOGRAPHY.sectionSubheading` | The badge sits on the verified presets only; `Notifikationer` / `Farvevalg` / `Tekst` read as small bold headings over larger regular options |
+| `/login` → ⚙ → `Tydelig` + `Stor` → `Gem` | 375px + desktop | `html[data-palette]`, `html[data-text-scale]` | The page takes the preset and the larger root size, the card returns to its view face, toast `Indstillinger gemt` |
+| Any page after the save | desktop | the whole app | The preset holds across navigation and a reload |
+| `/login` → ⚙ → `Send testbesked` | desktop | toast | `Testbesked afsendt` plus the message id, or `Notifikationer er ikke sat op i dette miljø` plus `TEST:EMAIL:unconfigured` |
 
 ### Affected Areas
 
-`prisma/schema.prisma`, `app/composables/useUserPreference*.ts`, `server/data/settingsRepository.ts`, `server/routes/api/user/preference/`,
-`app/composables/usePermissions.ts`, `app/stores/preferences.ts`, `app/components/user/UserPreferencesCard.vue`, `Login.vue`,
-`layouts/default.vue`, `app/assets/css/main.css`, `docs/ui.md`, `feature-proposal-notifications.md`, compliance docs.
+`prisma/schema.prisma` (two `User` columns), `migrations/0016_settings.sql`, `app/composables/useUserPreferenceValidation.ts`,
+`app/composables/fragments/domainFragments.ts`, `app/composables/useCoreValidation.ts`, `app/composables/useHeynaboValidation.ts`,
+`server/data/prismaRepository.ts`, `server/routes/api/user/preferences.post.ts`, `server/routes/api/user/notifications/test.post.ts`,
+`server/utils/sender/events/test.ts`, `app/composables/usePermissions.ts`, `app/stores/auth.ts`,
+`app/components/user/UserPreferencesCard.vue`, `app/components/user/UserProfileCard.vue` (the ⚙ toggle),
+`app/components/login/Login.vue` (owns the open state), `app/layouts/default.vue`,
+`app/assets/css/main.css`, `app/composables/useTheSlopeDesignSystem.ts` (`ICONS.notification`, `ICONS.palette`, `ICONS.textScale`),
+`tests/e2e/testDataFactories/userFactory.ts`, `docs/ui.md`, compliance docs.
 
 ---
 
@@ -1522,7 +1795,7 @@ Every endpoint gets an API spec; every UX component gets a BDD e2e (GIVEN/WHEN/T
 | Teams edit mode with no teams | `AdminTeams.e2e.spec.ts` | — (`AdminTeams` has no component spec) |
 | Booking grid period with no dinners | covered by the component spec | `BookingGridView.nuxt.spec.ts` |
 | Allergy detail edit affordance | `AdminAllergies.e2e.spec.ts` | `AllergyDetailPanel.nuxt.spec.ts`, `AdminAllergies.nuxt.spec.ts` |
-| `UserPreferencesCard` | `UserPreferences.e2e.spec.ts` (new) | `UserPreferencesCard.nuxt.spec.ts`, `preferences.nuxt.spec.ts` (new) |
+| `UserPreferencesCard` | `UserPreferences.e2e.spec.ts`, `user/preferences.e2e.spec.ts` | `UserPreferencesCard.nuxt.spec.ts`, `useUserPreferenceValidation.unit.spec.ts` |
 | Planning form controls, member gating | `AdminPlanning.e2e`, `AdminPlanningSeason.e2e`, `admin.e2e`, `AdminPlanningLiveSeason.e2e` (serial) | `AdminPlanning.nuxt.spec.ts`, `AdminPlanningSeason.nuxt.spec.ts` |
 | Editable holiday rows | `AdminPlanningSeason.e2e` | `CalendarDateRangeListPicker.nuxt.spec.ts` |
 | Sorted holidays | `AdminPlanningSeason.e2e` | `date.unit`, `useSeasonValidation.unit`, list-picker spec |
@@ -1559,7 +1832,7 @@ Every endpoint gets an API spec; every UX component gets a BDD e2e (GIVEN/WHEN/T
 | 6 | Planning form | ✅ shipped (2026-09-16) |
 | 7 | QR code | ✅ shipped (2026-09-16) — with the teams empty state, the booking grid empty period and the allergy edit affordance |
 | 8 | Colour drift sweep | ✅ shipped (2026-09-16) — DS tokens for every colour, two architecture rules |
-| 9 | Poster notes editing + My preferences (one migration) | mockups ✅; color decision taken; brief approved; migration created and applied by the user |
+| 9 | Poster notes editing + My preferences (one migration) | ✅ shipped — My preferences (2026-09-17), poster notes editing on the same migration (2026-09-18) |
 | 10 | Ship: the settings ADR, compliance docs, `docs/ui.md`, `docs/testing.md`, `pre:all`, full suites, `/dry` | — |
 
 Per package: red output shown → green output shown → `npm run pre:all` → architect diff review against the package, the coverage matrix
@@ -1571,7 +1844,7 @@ and the design-system rule → compliance rows in the same change. Agents (`tdd-
 ```
 npm i uqr                                                  # QR code
 make d1-prisma                                             # after the schema edit (commit generated zod)
-make d1-create-migration name=settings_preferences     # → migrations/0015_settings_preferences.sql
+make d1-create-migration name=settings                     # → migrations/0016_settings.sql (Setting + User.appearance)
 npm run db:migrate:local                                   # dev/prod at deploy
 ```
 
@@ -1594,9 +1867,13 @@ npm run db:migrate:local                                   # dev/prod at deploy
 **Out of scope (noted):** mobile Playwright viewport projects (commented out in
 `playwright.config.ts`); `HouseholdAllergies.vue`.
 
-- **ADR-0xx (next free number when it ships) [Editable settings and user preferences as key-value stores with code registries]** — proposed by "Poster notes" / "My preferences":
-  two tables, one pattern; keys, value schemas, defaults and writers declared in code registries; GET returns defaults, never 404; per-key
-  write check in the endpoint, never in the route table; the domain store owns the fetch; a new preference is a registry entry, not a migration.
+- **ADR-0xx (next free number when it ships) [Editable settings as a key-value store with a code registry]** — built by "Poster notes",
+  shared with "My preferences": the `Setting` table holds `key` + a JSON `value`; `SETTING_REGISTRY` in `useSettingValidation.ts` declares each
+  key's `valueSchema`, `defaultValue` and `canWrite`. `GET /api/admin/setting/[key]` answers a registered key with the stored row or the
+  registry default (`updatedAt` and `updatedByUserId` null), and an unregistered key with 400. `POST` validates the body against the key's own
+  schema and runs `requireSettingWriteAccess(event, key)`, so the route table carries one coarse rule per prefix and never a key name. The
+  repository owns the JSON (ADR-010); the domain store owns the fetch and keeps its own status refs; a new editable text is a key plus a
+  registry entry. `User.notificationChannels` and `User.appearance` follow the same registry shape per column in `useUserPreferenceValidation.ts`.
 - **ADR-018 [Design system owns shared UI patterns — components bind tokens, never raw Nuxt UI props]** — recorded in `docs/adr.md` 2026-09-16:
   `BUTTONS`, `ALERTS`, `COMPONENTS.calendarGrid` live in `useTheSlopeDesignSystem`; architecture tests enforce; a new Nuxt UI component
   family gets a token before its first use.

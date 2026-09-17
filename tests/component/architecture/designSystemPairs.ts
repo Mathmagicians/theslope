@@ -16,11 +16,11 @@ import {fileURLToPath} from 'node:url'
 import type {Ref} from 'vue'
 import {
     BACKGROUNDS, BG, BORDER, CALENDAR, CHEF_CALENDAR, COMPONENTS, DINNER_CALENDAR, LAYOUTS,
-    PANTONE_CHIPS, PLANNING_CALENDAR, RING, TEXT, TYPOGRAPHY, createResponsiveAlerts
+    PANTONE_CHIPS, PLANNING_CALENDAR, RAINBOW, RING, TEXT, TYPOGRAPHY, createResponsiveAlerts
 } from '../../../app/composables/useTheSlopeDesignSystem'
 import {
     composite, contrastRatio, cssColourToHex, hexToRgb, parseColourScales, parseSemanticBlock,
-    type ColourScales, type Rgb, type Rgba
+    type ModeOverride, type Rgb, type Rgba
 } from './contrast'
 
 // ---------------------------------------------------------------------------
@@ -56,8 +56,11 @@ export type Mode = keyof typeof SEMANTIC
 export const MODES = Object.keys(SEMANTIC) as Mode[]
 
 /** A preset overrides `--color-<family>-<step>` per mode; `dark` already carries the light layer */
-export type ModeScales = {light: ColourScales, dark: ColourScales}
-export const NO_OVERRIDE: ModeScales = {light: {}, dark: {}}
+export type PaletteOverride = {light: ModeOverride, dark: ModeOverride}
+export const NO_OVERRIDE: PaletteOverride = {light: {scales: {}, slots: {}}, dark: {scales: {}, slots: {}}}
+
+/** Nuxt UI's colours plugin: a bare `bg-<slot>` paints the 500 rung in light, the 400 in dark */
+export const DEFAULT_SLOT_RUNG: Record<Mode, string> = {light: '500', dark: '400'}
 
 /** The `--color-<family>-<step>` variable a resolved colour came from - what a preset can move */
 export type PaletteRef = {family: string, step: string}
@@ -82,7 +85,7 @@ const SEMANTIC_PREFIX: Record<Channel, string> = {
  * `bg-neutral-900` paints TheSlope's sky, not Tailwind's grey, and why the variable a preset
  * has to move for it is `--color-sky-900`.
  */
-export const createResolver = (override: ColourScales) => {
+export const createResolver = ({scales: override, slots}: ModeOverride) => {
     const layered = (family: string, scale: Record<string, string>) =>
         ({family, scale: override[family] ? {...scale, ...override[family]} : scale})
 
@@ -91,7 +94,9 @@ export const createResolver = (override: ColourScales) => {
         seen.add(name)
         if (APP_SCALES[name]) return layered(name, APP_SCALES[name]!)
         const alias = SLOT_FAMILY[name] ? familyScale(SLOT_FAMILY[name]!, seen) : undefined
-        if (alias) return alias
+        // A preset may re-point a slot family (`--ui-color-info-600`) instead of the family behind
+        // it, so the slot takes the new hue while the brand family keeps painting the bands
+        if (alias) return override[name] ? {family: name, scale: {...alias.scale, ...override[name]}} : alias
         if (TAILWIND_SCALES[name]) return layered(name, TAILWIND_SCALES[name]!)
         return override[name] ? {family: name, scale: override[name]!} : undefined
     }
@@ -127,8 +132,9 @@ export const createResolver = (override: ColourScales) => {
         const shaded = name.match(/^([a-z]+)-(\d{2,3})$/)
         if (shaded) return withAlpha(step(shaded[1]!, shaded[2]!))
 
-        // A bare slot name: Nuxt UI paints `bg-primary` as the 500 rung in light, 400 in dark
-        if (SLOT_FAMILY[name]) return withAlpha(step(name, mode === 'light' ? '500' : '400'))
+        // A bare slot name: Nuxt UI paints `bg-primary` as the 500 rung in light, 400 in dark,
+        // unless the preset re-points `--ui-primary` at another rung
+        if (SLOT_FAMILY[name]) return withAlpha(step(name, slots[name] ?? DEFAULT_SLOT_RUNG[mode]))
 
         // Nuxt UI's neutral semantics: `text-default`, `bg-elevated`, `border-accented`, …
         const base = SEMANTIC_PREFIX[channel]
@@ -157,11 +163,22 @@ const walk = (node: unknown, path: string, out: Leaf[] = []): Leaf[] => {
 const ALERTS = createResponsiveAlerts({value: false} as Ref<boolean>)
 
 export const LEAVES = walk({
-    TEXT, BG, BORDER, RING, TYPOGRAPHY, LAYOUTS, BACKGROUNDS, PANTONE_CHIPS, COMPONENTS,
+    TEXT, BG, BORDER, RING, TYPOGRAPHY, LAYOUTS, BACKGROUNDS, PANTONE_CHIPS, RAINBOW, COMPONENTS,
     CALENDAR, PLANNING_CALENDAR, CHEF_CALENDAR, DINNER_CALENDAR, ALERTS
 }, '')
 
 const leafByPath = new Map(LEAVES.map(leaf => [leaf.path, leaf]))
+
+/**
+ * The class string a design-system path renders. A spec that names one token resolves it through
+ * here rather than restating its classes, so a renamed token fails loudly instead of silently
+ * measuring nothing.
+ */
+export const leafClasses = (path: string): string => {
+    const leaf = leafByPath.get(path)
+    if (!leaf) throw new Error(`no design-system token at ${path}`)
+    return leaf.classes
+}
 
 /**
  * The colour references a class string names in one mode, in source order. Only bare and
@@ -221,7 +238,7 @@ const isTextRung = (path: string) => /^TEXT\.[a-z]+\.\d+$/.test(path)
  * against the fill the design system pairs it with, either inside the token or via PAIRED_INK.
  */
 const FILL_INK = [
-    'TEXT.white', 'TYPOGRAPHY.sectionSubheadingLight', 'TYPOGRAPHY.sectionIconLight',
+    'TEXT.white', 'TEXT.black', 'TYPOGRAPHY.sectionSubheadingLight', 'TYPOGRAPHY.sectionIconLight',
     'TYPOGRAPHY.footerText', 'CALENDAR.countdown', 'CHEF_CALENDAR.countdown',
     'DINNER_CALENDAR.countdown', 'COMPONENTS.heroPanel', 'COMPONENTS.kitchenPanel', 'COMPONENTS.ribbon'
 ]
@@ -310,6 +327,20 @@ export const isLargeText = (classes: string): boolean => {
     return faces.length > 0 && faces.every(isLargeFace)
 }
 
+/** One rendered ink on a fill, and the component line that draws it */
+type PlacedInk = {ink: string, at: string}
+
+/** app/pages/index.vue:49 - the band loop draws one `TYPOGRAPHY.sectionTitle` per stop */
+const SECTION_TITLE: PlacedInk[] = [{ink: 'TYPOGRAPHY.sectionTitle', at: 'index.vue:49'}]
+
+/** app/components/dinner/KitchenPreparation.vue:200-214 - four sizes per panel, smallest binds */
+const KITCHEN_INK: PlacedInk[] = [
+    {ink: 'TYPOGRAPHY.kitchenLabel', at: 'KitchenPreparation.vue:200'},
+    {ink: 'TYPOGRAPHY.kitchenSecondary', at: 'KitchenPreparation.vue:204'},
+    {ink: 'TYPOGRAPHY.kitchenMain', at: 'KitchenPreparation.vue:209'},
+    {ink: 'TYPOGRAPHY.kitchenDetail', at: 'KitchenPreparation.vue:214'}
+]
+
 /**
  * The typography a component actually places on a fill. 1.4.3 grades a pair by the size of the
  * text in it; a fill token carries no size of its own, so the threshold comes from the ink a
@@ -320,32 +351,34 @@ export const isLargeText = (classes: string): boolean => {
  * bring their own fill and are measured as their own pairs, so the band's declared ink renders
  * nowhere and stays at the body bar.
  */
-const INK_ON_FILL: Record<string, {ink: string, at: string}[]> = {
+const INK_ON_FILL: Record<string, PlacedInk[]> = {
+    // The brand rainbow. `RAINBOW` is what the landing bands and the kitchen panels both walk,
+    // so a stop answers for every face its consumers draw and the smallest of them binds: the
+    // kitchen's 12px label puts the first three stops at the body bar, while bonbon and party
+    // carry the landing band's large title alone
+    'RAINBOW[0]': [...SECTION_TITLE, ...KITCHEN_INK],
+    'RAINBOW[1]': [...SECTION_TITLE, ...KITCHEN_INK],
+    'RAINBOW[2]': [...SECTION_TITLE, ...KITCHEN_INK],
+    'RAINBOW[3]': SECTION_TITLE,
+    'RAINBOW[4]': SECTION_TITLE,
+    'BACKGROUNDS.hero.mocha': [
+        // app/components/dinner/DinnerDetailHeader.vue:65-78, app/components/chef/ChefMenuCard.vue:418
+        {ink: 'TYPOGRAPHY.bodyTextMedium', at: 'DinnerDetailHeader.vue:74'},
+        {ink: 'TYPOGRAPHY.heroTitle', at: 'Hero.vue:7'}
+    ],
+    'BACKGROUNDS.hero.pink': [...SECTION_TITLE, ...KITCHEN_INK],
+    'BACKGROUNDS.hero.orange': [...SECTION_TITLE, ...KITCHEN_INK],
+    'BACKGROUNDS.hero.ocean': [...SECTION_TITLE, ...KITCHEN_INK],
+    'BACKGROUNDS.hero.bonbon': SECTION_TITLE,
+    // The spare stop and the countdown fill are drawn by no component today; each is graded by
+    // the typography docs/ui.md pairs it with. The day a component puts body text on one, that
+    // component belongs in its row
+    'BACKGROUNDS.hero.party': SECTION_TITLE,
+    'BACKGROUNDS.hero.peach': [{ink: 'TYPOGRAPHY.heroTitle', at: 'docs/ui.md "The brand rainbow"'}],
     // app/components/landing/Hero.vue:7
     'BACKGROUNDS.landing.titleBar': [{ink: 'TYPOGRAPHY.heroTitle', at: 'Hero.vue:7'}],
-    // app/pages/index.vue:14-25 - one `h2` per band, all `TYPOGRAPHY.sectionTitle`
-    'BACKGROUNDS.landing.section1': [{ink: 'TYPOGRAPHY.sectionTitle', at: 'index.vue:15'}],
-    'BACKGROUNDS.landing.section2': [{ink: 'TYPOGRAPHY.sectionTitle', at: 'index.vue:18'}],
-    'BACKGROUNDS.landing.section3': [{ink: 'TYPOGRAPHY.sectionTitle', at: 'index.vue:21'}],
-    'BACKGROUNDS.landing.section4': [{ink: 'TYPOGRAPHY.sectionTitle', at: 'index.vue:24'}],
-    // app/components/dinner/DinnerDetailHeader.vue:65-78 and app/components/chef/ChefMenuCard.vue:418
-    'BACKGROUNDS.hero.mocha': [{ink: 'TYPOGRAPHY.bodyTextMedium', at: 'DinnerDetailHeader.vue:74'}],
-    // The other three hero fills, and `LAYOUTS.hero` with them, are declared and drawn by no
-    // component today. They are graded by the typography docs/ui.md pairs a hero with; the day a
-    // component puts body text on one, that component belongs in this row and the bar goes back up
-    'BACKGROUNDS.hero.peach': [{ink: 'TYPOGRAPHY.heroTitle', at: 'docs/ui.md "Hero Sections"'}],
-    'BACKGROUNDS.hero.pink': [{ink: 'TYPOGRAPHY.heroTitle', at: 'docs/ui.md "Hero Sections"'}],
-    'BACKGROUNDS.hero.orange': [{ink: 'TYPOGRAPHY.heroTitle', at: 'docs/ui.md "Hero Sections"'}],
-    // app/components/dinner/KitchenPreparation.vue:200-214 - four sizes per panel, smallest binds
-    ...Object.fromEntries(['TAKEAWAY', 'DINEIN', 'DINEINLATE', 'RELEASED'].map(mode => [
-        `COMPONENTS.kitchenPanel.${mode}`,
-        [
-            {ink: 'TYPOGRAPHY.kitchenLabel', at: 'KitchenPreparation.vue:200'},
-            {ink: 'TYPOGRAPHY.kitchenSecondary', at: 'KitchenPreparation.vue:204'},
-            {ink: 'TYPOGRAPHY.kitchenMain', at: 'KitchenPreparation.vue:209'},
-            {ink: 'TYPOGRAPHY.kitchenDetail', at: 'KitchenPreparation.vue:214'}
-        ]
-    ]))
+    ...Object.fromEntries(['TAKEAWAY', 'DINEIN', 'DINEINLATE', 'RELEASED']
+        .map(mode => [`COMPONENTS.kitchenPanel.${mode}`, KITCHEN_INK]))
 }
 
 /**
@@ -409,18 +442,23 @@ const TEXT_THRESHOLD: Record<Level, {body: number, large: number}> = {
 /** 1.4.11 Non-text Contrast has no enhanced level - 3:1 at every palette */
 const EDGE_THRESHOLD = 3
 
-export const buildPairs = (override: ModeScales, level: Level): Pair[] => {
+/** The last reference on this channel that names a colour (`text-sm text-gray-700` → grey) */
+export const pickColour = (
+    resolve: ReturnType<typeof createResolver>, classes: string, channel: Channel, mode: Mode
+): Sourced | null =>
+    (referencesFor(classes, mode)[channel] ?? [])
+        .map(reference => resolve(reference, channel, mode))
+        .filter((resolved): resolved is Sourced => resolved !== null)
+        .at(-1) ?? null
+
+export const buildPairs = (override: PaletteOverride, level: Level): Pair[] => {
     const pairs: Pair[] = []
 
     for (const mode of MODES) {
         const resolve = createResolver(override[mode])
 
-        /** The last reference on this channel that names a colour (`text-sm text-gray-700` → grey) */
-        const pick = (leafClasses: string, channel: Channel, mode_: Mode): Sourced | null =>
-            (referencesFor(leafClasses, mode_)[channel] ?? [])
-                .map(reference => resolve(reference, channel, mode_))
-                .filter((resolved): resolved is Sourced => resolved !== null)
-                .at(-1) ?? null
+        const pick = (classes: string, channel: Channel, mode_: Mode): Sourced | null =>
+            pickColour(resolve, classes, channel, mode_)
 
         const surfaceOf = (classes: string, mode_: Mode): {colour: Rgb, source: PaletteRef | null} | null => {
             const page = resolve('default', 'bg', mode_)

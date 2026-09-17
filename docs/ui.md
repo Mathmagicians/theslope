@@ -246,6 +246,7 @@ literal colour in a component prop (`color="primary"`, `:color="'error'"`). It r
 - `BORDER` - Border color scale (low-level, use LAYOUTS instead)
 - `RING` - Ring color scale for `ring-*` utilities: selection outlines, marker circles, armed confirm states
 - `COMPONENTS.segmentedActive` - The selected item in a segmented control (`FormModeSelector`, `BookingViewSwitcher`)
+- `COMPONENTS.choiceGroup` - Shared `URadioGroup` / `USwitch` config (`v-bind` a shape): `stacked` (one option under the other), `inline` (side by side from md up), `single` (a lone control). Every shape puts the option label on the body size in regular weight, so it reads under its section heading (`TYPOGRAPHY.sectionSubheading`) instead of competing with it
 - `PANTONE_CHIPS` / `getPantoneChip(index)` - One tinted chip per brand family, cycled by index (landing ticker)
 - `getKitchenPanelClasses(mode)` - Helper for kitchen panels
 - `TICKET_TYPE_COLORS` - Ticket type to color mapping
@@ -257,25 +258,93 @@ on `<html>` reaches Nuxt UI's semantics and the design system's utilities togeth
 only in `app/assets/css/palettes/*.css`; `main.css` imports them next to its other imports and keeps its
 own `@theme static` as the published palette.
 
-**Tydelig** (`tydelig.css`) is TheSlope's own hues at the lightness EN 301 549 → WCAG 2.1 AA asks for.
+**Tydelig** (`tydelig.css`) is TheSlope's own hues at the lightness EN 301 549 → WCAG 2.1 AA asks for, and it meets that level on all 418 pairs the design system defines, in light and dark.
 The generator walks each step of a failing pair along OKLCH lightness with the hue and the chroma held,
 so Mocha Mousse stays Mocha Mousse and reads at 4.5:1. The eight neutral surfaces (`page`, `BG.panel`,
 `BG.panelNested`, `BG.inset`, `BG.ticket`, `BG.invoiceGround`, `BG.invoiceStat`, `BG.budgetHead`) keep
 their published value, because a surface is the ground every other pair stands on. The light block
-carries 25 steps, the dark block 34 — the dark block also restates a step the light block moved where
+carries 21 steps, the dark block 36 — the dark block also restates a step the light block moved where
 dark mode wants the published value back.
 
+**Slot re-pointing.** Nuxt UI's colours plugin points `--ui-<slot>` at the 500 rung in light and the 400
+in dark, so a solid button's white label is measured against the rung the brand paints with. For each
+slot whose solid face misses 4.5:1 at that rung, the preset emits `--ui-<slot>: var(--ui-color-<slot>-600)`
+in the light block and the 300 rung in the dark block. That puts the button's demand on 600/300 and leaves
+500 to the bands and the chips: `pink-500`, `party-700` and `ocean-500` keep their published value under
+Tydelig. Thirteen slots are re-pointed: `caramel`, `error`, `info`, `neutral`, `ocean`, `party`, `peach`,
+`primary`, `secondary`, `success`, `warning`, `winery`, `yellow`.
+
+**Farveblind** (`colorblind.css`) maps the meaning-bearing families onto the Color Universal Design
+anchors (Okabe & Ito) and then takes the same AA walk, so it meets EN 301 549 → WCAG 2.1 AA on all 418
+pairs as well. Each anchor becomes a 50-950 scale: the anchor's OKLCH hue and chroma, the published
+family's lightness ladder rung by rung, chroma clamped to the sRGB gamut where a pale rung has no room
+for it. The light block carries 77 steps, the dark block 34.
+
+| Family | Meaning it carries | Anchor | Published as |
+|---|---|---|---|
+| `green` | success, active season, CHILD ticket, holiday ring | bluish green `#009E73` | `--color-green-*` |
+| `red` | error, released orders, cancellations, delete confirm | vermillion `#D55E00` | `--color-red-*` |
+| `orange` | warning, power mode, deadline ring, CTAs | orange `#E69F00` | `--color-orange-*` |
+| `yellow` | deadline chips | yellow `#F0E442` | `--color-yellow-*` |
+| `pink` | secondary, generated cooking days, picker selection | reddish purple `#CC79A7` | `--color-pink-*` |
+| `info` slot | info alerts, guest rows, claimed orders | blue `#0072B2` | `--ui-color-info-*` |
+
+**Scale or slot.** Two of the six families are also brand: `orange` is landing band 1 and the SPISESAL
+kitchen panel, `violet` is the Bonbon band and chip. The rule is the distance to the anchor. Mandarin
+Orange sits 36° from the CUD orange, so the scale moves and band 1 moves with it, from `#ec6a37` to
+`#bc8100`, 6.28:1 against its black ink where the published value reads 6.68:1. Bonbon sits 110° from the CUD blue, so the preset moves the
+*slot* instead: `--ui-color-info-<step>` is the variable Nuxt UI's colours plugin points the `info`
+scale at, so `bg-info` and `text-info-600` take the blue while `--color-violet-*` keeps painting the
+band and the chip. The brand families `amber`, `blue`, `sky`, `party`, `peach`, `caramel` and `winery`
+keep their published hue in both presets.
+
+**Regenerating.** Rerun the generator after a change to the `@theme static` scales in `main.css`, to
+`ui.colors` in `app.config.ts`, or to a design-system token that adds a fill or an ink:
+
 ```bash
-npx jiti scripts/palettes/generate.ts     # rewrites app/assets/css/palettes/tydelig.css
+make palettes                             # npx jiti scripts/palettes/generate.ts
 ```
 
-Two runs write the same bytes. `tests/component/architecture/designSystemContrast.unit.spec.ts` measures
-every preset against the inventory the generator solves (`designSystemPairs.ts`), at the level the
-preset's name promises. To see a preset in the browser before the appearance preference ships:
+It rewrites every preset under `app/assets/css/palettes/`, and those files are committed. The check is
+`npx vitest run tests/component/architecture`: `designSystemContrast.unit.spec.ts` renders each preset
+again and compares it to the committed file, so a stale file fails with the command to run, and it
+measures every preset against the inventory the generator solves (`designSystemPairs.ts`), at the level
+the registry badges it. Two runs write the same bytes.
+
+The level lives in one place: `PALETTES` in `app/composables/useUserPreferenceValidation.ts`. The card
+badges it, `tests/component/architecture/palettes.ts` derives the measured list from it, and one case
+holds `scripts/palettes/presets.ts` to the same names and levels.
+
+**What the simulation measures.** `designSystemColourVision.unit.spec.ts` takes the meanings that appear
+in one another's company - the alert kinds, info against secondary, the holiday ring against the cooking
+day, the order states, the ticket types - resolves each through the same resolver as the contrast spec,
+and measures how far apart the two stay for a dichromat. `colourVision.ts` simulates protanopia,
+deuteranopia and tritanopia with the Machado, Oliveira & Fernandes (2009) matrices at severity 1.0,
+applied in linear RGB, and the distance is ΔE in Oklab. The bar is **0.075**, the separation the CUD set
+itself keeps on its closest pair (bluish green against reddish purple, deuteranopia); a case in the
+spec re-measures that, so the bar stays tied to the data it comes from. The default theme and the
+Farveblind preset are both measured, 72 cases each: 57 and 54 clear the bar today, and the rest are
+listed in `FINDINGS` with their distance and run as `it.fails`.
+
+**The two `<html>` attributes.** `app/layouts/default.vue` writes them with `useHead({htmlAttrs})` from the
+logged-in user's `appearance` (`app/stores/auth.ts`), so SSR renders them and a reload keeps the look. Each is
+omitted on its default value. The member picks them in "Mine indstillinger" on the dashboard
+(`UserPreferencesCard.vue` → `POST /api/user/preferences`), and `useUserPreferenceValidation.ts` is the registry:
+`PaletteSchema`, `TextScaleSchema` and `PALETTES`, which carries the level the contrast test verifies each preset
+at — the level the card shows as the option's badge — and `colourSafe`, which marks the preset built on the
+Color Universal Design anchors.
+
+| Attribute | Values | Drawn by |
+|---|---|---|
+| `data-palette` | `tydelig`, `colorblind` | the preset block in `app/assets/css/palettes/<value>.css` |
+| `data-text-scale` | `large` (112.5%), `larger` (125%) | the root font-size rules at the end of `app/assets/css/main.css` |
+
+To see a preset in the browser without saving it:
 
 ```js
-document.documentElement.dataset.palette = 'tydelig'   // back to Standard: delete document.documentElement.dataset.palette
-document.documentElement.classList.toggle('dark')      // the dark block
+document.documentElement.dataset.palette = 'tydelig'     // or 'colorblind'
+delete document.documentElement.dataset.palette         // back to Farveglad
+document.documentElement.classList.toggle('dark')       // the dark block
 ```
 
 ### What the contrast criteria cover
@@ -283,7 +352,7 @@ document.documentElement.classList.toggle('dark')      // the dark block
 | Rule | Scope |
 |---|---|
 | **1.4.3 Contrast (Minimum)** | 4.5:1 for body text, 3:1 for large-scale text — 24px, or 18.66px at `font-bold` and heavier. Every face a token renders is measured, so the smallest one sets the bar. `TYPOGRAPHY.sectionIconLight` (`text-2xl`) is measured at 3:1 |
-| **1.4.3 for a fill** | A fill carries no size, so its bar comes from the typography a component places on it, listed in `INK_ON_FILL` with the component and line that draws it. The landing bands carry `TYPOGRAPHY.sectionTitle` (`text-xl md:text-3xl font-bold` — large at both widths) and are measured at 3:1; `COMPONENTS.kitchenPanel.*` carry `kitchenLabel` at `text-xs` and stay at 4.5:1 |
+| **1.4.3 for a fill** | A fill carries no size, so its bar comes from the typography a component places on it, listed in `INK_ON_FILL` with the component and line that draws it. A rainbow stop answers for every face its consumers draw and the smallest one binds: the first three stops carry the kitchen's `kitchenLabel` at `text-xs` and take 4.5:1, the last two carry `TYPOGRAPHY.sectionTitle` (`text-xl md:text-3xl font-bold` — large at both widths) and take 3:1 |
 | **1.4.11 Non-text Contrast** | 3:1 for the edges that identify a control or carry meaning: input and card borders, the green holiday ring, the amber and red deadline rings, the segmented-control ring, the calendar selection outlines |
 
 A surface that changes what it carries updates `INK_ON_FILL` in the same commit. `BACKGROUNDS.landing.ticker`
@@ -302,41 +371,27 @@ Four edge tokens draw a boundary the layout already states, and sit outside 1.4.
 
 ### Site Identity & Brand Colors
 
-**PRIMARY BRAND COLOR**: <span class="color-swatch" style="background-color: #a47864;"></span> **Mocha Mousse** (`amber-500`) - Pantone Color of the Year 2025
+**PRIMARY BRAND COLOR**: <span class="color-swatch" style="background-color: #a47864;"></span> **Mocha Mousse** (`amber-500`) - Pantone Color of the Year 2025. Mocha is the frame: the landing title bar, the ticker and the dinner header.
 
-The site identity is expressed through a **full-bleed rainbow** on the landing page:
+### The brand rainbow
 
-| Section | Color | Usage | Text Color |
-|---------|-------|-------|-----------|
-| Title Bar | <span class="color-swatch" style="background-color: #a47864;"></span> `amber-500` | PRIMARY brand color | `amber-50` |
-| Ticker | <span class="color-swatch" style="background-color: #a47864;"></span> `amber-500` | PRIMARY brand color | `amber-50` |
-| Section 1 | <span class="color-swatch" style="background-color: #fa7b95;"></span> `pink-500` | Vibrant accent (households) | `pink-50` |
-| Section 2 | <span class="color-swatch" style="background-color: #ec6a37;"></span> `orange-500` | Vibrant accent (community) | `orange-100` |
-| Section 3 | <span class="color-swatch" style="background-color: #c4516c;"></span> `party-700` | Deep burgundy (dining) | `party-50` |
-| Section 4 | <span class="color-swatch" style="background-color: #3c8c9e;"></span> `ocean-500` | Cool teal (nature) | `ocean-50` |
+`PANTONE_FAMILIES` in `useTheSlopeDesignSystem.ts` states the order of the palette, by hue. `HERO` holds one fill and one ink per family; `RAINBOW` and `PANTONE_CHIPS` map that list, so the ticker tints run in the order of the bands below them. A surface walks the rainbow by index through `getRainbowBand(i)`.
 
-**Rainbow Progression**: Warm mocha → vibrant pink → bright orange → deep burgundy → cool ocean
+| # | Family | Fill | Ink | Contrast | Walked by |
+|---|--------|------|-----|---------:|-----------|
+| 0 | Pink Lemonade | <span class="color-swatch" style="background-color: #fa7b95;"></span> `pink-500` | `TEXT.black` | 8.33 | landing band 1, kitchen TAKEAWAY |
+| 1 | Mandarin Orange | <span class="color-swatch" style="background-color: #ec6a37;"></span> `orange-500` | `TEXT.black` | 6.68 | landing band 2, kitchen SPISESAL |
+| 2 | Ocean | <span class="color-swatch" style="background-color: #25a6b5;"></span> `ocean-500` | `TEXT.black` | 7.2 | landing band 3, kitchen SPIS SENT |
+| 3 | Bonbon | <span class="color-swatch" style="background-color: #de5697;"></span> `bonbon-500` (violet scale) | `TEXT.black` | 5.88 | landing band 4 |
+| 4 | Party Punch | <span class="color-swatch" style="background-color: #e84c76;"></span> `party-500` | `TEXT.black` | 5.73 | the next surface that walks past band 4 |
+
+Two families sit outside the walk: <span class="color-swatch" style="background-color: #ffb482;"></span> `peach-300` with `TEXT.peach[950]` for countdowns and calendar highlights, and <span class="color-swatch" style="background-color: #a47864;"></span> `amber-500` with `TEXT.mocha[50]` for the frame.
+
+**Dark ink on vibrant fills.** The five vibrant stops carry `TEXT.black`, which clears 4.5:1 on each of them in light and dark mode. `TEXT.ink` serves text on a page surface; a brand fill takes `TEXT.black`.
+
+**TIL SALG is grey.** `COMPONENTS.kitchenPanel.RELEASED` fills `gray-400` with `TEXT.black` (8.07:1) and reads as neutral beside the three dining modes. Each kitchen divider is its own family one rung deeper: `border-pink-600`, `border-orange-600`, `border-ocean-600`, `border-gray-500`.
 
 ### When to Use Each Color Type
-
-#### Hero Sections (Family-Facing)
-Use **warm, inviting colors** for user-facing hero sections:
-- <span class="color-swatch" style="background-color: #a47864;"></span> `amber-500` (mocha mousse) - PRIMARY for main hero sections
-- <span class="color-swatch" style="background-color: #fa7b95;"></span> `pink-500` - Vibrant accent
-- <span class="color-swatch" style="background-color: #ec6a37;"></span> `orange-500` - Vibrant accent
-- <span class="color-swatch" style="background-color: #ffb482;"></span> `peach-300` - Countdown timers, calendar highlights
-
-**Example**: Dinner page hero should use `bg-amber-500` (mocha mousse)
-
-#### Functional Data Sections (Kitchen/Admin)
-Use **vibrant Pantone colors** for functional data display to celebrate the full rainbow:
-- <span class="color-swatch" style="background-color: #f59e0b;"></span> `warning-500` (amber) - TAKEAWAY mode
-- <span class="color-swatch" style="background-color: #c4516c;"></span> `party-700` (burgundy) - DINEIN mode
-- <span class="color-swatch" style="background-color: #ec6a37;"></span> `orange-500` (mandarin) - DINEINLATE mode
-- <span class="color-swatch" style="background-color: #6b7280;"></span> `gray-500` - RELEASED (neutral)
-- <span class="color-swatch" style="background-color: #f8f5f2;"></span> `amber-50` - Subtle backgrounds with mocha tint
-
-**Why vibrant?** Maximum color energy, celebrates the Pantone palette from the landing page, clear visual differentiation between dining modes. Uses the same amber/pink/orange colors from the site identity rainbow.
 
 #### Navigation & Organization
 Use **cool, calm colors** for navigation:
@@ -367,14 +422,10 @@ Use **semantic colors** for states:
 ### Implementation Checklist
 
 When designing a new page:
-- [ ] Hero section uses mocha mousse (`amber-500`) or Pantone accent colors
-- [ ] Kitchen/functional data sections use **vibrant Pantone colors** (Option 2: Maximum Color)
-  - TAKEAWAY: `warning-500` (amber)
-  - DINEIN: `party-700` (burgundy pink)
-  - DINEINLATE: `orange-500` (mandarin orange)
-  - RELEASED: `gray-500` (neutral)
-- [ ] Color palette uses Pantone rainbow from landing page
-- [ ] Text contrast meets WCAG AA standards (check with contrast checker)
+- [ ] A hero band takes `BACKGROUNDS.hero.<family>`; a series of bands walks `getRainbowBand(i)`
+- [ ] Fill and ink come from the same token, so dark ink follows its fill
+- [ ] Color palette uses the Pantone rainbow in `PANTONE_FAMILIES` order
+- [ ] `npx vitest run tests/component/architecture` measures the contrast of every pair the tokens define
 - [ ] Mobile-first responsive design
 - [ ] Consistent with landing page rainbow identity
 

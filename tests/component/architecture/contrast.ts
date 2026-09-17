@@ -69,11 +69,8 @@ const gammaEncode = (linear: number): number => {
     return Math.min(255, Math.max(0, Math.round(encoded * 255)))
 }
 
-/**
- * CSS Color 4 OKLCH → sRGB. `lightness` 0-1, `chroma` absolute, `hue` degrees.
- * Out-of-gamut colours clamp per channel, which is what a browser shows anyway.
- */
-export const oklchToRgb = (lightness: number, chroma: number, hue: number): Rgb => {
+/** CSS Color 4 OKLab → linear sRGB, unclamped: a channel outside 0-1 is outside the gamut */
+export const oklchToLinear = (lightness: number, chroma: number, hue: number): [number, number, number] => {
     const hueRad = (hue * Math.PI) / 180
     const a = chroma * Math.cos(hueRad)
     const b = chroma * Math.sin(hueRad)
@@ -89,11 +86,40 @@ export const oklchToRgb = (lightness: number, chroma: number, hue: number): Rgb 
     const s = sPrime ** 3
 
     // LMS → linear sRGB
-    return {
-        r: gammaEncode(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
-        g: gammaEncode(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
-        b: gammaEncode(-0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s)
+    return [
+        4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+        -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+        -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s
+    ]
+}
+
+/**
+ * CSS Color 4 OKLCH → sRGB. `lightness` 0-1, `chroma` absolute, `hue` degrees.
+ * Out-of-gamut colours clamp per channel, which is what a browser shows anyway.
+ */
+export const oklchToRgb = (lightness: number, chroma: number, hue: number): Rgb => {
+    const [r, g, b] = oklchToLinear(lightness, chroma, hue)
+    return {r: gammaEncode(r), g: gammaEncode(g), b: gammaEncode(b)}
+}
+
+/** Iterations of the chroma bisection - fixed, so two runs of the generator agree to the byte */
+const GAMUT_BISECTIONS = 32
+
+/**
+ * The largest chroma up to `chroma` that sRGB can still show at this lightness and hue.
+ * Per-channel clamping keeps a colour inside the cube by bending its hue; a palette built on a
+ * named anchor cannot afford that, so the rung gives up chroma instead and keeps the hue.
+ */
+export const clampChromaToGamut = (lightness: number, chroma: number, hue: number): number => {
+    const inside = (value: number) => oklchToLinear(lightness, value, hue).every(channel => channel >= 0 && channel <= 1)
+    if (inside(chroma)) return chroma
+    let [low, high] = [0, chroma]
+    for (let step = 0; step < GAMUT_BISECTIONS; step++) {
+        const middle = (low + high) / 2
+        if (inside(middle)) low = middle
+        else high = middle
     }
+    return low
 }
 
 /** `oklch(72.3% 0.219 149.579)` → `#00c950`. Returns null for anything else */
@@ -119,10 +145,17 @@ export const cssColourToHex = (value: string): string | null => {
 /** family → shade → `#rrggbb`, e.g. `scales.amber[500] === '#a47864'` */
 export type ColourScales = Record<string, Record<string, string>>
 
-/** Every `--color-<family>-<shade>: <colour>` in a stylesheet, resolved to hex */
+/**
+ * Every `--color-<family>-<shade>: <colour>` in a stylesheet, resolved to hex.
+ *
+ * `--ui-color-<slot>-<shade>` counts as a family too: Nuxt UI's colours plugin publishes it as
+ * `var(--color-<family>-<shade>)` for the family `app.config.ts` maps the slot to, and Tailwind's
+ * `--color-<slot>-<shade>` reads it back, so a preset that redeclares it moves the slot's whole
+ * scale without moving the brand family behind it.
+ */
 export const parseColourScales = (css: string): ColourScales => {
     const scales: ColourScales = {}
-    for (const [, family, shade, value] of css.matchAll(/--color-([a-z]+)-(\d{2,3})\s*:\s*([^;]+);/g)) {
+    for (const [, family, shade, value] of css.matchAll(/--(?:ui-)?color-([a-z]+)-(\d{2,3})\s*:\s*([^;]+);/g)) {
         const hex = cssColourToHex(value!)
         if (!hex) continue
         scales[family!] ??= {}
@@ -130,6 +163,22 @@ export const parseColourScales = (css: string): ColourScales => {
     }
     return scales
 }
+
+/**
+ * The rung a bare `bg-<slot>` or `text-<slot>` paints. Nuxt UI's colours plugin writes
+ * `--ui-<slot>: var(--ui-color-<slot>-500)` for the light block and the 400 rung for `.dark`;
+ * a preset may re-point a slot at another rung, which is what this reads back.
+ */
+export type SlotRungs = Record<string, string>
+
+/** Every `--ui-<slot>: var(--ui-color-<family>-<step>)` in a stylesheet → slot → step */
+export const parseSlotRungs = (css: string): SlotRungs => Object.fromEntries(
+    [...css.matchAll(/--ui-([a-z]+)\s*:\s*var\(--ui-color-[a-z]+-(\d{2,3})\)/g)]
+        .map(([, slot, step]) => [slot!, step!])
+)
+
+/** One mode of a palette: the steps it redeclares and the slots it re-points */
+export type ModeOverride = {scales: ColourScales, slots: SlotRungs}
 
 /** The `--ui-*` semantic tokens of one Nuxt UI mode block, values left unresolved */
 export type SemanticTokens = Record<string, string>
@@ -190,15 +239,16 @@ export const withLightness = (hex: string, lightness: number): string => {
  * has the higher specificity, so the dark scale is the light one with the dark block layered
  * on top - which is what the browser paints and therefore what the measurement reads.
  */
-export const parsePaletteOverrides = (css: string): {light: ColourScales, dark: ColourScales} => {
-    const layer = (target: ColourScales, source: ColourScales) => {
-        for (const [family, steps] of Object.entries(source)) Object.assign(target[family] ??= {}, steps)
+export const parsePaletteOverrides = (css: string): {light: ModeOverride, dark: ModeOverride} => {
+    const layer = (target: ModeOverride, source: ModeOverride) => {
+        for (const [family, steps] of Object.entries(source.scales)) Object.assign(target.scales[family] ??= {}, steps)
+        Object.assign(target.slots, source.slots)
         return target
     }
-    const light: ColourScales = {}
-    const dark: ColourScales = {}
+    const empty = (): ModeOverride => ({scales: {}, slots: {}})
+    const [light, dark] = [empty(), empty()]
     for (const [, selector, body] of css.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
-        layer(/\.dark\b/.test(selector!) ? dark : light, parseColourScales(body!))
+        layer(/\.dark\b/.test(selector!) ? dark : light, {scales: parseColourScales(body!), slots: parseSlotRungs(body!)})
     }
-    return {light, dark: layer(layer({}, light), dark)}
+    return {light, dark: layer(layer(empty(), light), dark)}
 }

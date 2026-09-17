@@ -15,19 +15,19 @@ export const senderAddress = (environment: string): string =>
 /** Display name next to the sender address: `Skråningen <environment>` — the sender line tells the environments apart */
 export const senderDisplayName = (environment: string): string => `${NOTIFICATION_SENDER_NAME} ${environment}`
 
-export const NOTIFICATION_SIGNATURE = `— ${NOTIFICATION_SENDER_NAME} · {{site}}`
+export const NOTIFICATION_SIGNATURE = `De bedste hilsner fra — ${NOTIFICATION_SENDER_NAME} · {{site}}`
 
 export const NOTIFICATION_TEMPLATES = {
     TEST: {
         subject: 'Skråningen: testbesked fra theslope-sender ({{environment}})',
-        text: 'Hej!\n\nDette er en testbesked sendt gennem theslope-sender.\n\nid: {{dedupeKey}}'
+        text: 'Hejsa!\n\nDette er en testbesked sendt gennem theslope-sender.\n\nid: {{dedupeKey}}'
     },
     BILLING_PERIOD_CLOSED: {
         subject: 'Skråningen: PBS-opgørelse {{billingPeriod}}',
-        text: 'Hej,\n\nVedhæftet er PBS-opgørelsen for perioden {{billingPeriod}}: {{householdCount}} husstande, i alt {{totalAmount}} kr.\n\nOversigt: {{summaryUrl}}'
+        text: 'Hejsa,\n\nVedhæftet er PBS-opgørelsen for perioden {{billingPeriod}}: {{householdCount}} husstande, i alt {{totalAmount}} kr.\n\nOversigt: {{summaryUrl}}'
     },
     BILLING_PERIOD_UPDATED: {
         subject: 'Skråningen: PBS-opgørelse {{billingPeriod}} — opdatering v{{version}}',
-        text: 'Hej,\n\nPBS-opgørelsen for perioden {{billingPeriod}} er opdateret (version {{version}}) og erstatter den tidligere fremsendte: {{householdCount}} husstande, i alt {{totalAmount}} kr.\n\nOversigt: {{summaryUrl}}'
+        text: 'Hejsa,\n\nPBS-opgørelsen for perioden {{billingPeriod}} er opdateret (version {{version}}) og erstatter den tidligere fremsendte: {{householdCount}} husstande, i alt {{totalAmount}} kr.\n\nOversigt: {{summaryUrl}}'
     }
 }

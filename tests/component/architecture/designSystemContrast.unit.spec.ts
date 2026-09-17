@@ -2,9 +2,12 @@ import {describe, it, expect} from 'vitest'
 import {existsSync} from 'node:fs'
 import {
     CHANNELS, LEAVES, MODES, NO_OVERRIDE, buildPairs, createResolver, meetsThreshold, referencesFor,
-    repoFile, repoPath, round, type Level, type Mode, type Pair
+    repoFile, repoPath, round, type Mode, type Pair
 } from './designSystemPairs'
 import {contrastRatio, composite, hexToRgb, oklchToHex, parsePaletteOverrides, rgbToOklch, withLightness} from './contrast'
+import {PALETTES_UNDER_TEST} from './palettes'
+import {PRESETS} from '../../../scripts/palettes/presets'
+import {renderPreset} from '../../../scripts/palettes/render'
 
 /**
  * Architecture test - EN 301 549 / WCAG 2.1 contrast across the design-system tokens.
@@ -16,28 +19,30 @@ import {contrastRatio, composite, hexToRgb, oklchToHex, parsePaletteOverrides, r
  * system, so a token added tomorrow is measured tomorrow - nothing is typed out twice.
  *
  * The inventory, the resolution order and the scoping rules live in `designSystemPairs.ts`,
- * because `scripts/palettes/generate.ts` solves the same pairs it is measured by.
+ * because `scripts/palettes/render.ts` solves the same pairs it is measured by. Which palettes are
+ * measured, and at which level, comes from the registry the appearance card badges (`palettes.ts`),
+ * so the promise a member reads and the assertion here are one value.
  *
  * Levels (WCAG 2.1, adopted by EN 301 549 clause 9.1.4):
- *   1.4.3  Contrast (Minimum), AA   - 4.5:1 body text, 3:1 large-scale text   → the default theme
- *   1.4.6  Contrast (Enhanced), AAA - 7:1 body text, 4.5:1 large-scale text   → the "Høj kontrast" preset
+ *   1.4.3  Contrast (Minimum), AA   - 4.5:1 body text, 3:1 large-scale text   → every palette today
+ *   1.4.6  Contrast (Enhanced), AAA - 7:1 body text, 4.5:1 large-scale text   → a preset the registry badges AAA
  *   1.4.11 Non-text Contrast, AA    - 3:1 borders, rings, UI boundaries (no AAA level exists)
  *
  * When a case fails, fix the token - never the threshold. Pairs that fail today are listed
- * in KNOWN_FINDINGS with the ratio measured on 2026-09-16 and run as `it.fails`, so both a
+ * in KNOWN_FINDINGS with the ratio measured on 2026-09-17 and run as `it.fails`, so both a
  * regression in a green pair and a fix of a listed one break the build.
  */
 
 // ---------------------------------------------------------------------------
-// The default theme's baseline, measured 2026-09-16
+// The default theme's baseline, measured 2026-09-17
 // ---------------------------------------------------------------------------
 
 /**
- * Pairs the default theme does not meet today, with the ratio measured on 2026-09-16.
+ * Pairs the default theme does not meet today, with the ratio measured on 2026-09-17.
  * They run as `it.fails`, so fixing one (a palette tune, a token swap) breaks the build and
  * asks for this entry to be removed - and a pair that is not listed may never start failing.
  *
- * finding 2026-09-16, awaiting the user's decision: TheSlope's Pantone palette is a warm
+ * finding 2026-09-17, awaiting the user's decision: TheSlope's Pantone palette is a warm
  * pastel set whose 500/400 rungs sit around 2-4:1 on white, so nearly every semantic slot,
  * every hero pairing and the Tailwind-default borders miss their level. The "Colors in My
  * preferences" decision (docs/features/bug-fix-admin-ux.md) is what resolves it: the presets
@@ -46,21 +51,15 @@ import {contrastRatio, composite, hexToRgb, oklchToHex, parsePaletteOverrides, r
  */
 const KNOWN_FINDINGS = new Map<string, number>([
     ['light|TEXT.muted|BG.panelNested', 4.06],
-    ['light|TEXT.dimmed|page', 2.6],
-    ['light|TEXT.dimmed|BG.panel', 2.45],
-    ['light|TEXT.dimmed|BG.panelNested', 2.19],
-    ['light|TEXT.dimmed|BG.inset', 2.49],
+    ['light|TEXT.dimmed|BG.panelNested', 4.06],
     ['light|TEXT.timestamp|BG.panelNested', 4.06],
     ['light|TEXT.menuBody|BG.panelNested', 4.47],
     ['light|TYPOGRAPHY.bodyTextPlaceholder|BG.panelNested', 4.06],
-    ['light|COMPONENTS.powerMode.iconClass|page', 3.14],
-    ['light|COMPONENTS.powerMode.iconClass|BG.panel', 2.96],
-    ['light|COMPONENTS.powerMode.iconClass|BG.panelNested', 2.64],
-    ['light|COMPONENTS.powerMode.iconClass|BG.inset', 3.01],
-    ['light|COMPONENTS.guestRow.iconClass|page', 3.57],
-    ['light|COMPONENTS.guestRow.iconClass|BG.panel', 3.36],
-    ['light|COMPONENTS.guestRow.iconClass|BG.panelNested', 3],
-    ['light|COMPONENTS.guestRow.iconClass|BG.inset', 3.42],
+    ['light|COMPONENTS.powerMode.iconClass|page', 4.3],
+    ['light|COMPONENTS.powerMode.iconClass|BG.panel', 4.05],
+    ['light|COMPONENTS.powerMode.iconClass|BG.panelNested', 3.61],
+    ['light|COMPONENTS.powerMode.iconClass|BG.inset', 4.11],
+    ['light|COMPONENTS.guestRow.iconClass|BG.panelNested', 4.05],
     ['light|COMPONENTS.economyTable.level1.icon|page', 4.26],
     ['light|COMPONENTS.economyTable.level1.icon|BG.panel', 4.01],
     ['light|COMPONENTS.economyTable.level1.icon|BG.panelNested', 3.58],
@@ -71,15 +70,7 @@ const KNOWN_FINDINGS = new Map<string, number>([
     ['light|COMPONENTS.economyTable.level2.icon|BG.inset', 3.34],
     ['light|COMPONENTS.economyTable.level3.icon|BG.panelNested', 4.47],
     ['light|BACKGROUNDS.landing.ticker|self', 3.55],
-    ['light|BACKGROUNDS.landing.section1|self', 2.32],
-    ['light|BACKGROUNDS.landing.section2|self', 2.64],
-    ['light|BACKGROUNDS.landing.section4|self', 2.78],
     ['light|BACKGROUNDS.hero.mocha|self', 3.55],
-    ['light|BACKGROUNDS.hero.pink|self', 2.32],
-    ['light|BACKGROUNDS.hero.orange|self', 2.64],
-    ['light|COMPONENTS.kitchenPanel.TAKEAWAY|self', 3.14],
-    ['light|COMPONENTS.kitchenPanel.DINEIN|self', 4.43],
-    ['light|COMPONENTS.kitchenPanel.DINEINLATE|self', 3.14],
     ['light|CHEF_CALENDAR.day.next|self', 2.24],
     ['light|DINNER_CALENDAR.day.next|self', 2.08],
     ['light|TYPOGRAPHY.footerText|BACKGROUNDS.appShell', 3.85],
@@ -152,11 +143,8 @@ const KNOWN_FINDINGS = new Map<string, number>([
     ['dark|TEXT.toned|BG.panelNested', 3.38],
     ['dark|TEXT.muted|page', 3.96],
     ['dark|TEXT.muted|BG.panelNested', 3.38],
-    ['dark|TEXT.dimmed|page', 2.13],
-    ['dark|TEXT.dimmed|BG.panelNested', 1.82],
-    ['dark|TEXT.dimmed|BG.inset', 3.03],
-    ['dark|TEXT.dimmed|BG.ticket', 2.56],
-    ['dark|TEXT.dimmed|BG.invoiceGround', 3.03],
+    ['dark|TEXT.dimmed|page', 3.96],
+    ['dark|TEXT.dimmed|BG.panelNested', 3.38],
     ['dark|TEXT.timestamp|page', 2.13],
     ['dark|TEXT.timestamp|BG.panelNested', 1.82],
     ['dark|TEXT.timestamp|BG.inset', 3.03],
@@ -172,14 +160,13 @@ const KNOWN_FINDINGS = new Map<string, number>([
     ['dark|TYPOGRAPHY.bodyTextPlaceholder|BG.inset', 3.03],
     ['dark|TYPOGRAPHY.bodyTextPlaceholder|BG.ticket', 2.56],
     ['dark|TYPOGRAPHY.bodyTextPlaceholder|BG.invoiceGround', 3.03],
-    ['dark|COMPONENTS.powerMode.iconClass|page', 3.28],
-    ['dark|COMPONENTS.powerMode.iconClass|BG.panelNested', 2.8],
-    ['dark|COMPONENTS.powerMode.iconClass|BG.ticket', 3.94],
-    ['dark|COMPONENTS.guestRow.iconClass|page', 2.89],
-    ['dark|COMPONENTS.guestRow.iconClass|BG.panelNested', 2.46],
-    ['dark|COMPONENTS.guestRow.iconClass|BG.inset', 4.11],
-    ['dark|COMPONENTS.guestRow.iconClass|BG.ticket', 3.47],
-    ['dark|COMPONENTS.guestRow.iconClass|BG.invoiceGround', 4.1],
+    ['dark|COMPONENTS.powerMode.iconClass|page', 3.8],
+    ['dark|COMPONENTS.powerMode.iconClass|BG.panelNested', 3.24],
+    ['dark|COMPONENTS.guestRow.iconClass|page', 2.14],
+    ['dark|COMPONENTS.guestRow.iconClass|BG.panelNested', 1.82],
+    ['dark|COMPONENTS.guestRow.iconClass|BG.inset', 3.04],
+    ['dark|COMPONENTS.guestRow.iconClass|BG.ticket', 2.57],
+    ['dark|COMPONENTS.guestRow.iconClass|BG.invoiceGround', 3.04],
     ['dark|COMPONENTS.economyTable.level1.icon|BG.panelNested', 3.93],
     ['dark|COMPONENTS.economyTable.level2.icon|BG.panelNested', 4.23],
     ['dark|COMPONENTS.economyTable.level3.icon|page', 3.64],
@@ -187,37 +174,22 @@ const KNOWN_FINDINGS = new Map<string, number>([
     ['dark|COMPONENTS.economyTable.level3.icon|BG.ticket', 4.37],
     ['dark|COMPONENTS.dangerZone.heading|page', 4.44],
     ['dark|COMPONENTS.dangerZone.heading|BG.panelNested', 3.79],
-    ['dark|PLANNING_CALENDAR.day.potential|page', 1.52],
-    ['dark|PLANNING_CALENDAR.day.potential|BG.panelNested', 1.29],
-    ['dark|PLANNING_CALENDAR.day.potential|BG.inset', 2.16],
-    ['dark|PLANNING_CALENDAR.day.potential|BG.ticket', 1.82],
-    ['dark|PLANNING_CALENDAR.day.potential|BG.invoiceGround', 2.16],
     ['dark|BACKGROUNDS.landing.ticker|self', 3.55],
-    ['dark|BACKGROUNDS.landing.section1|self', 2.32],
-    ['dark|BACKGROUNDS.landing.section2|self', 2.64],
-    ['dark|BACKGROUNDS.landing.section4|self', 2.78],
     ['dark|BACKGROUNDS.hero.mocha|self', 3.55],
-    ['dark|BACKGROUNDS.hero.pink|self', 2.32],
-    ['dark|BACKGROUNDS.hero.orange|self', 2.64],
-    ['dark|COMPONENTS.kitchenPanel.TAKEAWAY|self', 3.14],
-    ['dark|COMPONENTS.kitchenPanel.DINEIN|self', 4.43],
-    ['dark|COMPONENTS.kitchenPanel.DINEINLATE|self', 3.14],
-    ['dark|CHEF_CALENDAR.day.next|self', 2.24],
-    ['dark|DINNER_CALENDAR.day.next|self', 2.08],
     ['dark|TYPOGRAPHY.sectionSubheadingLight|BACKGROUNDS.hero.mocha', 3.01],
     ['dark|BORDER.gray.500|border|page', 2.13],
     ['dark|BORDER.gray.600|border|page', 1.36],
     ['dark|BORDER.gray.700|border|page', 1],
-    ['dark|BORDER.gray.800|border|page', 1.42],
+    ['dark|BORDER.gray.800|border|page', 1.36],
+    ['dark|BORDER.ocean.600|border|page', 2.42],
     ['dark|BORDER.ocean.700|border|page', 1.74],
+    ['dark|BORDER.pink.600|border|page', 2.72],
+    ['dark|BORDER.orange.600|border|page', 2.4],
     ['dark|BORDER.red.500|border|page', 2.98],
-    ['dark|BORDER.amber.500|border|page', 2.67],
     ['dark|BORDER.amber.600|border|page', 1.91],
     ['dark|RING.red.500|ring|page', 2.98],
     ['dark|RING.red.700|ring|page', 1.47],
-    ['dark|RING.amber.500|ring|page', 2.67],
     ['dark|CALENDAR.deadline.critical|ring|page', 2.98],
-    ['dark|CALENDAR.deadline.warning|ring|page', 2.67],
     ['dark|CHEF_CALENDAR.selection|outline|page', 1.74],
     ['dark|DINNER_CALENDAR.selection|outline|page', 2.02],
     ['dark|slot.primary|page', 3.27],
@@ -256,49 +228,26 @@ const KNOWN_FINDINGS = new Map<string, number>([
 // ---------------------------------------------------------------------------
 
 /**
- * A preset overrides the families under `html[data-palette="…"]`; the level it has to meet
- * is the promise its name makes. The files are generated by `scripts/palettes/generate.ts`
- * - until one exists its cases skip, never fake.
+ * The palettes and their levels come from `PALETTES_UNDER_TEST`, which derives them from the
+ * registry the appearance card badges - so the level a member is promised is the level asserted
+ * here, and flipping the registry moves the assertion with it. A preset's stylesheet is generated
+ * by `scripts/palettes/generate.ts`; a registry entry with no file is a badge nobody measured, so
+ * its case fails rather than skips.
  */
-const PALETTES = [
-    {id: 'default', name: 'default theme (AA)', file: null as string | null, level: 'AA' as Level},
-    {id: 'tydelig', name: 'Tydelig preset (AA)', file: 'app/assets/css/palettes/tydelig.css', level: 'AA' as Level},
-    {id: 'high-contrast', name: 'Høj kontrast preset (AAA)', file: 'app/assets/css/palettes/high-contrast.css', level: 'AAA' as Level},
-    {id: 'colorblind', name: 'Farveblind-venlig preset (AA)', file: 'app/assets/css/palettes/colorblind.css', level: 'AA' as Level}
-] as const
+const PALETTES = PALETTES_UNDER_TEST
 
 /**
  * Pairs a preset cannot answer, keyed `<preset>|<pair>`, with the ratio it reaches. Same
  * contract as KNOWN_FINDINGS: `it.fails`, so a regeneration that fixes one breaks the build.
  *
- * finding 2026-09-16, awaiting the user's decision: each of these is one `--color-<family>-<step>`
- * that the same mode asks to be two things at once, so no value of it answers both pairs. Twelve
- * of the fourteen dark ones are a token with no `dark:` face - `bg-orange-500 text-white` paints
- * the same orange in both modes, while dark mode also draws `text-warning-500` in that orange on
- * a dark page. `BORDER.gray.800` is `BG.inset`'s own dark fill, which a preset holds. The fix is
- * a dark face on eight tokens (`COMPONENTS.kitchenPanel.*`, `CHEF_CALENDAR.day.next`,
- * `DINNER_CALENDAR.day.next`, `CALENDAR.picker.cookingDay`, `PLANNING_CALENDAR.day.generated`,
- * `BACKGROUNDS.hero.orange`) - a token change, which the "Tydelig, the AA preset" decision
- * (docs/features/bug-fix-admin-ux.md) puts outside this package.
+ * Empty since 2026-09-17, and still empty with Farveblind added on 2026-09-18: both presets meet
+ * AA on all 418 pairs, in light and dark. The nine tokens
+ * that used to hold it back drew one rung as a fill and as ink at once; each now carries its own
+ * `dark:` face (`*_CALENDAR.day.next`, `PLANNING_CALENDAR.day.potential`, `BORDER.amber[500]`,
+ * `RING.amber[500]`, `BORDER.gray[800]`, `TEXT.dimmed`, `COMPONENTS.powerMode.iconClass`), and the
+ * two countdown accents moved to the 200 rung, which only they draw.
  */
-const PRESET_FINDINGS = new Map<string, number>([
-    ['tydelig|light|CHEF_CALENDAR.countdown.accent|CALENDAR.countdown.container', 3.49],
-    ['tydelig|light|DINNER_CALENDAR.countdown.accent|CALENDAR.countdown.container', 3.51],
-    ['tydelig|dark|BACKGROUNDS.landing.section2|self', 1.59],
-    ['tydelig|dark|BACKGROUNDS.hero.orange|self', 1.59],
-    ['tydelig|dark|PANTONE_CHIPS[1]|self', 1.61],
-    ['tydelig|dark|COMPONENTS.kitchenPanel.TAKEAWAY|self', 1.89],
-    ['tydelig|dark|COMPONENTS.kitchenPanel.DINEINLATE|self', 1.89],
-    ['tydelig|dark|COMPONENTS.kitchenPanel.RELEASED|self', 1.89],
-    ['tydelig|dark|CALENDAR.picker.cookingDay|self', 1.74],
-    ['tydelig|dark|PLANNING_CALENDAR.day.generated|self', 1.74],
-    ['tydelig|dark|CHEF_CALENDAR.day.next|self', 1.82],
-    ['tydelig|dark|DINNER_CALENDAR.day.next|self', 1.86],
-    ['tydelig|dark|BORDER.gray.800|border|page', 1.42],
-    ['tydelig|dark|BORDER.amber.500|border|page', 1.73],
-    ['tydelig|dark|RING.amber.500|ring|page', 1.73],
-    ['tydelig|dark|CALENDAR.deadline.warning|ring|page', 1.73]
-])
+const PRESET_FINDINGS = new Map<string, number>([])
 
 describe('EN 301 549 / WCAG 2.1: the design system meets its contrast level', () => {
     it('the OKLCH conversion agrees with the sRGB hex Tailwind 4 publishes', () => {
@@ -339,7 +288,7 @@ describe('EN 301 549 / WCAG 2.1: the design system meets its contrast level', ()
     })
 
     it('every palette shade the design system names resolves to a value', () => {
-        const resolve = createResolver({})
+        const resolve = createResolver(NO_OVERRIDE.light)
         // `bg-<family>-<shade>` is the shape that can name a family no stylesheet declares -
         // `bg-mocha-500` would paint nothing, because `--color-mocha-500` is never emitted
         const isShade = (reference: string) => /^[a-z]+-\d{2,3}(\/\d+)?$/.test(reference)
@@ -362,37 +311,61 @@ describe('EN 301 549 / WCAG 2.1: the design system meets its contrast level', ()
         expect(stale.filter(key => !measured.has(key)).join('\n')).toBe('')
     })
 
-    describe.each(PALETTES)('$name', ({id, file, level}) => {
-        const override = file && existsSync(repoPath(file)) ? parsePaletteOverrides(repoFile(file)) : null
-        const missing = file !== null && override === null
+    it('the generator solves the presets the registry badges, at the level it badges them', () => {
+        // Three copies of a level would let the badge promise AAA while the spec measures AA.
+        // The registry is the source; this is what keeps the producer on it
+        const solved = PRESETS.map(({name, level}) => `${name} ${level}`).sort()
+        const badged = PALETTES.filter(palette => palette.promised)
+            .map(palette => `${palette.id} ${palette.promised}`).sort()
+        expect(solved).toEqual(badged)
+    })
 
-        // A preset that has not been generated yet still gets its full inventory, named and
-        // skipped: `describe.skipIf` reports the cases it is not running instead of faking them
-        const pairs = buildPairs(override ?? NO_OVERRIDE, level)
+    describe.each(PALETTES)('$label', palette => {
+        const {id, file, level, promised} = palette
+        const published = file !== null && existsSync(repoPath(file))
+        const override = published ? parsePaletteOverrides(repoFile(file!)) : null
+
+        if (file !== null) {
+            it('publishes the stylesheet its badge claims', () => {
+                // A registry entry with no generated file badges a level nobody measured
+                expect(published, `${file} is missing - run npx jiti scripts/palettes/generate.ts`).toBe(true)
+            })
+
+            it('is generated from the preset the generator holds today', () => {
+                const preset = PRESETS.find(candidate => candidate.name === id)
+                expect(preset, `no preset named ${id} in scripts/palettes/presets.ts`).toBeDefined()
+                expect(published ? repoFile(file) : '',
+                    `${file} is stale - run make palettes (npx jiti scripts/palettes/generate.ts) and commit the result`)
+                    .toBe(renderPreset(preset!))
+            })
+        }
+
+        // A preset with no stylesheet has already failed above; its pairs would measure the
+        // published palette and say nothing about the preset, so they do not run
+        const pairs = file !== null && !published ? [] : buildPairs(override ?? NO_OVERRIDE, level)
         const groups = [...new Set(pairs.map(pair => pair.group))]
 
-        describe.skipIf(missing)
-            .each(groups)('%s', group => {
-                const cases = pairs.filter(pair => pair.group === group)
-                const finding = (pair: Pair) =>
-                    file === null ? KNOWN_FINDINGS.get(pair.key) : PRESET_FINDINGS.get(`${id}|${pair.key}`)
+        describe.each(groups)('%s', group => {
+            const cases = pairs.filter(pair => pair.group === group)
+            const finding = (pair: Pair) =>
+                promised === null ? KNOWN_FINDINGS.get(pair.key) : PRESET_FINDINGS.get(`${id}|${pair.key}`)
 
-                const green = cases.filter(pair => finding(pair) === undefined)
-                    .map(pair => ({pair, name: `${pair.mode}: ${pair.name} ≥ ${pair.threshold} (${level})`}))
+            const green = cases.filter(pair => finding(pair) === undefined)
+                .map(pair => ({pair, name: `${pair.mode}: ${pair.name} ≥ ${pair.threshold} (${level})`}))
 
-                const findings = cases.filter(pair => finding(pair) !== undefined)
-                    .map(pair => ({
-                        pair,
-                        name: `${pair.mode}: ${pair.name} — ${finding(pair)} (finding 2026-09-16, awaiting the user's decision)`
-                    }))
+            const findings = cases.filter(pair => finding(pair) !== undefined)
+                .map(pair => ({
+                    pair,
+                    name: `${pair.mode}: ${pair.name} — ${finding(pair)} (finding 2026-09-17, awaiting the user's decision)`
+                }))
 
-                it.each(green)('$name', ({pair}) => {
-                    expect(meetsThreshold(pair), `${pair.name} measures ${round(pair.ratio)}:1`).toBe(true)
-                })
-
-                it.fails.each(findings)('$name', ({pair}) => {
-                    expect(meetsThreshold(pair), `${pair.name} measures ${round(pair.ratio)}:1`).toBe(true)
-                })
+            it.each(green)('$name', ({pair}) => {
+                expect(meetsThreshold(pair), `${pair.name} measures ${round(pair.ratio)}:1`).toBe(true)
             })
+
+            it.fails.each(findings)('$name', ({pair}) => {
+                expect(meetsThreshold(pair), `${pair.name} measures ${round(pair.ratio)}:1`).toBe(true)
+            })
+        })
     })
 })

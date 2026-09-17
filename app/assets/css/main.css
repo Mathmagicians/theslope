@@ -3,6 +3,7 @@
 
 /* Palette presets - generated, one `html[data-palette="…"]` block each. See docs/ui.md "Palettes" */
 @import "./palettes/tydelig.css";
+@import "./palettes/colorblind.css";
 
 @theme static {
     /* Custom amber color palette */
@@ -171,4 +172,14 @@
             transform: translateX(-100%);
         }
     }
+}
+
+/* Text scale preference - `html[data-text-scale]` is set by the layout from User.appearance.
+   Every rem in the app scales with the root font size. See docs/ui.md "Palettes". */
+html[data-text-scale="large"] {
+    font-size: 112.5%;
+}
+
+html[data-text-scale="larger"] {
+    font-size: 125%;
 }

@@ -284,11 +284,10 @@ Tjek `unmatchedNames` i svaret - disse skal tildeles manuelt eller rettes i CSV.
 
 ### Heynabo-import
 
-Synkronisér husstande og beboere fra Heynabo:
+Synkronisér husstande og beboere fra Heynabo. På dev og prod: Admin → System → Heynabo-import. Lokalt:
 
 ```bash
-make heynabo-import-prod   # Produktion
-make heynabo-import-local  # Lokal
+make theslope-login-local && make theslope-admin-import   # GET /api/admin/heynabo/import på den lokale server
 ```
 
 ---
