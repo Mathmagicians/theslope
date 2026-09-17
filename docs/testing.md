@@ -387,9 +387,10 @@ The pairs are **derived by walking the exported tokens**, so a token added tomor
 text on the neutral surfaces (`BG.panel`, `BG.inset`, …), a token that carries both its ink and its fill (hero
 backgrounds, calendar days, kitchen panels, Pantone chips), borders/rings against the page and `BG.panel`, and the Nuxt
 UI semantic slots (`text-<slot>` on the page and on the soft `bg-<slot>/10` alert surface, `text-inverted` on the solid
-fill). Two scoping rules keep the inventory on the standard: a token whose own classes make its text large-scale
-(24px, or 18.66px bold) is measured at the 3:1 rung of 1.4.3, and the dividers and table banding listed in docs/ui.md
-"Palettes" sit outside 1.4.11.
+fill). Three scoping rules keep the inventory on the standard: a token whose own classes make its text large-scale
+(24px, or 18.66px bold) is measured at the 3:1 rung of 1.4.3; a fill takes its bar from the typography a component
+places on it (`INK_ON_FILL`, one row per surface with the component and line that draws it); and the dividers and
+table banding listed in docs/ui.md "Palettes" sit outside 1.4.11.
 
 Palette presets under `app/assets/css/palettes/` are measured the same way, at the level the preset's name promises,
 with the pairs a preset cannot answer listed per preset in `PRESET_FINDINGS`; a preset that does not exist yet has its

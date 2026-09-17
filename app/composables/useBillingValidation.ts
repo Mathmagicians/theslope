@@ -56,7 +56,15 @@ export const useBillingValidation = () => {
         ticketCountsByType: TicketCountsByTypeSchema, // { ADULT: 200, CHILD: 50, BABY: 1 }
         cutoffDate: z.coerce.date(),
         paymentDate: z.coerce.date(),
-        createdAt: z.coerce.date()
+        createdAt: z.coerce.date(),
+        version: z.number().int().min(1) // content version (ADR-015): bumped when catch-up billing changes the period
+    })
+
+    /** What the monthly run reads to decide what a period still needs: its version and the versions delivered so far */
+    const BillingSideEffectStampsSchema = z.object({
+        version: z.number().int().min(1),
+        archivedVersion: z.number().int().min(0),
+        notifiedVersion: z.number().int().min(0)
     })
 
     /**
@@ -374,7 +382,8 @@ export const useBillingValidation = () => {
 
     const BillingPeriodSummaryCreateSchema = BillingPeriodSummaryDisplaySchema.omit({
         id: true, createdAt: true, shareToken: true,
-        invoiceSum: true, dinnerCount: true, ticketCountsByType: true  // Computed on read, not stored
+        invoiceSum: true, dinnerCount: true, ticketCountsByType: true,  // Computed on read, not stored
+        version: true  // Defaults to 1
     })
 
     const BillingPeriodSummaryIdSchema = BillingPeriodSummaryDisplaySchema.pick({id: true})
@@ -386,6 +395,7 @@ export const useBillingValidation = () => {
         key: z.string(),
         filename: z.string(),
         sizeBytes: z.number().int().min(0),
+        version: z.number().int().min(1),
         archived: z.boolean(),
         /** true when the ARCHIVE binding is missing in this environment */
         degraded: z.boolean()
@@ -396,8 +406,20 @@ export const useBillingValidation = () => {
         billingPeriod: z.string(),
         invoiceCount: z.number().int().min(0),
         transactionCount: z.number().int().min(0),
-        totalAmount: z.number().int().min(0),
-        /** Side effects of runMonthlyBilling per period; absent on generateBilling's own result */
+        totalAmount: z.number().int().min(0)
+    })
+
+    /**
+     * State of one billing period's side effects after a monthly run (ADR-015: the run converges every period):
+     * csvUploaded / emailSent tell whether the archive and the accountant mail match the period's current CSV;
+     * archive / notification are present when this run did the work.
+     */
+    const BillingPeriodSideEffectsSchema = z.object({
+        billingPeriodSummaryId: z.number().int().positive(),
+        billingPeriod: z.string(),
+        version: z.number().int().min(1),
+        csvUploaded: z.boolean(),
+        emailSent: z.boolean(),
         archive: BillingArchiveResultSchema.optional(),
         notification: SenderEmitResultSchema.optional()
     })
@@ -408,7 +430,10 @@ export const useBillingValidation = () => {
      * Normal monthly run = 1 period, catch-up = multiple periods
      */
     const MonthlyBillingResponseSchema = z.object({
+        /** What this run billed (one per period with unbilled transactions) */
         results: z.array(BillingGenerationResultSchema),
+        /** Every closed period after this run: CSV in R2 and accountant mail, done or redone as needed */
+        periods: z.array(BillingPeriodSideEffectsSchema),
         jobRunId: z.number().int().positive()
     })
 
@@ -459,11 +484,11 @@ export const useBillingValidation = () => {
     }
 
     /**
-     * Generate filename for CSV export
-     * Format: PBS-Opgørelse-Skråningen-{billingPeriod}.csv
+     * Generate filename for CSV export — carries the period's version (the accountant sees which one replaces which)
+     * Format: PBS-Opgørelse-Skråningen-{billingPeriod}-v{version}.csv
      */
     const generateCsvFilename = (summary: z.infer<typeof BillingPeriodSummaryDetailSchema>): string =>
-        `PBS-Opgørelse-Skråningen-${summary.billingPeriod}.csv`
+        `PBS-Opgørelse-Skråningen-${summary.billingPeriod}-v${summary.version}.csv`
 
     // ============================================================================
     // Transaction Serialization (ADR-010)
@@ -582,6 +607,7 @@ export const useBillingValidation = () => {
         cutoffDate: Date
         paymentDate: Date
         createdAt: Date
+        version: number
         invoices: Array<{
             id: number
             amount: number
@@ -727,6 +753,8 @@ export const useBillingValidation = () => {
         generateBillingCsv,
         generateCsvFilename,
         BillingArchiveResultSchema,
+        BillingSideEffectStampsSchema,
+        BillingPeriodSideEffectsSchema,
 
         // Monthly Billing Generation
         BillingPeriodSummaryCreateSchema,
@@ -781,6 +809,8 @@ export type BillingPeriodSummaryId = z.infer<ReturnType<typeof useBillingValidat
 export type InvoiceCreated = z.infer<ReturnType<typeof useBillingValidation>['InvoiceCreatedSchema']>
 export type BillingGenerationResult = z.infer<ReturnType<typeof useBillingValidation>['BillingGenerationResultSchema']>
 export type BillingArchiveResult = z.infer<ReturnType<typeof useBillingValidation>['BillingArchiveResultSchema']>
+export type BillingSideEffectStamps = z.infer<ReturnType<typeof useBillingValidation>['BillingSideEffectStampsSchema']>
+export type BillingPeriodSideEffects = z.infer<ReturnType<typeof useBillingValidation>['BillingPeriodSideEffectsSchema']>
 export type MonthlyBillingResponse = z.infer<ReturnType<typeof useBillingValidation>['MonthlyBillingResponseSchema']>
 
 // Household Billing types

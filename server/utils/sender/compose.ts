@@ -20,7 +20,7 @@ export type ComposeInput = {
     cc?: string[]
     values?: Record<string, string>
     attachments?: TextAttachment[]
-    /** jobRunId / billingPeriod — never PII */
+    /** jobRunId / billingPeriod — an id or a period label */
     correlationId?: string
     now?: Date
 }

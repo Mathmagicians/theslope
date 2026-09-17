@@ -955,7 +955,7 @@ if (order.state === OrderStateSchema.enum.BOOKED) { }
 
 ### Compliance
 
-**Generated:** Committed to git, regenerate with `make prisma`
+**Generated:** Committed to git, regenerate with `make d1-prisma`
 
 **Validation composables:**
 1. MUST import enums from generated layer

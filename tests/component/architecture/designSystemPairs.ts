@@ -252,9 +252,8 @@ const SLOTS = Object.keys(SLOT_FAMILY)
 
 /**
  * 1.4.3 sets a lower bar for **large-scale text**: 18pt (24px), or 14pt bold (18.66px bold).
- * A token states its own size, so the rule reads the token's bare classes - the `md:` face is
- * the larger one, and a threshold has to hold at the smaller. `font-semibold` is not bold:
- * WCAG's "bold" is the 700 weight the browser draws for `font-bold` and above.
+ * `font-semibold` is not bold: WCAG's "bold" is the 700 weight the browser draws for
+ * `font-bold` and above.
  */
 const TAILWIND_TEXT_PX: Record<string, number> = {
     xs: 12, sm: 14, base: 16, lg: 18, xl: 20, '2xl': 24, '3xl': 30, '4xl': 36,
@@ -263,14 +262,90 @@ const TAILWIND_TEXT_PX: Record<string, number> = {
 
 const LARGE_TEXT_PX = 24
 const LARGE_BOLD_TEXT_PX = 18.66
+const BOLD_WEIGHTS = ['bold', 'extrabold', 'black']
+const BREAKPOINTS = ['sm', 'md', 'lg', 'xl', '2xl']
 
+/** One rendered size of a token: the bare classes, or a breakpoint's override of them */
+export type TextFace = {at: string, px: number, bold: boolean}
+
+/**
+ * Every face a class string renders. `text-base md:text-lg font-bold` renders 16px bold up to
+ * `md` and 18px bold from there, and a threshold has to hold at each - which in this codebase
+ * means the bare face, since a `md:` face is always the larger one.
+ */
+export const textFaces = (classes: string): TextFace[] => {
+    const tokens = classes.split(/\s+/).filter(Boolean)
+    const read = <T>(pattern: RegExp, parse: (value: string) => T | undefined) => {
+        const found = new Map<string, T>()
+        for (const token of tokens) {
+            const match = token.match(pattern)
+            if (!match) continue
+            const breakpoint = match[1] ?? ''
+            if (breakpoint && !BREAKPOINTS.includes(breakpoint)) continue
+            const value = parse(match[2]!)
+            if (value !== undefined && !found.has(breakpoint)) found.set(breakpoint, value)
+        }
+        return found
+    }
+
+    const sizes = read(/^(?:([a-z0-9]+):)?text-([a-z0-9]+)$/, value => TAILWIND_TEXT_PX[value])
+    const weights = read(/^(?:([a-z0-9]+):)?font-([a-z]+)$/, value => BOLD_WEIGHTS.includes(value))
+    const bare = sizes.get('')
+    if (bare === undefined) return []
+
+    const faces = [...new Set(['', ...sizes.keys(), ...weights.keys()])]
+    return faces.map(breakpoint => ({
+        at: breakpoint || 'base',
+        px: sizes.get(breakpoint) ?? bare,
+        bold: weights.get(breakpoint) ?? weights.get('') ?? false
+    }))
+}
+
+export const isLargeFace = ({px, bold}: TextFace) =>
+    px >= LARGE_TEXT_PX || (bold && px >= LARGE_BOLD_TEXT_PX)
+
+/** A token is large-scale text only when every face it renders is - the smallest one binds */
 export const isLargeText = (classes: string): boolean => {
-    const bare = classes.split(/\s+/).filter(className => !className.includes(':'))
-    const size = bare.map(className => TAILWIND_TEXT_PX[className.replace(/^text-/, '')])
-        .find((px): px is number => px !== undefined)
-    if (size === undefined) return false
-    const bold = bare.some(className => ['font-bold', 'font-extrabold', 'font-black'].includes(className))
-    return size >= LARGE_TEXT_PX || (bold && size >= LARGE_BOLD_TEXT_PX)
+    const faces = textFaces(classes)
+    return faces.length > 0 && faces.every(isLargeFace)
+}
+
+/**
+ * The typography a component actually places on a fill. 1.4.3 grades a pair by the size of the
+ * text in it; a fill token carries no size of its own, so the threshold comes from the ink a
+ * component draws on it, at that ink's smallest face. Read from the components named here - a
+ * surface that changes what it carries updates this table.
+ *
+ * `BACKGROUNDS.landing.ticker` is left out on purpose: its words are `PANTONE_CHIPS`, which
+ * bring their own fill and are measured as their own pairs, so the band's declared ink renders
+ * nowhere and stays at the body bar.
+ */
+const INK_ON_FILL: Record<string, {ink: string, at: string}[]> = {
+    // app/components/landing/Hero.vue:7
+    'BACKGROUNDS.landing.titleBar': [{ink: 'TYPOGRAPHY.heroTitle', at: 'Hero.vue:7'}],
+    // app/pages/index.vue:14-25 - one `h2` per band, all `TYPOGRAPHY.sectionTitle`
+    'BACKGROUNDS.landing.section1': [{ink: 'TYPOGRAPHY.sectionTitle', at: 'index.vue:15'}],
+    'BACKGROUNDS.landing.section2': [{ink: 'TYPOGRAPHY.sectionTitle', at: 'index.vue:18'}],
+    'BACKGROUNDS.landing.section3': [{ink: 'TYPOGRAPHY.sectionTitle', at: 'index.vue:21'}],
+    'BACKGROUNDS.landing.section4': [{ink: 'TYPOGRAPHY.sectionTitle', at: 'index.vue:24'}],
+    // app/components/dinner/DinnerDetailHeader.vue:65-78 and app/components/chef/ChefMenuCard.vue:418
+    'BACKGROUNDS.hero.mocha': [{ink: 'TYPOGRAPHY.bodyTextMedium', at: 'DinnerDetailHeader.vue:74'}],
+    // The other three hero fills, and `LAYOUTS.hero` with them, are declared and drawn by no
+    // component today. They are graded by the typography docs/ui.md pairs a hero with; the day a
+    // component puts body text on one, that component belongs in this row and the bar goes back up
+    'BACKGROUNDS.hero.peach': [{ink: 'TYPOGRAPHY.heroTitle', at: 'docs/ui.md "Hero Sections"'}],
+    'BACKGROUNDS.hero.pink': [{ink: 'TYPOGRAPHY.heroTitle', at: 'docs/ui.md "Hero Sections"'}],
+    'BACKGROUNDS.hero.orange': [{ink: 'TYPOGRAPHY.heroTitle', at: 'docs/ui.md "Hero Sections"'}],
+    // app/components/dinner/KitchenPreparation.vue:200-214 - four sizes per panel, smallest binds
+    ...Object.fromEntries(['TAKEAWAY', 'DINEIN', 'DINEINLATE', 'RELEASED'].map(mode => [
+        `COMPONENTS.kitchenPanel.${mode}`,
+        [
+            {ink: 'TYPOGRAPHY.kitchenLabel', at: 'KitchenPreparation.vue:200'},
+            {ink: 'TYPOGRAPHY.kitchenSecondary', at: 'KitchenPreparation.vue:204'},
+            {ink: 'TYPOGRAPHY.kitchenMain', at: 'KitchenPreparation.vue:209'},
+            {ink: 'TYPOGRAPHY.kitchenDetail', at: 'KitchenPreparation.vue:214'}
+        ]
+    ]))
 }
 
 /**
@@ -384,6 +459,26 @@ export const buildPairs = (override: ModeScales, level: Level): Pair[] => {
         const textThreshold = (classes: string) =>
             TEXT_THRESHOLD[level][isLargeText(classes) ? 'large' : 'body']
 
+        /**
+         * 1.4.3 for a fill: the size comes from the ink a component places on it. Every face of
+         * every placed ink has to clear the bar, so the smallest one sets it, and the pair says
+         * which ink and which face that is.
+         */
+        const placedInk = (path: string) => {
+            const placed = INK_ON_FILL[path]
+            if (!placed?.length) return null
+            const faces = placed.flatMap(({ink}) =>
+                textFaces(leafByPath.get(ink)?.classes ?? '').map(face => ({ink, face})))
+            if (!faces.length) return null
+            const smallest = faces.reduce((worst, candidate) =>
+                isLargeFace(candidate.face) && !isLargeFace(worst.face) ? worst
+                    : candidate.face.px < worst.face.px ? candidate : worst)
+            return {
+                threshold: TEXT_THRESHOLD[level][faces.every(({face}) => isLargeFace(face)) ? 'large' : 'body'],
+                governedBy: `${smallest.ink} @${smallest.face.at} ${smallest.face.px}px${smallest.face.bold ? ' bold' : ''}`
+            }
+        }
+
         const textSurfaces = distinctSurfaces(SURFACES, mode)
         const edgeSurfaces = distinctSurfaces(EDGE_SURFACES, mode)
 
@@ -398,12 +493,15 @@ export const buildPairs = (override: ModeScales, level: Level): Pair[] => {
             }
         }
 
-        // 1b - a token that carries both its ink and its fill states its own pair
+        // 1b - a token that carries both its ink and its fill states its own pair, graded by
+        //      the text a component places on it where the fill names no size of its own
         for (const leaf of LEAVES) {
             const ink = pick(leaf.classes, 'text', mode)
             const bg = pick(leaf.classes, 'bg', mode) && surfaceOf(leaf.classes, mode)
-            if (ink && bg) add('paired token', `${leaf.path} (own fill)`,
-                `${mode}|${leaf.path}|self`, ink, bg, textThreshold(leaf.classes))
+            if (!ink || !bg) continue
+            const placed = textFaces(leaf.classes).length ? null : placedInk(leaf.path)
+            add('paired token', `${leaf.path} (own fill${placed ? `, ${placed.governedBy}` : ''})`,
+                `${mode}|${leaf.path}|self`, ink, bg, placed?.threshold ?? textThreshold(leaf.classes))
         }
 
         // 1c - ink with one owner: the fill the design system draws it on

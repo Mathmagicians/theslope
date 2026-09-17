@@ -61,25 +61,26 @@ help: ## Show this help
 	@grep -E '^[a-zA-Z0-9_-]+:.*## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*## "}; {printf "  \033[36m%-28s\033[0m %s\n", $$1, $$2}'
 
 # ============================================================================
-# PRISMA & MIGRATIONS
+# D1 — SCHEMA, MIGRATIONS, SEEDS, QUERIES
 # ============================================================================
-.PHONY: prisma-to-zod d1-prisma prisma-create-migration prisma-flatten-migrations
+# --- Schema → migration files → Prisma client + zod (prisma/generated, committed)
+.PHONY: d1-prisma-zod d1-prisma d1-create-migration d1-flatten-migrations
 
-prisma-to-zod:
+d1-prisma-zod:
 	@npx prisma generate zod
 
-d1-prisma: prisma-to-zod ## Generate Prisma client and Zod types
+d1-prisma: d1-prisma-zod ## Generate Prisma client and Zod types
 	@npx prisma format
 	@npx prisma validate
 	@npm run db:generate-client
 
-prisma-create-migration: ## Create migration (name=xxx)
+d1-create-migration: ## Create migration (name=xxx)
 	@echo "📝 Creating new Prisma migration..."
 	@npx prisma migrate dev --name $(name) --create-only
 	@echo "✅ Migration created in prisma/migrations/"
-	@$(MAKE) prisma-flatten-migrations
+	@$(MAKE) d1-flatten-migrations
 
-prisma-flatten-migrations:
+d1-flatten-migrations:
 	@echo "🔄 Flattening Prisma migrations for Wrangler..."
 	@mkdir -p migrations
 	@counter=1; \
@@ -98,9 +99,7 @@ prisma-flatten-migrations:
 	done
 	@echo "✅ Migrations flattened!"
 
-# ============================================================================
-# DATABASE MIGRATIONS
-# ============================================================================
+# --- Apply migrations (+ seeds) per environment
 .PHONY: d1-migrate-local d1-migrate-dev d1-migrate-prod d1-migrate-all
 
 d1-migrate-local: ## Migrate + seed local database
@@ -121,9 +120,7 @@ d1-migrate-prod: ## Migrate + seed production database
 d1-migrate-all: d1-migrate-local d1-migrate-dev d1-migrate-prod
 	@echo "✅ Applied migrations to all databases"
 
-# ============================================================================
-# DATABASE SEEDING
-# ============================================================================
+# --- Seeds
 .PHONY: d1-seed-local d1-seed-dev d1-seed-prod d1-seed-testdata d1-seed-master-data-local d1-seed-master-data-dev d1-seed-master-data-prod
 
 d1-seed-local: ## Run all seeds (local)
@@ -153,10 +150,7 @@ d1-seed-master-data-prod: ## Load master data to prod (confidential, manual)
 	@npx wrangler d1 execute theslope-prod --file .theslope/prod-master-data-households.sql --env prod --remote
 	@echo "✅ Master data loaded (prod)!"
 
-
-# ============================================================================
-# DATABASE QUERIES
-# ============================================================================
+# --- Queries and test-data cleanup (local)
 .PHONY: d1-list-users-local d1-list-tables d1-list-tables-local d1-nuke-seasons d1-nuke-households d1-nuke-users d1-nuke-allergytypes d1-nuke-all
 
 d1-list-users-local:
@@ -198,6 +192,34 @@ d1-nuke-allergytypes: ## Delete test allergy types (local) - Peanuts-* pattern
 
 d1-nuke-all: d1-nuke-seasons d1-nuke-households d1-nuke-users d1-nuke-allergytypes ## Nuke all test data from local database
 	@echo "✅ Nuked all test data!"
+
+# ============================================================================
+# TESTING
+# ============================================================================
+.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod
+
+unit-test: ## Run all unit tests
+	@npx vitest --run
+
+unit-test-single: ## Run single test (name=pattern)
+	@npx vitest --run --testNamePattern=$(name)
+
+e2e-team: ## Run team E2E tests
+	@npx playwright test tests/e2e/api/admin/team.e2e.spec.ts --reporter=line
+
+e2e-season: ## Run season E2E tests
+	@npx playwright test tests/e2e/api/admin/season.e2e.spec.ts --reporter=line
+
+# Smoke macro: $(1)=env file — BASE_URL from the env file, SHOULD_NOT_MUTATE, runs the smoke suite
+define run_smoke
+	@$(call require_base_url,$(1)) && SHOULD_NOT_MUTATE=true npm run test:e2e:smoke
+endef
+
+smoke-dev: ## Run smoke tests against dev (BASE_URL from .env.dev)
+	$(call run_smoke,$(ENV_dev))
+
+smoke-prod: ## Run smoke tests against prod (BASE_URL from .env.prod)
+	$(call run_smoke,$(ENV_prod))
 
 # ============================================================================
 # VERSION MANAGEMENT
@@ -294,7 +316,7 @@ logs-prod: ## Tail app logs (prod)
 logs-sender-dev: ## Tail theslope-sender logs (dev)
 	$(call worker_tail,sender,dev)
 
-typegen: ## Regenerate wrangler binding typings for every worker from wrangler.toml (the local .env is not read) (root + workers/*)
+typegen: ## Regenerate wrangler binding typings for every worker from wrangler.toml alone (root + workers/*)
 	@CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false npx wrangler types shared/types/worker-configuration.d.ts && $(foreach w,$(WORKERS),CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false npx wrangler types workers/$(w)/worker-configuration.d.ts -c $(call worker_cfg,$(w)) &&) true
 
 # ============================================================================
@@ -317,9 +339,9 @@ theslope-sender-event-test-dev: ## Test event on dev → real mail from Skrånin
 theslope-sender-event-test-prod: ## Test event on prod → real mail from Skråningen prod <no-reply@skraaningen.dk>
 	$(call theslope_sender_event_test,$(ENV_prod))
 
-# $(1)=env file; bpid=<billingPeriodSummaryId> (GET /api/admin/billing/periods lists them)
+# $(1)=env file; bpid=<billingPeriodSummaryId> — the numeric id from GET /api/admin/billing/periods
 define theslope_sender_event_monthly_billing
-	@test -n "$(bpid)" || { echo "usage: make $@ bpid=<billingPeriodSummaryId>"; exit 1; }
+	@case "$(bpid)" in ''|*[!0-9]*) echo "usage: make $@ bpid=<billingPeriodSummaryId> (numeric id, see GET /api/admin/billing/periods)"; exit 1;; esac
 	$(call theslope_call,$(1),-X POST "$$BASE_URL/api/admin/sender/event/monthly-billing" -d "{\"billingPeriodSummaryId\":$(bpid)}")
 endef
 
@@ -412,6 +434,37 @@ theslope-import-season-prod: ## Import season CSV to production
 	$(call theslope_import_season,$(ENV_prod),$(CALENDAR_CSV),$(TEAMS_CSV_PROD))
 
 # ============================================================================
+# HEAL USER BOOKINGS (bugfix - one-time healing)
+# ============================================================================
+# Usage: make heal-local hid=123 dryrun=false
+# Default: dryrun=true (preview mode)
+.PHONY: heal-local heal-dev heal-prod
+
+heal-local: ## Heal user bookings (local) - hid=householdId dryrun=true|false
+	$(call theslope_call,$(ENV_local),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
+
+heal-dev: ## Heal user bookings (dev) - hid=householdId dryrun=true|false
+	$(call theslope_call,$(ENV_dev),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
+
+heal-prod: ## Heal user bookings (prod) - hid=householdId dryrun=true|false
+	$(call theslope_call,$(ENV_prod),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
+
+# ============================================================================
+# REGENERATE DINNER EVENTS (reconcile with season config - fixes stale holiday events)
+# ============================================================================
+# Usage: make regen-dinner-events-prod sid=2
+.PHONY: regen-dinner-events-local regen-dinner-events-dev regen-dinner-events-prod
+
+regen-dinner-events-local: ## Regenerate dinner events (local) - sid=seasonId
+	$(call theslope_call,$(ENV_local),-X POST "$$BASE_URL/api/admin/season/$(sid)/generate-dinner-events")
+
+regen-dinner-events-dev: ## Regenerate dinner events (dev) - sid=seasonId
+	$(call theslope_call,$(ENV_dev),-X POST "$$BASE_URL/api/admin/season/$(sid)/generate-dinner-events")
+
+regen-dinner-events-prod: ## Regenerate dinner events (prod) - sid=seasonId
+	$(call theslope_call,$(ENV_prod),-X POST "$$BASE_URL/api/admin/season/$(sid)/generate-dinner-events")
+
+# ============================================================================
 # HEYNABO API
 # ============================================================================
 .PHONY: heynabo-login heynabo-get-events heynabo-get-event heynabo-patch-event heynabo-delete-event heynabo-upload-image heynabo-get-locations heynabo-get-nhbrs
@@ -468,65 +521,6 @@ heynabo-get-nhbrs-prod: ## List all neighbors (prod) - uses /admin/users/ matchi
 
 heynabo-nuke-test-events: ## Nuke all test events from Heynabo (patterns: Test Menu-, Updated Delicious Pasta-)
 	$(call theslope_call,$(ENV_local),-X POST "$$BASE_URL/api/test/heynabo/cleanup" -d '{"nuke": true}')
-
-# ============================================================================
-# HEAL USER BOOKINGS (bugfix - one-time healing)
-# ============================================================================
-# Usage: make heal-local hid=123 dryrun=false
-# Default: dryrun=true (preview mode)
-.PHONY: heal-local heal-dev heal-prod
-
-heal-local: ## Heal user bookings (local) - hid=householdId dryrun=true|false
-	$(call theslope_call,$(ENV_local),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
-
-heal-dev: ## Heal user bookings (dev) - hid=householdId dryrun=true|false
-	$(call theslope_call,$(ENV_dev),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
-
-heal-prod: ## Heal user bookings (prod) - hid=householdId dryrun=true|false
-	$(call theslope_call,$(ENV_prod),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
-
-# ============================================================================
-# REGENERATE DINNER EVENTS (reconcile with season config - fixes stale holiday events)
-# ============================================================================
-# Usage: make regen-dinner-events-prod sid=2
-.PHONY: regen-dinner-events-local regen-dinner-events-dev regen-dinner-events-prod
-
-regen-dinner-events-local: ## Regenerate dinner events (local) - sid=seasonId
-	$(call theslope_call,$(ENV_local),-X POST "$$BASE_URL/api/admin/season/$(sid)/generate-dinner-events")
-
-regen-dinner-events-dev: ## Regenerate dinner events (dev) - sid=seasonId
-	$(call theslope_call,$(ENV_dev),-X POST "$$BASE_URL/api/admin/season/$(sid)/generate-dinner-events")
-
-regen-dinner-events-prod: ## Regenerate dinner events (prod) - sid=seasonId
-	$(call theslope_call,$(ENV_prod),-X POST "$$BASE_URL/api/admin/season/$(sid)/generate-dinner-events")
-
-# ============================================================================
-# TESTING
-# ============================================================================
-.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod
-
-unit-test: ## Run all unit tests
-	@npx vitest --run
-
-unit-test-single: ## Run single test (name=pattern)
-	@npx vitest --run --testNamePattern=$(name)
-
-e2e-team: ## Run team E2E tests
-	@npx playwright test tests/e2e/api/admin/team.e2e.spec.ts --reporter=line
-
-e2e-season: ## Run season E2E tests
-	@npx playwright test tests/e2e/api/admin/season.e2e.spec.ts --reporter=line
-
-# Smoke macro: $(1)=env file — BASE_URL from the env file, SHOULD_NOT_MUTATE, runs the smoke suite
-define run_smoke
-	@$(call require_base_url,$(1)) && SHOULD_NOT_MUTATE=true npm run test:e2e:smoke
-endef
-
-smoke-dev: ## Run smoke tests against dev (BASE_URL from .env.dev)
-	$(call run_smoke,$(ENV_dev))
-
-smoke-prod: ## Run smoke tests against prod (BASE_URL from .env.prod)
-	$(call run_smoke,$(ENV_prod))
 
 # ============================================================================
 # UTILITIES

@@ -18,7 +18,7 @@ describe('buildBillingPeriodClosedEmail', () => {
         expect(message.to).toBe(config.accountantEmail)
         expect(message.cc).toEqual([config.adminEmail])
         expect(message.meta.kind).toBe('BILLING_PERIOD_CLOSED')
-        expect(message.meta.correlationId).toBe(summary.billingPeriod)
+        expect(message.meta.correlationId).toBe(`${summary.billingPeriod} v1`)
     })
 
     it('names the period, the household count, the total in kroner and the summary link', () => {
@@ -28,12 +28,28 @@ describe('buildBillingPeriodClosedEmail', () => {
         expect(message.text).toContain(`https://${config.site}/public/billing/${summary.shareToken}`)
     })
 
-    it('attaches the period CSV under its PBS filename', () => {
+    it('attaches the period CSV under its versioned PBS filename', () => {
         expect(message.attachments).toHaveLength(1)
         const [csv] = message.attachments
         expect(csv!.filename).toBe(generateCsvFilename(summary))
+        expect(csv!.filename).toMatch(/-v1\.csv$/)
         expect(csv!.contentType).toBe('text/csv; charset=utf-8')
         expect(Buffer.from(csv!.contentBase64, 'base64').toString('utf8')).toBe(generateBillingCsv(summary))
+    })
+})
+
+describe('buildBillingPeriodClosedEmail for a later version', () => {
+    const updated = {...summary, version: 2}
+    const message = buildBillingPeriodClosedEmail(config, updated)
+
+    it('is the BILLING_PERIOD_UPDATED mail naming the version that replaces the earlier one', () => {
+        expect(NotificationMessageSchema.safeParse(message).success).toBe(true)
+        expect(message.meta.kind).toBe('BILLING_PERIOD_UPDATED')
+        expect(message.subject).toBe(`Skråningen: PBS-opgørelse ${summary.billingPeriod} — opdatering v2`)
+        expect(message.text).toContain('version 2')
+        expect(message.text).toContain('erstatter den tidligere fremsendte')
+        expect(message.meta.correlationId).toBe(`${summary.billingPeriod} v2`)
+        expect(message.attachments[0]!.filename).toMatch(/-v2\.csv$/)
     })
 })
 

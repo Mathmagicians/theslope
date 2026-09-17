@@ -25,5 +25,9 @@ export const NOTIFICATION_TEMPLATES = {
     BILLING_PERIOD_CLOSED: {
         subject: 'Skråningen: PBS-opgørelse {{billingPeriod}}',
         text: 'Hej,\n\nVedhæftet er PBS-opgørelsen for perioden {{billingPeriod}}: {{householdCount}} husstande, i alt {{totalAmount}} kr.\n\nOversigt: {{summaryUrl}}'
+    },
+    BILLING_PERIOD_UPDATED: {
+        subject: 'Skråningen: PBS-opgørelse {{billingPeriod}} — opdatering v{{version}}',
+        text: 'Hej,\n\nPBS-opgørelsen for perioden {{billingPeriod}} er opdateret (version {{version}}) og erstatter den tidligere fremsendte: {{householdCount}} husstande, i alt {{totalAmount}} kr.\n\nOversigt: {{summaryUrl}}'
     }
 }

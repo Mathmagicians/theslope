@@ -18,7 +18,7 @@ export const DinnerEventAllergenScalarFieldEnumSchema = z.enum(['id','dinnerEven
 
 export const AllergyScalarFieldEnumSchema = z.enum(['id','inhabitantId','inhabitantComment','allergyTypeId','createdAt','updatedAt']);
 
-export const UserScalarFieldEnumSchema = z.enum(['id','email','phone','passwordHash','systemRoles','createdAt','updatedAt']);
+export const UserScalarFieldEnumSchema = z.enum(['id','email','phone','passwordHash','systemRoles','notificationChannels','createdAt','updatedAt']);
 
 export const InhabitantScalarFieldEnumSchema = z.enum(['id','heynaboId','userId','householdId','pictureUrl','name','lastName','birthDate','dinnerPreferences']);
 
@@ -32,7 +32,9 @@ export const TransactionScalarFieldEnumSchema = z.enum(['id','orderId','orderSna
 
 export const InvoiceScalarFieldEnumSchema = z.enum(['id','cutoffDate','paymentDate','billingPeriod','amount','createdAt','householdId','billingPeriodSummaryId','pbsId','address']);
 
-export const BillingPeriodSummaryScalarFieldEnumSchema = z.enum(['id','billingPeriod','shareToken','totalAmount','householdCount','ticketCount','cutoffDate','paymentDate','createdAt']);
+export const BillingPeriodSummaryScalarFieldEnumSchema = z.enum(['id','billingPeriod','shareToken','totalAmount','householdCount','ticketCount','cutoffDate','paymentDate','createdAt','version']);
+
+export const DeliveryScalarFieldEnumSchema = z.enum(['id','subjectType','subjectId','version','kind','reference','jobRunId','deliveredAt']);
 
 export const CookingTeamScalarFieldEnumSchema = z.enum(['id','seasonId','name','affinity']);
 
@@ -53,6 +55,10 @@ export const NullsOrderSchema = z.enum(['first','last']);
 export const SystemRoleSchema = z.enum(['ADMIN','ALLERGYMANAGER']);
 
 export type SystemRoleType = `${z.infer<typeof SystemRoleSchema>}`
+
+export const NotificationChannelSchema = z.enum(['EMAIL','SMS']);
+
+export type NotificationChannelType = `${z.infer<typeof NotificationChannelSchema>}`
 
 export const RoleSchema = z.enum(['CHEF','COOK','JUNIORHELPER']);
 
@@ -85,6 +91,14 @@ export type JobTypeType = `${z.infer<typeof JobTypeSchema>}`
 export const JobStatusSchema = z.enum(['RUNNING','SUCCESS','PARTIAL','FAILED']);
 
 export type JobStatusType = `${z.infer<typeof JobStatusSchema>}`
+
+export const DeliverySubjectSchema = z.enum(['BILLING_PERIOD']);
+
+export type DeliverySubjectType = `${z.infer<typeof DeliverySubjectSchema>}`
+
+export const DeliveryKindSchema = z.enum(['ARCHIVE','EMAIL','SMS']);
+
+export type DeliveryKindType = `${z.infer<typeof DeliveryKindSchema>}`
 
 /////////////////////////////////////////
 // MODELS
@@ -140,6 +154,7 @@ export const UserSchema = z.object({
   phone: z.string().nullable(),
   passwordHash: z.string(),
   systemRoles: z.string(),
+  notificationChannels: z.string(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
 })
@@ -274,9 +289,27 @@ export const BillingPeriodSummarySchema = z.object({
   cutoffDate: z.coerce.date(),
   paymentDate: z.coerce.date(),
   createdAt: z.coerce.date(),
+  version: z.number().int(),
 })
 
 export type BillingPeriodSummary = z.infer<typeof BillingPeriodSummarySchema>
+
+/////////////////////////////////////////
+// DELIVERY SCHEMA
+/////////////////////////////////////////
+
+export const DeliverySchema = z.object({
+  subjectType: DeliverySubjectSchema,
+  kind: DeliveryKindSchema,
+  id: z.number().int(),
+  subjectId: z.number().int(),
+  version: z.number().int(),
+  reference: z.string(),
+  jobRunId: z.number().int().nullable(),
+  deliveredAt: z.coerce.date(),
+})
+
+export type Delivery = z.infer<typeof DeliverySchema>
 
 /////////////////////////////////////////
 // COOKING TEAM SCHEMA
@@ -489,6 +522,7 @@ export const UserSelectSchema: z.ZodType<Prisma.UserSelect> = z.object({
   phone: z.boolean().optional(),
   passwordHash: z.boolean().optional(),
   systemRoles: z.boolean().optional(),
+  notificationChannels: z.boolean().optional(),
   createdAt: z.boolean().optional(),
   updatedAt: z.boolean().optional(),
   Inhabitant: z.union([z.boolean(),z.lazy(() => InhabitantArgsSchema)]).optional(),
@@ -775,8 +809,33 @@ export const BillingPeriodSummarySelectSchema: z.ZodType<Prisma.BillingPeriodSum
   cutoffDate: z.boolean().optional(),
   paymentDate: z.boolean().optional(),
   createdAt: z.boolean().optional(),
+  version: z.boolean().optional(),
   invoices: z.union([z.boolean(),z.lazy(() => InvoiceFindManyArgsSchema)]).optional(),
   _count: z.union([z.boolean(),z.lazy(() => BillingPeriodSummaryCountOutputTypeArgsSchema)]).optional(),
+}).strict()
+
+// DELIVERY
+//------------------------------------------------------
+
+export const DeliveryIncludeSchema: z.ZodType<Prisma.DeliveryInclude> = z.object({
+  jobRun: z.union([z.boolean(),z.lazy(() => JobRunArgsSchema)]).optional(),
+}).strict();
+
+export const DeliveryArgsSchema: z.ZodType<Prisma.DeliveryDefaultArgs> = z.object({
+  select: z.lazy(() => DeliverySelectSchema).optional(),
+  include: z.lazy(() => DeliveryIncludeSchema).optional(),
+}).strict();
+
+export const DeliverySelectSchema: z.ZodType<Prisma.DeliverySelect> = z.object({
+  id: z.boolean().optional(),
+  subjectType: z.boolean().optional(),
+  subjectId: z.boolean().optional(),
+  version: z.boolean().optional(),
+  kind: z.boolean().optional(),
+  reference: z.boolean().optional(),
+  jobRunId: z.boolean().optional(),
+  deliveredAt: z.boolean().optional(),
+  jobRun: z.union([z.boolean(),z.lazy(() => JobRunArgsSchema)]).optional(),
 }).strict()
 
 // COOKING TEAM
@@ -945,6 +1004,24 @@ export const OrderHistorySelectSchema: z.ZodType<Prisma.OrderHistorySelect> = z.
 // JOB RUN
 //------------------------------------------------------
 
+export const JobRunIncludeSchema: z.ZodType<Prisma.JobRunInclude> = z.object({
+  deliveries: z.union([z.boolean(),z.lazy(() => DeliveryFindManyArgsSchema)]).optional(),
+  _count: z.union([z.boolean(),z.lazy(() => JobRunCountOutputTypeArgsSchema)]).optional(),
+}).strict();
+
+export const JobRunArgsSchema: z.ZodType<Prisma.JobRunDefaultArgs> = z.object({
+  select: z.lazy(() => JobRunSelectSchema).optional(),
+  include: z.lazy(() => JobRunIncludeSchema).optional(),
+}).strict();
+
+export const JobRunCountOutputTypeArgsSchema: z.ZodType<Prisma.JobRunCountOutputTypeDefaultArgs> = z.object({
+  select: z.lazy(() => JobRunCountOutputTypeSelectSchema).nullish(),
+}).strict();
+
+export const JobRunCountOutputTypeSelectSchema: z.ZodType<Prisma.JobRunCountOutputTypeSelect> = z.object({
+  deliveries: z.boolean().optional(),
+}).strict();
+
 export const JobRunSelectSchema: z.ZodType<Prisma.JobRunSelect> = z.object({
   id: z.boolean().optional(),
   jobType: z.boolean().optional(),
@@ -955,6 +1032,8 @@ export const JobRunSelectSchema: z.ZodType<Prisma.JobRunSelect> = z.object({
   resultSummary: z.boolean().optional(),
   errorMessage: z.boolean().optional(),
   triggeredBy: z.boolean().optional(),
+  deliveries: z.union([z.boolean(),z.lazy(() => DeliveryFindManyArgsSchema)]).optional(),
+  _count: z.union([z.boolean(),z.lazy(() => JobRunCountOutputTypeArgsSchema)]).optional(),
 }).strict()
 
 
@@ -1170,6 +1249,7 @@ export const UserWhereInputSchema: z.ZodType<Prisma.UserWhereInput> = z.object({
   phone: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   passwordHash: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   systemRoles: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  notificationChannels: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   Inhabitant: z.union([ z.lazy(() => InhabitantNullableScalarRelationFilterSchema), z.lazy(() => InhabitantWhereInputSchema) ]).optional().nullable(),
@@ -1183,6 +1263,7 @@ export const UserOrderByWithRelationInputSchema: z.ZodType<Prisma.UserOrderByWit
   phone: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   passwordHash: z.lazy(() => SortOrderSchema).optional(),
   systemRoles: z.lazy(() => SortOrderSchema).optional(),
+  notificationChannels: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
   Inhabitant: z.lazy(() => InhabitantOrderByWithRelationInputSchema).optional(),
@@ -1211,6 +1292,7 @@ export const UserWhereUniqueInputSchema: z.ZodType<Prisma.UserWhereUniqueInput> 
   phone: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   passwordHash: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   systemRoles: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  notificationChannels: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   Inhabitant: z.union([ z.lazy(() => InhabitantNullableScalarRelationFilterSchema), z.lazy(() => InhabitantWhereInputSchema) ]).optional().nullable(),
@@ -1224,6 +1306,7 @@ export const UserOrderByWithAggregationInputSchema: z.ZodType<Prisma.UserOrderBy
   phone: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   passwordHash: z.lazy(() => SortOrderSchema).optional(),
   systemRoles: z.lazy(() => SortOrderSchema).optional(),
+  notificationChannels: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
   _count: z.lazy(() => UserCountOrderByAggregateInputSchema).optional(),
@@ -1242,6 +1325,7 @@ export const UserScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.UserScal
   phone: z.union([ z.lazy(() => StringNullableWithAggregatesFilterSchema), z.string() ]).optional().nullable(),
   passwordHash: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
   systemRoles: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
+  notificationChannels: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
   updatedAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
 }).strict();
@@ -1875,6 +1959,7 @@ export const BillingPeriodSummaryWhereInputSchema: z.ZodType<Prisma.BillingPerio
   cutoffDate: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   paymentDate: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  version: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
   invoices: z.lazy(() => InvoiceListRelationFilterSchema).optional(),
 }).strict();
 
@@ -1888,6 +1973,7 @@ export const BillingPeriodSummaryOrderByWithRelationInputSchema: z.ZodType<Prism
   cutoffDate: z.lazy(() => SortOrderSchema).optional(),
   paymentDate: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  version: z.lazy(() => SortOrderSchema).optional(),
   invoices: z.lazy(() => InvoiceOrderByRelationAggregateInputSchema).optional(),
 }).strict();
 
@@ -1932,6 +2018,7 @@ export const BillingPeriodSummaryWhereUniqueInputSchema: z.ZodType<Prisma.Billin
   cutoffDate: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   paymentDate: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  version: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
   invoices: z.lazy(() => InvoiceListRelationFilterSchema).optional(),
 }).strict());
 
@@ -1945,6 +2032,7 @@ export const BillingPeriodSummaryOrderByWithAggregationInputSchema: z.ZodType<Pr
   cutoffDate: z.lazy(() => SortOrderSchema).optional(),
   paymentDate: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  version: z.lazy(() => SortOrderSchema).optional(),
   _count: z.lazy(() => BillingPeriodSummaryCountOrderByAggregateInputSchema).optional(),
   _avg: z.lazy(() => BillingPeriodSummaryAvgOrderByAggregateInputSchema).optional(),
   _max: z.lazy(() => BillingPeriodSummaryMaxOrderByAggregateInputSchema).optional(),
@@ -1965,6 +2053,82 @@ export const BillingPeriodSummaryScalarWhereWithAggregatesInputSchema: z.ZodType
   cutoffDate: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
   paymentDate: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
   createdAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
+  version: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
+}).strict();
+
+export const DeliveryWhereInputSchema: z.ZodType<Prisma.DeliveryWhereInput> = z.object({
+  AND: z.union([ z.lazy(() => DeliveryWhereInputSchema), z.lazy(() => DeliveryWhereInputSchema).array() ]).optional(),
+  OR: z.lazy(() => DeliveryWhereInputSchema).array().optional(),
+  NOT: z.union([ z.lazy(() => DeliveryWhereInputSchema), z.lazy(() => DeliveryWhereInputSchema).array() ]).optional(),
+  id: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  subjectType: z.union([ z.lazy(() => EnumDeliverySubjectFilterSchema), z.lazy(() => DeliverySubjectSchema) ]).optional(),
+  subjectId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  version: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  kind: z.union([ z.lazy(() => EnumDeliveryKindFilterSchema), z.lazy(() => DeliveryKindSchema) ]).optional(),
+  reference: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  jobRunId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number() ]).optional().nullable(),
+  deliveredAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  jobRun: z.union([ z.lazy(() => JobRunNullableScalarRelationFilterSchema), z.lazy(() => JobRunWhereInputSchema) ]).optional().nullable(),
+}).strict();
+
+export const DeliveryOrderByWithRelationInputSchema: z.ZodType<Prisma.DeliveryOrderByWithRelationInput> = z.object({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  subjectType: z.lazy(() => SortOrderSchema).optional(),
+  subjectId: z.lazy(() => SortOrderSchema).optional(),
+  version: z.lazy(() => SortOrderSchema).optional(),
+  kind: z.lazy(() => SortOrderSchema).optional(),
+  reference: z.lazy(() => SortOrderSchema).optional(),
+  jobRunId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  deliveredAt: z.lazy(() => SortOrderSchema).optional(),
+  jobRun: z.lazy(() => JobRunOrderByWithRelationInputSchema).optional(),
+}).strict();
+
+export const DeliveryWhereUniqueInputSchema: z.ZodType<Prisma.DeliveryWhereUniqueInput> = z.object({
+  id: z.number().int(),
+})
+.and(z.object({
+  id: z.number().int().optional(),
+  AND: z.union([ z.lazy(() => DeliveryWhereInputSchema), z.lazy(() => DeliveryWhereInputSchema).array() ]).optional(),
+  OR: z.lazy(() => DeliveryWhereInputSchema).array().optional(),
+  NOT: z.union([ z.lazy(() => DeliveryWhereInputSchema), z.lazy(() => DeliveryWhereInputSchema).array() ]).optional(),
+  subjectType: z.union([ z.lazy(() => EnumDeliverySubjectFilterSchema), z.lazy(() => DeliverySubjectSchema) ]).optional(),
+  subjectId: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
+  version: z.union([ z.lazy(() => IntFilterSchema), z.number().int() ]).optional(),
+  kind: z.union([ z.lazy(() => EnumDeliveryKindFilterSchema), z.lazy(() => DeliveryKindSchema) ]).optional(),
+  reference: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  jobRunId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number().int() ]).optional().nullable(),
+  deliveredAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
+  jobRun: z.union([ z.lazy(() => JobRunNullableScalarRelationFilterSchema), z.lazy(() => JobRunWhereInputSchema) ]).optional().nullable(),
+}).strict());
+
+export const DeliveryOrderByWithAggregationInputSchema: z.ZodType<Prisma.DeliveryOrderByWithAggregationInput> = z.object({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  subjectType: z.lazy(() => SortOrderSchema).optional(),
+  subjectId: z.lazy(() => SortOrderSchema).optional(),
+  version: z.lazy(() => SortOrderSchema).optional(),
+  kind: z.lazy(() => SortOrderSchema).optional(),
+  reference: z.lazy(() => SortOrderSchema).optional(),
+  jobRunId: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
+  deliveredAt: z.lazy(() => SortOrderSchema).optional(),
+  _count: z.lazy(() => DeliveryCountOrderByAggregateInputSchema).optional(),
+  _avg: z.lazy(() => DeliveryAvgOrderByAggregateInputSchema).optional(),
+  _max: z.lazy(() => DeliveryMaxOrderByAggregateInputSchema).optional(),
+  _min: z.lazy(() => DeliveryMinOrderByAggregateInputSchema).optional(),
+  _sum: z.lazy(() => DeliverySumOrderByAggregateInputSchema).optional(),
+}).strict();
+
+export const DeliveryScalarWhereWithAggregatesInputSchema: z.ZodType<Prisma.DeliveryScalarWhereWithAggregatesInput> = z.object({
+  AND: z.union([ z.lazy(() => DeliveryScalarWhereWithAggregatesInputSchema), z.lazy(() => DeliveryScalarWhereWithAggregatesInputSchema).array() ]).optional(),
+  OR: z.lazy(() => DeliveryScalarWhereWithAggregatesInputSchema).array().optional(),
+  NOT: z.union([ z.lazy(() => DeliveryScalarWhereWithAggregatesInputSchema), z.lazy(() => DeliveryScalarWhereWithAggregatesInputSchema).array() ]).optional(),
+  id: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
+  subjectType: z.union([ z.lazy(() => EnumDeliverySubjectWithAggregatesFilterSchema), z.lazy(() => DeliverySubjectSchema) ]).optional(),
+  subjectId: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
+  version: z.union([ z.lazy(() => IntWithAggregatesFilterSchema), z.number() ]).optional(),
+  kind: z.union([ z.lazy(() => EnumDeliveryKindWithAggregatesFilterSchema), z.lazy(() => DeliveryKindSchema) ]).optional(),
+  reference: z.union([ z.lazy(() => StringWithAggregatesFilterSchema), z.string() ]).optional(),
+  jobRunId: z.union([ z.lazy(() => IntNullableWithAggregatesFilterSchema), z.number() ]).optional().nullable(),
+  deliveredAt: z.union([ z.lazy(() => DateTimeWithAggregatesFilterSchema), z.coerce.date() ]).optional(),
 }).strict();
 
 export const CookingTeamWhereInputSchema: z.ZodType<Prisma.CookingTeamWhereInput> = z.object({
@@ -2365,6 +2529,7 @@ export const JobRunWhereInputSchema: z.ZodType<Prisma.JobRunWhereInput> = z.obje
   resultSummary: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   errorMessage: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   triggeredBy: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  deliveries: z.lazy(() => DeliveryListRelationFilterSchema).optional(),
 }).strict();
 
 export const JobRunOrderByWithRelationInputSchema: z.ZodType<Prisma.JobRunOrderByWithRelationInput> = z.object({
@@ -2377,6 +2542,7 @@ export const JobRunOrderByWithRelationInputSchema: z.ZodType<Prisma.JobRunOrderB
   resultSummary: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   errorMessage: z.union([ z.lazy(() => SortOrderSchema), z.lazy(() => SortOrderInputSchema) ]).optional(),
   triggeredBy: z.lazy(() => SortOrderSchema).optional(),
+  deliveries: z.lazy(() => DeliveryOrderByRelationAggregateInputSchema).optional(),
 }).strict();
 
 export const JobRunWhereUniqueInputSchema: z.ZodType<Prisma.JobRunWhereUniqueInput> = z.object({
@@ -2395,6 +2561,7 @@ export const JobRunWhereUniqueInputSchema: z.ZodType<Prisma.JobRunWhereUniqueInp
   resultSummary: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   errorMessage: z.union([ z.lazy(() => StringNullableFilterSchema), z.string() ]).optional().nullable(),
   triggeredBy: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  deliveries: z.lazy(() => DeliveryListRelationFilterSchema).optional(),
 }).strict());
 
 export const JobRunOrderByWithAggregationInputSchema: z.ZodType<Prisma.JobRunOrderByWithAggregationInput> = z.object({
@@ -2583,6 +2750,7 @@ export const UserCreateInputSchema: z.ZodType<Prisma.UserCreateInput> = z.object
   phone: z.string().optional().nullable(),
   passwordHash: z.string(),
   systemRoles: z.string().optional(),
+  notificationChannels: z.string().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   Inhabitant: z.lazy(() => InhabitantCreateNestedOneWithoutUserInputSchema).optional(),
@@ -2596,6 +2764,7 @@ export const UserUncheckedCreateInputSchema: z.ZodType<Prisma.UserUncheckedCreat
   phone: z.string().optional().nullable(),
   passwordHash: z.string(),
   systemRoles: z.string().optional(),
+  notificationChannels: z.string().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   Inhabitant: z.lazy(() => InhabitantUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
@@ -2608,6 +2777,7 @@ export const UserUpdateInputSchema: z.ZodType<Prisma.UserUpdateInput> = z.object
   phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   passwordHash: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   systemRoles: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  notificationChannels: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   Inhabitant: z.lazy(() => InhabitantUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -2621,6 +2791,7 @@ export const UserUncheckedUpdateInputSchema: z.ZodType<Prisma.UserUncheckedUpdat
   phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   passwordHash: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   systemRoles: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  notificationChannels: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   Inhabitant: z.lazy(() => InhabitantUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -2634,6 +2805,7 @@ export const UserCreateManyInputSchema: z.ZodType<Prisma.UserCreateManyInput> = 
   phone: z.string().optional().nullable(),
   passwordHash: z.string(),
   systemRoles: z.string().optional(),
+  notificationChannels: z.string().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
 }).strict();
@@ -2643,6 +2815,7 @@ export const UserUpdateManyMutationInputSchema: z.ZodType<Prisma.UserUpdateManyM
   phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   passwordHash: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   systemRoles: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  notificationChannels: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
@@ -2653,6 +2826,7 @@ export const UserUncheckedUpdateManyInputSchema: z.ZodType<Prisma.UserUncheckedU
   phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   passwordHash: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   systemRoles: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  notificationChannels: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
@@ -3225,6 +3399,7 @@ export const BillingPeriodSummaryCreateInputSchema: z.ZodType<Prisma.BillingPeri
   cutoffDate: z.coerce.date(),
   paymentDate: z.coerce.date(),
   createdAt: z.coerce.date().optional(),
+  version: z.number().int().optional(),
   invoices: z.lazy(() => InvoiceCreateNestedManyWithoutBillingPeriodSummaryInputSchema).optional(),
 }).strict();
 
@@ -3238,6 +3413,7 @@ export const BillingPeriodSummaryUncheckedCreateInputSchema: z.ZodType<Prisma.Bi
   cutoffDate: z.coerce.date(),
   paymentDate: z.coerce.date(),
   createdAt: z.coerce.date().optional(),
+  version: z.number().int().optional(),
   invoices: z.lazy(() => InvoiceUncheckedCreateNestedManyWithoutBillingPeriodSummaryInputSchema).optional(),
 }).strict();
 
@@ -3250,6 +3426,7 @@ export const BillingPeriodSummaryUpdateInputSchema: z.ZodType<Prisma.BillingPeri
   cutoffDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   paymentDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  version: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   invoices: z.lazy(() => InvoiceUpdateManyWithoutBillingPeriodSummaryNestedInputSchema).optional(),
 }).strict();
 
@@ -3263,6 +3440,7 @@ export const BillingPeriodSummaryUncheckedUpdateInputSchema: z.ZodType<Prisma.Bi
   cutoffDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   paymentDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  version: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
   invoices: z.lazy(() => InvoiceUncheckedUpdateManyWithoutBillingPeriodSummaryNestedInputSchema).optional(),
 }).strict();
 
@@ -3276,6 +3454,7 @@ export const BillingPeriodSummaryCreateManyInputSchema: z.ZodType<Prisma.Billing
   cutoffDate: z.coerce.date(),
   paymentDate: z.coerce.date(),
   createdAt: z.coerce.date().optional(),
+  version: z.number().int().optional(),
 }).strict();
 
 export const BillingPeriodSummaryUpdateManyMutationInputSchema: z.ZodType<Prisma.BillingPeriodSummaryUpdateManyMutationInput> = z.object({
@@ -3287,6 +3466,7 @@ export const BillingPeriodSummaryUpdateManyMutationInputSchema: z.ZodType<Prisma
   cutoffDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   paymentDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  version: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const BillingPeriodSummaryUncheckedUpdateManyInputSchema: z.ZodType<Prisma.BillingPeriodSummaryUncheckedUpdateManyInput> = z.object({
@@ -3299,6 +3479,80 @@ export const BillingPeriodSummaryUncheckedUpdateManyInputSchema: z.ZodType<Prism
   cutoffDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   paymentDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  version: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+}).strict();
+
+export const DeliveryCreateInputSchema: z.ZodType<Prisma.DeliveryCreateInput> = z.object({
+  subjectType: z.lazy(() => DeliverySubjectSchema),
+  subjectId: z.number().int(),
+  version: z.number().int(),
+  kind: z.lazy(() => DeliveryKindSchema),
+  reference: z.string(),
+  deliveredAt: z.coerce.date().optional(),
+  jobRun: z.lazy(() => JobRunCreateNestedOneWithoutDeliveriesInputSchema).optional(),
+}).strict();
+
+export const DeliveryUncheckedCreateInputSchema: z.ZodType<Prisma.DeliveryUncheckedCreateInput> = z.object({
+  id: z.number().int().optional(),
+  subjectType: z.lazy(() => DeliverySubjectSchema),
+  subjectId: z.number().int(),
+  version: z.number().int(),
+  kind: z.lazy(() => DeliveryKindSchema),
+  reference: z.string(),
+  jobRunId: z.number().int().optional().nullable(),
+  deliveredAt: z.coerce.date().optional(),
+}).strict();
+
+export const DeliveryUpdateInputSchema: z.ZodType<Prisma.DeliveryUpdateInput> = z.object({
+  subjectType: z.union([ z.lazy(() => DeliverySubjectSchema), z.lazy(() => EnumDeliverySubjectFieldUpdateOperationsInputSchema) ]).optional(),
+  subjectId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  version: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  kind: z.union([ z.lazy(() => DeliveryKindSchema), z.lazy(() => EnumDeliveryKindFieldUpdateOperationsInputSchema) ]).optional(),
+  reference: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  deliveredAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  jobRun: z.lazy(() => JobRunUpdateOneWithoutDeliveriesNestedInputSchema).optional(),
+}).strict();
+
+export const DeliveryUncheckedUpdateInputSchema: z.ZodType<Prisma.DeliveryUncheckedUpdateInput> = z.object({
+  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  subjectType: z.union([ z.lazy(() => DeliverySubjectSchema), z.lazy(() => EnumDeliverySubjectFieldUpdateOperationsInputSchema) ]).optional(),
+  subjectId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  version: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  kind: z.union([ z.lazy(() => DeliveryKindSchema), z.lazy(() => EnumDeliveryKindFieldUpdateOperationsInputSchema) ]).optional(),
+  reference: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  jobRunId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  deliveredAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+}).strict();
+
+export const DeliveryCreateManyInputSchema: z.ZodType<Prisma.DeliveryCreateManyInput> = z.object({
+  id: z.number().int().optional(),
+  subjectType: z.lazy(() => DeliverySubjectSchema),
+  subjectId: z.number().int(),
+  version: z.number().int(),
+  kind: z.lazy(() => DeliveryKindSchema),
+  reference: z.string(),
+  jobRunId: z.number().int().optional().nullable(),
+  deliveredAt: z.coerce.date().optional(),
+}).strict();
+
+export const DeliveryUpdateManyMutationInputSchema: z.ZodType<Prisma.DeliveryUpdateManyMutationInput> = z.object({
+  subjectType: z.union([ z.lazy(() => DeliverySubjectSchema), z.lazy(() => EnumDeliverySubjectFieldUpdateOperationsInputSchema) ]).optional(),
+  subjectId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  version: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  kind: z.union([ z.lazy(() => DeliveryKindSchema), z.lazy(() => EnumDeliveryKindFieldUpdateOperationsInputSchema) ]).optional(),
+  reference: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  deliveredAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+}).strict();
+
+export const DeliveryUncheckedUpdateManyInputSchema: z.ZodType<Prisma.DeliveryUncheckedUpdateManyInput> = z.object({
+  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  subjectType: z.union([ z.lazy(() => DeliverySubjectSchema), z.lazy(() => EnumDeliverySubjectFieldUpdateOperationsInputSchema) ]).optional(),
+  subjectId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  version: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  kind: z.union([ z.lazy(() => DeliveryKindSchema), z.lazy(() => EnumDeliveryKindFieldUpdateOperationsInputSchema) ]).optional(),
+  reference: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  jobRunId: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  deliveredAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const CookingTeamCreateInputSchema: z.ZodType<Prisma.CookingTeamCreateInput> = z.object({
@@ -3670,6 +3924,7 @@ export const JobRunCreateInputSchema: z.ZodType<Prisma.JobRunCreateInput> = z.ob
   resultSummary: z.string().optional().nullable(),
   errorMessage: z.string().optional().nullable(),
   triggeredBy: z.string().optional(),
+  deliveries: z.lazy(() => DeliveryCreateNestedManyWithoutJobRunInputSchema).optional(),
 }).strict();
 
 export const JobRunUncheckedCreateInputSchema: z.ZodType<Prisma.JobRunUncheckedCreateInput> = z.object({
@@ -3682,6 +3937,7 @@ export const JobRunUncheckedCreateInputSchema: z.ZodType<Prisma.JobRunUncheckedC
   resultSummary: z.string().optional().nullable(),
   errorMessage: z.string().optional().nullable(),
   triggeredBy: z.string().optional(),
+  deliveries: z.lazy(() => DeliveryUncheckedCreateNestedManyWithoutJobRunInputSchema).optional(),
 }).strict();
 
 export const JobRunUpdateInputSchema: z.ZodType<Prisma.JobRunUpdateInput> = z.object({
@@ -3693,6 +3949,7 @@ export const JobRunUpdateInputSchema: z.ZodType<Prisma.JobRunUpdateInput> = z.ob
   resultSummary: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   errorMessage: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   triggeredBy: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  deliveries: z.lazy(() => DeliveryUpdateManyWithoutJobRunNestedInputSchema).optional(),
 }).strict();
 
 export const JobRunUncheckedUpdateInputSchema: z.ZodType<Prisma.JobRunUncheckedUpdateInput> = z.object({
@@ -3705,6 +3962,7 @@ export const JobRunUncheckedUpdateInputSchema: z.ZodType<Prisma.JobRunUncheckedU
   resultSummary: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   errorMessage: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   triggeredBy: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  deliveries: z.lazy(() => DeliveryUncheckedUpdateManyWithoutJobRunNestedInputSchema).optional(),
 }).strict();
 
 export const JobRunCreateManyInputSchema: z.ZodType<Prisma.JobRunCreateManyInput> = z.object({
@@ -4035,6 +4293,7 @@ export const UserCountOrderByAggregateInputSchema: z.ZodType<Prisma.UserCountOrd
   phone: z.lazy(() => SortOrderSchema).optional(),
   passwordHash: z.lazy(() => SortOrderSchema).optional(),
   systemRoles: z.lazy(() => SortOrderSchema).optional(),
+  notificationChannels: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
@@ -4049,6 +4308,7 @@ export const UserMaxOrderByAggregateInputSchema: z.ZodType<Prisma.UserMaxOrderBy
   phone: z.lazy(() => SortOrderSchema).optional(),
   passwordHash: z.lazy(() => SortOrderSchema).optional(),
   systemRoles: z.lazy(() => SortOrderSchema).optional(),
+  notificationChannels: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
@@ -4059,6 +4319,7 @@ export const UserMinOrderByAggregateInputSchema: z.ZodType<Prisma.UserMinOrderBy
   phone: z.lazy(() => SortOrderSchema).optional(),
   passwordHash: z.lazy(() => SortOrderSchema).optional(),
   systemRoles: z.lazy(() => SortOrderSchema).optional(),
+  notificationChannels: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
   updatedAt: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
@@ -4619,6 +4880,7 @@ export const BillingPeriodSummaryCountOrderByAggregateInputSchema: z.ZodType<Pri
   cutoffDate: z.lazy(() => SortOrderSchema).optional(),
   paymentDate: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  version: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const BillingPeriodSummaryAvgOrderByAggregateInputSchema: z.ZodType<Prisma.BillingPeriodSummaryAvgOrderByAggregateInput> = z.object({
@@ -4626,6 +4888,7 @@ export const BillingPeriodSummaryAvgOrderByAggregateInputSchema: z.ZodType<Prism
   totalAmount: z.lazy(() => SortOrderSchema).optional(),
   householdCount: z.lazy(() => SortOrderSchema).optional(),
   ticketCount: z.lazy(() => SortOrderSchema).optional(),
+  version: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const BillingPeriodSummaryMaxOrderByAggregateInputSchema: z.ZodType<Prisma.BillingPeriodSummaryMaxOrderByAggregateInput> = z.object({
@@ -4638,6 +4901,7 @@ export const BillingPeriodSummaryMaxOrderByAggregateInputSchema: z.ZodType<Prism
   cutoffDate: z.lazy(() => SortOrderSchema).optional(),
   paymentDate: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  version: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const BillingPeriodSummaryMinOrderByAggregateInputSchema: z.ZodType<Prisma.BillingPeriodSummaryMinOrderByAggregateInput> = z.object({
@@ -4650,6 +4914,7 @@ export const BillingPeriodSummaryMinOrderByAggregateInputSchema: z.ZodType<Prism
   cutoffDate: z.lazy(() => SortOrderSchema).optional(),
   paymentDate: z.lazy(() => SortOrderSchema).optional(),
   createdAt: z.lazy(() => SortOrderSchema).optional(),
+  version: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const BillingPeriodSummarySumOrderByAggregateInputSchema: z.ZodType<Prisma.BillingPeriodSummarySumOrderByAggregateInput> = z.object({
@@ -4657,6 +4922,93 @@ export const BillingPeriodSummarySumOrderByAggregateInputSchema: z.ZodType<Prism
   totalAmount: z.lazy(() => SortOrderSchema).optional(),
   householdCount: z.lazy(() => SortOrderSchema).optional(),
   ticketCount: z.lazy(() => SortOrderSchema).optional(),
+  version: z.lazy(() => SortOrderSchema).optional(),
+}).strict();
+
+export const EnumDeliverySubjectFilterSchema: z.ZodType<Prisma.EnumDeliverySubjectFilter> = z.object({
+  equals: z.lazy(() => DeliverySubjectSchema).optional(),
+  in: z.lazy(() => DeliverySubjectSchema).array().optional(),
+  notIn: z.lazy(() => DeliverySubjectSchema).array().optional(),
+  not: z.union([ z.lazy(() => DeliverySubjectSchema), z.lazy(() => NestedEnumDeliverySubjectFilterSchema) ]).optional(),
+}).strict();
+
+export const EnumDeliveryKindFilterSchema: z.ZodType<Prisma.EnumDeliveryKindFilter> = z.object({
+  equals: z.lazy(() => DeliveryKindSchema).optional(),
+  in: z.lazy(() => DeliveryKindSchema).array().optional(),
+  notIn: z.lazy(() => DeliveryKindSchema).array().optional(),
+  not: z.union([ z.lazy(() => DeliveryKindSchema), z.lazy(() => NestedEnumDeliveryKindFilterSchema) ]).optional(),
+}).strict();
+
+export const JobRunNullableScalarRelationFilterSchema: z.ZodType<Prisma.JobRunNullableScalarRelationFilter> = z.object({
+  is: z.lazy(() => JobRunWhereInputSchema).optional().nullable(),
+  isNot: z.lazy(() => JobRunWhereInputSchema).optional().nullable(),
+}).strict();
+
+export const DeliveryCountOrderByAggregateInputSchema: z.ZodType<Prisma.DeliveryCountOrderByAggregateInput> = z.object({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  subjectType: z.lazy(() => SortOrderSchema).optional(),
+  subjectId: z.lazy(() => SortOrderSchema).optional(),
+  version: z.lazy(() => SortOrderSchema).optional(),
+  kind: z.lazy(() => SortOrderSchema).optional(),
+  reference: z.lazy(() => SortOrderSchema).optional(),
+  jobRunId: z.lazy(() => SortOrderSchema).optional(),
+  deliveredAt: z.lazy(() => SortOrderSchema).optional(),
+}).strict();
+
+export const DeliveryAvgOrderByAggregateInputSchema: z.ZodType<Prisma.DeliveryAvgOrderByAggregateInput> = z.object({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  subjectId: z.lazy(() => SortOrderSchema).optional(),
+  version: z.lazy(() => SortOrderSchema).optional(),
+  jobRunId: z.lazy(() => SortOrderSchema).optional(),
+}).strict();
+
+export const DeliveryMaxOrderByAggregateInputSchema: z.ZodType<Prisma.DeliveryMaxOrderByAggregateInput> = z.object({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  subjectType: z.lazy(() => SortOrderSchema).optional(),
+  subjectId: z.lazy(() => SortOrderSchema).optional(),
+  version: z.lazy(() => SortOrderSchema).optional(),
+  kind: z.lazy(() => SortOrderSchema).optional(),
+  reference: z.lazy(() => SortOrderSchema).optional(),
+  jobRunId: z.lazy(() => SortOrderSchema).optional(),
+  deliveredAt: z.lazy(() => SortOrderSchema).optional(),
+}).strict();
+
+export const DeliveryMinOrderByAggregateInputSchema: z.ZodType<Prisma.DeliveryMinOrderByAggregateInput> = z.object({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  subjectType: z.lazy(() => SortOrderSchema).optional(),
+  subjectId: z.lazy(() => SortOrderSchema).optional(),
+  version: z.lazy(() => SortOrderSchema).optional(),
+  kind: z.lazy(() => SortOrderSchema).optional(),
+  reference: z.lazy(() => SortOrderSchema).optional(),
+  jobRunId: z.lazy(() => SortOrderSchema).optional(),
+  deliveredAt: z.lazy(() => SortOrderSchema).optional(),
+}).strict();
+
+export const DeliverySumOrderByAggregateInputSchema: z.ZodType<Prisma.DeliverySumOrderByAggregateInput> = z.object({
+  id: z.lazy(() => SortOrderSchema).optional(),
+  subjectId: z.lazy(() => SortOrderSchema).optional(),
+  version: z.lazy(() => SortOrderSchema).optional(),
+  jobRunId: z.lazy(() => SortOrderSchema).optional(),
+}).strict();
+
+export const EnumDeliverySubjectWithAggregatesFilterSchema: z.ZodType<Prisma.EnumDeliverySubjectWithAggregatesFilter> = z.object({
+  equals: z.lazy(() => DeliverySubjectSchema).optional(),
+  in: z.lazy(() => DeliverySubjectSchema).array().optional(),
+  notIn: z.lazy(() => DeliverySubjectSchema).array().optional(),
+  not: z.union([ z.lazy(() => DeliverySubjectSchema), z.lazy(() => NestedEnumDeliverySubjectWithAggregatesFilterSchema) ]).optional(),
+  _count: z.lazy(() => NestedIntFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumDeliverySubjectFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumDeliverySubjectFilterSchema).optional(),
+}).strict();
+
+export const EnumDeliveryKindWithAggregatesFilterSchema: z.ZodType<Prisma.EnumDeliveryKindWithAggregatesFilter> = z.object({
+  equals: z.lazy(() => DeliveryKindSchema).optional(),
+  in: z.lazy(() => DeliveryKindSchema).array().optional(),
+  notIn: z.lazy(() => DeliveryKindSchema).array().optional(),
+  not: z.union([ z.lazy(() => DeliveryKindSchema), z.lazy(() => NestedEnumDeliveryKindWithAggregatesFilterSchema) ]).optional(),
+  _count: z.lazy(() => NestedIntFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumDeliveryKindFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumDeliveryKindFilterSchema).optional(),
 }).strict();
 
 export const SeasonScalarRelationFilterSchema: z.ZodType<Prisma.SeasonScalarRelationFilter> = z.object({
@@ -4975,6 +5327,16 @@ export const EnumJobStatusFilterSchema: z.ZodType<Prisma.EnumJobStatusFilter> = 
   in: z.lazy(() => JobStatusSchema).array().optional(),
   notIn: z.lazy(() => JobStatusSchema).array().optional(),
   not: z.union([ z.lazy(() => JobStatusSchema), z.lazy(() => NestedEnumJobStatusFilterSchema) ]).optional(),
+}).strict();
+
+export const DeliveryListRelationFilterSchema: z.ZodType<Prisma.DeliveryListRelationFilter> = z.object({
+  every: z.lazy(() => DeliveryWhereInputSchema).optional(),
+  some: z.lazy(() => DeliveryWhereInputSchema).optional(),
+  none: z.lazy(() => DeliveryWhereInputSchema).optional(),
+}).strict();
+
+export const DeliveryOrderByRelationAggregateInputSchema: z.ZodType<Prisma.DeliveryOrderByRelationAggregateInput> = z.object({
+  _count: z.lazy(() => SortOrderSchema).optional(),
 }).strict();
 
 export const JobRunCountOrderByAggregateInputSchema: z.ZodType<Prisma.JobRunCountOrderByAggregateInput> = z.object({
@@ -6043,6 +6405,30 @@ export const InvoiceUncheckedUpdateManyWithoutBillingPeriodSummaryNestedInputSch
   deleteMany: z.union([ z.lazy(() => InvoiceScalarWhereInputSchema), z.lazy(() => InvoiceScalarWhereInputSchema).array() ]).optional(),
 }).strict();
 
+export const JobRunCreateNestedOneWithoutDeliveriesInputSchema: z.ZodType<Prisma.JobRunCreateNestedOneWithoutDeliveriesInput> = z.object({
+  create: z.union([ z.lazy(() => JobRunCreateWithoutDeliveriesInputSchema), z.lazy(() => JobRunUncheckedCreateWithoutDeliveriesInputSchema) ]).optional(),
+  connectOrCreate: z.lazy(() => JobRunCreateOrConnectWithoutDeliveriesInputSchema).optional(),
+  connect: z.lazy(() => JobRunWhereUniqueInputSchema).optional(),
+}).strict();
+
+export const EnumDeliverySubjectFieldUpdateOperationsInputSchema: z.ZodType<Prisma.EnumDeliverySubjectFieldUpdateOperationsInput> = z.object({
+  set: z.lazy(() => DeliverySubjectSchema).optional(),
+}).strict();
+
+export const EnumDeliveryKindFieldUpdateOperationsInputSchema: z.ZodType<Prisma.EnumDeliveryKindFieldUpdateOperationsInput> = z.object({
+  set: z.lazy(() => DeliveryKindSchema).optional(),
+}).strict();
+
+export const JobRunUpdateOneWithoutDeliveriesNestedInputSchema: z.ZodType<Prisma.JobRunUpdateOneWithoutDeliveriesNestedInput> = z.object({
+  create: z.union([ z.lazy(() => JobRunCreateWithoutDeliveriesInputSchema), z.lazy(() => JobRunUncheckedCreateWithoutDeliveriesInputSchema) ]).optional(),
+  connectOrCreate: z.lazy(() => JobRunCreateOrConnectWithoutDeliveriesInputSchema).optional(),
+  upsert: z.lazy(() => JobRunUpsertWithoutDeliveriesInputSchema).optional(),
+  disconnect: z.union([ z.boolean(),z.lazy(() => JobRunWhereInputSchema) ]).optional(),
+  delete: z.union([ z.boolean(),z.lazy(() => JobRunWhereInputSchema) ]).optional(),
+  connect: z.lazy(() => JobRunWhereUniqueInputSchema).optional(),
+  update: z.union([ z.lazy(() => JobRunUpdateToOneWithWhereWithoutDeliveriesInputSchema), z.lazy(() => JobRunUpdateWithoutDeliveriesInputSchema), z.lazy(() => JobRunUncheckedUpdateWithoutDeliveriesInputSchema) ]).optional(),
+}).strict();
+
 export const SeasonCreateNestedOneWithoutCookingTeamsInputSchema: z.ZodType<Prisma.SeasonCreateNestedOneWithoutCookingTeamsInput> = z.object({
   create: z.union([ z.lazy(() => SeasonCreateWithoutCookingTeamsInputSchema), z.lazy(() => SeasonUncheckedCreateWithoutCookingTeamsInputSchema) ]).optional(),
   connectOrCreate: z.lazy(() => SeasonCreateOrConnectWithoutCookingTeamsInputSchema).optional(),
@@ -6395,12 +6781,54 @@ export const UserUpdateOneWithoutOrderHistoryNestedInputSchema: z.ZodType<Prisma
   update: z.union([ z.lazy(() => UserUpdateToOneWithWhereWithoutOrderHistoryInputSchema), z.lazy(() => UserUpdateWithoutOrderHistoryInputSchema), z.lazy(() => UserUncheckedUpdateWithoutOrderHistoryInputSchema) ]).optional(),
 }).strict();
 
+export const DeliveryCreateNestedManyWithoutJobRunInputSchema: z.ZodType<Prisma.DeliveryCreateNestedManyWithoutJobRunInput> = z.object({
+  create: z.union([ z.lazy(() => DeliveryCreateWithoutJobRunInputSchema), z.lazy(() => DeliveryCreateWithoutJobRunInputSchema).array(), z.lazy(() => DeliveryUncheckedCreateWithoutJobRunInputSchema), z.lazy(() => DeliveryUncheckedCreateWithoutJobRunInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => DeliveryCreateOrConnectWithoutJobRunInputSchema), z.lazy(() => DeliveryCreateOrConnectWithoutJobRunInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => DeliveryCreateManyJobRunInputEnvelopeSchema).optional(),
+  connect: z.union([ z.lazy(() => DeliveryWhereUniqueInputSchema), z.lazy(() => DeliveryWhereUniqueInputSchema).array() ]).optional(),
+}).strict();
+
+export const DeliveryUncheckedCreateNestedManyWithoutJobRunInputSchema: z.ZodType<Prisma.DeliveryUncheckedCreateNestedManyWithoutJobRunInput> = z.object({
+  create: z.union([ z.lazy(() => DeliveryCreateWithoutJobRunInputSchema), z.lazy(() => DeliveryCreateWithoutJobRunInputSchema).array(), z.lazy(() => DeliveryUncheckedCreateWithoutJobRunInputSchema), z.lazy(() => DeliveryUncheckedCreateWithoutJobRunInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => DeliveryCreateOrConnectWithoutJobRunInputSchema), z.lazy(() => DeliveryCreateOrConnectWithoutJobRunInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => DeliveryCreateManyJobRunInputEnvelopeSchema).optional(),
+  connect: z.union([ z.lazy(() => DeliveryWhereUniqueInputSchema), z.lazy(() => DeliveryWhereUniqueInputSchema).array() ]).optional(),
+}).strict();
+
 export const EnumJobTypeFieldUpdateOperationsInputSchema: z.ZodType<Prisma.EnumJobTypeFieldUpdateOperationsInput> = z.object({
   set: z.lazy(() => JobTypeSchema).optional(),
 }).strict();
 
 export const EnumJobStatusFieldUpdateOperationsInputSchema: z.ZodType<Prisma.EnumJobStatusFieldUpdateOperationsInput> = z.object({
   set: z.lazy(() => JobStatusSchema).optional(),
+}).strict();
+
+export const DeliveryUpdateManyWithoutJobRunNestedInputSchema: z.ZodType<Prisma.DeliveryUpdateManyWithoutJobRunNestedInput> = z.object({
+  create: z.union([ z.lazy(() => DeliveryCreateWithoutJobRunInputSchema), z.lazy(() => DeliveryCreateWithoutJobRunInputSchema).array(), z.lazy(() => DeliveryUncheckedCreateWithoutJobRunInputSchema), z.lazy(() => DeliveryUncheckedCreateWithoutJobRunInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => DeliveryCreateOrConnectWithoutJobRunInputSchema), z.lazy(() => DeliveryCreateOrConnectWithoutJobRunInputSchema).array() ]).optional(),
+  upsert: z.union([ z.lazy(() => DeliveryUpsertWithWhereUniqueWithoutJobRunInputSchema), z.lazy(() => DeliveryUpsertWithWhereUniqueWithoutJobRunInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => DeliveryCreateManyJobRunInputEnvelopeSchema).optional(),
+  set: z.union([ z.lazy(() => DeliveryWhereUniqueInputSchema), z.lazy(() => DeliveryWhereUniqueInputSchema).array() ]).optional(),
+  disconnect: z.union([ z.lazy(() => DeliveryWhereUniqueInputSchema), z.lazy(() => DeliveryWhereUniqueInputSchema).array() ]).optional(),
+  delete: z.union([ z.lazy(() => DeliveryWhereUniqueInputSchema), z.lazy(() => DeliveryWhereUniqueInputSchema).array() ]).optional(),
+  connect: z.union([ z.lazy(() => DeliveryWhereUniqueInputSchema), z.lazy(() => DeliveryWhereUniqueInputSchema).array() ]).optional(),
+  update: z.union([ z.lazy(() => DeliveryUpdateWithWhereUniqueWithoutJobRunInputSchema), z.lazy(() => DeliveryUpdateWithWhereUniqueWithoutJobRunInputSchema).array() ]).optional(),
+  updateMany: z.union([ z.lazy(() => DeliveryUpdateManyWithWhereWithoutJobRunInputSchema), z.lazy(() => DeliveryUpdateManyWithWhereWithoutJobRunInputSchema).array() ]).optional(),
+  deleteMany: z.union([ z.lazy(() => DeliveryScalarWhereInputSchema), z.lazy(() => DeliveryScalarWhereInputSchema).array() ]).optional(),
+}).strict();
+
+export const DeliveryUncheckedUpdateManyWithoutJobRunNestedInputSchema: z.ZodType<Prisma.DeliveryUncheckedUpdateManyWithoutJobRunNestedInput> = z.object({
+  create: z.union([ z.lazy(() => DeliveryCreateWithoutJobRunInputSchema), z.lazy(() => DeliveryCreateWithoutJobRunInputSchema).array(), z.lazy(() => DeliveryUncheckedCreateWithoutJobRunInputSchema), z.lazy(() => DeliveryUncheckedCreateWithoutJobRunInputSchema).array() ]).optional(),
+  connectOrCreate: z.union([ z.lazy(() => DeliveryCreateOrConnectWithoutJobRunInputSchema), z.lazy(() => DeliveryCreateOrConnectWithoutJobRunInputSchema).array() ]).optional(),
+  upsert: z.union([ z.lazy(() => DeliveryUpsertWithWhereUniqueWithoutJobRunInputSchema), z.lazy(() => DeliveryUpsertWithWhereUniqueWithoutJobRunInputSchema).array() ]).optional(),
+  createMany: z.lazy(() => DeliveryCreateManyJobRunInputEnvelopeSchema).optional(),
+  set: z.union([ z.lazy(() => DeliveryWhereUniqueInputSchema), z.lazy(() => DeliveryWhereUniqueInputSchema).array() ]).optional(),
+  disconnect: z.union([ z.lazy(() => DeliveryWhereUniqueInputSchema), z.lazy(() => DeliveryWhereUniqueInputSchema).array() ]).optional(),
+  delete: z.union([ z.lazy(() => DeliveryWhereUniqueInputSchema), z.lazy(() => DeliveryWhereUniqueInputSchema).array() ]).optional(),
+  connect: z.union([ z.lazy(() => DeliveryWhereUniqueInputSchema), z.lazy(() => DeliveryWhereUniqueInputSchema).array() ]).optional(),
+  update: z.union([ z.lazy(() => DeliveryUpdateWithWhereUniqueWithoutJobRunInputSchema), z.lazy(() => DeliveryUpdateWithWhereUniqueWithoutJobRunInputSchema).array() ]).optional(),
+  updateMany: z.union([ z.lazy(() => DeliveryUpdateManyWithWhereWithoutJobRunInputSchema), z.lazy(() => DeliveryUpdateManyWithWhereWithoutJobRunInputSchema).array() ]).optional(),
+  deleteMany: z.union([ z.lazy(() => DeliveryScalarWhereInputSchema), z.lazy(() => DeliveryScalarWhereInputSchema).array() ]).optional(),
 }).strict();
 
 export const NestedIntFilterSchema: z.ZodType<Prisma.NestedIntFilter> = z.object({
@@ -6653,6 +7081,40 @@ export const NestedBoolWithAggregatesFilterSchema: z.ZodType<Prisma.NestedBoolWi
   _count: z.lazy(() => NestedIntFilterSchema).optional(),
   _min: z.lazy(() => NestedBoolFilterSchema).optional(),
   _max: z.lazy(() => NestedBoolFilterSchema).optional(),
+}).strict();
+
+export const NestedEnumDeliverySubjectFilterSchema: z.ZodType<Prisma.NestedEnumDeliverySubjectFilter> = z.object({
+  equals: z.lazy(() => DeliverySubjectSchema).optional(),
+  in: z.lazy(() => DeliverySubjectSchema).array().optional(),
+  notIn: z.lazy(() => DeliverySubjectSchema).array().optional(),
+  not: z.union([ z.lazy(() => DeliverySubjectSchema), z.lazy(() => NestedEnumDeliverySubjectFilterSchema) ]).optional(),
+}).strict();
+
+export const NestedEnumDeliveryKindFilterSchema: z.ZodType<Prisma.NestedEnumDeliveryKindFilter> = z.object({
+  equals: z.lazy(() => DeliveryKindSchema).optional(),
+  in: z.lazy(() => DeliveryKindSchema).array().optional(),
+  notIn: z.lazy(() => DeliveryKindSchema).array().optional(),
+  not: z.union([ z.lazy(() => DeliveryKindSchema), z.lazy(() => NestedEnumDeliveryKindFilterSchema) ]).optional(),
+}).strict();
+
+export const NestedEnumDeliverySubjectWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumDeliverySubjectWithAggregatesFilter> = z.object({
+  equals: z.lazy(() => DeliverySubjectSchema).optional(),
+  in: z.lazy(() => DeliverySubjectSchema).array().optional(),
+  notIn: z.lazy(() => DeliverySubjectSchema).array().optional(),
+  not: z.union([ z.lazy(() => DeliverySubjectSchema), z.lazy(() => NestedEnumDeliverySubjectWithAggregatesFilterSchema) ]).optional(),
+  _count: z.lazy(() => NestedIntFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumDeliverySubjectFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumDeliverySubjectFilterSchema).optional(),
+}).strict();
+
+export const NestedEnumDeliveryKindWithAggregatesFilterSchema: z.ZodType<Prisma.NestedEnumDeliveryKindWithAggregatesFilter> = z.object({
+  equals: z.lazy(() => DeliveryKindSchema).optional(),
+  in: z.lazy(() => DeliveryKindSchema).array().optional(),
+  notIn: z.lazy(() => DeliveryKindSchema).array().optional(),
+  not: z.union([ z.lazy(() => DeliveryKindSchema), z.lazy(() => NestedEnumDeliveryKindWithAggregatesFilterSchema) ]).optional(),
+  _count: z.lazy(() => NestedIntFilterSchema).optional(),
+  _min: z.lazy(() => NestedEnumDeliveryKindFilterSchema).optional(),
+  _max: z.lazy(() => NestedEnumDeliveryKindFilterSchema).optional(),
 }).strict();
 
 export const NestedEnumRoleFilterSchema: z.ZodType<Prisma.NestedEnumRoleFilter> = z.object({
@@ -7300,6 +7762,7 @@ export const UserCreateWithoutInhabitantInputSchema: z.ZodType<Prisma.UserCreate
   phone: z.string().optional().nullable(),
   passwordHash: z.string(),
   systemRoles: z.string().optional(),
+  notificationChannels: z.string().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   bookedOrders: z.lazy(() => OrderCreateNestedManyWithoutBookedByUserInputSchema).optional(),
@@ -7312,6 +7775,7 @@ export const UserUncheckedCreateWithoutInhabitantInputSchema: z.ZodType<Prisma.U
   phone: z.string().optional().nullable(),
   passwordHash: z.string(),
   systemRoles: z.string().optional(),
+  notificationChannels: z.string().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   bookedOrders: z.lazy(() => OrderUncheckedCreateNestedManyWithoutBookedByUserInputSchema).optional(),
@@ -7501,6 +7965,7 @@ export const UserUpdateWithoutInhabitantInputSchema: z.ZodType<Prisma.UserUpdate
   phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   passwordHash: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   systemRoles: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  notificationChannels: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   bookedOrders: z.lazy(() => OrderUpdateManyWithoutBookedByUserNestedInputSchema).optional(),
@@ -7513,6 +7978,7 @@ export const UserUncheckedUpdateWithoutInhabitantInputSchema: z.ZodType<Prisma.U
   phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   passwordHash: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   systemRoles: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  notificationChannels: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   bookedOrders: z.lazy(() => OrderUncheckedUpdateManyWithoutBookedByUserNestedInputSchema).optional(),
@@ -8142,6 +8608,7 @@ export const UserCreateWithoutBookedOrdersInputSchema: z.ZodType<Prisma.UserCrea
   phone: z.string().optional().nullable(),
   passwordHash: z.string(),
   systemRoles: z.string().optional(),
+  notificationChannels: z.string().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   Inhabitant: z.lazy(() => InhabitantCreateNestedOneWithoutUserInputSchema).optional(),
@@ -8154,6 +8621,7 @@ export const UserUncheckedCreateWithoutBookedOrdersInputSchema: z.ZodType<Prisma
   phone: z.string().optional().nullable(),
   passwordHash: z.string(),
   systemRoles: z.string().optional(),
+  notificationChannels: z.string().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   Inhabitant: z.lazy(() => InhabitantUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
@@ -8341,6 +8809,7 @@ export const UserUpdateWithoutBookedOrdersInputSchema: z.ZodType<Prisma.UserUpda
   phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   passwordHash: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   systemRoles: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  notificationChannels: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   Inhabitant: z.lazy(() => InhabitantUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -8353,6 +8822,7 @@ export const UserUncheckedUpdateWithoutBookedOrdersInputSchema: z.ZodType<Prisma
   phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   passwordHash: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   systemRoles: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  notificationChannels: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   Inhabitant: z.lazy(() => InhabitantUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -8644,6 +9114,7 @@ export const BillingPeriodSummaryCreateWithoutInvoicesInputSchema: z.ZodType<Pri
   cutoffDate: z.coerce.date(),
   paymentDate: z.coerce.date(),
   createdAt: z.coerce.date().optional(),
+  version: z.number().int().optional(),
 }).strict();
 
 export const BillingPeriodSummaryUncheckedCreateWithoutInvoicesInputSchema: z.ZodType<Prisma.BillingPeriodSummaryUncheckedCreateWithoutInvoicesInput> = z.object({
@@ -8656,6 +9127,7 @@ export const BillingPeriodSummaryUncheckedCreateWithoutInvoicesInputSchema: z.Zo
   cutoffDate: z.coerce.date(),
   paymentDate: z.coerce.date(),
   createdAt: z.coerce.date().optional(),
+  version: z.number().int().optional(),
 }).strict();
 
 export const BillingPeriodSummaryCreateOrConnectWithoutInvoicesInputSchema: z.ZodType<Prisma.BillingPeriodSummaryCreateOrConnectWithoutInvoicesInput> = z.object({
@@ -8745,6 +9217,7 @@ export const BillingPeriodSummaryUpdateWithoutInvoicesInputSchema: z.ZodType<Pri
   cutoffDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   paymentDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  version: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const BillingPeriodSummaryUncheckedUpdateWithoutInvoicesInputSchema: z.ZodType<Prisma.BillingPeriodSummaryUncheckedUpdateWithoutInvoicesInput> = z.object({
@@ -8757,6 +9230,7 @@ export const BillingPeriodSummaryUncheckedUpdateWithoutInvoicesInputSchema: z.Zo
   cutoffDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   paymentDate: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  version: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const InvoiceCreateWithoutBillingPeriodSummaryInputSchema: z.ZodType<Prisma.InvoiceCreateWithoutBillingPeriodSummaryInput> = z.object({
@@ -8807,6 +9281,68 @@ export const InvoiceUpdateWithWhereUniqueWithoutBillingPeriodSummaryInputSchema:
 export const InvoiceUpdateManyWithWhereWithoutBillingPeriodSummaryInputSchema: z.ZodType<Prisma.InvoiceUpdateManyWithWhereWithoutBillingPeriodSummaryInput> = z.object({
   where: z.lazy(() => InvoiceScalarWhereInputSchema),
   data: z.union([ z.lazy(() => InvoiceUpdateManyMutationInputSchema), z.lazy(() => InvoiceUncheckedUpdateManyWithoutBillingPeriodSummaryInputSchema) ]),
+}).strict();
+
+export const JobRunCreateWithoutDeliveriesInputSchema: z.ZodType<Prisma.JobRunCreateWithoutDeliveriesInput> = z.object({
+  jobType: z.lazy(() => JobTypeSchema),
+  status: z.lazy(() => JobStatusSchema),
+  startedAt: z.coerce.date().optional(),
+  completedAt: z.coerce.date().optional().nullable(),
+  durationMs: z.number().int().optional().nullable(),
+  resultSummary: z.string().optional().nullable(),
+  errorMessage: z.string().optional().nullable(),
+  triggeredBy: z.string().optional(),
+}).strict();
+
+export const JobRunUncheckedCreateWithoutDeliveriesInputSchema: z.ZodType<Prisma.JobRunUncheckedCreateWithoutDeliveriesInput> = z.object({
+  id: z.number().int().optional(),
+  jobType: z.lazy(() => JobTypeSchema),
+  status: z.lazy(() => JobStatusSchema),
+  startedAt: z.coerce.date().optional(),
+  completedAt: z.coerce.date().optional().nullable(),
+  durationMs: z.number().int().optional().nullable(),
+  resultSummary: z.string().optional().nullable(),
+  errorMessage: z.string().optional().nullable(),
+  triggeredBy: z.string().optional(),
+}).strict();
+
+export const JobRunCreateOrConnectWithoutDeliveriesInputSchema: z.ZodType<Prisma.JobRunCreateOrConnectWithoutDeliveriesInput> = z.object({
+  where: z.lazy(() => JobRunWhereUniqueInputSchema),
+  create: z.union([ z.lazy(() => JobRunCreateWithoutDeliveriesInputSchema), z.lazy(() => JobRunUncheckedCreateWithoutDeliveriesInputSchema) ]),
+}).strict();
+
+export const JobRunUpsertWithoutDeliveriesInputSchema: z.ZodType<Prisma.JobRunUpsertWithoutDeliveriesInput> = z.object({
+  update: z.union([ z.lazy(() => JobRunUpdateWithoutDeliveriesInputSchema), z.lazy(() => JobRunUncheckedUpdateWithoutDeliveriesInputSchema) ]),
+  create: z.union([ z.lazy(() => JobRunCreateWithoutDeliveriesInputSchema), z.lazy(() => JobRunUncheckedCreateWithoutDeliveriesInputSchema) ]),
+  where: z.lazy(() => JobRunWhereInputSchema).optional(),
+}).strict();
+
+export const JobRunUpdateToOneWithWhereWithoutDeliveriesInputSchema: z.ZodType<Prisma.JobRunUpdateToOneWithWhereWithoutDeliveriesInput> = z.object({
+  where: z.lazy(() => JobRunWhereInputSchema).optional(),
+  data: z.union([ z.lazy(() => JobRunUpdateWithoutDeliveriesInputSchema), z.lazy(() => JobRunUncheckedUpdateWithoutDeliveriesInputSchema) ]),
+}).strict();
+
+export const JobRunUpdateWithoutDeliveriesInputSchema: z.ZodType<Prisma.JobRunUpdateWithoutDeliveriesInput> = z.object({
+  jobType: z.union([ z.lazy(() => JobTypeSchema), z.lazy(() => EnumJobTypeFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => JobStatusSchema), z.lazy(() => EnumJobStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  startedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  completedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  durationMs: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  resultSummary: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  errorMessage: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  triggeredBy: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+}).strict();
+
+export const JobRunUncheckedUpdateWithoutDeliveriesInputSchema: z.ZodType<Prisma.JobRunUncheckedUpdateWithoutDeliveriesInput> = z.object({
+  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  jobType: z.union([ z.lazy(() => JobTypeSchema), z.lazy(() => EnumJobTypeFieldUpdateOperationsInputSchema) ]).optional(),
+  status: z.union([ z.lazy(() => JobStatusSchema), z.lazy(() => EnumJobStatusFieldUpdateOperationsInputSchema) ]).optional(),
+  startedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+  completedAt: z.union([ z.coerce.date(),z.lazy(() => NullableDateTimeFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  durationMs: z.union([ z.number().int(),z.lazy(() => NullableIntFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  resultSummary: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  errorMessage: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
+  triggeredBy: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
 export const SeasonCreateWithoutCookingTeamsInputSchema: z.ZodType<Prisma.SeasonCreateWithoutCookingTeamsInput> = z.object({
@@ -9434,6 +9970,7 @@ export const UserCreateWithoutOrderHistoryInputSchema: z.ZodType<Prisma.UserCrea
   phone: z.string().optional().nullable(),
   passwordHash: z.string(),
   systemRoles: z.string().optional(),
+  notificationChannels: z.string().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   Inhabitant: z.lazy(() => InhabitantCreateNestedOneWithoutUserInputSchema).optional(),
@@ -9446,6 +9983,7 @@ export const UserUncheckedCreateWithoutOrderHistoryInputSchema: z.ZodType<Prisma
   phone: z.string().optional().nullable(),
   passwordHash: z.string(),
   systemRoles: z.string().optional(),
+  notificationChannels: z.string().optional(),
   createdAt: z.coerce.date().optional(),
   updatedAt: z.coerce.date().optional(),
   Inhabitant: z.lazy(() => InhabitantUncheckedCreateNestedOneWithoutUserInputSchema).optional(),
@@ -9517,6 +10055,7 @@ export const UserUpdateWithoutOrderHistoryInputSchema: z.ZodType<Prisma.UserUpda
   phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   passwordHash: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   systemRoles: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  notificationChannels: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   Inhabitant: z.lazy(() => InhabitantUpdateOneWithoutUserNestedInputSchema).optional(),
@@ -9529,10 +10068,69 @@ export const UserUncheckedUpdateWithoutOrderHistoryInputSchema: z.ZodType<Prisma
   phone: z.union([ z.string(),z.lazy(() => NullableStringFieldUpdateOperationsInputSchema) ]).optional().nullable(),
   passwordHash: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   systemRoles: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  notificationChannels: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
   createdAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
   Inhabitant: z.lazy(() => InhabitantUncheckedUpdateOneWithoutUserNestedInputSchema).optional(),
   bookedOrders: z.lazy(() => OrderUncheckedUpdateManyWithoutBookedByUserNestedInputSchema).optional(),
+}).strict();
+
+export const DeliveryCreateWithoutJobRunInputSchema: z.ZodType<Prisma.DeliveryCreateWithoutJobRunInput> = z.object({
+  subjectType: z.lazy(() => DeliverySubjectSchema),
+  subjectId: z.number().int(),
+  version: z.number().int(),
+  kind: z.lazy(() => DeliveryKindSchema),
+  reference: z.string(),
+  deliveredAt: z.coerce.date().optional(),
+}).strict();
+
+export const DeliveryUncheckedCreateWithoutJobRunInputSchema: z.ZodType<Prisma.DeliveryUncheckedCreateWithoutJobRunInput> = z.object({
+  id: z.number().int().optional(),
+  subjectType: z.lazy(() => DeliverySubjectSchema),
+  subjectId: z.number().int(),
+  version: z.number().int(),
+  kind: z.lazy(() => DeliveryKindSchema),
+  reference: z.string(),
+  deliveredAt: z.coerce.date().optional(),
+}).strict();
+
+export const DeliveryCreateOrConnectWithoutJobRunInputSchema: z.ZodType<Prisma.DeliveryCreateOrConnectWithoutJobRunInput> = z.object({
+  where: z.lazy(() => DeliveryWhereUniqueInputSchema),
+  create: z.union([ z.lazy(() => DeliveryCreateWithoutJobRunInputSchema), z.lazy(() => DeliveryUncheckedCreateWithoutJobRunInputSchema) ]),
+}).strict();
+
+export const DeliveryCreateManyJobRunInputEnvelopeSchema: z.ZodType<Prisma.DeliveryCreateManyJobRunInputEnvelope> = z.object({
+  data: z.union([ z.lazy(() => DeliveryCreateManyJobRunInputSchema), z.lazy(() => DeliveryCreateManyJobRunInputSchema).array() ]),
+}).strict();
+
+export const DeliveryUpsertWithWhereUniqueWithoutJobRunInputSchema: z.ZodType<Prisma.DeliveryUpsertWithWhereUniqueWithoutJobRunInput> = z.object({
+  where: z.lazy(() => DeliveryWhereUniqueInputSchema),
+  update: z.union([ z.lazy(() => DeliveryUpdateWithoutJobRunInputSchema), z.lazy(() => DeliveryUncheckedUpdateWithoutJobRunInputSchema) ]),
+  create: z.union([ z.lazy(() => DeliveryCreateWithoutJobRunInputSchema), z.lazy(() => DeliveryUncheckedCreateWithoutJobRunInputSchema) ]),
+}).strict();
+
+export const DeliveryUpdateWithWhereUniqueWithoutJobRunInputSchema: z.ZodType<Prisma.DeliveryUpdateWithWhereUniqueWithoutJobRunInput> = z.object({
+  where: z.lazy(() => DeliveryWhereUniqueInputSchema),
+  data: z.union([ z.lazy(() => DeliveryUpdateWithoutJobRunInputSchema), z.lazy(() => DeliveryUncheckedUpdateWithoutJobRunInputSchema) ]),
+}).strict();
+
+export const DeliveryUpdateManyWithWhereWithoutJobRunInputSchema: z.ZodType<Prisma.DeliveryUpdateManyWithWhereWithoutJobRunInput> = z.object({
+  where: z.lazy(() => DeliveryScalarWhereInputSchema),
+  data: z.union([ z.lazy(() => DeliveryUpdateManyMutationInputSchema), z.lazy(() => DeliveryUncheckedUpdateManyWithoutJobRunInputSchema) ]),
+}).strict();
+
+export const DeliveryScalarWhereInputSchema: z.ZodType<Prisma.DeliveryScalarWhereInput> = z.object({
+  AND: z.union([ z.lazy(() => DeliveryScalarWhereInputSchema), z.lazy(() => DeliveryScalarWhereInputSchema).array() ]).optional(),
+  OR: z.lazy(() => DeliveryScalarWhereInputSchema).array().optional(),
+  NOT: z.union([ z.lazy(() => DeliveryScalarWhereInputSchema), z.lazy(() => DeliveryScalarWhereInputSchema).array() ]).optional(),
+  id: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  subjectType: z.union([ z.lazy(() => EnumDeliverySubjectFilterSchema), z.lazy(() => DeliverySubjectSchema) ]).optional(),
+  subjectId: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  version: z.union([ z.lazy(() => IntFilterSchema), z.number() ]).optional(),
+  kind: z.union([ z.lazy(() => EnumDeliveryKindFilterSchema), z.lazy(() => DeliveryKindSchema) ]).optional(),
+  reference: z.union([ z.lazy(() => StringFilterSchema), z.string() ]).optional(),
+  jobRunId: z.union([ z.lazy(() => IntNullableFilterSchema), z.number() ]).optional().nullable(),
+  deliveredAt: z.union([ z.lazy(() => DateTimeFilterSchema), z.coerce.date() ]).optional(),
 }).strict();
 
 export const AllergyCreateManyAllergyTypeInputSchema: z.ZodType<Prisma.AllergyCreateManyAllergyTypeInput> = z.object({
@@ -10488,6 +11086,45 @@ export const OrderUncheckedUpdateManyWithoutTicketPriceInputSchema: z.ZodType<Pr
   updatedAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
 }).strict();
 
+export const DeliveryCreateManyJobRunInputSchema: z.ZodType<Prisma.DeliveryCreateManyJobRunInput> = z.object({
+  id: z.number().int().optional(),
+  subjectType: z.lazy(() => DeliverySubjectSchema),
+  subjectId: z.number().int(),
+  version: z.number().int(),
+  kind: z.lazy(() => DeliveryKindSchema),
+  reference: z.string(),
+  deliveredAt: z.coerce.date().optional(),
+}).strict();
+
+export const DeliveryUpdateWithoutJobRunInputSchema: z.ZodType<Prisma.DeliveryUpdateWithoutJobRunInput> = z.object({
+  subjectType: z.union([ z.lazy(() => DeliverySubjectSchema), z.lazy(() => EnumDeliverySubjectFieldUpdateOperationsInputSchema) ]).optional(),
+  subjectId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  version: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  kind: z.union([ z.lazy(() => DeliveryKindSchema), z.lazy(() => EnumDeliveryKindFieldUpdateOperationsInputSchema) ]).optional(),
+  reference: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  deliveredAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+}).strict();
+
+export const DeliveryUncheckedUpdateWithoutJobRunInputSchema: z.ZodType<Prisma.DeliveryUncheckedUpdateWithoutJobRunInput> = z.object({
+  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  subjectType: z.union([ z.lazy(() => DeliverySubjectSchema), z.lazy(() => EnumDeliverySubjectFieldUpdateOperationsInputSchema) ]).optional(),
+  subjectId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  version: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  kind: z.union([ z.lazy(() => DeliveryKindSchema), z.lazy(() => EnumDeliveryKindFieldUpdateOperationsInputSchema) ]).optional(),
+  reference: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  deliveredAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+}).strict();
+
+export const DeliveryUncheckedUpdateManyWithoutJobRunInputSchema: z.ZodType<Prisma.DeliveryUncheckedUpdateManyWithoutJobRunInput> = z.object({
+  id: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  subjectType: z.union([ z.lazy(() => DeliverySubjectSchema), z.lazy(() => EnumDeliverySubjectFieldUpdateOperationsInputSchema) ]).optional(),
+  subjectId: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  version: z.union([ z.number().int(),z.lazy(() => IntFieldUpdateOperationsInputSchema) ]).optional(),
+  kind: z.union([ z.lazy(() => DeliveryKindSchema), z.lazy(() => EnumDeliveryKindFieldUpdateOperationsInputSchema) ]).optional(),
+  reference: z.union([ z.string(),z.lazy(() => StringFieldUpdateOperationsInputSchema) ]).optional(),
+  deliveredAt: z.union([ z.coerce.date(),z.lazy(() => DateTimeFieldUpdateOperationsInputSchema) ]).optional(),
+}).strict();
+
 /////////////////////////////////////////
 // ARGS
 /////////////////////////////////////////
@@ -11174,6 +11811,68 @@ export const BillingPeriodSummaryFindUniqueOrThrowArgsSchema: z.ZodType<Prisma.B
   where: BillingPeriodSummaryWhereUniqueInputSchema, 
 }).strict();
 
+export const DeliveryFindFirstArgsSchema: z.ZodType<Prisma.DeliveryFindFirstArgs> = z.object({
+  select: DeliverySelectSchema.optional(),
+  include: DeliveryIncludeSchema.optional(),
+  where: DeliveryWhereInputSchema.optional(), 
+  orderBy: z.union([ DeliveryOrderByWithRelationInputSchema.array(), DeliveryOrderByWithRelationInputSchema ]).optional(),
+  cursor: DeliveryWhereUniqueInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+  distinct: z.union([ DeliveryScalarFieldEnumSchema, DeliveryScalarFieldEnumSchema.array() ]).optional(),
+}).strict();
+
+export const DeliveryFindFirstOrThrowArgsSchema: z.ZodType<Prisma.DeliveryFindFirstOrThrowArgs> = z.object({
+  select: DeliverySelectSchema.optional(),
+  include: DeliveryIncludeSchema.optional(),
+  where: DeliveryWhereInputSchema.optional(), 
+  orderBy: z.union([ DeliveryOrderByWithRelationInputSchema.array(), DeliveryOrderByWithRelationInputSchema ]).optional(),
+  cursor: DeliveryWhereUniqueInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+  distinct: z.union([ DeliveryScalarFieldEnumSchema, DeliveryScalarFieldEnumSchema.array() ]).optional(),
+}).strict();
+
+export const DeliveryFindManyArgsSchema: z.ZodType<Prisma.DeliveryFindManyArgs> = z.object({
+  select: DeliverySelectSchema.optional(),
+  include: DeliveryIncludeSchema.optional(),
+  where: DeliveryWhereInputSchema.optional(), 
+  orderBy: z.union([ DeliveryOrderByWithRelationInputSchema.array(), DeliveryOrderByWithRelationInputSchema ]).optional(),
+  cursor: DeliveryWhereUniqueInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+  distinct: z.union([ DeliveryScalarFieldEnumSchema, DeliveryScalarFieldEnumSchema.array() ]).optional(),
+}).strict();
+
+export const DeliveryAggregateArgsSchema: z.ZodType<Prisma.DeliveryAggregateArgs> = z.object({
+  where: DeliveryWhereInputSchema.optional(), 
+  orderBy: z.union([ DeliveryOrderByWithRelationInputSchema.array(), DeliveryOrderByWithRelationInputSchema ]).optional(),
+  cursor: DeliveryWhereUniqueInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+}).strict();
+
+export const DeliveryGroupByArgsSchema: z.ZodType<Prisma.DeliveryGroupByArgs> = z.object({
+  where: DeliveryWhereInputSchema.optional(), 
+  orderBy: z.union([ DeliveryOrderByWithAggregationInputSchema.array(), DeliveryOrderByWithAggregationInputSchema ]).optional(),
+  by: DeliveryScalarFieldEnumSchema.array(), 
+  having: DeliveryScalarWhereWithAggregatesInputSchema.optional(), 
+  take: z.number().optional(),
+  skip: z.number().optional(),
+}).strict();
+
+export const DeliveryFindUniqueArgsSchema: z.ZodType<Prisma.DeliveryFindUniqueArgs> = z.object({
+  select: DeliverySelectSchema.optional(),
+  include: DeliveryIncludeSchema.optional(),
+  where: DeliveryWhereUniqueInputSchema, 
+}).strict();
+
+export const DeliveryFindUniqueOrThrowArgsSchema: z.ZodType<Prisma.DeliveryFindUniqueOrThrowArgs> = z.object({
+  select: DeliverySelectSchema.optional(),
+  include: DeliveryIncludeSchema.optional(),
+  where: DeliveryWhereUniqueInputSchema, 
+}).strict();
+
 export const CookingTeamFindFirstArgsSchema: z.ZodType<Prisma.CookingTeamFindFirstArgs> = z.object({
   select: CookingTeamSelectSchema.optional(),
   include: CookingTeamIncludeSchema.optional(),
@@ -11486,6 +12185,7 @@ export const OrderHistoryFindUniqueOrThrowArgsSchema: z.ZodType<Prisma.OrderHist
 
 export const JobRunFindFirstArgsSchema: z.ZodType<Prisma.JobRunFindFirstArgs> = z.object({
   select: JobRunSelectSchema.optional(),
+  include: JobRunIncludeSchema.optional(),
   where: JobRunWhereInputSchema.optional(), 
   orderBy: z.union([ JobRunOrderByWithRelationInputSchema.array(), JobRunOrderByWithRelationInputSchema ]).optional(),
   cursor: JobRunWhereUniqueInputSchema.optional(), 
@@ -11496,6 +12196,7 @@ export const JobRunFindFirstArgsSchema: z.ZodType<Prisma.JobRunFindFirstArgs> = 
 
 export const JobRunFindFirstOrThrowArgsSchema: z.ZodType<Prisma.JobRunFindFirstOrThrowArgs> = z.object({
   select: JobRunSelectSchema.optional(),
+  include: JobRunIncludeSchema.optional(),
   where: JobRunWhereInputSchema.optional(), 
   orderBy: z.union([ JobRunOrderByWithRelationInputSchema.array(), JobRunOrderByWithRelationInputSchema ]).optional(),
   cursor: JobRunWhereUniqueInputSchema.optional(), 
@@ -11506,6 +12207,7 @@ export const JobRunFindFirstOrThrowArgsSchema: z.ZodType<Prisma.JobRunFindFirstO
 
 export const JobRunFindManyArgsSchema: z.ZodType<Prisma.JobRunFindManyArgs> = z.object({
   select: JobRunSelectSchema.optional(),
+  include: JobRunIncludeSchema.optional(),
   where: JobRunWhereInputSchema.optional(), 
   orderBy: z.union([ JobRunOrderByWithRelationInputSchema.array(), JobRunOrderByWithRelationInputSchema ]).optional(),
   cursor: JobRunWhereUniqueInputSchema.optional(), 
@@ -11533,11 +12235,13 @@ export const JobRunGroupByArgsSchema: z.ZodType<Prisma.JobRunGroupByArgs> = z.ob
 
 export const JobRunFindUniqueArgsSchema: z.ZodType<Prisma.JobRunFindUniqueArgs> = z.object({
   select: JobRunSelectSchema.optional(),
+  include: JobRunIncludeSchema.optional(),
   where: JobRunWhereUniqueInputSchema, 
 }).strict();
 
 export const JobRunFindUniqueOrThrowArgsSchema: z.ZodType<Prisma.JobRunFindUniqueOrThrowArgs> = z.object({
   select: JobRunSelectSchema.optional(),
+  include: JobRunIncludeSchema.optional(),
   where: JobRunWhereUniqueInputSchema, 
 }).strict();
 
@@ -12113,6 +12817,58 @@ export const BillingPeriodSummaryDeleteManyArgsSchema: z.ZodType<Prisma.BillingP
   limit: z.number().optional(),
 }).strict();
 
+export const DeliveryCreateArgsSchema: z.ZodType<Prisma.DeliveryCreateArgs> = z.object({
+  select: DeliverySelectSchema.optional(),
+  include: DeliveryIncludeSchema.optional(),
+  data: z.union([ DeliveryCreateInputSchema, DeliveryUncheckedCreateInputSchema ]),
+}).strict();
+
+export const DeliveryUpsertArgsSchema: z.ZodType<Prisma.DeliveryUpsertArgs> = z.object({
+  select: DeliverySelectSchema.optional(),
+  include: DeliveryIncludeSchema.optional(),
+  where: DeliveryWhereUniqueInputSchema, 
+  create: z.union([ DeliveryCreateInputSchema, DeliveryUncheckedCreateInputSchema ]),
+  update: z.union([ DeliveryUpdateInputSchema, DeliveryUncheckedUpdateInputSchema ]),
+}).strict();
+
+export const DeliveryCreateManyArgsSchema: z.ZodType<Prisma.DeliveryCreateManyArgs> = z.object({
+  data: z.union([ DeliveryCreateManyInputSchema, DeliveryCreateManyInputSchema.array() ]),
+}).strict();
+
+export const DeliveryCreateManyAndReturnArgsSchema: z.ZodType<Prisma.DeliveryCreateManyAndReturnArgs> = z.object({
+  data: z.union([ DeliveryCreateManyInputSchema, DeliveryCreateManyInputSchema.array() ]),
+}).strict();
+
+export const DeliveryDeleteArgsSchema: z.ZodType<Prisma.DeliveryDeleteArgs> = z.object({
+  select: DeliverySelectSchema.optional(),
+  include: DeliveryIncludeSchema.optional(),
+  where: DeliveryWhereUniqueInputSchema, 
+}).strict();
+
+export const DeliveryUpdateArgsSchema: z.ZodType<Prisma.DeliveryUpdateArgs> = z.object({
+  select: DeliverySelectSchema.optional(),
+  include: DeliveryIncludeSchema.optional(),
+  data: z.union([ DeliveryUpdateInputSchema, DeliveryUncheckedUpdateInputSchema ]),
+  where: DeliveryWhereUniqueInputSchema, 
+}).strict();
+
+export const DeliveryUpdateManyArgsSchema: z.ZodType<Prisma.DeliveryUpdateManyArgs> = z.object({
+  data: z.union([ DeliveryUpdateManyMutationInputSchema, DeliveryUncheckedUpdateManyInputSchema ]),
+  where: DeliveryWhereInputSchema.optional(), 
+  limit: z.number().optional(),
+}).strict();
+
+export const DeliveryUpdateManyAndReturnArgsSchema: z.ZodType<Prisma.DeliveryUpdateManyAndReturnArgs> = z.object({
+  data: z.union([ DeliveryUpdateManyMutationInputSchema, DeliveryUncheckedUpdateManyInputSchema ]),
+  where: DeliveryWhereInputSchema.optional(), 
+  limit: z.number().optional(),
+}).strict();
+
+export const DeliveryDeleteManyArgsSchema: z.ZodType<Prisma.DeliveryDeleteManyArgs> = z.object({
+  where: DeliveryWhereInputSchema.optional(), 
+  limit: z.number().optional(),
+}).strict();
+
 export const CookingTeamCreateArgsSchema: z.ZodType<Prisma.CookingTeamCreateArgs> = z.object({
   select: CookingTeamSelectSchema.optional(),
   include: CookingTeamIncludeSchema.optional(),
@@ -12375,11 +13131,13 @@ export const OrderHistoryDeleteManyArgsSchema: z.ZodType<Prisma.OrderHistoryDele
 
 export const JobRunCreateArgsSchema: z.ZodType<Prisma.JobRunCreateArgs> = z.object({
   select: JobRunSelectSchema.optional(),
+  include: JobRunIncludeSchema.optional(),
   data: z.union([ JobRunCreateInputSchema, JobRunUncheckedCreateInputSchema ]),
 }).strict();
 
 export const JobRunUpsertArgsSchema: z.ZodType<Prisma.JobRunUpsertArgs> = z.object({
   select: JobRunSelectSchema.optional(),
+  include: JobRunIncludeSchema.optional(),
   where: JobRunWhereUniqueInputSchema, 
   create: z.union([ JobRunCreateInputSchema, JobRunUncheckedCreateInputSchema ]),
   update: z.union([ JobRunUpdateInputSchema, JobRunUncheckedUpdateInputSchema ]),
@@ -12395,11 +13153,13 @@ export const JobRunCreateManyAndReturnArgsSchema: z.ZodType<Prisma.JobRunCreateM
 
 export const JobRunDeleteArgsSchema: z.ZodType<Prisma.JobRunDeleteArgs> = z.object({
   select: JobRunSelectSchema.optional(),
+  include: JobRunIncludeSchema.optional(),
   where: JobRunWhereUniqueInputSchema, 
 }).strict();
 
 export const JobRunUpdateArgsSchema: z.ZodType<Prisma.JobRunUpdateArgs> = z.object({
   select: JobRunSelectSchema.optional(),
+  include: JobRunIncludeSchema.optional(),
   data: z.union([ JobRunUpdateInputSchema, JobRunUncheckedUpdateInputSchema ]),
   where: JobRunWhereUniqueInputSchema, 
 }).strict();

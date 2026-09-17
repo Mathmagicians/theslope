@@ -9,10 +9,11 @@ const fakeBucket = (put = vi.fn().mockResolvedValue(undefined)) => ({bucket: {pu
 
 describe('getBillingArchiveKey', () => {
     it.each([
-        [new Date('2026-08-17T00:00:00Z'), 'billing/2026-08/pbs-opgoerelse-2026-08.csv'],
-        [new Date('2026-12-17T12:00:00Z'), 'billing/2026-12/pbs-opgoerelse-2026-12.csv']
-    ])('keys the cutoff %s under its month, ASCII only', (cutoffDate, expected) => {
-        expect(getBillingArchiveKey(cutoffDate)).toBe(expected)
+        [new Date('2026-08-17T00:00:00Z'), 1, 'billing/2026-08/pbs-opgoerelse-2026-08-v1.csv'],
+        [new Date('2026-08-17T00:00:00Z'), 2, 'billing/2026-08/pbs-opgoerelse-2026-08-v2.csv'],
+        [new Date('2026-12-17T12:00:00Z'), 1, 'billing/2026-12/pbs-opgoerelse-2026-12-v1.csv']
+    ])('keys the cutoff %s at version %i under its month, ASCII only, one object per version', (cutoffDate, version, expected) => {
+        expect(getBillingArchiveKey(cutoffDate, version)).toBe(expected)
     })
 })
 
@@ -26,11 +27,11 @@ describe('archiveBillingCsv', () => {
 
         const result = await archiveBillingCsv(bucket, summary, 42)
 
-        expect(result).toMatchObject({key: getBillingArchiveKey(summary.cutoffDate), filename: generateCsvFilename(summary), archived: true, degraded: false})
+        expect(result).toMatchObject({key: getBillingArchiveKey(summary.cutoffDate, summary.version), filename: generateCsvFilename(summary), version: summary.version, archived: true, degraded: false})
         expect(result.sizeBytes).toBe(Buffer.byteLength(generateBillingCsv(summary), 'utf8'))
         expect(put).toHaveBeenCalledWith(result.key, generateBillingCsv(summary), expect.objectContaining({
             httpMetadata: {contentType: 'text/csv; charset=utf-8'},
-            customMetadata: expect.objectContaining({billingPeriod: summary.billingPeriod, filename: result.filename, jobRunId: '42'})
+            customMetadata: expect.objectContaining({billingPeriod: summary.billingPeriod, version: String(summary.version), filename: result.filename, jobRunId: '42'})
         }))
     })
 

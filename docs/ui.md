@@ -282,8 +282,12 @@ document.documentElement.classList.toggle('dark')      // the dark block
 
 | Rule | Scope |
 |---|---|
-| **1.4.3 Contrast (Minimum)** | 4.5:1 for body text, 3:1 for large-scale text — 24px, or 18.66px at `font-bold` and heavier. A token states its own size, and the bare class decides, since a `md:` face is the larger one. `TYPOGRAPHY.sectionIconLight` (`text-2xl`) is measured at 3:1 |
+| **1.4.3 Contrast (Minimum)** | 4.5:1 for body text, 3:1 for large-scale text — 24px, or 18.66px at `font-bold` and heavier. Every face a token renders is measured, so the smallest one sets the bar. `TYPOGRAPHY.sectionIconLight` (`text-2xl`) is measured at 3:1 |
+| **1.4.3 for a fill** | A fill carries no size, so its bar comes from the typography a component places on it, listed in `INK_ON_FILL` with the component and line that draws it. The landing bands carry `TYPOGRAPHY.sectionTitle` (`text-xl md:text-3xl font-bold` — large at both widths) and are measured at 3:1; `COMPONENTS.kitchenPanel.*` carry `kitchenLabel` at `text-xs` and stay at 4.5:1 |
 | **1.4.11 Non-text Contrast** | 3:1 for the edges that identify a control or carry meaning: input and card borders, the green holiday ring, the amber and red deadline rings, the segmented-control ring, the calendar selection outlines |
+
+A surface that changes what it carries updates `INK_ON_FILL` in the same commit. `BACKGROUNDS.landing.ticker`
+is left out of it: its words are `PANTONE_CHIPS`, which bring their own fill and are measured as their own pairs.
 
 Four edge tokens draw a boundary the layout already states, and sit outside 1.4.11:
 

@@ -22,7 +22,7 @@ html[data-palette="tydelig"] {
     --color-orange-200: #ac8467;
     --color-orange-500: #bb3d00;
     --color-party-500: #c6295b;
-    --color-party-700: #b94763;
+    --color-party-700: #c04d69;
     --color-peach-400: #b85a14;
     --color-peach-500: #c23a00;
     --color-peach-600: #c62d00;
@@ -42,7 +42,7 @@ html.dark[data-palette="tydelig"] {
     --color-amber-600: #b48375;
     --color-amber-800: #633f3d;
     --color-blue-400: #4dd1e0;
-    --color-blue-500: #007c8b;
+    --color-blue-500: #0d9baa;
     --color-blue-700: #5298a9;
     --color-caramel-400: #f9ac84;
     --color-gray-200: #e5e7eb;
@@ -61,7 +61,7 @@ html.dark[data-palette="tydelig"] {
     --color-peach-700: #ed633d;
     --color-pink-300: #fab0c7;
     --color-pink-400: #ffa3c6;
-    --color-pink-500: #bd4461;
+    --color-pink-500: #dd627d;
     --color-pink-800: #ffa2ba;
     --color-red-400: #ecb1aa;
     --color-red-500: #c97973;

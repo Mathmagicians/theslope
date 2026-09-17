@@ -58,9 +58,9 @@ describe('useBillingValidation', () => {
     })
 
     describe('generateCsvFilename', () => {
-        it('GIVEN summary WHEN generating filename THEN uses billingPeriod', () => {
-            const summary = BillingFactory.defaultSummaryData('test')
-            expect(generateCsvFilename(summary)).toBe(`PBS-Opgørelse-Skråningen-${summary.billingPeriod}.csv`)
+        it.each([1, 2])('GIVEN summary at version %i WHEN generating filename THEN uses billingPeriod and the version', (version) => {
+            const summary = {...BillingFactory.defaultSummaryData('test'), version}
+            expect(generateCsvFilename(summary)).toBe(`PBS-Opgørelse-Skråningen-${summary.billingPeriod}-v${version}.csv`)
         })
     })
 
@@ -288,6 +288,7 @@ describe('useBillingValidation', () => {
             cutoffDate: new Date(),
             paymentDate: new Date(),
             createdAt: new Date(),
+            version: 1,
             invoices: invoices.map((inv, i) => ({
                 id: i + 1, amount: inv.amount, cutoffDate: new Date(), paymentDate: new Date(),
                 billingPeriod: '01/01/2025-31/01/2025', createdAt: new Date(),
@@ -345,6 +346,7 @@ describe('useBillingValidation', () => {
                 id: 1, billingPeriod: '01/01/2025-31/01/2025', shareToken: 'token',
                 totalAmount: 10000, householdCount: 1, ticketCount: 3,
                 cutoffDate: new Date(), paymentDate: new Date(), createdAt: new Date(),
+                version: 1,
                 invoices: [{
                     id: 1, amount: 8000, cutoffDate: new Date(), paymentDate: new Date(),
                     billingPeriod: '01/01/2025-31/01/2025', createdAt: new Date(),

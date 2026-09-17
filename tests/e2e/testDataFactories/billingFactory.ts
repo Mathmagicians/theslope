@@ -66,6 +66,7 @@ export class BillingFactory {
         paymentDate: new Date(2025, 11, 1), // Dec 1
         createdAt: new Date(2025, 10, 18),
         shareToken: salt('token', testSalt),
+        version: 1,
         invoices: [{
             id: 1,
             cutoffDate: new Date('2025-11-17'),

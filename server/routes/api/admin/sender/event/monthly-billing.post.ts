@@ -1,6 +1,6 @@
 import {defineEventHandler, readValidatedBody, createError, setResponseStatus} from 'h3'
 import {useNotificationValidation, type SenderEmitResult} from '~/composables/useNotificationValidation'
-import {emitBillingPeriodClosed} from '~~/server/utils/sender/events/monthly-billing'
+import {notifyBillingPeriod} from '~~/server/utils/monthlyBillingService'
 import {getNotificationConfig} from '~~/server/utils/sender/config'
 import {fetchBillingPeriodSummary} from '~~/server/data/prismaRepository'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
@@ -12,8 +12,8 @@ const LOG = '📮 > SENDER > [EVENT monthly-billing]'
 /**
  * POST /api/admin/sender/event/monthly-billing
  *
- * Re-sends the accountant mail (BILLING_PERIOD_CLOSED, CSV attached, cc admin) for one billing period —
- * the HTTP twin of the event runMonthlyBilling raises after each closed period.
+ * Re-sends the accountant mail (BILLING_PERIOD_CLOSED, CSV attached, cc admin) for one billing period and
+ * stamps the period as notified for its current CSV — the HTTP twin of the mail runMonthlyBilling sends.
  * Admin only (route table: /api/admin/ POST → isAdmin).
  *
  * Body: {billingPeriodSummaryId}. 404 when the period does not exist.
@@ -42,7 +42,7 @@ export default defineEventHandler(async (event): Promise<SenderEmitResult> => {
     }
 
     try {
-        const result = await emitBillingPeriodClosed(env.SENDER, getNotificationConfig(event), summary)
+        const result = await notifyBillingPeriod(env.DB, env.SENDER, getNotificationConfig(event), summary)
         console.info(`${LOG} ${result.queued ? 'queued' : 'not queued'}`, {dedupeKey: result.dedupeKey, degraded: result.degraded})
         setResponseStatus(event, 200)
         return result

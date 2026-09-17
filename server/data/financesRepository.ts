@@ -1659,6 +1659,13 @@ export async function createBillingPeriodSummary(
     return BillingPeriodSummaryIdSchema.parse(created)
 }
 
+/** A period's content changed (catch-up billing): the next run archives and mails the new version */
+export async function bumpBillingPeriodVersion(d1Client: D1Database, id: number): Promise<number> {
+    const prisma = await getPrismaClientConnection(d1Client)
+    const updated = await prisma.billingPeriodSummary.update({where: {id}, data: {version: {increment: 1}}, select: {version: true}})
+    return updated.version
+}
+
 export async function createInvoices(
     d1Client: D1Database,
     invoices: InvoiceCreate[]

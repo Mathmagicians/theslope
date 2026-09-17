@@ -1081,8 +1081,9 @@ runs as `it.fails`, so a fix breaks the build and asks for the entry to be delet
    the preset.
 3. The brand surfaces (landing rainbow, hero, kitchen panels) are large text in practice — should they be measured at the 3:1 large-text rung of
    1.4.3 instead of 4.5? That is a per-token decision, not a global one.
-   → **Open.** Step 2 applies the large-text rung where a token states its own size (`TYPOGRAPHY.sectionIconLight`). The brand surfaces carry the
-   fill, and the size comes from the `TYPOGRAPHY` token rendered inside them, so each one is still a decision to take.
+   → **Answered in step 2**, per token, from the components: `INK_ON_FILL` maps each brand surface to the typography that draws on it. The landing
+   bands and the title bar carry `sectionTitle` / `heroTitle` and take the 3:1 rung; the kitchen panels carry `kitchenLabel` at `text-xs` and stay
+   at 4.5:1; `hero.mocha` carries `bodyTextMedium` and stays.
 
 Two Nuxt UI observations fell out of the same resolution work and are recorded here, not fixed: `--ui-neutral` is never emitted (the colours
 plugin destructures `neutral` out), and `mocha`/`bonbon` are declared in `nuxt.config.ts` `ui.theme.colors` but never mapped in `app.config.ts`
@@ -1094,20 +1095,33 @@ and Nuxt UI's own neutral compound variants use `text-highlighted`/`bg-elevated`
 
 ### Tydelig — step 2 ✅ (2026-09-16, the AA preset + its generator)
 
-**Scoped to the standard first.** Two rules moved the inventory onto what WCAG 2.1 actually asks, both stated in
-`designSystemPairs.ts` and in docs/ui.md "Palettes": **1.4.3 large-scale text** — a token whose own classes set 24px, or
-18.66px at `font-bold` and heavier, is measured at 3:1 (today `TYPOGRAPHY.sectionIconLight`, `text-2xl`, light 3.55 and
-dark 3.01) — and **1.4.11 decorative edges** — `LAYOUTS.sectionDivider`, `LAYOUTS.panelDivider` and the economy tree's
-`border` / `header` / `footer` / `statBox` / `tableHead` draw a boundary the indentation, heading and icon already
-state, so they sit outside non-text contrast. Their ink stays measured in the text groups. A new case guards the
-baseline itself: **every listed finding still names a pair**, so a scoping rule that removes a pair removes its line.
+**Scoped to the standard first.** Three rules put the inventory on what WCAG 2.1 asks, all stated in
+`designSystemPairs.ts` and in docs/ui.md "Palettes":
 
-**Default theme after scoping: 401 pairs, 193 pass, 208 fail** (was 438 / 191 / 247).
+1. **1.4.3 large-scale text** — every face a token renders is measured and the smallest one sets the bar: 24px, or
+   18.66px at `font-bold` and heavier, takes the 3:1 rung. Today that is `TYPOGRAPHY.sectionIconLight` (`text-2xl`,
+   light 3.55 and dark 3.01).
+2. **1.4.3 for a fill** — a fill token carries no size, so its bar comes from the typography a component places on it.
+   `INK_ON_FILL` lists one row per surface with the component and line that draws it: the landing bands carry
+   `TYPOGRAPHY.sectionTitle` (`text-xl md:text-3xl font-bold` — 20px bold at phone width, large at both widths) and
+   move to 3:1; `BACKGROUNDS.landing.titleBar` carries `heroTitle`; `BACKGROUNDS.hero.mocha` carries
+   `bodyTextMedium` (`text-sm`) and stays at 4.5:1; `COMPONENTS.kitchenPanel.*` carry `kitchenLabel` `text-xs`,
+   `kitchenSecondary`, `kitchenMain` `text-base md:text-lg font-bold` and `kitchenDetail` — all under the large bar,
+   so **4.5:1 stays**. `BACKGROUNDS.landing.ticker` is out of the table: its words are `PANTONE_CHIPS`, which bring
+   their own fill and are measured as their own pairs.
+3. **1.4.11 decorative edges** — `LAYOUTS.sectionDivider`, `LAYOUTS.panelDivider` and the economy tree's `border` /
+   `header` / `footer` / `statBox` / `tableHead` draw a boundary the indentation, heading and icon already state, so
+   they sit outside non-text contrast. Their ink stays measured in the text groups.
+
+A new case guards the baseline: **every listed finding still names a pair**, so a scoping rule that removes a pair
+removes its line.
+
+**Default theme after scoping: 401 pairs, 197 pass, 204 fail** (was 438 / 191 / 247).
 
 | Group | Pairs | Pass | Fail | Moved by the scoping |
 |---|---:|---:|---:|---|
 | text on surface | 153 | 84 | 69 | — |
-| paired token | 86 | 55 | 31 | 2 to pass (large text) |
+| paired token | 86 | 59 | 27 | 6 to pass (2 large text, 4 placed ink) |
 | edge on surface | 84 | 44 | 40 | 37 pairs out (decorative) |
 | semantic slot | 78 | 10 | 68 | — |
 
@@ -1123,14 +1137,14 @@ block across 14 families, 34 in the dark block**, imported by `main.css`. Two ru
 | Family | Light block | Dark block |
 |---|---|---|
 | amber | 500 `#a47864`→`#8c614e` | 400 `#ae8a71`→`#ddb89d`, 500 →`#835a46`, 600 `#8d5f52`→`#b48375`, 800 back to `#633f3d` |
-| blue | 400 `#33becc`→`#00808e`, 500 `#25a6b5`→`#007685`, 600 `#228698`→`#007385` | 400 →`#4dd1e0`, 500 →`#007c8b`, 700 `#226d7d`→`#5298a9` |
+| blue | 400 `#33becc`→`#00808e`, 500 `#25a6b5`→`#007685`, 600 `#228698`→`#007385` | 400 →`#4dd2e0`, 500 →`#0d9baa`, 700 `#226d7d`→`#5298a9` |
 | caramel | 500 `#b76a4a`→`#a15737` | 400 `#ca815a`→`#f9ac84` |
 | gray | 200 `#e5e7eb`→`#8b8c90`, 300 `#d1d5dc`→`#898c93`, 400 `#99a1af`→`#616976`, 500 `#6a7282`→`#616878` | 200 and 300 back to published, 400 →`#b5bdcc`, 500 →`#b4bdce`, 600 `#4a5565`→`#8390a1`, 700 `#364153`→`#838fa4` |
 | green | 500 `#00c950`→`#007c00` | 400 and 500 back to published |
 | orange | 200 `#f9ceaf`→`#ac8467`, 500 `#ec6a37`→`#bb3d00` | 200 back to published, 400 `#ef7e48`→`#ffaa74`, 500 →`#ffa875` |
-| party | 500 `#e84c76`→`#c6295b`, 700 `#c4516c`→`#b94763` | 400 `#f17999`→`#ffa3c2` |
+| party | 500 `#e84c76`→`#c6295b`, 700 `#c4516c`→`#c04d69` | 400 `#f17999`→`#ffa3c2` |
 | peach | 400 `#ff9b5e`→`#b85a14`, 500 `#fe7320`→`#c23a00`, 600 `#ef5616`→`#c62d00` | 400 →`#ffab6d`, 700 `#c63f14`→`#ed633d` |
-| pink | 300 `#fab0c7`→`#be788f`, 500 `#fa7b95`→`#b83f5e` | 300 back to published, 400 `#f77da1`→`#ffa3c6`, 500 →`#bd4461`, 800 `#a9284b`→`#ffa2ba` |
+| pink | 300 `#fab0c7`→`#be788f`, 500 `#fa7b95`→`#b83f5e` | 300 back to published, 400 `#f77da1`→`#ffa3c6`, 500 →`#dd627d`, 800 `#a9284b`→`#ffa2ba` |
 | red | 500 `#c4746f`→`#a25551` | 400 `#d69c96`→`#ecb1aa`, 500 →`#c97973`, 700 `#904040`→`#cd7674` |
 | sky | 500 `#3c8c9e`→`#207586`, 600 `#357385`→`#327082` | 400 `#52a5b6`→`#7accde` |
 | violet | 500 `#de5697`→`#b93277` | 400 `#e97db3`→`#ffa0d6`, 500 →`#ff9ddd` |
@@ -1138,9 +1152,25 @@ block across 14 families, 34 in the dark block**, imported by `main.css`. Two ru
 | yellow | 500 `#eab308`→`#946000` | 400 back to published |
 
 **Tydelig result: 401 pairs, 385 pass, 16 fail** — text on surface 153/153, semantic slot 78/78, edge on surface 80/84,
-paired token 74/86. Light mode carries 14 of the 16 passes that light mode can carry; the two light misses are the ocean
-and peach countdown accents on the near-black countdown container, whose step the light mode also darkens for the
-calendar day fill.
+paired token 74/86.
+
+**The bands, measured.** The placed-ink rule lowered the bands' own bar to 3:1, and the emitted values barely moved:
+the same `--color-<family>-500` also paints a **solid button**, whose `text-inverted` label is body text at 4.5:1
+(`slot.secondary` = pink, `slot.warning` = orange, `slot.party`, `slot.neutral` = sky). That constraint is the binding
+one, so the bands land where the slots put them. Light mode:
+
+| Band | Fill | Bar | Default | Tydelig |
+|---|---|---:|---:|---:|
+| `landing.section1` / `hero.pink` | pink-500 | 3 | 2.32 | **4.95** |
+| `landing.section2` / `hero.orange` | orange-500 | 3 | 2.64 | **4.67** |
+| `landing.section3` | party-700 | 3 | 4.07 | **4.29** |
+| `landing.section4` | sky-500 | 3 | 2.78 | **5.09** |
+| `landing.titleBar` / `ticker` / `hero.mocha` | amber-500 | 3 / 3 / 4.5 | 3.55 | **4.91** |
+| `hero.peach` | peach-300 | 3 | 9.01 | 9.01 |
+
+Four distinct hues remain (deep rose, burnt orange, mauve-rose, teal), each one step deeper than the published band.
+Three values changed against the pre-scoping run: `party-700` `#b94763`→`#c04d69`, dark `blue-500` `#007c8b`→`#0d9baa`,
+dark `pink-500` `#bd4461`→`#dd627d`. The light block still carries 25 steps, the dark block 34.
 
 **The 16 are one variable asked to be two things**, listed per pair in `PRESET_FINDINGS` and run as `it.fails`. Twelve of
 the fourteen dark ones are a token with **no `dark:` face**: `COMPONENTS.kitchenPanel.*` paints `bg-orange-500 text-white`
@@ -1150,8 +1180,30 @@ and `PLANNING_CALENDAR.day.generated` (`bg-pink-800 text-pink-50`), `BACKGROUNDS
 `PANTONE_CHIPS[1]`. `BORDER.gray.800` is `BG.inset`'s own dark fill, which a preset holds. **A dark face on those eight
 tokens closes all sixteen** — a token change, which the "Tydelig, the AA preset" decision puts outside this package.
 
-**Screenshots** (`test-results/palettes/<page>-<viewport>-<default|tydelig>.png`, 32 files, desktop 1440×900 and 375×812):
-`admin-planning`, `admin-allergies`, `admin-teams`, `household-bookings`, `dinner`, `chef`, `login`, `landing`.
+**Kitchen panels — three options, numbers only.** White `text-xs` on a vibrant fill needs 4.5:1, which the palette can
+only reach by pulling all four fills to the same depth. That is a surface design decision, so the kitchen pairs stay in
+`PRESET_FINDINGS` and the choice is the user's:
+
+| Panel | Published fill | (a) as generated, white ink | (b) dark ink on the published fill | (c) main number at `text-2xl font-bold` (3:1), published fill |
+|---|---|---:|---|---:|
+| TAKEAWAY (`bg-warning-500`) | orange-500 `#ec6a37` | `#bb3d00` → 5.55 | `TEXT.ink` 5.65 · black 6.68 | white 3.14 ✅ |
+| DINEIN (`bg-party-700`) | party-700 `#c4516c` | `#c04d69` → 4.66 | `TEXT.ink` 4.01 · black 4.74 | white 4.43 ✅ |
+| DINEINLATE (`bg-orange-500`) | orange-500 `#ec6a37` | `#bb3d00` → 5.55 | `TEXT.ink` 5.65 · black 6.68 | white 3.14 ✅ |
+| RELEASED (`bg-gray-500`) | gray-500 `#6a7282` | `#616878` → 5.59 | `TEXT.ink` 3.67 · black 4.34 | white 4.84 ✅ |
+
+(a) costs the four hues: TAKEAWAY and DINEINLATE are the **same** `orange-500` in the published palette too, so the
+panel row reads as three colours either way, at a deeper saturation. (b) clears 4.5:1 on three of the four with
+`TEXT.ink` (`text-gray-900`) and on all four with black; `RELEASED` at 3.67 needs one step lighter — `gray-400`
+`#99a1af` gives 6.82, and the other three at their 400 rung give 6.55 / 6.71 / 6.55. (c) clears the 3:1 large-text bar
+on all four with the fills untouched, and the small labels (`kitchenLabel`, `kitchenSecondary`, `kitchenDetail`) then
+move to dark ink, where they read at the (b) numbers.
+
+**Screenshots** (`test-results/palettes/<page>-<viewport>-<default|tydelig>.png`, 28 files, desktop 1440×900 and 375×812),
+taken against seeded content: the singleton active season with dinner events, a cooking team with the admin as chef on
+the next three dinners, and `scaffold-prebookings` run for the season. Pages: `chef` (team, countdown, calendar, chef
+card, kitchen panels), `chef-kitchen` (agenda open, the seeded menu in the list), `dinner` (selected dinner, the
+household's ticket rows, kitchen panels), `household-bookings` (week grid with two dinner columns), `admin-planning`
+(season + calendar), `admin-allergies` (catalog + detail), `landing`.
 
 ### Visual check — Tydelig
 
@@ -1160,16 +1212,17 @@ Set the preset from the console on any page: `document.documentElement.dataset.p
 
 | Route + state | Viewport | DS element to expect | Expect |
 |---|---|---|---|
-| `/` landing, scrolled | 375px + desktop | `BACKGROUNDS.landing.section1-4`, `PANTONE_CHIPS` | The rainbow deepens: pink `#fa7b95`→`#b83f5e`, orange `#ec6a37`→`#bb3d00`, ocean `#3c8c9e`→`#207586`; the near-white section text now reads on each band. The ticker chips keep their tint |
-| `/admin/planning`, view mode | desktop | `CALENDAR.holiday` ring, `PLANNING_CALENDAR.day.generated`, `BUTTONS.primaryAction` | The green holiday ring darkens to `#007c00` and separates from white; generated cooking days keep their pink fill; `Opret sæson` and `Rediger` go from mocha `#a47864` to `#8c614e` |
-| `/admin/planning?mode=edit`, holiday rows | 375px | `CalendarDateRangePicker` inputs, `LAYOUTS.sectionDivider` | Input borders go from `gray-200` to a mid grey `#8b8c90` and the field edges become visible; the section rules darken with them |
-| `/admin/allergies`, a row tapped | 375px + desktop | `AllergyCatalogTable`, `AllergyTypeDetailPanel`, `TEXT.dimmed` | Muted and dimmed greys darken (`gray-400` `#99a1af`→`#616976`, `gray-500`→`#616878`); timestamps and placeholder text read on the panel |
-| `/admin/teams`, a team card | desktop | `CookingTeamCard`, `TeamCalendarDisplay`, `COMPONENTS.segmentedActive` | Team colours darken one notch; the segmented control's `orange-200` ring becomes a visible edge `#ac8467` |
-| `/household/<own>/bookings?view=week` | 375px + desktop | `BookingGridView`, `DinnerTicket`, deadline badges | Deadline rings (`red-500`, `amber-500`) darken and separate from the page; ticket fills keep their hue |
-| `/dinner` | desktop | `DinnerCalendarDisplay`, `COMPONENTS.kitchenPanel` | Peach day fills darken (`#ff9b5e`→`#b85a14`) so the white day number reads; kitchen panels darken with `warning`/`party` |
-| `/chef` | 375px + desktop | `ChefCalendarDisplay`, `CALENDAR.countdown` | Ocean accents darken; **the countdown accent on the near-black container is one of the two light-mode misses — check it reads** |
+| `/` landing, scrolled | 375px + desktop | `BACKGROUNDS.landing.section1-4`, `PANTONE_CHIPS` | Four distinct bands, each a step deeper: pink 2.32→4.95, orange 2.64→4.67, party 4.07→4.29, ocean 2.78→5.09. The near-white section titles read on every band. The ticker chips keep their tint |
+| `/admin/planning`, view mode | desktop | `CALENDAR.holiday` ring, `PLANNING_CALENDAR.day.generated`, `BUTTONS.primaryAction` | Holiday ring darkens to `#007c00` and separates from white; generated cooking days keep their pink fill; `Opret sæson` / `Rediger` go mocha `#a47864`→`#8c614e` |
+| `/admin/planning?mode=edit`, holiday rows | 375px | `CalendarDateRangePicker` inputs, `LAYOUTS.sectionDivider` | Input borders `gray-200`→`#8b8c90`; the field edges become visible; section rules darken with them |
+| `/admin/allergies`, a row tapped | 375px + desktop | `AllergyCatalogTable`, `AllergyDetailPanel`, `TEXT.dimmed` | Muted and dimmed greys darken (`gray-400` `#99a1af`→`#616976`); timestamps and placeholder text read on the panel |
+| `/admin/teams`, a team card | desktop | `CookingTeamCard`, `TeamCalendarDisplay`, `COMPONENTS.segmentedActive` | Team colours darken a notch; the segmented control's `orange-200` ring becomes a visible edge `#ac8467` |
+| `/household/<own>/bookings?view=week` | 375px + desktop | `BookingGridView`, `DinnerTicket`, deadline dots | Ticket badges darken (`Voksen` brown, `Barn` deep green); the calendar's deadline dots go from bright to deep orange |
+| `/dinner?date=<a dinner>` | 375px + desktop | `KitchenPreparation`, `DinnerTicket`, `DinnerDetailHeader` | Kitchen panel row deepens; **TAKEAWAY and SPIS SENT are the same orange in both palettes** — they share `orange-500`. The header's mocha band darkens with the rest |
+| `/chef?team=<id>`, calendar open | 375px + desktop | `ChefCalendarDisplay`, `CALENDAR.countdown`, `BUTTONS.primaryAction` | Ocean day circles darken; `Rediger menu` goes deep orange; **the countdown accent on the near-black container is one of the two light-mode misses — check it reads** |
+| `/chef?team=<id>&view=agenda:open` | desktop | Agenda list, `KitchenPreparation` | The dinner cards keep their state chips; the kitchen row deepens |
 | Any page, dark mode | desktop | `TEXT.muted`, `BORDER.gray.*`, slot inks | Greys lighten instead (`gray-400`→`#b5bdcc`, `gray-700`→`#838fa4`); every `text-<slot>` lightens |
-| `/dinner` + `/chef`, dark mode | desktop | `COMPONENTS.kitchenPanel.*`, `*_CALENDAR.day.next` | **The known misses:** white on `orange-500`/`ocean-400`/`peach-400` stays low-contrast, because those tokens have no dark face |
+| `/dinner` + `/chef`, dark mode | desktop | `COMPONENTS.kitchenPanel.*`, `*_CALENDAR.day.next` | **The known misses:** white on `orange-500`/`ocean-400`/`peach-400` stays low-contrast — those tokens have no dark face |
 
 ### Mockup — ✅ signed off 2026-09-16 (behind an "Indstillinger" button; colors variant still open)
 
@@ -1518,7 +1571,7 @@ and the design-system rule → compliance rows in the same change. Agents (`tdd-
 ```
 npm i uqr                                                  # QR code
 make d1-prisma                                             # after the schema edit (commit generated zod)
-make prisma-create-migration name=settings_preferences     # → migrations/0015_settings_preferences.sql
+make d1-create-migration name=settings_preferences     # → migrations/0015_settings_preferences.sql
 npm run db:migrate:local                                   # dev/prod at deploy
 ```
 

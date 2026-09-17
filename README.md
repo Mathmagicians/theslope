@@ -110,7 +110,7 @@ When using Prisma's D1 adapter, implicit & explicit transactions will be ignored
 #### Heynabo
 - Heynabo API - se  [dokumentation](https://heynabo.atlassian.net/wiki/external/N2QzNGVkM2ZiMzg1NDkwZDk2NTBiYWYyMzA0ZWJjNmQ)
 - There is a Makefile to test the heynabo api. you must have an .env file with username and password. Fx the following will return a list of neighbors:
-```make heynabo-get-nhbrs```
+```make heynabo-get-nhbrs-dev```
 
 
 ## 📚 Documentation
@@ -158,10 +158,10 @@ After creating the database, update the database ID in `wrangler.toml`.
 2. Generate migration:
    ```bash
    # Initial migration
-   make prisma-create-migration name=initial
+   make d1-create-migration name=initial
 
    # Subsequent migrations
-   make prisma-create-migration name=add_feature_name
+   make d1-create-migration name=add_feature_name
    ```
 3. Generate Prisma client: `make d1-prisma`
 4. Apply migrations:

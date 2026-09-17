@@ -171,6 +171,7 @@
 | `useBillingValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Billing, transaction, invoice schemas |
 | `useHeynaboValidation()` | ✅ | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Heynabo import response schemas |
 | `useMaintenanceValidation()` | ✅ | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Season import response schemas |
+| `useDeliveryValidation()` | ✅ | ✅ `DeliveryKindSchema`, `DeliverySubjectSchema` | ✅ Delivery, DeliveredVersions | ✅ Full | **✅ COMPLIANT** - Delivery facts (ADR-015 convergence): schemas + pure `deliveredVersions` reducer; isomorphic (ADR-017) |
 | `useNotificationValidation()` | ✅ | N/A | ✅ Contract types | ✅ via `workers/sender/test/contract.unit.spec.ts` + `tests/component/utils/sender/*` | **✅ COMPLIANT** - Re-exports the sender contract (`workers/sender/contract.ts`); `NotificationConfigSchema` (runtimeConfig + app.config templates), sender event bodies, `SenderEmitResultSchema`; isomorphic (ADR-017) |
 | **Business Logic Composables** |
 | `useBooking()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - ADR-016 `decideOrderAction`, bucket resolvers, `resolveUserBookingBuckets()`; ADR-017 isomorphic (explicit imports; badges/action preview moved to `useBookingUi`, `DINNER_STEP_MAP` icon-free) |

@@ -77,7 +77,7 @@ npx wrangler queues info theslope-sender-dev              # expect: Queue ID + 0
 
 | Key | Local value |
 |-----|-------------|
-| `NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL` | any address — the local queue is a miniflare sink, nothing is delivered |
+| `NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL` | any address — the local queue is a miniflare sink |
 | `NUXT_NOTIFICATIONS_ADMIN_EMAIL` | any address |
 
 The CI e2e job sets placeholder addresses the same way (`cicd.yml`).
@@ -97,7 +97,8 @@ One e-mail template per notification kind in `app/config/notificationTemplates.t
 | Kind | Event | Recipient |
 |------|-------|-----------|
 | `TEST` | `make theslope-sender-event-test-<env>` | `NUXT_NOTIFICATIONS_ADMIN_EMAIL` |
-| `BILLING_PERIOD_CLOSED` | monthly billing (cron / `POST /api/admin/maintenance/monthly`), re-send `make theslope-sender-event-monthly-billing-<env> bpid=<billingPeriodSummaryId>` | `NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL`, cc `NUXT_NOTIFICATIONS_ADMIN_EMAIL`; the period CSV attached |
+| `BILLING_PERIOD_CLOSED` | monthly billing (cron / `POST /api/admin/maintenance/monthly`) closes a period (v1); re-send `make theslope-sender-event-monthly-billing-<env> bpid=<billingPeriodSummaryId>` | `NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL`, cc `NUXT_NOTIFICATIONS_ADMIN_EMAIL`; the period CSV attached (`…-v1.csv`) |
+| `BILLING_PERIOD_UPDATED` | a later version of a period (catch-up billing changed it) — subject `opdatering v<n>`, replaces the earlier mail | same, CSV `…-v<n>.csv` |
 
 ### Secrets (admin, wrangler)
 
@@ -120,13 +121,13 @@ The app's other runtime secrets (`NUXT_SESSION_PASSWORD`, `HEY_NABO_USERNAME`, `
 
 ### Billing archive (R2)
 
-The monthly billing job stores the period CSV in R2 under `billing/YYYY-MM/pbs-opgoerelse-YYYY-MM.csv` (month of the cutoff date; metadata `billingPeriod`, `filename`, `jobRunId`) and mails it to the accountant. A re-run overwrites the key (ADR-015). Locally the bucket is miniflare. Buckets, once per account:
+The monthly billing job stores the period CSV in R2 under `billing/YYYY-MM/pbs-opgoerelse-YYYY-MM-v<version>.csv` (month of the cutoff date; metadata `billingPeriod`, `version`, `filename`, `jobRunId`) and mails it to the accountant. A period's `version` starts at 1 and is bumped when catch-up billing changes its content; every version is its own object, so the bucket listing is the audit trail of what the accountant received. Every delivery is a row in `Delivery` (`subjectType BILLING_PERIOD`, `subjectId`, `version`, `kind ARCHIVE | EMAIL | SMS`, `reference` = R2 key or mail dedupeKey, `jobRunId`, `deliveredAt`). Every run walks every closed period and redoes the kind whose highest delivered version is behind the period's version (mail: v1 = `BILLING_PERIOD_CLOSED`, later = `BILLING_PERIOD_UPDATED`, subject `opdatering v<n>`). The response lists `periods[]` with `version`, `csvUploaded` and `emailSent` (ADR-015). Migration `0015` inserts an `EMAIL` v1 delivery for the periods that predate the mail, so the first run after it archives their CSVs; mail starts with the next closed period. Locally the bucket is miniflare. Buckets, once per account:
 
 ```bash
 npx wrangler r2 bucket create theslope-archive-dev     # local + dev (binding ARCHIVE)
 npx wrangler r2 bucket create theslope-archive-prod    # prod
 npx wrangler r2 bucket list
-npx wrangler r2 object get theslope-archive-prod/billing/2026-08/pbs-opgoerelse-2026-08.csv --file test-results/pbs-2026-08.csv   # fetch an archived period
+npx wrangler r2 object get theslope-archive-prod/billing/2026-08/pbs-opgoerelse-2026-08-v1.csv --file test-results/pbs-2026-08-v1.csv   # fetch an archived period version
 ```
 
 ### Deploy and verify
@@ -414,6 +415,25 @@ curl https://www.skraaningen.dk/api/public/health | jq '.version'
 ```
 
 ---
+
+## Schema Changes (Prisma → D1)
+
+The schema is `prisma/schema.prisma`; D1 applies the SQL files in `migrations/` once each (tracked in the database's `d1_migrations` table). Every file in `migrations/` comes from the Make targets.
+
+```bash
+# 1. Edit prisma/schema.prisma (the model is signed off in the feature document first)
+make d1-create-migration name=<change>   # prisma/migrations/<stamp>_<change>/migration.sql + migrations/NNNN_<change>.sql
+make d1-prisma                               # format, validate, Prisma client + prisma/generated/zod (committed)
+make d1-migrate-local                        # apply + seed the local D1 (miniflare), then nuxt dev + e2e
+make d1-migrate-dev                          # before make deploy-dev
+make d1-migrate-prod                         # before make deploy-prod
+```
+
+- The flattened file is named from the text after the last underscore of the migration directory: `name=delivery_and_versions` gives `0015_versions.sql`. A one-word name keeps both names equal.
+- A data line (backfill) is written into the Prisma source file `prisma/migrations/<stamp>_<change>/migration.sql`, convergent (`WHERE NOT EXISTS …`, `max(…)`), and the flattened copy is regenerated: `rm migrations/NNNN_<change>.sql && make d1-flatten-migrations`.
+- D1 stores `DateTime` as ISO-8601 text (`2026-06-16T22:00:00.000+00:00`); a date literal in SQL compares as text (`"cutoffDate" < '2026-09-17'`).
+- Prisma rebuilds a SQLite table for a column change (`CREATE TABLE "new_…"`, copy, drop, rename, inside `PRAGMA defer_foreign_keys`); D1 runs this pattern (migrations `0002`–`0011`, `0015`).
+- Reading a database for a check: `npx wrangler d1 execute theslope --local --command "SELECT …"` (`--remote --env dev|prod` for the deployed ones).
 
 ## Database Seeding
 
