@@ -48,7 +48,20 @@
       "Bash(npx wrangler queues subscription:*)",
       "Bash(wrangler queues subscription:*)",
       "Bash(npx wrangler email:*)",
-      "Bash(wrangler email:*)"
+      "Bash(wrangler email:*)",
+      "Bash(make d1-migrate:*)",
+      "Bash(make d1-copy:*)",
+      "Bash(make d1-seed:*)",
+      "Bash(make d1-time-travel-dev:*)",
+      "Bash(make d1-time-travel-prod:*)",
+      "Bash(npm run db:migrate:*)",
+      "Bash(npm run db:seed:*)",
+      "Bash(npx wrangler d1 migrations apply:*)",
+      "Bash(wrangler d1 migrations apply:*)",
+      "Bash(npx wrangler d1 time-travel restore:*)",
+      "Bash(wrangler d1 time-travel restore:*)",
+      "Bash(npx wrangler d1 export:*)",
+      "Bash(wrangler d1 export:*)"
     ],
     "ask": [
       "Bash(npx wrangler :* --remote :*)"

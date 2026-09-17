@@ -32,7 +32,8 @@ Make targets own the file layout; the user owns every database write.
 
 - A migration file applies once per database (`d1_migrations` table); the DDL is one-shot, the data lines are written convergent anyway.
 - `DateTime` is ISO-8601 text (`2026-06-16T22:00:00.000+00:00`); compare with a text literal.
-- Prisma rebuilds a SQLite table for a column change (`new_<Table>`, copy, drop, rename, `PRAGMA defer_foreign_keys`); D1 runs it.
+- Prisma emits a table rebuild (`new_<Table>`, copy, `DROP TABLE`, rename) for every **required** column. On D1 the `PRAGMA foreign_keys=OFF` around it is a no-op inside the migration transaction, so `DROP TABLE` fires every child's `ON DELETE` action — `0015` as generated nulled every parent link on local and dev (2026-09-17). Rewrite the block in the Prisma source to `ALTER TABLE … ADD COLUMN … NOT NULL DEFAULT <constant>`; `tests/component/architecture/migrations.unit.spec.ts` rejects a `DROP TABLE` in any migration after `0014`.
+- `make d1-migrate-<env>` compares the child-without-parent counts before and after the apply and fails on a change; `make d1-verify-<env>` prints them. A migration is done when that check is clean on local (a copy of dev: `make d1-copy-dev-to-local`), then on dev, then on prod.
 - Enum values are text in JSON or enum columns; adding a value is a schema + zod change with no SQL.
 - ADR-014 limits: 100 bound parameters per statement, 1 000 queries per invocation.
 
@@ -40,7 +41,7 @@ Make targets own the file layout; the user owns every database write.
 
 | I run | The user runs |
 |---|---|
-| `npx prisma format`, `npx prisma validate`, `make d1-prisma`, `make d1-flatten-migrations`, `wrangler d1 execute … --command "SELECT …"` (a read) | `make d1-create-migration`, `make d1-migrate-local|dev|prod`, every `wrangler d1` write, `wrangler d1 create|delete` |
+| `npx prisma format`, `npx prisma validate`, `make d1-prisma`, `make d1-flatten-migrations`, `make -n <target>` dry runs, `make d1-verify-<env>` and `wrangler d1 execute … --command "SELECT …"` (reads) | `make d1-create-migration`, `make d1-migrate-*`, `make d1-copy-dev-to-local`, `make d1-time-travel-dev|prod`, `make d1-seed-*`, `npm run db:*`, `wrangler d1 migrations apply`, `wrangler d1 time-travel restore`, `wrangler d1 export`, every `wrangler d1 execute` that writes, `wrangler d1 create|delete` — denied to me in `.claude/settings.json`; a guard is verified with `make -n`, never by running the target |
 
 ## Checklist before handing a migration over
 

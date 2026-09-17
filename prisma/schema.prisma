@@ -128,11 +128,23 @@ model User {
   passwordHash         String
   systemRoles          String         @default("[]") // JSON stringified array of SystemRole
   notificationChannels String         @default("[\"EMAIL\"]") // JSON stringified array of NotificationChannel
+  appearance           String         @default("{\"palette\":\"default\",\"textScale\":\"normal\"}") // JSON typed by AppearanceSchema (useUserPreferenceValidation)
   Inhabitant           Inhabitant?
   bookedOrders         Order[]        @relation("BookedByUser")
   orderHistory         OrderHistory[]
+  settingsUpdated      Setting[]      @relation("SettingUpdatedBy")
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
+}
+
+// Community-wide editable values, one row per key. The key registry, value schemas and defaults live in code
+// (useSettingValidation); a key without a row reads its registry default.
+model Setting {
+  key             String   @id
+  value           String // JSON, typed per key
+  updatedAt       DateTime @updatedAt
+  updatedByUserId Int?
+  updatedBy       User?    @relation("SettingUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
 }
 
 // Represents a member of a household, that can participate in the dinners and cooking

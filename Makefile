@@ -100,22 +100,44 @@ d1-flatten-migrations:
 	@echo "✅ Migrations flattened!"
 
 # --- Apply migrations (+ seeds) per environment
-.PHONY: d1-migrate-local d1-migrate-dev d1-migrate-prod d1-migrate-all
+.PHONY: d1-migrate-local d1-migrate-dev d1-migrate-prod d1-migrate-all d1-verify-local d1-verify-dev d1-verify-prod
 
-d1-migrate-local: ## Migrate + seed local database
+# --- Parent-link check: the counts of child rows without a parent on every ON DELETE SET NULL link. A migration is done when
+#     the counts are the same before and after the apply (children without a parent are legitimate: inhabitants without a login,
+#     orders of deleted users) — a rebuilt parent table shows up as every count jumping to the row count (2026-09-17)
+# $(1)=database, $(2)=location flags (--local | --remote --env dev|prod) → one line of counts
+define d1_link_counts
+	npx wrangler d1 execute $(1) $(2) --json --command "SELECT (SELECT COUNT(*) FROM Inhabitant WHERE userId IS NULL) AS inhabitantsWithoutUser, (SELECT COUNT(*) FROM \"Order\" WHERE bookedByUserId IS NULL) AS ordersWithoutUser, (SELECT COUNT(*) FROM OrderHistory WHERE performedByUserId IS NULL) AS historyWithoutUser, (SELECT COUNT(*) FROM Invoice WHERE billingPeriodSummaryId IS NULL) AS invoicesWithoutPeriod" | jq -c '.[0].results[0]'
+endef
+
+# $(1)=database, $(2)=location flags, $(3)=npm migrate script, $(4)=npm seed script — apply + seed, fail when a parent link count changed
+define d1_migrate
+	@before=$$($(call d1_link_counts,$(1),$(2))) && echo "links without parent before: $$before" && \
+	npm run $(3) && npm run $(4) && \
+	after=$$($(call d1_link_counts,$(1),$(2))) && echo "links without parent after:  $$after" && \
+	if [ "$$before" != "$$after" ]; then echo "❌ the migration changed parent links — see docs/ops-runbook.md Schema Changes"; exit 1; fi
+endef
+
+d1-verify-local: ## Child rows without a parent on the SET NULL links (local)
+	@$(call d1_link_counts,theslope,--local)
+
+d1-verify-dev: ## Child rows without a parent on the SET NULL links (dev)
+	@$(call d1_link_counts,theslope,--remote --env dev)
+
+d1-verify-prod: ## Child rows without a parent on the SET NULL links (prod)
+	@$(call d1_link_counts,theslope-prod,--remote --env prod)
+
+d1-migrate-local: ## Migrate + seed the local database; fails when a parent link count changed
 	@echo "🏗️ Applying migrations to local database"
-	@npm run db:migrate:local
-	@npm run db:seed:all:local
+	$(call d1_migrate,theslope,--local,db:migrate:local,db:seed:all:local)
 
-d1-migrate-dev: ## Migrate + seed dev database
+d1-migrate-dev: ## Migrate + seed the dev database; fails when a parent link count changed
 	@echo "🏗️ Applying migrations to dev database"
-	@npm run db:migrate:dev
-	@npm run db:seed:all:dev
+	$(call d1_migrate,theslope,--remote --env dev,db:migrate:dev,db:seed:all:dev)
 
-d1-migrate-prod: ## Migrate + seed production database
+d1-migrate-prod: ## Migrate + seed the production database; fails when a parent link count changed
 	@echo "🏗️ Applying migrations to production database"
-	@npm run db:migrate:prod
-	@npm run db:seed:all:prod
+	$(call d1_migrate,theslope-prod,--remote --env prod,db:migrate:prod,db:seed:all:prod)
 
 d1-migrate-all: d1-migrate-local d1-migrate-dev d1-migrate-prod
 	@echo "✅ Applied migrations to all databases"
@@ -192,6 +214,53 @@ d1-nuke-allergytypes: ## Delete test allergy types (local) - Peanuts-* pattern
 
 d1-nuke-all: d1-nuke-seasons d1-nuke-households d1-nuke-users d1-nuke-allergytypes ## Nuke all test data from local database
 	@echo "✅ Nuked all test data!"
+
+# --- Time Travel (remote D1, last 30 days) and the dev → local copy. Local has no Time Travel: it is replaced by a copy of dev
+.PHONY: d1-time-travel-info-dev d1-time-travel-info-prod d1-time-travel-dev d1-time-travel-prod d1-copy-dev-to-local
+
+# $(1)=database, $(2)=env — the last migration the database has applied (d1_migrations)
+define d1_last_migration
+	@npx wrangler d1 execute $(1) --remote --env $(2) --json --command "SELECT name, applied_at FROM d1_migrations ORDER BY id DESC LIMIT 1" \
+		| jq -r '.[0].results[0] | "last migration applied: \(.name) at \(.applied_at) UTC"'
+endef
+
+# $(1)=database, $(2)=env; ts=<RFC3339 or unix seconds> optional — the bookmark for that point (default: now) and the migration state of the database
+define d1_time_travel_info
+	@npx wrangler d1 time-travel info $(1) --env $(2) $(if $(ts),--timestamp=$(ts),)
+	$(call d1_last_migration,$(1),$(2))
+endef
+
+d1-time-travel-info-dev: ## Bookmark of the dev D1 (ts=<RFC3339> for a past point) + its last applied migration
+	$(call d1_time_travel_info,theslope,dev)
+
+d1-time-travel-info-prod: ## Bookmark of the prod D1 (ts=<RFC3339> for a past point) + its last applied migration
+	$(call d1_time_travel_info,theslope-prod,prod)
+
+# $(1)=database, $(2)=env; ts=<RFC3339 or unix seconds, within the last 30 days>. Prints the last migration before and after the restore
+define d1_time_travel
+	@test -n "$(ts)" || { echo "usage: make $@ ts=2026-09-17T14:05:00Z"; exit 1; }
+	@echo "before restore:"
+	$(call d1_last_migration,$(1),$(2))
+	@npx wrangler d1 time-travel restore $(1) --env $(2) --timestamp=$(ts)
+	@echo "after restore:"
+	$(call d1_last_migration,$(1),$(2))
+endef
+
+d1-time-travel-dev: ## Restore the dev D1 to ts=<RFC3339>; prints the last applied migration before and after (d1_migrations travels with the data)
+	$(call d1_time_travel,theslope,dev)
+
+d1-time-travel-prod: ## Restore the prod D1 to ts=<RFC3339>; prints the last applied migration before and after
+	$(call d1_time_travel,theslope-prod,prod)
+
+# Stop nuxt dev / run-sender-local first: they hold the local D1 open. The dump is loaded with sqlite3 straight into the
+# miniflare database file (wrangler d1 execute --file fails on a dump this size); the export stays in .theslope/d1/ (gitignored)
+d1-copy-dev-to-local: ## Replace the local D1 with a copy of dev (schema, data, applied migrations) — stop the local app first
+	@mkdir -p .theslope/d1 && \
+	npx wrangler d1 export theslope --remote --env dev --output .theslope/d1/dev.sql && \
+	rm -rf .wrangler/state/v3/d1 && \
+	npx wrangler d1 execute theslope --local --command "SELECT 1" > /dev/null && \
+	sqlite3 "$$(ls .wrangler/state/v3/d1/miniflare-D1DatabaseObject/[0-9a-f]*.sqlite)" < .theslope/d1/dev.sql && \
+	npx wrangler d1 execute theslope --local --command "SELECT name AS lastMigrationApplied, applied_at FROM d1_migrations ORDER BY id DESC LIMIT 1"
 
 # ============================================================================
 # TESTING
