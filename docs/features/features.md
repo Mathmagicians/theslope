@@ -2,7 +2,7 @@
 
 TheSlope is a community dining management platform for Skråningen co-housing. It handles meal booking, cooking team coordination, billing, and integration with external systems (Heynabo, PBS).
 
-> **User Guides:** [User Guide](user-guide.md) | [Chef Guide](chef-guide.md) | [Admin Guide](admin-guide.md)
+> **User Guides:** [User Guide](../user-guide.md) | [Chef Guide](../chef-guide.md) | [Admin Guide](../admin-guide.md)
 
 ---
 
@@ -47,27 +47,27 @@ User (Bruger)
 
 | Feature | Description | Guide |
 |---------|-------------|-------|
-| **Season Management** | Create seasons, set cooking days, holidays, ticket prices | [Admin Guide](admin-guide.md#season-management) |
-| **Season Activation** | Activate seasons, auto-scaffold pre-bookings | [Admin Guide](admin-guide.md#activate-a-season) |
-| **Cooking Teams** | Create teams, assign members, set affinities | [Admin Guide](admin-guide.md#cooking-teams) |
-| **Weekly Preferences** | Set DINEIN/TAKEAWAY/NONE per weekday per person | [User Guide](user-guide.md#sådan-sætter-du-ugentlige-præferencer) |
-| **Preference Auto-Scaffolding** | Bookings auto-update when preferences change (ADR-015) | [User Guide](user-guide.md#sådan-sætter-du-ugentlige-præferencer) |
-| **Meal Booking** | Book/cancel dinners, day/week/month views (ADR-016) | [User Guide](user-guide.md#sådan-tilmelder-du-dig-fællesspisning) |
-| **Grid Booking** | Week/month grid with draft state, power mode | [User Guide](user-guide.md#sådan-tilmelder-du-dig-fællesspisning) |
-| **Guest Tickets** | Add guest tickets with allergy tracking | [User Guide](user-guide.md#sådan-inviterer-du-en-gæst) |
-| **Allergy Management** | Track allergies per inhabitant | [User Guide](user-guide.md#sådan-tilføjer-du-allergier) |
-| **Chef Dashboard** | View team, menu planning, allergen tracking | [Chef Guide](chef-guide.md) |
-| **Heynabo Event Sync** | Announce menus to Heynabo calendar | [Chef Guide](chef-guide.md#annoncér-menu) |
-| **Household Management** | View/edit households and inhabitants | [Admin Guide](admin-guide.md#husstande) |
-| **Multi-Household per Address** | Two families can coexist at one address during move (Heynabo import preserves both) | [Admin Guide](admin-guide.md#husstande) |
-| **Admin Household Edit** | Inline row-expand: move inhabitants between same-address households, delete household (CASCADE) | [Admin Guide](admin-guide.md#sådan-flytter-du-en-beboer) |
-| **Move-Out Date** | Members set own `moveOutDate`; bookings after date auto-pruned; pencil-gate UX | [User Guide](user-guide.md#sådan-sætter-du-fraflytningsdato) |
+| **Season Management** | Create seasons, set cooking days, holidays, ticket prices | [Admin Guide](../admin-guide.md#season-management) |
+| **Season Activation** | Activate seasons, auto-scaffold pre-bookings | [Admin Guide](../admin-guide.md#activate-a-season) |
+| **Cooking Teams** | Create teams, assign members, set affinities | [Admin Guide](../admin-guide.md#cooking-teams) |
+| **Weekly Preferences** | Set DINEIN/TAKEAWAY/NONE per weekday per person | [User Guide](../user-guide.md#sådan-sætter-du-ugentlige-præferencer) |
+| **Preference Auto-Scaffolding** | Bookings auto-update when preferences change (ADR-015) | [User Guide](../user-guide.md#sådan-sætter-du-ugentlige-præferencer) |
+| **Meal Booking** | Book/cancel dinners, day/week/month views (ADR-016) | [User Guide](../user-guide.md#sådan-tilmelder-du-dig-fællesspisning) |
+| **Grid Booking** | Week/month grid with draft state, power mode | [User Guide](../user-guide.md#sådan-tilmelder-du-dig-fællesspisning) |
+| **Guest Tickets** | Add guest tickets with allergy tracking | [User Guide](../user-guide.md#sådan-inviterer-du-en-gæst) |
+| **Allergy Management** | Track allergies per inhabitant | [User Guide](../user-guide.md#sådan-tilføjer-du-allergier) |
+| **Chef Dashboard** | View team, menu planning, allergen tracking | [Chef Guide](../chef-guide.md) |
+| **Heynabo Event Sync** | Announce menus to Heynabo calendar | [Chef Guide](../chef-guide.md#annoncér-menu) |
+| **Household Management** | View/edit households and inhabitants | [Admin Guide](../admin-guide.md#husstande) |
+| **Multi-Household per Address** | Two families can coexist at one address during move (Heynabo import preserves both) | [Admin Guide](../admin-guide.md#husstande) |
+| **Admin Household Edit** | Inline row-expand: move inhabitants between same-address households, delete household (CASCADE) | [Admin Guide](../admin-guide.md#sådan-flytter-du-en-beboer) |
+| **Move-Out Date** | Members set own `moveOutDate`; bookings after date auto-pruned; pencil-gate UX | [User Guide](../user-guide.md#sådan-sætter-du-fraflytningsdato) |
 | **Unified Booking Navigation** | Day/week/month arrows use one algorithm (period boundary → adjacent dinner) | — |
-| **Season Import** | Import calendar and teams from CSV | [Admin Guide](admin-guide.md#data-importexport) |
-| **Billing Import** | Import orders from legacy CSV format | [Admin Guide](admin-guide.md#billing--economy) |
-| **Daily Maintenance** | Auto-consume dinners, close orders, create transactions | [Admin Guide](admin-guide.md#system-maintenance) |
-| **Monthly Billing** | Generate invoices, magic link sharing, CSV export | [Admin Guide](admin-guide.md#økonomi) |
-| **Job History Panel** | View/trigger system jobs, track run history | [Admin Guide](admin-guide.md#systemvedligeholdelse) |
+| **Season Import** | Import calendar and teams from CSV | [Admin Guide](../admin-guide.md#data-importexport) |
+| **Billing Import** | Import orders from legacy CSV format | [Admin Guide](../admin-guide.md#billing--economy) |
+| **Daily Maintenance** | Auto-consume dinners, close orders, create transactions | [Admin Guide](../admin-guide.md#system-maintenance) |
+| **Monthly Billing** | Generate invoices, magic link sharing, CSV export | [Admin Guide](../admin-guide.md#økonomi) |
+| **Job History Panel** | View/trigger system jobs, track run history | [Admin Guide](../admin-guide.md#systemvedligeholdelse) |
 | **Authorization** | Role-based access control (Admin, AllergyManager) | — |
 
 ### Partially Implemented

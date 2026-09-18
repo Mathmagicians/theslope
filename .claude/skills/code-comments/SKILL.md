@@ -24,6 +24,9 @@ Write a comment only when it adds information the code cannot convey itself.
 - Labels code hack/workaround/temporary without a concrete, checkable
   removal condition.
 - Explains what is obvious to anyone fluent in the language/framework.
+- Carries a date, a sign-off or a decision ("the user decided", "awaiting
+  the user's decision", "measured on 2026-09-18"), in source and in the
+  headers a generator writes. Decisions and dates belong in `docs/features`.
 
 ## Style
 

@@ -1,6 +1,6 @@
 # Bug Fix: Admin UX — allergy catalog, alerts, poster, planning, preferences, palettes
 
-**Status:** In progress | **Date:** 2026-09-01 | **Updated:** 2026-09-18 | **Branch:** `bugfix/admin-ux` | **PR:** #166
+**Status:** Shipped in #166 | **Date:** 2026-09-01 | **Updated:** 2026-09-18 | **Branch:** `bugfix/admin-ux` | **PR:** #166
 The allergy catalog fixes D1, D2 and A1 shipped in #165. Follow-up defects found on this branch: `bug-fix-dinner-page-and-dates.md`.
 
 ## Fix inventory
@@ -59,6 +59,7 @@ The allergy catalog fixes D1, D2 and A1 shipped in #165. Follow-up defects found
 - **Mode trays are the page colour** (2026-09-18). The tray behind the dinner-mode and weekday buttons (`FIELD_GROUP_CLASSES` in
   `DinnerModeSelector.vue`, `WEEKDAY.fieldGroupClasses`) is `bg-default` with its border, so its buttons sit on the ground the contrast
   test measures. A session appearance is read field by field through `readAppearance`; a palette that is not offered reads as the default.
+  Mode badges and buttons are square segments on a phone and rounded from md (`MODE_SEGMENT_CLASSES`), the power row's "?" included.
 - **Palette badges** (2026-09-18). "🇪🇺 EN 301 549 · Kontrast AA ✓" or "… Kontrast AAA ✓" from the `PALETTES` level: the badge claims
   contrast (WCAG 1.4.3, 1.4.6, 1.4.11), never full conformance. "👁 Nedsat farvesyn · Okabe–Ito ✓" from `PALETTES.colourSafe` (EN 301 549
   clause 4.2.3, WCAG 1.4.1 "Anvendelse af farve"). "Farvesikker" describes a person who passes a colour-vision test and is not used.
@@ -112,8 +113,6 @@ The allergy catalog fixes D1, D2 and A1 shipped in #165. Follow-up defects found
   `testHelpers.freshMemberContext`.
 - **`ChefMenuCard.nuxt.spec.ts`** mocks stores and child components (`docs/testing.md` Rule 6) and still describes the actions trigger as
   a "quiet overflow trigger" / "…".
-- **Admin pages are readable by any logged-in user** (`GET /api/admin/*` → `isAuthenticated` in `usePermissions.ts`); the poster's QR flow
-  relies on it for members.
 - **`HouseholdAllergies.vue`** has no component or e2e spec and keeps its own table layout.
 - **Mobile Playwright projects** are commented out in `playwright.config.ts`; phone widths are covered by `MobileViewport.e2e.spec.ts`
   with `test.use({viewport})`.

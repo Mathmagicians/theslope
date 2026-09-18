@@ -43,6 +43,9 @@ type ButtonVariant = NonNullable<ButtonProps['variant']>
 
 // Local styling constant (field group only - badge size from design system)
 const FIELD_GROUP_CLASSES = 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-default gap-0 md:gap-1'
+// A mode badge or button is a square segment on a phone. The view badge sits in its own wrapper, where the
+// field group's corner rules never reach it, so both faces carry the corners themselves
+const MODE_SEGMENT_CLASSES = 'rounded-none md:rounded-md'
 
 interface Props {
   modelValue?: WeekDay | DinnerMode // Optional - defaults to NONE when no order exists
@@ -268,6 +271,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
         :color="getBadgeColor()"
         :variant="getBadgeVariant()"
         :size="responsiveSize"
+        :class="MODE_SEGMENT_CLASSES"
         :name="name"
         :data-testid="name"
       >
@@ -308,7 +312,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
           :disabled="isModeDisabled(mode)"
           :size="responsiveSize"
           :data-testid="`${name}-${mode}`"
-          :class="['rounded-none md:rounded-md', { 'animate-pulse': shouldPulse(mode) }]"
+          :class="[MODE_SEGMENT_CLASSES, { 'animate-pulse': shouldPulse(mode) }]"
           :ui="{ leadingIcon: iconSizeClass }"
           @click="updateMode(mode)"
         />

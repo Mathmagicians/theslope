@@ -14,7 +14,7 @@ at a time behind an explicit approval. The plan document is the deliverable; the
 - A shipped doc moves to `docs/features/archived/`, trimmed to pointers, and a proposal becomes a feature there:
   `feature-proposal-<name>.md` → `archived/feature-<name>.md`. What did not ship moves to its own proposal or the branch's follow-up doc first.
 - Header: **Status** | **Date** | **Updated** | **Branch**. A **Fix inventory** table at the top; one section per fix below in this order:
-  **Problem → Root cause → Solution → Mockup → TDD → Affected areas** (see `bug-fix-admin-ux.md` for the shape).
+  **Problem → Root cause → Solution → Mockup → TDD → Affected areas** (see `archived/bug-fix-admin-ux.md` for the shape).
 - A dated **Decisions** section records what the user decided and why; open decisions are marked **OPEN** with the options compared,
   never silently picked.
 - References to an accepted ADR are `ADR-NNN [Title]`. A new ADR is proposed in the doc's ADR Notes by its semantic name only; it gets its number
@@ -87,6 +87,10 @@ Agent: tdd-pair-programmer | nuxt-typescript-developer | test-automation-enginee
 User actions: <npm i …, migration, none>
 ```
 Wait for approval or fine-tuning. Launch one agent per package with the brief, the mockup and `docs/testing.md` rules.
+
+- The brief covers the ask and nothing wider: the smallest change that does what the user asked. A wider idea is one optional
+  line after the brief, never part of its scope or its decisions. "Measure the contrast correctly" is the pairs the components
+  paint, not their hover states, checkbox parts and a button sweep; "change the default palette" is a selector, not a rebase.
 
 ## Per-package gate
 

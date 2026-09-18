@@ -371,6 +371,10 @@ the sites to fix.
 
 Add one whenever a fix to a Nuxt UI component family becomes a token: add the token, sweep all instances, add the rule.
 
+A property check runs one case per dimension — a rule, a palette and mode — that collects every failing item and prints
+them in its message (`expect(misses).toEqual([])`). One case per item turns a 50-case suite into thousands and says the
+same thing.
+
 ### `designSystemContrast.unit.spec.ts` — the palette's contrast, not its class strings
 
 The one architecture test that reads *values* instead of sources, and it is still a property, not a token value: it

@@ -2,7 +2,7 @@
 
 Velkommen til TheSlope - Skråningens system til fællesspisning! Denne guide hjælper dig med de mest almindelige opgaver.
 
-> **Se også:** [Chefkokguide](chef-guide.md) | [Administratorguide](admin-guide.md) | [Systemoversigt](features.md)
+> **Se også:** [Chefkokguide](chef-guide.md) | [Administratorguide](admin-guide.md) | [Systemoversigt](features/features.md)
 
 > **Tip:** Klik på hjælp-ikonet (?) i øverste højre hjørne for kontekstafhængig hjælp på hver side.
 
