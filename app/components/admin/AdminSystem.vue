@@ -35,7 +35,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, ALERTS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, ALERTS, COMPONENTS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 // Maintenance helpers
 const {
@@ -441,6 +441,7 @@ const jobDefinitions = computed(() => {
         :empty="jobHistoryEmpty"
         caption="Seneste jobkørsler"
         class="w-full"
+        :ui="COMPONENTS.table.ui"
       >
         <!-- Custom status cell with color and icon -->
         <template #status-cell="{ row }">

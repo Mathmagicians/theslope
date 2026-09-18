@@ -582,6 +582,9 @@ const CHOICE_LABEL_UI = {
     description: 'text-sm'
 } as const
 
+/** Table cells break a long value instead of widening the table (overflow-wrap: anywhere) */
+const TABLE_CELL_WRAP = 'whitespace-normal wrap-anywhere'
+
 export const COMPONENTS = {
     // Kitchen panels (functional data) - Vibrant Pantone colors
     kitchenStatsBar: `${BG.mocha[50]} ${TEXT.gray[900]} px-0 py-4 md:p-6`,
@@ -650,13 +653,21 @@ export const COMPONENTS = {
         clickableCell: 'cursor-pointer',
         selectedCell: 'bg-secondary-50 dark:bg-secondary-950',
         /**
-         * UTable :ui prop for consistent cell styling
-         * Responsive padding: tighter on mobile (py-1), comfortable on desktop (py-2).
-         * Nuxt UI draws the row a table expands with this same cell class, `whitespace-nowrap`
-         * included, so a panel docked there never breaks a line and widens the table past a
-         * phone; the cell under an expanded row wraps like the page does.
+         * THE table cell styling (ADR-018): every UTable binds one of these three
+         * (`designSystemUsage.unit.spec.ts` rejects a table without).
+         * Cells wrap on every viewport - Nuxt UI's theme cell is `whitespace-nowrap`, so one long value (an e-mail,
+         * a name without spaces) or the panel docked under an expanded row would widen the table past a phone.
+         * `wrap-anywhere` lets such a value break, so the column shrinks to the screen (MobileViewport.e2e).
          */
-        ui: {td: 'py-1 md:py-2 [[data-expanded=true]+tr>&]:whitespace-normal'}
+        ui: {th: 'px-2 md:px-4', td: `px-2 py-1 md:px-4 md:py-2 ${TABLE_CELL_WRAP}`},
+        /** Compact tables with many narrow columns (booking form, household preferences, household allergies) */
+        denseUi: {th: 'px-1 py-1 md:px-4 md:py-3', td: `px-1 md:px-4 ${TABLE_CELL_WRAP}`},
+        /** The booking grid: centred day cells, a sticky footer */
+        gridUi: {
+            th: 'px-1 py-1 md:px-2 md:py-2 text-center',
+            td: `px-1 py-1 md:px-2 text-center ${TABLE_CELL_WRAP}`,
+            tfoot: 'sticky bottom-0 bg-default px-1 py-1 md:px-2 text-center text-xs'
+        }
     },
 
     // Card action buttons - positioned in card corners or footers
@@ -1590,6 +1601,15 @@ export type CalendarPickerSelection = keyof typeof CALENDAR.picker
  * (CALENDAR.holiday, PLANNING_CALENDAR.day.generated, CHEF_CALENDAR.day.next, …).
  * Exposed from the composable because the size depends on `isMd`.
  */
+/**
+ * UTable column visibility by breakpoint: the columns listed are hidden on a phone, every column shows from md.
+ * The content of a hidden column lives in the row's expanded panel.
+ * @example <UTable :column-visibility="columnVisibility(['id', 'phone'])" />
+ */
+export const createColumnVisibility = (isMd: Ref<boolean>) =>
+    (hiddenOnPhone: readonly string[]): Record<string, boolean> =>
+        isMd.value ? {} : Object.fromEntries(hiddenOnPhone.map(column => [column, false]))
+
 export const createDayCircleClasses = (isMd: Ref<boolean>) =>
     (...variants: (string | false | null | undefined)[]): string[] =>
         [createResponsiveSizes(isMd).calendarCircle, CALENDAR.day.shape, ...variants.filter((variant): variant is string => Boolean(variant))]
@@ -1832,6 +1852,7 @@ export const useTheSlopeDesignSystem = () => {
     // Inject responsive breakpoint from layout
     const isMd = inject<Ref<boolean>>('isMd', ref(false))
     const dayCircleClasses = createDayCircleClasses(isMd)
+    const columnVisibility = createColumnVisibility(isMd)
 
     return {
         // For NuxtUI components
@@ -1842,6 +1863,7 @@ export const useTheSlopeDesignSystem = () => {
         CALENDAR,
         calendarPickerProps,
         dayCircleClasses,
+        columnVisibility,
         CHEF_CALENDAR,
         DINNER_CALENDAR,
         PLANNING_CALENDAR,

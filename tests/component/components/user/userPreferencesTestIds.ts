@@ -15,5 +15,8 @@ export const PREF_TEST_IDS = {
     textScale: (textScale: string) => `pref-text-scale-${textScale}`
 } as const
 
-/** The badge the accessibility-verified preset carries; Standard carries none */
-export const PALETTE_BADGE_TEXT = 'EN 301 549 · WCAG 2.1 AA'
+/** The contrast badge every palette with a verified level carries - the AA and the AAA one alike */
+export const PALETTE_BADGE_TEXT = 'EN 301 549 · Kontrast AA'
+
+/** The badge the colour-safe palette carries beside its contrast badge */
+export const COLOUR_SAFE_BADGE_TEXT = 'Nedsat farvesyn · Okabe–Ito'

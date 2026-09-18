@@ -87,6 +87,7 @@ export const separationUnder = (vision: VisionType, a: Rgb, b: Rgb): number =>
  * bar off these values rather than naming one.
  */
 export const CUD_ANCHORS = {
+    black: '#000000',
     orange: '#E69F00',
     skyBlue: '#56B4E9',
     bluishGreen: '#009E73',

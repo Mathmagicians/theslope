@@ -17,7 +17,7 @@ import {mountWithTooltipProvider, findByTestId} from '~~/tests/component/testHel
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import type {UserDetail} from '~/composables/useCoreValidation'
 import {PALETTES} from '~/composables/useUserPreferenceValidation'
-import {PREF_TEST_IDS, PALETTE_BADGE_TEXT} from './userPreferencesTestIds'
+import {PREF_TEST_IDS, PALETTE_BADGE_TEXT, COLOUR_SAFE_BADGE_TEXT} from './userPreferencesTestIds'
 
 // The test runtime has no session cookie and no /api/_auth endpoint, so the session nuxt-auth-utils
 // would hydrate is the one thing faked (households.nuxt.spec.ts precedent) - the auth store is real.
@@ -104,13 +104,13 @@ describe.each([
     it('GIVEN saved preferences WHEN the card renders THEN the view face shows the channels and the appearance', async () => {
         const wrapper = await mountCard(userWith({
             notificationChannels: ['EMAIL'],
-            appearance: {palette: 'tydelig', textScale: 'large'}
+            appearance: {palette: 'high-contrast', textScale: 'large'}
         }), isMd)
 
         expect(findByTestId(wrapper, PREF_TEST_IDS.card).exists()).toBe(true)
         expect(wrapper.text()).toContain('E-mail')
         expect(wrapper.text()).toContain('Farvevalg')
-        expect(wrapper.text()).toContain('Tydelig')
+        expect(wrapper.text()).toContain('Høj kontrast')
         expect(wrapper.text()).toContain('Stor')
         expect(findByTestId(wrapper, PREF_TEST_IDS.edit).exists()).toBe(true)
         expect(findByTestId(wrapper, PREF_TEST_IDS.save).exists()).toBe(false)
@@ -131,7 +131,7 @@ describe.each([
         const wrapper = await mountCard(stale as UserDetail, isMd)
 
         expect(wrapper.text()).toContain('E-mail')
-        expect(wrapper.text()).toContain('Farveglad')
+        expect(wrapper.text()).toContain('Glade farver')
         expect(wrapper.text()).not.toContain('Ingen notifikationer')
     })
 
@@ -175,16 +175,36 @@ describe.each([
         expect(wrapper.text().includes('kræver telefonnummer')).toBe(disabled)
     })
 
-    it('GIVEN the edit face THEN the accessibility badge sits on the verified palettes only', async () => {
+    it('GIVEN the edit face THEN the palettes are offered as Glade farver, Høj kontrast, Til farveblinde', async () => {
         const wrapper = await mountCard(userWith({}), isMd)
 
         await click(wrapper, PREF_TEST_IDS.edit)
 
-        // The registry decides which option earns the badge, so a new preset needs no edit here
-        const badged = Object.entries(PALETTES).map(([palette, {level}]) =>
-            [palette, findByTestId(wrapper, PREF_TEST_IDS.palette(palette)).text().includes(PALETTE_BADGE_TEXT), level !== null])
-        expect(badged.filter(([, shown, verified]) => shown !== verified)).toEqual([])
-        expect(findByTestId(wrapper, PREF_TEST_IDS.palette('default')).text()).toContain('Farveglad')
+        const offered = Object.keys(PALETTES).map(palette => findByTestId(wrapper, PREF_TEST_IDS.palette(palette)).text())
+        expect(offered.map((text, index) => text.startsWith(['Glade farver', 'Høj kontrast', 'Til farveblinde'][index]!)))
+            .toEqual([true, true, true])
+    })
+
+    it('GIVEN the edit face THEN each badge sits on the palettes the registry verifies for it', async () => {
+        const wrapper = await mountCard(userWith({}), isMd)
+
+        await click(wrapper, PREF_TEST_IDS.edit)
+
+        // The registry decides which option earns which badge, so a new preset needs no edit here
+        const badged = Object.entries(PALETTES).map(([palette, {level, colourSafe}]) => {
+            const text = findByTestId(wrapper, PREF_TEST_IDS.palette(palette)).text()
+            return {palette, contrast: text.includes(PALETTE_BADGE_TEXT), colourSafe: text.includes(COLOUR_SAFE_BADGE_TEXT),
+                verified: level !== null, safe: colourSafe}
+        })
+        expect(badged.filter(({contrast, verified, colourSafe, safe}) => contrast !== verified || colourSafe !== safe)).toEqual([])
+    })
+
+    it('GIVEN a member on Til farveblinde THEN the view face shows both badges', async () => {
+        const wrapper = await mountCard(userWith({appearance: {palette: 'colorblind', textScale: 'normal'}}), isMd)
+
+        expect(wrapper.text()).toContain('Til farveblinde')
+        expect(wrapper.text()).toContain(PALETTE_BADGE_TEXT)
+        expect(wrapper.text()).toContain(COLOUR_SAFE_BADGE_TEXT)
     })
 
     it('GIVEN a changed draft WHEN Annuller is clicked THEN the draft is discarded', async () => {
@@ -195,7 +215,7 @@ describe.each([
 
         await click(wrapper, PREF_TEST_IDS.edit)
         await click(wrapper, PREF_TEST_IDS.channel('EMAIL'))
-        await selectRadio(wrapper, 'tydelig')
+        await selectRadio(wrapper, 'high-contrast')
         await click(wrapper, PREF_TEST_IDS.cancel)
         await click(wrapper, PREF_TEST_IDS.edit)
 
@@ -212,13 +232,13 @@ describe.each([
 
         await click(wrapper, PREF_TEST_IDS.edit)
         await click(wrapper, PREF_TEST_IDS.channel('SMS'))
-        await selectRadio(wrapper, 'tydelig')
+        await selectRadio(wrapper, 'high-contrast')
         await selectRadio(wrapper, 'large')
         await click(wrapper, PREF_TEST_IDS.save)
 
         expect(savedBodies).toEqual([{
             notificationChannels: ['EMAIL', 'SMS'],
-            appearance: {palette: 'tydelig', textScale: 'large'}
+            appearance: {palette: 'high-contrast', textScale: 'large'}
         }])
         expect(session.fetch).toHaveBeenCalled()
         expect(findByTestId(wrapper, PREF_TEST_IDS.edit).exists()).toBe(true)

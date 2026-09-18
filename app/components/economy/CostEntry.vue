@@ -33,7 +33,7 @@
  *     :items-accessor="e => e.groups"
  * >
  *   <template #default="{ items }">
- *     <UTable :data="items"/>
+ *     <UTable :data="items" :ui="COMPONENTS.table.ui"/>
  *   </template>
  * </CostEntry>
  */

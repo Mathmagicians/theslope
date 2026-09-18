@@ -16,7 +16,6 @@ proposals. The last four came up while building the notification pipe (`archived
 | Composables after an await | the plan store injects outside setup on every claim and resign | proposed |
 | Catch-up amounts | invoice amounts and period totals follow the transactions a catch-up run links | proposed |
 | Job schedule labels | `/admin/system` labels the monthly billing job "D. 17." and it runs on the 18th | proposed |
-| Mobile overflow left by the alert token | tables and a settings-tree URL wider than a phone; layouts inside alert descriptions | findings, measured 2026-09-16 |
 | Configuration duplication | values stated in several config files | findings, report only |
 
 ## Stored dinner dates
@@ -127,18 +126,6 @@ Månedlig fakturering    D. 18. hver måned kl. 05:00 (sommertid) / 04:00 (vinte
 **TDD.** Unit: every `systemJobs` cron is a key of `scheduledTasks` and appears in each `wrangler.toml` `crons` list (parsed with wrangler's own config reader); `useMaintenance` labels equal the module's labels.
 
 **Affected.** `app/config/systemJobs.ts` (new), `nuxt.config.ts`, `app/app.config.ts`, `app/composables/useMaintenance.ts`, `docs/adr-compliance-frontend.md` (`useMaintenance` row).
-
-## Mobile overflow left by the alert token
-
-Measured 2026-09-16 at 375×812 with `tests/e2e/ui/MobileViewport.e2e.spec.ts` and a per-element probe, after every `<UAlert>` moved
-onto `ALERTS` (ADR-018).
-
-| Finding | Where | Note |
-|---|---|---|
-| `UTable` wrapper scrolls wider than the phone | `/admin/users` (576px), `/admin/system` job history (1596px) | mail and result columns cut off |
-| `span.truncate` clips a long URL by 273px | `/admin/system` settings tree (`holidayUrl`) | a tree cell |
-| 3px document overflow while the skeleton renders | `/dinner`, `UPageCard` inner `p-4 sm:p-6` | the repro's `scrollWidth <= innerWidth` sits on the edge on `/dinner` |
-| Layout inside an alert's `#description` (flex rows, `<ul>`, badges, selectors) | `AllergyManagersList`, `AllergyDetailPanel`, `ActionPreview`, `HouseholdCard`, `UserProfileCard`, `pages/admin/allergies/pdf.vue` | `wrap-anywhere` wraps text; each row needs its own responsive classes or an extraction like `DinnerModeLegend.vue` |
 
 ## Configuration duplication
 

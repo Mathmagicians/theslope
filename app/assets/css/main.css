@@ -1,8 +1,9 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
 
-/* Palette presets - generated, one `html[data-palette="…"]` block each. See docs/ui.md "Palettes" */
-@import "./palettes/tydelig.css";
+/* Palettes - generated: the base under `html:not([data-palette])`, each preset under its
+   `html[data-palette="…"]`. See docs/ui.md "Palettes" */
+@import "./palettes/default.css";
 @import "./palettes/colorblind.css";
 @import "./palettes/high-contrast.css";
 

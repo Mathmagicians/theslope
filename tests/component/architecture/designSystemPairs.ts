@@ -426,6 +426,13 @@ export const isDecorativeEdge = (path: string) => DECORATIVE_EDGES.includes(path
 
 export type Level = 'AA' | 'AAA'
 
+/**
+ * The opaque colour a pair is measured against, the variable behind it, and - for a translucent
+ * fill such as `bg-<slot>/10` - the alpha it is laid down with and the ground under it, so a
+ * reader that moves the variable can lay the fill down again
+ */
+export type Ground = {colour: Rgb, source: PaletteRef | null, alpha?: number, ground?: Rgb}
+
 export type Pair = {
     group: string
     mode: Mode
@@ -436,7 +443,7 @@ export type Pair = {
     /** The ink or edge of the pair, and the variable a preset moves to change it */
     ink: Sourced
     /** The opaque ground it is measured against */
-    fill: {colour: Rgb, source: PaletteRef | null}
+    fill: Ground
 }
 
 /** 1.4.3 body text; large-scale text drops one level (3:1 at AA, 4.5:1 at AAA) */
@@ -466,12 +473,12 @@ export const buildPairs = (override: PaletteOverride, level: Level): Pair[] => {
         const pick = (classes: string, channel: Channel, mode_: Mode): Sourced | null =>
             pickColour(resolve, classes, channel, mode_)
 
-        const surfaceOf = (classes: string, mode_: Mode): {colour: Rgb, source: PaletteRef | null} | null => {
+        const surfaceOf = (classes: string, mode_: Mode): Ground | null => {
             const page = resolve('default', 'bg', mode_)
             if (!page) return null
             const own = pick(classes, 'bg', mode_)
             return own
-                ? {colour: composite(own.colour, page.colour), source: own.source}
+                ? {colour: composite(own.colour, page.colour), source: own.source, alpha: own.colour.alpha, ground: page.colour}
                 : {colour: page.colour, source: page.source}
         }
 
@@ -481,7 +488,7 @@ export const buildPairs = (override: PaletteOverride, level: Level): Pair[] => {
          * `neutral-50` in light, and three identical cases say the same thing three times.
          */
         const distinctSurfaces = (surfaces: readonly {name: string, classes: string}[], mode_: Mode) => {
-            const seen = new Map<string, {name: string, colour: Rgb, source: PaletteRef | null}>()
+            const seen = new Map<string, Ground & {name: string}>()
             for (const surface of surfaces) {
                 const resolved = surfaceOf(surface.classes, mode_)
                 if (!resolved) continue
@@ -493,7 +500,7 @@ export const buildPairs = (override: PaletteOverride, level: Level): Pair[] => {
 
         const add = (
             group: string, name: string, key: string, ink: Sourced,
-            fill: {colour: Rgb, source: PaletteRef | null}, threshold: number
+            fill: Ground, threshold: number
         ) => pairs.push({
             group, mode, name, key, threshold, ink, fill,
             ratio: contrastRatio(composite(ink.colour, fill.colour), fill.colour)
@@ -594,10 +601,10 @@ export const buildPairs = (override: PaletteOverride, level: Level): Pair[] => {
             add('semantic slot', `text-${slot} on page`, `${mode}|slot.${slot}|page`,
                 ink, page, TEXT_THRESHOLD[level].body)
             add('semantic slot', `text-${slot} on bg-${slot}/10`, `${mode}|slot.${slot}|soft`,
-                ink, {colour: composite({...fill.colour, alpha: 0.1}, page.colour), source: fill.source},
+                ink, {colour: composite({...fill.colour, alpha: 0.1}, page.colour), source: fill.source, alpha: 0.1, ground: page.colour},
                 TEXT_THRESHOLD[level].body)
             add('semantic slot', `text-inverted on bg-${slot}`, `${mode}|slot.${slot}|solid`,
-                inverted, {colour: composite(fill.colour, page.colour), source: fill.source},
+                inverted, {colour: composite(fill.colour, page.colour), source: fill.source, alpha: fill.colour.alpha, ground: page.colour},
                 TEXT_THRESHOLD[level].body)
         }
     }

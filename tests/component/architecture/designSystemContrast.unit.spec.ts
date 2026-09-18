@@ -6,7 +6,7 @@ import {
 } from './designSystemPairs'
 import {contrastRatio, composite, hexToRgb, oklchToHex, parsePaletteOverrides, rgbToOklch, withLightness} from './contrast'
 import {PALETTES_UNDER_TEST} from './palettes'
-import {PRESETS} from '../../../scripts/palettes/presets'
+import {BASE_PALETTE, PRESETS} from '../../../scripts/palettes/presets'
 import {renderPreset} from '../../../scripts/palettes/render'
 
 /**
@@ -28,211 +28,22 @@ import {renderPreset} from '../../../scripts/palettes/render'
  *   1.4.6  Contrast (Enhanced), AAA - 7:1 body text, 4.5:1 large-scale text   → a preset the registry badges AAA
  *   1.4.11 Non-text Contrast, AA    - 3:1 borders, rings, UI boundaries (no AAA level exists)
  *
- * When a case fails, fix the token - never the threshold. Pairs that fail today are listed with
- * the ratio they reach and run as `it.fails`, so both a regression in a green pair and a fix of a
- * listed one break the build: KNOWN_FINDINGS carries the default theme, measured 2026-09-17, and
- * PRESET_FINDINGS carries a generated preset, measured 2026-09-18.
+ * When a case fails, fix the token - never the threshold. A pair a palette cannot meet is listed in
+ * PRESET_FINDINGS with the ratio it reaches and runs as `it.fails`, so both a regression in a green
+ * pair and a fix of a listed one break the build. Every palette meets its level today.
  */
 
 // ---------------------------------------------------------------------------
-// The default theme's baseline, measured 2026-09-17
-// ---------------------------------------------------------------------------
-
-/**
- * Pairs the default theme does not meet today, with the ratio measured on 2026-09-17.
- * They run as `it.fails`, so fixing one (a palette tune, a token swap) breaks the build and
- * asks for this entry to be removed - and a pair that is not listed may never start failing.
- *
- * finding 2026-09-17, awaiting the user's decision: TheSlope's Pantone palette is a warm
- * pastel set whose 500/400 rungs sit around 2-4:1 on white, so nearly every semantic slot,
- * every hero pairing and the Tailwind-default borders miss their level. The "Colors in My
- * preferences" decision (docs/features/bug-fix-admin-ux.md) is what resolves it: the presets
- * are generated against these thresholds, and the default theme's own rungs are tuned or the
- * misses are accepted per token.
- */
-const KNOWN_FINDINGS = new Map<string, number>([
-    ['light|TEXT.muted|BG.panelNested', 4.06],
-    ['light|TEXT.dimmed|BG.panelNested', 4.06],
-    ['light|TEXT.timestamp|BG.panelNested', 4.06],
-    ['light|TEXT.menuBody|BG.panelNested', 4.47],
-    ['light|TYPOGRAPHY.bodyTextPlaceholder|BG.panelNested', 4.06],
-    ['light|COMPONENTS.powerMode.iconClass|page', 4.3],
-    ['light|COMPONENTS.powerMode.iconClass|BG.panel', 4.05],
-    ['light|COMPONENTS.powerMode.iconClass|BG.panelNested', 3.61],
-    ['light|COMPONENTS.powerMode.iconClass|BG.inset', 4.11],
-    ['light|COMPONENTS.guestRow.iconClass|BG.panelNested', 4.05],
-    ['light|COMPONENTS.economyTable.level1.icon|page', 4.26],
-    ['light|COMPONENTS.economyTable.level1.icon|BG.panel', 4.01],
-    ['light|COMPONENTS.economyTable.level1.icon|BG.panelNested', 3.58],
-    ['light|COMPONENTS.economyTable.level1.icon|BG.inset', 4.07],
-    ['light|COMPONENTS.economyTable.level2.icon|page', 3.49],
-    ['light|COMPONENTS.economyTable.level2.icon|BG.panel', 3.29],
-    ['light|COMPONENTS.economyTable.level2.icon|BG.panelNested', 2.93],
-    ['light|COMPONENTS.economyTable.level2.icon|BG.inset', 3.34],
-    ['light|COMPONENTS.economyTable.level3.icon|BG.panelNested', 4.47],
-    ['light|BACKGROUNDS.landing.ticker|self', 3.55],
-    ['light|BACKGROUNDS.hero.mocha|self', 3.55],
-    ['light|CHEF_CALENDAR.day.next|self', 2.24],
-    ['light|DINNER_CALENDAR.day.next|self', 2.08],
-    ['light|TYPOGRAPHY.footerText|BACKGROUNDS.appShell', 3.85],
-    ['light|TYPOGRAPHY.sectionSubheadingLight|BACKGROUNDS.hero.mocha', 3.55],
-    ['light|BORDER.gray.200|border|page', 1.24],
-    ['light|BORDER.gray.200|border|BG.panel', 1.17],
-    ['light|BORDER.gray.300|border|page', 1.47],
-    ['light|BORDER.gray.300|border|BG.panel', 1.39],
-    ['light|BORDER.peach.400|border|page', 2.08],
-    ['light|BORDER.peach.400|border|BG.panel', 1.96],
-    ['light|BORDER.ocean.400|border|page', 2.24],
-    ['light|BORDER.ocean.400|border|BG.panel', 2.11],
-    ['light|RING.green.500|ring|page', 2.22],
-    ['light|RING.green.500|ring|BG.panel', 2.09],
-    ['light|RING.orange.200|ring|page', 1.45],
-    ['light|RING.orange.200|ring|BG.panel', 1.37],
-    ['light|COMPONENTS.segmentedActive|ring|page', 1.45],
-    ['light|COMPONENTS.segmentedActive|ring|BG.panel', 1.37],
-    ['light|CALENDAR.holiday|ring|page', 2.22],
-    ['light|CALENDAR.holiday|ring|BG.panel', 2.09],
-    ['light|CALENDAR.picker.holiday|ring|page', 2.22],
-    ['light|CALENDAR.picker.holiday|ring|BG.panel', 2.09],
-    ['light|PLANNING_CALENDAR.day.potential|border|page', 1.74],
-    ['light|PLANNING_CALENDAR.day.potential|border|BG.panel', 1.64],
-    ['light|CHEF_CALENDAR.countdown.border|border|page', 2.24],
-    ['light|CHEF_CALENDAR.countdown.border|border|BG.panel', 2.11],
-    ['light|DINNER_CALENDAR.countdown.border|border|page', 2.08],
-    ['light|DINNER_CALENDAR.countdown.border|border|BG.panel', 1.96],
-    ['light|slot.primary|page', 3.85],
-    ['light|slot.primary|soft', 3.45],
-    ['light|slot.primary|solid', 3.85],
-    ['light|slot.neutral|page', 3.86],
-    ['light|slot.neutral|soft', 3.45],
-    ['light|slot.neutral|solid', 3.86],
-    ['light|slot.secondary|page', 2.52],
-    ['light|slot.secondary|soft', 2.31],
-    ['light|slot.secondary|solid', 2.52],
-    ['light|slot.info|page', 3.57],
-    ['light|slot.info|soft', 3.18],
-    ['light|slot.info|solid', 3.57],
-    ['light|slot.success|page', 2.22],
-    ['light|slot.success|soft', 2.03],
-    ['light|slot.success|solid', 2.22],
-    ['light|slot.warning|page', 3.14],
-    ['light|slot.warning|soft', 2.82],
-    ['light|slot.warning|solid', 3.14],
-    ['light|slot.error|page', 3.46],
-    ['light|slot.error|soft', 3.11],
-    ['light|slot.error|solid', 3.46],
-    ['light|slot.winery|page', 3.73],
-    ['light|slot.winery|soft', 3.32],
-    ['light|slot.winery|solid', 3.73],
-    ['light|slot.party|page', 3.67],
-    ['light|slot.party|soft', 3.24],
-    ['light|slot.party|solid', 3.67],
-    ['light|slot.peach|page', 2.73],
-    ['light|slot.peach|soft', 2.47],
-    ['light|slot.peach|solid', 2.73],
-    ['light|slot.caramel|page', 4.06],
-    ['light|slot.caramel|soft', 3.61],
-    ['light|slot.caramel|solid', 4.06],
-    ['light|slot.ocean|page', 2.92],
-    ['light|slot.ocean|soft', 2.64],
-    ['light|slot.ocean|solid', 2.92],
-    ['light|slot.yellow|page', 1.92],
-    ['light|slot.yellow|soft', 1.8],
-    ['light|slot.yellow|solid', 1.92],
-    ['dark|TEXT.toned|page', 3.96],
-    ['dark|TEXT.toned|BG.panelNested', 3.38],
-    ['dark|TEXT.muted|page', 3.96],
-    ['dark|TEXT.muted|BG.panelNested', 3.38],
-    ['dark|TEXT.dimmed|page', 3.96],
-    ['dark|TEXT.dimmed|BG.panelNested', 3.38],
-    ['dark|TEXT.timestamp|page', 2.13],
-    ['dark|TEXT.timestamp|BG.panelNested', 1.82],
-    ['dark|TEXT.timestamp|BG.inset', 3.03],
-    ['dark|TEXT.timestamp|BG.ticket', 2.56],
-    ['dark|TEXT.timestamp|BG.invoiceGround', 3.03],
-    ['dark|TEXT.menuBody|page', 3.64],
-    ['dark|TEXT.menuBody|BG.panelNested', 3.1],
-    ['dark|TEXT.menuBody|BG.ticket', 4.37],
-    ['dark|TYPOGRAPHY.bodyTextMuted|page', 3.96],
-    ['dark|TYPOGRAPHY.bodyTextMuted|BG.panelNested', 3.38],
-    ['dark|TYPOGRAPHY.bodyTextPlaceholder|page', 2.13],
-    ['dark|TYPOGRAPHY.bodyTextPlaceholder|BG.panelNested', 1.82],
-    ['dark|TYPOGRAPHY.bodyTextPlaceholder|BG.inset', 3.03],
-    ['dark|TYPOGRAPHY.bodyTextPlaceholder|BG.ticket', 2.56],
-    ['dark|TYPOGRAPHY.bodyTextPlaceholder|BG.invoiceGround', 3.03],
-    ['dark|COMPONENTS.powerMode.iconClass|page', 3.8],
-    ['dark|COMPONENTS.powerMode.iconClass|BG.panelNested', 3.24],
-    ['dark|COMPONENTS.guestRow.iconClass|page', 2.14],
-    ['dark|COMPONENTS.guestRow.iconClass|BG.panelNested', 1.82],
-    ['dark|COMPONENTS.guestRow.iconClass|BG.inset', 3.04],
-    ['dark|COMPONENTS.guestRow.iconClass|BG.ticket', 2.57],
-    ['dark|COMPONENTS.guestRow.iconClass|BG.invoiceGround', 3.04],
-    ['dark|COMPONENTS.economyTable.level1.icon|BG.panelNested', 3.93],
-    ['dark|COMPONENTS.economyTable.level2.icon|BG.panelNested', 4.23],
-    ['dark|COMPONENTS.economyTable.level3.icon|page', 3.64],
-    ['dark|COMPONENTS.economyTable.level3.icon|BG.panelNested', 3.1],
-    ['dark|COMPONENTS.economyTable.level3.icon|BG.ticket', 4.37],
-    ['dark|COMPONENTS.dangerZone.heading|page', 4.44],
-    ['dark|COMPONENTS.dangerZone.heading|BG.panelNested', 3.79],
-    ['dark|BACKGROUNDS.landing.ticker|self', 3.55],
-    ['dark|BACKGROUNDS.hero.mocha|self', 3.55],
-    ['dark|TYPOGRAPHY.sectionSubheadingLight|BACKGROUNDS.hero.mocha', 3.01],
-    ['dark|BORDER.gray.500|border|page', 2.13],
-    ['dark|BORDER.gray.600|border|page', 1.36],
-    ['dark|BORDER.gray.700|border|page', 1],
-    ['dark|BORDER.gray.800|border|page', 1.36],
-    ['dark|BORDER.ocean.600|border|page', 2.42],
-    ['dark|BORDER.ocean.700|border|page', 1.74],
-    ['dark|BORDER.pink.600|border|page', 2.72],
-    ['dark|BORDER.orange.600|border|page', 2.4],
-    ['dark|BORDER.red.500|border|page', 2.98],
-    ['dark|BORDER.amber.600|border|page', 1.91],
-    ['dark|RING.red.500|ring|page', 2.98],
-    ['dark|RING.red.700|ring|page', 1.47],
-    ['dark|CALENDAR.deadline.critical|ring|page', 2.98],
-    ['dark|CHEF_CALENDAR.selection|outline|page', 1.74],
-    ['dark|DINNER_CALENDAR.selection|outline|page', 2.02],
-    ['dark|slot.primary|page', 3.27],
-    ['dark|slot.primary|soft', 2.91],
-    ['dark|slot.primary|solid', 3.27],
-    ['dark|slot.neutral|page', 3.64],
-    ['dark|slot.neutral|soft', 3.17],
-    ['dark|slot.neutral|solid', 3.64],
-    ['dark|slot.secondary|page', 4.12],
-    ['dark|slot.secondary|soft', 3.63],
-    ['dark|slot.secondary|solid', 4.12],
-    ['dark|slot.info|page', 3.95],
-    ['dark|slot.info|soft', 3.48],
-    ['dark|slot.info|solid', 3.95],
-    ['dark|slot.warning|page', 3.8],
-    ['dark|slot.warning|soft', 3.39],
-    ['dark|slot.warning|solid', 3.8],
-    ['dark|slot.error|page', 4.44],
-    ['dark|slot.error|soft', 3.81],
-    ['dark|slot.error|solid', 4.44],
-    ['dark|slot.winery|page', 3.97],
-    ['dark|slot.winery|soft', 3.49],
-    ['dark|slot.winery|solid', 3.97],
-    ['dark|slot.party|page', 3.89],
-    ['dark|slot.party|soft', 3.45],
-    ['dark|slot.party|solid', 3.89],
-    ['dark|slot.peach|soft', 4.24],
-    ['dark|slot.caramel|page', 3.34],
-    ['dark|slot.caramel|soft', 2.98],
-    ['dark|slot.caramel|solid', 3.34],
-    ['dark|slot.ocean|soft', 3.89],
-])
-
-// ---------------------------------------------------------------------------
-// The palettes: the default theme plus the presets the appearance preference offers
+// The palettes: the base every visitor sees plus the presets the appearance preference offers
 // ---------------------------------------------------------------------------
 
 /**
  * The palettes and their levels come from `PALETTES_UNDER_TEST`, which derives them from the
  * registry the appearance card badges - so the level a member is promised is the level asserted
- * here, and flipping the registry moves the assertion with it. A preset's stylesheet is generated
- * by `scripts/palettes/generate.ts`; a registry entry with no file is a badge nobody measured, so
- * its case fails rather than skips.
+ * here, and flipping the registry moves the assertion with it. Each stylesheet is generated by
+ * `scripts/palettes/generate.ts` and measured on its own, because it applies on its own: the base
+ * (`default.css`, Glade farver) wherever no `data-palette` is set, a preset under its own. A registry
+ * entry with no file is a badge nobody measured, so its case fails rather than skips.
  */
 const PALETTES = PALETTES_UNDER_TEST
 
@@ -243,10 +54,10 @@ const PALETTES = PALETTES_UNDER_TEST
 const RENDER_TIMEOUT_MS = 30_000
 
 /**
- * Pairs a preset cannot answer, keyed `<preset>|<pair>`, with the ratio it reaches. Same
- * contract as KNOWN_FINDINGS: `it.fails`, so a regeneration that fixes one breaks the build.
+ * Pairs a palette cannot answer, keyed `<palette>|<pair>`, with the ratio it reaches. They run as
+ * `it.fails`, so a regeneration that fixes one breaks the build and asks for the entry to go.
  *
- * Tydelig and Farveblind meet AA on every pair, in light and dark. The nine tokens that used to
+ * Glade farver and Til farveblinde meet AA on every pair, in light and dark. The nine tokens that used to
  * hold them back drew one rung as a fill and as ink at once; each now carries its own `dark:` face
  * (`*_CALENDAR.day.next`, `PLANNING_CALENDAR.day.potential`, `BORDER.amber[500]`, `RING.amber[500]`,
  * `BORDER.gray[800]`, `TEXT.dimmed`, `COMPONENTS.powerMode.iconClass`), and the two countdown
@@ -258,6 +69,29 @@ const RENDER_TIMEOUT_MS = 30_000
  * border no longer shares its rung with the orange band fill.
  */
 const PRESET_FINDINGS = new Map<string, number>([])
+
+/** The selectors a stylesheet opens its blocks with, its comments left out */
+const blockSelectors = (css: string) =>
+    [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{/g)].map(([, selector]) => selector!.trim())
+
+/**
+ * CSS specificity (ids, classes, types) of a compound selector of the shapes a palette block uses:
+ * `html`, `.dark`, `[data-palette="…"]`, and `:not(…)`, which counts as its argument
+ */
+const specificity = (selector: string): [number, number, number] => {
+    const bare = selector.replace(/:not\(([^)]*)\)/g, ' $1')
+    return [
+        (bare.match(/#[\w-]+/g) ?? []).length,
+        (bare.match(/\.[\w-]+|\[[^\]]+\]|:[\w-]+/g) ?? []).length,
+        (bare.match(/(^|[\s>+~])[a-z]+/g) ?? []).length
+    ]
+}
+
+/** What Nuxt UI's colours plugin writes its variables under at runtime: `:root` and `.dark` */
+const NUXT_UI_RUNTIME: [number, number, number] = [0, 1, 0]
+
+const outranks = (a: [number, number, number], b: [number, number, number]) =>
+    a[0] !== b[0] ? a[0] > b[0] : a[1] !== b[1] ? a[1] > b[1] : a[2] > b[2]
 
 describe('EN 301 549 / WCAG 2.1: the design system meets its contrast level', () => {
     it('the OKLCH conversion agrees with the sRGB hex Tailwind 4 publishes', () => {
@@ -317,21 +151,22 @@ describe('EN 301 549 / WCAG 2.1: the design system meets its contrast level', ()
         // A finding whose pair left the inventory - a token renamed, a scoping rule that put it
         // outside 1.4.3 or 1.4.11 - is a line nothing measures any more, and it goes
         const measured = new Set(buildPairs(NO_OVERRIDE, 'AA').map(pair => pair.key))
-        const stale = [...KNOWN_FINDINGS.keys(), ...[...PRESET_FINDINGS.keys()].map(key => key.split('|').slice(1).join('|'))]
+        const stale = [...PRESET_FINDINGS.keys()].map(key => key.split('|').slice(1).join('|'))
         expect(stale.filter(key => !measured.has(key)).join('\n')).toBe('')
     })
 
-    it('the generator solves the presets the registry badges, at the level it badges them', () => {
-        // Three copies of a level would let the badge promise AAA while the spec measures AA.
-        // The registry is the source; this is what keeps the producer on it
-        const solved = PRESETS.map(({name, level}) => `${name} ${level}`).sort()
+    it('the generator solves the presets the registry badges, at the level and the colour safety it badges them', () => {
+        // Three copies of a level would let the badge promise AAA while the spec measures AA, and a
+        // registry that claims colour safety for a preset the generator does not separate would
+        // badge a promise nobody solved for. The registry is the source; this keeps the producer on it
+        const solved = PRESETS.map(({name, level, colourSafe}) => `${name} ${level}${colourSafe ? ' colour-safe' : ''}`).sort()
         const badged = PALETTES.filter(palette => palette.promised)
-            .map(palette => `${palette.id} ${palette.promised}`).sort()
+            .map(palette => `${palette.id} ${palette.promised}${palette.colourSafe ? ' colour-safe' : ''}`).sort()
         expect(solved).toEqual(badged)
     })
 
     describe.each(PALETTES)('$label', palette => {
-        const {id, file, level, promised} = palette
+        const {id, file, level} = palette
         const published = file !== null && existsSync(repoPath(file))
         const override = published ? parsePaletteOverrides(repoFile(file!)) : null
 
@@ -348,6 +183,17 @@ describe('EN 301 549 / WCAG 2.1: the design system meets its contrast level', ()
                     `${file} is stale - run make palettes (npx jiti scripts/palettes/generate.ts) and commit the result`)
                     .toBe(renderPreset(preset!))
             }, RENDER_TIMEOUT_MS)
+
+            it('applies on its own, above the variables Nuxt UI writes at runtime', () => {
+                // Each stylesheet is measured alone, which is what the browser paints only when two
+                // palettes never apply together: the base steps aside wherever a preset is chosen,
+                // and a preset applies under its own data-palette only
+                const scope = id === BASE_PALETTE ? ':not([data-palette])' : `[data-palette="${id}"]`
+                const selectors = published ? blockSelectors(repoFile(file)) : []
+                expect(selectors.filter(selector => !selector.includes(scope) || !outranks(specificity(selector), NUXT_UI_RUNTIME)))
+                    .toEqual([])
+                expect(selectors).toHaveLength(2)
+            })
         }
 
         // A preset with no stylesheet has already failed above; its pairs would measure the
@@ -357,18 +203,16 @@ describe('EN 301 549 / WCAG 2.1: the design system meets its contrast level', ()
 
         describe.each(groups)('%s', group => {
             const cases = pairs.filter(pair => pair.group === group)
-            const finding = (pair: Pair) =>
-                promised === null ? KNOWN_FINDINGS.get(pair.key) : PRESET_FINDINGS.get(`${id}|${pair.key}`)
+            const finding = (pair: Pair) => PRESET_FINDINGS.get(`${id}|${pair.key}`)
 
             const green = cases.filter(pair => finding(pair) === undefined)
                 .map(pair => ({pair, name: `${pair.mode}: ${pair.name} ≥ ${pair.threshold} (${level})`}))
 
-            const measured = promised === null ? '2026-09-17' : '2026-09-18'
 
             const findings = cases.filter(pair => finding(pair) !== undefined)
                 .map(pair => ({
                     pair,
-                    name: `${pair.mode}: ${pair.name} — ${finding(pair)} (finding ${measured}, awaiting the user's decision)`
+                    name: `${pair.mode}: ${pair.name} — ${finding(pair)} (finding 2026-09-18, awaiting the user's decision)`
                 }))
 
             it.each(green)('$name', ({pair}) => {

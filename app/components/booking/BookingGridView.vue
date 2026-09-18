@@ -603,11 +603,9 @@ const getEventSummary = (eventId: number) => {
       :columns="columns"
       row-key="id"
       :ui="{
+        ...COMPONENTS.table.gridUi,
         tbody: '[&_tr:first-child]:bg-warning/10',
-        tr: 'data-[expanded=true]:bg-elevated/50',
-        th: 'px-1 py-1 md:px-2 md:py-2 text-center',
-        td: 'px-1 py-1 md:px-2 text-center',
-        tfoot: 'sticky bottom-0 bg-default px-1 py-1 md:px-2 text-center text-xs'
+        tr: 'data-[expanded=true]:bg-elevated/50'
       }"
     >
       <!-- Empty state -->

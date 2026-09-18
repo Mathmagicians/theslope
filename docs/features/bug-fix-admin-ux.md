@@ -22,12 +22,13 @@ The allergy catalog fixes D1, D2 and A1 shipped in #165. Follow-up defects found
 | QR code | in-house QR that prints with the poster | ✅ 2026-09-16 | `app/utils/qr.ts`, `shared/QrCode.vue` |
 | Poster notes | "Vigtige bemærkninger" stored in `Setting`, edited in place by allergy managers | ✅ 2026-09-18 | `useSettingValidation.ts`, `settingsRepository.ts`, `api/admin/setting/[key]`, `AllergyNotes.vue` |
 | My preferences | channels and appearance per user behind ⚙ on the dashboard | ✅ 2026-09-18 | `User` columns, `useUserPreferenceValidation.ts`, `api/user/preferences.post.ts`, `UserPreferencesCard.vue` |
-| Palettes | Farveglad, Tydelig (AA), Farveblind (AA), Høj kontrast (AAA) | 🟡 Høj kontrast team separation OPEN; Farveblind colour-safe pass queued | `scripts/palettes/`, `app/assets/css/palettes/` |
+| Palettes | Glade farver (AA, default), Høj kontrast (AAA), Til farveblinde (AA, colour-safe) | 🟡 in progress: Tydelig becomes the base, Høj kontrast team stops (option A), Farveblind colour-safe pass | `scripts/palettes/`, `app/assets/css/palettes/` |
 | Brand rainbow | one ordered rainbow for landing, kitchen panels and ticker | ✅ 2026-09-17 | `PANTONE_FAMILIES`, `HERO`, `RAINBOW`, `getRainbowBand` |
 | Team colours | team n wears rainbow stop n | ✅ 2026-09-18 | `RAINBOW_FAMILIES`; `TeamCalendarDisplay`, `CookingTeamBadges`, `CookingTeamCard`, `AdminTeams` |
 | Team creation toast | the toast states teams created and dinners assigned | ✅ 2026-09-18 | `CreateTeamsResponse`, `api/admin/team/index.put.ts`, `AdminTeams.vue` |
 | Dev feedback round 1 | six findings from the dev walk | ✅ 2026-09-18 | see "Dev feedback round 1" |
 | Calendar-day matching | team assignment and holiday cells compare calendar days | ✅ 2026-09-18 | `computeTeamAssignmentsForEvents` in `app/utils/season.ts`, `isCalendarDateInDateList` in `app/utils/date.ts` |
+| Mobile tables | tables fit a phone: cells wrap, the users table hides four columns behind its expanded row; the loader fits its card | 🟡 users, catalog, loader ✅ 2026-09-18; job history and the settings tree OPEN | `COMPONENTS.table.ui` / `denseUi` / `gridUi`, `columnVisibility`, every `UTable`, `AdminUsers.vue`, `Loader.vue` |
 
 ---
 
@@ -47,15 +48,19 @@ The allergy catalog fixes D1, D2 and A1 shipped in #165. Follow-up defects found
   `dayCircleClasses`. Green belongs to holidays.
 - **The live season is edited in place** (2026-09-16). Saving reconciles the dinner events (ADR-015), runs `clipPreferences` and
   `scaffoldPrebookings` on the active season, and deletes the Heynabo events of removed dates (ADR-013). Activation lives in `/active`.
-- **Palettes** (2026-09-16 to 2026-09-18). Four options: Farveglad, Tydelig (AA), Farveblind (AA, colour-safe), Høj kontrast (AAA). The badge
-  level comes from `PALETTES` in `useUserPreferenceValidation.ts`, which the contrast spec asserts. `make palettes` writes the preset files.
+- **Palettes** (2026-09-16 to 2026-09-18). Three options: Glade farver (the Tydelig solve, AA, the default for every visitor), Høj kontrast
+  (AAA), Til farveblinde (AA, colour-safe). The published Farveglad colours leave the UI; the `main.css` scales stay as the generator's input.
+  The level comes from `PALETTES` in `useUserPreferenceValidation.ts`, which the contrast spec asserts. `make palettes` writes the preset files.
+- **Palette badges** (2026-09-18). "🇪🇺 EN 301 549 · Kontrast AA ✓" or "… Kontrast AAA ✓" from the `PALETTES` level: the badge claims
+  contrast (WCAG 1.4.3, 1.4.6, 1.4.11), never full conformance. "👁 Nedsat farvesyn · Okabe–Ito ✓" from `PALETTES.colourSafe` (EN 301 549
+  clause 4.2.3, WCAG 1.4.1 "Anvendelse af farve"). "Farvesikker" describes a person who passes a colour-vision test and is not used.
 - **Farveblind is the Color Universal Design standard** (2026-09-18). Every colour comes from the eight CUD colours; neutral maps to sky blue,
   primary to black; teams 1-8 take the eight colours and team 9 repeats team 1.
 - **Brand rainbow** (2026-09-17). Order pink, orange, ocean, bonbon, then the team stops. Black ink on the vibrant fills. TIL SALG stays grey.
   The landing walks stops 0-3, the kitchen panels 0-2, the ticker chips follow the same order.
 - **Team colours** (2026-09-18). Team n wears rainbow stop n, 8-10 distinct colours; the team name on the badge carries the identity.
 - **Preferences** (2026-09-16, 2026-09-17). The card sits behind ⚙ in the profile card header; the pencil opens the edit face with Gem and
-  Annuller. Labels: Notifikationer, Farvevalg (Farveglad, Tydelig, Farveblind, Høj kontrast), Tekst (Normal, Stor, Større).
+  Annuller. Labels: Notifikationer, Farvevalg (Glade farver, Høj kontrast, Til farveblinde), Tekst (Normal, Stor, Større).
 - **Poster boxes are outline** (2026-09-18). The poster prints without grey fills.
 - **Allergy toolbar** (2026-09-18). "Kombiner allergener", and "Afslut kombinering" while active.
 - **Disclosure buttons** (2026-09-18). A button that opens a panel below it carries a chevron that turns while the panel is open
@@ -140,11 +145,11 @@ this pair.
 - **Nuxt UI colour observations.** Nuxt UI's colours plugin emits no `--ui-neutral`; each preset declares it. `mocha` and `bonbon` are
   declared in `nuxt.config.ts` `ui.theme.colors` and mapped nowhere in `app.config.ts` `ui.colors`, so `bg-mocha-*` and `bg-bonbon-*` paint
   nothing; `BG.mocha` names `amber`, `BG.bonbon` names `violet`.
-- **Default theme at AA.** Farveglad stays the default (2026-09-18) with 170 pairs below AA, listed with their ratios in `KNOWN_FINDINGS`
-  of `designSystemContrast.unit.spec.ts`; a pair that starts passing breaks its `it.fails` and asks for the entry to go.
-- **Alert findings the token leaves standing** (tables wider than a phone on `/admin/users` and `/admin/system`, a clipped URL in the
-  `/admin/system` settings tree, a 3px overflow on `/dinner` while its skeleton renders, layouts inside `#description`): full table in
-  `bug-fix-dinner-page-and-dates.md` → "Mobile overflow left by the alert token".
+- **Base palette swap** (in progress, 2026-09-18). The Tydelig blocks render under `html:not([data-palette])` as `palettes/default.css`,
+  registry key `default` at AA; `tydelig` leaves `PaletteSchema` and a stored `tydelig` reads as `default` (no migration: the `User.appearance`
+  column default already holds `default`). The 170 default-theme entries in `KNOWN_FINDINGS` go. Høj kontrast and Til farveblinde keep their
+  mechanism and solve input: they set `data-palette`, so the base blocks never apply beneath them.
+- **Mobile tables** — job history on a phone and the settings tree's long values: OPEN, see "Mobile tables".
 - **`AdminAllergies.e2e.spec.ts` poster-notes cases** fail with four workers: `apiRequestContext.get: Request context disposed` in the
   catalog `beforeAll` and `apiRequestContext.post: Target page, context or browser has been closed` inside `UserFactory.withSystemRoles`.
   The describe runs serially; the cause (a context closed while another test uses it) is being traced in `settingFactory.ts` /
@@ -179,8 +184,8 @@ this pair.
 **Solution.** `createResponsiveAlerts(isMd)` exports `ALERTS`: `info`, `neutral`, `success`, `warning`, `error`, `legend`, `emptyState`,
 `emptyStateCompact`, plus the modifiers `withActions` (actions beside the text from md, below it on a phone) and `withCornerAction` (an
 icon-only action in the top-right corner). Shared `ui` wraps anywhere and breaks white space. The two "Forklaring" legends are
-`dinner/DinnerModeLegend.vue`. The findings the token leaves standing: `bug-fix-dinner-page-and-dates.md` → "Mobile overflow left by
-the alert token"; the classification of the 56 sites is in the git history of `feature-proposal-notifications.md`.
+`dinner/DinnerModeLegend.vue`. Tables and the loader: "Mobile tables". The classification of the 56 sites is in the git history of
+`feature-proposal-notifications.md`.
 **Tests.** `designSystemUsage.unit.spec.ts` (every `<UAlert>` binds a kind), `MobileViewport.e2e.spec.ts`, `DinnerModeLegend.nuxt.spec.ts`.
 
 ## Empty states
@@ -319,6 +324,37 @@ SSR worker) and in between. **Tests:** `season.unit` (UTC-midnight events), `dat
 run in UTC and Copenhagen. The storage convention: `bug-fix-dinner-page-and-dates.md`.
 
 ---
+
+## Mobile tables
+
+**Problem.** Measured at 375px by `MobileViewport.e2e.spec.ts` on 2026-09-18: the users table scrolled 555px sideways, the job-history
+table 1146px, the allergy catalog 192px with a row expanded; `/dinner` was 3px wider than the phone while its loaders showed; the
+settings tree cuts `holidayUrl` by 273px.
+**Root cause.** Nuxt UI's table cell is `whitespace-nowrap` with `p-4`, so the widest value in a column (an e-mail, a name without
+spaces, the job result text) sets the table's width, and a panel docked under an expanded row spans it. Ten of the seventeen tables bound
+no table token. `Loader.vue` draws a fixed 48 + 16 + 250px row, 378px inside a card on a phone. The tree label is `truncate`.
+**Solution.**
+- `COMPONENTS.table.ui` (cells `px-2 md:px-4`, `py-1 md:py-2`, `whitespace-normal wrap-anywhere`), `denseUi` (the compact padding of the
+  booking form, household preferences and household allergies) and `gridUi` (the booking grid); every `<UTable>` binds one of them —
+  `designSystemUsage.unit.spec.ts` rule "every <UTable> binds a COMPONENTS.table token".
+- `columnVisibility(hiddenOnPhone)` in the design system (`createColumnVisibility`); the users table hides `#`, Telefon, Systemroller and
+  Sidst opdateret on a phone, their content is in the expanded `UserProfileCard`.
+- `Loader.vue`: the bars keep 250/200px as a maximum and shrink with the card.
+
+**Mockup — users table on a phone** ✅ signed off 2026-09-18; in the header of `AdminUsers.vue`.
+
+**Mockup — job history on a phone** — OPEN. The wrapping cells alone fit the six columns at about 50px each: words break mid-letter and a
+row is about 300px tall. Options and their measurements: the reply of 2026-09-18.
+
+**Settings tree** — OPEN: the ellipsis stays, or the tree's labels wrap.
+
+**TDD.** `MobileViewport.e2e.spec.ts` samples the document every animation frame (skeletons included), checks every alert for clipped
+content, measures the tables' own scroll boxes and the truncating tree labels, and names the elements that reach past the phone; red on
+four cases, green on eight of nine after the change. `designSystemUsage.unit.spec.ts` red on seven sites, then green.
+`useTheSlopeDesignSystem.unit.spec.ts`: `columnVisibility` per breakpoint.
+**Affected.** `useTheSlopeDesignSystem.ts`; `AdminUsers.vue`, `AdminSystem.vue`, `AdminTeams.vue`, `BookingGridView.vue`,
+`DinnerBookingForm.vue`, `HouseholdCard.vue`, `HouseholdAllergies.vue`, `AllergyCatalogTable.vue`, `CostEntry.vue` (doc example),
+`Loader.vue`; every table that already bound `COMPONENTS.table.ui` takes the new padding and wrapping.
 
 ## Test coverage
 

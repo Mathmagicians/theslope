@@ -81,7 +81,7 @@ const columns = computed(() => [
 // Tighter horizontal cell padding - the catalog lives in the narrow master column
 const tableUi = {
   ...COMPONENTS.table.ui,
-  td: `${COMPONENTS.table.ui.td} px-1`,
+  td: `${COMPONENTS.table.ui.td} px-1 md:px-1`,
   th: 'px-1'
 }
 

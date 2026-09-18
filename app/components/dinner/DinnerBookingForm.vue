@@ -592,7 +592,7 @@ const actionPreviewItems = computed(() => {
       :columns="columns"
       row-key="id"
       data-testid="booking-table"
-      :ui="{tbody: '[&_tr:first-child]:bg-warning/10', tr: 'data-[expanded=true]:bg-elevated/50', th: 'px-1 py-1 md:px-4 md:py-3', td: 'px-1 md:px-4'}"
+      :ui="{...COMPONENTS.table.denseUi, tbody: '[&_tr:first-child]:bg-warning/10', tr: 'data-[expanded=true]:bg-elevated/50'}"
     >
       <!-- Expand button column - uses BUTTONS.edit for standardized sizing -->
       <template #expand-cell="{row}">

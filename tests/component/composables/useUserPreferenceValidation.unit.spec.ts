@@ -23,7 +23,7 @@ const {
 
 describe('useUserPreferenceValidation - enums', () => {
     it.each([
-        {schema: 'PaletteSchema', values: ['default', 'tydelig', 'colorblind', 'high-contrast']},
+        {schema: 'PaletteSchema', values: ['default', 'high-contrast', 'colorblind']},
         {schema: 'TextScaleSchema', values: ['normal', 'large', 'larger']},
         {schema: 'NotificationChannelSchema', values: ['EMAIL', 'SMS']}
     ])('GIVEN $schema THEN its options are $values', ({schema, values}) => {
@@ -33,6 +33,7 @@ describe('useUserPreferenceValidation - enums', () => {
 
     it.each([
         {desc: 'an unlisted palette', schema: PaletteSchema, input: 'neon'},
+        {desc: 'the retired palette key', schema: PaletteSchema, input: 'tydelig'},
         {desc: 'an unlisted text scale', schema: TextScaleSchema, input: 'huge'},
         {desc: 'an unlisted channel', schema: NotificationChannelSchema, input: 'PIGEON'}
     ])('GIVEN $desc THEN it is rejected', ({schema, input}) => {
@@ -50,8 +51,13 @@ describe('useUserPreferenceValidation - AppearanceSchema', () => {
     })
 
     it('GIVEN a full appearance THEN it round-trips through JSON', () => {
-        const appearance = {palette: 'tydelig' as const, textScale: 'large' as const}
+        const appearance = {palette: 'high-contrast' as const, textScale: 'large' as const}
         expect(AppearanceSchema.parse(JSON.parse(JSON.stringify(appearance)))).toEqual(appearance)
+    })
+
+    it('GIVEN an appearance stored with the retired palette tydelig THEN it reads as the default palette', () => {
+        // Tydelig became the default palette; appearances saved while it was an option keep their text scale
+        expect(AppearanceSchema.parse({palette: 'tydelig', textScale: 'large'})).toEqual({palette: 'default', textScale: 'large'})
     })
 
     it('GIVEN an unlisted palette THEN the appearance is rejected', () => {
@@ -65,10 +71,9 @@ describe('useUserPreferenceValidation - PALETTES registry', () => {
     })
 
     it.each([
-        {palette: 'default' as const, level: null, colourSafe: false},
-        {palette: 'tydelig' as const, level: 'AA' as const, colourSafe: false},
-        {palette: 'colorblind' as const, level: 'AA' as const, colourSafe: true},
-        {palette: 'high-contrast' as const, level: 'AAA' as const, colourSafe: false}
+        {palette: 'default' as const, level: 'AA' as const, colourSafe: false},
+        {palette: 'high-contrast' as const, level: 'AAA' as const, colourSafe: false},
+        {palette: 'colorblind' as const, level: 'AA' as const, colourSafe: true}
     ])('GIVEN $palette THEN its verified level is $level and colourSafe is $colourSafe', ({palette, level, colourSafe}) => {
         expect(PALETTES[palette]).toEqual({level, colourSafe})
     })
@@ -89,7 +94,7 @@ describe('useUserPreferenceValidation - PALETTES registry', () => {
 
 describe('useUserPreferenceValidation - UserPreferencesUpdateSchema', () => {
     it.each([
-        {desc: 'both fields', input: {notificationChannels: ['EMAIL'], appearance: {palette: 'tydelig', textScale: 'large'}}},
+        {desc: 'both fields', input: {notificationChannels: ['EMAIL'], appearance: {palette: 'high-contrast', textScale: 'large'}}},
         {desc: 'channels only', input: {notificationChannels: ['EMAIL', 'SMS']}},
         {desc: 'appearance only', input: {appearance: {palette: 'default', textScale: 'larger'}}},
         {desc: 'no channels at all', input: {notificationChannels: []}},

@@ -1,3 +1,25 @@
+<!--
+UX MOCKUP: /admin/users table on a phone (signed off 2026-09-18)
+
+MOBILE (<md)                            DESKTOP (md+)
+┌─────────────────────────────────────┐ all seven columns:
+│ 🔍 Søg efter navn eller email…      │ › · # · Navn · Mail · Telefon ·
+│ [⇅ Navn]  [«] [‹] [1] [›] [»]       │ Systemroller · Sidst opdateret
+├───┬────────────┬────────────────────┤
+│   │ Navn       │ Mail               │
+│ › │ Lasse      │ lassefm@gmail.com  │
+│ › │ Alexander  │ smedegaard1987@gma │
+│   │            │ il.com             │ a long address wraps (COMPONENTS.table.ui)
+│ ⌄ │ Anders     │ anders@hey.com     │
+│ ┌─────────────────────────────────┐ │
+│ │ UserProfileCard (mail, telefon, │ │ expanded row, unchanged
+│ │ systemroller)                   │ │
+│ └─────────────────────────────────┘ │
+└─────────────────────────────────────┘
+On a phone #, Telefon, Systemroller and Sidst opdateret are hidden (columnVisibility);
+phone and roles show in the expanded UserProfileCard.
+-->
+
 <script setup lang="ts">
 import {h, resolveComponent} from 'vue'
 import {getPaginationRowModel} from '@tanstack/vue-table'
@@ -17,7 +39,7 @@ const {users, isUsersLoading, isUsersErrored, usersError} = storeToRefs(store)
 
 // Use existing role badge definitions
 const {roleLabels} = useUserRolesUi()
-const {COMPONENTS, ICONS, ALERTS, COLOR, TEXT, BG} = useTheSlopeDesignSystem()
+const {COMPONENTS, ICONS, ALERTS, COLOR, TEXT, BG, columnVisibility} = useTheSlopeDesignSystem()
 
 // Search/filter state
 const searchQuery = ref('')
@@ -110,6 +132,9 @@ interface TableRow {
   original: typeof formattedUsers.value[number]
 }
 
+// Shown in the expanded UserProfileCard on a phone (mockup above)
+const HIDDEN_ON_PHONE = ['id', 'phone', 'systemRoles', 'updatedAt'] as const
+
 const userColumns = [
   {
     id: 'expand',
@@ -187,6 +212,7 @@ const pagination = ref({
         caption="Brugere - importeret fra Heynabo"
         class="w-full"
         :ui="COMPONENTS.table.ui"
+        :column-visibility="columnVisibility(HIDDEN_ON_PHONE)"
         :pagination-options="{
           getPaginationRowModel: getPaginationRowModel()
         }"

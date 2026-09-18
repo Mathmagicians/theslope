@@ -62,6 +62,16 @@ const BINDS_ALERT_TOKEN = /\bALERTS[.[]/
 /** ` color=`, ` :variant=`, ` type=` - a raw Nuxt UI prop the token should own */
 const RAW_ALERT_PROP = /(?:^|\s)(?::|v-bind:)?(?:color|variant|type)=/
 
+/**
+ * A UTable binds a table token: `COMPONENTS.table.<ui|denseUi|gridUi>` in the tag, or a local `:ui` object built from one
+ * (`const tableUi = {...COMPONENTS.table.ui, …}`). The token owns cell padding and wrapping on a phone.
+ */
+const bindsTableToken = (source: string, tagText: string): boolean => {
+    if (/COMPONENTS\.table\./.test(tagText)) return true
+    const local = tagText.match(/:ui="([A-Za-z_$][\w$]*)"/)?.[1]
+    return local !== undefined && new RegExp(`const ${local}\\s*=[\\s\\S]{0,200}?COMPONENTS\\.table\\.`).test(source)
+}
+
 // The grid token reaches a UCalendar directly, or through a picker preset built from it
 // (calendarPickerProps merges COMPONENTS.calendarGrid with a CALENDAR.picker selection)
 const BINDS_CALENDAR_GRID = /v-bind="(COMPONENTS\.calendarGrid|calendarProps)"/
@@ -124,6 +134,16 @@ describe('ADR-018: components bind design-system tokens, never raw Nuxt UI props
                 .filter(tag => !BINDS_CALENDAR_GRID.test(tag.text))
                 .map(tag => `app/${file}:${tag.line} - no calendarGrid token (use v-bind="COMPONENTS.calendarGrid" or a calendarPickerProps preset)`)
         )
+        expect(report(violations)).toBe('')
+    })
+
+    it('every <UTable> binds a COMPONENTS.table token', () => {
+        const violations = vueFiles.flatMap(file => {
+            const source = readVue(file)
+            return openingTags(source, 'UTable')
+                .filter(tag => !bindsTableToken(source, tag.text))
+                .map(tag => `app/${file}:${tag.line} - no table token (use :ui="COMPONENTS.table.ui", or spread a COMPONENTS.table token)`)
+        })
         expect(report(violations)).toBe('')
     })
 

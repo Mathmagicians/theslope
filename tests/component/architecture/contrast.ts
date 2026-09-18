@@ -247,7 +247,9 @@ export const parsePaletteOverrides = (css: string): {light: ModeOverride, dark: 
     }
     const empty = (): ModeOverride => ({scales: {}, slots: {}})
     const [light, dark] = [empty(), empty()]
-    for (const [, selector, body] of css.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
+    // A comment is not a selector: a header that names `.dark` would otherwise file the light block as dark
+    const rules = css.replace(/\/\*[\s\S]*?\*\//g, '')
+    for (const [, selector, body] of rules.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
         layer(/\.dark\b/.test(selector!) ? dark : light, {scales: parseColourScales(body!), slots: parseSlotRungs(body!)})
     }
     return {light, dark: layer(layer(empty(), light), dark)}

@@ -9,14 +9,21 @@
 import {z} from 'zod'
 import {NotificationChannelSchema} from '~~/prisma/generated/zod'
 
-/** One palette preset per `html[data-palette="…"]` block under app/assets/css/palettes */
-export const PaletteSchema = z.enum(['default', 'tydelig', 'colorblind', 'high-contrast'])
+/**
+ * One palette per stylesheet under app/assets/css/palettes: `default` is the base every visitor sees
+ * (no `data-palette`), each other key a preset under its `html[data-palette="…"]` block
+ */
+export const PaletteSchema = z.enum(['default', 'high-contrast', 'colorblind'])
+
+/** `tydelig` became the default palette; an appearance stored while it was an option reads as `default` */
+const RETIRED_PALETTES: Record<string, Palette> = {tydelig: 'default'}
 
 /** One text scale per `html[data-text-scale="…"]` rule in app/assets/css/main.css */
 export const TextScaleSchema = z.enum(['normal', 'large', 'larger'])
 
 export const AppearanceSchema = z.object({
-    palette: PaletteSchema.default('default'),
+    palette: z.preprocess(value => typeof value === 'string' ? RETIRED_PALETTES[value] ?? value : value, PaletteSchema)
+        .default('default'),
     textScale: TextScaleSchema.default('normal')
 })
 
@@ -32,16 +39,15 @@ export const DEFAULT_APPEARANCE: Appearance = {palette: 'default', textScale: 'n
 export const DEFAULT_NOTIFICATION_CHANNELS: NotificationChannel[] = ['EMAIL']
 
 /**
- * The palette registry: one entry per preset, carrying the contrast level
+ * The palette registry: one entry per palette, carrying the contrast level
  * `designSystemContrast.unit.spec.ts` verifies it at (`null` = no verified level) and whether
  * `designSystemColourVision.unit.spec.ts` verifies that its meanings stay apart under
  * protanopia, deuteranopia and tritanopia.
  */
 export const PALETTES: Record<Palette, {level: 'AA' | 'AAA' | null, colourSafe: boolean}> = {
-    default: {level: null, colourSafe: false},
-    tydelig: {level: 'AA', colourSafe: false},
-    colorblind: {level: 'AA', colourSafe: true},
-    'high-contrast': {level: 'AAA', colourSafe: false}
+    default: {level: 'AA', colourSafe: false},
+    'high-contrast': {level: 'AAA', colourSafe: false},
+    colorblind: {level: 'AA', colourSafe: true}
 }
 
 /** Body of POST /api/user/preferences - either field alone, or both in one save */

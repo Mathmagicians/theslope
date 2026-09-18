@@ -1388,7 +1388,7 @@ describe('useCoreValidation - User preference columns', () => {
 
     const preferences: Pick<UserCreate, 'notificationChannels' | 'appearance'> = {
         notificationChannels: ['EMAIL', 'SMS'],
-        appearance: {palette: 'tydelig', textScale: 'large'}
+        appearance: {palette: 'high-contrast', textScale: 'large'}
     }
 
     it('GIVEN a user without the columns THEN the domain schema fills the defaults', () => {

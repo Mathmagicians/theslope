@@ -223,7 +223,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
           :data="tableData"
           :columns="columns"
           row-key="id"
-          :ui="{ tbody: '[&_tr:first-child]:bg-info/10', tr: 'data-[expanded=true]:bg-elevated/50', th: 'px-1 py-1 md:px-4 md:py-3', td: 'px-1 md:px-4' }"
+          :ui="{ ...COMPONENTS.table.denseUi, tbody: '[&_tr:first-child]:bg-info/10', tr: 'data-[expanded=true]:bg-elevated/50' }"
       >
         <!-- Expand button column - only shown when canEdit -->
         <template #expand-cell="{ row }">

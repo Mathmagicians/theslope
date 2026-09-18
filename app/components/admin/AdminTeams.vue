@@ -402,7 +402,7 @@ interface TableRow {
   original: CookingTeamDisplay
 }
 
-const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, TEXT, BG, getRainbowBand} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, TEXT, BG, COMPONENTS, getRainbowBand} = useTheSlopeDesignSystem()
 
 const columns = [
   {
@@ -565,7 +565,7 @@ v-else
               :columns="columns"
               :data="displayedTeams"
               :loading="isSelectedSeasonLoading"
-              :ui="{ td: 'py-2' }"
+              :ui="COMPONENTS.table.ui"
           >
             <!-- Team name column with colored badge -->
             <template #name-cell="{ row }">

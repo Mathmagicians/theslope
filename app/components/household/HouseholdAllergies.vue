@@ -34,7 +34,7 @@ import type {AllergyDisplay, AllergyTypeDisplay} from '~/composables/useAllergyV
 import type {TicketTypeConfig} from '~/composables/useTicket'
 
 // Design system
-const {SIZES, COLOR} = useTheSlopeDesignSystem()
+const {SIZES, COLOR, COMPONENTS} = useTheSlopeDesignSystem()
 
 // Ticket type config for display (label, color, icon); active season prices carry the age limits
 const {getTicketTypeConfig} = useTicket()
@@ -227,7 +227,7 @@ const columns = computed(() => [
             v-model:expanded="expanded"
             :data="tableData"
             :columns="columns"
-            :ui="{ tr: 'data-[expanded=true]:bg-elevated/50', th: 'px-1 py-1 md:px-4 md:py-3', td: 'px-1 md:px-4' }"
+            :ui="{ ...COMPONENTS.table.denseUi, tr: 'data-[expanded=true]:bg-elevated/50' }"
         >
           <!-- Expand/Edit column (pencil icon) -->
           <template #expand-cell="{ row }">

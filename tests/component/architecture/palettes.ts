@@ -3,10 +3,10 @@
  *
  * `PALETTES` in `app/composables/useUserPreferenceValidation.ts` is the single source: the level it
  * carries is the badge "Mine indstillinger" shows, the level `designSystemContrast.unit.spec.ts`
- * asserts every pair at, and the level `scripts/palettes/presets.ts` solves for. A preset whose
- * entry claims a level has to publish a stylesheet and meet that level on every pair; a registry
- * entry with no level is the theme a member gets without choosing, measured at AA as the baseline
- * the dated findings are kept against.
+ * asserts every pair at, and the level `scripts/palettes/presets.ts` solves for. A palette whose
+ * entry claims a level has to publish a stylesheet and meet that level on every pair - the base,
+ * `default`, included: it is the Glade farver stylesheet every visitor sees. An entry with no level
+ * would be measured at AA as the baseline its dated findings are kept against.
  */
 
 import {PALETTES, DEFAULT_APPEARANCE, type Palette} from '~/composables/useUserPreferenceValidation'
@@ -18,10 +18,9 @@ import type {Level} from './designSystemPairs'
  * spec's own copy of the name - typed by `Palette`, so a new registry entry needs one here too.
  */
 const LABEL: Record<Palette, string> = {
-    default: 'Farveglad (the default theme)',
-    tydelig: 'Tydelig',
-    colorblind: 'Farveblind',
-    'high-contrast': 'Høj kontrast'
+    default: 'Glade farver (the base)',
+    'high-contrast': 'Høj kontrast',
+    colorblind: 'Til farveblinde'
 }
 
 /** The level the contrast spec measures a palette at when its registry entry promises none */
