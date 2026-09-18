@@ -84,7 +84,6 @@ const KNOWN_FINDINGS = new Map<string, number>([
     ['light|BORDER.peach.400|border|BG.panel', 1.96],
     ['light|BORDER.ocean.400|border|page', 2.24],
     ['light|BORDER.ocean.400|border|BG.panel', 2.11],
-    ['light|BORDER.orange.500|border|BG.panel', 2.96],
     ['light|RING.green.500|ring|page', 2.22],
     ['light|RING.green.500|ring|BG.panel', 2.09],
     ['light|RING.orange.200|ring|page', 1.45],
@@ -238,6 +237,12 @@ const KNOWN_FINDINGS = new Map<string, number>([
 const PALETTES = PALETTES_UNDER_TEST
 
 /**
+ * The regeneration case runs a full solve, a few seconds for an AAA preset and several times that
+ * beside the full suite
+ */
+const RENDER_TIMEOUT_MS = 30_000
+
+/**
  * Pairs a preset cannot answer, keyed `<preset>|<pair>`, with the ratio it reaches. Same
  * contract as KNOWN_FINDINGS: `it.fails`, so a regeneration that fixes one breaks the build.
  *
@@ -247,43 +252,12 @@ const PALETTES = PALETTES_UNDER_TEST
  * `BORDER.gray[800]`, `TEXT.dimmed`, `COMPONENTS.powerMode.iconClass`), and the two countdown
  * accents moved to the 200 rung, which only they draw.
  *
- * Høj kontrast meets AAA on 423 of the 438 pairs. The fifteen below are measured 2026-09-18 and
- * have two closers:
- *
- * 1. Thirteen of them wait on the generator's colour maths. `withLightness` moves a published rung
- *    along OKLCH lightness with the chroma held, and a rung that leaves the sRGB gamut at the new
- *    lightness has its channels clipped, which costs it the luminance the lift was for. Clamping
- *    chroma to the gamut per rung - what `anchoredLightness` already does for a hue-mapped family -
- *    takes the preset to 436 of 438, measured 2026-09-18. It moves nine rungs in each of Tydelig
- *    and Farveblind, which both still meet AA on all 438 pairs, so it is the user's call.
- * 2. `BORDER.orange.500` waits on a token. Orange 500 draws the border and the band fill at once,
- *    and the lightness that carries a 3:1 border takes `BACKGROUNDS.hero.orange`, `RAINBOW[1]` and
- *    `COMPONENTS.kitchenPanel.DINEIN` below their own bar. Its closer is the one the nine tokens
- *    above took: a light-mode face of its own, on a rung only the border draws.
+ * Høj kontrast meets AAA on every pair since 2026-09-18, through two changes: the generator gives
+ * up chroma where sRGB cannot show a rung at its new lightness (a clipped channel costs the
+ * luminance the lift was for), and `BORDER.orange[500]` draws the 600 rung in light mode, so the
+ * border no longer shares its rung with the orange band fill.
  */
-/**
- * The regeneration case runs a full solve. An AAA preset with findings walks until its first repeated
- * palette (10 rounds for Høj kontrast, ~3 s alone and several times that beside the full suite)
- */
-const RENDER_TIMEOUT_MS = 30_000
-
-const PRESET_FINDINGS = new Map<string, number>([
-    ['high-contrast|light|BORDER.orange.500|border|page', 2.93],
-    ['high-contrast|light|BORDER.orange.500|border|BG.panel', 2.76],
-    ['high-contrast|dark|COMPONENTS.powerMode.iconClass|BG.panelNested', 6.12],
-    ['high-contrast|dark|COMPONENTS.guestRow.iconClass|page', 5.98],
-    ['high-contrast|dark|COMPONENTS.guestRow.iconClass|BG.panelNested', 5.1],
-    ['high-contrast|dark|COMPONENTS.economyTable.level2.icon|BG.panelNested', 6.11],
-    ['high-contrast|dark|slot.secondary|soft', 6.51],
-    ['high-contrast|dark|slot.info|soft', 5.73],
-    ['high-contrast|dark|slot.success|soft', 5.8],
-    ['high-contrast|dark|slot.warning|soft', 5.71],
-    ['high-contrast|dark|slot.winery|soft', 5.72],
-    ['high-contrast|dark|slot.party|soft', 5.7],
-    ['high-contrast|dark|slot.peach|soft', 5.74],
-    ['high-contrast|dark|slot.caramel|soft', 5.7],
-    ['high-contrast|dark|slot.ocean|soft', 6.88]
-])
+const PRESET_FINDINGS = new Map<string, number>([])
 
 describe('EN 301 549 / WCAG 2.1: the design system meets its contrast level', () => {
     it('the OKLCH conversion agrees with the sRGB hex Tailwind 4 publishes', () => {

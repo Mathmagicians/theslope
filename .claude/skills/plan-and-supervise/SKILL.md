@@ -1,6 +1,6 @@
 ---
 name: plan-and-supervise
-description: Use when writing or updating a feature / bug-fix plan doc in docs/features, when asked to "assess and plan the work left", or when supervising subagents that implement such a plan. Encodes the user's working preferences - named packages (no codes), ASCII mockups signed off in the doc AND the component header, per-package approval before any agent starts, endpoint→API spec and component→BDD spec coverage, design-system tokens over raw Nuxt UI props, code traced before claims.
+description: Use when writing or updating a feature / bug-fix plan doc in docs/features, when asked to "assess and plan the work left", or when supervising subagents that implement such a plan. Encodes the user's working preferences - named packages (no codes), ASCII mockups signed off in the doc and moved to the component header on implementation, implemented fixes trimmed to pointers, per-package approval before any agent starts, endpoint→API spec and component→BDD spec coverage, design-system tokens over raw Nuxt UI props, code traced before claims.
 ---
 
 # Plan and Supervise
@@ -25,12 +25,24 @@ at a time behind an explicit approval. The plan document is the deliverable; the
 
 ## Mockups gate every UX change
 
-- ASCII mockups in the doc (desktop and mobile where they differ) marked `⏳ awaiting signoff` until the user marks them `✅`.
-- The same mockup is repeated in the changed component's header comment (`AdminPlanning.vue`, `SeasonSelector.vue`, `UserProfileCard.vue` style).
+- ASCII mockups live in the doc (desktop and mobile where they differ) until they are implemented, marked `⏳ awaiting signoff`
+  until the user marks them `✅`.
+- Implementing a mockup moves it into the changed component's header comment (`AdminPlanning.vue`, `SeasonSelector.vue`,
+  `UserProfileCard.vue` style); the doc then keeps the signoff line and points to that header.
 - Parent owns the composition, child owns its layout: the container's header mockup draws how the children are arranged
   (each child as a labelled box, no internals); each child's header mockup draws its own internals. No drawing line appears
   in two files.
 - No implementation of a UX package before its mockup is ✅.
+
+## Cleaning up the doc once a fix is implemented
+
+- An implemented fix shrinks to pointers: the files, functions and specs that carry it, the signoff date, the component header
+  that holds its mockup. Code snippets, token and hex tables, red/green logs and old → new tables leave the doc; git history
+  holds them.
+- Anything not implemented keeps its full detail: open decisions with the options and their measurements, findings still
+  standing, deferred work, notes on what a later package has to do.
+- Detail that belongs to another feature moves to that feature's doc in full (the alert classification lives in
+  `feature-proposal-notifications.md`), and this doc points there.
 
 ## Investigate before you claim
 

@@ -331,7 +331,8 @@ export const BORDER = {
         600: 'border-pink-600'     // Kitchen panel divider - TAKE AWAY
     },
     orange: {
-        500: 'border-orange-500',
+        // Light draws 600: 500 is also the orange band fill, and reads 2.96:1 as a border on BG.panel
+        500: 'border-orange-600 dark:border-orange-500',
         600: 'border-orange-600'   // Kitchen panel divider - SPIS SAMMEN
     },
     red: {

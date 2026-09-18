@@ -83,12 +83,18 @@ export class SettingFactory {
     static readonly appendLine = (context: BrowserContext, key: SettingKey, line: string): Promise<SettingDetail> =>
         SettingFactory.rewrite(context, key, lines => [...lines, line], value => value.includes(line))
 
-    /** Remove the lines this spec added, keeping everyone else's - cleanup for `afterAll` */
-    static readonly removeLines = (context: BrowserContext, key: SettingKey, lines: string[]): Promise<SettingDetail> =>
-        SettingFactory.rewrite(
+    /**
+     * Remove the lines this spec added, keeping everyone else's - cleanup for `afterAll`.
+     * `afterAll` runs in every worker that ran a test of the describe, and each worker only knows
+     * its own lines; a worker that added none leaves the shared row alone.
+     */
+    static readonly removeLines = async (context: BrowserContext, key: SettingKey, lines: string[]): Promise<void> => {
+        if (lines.length === 0) return
+        await SettingFactory.rewrite(
             context,
             key,
             current => current.filter(line => !lines.includes(line)),
             value => lines.every(line => !value.includes(line))
         )
+    }
 }

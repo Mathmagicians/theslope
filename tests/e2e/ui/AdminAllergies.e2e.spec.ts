@@ -5,7 +5,6 @@ import {AllergyFactory} from '../testDataFactories/allergyFactory'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {SettingFactory} from '../testDataFactories/settingFactory'
 import {UserFactory} from '../testDataFactories/userFactory'
-import {useCoreValidation} from '~/composables/useCoreValidation'
 
 const {adminUIFile} = authFiles
 const {
@@ -16,8 +15,6 @@ const {
     pollUntil,
     temporaryAndRandom
 } = testHelpers
-
-const {SystemRoleSchema} = useCoreValidation()
 
 const NOTES_KEY = 'allergy-poster-notes'
 
@@ -168,16 +165,15 @@ test.describe('AdminAllergies - poster notes', () => {
     /** The rendered bullets - the notes the user actually reads, not the textarea they typed into */
     const renderedNotes = (page: Page) => page.getByTestId('allergy-notes-item')
 
-    test('GIVEN an allergy manager WHEN adding a note and saving THEN the bullets, a reload and the poster show it', async ({browser}) => {
-        const adminContext = await validatedBrowserContext(browser)
-        const memberSession = await memberValidatedBrowserContext(browser)
-        const {userId} = await getSessionUserInfo(memberSession)
-        const newNote = `Husk allergener ${temporaryAndRandom()}`
-        addedLines.push(newNote)
+    // The writer here is the admin session. Who may write (ALLERGYMANAGER 200, a member 403) is the
+    // API spec's business; this case owns the round trip from the pencil to the rendered bullets, so it
+    // touches nobody's roles and runs beside the member case below.
+    test.describe('as a writer', () => {
+        test.use({storageState: adminUIFile})
 
-        await UserFactory.withSystemRoles(adminContext, userId, [SystemRoleSchema.enum.ALLERGYMANAGER], async () => {
-            const context = await freshMemberContext(browser)
-            const page = await context.newPage()
+        test('GIVEN a writer WHEN adding a note and saving THEN the bullets, a reload and the poster show it', async ({page}) => {
+            const newNote = `Husk allergener ${temporaryAndRandom()}`
+            addedLines.push(newNote)
 
             await gotoCatalog(page)
             await page.getByTestId('edit-allergy-notes').click()

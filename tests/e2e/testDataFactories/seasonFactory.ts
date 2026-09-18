@@ -405,16 +405,12 @@ export class SeasonFactory {
                 throw new Error('Failed to create singleton and could not find existing singleton season')
             }
 
-            // Activate it if not already active, or poll until active (handle race with other workers)
-            if (!existingSingleton.isActive) {
-                console.info('🌞 > SEASON_FACTORY > Activating existing singleton season')
-                await context.request.post('/api/admin/season/active', {
-                    headers: headers,
-                    data: { seasonId: existingSingleton.id }
-                })
-            }
-
-            // Poll until the season is active (another worker might be activating simultaneously)
+            // The worker that created the singleton activates it; this one only waits for that.
+            // Activation scaffolds prebookings for every household (ADR-015), and a second or
+            // third concurrent activation of the same season queues behind the first on local
+            // D1 - every worker's beforeAll then overruns its 30s budget and the dev server
+            // stalls for the tests running beside it.
+            console.info('🌞 > SEASON_FACTORY > Waiting for the creating worker to activate the singleton')
             const activeSeason = await testHelpers.pollUntil(
                 async () => {
                     const response = await context.request.get(`/api/admin/season/${existingSingleton.id}`, { headers })

@@ -13,7 +13,8 @@
  * 2. **The contrast walk** (every preset, at its level). The generator reads the pair inventory of
  *    `tests/component/architecture/designSystemPairs.ts` - the same inventory
  *    `designSystemContrast.unit.spec.ts` asserts - and walks every failing pair's step along OKLCH
- *    lightness, hue and chroma held, until the pair meets its threshold. A step moves away from
+ *    lightness, hue held and chroma clamped to the sRGB gamut at each lightness, until the pair
+ *    meets its threshold. A step moves away from
  *    what it is measured against: ink on a page goes darker in light mode and lighter in dark mode,
  *    and a fill that carries white ink darkens.
  *
@@ -37,7 +38,7 @@ import {
 } from '../../tests/component/architecture/designSystemPairs'
 import {
     clampChromaToGamut, composite, contrastRatio, hexToRgb, oklchToRgb, relativeLuminance, rgbToHex, rgbToOklch,
-    withLightness, type ColourScales, type ModeOverride, type SlotRungs
+    type ColourScales, type ModeOverride, type SlotRungs
 } from '../../tests/component/architecture/contrast'
 import {paletteFile, type Anchor, type Preset} from './presets'
 
@@ -271,11 +272,9 @@ export const solvePreset = (preset: Preset): RenderedPreset => {
             const hex = baseHex({family, step})
             if (!hex) continue
             override[mode].scales[family] ??= {}
-            // A hue-mapped rung answers for a meaning, so it gives up chroma rather than let a
-            // clipped channel bend it off its anchor; a published rung keeps its own hue anyway
-            override[mode].scales[family]![step] = hueBase[family]
-                ? anchoredLightness(hex, value)
-                : withLightness(hex, value)
+            // A rung gives up chroma where sRGB cannot show it at the new lightness: a clipped
+            // channel costs the luminance the move was for, and bends a hue-mapped rung off its anchor
+            override[mode].scales[family]![step] = anchoredLightness(hex, value)
         }
         // A light-block declaration also applies in dark mode - the dark scale is the layered one
         for (const [family, steps] of Object.entries(override.light.scales)) {
@@ -292,7 +291,7 @@ export const solvePreset = (preset: Preset): RenderedPreset => {
     const constraintFor = (pair: Pair, asInk: boolean): Constraint => {
         const source = asInk ? pair.ink.source! : pair.fill.source!
         const {chroma, hue} = rgbToOklch(hexToRgb(baseHex(source)!))
-        const shifted = (lightness: number) => oklchToRgb(lightness, chroma, hue)
+        const shifted = (lightness: number) => oklchToRgb(lightness, clampChromaToGamut(lightness, chroma, hue), hue)
         const inkDownwards = separation(pair)
         return {
             pair,

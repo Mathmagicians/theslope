@@ -6,6 +6,7 @@
 import {fillTemplate, templatePlaceholders} from '~/utils/template'
 import {maskEmail} from '~~/workers/common/mask'
 import {NOTIFICATION_ADDRESS_VARS, type EmailMessage, type NotificationConfig} from '~/composables/useNotificationValidation'
+import {NOTIFICATION_SENDER_NAME} from '~/config/notificationTemplates'
 
 export type TextAttachment = {
     filename: string
@@ -42,7 +43,7 @@ export const composeEmail = (config: NotificationConfig, input: ComposeInput): E
 
     // {kind}:{channel}:{maskedRecipient}:{messageId} — one grep on the masked address finds every send to that mailbox
     const dedupeKey = `${kind}:EMAIL:${maskEmail(to)}:${crypto.randomUUID()}`
-    const allValues = {...values, site: config.site, environment: config.environment, dedupeKey}
+    const allValues = {...values, senderName: NOTIFICATION_SENDER_NAME, site: config.site, environment: config.environment, dedupeKey}
 
     return {
         v: 1,

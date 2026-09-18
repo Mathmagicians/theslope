@@ -185,12 +185,17 @@ test.describe('Admin Teams API', () => {
             // AND: Contains dinnerEvents array (Detail pattern)
             expect(teamDetail).toHaveProperty('dinnerEvents')
             expect(Array.isArray(teamDetail.dinnerEvents)).toBe(true)
-            expect(teamDetail.dinnerEvents.length).toBe(2)
-            expect(teamDetail.dinnerEvents.map((e: {id: number}) => e.id).sort()).toEqual([dinnerEvent1.id, dinnerEvent2.id].sort())
+            // Creating the team also auto-assigns the season's unassigned dinners (ADR-015), so the source of truth is
+            // the season's dinner list, not a fixed number: the Detail carries exactly the dinners that name this team
+            const seasonDinners = await DinnerEventFactory.getDinnerEventsForSeason(context, testSeasonId)
+            const teamDinnerIds = seasonDinners.filter(e => e.cookingTeamId === createdTeam.id).map(e => e.id).sort()
+            const detailIds = teamDetail.dinnerEvents.map((e: {id: number}) => e.id).sort()
+            expect(detailIds).toEqual(teamDinnerIds)
+            expect(detailIds).toEqual(expect.arrayContaining([dinnerEvent1.id, dinnerEvent2.id]))
 
             // AND: Contains cookingDaysCount aggregate
             expect(teamDetail).toHaveProperty('cookingDaysCount')
-            expect(teamDetail.cookingDaysCount).toBe(2)
+            expect(teamDetail.cookingDaysCount).toBe(teamDinnerIds.length)
         })
 
         test('GET /api/admin/team/[id] should return 404 for non-existent team', async ({browser}) => {
