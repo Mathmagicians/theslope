@@ -5,9 +5,9 @@ import {
     type Channel, type Mode
 } from './designSystemPairs'
 import {composite, hexToRgb, parsePaletteOverrides, rgbToHex, type ModeOverride, type Rgb} from './contrast'
-import {CUD_ANCHORS, VISION_TYPES, separationUnder} from './colourVision'
-import {BASELINE, COLOUR_SAFE} from './palettes'
-import {ORDER_STATE_COLORS, TICKET_TYPE_COLORS} from '../../../app/composables/useTheSlopeDesignSystem'
+import {CUD_ANCHORS, VISION_TYPES, deltaEOk, separationUnder} from './colourVision'
+import {BASELINE, COLOUR_SAFE, PALETTES_UNDER_TEST} from './palettes'
+import {RAINBOW, ORDER_STATE_COLORS, TICKET_TYPE_COLORS} from '../../../app/composables/useTheSlopeDesignSystem'
 
 /**
  * Architecture test - the meanings of the design system stay apart for a member with a colour
@@ -247,6 +247,39 @@ describe('WCAG 2.1 §1.4.1: the design system keeps its meanings apart under col
 
             it.fails.each(findings)('$name', ({test}) => {
                 expect(test.distance >= THRESHOLD, message(test)).toBe(true)
+            })
+        })
+    })
+
+    /**
+     * The brand rainbow carries a meaning of its own: a cooking team wears the stop of its number
+     * (ADR-018), so two teams in the same week have to read as two teams. The stops are measured
+     * at the same bar, for normal vision, in every palette a member can pick - a preset moves the
+     * rungs, so the nine have to stay apart in each of them.
+     *
+     * The bar stops at normal vision on purpose. Nine hues is two more than the Color Universal
+     * Design set has anchors for, and under dichromacy the stops come as close as 0.016 (pink
+     * against ocean, protanopia, Farveblind, measured 2026-09-18). WCAG 2.1 §1.4.1 is met by the
+     * second channel instead: every team badge carries the team's name, its number or - in the
+     * calendar - the day, with the legend and the tooltip naming the team beside it.
+     */
+    describe.each(PALETTES_UNDER_TEST)('$label: the brand rainbow', ({file}) => {
+        const published = file !== null && existsSync(repoPath(file))
+        const override = published ? parsePaletteOverrides(repoFile(file!)) : null
+
+        describe.each(MODES)('%s mode', mode => {
+            // A preset with no stylesheet is reported by its own palette case above; measuring it
+            // here would report the published palette's numbers under the preset's name
+            it.skipIf(file !== null && !published)(`keeps its ${RAINBOW.length} stops apart from one another ≥ ${THRESHOLD}`, () => {
+                const colour = colourOf((override ?? NO_OVERRIDE)[mode], mode)
+                const stops = RAINBOW.map((_, index) => ({label: `RAINBOW[${index}]`, path: `RAINBOW[${index}]`, channel: 'bg' as Channel}))
+                const closest = stops.flatMap((a, index) => stops.slice(index + 1)
+                    .map(b => ({a, b, distance: deltaEOk(colour(a), colour(b))})))
+                    .reduce((worst, pair) => pair.distance < worst.distance ? pair : worst)
+
+                expect(closest.distance >= THRESHOLD,
+                    `${closest.a.label} vs ${closest.b.label} measures ${Math.round(closest.distance * 1000) / 1000}`
+                    + ` (${rgbToHex(colour(closest.a))} vs ${rgbToHex(colour(closest.b))})`).toBe(true)
             })
         })
     })

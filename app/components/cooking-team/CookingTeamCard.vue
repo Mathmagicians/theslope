@@ -38,7 +38,7 @@ import type { TeamRole, CookingTeamAssignment } from '~/composables/useCookingTe
 import { ROLE_LABELS, ROLE_ICONS } from '~/composables/useCookingTeamValidation'
 
 // Design system
-const { SIZES, ICONS, ALERTS, COLOR, TYPOGRAPHY, TEXT, BG, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { SIZES, ICONS, ALERTS, COLOR, TYPOGRAPHY, TEXT, BG, getRainbowBand, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 type DisplayMode = 'monitor' | 'regular' | 'edit'
 
@@ -111,17 +111,9 @@ watch(teamName, (newName) => {
   editedName.value = newName
 })
 
-const { getTeamColor } = useCookingTeam()
-const teamColor = computed(() => {
-  return getTeamColor(props.teamNumber - 1)
-})
-
-const appConfig = useAppConfig()
-const resolvedColor = computed(() => {
-  const colorName = teamColor.value as string
-  const colors = appConfig.ui?.colors as Record<string, string> | undefined
-  return colors?.[colorName] ?? 'neutral'
-})
+// The team wears the rainbow stop of its number: fill and ink as classes, so a badge needs
+// no colour slot (ADR-018)
+const teamBand = computed(() => getRainbowBand(props.teamNumber - 1))
 
 const roleGroups = computed(() => {
   const groups = {
@@ -163,7 +155,7 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
 
 // ========== INHABITANT SELECTOR (EDIT mode) ==========
 
-const {mergeInhabitantsWithAssignments, getTeamColor: getTeamColorByIndex} = useCookingTeam()
+const {mergeInhabitantsWithAssignments} = useCookingTeam()
 const householdsStore = useHouseholdsStore()
 
 const inhabitantsWithAssignments = computed(() =>
@@ -186,9 +178,10 @@ const getCurrentAssignment = (id: number) =>
 const getTeamName = (cookingTeamId: number) =>
     getTeamShortName(props.teams?.find(t => t.id === cookingTeamId)?.name ?? '')
 
-const getTeamColorForId = (cookingTeamId: number) => {
+/** The band of another team in the season - empty when the season does not list it */
+const getTeamBandForId = (cookingTeamId: number) => {
   const idx = props.teams?.findIndex(t => t.id === cookingTeamId) ?? -1
-  return idx >= 0 ? getTeamColorByIndex(idx) : 'neutral' as TeamColor
+  return idx >= 0 ? getRainbowBand(idx) : ''
 }
 
 const sortByStatusThenName = (rowA: {original: InhabitantDisplay}, rowB: {original: InhabitantDisplay}): number => {
@@ -239,13 +232,13 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
   <div v-else-if="mode === 'monitor'" class="py-4 md:py-6">
     <!-- Team name header (always visible) -->
     <div class="mb-3 md:mb-4 px-3 md:px-4 flex items-center gap-2 flex-wrap">
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
+      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
         <UIcon :name="ICONS.team" :size="SIZES.largeIconSize" class="inline" /> {{ teamName }}
       </UBadge>
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
+      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
         👨‍🍳 {{ assignments.length }}
       </UBadge>
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
+      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
         📅 {{ cookingDaysCount }}
       </UBadge>
     </div>
@@ -262,7 +255,6 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
           :inhabitants="roleGroups.CHEF.map(m => m.inhabitant)"
           :compact="false"
           :size="SIZES.standard"
-          :ring-color="teamColor"
           class="mt-2"
         />
       </div>
@@ -277,7 +269,6 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
           :inhabitants="roleGroups.COOK.map(m => m.inhabitant)"
           :compact="false"
           :size="SIZES.standard"
-          :ring-color="teamColor"
           class="mt-2"
         />
       </div>
@@ -292,7 +283,6 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
           :inhabitants="roleGroups.JUNIORHELPER.map(m => m.inhabitant)"
           :compact="false"
           :size="SIZES.standard"
-          :ring-color="teamColor"
           class="mt-2"
         />
       </div>
@@ -318,11 +308,9 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
     <div
       v-if="isEditable"
       class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 py-2 px-0 md:px-4 border-y-2 md:border-2 border-dashed"
-      :class="`border-${teamColor}-400 dark:border-${teamColor}-700`"
-      :style="{ borderColor: `var(--color-${resolvedColor}-300)` }"
     >
       <div class="flex flex-col md:flex-row md:items-center gap-3 flex-1">
-        <UBadge :color="teamColor" variant="soft" :size="SIZES.standard" class="rounded-full p-2 md:p-3">
+        <UBadge :class="[teamBand, 'rounded-full p-2 md:p-3']" :size="SIZES.standard">
           <UIcon :name="ICONS.team" :size="SIZES.standardIconSize" />
         </UBadge>
         <UFormField label="Holdnavn" class="flex-1 min-w-fit" >
@@ -354,15 +342,13 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             </UTooltip>
           </UAvatarGroup>
           <UBadge
-            :color="teamColor"
-            variant="soft"
+            :class="teamBand"
             :size="SIZES.large"
           >
             👨‍🍳 {{ assignments.length }}
           </UBadge>
           <UBadge
-            :color="teamColor"
-            variant="soft"
+            :class="teamBand"
             :size="SIZES.large"
           >
             📅 {{ cookingDaysCount }}
@@ -379,14 +365,14 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
     </div>
 
     <!-- VIEW MODE: Team name header -->
-    <div v-else class="flex items-center gap-2 flex-wrap p-4 border" :class="`border-${teamColor}-300 dark:border-${teamColor}-700`">
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
+    <div v-else class="flex items-center gap-2 flex-wrap p-4 border">
+      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
         <UIcon :name="ICONS.team" :size="SIZES.largeIconSize" class="inline" /> {{ teamName }}
       </UBadge>
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
+      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
         👨‍🍳 {{ assignments.length }}
       </UBadge>
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
+      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
         📅 {{ cookingDaysCount }}
       </UBadge>
     </div>
@@ -420,17 +406,15 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                   />
                   <UBadge
                     size="md"
-                    variant="subtle"
-                    :color="teamColor"
-                    class="cursor-pointer hover:opacity-80 transition-opacity"
+                    :class="[teamBand, 'cursor-pointer hover:opacity-80 transition-opacity']"
                     @click="member.inhabitant && navigateToInhabitant(member.inhabitant.id)"
                   >
                     {{ member.inhabitant?.name }} {{ member.inhabitant?.lastName }}
                   </UBadge>
-                  <UBadge :color="teamColor" variant="outline" :size="SIZES.small" class="w-fit">
+                  <UBadge :color="COLOR.neutral" variant="outline" :size="SIZES.small" class="w-fit">
                     {{ member.allocationPercentage }}%
                   </UBadge>
-                  <WeekDayMapDisplay v-if="member.affinity" :model-value="member.affinity" compact disabled :color="teamColor" />
+                  <WeekDayMapDisplay v-if="member.affinity" :model-value="member.affinity" compact disabled />
                   <UButton
                     v-if="isEditable && member.id"
                     :color="COLOR.winery"
@@ -468,10 +452,10 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
               </div>
               <div v-else class="flex flex-col gap-1">
                 <div v-for="(a, idx) in getAssignmentsFor(row.original.id)" :key="idx" class="flex flex-col gap-0.5">
-                  <UBadge :color="getTeamColorForId(a.cookingTeamId)" variant="solid" :size="SIZES.small" class="w-fit">
+                  <UBadge :class="[getTeamBandForId(a.cookingTeamId), 'w-fit']" :size="SIZES.small">
                     {{ getTeamName(a.cookingTeamId) }} · {{ a.allocationPercentage }}%
                   </UBadge>
-                  <WeekDayMapDisplay v-if="a.affinity" :model-value="a.affinity" compact disabled :color="getTeamColorForId(a.cookingTeamId)" />
+                  <WeekDayMapDisplay v-if="a.affinity" :model-value="a.affinity" compact disabled />
                 </div>
               </div>
             </template>
@@ -496,7 +480,6 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
               <div :class="['p-4', BG.panel]">
                 <TeamMemberAddForm
                   :team-affinity="affinity"
-                  :team-color="teamColor"
                   :initial-role="getCurrentAssignment(row.original.id)?.role"
                   :initial-percentage="getCurrentAssignment(row.original.id)?.allocationPercentage"
                   :initial-affinity="getCurrentAssignment(row.original.id)?.affinity"
@@ -524,7 +507,6 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             :compact="!isEditable"
             hide-restricted
             :label="isEditable ? 'Holdets madlavningsdage' : 'Madlavningsdage'"
-            :color="teamColor"
             @update:model-value="(value) => emit('update:affinity', value)"
           />
         </div>

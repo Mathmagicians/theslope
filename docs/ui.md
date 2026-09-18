@@ -248,6 +248,7 @@ literal colour in a component prop (`color="primary"`, `:color="'error'"`). It r
 - `COMPONENTS.segmentedActive` - The selected item in a segmented control (`FormModeSelector`, `BookingViewSwitcher`)
 - `COMPONENTS.choiceGroup` - Shared `URadioGroup` / `USwitch` config (`v-bind` a shape): `stacked` (one option under the other), `inline` (side by side from md up), `single` (a lone control). Every shape puts the option label on the body size in regular weight, so it reads under its section heading (`TYPOGRAPHY.sectionSubheading`) instead of competing with it
 - `PANTONE_CHIPS` / `getPantoneChip(index)` - One tinted chip per brand family, cycled by index (landing ticker)
+- `RAINBOW` / `getRainbowBand(index)` / `getRainbowFamily(index)` - The nine brand stops (fill + ink classes), cycled by index, and the family behind a stop: landing bands, kitchen panels, cooking teams (see **The brand rainbow**)
 - `getKitchenPanelClasses(mode)` - Helper for kitchen panels
 - `TICKET_TYPE_COLORS` - Ticket type to color mapping
 
@@ -258,27 +259,31 @@ on `<html>` reaches Nuxt UI's semantics and the design system's utilities togeth
 only in `app/assets/css/palettes/*.css`; `main.css` imports them next to its other imports and keeps its
 own `@theme static` as the published palette.
 
-**Tydelig** (`tydelig.css`) is TheSlope's own hues at the lightness EN 301 549 → WCAG 2.1 AA asks for, and it meets that level on all 418 pairs the design system defines, in light and dark.
+Four options: **Farveglad**, the published palette a member gets without choosing, and the three generated
+presets below.
+
+**Tydelig** (`tydelig.css`) is TheSlope's own hues at the lightness EN 301 549 → WCAG 2.1 AA asks for, and it meets that level on all 438 pairs the design system defines, in light and dark.
 The generator walks each step of a failing pair along OKLCH lightness with the hue and the chroma held,
 so Mocha Mousse stays Mocha Mousse and reads at 4.5:1. The eight neutral surfaces (`page`, `BG.panel`,
 `BG.panelNested`, `BG.inset`, `BG.ticket`, `BG.invoiceGround`, `BG.invoiceStat`, `BG.budgetHead`) keep
 their published value, because a surface is the ground every other pair stands on. The light block
-carries 21 steps, the dark block 36 — the dark block also restates a step the light block moved where
+carries 21 steps, the dark block 37 — the dark block also restates a step the light block moved where
 dark mode wants the published value back.
 
 **Slot re-pointing.** Nuxt UI's colours plugin points `--ui-<slot>` at the 500 rung in light and the 400
 in dark, so a solid button's white label is measured against the rung the brand paints with. For each
-slot whose solid face misses 4.5:1 at that rung, the preset emits `--ui-<slot>: var(--ui-color-<slot>-600)`
+slot whose solid face misses its level's body-text bar at that rung, the preset emits `--ui-<slot>: var(--ui-color-<slot>-600)`
 in the light block and the 300 rung in the dark block. That puts the button's demand on 600/300 and leaves
 500 to the bands and the chips: `pink-500`, `party-700` and `ocean-500` keep their published value under
-Tydelig. Thirteen slots are re-pointed: `caramel`, `error`, `info`, `neutral`, `ocean`, `party`, `peach`,
-`primary`, `secondary`, `success`, `warning`, `winery`, `yellow`.
+Tydelig. All three presets re-point the same thirteen slots: `caramel`, `error`, `info`, `neutral`,
+`ocean`, `party`, `peach`, `primary`, `secondary`, `success`, `warning`, `winery`, `yellow`. At 7:1 the
+600 and 300 rungs still carry the label, so Høj kontrast re-points to the same pair of rungs.
 
 **Farveblind** (`colorblind.css`) maps the meaning-bearing families onto the Color Universal Design
-anchors (Okabe & Ito) and then takes the same AA walk, so it meets EN 301 549 → WCAG 2.1 AA on all 418
+anchors (Okabe & Ito) and then takes the same AA walk, so it meets EN 301 549 → WCAG 2.1 AA on all 438
 pairs as well. Each anchor becomes a 50-950 scale: the anchor's OKLCH hue and chroma, the published
 family's lightness ladder rung by rung, chroma clamped to the sRGB gamut where a pale rung has no room
-for it. The light block carries 77 steps, the dark block 34.
+for it. The light block carries 77 steps, the dark block 35.
 
 | Family | Meaning it carries | Anchor | Published as |
 |---|---|---|---|
@@ -296,7 +301,15 @@ Orange sits 36° from the CUD orange, so the scale moves and band 1 moves with i
 *slot* instead: `--ui-color-info-<step>` is the variable Nuxt UI's colours plugin points the `info`
 scale at, so `bg-info` and `text-info-600` take the blue while `--color-violet-*` keeps painting the
 band and the chip. The brand families `amber`, `blue`, `sky`, `party`, `peach`, `caramel` and `winery`
-keep their published hue in both presets.
+keep their published hue in every preset.
+
+**Høj kontrast** (`high-contrast.css`) takes Tydelig's procedure to the enhanced level: EN 301 549 →
+WCAG 2.1 1.4.6 asks 7:1 of body text and 4.5:1 of large-scale text, and 1.4.11 keeps borders, rings and
+UI boundaries at 3:1, the level it defines. The hues, the chroma and the eight held surfaces are
+Tydelig's, and the walk starts from the same published palette and stops at the higher bar. It meets AAA
+on 423 of the 438 pairs; the light block carries 31 steps, the dark block 39. The remaining fifteen are
+listed in `PRESET_FINDINGS` in `designSystemContrast.unit.spec.ts`, each with the ratio it reaches,
+measured 2026-09-18, and the change that closes it.
 
 **Regenerating.** Rerun the generator after a change to the `@theme static` scales in `main.css`, to
 `ui.colors` in `app.config.ts`, or to a design-system token that adds a fill or an ink:
@@ -336,13 +349,13 @@ Color Universal Design anchors.
 
 | Attribute | Values | Drawn by |
 |---|---|---|
-| `data-palette` | `tydelig`, `colorblind` | the preset block in `app/assets/css/palettes/<value>.css` |
+| `data-palette` | `tydelig`, `colorblind`, `high-contrast` | the preset block in `app/assets/css/palettes/<value>.css` |
 | `data-text-scale` | `large` (112.5%), `larger` (125%) | the root font-size rules at the end of `app/assets/css/main.css` |
 
 To see a preset in the browser without saving it:
 
 ```js
-document.documentElement.dataset.palette = 'tydelig'     // or 'colorblind'
+document.documentElement.dataset.palette = 'tydelig'     // or 'colorblind', 'high-contrast'
 delete document.documentElement.dataset.palette         // back to Farveglad
 document.documentElement.classList.toggle('dark')       // the dark block
 ```
@@ -353,7 +366,8 @@ document.documentElement.classList.toggle('dark')       // the dark block
 |---|---|
 | **1.4.3 Contrast (Minimum)** | 4.5:1 for body text, 3:1 for large-scale text — 24px, or 18.66px at `font-bold` and heavier. Every face a token renders is measured, so the smallest one sets the bar. `TYPOGRAPHY.sectionIconLight` (`text-2xl`) is measured at 3:1 |
 | **1.4.3 for a fill** | A fill carries no size, so its bar comes from the typography a component places on it, listed in `INK_ON_FILL` with the component and line that draws it. A rainbow stop answers for every face its consumers draw and the smallest one binds: the first three stops carry the kitchen's `kitchenLabel` at `text-xs` and take 4.5:1, the last two carry `TYPOGRAPHY.sectionTitle` (`text-xl md:text-3xl font-bold` — large at both widths) and take 3:1 |
-| **1.4.11 Non-text Contrast** | 3:1 for the edges that identify a control or carry meaning: input and card borders, the green holiday ring, the amber and red deadline rings, the segmented-control ring, the calendar selection outlines |
+| **1.4.6 Contrast (Enhanced)** | 7:1 for body text, 4.5:1 for large-scale text, at the same faces and the same `INK_ON_FILL` rule. The level Høj kontrast is measured at |
+| **1.4.11 Non-text Contrast** | 3:1 for the edges that identify a control or carry meaning: input and card borders, the green holiday ring, the amber and red deadline rings, the segmented-control ring, the calendar selection outlines. 3:1 at every level, so it is the same bar in all four palettes |
 
 A surface that changes what it carries updates `INK_ON_FILL` in the same commit. `BACKGROUNDS.landing.ticker`
 is left out of it: its words are `PANTONE_CHIPS`, which bring their own fill and are measured as their own pairs.
@@ -375,19 +389,25 @@ Four edge tokens draw a boundary the layout already states, and sit outside 1.4.
 
 ### The brand rainbow
 
-`PANTONE_FAMILIES` in `useTheSlopeDesignSystem.ts` states the order of the palette, by hue. `HERO` holds one fill and one ink per family; `RAINBOW` and `PANTONE_CHIPS` map that list, so the ticker tints run in the order of the bands below them. A surface walks the rainbow by index through `getRainbowBand(i)`.
+`PANTONE_FAMILIES` in `useTheSlopeDesignSystem.ts` states the order of the palette, by hue, and `PANTONE_CHIPS` maps it for the ticker. `HERO` holds one fill and one ink per family; `RAINBOW_FAMILIES` lists the nine families that are stops and `RAINBOW` maps them, so a surface walks the rainbow by index through `getRainbowBand(i)` and takes the family behind a stop from `getRainbowFamily(i)`.
 
 | # | Family | Fill | Ink | Contrast | Walked by |
 |---|--------|------|-----|---------:|-----------|
-| 0 | Pink Lemonade | <span class="color-swatch" style="background-color: #fa7b95;"></span> `pink-500` | `TEXT.black` | 8.33 | landing band 1, kitchen TAKEAWAY |
-| 1 | Mandarin Orange | <span class="color-swatch" style="background-color: #ec6a37;"></span> `orange-500` | `TEXT.black` | 6.68 | landing band 2, kitchen SPISESAL |
-| 2 | Ocean | <span class="color-swatch" style="background-color: #25a6b5;"></span> `ocean-500` | `TEXT.black` | 7.2 | landing band 3, kitchen SPIS SENT |
-| 3 | Bonbon | <span class="color-swatch" style="background-color: #de5697;"></span> `bonbon-500` (violet scale) | `TEXT.black` | 5.88 | landing band 4 |
-| 4 | Party Punch | <span class="color-swatch" style="background-color: #e84c76;"></span> `party-500` | `TEXT.black` | 5.73 | the next surface that walks past band 4 |
+| 0 | Pink Lemonade | <span class="color-swatch" style="background-color: #fa7b95;"></span> `pink-500` | `TEXT.black` | 8.33 | landing band 1, kitchen TAKEAWAY, madhold 1 |
+| 1 | Mandarin Orange | <span class="color-swatch" style="background-color: #ec6a37;"></span> `orange-500` | `TEXT.black` | 6.27 | landing band 2, kitchen SPISESAL, madhold 2 |
+| 2 | Ocean | <span class="color-swatch" style="background-color: #25a6b5;"></span> `ocean-500` | `TEXT.black` | 7.2 | landing band 3, kitchen SPIS SENT, madhold 3 |
+| 3 | Bonbon | <span class="color-swatch" style="background-color: #de5697;"></span> `bonbon-500` (violet scale) | `TEXT.black` | 5.88 | landing band 4, madhold 4 |
+| 4 | Party Punch | <span class="color-swatch" style="background-color: #c4516c;"></span> `party-700` | `TEXT.black` | 4.74 | madhold 5 |
+| 5 | Peach Cobbler | <span class="color-swatch" style="background-color: #ffb482;"></span> `peach-300` | `TEXT.peach[950]` | 9.01 | countdowns, calendar highlights, madhold 6 |
+| 6 | Winery | <span class="color-swatch" style="background-color: #a02f4b;"></span> `winery-700` | `TEXT.white` | 6.99 | madhold 7 |
+| 7 | Yellow | <span class="color-swatch" style="background-color: #facc15;"></span> `yellow-400` | `TEXT.black` | 13.71 | madhold 8 |
+| 8 | Sky | <span class="color-swatch" style="background-color: #305f6e;"></span> `sky-700` | `TEXT.white` | 7.03 | madhold 9 |
 
-Two families sit outside the walk: <span class="color-swatch" style="background-color: #ffb482;"></span> `peach-300` with `TEXT.peach[950]` for countdowns and calendar highlights, and <span class="color-swatch" style="background-color: #a47864;"></span> `amber-500` with `TEXT.mocha[50]` for the frame.
+One family sits outside the walk: <span class="color-swatch" style="background-color: #a47864;"></span> `amber-500` with `TEXT.mocha[50]`, the frame — the landing title bar, the ticker and the dinner header.
 
-**Dark ink on vibrant fills.** The five vibrant stops carry `TEXT.black`, which clears 4.5:1 on each of them in light and dark mode. `TEXT.ink` serves text on a page surface; a brand fill takes `TEXT.black`.
+**Nine hues, one per cooking team.** A cooking team wears the stop of its number, wrapping at nine (`getRainbowBand(teamNumber - 1)`); the badge carries the stop's fill and ink as classes. The nearest two stops sit 0.079 apart in Oklab in each registered palette, over the 0.075 bar `designSystemColourVision.unit.spec.ts` reads off the Color Universal Design set. The set has seven anchors, so a dichromat reads the team from the name or number on the badge and in the legend beside it.
+
+**Ink on brand fills.** Each stop carries the ink that clears 4.5:1 on it in light and dark mode: `TEXT.black` on six of them, `TEXT.white` on Winery and Sky, `TEXT.peach[950]` on Peach. `TEXT.ink` serves text on a page surface; a brand fill takes the ink its `HERO` entry names.
 
 **TIL SALG is grey.** `COMPONENTS.kitchenPanel.RELEASED` fills `gray-400` with `TEXT.black` (8.07:1) and reads as neutral beside the three dining modes. Each kitchen divider is its own family one rung deeper: `border-pink-600`, `border-orange-600`, `border-ocean-600`, `border-gray-500`.
 
@@ -399,8 +419,7 @@ Use **cool, calm colors** for navigation:
 - <span class="color-swatch" style="background-color: #25a6b5;"></span> `blue-500` (primary/info) - Buttons, links
 
 #### Cooking Teams
-Teams rotate through **8 Pantone colors** for identity:
-- mocha, pink, orange, winery, party, peach, caramel, bonbon
+Team n wears rainbow stop n — the nine stops in **The brand rainbow**, wrapping at nine. `CookingTeamBadges`, `CookingTeamCard`, `TeamCalendarDisplay` and the `/admin/teams` table bind `getRainbowBand(i)` as the badge's class, `i` being the team's position in the season (`teamNumber - 1`). Mocha is the frame.
 
 **Note**: Team cards are small components showing one color at a time - don't compete with hero sections.
 

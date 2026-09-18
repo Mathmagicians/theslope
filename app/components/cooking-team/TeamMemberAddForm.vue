@@ -9,11 +9,9 @@
 import type {TeamRole} from '~/composables/useCookingTeamValidation'
 import {ROLE_OPTIONS, ALLOCATION_PERCENTAGE_OPTIONS} from '~/composables/useCookingTeamValidation'
 import type {WeekDayMap} from '~/types/dateTypes'
-import type {TeamColor} from '~/composables/useCookingTeam'
 
 interface Props {
   teamAffinity?: WeekDayMap | null
-  teamColor: TeamColor
   initialRole?: TeamRole
   initialPercentage?: number
   initialAffinity?: WeekDayMap | null
@@ -70,7 +68,6 @@ const handleSubmit = () => {
         :parent-restriction="teamAffinity"
         hide-restricted
         label="Kan kun følgende ugedage"
-        :color="teamColor"
     />
 
     <div class="flex flex-col-reverse md:flex-row md:justify-end gap-2">

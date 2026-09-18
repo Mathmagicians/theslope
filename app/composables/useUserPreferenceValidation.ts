@@ -10,7 +10,7 @@ import {z} from 'zod'
 import {NotificationChannelSchema} from '~~/prisma/generated/zod'
 
 /** One palette preset per `html[data-palette="…"]` block under app/assets/css/palettes */
-export const PaletteSchema = z.enum(['default', 'tydelig', 'colorblind'])
+export const PaletteSchema = z.enum(['default', 'tydelig', 'colorblind', 'high-contrast'])
 
 /** One text scale per `html[data-text-scale="…"]` rule in app/assets/css/main.css */
 export const TextScaleSchema = z.enum(['normal', 'large', 'larger'])
@@ -40,7 +40,8 @@ export const DEFAULT_NOTIFICATION_CHANNELS: NotificationChannel[] = ['EMAIL']
 export const PALETTES: Record<Palette, {level: 'AA' | 'AAA' | null, colourSafe: boolean}> = {
     default: {level: null, colourSafe: false},
     tydelig: {level: 'AA', colourSafe: false},
-    colorblind: {level: 'AA', colourSafe: true}
+    colorblind: {level: 'AA', colourSafe: true},
+    'high-contrast': {level: 'AAA', colourSafe: false}
 }
 
 /** Body of POST /api/user/preferences - either field alone, or both in one save */

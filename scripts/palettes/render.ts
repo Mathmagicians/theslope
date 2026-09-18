@@ -10,7 +10,7 @@
  *    OKLCH hue and chroma, the published family's lightness ladder rung by rung, chroma clamped
  *    to the sRGB gamut per rung. A family that is also a brand band publishes the anchor on the
  *    Nuxt UI slot instead (`--ui-color-<slot>-<step>`), so the meaning moves and the band does not.
- * 2. **The AA walk** (every preset). The generator reads the pair inventory of
+ * 2. **The contrast walk** (every preset, at its level). The generator reads the pair inventory of
  *    `tests/component/architecture/designSystemPairs.ts` - the same inventory
  *    `designSystemContrast.unit.spec.ts` asserts - and walks every failing pair's step along OKLCH
  *    lightness, hue and chroma held, until the pair meets its threshold. A step moves away from
@@ -27,8 +27,8 @@
  * chips at 500 and the buttons at 600.
  *
  * Two runs produce byte-identical output: the hue map is arithmetic on published values, and the
- * walk starts from that base, takes a fixed step, and visits the pairs in the order the inventory
- * lists them.
+ * walk starts from that base, takes a fixed step, visits the pairs in the order the inventory
+ * lists them, and stops on the round that meets every pair or on the first palette it repeats.
  */
 
 import {
@@ -93,8 +93,9 @@ const surfaceKeys = (pairs: Pair[]): Set<StepKey> => new Set(
 const surfaceNames = SURFACES.map(surface => surface.name).join(', ')
 
 /**
- * A solid button is `text-inverted` on `bg-<slot>`, body text at 4.5:1. Where the rung Nuxt UI
- * points a slot at cannot carry that label, the preset moves the *slot* rather than the rung:
+ * A solid button is `text-inverted` on `bg-<slot>`, body text at its level (4.5:1 AA, 7:1 AAA).
+ * Where the rung Nuxt UI points a slot at cannot carry that label, the preset moves the *slot*
+ * rather than the rung:
  * the 500 rung also paints the landing bands and the Pantone chips, and dragging it down to
  * answer a white button label darkens the whole brand with it. So `--ui-<slot>` re-points one
  * rung deeper in light, and its mirror in dark, where `text-inverted` is dark ink and the fill
@@ -339,6 +340,16 @@ export const solvePreset = (preset: Preset): RenderedPreset => {
          */
         let best = {lightness: new Map(lightness), passing: -1}
         let roundsUsed = 0
+
+        /**
+         * A round is a pure function of the lightness it starts from, so a walk that comes back to a
+         * palette it has already published repeats the same cycle from there and no later round can
+         * beat the best. A preset that meets its level everywhere stops on the round that gets it
+         * there; one that cannot - Høj kontrast at AAA - stops on its first repeat.
+         */
+        const visited = new Set<string>()
+        const fingerprint = () => [...lightness.keys()].sort().map(key => `${key}=${lightness.get(key)}`).join(';')
+
         for (let round_ = 0; round_ < MAX_ROUNDS; round_++) {
             const byVariable = constraintsByVariable(buildPairs(toScales(lightness), level))
 
@@ -354,45 +365,15 @@ export const solvePreset = (preset: Preset): RenderedPreset => {
             const passing = pairs.filter(meetsThreshold).length
             roundsUsed = round_ + 1
             if (passing > best.passing) best = {lightness: new Map(lightness), passing}
-            if (passing === pairs.length) break
+            const state = fingerprint()
+            if (passing === pairs.length || visited.has(state)) break
+            visited.add(state)
         }
 
-        /**
-         * The rounds publish the palette that passed the most pairs, and a round is all variables at
-         * once - so a variable that alone would close a pair is dropped with the round that traded
-         * something else away. The repair takes the winning palette and offers each still-failing
-         * pair the move it asks for, one variable at a time, keeping it only when the whole inventory
-         * comes out ahead. One variable at a time in inventory order, so a rerun repairs the same way.
-         */
-        const repair = (start: Lightness): Lightness => {
-            const lightness_ = new Map(start)
-            const count = () => buildPairs(toScales(lightness_), level).filter(meetsThreshold).length
-            let passing = count()
-            for (const pair of buildPairs(toScales(lightness_), level).filter(pair_ => !meetsThreshold(pair_))) {
-                for (const asInk of [true, false]) {
-                    const source = asInk ? pair.ink.source : pair.fill.source
-                    const key = source && stepKey(pair.mode, source)
-                    if (!key || held.has(key)) continue
-                    const wanted = required(constraintFor(pair, asInk))
-                    if (wanted === null) continue
-                    const previous = lightness_.get(key)
-                    lightness_.set(key, wanted)
-                    if (count() > passing) {
-                        passing = count()
-                        break
-                    }
-                    if (previous === undefined) lightness_.delete(key)
-                    else lightness_.set(key, previous)
-                }
-            }
-            return lightness_
-        }
-
-        const solved = repair(best.lightness)
+        const solved = best.lightness
         return {
             lightness: solved,
             failing: buildPairs(toScales(solved), level).filter(pair => !meetsThreshold(pair)),
-            repaired: buildPairs(toScales(solved), level).filter(meetsThreshold).length - best.passing,
             roundsUsed
         }
     }
@@ -418,7 +399,7 @@ export const solvePreset = (preset: Preset): RenderedPreset => {
         })
 
     const published = buildPairs(NO_OVERRIDE, level)
-    const {lightness, failing, repaired, roundsUsed} = solve()
+    const {lightness, failing, roundsUsed} = solve()
     const scales = toScales(lightness)
     const solved = buildPairs(scales, level)
     const written = emit(scales)
@@ -434,7 +415,7 @@ export const solvePreset = (preset: Preset): RenderedPreset => {
             : []),
         `👨‍💻 > [PALETTE] > [${name}] ${solved.length} pairs, ${solved.filter(meetsThreshold).length} pass`,
         ...groupCounts(solved),
-        `👨‍💻 > [PALETTE] > [${name}] steps published after ${roundsUsed} rounds and ${repaired} repaired pairs`,
+        `👨‍💻 > [PALETTE] > [${name}] steps published after ${roundsUsed} rounds`,
         ...MODES.map(mode => `    ${mode} block: ${written[mode].steps} steps, ${written[mode].slots} slots`),
         `👨‍💻 > [PALETTE] > [${name}] slots re-pointed to ${REPOINTED_RUNG.light}/${REPOINTED_RUNG.dark}: ${repointedSlots.join(', ')}`,
         `👨‍💻 > [PALETTE] > [${name}] renders ${output}`

@@ -23,7 +23,7 @@ type CookingTeamCreateAssignment = NonNullable<CookingTeamCreate['assignments']>
 // Serialization now handled internally by repository layer
 const {salt, temporaryAndRandom, headers} = testHelpers
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
-const {CookingTeamDetailSchema, CookingTeamAssignmentSchema} = useCookingTeamValidation()
+const {CookingTeamDetailSchema, CookingTeamAssignmentSchema, CreateTeamsResponseSchema} = useCookingTeamValidation()
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
@@ -838,10 +838,11 @@ export class SeasonFactory {
 
         if (expectedStatus === 201) {
             const responseBody = await response.json()
-            const validatedTeams = CookingTeamDetailSchema.array().parse(responseBody)
-            expect(validatedTeams[0]!.id, 'Response should contain the new team ID').toBeDefined()
-            expect(validatedTeams[0]!.seasonId).toBe(seasonId)
-            return validatedTeams[0]!
+            // ADR-009 operation result envelope: {teams, eventsAssigned}
+            const {teams} = CreateTeamsResponseSchema.parse(responseBody)
+            expect(teams[0]!.id, 'Response should contain the new team ID').toBeDefined()
+            expect(teams[0]!.seasonId).toBe(seasonId)
+            return teams[0]!
         }
         return null as unknown as CookingTeamDetail
     }

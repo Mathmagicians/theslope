@@ -2,7 +2,7 @@
 
 import {defineEventHandler, readBody, setResponseStatus} from "h3"
 import {createTeamsWithAssignments} from "~~/server/utils/teamService"
-import type {CookingTeamDetail, CookingTeamCreate} from "~/composables/useCookingTeamValidation"
+import type {CreateTeamsResponse, CookingTeamCreate} from "~/composables/useCookingTeamValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {z} from "zod"
@@ -11,7 +11,7 @@ const {throwH3Error} = eventHandlerHelper
 
 const {CookingTeamCreateSchema} = useCookingTeamValidation()
 
-export default defineEventHandler(async (event): Promise<CookingTeamDetail[]> => {
+export default defineEventHandler(async (event): Promise<CreateTeamsResponse> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
@@ -41,7 +41,8 @@ export default defineEventHandler(async (event): Promise<CookingTeamDetail[]> =>
         console.info(`👥 > TEAM > [PUT] Created ${result.teams.length} team(s), assigned ${result.eventsAssigned} events`)
         setResponseStatus(event, 201)
 
-        return result.teams
+        // ADR-009 operation result: teams created + dinner events the assignment touched
+        return result
     } catch (error) {
         return throwH3Error("👥 > TEAM > [PUT] Error creating team(s)", error)
     }

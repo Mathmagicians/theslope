@@ -165,6 +165,15 @@ export const BG = {
     bonbon: {
         500: 'bg-violet-500'    // Rainbow stop 4
     },
+    winery: {
+        700: 'bg-winery-700'    // Rainbow stop 7
+    },
+    yellow: {
+        400: 'bg-yellow-400'    // Rainbow stop 8
+    },
+    sky: {
+        700: 'bg-sky-700'       // Rainbow stop 9
+    },
     gray: {
         50: 'bg-gray-50',
         100: 'bg-gray-100',
@@ -457,40 +466,58 @@ export const LAYOUTS = {
  * `RAINBOW` and `PANTONE_CHIPS` map this list, so the ticker tints announce the solid bands
  * that follow them down the page, and a reordering is one edit.
  */
-export const PANTONE_FAMILIES = ['pink', 'orange', 'ocean', 'bonbon', 'party', 'peach', 'mocha'] as const
+export const PANTONE_FAMILIES = ['pink', 'orange', 'ocean', 'bonbon', 'party', 'peach', 'mocha', 'winery', 'yellow', 'sky'] as const
 
 export type PantoneFamily = typeof PANTONE_FAMILIES[number]
 
 /**
  * HERO - the brand fill set: one fill, one ink, per family
  *
- * The landing rainbow, the dinner and chef headers and the kitchen panels paint these same
- * surfaces, so each family pairs its fill with its ink here and every consumer inherits both.
+ * The landing rainbow, the dinner and chef headers, the kitchen panels and the cooking teams
+ * paint these same surfaces, so each family pairs its fill with its ink here and every consumer
+ * inherits both.
  *
- * The five vibrant stops carry `TEXT.black`: white and the 50/100 rungs read 2.1-4.4:1 on them,
- * black reads 5.7-8.3:1 and is the one ink that clears 4.5:1 on all of them, in both modes.
- * Peach and Mocha are light fills with their own dark ink and sit outside the walked rainbow.
+ * Ink is whichever of `TEXT.black` and `TEXT.white` clears 4.5:1 on the fill in both modes; a
+ * light fill carries its own family's darkest rung. Ratios measured 2026-09-18 in Farveglad,
+ * Tydelig and Farveblind - the lowest of the three is the one written here.
  */
 const HERO: Record<PantoneFamily, string> = {
     pink: `${BG.pink[500]} ${TEXT.black}`,            // Pink Lemonade   8.33:1
-    orange: `${BG.orange[500]} ${TEXT.black}`,        // Mandarin Orange 6.68:1
+    orange: `${BG.orange[500]} ${TEXT.black}`,        // Mandarin Orange 6.27:1
     ocean: `${BG.ocean[500]} ${TEXT.black}`,          // Ocean           7.2:1
     bonbon: `${BG.bonbon[500]} ${TEXT.black}`,        // Bonbon          5.88:1
-    party: `${BG.party[500]} ${TEXT.black}`,          // Party Punch     5.73:1
+    party: `${BG.party[700]} ${TEXT.black}`,          // Party Punch     4.74:1
     peach: `${BG.peach[300]} ${TEXT.peach[950]}`,     // Countdown       9.01:1
+    winery: `${BG.winery[700]} ${TEXT.white}`,        // Winery          6.99:1
+    yellow: `${BG.yellow[400]} ${TEXT.black}`,        // Yellow         13.71:1
+    sky: `${BG.sky[700]} ${TEXT.white}`,              // Sky             7.03:1
     mocha: `${BG.mocha[500]} ${TEXT.mocha[50]}`       // The frame: title bar, ticker, dinner header
 }
 
 /**
- * RAINBOW - the vibrant stops, in hue order, walked by index
+ * RAINBOW_FAMILIES - the stops a list walks, in hue order
  *
- * The landing bands take the first four; the kitchen panels take the first three. `party` is
- * the spare stop a fifth band or panel reaches without a new decision.
+ * Nine hues, each one its own: the nearest neighbours stay 0.079 apart in Oklab (the bar
+ * `designSystemColourVision.unit.spec.ts` reads off the Color Universal Design set is 0.075),
+ * in every registered palette. Party is at its 700 rung because at 500 it sits 0.049 from
+ * Bonbon. Mocha is the frame - the title bar, the ticker, the dinner header - never a stop.
  */
-export const RAINBOW = [HERO.pink, HERO.orange, HERO.ocean, HERO.bonbon, HERO.party] as const
+export const RAINBOW_FAMILIES = ['pink', 'orange', 'ocean', 'bonbon', 'party', 'peach', 'winery', 'yellow', 'sky'] as const satisfies readonly PantoneFamily[]
+
+/**
+ * RAINBOW - the stops themselves, walked by index
+ *
+ * The landing bands take the first four, the kitchen panels the first three, and a cooking team
+ * wears the stop of its number.
+ */
+export const RAINBOW = RAINBOW_FAMILIES.map(family => HERO[family])
 
 /** The rainbow stop for a position in a list, wrapping at the end of the palette */
 export const getRainbowBand = (index: number): string => RAINBOW[index % RAINBOW.length]!
+
+/** The family behind that stop, for a consumer that needs another rung of the same colour */
+export const getRainbowFamily = (index: number): PantoneFamily =>
+    RAINBOW_FAMILIES[index % RAINBOW_FAMILIES.length]!
 
 /**
  * BACKGROUNDS - Background patterns for sections
@@ -532,7 +559,10 @@ const CHIPS: Record<PantoneFamily, string> = {
     bonbon: 'border-violet-800 bg-violet-100 text-violet-900',
     party: 'border-party-800 bg-party-50 text-party-900',
     peach: 'border-peach-700 bg-peach-50 text-peach-950',
-    mocha: 'border-amber-900 bg-amber-100 text-amber-900'
+    mocha: 'border-amber-900 bg-amber-100 text-amber-900',
+    winery: 'border-winery-800 bg-winery-100 text-winery-900',
+    yellow: 'border-yellow-600 bg-yellow-100 text-yellow-900',
+    sky: 'border-sky-700 bg-sky-50 text-sky-900'
 }
 
 export const PANTONE_CHIPS = PANTONE_FAMILIES.map(family => CHIPS[family])
@@ -1787,7 +1817,9 @@ export const useTheSlopeDesignSystem = () => {
         PANTONE_CHIPS,
         getPantoneChip,
         RAINBOW,
+        RAINBOW_FAMILIES,
         getRainbowBand,
+        getRainbowFamily,
         ICONS,
         IMG,
 

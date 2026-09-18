@@ -41,7 +41,12 @@ const CHANNEL_LABELS: Record<NotificationChannel, {label: string, icon: string}>
   EMAIL: {label: 'E-mail', icon: ICONS.mail},
   SMS: {label: 'SMS', icon: ICONS.phone}
 }
-const PALETTE_LABELS: Record<Palette, string> = {default: 'Farveglad', tydelig: 'Tydelig', colorblind: 'Farveblind'}
+const PALETTE_LABELS: Record<Palette, string> = {
+  default: 'Farveglad',
+  tydelig: 'Tydelig',
+  colorblind: 'Farveblind',
+  'high-contrast': 'Høj kontrast'
+}
 const TEXT_SCALE_LABELS: Record<TextScale, string> = {normal: 'Normal', large: 'Stor', larger: 'Større'}
 const LEVEL_BADGES: Record<'AA' | 'AAA', string> = {
   AA: '🇪🇺 EN 301 549 · WCAG 2.1 AA ✓',

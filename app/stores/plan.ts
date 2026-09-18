@@ -1,5 +1,5 @@
 import type {Season, SeasonUpdateResponse} from '~/composables/useSeasonValidation'
-import type {CookingTeamDisplay, CookingTeamDetail, CookingTeamAssignment, CookingTeamCreate, CookingTeamUpdate, CookingTeamAssignmentCreate, TeamRole} from '~/composables/useCookingTeamValidation'
+import type {CookingTeamDisplay, CookingTeamDetail, CookingTeamAssignment, CookingTeamCreate, CookingTeamUpdate, CookingTeamAssignmentCreate, CreateTeamsResponse, TeamRole} from '~/composables/useCookingTeamValidation'
 import {ROLE_ICONS} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay, DinnerEventDetail, MenuSwapStrategy} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
@@ -74,14 +74,15 @@ export const usePlanStore = defineStore("Plan", () => {
         // No store state - components use useAsyncData with this function
         // Pattern: Store provides fetch logic, components manage their own data
         // Note: HTTP converts Date→ISO strings, schema.parse() with z.coerce.date() converts back
-        const {CookingTeamDetailSchema} = useCookingTeamValidation()
+        const {CookingTeamDetailSchema, CreateTeamsResponseSchema} = useCookingTeamValidation()
         const fetchTeamDetail = async (teamId: number): Promise<CookingTeamDetail> => {
             const data = await $fetch(`/api/admin/team/${teamId}`)
             return CookingTeamDetailSchema.parse(data)
         }
 
         // Create team operation - useAsyncData pattern for mutations
-        const createTeamData = ref<CookingTeamDetail | CookingTeamDetail[]>([])
+        const emptyCreateTeamsResponse = (): CreateTeamsResponse => ({teams: [], eventsAssigned: 0})
+        const createTeamData = ref<CreateTeamsResponse>(emptyCreateTeamsResponse())
         const {
             status: createTeamStatus,
             error: createTeamError,
@@ -91,7 +92,7 @@ export const usePlanStore = defineStore("Plan", () => {
             () => Promise.resolve(createTeamData.value),
             {
                 immediate: false,
-                default: () => []
+                default: emptyCreateTeamsResponse
             }
         )
 
@@ -383,14 +384,16 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         // COOKING TEAM ACTIONS - Part of Season aggregate (ADR-005)
-        const createTeam = async (teamOrTeams: CookingTeamCreate | CookingTeamCreate[]): Promise<CookingTeamDetail[]> => {
+        const createTeam = async (teamOrTeams: CookingTeamCreate | CookingTeamCreate[]): Promise<CreateTeamsResponse> => {
             const teams = Array.isArray(teamOrTeams) ? teamOrTeams : [teamOrTeams]
 
-            createTeamData.value = await $fetch<CookingTeamDetail[]>('/api/admin/team', {
+            // ADR-009 operation result: teams created + dinner events the assignment touched
+            const response = await $fetch('/api/admin/team', {
                 method: 'PUT',
                 body: teams,
                 headers: {'Content-Type': 'application/json'}
             })
+            createTeamData.value = CreateTeamsResponseSchema.parse(response)
 
             await executeCreateTeam()
 
@@ -399,13 +402,13 @@ export const usePlanStore = defineStore("Plan", () => {
                 throw createTeamError.value
             }
 
-            console.info(`👥 > PLAN_STORE > Created ${createTeamData.value.length} team(s)`)
+            console.info(`👥 > PLAN_STORE > Created ${createTeamData.value.teams.length} team(s), assigned ${createTeamData.value.eventsAssigned} dinner event(s)`)
 
             if (selectedSeasonId.value) {
                 await refreshSelectedSeason()
             }
 
-            return Array.isArray(createTeamData.value) ? createTeamData.value : [createTeamData.value]
+            return createTeamData.value
         }
 
         const updateTeam = async (team: CookingTeamUpdate) => {

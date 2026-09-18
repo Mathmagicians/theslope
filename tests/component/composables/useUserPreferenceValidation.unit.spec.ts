@@ -23,7 +23,7 @@ const {
 
 describe('useUserPreferenceValidation - enums', () => {
     it.each([
-        {schema: 'PaletteSchema', values: ['default', 'tydelig', 'colorblind']},
+        {schema: 'PaletteSchema', values: ['default', 'tydelig', 'colorblind', 'high-contrast']},
         {schema: 'TextScaleSchema', values: ['normal', 'large', 'larger']},
         {schema: 'NotificationChannelSchema', values: ['EMAIL', 'SMS']}
     ])('GIVEN $schema THEN its options are $values', ({schema, values}) => {
@@ -32,7 +32,7 @@ describe('useUserPreferenceValidation - enums', () => {
     })
 
     it.each([
-        {desc: 'an unlisted palette', schema: PaletteSchema, input: 'high-contrast'},
+        {desc: 'an unlisted palette', schema: PaletteSchema, input: 'neon'},
         {desc: 'an unlisted text scale', schema: TextScaleSchema, input: 'huge'},
         {desc: 'an unlisted channel', schema: NotificationChannelSchema, input: 'PIGEON'}
     ])('GIVEN $desc THEN it is rejected', ({schema, input}) => {
@@ -67,9 +67,17 @@ describe('useUserPreferenceValidation - PALETTES registry', () => {
     it.each([
         {palette: 'default' as const, level: null, colourSafe: false},
         {palette: 'tydelig' as const, level: 'AA' as const, colourSafe: false},
-        {palette: 'colorblind' as const, level: 'AA' as const, colourSafe: true}
+        {palette: 'colorblind' as const, level: 'AA' as const, colourSafe: true},
+        {palette: 'high-contrast' as const, level: 'AAA' as const, colourSafe: false}
     ])('GIVEN $palette THEN its verified level is $level and colourSafe is $colourSafe', ({palette, level, colourSafe}) => {
         expect(PALETTES[palette]).toEqual({level, colourSafe})
+    })
+
+    it('GIVEN the registry THEN one preset carries the enhanced level', () => {
+        // 1.4.6 AAA is one preset's promise: a member who needs it picks it by name, and the
+        // contrast spec measures every pair of that one at 7:1
+        expect(Object.entries(PALETTES).filter(([, entry]) => entry.level === 'AAA').map(([key]) => key))
+            .toEqual(['high-contrast'])
     })
 
     it('GIVEN the registry THEN one preset carries the colour-safe mapping', () => {

@@ -132,7 +132,7 @@ const props = withDefaults(defineProps<Props>(), {
   canEdit: false
 })
 
-const {getDefaultCookingTeam, getTeamColor} = useCookingTeam()
+const {getDefaultCookingTeam} = useCookingTeam()
 const store = usePlanStore()
 const {
   isSeasonsLoading,
@@ -236,7 +236,7 @@ const teamTabs = computed(() => {
     label: team.name,
     value: index,
     icon: 'i-fluent-mdl2-team-favorite',
-    color: getTeamColor(index),
+    // The team's colour rides on CookingTeamBadges in the tab body, from the team's number
     memberCount: team.assignments?.length ?? 0,
     cookingDaysCount: team.cookingDaysCount ?? 0
   }))
@@ -268,8 +268,9 @@ const handleBatchCreateTeams = async () => {
   if (!createDraft.value.length || !selectedSeason.value?.id) return
 
   try {
-    await createTeam(createDraft.value)
-    showSuccessToast('Madhold oprettet', `${createDraft.value.length} madhold oprettet med automatisk tildeling`)
+    // The toast reports the operation result (ADR-009), not the draft
+    const {teams: createdTeams, eventsAssigned} = await createTeam(createDraft.value)
+    showSuccessToast('Madhold oprettet', `${createdTeams.length} madhold oprettet · ${eventsAssigned} madlavninger tildelt`)
     await onModeChange(FORM_MODES.VIEW)
   } catch (error) {
     console.error('👥 > ADMIN_TEAMS > [CREATE] Error creating teams:', error)
@@ -401,7 +402,7 @@ interface TableRow {
   original: CookingTeamDisplay
 }
 
-const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, TEXT, BG} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, TEXT, BG, getRainbowBand} = useTheSlopeDesignSystem()
 
 const columns = [
   {
@@ -569,8 +570,7 @@ v-else
             <!-- Team name column with colored badge -->
             <template #name-cell="{ row }">
               <UBadge
-                  :color="getTeamColor(displayedTeams.findIndex(t => t.id === row.original.id))"
-                  variant="solid"
+                  :class="getRainbowBand(displayedTeams.findIndex(t => t.id === row.original.id))"
                   size="md"
               >
                 {{ row.original.name }}
@@ -581,7 +581,6 @@ v-else
             <template #affinity-cell="{ row }">
               <WeekDayMapDisplay
                   :model-value="row.original.affinity"
-                  :color="getTeamColor(displayedTeams.findIndex(t => t.id === row.original.id))"
                   compact
               />
             </template>

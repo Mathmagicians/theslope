@@ -20,7 +20,8 @@ import type {Level} from './designSystemPairs'
 const LABEL: Record<Palette, string> = {
     default: 'Farveglad (the default theme)',
     tydelig: 'Tydelig',
-    colorblind: 'Farveblind'
+    colorblind: 'Farveblind',
+    'high-contrast': 'Høj kontrast'
 }
 
 /** The level the contrast spec measures a palette at when its registry entry promises none */

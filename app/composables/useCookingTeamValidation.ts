@@ -140,6 +140,16 @@ export const useCookingTeamValidation = () => {
     const CookingTeamUpdateSchema = CookingTeamSchema.partial().required({ id: true })
 
     /**
+     * CreateTeamsResponse - Operation result envelope for PUT /api/admin/team (ADR-009)
+     * Team creation also assigns affinities and cooking teams to the season's dinner events,
+     * so the response reports what the operation did, not only the entities it created.
+     */
+    const CreateTeamsResponseSchema = z.object({
+        teams: z.array(CookingTeamDetailSchema),
+        eventsAssigned: z.number().int().min(0)
+    })
+
+    /**
      * PrismaTeamUpdateData - Return type for toPrismaUpdateData
      * Derived from CookingTeamDetailSchema, excludes computed fields, serializes affinity
      */
@@ -315,6 +325,7 @@ export const useCookingTeamValidation = () => {
         CookingTeamDetailSchema,             // For detail views (CookingTeamCard)
         CookingTeamCreateSchema,             // For PUT operations (ADR-009)
         CookingTeamUpdateSchema,             // For POST operations (ADR-009)
+        CreateTeamsResponseSchema,           // Operation result for PUT /api/admin/team (ADR-009)
         CookingTeamAssignmentSchema,         // For nested assignments
         CookingTeamAssignmentCreateSchema,   // For creating assignments (ADR-009)
         RoleAssignmentPlanSchema,            // Plan output from decideRoleAssignmentWrites
@@ -348,6 +359,7 @@ export type CookingTeamDisplay = z.infer<ReturnType<typeof useCookingTeamValidat
 export type CookingTeamDetail = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamDetailSchema']>
 export type CookingTeamCreate = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamCreateSchema']>
 export type CookingTeamUpdate = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamUpdateSchema']>
+export type CreateTeamsResponse = z.infer<ReturnType<typeof useCookingTeamValidation>['CreateTeamsResponseSchema']>
 export type CookingTeamAssignment = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamAssignmentSchema']>
 export type CookingTeamAssignmentCreate = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamAssignmentCreateSchema']>
 export type RoleAssignmentPlan = z.infer<ReturnType<typeof useCookingTeamValidation>['RoleAssignmentPlanSchema']>

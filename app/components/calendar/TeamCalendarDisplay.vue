@@ -5,7 +5,7 @@
  * Features:
  * - Calendar view: Shows team assignments on calendar with colored badges
  * - Selection support: Click to select dinner event (optional via emit)
- * - Multi-team support: Shows all teams with distinct colors
+ * - Multi-team support: team n wears rainbow stop n (`getRainbowBand`), wrapping at nine
  * - Holiday awareness: Displays holidays as green rings
  *
  * Uses BaseCalendar for consistent calendar structure.
@@ -39,10 +39,9 @@ const emit = defineEmits<{
   select: [dinnerId: number]
 }>()
 
-const {getTeamColor} = useCookingTeam()
 const {createEventList} = useCalendarEvents()
 const {getHolidayDatesFromDateRangeList} = useSeason()
-const {CALENDAR, dayCircleClasses} = useTheSlopeDesignSystem()
+const {CALENDAR, dayCircleClasses, getRainbowBand} = useTheSlopeDesignSystem()
 
 // Expand holiday ranges into individual dates
 const holidayDates = computed(() => {
@@ -120,10 +119,8 @@ const getCalendarDayClasses = (day: DateValue) => [
             :text="getTeamEventList(eventLists)!.events[0]?.label"
           >
             <UBadge
-              :color="getTeamColor(getTeamEventList(eventLists)!.color as number)"
-              variant="solid"
               size="md"
-              :class="getCalendarDayClasses(day)"
+              :class="[getRainbowBand(getTeamEventList(eventLists)!.color as number), ...getCalendarDayClasses(day)]"
               @click="handleCalendarDayClick(day)"
             >
               {{ day.day }}
@@ -138,12 +135,11 @@ const getCalendarDayClasses = (day: DateValue) => [
         <template #legend>
           <div class="px-4 py-6 md:px-6 md:py-8 border-t mt-auto text-sm grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
             <!-- Teams -->
-            <div v-for="(team, index) in teams" :key="team.id" class="flex items-center gap-3">
+            <div v-for="(team, index) in teams" :key="team.id" class="flex items-center gap-3" data-testid="team-legend-entry">
               <UBadge
-                :color="getTeamColor(index)"
-                variant="solid"
                 size="md"
-                class="w-8 h-8 flex items-center justify-center shrink-0"
+                :class="[getRainbowBand(index), 'w-8 h-8 flex items-center justify-center shrink-0']"
+                data-testid="team-legend-badge"
               >
                 1
               </UBadge>

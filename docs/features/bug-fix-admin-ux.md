@@ -1476,6 +1476,208 @@ Standard with `delete document.documentElement.dataset.palette`, dark with
 | Any page, dark mode | desktop | `ALERTS.*`, `getRainbowBand(i)` | The dark block lifts the same six families; the bands paint the same fills with the same black ink |
 | `/login` → `Rediger` | 375px + desktop | `URadioGroup`, `UBadge` `COLOR.success` | Three options read Farveglad / Tydelig / Farveblind, and the EU badge sits on Tydelig and Farveblind |
 
+### Høj kontrast — ✅ IMPLEMENTED (2026-09-18)
+
+The fourth option, key `high-contrast`, label **Høj kontrast**, badge level **AAA**, in
+`app/assets/css/palettes/high-contrast.css` under `html[data-palette="high-contrast"]` and its `.dark` mirror. One
+line in `scripts/palettes/presets.ts` produces it, after `tydelig`:
+
+```ts
+{name: 'high-contrast', level: 'AAA', generatedOn: '2026-09-18', hues: {}, header: highContrastHeader}
+```
+
+Tydelig's procedure one level up. The hue map is empty, so the hues and the chroma are TheSlope's published palette,
+only OKLCH lightness moves, and the eight neutral surfaces stay held. The level reaches the inventory through
+`buildPairs(override, 'AAA')`, which raises 1.4.3 to **1.4.6 Contrast (Enhanced)** — 7:1 body text, 4.5:1 large-scale
+text — and leaves 1.4.11 at 3:1, the level that criterion defines. Every scoping rule is the one the AA presets use:
+the `INK_ON_FILL` faces, the large-scale exemption, the decorative edges.
+
+**The slot re-pointing rule holds at AAA.** It lands on the same rungs at the higher bar: all thirteen slots
+re-point, to 600 in light and 300 in dark, and each of the 26 solid faces (`text-inverted` on `bg-<slot>`) clears
+7:1 there, so the walk answers the buttons at 600/300 and leaves 500 to the bands and the chips exactly as it does
+under Tydelig.
+
+**The walk stops on its first repeated palette.** A round is a pure function of the lightness it starts from. Tydelig
+meets every pair in round 1 and Farveblind in round 2; Høj kontrast reaches 423 in round 5 and then cycles with period
+6 (423, 419, 421, 421, 421, 419). `solve()` fingerprints the lightness map after each round and stops when one
+repeats, which is round 10 here instead of the 30-round cap. The published palette is the best round, so the output
+of all three presets is byte-identical to the 30-round walk. The regeneration case carries a 30 s timeout
+(`RENDER_TIMEOUT_MS`): the Høj kontrast render takes ~3 s alone, several times that beside the full suite.
+
+**Counts.** 438 pairs, **423 pass**, 10 rounds. Light block **31 steps, 13 slots**; dark block **39 steps,
+13 slots** (Tydelig 21 / 37, Farveblind 77 / 35).
+
+| Group | Pairs | Farveglad at AAA | Høj kontrast |
+|---|---:|---:|---:|
+| text on surface | 153 | 37 | 149 |
+| paired token | 114 | 79 | 114 |
+| edge on surface | 93 | 53 | 91 |
+| semantic slot | 78 | 0 | 69 |
+| **Total** | **438** | **169** | **423** |
+
+**The fifteen findings**, in `PRESET_FINDINGS` in `designSystemContrast.unit.spec.ts` as `it.fails`, measured
+2026-09-18, with two closers:
+
+| Pairs | Ratios | Closer |
+|---|---|---|
+| 9 × dark `text-<slot>` on `bg-<slot>/10`: secondary, ocean, success, peach, info, winery, warning, party, caramel | 6.51, 6.88, 5.80, 5.74, 5.73, 5.72, 5.71, 5.70, 5.70 | The generator's colour maths. `withLightness` moves a published rung along OKLCH lightness with the chroma held, and a rung that leaves the sRGB gamut at the new lightness has its channels clipped, which costs it the luminance the lift was for |
+| 4 × dark icon ink: `COMPONENTS.powerMode.iconClass` on `BG.panelNested`, `COMPONENTS.guestRow.iconClass` on page and on `BG.panelNested`, `COMPONENTS.economyTable.level2.icon` on `BG.panelNested` | 6.12, 5.98, 5.10, 6.11 | Same |
+| 2 × light `BORDER.orange.500` on page and on `BG.panel` | 2.93, 2.76 | A token. Orange 500 draws the border and the band fill at once, and the lightness that carries a 3:1 border takes `BACKGROUNDS.hero.orange`, `RAINBOW[1]` and `COMPONENTS.kitchenPanel.DINEIN` below their own bar. Its closer is the one the nine `dark:`-faced tokens took: a light-mode face of its own, on a rung only the border draws |
+
+Measured the same day: clamping chroma to the sRGB gamut per rung — what `anchoredLightness` already does for a
+hue-mapped family — closes the first thirteen and takes the preset to **436 of 438**. It moves nine rungs in each of
+Tydelig and Farveblind, which both still meet AA on all 438 pairs, so the two AA presets keep the bytes they have
+until the user takes that call.
+
+**Registry and card.** `PaletteSchema` gains `'high-contrast'`; `PALETTES['high-contrast'] = {level: 'AAA',
+colourSafe: false}`; `PALETTE_LABELS['high-contrast'] = 'Høj kontrast'` and the radio renders the registry, so the
+option arrives with the `EN 301 549 · WCAG 2.1 AAA ✓` badge `LEVEL_BADGES` already held. `palettes.ts` gains the
+spec's own label, `main.css` imports `./palettes/high-contrast.css`, and the four options read Farveglad / Tydelig /
+Farveblind / Høj kontrast. The registry drives the measurement: the contrast spec asserts every pair of this preset
+at AAA, the case *the generator solves the presets the registry badges* holds `PRESETS` to the same names and
+levels, and *is generated from the preset the generator holds today* renders the file again and compares bytes.
+
+**Determinism.** Three consecutive `npx jiti scripts/palettes/generate.ts` runs write the same sha256 for all three
+presets. In the same window the design system gained three rainbow families (`winery`, `yellow`, `sky` in `HERO`),
+which takes the inventory from 418 to 438 pairs and adds one declaration, `--color-sky-50` in the dark block, to
+`tydelig.css` and `colorblind.css`; both still meet AA on 438 of 438.
+
+### Visual check — Høj kontrast
+
+Set the preset from the console on any page: `document.documentElement.dataset.palette = 'high-contrast'`, back to
+Farveglad with `delete document.documentElement.dataset.palette`, dark with
+`document.documentElement.classList.toggle('dark')`.
+
+| Route + state | Viewport | DS element to expect | Expect |
+|---|---|---|---|
+| `/login` → `Rediger` | 375px + desktop | `URadioGroup`, `UBadge` `COLOR.success` | Four options read Farveglad / Tydelig / Farveblind / Høj kontrast, and the badge on Høj kontrast reads `EN 301 549 · WCAG 2.1 AAA ✓` |
+| `/login` → `Rediger` → `Høj kontrast` → `Gem` | 375px + desktop | `html[data-palette]` | The page takes the preset, the card returns to its view face, and a reload keeps it |
+| `/` landing, scrolled | 375px + desktop | `getRainbowBand(0-8)`, `PANTONE_CHIPS` | Each band keeps its hue and deepens; the black ink on the first stops and the white ink on winery and sky read at 7:1 |
+| `/admin/planning` | desktop | `BUTTONS.primaryAction`, `SeasonStatusDisplay` | Solid buttons take the 600 rung and carry their white label at 7:1; the season alert's text reads on its soft fill |
+| `/admin/planning`, edit | 375px + desktop | `CALENDAR.holiday`, `PLANNING_CALENDAR.day.potential` | The holiday ring and the potential-day border sit at 3:1 against the calendar |
+| A page with an alert of each kind, dark | 375px + desktop | `ALERTS.info`, `ALERTS.success`, `ALERTS.warning`, `ALERTS.error` | Alert text on the soft `bg-<slot>/10` fill — the nine faces the findings list, at 5.7-6.9:1 |
+| `/household/<x>/bookings` | 375px + desktop | `DinnerTicket`, `ORDER_STATE_COLORS`, `COMPONENTS.guestRow.iconClass` | Ticket and state text read at 7:1; the dark guest glyph is the finding at 5.98:1 |
+| `/admin/economy`, tree expanded | desktop | `COMPONENTS.economyTable.level{1,2,3}` | Level headings, icons and stat boxes read at 7:1 on their banding, in both modes |
+| Any page, dark | desktop | `TEXT.muted`, `TEXT.timestamp`, `TEXT.menuBody` on `BG.panelNested` | The muted inks lift far enough to read at 7:1 on the nested panel |
+
+### Team colours — ✅ IMPLEMENTED (2026-09-18)
+
+**Decided by the user (2026-09-18).** Cooking teams need 8-10 clearly distinct colours, and the brand rainbow supplies
+them: team number n wears rainbow stop n, wrapping at nine. Mocha stays the frame.
+
+**Problem.** Team colours were eleven Nuxt UI slot names in `TEAM_COLORS` (`app/composables/useCookingTeam.ts`). Under
+Tydelig each slot is re-pointed to a darkened 600 rung, so orange and peach paint the same colour and pink, party and
+winery converge on one another. A stop is a fill and an ink at rungs the presets leave in place, so nine stops stay
+apart in each palette.
+
+**The stops.** Measured 2026-09-18 with the spec's own resolver: each ink clears 4.5:1, and the nearest two stops sit
+0.079 apart in Oklab in Farveglad, Tydelig, Farveblind and Høj kontrast, light and dark (bar 0.075). Party Punch moves
+to its 700 rung: at 500 it sits 0.049 from Bonbon.
+
+| # | Stop | Fill + ink | Ink ratio (lowest palette) |
+|---|---|---|---:|
+| 0 | pink | `BG.pink[500]` + `TEXT.black` | 8.33 |
+| 1 | orange | `BG.orange[500]` + `TEXT.black` | 6.27 |
+| 2 | ocean | `BG.ocean[500]` + `TEXT.black` | 7.2 |
+| 3 | bonbon | `BG.bonbon[500]` + `TEXT.black` | 5.88 |
+| 4 | party | `BG.party[700]` + `TEXT.black` | 4.74 |
+| 5 | peach | `BG.peach[300]` + `TEXT.peach[950]` | 9.01 |
+| 6 | winery | `BG.winery[700]` + `TEXT.white` | 6.99 |
+| 7 | yellow | `BG.yellow[400]` + `TEXT.black` | 13.71 |
+| 8 | sky | `BG.sky[700]` + `TEXT.white` | 7.03 |
+
+| Token | Old | New |
+|---|---|---|
+| `BG.winery[700]` | — | `bg-winery-700` |
+| `BG.yellow[400]` | — | `bg-yellow-400` |
+| `BG.sky[700]` | — | `bg-sky-700` |
+| `PANTONE_FAMILIES` | `['pink','orange','ocean','bonbon','party','peach','mocha']` | `['pink','orange','ocean','bonbon','party','peach','mocha','winery','yellow','sky']` |
+| `HERO.party` (and `BACKGROUNDS.hero.party`) | `bg-party-500 text-black` | `bg-party-700 text-black` |
+| `HERO.winery` | — | `bg-winery-700 text-white` |
+| `HERO.yellow` | — | `bg-yellow-400 text-black` |
+| `HERO.sky` | — | `bg-sky-700 text-white` |
+| `RAINBOW_FAMILIES` | — | `['pink','orange','ocean','bonbon','party','peach','winery','yellow','sky']` |
+| `RAINBOW` | `[HERO.pink, HERO.orange, HERO.ocean, HERO.bonbon, HERO.party]` | `RAINBOW_FAMILIES.map(family => HERO[family])` — nine stops |
+| `getRainbowBand(i)` | `RAINBOW[i % 5]` | `RAINBOW[i % 9]` |
+| `getRainbowFamily(i)` | — | `RAINBOW_FAMILIES[i % 9]` |
+| `CHIPS.winery` | — | `border-winery-800 bg-winery-100 text-winery-900` (8.34:1) |
+| `CHIPS.yellow` | — | `border-yellow-600 bg-yellow-100 text-yellow-900` (7.81:1) |
+| `CHIPS.sky` | — | `border-sky-700 bg-sky-50 text-sky-900` (9.71:1) |
+| `TEAM_COLORS`, `TeamColor`, `getTeamColor` (`useCookingTeam.ts`) | eleven slot names | removed; the isomorphic composable carries no presentation (ADR-017) |
+
+The landing walks stops 0-3 and the kitchen panels 0-2, as before. `PANTONE_CHIPS` follows `PANTONE_FAMILIES`, so the
+ticker runs ten chips.
+
+**Consumers.** A badge binds the stop as its class; Nuxt UI merges `class` with tailwind-merge, so the stop's `bg-*` and
+`text-*` override the variant's.
+
+| Component | Site | Old | New |
+|---|---|---|---|
+| `TeamCalendarDisplay` | cooking-day badge | `:color="getTeamColor(i)" variant="solid"` | `:class="[getRainbowBand(i), …selection]"` |
+| `TeamCalendarDisplay` | legend badge | `:color="getTeamColor(index)" variant="solid"` | `:class="[getRainbowBand(index), …]"`, `data-testid="team-legend-badge"` in `data-testid="team-legend-entry"` |
+| `CookingTeamBadges` | name, 👥, 📅 badges | `:color="teamColor" variant="soft"` | `:class="teamBand"` |
+| `CookingTeamCard` | header badges (monitor, view, edit; 9) | `:color="teamColor" variant="soft"` | `:class="teamBand"` |
+| `CookingTeamCard` | member name badge | `:color="teamColor" variant="subtle"` | `:class="teamBand"` |
+| `CookingTeamCard` | member allocation badge | `:color="teamColor" variant="outline"` | `:color="COLOR.neutral" variant="outline"` |
+| `CookingTeamCard` | other team's status badge | `:color="getTeamColorForId(id)" variant="solid"` | `:class="getTeamBandForId(id)"` |
+| `CookingTeamCard` | avatar ring (3 `UserListItem`) | `:ring-color="teamColor"` | removed |
+| `CookingTeamCard` | edit header frame | `border-${teamColor}-400 …` + `var(--color-${resolvedColor}-300)` from an `useAppConfig()` lookup | `border-dashed` in the base border colour; lookup removed |
+| `CookingTeamCard` | view header frame | `border-${teamColor}-300 …` | `border` in the base border colour |
+| `CookingTeamCard`, `AdminTeams`, `TeamMemberAddForm` | `WeekDayMapDisplay` (5 sites) | `:color="teamColor"` | the component's default colour |
+| `TeamMemberAddForm` | `teamColor` prop | `TeamColor` | removed |
+| `MyTeamSelector`, `AdminTeams` | tab items | `color: getTeamColor(index)` | removed; `CookingTeamBadges` in the tab body carries the stop |
+| `AdminTeams` | table name cell | `:color="getTeamColor(i)" variant="solid"` | `:class="getRainbowBand(i)"` |
+
+**Where the look changes.**
+
+| Site | Change |
+|---|---|
+| Soft and subtle team badges (`CookingTeamBadges`, `CookingTeamCard` headers and member names) | tinted → the stop's solid fill with its ink |
+| `CookingTeamCard` allocation badge | team outline → neutral outline |
+| `CookingTeamCard` monitor avatars | lose the `md:ring-2` team ring; the header badges carry the team's stop |
+| `CookingTeamCard` edit and view frames | team tint → the base border colour |
+| Weekday affinity chips and checkboxes on team surfaces | team tint → `WeekDayMapDisplay`'s `success` default |
+
+A ring or a border takes `RING`/`BORDER`, and each rung there is measured at 3:1 against the page and `BG.panel`
+(1.4.11); `ring-yellow-400` reads 1.57:1 on the light page. The team surfaces carry the stop on their badges.
+
+### TDD — Team colours
+
+| Spec | Red | Green |
+|---|---|---|
+| `tests/component/architecture/designSystemColourVision.unit.spec.ts` › `<palette>: the brand rainbow` › `keeps its 9 stops apart from one another ≥ 0.075` (4 palettes × 2 modes) | 8 failed with `HERO.party` at 500: `RAINBOW[3] vs RAINBOW[4] measures 0.049 (#de5697 vs #e84c76)` | 8 passed, nearest pair 0.079 |
+| `tests/component/components/calendar/TeamCalendarDisplay.nuxt.spec.ts` (new, 12 cases: one entry per team, team `i` wears `getRainbowBand(i)` for ten teams, nine distinct stops and the tenth wraps) | 9 failed with the legend bound to one stop | 12 passed |
+| `tests/component/components/cooking-team/TeamMemberAddForm.nuxt.spec.ts` | mounts without the removed `teamColor` prop | green |
+
+`designSystemContrast.unit.spec.ts` walks `RAINBOW`, `BACKGROUNDS.hero` and `PANTONE_CHIPS`, so the new stops and chips
+are measured at 4.5:1 in each palette: `KNOWN_FINDINGS` and `PRESET_FINDINGS` gain no entries.
+
+### Affected Areas — Team colours
+
+`app/composables/useTheSlopeDesignSystem.ts`, `app/composables/useCookingTeam.ts`,
+`app/components/calendar/TeamCalendarDisplay.vue`, `app/components/cooking-team/CookingTeamCard.vue`,
+`app/components/cooking-team/MyTeamSelector.vue`, `app/components/cooking-team/TeamMemberAddForm.vue`,
+`app/components/shared/CookingTeamBadges.vue`, `app/components/admin/AdminTeams.vue`; specs above; `docs/ui.md`
+"The brand rainbow" and "Cooking Teams".
+
+### Visual check — Team colours
+
+Set the preset from the console: `document.documentElement.dataset.palette = 'tydelig'`, back to Farveglad with
+`delete document.documentElement.dataset.palette`.
+
+| Route + state | Viewport | DS element to expect | Expect |
+|---|---|---|---|
+| `/admin/teams`, view, a season with 9+ teams | 375px + desktop | `getRainbowBand(i)` on the name cell, `CookingTeamBadges` | Team 1-9: pink, orange, ocean, bonbon, party, peach, winery, yellow, sky; team 10 pink again. White text on winery and sky, dark text on the rest |
+| `/admin/teams`, view, Tydelig | desktop | `getRainbowBand(i)` | The nine stay nine: orange and peach are two colours, party and winery are two colours |
+| `/admin/teams`, a row expanded | 375px + desktop | `TeamCalendarDisplay` legend + day badges | Each legend badge wears its team's stop; the cooking days in the calendar wear the same stop |
+| `/admin/teams?mode=edit` | desktop | `CookingTeamCard` edit header, `CookingTeamBadges` in the tabs | Round team icon and the 👨‍🍳 / 📅 badges wear the stop; the dashed frame is the base border colour |
+| `/admin/teams?mode=edit`, member list + finder | desktop | `CookingTeamCard` member badges, status badges | Member names wear the stop; the allocation % is a neutral outline; a member of another team shows that team's stop in the status column; weekday chips are green |
+| `/chef`, team tabs | 375px + desktop | `MyTeamSelector` → `CookingTeamBadges` | Each tab's badge wears the team's stop |
+| `/chef`, team calendar | 375px + desktop | `TeamCalendarDisplay` | Cooking days wear the team's stop; the selected day keeps its primary ring |
+| `/chef` or `/dinner`, "Hvem laver maden?" | 375px + desktop | `CookingTeamCard` monitor | Name, 👨‍🍳 and 📅 badges wear the stop; the avatars carry no team ring |
+| Each row above, Tydelig | desktop | `getRainbowBand(i)` | Same fills as Farveglad (the stops sit on rungs the preset leaves in place, orange one shade deeper) |
+| `/` ticker | desktop | `PANTONE_CHIPS` | Ten chips: pink, orange, ocean, bonbon, party, peach, mocha, winery, yellow, sky |
+
 ### Mockup — ✅ signed off 2026-09-16 (behind the [⚙ Indstillinger] button), card faces ✅ 2026-09-17
 
 `Login.vue` owns the composition and draws it in its own header comment; `UserProfileCard.vue` draws the ⚙ in its

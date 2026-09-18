@@ -28,9 +28,10 @@ import {renderPreset} from '../../../scripts/palettes/render'
  *   1.4.6  Contrast (Enhanced), AAA - 7:1 body text, 4.5:1 large-scale text   → a preset the registry badges AAA
  *   1.4.11 Non-text Contrast, AA    - 3:1 borders, rings, UI boundaries (no AAA level exists)
  *
- * When a case fails, fix the token - never the threshold. Pairs that fail today are listed
- * in KNOWN_FINDINGS with the ratio measured on 2026-09-17 and run as `it.fails`, so both a
- * regression in a green pair and a fix of a listed one break the build.
+ * When a case fails, fix the token - never the threshold. Pairs that fail today are listed with
+ * the ratio they reach and run as `it.fails`, so both a regression in a green pair and a fix of a
+ * listed one break the build: KNOWN_FINDINGS carries the default theme, measured 2026-09-17, and
+ * PRESET_FINDINGS carries a generated preset, measured 2026-09-18.
  */
 
 // ---------------------------------------------------------------------------
@@ -240,14 +241,49 @@ const PALETTES = PALETTES_UNDER_TEST
  * Pairs a preset cannot answer, keyed `<preset>|<pair>`, with the ratio it reaches. Same
  * contract as KNOWN_FINDINGS: `it.fails`, so a regeneration that fixes one breaks the build.
  *
- * Empty since 2026-09-17, and still empty with Farveblind added on 2026-09-18: both presets meet
- * AA on all 418 pairs, in light and dark. The nine tokens
- * that used to hold it back drew one rung as a fill and as ink at once; each now carries its own
- * `dark:` face (`*_CALENDAR.day.next`, `PLANNING_CALENDAR.day.potential`, `BORDER.amber[500]`,
- * `RING.amber[500]`, `BORDER.gray[800]`, `TEXT.dimmed`, `COMPONENTS.powerMode.iconClass`), and the
- * two countdown accents moved to the 200 rung, which only they draw.
+ * Tydelig and Farveblind meet AA on every pair, in light and dark. The nine tokens that used to
+ * hold them back drew one rung as a fill and as ink at once; each now carries its own `dark:` face
+ * (`*_CALENDAR.day.next`, `PLANNING_CALENDAR.day.potential`, `BORDER.amber[500]`, `RING.amber[500]`,
+ * `BORDER.gray[800]`, `TEXT.dimmed`, `COMPONENTS.powerMode.iconClass`), and the two countdown
+ * accents moved to the 200 rung, which only they draw.
+ *
+ * Høj kontrast meets AAA on 423 of the 438 pairs. The fifteen below are measured 2026-09-18 and
+ * have two closers:
+ *
+ * 1. Thirteen of them wait on the generator's colour maths. `withLightness` moves a published rung
+ *    along OKLCH lightness with the chroma held, and a rung that leaves the sRGB gamut at the new
+ *    lightness has its channels clipped, which costs it the luminance the lift was for. Clamping
+ *    chroma to the gamut per rung - what `anchoredLightness` already does for a hue-mapped family -
+ *    takes the preset to 436 of 438, measured 2026-09-18. It moves nine rungs in each of Tydelig
+ *    and Farveblind, which both still meet AA on all 438 pairs, so it is the user's call.
+ * 2. `BORDER.orange.500` waits on a token. Orange 500 draws the border and the band fill at once,
+ *    and the lightness that carries a 3:1 border takes `BACKGROUNDS.hero.orange`, `RAINBOW[1]` and
+ *    `COMPONENTS.kitchenPanel.DINEIN` below their own bar. Its closer is the one the nine tokens
+ *    above took: a light-mode face of its own, on a rung only the border draws.
  */
-const PRESET_FINDINGS = new Map<string, number>([])
+/**
+ * The regeneration case runs a full solve. An AAA preset with findings walks until its first repeated
+ * palette (10 rounds for Høj kontrast, ~3 s alone and several times that beside the full suite)
+ */
+const RENDER_TIMEOUT_MS = 30_000
+
+const PRESET_FINDINGS = new Map<string, number>([
+    ['high-contrast|light|BORDER.orange.500|border|page', 2.93],
+    ['high-contrast|light|BORDER.orange.500|border|BG.panel', 2.76],
+    ['high-contrast|dark|COMPONENTS.powerMode.iconClass|BG.panelNested', 6.12],
+    ['high-contrast|dark|COMPONENTS.guestRow.iconClass|page', 5.98],
+    ['high-contrast|dark|COMPONENTS.guestRow.iconClass|BG.panelNested', 5.1],
+    ['high-contrast|dark|COMPONENTS.economyTable.level2.icon|BG.panelNested', 6.11],
+    ['high-contrast|dark|slot.secondary|soft', 6.51],
+    ['high-contrast|dark|slot.info|soft', 5.73],
+    ['high-contrast|dark|slot.success|soft', 5.8],
+    ['high-contrast|dark|slot.warning|soft', 5.71],
+    ['high-contrast|dark|slot.winery|soft', 5.72],
+    ['high-contrast|dark|slot.party|soft', 5.7],
+    ['high-contrast|dark|slot.peach|soft', 5.74],
+    ['high-contrast|dark|slot.caramel|soft', 5.7],
+    ['high-contrast|dark|slot.ocean|soft', 6.88]
+])
 
 describe('EN 301 549 / WCAG 2.1: the design system meets its contrast level', () => {
     it('the OKLCH conversion agrees with the sRGB hex Tailwind 4 publishes', () => {
@@ -337,7 +373,7 @@ describe('EN 301 549 / WCAG 2.1: the design system meets its contrast level', ()
                 expect(published ? repoFile(file) : '',
                     `${file} is stale - run make palettes (npx jiti scripts/palettes/generate.ts) and commit the result`)
                     .toBe(renderPreset(preset!))
-            })
+            }, RENDER_TIMEOUT_MS)
         }
 
         // A preset with no stylesheet has already failed above; its pairs would measure the
@@ -353,10 +389,12 @@ describe('EN 301 549 / WCAG 2.1: the design system meets its contrast level', ()
             const green = cases.filter(pair => finding(pair) === undefined)
                 .map(pair => ({pair, name: `${pair.mode}: ${pair.name} ≥ ${pair.threshold} (${level})`}))
 
+            const measured = promised === null ? '2026-09-17' : '2026-09-18'
+
             const findings = cases.filter(pair => finding(pair) !== undefined)
                 .map(pair => ({
                     pair,
-                    name: `${pair.mode}: ${pair.name} — ${finding(pair)} (finding 2026-09-17, awaiting the user's decision)`
+                    name: `${pair.mode}: ${pair.name} — ${finding(pair)} (finding ${measured}, awaiting the user's decision)`
                 }))
 
             it.each(green)('$name', ({pair}) => {
