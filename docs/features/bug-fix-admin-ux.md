@@ -56,6 +56,9 @@ The allergy catalog fixes D1, D2 and A1 shipped in #165. Follow-up defects found
 - **Contrast test** (2026-09-18). One case per palette and mode; `color="neutral"` badges, buttons and alerts are measured on the faces Nuxt
   UI gives them. Høj kontrast light `sky-700` → `#235261` and dark `sky-200` → `#cbeef5` carry `text-default` on `bg-elevated` at 7:1.
   Code comments carry no dates or decisions; this doc does.
+- **Mode trays are the page colour** (2026-09-18). The tray behind the dinner-mode and weekday buttons (`FIELD_GROUP_CLASSES` in
+  `DinnerModeSelector.vue`, `WEEKDAY.fieldGroupClasses`) is `bg-default` with its border, so its buttons sit on the ground the contrast
+  test measures. A session appearance is read field by field through `readAppearance`; a palette that is not offered reads as the default.
 - **Palette badges** (2026-09-18). "🇪🇺 EN 301 549 · Kontrast AA ✓" or "… Kontrast AAA ✓" from the `PALETTES` level: the badge claims
   contrast (WCAG 1.4.3, 1.4.6, 1.4.11), never full conformance. "👁 Nedsat farvesyn · Okabe–Ito ✓" from `PALETTES.colourSafe` (EN 301 549
   clause 4.2.3, WCAG 1.4.1 "Anvendelse af farve"). "Farvesikker" describes a person who passes a colour-vision test and is not used.

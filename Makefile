@@ -11,13 +11,6 @@ ENV_prod  := .env.prod
 
 # BASE_URL (the app's URL) and the credentials come from these files — or from the environment in CI
 
-CSV_TEST := .theslope/order-import/test_import_orders.csv
-CSV_PROD := .theslope/order-import/skraaningen_2025_december_framelding.csv
-
-CALENDAR_CSV := .theslope/team-import/calendar.csv
-TEAMS_CSV_TEST := .theslope/team-import/test_teams.csv
-TEAMS_CSV_PROD := .theslope/team-import/teams.csv
-
 # Comma variable for use in $(call ...) where literal commas are separators
 COMMA := ,
 
@@ -39,6 +32,11 @@ define theslope_call
 	@$(call require_base_url,$(1)) && curl -s -c .cookies.txt "$$BASE_URL/api/auth/login" -H "Content-Type: application/json" \
 		-d "{\"email\":\"$$HEY_NABO_USERNAME\",\"password\":\"$$HEY_NABO_PASSWORD\"}" | jq -e '.email' > /dev/null && \
 	curl -s -b .cookies.txt -H "Content-Type: application/json" $(2) | jq
+endef
+
+# $(1)=argument name, $(2)=its value → stops with the target's usage unless the value names a file
+define require_file
+	@test -f "$(2)" || { echo "usage: make $@ $(1)=<file> ('$(2)' is not a file)"; exit 1; }
 endef
 
 define heynabo_call
@@ -486,11 +484,6 @@ theslope-put-user:
 		--url-query "systemRole=ADMIN" \
 		-H "Content-Type: application/json" -d '{"role": "admin"}' | jq
 
-theslope-import-orders-dev-manual: theslope-login-dev
-	@$(call require_base_url,$(ENV_dev)) && curl -b .cookies.txt -X POST "$$BASE_URL/api/admin/billing/import" \
-		-H "Content-Type: application/json" \
-		-d '{"csvContent": $(shell cat $(CSV_TEST) | jq -Rs .)}' | jq
-
 # ============================================================================
 # ORDER IMPORT (Billing CSV)
 # ============================================================================
@@ -498,17 +491,18 @@ theslope-import-orders-dev-manual: theslope-login-dev
 
 # $(1)=env file, $(2)=CSV
 define theslope_import_orders
+	$(call require_file,csv,$(2))
 	$(call theslope_call,$(1),-X POST "$$BASE_URL/api/admin/billing/import" -d "{\"csvContent\": $$(cat $(2) | jq -Rs .)}")
 endef
 
-theslope-import-orders-local: ## Import orders CSV to localhost
-	$(call theslope_import_orders,$(ENV_local),$(CSV_TEST))
+theslope-import-orders-local: ## Import a billing CSV to localhost - csv=<file>
+	$(call theslope_import_orders,$(ENV_local),$(csv))
 
-theslope-import-orders-dev: ## Import orders CSV to dev
-	$(call theslope_import_orders,$(ENV_dev),$(CSV_TEST))
+theslope-import-orders-dev: ## Import a billing CSV to dev - csv=<file>
+	$(call theslope_import_orders,$(ENV_dev),$(csv))
 
-theslope-import-orders-prod: ## Import orders CSV to production
-	$(call theslope_import_orders,$(ENV_prod),$(CSV_PROD))
+theslope-import-orders-prod: ## Import a billing CSV to production - csv=<file>
+	$(call theslope_import_orders,$(ENV_prod),$(csv))
 
 # ============================================================================
 # SEASON IMPORT (Calendar + Teams CSV)
@@ -517,17 +511,19 @@ theslope-import-orders-prod: ## Import orders CSV to production
 
 # $(1)=env file, $(2)=calendar CSV, $(3)=teams CSV
 define theslope_import_season
+	$(call require_file,calendar,$(2))
+	$(call require_file,teams,$(3))
 	$(call theslope_call,$(1),-X POST "$$BASE_URL/api/admin/season/import" -d "{\"calendarCsv\": $$(cat $(2) | jq -Rs .)$(COMMA) \"teamsCsv\": $$(cat $(3) | jq -Rs .)}")
 endef
 
-theslope-import-season-local: ## Import season CSV to localhost
-	$(call theslope_import_season,$(ENV_local),$(CALENDAR_CSV),$(TEAMS_CSV_TEST))
+theslope-import-season-local: ## Import a season to localhost - calendar=<file> teams=<file>
+	$(call theslope_import_season,$(ENV_local),$(calendar),$(teams))
 
-theslope-import-season-dev: ## Import season CSV to dev
-	$(call theslope_import_season,$(ENV_dev),$(CALENDAR_CSV),$(TEAMS_CSV_TEST))
+theslope-import-season-dev: ## Import a season to dev - calendar=<file> teams=<file>
+	$(call theslope_import_season,$(ENV_dev),$(calendar),$(teams))
 
-theslope-import-season-prod: ## Import season CSV to production
-	$(call theslope_import_season,$(ENV_prod),$(CALENDAR_CSV),$(TEAMS_CSV_PROD))
+theslope-import-season-prod: ## Import a season to production - calendar=<file> teams=<file>
+	$(call theslope_import_season,$(ENV_prod),$(calendar),$(teams))
 
 # ============================================================================
 # SEASON TEAMS EXPORT (teams CSV in the season importer's format)
@@ -539,10 +535,10 @@ theslope-import-season-prod: ## Import season CSV to production
 TEAMS_EXPORT_JQ = if type != "array" then error("no teams for the active season: \(.)") else ("team,role,name,affinity", (.[] | (.name | capture("(?<n>[0-9]+)").n) as $$n | .assignments | sort_by(.role, .inhabitant.name)[] | ["Madhold " + $$n, .role, .inhabitant.name + " " + .inhabitant.lastName, ((.affinity // {}) | with_entries(select(.value)) | keys | if length == 1 then ({"mandag": "man", "tirsdag": "tirs", "onsdag": "ons", "torsdag": "tors"}[.[0]] // "") else "" end)] | @csv)) end
 
 # The season is the active one (GET /api/admin/season/active), read after the login
-theslope-export-teams: ## Export the active season's team members as teams CSV - env=local|dev|prod → .theslope/team-import/teams-<env>.csv
-	@test -n "$(ENV_$(env))" || { echo "usage: make $@ env=local|dev|prod"; exit 1; }
-	$(call theslope_call,$(ENV_$(env)),"$$BASE_URL/api/admin/team?seasonId=$$(curl -s -b .cookies.txt "$$BASE_URL/api/admin/season/active")") | jq -r '$(TEAMS_EXPORT_JQ)' > .theslope/team-import/teams-$(env).csv
-	@echo "$$(($$(wc -l < .theslope/team-import/teams-$(env).csv) - 1)) members → .theslope/team-import/teams-$(env).csv"
+theslope-export-teams: ## Export the active season's team members as a teams CSV - env=local|dev|prod out=<file>
+	@test -n "$(ENV_$(env))" -a -n "$(out)" || { echo "usage: make $@ env=local|dev|prod out=<file>"; exit 1; }
+	$(call theslope_call,$(ENV_$(env)),"$$BASE_URL/api/admin/team?seasonId=$$(curl -s -b .cookies.txt "$$BASE_URL/api/admin/season/active")") | jq -r '$(TEAMS_EXPORT_JQ)' > $(out)
+	@echo "$$(($$(wc -l < $(out)) - 1)) members → $(out)"
 
 # ============================================================================
 # HEAL USER BOOKINGS (bugfix - one-time healing)
