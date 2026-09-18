@@ -11,8 +11,8 @@ Operational procedures for TheSlope infrastructure on Cloudflare.
 | `dev.skraaningen.dk` | Development | `theslope-dev` |
 | `www.skraaningen.dk` | Production | `theslope-prod` |
 | `skraaningen.dk` | Production | `theslope-prod` |
-| — (no route, queue consumer) | Development | `theslope-sender-dev` |
-| — (no route, queue consumer) | Production | `theslope-sender-prod` |
+| `dev.skraaningen.dk/sender/*` | Development | `theslope-sender-dev` (health; queue consumer) |
+| `www.skraaningen.dk/sender/*`, `skraaningen.dk/sender/*` | Production | `theslope-sender-prod` (health; queue consumer) |
 
 ### Workers
 

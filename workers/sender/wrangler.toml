@@ -32,10 +32,11 @@ max_retries = 3                            # retried at 30/60/120 s; the last at
 
 # Sender and recipient restrictions live on the binding: a disallowed address
 # fails inside env.EMAIL.send() with a terminal E_* code, which the consumer acks and logs.
-# The sender address is per environment: local and dev send as no-reply.dev@, prod as no-reply@.
+# The sender address is per environment — no-reply.<environment>@ (local, dev), no-reply@ on prod —
+# the rule senderAddress() in app/config/notificationTemplates.ts derives the app's `from` with.
 [[send_email]]
 name = "EMAIL"
-allowed_sender_addresses = ["no-reply.dev@skraaningen.dk"]
+allowed_sender_addresses = ["no-reply.local@skraaningen.dk"]
 
 # ---------------------------------------------------------------------------
 # dev — dev.skraaningen.dk
@@ -60,5 +61,23 @@ name = "EMAIL"
 allowed_sender_addresses = ["no-reply.dev@skraaningen.dk"]
 allowed_destination_addresses = ["test@mathmagicians.dk"]
 
-# [env.prod] arrives with the "Pipe hardening + prod" package, together with routes/health.get.ts.
-# It pins allowed_sender_addresses = ["no-reply@skraaningen.dk"] and omits the destination limit.
+# ---------------------------------------------------------------------------
+# prod — www.skraaningen.dk and skraaningen.dk
+# ---------------------------------------------------------------------------
+[env.prod]
+name = "theslope-sender-prod"
+workers_dev = false
+routes = [
+    { pattern = "www.skraaningen.dk/sender/*", zone_name = "skraaningen.dk" },   # /sender/health; the most specific route wins over the app's /*
+    { pattern = "skraaningen.dk/sender/*", zone_name = "skraaningen.dk" }
+]
+
+[[env.prod.queues.consumers]]
+queue = "theslope-sender-prod"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 3
+
+[[env.prod.send_email]]
+name = "EMAIL"
+allowed_sender_addresses = ["no-reply@skraaningen.dk"]

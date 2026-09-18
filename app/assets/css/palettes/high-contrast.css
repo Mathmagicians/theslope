@@ -32,6 +32,7 @@ html[data-palette="high-contrast"] {
     --color-orange-600: #9c0000;
     --color-orange-800: #8f2619;
     --color-party-600: #9a0032;
+    --color-party-700: #e8718a;
     --color-peach-400: #963b00;
     --color-peach-600: #9c0000;
     --color-peach-800: #881d00;
@@ -41,6 +42,7 @@ html[data-palette="high-contrast"] {
     --color-red-600: #863031;
     --color-red-700: #813334;
     --color-sky-600: #0f5365;
+    --color-violet-500: #f066a6;
     --color-violet-600: #97004d;
     --color-winery-600: #970e3a;
     --color-winery-700: #9e2d4a;

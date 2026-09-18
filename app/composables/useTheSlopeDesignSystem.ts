@@ -460,11 +460,11 @@ export const LAYOUTS = {
 } as const
 
 /**
- * PANTONE_FAMILIES - the order of the brand rainbow, by hue
+ * PANTONE_FAMILIES - every brand family, by hue
  *
- * One list is the single source of order. `HERO` and `CHIPS` are records keyed by family;
- * `RAINBOW` and `PANTONE_CHIPS` map this list, so the ticker tints announce the solid bands
- * that follow them down the page, and a reordering is one edit.
+ * `HERO` and `CHIPS` are records keyed by family. `PANTONE_CHIPS` maps this list, so the ticker
+ * tints run in the order of the solid bands below them; `RAINBOW` maps `RAINBOW_FAMILIES`, the
+ * same order without the Mocha frame.
  */
 export const PANTONE_FAMILIES = ['pink', 'orange', 'ocean', 'bonbon', 'party', 'peach', 'mocha', 'winery', 'yellow', 'sky'] as const
 
@@ -654,9 +654,12 @@ export const COMPONENTS = {
         selectedCell: 'bg-secondary-50 dark:bg-secondary-950',
         /**
          * UTable :ui prop for consistent cell styling
-         * Responsive padding: tighter on mobile (py-1), comfortable on desktop (py-2)
+         * Responsive padding: tighter on mobile (py-1), comfortable on desktop (py-2).
+         * Nuxt UI draws the row a table expands with this same cell class, `whitespace-nowrap`
+         * included, so a panel docked there never breaks a line and widens the table past a
+         * phone; the cell under an expanded row wraps like the page does.
          */
-        ui: {td: 'py-1 md:py-2'}
+        ui: {td: 'py-1 md:py-2 [[data-expanded=true]+tr>&]:whitespace-normal'}
     },
 
     // Card action buttons - positioned in card corners or footers
@@ -1182,6 +1185,19 @@ const createResponsiveButtons = (isMd: Ref<boolean>) => {
                 variant: NOISE.quiet,
                 size: sizes.standard
             }
+        },
+
+        // Settings wheel - icon-only, framed (NOISE.medium), so it sits in a row of outline
+        // actions with the same shape. The site names it with an `aria-label`; as a menu trigger
+        // it adds `:trailing-icon="ICONS.chevronDown"`.
+        get settings() {
+            return {
+                icon: ICONS.settings,
+                color: COLOR.primary,
+                variant: NOISE.medium,
+                square: true,
+                size: sizes.standard
+            }
         }
     }
 }
@@ -1199,9 +1215,11 @@ type AlertKindConfig = {
  * so an unbreakable token (a mail address, a URL) is clipped instead of wrapped on a phone.
  * `wrap-anywhere` counts in min-content sizing where `break-words` does not, and `min-w-0`
  * lets the alert shrink inside a flex parent rather than pushing past the viewport.
+ * `whitespace-normal` undoes an inherited `whitespace-nowrap` (a table cell), which no wrap
+ * class can break through.
  */
 const alertUi = (extra: Partial<AlertUi> = {}): AlertUi => ({
-    root: ['min-w-0', extra.root].filter(Boolean).join(' '),
+    root: ['min-w-0 whitespace-normal', extra.root].filter(Boolean).join(' '),
     title: ['wrap-anywhere', extra.title].filter(Boolean).join(' '),
     description: ['wrap-anywhere', extra.description].filter(Boolean).join(' ')
 })
@@ -1267,12 +1285,24 @@ export const createResponsiveAlerts = (isMd: Ref<boolean>) => ({
      */
     get withActions() {
         return {orientation: (isMd.value ? 'horizontal' : 'vertical') as NonNullable<AlertProps['orientation']>}
+    },
+
+    /**
+     * Modifier, not a kind: spread AFTER a text kind when the alert's one action is an icon-only
+     * button (a pencil). The button sits in the box's top-right corner on every viewport, the way
+     * a card's edit pencil does. It carries the kinds' shared wrap `ui`, so it pairs with the
+     * text kinds, not with the empty states.
+     * @example <UAlert v-bind="{...ALERTS.legend, ...ALERTS.withCornerAction}">
+     */
+    withCornerAction: {
+        orientation: 'horizontal' as NonNullable<AlertProps['orientation']>,
+        ui: {...alertUi({root: 'items-start'}), actions: 'self-start'}
     }
 })
 
 export type ResponsiveAlerts = ReturnType<typeof createResponsiveAlerts>
 /** The alert kinds a component may take as a prop (`kind?: AlertKind`) */
-export type AlertKind = Exclude<keyof ResponsiveAlerts, 'withActions'>
+export type AlertKind = Exclude<keyof ResponsiveAlerts, 'withActions' | 'withCornerAction'>
 
 /**
  * createOrientations - Responsive orientation patterns for UFieldGroup

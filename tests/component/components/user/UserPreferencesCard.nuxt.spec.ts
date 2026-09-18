@@ -116,6 +116,15 @@ describe.each([
         expect(findByTestId(wrapper, PREF_TEST_IDS.save).exists()).toBe(false)
     })
 
+    // The row pencil of docs/ui.md "Edit affordances": a glyph with an accessible name, no text
+    it('GIVEN the view face THEN the edit pencil is the bare glyph, named "Rediger"', async () => {
+        const wrapper = await mountCard(userWith({}), isMd)
+        const pencil = findByTestId(wrapper, PREF_TEST_IDS.edit)
+
+        expect(pencil.text()).toBe('')
+        expect(pencil.attributes('aria-label')).toBe('Rediger')
+    })
+
     it('GIVEN a session snapshot from before the columns existed THEN the card falls back to the column defaults', async () => {
         const {notificationChannels: _channels, appearance: _appearance, ...stale} = userWith({})
 

@@ -2,7 +2,7 @@ import {describe, expect, it} from 'vitest'
 import {composeEmail, missingAddress} from '~~/server/utils/sender/compose'
 import {deploymentFromUrl, useNotificationValidation} from '~/composables/useNotificationValidation'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
-import {senderAddress, senderDisplayName} from '~/config/notificationTemplates'
+import {NOTIFICATION_SENDER_NAME, NOTIFICATION_SIGNATURE, NOTIFICATION_TEMPLATES, senderAddress, senderDisplayName} from '~/config/notificationTemplates'
 import {maskEmail} from '~~/workers/common/mask'
 
 const {NotificationMessageSchema} = useNotificationValidation()
@@ -16,6 +16,19 @@ describe('senderDisplayName', () => {
         ['prod', 'Skråningen prod']
     ])('derives the sender line for %s as %s', (environment, expected) => {
         expect(senderDisplayName(environment)).toBe(expected)
+    })
+})
+
+// The organisation's name lives in NOTIFICATION_SENDER_NAME; templates name it through the {{senderName}} built-in
+describe('templates name the sender through {{senderName}}', () => {
+    it.each(Object.entries(NOTIFICATION_TEMPLATES))('%s subject', (_kind, template) => {
+        expect(template.subject).toContain('{{senderName}}')
+        expect(template.subject).not.toContain(NOTIFICATION_SENDER_NAME)
+    })
+
+    it('signature', () => {
+        expect(NOTIFICATION_SIGNATURE).toContain('{{senderName}}')
+        expect(NOTIFICATION_SIGNATURE).not.toContain(NOTIFICATION_SENDER_NAME)
     })
 })
 
@@ -73,7 +86,9 @@ describe('composeEmail', () => {
     it('keys the message on the masked recipient and a message id', () => {
         const message = composeEmail(config, toAnna)
 
-        expect(message.meta.dedupeKey).toMatch(new RegExp(`^TEST:EMAIL:${maskEmail(toAnna.to).replace(/[.*]/g, '\\$&')}:[0-9a-f-]{36}$`))
+        const prefix = `TEST:EMAIL:${maskEmail(toAnna.to)}:`
+        expect(message.meta.dedupeKey.startsWith(prefix)).toBe(true)
+        expect(message.meta.dedupeKey.slice(prefix.length)).toMatch(/^[0-9a-f-]{36}$/)
         expect(message.meta.dedupeKey).not.toContain(toAnna.to)
     })
 

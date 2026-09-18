@@ -17,6 +17,9 @@ const {validatedBrowserContext, pollUntil, doScreenshot, waitForHydration, getSe
  *
  * Measured 2026-09-16: green on all 7 pages - the alert theme clips (root overflow-hidden) instead of
  * scrolling the document, see "Alerts on mobile > Classification" in docs/features/bug-fix-admin-ux.md.
+ *
+ * A UTable root scrolls its own overflow, so a row that spills never reaches the document: a case
+ * with a `scrollBox` measures that box as well.
  */
 test.describe('Mobile viewport - no horizontal overflow', () => {
     const MOBILE_VIEWPORT = {width: 375, height: 812}
@@ -32,10 +35,23 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
         ready: (page: Page) => Locator
         /** Reveals what the page hides behind a control, so the measurement covers it too */
         reveal?: (page: Page) => Promise<void>
+        /** A box that scrolls its own overflow, measured on top of the document */
+        scrollBox?: (page: Page) => Locator
     }
 
     const PAGES: MobilePageCase[] = [
         {name: 'admin-allergies', path: () => '/admin/allergies', ready: (page) => page.getByTestId('admin-allergies')},
+        {
+            name: 'admin-allergies-expanded-row',
+            path: () => '/admin/allergies',
+            ready: (page) => page.getByTestId('admin-allergies'),
+            // On a phone the detail panel docks in the tapped row, inside the catalog table
+            reveal: async (page) => {
+                await page.locator('[data-testid^="allergy-row-"]').first().click()
+                await page.getByTestId('edit-allergy-type').waitFor({state: 'visible'})
+            },
+            scrollBox: (page) => page.getByTestId('admin-allergies').locator('div:has(> table)').first()
+        },
         {name: 'admin-allergies-pdf', path: () => '/admin/allergies/pdf', ready: (page) => page.getByTestId('allergy-table')},
         {name: 'admin-system', path: () => '/admin/system', ready: (page) => page.getByTestId('admin-system')},
         {name: 'admin-users', path: () => '/admin/users', ready: (page) => page.getByTestId('admin-users')},
@@ -44,7 +60,7 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
         {
             name: 'login',
             path: () => '/login',
-            ready: (page) => page.locator('button[name="logout-button"]'),
+            ready: (page) => page.getByTestId('logout-button'),
             // The settings card sits behind the ⚙ in the profile card header
             reveal: async (page) => {
                 await page.getByTestId('pref-toggle').click()
@@ -69,7 +85,7 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
     const measureHorizontalOverflow = (page: Page) =>
         page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth)
 
-    for (const {name, path, ready, reveal} of PAGES) {
+    for (const {name, path, ready, reveal, scrollBox} of PAGES) {
         test(`GIVEN a 375px viewport WHEN ${name} renders THEN the page does not scroll horizontally`, async ({page}) => {
             const url = path()
 
@@ -89,6 +105,11 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
             // THEN: nothing renders wider than the viewport
             const overflow = await measureHorizontalOverflow(page)
             expect(overflow, `${url} overflows horizontally by ${overflow}px`).toBeLessThanOrEqual(0)
+
+            if (scrollBox) {
+                const inner = await scrollBox(page).evaluate(box => box.scrollWidth - box.clientWidth)
+                expect(inner, `${url} (${name}) scrolls sideways inside its table by ${inner}px`).toBeLessThanOrEqual(0)
+            }
         })
     }
 })

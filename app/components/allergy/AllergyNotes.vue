@@ -4,8 +4,8 @@ the poster (/admin/allergies/pdf). The text arrives as a prop, one note per line
 parent owns where it comes from and what happens on save.
 
 ┌ view face ───────────────────────────────────────┐
-│ ⚠ Vigtige bemærkninger                     [✏️] │  ← pencil only when canEdit
-│  • Glutenfri boller findes i fryseren …          │
+│ ⚠ Vigtige bemærkninger                     [✏️] │  ← pencil only when canEdit, top-right
+│  • Glutenfri boller findes i fryseren …          │    on every viewport (withCornerAction)
 │  • Ved mælkeprodukter i brød …                   │
 │  • Husk at give besked …                         │
 └──────────────────────────────────────────────────┘
@@ -77,7 +77,7 @@ const save = async () => {
 <template>
   <UAlert
       v-if="items.length || isEditing"
-      v-bind="{...ALERTS.legend, ...ALERTS.withActions}"
+      v-bind="{...ALERTS.legend, ...ALERTS.withCornerAction}"
       :icon="ICONS.warning"
       data-testid="allergy-notes"
   >

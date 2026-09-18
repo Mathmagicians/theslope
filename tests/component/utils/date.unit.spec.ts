@@ -16,6 +16,7 @@ import {
     calculateAgeOnDate,
     calculateAge,
     toCalendarDate,
+    isCalendarDateInDateList,
     toDate,
     calculateCountdown,
     createDateInTimezone,
@@ -888,5 +889,19 @@ describe('getPeriodBoundary', () => {
     ])('$desc', ({input, view, direction, expected}) => {
         const boundary = getPeriodBoundary(input, view, direction)
         expect(boundary.getTime()).toBe(expected.getTime())
+    })
+})
+
+describe('isCalendarDateInDateList', () => {
+    // A calendar cell names a day; the list holds that day at the runtime's local midnight (parseDate, new Date(y, m, d)).
+    // The match is by day wherever the code runs: a Danish browser, the UTC worker rendering SSR, and CI.
+    const listDay = new Date(2025, 0, 13)
+
+    it.each([
+        {cell: new CalendarDate(2025, 1, 13), expected: true},
+        {cell: new CalendarDate(2025, 1, 12), expected: false},
+        {cell: new CalendarDate(2025, 1, 14), expected: false}
+    ])('$cell.day/$cell.month in [13/1] → $expected', ({cell, expected}) => {
+        expect(isCalendarDateInDateList(cell, [listDay])).toBe(expected)
     })
 })

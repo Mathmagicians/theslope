@@ -29,7 +29,7 @@
 | `/api/admin/team/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeams() → CookingTeamWithMembers[]                                                          |
 | `/api/admin/team/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateTeamWithAssignments() auto-assigns affinities + events                                     |
 | `/api/admin/team/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeam() → CookingTeamWithMembers                                                             |
-| `/api/admin/team/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createTeamsWithAssignments() auto-assigns affinities + events                                    |
+| `/api/admin/team/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createTeamsWithAssignments() auto-assigns affinities + events → `CreateTeamsResponse` `{teams, eventsAssigned}` (ADR-009 operation result, 201); `team.e2e.spec.ts` asserts `eventsAssigned` equals the season's dinners carrying a `cookingTeamId` |
 | `/api/admin/team/assignment/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteCookingTeamAssignments() → number                                                          |
 | `/api/admin/team/assignment/index.get.ts` | ❌ | ✅ | N/A | N/A | Stub endpoint (returns static message)                                                           |
 | `/api/admin/team/assignment/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeamAssignment() → CookingTeamAssignment                                                    |

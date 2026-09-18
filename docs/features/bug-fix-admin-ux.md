@@ -1,4 +1,3 @@
-| — | `pref-cancel` |
 # Bug Fix: Admin UX — allergy catalog, alerts, poster, planning, preferences
 
 **Status:** In progress | **Date:** 2026-09-01 | **Updated:** 2026-09-16
@@ -409,7 +408,7 @@ not shown:
 - **Teams page, edit mode with zero teams** (2026-09-16, applied): `AdminTeams.vue` gates the master-detail branch and the edit footer on `displayedTeams.length > 0`, so the table branch and its `#empty` slot carry the one empty state + "Opret madhold" CTA.
 - **Booking grid, week or month without dinners** (2026-09-16, applied): `BookingGridView.vue` `tableData` returns `[]` when `flatEvents` is empty, so the `UTable` `#empty` slot renders the grid empty state.
 - **Edit affordances** (2026-09-16): table rows and detail panels keep the ghost pencil `BUTTONS.edit` (the allergy detail header was briefly labelled and reverted the same day); a form card’s edit entry is the labelled button `BUTTONS.secondaryAction` + `COLOR.primary` + `ICONS.edit` + "Rediger <navn>" — e.g. "Rediger Forår 2026" (the chef menu card pattern, label names the record like the household "Slet …" button). Applies to the season card (Planning form) only. Rule lives in `docs/ui.md`.
-- **Season card title names the season** (2026-09-16): "Fællesspisning sæson 08/26-07/27" (view), "Rediger fællesspisning sæson …" (edit), "Opret fællesspisning sæson …" (create, name appears once the dates are set); the read-only "Sæson" input is removed — dates are never shown as a form element.
+- **Season card title names the season** (2026-09-16): "Fællesspisning sæson 08/26-07/27" (view), "Redigerer fællesspisning sæson …" (edit; present tense since 2026-09-18, the button keeps "Rediger {navn}"), "Opret fællesspisning sæson …" (create, name appears once the dates are set); the read-only "Sæson" input is removed — dates are never shown as a form element.
 - **Date picker selection style** (2026-09-16): pickers render selected days through the same `#day` slot and the one DS helper `dayCircleClasses(variant)` the display calendars use; `CALENDAR.picker = {cookingDay: PLANNING_CALENDAR.day.generated, holiday: CALENDAR.holiday}` (references, no new class strings), chosen by a `selection` prop; Nuxt UI’s own selection fill is neutralised; no `:color` prop on pickers. Green stays reserved for holidays.
 - **Tydelig, the AA preset** (2026-09-16): a fourth palette option — TheSlope’s own hues with every failing step darkened by procedure until WCAG 2.1 AA holds, generated into `app/assets/css/palettes/tydelig.css` and applied as CSS variables under `html[data-palette="tydelig"]`; no token or component changes. The options read Standard / Tydelig / Høj kontrast / Farveblind-venlig; the AA badge sits on Tydelig. After the visual comparison the user decides whether Standard stays or Tydelig replaces it as the base.
 - **Colors in "My preferences"** (decided 2026-09-16): the Farver control carries a small 🇪🇺 flag and a green check naming the verified level (`EN 301 549 · WCAG 2.1 AA`, `AAA` for Høj kontrast), sourced from the same registry the contrast test asserts. Presets, criteria from EN 301 549 / WCAG 2.1 (AA default, AAA for Høj kontrast), verified by a contrast-ratio unit test over the design-system token pairs. Høj kontrast keeps TheSlope’s hues and tunes lightness; Farveblind-venlig maps the Color Universal Design set onto the meaning-bearing tokens (green, red, orange, pink, yellow). A node generator under `scripts/` emits `app/assets/css/palettes/high-contrast.css` and `colorblind.css`; `main.css` only imports them — generated CSS never lives in a hand-written file.
@@ -1504,16 +1503,36 @@ repeats, which is round 10 here instead of the 30-round cap. The published palet
 of all three presets is byte-identical to the 30-round walk. The regeneration case carries a 30 s timeout
 (`RENDER_TIMEOUT_MS`): the Høj kontrast render takes ~3 s alone, several times that beside the full suite.
 
-**Counts.** 438 pairs, **423 pass**, 10 rounds. Light block **31 steps, 13 slots**; dark block **39 steps,
+**Counts.** 438 pairs, **423 pass**, 10 rounds. Light block **33 steps, 13 slots**; dark block **39 steps,
 13 slots** (Tydelig 21 / 37, Farveblind 77 / 35).
 
 | Group | Pairs | Farveglad at AAA | Høj kontrast |
 |---|---:|---:|---:|
 | text on surface | 153 | 37 | 149 |
-| paired token | 114 | 79 | 114 |
+| paired token | 114 | 75 | 114 |
 | edge on surface | 93 | 53 | 91 |
 | semantic slot | 78 | 0 | 69 |
-| **Total** | **438** | **169** | **423** |
+| **Total** | **438** | **165** | **423** |
+
+**Every rainbow stop is body text.** A cooking team wears the stop of its number on a `UBadge` (`CookingTeamBadges`,
+`CookingTeamCard`, `AdminTeams`, `TeamCalendarDisplay`), whose label is Nuxt UI's badge face, `text-[10px]` to
+`text-sm`. `INK_ON_FILL` in `designSystemPairs.ts` carries it as `TEAM_BADGE` on all nine stops, so `RAINBOW[3]`
+(bonbon) and `RAINBOW[4]` (party) move from the landing title's large-text bar to the body bar:
+
+| Stop | Ratio | Bar before → after (AA presets) | Høj kontrast before → after |
+|---|---:|---|---|
+| `RAINBOW[3]` bonbon, black ink | 5.88 | 3 → 4.5, passes | 5.88 of 4.5 → **7.16 of 7**: `--color-violet-500` lifts to `#f066a6` |
+| `RAINBOW[4]` party, black ink | 4.74 | 3 → 4.5, passes | 4.74 of 4.5 → **7.16 of 7**: `--color-party-700` lifts to `#e8718a` |
+
+Tydelig and Farveblind regenerate byte-identical, and the default theme meets the body bar on both stops, so
+`KNOWN_FINDINGS` is unchanged. Høj kontrast gains the two light-block declarations above and keeps 423 of 438.
+
+At AAA the two lifts bring three stops together: pink, bonbon and party all carry black ink, so all three have to be
+light, and the rainbow's separation check (`designSystemColourVision.unit.spec.ts`, ΔE ≥ 0.075 in Oklab, every
+palette) measures pink–party **0.042**, bonbon–party **0.053**, pink–bonbon **0.062** in both modes. Holding party
+and bonbon at their published rungs keeps the stops 0.079 apart and leaves them at 4.74 and 5.88 against 7:1;
+lifting pink alone clears none of the three. The closer is an ink or rung choice in `HERO` for one or more of the
+three pink stops, which is the user's call.
 
 **The fifteen findings**, in `PRESET_FINDINGS` in `designSystemContrast.unit.spec.ts` as `it.fails`, measured
 2026-09-18, with two closers:
@@ -1552,7 +1571,8 @@ Farveglad with `delete document.documentElement.dataset.palette`, dark with
 |---|---|---|---|
 | `/login` → `Rediger` | 375px + desktop | `URadioGroup`, `UBadge` `COLOR.success` | Four options read Farveglad / Tydelig / Farveblind / Høj kontrast, and the badge on Høj kontrast reads `EN 301 549 · WCAG 2.1 AAA ✓` |
 | `/login` → `Rediger` → `Høj kontrast` → `Gem` | 375px + desktop | `html[data-palette]` | The page takes the preset, the card returns to its view face, and a reload keeps it |
-| `/` landing, scrolled | 375px + desktop | `getRainbowBand(0-8)`, `PANTONE_CHIPS` | Each band keeps its hue and deepens; the black ink on the first stops and the white ink on winery and sky read at 7:1 |
+| `/` landing, scrolled | 375px + desktop | `getRainbowBand(0-3)`, `PANTONE_CHIPS` | Each band keeps its hue; orange and bonbon lift until their black titles read at 7:1 |
+| `/admin/teams`, a season with nine teams | 375px + desktop | `CookingTeamBadges`, `getRainbowBand(0-8)` | Every badge label reads at 7:1: black-ink stops lift, winery and sky keep white ink. Teams 1, 4 and 5 (pink, bonbon, party) sit close together — the separation finding above |
 | `/admin/planning` | desktop | `BUTTONS.primaryAction`, `SeasonStatusDisplay` | Solid buttons take the 600 rung and carry their white label at 7:1; the season alert's text reads on its soft fill |
 | `/admin/planning`, edit | 375px + desktop | `CALENDAR.holiday`, `PLANNING_CALENDAR.day.potential` | The holiday ring and the potential-day border sit at 3:1 against the calendar |
 | A page with an alert of each kind, dark | 375px + desktop | `ALERTS.info`, `ALERTS.success`, `ALERTS.warning`, `ALERTS.error` | Alert text on the soft `bg-<slot>/10` fill — the nine faces the findings list, at 5.7-6.9:1 |
@@ -1639,7 +1659,7 @@ ticker runs ten chips.
 | Weekday affinity chips and checkboxes on team surfaces | team tint → `WeekDayMapDisplay`'s `success` default |
 
 A ring or a border takes `RING`/`BORDER`, and each rung there is measured at 3:1 against the page and `BG.panel`
-(1.4.11); `ring-yellow-400` reads 1.57:1 on the light page. The team surfaces carry the stop on their badges.
+(1.4.11); `ring-yellow-400` reads 1.53:1 on the light page. The team surfaces carry the stop on their badges.
 
 ### TDD — Team colours
 
@@ -1677,6 +1697,31 @@ Set the preset from the console: `document.documentElement.dataset.palette = 'ty
 | `/chef` or `/dinner`, "Hvem laver maden?" | 375px + desktop | `CookingTeamCard` monitor | Name, 👨‍🍳 and 📅 badges wear the stop; the avatars carry no team ring |
 | Each row above, Tydelig | desktop | `getRainbowBand(i)` | Same fills as Farveglad (the stops sit on rungs the preset leaves in place, orange one shade deeper) |
 | `/` ticker | desktop | `PANTONE_CHIPS` | Ten chips: pink, orange, ocean, bonbon, party, peach, mocha, winery, yellow, sky |
+
+### Team creation toast — ✅ IMPLEMENTED (2026-09-18)
+
+**Decided by the user (2026-09-18).** The toast after "Opret madhold" on `/admin/teams` states what the operation did,
+in one line.
+
+| | Toast description |
+|---|---|
+| Old | `<draft count> madhold oprettet med automatisk tildeling` — fixed text, shown also when no dinner was assigned |
+| New | `<n> madhold oprettet · <m> madlavninger tildelt` — both numbers from the response |
+
+**Solution.** `PUT /api/admin/team` returns `CreateTeamsResponse` `{teams, eventsAssigned}` (`useCookingTeamValidation`),
+an operation result per ADR-009 [API Index Endpoint Data Inclusion Strategy]. `usePlanStore().createTeam()` parses and
+returns it; `AdminTeams.vue` builds the description from `teams.length` and `eventsAssigned`.
+`SeasonFactory.createCookingTeamForSeason` reads `teams[0]` from the envelope.
+
+| Spec | Red | Green |
+|---|---|---|
+| `tests/e2e/api/parallel/admin/team.e2e.spec.ts` › `PUT /api/admin/team returns the {teams, eventsAssigned} envelope (ADR-009)` | `PUT must return {teams, eventsAssigned}`: expected `false`, received `true` | green; `eventsAssigned` equals the season's dinners carrying a `cookingTeamId` |
+| `tests/component/stores/plan.nuxt.spec.ts` › `Plan Store - Team creation` › `createTeam returns the {teams, eventsAssigned} envelope` | `Cannot read properties of undefined (reading 'map')` | green |
+| `tests/component/components/admin/AdminTeams.nuxt.spec.ts` (new) › `reports created teams and assigned dinners in the toast` | received `2 madhold oprettet med automatisk tildeling` | green |
+
+| Route + state | Viewport | DS element to expect | Expect |
+|---|---|---|---|
+| `/admin/teams?mode=create`, a season with dinners, 2 new teams → "Opret madhold" | 375px + desktop | success toast | Title "Madhold oprettet"; description `2 madhold oprettet · <m> madlavninger tildelt` on one line, `<m>` matching the cooking days the teams show in view mode |
 
 ### Mockup — ✅ signed off 2026-09-16 (behind the [⚙ Indstillinger] button), card faces ✅ 2026-09-17
 
@@ -1801,7 +1846,7 @@ on removed dates stay published in Heynabo. The endpoint also writes `isActive` 
 - Keep `useEntityFormManager` and `?mode=` sync (ADR-008 [useEntityFormManager Composable Pattern], ADR-006 [URL-Based Navigation and
   Client-Side State]) — deep links `?mode=create|edit` stay valid. Only the controls change:
   - Card header: `SeasonSelector` + `[＋ Opret sæson]` (`BUTTONS.primaryAction`, `create-season`, disabled when CREATE is in `disabledModes`).
-  - `AdminPlanningSeason` header: the title carries the season name (Fællesspisning sæson {navn} / Rediger fællesspisning sæson {navn} / Opret fællesspisning sæson {navn}), so the read-only "Sæson" field goes away; beside it a labelled `Rediger {navn}` (`BUTTONS.secondaryAction` + `COLOR.primary` + `ICONS.edit`, `edit-season`, view mode + `canEdit`).
+  - `AdminPlanningSeason` header: the title carries the season name (Fællesspisning sæson {navn} / Redigerer fællesspisning sæson {navn} / Opret fællesspisning sæson {navn}), so the read-only "Sæson" field goes away; beside it a labelled `Rediger {navn}` (`BUTTONS.secondaryAction` + `COLOR.primary` + `ICONS.edit`, `edit-season`, view mode + `canEdit`).
   - Footer: `LAYOUTS.formButtonRow`, `BUTTONS.cancel` "Annuller", `BUTTONS.save` "Gem" (`type="submit"`, `:loading`). `id="seasonForm"` untouched.
   - Activation controls stay in edit mode as today. No delete for seasons.
   - Picker selection follows what is picked (`CALENDAR.picker`, drawn in the pickers' `#day` slot through the shared `dayCircleClasses` helper): a holiday is the green `CALENDAR.holiday` ring the preview draws, a season date the filled pink `PLANNING_CALENDAR.day.generated` of a cooking day with a dinner. Every calendar day circle in the app now goes through that one helper.
@@ -1820,7 +1865,7 @@ on removed dates stay published in Heynabo. The endpoint also writes `isActive` 
 VIEW (canEdit)                                              EDIT / CREATE
 ┌ [Sæson ▾ 08/26-07/27]              [＋ Opret sæson] ┐     ┌ [Sæson ▾ 08/26-07/27]      [＋ Opret sæson] ┐ (disabled)
 │ 🟢 Aktiv sæson … (SeasonStatusDisplay)              │     │ 🟢 Aktiv sæson … [✕ Deaktiver Sæson]        │ (as today: edit mode)
-│ ┌ Fællesspisning sæson 08/26-07/27                ┐ │     │ ┌ Rediger fællesspisning sæson 08/26-07/27 ┐ │  create: "Opret fællesspisning
+│ ┌ Fællesspisning sæson 08/26-07/27                ┐ │     │ ┌ Redigerer fællesspisning sæson 08/26-07/27 ┐ │  create: "Opret fællesspisning
 │ │                    [✏ Rediger 08/26-07/27]      │ │     │ │ Vi følger folkeskolernes feriekalender…  │ │  sæson <navn>", navn once the
 │ │ Vi følger folkeskolernes feriekalender…         │ │     │ │ Hvornår holder fællesspisning fri?       │ │  dates are valid
 │ │ fields disabled … calendar (right/top) …        │ │     │ │ [Start dato ▾][Slut dato ▾] [☀ Tilføj ferie] │  add row (as today)
@@ -1875,7 +1920,7 @@ verified in the browser: `test-results/picker-season-cookingday.png` (filled pin
 |---|---|---|---|
 | `/admin/planning` as ADMIN, a season selected | 375px + desktop | `LAYOUTS.cardActionRow` + `BUTTONS.primaryAction` + `COLOR.primary` + `ICONS.plusCircle` | "⊕ Opret sæson" solid beside the season selector, full width on the phone and inline on desktop; the old [👁][✏️][＋] trio is gone |
 | same | 375px + desktop | `BUTTONS.secondaryAction` + `COLOR.primary` + `ICONS.edit` | the card header reads "Fællesspisning sæson 08/26-07/27" with "✏ Rediger 08/26-07/27" beside it; the form has no read-only "Sæson" field any more |
-| `/admin/planning?mode=edit` | 375px + desktop | `LAYOUTS.formButtonRow` + `BUTTONS.cancel` + `BUTTONS.save` | title "Rediger fællesspisning sæson 08/26-07/27"; "✕ Annuller" and "✓ Gem" right-aligned on desktop and stacked with Gem on top on the phone; the error list sits above them |
+| `/admin/planning?mode=edit` | 375px + desktop | `LAYOUTS.formButtonRow` + `BUTTONS.cancel` + `BUTTONS.save` | title "Redigerer fællesspisning sæson 08/26-07/27"; "✕ Annuller" and "✓ Gem" right-aligned on desktop and stacked with Gem on top on the phone; the error list sits above them |
 | `/admin/planning?mode=create` | 375px + desktop | same footer | title "Opret fællesspisning sæson", and the computed name appears as soon as start and slut are valid |
 | `/admin/planning?mode=edit`, season with holidays | 375px + desktop | row `CalendarDateRangePicker` + `BUTTONS.edit` + `ICONS.trash` | each holiday row is ☀ + [Start dato][Slut dato] + 🗑; a date change lands on that row alone; an overlapping change shows "Ferieperioder må ikke overlappe hinanden" by the add row and the row keeps its old dates |
 | same, a holiday row picker open | 375px + desktop | `dayCircleClasses(CALENDAR.picker.holiday)` | every picked day is an empty circle with a green ring, start and end included; adjacent-month days stay hidden (`test-results/picker-holiday-selection.png`) |

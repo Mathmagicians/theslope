@@ -62,6 +62,15 @@ describe.each(VIEWPORTS)('AllergyNotes - edit face on $viewport', ({isMd}) => {
         expect(findByTestId(wrapper, ALLERGY_TEST_IDS.editNotes).exists()).toBe(expected)
     })
 
+    // Nuxt UI renders a horizontal alert's actions beside its text wrapper, a vertical one's inside
+    // it, under the text - so the pencil outside the wrapper is the pencil in the box's corner
+    it('places the pencil beside the notes, not under them', async () => {
+        const wrapper = await mount({notes: 'A\nB', canEdit: true})
+
+        expect(findByTestId(wrapper, ALLERGY_TEST_IDS.editNotes).exists()).toBe(true)
+        expect(findByTestId(wrapper.find('[data-slot="wrapper"]'), ALLERGY_TEST_IDS.editNotes).exists()).toBe(false)
+    })
+
     it('shows the current text in the textarea, one note per line', async () => {
         const wrapper = await mount({notes: 'A\nB', canEdit: true})
 

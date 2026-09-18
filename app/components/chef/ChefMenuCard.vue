@@ -62,9 +62,10 @@
  * │ [Menu] ⚠️ Om 2d   [Indkøb] ⚠️ Om 4d   [Bestilling] ✅ Åben   💰 1.500 kr │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
- * Action row noise ladder (NOISE: loud -> medium -> quiet) - matches use frequency:
- *   [edit menu] solid primary | [publish] outline secondary | [more] ghost overflow
- * The "more" overflow reveals a danger zone holding the rare cancel-dinner action.
+ * Action row noise ladder (NOISE: loud -> medium) - matches use frequency:
+ *   [edit menu] solid primary | [publish] outline secondary | [⚙ ▾] outline settings wheel
+ * The ⚙ ▾ trigger (BUTTONS.settings + chevron) reveals a danger zone holding the rare
+ * cancel-dinner action.
  *
  * ADR Compliance:
  * - ADR-001: Types from validation composables, FORM_MODES from ~/types/form
@@ -486,10 +487,11 @@ const handleCardClick = () => {
                   {{ isUpdating ? 'Arbejder...' : (dinnerEvent.heynaboEventId ? 'Publiceret' : 'Publicer') }}
                 </UButton>
 
-                <!-- More - overflow trigger (NOISE.quiet): "..." + chevron, reveals the danger zone -->
+                <!-- More - the settings wheel + chevron (BUTTONS.settings), reveals the danger zone -->
                 <UButton
                   v-if="canCancelDinner(dinnerEvent)"
-                  v-bind="BUTTONS.more"
+                  v-bind="BUTTONS.settings"
+                  :trailing-icon="ICONS.chevronDown"
                   class="self-end md:self-auto"
                   :ui="{ trailingIcon: isMoreOpen ? 'rotate-180 transition-transform duration-200' : 'transition-transform duration-200' }"
                   :disabled="isUpdating"

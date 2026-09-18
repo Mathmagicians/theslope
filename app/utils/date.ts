@@ -146,7 +146,8 @@ export function toCalendarDateRange(range: DateRange | undefined): { start?: Cal
 
 // Check if a CalendarDate is in a list of Date objects
 export function isCalendarDateInDateList(dateValue: DateValue, dateList: Date[]): boolean {
-    const dateToCheck = dateValue.toDate(DATE_SETTINGS.timezone)
+    // The cell names a calendar day; compare it as that day at the runtime's local midnight, the clock the list was built in
+    const dateToCheck = new Date(dateValue.year, dateValue.month - 1, dateValue.day)
     return dateList.some(date => isSameDay(date, dateToCheck))
 }
 

@@ -3,8 +3,8 @@
 │ UserPreferencesCard - the member's own notification channels and appearance ("Mine indstillinger")    │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                                      │
-│ VIEW  (dashboard /login, under UserProfileCard)          EDIT  (after ✏️ Rediger)                     │
-│ ┌ Mine indstillinger                   [✏️ Rediger] ┐    ┌ Mine indstillinger ───────────────────────┐ │
+│ VIEW  (dashboard /login, under UserProfileCard)          EDIT  (after ✏️)                             │
+│ ┌ Mine indstillinger                           [✏️] ┐    ┌ Mine indstillinger ───────────────────────┐ │
 │ │ 🔔 Notifikationer  [📧 E-mail] [📱 SMS]          │    │ 🔔 Notifikationer                         │ │
 │ │ 🎨 Farvevalg       Tydelig  🇪🇺 EN 301 549·AA ✓  │    │    E-mail   anna@…            [———●] ON   │ │
 │ │ 🔤 Tekst           Normal                        │    │    SMS      +45 …             [●———] OFF  │ │
@@ -130,13 +130,10 @@ const sendTest = async () => {
         <UButton
           v-if="!isEditing"
           v-bind="BUTTONS.edit"
-          :square="false"
-          aria-label="Rediger mine indstillinger"
+          aria-label="Rediger"
           data-testid="pref-edit"
           @click="startEditing"
-        >
-          Rediger
-        </UButton>
+        />
       </div>
     </template>
 

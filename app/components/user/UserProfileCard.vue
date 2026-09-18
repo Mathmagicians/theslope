@@ -7,10 +7,11 @@
 │ ┌─────────────────────────────────────────────────────────────────────────┐ │
 │ │ #header                                                                 │ │
 │ │                                                                         │ │
-│ │  [👤] Anna Hansen      [⚙ Indstillinger] [Heynabo →] [👋 Log ud →]     │ │
+│ │  [👤] Anna Hansen                    [⚙] [Heynabo →] [👋 Log ud →]     │ │
 │ │       [🛡️ Admin] [💚 Allergichef]                                      │ │
-│ │                        ↑ own settings, current user only; filled while  │ │
-│ │                          the parent shows UserPreferencesCard below     │ │
+│ │                                      ↑ own settings, current user only  │ │
+│ │                                        aria-label "Indstillinger"       │ │
+│ │  One outline shape: BUTTONS.settings + BUTTONS.secondaryAction          │ │
 │ │                                                                         │ │
 │ ├─────────────────────────────────────────────────────────────────────────┤ │
 │ │ #default                                                                │ │
@@ -29,7 +30,7 @@
 │ │  [👤] Anna Hansen                                                      │ │
 │ │       [🛡️ Admin] [💚 Allergichef]                                      │ │
 │ │                                                                         │ │
-│ │  [⚙ Indstillinger] [Heynabo →] [👋 Log ud →]    (the three wrap here)   │ │
+│ │  [⚙] [Heynabo →] [👋 Log ud →]           (wraps when the row is full)   │ │
 │ │                                                                         │ │
 │ ├─────────────────────────────────────────────────────────────────────────┤ │
 │ │ #default                                                                │ │
@@ -68,7 +69,7 @@ const props = withDefaults(defineProps<Props>(), {
   preferencesOpen: false
 })
 
-const {TYPOGRAPHY, SIZES, ICONS, IMG, BUTTONS, COMPONENTS, ALERTS, COLOR} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, SIZES, ICONS, IMG, BUTTONS, ALERTS, COLOR} = useTheSlopeDesignSystem()
 const {roleLabels} = useUserRolesUi()
 const {getUserUrl} = useHeynabo()
 const authStore = useAuthStore()
@@ -189,47 +190,45 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
           </template>
         </UserListItem>
 
-        <!-- Right: Action buttons -->
-        <UFieldGroup  :size="SIZES.standard" class="gap-2 md:gap-4 md:justify-end">
+        <!-- Right: action buttons - one outline shape; they wrap on a phone, one row from md -->
+        <div class="flex flex-wrap items-center gap-2 md:gap-4 md:flex-nowrap md:shrink-0 md:ml-auto">
           <!-- Own settings: reveals UserPreferencesCard under this card -->
           <UButton
             v-if="shouldShowActions"
-            v-bind="{...BUTTONS.secondaryAction, ...(preferencesOpen ? COMPONENTS.cardAction.toggleActive : COMPONENTS.cardAction.toggle)}"
-            :icon="ICONS.settings"
+            v-bind="BUTTONS.settings"
+            aria-label="Indstillinger"
             :aria-pressed="preferencesOpen"
             data-testid="pref-toggle"
             @click="emit('toggle-preferences')"
-          >
-            Indstillinger
-          </UButton>
+          />
 
           <!-- Heynabo profile link -->
           <UButton
             v-if="heynaboProfileUrl"
+            v-bind="BUTTONS.secondaryAction"
+            :color="COLOR.primary"
             :to="heynaboProfileUrl"
             target="_blank"
-            name="heynabo-profile-link"
-            :color="COMPONENTS.cardAction.neutral.color"
-            :variant="COMPONENTS.cardAction.neutral.variant"
             :avatar="{src: IMG.heynabo, alt: 'Heynabo'}"
             :trailing-icon="ICONS.arrowRight"
+            data-testid="heynabo-profile-link"
           >
             Heynabo
           </UButton>
 
           <!-- Logout button -->
           <UButton
-              v-if="shouldShowActions"
-            name="logout-button"
+            v-if="shouldShowActions"
+            v-bind="BUTTONS.secondaryAction"
+            :color="COLOR.error"
             :leading-icon="ICONS.logout"
             :trailing-icon="ICONS.arrowRight"
-            :color="COMPONENTS.cardAction.destructive.color"
-            :variant="COMPONENTS.cardAction.destructive.variant"
+            data-testid="logout-button"
             @click="handleLogout"
           >
             Log ud
           </UButton>
-        </UFieldGroup>
+        </div>
       </div>
     </template>
 

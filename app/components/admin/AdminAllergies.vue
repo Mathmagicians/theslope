@@ -325,7 +325,7 @@ const catalogEmptyState = {
             data-testid="multiselect-toggle"
             @click="toggleMultiselectMode"
         >
-          {{ multiselectMode ? 'Afslut sammenligning' : 'Sammenlign' }}
+          {{ multiselectMode ? 'Afslut kombinering' : 'Kombiner allergener' }}
         </UButton>
 
         <UButton

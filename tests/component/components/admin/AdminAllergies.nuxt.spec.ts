@@ -141,12 +141,13 @@ describe('AdminAllergies', () => {
                 expect(findByTestId(wrapper, ALLERGY_TEST_IDS.sort).exists()).toBe(true)
             })
 
-            it('switches to compare mode', async () => {
+            it('switches to combine mode', async () => {
                 const wrapper = await mount()
+                expect(findByTestId(wrapper, ALLERGY_TEST_IDS.compare).text()).toContain('Kombiner allergener')
 
                 await clickByTestId(wrapper, ALLERGY_TEST_IDS.compare)
 
-                expect(wrapper.text()).toContain('Afslut sammenligning')
+                expect(findByTestId(wrapper, ALLERGY_TEST_IDS.compare).text()).toContain('Afslut kombinering')
             })
 
             // Same AllergyNotes component and text source (the Setting row) as the poster,

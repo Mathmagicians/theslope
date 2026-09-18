@@ -31,14 +31,14 @@ TheSlope uses a custom color palette inspired by Pantone Color of the Year 2025 
 
 | Color | Pantone Name | Base Hex | Tailwind Name | NuxtUI Alias | Type | Usage |
 |-------|--------------|----------|---------------|--------------|------|-------|
-| <span class="color-swatch" style="background-color: #a47864;"></span> | **Mocha Mousse** | `#a47864` | `amber-500` | `mocha` | Custom | Cooking teams |
-| <span class="color-swatch" style="background-color: #fa7b95;"></span> | **Pink Lemonade** | `#fa7b95` | `pink-500` | `pink` | Custom | Cooking teams, calendar events |
-| <span class="color-swatch" style="background-color: #ec6a37;"></span> | **Mandarin Orange** | `#ec6a37` | `orange-500` | `orange` | Custom | Cooking teams |
-| <span class="color-swatch" style="background-color: #7e212a;"></span> | **Winery** | `#7e212a` | `winery-900` | `winery` | Custom | Cooking teams |
-| <span class="color-swatch" style="background-color: #c4516c;"></span> | **Party Punch** | `#c4516c` | `party-700` | `party` | Custom | Cooking teams |
-| <span class="color-swatch" style="background-color: #ffb482;"></span> | **Peach Cobbler** | `#ffb482` | `peach-300` | `peach` | Custom | Cooking teams, countdown timer |
-| <span class="color-swatch" style="background-color: #ca815a;"></span> | **Caramel** | `#ca815a` | `caramel-400` | `caramel` | Custom | Cooking teams |
-| <span class="color-swatch" style="background-color: #f1a9cf;"></span> | **Bonbon** | `#f1a9cf` | `violet-300` | `bonbon` | Custom | Cooking teams |
+| <span class="color-swatch" style="background-color: #a47864;"></span> | **Mocha Mousse** | `#a47864` | `amber-500` | `mocha` | Custom | Frame: title bar, ticker, dinner header |
+| <span class="color-swatch" style="background-color: #fa7b95;"></span> | **Pink Lemonade** | `#fa7b95` | `pink-500` | `pink` | Custom | Rainbow stop 1: landing band, TAKEAWAY, team 1; calendar events |
+| <span class="color-swatch" style="background-color: #ec6a37;"></span> | **Mandarin Orange** | `#ec6a37` | `orange-500` | `orange` | Custom | Rainbow stop 2: landing band, SPISESAL, team 2 |
+| <span class="color-swatch" style="background-color: #7e212a;"></span> | **Winery** | `#7e212a` | `winery-900` | `winery` | Custom | Rainbow stop 7 at `winery-700`: team 7 |
+| <span class="color-swatch" style="background-color: #c4516c;"></span> | **Party Punch** | `#c4516c` | `party-700` | `party` | Custom | Rainbow stop 5: team 5 |
+| <span class="color-swatch" style="background-color: #ffb482;"></span> | **Peach Cobbler** | `#ffb482` | `peach-300` | `peach` | Custom | Rainbow stop 6: team 6; countdown timer |
+| <span class="color-swatch" style="background-color: #ca815a;"></span> | **Caramel** | `#ca815a` | `caramel-400` | `caramel` | Custom | Nuxt UI slot `caramel` |
+| <span class="color-swatch" style="background-color: #f1a9cf;"></span> | **Bonbon** | `#f1a9cf` | `violet-300` | `bonbon` | Custom | Rainbow stop 4 at `violet-500`: landing band, team 4 |
 | <span class="color-swatch" style="background-color: #3c8c9e;"></span> | **Ocean/Sky** | `#3c8c9e` | `sky-500` | `ocean` | Custom | Menu hero, DINEIN mode |
 | <span class="color-swatch" style="background-color: #25a6b5;"></span> | **Blue Lagoon** | `#25a6b5` | `blue-500` | `primary` / `secondary` / `info` | Semantic | Buttons, links, info messages |
 | <span class="color-swatch" style="background-color: #c4746f;"></span> | **Soft Red** | `#c4746f` | `red-500` | `error` | Semantic | Error messages, cancel actions |
@@ -307,7 +307,7 @@ keep their published hue in every preset.
 WCAG 2.1 1.4.6 asks 7:1 of body text and 4.5:1 of large-scale text, and 1.4.11 keeps borders, rings and
 UI boundaries at 3:1, the level it defines. The hues, the chroma and the eight held surfaces are
 Tydelig's, and the walk starts from the same published palette and stops at the higher bar. It meets AAA
-on 423 of the 438 pairs; the light block carries 31 steps, the dark block 39. The remaining fifteen are
+on 423 of the 438 pairs; the light block carries 33 steps, the dark block 39. The remaining fifteen are
 listed in `PRESET_FINDINGS` in `designSystemContrast.unit.spec.ts`, each with the ratio it reaches,
 measured 2026-09-18, and the change that closes it.
 
@@ -365,7 +365,7 @@ document.documentElement.classList.toggle('dark')       // the dark block
 | Rule | Scope |
 |---|---|
 | **1.4.3 Contrast (Minimum)** | 4.5:1 for body text, 3:1 for large-scale text — 24px, or 18.66px at `font-bold` and heavier. Every face a token renders is measured, so the smallest one sets the bar. `TYPOGRAPHY.sectionIconLight` (`text-2xl`) is measured at 3:1 |
-| **1.4.3 for a fill** | A fill carries no size, so its bar comes from the typography a component places on it, listed in `INK_ON_FILL` with the component and line that draws it. A rainbow stop answers for every face its consumers draw and the smallest one binds: the first three stops carry the kitchen's `kitchenLabel` at `text-xs` and take 4.5:1, the last two carry `TYPOGRAPHY.sectionTitle` (`text-xl md:text-3xl font-bold` — large at both widths) and take 3:1 |
+| **1.4.3 for a fill** | A fill carries no size, so its bar comes from the typography a component places on it, listed in `INK_ON_FILL` with the component and line that draws it. A rainbow stop answers for every face its consumers draw and the smallest one binds: a cooking team wears the stop of its number on a `UBadge` whose label is body text (`text-[10px]` to `text-sm`), so all nine stops take the body bar — 4.5:1, and 7:1 in Høj kontrast |
 | **1.4.6 Contrast (Enhanced)** | 7:1 for body text, 4.5:1 for large-scale text, at the same faces and the same `INK_ON_FILL` rule. The level Høj kontrast is measured at |
 | **1.4.11 Non-text Contrast** | 3:1 for the edges that identify a control or carry meaning: input and card borders, the green holiday ring, the amber and red deadline rings, the segmented-control ring, the calendar selection outlines. 3:1 at every level, so it is the same bar in all four palettes |
 

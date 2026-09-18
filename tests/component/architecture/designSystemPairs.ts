@@ -342,6 +342,15 @@ const KITCHEN_INK: PlacedInk[] = [
 ]
 
 /**
+ * A cooking team wears the stop of its number on `UBadge`s, and the label is Nuxt UI's badge face:
+ * `text-[10px]` at `sm`, `text-xs` at `md`, `text-sm` at `lg`. Every one of them is body text, and
+ * `TYPOGRAPHY.bodyTextSmall` (`text-sm`) is the design-system face that grades it: 1.4.3 has one
+ * bar below large scale. Drawn by CookingTeamBadges.vue:43, CookingTeamCard.vue:235,
+ * AdminTeams.vue:572 and TeamCalendarDisplay.vue:121
+ */
+const TEAM_BADGE: PlacedInk[] = [{ink: 'TYPOGRAPHY.bodyTextSmall', at: 'CookingTeamBadges.vue:43'}]
+
+/**
  * The typography a component actually places on a fill. 1.4.3 grades a pair by the size of the
  * text in it; a fill token carries no size of its own, so the threshold comes from the ink a
  * component draws on it, at that ink's smallest face. Read from the components named here - a
@@ -352,15 +361,15 @@ const KITCHEN_INK: PlacedInk[] = [
  * nowhere and stays at the body bar.
  */
 const INK_ON_FILL: Record<string, PlacedInk[]> = {
-    // The brand rainbow. `RAINBOW` is what the landing bands and the kitchen panels both walk,
-    // so a stop answers for every face its consumers draw and the smallest of them binds: the
-    // kitchen's 12px label puts the first three stops at the body bar, while bonbon and party
-    // carry the landing band's large title alone
-    'RAINBOW[0]': [...SECTION_TITLE, ...KITCHEN_INK],
-    'RAINBOW[1]': [...SECTION_TITLE, ...KITCHEN_INK],
-    'RAINBOW[2]': [...SECTION_TITLE, ...KITCHEN_INK],
-    'RAINBOW[3]': SECTION_TITLE,
-    'RAINBOW[4]': SECTION_TITLE,
+    // The brand rainbow. `RAINBOW` is what the landing bands, the kitchen panels and the cooking
+    // teams walk, so a stop answers for every face its consumers draw and the smallest of them
+    // binds: a team badge puts every stop at the body bar
+    'RAINBOW[0]': [...SECTION_TITLE, ...KITCHEN_INK, ...TEAM_BADGE],
+    'RAINBOW[1]': [...SECTION_TITLE, ...KITCHEN_INK, ...TEAM_BADGE],
+    'RAINBOW[2]': [...SECTION_TITLE, ...KITCHEN_INK, ...TEAM_BADGE],
+    'RAINBOW[3]': [...SECTION_TITLE, ...TEAM_BADGE],
+    'RAINBOW[4]': [...SECTION_TITLE, ...TEAM_BADGE],
+    ...Object.fromEntries(RAINBOW.slice(5).map((_, offset) => [`RAINBOW[${offset + 5}]`, TEAM_BADGE])),
     'BACKGROUNDS.hero.mocha': [
         // app/components/dinner/DinnerDetailHeader.vue:65-78, app/components/chef/ChefMenuCard.vue:418
         {ink: 'TYPOGRAPHY.bodyTextMedium', at: 'DinnerDetailHeader.vue:74'},

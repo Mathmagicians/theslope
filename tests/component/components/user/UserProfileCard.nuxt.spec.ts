@@ -1,9 +1,10 @@
 // @vitest-environment nuxt
 /**
- * UserProfileCard - the ⚙ toggle that reveals the settings card the parent renders.
+ * UserProfileCard - the owner's header actions: the ⚙ toggle that reveals the settings card the
+ * parent renders, and Log ud.
  *
  * Real component tree, real stores (testing.md Rule 6); only HTTP and the session are faked.
- * The toggle belongs to the current user's own card, so the spec drives `authStore.user`.
+ * The toggle and Log ud belong to the current user's own card, so the spec drives `authStore.user`.
  */
 import {describe, it, expect, vi, beforeEach} from 'vitest'
 import {nextTick, type Ref} from 'vue'
@@ -16,6 +17,11 @@ import {mountWithTooltipProvider, findByTestId} from '~~/tests/component/testHel
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import type {UserDetail} from '~/composables/useCoreValidation'
 import {PREF_TEST_IDS} from './userPreferencesTestIds'
+
+/** The header's own actions; the ⚙ is `PREF_TEST_IDS.toggle`, next to the card it opens */
+const PROFILE_TEST_IDS = {
+    logout: 'logout-button'
+} as const
 
 // The test runtime has no session cookie and no /api/_auth endpoint, so the session nuxt-auth-utils
 // would hydrate is the one thing faked; the auth store reading it is real.
@@ -55,15 +61,26 @@ beforeEach(() => {
     clearNuxtData()
 })
 
-describe('UserProfileCard - settings toggle', () => {
+describe('UserProfileCard - header actions', () => {
     it.each([
         {desc: 'the current user with actions', user: me, showActions: true, visible: true},
         {desc: 'another user with actions', user: someoneElse, showActions: true, visible: false},
         {desc: 'the current user without actions', user: me, showActions: false, visible: false}
-    ])('GIVEN $desc THEN the toggle is rendered=$visible', async ({user, showActions, visible}) => {
+    ])('GIVEN $desc THEN the toggle and Log ud are rendered=$visible', async ({user, showActions, visible}) => {
         const wrapper = await mountCard({user, showActions})
 
         expect(findByTestId(wrapper, PREF_TEST_IDS.toggle).exists()).toBe(visible)
+        expect(findByTestId(wrapper, PROFILE_TEST_IDS.logout).exists()).toBe(visible)
+    })
+
+
+
+    it('GIVEN the toggle THEN it is the wheel alone, named "Indstillinger" for assistive tech', async () => {
+        const wrapper = await mountCard({user: me, showActions: true})
+        const toggle = findByTestId(wrapper, PREF_TEST_IDS.toggle)
+
+        expect(toggle.text()).toBe('')
+        expect(toggle.attributes('aria-label')).toBe('Indstillinger')
     })
 
     it('GIVEN the toggle WHEN it is clicked THEN the card asks its parent to toggle the settings', async () => {

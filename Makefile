@@ -340,7 +340,7 @@ WORKERS := sender
 worker_cfg = workers/$(1)/wrangler.toml
 
 .PHONY: deploy-dev deploy-prod logs-dev logs-prod deploy-theslope-dev deploy-theslope-prod \
-        run-sender-local deploy-sender-dev logs-sender-dev typegen
+        run-sender-local deploy-sender-dev deploy-sender-prod logs-sender-dev logs-sender-prod typegen
 
 # Deploy macro: $(1)=npm script, $(2)=environment name
 # Uses env vars if set (CI), otherwise calculates via version-info (local)
@@ -377,10 +377,12 @@ run-sender-local: ## Run theslope-sender locally (miniflare, port 3100 from its 
 deploy-sender-dev: ## Build + deploy theslope-sender to dev
 	$(call worker_deploy,sender,dev)
 
+deploy-sender-prod: ## Build + deploy theslope-sender to prod
+	$(call worker_deploy,sender,prod)
+
 # CI entry points — names unchanged. Prerequisites run in order: consumers first, the app (producer) last.
 deploy-dev: $(foreach w,$(WORKERS),deploy-$(w)-dev) deploy-theslope-dev ## Deploy ALL workers to dev
-# prod has no sender yet: [env.prod] and deploy-sender-prod arrive with the "Pipe hardening + prod" package
-deploy-prod: deploy-theslope-prod ## Deploy ALL workers to prod
+deploy-prod: $(foreach w,$(WORKERS),deploy-$(w)-prod) deploy-theslope-prod ## Deploy ALL workers to prod
 
 logs-dev: ## Tail app logs (dev)
 	@npx wrangler tail theslope --env dev --format pretty
@@ -391,6 +393,9 @@ logs-prod: ## Tail app logs (prod)
 logs-sender-dev: ## Tail theslope-sender logs (dev)
 	$(call worker_tail,sender,dev)
 
+logs-sender-prod: ## Tail theslope-sender logs (prod)
+	$(call worker_tail,sender,prod)
+
 typegen: ## Regenerate wrangler binding typings for every worker from wrangler.toml alone (root + workers/*)
 	@CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false npx wrangler types shared/types/worker-configuration.d.ts && $(foreach w,$(WORKERS),CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false npx wrangler types workers/$(w)/worker-configuration.d.ts -c $(call worker_cfg,$(w)) &&) true
 
@@ -398,7 +403,7 @@ typegen: ## Regenerate wrangler binding typings for every worker from wrangler.t
 # SENDER EVENTS — trigger a notification event on an environment (the cron twins' pattern, via theslope_call)
 # ============================================================================
 .PHONY: theslope-sender-event-test-local theslope-sender-event-test-dev theslope-sender-event-test-prod \
-        theslope-sender-event-monthly-billing-local theslope-sender-event-monthly-billing-dev theslope-sender-event-monthly-billing-prod queues-info-dev
+        theslope-sender-event-monthly-billing-local theslope-sender-event-monthly-billing-dev theslope-sender-event-monthly-billing-prod queues-info-dev queues-info-prod
 
 # $(1)=env file. The mail goes to the environment's admin mailbox
 define theslope_sender_event_test
@@ -431,6 +436,9 @@ theslope-sender-event-monthly-billing-prod: ## Re-send the accountant mail for a
 
 queues-info-dev: ## Backlog of the dev sender queue
 	@npx wrangler queues info theslope-sender-dev
+
+queues-info-prod: ## Backlog of the prod sender queue
+	@npx wrangler queues info theslope-sender-prod
 
 # ============================================================================
 # THESLOPE API

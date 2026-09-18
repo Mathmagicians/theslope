@@ -3,7 +3,7 @@ UX MOCKUP: season form (signed off 2026-09-16) - this component's own layout.
 Where the form sits on the page: see AdminPlanning.vue.
 
 VIEW (canEdit)                                    EDIT / CREATE
-┌ Fællesspisning sæson 08/26-07/27             ┐   ┌ Rediger fællesspisning sæson 08/26-07/27  ┐
+┌ Fællesspisning sæson 08/26-07/27             ┐   ┌ Redigerer fællesspisning sæson 08/26-07/27┐
 │                     [✏ Rediger 08/26-07/27]  │   │ (create: Opret fællesspisning sæson <navn>,│
 │ Vi følger folkeskolernes feriekalender…      │   │  navn as soon as the dates are valid)      │
 │ [Start dato][Slut dato]            (disabled)│   │ Vi følger folkeskolernes feriekalender…    │
@@ -59,20 +59,21 @@ watch(() => model.value.seasonDates, (newDates) => {
   }
 }, {deep: true})
 
-// One label and one verb per mode - the title, and the edit control, read from the same words
+// The title says what the form is doing (Redigerer); the edit control says what it does (Rediger)
 const SEASON_LABEL = 'fællesspisning sæson'
-const MODE_VERBS: Record<FormMode, string> = {
+const EDIT_VERB = 'Rediger'
+const TITLE_VERBS: Record<FormMode, string> = {
   [FORM_MODES.VIEW]: '',
-  [FORM_MODES.EDIT]: 'Rediger',
+  [FORM_MODES.EDIT]: 'Redigerer',
   [FORM_MODES.CREATE]: 'Opret'
 }
 
 // The season's name lives in the title (create shows it as soon as the dates are valid)
 const formTitle = computed(() =>
-    capitalize([MODE_VERBS[props.mode], SEASON_LABEL, model.value.shortName].filter(Boolean).join(' '))
+    capitalize([TITLE_VERBS[props.mode], SEASON_LABEL, model.value.shortName].filter(Boolean).join(' '))
 )
 
-const editLabel = computed(() => `${MODE_VERBS[FORM_MODES.EDIT]} ${model.value.shortName}`)
+const editLabel = computed(() => `${EDIT_VERB} ${model.value.shortName}`)
 
 // ACTIONS
 const onSubmitSeason = () => {
