@@ -402,7 +402,7 @@ interface TableRow {
   original: CookingTeamDisplay
 }
 
-const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, TEXT, BG, COMPONENTS, getRainbowBand} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, TEXT, BG, COMPONENTS} = useTheSlopeDesignSystem()
 
 const columns = [
   {
@@ -424,10 +424,6 @@ const columns = [
   {
     accessorKey: 'affinity',
     header: 'Madlavningsdage'
-  },
-  {
-    accessorKey: 'assignments',
-    header: 'Medlemmer'
   }
 ]
 
@@ -567,31 +563,19 @@ v-else
               :loading="isSelectedSeasonLoading"
               :ui="COMPONENTS.table.ui"
           >
-            <!-- Team name column with colored badge -->
             <template #name-cell="{ row }">
-              <UBadge
-                  :class="getRainbowBand(displayedTeams.findIndex(t => t.id === row.original.id))"
-                  size="md"
-              >
-                {{ row.original.name }}
-              </UBadge>
-            </template>
-
-            <!-- Team affinity column with compact WeekDayMapDisplay -->
-            <template #affinity-cell="{ row }">
-              <WeekDayMapDisplay
-                  :model-value="row.original.affinity"
-                  compact
-              />
-            </template>
-
-            <!-- Team assignments column with CookingTeamBadges -->
-            <template #assignments-cell="{ row }">
               <CookingTeamBadges
                   :team-number="displayedTeams.findIndex(t => t.id === row.original.id) + 1"
                   :team-name="row.original.name"
                   :member-count="row.original.assignments?.length ?? 0"
                   :cooking-days-count="row.original.cookingDaysCount ?? 0"
+                  compact
+              />
+            </template>
+
+            <template #affinity-cell="{ row }">
+              <WeekDayMapDisplay
+                  :model-value="row.original.affinity"
                   compact
               />
             </template>

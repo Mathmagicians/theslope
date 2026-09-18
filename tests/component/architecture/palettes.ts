@@ -6,7 +6,7 @@
  * asserts every pair at, and the level `scripts/palettes/presets.ts` solves for. A palette whose
  * entry claims a level has to publish a stylesheet and meet that level on every pair - the base,
  * `default`, included: it is the Glade farver stylesheet every visitor sees. An entry with no level
- * would be measured at AA as the baseline its dated findings are kept against.
+ * is measured at AA.
  */
 
 import {PALETTES, DEFAULT_APPEARANCE, type Palette} from '~/composables/useUserPreferenceValidation'

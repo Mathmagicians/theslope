@@ -390,7 +390,7 @@ export type RenderedPreset = {css: string, report: string[], warnings: string[]}
  * bytes on every run, which is what lets a spec compare the committed file against it.
  */
 export const solvePreset = (preset: Preset): RenderedPreset => {
-    const {name, level, generatedOn, hues, colourSafe} = preset
+    const {name, level, hues, colourSafe} = preset
     const output = paletteFile(name)
     const slotFamilies = new Set(Object.keys(hues).filter(family => hues[family]!.as === 'slot'))
 
@@ -619,7 +619,7 @@ export const solvePreset = (preset: Preset): RenderedPreset => {
 
     const emit = (override: PaletteOverride) => {
         const published = publishedScales([...new Set([...Object.keys(override.light.scales), ...slotFamilies])])
-        const header = ['/*', ...preset.header(output, generatedOn), ' */', ''].join('\n')
+        const header = ['/*', ...preset.header(output), ' */', ''].join('\n')
 
         const light = block(paletteSelector(name, 'light'), override.light, published, slotFamilies)
         const dark = block(paletteSelector(name, 'dark'), override.dark, override.light.scales, slotFamilies)
@@ -674,7 +674,7 @@ export const solvePreset = (preset: Preset): RenderedPreset => {
         `👨‍💻 > [PALETTE] > [${name}] renders ${output}`
     ]
 
-    // A clipped channel bends the hue, and a hue map that bends is no longer the anchor it names.
+    // A clipped channel bends the hue, and a hue map that bends is not the anchor it names.
     // Black has no hue to bend, and a ladder-chroma rung near white or black too little to read one
     const drift = Object.entries(hues).filter(([, anchor]) => !isAchromatic(anchor.hex)).flatMap(([family, anchor]) => {
         const {hue} = rgbToOklch(hexToRgb(anchor.hex))

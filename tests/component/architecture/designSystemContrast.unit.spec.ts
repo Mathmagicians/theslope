@@ -30,8 +30,7 @@ import {renderPreset} from '../../../scripts/palettes/render'
  *
  * When a case fails, fix the token - never the threshold. A pair a palette cannot meet is listed in
  * PRESET_FINDINGS with the ratio it reaches; the case per mode expects exactly the listed pairs to
- * miss, so both a regression in a green pair and a fix of a listed one break the build. Every
- * palette meets its level today.
+ * miss, so both a regression in a green pair and a fix of a listed one break the build.
  */
 
 // ---------------------------------------------------------------------------
@@ -54,21 +53,7 @@ const PALETTES = PALETTES_UNDER_TEST
  */
 const RENDER_TIMEOUT_MS = 30_000
 
-/**
- * Pairs a palette cannot answer, keyed `<palette>|<pair>`, with the ratio it reaches. A regeneration
- * that fixes one fails its mode's case and asks for the entry to go.
- *
- * Glade farver and Til farveblinde meet AA on every pair, in light and dark. The nine tokens that used to
- * hold them back drew one rung as a fill and as ink at once; each now carries its own `dark:` face
- * (`*_CALENDAR.day.next`, `PLANNING_CALENDAR.day.potential`, `BORDER.amber[500]`, `RING.amber[500]`,
- * `BORDER.gray[800]`, `TEXT.dimmed`, `COMPONENTS.powerMode.iconClass`), and the two countdown
- * accents moved to the 200 rung, which only they draw.
- *
- * Høj kontrast meets AAA on every pair since 2026-09-18, through two changes: the generator gives
- * up chroma where sRGB cannot show a rung at its new lightness (a clipped channel costs the
- * luminance the lift was for), and `BORDER.orange[500]` draws the 600 rung in light mode, so the
- * border no longer shares its rung with the orange band fill.
- */
+/** Pairs a palette cannot meet, keyed `<palette>|<pair>`, with the ratio it reaches */
 const PRESET_FINDINGS = new Map<string, number>([])
 
 /** A pair as a failing case prints it */

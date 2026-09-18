@@ -467,9 +467,8 @@ export type PantoneFamily = typeof PANTONE_FAMILIES[number]
  * inherits both.
  *
  * Ink is whichever of `TEXT.black` and `TEXT.white` clears 4.5:1 on the fill in both modes; a
- * light fill carries its own family's darkest rung. Ratios measured 2026-09-18 in the AA palettes,
- * Glade farver and Til farveblinde - the lower of the two is the one written here. Høj kontrast
- * holds every surface at 7:1.
+ * light fill carries its own family's darkest rung. The ratios are the lower of Glade farver and
+ * Til farveblinde; Høj kontrast holds every surface at 7:1.
  */
 const HERO = {
     pink: `${BG.pink[500]} ${TEXT.black}`,            // Pink Lemonade   6.86:1

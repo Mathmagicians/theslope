@@ -5,7 +5,7 @@
  * It applies wherever no `data-palette` is set, under selectors that outrank the `:root` and `.dark`
  * variables Nuxt UI writes at runtime; a chosen preset replaces it rather than layering on it.
  *
- * Generated 2026-09-18 against EN 301 549 → WCAG 2.1: 4.5:1 body text and 3:1 large-scale
+ * Meets EN 301 549 → WCAG 2.1: 4.5:1 body text and 3:1 large-scale
  * text (1.4.3 AA), 3:1 borders, rings and UI boundaries (1.4.11 AA). The hues and the chroma are
  * TheSlope's published palette; only OKLCH lightness moves, and the neutral surfaces stay put.
  *
@@ -82,6 +82,7 @@ html.dark:not([data-palette]) {
     --color-red-500: #c97973;
     --color-red-700: #cd7674;
     --color-sky-50: #f1fafa;
+    --color-sky-200: #bcdfe5;
     --color-sky-300: #8dc8d3;
     --color-sky-400: #76c9da;
     --color-violet-300: #f1a9cf;

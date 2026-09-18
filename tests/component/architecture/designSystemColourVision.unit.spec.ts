@@ -24,33 +24,19 @@ import {RAINBOW} from '../../../app/composables/useTheSlopeDesignSystem'
  * comes from.
  *
  * When a case fails, fix the palette - never the threshold. Pairs that miss today are listed in
- * FINDINGS with the distance measured on 2026-09-18; the case per mode expects exactly the listed
+ * FINDINGS with the distance they reach; the case per mode expects exactly the listed
  * pairs to miss, so both a regression in a green pair and a fix of a listed one break the build.
  */
 
 // ---------------------------------------------------------------------------
-// What each palette reaches today, measured 2026-09-18
+// Meaning pairs a palette does not keep apart
 // ---------------------------------------------------------------------------
 
 /**
- * Pairs a palette does not keep apart, keyed `<palette>|<mode>|<a> vs <b>|<vision>`, with the
- * distance it reaches. They run as `it.fails`: a palette change that fixes one breaks the build
- * and asks for the entry to go, and a pair that is not listed may never start failing.
- *
- * Measured 2026-09-18: Glade farver, the base, keeps 42 of its 72 cases; Til farveblinde keeps all 72.
- *
- * finding 2026-09-18, awaiting the user's decision: **a solid slot fill has one rung to give**.
- * It is both the ink of `text-<slot>` on the page and the fill under `text-inverted`, so AA at
- * 4.5:1 puts every slot at the same end of the lightness range - the dark end in light mode, the
- * light end in dark mode - and leaves hue alone to tell the meanings apart. Under protanopia and
- * deuteranopia the red-green axis is the one that goes. The base's rows are that finding: it is
- * the published palette with its lightness walked to AA, and the walk takes each face to the edge.
- *
- * Til farveblinde answers it with the user's decisions of 2026-09-18 ("The meaning faces" in
- * `scripts/palettes/render.ts`): every meaning face takes its Color Universal Design anchor -
- * `neutral` sky blue and `primary` black included - and where AA leaves no room at an anchor's own
- * lightness the faces take the arrangement nearest their anchors' lightness that parts, by lightness,
- * every pair the hues cannot part.
+ * Keyed `<palette>|<mode>|<a> vs <b>|<vision>`, with the distance each reaches. Glade farver is not
+ * colour-safe: a solid slot fill is both `text-<slot>` on the page and the fill under `text-inverted`,
+ * so AA puts every slot at one lightness and leaves hue alone to part the meanings. Til farveblinde,
+ * the colour-safe palette, keeps every pair apart ("The meaning faces" in `scripts/palettes/render.ts`).
  */
 const FINDINGS = new Map<string, number>([
     ['default|light|success vs error|deuteranopia', 0.037],

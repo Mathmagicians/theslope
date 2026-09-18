@@ -393,16 +393,17 @@ places on it (`INK_ON_FILL`, one row per surface with the component and line tha
 table banding listed in docs/ui.md "Palettes" sit outside 1.4.11.
 
 Every palette under `app/assets/css/palettes/` — the base `default.css` and each preset — is measured at the level its
-`PALETTES` entry carries (`tests/component/architecture/palettes.ts` derives the list from the registry). A pair a palette
-cannot answer is listed in `PRESET_FINDINGS` (empty today) with its ratio and runs as `it.fails`.
+`PALETTES` entry carries (`tests/component/architecture/palettes.ts` derives the list from the registry). `color="neutral"`
+badges, buttons and alerts are measured on the faces Nuxt UI gives them (`bg-inverted`, `bg-elevated`, `bg-elevated/50`).
+One case per palette and mode lists every pair below its bar and expects exactly the pairs listed in `PRESET_FINDINGS`.
 
 `designSystemColourVision.unit.spec.ts` measures the meaning pairs of `designSystemMeanings.ts` (shared with the generator)
 under protanopia, deuteranopia and tritanopia for the base and every `colourSafe` palette, and the rainbow stops apart in
-every palette. Its dated `FINDINGS` rows (the base's meaning pairs, 2026-09-18) run as `it.fails`.
+every palette; its case per palette and mode expects exactly the pairs listed in `FINDINGS` (the base's meaning pairs).
 
-**When it fails, fix the token — never the threshold.** A listed row cuts both ways: a green pair that starts failing
-breaks its own case, and a listed pair that starts passing breaks its `it.fails` and asks for the entry to be deleted.
-Never add an entry to silence a new failure — a new miss is a regression, and a row is the record of one dated decision.
+**When it fails, fix the token — never the threshold.** A listed pair cuts both ways: a green pair that starts failing
+and a listed pair that starts passing both fail the case, and the second asks for the entry to be deleted. Never add an
+entry to silence a new failure — a new miss is a regression.
 
 **Do NOT assert design-token values.** `expect(ui.title).toContain('text-lg')` restates the design and guards nothing —
 the colour, size and padding of a token are the user's visual check. Architecture tests assert *usage*; component specs

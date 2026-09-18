@@ -288,9 +288,7 @@ const costAlternativeDisplay = computed(() => {
 
 const isEditingMenu = ref(false)
 
-// Overflow panel reveal - hosts the danger zone (cancel-dinner action).
-// Rare + destructive actions are spatially separated from routine controls (NOISE.quiet trigger),
-// so a chef hunting for "edit" can no longer mis-tap a prominent cancel button.
+// The danger zone (cancel dinner) sits behind the actions trigger, away from the routine edit controls
 const isMoreOpen = ref(false)
 
 // Reset transient edit/panel state when navigating to another dinner - never carry a stale

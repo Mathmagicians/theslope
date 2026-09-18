@@ -52,7 +52,10 @@ The allergy catalog fixes D1, D2 and A1 shipped in #165. Follow-up defects found
   (AAA), Til farveblinde (AA, colour-safe). The published Farveglad colours leave the UI; the `main.css` scales stay as the generator's input.
   The level comes from `PALETTES` in `useUserPreferenceValidation.ts`, which the contrast spec asserts. `make palettes` writes the preset files.
 - **Colour vision in Glade farver** (2026-09-18). Colour-blind members pick Til farveblinde. Glade farver keeps 42 of 72 meaning cases (the
-  Farveglad colours kept 57); its 30 rows stay dated in `FINDINGS` of `designSystemColourVision.unit.spec.ts`.
+  Farveglad colours kept 57); its 30 pairs are listed in `FINDINGS` of `designSystemColourVision.unit.spec.ts`.
+- **Contrast test** (2026-09-18). One case per palette and mode; `color="neutral"` badges, buttons and alerts are measured on the faces Nuxt
+  UI gives them. Høj kontrast light `sky-700` → `#235261` and dark `sky-200` → `#cbeef5` carry `text-default` on `bg-elevated` at 7:1.
+  Code comments carry no dates or decisions; this doc does.
 - **Palette badges** (2026-09-18). "🇪🇺 EN 301 549 · Kontrast AA ✓" or "… Kontrast AAA ✓" from the `PALETTES` level: the badge claims
   contrast (WCAG 1.4.3, 1.4.6, 1.4.11), never full conformance. "👁 Nedsat farvesyn · Okabe–Ito ✓" from `PALETTES.colourSafe` (EN 301 549
   clause 4.2.3, WCAG 1.4.1 "Anvendelse af farve"). "Farvesikker" describes a person who passes a colour-vision test and is not used.
@@ -87,8 +90,9 @@ The allergy catalog fixes D1, D2 and A1 shipped in #165. Follow-up defects found
   `systemRoles`. The Heynabo import creates through `createUsers` and updates through the id-keyed `saveUser`, so it keeps them.
 - **Tokens without a consumer:** `COMPONENTS.cardAction.{neutral,destructive,toggle,toggleActive}`, `BUTTONS.more`, `LAYOUTS.hero`, the
   `CLASSES.hero.primary` example in the design-system header (names an export that does not exist), `TEXT.orange[100]`, `getRainbowFamily`.
-- **Neutral badges.** The contrast spec measures `color="neutral"` on `bg-neutral`; Nuxt UI paints solid neutral on `bg-inverted` and
-  soft/subtle on `bg-elevated`. In Til farveblinde a solid BABY badge renders `neutral-900`, not sky blue.
+- **Alert descriptions** render at `opacity-90` (Nuxt UI); the contrast spec measures alert text at full strength.
+- **Neutral badges in Til farveblinde.** A solid BABY badge renders `neutral-900` (Nuxt UI paints neutral solid on `bg-inverted`), not
+  sky blue.
 - **Til farveblinde choices made by the generator** (visual check). Error and warning part by lightness; light `neutral` (L .43) sits
   below `success` (L .52); faces keep at least half their anchor's chroma; `neutral` keeps the ladder's chroma (dark page `#2d4351`);
   dark `primary` is `#d2d2d2`; ocean and peach swap anchors (ocean bluish green, peach sky blue); bonbon takes vermillion darkened to
@@ -228,9 +232,9 @@ on screen and a row in print. **Mockup:** `pdf.vue` header (✅ 2026-09-16). **T
 
   | Palette | Contrast pairs at its level | Meaning cases (3 vision types × 2 modes) |
   |---|---|---|
-  | Glade farver | 434 of 434 at AA | 42 of 72 |
-  | Høj kontrast | 434 of 434 at AAA | not measured |
-  | Til farveblinde | 434 of 434 at AA | 72 of 72 |
+  | Glade farver | 440 of 440 at AA | 42 of 72 |
+  | Høj kontrast | 440 of 440 at AAA | not measured |
+  | Til farveblinde | 440 of 440 at AA | 72 of 72 |
 
 - **Mockups.** `UserPreferencesCard.vue` header (badges ✅ 2026-09-18).
 
