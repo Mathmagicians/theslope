@@ -7,7 +7,7 @@
 │ ┌─────────────────────────────────────────────────────────────────────────┐ │
 │ │ #header                                                                 │ │
 │ │                                                                         │ │
-│ │  [👤] Anna Hansen                    [⚙] [Heynabo →] [👋 Log ud →]     │ │
+│ │  [👤] Anna Hansen                  [⚙ ▾] [Heynabo →] [👋 Log ud →]     │ │
 │ │       [🛡️ Admin] [💚 Allergichef]                                      │ │
 │ │                                      ↑ own settings, current user only  │ │
 │ │                                        aria-label "Indstillinger"       │ │
@@ -30,7 +30,7 @@
 │ │  [👤] Anna Hansen                                                      │ │
 │ │       [🛡️ Admin] [💚 Allergichef]                                      │ │
 │ │                                                                         │ │
-│ │  [⚙] [Heynabo →] [👋 Log ud →]           (wraps when the row is full)   │ │
+│ │  [⚙ ▾] [Heynabo →] [👋 Log ud →]         (wraps when the row is full)   │ │
 │ │                                                                         │ │
 │ ├─────────────────────────────────────────────────────────────────────────┤ │
 │ │ #default                                                                │ │
@@ -195,9 +195,8 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
           <!-- Own settings: reveals UserPreferencesCard under this card -->
           <UButton
             v-if="shouldShowActions"
-            v-bind="BUTTONS.settings"
+            v-bind="{...BUTTONS.settings, ...BUTTONS.disclosure(preferencesOpen)}"
             aria-label="Indstillinger"
-            :aria-pressed="preferencesOpen"
             data-testid="pref-toggle"
             @click="emit('toggle-preferences')"
           />

@@ -5,7 +5,7 @@
  * Features:
  * - Calendar view: Shows team assignments on calendar with colored badges
  * - Selection support: Click to select dinner event (optional via emit)
- * - Multi-team support: team n wears rainbow stop n (`getRainbowBand`), wrapping at nine
+ * - Multi-team support: team n wears rainbow stop n (`getRainbowBand`); team 9 repeats team 1
  * - Holiday awareness: Displays holidays as green rings
  *
  * Uses BaseCalendar for consistent calendar structure.

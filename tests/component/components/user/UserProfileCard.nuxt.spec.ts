@@ -93,11 +93,11 @@ describe('UserProfileCard - header actions', () => {
     })
 
     it.each([
-        {preferencesOpen: false, pressed: 'false'},
-        {preferencesOpen: true, pressed: 'true'}
-    ])('GIVEN preferencesOpen=$preferencesOpen THEN the toggle reports aria-pressed=$pressed', async ({preferencesOpen, pressed}) => {
+        {preferencesOpen: false, expanded: 'false'},
+        {preferencesOpen: true, expanded: 'true'}
+    ])('GIVEN preferencesOpen=$preferencesOpen THEN the ⚙ opens a panel and reports aria-expanded=$expanded', async ({preferencesOpen, expanded}) => {
         const wrapper = await mountCard({user: me, showActions: true, preferencesOpen})
 
-        expect(findByTestId(wrapper, PREF_TEST_IDS.toggle).attributes('aria-pressed')).toBe(pressed)
+        expect(findByTestId(wrapper, PREF_TEST_IDS.toggle).attributes('aria-expanded')).toBe(expanded)
     })
 })

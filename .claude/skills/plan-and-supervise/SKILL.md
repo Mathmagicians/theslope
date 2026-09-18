@@ -11,11 +11,14 @@ at a time behind an explicit approval. The plan document is the deliverable; the
 ## Where the plan lives
 
 - `docs/features/<kind>-<name>.md` (`bug-fix-…`, `feature-proposal-…`); rename when the scope outgrows the name (plain `mv`, the user stages).
+- A shipped doc moves to `docs/features/archived/`, trimmed to pointers, and a proposal becomes a feature there:
+  `feature-proposal-<name>.md` → `archived/feature-<name>.md`. What did not ship moves to its own proposal or the branch's follow-up doc first.
 - Header: **Status** | **Date** | **Updated** | **Branch**. A **Fix inventory** table at the top; one section per fix below in this order:
   **Problem → Root cause → Solution → Mockup → TDD → Affected areas** (see `bug-fix-admin-ux.md` for the shape).
 - A dated **Decisions** section records what the user decided and why; open decisions are marked **OPEN** with the options compared,
   never silently picked.
-- ADR references are always `ADR-NNN [Title]`; new ADRs are proposed in the doc's ADR Notes with the next free number.
+- References to an accepted ADR are `ADR-NNN [Title]`. A new ADR is proposed in the doc's ADR Notes by its semantic name only; it gets its number
+  when it is written into `docs/adr.md`.
 - Prose in the doc follows the `documentation` skill (compact, factual, only what we do); decisions and OPEN items are the one place alternatives are written down.
 
 ## Naming
@@ -41,8 +44,8 @@ at a time behind an explicit approval. The plan document is the deliverable; the
   holds them.
 - Anything not implemented keeps its full detail: open decisions with the options and their measurements, findings still
   standing, deferred work, notes on what a later package has to do.
-- Detail that belongs to another feature moves to that feature's doc in full (the alert classification lives in
-  `feature-proposal-notifications.md`), and this doc points there.
+- Detail that belongs to another feature moves to that feature's doc in full (the notification triggers moved from the
+  notifications doc to `feature-proposal-notification-triggers.md`), and this doc points there.
 
 ## Investigate before you claim
 

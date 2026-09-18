@@ -33,7 +33,6 @@ html[data-palette="high-contrast"] {
     --color-orange-600: #922300;
     --color-orange-800: #8f2619;
     --color-party-600: #99003b;
-    --color-party-700: #e8718a;
     --color-peach-400: #8f4100;
     --color-peach-600: #8c2b00;
     --color-peach-800: #861f00;
@@ -43,10 +42,8 @@ html[data-palette="high-contrast"] {
     --color-red-600: #863031;
     --color-red-700: #813334;
     --color-sky-600: #0f5365;
-    --color-violet-500: #f066a6;
     --color-violet-600: #960050;
     --color-winery-600: #970e3a;
-    --color-winery-700: #9e2d4a;
     --color-yellow-600: #6a4600;
     --ui-caramel: var(--ui-color-caramel-600);
     --ui-error: var(--ui-color-error-600);

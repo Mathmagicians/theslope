@@ -119,7 +119,7 @@ export const BG = {
         400: 'bg-amber-400',
         500: 'bg-amber-500',    // PRIMARY
         600: 'bg-amber-600',
-        700: 'bg-amber-700',
+        700: 'bg-amber-700',    // Rainbow stop 8
         800: 'bg-amber-800',
         900: 'bg-amber-900',
         950: 'bg-amber-950'
@@ -144,12 +144,6 @@ export const BG = {
         500: 'bg-orange-500',   // Landing section
         600: 'bg-orange-600'
     },
-    party: {
-        50: 'bg-party-50',
-        500: 'bg-party-500',
-        700: 'bg-party-700',    // Landing section, vibrant kitchen
-        800: 'bg-party-800'
-    },
     ocean: {
         50: 'bg-ocean-50',
         200: 'bg-ocean-200',    // Chef calendar - future cookings
@@ -163,16 +157,13 @@ export const BG = {
     // Bonbon is the Pantone name of the violet scale. `bg-bonbon-*` paints nothing - the alias
     // is declared in nuxt.config but never mapped in app.config - so the token names the scale
     bonbon: {
-        500: 'bg-violet-500'    // Rainbow stop 4
-    },
-    winery: {
-        700: 'bg-winery-700'    // Rainbow stop 7
+        800: 'bg-violet-800'    // Rainbow stop 4
     },
     yellow: {
-        400: 'bg-yellow-400'    // Rainbow stop 8
+        400: 'bg-yellow-400'    // Rainbow stop 6
     },
     sky: {
-        700: 'bg-sky-700'       // Rainbow stop 9
+        700: 'bg-sky-700'       // Rainbow stop 7
     },
     gray: {
         50: 'bg-gray-50',
@@ -246,9 +237,6 @@ export const TEXT = {
     },
     orange: {
         100: 'text-orange-100'
-    },
-    party: {
-        50: 'text-party-50'
     },
     ocean: {
         50: 'text-ocean-50',
@@ -463,55 +451,63 @@ export const LAYOUTS = {
 /**
  * PANTONE_FAMILIES - every brand family, by hue
  *
- * `HERO` and `CHIPS` are records keyed by family. `PANTONE_CHIPS` maps this list, so the ticker
- * tints run in the order of the solid bands below them; `RAINBOW` maps `RAINBOW_FAMILIES`, the
- * same order without the Mocha frame.
+ * `CHIPS` is a record keyed by family, and `PANTONE_CHIPS` maps this list, so the ticker tints run
+ * in the order of the solid bands below them. `RAINBOW` maps `RAINBOW_FAMILIES`, the families a
+ * list walks.
  */
 export const PANTONE_FAMILIES = ['pink', 'orange', 'ocean', 'bonbon', 'party', 'peach', 'mocha', 'winery', 'yellow', 'sky'] as const
 
 export type PantoneFamily = typeof PANTONE_FAMILIES[number]
 
 /**
- * HERO - the brand fill set: one fill, one ink, per family
+ * HERO - the brand fill set: one fill, one ink, per surface
  *
  * The landing rainbow, the dinner and chef headers, the kitchen panels and the cooking teams
- * paint these same surfaces, so each family pairs its fill with its ink here and every consumer
+ * paint these same surfaces, so each surface pairs its fill with its ink here and every consumer
  * inherits both.
  *
  * Ink is whichever of `TEXT.black` and `TEXT.white` clears 4.5:1 on the fill in both modes; a
  * light fill carries its own family's darkest rung. Ratios measured 2026-09-18 in Farveglad,
  * Tydelig and Farveblind - the lowest of the three is the one written here.
  */
-const HERO: Record<PantoneFamily, string> = {
+const HERO = {
     pink: `${BG.pink[500]} ${TEXT.black}`,            // Pink Lemonade   8.33:1
     orange: `${BG.orange[500]} ${TEXT.black}`,        // Mandarin Orange 6.27:1
     ocean: `${BG.ocean[500]} ${TEXT.black}`,          // Ocean           7.2:1
-    bonbon: `${BG.bonbon[500]} ${TEXT.black}`,        // Bonbon          5.88:1
-    party: `${BG.party[700]} ${TEXT.black}`,          // Party Punch     4.74:1
+    bonbon: `${BG.bonbon[800]} ${TEXT.white}`,        // Bonbon          8.23:1
     peach: `${BG.peach[300]} ${TEXT.peach[950]}`,     // Countdown       9.01:1
-    winery: `${BG.winery[700]} ${TEXT.white}`,        // Winery          6.99:1
     yellow: `${BG.yellow[400]} ${TEXT.black}`,        // Yellow         13.71:1
     sky: `${BG.sky[700]} ${TEXT.white}`,              // Sky             7.03:1
-    mocha: `${BG.mocha[500]} ${TEXT.mocha[50]}`       // The frame: title bar, ticker, dinner header
-}
+    /** The frame: title bar, ticker, dinner header */
+    mocha: `${BG.mocha[500]} ${TEXT.mocha[50]}`,
+    /** Mocha as a rainbow stop, two rungs under the frame so a team never reads as the frame */
+    mochaStop: `${BG.mocha[700]} ${TEXT.white}`        // Mocha Mousse    7.22:1
+} as const
 
 /**
  * RAINBOW_FAMILIES - the stops a list walks, in hue order
  *
- * Nine hues, each one its own: the nearest neighbours stay 0.079 apart in Oklab (the bar
+ * Eight hues, each one its own: the nearest pair stays 0.100 apart in Oklab (the bar
  * `designSystemColourVision.unit.spec.ts` reads off the Color Universal Design set is 0.075),
- * in every registered palette. Party is at its 700 rung because at 500 it sits 0.049 from
- * Bonbon. Mocha is the frame - the title bar, the ticker, the dinner header - never a stop.
+ * in every registered palette, light and dark. A red-pink family has room for a light fill with
+ * black ink and a dark fill with white ink at 7:1, so pink is the light one and Bonbon, at its
+ * 800 rung, the dark one. Mocha's stop is its 700 rung (`HERO.mochaStop`); its 500 rung stays
+ * the frame.
  */
-export const RAINBOW_FAMILIES = ['pink', 'orange', 'ocean', 'bonbon', 'party', 'peach', 'winery', 'yellow', 'sky'] as const satisfies readonly PantoneFamily[]
+export const RAINBOW_FAMILIES = ['pink', 'orange', 'ocean', 'bonbon', 'peach', 'yellow', 'sky', 'mocha'] as const satisfies readonly PantoneFamily[]
+
+type RainbowFamily = typeof RAINBOW_FAMILIES[number]
+
+/** The surface a family wears as a stop: its hero fill, and Mocha's stop in place of the frame */
+const stopOf = (family: RainbowFamily): string => family === 'mocha' ? HERO.mochaStop : HERO[family]
 
 /**
  * RAINBOW - the stops themselves, walked by index
  *
  * The landing bands take the first four, the kitchen panels the first three, and a cooking team
- * wears the stop of its number.
+ * wears the stop of its number: team 9 repeats team 1.
  */
-export const RAINBOW = RAINBOW_FAMILIES.map(family => HERO[family])
+export const RAINBOW = RAINBOW_FAMILIES.map(stopOf)
 
 /** The rainbow stop for a position in a list, wrapping at the end of the palette */
 export const getRainbowBand = (index: number): string => RAINBOW[index % RAINBOW.length]!
@@ -1198,6 +1194,18 @@ const createResponsiveButtons = (isMd: Ref<boolean>) => {
                 variant: NOISE.medium,
                 square: true,
                 size: sizes.standard
+            }
+        },
+
+        /**
+         * Modifier for a button that opens a panel below it: a chevron that turns while the panel is open, and
+         * `aria-expanded` for screen readers. Spread after a kind: `v-bind="{...BUTTONS.settings, ...BUTTONS.disclosure(isOpen)}"`
+         */
+        disclosure(isOpen: boolean) {
+            return {
+                trailingIcon: ICONS.chevronDown,
+                'aria-expanded': isOpen,
+                ui: {trailingIcon: isOpen ? 'rotate-180 transition-transform duration-200' : 'transition-transform duration-200'}
             }
         }
     }

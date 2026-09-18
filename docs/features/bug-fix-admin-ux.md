@@ -1,2152 +1,382 @@
-# Bug Fix: Admin UX — allergy catalog, alerts, poster, planning, preferences
+# Bug Fix: Admin UX — allergy catalog, alerts, poster, planning, preferences, palettes
 
-**Status:** In progress | **Date:** 2026-09-01 | **Updated:** 2026-09-16
-**Branch:** `bugfix/admin-ux` (allergy catalog fixes below shipped in #165 from `fix/allergy-ages-categories-and-display-logic`)
+**Status:** In progress | **Date:** 2026-09-01 | **Updated:** 2026-09-18 | **Branch:** `bugfix/admin-ux` | **PR:** #166
+The allergy catalog fixes D1, D2 and A1 shipped in #165. Follow-up defects found on this branch: `bug-fix-dinner-page-and-dates.md`.
 
-## Fix Inventory
+## Fix inventory
 
-| id | Fix | Status |
-|----|-----|--------|
-| D1 | Master/detail display logic — mobile detail off-screen | ✅ IMPLEMENTED (2026-09-01) |
-| D2 | Compare mode — mobile summary bar | ✅ IMPLEMENTED (2026-09-01) |
-| A1 | Wrong age categories in allergy surfaces (children as adults) | **Implemented** (2026-09-01) |
-| C1 | CI break — server-reachable composable relied on app auto-imports; per-context typecheck gate + pure UI composables | ✅ IMPLEMENTED (2026-09-02) |
-| C2 | E2E stability — season list polled past a half-created season; UI specs wait for hydration before interacting | ✅ IMPLEMENTED (2026-09-02) |
-| Alerts on mobile | UAlert ignores screen size → design-system `ALERTS` pattern, every instance migrated, architecture test | ✅ IMPLEMENTED (2026-09-16) |
-| Poster notes | "Vigtige bemærkninger" shared with `/admin/allergies`, editable by ADMIN/ALLERGYMANAGER → `Setting` table + `AllergyNotes` | ✅ IMPLEMENTED (2026-09-18) |
-| QR code | `uqr` + `QrCode.vue` atom instead of `api.qrserver.com`; prints | ✅ IMPLEMENTED (2026-09-16) |
-| My preferences | notification channels (EMAIL/SMS) + appearance (colours, text scale) → two `User` columns, one endpoint, dashboard card | ✅ IMPLEMENTED (2026-09-17) |
-| Planning form | edit/create the allergies way (labelled Rediger + Opret), holiday rows editable, live-season save re-scaffolds, Heynabo cleanup on removed dates | ✅ IMPLEMENTED (2026-09-16) |
-| Sorted holidays | holiday list chronological everywhere | ✅ IMPLEMENTED (2026-09-16) |
-| Calendar grid | pickers show adjacent-month days twice → one shared `UCalendar` root token | ✅ IMPLEMENTED (2026-09-16) |
-| Planning buttons | every planning button from the design system | ✅ IMPLEMENTED (2026-09-16) |
-| Colour drift sweep | 178 raw Tailwind colour classes (34 files) and 59 literal Nuxt UI colour props (31 files) outside the design system → `TEXT`/`BORDER`/`RING`/`TYPOGRAPHY`/`BG`/`COLOR` tokens; architecture test forbids raw colour outside `useTheSlopeDesignSystem.ts` | ✅ IMPLEMENTED (2026-09-16) |
-
----
-
-## D1 — Master/Detail Display Logic
-
-### Problem
-
-On `/admin/allergies` mobile, every interaction response renders **below the entire
-master table**, off-screen from the tap that triggered it:
-
-1. Tap a row → the only visible feedback is a highlight; the detail renders below the
-   fold (`AdminAllergies.vue` stacks master over detail on `<md`). Nothing appears to happen.
-2. ✏️ Rediger lives in the **detail header** — already below the fold; the form then
-   replaces the detail, even further from the row being edited.
-3. "Opret allergi" sits in the top toolbar, but the create form renders at the bottom —
-   no scroll-to, no spatial link.
-4. The delete cascade warning renders where the user isn't looking.
-
-### Root Cause
-
-Stacked master/detail breaks the layout's **"both panes visible" contract** — vertical
-stacking silently converts it into "list, then a mystery zone below".
-
-Compounding debt:
-- Two near-identical copy-pasted catalog tables: `AdminAllergies.vue` (single-select)
-  and `AllergenMultiSelector.vue` edit mode (checkboxes) — same icon/name/count/new cells.
-- Stale header comment in `AdminAllergies.vue` claims `LAYOUTS.masterDetailPage` (the
-  template hand-rolls a 1/3–2/3 flex) and a `FormModeSelector` that no longer exists.
-
-### Solution
-
-**Master/detail stays THE layout at every breakpoint. The detail's mount point is the
-only responsive decision:**
-
-- **Desktop:** right pane, upgraded with `md:sticky md:top-4 self-start` (replaces the
-  `md:pt-10` alignment hack); adopts `LAYOUTS.masterDetailPage` for real.
-- **Mobile:** the same panel docks in the `UTable` `#expanded` slot directly under the
-  selected row; CREATE docks under the toolbar (adjacent to the button that opened it).
-- Selection is the single state. Expansion is **derived** (writable computed) — mobile
-  only, explicit selection only (no auto-expand); the first-item fallback feeds only the
-  desktop pane. Single-open is inherent (one selected id) — no watcher needed.
-- The panel appears at two template mount points guarded by `v-if` so exactly **one
-  mounts** (stateful form — no CSS dual-mount).
-- Known trade-off: `isMd` is provided in `layouts/default.vue` as `ref(false)` and
-  resolved `onMounted` → SSR + first client tick render the mobile mount; brief desktop
-  first-paint flash, house-accepted (cf. `DinnerBookingForm` isMd-derived columns).
-
-**New components** (`app/components/allergy/`):
-
-| Component | Role |
-|-----------|------|
-| `AllergyCatalogTable.vue` | ONE master list, `mode: 'single' \| 'multi'`; forwards `#expanded`; consumers: AdminAllergies, AllergenMultiSelector (→ ChefMenuCard edit mode transitively) |
-| `AllergyDetailPanel.vue` | Detail region extracted verbatim: "Detaljer" header + ✏️🗑 / AllergyTypeCard view / edit / create / delete-confirm / empty. `AllergyTypeCard` untouched; all testids preserved |
-
-### Layouts
-
-```
-DESKTOP single mode — unchanged 3/9 + sticky detail
-┌──────────────────────────┬─────────────────────────────────────┐
-│ MASTER (CatalogTable)    │ DETAIL (AllergyDetailPanel)         │
-│ 🥛 Mælk        2  🆕     │ ┌─ sticky top-4 ─────────────────┐  │
-│ 🥜 Jordnødder  2  ◀ sel  │ │ Detaljer            [✏️]  [🗑] │  │
-│ 🌾 Gluten      1         │ │ 🥜 Jordnødder                  │  │
-│ ...long list scrolls...  │ │ Berørte beboere (2)            │  │
-│                          │ └── follows you as list scrolls ─┘  │
-└──────────────────────────┴─────────────────────────────────────┘
-
-MOBILE single mode — same panel, docked under the tapped row
-│ [👁] 🥛 Mælk          2  🆕    │
-│ [▼] 🥜 Jordnødder     2        │  ← tap = select = expand
-│ ┌────────────────────────────┐ │
-│ │ Detaljer      [✏️] [🗑] │ │  ← AllergyDetailPanel, verbatim
-│ │ 🥜 Jordnødder           │ │     ✏️ → edit form IN PLACE
-│ │ Berørte beboere (2)        │ │     🗑 → cascade confirm IN PLACE
-│ └────────────────────────────┘ │
-│ [👁] 🌾 Gluten        1        │
-
-MOBILE create — panel docks under the toolbar
-│ [⧉ Sammenlign] [↓ Antal]    │
-│ [＋ Opret allergi]          │
-│ ┌─────────────────────────┐ │
-│ │ Opret allergi           │ │
-│ │ Navn [    ] Ikon [ ]    │ │
-│ └─────────────────────────┘ │
-│ [👁] 🥛 Mælk          2     │
-
-ARCHITECTURE
-                 ┌───────────────────────────────┐
-                 │  AllergyCatalogTable.vue  NEW │
-                 │  mode: 'single' | 'multi'     │
-                 └──────┬──────────┬─────────┬───┘
-        ┌───────────────┴──┐  ┌────┴──────────────┐  ┌──────────────┐
-        │ AdminAllergies   │  │ AllergenMulti-    │  │ ChefMenuCard │
-        │ (single-select)  │  │ Selector (multi)  │  │ (via multi)  │
-        └───────┬──────────┘  └───────────────────┘  └──────────────┘
-        ┌───────┴───────────────────┐
-        │ AllergyDetailPanel.vue NEW│ ← mounts in pane (md+) OR #expanded (<md)
-        └───────────────────────────┘
-```
-
-### TDD
-
-| Test | Change |
-|------|--------|
-| `AllergyCatalogTable.nuxt.spec.ts` (new) | 🟢 parametrized single/multi × showNewBadge × readonly; selection emits; `#expanded` forwarding |
-| `AllergyDetailPanel.nuxt.spec.ts` (new) | 🟢 view actions / edit / create / delete-confirm cascade text / `canEdit:false` |
-| `AdminAllergies.nuxt.spec.ts` | 🟢 parametrize over `isMd` true/false; mobile path selects a row first; `toHaveLength(1)` guards now pin the single-mount invariant |
-| `AllergyTypeCard.nuxt.spec.ts` | untouched (layout-agnostic, mounts card in isolation) |
-| `AllergenMultiSelector.nuxt.spec.ts` | stays green through the table extraction |
-| `AdminAllergies.e2e.spec.ts` (new) | 🟢 CRUD flow, desktop viewport; the navigation helper waits for the client-only detail pane — the container testid is SSR-visible before hydration attaches listeners |
-
-### Affected Areas
-
-- New: `app/components/allergy/AllergyCatalogTable.vue`, `app/components/allergy/AllergyDetailPanel.vue` + 2 specs, `tests/e2e/ui/AdminAllergies.e2e.spec.ts`
-- Modified: `app/components/admin/AdminAllergies.vue`, `app/components/allergy/AllergenMultiSelector.vue`, their specs, `docs/adr-compliance-frontend.md`
-- Untouched by design: `AllergyTypeCard.vue` (+ its tests), `HouseholdAllergies.vue` (inhabitant-row table, different data shape), stores, server
+| Fix | What | Status | Implementation |
+|---|---|---|---|
+| D1 Master/detail | the allergy detail docks under the tapped row on a phone, sticky beside the list on desktop | ✅ #165 | `AllergyCatalogTable.vue`, `AllergyDetailPanel.vue`, `AdminAllergies.vue` |
+| D2 Combine summary | fixed bottom bar with the selection count on a phone | ✅ #165 | `AllergenMultiSelector.vue` |
+| A1 Age categories | children classified by birth date on the poster and the allergy cards | ✅ #165 | `useTicket.ts` `getTicketTypeConfig`, `groupInhabitantsByTicketCategory`; `pdf.vue` |
+| C1 Typecheck gate | per-context typecheck; presentation in `use<Domain>Ui` | ✅ 2026-09-02 | ADR-017; `pre:all` in `package.json`; `useBookingUi.ts`, `useUserRolesUi.ts` |
+| C2 E2E stability | season list polling, hydration wait | ✅ 2026-09-02 | `seasonFactory.getAllSeasons`, `testHelpers.waitForHydration` |
+| Alerts on mobile | one responsive alert pattern, 55 sites migrated | ✅ 2026-09-16 | `ALERTS` in `useTheSlopeDesignSystem.ts`, ADR-018 |
+| Empty states | table empty states render through the Nuxt UI 4 `#empty` slot | ✅ 2026-09-16 | six `UTable` sites; `BookingGridView` `tableData` |
+| Colour drift sweep | every colour from the design system, value-preserving | ✅ 2026-09-16 | `TEXT`/`BG`/`BORDER`/`RING`/`LAYOUTS` tokens; `designSystemUsage.unit.spec.ts` |
+| Sorted holidays | holidays in date order in the list and in storage | ✅ 2026-09-16 | `sortDateRanges` in `app/utils/date.ts`; `useSeasonValidation.ts` |
+| Calendar grid | pickers hide neighbouring-month days; one day-circle helper | ✅ 2026-09-16 | `COMPONENTS.calendarGrid`, `calendarPickerProps`, `dayCircleClasses` |
+| Planning buttons | planning buttons bind `BUTTONS` tokens | ✅ 2026-09-16 | planning and calendar components, `ICONS.holiday`, `ICONS.printer` |
+| Planning form | Opret + Rediger, editable holiday rows, live-season save | ✅ 2026-09-16 | `AdminPlanning.vue`, `AdminPlanningSeason.vue`, `season/[id].post.ts`, `reconcileDinnerEvents.ts` |
+| QR code | in-house QR that prints with the poster | ✅ 2026-09-16 | `app/utils/qr.ts`, `shared/QrCode.vue` |
+| Poster notes | "Vigtige bemærkninger" stored in `Setting`, edited in place by allergy managers | ✅ 2026-09-18 | `useSettingValidation.ts`, `settingsRepository.ts`, `api/admin/setting/[key]`, `AllergyNotes.vue` |
+| My preferences | channels and appearance per user behind ⚙ on the dashboard | ✅ 2026-09-18 | `User` columns, `useUserPreferenceValidation.ts`, `api/user/preferences.post.ts`, `UserPreferencesCard.vue` |
+| Palettes | Farveglad, Tydelig (AA), Farveblind (AA), Høj kontrast (AAA) | 🟡 Høj kontrast team separation OPEN; Farveblind colour-safe pass queued | `scripts/palettes/`, `app/assets/css/palettes/` |
+| Brand rainbow | one ordered rainbow for landing, kitchen panels and ticker | ✅ 2026-09-17 | `PANTONE_FAMILIES`, `HERO`, `RAINBOW`, `getRainbowBand` |
+| Team colours | team n wears rainbow stop n | ✅ 2026-09-18 | `RAINBOW_FAMILIES`; `TeamCalendarDisplay`, `CookingTeamBadges`, `CookingTeamCard`, `AdminTeams` |
+| Team creation toast | the toast states teams created and dinners assigned | ✅ 2026-09-18 | `CreateTeamsResponse`, `api/admin/team/index.put.ts`, `AdminTeams.vue` |
+| Dev feedback round 1 | six findings from the dev walk | ✅ 2026-09-18 | see "Dev feedback round 1" |
+| Calendar-day matching | team assignment and holiday cells compare calendar days | ✅ 2026-09-18 | `computeTeamAssignmentsForEvents` in `app/utils/season.ts`, `isCalendarDateInDateList` in `app/utils/date.ts` |
 
 ---
 
-## D2 — Compare Mode: Sticky Mobile Summary
+## Decisions
 
-### Problem
+- **Editable content lives in the database** (2026-09-16). `app.config` and `runtimeConfig` are build and deploy time.
+- **Community values in `Setting`, a user's own values in `User` columns** (2026-09-17). `Setting` holds a key and a JSON value typed by a
+  code registry; `User.notificationChannels` and `User.appearance` travel with the session. Migration `0016_settings` adds both.
+- **The design system owns shared UI values** (ADR-018, 2026-09-16). Components bind tokens; token sweeps preserve the rendered classes.
+- **Mockups live in this doc until implemented, then in the component header comment** (2026-09-18). The parent draws the composition,
+  the child its own layout; an implemented section keeps the signoff line and points to the header.
+- **Edit affordances** (2026-09-16, 2026-09-18). Rows, detail panels, card headers and the notes box use the square ghost pencil
+  `BUTTONS.edit`; the season card uses the labelled `Rediger <navn>`. The ⚙ settings control is `BUTTONS.settings`.
+- **Planning** (2026-09-16). `/admin/planning` uses `Opret sæson` and `Rediger <navn>`; `/admin/teams` keeps `FormModeSelector`. The card title
+  reads "Fællesspisning sæson …", "Redigerer fællesspisning sæson …" (edit), "Opret fællesspisning sæson …" (create).
+- **Picker selection** (2026-09-16). A picked holiday is the green holiday ring, a picked season date the pink cooking-day circle, drawn by
+  `dayCircleClasses`. Green belongs to holidays.
+- **The live season is edited in place** (2026-09-16). Saving reconciles the dinner events (ADR-015), runs `clipPreferences` and
+  `scaffoldPrebookings` on the active season, and deletes the Heynabo events of removed dates (ADR-013). Activation lives in `/active`.
+- **Palettes** (2026-09-16 to 2026-09-18). Four options: Farveglad, Tydelig (AA), Farveblind (AA, colour-safe), Høj kontrast (AAA). The badge
+  level comes from `PALETTES` in `useUserPreferenceValidation.ts`, which the contrast spec asserts. `make palettes` writes the preset files.
+- **Farveblind is the Color Universal Design standard** (2026-09-18). Every colour comes from the eight CUD colours; neutral maps to sky blue,
+  primary to black; teams 1-8 take the eight colours and team 9 repeats team 1.
+- **Brand rainbow** (2026-09-17). Order pink, orange, ocean, bonbon, then the team stops. Black ink on the vibrant fills. TIL SALG stays grey.
+  The landing walks stops 0-3, the kitchen panels 0-2, the ticker chips follow the same order.
+- **Team colours** (2026-09-18). Team n wears rainbow stop n, 8-10 distinct colours; the team name on the badge carries the identity.
+- **Preferences** (2026-09-16, 2026-09-17). The card sits behind ⚙ in the profile card header; the pencil opens the edit face with Gem and
+  Annuller. Labels: Notifikationer, Farvevalg (Farveglad, Tydelig, Farveblind, Høj kontrast), Tekst (Normal, Stor, Større).
+- **Poster boxes are outline** (2026-09-18). The poster prints without grey fills.
+- **Allergy toolbar** (2026-09-18). "Kombiner allergener", and "Afslut kombinering" while active.
+- **Disclosure buttons** (2026-09-18). A button that opens a panel below it carries a chevron that turns while the panel is open
+  (`BUTTONS.disclosure`): the ⚙ on the dashboard and on `/chef`, the role assignment, "Rapporter fejl".
+- **Toasts state results** (2026-09-18). The team toast reads `<n> madhold oprettet · <m> madlavninger tildelt`; the test-message toast carries
+  the message id.
 
-Compare mode (Sammenlign) is **also** master/detail (`AllergenMultiSelector.vue` edit
-mode: table left, 📊 Statistik right) — on mobile the statistics land below the list.
-Milder than D1 (read-only aggregate), but the same disease; fixed here so the area is done.
+## Open
 
-### Solution
+### Høj kontrast team separation — OPEN, awaiting ✅
 
-Fixed bottom bar inside `AllergenMultiSelector`, `<md` only (`md:hidden` — display-only,
-so CSS hiding is fine), visible when selections > 0; tap scrolls to the statistics panel
-(`scrollIntoView` on an anchor ref). `position: fixed`, not `sticky` — an
-overflow-clipping card ancestor keeps sticky from ever pinning to the viewport.
-`ChefMenuCard` edit mode gets it for free.
+Team badges put body text (`text-[10px]` to `text-sm`) on every rainbow stop, so `INK_ON_FILL` in `designSystemPairs.ts` grades all nine
+stops as body text (`TEAM_BADGE`): 4.5:1 in the AA palettes, 7:1 in Høj kontrast. At 7:1 the generator lifts the black-ink stops:
+`violet-500` → `#f066a6`, `party-700` → `#e8718a`. Pink, bonbon and party then carry black ink on three light pinks, and
+`designSystemColourVision.unit.spec.ts` › `'Høj kontrast': the brand rainbow › keeps its 9 stops apart ≥ 0.075` fails in light and dark:
 
-```
-MOBILE — Sammenlign (compare) mode
-┌────────────────────────────┐
-│ ☑ 🥛 Mælk         2        │
-│ ☐ 🥜 Jordnødder   2        │
-│ ☑ 🌾 Gluten       1        │
-│  ...list scrolls...        │
-│ 📊 Statistik (below list)  │
-├────────────────────────────┤ ← fixed bottom bar, <md only,
-│ 🧮 2 valgte · 3 beboere  ▼ │   hidden when nothing selected;
-└────────────────────────────┘   tap scrolls to 📊 Statistik
-```
+| Pair | ΔE (Oklab) | Bar |
+|---|---:|---:|
+| pink – party | 0.042 | 0.075 |
+| bonbon – party | 0.053 | 0.075 |
+| pink – bonbon | 0.062 | 0.075 |
 
-### TDD
+At AAA a hue family has room for two versions, a light fill with black ink and a dark fill with white ink; the rainbow holds four red-pinks
+(pink, bonbon, party, winery). Measured 2026-09-18 with the spec's resolver (nearest pair across the stops; lowest ink contrast):
 
-Extend `AllergenMultiSelector.nuxt.spec.ts`: bar renders only with selections; headline
-matches `allergyStatistics` counts; absent when empty.
+| Option | Stops | Nearest pair | Lowest ink |
+|---|---|---|---|
+| Today | pink, orange, ocean, bonbon, party-700, peach, winery, yellow, sky | Høj kontrast pink–party 0.042; the other palettes bonbon–party 0.079 | 4.74 AA / 7.03 AAA |
+| Keep party and bonbon at their published fills | as today | 0.079 | party 4.74, bonbon 5.88 — below 7:1 |
+| Lighten pink | as today | the three pairs stay below the bar | — |
+| Bonbon at `violet-700` + party at `party-900`, white ink | nine stops | bonbon–winery 0.044 | — |
+| Bonbon at `violet-800` + party at `party-900`, white ink | nine stops | bonbon–party 0.036 | — |
+| Bonbon at `violet-700` + party at `party-800`, white ink | nine stops | party–winery 0.028 | — |
+| **A — recommended**: pink, orange, ocean, bonbon `violet-800` (white), peach, yellow, sky (white), mocha `amber-700` (white) | eight stops, team 9 repeats team 1 | 0.100 in all four palettes, light and dark (bonbon–mocha) | 6.27 AA palettes / 7.03 Høj kontrast |
+| B: party `party-800` (white) instead of bonbon; bonbon and winery out | eight stops | 0.101-0.107 | 6.27 / 7.03 |
+| C: bonbon light, party out, winery dark | eight stops | Høj kontrast pink–bonbon 0.062 | — |
 
----
+White-ink ratios of the dark candidates: `party-800` 7.83, `party-900` 9.37, `violet-700` 6.40, `violet-800` 8.23, `violet-900` 9.87,
+`winery-700` 6.99, `winery-800` 8.72, `sky-700` 7.03, `amber-700` 7.22. Option A keeps the landing's four families; landing band 4 becomes
+deep magenta `#91234d` with a white heading, and teams from number 5 up change colour. Option A matches Farveblind's eight colour-blind
+colours with team 9 repeating team 1. The two architecture cases stay red until the choice lands in `HERO` / `RAINBOW_FAMILIES`.
 
-## A1 — Wrong Age Categories (children as adults)
+### Farveblind colour-safe pass — approved 2026-09-18, starts after the team stops
 
-### Problem
+The preset maps the meaning scales onto the Color Universal Design anchors (green `#009E73`, red `#D55E00`, orange `#E69F00`, yellow
+`#F0E442`, pink `#CC79A7`, the info slot `#0072B2`) and meets AA on all 438 pairs. The simulation spec measures 12 meaning pairs × 3
+vision types × 2 modes = 72 cases per palette at ΔE ≥ 0.075: the default theme clears 57, Farveblind 54. The misses AA takes away:
 
-Prod bug (user-reported, confirmed): children figure as adults on the allergy poster
-(`/admin/allergies/pdf` — every person marked `(v)`, counts read `0 børn`). Same defect
-family on three surfaces, while the correct pattern already ships in the preferences view:
+| Pair | Vision | Default | Farveblind | Cause |
+|---|---|---|---:|---|
+| `error vs warning` | protanopia, deuteranopia | 0.073 / 0.084 | 0.019 / 0.025 | The CUD set separates vermillion and orange by lightness (0.62 against 0.75); a solid slot fill is both `text-<slot>` on the page and the fill under `text-inverted`, so 4.5:1 puts every slot at one lightness and leaves the hue axis these viewers lack |
+| `ADULT vs CHILD` | protanopia, deuteranopia | 0.211 / 0.128 | 0.030 / 0.041 | `primary` is Mocha Mousse, untouched by the hue map, and at the contrast ceiling it sits beside the bluish green |
+| `CHILD vs BABY` | tritanopia | 0.144 | 0.014 | `neutral` is the Ocean teal, beside the CUD bluish green for a tritanope at the ceiling |
 
-| Surface | Today | Defect |
-|---|---|---|
-| `pages/admin/allergies/pdf.vue` (poster) | `resolveTicketPrice(birthDate, undefined, undefined)?.ticketType ?? ADULT` inline | No prices passed → resolver returns `undefined` → **everyone ADULT**. Invented `(v)/(b)/(ba)` markers, hand-rolled count line, name-substring hex colors |
-| `HouseholdAllergies.vue` | `getTicketTypeConfig(birthDate ?? null)` — no prices | Same silent-ADULT bug: every child badges `[Voksen]` |
-| `AllergyTypeCard.vue` (admin) | No age marker at all | Information absent |
-| **`HouseholdCard.vue` (preferences)** | `getTicketTypeConfig(birthDate ?? null, activeSeason.value?.ticketPrices)` + `UBadge` | ✅ the pattern to replicate |
+A measured ceiling: re-pointing each meaning slot at the rung that spreads the meanings furthest lifts the worst pair from 0.019 to 0.078
+(light) and 0.056 (dark), with near-black meaning fills (`#00533b` success, `#3e1600` error).
 
-### Root Cause
+The user's decisions (2026-09-18): Farveblind is the CUD standard with no weak pairs. The pass:
+1. Keeps each anchor's own lightness where AA allows, so the meanings keep the separation the set is built on.
+2. Maps `neutral` to sky blue `#56B4E9` and `primary` to black `#000000` inside Farveblind: black primary buttons, sky-blue neutrals,
+   a black ADULT ticket.
+3. Maps team stops 1-8 to the eight CUD colours; team 9 repeats team 1.
+4. Ends with zero Farveblind rows in `FINDINGS` of `designSystemColourVision.unit.spec.ts`; the default theme keeps its dated rows.
 
-`getTicketTypeConfig` classifies via `resolveTicketPrice`, which returns `undefined`
-without a price list; callers' hardcoded `?? TicketType.ADULT` fallback then ADULT-ed
-everyone. `determineTicketType` (with app-config default age limits) sat unused for this
-path.
+A regression found by the chroma clamp (2026-09-18) stands until the pass lands: Farveblind light mode, `normal vs released` under
+deuteranopia, 0.0761 → **0.0746** (`#8d5f52` against `red-600`, which moved one byte `#b14d00` → `#b14c00`). Protanopia on the same
+pair stays at its listed 0.074. The case fails in the architecture suite. The pass replaces `normal` (primary) with black, which moves
+this pair.
 
-### Fix — reuse existing utilities, no hardcoded ages or spellings
+### Smaller open items
 
-1. **One classification path, resolve function untouched:** `getTicketTypeConfig`'s
-   fallback becomes `?? determineTicketType(birthDate, ticketPrices, referenceDate)` —
-   with prices present nothing changes (BookingGridView, DinnerBookingForm, CostLine
-   unaffected); without prices the app-config default age limits classify.
-2. **New aggregator `groupInhabitantsByTicketCategory(inhabitants, ticketPrices?, referenceDate?)`
-   in `useTicket`** — inhabitant counterpart to `useOrder.groupByTicketType` (which
-   buckets orders by their *frozen* `ticketType`, ADR-011; inhabitants are classified
-   *live* from `birthDate`). Fixed `ADULT, CHILD, BABY` order, empty categories included,
-   each group carries `config = ticketTypeConfig[type]`; inhabitants come out stamped
-   with `ticketType` so they feed `formatTicketCounts` directly.
-3. **Formatters — shared with the orders path:** compact `V`/`B`/`b` letters move from
-   `useBilling.formatTicketCounts`'s body into `ticketTypeConfig.compactLabel` (output
-   unchanged: "2V 1B"). Poster: per-person marker = `compactLabel`, count line =
-   `formatTicketCounts` (replaces `(v)/(b)/(ba)` + `[N voksne, M børn & K babyer]`).
-   Screen badges (AllergyTypeCard, HouseholdAllergies): full `config.label` in `UBadge`
-   — the HouseholdCard pattern; prices from the plan store's `activeSeason`.
-4. **DS cleanup on the poster:** drop the name-substring color classes
-   (`allergy-gluten`/`dairy`/`nuts` hex + Danish `includes()` matching); DS typography +
-   the allergy's own `icon`. Print CSS stays. Full visual redesign = separate UX pass.
+- **Create title.** "Opret fællesspisning sæson …" as built, or "Opretter fællesspisning sæson …" to match "Redigerer".
+- **Inhabitant create on an existing email.** `serializeUserInput` writes both preference columns on the email-keyed upsert, so an admin
+  creating an inhabitant whose email already exists resets that user's channels and appearance to the defaults — the same as it resets
+  `systemRoles`. The Heynabo import creates through `createUsers` and updates through the id-keyed `saveUser`, so it keeps them.
+- **Tokens without a consumer:** `COMPONENTS.cardAction.{neutral,destructive,toggle,toggleActive}`, `BUTTONS.more`, `LAYOUTS.hero`, the
+  `CLASSES.hero.primary` example in the design-system header (names an export that does not exist), `TEXT.orange[100]`, `TEXT.party[50]`.
+- **Countdown token names.** `CHEF_CALENDAR.countdown` / `DINNER_CALENDAR.countdown` read `accent` = 200, `accentMedium` = 300,
+  `accentLight` = 50 since the accent moved to the 200 rung.
+- **`HERO` comment.** It records "Mandarin Orange 6.27:1" as the lowest across palettes; Tydelig now publishes `#ec6a37` (6.68) and
+  Farveblind `#c78900` (7.01), so the lowest is 6.68.
+- **Nuxt UI colour observations.** Nuxt UI's colours plugin emits no `--ui-neutral`; each preset declares it. `mocha` and `bonbon` are
+  declared in `nuxt.config.ts` `ui.theme.colors` and mapped nowhere in `app.config.ts` `ui.colors`, so `bg-mocha-*` and `bg-bonbon-*` paint
+  nothing; `BG.mocha` names `amber`, `BG.bonbon` names `violet`.
+- **Default theme at AA.** Farveglad stays the default (2026-09-18) with 170 pairs below AA, listed with their ratios in `KNOWN_FINDINGS`
+  of `designSystemContrast.unit.spec.ts`; a pair that starts passing breaks its `it.fails` and asks for the entry to go.
+- **Alert findings the token leaves standing** (tables wider than a phone on `/admin/users` and `/admin/system`, a clipped URL in the
+  `/admin/system` settings tree, a 3px overflow on `/dinner` while its skeleton renders, layouts inside `#description`): full table in
+  `bug-fix-dinner-page-and-dates.md` → "Mobile overflow left by the alert token".
+- **`AdminAllergies.e2e.spec.ts` poster-notes cases** fail with four workers: `apiRequestContext.get: Request context disposed` in the
+  catalog `beforeAll` and `apiRequestContext.post: Target page, context or browser has been closed` inside `UserFactory.withSystemRoles`.
+  The describe runs serially; the cause (a context closed while another test uses it) is being traced in `settingFactory.ts` /
+  `testHelpers.freshMemberContext`.
+- **`ChefMenuCard.nuxt.spec.ts`** mocks stores and child components (`docs/testing.md` Rule 6) and still describes the actions trigger as
+  a "quiet overflow trigger" / "…".
+- **Admin pages are readable by any logged-in user** (`GET /api/admin/*` → `isAuthenticated` in `usePermissions.ts`); the poster's QR flow
+  relies on it for members.
+- **`HouseholdAllergies.vue`** has no component or e2e spec and keeps its own table layout.
+- **Mobile Playwright projects** are commented out in `playwright.config.ts`; phone widths are covered by `MobileViewport.e2e.spec.ts`
+  with `test.use({viewport})`.
+- **`nuxt typecheck`** (`vue-tsc -b` over root `references`) replaces the per-project `ts:*` scripts once nuxt/nuxt#34385 is fixed; it is
+  broken on Nuxt 4.3.1 / @nuxt/cli 3.33.1 (fix PR #35195 unmerged). Recorded in ADR-017.
 
-### TDD
+## Ship — not started
 
-| Test | Change |
-|------|--------|
-| `useTicket.nuxt.spec.ts` | ✅ done (red → green): `compactLabel` in config table; `getTicketTypeConfig` without prices (1yo→Baby, 8yo→Barn, 25yo/null→Voksen); aggregator bucketing/order/counts/config. Reuses `TicketFactory.defaultTicketPrices()`, existing `referenceDate` + birthdates, `HouseholdFactory.defaultInhabitantData` — no new age-limit variants (classifier variance already covered) |
-| `useBilling.nuxt.spec.ts` | ✅ existing `formatTicketCounts` tests stay green unchanged through the `compactLabel` refactor |
-| `AllergyTypeCard.nuxt.spec.ts` | ✅ done (red → green): badge shows `Barn` for a child birthDate (factory canon: Anna adult, Bob child, Clara baby) |
-| pdf page spec (new: `tests/component/pages/admin-allergies-pdf.nuxt.spec.ts`) | ✅ done (red → green): child+baby not rendered as Voksen; counts via `formatTicketCounts` |
-| `AllergyPoster.e2e.spec.ts` (new) | ✅ done: render smoke only — logged-in, header + table visible |
-
-**Extra finding fixed en route:** the allergies store's catalog fetch had no ADR-007
-`transform` — dates arrived as JSON strings (masked before because the broken classifier
-never read `birthDate`). Catalog now parses with `AllergyTypeDetailSchema` (ADR-010 domain
-types); the store spec's catalog mocks corrected to the Detail shape the endpoint actually
-returns.
-
-**Verified 2026-09-01:** `pre:all` ✅ · full vitest 2140/2140 ✅ · e2e smoke 1/1 ✅
-
-### Affected Areas
-
-- Modified: `app/composables/useTicket.ts`, `app/composables/useBilling.ts`,
-  `app/pages/admin/allergies/pdf.vue`, `app/components/allergy/AllergyTypeCard.vue`,
-  `app/components/admin/AdminAllergies.vue` (passes prices prop),
-  `app/components/household/HouseholdAllergies.vue` (one-line price pass)
-- Side-findings recorded: admin pages are readable by any logged-in user
-  (`GET /api/admin/* → isAuthenticated`) so the poster QR flow works for members; the
-  external QR service (`api.qrserver.com`) is noted, not part of this fix.
-
----
-
-## C1 — Server-reachable composables & the missing typecheck gate
-
-### Problem
-
-CI run 33564747955 (PR #165) failed in the e2e API step: `GET /api/admin/billing/current-period`
-answered 500 `useTicket is not defined`. `pre:all` (lint + `vue-tsc --noEmit`) was green, the full
-Vitest suite was green, and the defect surfaced only once a Playwright test hit the endpoint —
-37 API tests and the whole UI project never ran.
-
-### Root Cause
-
-Three layers, each necessary:
-
-1. **A bare auto-import in a composable the server imports.** A1 moved the V/B/b letters into
-   `ticketTypeConfig`, and `useBilling.ts` picked them up with a bare call:
-   ```ts
-   // app/composables/useBilling.ts:20 (fe7e40e)
-   const {ticketTypeConfig} = useTicket()
-   ```
-   `useBilling` is imported by `financesRepository.ts`, `generateBilling.ts` and the billing
-   endpoints. Nitro auto-imports only `server/utils` and h3 — never `app/composables` — so the
-   call is a `ReferenceError` on every server use.
-2. **The root typecheck runs in the app flavour.** `tsconfig.json` extends the legacy
-   `.nuxt/tsconfig.json` and includes `.nuxt/**`; `.nuxt/types/imports.d.ts` therefore declares
-   every app auto-import as a global for server files too. Nuxt 4 generates a separate
-   `.nuxt/tsconfig.server.json` (server sources + Nitro auto-imports only) that flags the line as
-   `TS2304` — nothing ran it.
-3. **The same class of latent bug existed 43 more times**, e.g.
-   ```ts
-   // app/composables/useBooking.ts:1297-1299 — the author knew
-   // Lazy import: useOrder relies on Nuxt auto-imports, only available client-side
-   const {orderStateConfig, formatGuestLabel} = useOrder()
-
-   // app/composables/useUserRoles.ts:70-73 — Pinia + design system in a server-imported file
-   const authStore = useAuthStore()
-   const {systemRoles, isAdmin, isAllergyManager} = storeToRefs(authStore)
-   const {ICONS} = useTheSlopeDesignSystem()
-   ```
-   plus bare `formatDate`/`toDate`/`copyPartialDateRange`… calls in `useSeason` and
-   `useCookingTeam`, and three server-side typing gaps the server project could not see:
-   `types/cloudflare.d.ts` (Nitro `TaskContext` augmentation) sat outside the Nuxt 4 context
-   directories, `teamService.ts` used the `D1Database` global, `eventHandlerHelper.ts` imported
-   `#app`.
-
-### Fix — ADR-017 [Isomorphic Composables, Pure UI Composables and Per-Context Type Checking]
-
-**Gate.** `pre:all` now runs every generated project explicitly:
-
-```
-"ts":        "npx vue-tsc --noEmit",                              // root: app + tests
-"ts:server": "npx vue-tsc --noEmit -p server/tsconfig.json",      // Nitro project
-"ts:node":   "npx vue-tsc --noEmit -p .nuxt/tsconfig.node.json",  // nuxt.config / app.config / vitest.config
-"pre:all":   "npm run lint && npm run ts && npm run ts:server && npm run ts:node"
-```
-
-CI already calls `pre:all` before unit tests, so the workflow is unchanged. Nuxt's own
-`nuxt typecheck` (`vue-tsc -b` over root `references`) is the target layout but is broken on
-Nuxt 4.3.1 / @nuxt/cli 3.33.1 (nuxt/nuxt#34385, fix PR #35195 unmerged); recorded as follow-up.
-
-**Cleanup (44 server-project errors → 0, 1 node-project error → 0):**
-
-| Errors | Where | Fix |
-|---|---|---|
-| 3 | `server/tasks/*` `TaskContext.cloudflare` | `types/*.d.ts` → `shared/types/` (Nuxt 4: augmentations must live in `app/`, `server/` or `shared/`); root include `shared/**/*` |
-| 3 | `server/utils/teamService.ts` `D1Database` | Explicit `import type` from `@cloudflare/workers-types` (house pattern) |
-| 1 | `server/utils/eventHandlerHelper.ts` `#app` | `import type {NuxtError} from 'nuxt/app'` |
-| 1 (node) | `app/app.config.ts` `~~/prisma/generated/zod` | Relative path (node project has no `~~` alias) |
-| 11 | `useSeason.ts`, `useCookingTeam.ts` | Explicit `~/utils/date` / `useCookingTeamValidation` imports; typed app-config ticket-price callback |
-| 2 | `useBooking.ts` `useBilling`, `ScaffoldResult` | Explicit imports; `TransactionCreateData` now a schema in `useBillingValidation` (app no longer imports from `~~/server`) |
-| 19 | `useBooking.ts` → `useTheSlopeDesignSystem.ts` | Presentation → new pure UI composable **`useBookingUi`**: `createBookingBadge(s)`, `createDiningModeBadge`, `createChefBadges`, `STEP_ICONS`, `formatActionPreview`, `ACTION_PREVIEW`, `DeadlineBadgeData`, `ActionPreviewItem`. `DINNER_STEP_MAP` is icon-free; `useBooking` no longer imports the design system |
-| 4 | `useUserRoles.ts` composable | `useUserRoles()` → **`useUserRolesUi`** (auth store + design system); `useUserRoles.ts` keeps `reconcileUserRoles` / `ROLE_OWNERSHIP` |
-| 1 | `usePermissions.ts` `isHouseholdMember` | Session predicate moved to `auth.ts` (`isMemberOfHousehold` = `isInHousehold(user, id)`) |
-
-Convention introduced: `use<Domain>Ui.ts` = client-only presentation, never imported by
-`server/`; the design system stays page layout + tokens.
-
-**Nuxt 4 references:** upgrade guide "TypeScript Configuration Splitting" (per-context configs,
-`references` root, "Augmenting types from outside the app/, server/, or shared/ directories will
-not work"); `guide/concepts/typescript` (type augmentation per context); `directory-structure/server`
-("Do not import Vue app code … in your server routes or utilities"; `server/types` auto-imported
-server-side only); `directory-structure/shared` (`shared/types` for both contexts);
-`directory-structure/tsconfig` (default `references` root).
-
-### TDD
-
-| Test | Change |
-|------|--------|
-| `npm run ts:server` | red 44 → green 0; negative check: a bare `useTicket()` in `useBilling.ts` fails with `TS2304` |
-| `npm run ts:node` | red 1 → green 0 |
-| `useBookingUi.nuxt.spec.ts` (new) | `STEP_ICONS` covers every `DinnerStepState` and `DINNER_STEP_MAP` is icon-free; parametrized `createBookingBadge` (open / closed / 1 and n released), `createDiningModeBadge` (open, <24h, <1h, closed), `createBookingBadges`, `createChefBadges` (steps 1-4, done/pending per state, released counts on a closed booking) |
-| `useBooking.nuxt.spec.ts` | Action-preview describe now takes `formatActionPreview`/`ACTION_PREVIEW` from `useBookingUi()`; everything else unchanged |
-| `useUserRoles.nuxt.spec.ts` → `useUserRolesUi.nuxt.spec.ts` + `useUserRoles.unit.spec.ts` | Display tests follow the composable (auth-store mock kept); reconciliation tests run against the module in the plain unit environment |
-| `DinnerBookingForm.nuxt.spec.ts` | Mocks `useAuthStore().isMemberOfHousehold` instead of `usePermissions().isHouseholdMember` |
-| `ActionPreview.nuxt.spec.ts` | Type import path |
-
-### Affected Areas
-
-- New: `app/composables/useBookingUi.ts`, `app/composables/useUserRolesUi.ts`, `shared/types/{cloudflare,auth}.d.ts` (moved from `types/`), `tests/component/composables/{useBookingUi.nuxt,useUserRolesUi.nuxt,useUserRoles.unit}.spec.ts`
-- Modified: `package.json`, `tsconfig.json`, `app/app.config.ts`, `app/composables/{useBooking,useSeason,useCookingTeam,useUserRoles,usePermissions,useBillingValidation}.ts`, `app/stores/auth.ts`, `server/utils/{teamService,eventHandlerHelper}.ts`, `server/data/financesRepository.ts`, components `BookingGridView`, `GuestBookingForm`, `DinnerBookingForm`, `ActionPreview`, `DinnerStatusStepper`, `ChefDinnerCard`, `DeadlineBadge`, `AdminUsers`, `UserProfileCard`, docs (`adr.md`, `adr-compliance-frontend.md`, `CLAUDE.md`, prepare-to-ship skill)
-- Removed: `types/`, `tests/component/composables/useUserRoles.nuxt.spec.ts`
-
----
-
-## C2 — E2E stability (tests only)
-
-### Problem
-
-Running the full suites locally (never done for this branch in CI, because C1 stopped the
-pipeline at the API step) surfaced two deterministic-under-load failures that CI on main had
-not shown:
-
-1. Parallel API project: 1-2 tests per run failed on `GET /api/admin/season` → 400, mostly
-   in `SeasonFactory.cleanupSeasons`. Body: `ticketPrices: Udfyld mindst en billettype`.
-2. `AdminHouseholds.e2e.spec.ts`: 3 of 5 tests failed, and 4 of 5 when run alone — the inline
-   create form never opened, search/delete/move interactions had no effect.
-
-### Root Cause
-
-1. A season another worker is creating is briefly visible without its ticket prices
-   (`createSeason` is a nested Prisma create; D1 has no transactions), and the list endpoint
-   rejects the whole list while that row exists. Exposure grew with #164, which makes the
-   factory re-verify its cached singleton and fall back to the list endpoint far more often.
-2. Hydration race: the spec's navigation helper waits for server-rendered rows, which are
-   visible seconds before Vue attaches listeners in dev mode (trace: click at +1.8 s, last of
-   822 module requests at +6.6 s), so the first click/fill is lost.
-
-### Fix — polling for a signal, no application code
-
-| Change | Where |
-|--------|-------|
-| `getAllSeasons` polls the list endpoint until it answers with the expected status, then asserts every season has ticket prices before continuing | `tests/e2e/testDataFactories/seasonFactory.ts` |
-| `waitForHydration(page)` — `pollUntil` on `useNuxtApp().isHydrating === false` (exposed as `window.useNuxtApp` in every client build) | `tests/e2e/testHelpers.ts`, called at the end of `navigateToHouseholds` |
-| Documented under "Waiting Patterns" | `docs/testing.md` |
-
-### TDD
-
-| Test | Result |
-|------|--------|
-| `npx playwright test --project=chromium-api` | 223 passed with the polling helper (previously 1-2 failures per run) |
-| `AdminHouseholds.e2e.spec.ts` alone, then `--project=chromium-ui --project=chromium-ui-serial` | see Verified line below |
-
----
-
-## Decisions (2026-09-16)
-
-- **Editable content lives in the database.** Nuxt `app.config` and `runtimeConfig` are build/deploy-time: `nuxt/dist/app/config.js` hands
-  each request a `klona` copy and Nitro deep-freezes its copy; nothing persists. `updateAppConfig()` is in-memory reactivity only.
-- **Community values in a table, per-user values in columns** (amended 2026-09-17): `Setting` (global, key `@id`, JSON value typed by a code
-  registry) holds what a role edits for everyone; a user's own settings are columns on `User` (`notificationChannels`, `appearance`), so the
-  session snapshot carries them and one save writes the record. Migration `0016_settings` bundles both.
-- **Shared design lives in `useTheSlopeDesignSystem`.** Alerts get a responsive `ALERTS` pattern, every `UAlert` migrates to it, and an
-  architecture test forbids raw `UAlert` props. No Nuxt UI theme override in `app.config`.
-- **Planning only.** `/admin/teams` keeps `FormModeSelector`; conversion is a follow-up.
-- **Mockups** are ASCII in this doc and repeated in the component header comment (`AdminPlanning.vue`, `SeasonSelector.vue`, `UserProfileCard.vue` style).
-- **Notes box: same look on the admin page and the poster** (2026-09-16): neutral outline with dark text as before, plus the ⚠ icon — `v-bind="ALERTS.legend" :icon="ICONS.warning"`. `AllergyNotes` binds exactly that on both mounts.
-- **Teams page, edit mode with zero teams** (2026-09-16, applied): `AdminTeams.vue` gates the master-detail branch and the edit footer on `displayedTeams.length > 0`, so the table branch and its `#empty` slot carry the one empty state + "Opret madhold" CTA.
-- **Booking grid, week or month without dinners** (2026-09-16, applied): `BookingGridView.vue` `tableData` returns `[]` when `flatEvents` is empty, so the `UTable` `#empty` slot renders the grid empty state.
-- **Edit affordances** (2026-09-16): table rows and detail panels keep the ghost pencil `BUTTONS.edit` (the allergy detail header was briefly labelled and reverted the same day); a form card’s edit entry is the labelled button `BUTTONS.secondaryAction` + `COLOR.primary` + `ICONS.edit` + "Rediger <navn>" — e.g. "Rediger Forår 2026" (the chef menu card pattern, label names the record like the household "Slet …" button). Applies to the season card (Planning form) only. Rule lives in `docs/ui.md`.
-- **Season card title names the season** (2026-09-16): "Fællesspisning sæson 08/26-07/27" (view), "Redigerer fællesspisning sæson …" (edit; present tense since 2026-09-18, the button keeps "Rediger {navn}"), "Opret fællesspisning sæson …" (create, name appears once the dates are set); the read-only "Sæson" input is removed — dates are never shown as a form element.
-- **Date picker selection style** (2026-09-16): pickers render selected days through the same `#day` slot and the one DS helper `dayCircleClasses(variant)` the display calendars use; `CALENDAR.picker = {cookingDay: PLANNING_CALENDAR.day.generated, holiday: CALENDAR.holiday}` (references, no new class strings), chosen by a `selection` prop; Nuxt UI’s own selection fill is neutralised; no `:color` prop on pickers. Green stays reserved for holidays.
-- **Tydelig, the AA preset** (2026-09-16): a fourth palette option — TheSlope’s own hues with every failing step darkened by procedure until WCAG 2.1 AA holds, generated into `app/assets/css/palettes/tydelig.css` and applied as CSS variables under `html[data-palette="tydelig"]`; no token or component changes. The options read Standard / Tydelig / Høj kontrast / Farveblind-venlig; the AA badge sits on Tydelig. After the visual comparison the user decides whether Standard stays or Tydelig replaces it as the base.
-- **Colors in "My preferences"** (decided 2026-09-16): the Farver control carries a small 🇪🇺 flag and a green check naming the verified level (`EN 301 549 · WCAG 2.1 AA`, `AAA` for Høj kontrast), sourced from the same registry the contrast test asserts. Presets, criteria from EN 301 549 / WCAG 2.1 (AA default, AAA for Høj kontrast), verified by a contrast-ratio unit test over the design-system token pairs. Høj kontrast keeps TheSlope’s hues and tunes lightness; Farveblind-venlig maps the Color Universal Design set onto the meaning-bearing tokens (green, red, orange, pink, yellow). A node generator under `scripts/` emits `app/assets/css/palettes/high-contrast.css` and `colorblind.css`; `main.css` only imports them — generated CSS never lives in a hand-written file.
-  package's approval gate. Schema, endpoints and store do not depend on it (JSON value typed in the registry).
-- **Editing the live season needs no deactivation.** Saving already reconciles dinner events (ADR-015 [Idempotent Automated Jobs with Rolling
-  Window] `pruneAndCreate`); orders on removed dates cascade by schema design (ADR-013 [External System Integration Pattern]: billing survives via
-  `Transaction.orderSnapshot`, audit via `OrderHistory`). The only gap is that preference clipping and pre-booking scaffolding wait for the nightly
-  job, so the save endpoint runs the same two idempotent jobs activation runs. Reconciliation also gets the Heynabo delete callback it never passed.
-- **Approval gate per package.** Before any programming agent starts, the package brief (scope, files, red tests, test-ids, open decisions, agent)
-  is posted for approval or fine-tuning. Agents never commit; the user commits per package.
+1. The settings ADR in `docs/adr.md` under the next free number (text in "ADR notes" below).
+2. `docs/ui.md` "Complete Color Reference Table": the Nuxt UI semantic rows name stale scales (`primary` / `secondary` / `info` as
+   `blue-500`, `warning` as `amber-500`); rewrite them from `app.config.ts` `ui.colors`.
+3. Compliance docs final pass (`docs/adr-compliance-backend.md`, `docs/adr-compliance-frontend.md`), `docs/testing.md` for the
+   architecture specs added on this branch (`designSystemColourVision`, `migrations`, the registry-derived palette list).
+4. `npm run pre:all`, the full unit suite and the full e2e suite (parallel and serial projects) in one run; each package ran only its
+   own specs.
+5. `/dry` over the branch.
+6. PR #166 description: summary, test results, and the human checks comment.
 
 ---
 
 ## Alerts on mobile
 
-### Problem
+**Problem.** `UAlert` clipped long words, e-mails and URLs on a phone; 56 sites picked colour, variant and padding by hand.
+**Solution.** `createResponsiveAlerts(isMd)` exports `ALERTS`: `info`, `neutral`, `success`, `warning`, `error`, `legend`, `emptyState`,
+`emptyStateCompact`, plus the modifiers `withActions` (actions beside the text from md, below it on a phone) and `withCornerAction` (an
+icon-only action in the top-right corner). Shared `ui` wraps anywhere and breaks white space. The two "Forklaring" legends are
+`dinner/DinnerModeLegend.vue`. The findings the token leaves standing: `bug-fix-dinner-page-and-dates.md` → "Mobile overflow left by
+the alert token"; the classification of the 56 sites is in the git history of `feature-proposal-notifications.md`.
+**Tests.** `designSystemUsage.unit.spec.ts` (every `<UAlert>` binds a kind), `MobileViewport.e2e.spec.ts`, `DinnerModeLegend.nuxt.spec.ts`.
 
-`UAlert` renders wider than the phone viewport or clips its content: long Danish sentences, e-mails and URLs in `title`/`description`
-never wrap, action buttons don't wrap, padding is fixed. 56 instances in 34 files, none pass `orientation`; five sites patch the symptom
-locally (`HouseholdCard.vue:330-331` `min-w-0` + `break-words`, `TeamRoleStatus.vue:79`, `ChefMenuCard.vue:605`, `UserProfileCard.vue:339`,
-`AllergyManagersList.vue:34`); three pass an invalid `type="info"`; three carry a no-op `class="space-y-4"`.
+## Empty states
 
-### Root Cause
-
-Nuxt UI 4.3.0 alert theme: `root "relative overflow-hidden w-full rounded-lg p-4 flex gap-2.5"`, `title`/`description` without any wrap
-class, `actions "… shrink-0"`. The design system has no alert token beyond `COMPONENTS.emptyStateAlert(Compact)`, so every site hand-picks props.
-
-### Solution
-
-1. **Repro first**: `tests/e2e/ui/MobileViewport.e2e.spec.ts` (375×812, admin) over `/admin/allergies`, `/admin/system`, `/admin/users`,
-   `/dinner`, `/admin/allergies/pdf`, `/household/<own>/settings`, `/login`: screenshot + `scrollWidth <= innerWidth`. Screenshots land here.
-2. **Classify** all 56 sites into kinds (table added here before the sweep). Factory `createResponsiveAlerts(isMd)` next to
-   `createResponsiveButtons`, exported as `ALERTS`:
-
-   | `ALERTS.` | color / variant / default icon | orientation | used for |
-   |---|---|---|---|
-   | `info` | info / subtle / `ICONS.info` | vertical | prose, visitor banner |
-   | `neutral` | neutral / subtle / `ICONS.robotHappy` | vertical | economy hints, read-only banner |
-   | `success` · `warning` · `error` | semantic / soft / `checkCircle` · `warning` · `exclamationCircle` | vertical | status, residency, poster notes, job errors |
-   | `legend` | neutral / outline / none | vertical | "Forklaring", ActionPreview, delete-cascade |
-   | `callToAction` | info / soft, avatar allowed | `isMd ? 'horizontal' : 'vertical'` | `:actions`, banners with `#actions` |
-   | `emptyState` · `emptyStateCompact` | migrated from `COMPONENTS` | vertical | empty states |
-
-   Shared `ui` on every kind: `root 'min-w-0 p-3 md:p-4'`, `title`/`description 'wrap-anywhere'` (Tailwind 4.1.18; `overflow-wrap:anywhere`
-   counts in min-content sizing, `break-words` does not), `actions 'flex-wrap'`. `md:` classes over `isMd` (SSR-safe); `isMd` only for prop values.
-   Sites keep only `:title` `:description` `:icon` `:avatar` `data-testid` `class`; dynamic color = `v-bind="ok ? ALERTS.success : ALERTS.error"`.
-3. **Sweep** all 56 sites; delete `COMPONENTS.emptyStateAlert*`, the local patches, `type=`, `space-y-4`; `docs/ui.md` example → `v-bind="ALERTS.warning"`.
-   The duplicated "Forklaring" legends (`BookingGridView.vue:835`, `DinnerBookingForm.vue:876`) → `DinnerModeLegend.vue` if the repro shows overflow.
-4. **ADR-018 [Design system owns shared UI patterns — components bind tokens, never raw Nuxt UI props]**, enforced by an architecture test.
-
-### Mockup — ✅ signed off, applied 2026-09-16 (padding kept at the theme `p-4`; `callToAction` became the `withActions` modifier)
-
-```
-BEFORE (<md)                                AFTER (<md)  v-bind="ALERTS.info"
-┌──────────────────────────────┐            ┌──────────────────────────────┐
-│ ⓘ Brugere                    │            │ ⓘ Brugere                    │
-│   Her kan du se de brugere, s│om vi ha…   │   Her kan du se de brugere,  │
-│   Heynabo-import@…            (clipped)   │   som vi har importeret fra  │
-│  [Handling][Handling 2]      │            │   Heynabo. Brug System-fanen │
-└──────────────────────────────┘            │   [Handling]  [Handling 2]   │ actions wrap
-p-4 fixed · overflow-hidden clips ·         └──────────────────────────────┘
-long words/emails/URLs never break          p-3 md:p-4 · wrap-anywhere · actions flex-wrap
-                                            callToAction: vertical <md, horizontal md+
-```
-
-### TDD
-
-| Test | Change |
-|------|--------|
-| `MobileViewport.e2e.spec.ts` (new) | red on the overflowing pages, green after the sweep; the regression guard |
-| `tests/component/architecture/designSystemAlerts.unit.spec.ts` (new) | walks `app/**/*.vue`: every `<UAlert` has `v-bind="ALERTS.` and no literal `color=`/`variant=`/`type=` — red on 56 sites today |
-| design-system spec | every `ALERTS` kind carries the wrap classes; `callToAction.orientation` flips with `isMd`; per-call `:ui` still merges |
-| existing component specs | stay green (they assert text, not classes); e2e locators `admin-readonly-banner`, `visitor-banner` unchanged |
-
-### Affected Areas
-
-`app/composables/useTheSlopeDesignSystem.ts`, 34 component/page files, `docs/ui.md`, `docs/adr.md` (ADR-018), compliance checklist.
-
-### Classification — ✅ applied (2026-09-16)
-
-#### (a) Repro — `tests/e2e/ui/MobileViewport.e2e.spec.ts`, 375×812, admin UI session, 7/7 GREEN
-
-`scrollWidth - innerWidth` is **0 on every page**: the alert theme's `root` carries `overflow-hidden` and its `wrapper` carries
-`min-w-0 flex-1`, so an over-wide alert clips instead of scrolling the document. Second measurement (temporary probe, deleted):
-per-element `scrollWidth - clientWidth` + box-wider-than-viewport.
-
-| Page | overflow px | Alerts rendered (root/child clip) | Other clipping measured | Screenshot |
-|---|---|---|---|---|
-| `/admin/allergies` | 0 ✅ | 1 — `AllergyManagersList` w=343, clip 0/0 | none | `test-results/mobile/alerts-admin-allergies-*.png` |
-| `/admin/allergies/pdf` | 0 ✅ | 2 — poster notes + managers, w=311, clip 0/0 | `div.flex.gap-6` (table+QR column) clipped 27px | `…alerts-admin-allergies-pdf-*.png` |
-| `/admin/system` | 0 ✅ | 0 (error alert only on job error) | job-history `UTable` wrapper scrolls 1596px; settings-tree `span.truncate` clips `holidayUrl: https://www.lejre.dk/…` by 273px | `…alerts-admin-system-*.png` |
-| `/admin/users` | 0 ✅ | 1 — `AdminUsers:151` w=295, clip 0/0, description wraps over 5 lines | `UTable` wrapper scrolls 576px (mail column cut in the screenshot) | `…alerts-admin-users-*.png` |
-| `/dinner` | 0 ✅ (3px in the probe) | screenshot: `DinnerBookingForm:876` legend (mode row wraps to 2 lines) + `AllergenMultiSelector:162` compact empty state, both fit | while `DinnerDetailPanel` shows its skeleton, `UPageCard` inner `p-4 sm:p-6` is 3px wider → doc overflow 3px | `…alerts-dinner-*.png` |
-| `/household/<own>/settings` | 0 ✅ | 0 (edit + last-result alerts are state-gated) | none | `…alerts-household-settings-*.png` |
-| `/login` | 0 ✅ | 0 (error alert only on failed login) | none | `…alerts-login-*.png` |
-
-**Consequences for the sweep:** (1) the guard is green today, so it guards *against regression*, it does not prove the bug;
-(2) the mockup's "actions don't wrap" premise does not hold — the generated theme already ships `actions: "flex flex-wrap gap-1.5 shrink-0"`
-and `wrapper: "min-w-0 flex-1"` (`.nuxt/ui/alert.ts:29-39`); only `title`/`description` lack a wrap class, so the residual defect is a long
-unbroken token (mail/URL) *clipped* inside an alert — no page renders one today; (3) at most 6 of the 56 sites render in the repro
-(the rest are state-gated), so the token change must be covered by component specs, not by this guard; (4) `/dinner`'s 3px makes `<= 0` borderline.
-
-#### (b) Classification — 56 sites / 34 files, all migrated (theme defaults were `color=primary`, `variant=solid`)
-
-| Site | Props today | Kind | Visual change / note |
-|---|---|---|---|
-| `AdminAllergies.vue:360` | soft, `COLOR.success`, avatar, `:ui=emptyStateAlert`, `#actions` | `emptyState` | empty state **with** a CTA button — see kind gap below |
-| `AdminEconomy.vue:609` | neutral/subtle/`robotHappy`, title+desc | `neutral` | none |
-| `AdminEconomy.vue:741` | neutral/subtle/`robotHappy` | `neutral` | none |
-| `AdminEconomy.vue:876` | neutral/subtle/`robotHappy` | `neutral` | none |
-| `AdminPlanning.vue:238` | `color=info`, **no variant → solid**, avatar 💤, `class="space-y-4"` | `emptyState` | solid info → soft/centered; drop no-op `space-y-4` |
-| `AdminSystem.vue:377` | `COLOR.error`/subtle/`exclamationCircle` | `error` | subtle → soft |
-| `AdminTeams.vue:460` | `color=info`, no variant → solid, avatar 💤, `:actions`, `space-y-4` | `emptyState` | solid → soft; empty state **with** `:actions`; drop `space-y-4` |
-| `AdminToCreateSeason.vue:6` | `color=info`, no variant → solid, avatar 🧘, `:actions`, `space-y-4` | `emptyState` | as above |
-| `AdminUsers.vue:151` | outline, icon `authorized`, title+desc | `info` | outline → subtle; keep domain icon |
-| `HouseholdCreateForm.vue:135` | neutral/soft/avatar 🏠/`:ui=emptyStateAlert` | `emptyState` | none |
-| `AllergenMultiSelector.vue:162` | no color/variant → **primary/solid**, `:ui=emptyStateAlertCompact` | `emptyStateCompact` | none (compact `ui` already overrides bg) |
-| `AllergenMultiSelector.vue:206` | `COLOR.primary`, no variant → solid, numeric avatar | `info` | **primary/solid → info/subtle** (amber → violet); avatar stays |
-| `AllergenMultiSelector.vue:251` | no color/variant, `:ui=emptyStateAlertCompact` | `emptyStateCompact` | none |
-| `AllergyDetailPanel.vue:54` | neutral/outline/`ICONS.warning`, `#description` = `<ul>`+badges | `legend` | none; **layout in `#description`** |
-| `AllergyManagersList.vue:28` | `props.color=info`/`props.variant=subtle`, `:ui={description: flex flex-col md:flex-row}` | `info` | drop the `color`/`variant` props from the component API; the `:ui` flex row must survive the merge; **layout in `#description`** |
-| `AllergyTypeCard.vue:227` | soft/success/avatar/`:ui=emptyStateAlert` | `emptyState` | none |
-| `ActionPreview.vue:30` | neutral/outline/`ICONS.ticket`, `#description` = `<ul>`+badges | `legend` | none; **layout in `#description`** |
-| `BookingGridView.vue:577` | `residencyAlert.color` (success\|error\|neutral)/soft, `class="mx-2 mt-2"` | `success`·`error`·`neutral` (dynamic) | `v-bind="ALERTS[residencyKind]"` keyed off `RESIDENCY_CONFIG`; keep testid `outside-residency-alert` |
-| `BookingGridView.vue:612` | soft/neutral/avatar/`:ui=emptyStateAlert` | `emptyState` | none |
-| `BookingGridView.vue:835` | neutral/subtle/`ICONS.info`, "Forklaring", `#description` = flex row of `DinnerModeSelector` | `legend` | subtle → outline; **duplicate of `DinnerBookingForm:876` → `DinnerModeLegend.vue`** |
-| `GuestBookingForm.vue:190` | neutral/soft/avatar/`:ui=emptyStateAlert` | `emptyState` | none |
-| `ChefMenuCard.vue:600` | warning/soft/`ICONS.info`, `:ui={root:'p-2 mt-2', description:'text-xs'}` | `warning` | local `:ui` fights the kind's `p-3 md:p-4` — keep compact override or accept p-3 (decide) |
-| `DinnerStatusStepper.vue:97` | error/soft/`x-circle` | `error` | none |
-| `TeamRoleStatus.vue:74` | `isChef ? warning : info`/soft, `:ui={root:'w-full'}` | `warning`\|`info` (ternary) | `w-full` is already in the theme root → delete |
-| `CookingTeamCard.vue:225` | soft/neutral/avatar/`:ui=emptyStateAlert` | `emptyState` | none |
-| `CookingTeamCard.vue:302` | soft/neutral/avatar/`:ui=emptyStateAlert` | `emptyState` | none |
-| `MyTeamSelector.vue:81` | **`type="info"` (invalid)**, soft, `COLOR.info`, `user-group` | `info` | drop `type`; soft → subtle |
-| `DinnerBookingForm.vue:538` | `residencyAlert.color`/soft, testid `outside-residency-alert` | `success`·`error`·`neutral` (dynamic) | same map as `BookingGridView:577` |
-| `DinnerBookingForm.vue:548` | neutral/soft/avatar/`:ui=emptyStateAlert` | `emptyState` | none |
-| `DinnerBookingForm.vue:575` | warning/soft/`ICONS.released` | `warning` | none |
-| `DinnerBookingForm.vue:586` | info/soft/`ICONS.claim` (one-liner) | `info` | soft → subtle |
-| `DinnerBookingForm.vue:794` | `COMPONENTS.powerMode.alert` (warning/soft/superhero) | `warning` | `powerMode.alert` should shrink to the icon once `ALERTS.warning` exists (token overlap) |
-| `DinnerBookingForm.vue:876` | neutral/subtle/`ICONS.info`, "Forklaring" + flex row | `legend` | subtle → outline; **duplicate of `BookingGridView:835`** |
-| `HouseholdBookings.vue:273` | `ICONS.calendar`/neutral/soft | `neutral` | soft → subtle |
-| `HouseholdBookings.vue:286` | `ICONS.calendar`/**primary**/subtle, testid `household-bookings-empty` | `info` | **primary → info** (amber → violet) |
-| `HouseholdCard.vue:324` | `powerMode.alert`, `class="min-w-0"`, `:ui={title/description:'break-words'}` | `warning` | local patches deleted (kind ships `min-w-0` + `wrap-anywhere`) |
-| `HouseholdCard.vue:389` | `errored>0 ? error : neutral`/subtle, testid `last-result-alert` | `error`\|`neutral` (ternary) | error branch subtle → soft |
-| `HouseholdCard.vue:400` | **primary**/soft/`information-circle`, `#description` = icon rows | `info` | **primary → info**; **layout in `#description`** |
-| `HouseholdEconomy.vue:288` | neutral/subtle/`robotHappy` | `neutral` | none |
-| `HouseholdEconomy.vue:401` | neutral/subtle/`robotHappy` | `neutral` | none |
-| `HouseholdEconomy.vue:413` | warning/subtle/`exclamationCircle` | `warning` | subtle → soft |
-| `HouseholdSettings.vue:202` | warning/soft, `editAlert.icon/title/description/testid` | `warning` | none; testids `move-out-warning`/`move-out-change-warning` unchanged |
-| `HouseholdSettings.vue:271` | `errored>0 ? error : neutral`/subtle, testid `last-move-out-result-alert` | `error`\|`neutral` (ternary) | error branch subtle → soft |
-| `Login.vue:50` | error/soft/`mage-robot-dead`, `class="mb-4"` | `error` | none (keep spacing class) |
-| `OrderHistoryDisplay.vue:77` | warning/soft/`exclamationCircle`, title only | `warning` | none |
-| `OrderHistoryDisplay.vue:80` | error/soft/`exclamationCircle`, title only | `error` | none |
-| `SeasonStatusDisplay.vue:156` | `alertConfig.color/variant/icon` (success+subtle\|outline…), `#actions` = `UFormField`+`DangerButton` | `success`·`warning`·`info` + actions | **kind gap** (below); `#actions` holds a form field, not a button row |
-| `UserProfileCard.vue:334` | info/soft/`shield-check`, `:ui={description:'text-sm'}`, `#description` = `<ul>` | `info` | soft → subtle; `text-sm` already the theme default → drop; **layout in `#description`** |
-| `pages/admin/[tab].vue:154` | neutral/soft/`eye`, testid `admin-readonly-banner` | `neutral` | soft → subtle; keep `eye` icon + testid |
-| `pages/admin/allergies/pdf.vue:153` | warning/outline, `#description` = heading + `<ul>` | `warning` | outline → soft — **check print**: the poster is print-first and has no `UApp`; **layout in `#description`** |
-| `pages/chef/index.vue:320` | **`type="info"` (invalid)**, soft, `COLOR.info`, `calendarDays` | `info` | drop `type`; soft → subtle |
-| `pages/chef/index.vue:397` | soft/neutral/`userGroup`, title only | `neutral` | soft → subtle |
-| `pages/dinner/index.vue:212` | **`type="info"` (invalid)**, soft, `COLOR.info`, `robotDead`, `#actions` = `UButton size=lg` | `emptyState` + actions | drop `type`; empty state **with** `#actions` — kind gap |
-| `pages/dinner/index.vue:308` | soft/`COLOR.info`, `#title` only (emoji + fun text) | `info` | soft → subtle |
-| `pages/household/[shortname]/[tab].vue:180` | info/subtle/`eye`, testid `visitor-banner`, `#actions` = `DangerButton` | `callToAction` | subtle → soft; vertical <md, horizontal md+ |
-| `pages/household/[shortname]/[tab].vue:203` | **warning**/subtle/`authorize`, testid `admin-override-active`, `#actions` = `UButton` | `callToAction` + warning | **kind gap** (below) |
-
-**Counts:** `emptyState` 12 · `info` 10 · `neutral` 8 · `warning` 8 · `legend` 4 · `error` 4 · `emptyStateCompact` 2 ·
-`callToAction` 1 · dynamic two-kind ternaries 6 · needs the kind gap resolved 1. `success` has **no** static site (only the residency ternary).
-
-**Kind gap — resolved as a modifier.** `callToAction` was dropped as a kind: orientation is `ALERTS.withActions`, spread over any kind
-(`v-bind="{...ALERTS.warning, ...ALERTS.withActions}"`), and `emptyState` stays vertical/centred even with a CTA. The five sites that
-needed "this kind **plus** actions" landed as: `SeasonStatusDisplay` (kind by season status + `withActions`), `[tab].vue:180/:203`
-(`info`/`warning` + `withActions`), `AdminTeams` (moved into the table's `#empty` slot), `AdminToCreateSeason` and `dinner/index.vue:212`
-(`emptyState`, CTA centred). No site needed a colour outside the kind table.
-
-**Applied 2026-09-16.** Final kinds: `info` · `neutral` · `success` · `warning` · `error` · `legend` · `emptyState` · `emptyStateCompact`,
-plus the `withActions` modifier. Padding stayed the theme's `p-4` (the mockup's `p-3 md:p-4` was dropped — no visual change);
-`actions: 'flex-wrap'` dropped as a no-op (already in the theme). Shared `ui` per kind: `root 'min-w-0'`, `title`/`description 'wrap-anywhere'`.
-
-**Applied tally, 55 `<UAlert>` sites** (56 − 2 duplicated legends + 1 inside `DinnerModeLegend.vue`):
-`emptyState` 12 · `info` 10 · `warning` 9 · `neutral` 8 · `error` 4 · `legend` 3 · `emptyStateCompact` 2 ·
-dynamic 7 (`ALERTS[residency.color]` ×2, `error|neutral` ternary ×2, `warning|info` ternary, `ALERTS[props.kind]`, `ALERTS[alertConfig.kind]`).
-`withActions` on 3 sites.
-
-**Deltas beyond the table above** (the kind's default won over the site's local pick — on the user's visual-check list):
-`AdminAllergies:360` and `AllergyTypeCard:227` empty states go success → neutral (one `emptyState` kind);
-`dinner/index.vue:212` becomes a centred `emptyState` rather than a left-aligned info alert;
-`ChefMenuCard:600` loses its `p-2`/`text-xs` compact override (decided: dropped);
-and three sites now show the kind's default icon where they had none or another one —
-`pdf.vue:153` (poster notes gain the warning triangle — **check the print**), `dinner/index.vue:308` (info circle beside the emoji title),
-`HouseholdEconomy:413` (`exclamationCircle` → triangle). `OrderHistoryDisplay:77` keeps its `exclamationCircle` via an explicit `:icon`.
-
-#### (c) Not fixed by the alert token
-
-| Finding | Where | Note |
-|---|---|---|
-| `UTable` wrapper scrolls far wider than the phone | `/admin/users` (576px), `/admin/system` job history (1596px) | mail/result columns cut off in the screenshots — table/responsive-column concern |
-| `span.truncate` clips a long URL by 273px | `/admin/system` settings tree (`holidayUrl`) | tree cell, not an alert |
-| Poster table + QR flex row clipped 27px | `/admin/allergies/pdf` `div.flex.gap-6.mb-6` | fixed with the QR package: the row is `flex flex-col md:flex-row gap-6 mb-6`, so the QR stacks under the table on a phone |
-| 3px document overflow while the skeleton renders | `/dinner` `UPageCard` inner `p-4 sm:p-6` | makes the repro's `<= 0` borderline on `/dinner` |
-| Layout inside `#description` (flex rows, `<ul>`, badges, selectors) | `AllergyManagersList:36`, `AllergyDetailPanel:60`, `ActionPreview:37`, `BookingGridView:843`, `DinnerBookingForm:884`, `HouseholdCard:406`, `UserProfileCard:341`, `pdf:154` | `wrap-anywhere` cannot wrap a flex row of badges — each needs its own responsive classes or extraction (`DinnerModeLegend.vue`) |
-| `actions: 'flex-wrap'` in the planned shared `ui` | theme already ships `actions: "flex flex-wrap gap-1.5 shrink-0"` | no-op — drop it from the plan |
-
-#### (d) Verified — 2026-09-16
-
-- **Red first:** `designSystemUsage.unit.spec.ts` failed on 56 sites (no `ALERTS` token) and 53 sites (raw `color`/`variant`/`type`),
-  reported as `file:line`; the two other rules (`UCalendar` → `COMPONENTS.calendarGrid`, no `#empty-state`) were already green.
-  `AdminTeams.e2e.spec.ts`'s new empty-state case failed with `locator('table')` not found — the standalone alert rendered *instead of* the table.
-- **Green:** all 4 architecture rules pass; `npm run test:unit` 2261 passed / 84 files; `npm run lint` clean;
-  `ts:server` and `ts:node` clean; e2e `MobileViewport` + `admin` + `household` + `AdminTeams` + `AdminAllergies` + `AllergyPoster`
-  = **69 passed** (`--workers=4`).
-- **Reuse:** the standalone "Her ser lidt tomt ud!" teams alert moved into the teams table's `#empty` slot (`showAdminTeams` no longer
-  hides the table for a season with no teams), and the two identical "Forklaring" legends became `app/components/dinner/DinnerModeLegend.vue`.
-- **Tests assert usage and behaviour, never token values** (`docs/testing.md` → *Architecture tests*): the architecture rules,
-  `DinnerModeLegend.nuxt.spec.ts` (rendered modes / CTA / hint), `ChefCalendarDisplay.nuxt.spec.ts` (agenda `#empty` text),
-  the `AdminTeams` e2e case, and `MobileViewport.e2e.spec.ts`. The `withActions` `isMd` branch is the one factory case kept in the
-  design-system spec; the class-string assertions written first were removed.
-- **Known-broken gate, not caused by this package:** `npm run ts` fails with `TS2688 Cannot find type definition file for
-  '@cloudflare/workers-types/2023-07-01'` — `@cloudflare/workers-types` is now `^5.20260916.1` and v5 dropped the dated entry points.
-  Fix is one line in `tsconfig.json`: `"@cloudflare/workers-types/2023-07-01"` → `"@cloudflare/workers-types"`. With that entry
-  substituted, a full `vue-tsc` over `app/ server/ tests/ shared/` is clean.
-
-### Empty states render again — ✅ IMPLEMENTED (2026-09-16)
-
-- **Root cause:** six `UTable`s used the Nuxt UI **v2** slot name `#empty-state`. Nuxt UI 4.3 has exactly one empty slot, `#empty`
-  (`Table.vue:426-430`, typed `Table.vue.d.ts:173`; the string `empty-state` exists nowhere in the package), so every one of those
-  templates was dead and the tables fell back to the built-in "No data" text.
-- **Sites renamed** `#empty-state` → `#empty`: `BookingGridView.vue:611`, `AllergyCatalogTable.vue:181-182` (forward
-  `v-if="$slots.empty" #empty`), `AdminAllergies.vue:359`, `AdminHouseholds.vue:235`, `AdminTeams.vue:631`,
-  `ChefCalendarDisplay.vue:345`, `InhabitantSelector.vue:141`. The `teams-empty-state` **testid** is unchanged.
-- **Tests:** `AdminAllergies.nuxt.spec.ts` (empty catalog message + `create-first-allergy-type` gated on `canEdit`),
-  `AllergyCatalogTable.nuxt.spec.ts` (`#empty` forwarded only with zero rows), `InhabitantSelector.nuxt.spec.ts` (empty text for
-  "no inhabitants" and "search without matches"), `AdminHouseholds.e2e.spec.ts` (search with no matches). Red 5/74 → green 116/116;
-  e2e 19 passed (`MobileViewport` + `AdminAllergies` + `AdminHouseholds`, `--workers=4`).
-- **Two of the six remain unreachable** — the rename is correct but nothing renders them, because `UTable` only shows `#empty` when
-  `data.length === 0`: `AdminTeams.vue:631` sits behind `v-else-if isNoTeams` (`:460`), which shows the "Her ser lidt tomt ud!" alert
-  *instead of* the table; `BookingGridView.vue:611`'s `data` is `tableData` (power row + inhabitants + guests), which is never empty —
-  probed with zero dinner events: `{"hasEmptySlot":false,"bodyRows":2}`. Making the grid's empty state reachable needs
-  `tableData` to return `[]` when `flatEvents` is empty — a UX change (an event-less week would show the alert instead of a blank grid),
-  parked for signoff.
-- **Overflow measurement (empty bookings week, 375×812, temporary probe, deleted):** the state cannot be reached from the URL either —
-  `useDinnerDateParam` (`useBookingView.ts:19-38`) validates `?date` against the season's dinner dates, so `date=01/01/2020` was rewritten
-  to `date=18/09/2026` on hydration. Measured on that page: `documentOverflow: 0` at `innerWidth: 375`, no element extending past the
-  viewport and no element with `scrollWidth > clientWidth`. The reported "empty state gives horizontal scroll" is therefore **not**
-  reproducible on the bookings grid today.
-
----
-
-### Visual check — Alert tokens and sweep (walk before the package is approved; copied into the PR description)
-
-| Route + state | Viewport | DS element to expect | Expect |
-|---|---|---|---|
-| `/admin/planning`, no season selected | 375px + desktop | `ALERTS.emptyState` | soft neutral, centred, large title, 💤 avatar (was a solid violet block) |
-| `/admin/planning`, season selected, each status | both | `ALERTS[success\|info\|warning\|neutral]` + `ALERTS.withActions` (`SeasonStatusDisplay`) | ACTIVE success/soft; FUTURE info/subtle; CURRENT warning/soft; PAST neutral/subtle. Activate/Deactivate beside the text on desktop, below it on the phone |
-| `/admin/planning` or `/admin/teams` with no seasons | both | `ALERTS.emptyState` + `BUTTONS.primaryAction` CTA (`AdminToCreateSeason`) | soft neutral centred; "Opret ny sæson" centred under the text |
-| `/admin/teams?season=<season without teams>` | both | `UTable #empty` slot → `ALERTS.emptyState` + `create-new-team` CTA | the table renders (header + empty row) with the 💤 empty state and "Opret madhold" inside it |
-| `/admin/teams?mode=edit&season=<season without teams>` | both | master-detail placeholder (no alert) | "Vælg et madhold for at redigere" (URL-only edge case) |
-| `/admin/allergies`, empty catalog | 375px + desktop | `UTable #empty` → `ALERTS.emptyState` + `create-first-allergy-type` | neutral (was green); "Tilføj allergi" unchanged |
-| `/admin/allergies` footer | both | `AllergyManagersList kind="info"` → `ALERTS.info` + its description flex row | unchanged look; managers beside the message on desktop, under it on the phone |
-| `/admin/allergies/pdf` + print preview | desktop + print | `ALERTS.legend` + `:icon="ICONS.warning"` (notes — decided 2026-09-16: unchanged neutral outline, dark text, ⚠ added; same on page and poster), `AllergyManagersList kind="legend"` → `ALERTS.legend` (outline, as on main; corrected 2026-09-18 after the print check) | "Vigtige bemærkninger" as before, with a ⚠ next to the heading; managers box outline, no fill on paper |
-| `/admin/users` | both | `ALERTS.info` | violet subtle (was amber outline); `authorized` icon kept |
-| `/admin/system`, a job with an error | both | `ALERTS.error` | soft (stronger red) |
-| `/admin/economy` (3 empty states) | both | `ALERTS.neutral` | unchanged |
-| `/admin/households` create form, Heynabo without addresses | both | `ALERTS.emptyState` | unchanged |
-| `/household/<own>/members`, ⚡ power row expanded | 375px | `ALERTS.warning` (power mode), local wrap patches removed | warning still fits; long sentence wraps, no clipping |
-| `/household/<own>/members`, bottom info alert | both | `ALERTS.info` | violet subtle (was amber soft); icon rows unchanged |
-| `/household/<own>/members`, after saving preferences | both | `errored ? ALERTS.error : ALERTS.neutral` | success path unchanged; error branch soft |
-| `/household/<own>/settings`, pencil → edit move-out | both | `ALERTS.warning` | unchanged; testids intact |
-| `/household/<own>/settings`, after saving a move-out date | both | `errored ? ALERTS.error : ALERTS.neutral` | error branch soft |
-| `/household/<own>/bookings?view=day` | 375px + desktop | `DinnerModeLegend` → `ALERTS.legend` | "Forklaring" outline box; 4 modes + "Blandet"; no "Ændret", no hint |
-| `/household/<own>/bookings?view=week` / `month` | 375px + desktop | `DinnerModeLegend` (grid options) → `ALERTS.legend` | outline "Forklaring" with the "Ændret" marker and the click-a-cell hint |
-| `/household/<other>` as visitor | 375px + desktop | `{...ALERTS.info, ...ALERTS.withActions}` | banner soft; "Admin røre alligevel" beside the text on desktop, below on the phone |
-| `/household/<other>` after admin override | 375px + desktop | `{...ALERTS.warning, ...ALERTS.withActions}` | same orientation behaviour; soft |
-| `/household/<own>/economy` | both | 2 × `ALERTS.neutral`; "Ingen data" `ALERTS.warning` | "Ingen data" soft with the warning triangle |
-| `/dinner` with no active season | both | `ALERTS.emptyState` + `BUTTONS.primaryAction` CTA | centred neutral, large title, "Værsgo, opret en ny sæson" centred below (was a left-aligned info alert) |
-| `/dinner`, dinner without a team | both | `ALERTS.info` | subtle with ⓘ next to the emoji title |
-| `/dinner` day view | 375px | `DinnerModeLegend` → `ALERTS.legend`; released `ALERTS.warning`; claim `ALERTS.info` | legend outline; "Har du brug for flere billetter?" subtle |
-| `/chef`, team without dinners | both | `ALERTS.info` | subtle |
-| `/chef`, dinner without a team | both | `ALERTS.neutral` | subtle |
-| `/chef`, editing a dinner without a menu title | both | `ALERTS.warning` (compact `p-2 text-xs` override removed) | standard alert padding and body text |
-| `/chef`, role banner (chef vs cook) | both | `isChef ? ALERTS.warning : ALERTS.info` | chef unchanged; cook branch subtle; still full width |
-| `/chef/dinner/<cancelled>`, `/login` wrong password, `/admin/economy` order-history errors | both | `ALERTS.error` / `ALERTS.warning` | unchanged |
-
----
+**Problem.** Six tables used the Nuxt UI 2 slot `#empty-state`, which Nuxt UI 4 ignores.
+**Solution.** `#empty` in `BookingGridView`, `AllergyCatalogTable`, `AdminAllergies`, `AdminHouseholds`, `AdminTeams`, `ChefCalendarDisplay`,
+`InhabitantSelector`. `AdminTeams` renders its table (and its `#empty`) with zero teams in view and edit; `BookingGridView.tableData` is empty
+for a period without dinners. `designSystemUsage.unit.spec.ts` rejects `#empty-state`.
 
 ## Colour drift sweep
 
-### Problem
+**Problem.** 178 raw Tailwind colour classes and 59 literal colour props sat outside the design system.
+**Solution.** One token per distinct rendered value (`TEXT.ink/strong/toned/muted/dimmed/timestamp/menuBody`, `BG.panel/panelNested/panelHover/
+inset/ticket/budgetHead/invoiceGround/invoiceStat`, `LAYOUTS.panelDivider`, `RING.*`, `COMPONENTS.segmentedActive`, `BACKGROUNDS.appShell/header`,
+`PANTONE_CHIPS`). A before/after comparison of the rendered class sets over the 105 `.vue` files showed zero differences. Two rules in
+`designSystemUsage.unit.spec.ts` reject raw colour classes and literal colour props. Token table: `docs/ui.md`.
 
-Colour was decided per file. Outside `app/composables/useTheSlopeDesignSystem.ts`, `app/` held **178 raw Tailwind
-colour utility classes in 34 files** (`gray` 75, `neutral` 50, `red` 13, `amber` 9, `peach`/`orange`/`ocean`/`blue` 5
-each, `violet` 4, `pink` 3, `party` 3, `green` 1 — `view/Ticker.vue` 21, `cooking-team/CookingTeamCard.vue` 20,
-`admin/AdminEconomy.vue` 17, `allergy/AllergyTypeCard.vue` 12, `pages/public/billing/[token].vue` 10,
-`admin/HouseholdEditPanel.vue` 10, `pages/admin/allergies/pdf.vue` 9, `view/ViewError.vue` 8, `chef/ChefMenuCard.vue` 8,
-then 1–5 in 25 more) and **59 literal Nuxt UI colour props in 31 files** (`AdminEconomy` 9, `AdminTeams` 5,
-`HouseholdEconomy` 5, `CookingTeamCard` 3, `UserProfileCard` 3, then 1–2 in 26 more). The same grey appeared as
-`gray` in one file and `neutral` in the next; `CookingTeamCard.vue:239` carried `bg-violet-850`, a shade the palette
-does not define.
+## Planning form, holidays, calendars, buttons
 
-### Solution
+**Problem.** Planning used a three-button mode selector, holiday rows could only be deleted, holidays kept insertion order, the pickers drew
+neighbouring-month days twice, and planning buttons were hand-built. Saving the active season left clipping and scaffolding to the nightly job
+and left Heynabo events of removed dates published.
+**Solution.**
+- `AdminPlanning.vue`: `SeasonSelector` + `Opret sæson` (`create-season`); `useEntityFormManager` keeps `?mode=` (ADR-006, ADR-008).
+- `AdminPlanningSeason.vue`: title per mode (`TITLE_VERBS`), `Rediger <navn>` (`edit-season`, `EDIT_VERB`), footer `LAYOUTS.formButtonRow`.
+- `CalendarDateRangeListPicker.vue`: each holiday row is a `CalendarDateRangePicker` validated against `holidaysSchema`; `sortDateRanges` on add;
+  `serializeSeason`/`deserializeSeason` store and read holidays in date order.
+- `COMPONENTS.calendarGrid` on every `UCalendar`; `calendarPickerProps(selection)` and `CALENDAR.picker` for pickers; `dayCircleClasses` for
+  every day circle; `PLANNING_CALENDAR` for the preview.
+- `season/[id].post.ts` returns `SeasonUpdateResponse` (ADR-009), ignores `isActive`, runs `clipPreferences` + `scaffoldPrebookings` on the
+  active season; `reconcileDinnerEventsForSeason` passes `deleteHeynaboEventAsSystem`.
+- Buttons: `BUTTONS.secondaryAction`/`primaryAction`/`edit` with `ICONS`; `TicketPriceListEditor` test-ids; `AdminToCreateSeason` `canEdit`.
+**Mockups.** `AdminPlanning.vue` and `AdminPlanningSeason.vue` headers (✅ 2026-09-16).
+**Tests.** `AdminPlanning.nuxt`, `AdminPlanningSeason.nuxt`, `CalendarDateRangeListPicker.nuxt`, `CalendarDateRangePicker.nuxt`,
+`CalendarDisplay.nuxt`, `TicketPriceListEditor.nuxt`, `AdminToCreateSeason.nuxt`, `SeasonStatusDisplay.nuxt`, `date.unit`, `useSeasonValidation.unit`;
+e2e `AdminPlanning`, `AdminPlanningSeason`, `admin`, `season` (API), `seasonLiveEdit` (serial API), `AdminPlanningLiveSeason` (serial UI).
 
-Every colour value lives in the design system; a `.vue` file references a token. Two architecture rules keep it there.
-Each token carries exactly one rendered value, light rung and dark rung together, so every template renders the class
-set it rendered before the sweep; two surfaces that drew different values take two tokens, named by where they are used.
+## QR code
 
-| Added token | Classes | Sites |
-|---|---|---|
-| `TEXT.ink` | `text-gray-900 dark:text-white` | `AdminPlanningSeason` sub-headings, `DinnerModeSelector` day glyph |
-| `TEXT.strong` | `text-gray-700 dark:text-gray-300` | `AllergyTypeCard` comment line, plus `TYPOGRAPHY.sectionSubheading` |
-| `TEXT.toned` | `text-gray-600 dark:text-gray-400` | `AllergyTypeCard`, `CookingTeamCard`, `KitchenPreparation`, plus `TYPOGRAPHY.bodyTextMuted` |
-| `TEXT.muted` | `text-gray-500 dark:text-gray-400` | `CookingTeamCard`, `DeadlineBadge`, `UserListItem`, `HouseholdListItem` |
-| `TEXT.dimmed` | `text-gray-400 dark:text-gray-500` | `DinnerTicket` watermark |
-| `TEXT.timestamp` | `text-gray-500 dark:text-gray-500` | `AllergyTypeCard` "sidst ændret" line |
-| `TEXT.menuBody` | `text-neutral-600 dark:text-neutral-400` | `ChefMenuCard` menu description |
-| `TEXT.gray[400/500]`, `TEXT.neutral[400/500]` | `text-gray-400`, `text-gray-500`, `text-neutral-400`, `text-neutral-500` | the light-only greys: 13 files, from `AdminEconomy` to `ViewError` |
-| `BG.panel` | `bg-neutral-50 dark:bg-neutral-900` | 6 files: expanded rows and the detail panel under them (`AdminEconomy`, `AdminTeams`, `AdminUsers`, `HouseholdEditPanel`, `CookingTeamCard`, `HouseholdEconomy`) |
-| `BG.panelNested` | `bg-neutral-100 dark:bg-neutral-800` | `AdminEconomy` order lines |
-| `BG.panelHover` | `hover:bg-gray-50 dark:hover:bg-gray-800` | `HouseholdListItem` — a variant prefix composes only inside the token |
-| `BG.inset` | `bg-gray-50 dark:bg-gray-800` | `AllergenMultiSelector` selected row, `CookingTeamCard` member list, `HouseholdSettings` calendar-feed box |
-| `BG.ticket` | `bg-gray-50 dark:bg-gray-800/50` | `DinnerTicket` body |
-| `BG.budgetHead` | `bg-neutral-50 dark:bg-neutral-800` | `DinnerBudget` head row |
-| `BG.invoiceGround` | `bg-neutral-50 dark:bg-neutral-950` | `public/billing/[token]` page ground |
-| `BG.invoiceStat` | `bg-neutral-100 dark:bg-neutral-900` | `public/billing/[token]` 4 summary boxes |
-| `LAYOUTS.panelDivider` | `border-t border-neutral-200 dark:border-neutral-700` | `HouseholdEditPanel` footer rule |
-| `RING.{red,green,amber,orange}` | `ring-red-500/700`, `ring-green-500`, `ring-amber-500`, `ring-orange-200` | 6 files, plus `CALENDAR.deadline` and `CALENDAR.holiday` |
-| `COMPONENTS.segmentedActive` | `ring-2 border-2 ring-orange-200 shadow-md` | `FormModeSelector`, `BookingViewSwitcher` — one string, two files |
-| `COMPONENTS.economyTable.level{1,2}.tableHead` | `bg-ocean-100 dark:bg-ocean-900`, `bg-peach-100 dark:bg-peach-900` | `HouseholdEconomy`, `AdminEconomy` |
-| `BACKGROUNDS.appShell` | `bg-amber-500 dark:bg-amber-800` | `layouts/default.vue` |
-| `BACKGROUNDS.header` | `bg-blue-100 md:bg-blue-100/80 dark:bg-blue-900 md:dark:bg-blue-900/80` | `PageHeader` |
-| `PANTONE_CHIPS` / `getPantoneChip(index)` | One tinted chip per brand family | `Ticker` |
-| Scale shades | `TEXT.mocha[500]`, `TEXT.blue[500]`, `TEXT.red[500/700/900]`, `BG.red[100]`, `BORDER.gray[300]`, `BORDER.amber[600]` | `ChefMenuCard`, `AdminPlanningSeason`, `TicketPriceListEditor`, `ViewError`, `pdf.vue` |
-
-`CookingTeamCard.vue:239` drops `bg-violet-850`; the poster keeps the light-only family scale (`BG.gray[100]`,
-`BORDER.gray[700]`, `TEXT.gray[600]`) so print stays as it is. The rule and the token table live in
-[docs/ui.md](../ui.md#colour-comes-from-the-design-system).
-
-### TDD
-
-| Red | Green |
-|---|---|
-| `no .vue names a Tailwind palette shade` — 178 `file:line` hits in 34 files | 0 |
-| `no .vue passes a literal colour to a component` — 59 `file:line` hits in 31 files | 0 |
-
-Both rules read the `.vue` sources in `tests/component/architecture/designSystemUsage.unit.spec.ts` and exempt
-`app/components/icons/Logo.vue`. The shade rule covers `(bg|text|border|ring|outline|from|to|via|fill|stroke|divide|placeholder|decoration|accent)-<family>-<shade>`
-including `dark:`, `hover:` and `md:` forms; the prop rule covers `color="…"` and `:color="'…'"` and the compound
-props that end in `-color`.
-
-### Affected Areas
-
-55 files: `app/composables/useTheSlopeDesignSystem.ts`, `app/layouts/default.vue`, 4 pages
-(`admin/[tab].vue`, `admin/allergies/pdf.vue`, `household/[shortname]/[tab].vue`, `public/billing/[token].vue`)
-and 49 components across `admin/`, `allergy/`, `booking/`, `calendar/`, `chef/`, `common/`, `cooking-team/`,
-`deadline/`, `dinner/`, `economy/`, `form/`, `household/`, `login/`, `shared/`, `user/`, `view/`.
-
-Verified: value-preserving. A script resolves every design-system token reference in all 105 tracked `.vue` files under
-`app/` against the matching version of `useTheSlopeDesignSystem.ts` and compares the multiset of colour utility classes
-each template renders at `HEAD` with the multiset it renders now — `dark:`, `hover:`, `md:` and `/alpha` forms included.
-Result: 0 differences, the one exception being `bg-violet-850` in `CookingTeamCard.vue:239`, a shade `main.css` leaves
-undefined.
-
-Verified: `npx vitest run tests/component/architecture` 6 passed; `npm run test:unit` 2337 passed in 93 files;
-`npm run pre:all` green (lint, ts, ts:server, ts:node, ts:workers); the 8 UI e2e specs 74 passed with one flake on
-`AdminTeams.e2e.spec.ts:57` at `--workers=4`, 13 passed on the rerun of that file alone.
-
-### Visual check — Colour drift sweep
-
-| Route + state | Viewport | DS element to expect | Expect |
-|---|---|---|---|
-| `/` landing ticker | 375px + desktop | `getPantoneChip(index)` | unchanged — the 7 chips keep border, fill and ink per family |
-| Every page, outside the card | both | `BACKGROUNDS.appShell` | unchanged — mocha shell, amber-800 in dark |
-| Every page, header bar | 375px + desktop | `BACKGROUNDS.header` | unchanged — blue-100 bar, translucent and rounded from md up |
-| `/admin/planning`, season card | both | `TYPOGRAPHY.bodyTextMedium` + `TEXT.ink` on the holiday and ticket sub-headings, `TEXT.blue[500]` on the Lejre Kommune link, `TEXT.red[500]` on a validation error | unchanged (value-preserving) |
-| `/admin/planning`, ticket price editor | both | `TEXT.gray[500]` on descriptions, `TEXT.red[500]` on the error line | unchanged (value-preserving) |
-| `/admin/teams`, table + edit mode | both | `TEXT.gray[500]` on the placeholder, `BG.panel` on the expanded row, `COLOR.secondary`/`COLOR.neutral` on the footer buttons | unchanged (value-preserving) |
-| `/admin/teams`, a team card | 375px + desktop | `TYPOGRAPHY.sectionSubheading`, `TYPOGRAPHY.caption` + `TEXT.toned`, `BG.inset` on the member list, `BG.panel` on the expanded row, `COLOR.winery` on remove | unchanged (value-preserving) |
-| `/admin/teams`, kitchen monitor mode | desktop | no background class | unchanged — `bg-violet-850` named a shade the palette does not define |
-| `/admin/households`, table + expanded row | both | `TEXT.gray[400]` on the home glyph, `TEXT.gray[500]` on the two empty lines, `BG.panel` + `TEXT.neutral[500]` + `LAYOUTS.panelDivider` in `HouseholdEditPanel` | unchanged (value-preserving) |
-| `/admin/users`, table + expanded row | both | `BG.panel`, `TEXT.gray[500]`, `COLOR.secondary` on search and loading | unchanged (value-preserving) |
-| `/admin/allergies`, catalog + detail | 375px + desktop | `RING.red[700]` on the allergen circle, `TEXT.gray[500]` on the empty detail, `TEXT.strong` on a beboer comment, `TEXT.timestamp` on the "sidst ændret" line, `COLOR.secondary` on the search | unchanged (value-preserving) |
-| `/admin/allergies/pdf` + print preview | desktop + print | `BORDER.gray[700]`, `BG.gray[100]`, `TEXT.gray[600]`, `BORDER.gray[300]` on the QR frame | unchanged — the poster keeps its light-only scale |
-| `/admin/economy`, three nesting levels | both | `BG.panel` (level 1 expand), `BG.panelNested` (order lines), `COMPONENTS.economyTable.level2.tableHead`, `TEXT.neutral[400]` on the em-dashes, `COLOR.neutral`/`COLOR.success` on badges | unchanged (value-preserving) |
-| `/household/<own>/economy` | both | `COMPONENTS.economyTable.level1.tableHead`, `BG.panel`, `TEXT.gray[400]` on the `\|` separator | unchanged (value-preserving) |
-| `/household/<own>/bookings`, view switcher | 375px + desktop | `COMPONENTS.segmentedActive` | unchanged — orange-200 ring on the selected view |
-| `/household/<own>/bookings`, a ticket | 375px | `BG.ticket` on the ticket body, `TEXT.dimmed` on the watermark, `TEXT.gray[500]` on the provenance line | unchanged (value-preserving) — the body keeps its `/50` alpha in dark, the watermark its `opacity-[0.12]` |
-| `/household/<own>/settings`, calendar feed box | both | `BG.inset`, `COLOR.error` on the move-out DangerButton | unchanged (value-preserving) |
-| `/household/<own>/members`, household card | both | `COLOR.warning` / `COLOR.primary` as `ring-color` on the avatars | unchanged |
-| `/household/<other>` as visitor | both | `COLOR.info` as `initial-color` on the admin-override DangerButton | unchanged |
-| `/chef`, agenda + menu card | 375px + desktop | `RING.amber[500]` on the card and the chef portrait, `BORDER.amber[600]` on the WANTED frame, `TEXT.mocha[500]` on the hat, `TEXT.neutral[500]` on a missing menu title, `TEXT.menuBody` on the description | unchanged (value-preserving) |
-| `/chef`, team without dinners | both | `TEXT.gray[400]` on the calendar glyph, `TEXT.gray[500]` on the line | unchanged (value-preserving) |
-| `/chef/dinner/<id>`, budget table | both | `BG.budgetHead` on the head row | unchanged (value-preserving) |
-| `/dinner`, kitchen preparation | 375px + desktop | `TEXT.toned` on the two stat lines | unchanged |
-| `/dinner`, mode selector | 375px | `TYPOGRAPHY.caption` + `TEXT.ink` on the day glyph | unchanged (value-preserving) |
-| `/login`, wrong password | both | `COLOR.secondary` on the buttons | unchanged |
-| Public billing `/public/billing/<token>` | 375px + desktop | `BG.invoiceGround` on the page ground, `BG.invoiceStat` on the 4 summary boxes | unchanged (value-preserving) |
-| Any error page | both | `TEXT.red[500/700/900]`, `BG.red[100]`, `TEXT.gray[400]` on the stack trace, `COLOR.error` on the trace button | unchanged (value-preserving) |
-| Any form with a mode selector | both | `COMPONENTS.segmentedActive`, `COLOR.info` on the buttons | unchanged |
-| Any table with search + pagination | both | `COLOR.neutral` | unchanged |
-
----
+**Problem.** The poster loaded its QR from `api.qrserver.com` and hid it from print.
+**Solution.** `encodeQrPath` (`app/utils/qr.ts`, `uqr`) and `QrCode.vue` (inline SVG, black on white). The poster row is `flex-col md:flex-row`
+on screen and a row in print. **Mockup:** `pdf.vue` header (✅ 2026-09-16). **Tests:** `qr.unit`, `QrCode.nuxt`, `admin-allergies-pdf.nuxt`,
+`AllergyPoster.e2e`.
 
 ## Poster notes
 
-### Problem
-
-The poster's "Vigtige bemærkninger" (three bullets, `pdf.vue:157-161`) exist nowhere else: not on `/admin/allergies`, not editable. The
-only text mechanisms are `HELP_TEXTS` and `app.config` (build-time). No settings table exists in the schema.
-
-### Solution
-
-- **Schema** (migration `0016_settings`, which also adds `User.appearance` for "My preferences"):
-
-  ```prisma
-  model Setting {            // global, role-editable; value = JSON typed per key in SETTING_REGISTRY
-    key             String   @id
-    value           String
-    updatedAt       DateTime @updatedAt
-    updatedByUserId Int?
-    updatedBy       User?    @relation("SettingUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: SetNull)
-  }
-  ```
-- **Registry** (isomorphic, ADR-017 [Isomorphic Composables…]): ONE file, `app/composables/useSettingValidation.ts` — `SETTING_KEYS =
-  ['allergy-poster-notes']`, `SettingKeySchema`, `SettingDetailSchema` (one entity type, Display ≡ Detail; `updatedAt` and `updatedByUserId`
-  nullable for an unwritten key), `SETTING_REGISTRY[key] = {valueSchema, defaultValue, canWrite}` with the three bullets as the default and
-  `canMutateAllergies` as the writer, plus `DEFAULT_ALLERGY_POSTER_NOTES` and `splitNotes`. It mirrors `useUserPreferenceValidation.ts` on the
-  user side. Values are JSON strings; the repository parses with the registry schema (ADR-010).
-- **Server**: `server/data/settingsRepository.ts` (`fetchSetting`, `upsertSetting`, upserting on the primary key), `GET /api/admin/setting/[key]`
-  (row or registry default with `updatedAt: null`, never 404 for a registered key, 400 for an unregistered one; all authenticated — the poster is
-  member-readable), `POST /api/admin/setting/[key]` (body validated with the key's own `valueSchema`, then `requireSettingWriteAccess(event, key)`
-  in `authorizationHelper.ts`, 403). Route table: `{prefix: '/api/admin/setting/', methods: ['POST'], check: isAuthenticated}` before the generic
-  admin rule — coarse gate, per-key check in the endpoint, so key names stay out of the route table.
-- **Store**: `allergies.ts` += `posterNotes` (`useAsyncData`, `SettingDetailSchema` transform, own `isPosterNotesLoading` /
-  `isPosterNotesErrored` / `isPosterNotesInitialized`, `loadPosterNotes`, `savePosterNotes`). The slice stays out of `isAllergyStoreReady`, so the
-  poster prints its notes while the catalog loads, and falls back to the registry default. `savePosterNotes` takes the POST response as the new
-  value: `refresh()` resolves on a failed request, so reading the row back in a second round trip put the box one failure away from the registry
-  default while the success toast had already fired — the bug the user hit on 2026-09-18 (old notes on screen after Gem).
-- **UI**: `app/components/allergy/AllergyNotes.vue` — prop-driven (`notes`, `canEdit`, `isSaving`; emits `save`); view face
-  `{...ALERTS.legend, ...ALERTS.withActions}` + `ICONS.warning` with one bullet per line, pencil `BUTTONS.edit` +
-  `aria-label="Rediger bemærkninger"` in `#actions` when `canEdit`; edit face `UTextarea` rows 5 over `LAYOUTS.formButtonRow` with
-  `BUTTONS.cancel` / `BUTTONS.save`, closing when the parent's `isSaving` resolves; no `UTooltip` (the poster has no `UApp`). Mounted in the
-  `AdminAllergies` card header above the managers list (the poster's order), which toasts "Bemærkninger gemt", and on the poster (view only).
-  The poster keeps its print table.
-- **ADR-0xx (next free number when it ships) [Editable settings as a key-value store with a code registry]**.
-
-### Mockup — ✅ applied (box in the card header 2026-09-16, edit face 2026-09-18)
-
-```
-DESKTOP                                             MOBILE
-┌ Allergi Katalog                    [📄 Plakat] ┐  ┌ Allergi Katalog      [📄 Plakat] ┐
-│ ⚠ Vigtige bemærkninger                          │  │ ⚠ Vigtige bemærkninger            │
-│  • Glutenfri boller findes i fryseren …         │  │  • Glutenfri boller …             │
-│  • Ved mælkeprodukter i brød …                  │  │  • Husk at give besked …          │
-│ ⓘ Spørgsmål om allergier? (managers)            │  │ ⓘ Spørgsmål om allergier?         │
-│ [⧉ Sammenlign] [↓ Antal] [＋ Opret allergi]      │  │ [⧉ Sammenlign] [↓ Antal]          │
-│ ┌ master ──────┬ detail (sticky) ─────────────┐ │  │ [＋ Opret allergi]                 │
-│ │ 🥛 Mælk  2   │ Detaljer          [✏️] [🗑]  │ │  │ [▼] 🥜 Jordnødder 2                │
-│ │ 🥜 Jordn. 2 ◀│ …                             │ │  │  ┌ Detaljer  [✏️][🗑] ┐             │
-│ └──────────────┴───────────────────────────────┘ │  │  └────────────────────┘             │
-└──────────────────────────────────────────────────┘  └────────────────────────────────────┘
-└──────────────────────────────────────────────────┘  └────────────────────────────────────┘
-EDIT FACE (in place; pencil only for ADMIN | ALLERGYMANAGER)
-│ Én bemærkning per linje                           │
-│ ┌ UTextarea rows=5 ────────────────────────────┐  │
-│ └──────────────────────────────────────────────┘  │
-│                              [✕ Annuller] [✓ Gem] │  LAYOUTS.formButtonRow · BUTTONS.cancel/save
-```
-Rejected: under the toolbar (competes with the mobile CREATE dock from D1).
-
-### TDD
-
-| Test | Change |
-|------|--------|
-| `useSettingValidation.unit.spec.ts` (new) | 🟢 keys, `SettingDetailSchema` (date coercion, nullable author), registry entry per key, value schema, default, `canWrite` for ADMIN / ALLERGYMANAGER / member, `splitNotes` |
-| `usePermissions.unit.spec.ts` | 🟢 `/api/admin/setting/` POST and GET resolve; the setting rule sits before the generic admin rule |
-| `tests/e2e/api/parallel/admin/setting.e2e.spec.ts` + `settingFactory.ts` (new) | 🟢 registered key never 404s, admin append keeps the line and names the author, member 403 then ALLERGYMANAGER 200 (`UserFactory.withSystemRoles` + `freshMemberContext`), unknown key 400, empty / wrong type / over-long value 400. The row is global, so every write is a salted `SettingFactory.appendLine` and `afterAll` calls `removeLines` with just this file's lines |
-| `allergies.nuxt.spec.ts` | 🟢 `posterNotes` loads, `savePosterNotes` posts and shows the stored text — including when a later read of the row fails (the regression guard for the old-notes-after-Gem bug), the registry default, errors exposed |
-| `AllergyNotes.nuxt.spec.ts` | 🟢 bullets per line, pencil gating, textarea seeded, Annuller restores, Gem emits the trimmed text, the editor waits for the parent's `isSaving`; `describe.each` over `isMd` |
-| `AdminAllergies.nuxt.spec.ts` | 🟢 setting endpoint registered (real store), stored notes render, the edit round trip posts, no pencil without `canEdit` |
-| `AdminAllergies.e2e.spec.ts` | 🟢 an allergy manager adds a salted line → Gem → the rendered `allergy-notes-item` bullets carry it with no reload, again after a reload, and on the poster; a member without the role sees no pencil; roles arranged with `UserFactory.withSystemRoles` + `freshMemberContext`; `afterAll` removes only this suite's line, so the API suite's lines survive |
-| `admin-allergies-pdf.nuxt.spec.ts`, `AllergyPoster.e2e.spec.ts` | 🟢 stored notes rendered, no pencil on the poster; existing `(V)` / `[1V 1B]` assertions kept |
-
-### Affected Areas
-
-`prisma/schema.prisma`, `app/composables/useSettingValidation.ts` (ONE file — `useSetting.ts` merged into it),
-`server/data/settingsRepository.ts`, `server/routes/api/admin/setting/`, `server/utils/authorizationHelper.ts`,
-`app/composables/usePermissions.ts`, `app/stores/allergies.ts`, `app/components/allergy/AllergyNotes.vue`, `AdminAllergies.vue`,
-`pages/admin/allergies/pdf.vue`, `allergyTestIds.ts`, `tests/e2e/testDataFactories/settingFactory.ts`, `userFactory.ts`
-(`getUsers`, `setSystemRoles`, `withSystemRoles`), `tests/e2e/testHelpers.ts` (`freshMemberContext`), compliance docs.
-
-### Notes on the page — ✅ IMPLEMENTED (2026-09-16)
-
-- **Shipped:** the notes box is one component, `app/components/allergy/AllergyNotes.vue` (prop `notes`, one note per line, `ALERTS.legend`
-  + `:icon="ICONS.warning"` — the look decided 2026-09-16), mounted in the `AdminAllergies` card header above the managers list and on the poster; the poster's
-  inline `UAlert` (`pdf.vue:154-165`) is gone, so both surfaces render the same markup from the same text.
-- **Text source:** `app/composables/useSettingValidation.ts` — isomorphic (ADR-017 [Isomorphic Composables…]), `DEFAULT_ALLERGY_POSTER_NOTES`
-  (the three bullets) and `splitNotes` (one note per line, blank lines and whitespace dropped). This is the registry default the `Setting`
-  store falls back to.
-- **Tests:** `AllergyNotes.nuxt.spec.ts` (bullets per line, empty text renders nothing), `admin-allergies-pdf.nuxt.spec.ts` and
-  `AdminAllergies.nuxt.spec.ts` (three items, both `isMd` branches) with the existing `(V)`/`[1V 1B]` assertions kept, plus one e2e
-  assertion each in `AllergyPoster.e2e.spec.ts` and `AdminAllergies.e2e.spec.ts`. Test-ids `allergy-notes` / `allergy-notes-item`.
-- **Editing — ✅ IMPLEMENTED (2026-09-18):** the text moved from the registry default into the `Setting` row, and only the source changed —
-  `AllergyNotes` keeps its `notes` prop and gained `canEdit`, `isSaving` and `save`. Test-ids added: `edit-allergy-notes`,
-  `allergy-notes-textarea`, `save-allergy-notes`, `cancel-allergy-notes`.
-- **A setting row is shared state (2026-09-18):** the API suite and the UI suite write the same row in projects that have no dependency on each
-  other, so neither may set it. `SettingFactory.appendLine` / `removeLines` read, change the lines and write back, re-reading to confirm the
-  change survived a concurrent write and retrying when it did not. Each spec asserts only its own salted line and removes only that line, which
-  also leaves the text a real user typed in place. Verified by running both projects in one `--workers=4` pass.
-- **Bug found and fixed in the same package (2026-09-18):** Gem toasted "Bemærkninger gemt" while the old bullets stayed on screen. The store
-  read the row back after the POST, and `useAsyncData`'s `refresh()` resolves on a failed request — it leaves `data` null, so `posterNotes` fell
-  through to the registry default. The POST already returns the stored row (ADR-009), so `savePosterNotes` now takes the response as the new
-  value and the second round trip is gone. Guarded by a store spec that fails the read after the save, and by an e2e that asserts the rendered
-  `allergy-notes-item` bullets with no reload and again after one.
-
-### Visual check — Notes on the page
-
-| Route + state | Viewport | DS element to expect | Expect |
-|---|---|---|---|
-| `/admin/allergies`, catalog loaded | 375px | `AllergyNotes` → `ALERTS.legend` + `:icon="ICONS.warning"` in the card header, above the managers list | neutral outline box at the top of the card, ⚠ beside "Vigtige bemærkninger:", three bullets; text wraps, no horizontal scroll |
-| `/admin/allergies`, catalog loaded | desktop | same, card header | box spans the card above the toolbar and the master/detail panes |
-| `/admin/allergies`, empty catalog | both | `AllergyNotes` + `UTable #empty` → `ALERTS.emptyState` | notes still render under the empty-state table |
-| `/admin/allergies/pdf` | desktop | `AllergyNotes` (`class="mt-4"`) | identical box to the catalog footer, between the allergy table and the `AllergyManagersList` box; same spacing as before |
-| `/admin/allergies/pdf`, print preview | print | same | notes print (no `no-print`); ⚠ icon and bullets legible in black on white |
-
-### Visual check — Poster notes
-
-| Route + state | Viewport | DS element to expect | Expect |
-|---|---|---|---|
-| `/admin/allergies` as ADMIN or ALLERGYMANAGER, view face | 375px | `AllergyNotes` → `{...ALERTS.legend, ...ALERTS.withActions}`, pencil `BUTTONS.edit` (`edit-allergy-notes`) | pencil sits below the bullets (vertical actions on a phone), square ghost, no label; bullets carry the stored text |
-| `/admin/allergies` as ADMIN or ALLERGYMANAGER, view face | desktop | same, `withActions` horizontal | pencil sits to the right of the text, on the same row |
-| `/admin/allergies`, pencil clicked | 375px | `UTextarea` rows 5 + `TYPOGRAPHY.finePrint` hint + `LAYOUTS.formButtonRow` | bullets are replaced in place by the textarea carrying the current text, one note per line; "Én bemærkning per linje" under it; Annuller above Gem (column-reverse), both full width; no pencil while editing |
-| `/admin/allergies`, pencil clicked | desktop | same | Annuller then Gem on one row, right-aligned |
-| `/admin/allergies`, Gem clicked | both | `BUTTONS.save` with `:loading` | Gem spins while the save runs, the editor stays open, then the bullets come back with the new line and a "Bemærkninger gemt" toast |
-| `/admin/allergies`, Annuller clicked after typing | both | view face | the bullets return unchanged; reopening the pencil shows the stored text, not what was typed |
-| `/admin/allergies` as a member | both | `AllergyNotes` view face | bullets render, no pencil anywhere in the box |
-| `/admin/allergies/pdf` any role | 375px + desktop | `AllergyNotes` (`class="mt-4"`) | the same bullets as the catalog, no pencil; print preview still shows them |
-
----
-
-## QR code — ✅ IMPLEMENTED (2026-09-16)
-
-### Problem
-
-The poster built `https://api.qrserver.com/v1/create-qr-code/?…` into an `<img>` inside a `no-print` block: an external dependency at
-render time, and the QR stayed off paper.
-
-### Solution
-
-`uqr` 0.1.3 (zero deps, runs in Workers and browsers).
-
-| Piece | What it holds |
-|---|---|
-| `app/utils/qr.ts` | `encodeQrPath(value, {ecc = 'M', border = 1})` → `{size, d}`: the module grid edge and every dark module as a 1x1 rect, in module units |
-| `app/components/shared/QrCode.vue` | props `value`, `size` (default 160), `label`; inline `<svg role="img" shape-rendering="crispEdges" data-testid="qr-code">` with a white `<rect>` and one black `<path>`; `aria-label` reads `<label>: <value>` |
-| `app/pages/admin/allergies/pdf.vue` | `<QrCode :value="qrCodeUrl" label="Scan for online version"/>` in the `poster-row`, which is `flex-col md:flex-row` on screen and `row` in the print block (A4 content is ~680px, below `md`); the QR prints with the poster |
-
-Literal `#000000`/`#ffffff` keep the code legible under `print-color-adjust: exact`. The page owns the caption and the layout.
-
-### Mockup — ✅ signed off 2026-09-16 (QR prints)
-
-```
-┌ [← Tilbage]                                   [🖨 Print] ┐  no-print, DS buttons
-│ ALLERGI-LISTE for skrånere · pr. 16. september 2026      │
-│ ┌ ALLERGEN / INTOLERANCE ┬ PERSON ────────────┐ ┌──────┐ │
-│ │ 🥜 JORDNØDDER          │ Anna (V), Bob (B)  │ │ ▩▩▩▩ │ │  QrCode.vue inline SVG,
-│ │ beskrivelse…           │ [1V 1B]            │ │ ▩▩▩▩ │ │  PRINTS (no-print removed)
-│ └────────────────────────┴────────────────────┘ │Scan…│ │
-│ ⚠ Vigtige bemærkninger  (AllergyNotes, view only)        │  same component as the catalog footer
-│ ⓘ Spørgsmål om allergier?  (AllergyManagersList)         │
-└──────────────────────────────────────────────────────────┘   mobile: table + QR stack (flex-col md:flex-row)
-```
-
-### TDD
-
-| Test | Change |
-|------|--------|
-| `tests/component/utils/qr.unit.spec.ts` (new) | `{size, d}`; `size` equals the library's; `d` differs per value |
-| `QrCode.nuxt.spec.ts` (new) | `svg[role="img"]`, `aria-label`, `viewBox`, `path[d]` changes on `setProps` |
-| `admin-allergies-pdf.nuxt.spec.ts`, `AllergyPoster.e2e.spec.ts` | `qr-code` rendered for a member |
-| `AdminTeams.e2e.spec.ts` | `?mode=edit` on a season with no teams shows `teams-empty-state` + `create-new-team` |
-| `BookingGridView.nuxt.spec.ts` | week and month with no events show the grid empty text; a period with one event grids the household again |
-| `AllergyDetailPanel.nuxt.spec.ts` | the edit control stays the row-style pencil with `aria-label="Rediger"` (reverted 2026-09-16); testid unchanged |
-
-**Verified (2026-09-16):** red first — `qr.unit` and `QrCode.nuxt` unresolved (`~/utils/qr` absent), `qr-code` missing on the poster page,
-`Ingen middage denne uge|måned` absent from the grid, the allergy edit control empty. Green: 497 vitest tests across
-`tests/component/{utils,components/shared,components/allergy,components/booking,pages,architecture}`; `npm run pre:all` clean;
-`AllergyPoster` + `AdminAllergies` + `AdminTeams` e2e 17/17 at `--workers=4`.
-
-### Visual check — QR batch
-
-| Route + state | Viewport | DS element to expect | Expect |
-|---|---|---|---|
-| `/admin/allergies/pdf` as a member | desktop | `QrCode` (`data-testid="qr-code"`) beside the allergy table | 160px black-on-white QR right of the table, caption "Scan for online version" under it; scanning it opens the same page |
-| `/admin/allergies/pdf` as a member | 375px | same `QrCode`, row is `flex-col md:flex-row` | table full width, QR below it, no horizontal page scroll |
-| `/admin/allergies/pdf` → Print (⌘P) | print preview | `QrCode` (the `no-print` wrapper is gone), `.poster-row` print rule | QR beside the table on the printed page, black on white; the ← Tilbage and 🖨 Print buttons stay off paper |
-| `/admin/teams?season=<season with no teams>&mode=edit` | 375px + desktop | `UTable #empty` → `ALERTS.emptyState` + `BUTTONS.primaryAction` `create-new-team` | 💤 "Her ser lidt tomt ud!" with "Opret madhold"; no "Vælg et madhold for at redigere" panel and no footer buttons |
-| `/admin/teams?season=<season with teams>&mode=edit` | desktop | master-detail + footer `add-team-button` | team tabs, the selected team card and "Tilføj madhold" all unchanged |
-| `/household/<own>/bookings?view=week` on a week with no dinners | 375px + desktop | `UTable #empty` → `ALERTS.emptyState` | emoji + "Ingen middage denne uge"; the Beboer / Alle grid rows are gone; arrows still move to the next week |
-| `/admin/allergies`, an allergy selected | desktop (sticky detail) | `BUTTONS.edit` pencil in the "Detaljer" header (reverted 2026-09-16) | ghost ✏️ beside the ghost 🗑, as before; clicking it opens the edit form in place |
-| `/admin/allergies`, a row tapped | 375px | same button in the docked detail | button and 🗑 fit the row width, header wraps rather than clipping |
-
----
+**Problem.** The poster's notes existed only on the poster and were fixed text.
+**Solution.**
+- `Setting` table (`key`, JSON `value`, `updatedAt`, `updatedByUserId` SET NULL) in `prisma/schema.prisma`, migration `0016_settings`.
+- `useSettingValidation.ts`: `SETTING_KEYS`, `SettingDetailSchema`, `SETTING_REGISTRY` (`valueSchema`, `defaultValue`, `canWrite`),
+  `DEFAULT_ALLERGY_POSTER_NOTES`, `splitNotes`.
+- `settingsRepository.ts` (`fetchSetting`, `upsertSetting`); `GET /api/admin/setting/[key]` (row or registry default, 400 for an unknown key);
+  `POST` (key's `valueSchema`, `requireSettingWriteAccess`, 403). Route rule in `usePermissions.ts` before the admin rule.
+- `allergies.ts` `posterNotes`, `savePosterNotes` (takes the stored row from the POST response).
+- `AllergyNotes.vue`: view face `ALERTS.legend` + `withCornerAction`, pencil for ADMIN and ALLERGYMANAGER, edit face with Gem and Annuller;
+  mounted in the `AdminAllergies` card header and on the poster.
+**Mockup.** `AllergyNotes.vue` header (✅ 2026-09-16, edit face ✅ 2026-09-18).
+**Tests.** `useSettingValidation.unit`, `usePermissions.unit`, `allergies.nuxt`, `AllergyNotes.nuxt`, `AdminAllergies.nuxt`,
+`admin-allergies-pdf.nuxt`; e2e `setting` (API), `AdminAllergies`, `AllergyPoster`. The notes row is shared state: `SettingFactory.appendLine` /
+`removeLines` touch only a suite's own salted lines.
 
 ## My preferences
 
-### Problem
-
-Members have no per-login preferences: the notifications proposal needs channel opt-ins (EMAIL/SMS), and colorblind and elderly members
-have asked for readable colors and larger text. Nothing in the schema holds per-user settings.
-
-### Solution
-
-- **Schema** — two columns on `User`, beside `systemRoles` (migration `0016_settings`, which also creates `Setting`):
-
-  ```prisma
-  notificationChannels String @default("[\"EMAIL\"]")                                        // JSON array of NotificationChannel
-  appearance           String @default("{\"palette\":\"default\",\"textScale\":\"normal\"}") // JSON, typed by AppearanceSchema
-  enum NotificationChannel { EMAIL SMS }
-  ```
-  The column is what `feature-proposal-notifications.md` (lines 23, 110-144) describes: the producer reads `User.notificationChannels`.
-- **Registry** (isomorphic, ADR-017 [Isomorphic Composables…]): `app/composables/useUserPreferenceValidation.ts` — `PaletteSchema`
-  (`default` | `tydelig`), `TextScaleSchema` (`normal` | `large` | `larger`), `AppearanceSchema` with `DEFAULT_APPEARANCE`,
-  `DEFAULT_NOTIFICATION_CHANNELS`, `PALETTES` (one entry per preset carrying the level the contrast test verifies: `default` none,
-  `tydelig` `AA`), `UserPreferencesUpdateSchema` (partial of both fields), and `NotificationChannelSchema` re-exported from the
-  generated layer. Danish labels and the badge wording live in the component.
-- **Domain types** (ADR-010 [Domain-Driven Serialization]): both columns travel through the User schemas — `UserFragmentSchema` carries
-  them with the column defaults, `SerializedUserInputSchema` holds the JSON strings, `serializeUserInput` / `deserializeUser` /
-  `deserializeUserDetail` convert, `serializeUserPartial` writes them with `Prisma.skip` (ADR-012), and `UserSessionSchema` carries them
-  into the session.
-- **Server**: `POST /api/user/preferences` writes both fields of the session user in one save — `requireUserSession`,
-  `readValidatedBody(UserPreferencesUpdateSchema)`, 400 `SMS kræver et telefonnummer` when SMS is asked for and `User.phone` is empty,
-  `saveUser(delta, id)`, then the session snapshot is replaced with the saved user (the Heynabo token in `passwordHash` kept, as
-  `login.post.ts` builds it), response `UserDetail` (ADR-009). `POST /api/user/notifications/test` sends the `TEST` template to the
-  session user's own mailbox through the same sender event as the admin twin (`emitTestEmail(queue, config, recipient)`), and answers 200
-  with the degraded result where the pipe is unconfigured. Route table: `{prefix: '/api/user/', methods: null, check: isAuthenticated}`
-  before the generic `/api/` rule.
-- **Store**: `app/stores/auth.ts` — `notificationChannels` and `appearance` (each falling back to the column default, so a session
-  snapshot written before the columns existed reads as the default and a save keeps it), `savePreferences(update)` → POST →
-  `fetch()` → toast `Indstillinger gemt`, `sendTestNotification()` → POST → toast per result.
-- **UI**: `app/components/user/UserPreferencesCard.vue` on the dashboard (`Login.vue`, under `UserProfileCard`): view face with the pencil,
-  edit face with a `USwitch` per channel (SMS disabled with a hint when `User.phone` is empty), a `URadioGroup` for the palette and one for
-  the text scale, `Annuller` / `Gem`. The appearance reaches every page from `layouts/default.vue` through `useHead({htmlAttrs})`:
-  `data-palette` and `data-text-scale`, each omitted on its default value, rendered by SSR. `main.css` carries
-  `html[data-text-scale="large"] {font-size: 112.5%}` and `larger` 125%.
-
-### Colors — ✅ decided 2026-09-16 (A, curated presets)
-
-`html[data-palette]` redeclares `--color-<family>-<step>`, so one attribute on `<html>` reaches Nuxt UI's semantics and the design
-system's utilities together, and SSR writes it. The registry names one preset per generated block together with the level
-`designSystemContrast.unit.spec.ts` verifies it at, and the card shows that level as the option's badge: `Tydelig` carries
-`🇪🇺 EN 301 549 · WCAG 2.1 AA ✓`, `Farveglad` carries none.
-
-### Contrast test — step 1 ✅ (2026-09-16, tests + docs only)
-
-The criterion the presets are generated against, automated. `tests/component/architecture/designSystemContrast.unit.spec.ts` turns
-EN 301 549 → WCAG 2.1 into a check of the design system: it resolves every colour a token names through the same stylesheets the browser
-reads — `main.css` `@theme static`, Tailwind 4's oklch defaults, `app.config.ts` `ui.colors`, Nuxt UI's `--ui-*` semantics — composites the
-alpha surfaces, and measures `(L1 + 0.05) / (L2 + 0.05)`. The colour maths (`hexToRgb`, `oklchToHex`, `relativeLuminance`, `contrastRatio`,
-`composite`) is exported from `tests/component/architecture/contrast.ts` so **the palette generator reuses the functions it is measured by**
-— no colour dependency, no second implementation. The OKLCH conversion is anchored against Tailwind's published hex
-(`oklch(72.3% 0.219 149.579)` → `#00c950`, `oklch(55.1% 0.027 264.364)` → `#6a7282`, `oklch(63.7% 0.237 25.331)` → `#fb2c36`).
-
-**Pair inventory** — derived by walking the exported tokens, so a token added tomorrow is measured tomorrow. Light and dark are separate pairs.
-
-| Group | What is measured | Threshold |
-|---|---|---|
-| **text on surface** | Every foreground token (`TEXT.ink/strong/toned/muted/dimmed/timestamp/menuBody`, `TYPOGRAPHY.*`, `COMPONENTS.*` icon and heading ink) on `page` (`bg-default`), `BG.panel`, `BG.panelNested`, `BG.inset`, `BG.ticket`, `BG.invoiceGround`, `BG.invoiceStat`, `BG.budgetHead` | 4.5 (7 in Høj kontrast) |
-| **paired token** | A token that carries **both** its ink and its fill — `BACKGROUNDS.*`, `PANTONE_CHIPS`, `COMPONENTS.kitchenPanel`, `CALENDAR`/`CHEF_CALENDAR`/`DINNER_CALENDAR`/`PLANNING_CALENDAR` day styles, `ALERTS.emptyStateCompact` — plus the eleven light-ink tokens whose fill has one owner (`TYPOGRAPHY.footerText` on `BACKGROUNDS.appShell`, the countdown ink on `CALENDAR.countdown.container`, …) | 4.5 (7) |
-| **edge on surface** | Every `BORDER.*`/`RING.*` rung, `LAYOUTS.*Divider`, `COMPONENTS.segmentedActive`, the calendar rings and selections, and the economy-tree header/footer/statBox fills, against `page` and `BG.panel` | 3 (1.4.11 has no AAA level) |
-| **semantic slot** | The 13 Nuxt UI slots of `app.config.ts`: `text-<slot>` on the page, `text-<slot>` on the soft `bg-<slot>/10` alert/badge surface, `text-inverted` on the solid `bg-<slot>` | 4.5 (7) |
-
-Two reductions keep the inventory honest rather than merely large, both commented in the spec: a **palette rung** (`TEXT.gray[500]`) is half a
-pair — docs/ui.md calls `BG`/`TEXT`/`BORDER`/`RING` low-level builders, and a text rung carries no dark face — so text rungs are measured where a
-token pairs them with a fill, while border and ring rungs stay in the edge group (being visible against an unknown surface *is* an edge's
-contract). And surfaces that resolve to the same colour in a mode are folded into the first name that carries it (`BG.panel`,
-`BG.invoiceGround` and `BG.budgetHead` are all `neutral-50` in light).
-
-**Default-theme result (measured 2026-09-16, before the scoping of step 2): 438 pairs, 191 pass, 247 fail.**
-The scoped numbers are in "Tydelig — step 2" below.
-
-| Group | Pairs | Pass | Fail | Worst |
-|---|---:|---:|---:|---|
-| text on surface | 153 | 84 | 69 | `TEXT.dimmed` 1.82 (dark, `BG.panelNested`) |
-| paired token | 86 | 53 | 33 | `BACKGROUNDS.hero.pink` / `landing.section1` 2.32 |
-| edge on surface | 121 | 44 | 77 | `BORDER.gray[700]` 1.00 (dark, page); every economy-tree fill 1.00–1.34 |
-| semantic slot | 78 | 10 | 68 | `slot.yellow` 1.80; `slot.success` 2.03; `slot.secondary` 2.31 |
-
-The shape of the finding is one sentence: **TheSlope's Pantone palette is a warm pastel set whose 500/400 rungs sit at 2–4:1 on white**, so
-in light mode **all 39 slot pairs fail** (13 slots × page / soft / solid) and only 10 of the 39 dark pairs pass (`success` and `yellow` fully,
-the page and solid faces of `peach` and `ocean`); the hero pairings miss it too (`hero.mocha` 3.55, `hero.orange` 2.64, `hero.pink` 2.32), and the
-Tailwind-default borders miss 1.4.11 (`BORDER.gray[200]` 1.24 on the page). Every miss is listed per pair in `KNOWN_FINDINGS` with its ratio and
-runs as `it.fails`, so a fix breaks the build and asks for the entry to be deleted, and a new miss cannot be hidden by adding one. The full
-247-pair list is the map the palette generator works from; the questions it puts to the colour decision:
-
-1. Does the **default** theme move to AA (retune the 500/400 rungs, or point `text-<slot>` at 600/700), or does AA become the promise of the
-   presets only, with the default accepted as-is?
-2. Are `TEXT.dimmed`, `LAYOUTS.sectionDivider` and the economy-tree fills **decorative** (1.4.3/1.4.11 exempt) or content? If decorative, they
-   leave the inventory by an explicit exemption in the spec, not by a lowered threshold.
-   → **Answered in step 2** for the dividers and the economy-tree banding (exempt, named per token); `TEXT.dimmed` stays content and is fixed by
-   the preset.
-3. The brand surfaces (landing rainbow, hero, kitchen panels) are large text in practice — should they be measured at the 3:1 large-text rung of
-   1.4.3 instead of 4.5? That is a per-token decision, not a global one.
-   → **Answered in step 2**, per token, from the components: `INK_ON_FILL` maps each brand surface to the typography that draws on it. The landing
-   bands and the title bar carry `sectionTitle` / `heroTitle` and take the 3:1 rung; the kitchen panels carry `kitchenLabel` at `text-xs` and stay
-   at 4.5:1; `hero.mocha` carries `bodyTextMedium` and stays.
-
-Two Nuxt UI observations fell out of the same resolution work and are recorded here, not fixed: `--ui-neutral` is never emitted (the colours
-plugin destructures `neutral` out), and `mocha`/`bonbon` are declared in `nuxt.config.ts` `ui.theme.colors` but never mapped in `app.config.ts`
-`ui.colors` — so `bg-mocha` and `bg-bonbon` paint nothing. Neither is reached today (`COLOR.mocha` sites use `BG.mocha[500]` = `bg-amber-500`,
-and Nuxt UI's own neutral compound variants use `text-highlighted`/`bg-elevated`), but a future `:color="COLOR.mocha"` would be invisible.
-
-**Preset status:** `app/assets/css/palettes/high-contrast.css` (AAA) and `colorblind.css` (AA) do not exist yet, so their 401 cases each are
-**skipped by name** (`describe.skipIf`) — 802 skipped, 0 faked. They go green the moment the generator emits the files.
-(2026-09-18: `colorblind.css` exists and measures 418 / 418; `high-contrast.css` keeps its 418 skipped cases.)
-
-### Tydelig — step 2 ✅ (2026-09-16, the AA preset + its generator)
-
-**Scoped to the standard first.** Three rules put the inventory on what WCAG 2.1 asks, all stated in
-`designSystemPairs.ts` and in docs/ui.md "Palettes":
-
-1. **1.4.3 large-scale text** — every face a token renders is measured and the smallest one sets the bar: 24px, or
-   18.66px at `font-bold` and heavier, takes the 3:1 rung. Today that is `TYPOGRAPHY.sectionIconLight` (`text-2xl`,
-   light 3.55 and dark 3.01).
-2. **1.4.3 for a fill** — a fill token carries no size, so its bar comes from the typography a component places on it.
-   `INK_ON_FILL` lists one row per surface with the component and line that draws it: the landing bands carry
-   `TYPOGRAPHY.sectionTitle` (`text-xl md:text-3xl font-bold` — 20px bold at phone width, large at both widths) and
-   move to 3:1; `BACKGROUNDS.landing.titleBar` carries `heroTitle`; `BACKGROUNDS.hero.mocha` carries
-   `bodyTextMedium` (`text-sm`) and stays at 4.5:1; `COMPONENTS.kitchenPanel.*` carry `kitchenLabel` `text-xs`,
-   `kitchenSecondary`, `kitchenMain` `text-base md:text-lg font-bold` and `kitchenDetail` — all under the large bar,
-   so **4.5:1 stays**. `BACKGROUNDS.landing.ticker` is out of the table: its words are `PANTONE_CHIPS`, which bring
-   their own fill and are measured as their own pairs.
-3. **1.4.11 decorative edges** — `LAYOUTS.sectionDivider`, `LAYOUTS.panelDivider` and the economy tree's `border` /
-   `header` / `footer` / `statBox` / `tableHead` draw a boundary the indentation, heading and icon already state, so
-   they sit outside non-text contrast. Their ink stays measured in the text groups.
-
-A new case guards the baseline: **every listed finding still names a pair**, so a scoping rule that removes a pair
-removes its line.
-
-**Default theme after scoping: 401 pairs, 197 pass, 204 fail** (was 438 / 191 / 247).
-
-| Group | Pairs | Pass | Fail | Moved by the scoping |
-|---|---:|---:|---:|---|
-| text on surface | 153 | 84 | 69 | — |
-| paired token | 86 | 59 | 27 | 6 to pass (2 large text, 4 placed ink) |
-| edge on surface | 84 | 44 | 40 | 37 pairs out (decorative) |
-| semantic slot | 78 | 10 | 68 | — |
-
-**The preset.** `scripts/palettes/generate.ts` (run with `npx jiti scripts/palettes/generate.ts`; jiti is already a Nuxt
-dependency) reads the inventory the spec asserts, and for each pair walks the `--color-<family>-<step>` behind its ink or
-its fill along OKLCH lightness — hue and chroma held — until the pair clears its threshold. Each side keeps the side it
-is on, a dark ink darker and a light ink lighter, so a scale stays a scale and `pink-50` on `bg-pink-500` is answered by
-darkening the fill. The eight neutral surfaces are held. Every pair constrains its variable, the ones that pass today
-included, so the preset never trades one pair for another; where two pairs ask one variable for opposite things, the
-variable goes the way that answers more of them. Output: `app/assets/css/palettes/tydelig.css`, **25 steps in the light
-block across 14 families, 34 in the dark block**, imported by `main.css`. Two runs write the same bytes.
-
-| Family | Light block | Dark block |
-|---|---|---|
-| amber | 500 `#a47864`→`#8c614e` | 400 `#ae8a71`→`#ddb89d`, 500 →`#835a46`, 600 `#8d5f52`→`#b48375`, 800 back to `#633f3d` |
-| blue | 400 `#33becc`→`#00808e`, 500 `#25a6b5`→`#007685`, 600 `#228698`→`#007385` | 400 →`#4dd2e0`, 500 →`#0d9baa`, 700 `#226d7d`→`#5298a9` |
-| caramel | 500 `#b76a4a`→`#a15737` | 400 `#ca815a`→`#f9ac84` |
-| gray | 200 `#e5e7eb`→`#8b8c90`, 300 `#d1d5dc`→`#898c93`, 400 `#99a1af`→`#616976`, 500 `#6a7282`→`#616878` | 200 and 300 back to published, 400 →`#b5bdcc`, 500 →`#b4bdce`, 600 `#4a5565`→`#8390a1`, 700 `#364153`→`#838fa4` |
-| green | 500 `#00c950`→`#007c00` | 400 and 500 back to published |
-| orange | 200 `#f9ceaf`→`#ac8467`, 500 `#ec6a37`→`#bb3d00` | 200 back to published, 400 `#ef7e48`→`#ffaa74`, 500 →`#ffa875` |
-| party | 500 `#e84c76`→`#c6295b`, 700 `#c4516c`→`#c04d69` | 400 `#f17999`→`#ffa3c2` |
-| peach | 400 `#ff9b5e`→`#b85a14`, 500 `#fe7320`→`#c23a00`, 600 `#ef5616`→`#c62d00` | 400 →`#ffab6d`, 700 `#c63f14`→`#ed633d` |
-| pink | 300 `#fab0c7`→`#be788f`, 500 `#fa7b95`→`#b83f5e` | 300 back to published, 400 `#f77da1`→`#ffa3c6`, 500 →`#dd627d`, 800 `#a9284b`→`#ffa2ba` |
-| red | 500 `#c4746f`→`#a25551` | 400 `#d69c96`→`#ecb1aa`, 500 →`#c97973`, 700 `#904040`→`#cd7674` |
-| sky | 500 `#3c8c9e`→`#207586`, 600 `#357385`→`#327082` | 400 `#52a5b6`→`#7accde` |
-| violet | 500 `#de5697`→`#b93277` | 400 `#e97db3`→`#ffa0d6`, 500 →`#ff9ddd` |
-| winery | 500 `#d65c72`→`#b84059` | 400 `#e68494`→`#ffa5b4` |
-| yellow | 500 `#eab308`→`#946000` | 400 back to published |
-
-**Tydelig result: 401 pairs, 385 pass, 16 fail** — text on surface 153/153, semantic slot 78/78, edge on surface 80/84,
-paired token 74/86.
-
-**The bands, measured.** The placed-ink rule lowered the bands' own bar to 3:1, and the emitted values barely moved:
-the same `--color-<family>-500` also paints a **solid button**, whose `text-inverted` label is body text at 4.5:1
-(`slot.secondary` = pink, `slot.warning` = orange, `slot.party`, `slot.neutral` = sky). That constraint is the binding
-one, so the bands land where the slots put them. Light mode:
-
-| Band | Fill | Bar | Default | Tydelig |
-|---|---|---:|---:|---:|
-| `landing.section1` / `hero.pink` | pink-500 | 3 | 2.32 | **4.95** |
-| `landing.section2` / `hero.orange` | orange-500 | 3 | 2.64 | **4.67** |
-| `landing.section3` | party-700 | 3 | 4.07 | **4.29** |
-| `landing.section4` | sky-500 | 3 | 2.78 | **5.09** |
-| `landing.titleBar` / `ticker` / `hero.mocha` | amber-500 | 3 / 3 / 4.5 | 3.55 | **4.91** |
-| `hero.peach` | peach-300 | 3 | 9.01 | 9.01 |
-
-Four distinct hues remain (deep rose, burnt orange, mauve-rose, teal), each one step deeper than the published band.
-Three values changed against the pre-scoping run: `party-700` `#b94763`→`#c04d69`, dark `blue-500` `#007c8b`→`#0d9baa`,
-dark `pink-500` `#bd4461`→`#dd627d`. The light block still carries 25 steps, the dark block 34.
-
-**The 16 are one variable asked to be two things**, listed per pair in `PRESET_FINDINGS` and run as `it.fails`. Twelve of
-the fourteen dark ones are a token with **no `dark:` face**: `COMPONENTS.kitchenPanel.*` paints `bg-orange-500 text-white`
-in both modes while dark mode also draws `text-warning-500` in that orange on a dark page, and the same shape repeats for
-`CHEF_CALENDAR.day.next` / `DINNER_CALENDAR.day.next` (`bg-ocean-400`/`bg-peach-400` + white), `CALENDAR.picker.cookingDay`
-and `PLANNING_CALENDAR.day.generated` (`bg-pink-800 text-pink-50`), `BACKGROUNDS.hero.orange` and `landing.section2`,
-`PANTONE_CHIPS[1]`. `BORDER.gray.800` is `BG.inset`'s own dark fill, which a preset holds. **A dark face on those eight
-tokens closes all sixteen** — a token change, which the "Tydelig, the AA preset" decision puts outside this package.
-
-**Kitchen panels — three options, numbers only.** White `text-xs` on a vibrant fill needs 4.5:1, which the palette can
-only reach by pulling all four fills to the same depth. That is a surface design decision, so the kitchen pairs stay in
-`PRESET_FINDINGS` and the choice is the user's:
-
-| Panel | Published fill | (a) as generated, white ink | (b) dark ink on the published fill | (c) main number at `text-2xl font-bold` (3:1), published fill |
-|---|---|---:|---|---:|
-| TAKEAWAY (`bg-warning-500`) | orange-500 `#ec6a37` | `#bb3d00` → 5.55 | `TEXT.ink` 5.65 · black 6.68 | white 3.14 ✅ |
-| DINEIN (`bg-party-700`) | party-700 `#c4516c` | `#c04d69` → 4.66 | `TEXT.ink` 4.01 · black 4.74 | white 4.43 ✅ |
-| DINEINLATE (`bg-orange-500`) | orange-500 `#ec6a37` | `#bb3d00` → 5.55 | `TEXT.ink` 5.65 · black 6.68 | white 3.14 ✅ |
-| RELEASED (`bg-gray-500`) | gray-500 `#6a7282` | `#616878` → 5.59 | `TEXT.ink` 3.67 · black 4.34 | white 4.84 ✅ |
-
-(a) costs the four hues: TAKEAWAY and DINEINLATE are the **same** `orange-500` in the published palette too, so the
-panel row reads as three colours either way, at a deeper saturation. (b) clears 4.5:1 on three of the four with
-`TEXT.ink` (`text-gray-900`) and on all four with black; `RELEASED` at 3.67 needs one step lighter — `gray-400`
-`#99a1af` gives 6.82, and the other three at their 400 rung give 6.55 / 6.71 / 6.55. (c) clears the 3:1 large-text bar
-on all four with the fills untouched, and the small labels (`kitchenLabel`, `kitchenSecondary`, `kitchenDetail`) then
-move to dark ink, where they read at the (b) numbers.
-
-**Screenshots** (`test-results/palettes/<page>-<viewport>-<default|tydelig>.png`, 28 files, desktop 1440×900 and 375×812),
-taken against seeded content: the singleton active season with dinner events, a cooking team with the admin as chef on
-the next three dinners, and `scaffold-prebookings` run for the season. Pages: `chef` (team, countdown, calendar, chef
-card, kitchen panels), `chef-kitchen` (agenda open, the seeded menu in the list), `dinner` (selected dinner, the
-household's ticket rows, kitchen panels), `household-bookings` (week grid with two dinner columns), `admin-planning`
-(season + calendar), `admin-allergies` (catalog + detail), `landing`.
-
-### Visual check — Tydelig
-
-Set the preset from the console on any page: `document.documentElement.dataset.palette = 'tydelig'`, back to Standard with
-`delete document.documentElement.dataset.palette`, dark with `document.documentElement.classList.toggle('dark')`.
-
-| Route + state | Viewport | DS element to expect | Expect |
-|---|---|---|---|
-| `/` landing, scrolled | 375px + desktop | `getRainbowBand(0-3)`, `PANTONE_CHIPS` | Four distinct bands in hue order with black headings: pink 8.33, orange 6.68→6.27, ocean 7.2, bonbon 5.88. The ticker chips keep their tint |
-| `/admin/planning`, view mode | desktop | `CALENDAR.holiday` ring, `PLANNING_CALENDAR.day.generated`, `BUTTONS.primaryAction` | Holiday ring darkens to `#007c00` and separates from white; generated cooking days keep their pink fill; `Opret sæson` / `Rediger` go mocha `#a47864`→`#8c614e` |
-| `/admin/planning?mode=edit`, holiday rows | 375px | `CalendarDateRangePicker` inputs, `LAYOUTS.sectionDivider` | Input borders `gray-200`→`#8b8c90`; the field edges become visible; section rules darken with them |
-| `/admin/allergies`, a row tapped | 375px + desktop | `AllergyCatalogTable`, `AllergyDetailPanel`, `TEXT.dimmed` | Muted and dimmed greys darken (`gray-400` `#99a1af`→`#616976`); timestamps and placeholder text read on the panel |
-| `/admin/teams`, a team card | desktop | `CookingTeamCard`, `TeamCalendarDisplay`, `COMPONENTS.segmentedActive` | Team colours darken a notch; the segmented control's `orange-200` ring becomes a visible edge `#ac8467` |
-| `/household/<own>/bookings?view=week` | 375px + desktop | `BookingGridView`, `DinnerTicket`, deadline dots | Ticket badges darken (`Voksen` brown, `Barn` deep green); the calendar's deadline dots go from bright to deep orange |
-| `/dinner?date=<a dinner>` | 375px + desktop | `KitchenPreparation`, `DinnerTicket`, `DinnerDetailHeader` | Kitchen panel row deepens; **TAKEAWAY and SPIS SENT are the same orange in both palettes** — they share `orange-500`. The header's mocha band darkens with the rest |
-| `/chef?team=<id>`, calendar open | 375px + desktop | `ChefCalendarDisplay`, `CALENDAR.countdown`, `BUTTONS.primaryAction` | Ocean day circles darken; `Rediger menu` goes deep orange; **the countdown accent on the near-black container is one of the two light-mode misses — check it reads** |
-| `/chef?team=<id>&view=agenda:open` | desktop | Agenda list, `KitchenPreparation` | The dinner cards keep their state chips; the kitchen row deepens |
-| Any page, dark mode | desktop | `TEXT.muted`, `BORDER.gray.*`, slot inks | Greys lighten instead (`gray-400`→`#b5bdcc`, `gray-700`→`#838fa4`); every `text-<slot>` lightens |
-| `/dinner` + `/chef`, dark mode | desktop | `COMPONENTS.kitchenPanel.*`, `*_CALENDAR.day.next` | The panels carry the rainbow with black ink in both modes; `*_CALENDAR.day.next` switches to `dark:text-black` on its ocean and peach fill |
-
-### The brand rainbow — ✅ IMPLEMENTED (2026-09-17)
-
-**Decided by the user.** One ordered brand rainbow, walked by index, in hue order. The landing bands and the kitchen
-panels walk the same list, and the ticker chips carry the same order, so the tints announce the solids below them.
-TIL SALG stays grey: a released ticket on offer reads as neutral beside the three dining modes. The ink on every
-vibrant fill is `TEXT.black`.
-
-**`PANTONE_FAMILIES` is the single source of order.** `HERO` and `CHIPS` are records keyed by family; `RAINBOW` and
-`PANTONE_CHIPS` map the list. Tailwind scans the literal class strings inside the records.
-
-| Token | Old | New |
-|---|---|---|
-| `TEXT.black` | — | `text-black` |
-| `BG.bonbon[500]` | — | `bg-violet-500` (the Bonbon scale; `bg-bonbon-*` paints nothing) |
-| `BORDER.pink[600]` / `BORDER.orange[600]` / `BORDER.ocean[600]` | — | `border-pink-600` / `border-orange-600` / `border-ocean-600` |
-| `PANTONE_FAMILIES` | — | `['pink','orange','ocean','bonbon','party','peach','mocha']` |
-| `HERO.pink` | — | `bg-pink-500 text-black` |
-| `HERO.orange` | — | `bg-orange-500 text-black` |
-| `HERO.ocean` | — | `bg-ocean-500 text-black` |
-| `HERO.bonbon` | — | `bg-violet-500 text-black` |
-| `HERO.party` | — | `bg-party-500 text-black` |
-| `BACKGROUNDS.hero.pink` | `bg-pink-500 text-pink-50` | `HERO.pink` |
-| `BACKGROUNDS.hero.orange` | `bg-orange-500 text-orange-100` | `HERO.orange` |
-| `BACKGROUNDS.hero.peach` | `bg-peach-300 text-peach-950` | unchanged |
-| `BACKGROUNDS.hero.mocha` | `bg-amber-500 text-amber-50` | unchanged |
-| `BACKGROUNDS.landing.titleBar` / `.ticker` | `bg-amber-500 text-amber-50` | `HERO.mocha` |
-| `BACKGROUNDS.landing.section1-4` | four fill+ink strings | deleted; `pages/index.vue` loops `getRainbowBand(i)` |
-| `COMPONENTS.kitchenPanel.TAKEAWAY` | `bg-warning-500 text-white border-warning-600 …` | `RAINBOW[0] border-pink-600 …` |
-| `COMPONENTS.kitchenPanel.DINEIN` | `bg-party-700 text-white border-party-800 …` | `RAINBOW[1] border-orange-600 …` |
-| `COMPONENTS.kitchenPanel.DINEINLATE` | `bg-orange-500 text-white border-orange-600 …` | `RAINBOW[2] border-ocean-600 …` |
-| `COMPONENTS.kitchenPanel.RELEASED` | `bg-gray-500 text-white border-gray-600 …` | `bg-gray-400 text-black border-gray-500 …` |
-| `PANTONE_CHIPS` | seven literals, mocha first | `PANTONE_FAMILIES.map(f => CHIPS[f])` |
-| `COMPONENTS.powerMode.iconClass` | `… text-warning-500` | `… text-warning-600` |
-| `TEXT.dimmed` | `text-gray-400 dark:text-gray-500` | `text-gray-500 dark:text-gray-600` |
-
-`KITCHEN_PANEL_BOX` holds the padding, the divider and the centring the four panels repeated verbatim.
-
-**The ink fix.** The last two rows free the two rungs the vibrant fills use: `orange-500` carries `TEXT.black` under
-band 1 and the SPISESAL panel while `powerMode.iconClass` drew the same rung as ink on the page, and `gray-400`
-carries TIL SALG while `TEXT.dimmed` drew it. In light mode the fix earns four pairs: `TEXT.dimmed` goes 2.6 → **4.84**
-on the page, and Tydelig leaves `orange-500` at `#e66532` and `gray-400` at its published value. Each token carries its
-own dark face — `dark:text-gray-400` and `dark:text-warning-400` — so dark mode gains ten pairs with it.
-
-**Counts.** Default theme **418 pairs, 247 pass, 171 fail** (was 401 / 197 / 204 before the dark-ink work).
-**Tydelig 418 pairs, 418 pass, 0 fail** (was 401 / 385 / 16): the preset meets EN 301 549 → WCAG 2.1 AA on every pair
-the design system defines, in light and dark.
-
-| Group | Pairs | Default pass | Tydelig pass |
-|---|---:|---:|---:|
-| text on surface | 153 | 99 | 153 |
-| paired token | 94 | 85 | 94 |
-| edge on surface | 93 | 53 | 93 |
-| semantic slot | 78 | 10 | 78 |
-
-**The bands, measured (light).** Slot re-pointing takes the white button label off the 500 rung, so three of the
-four band fills keep their published value under Tydelig.
-
-| Band / panel | Fill | Bar | Default | Tydelig |
-|---|---|---:|---:|---:|
-| band 0 · TAKEAWAY | pink-500, unmoved | 4.5 | **8.33** | **8.33** |
-| band 1 · SPISESAL | orange-500 `#ec6a37`→`#e66532` | 4.5 | **6.68** | **6.27** |
-| band 2 · SPIS SENT | ocean-500, unmoved | 4.5 | **7.2** | **7.2** |
-| band 3 | bonbon-500, unmoved | 3 | **5.88** | **5.88** |
-| spare stop | party-500, unmoved | 3 | **5.73** | **5.73** |
-| TIL SALG | gray-400, unmoved | 4.5 | **8.07** | **8.07** |
-| `landing.titleBar` / `ticker` / `hero.mocha` | amber-500 `#a47864`→`#8f6551` | 3 / 4.5 / 4.5 | 3.55 | **4.66** |
-| `hero.peach` | peach-300, unmoved | 3 | **9.01** | **9.01** |
-
-Seven of the eight brand fills keep their published value under Tydelig; `orange-500` moves one shade.
-
-**The AA closure.** Each remaining miss was one `--color-<family>-<step>` asked to be a fill and ink at once in the same
-mode. A preset moves values, not class strings, so each is closed by a token. `PRESET_FINDINGS` is empty and the
-generator converges in one round.
-
-| Token | Old | New | Closes |
-|---|---|---|---|
-| `CHEF_CALENDAR.day.next` | `text-white font-bold bg-ocean-400` | `text-white dark:text-black font-bold bg-ocean-400` | its own dark pair, 1.89 → 11.14 |
-| `DINNER_CALENDAR.day.next` | `text-white font-bold bg-peach-400` | `text-white dark:text-black font-bold bg-peach-400` | its own dark pair, 1.89 → 11.14 |
-| `PLANNING_CALENDAR.day.potential` | `font-medium border-2 border-pink-300 text-pink-800` | `… text-pink-800 dark:text-pink-300` | frees `pink-800`: `PANTONE_CHIPS[0]`, `CALENDAR.picker.cookingDay`, `PLANNING_CALENDAR.day.generated` |
-| `BORDER.amber[500]` | `border-amber-500` | `border-amber-500 dark:border-amber-300` | its dark edge on the page |
-| `RING.amber[500]` | `ring-amber-500` | `ring-amber-500 dark:ring-amber-300` | its dark ring, and `CALENDAR.deadline.warning` with it |
-| `BORDER.gray[800]` | `border-gray-800` | `border-gray-800 dark:border-gray-600` | its dark edge; `gray-800` stays `BG.inset`'s dark fill |
-| `CHEF_CALENDAR.countdown.accent` | `TEXT.ocean[400]` | `TEXT.ocean[200]` (new rung `text-ocean-200`) | its **light** pair on the near-black container |
-| `DINNER_CALENDAR.countdown.accent` | `TEXT.peach[400]` | `TEXT.peach[200]` (new rung `text-peach-200`) | its **light** pair on the near-black container |
-| `COMPONENTS.guestRow.iconClass` | `… text-info-500` | `… text-info-600` | frees `violet-500`: band 3 holds 5.88 under Tydelig |
-| `TEXT.dimmed` | `text-gray-500 dark:text-gray-600` | `text-gray-500 dark:text-gray-400` | its five dark pairs |
-| `COMPONENTS.powerMode.iconClass` | `… text-warning-600` | `… text-warning-600 dark:text-warning-400` | its five dark pairs |
-
-The two countdown accents took a **light** rung, not a `dark:` face: their miss is in light mode, where `blue-400` and
-`peach-400` carry white ink on `*_CALENDAR.day.next` and so stay dark, while the accent needs a light ink on the
-near-black countdown container. The 200 rung is drawn by the accent alone and reads 12.48 (ocean) and 12.38 (peach) on
-that container at published values.
-
-**Screenshots** (`test-results/rainbow/<page>-<viewport>-<default\|tydelig>.png`, 12 files, desktop 1440×900 and
-375×812), against a seeded season: all days cooking, a 2-day deadline, the member as chef of a team, household
-preferences DINEIN and TAKEAWAY, `scaffold-prebookings` run.
-
-```
-test-results/rainbow/landing-desktop-default.png    test-results/rainbow/landing-desktop-tydelig.png
-test-results/rainbow/landing-375-default.png        test-results/rainbow/landing-375-tydelig.png
-test-results/rainbow/chef-desktop-default.png       test-results/rainbow/chef-desktop-tydelig.png
-test-results/rainbow/chef-375-default.png           test-results/rainbow/chef-375-tydelig.png
-test-results/rainbow/dinner-desktop-default.png     test-results/rainbow/dinner-desktop-tydelig.png
-test-results/rainbow/dinner-375-default.png         test-results/rainbow/dinner-375-tydelig.png
-```
-
-### Visual check — The brand rainbow
-
-Set the preset from the console on any page: `document.documentElement.dataset.palette = 'tydelig'`, back to Standard
-with `delete document.documentElement.dataset.palette`, dark with `document.documentElement.classList.toggle('dark')`.
-
-| Route + state | Viewport | DS element to expect | Expect |
-|---|---|---|---|
-| `/` landing, scrolled | 375px + desktop | `getRainbowBand(0-3)`, `TYPOGRAPHY.sectionTitle` | Four bands in hue order: pink, orange, ocean, bonbon. Black headings on each. The mocha title bar and ticker frame them |
-| `/` ticker | 375px + desktop | `PANTONE_CHIPS` | The chips run pink, orange, ocean, bonbon, party, peach, mocha — the order of the bands below |
-| `/dinner?date=<a dinner>` | 375px + desktop | `COMPONENTS.kitchenPanel.*` | TAKEAWAY pink, SPISESAL orange, SPIS SENT ocean, TIL SALG grey, each with black labels and numbers. The grey panel reads as neutral beside the three |
-| `/dinner?date=<a dinner>` | 375px | `COMPONENTS.kitchenPanel.*` | The four panels stack; the dividers follow their own family one rung deeper |
-| `/chef?team=<id>&cal=open` | 375px + desktop | `KitchenPreparation`, `CALENDAR.countdown` | The panel row carries the rainbow; the countdown accent on the near-black container is one of the two light-mode misses — check it reads |
-| `/`, Tydelig | desktop | `getRainbowBand(0-3)` | Pink, ocean and party hold their published value; orange deepens to `#bb3d00` and bonbon to `#b93277` |
-| `/admin/planning`, Tydelig | desktop | `BUTTONS.primaryAction`, `CALENDAR.holiday` | Solid buttons take the 600 rung; the holiday ring darkens to `#00a328` |
-| Any page, dark mode | desktop | `COMPONENTS.kitchenPanel.*`, `getRainbowBand(i)` | The bands and the panels paint the same fills with the same black ink |
-| `/chef`, `/dinner` | 375px + desktop | `CHEF_CALENDAR.countdown.accent`, `DINNER_CALENDAR.countdown.accent` | The countdown date and number sit one rung paler on the near-black card: `text-ocean-200` on `/chef`, `text-peach-200` on `/dinner`. The small time value keeps the 300 rung |
-| `/chef`, `/dinner`, dark mode | desktop | `CHEF_CALENDAR.day.next`, `DINNER_CALENDAR.day.next` | The next-dinner circle keeps its ocean and peach fill and switches its label to black |
-| `/admin/planning`, dark mode | desktop | `PLANNING_CALENDAR.day.potential` | The potential cooking day draws `text-pink-300` inside its pink-300 border |
-| Any calendar, dark mode | desktop | `CALENDAR.deadline.warning`, `RING.amber[500]`, `BORDER.amber[500]` | The warning ring and the chef-portrait frame lift to `amber-300` and separate from the dark page |
-| Any card, dark mode | desktop | `BORDER.gray[800]` | The card edge lifts to `gray-600` while `BG.inset` keeps its `gray-800` fill |
-| A guest row, any page | 375px + desktop | `COMPONENTS.guestRow.iconClass` | The guest glyph reads one rung deeper (`text-info-600`), which holds band 3 at its published bonbon |
-| Any page with muted text, dark mode | desktop | `TEXT.dimmed`, `COMPONENTS.powerMode.iconClass` | Timestamps, placeholders and the power-mode bolt lighten in the dark (`gray-400`, `warning-400`) and darken in the light (`gray-500`, `warning-600`) |
-
-### Farveblind — ✅ IMPLEMENTED (2026-09-18)
-
-The third preset, key `colorblind`, label **Farveblind**, in `app/assets/css/palettes/colorblind.css` under
-`html[data-palette="colorblind"]` and its `.dark` mirror. The generator became multi-preset: a `PRESETS` list of
-`{name, level, generatedOn, hues, header}`, one file per entry, one `npx jiti scripts/palettes/generate.ts` for both.
-Tydelig regenerates byte-identical — the diff against the committed file is empty before and after the refactor, and
-three consecutive runs give the same md5 for both files.
-
-**Two passes.** The hue map first: each anchor keeps its OKLCH hue and chroma, walks the published family's lightness
-ladder rung by rung, and gives up chroma where sRGB cannot show it at that rung (`clampChromaToGamut`, a bisection in
-`contrast.ts`, so a clipped channel never bends the anchor). Then the Tydelig AA pass on top — the same slot
-re-pointing and the same lightness bisection — with one addition: a hue-mapped rung takes the gamut-clamped move, so
-the widest hue drift from an anchor, across every rung of the six mapped families in both modes, is **2.1°** (at
-`orange-50`, where the 8-bit hex dominates).
-
-| Family | Meaning | Anchor | Old 500 → new 500 | Published as |
-|---|---|---|---|---|
-| `green` | success, active season, CHILD ticket, holiday ring | bluish green `#009E73` | `#00c950` → `#039f75` | `--color-green-*`, 11 rungs |
-| `red` | error, released orders, cancellations, delete confirm | vermillion `#D55E00` | `#c4746f` → `#dd6514` | `--color-red-*`, 11 rungs |
-| `orange` | warning, power mode, deadline ring, CTAs | orange `#E69F00` | `#ec6a37` → `#bc8100` | `--color-orange-*`, 11 rungs |
-| `yellow` | deadline chips | yellow `#F0E442` | `#eab308` → `#cdc100` | `--color-yellow-*`, 11 rungs |
-| `pink` | secondary, generated cooking days, picker selection | reddish purple `#CC79A7` | `#fa7b95` → `#df8ab9` | `--color-pink-*`, 11 rungs |
-| `info` slot | info alerts, guest rows, claimed orders | blue `#0072B2` | `#de5697` → `#3a96d9` | `--ui-color-info-*`, 11 rungs |
-
-**Scale or slot.** Two of the six carry a brand band as well, and the distance to the anchor decides. Mandarin Orange
-is 36° from the CUD orange, so the `orange` scale moves and landing band 1 with it: `#ec6a37` → `#bc8100`, **6.28:1**
-against its black ink where the published value reads 6.68:1. Bonbon is 110° from the CUD blue, so the preset moves
-the slot instead — `--ui-color-info-<step>` is the variable Nuxt UI's colours plugin points the `info` scale at, so
-`bg-info` and `text-info-600` take the blue and `--color-violet-*` keeps painting band 3 and the Bonbon chip at their
-published `#de5697` (5.88:1). Pink Lemonade is 22° from reddish purple, so the `pink` scale moves and band 0 with it:
-`#fa7b95` → `#df8ab9` at **8.47:1**, and the cooking-day circle (`pink-800`) and the picker selection move with the
-meaning they carry. The measurement follows: `createResolver` now layers an override on the slot family itself, and
-`parseColourScales` reads `--ui-color-<slot>-<step>` as a family's rung.
-
-**Counts.** Light block **77 steps, 13 slots**; dark block **34 steps, 13 slots** (Tydelig: 21 / 13 and 36 / 13). The
-hue map alone meets AA on 244 of the 418 pairs; after the AA walk the preset meets **418 of 418**, in light and dark,
-converging in 2 rounds. `PRESET_FINDINGS` stays empty for both presets.
-
-**What the simulation shows.** `designSystemColourVision.unit.spec.ts` measures 12 meaning pairs × 3 vision types ×
-2 modes = 72 cases per palette, at ΔE ≥ 0.075 in Oklab — the separation the CUD set keeps on its own closest pair.
-The default theme clears 57 of 72, Farveblind 54; the 33 misses are listed in `FINDINGS` with their distance.
-Farveblind wins the pairs that move to the blue axis (`info vs secondary` dark, 0.018 → 0.215 tritanopia; the order
-states against `claimed`) and misses on three that AA takes away:
-
-| Pair | Vision | Default | Farveblind | Why |
-|---|---|---|---:|---|
-| `error vs warning` | protanopia, deuteranopia | 0.073 / 0.084 | **0.019 / 0.025** | The CUD set keeps vermillion and orange apart by lightness (0.62 against 0.75). A solid slot fill is both `text-<slot>` on the page and the fill under `text-inverted`, so 4.5:1 puts every slot at the same end of the range and leaves the hue axis a deuteranope has lost |
-| `ADULT vs CHILD` | protanopia, deuteranopia | 0.211 / 0.128 | **0.030 / 0.041** | `primary` is Mocha Mousse, a brand family the hue map leaves untouched, and at the contrast ceiling it sits beside the bluish green |
-| `CHILD vs BABY` | tritanopia | 0.144 | **0.014** | `neutral` is the Ocean teal, and the CUD bluish green sits beside it for a tritanope once both are at the ceiling |
-
-Measured the same day: re-pointing each meaning slot at the rung that spreads the meanings furthest, instead of the
-uniform 600/300, lifts the worst pair from 0.019 to **0.078** in light and **0.056** in dark, and pays for it with
-near-black meaning fills (`#00533b` success, `#3e1600` error). The three decisions that close the rest are the
-user's: whether a meaning may spend lightness, whether `neutral` stays a teal, and whether `primary` carries a
-meaning at all.
-
-**Registry and card.** `PaletteSchema` gains `colorblind`; `PALETTES` gains `colourSafe`, `false` for `default` and
-`tydelig`, `true` for `colorblind`; `PALETTE_LABELS.colorblind = 'Farveblind'` and the radio renders the registry.
-`main.css` imports `./palettes/colorblind.css` next to `tydelig.css`.
-
-**One level, one place.** The level used to sit in three copies — the registry the badge reads, the palette list in
-`designSystemContrast.unit.spec.ts`, and the generator's presets — so flipping the registry to AAA changed the badge
-and nothing else. `tests/component/architecture/palettes.ts` now derives the measured list from `PALETTES`
-(`id`, `label`, the promised level, `file = app/assets/css/palettes/<id>.css`, `colourSafe`); the contrast spec
-asserts every pair at the registry's level, the colour-vision spec runs its meaning pairs for every `colourSafe`
-entry, and a registry entry with no generated file fails the case *publishes the stylesheet its badge claims*
-instead of skipping. One case, *the generator solves the presets the registry badges, at the level it badges them*,
-compares `PRESETS` in `scripts/palettes/presets.ts` to the registry entries that carry a level.
-
-**Regenerating is checked.** The generator split in two: `scripts/palettes/render.ts` is pure (`renderPreset(preset)`
-returns the file text, `solvePreset` adds the run report) and `scripts/palettes/generate.ts` is the CLI that writes
-each file and prints. The case *is generated from the preset the generator holds today* renders each preset again and
-compares it to the committed file, failing with `run make palettes (npx jiti scripts/palettes/generate.ts) and commit
-the result`. It costs 0.1-0.6 s per preset and the architecture project runs in ~2.7 s.
-
-### Visual check — Farveblind
-
-Set the preset from the console on any page: `document.documentElement.dataset.palette = 'colorblind'`, back to
-Standard with `delete document.documentElement.dataset.palette`, dark with
-`document.documentElement.classList.toggle('dark')`.
-
-| Route + state | Viewport | DS element to expect | Expect |
-|---|---|---|---|
-| `/` landing, scrolled | 375px + desktop | `getRainbowBand(0-3)`, `PANTONE_CHIPS` | Band 0 is a mauve pink and band 1 a golden orange; band 2 ocean and band 3 bonbon are unchanged, and the Bonbon chip keeps its published violet |
-| `/admin/planning`, edit | 375px + desktop | `CALENDAR.holiday`, `PLANNING_CALENDAR.day.generated` | The holiday ring is a bluish green and the generated cooking day a reddish purple; the two read apart on one calendar |
-| `/admin/planning` | desktop | `BUTTONS.primaryAction`, `SeasonStatusDisplay` | Solid buttons take the 600 rung; the ACTIVE season alert is bluish green, the CURRENT one golden |
-| A page with an alert of each kind | 375px + desktop | `ALERTS.success`, `ALERTS.warning`, `ALERTS.error`, `ALERTS.info` | Success bluish green, warning golden, error vermillion, info blue — the info alert is the one that changes most against the default theme |
-| `/household/<x>/bookings`, a released ticket | 375px + desktop | `ORDER_STATE_COLORS`, `DinnerTicket` | A released ticket reads vermillion, a claimed one blue, a normal one mocha |
-| `/household/<x>/bookings`, a guest row | 375px + desktop | `COMPONENTS.guestRow.iconClass` | The guest glyph is blue, not magenta |
-| Any calendar with a deadline | 375px + desktop | `CALENDAR.deadline.critical`, `CALENDAR.deadline.warning` | The critical ring is vermillion and the warning ring keeps the untouched amber |
-| `/admin/allergies`, a ticket-type badge per age | desktop | `TICKET_TYPE_COLORS` | Voksen mocha, Barn bluish green, Baby ocean — the three are told apart by their labels first |
-| `/dinner?date=<a dinner>` | 375px + desktop | `COMPONENTS.kitchenPanel.*` | TAKEAWAY mauve, SPISESAL golden, SPIS SENT ocean, TIL SALG grey, each with black labels |
-| Any page, dark mode | desktop | `ALERTS.*`, `getRainbowBand(i)` | The dark block lifts the same six families; the bands paint the same fills with the same black ink |
-| `/login` → `Rediger` | 375px + desktop | `URadioGroup`, `UBadge` `COLOR.success` | Three options read Farveglad / Tydelig / Farveblind, and the EU badge sits on Tydelig and Farveblind |
-
-### Høj kontrast — ✅ IMPLEMENTED (2026-09-18)
-
-The fourth option, key `high-contrast`, label **Høj kontrast**, badge level **AAA**, in
-`app/assets/css/palettes/high-contrast.css` under `html[data-palette="high-contrast"]` and its `.dark` mirror. One
-line in `scripts/palettes/presets.ts` produces it, after `tydelig`:
-
-```ts
-{name: 'high-contrast', level: 'AAA', generatedOn: '2026-09-18', hues: {}, header: highContrastHeader}
-```
-
-Tydelig's procedure one level up. The hue map is empty, so the hues and the chroma are TheSlope's published palette,
-only OKLCH lightness moves, and the eight neutral surfaces stay held. The level reaches the inventory through
-`buildPairs(override, 'AAA')`, which raises 1.4.3 to **1.4.6 Contrast (Enhanced)** — 7:1 body text, 4.5:1 large-scale
-text — and leaves 1.4.11 at 3:1, the level that criterion defines. Every scoping rule is the one the AA presets use:
-the `INK_ON_FILL` faces, the large-scale exemption, the decorative edges.
-
-**The slot re-pointing rule holds at AAA.** It lands on the same rungs at the higher bar: all thirteen slots
-re-point, to 600 in light and 300 in dark, and each of the 26 solid faces (`text-inverted` on `bg-<slot>`) clears
-7:1 there, so the walk answers the buttons at 600/300 and leaves 500 to the bands and the chips exactly as it does
-under Tydelig.
-
-**The walk stops on its first repeated palette.** A round is a pure function of the lightness it starts from. Tydelig
-meets every pair in round 1 and Farveblind in round 2; Høj kontrast reaches 423 in round 5 and then cycles with period
-6 (423, 419, 421, 421, 421, 419). `solve()` fingerprints the lightness map after each round and stops when one
-repeats, which is round 10 here instead of the 30-round cap. The published palette is the best round, so the output
-of all three presets is byte-identical to the 30-round walk. The regeneration case carries a 30 s timeout
-(`RENDER_TIMEOUT_MS`): the Høj kontrast render takes ~3 s alone, several times that beside the full suite.
-
-**Counts.** 438 pairs, **423 pass**, 10 rounds. Light block **33 steps, 13 slots**; dark block **39 steps,
-13 slots** (Tydelig 21 / 37, Farveblind 77 / 35).
-
-| Group | Pairs | Farveglad at AAA | Høj kontrast |
-|---|---:|---:|---:|
-| text on surface | 153 | 37 | 149 |
-| paired token | 114 | 75 | 114 |
-| edge on surface | 93 | 53 | 91 |
-| semantic slot | 78 | 0 | 69 |
-| **Total** | **438** | **165** | **423** |
-
-**Every rainbow stop is body text.** A cooking team wears the stop of its number on a `UBadge` (`CookingTeamBadges`,
-`CookingTeamCard`, `AdminTeams`, `TeamCalendarDisplay`), whose label is Nuxt UI's badge face, `text-[10px]` to
-`text-sm`. `INK_ON_FILL` in `designSystemPairs.ts` carries it as `TEAM_BADGE` on all nine stops, so `RAINBOW[3]`
-(bonbon) and `RAINBOW[4]` (party) move from the landing title's large-text bar to the body bar:
-
-| Stop | Ratio | Bar before → after (AA presets) | Høj kontrast before → after |
-|---|---:|---|---|
-| `RAINBOW[3]` bonbon, black ink | 5.88 | 3 → 4.5, passes | 5.88 of 4.5 → **7.16 of 7**: `--color-violet-500` lifts to `#f066a6` |
-| `RAINBOW[4]` party, black ink | 4.74 | 3 → 4.5, passes | 4.74 of 4.5 → **7.16 of 7**: `--color-party-700` lifts to `#e8718a` |
-
-Tydelig and Farveblind regenerate byte-identical, and the default theme meets the body bar on both stops, so
-`KNOWN_FINDINGS` is unchanged. Høj kontrast gains the two light-block declarations above and keeps 423 of 438.
-
-At AAA the two lifts bring three stops together: pink, bonbon and party all carry black ink, so all three have to be
-light, and the rainbow's separation check (`designSystemColourVision.unit.spec.ts`, ΔE ≥ 0.075 in Oklab, every
-palette) measures pink–party **0.042**, bonbon–party **0.053**, pink–bonbon **0.062** in both modes. Holding party
-and bonbon at their published rungs keeps the stops 0.079 apart and leaves them at 4.74 and 5.88 against 7:1;
-lifting pink alone clears none of the three. The closer is an ink or rung choice in `HERO` for one or more of the
-three pink stops, which is the user's call.
-
-**The fifteen findings**, in `PRESET_FINDINGS` in `designSystemContrast.unit.spec.ts` as `it.fails`, measured
-2026-09-18, with two closers:
-
-| Pairs | Ratios | Closer |
-|---|---|---|
-| 9 × dark `text-<slot>` on `bg-<slot>/10`: secondary, ocean, success, peach, info, winery, warning, party, caramel | 6.51, 6.88, 5.80, 5.74, 5.73, 5.72, 5.71, 5.70, 5.70 | The generator's colour maths. `withLightness` moves a published rung along OKLCH lightness with the chroma held, and a rung that leaves the sRGB gamut at the new lightness has its channels clipped, which costs it the luminance the lift was for |
-| 4 × dark icon ink: `COMPONENTS.powerMode.iconClass` on `BG.panelNested`, `COMPONENTS.guestRow.iconClass` on page and on `BG.panelNested`, `COMPONENTS.economyTable.level2.icon` on `BG.panelNested` | 6.12, 5.98, 5.10, 6.11 | Same |
-| 2 × light `BORDER.orange.500` on page and on `BG.panel` | 2.93, 2.76 | A token. Orange 500 draws the border and the band fill at once, and the lightness that carries a 3:1 border takes `BACKGROUNDS.hero.orange`, `RAINBOW[1]` and `COMPONENTS.kitchenPanel.DINEIN` below their own bar. Its closer is the one the nine `dark:`-faced tokens took: a light-mode face of its own, on a rung only the border draws |
-
-Measured the same day: clamping chroma to the sRGB gamut per rung — what `anchoredLightness` already does for a
-hue-mapped family — closes the first thirteen and takes the preset to **436 of 438**. It moves nine rungs in each of
-Tydelig and Farveblind, which both still meet AA on all 438 pairs, so the two AA presets keep the bytes they have
-until the user takes that call.
-
-**Registry and card.** `PaletteSchema` gains `'high-contrast'`; `PALETTES['high-contrast'] = {level: 'AAA',
-colourSafe: false}`; `PALETTE_LABELS['high-contrast'] = 'Høj kontrast'` and the radio renders the registry, so the
-option arrives with the `EN 301 549 · WCAG 2.1 AAA ✓` badge `LEVEL_BADGES` already held. `palettes.ts` gains the
-spec's own label, `main.css` imports `./palettes/high-contrast.css`, and the four options read Farveglad / Tydelig /
-Farveblind / Høj kontrast. The registry drives the measurement: the contrast spec asserts every pair of this preset
-at AAA, the case *the generator solves the presets the registry badges* holds `PRESETS` to the same names and
-levels, and *is generated from the preset the generator holds today* renders the file again and compares bytes.
-
-**Determinism.** Three consecutive `npx jiti scripts/palettes/generate.ts` runs write the same sha256 for all three
-presets. In the same window the design system gained three rainbow families (`winery`, `yellow`, `sky` in `HERO`),
-which takes the inventory from 418 to 438 pairs and adds one declaration, `--color-sky-50` in the dark block, to
-`tydelig.css` and `colorblind.css`; both still meet AA on 438 of 438.
-
-### Visual check — Høj kontrast
-
-Set the preset from the console on any page: `document.documentElement.dataset.palette = 'high-contrast'`, back to
-Farveglad with `delete document.documentElement.dataset.palette`, dark with
-`document.documentElement.classList.toggle('dark')`.
-
-| Route + state | Viewport | DS element to expect | Expect |
-|---|---|---|---|
-| `/login` → `Rediger` | 375px + desktop | `URadioGroup`, `UBadge` `COLOR.success` | Four options read Farveglad / Tydelig / Farveblind / Høj kontrast, and the badge on Høj kontrast reads `EN 301 549 · WCAG 2.1 AAA ✓` |
-| `/login` → `Rediger` → `Høj kontrast` → `Gem` | 375px + desktop | `html[data-palette]` | The page takes the preset, the card returns to its view face, and a reload keeps it |
-| `/` landing, scrolled | 375px + desktop | `getRainbowBand(0-3)`, `PANTONE_CHIPS` | Each band keeps its hue; orange and bonbon lift until their black titles read at 7:1 |
-| `/admin/teams`, a season with nine teams | 375px + desktop | `CookingTeamBadges`, `getRainbowBand(0-8)` | Every badge label reads at 7:1: black-ink stops lift, winery and sky keep white ink. Teams 1, 4 and 5 (pink, bonbon, party) sit close together — the separation finding above |
-| `/admin/planning` | desktop | `BUTTONS.primaryAction`, `SeasonStatusDisplay` | Solid buttons take the 600 rung and carry their white label at 7:1; the season alert's text reads on its soft fill |
-| `/admin/planning`, edit | 375px + desktop | `CALENDAR.holiday`, `PLANNING_CALENDAR.day.potential` | The holiday ring and the potential-day border sit at 3:1 against the calendar |
-| A page with an alert of each kind, dark | 375px + desktop | `ALERTS.info`, `ALERTS.success`, `ALERTS.warning`, `ALERTS.error` | Alert text on the soft `bg-<slot>/10` fill — the nine faces the findings list, at 5.7-6.9:1 |
-| `/household/<x>/bookings` | 375px + desktop | `DinnerTicket`, `ORDER_STATE_COLORS`, `COMPONENTS.guestRow.iconClass` | Ticket and state text read at 7:1; the dark guest glyph is the finding at 5.98:1 |
-| `/admin/economy`, tree expanded | desktop | `COMPONENTS.economyTable.level{1,2,3}` | Level headings, icons and stat boxes read at 7:1 on their banding, in both modes |
-| Any page, dark | desktop | `TEXT.muted`, `TEXT.timestamp`, `TEXT.menuBody` on `BG.panelNested` | The muted inks lift far enough to read at 7:1 on the nested panel |
-
-### Team colours — ✅ IMPLEMENTED (2026-09-18)
-
-**Decided by the user (2026-09-18).** Cooking teams need 8-10 clearly distinct colours, and the brand rainbow supplies
-them: team number n wears rainbow stop n, wrapping at nine. Mocha stays the frame.
-
-**Problem.** Team colours were eleven Nuxt UI slot names in `TEAM_COLORS` (`app/composables/useCookingTeam.ts`). Under
-Tydelig each slot is re-pointed to a darkened 600 rung, so orange and peach paint the same colour and pink, party and
-winery converge on one another. A stop is a fill and an ink at rungs the presets leave in place, so nine stops stay
-apart in each palette.
-
-**The stops.** Measured 2026-09-18 with the spec's own resolver: each ink clears 4.5:1, and the nearest two stops sit
-0.079 apart in Oklab in Farveglad, Tydelig, Farveblind and Høj kontrast, light and dark (bar 0.075). Party Punch moves
-to its 700 rung: at 500 it sits 0.049 from Bonbon.
-
-| # | Stop | Fill + ink | Ink ratio (lowest palette) |
-|---|---|---|---:|
-| 0 | pink | `BG.pink[500]` + `TEXT.black` | 8.33 |
-| 1 | orange | `BG.orange[500]` + `TEXT.black` | 6.27 |
-| 2 | ocean | `BG.ocean[500]` + `TEXT.black` | 7.2 |
-| 3 | bonbon | `BG.bonbon[500]` + `TEXT.black` | 5.88 |
-| 4 | party | `BG.party[700]` + `TEXT.black` | 4.74 |
-| 5 | peach | `BG.peach[300]` + `TEXT.peach[950]` | 9.01 |
-| 6 | winery | `BG.winery[700]` + `TEXT.white` | 6.99 |
-| 7 | yellow | `BG.yellow[400]` + `TEXT.black` | 13.71 |
-| 8 | sky | `BG.sky[700]` + `TEXT.white` | 7.03 |
-
-| Token | Old | New |
-|---|---|---|
-| `BG.winery[700]` | — | `bg-winery-700` |
-| `BG.yellow[400]` | — | `bg-yellow-400` |
-| `BG.sky[700]` | — | `bg-sky-700` |
-| `PANTONE_FAMILIES` | `['pink','orange','ocean','bonbon','party','peach','mocha']` | `['pink','orange','ocean','bonbon','party','peach','mocha','winery','yellow','sky']` |
-| `HERO.party` (and `BACKGROUNDS.hero.party`) | `bg-party-500 text-black` | `bg-party-700 text-black` |
-| `HERO.winery` | — | `bg-winery-700 text-white` |
-| `HERO.yellow` | — | `bg-yellow-400 text-black` |
-| `HERO.sky` | — | `bg-sky-700 text-white` |
-| `RAINBOW_FAMILIES` | — | `['pink','orange','ocean','bonbon','party','peach','winery','yellow','sky']` |
-| `RAINBOW` | `[HERO.pink, HERO.orange, HERO.ocean, HERO.bonbon, HERO.party]` | `RAINBOW_FAMILIES.map(family => HERO[family])` — nine stops |
-| `getRainbowBand(i)` | `RAINBOW[i % 5]` | `RAINBOW[i % 9]` |
-| `getRainbowFamily(i)` | — | `RAINBOW_FAMILIES[i % 9]` |
-| `CHIPS.winery` | — | `border-winery-800 bg-winery-100 text-winery-900` (8.34:1) |
-| `CHIPS.yellow` | — | `border-yellow-600 bg-yellow-100 text-yellow-900` (7.81:1) |
-| `CHIPS.sky` | — | `border-sky-700 bg-sky-50 text-sky-900` (9.71:1) |
-| `TEAM_COLORS`, `TeamColor`, `getTeamColor` (`useCookingTeam.ts`) | eleven slot names | removed; the isomorphic composable carries no presentation (ADR-017) |
-
-The landing walks stops 0-3 and the kitchen panels 0-2, as before. `PANTONE_CHIPS` follows `PANTONE_FAMILIES`, so the
-ticker runs ten chips.
-
-**Consumers.** A badge binds the stop as its class; Nuxt UI merges `class` with tailwind-merge, so the stop's `bg-*` and
-`text-*` override the variant's.
-
-| Component | Site | Old | New |
-|---|---|---|---|
-| `TeamCalendarDisplay` | cooking-day badge | `:color="getTeamColor(i)" variant="solid"` | `:class="[getRainbowBand(i), …selection]"` |
-| `TeamCalendarDisplay` | legend badge | `:color="getTeamColor(index)" variant="solid"` | `:class="[getRainbowBand(index), …]"`, `data-testid="team-legend-badge"` in `data-testid="team-legend-entry"` |
-| `CookingTeamBadges` | name, 👥, 📅 badges | `:color="teamColor" variant="soft"` | `:class="teamBand"` |
-| `CookingTeamCard` | header badges (monitor, view, edit; 9) | `:color="teamColor" variant="soft"` | `:class="teamBand"` |
-| `CookingTeamCard` | member name badge | `:color="teamColor" variant="subtle"` | `:class="teamBand"` |
-| `CookingTeamCard` | member allocation badge | `:color="teamColor" variant="outline"` | `:color="COLOR.neutral" variant="outline"` |
-| `CookingTeamCard` | other team's status badge | `:color="getTeamColorForId(id)" variant="solid"` | `:class="getTeamBandForId(id)"` |
-| `CookingTeamCard` | avatar ring (3 `UserListItem`) | `:ring-color="teamColor"` | removed |
-| `CookingTeamCard` | edit header frame | `border-${teamColor}-400 …` + `var(--color-${resolvedColor}-300)` from an `useAppConfig()` lookup | `border-dashed` in the base border colour; lookup removed |
-| `CookingTeamCard` | view header frame | `border-${teamColor}-300 …` | `border` in the base border colour |
-| `CookingTeamCard`, `AdminTeams`, `TeamMemberAddForm` | `WeekDayMapDisplay` (5 sites) | `:color="teamColor"` | the component's default colour |
-| `TeamMemberAddForm` | `teamColor` prop | `TeamColor` | removed |
-| `MyTeamSelector`, `AdminTeams` | tab items | `color: getTeamColor(index)` | removed; `CookingTeamBadges` in the tab body carries the stop |
-| `AdminTeams` | table name cell | `:color="getTeamColor(i)" variant="solid"` | `:class="getRainbowBand(i)"` |
-
-**Where the look changes.**
-
-| Site | Change |
+**Problem.** Members had no per-login settings for notification channels, colours or text size.
+**Solution.**
+- `User.notificationChannels`, `User.appearance` (JSON, typed by `AppearanceSchema`) through the user schemas in `useCoreValidation.ts` and
+  `domainFragments.ts`; `serializeUserPartial` writes them (ADR-012).
+- `useUserPreferenceValidation.ts`: `PaletteSchema`, `TextScaleSchema`, `AppearanceSchema`, `PALETTES` (level, colourSafe), defaults,
+  `UserPreferencesUpdateSchema`.
+- `POST /api/user/preferences` (session user, 400 for SMS without a phone, session refreshed); `POST /api/user/notifications/test`
+  (`emitTestEmail` to the session user). Route rule `/api/user/` in `usePermissions.ts`.
+- `auth.ts` `savePreferences`, `sendTestNotification` (toast with the `dedupeKey`); column defaults cover sessions issued before the migration.
+- `UserProfileCard.vue` ⚙ (`BUTTONS.settings`, `pref-toggle`); `Login.vue` owns the open state; `UserPreferencesCard.vue` view and edit faces,
+  `COMPONENTS.choiceGroup` for radios and switches.
+- `layouts/default.vue` writes `html[data-palette]` and `html[data-text-scale]`; `main.css` scales the root font.
+**Mockups.** `Login.vue`, `UserProfileCard.vue`, `UserPreferencesCard.vue` headers (✅ 2026-09-16, card faces ✅ 2026-09-17).
+**Tests.** `useUserPreferenceValidation.unit`, `useCoreValidation.unit`, `usePermissions.unit`, `sender/events/test.unit`,
+`UserPreferencesCard.nuxt`, `UserProfileCard.nuxt`; e2e `user/preferences` (API), `UserPreferences`, `MobileViewport`.
+
+## Palettes
+
+- **Mechanism.** A preset redeclares `--color-<family>-<step>` and `--ui-<slot>` under `html[data-palette="<key>"]` and its `.dark` mirror
+  (`app/assets/css/palettes/<key>.css`, imported by `main.css`). One attribute on `<html>` reaches Nuxt UI and the design-system utilities.
+- **Registry.** `PALETTES` in `useUserPreferenceValidation.ts` holds each preset's level and `colourSafe`; the card renders the registry.
+- **Generator.** `scripts/palettes/presets.ts` (data), `render.ts` (`solvePreset`, `renderPreset`), `generate.ts` (CLI). A preset applies its
+  hue map, re-points the solid slots, then walks OKLCH lightness until every pair meets the preset's level. Run: `make palettes`.
+- **Measurement.** `tests/component/architecture/`: `contrast.ts` (colour maths shared with the generator), `designSystemPairs.ts` (the pair
+  inventory walked from the tokens), `palettes.ts` (the list derived from the registry), `designSystemContrast.unit.spec.ts` (every pair at the
+  registry's level; committed file equals a fresh render), `designSystemColourVision.unit.spec.ts` (meaning pairs under three vision types,
+  rainbow stops apart, ΔE ≥ 0.075 in Oklab). `KNOWN_FINDINGS` (default theme) and `PRESET_FINDINGS` run as dated `it.fails`.
+- **Counts (2026-09-18).**
+
+  | Palette | Level | Pairs meeting the level |
+  |---|---|---|
+  | Farveglad | — | 268 of 438 at AA (170 listed in `KNOWN_FINDINGS`) |
+  | Tydelig | AA | 438 of 438 |
+  | Farveblind | AA | 438 of 438 |
+  | Høj kontrast | AAA | 438 of 438 |
+
+  Ratios, blocks and old → new values: the generator's run report and the file headers.
+
+## Brand rainbow and team colours
+
+**Solution.** `PANTONE_FAMILIES` orders the families; `HERO` holds fill and ink per family; `RAINBOW_FAMILIES`/`RAINBOW` and `getRainbowBand(i)`
+walk the stops; `PANTONE_CHIPS` follows the same order. `pages/index.vue` loops the landing bands; `COMPONENTS.kitchenPanel` takes stops 0-2
+and grey for RELEASED; team badges in `TeamCalendarDisplay`, `CookingTeamBadges`, `CookingTeamCard`, `AdminTeams` bind `getRainbowBand(i)`.
+`useCookingTeam.ts` carries no colours (ADR-017).
+**Mockups.** `pages/index.vue`, `KitchenPreparation.vue` headers.
+**Tests.** `designSystemColourVision.unit` (stops apart per palette), `designSystemContrast.unit` (`INK_ON_FILL` grades every stop as body
+text), `TeamCalendarDisplay.nuxt`.
+
+## Team creation toast
+
+`PUT /api/admin/team` returns `CreateTeamsResponse` `{teams, eventsAssigned}` (`useCookingTeamValidation.ts`, ADR-009); `plan.ts` `createTeam`
+returns it; `AdminTeams.vue` writes both numbers. **Tests:** `team.e2e` (API), `plan.nuxt`, `AdminTeams.nuxt`.
+
+## Dev feedback round 1
+
+| Finding | Implementation |
 |---|---|
-| Soft and subtle team badges (`CookingTeamBadges`, `CookingTeamCard` headers and member names) | tinted → the stop's solid fill with its ink |
-| `CookingTeamCard` allocation badge | team outline → neutral outline |
-| `CookingTeamCard` monitor avatars | lose the `md:ring-2` team ring; the header badges carry the team's stop |
-| `CookingTeamCard` edit and view frames | team tint → the base border colour |
-| Weekday affinity chips and checkboxes on team surfaces | team tint → `WeekDayMapDisplay`'s `success` default |
+| Dashboard actions overflowed a phone in three looks | `UserProfileCard.vue` wrapping row; ⚙ `BUTTONS.settings`; Heynabo and Log ud `BUTTONS.secondaryAction` |
+| Preferences pencil carried a label | `UserPreferencesCard.vue` `BUTTONS.edit` + `aria-label` |
+| Notes pencil sat under the text on a phone | `ALERTS.withCornerAction` in `AllergyNotes.vue` |
+| "Sammenlign" | `AdminAllergies.vue` "Kombiner allergener" / "Afslut kombinering" |
+| Expanded allergy row overflowed a phone | `COMPONENTS.table.ui.td` wraps the expanded cell; `alertUi` root `whitespace-normal` |
+| `/chef` "…" menu trigger | `ChefMenuCard.vue` `BUTTONS.settings` + chevron |
 
-A ring or a border takes `RING`/`BORDER`, and each rung there is measured at 3:1 against the page and `BG.panel`
-(1.4.11); `ring-yellow-400` reads 1.53:1 on the light page. The team surfaces carry the stop on their badges.
+**Tests.** `UserProfileCard.nuxt`, `UserPreferencesCard.nuxt`, `AllergyNotes.nuxt`, `AdminAllergies.nuxt`; `MobileViewport.e2e` (`login`,
+`admin-allergies-expanded-row`).
 
-### TDD — Team colours
+## Calendar-day matching
 
-| Spec | Red | Green |
-|---|---|---|
-| `tests/component/architecture/designSystemColourVision.unit.spec.ts` › `<palette>: the brand rainbow` › `keeps its 9 stops apart from one another ≥ 0.075` (4 palettes × 2 modes) | 8 failed with `HERO.party` at 500: `RAINBOW[3] vs RAINBOW[4] measures 0.049 (#de5697 vs #e84c76)` | 8 passed, nearest pair 0.079 |
-| `tests/component/components/calendar/TeamCalendarDisplay.nuxt.spec.ts` (new, 12 cases: one entry per team, team `i` wears `getRainbowBand(i)` for ten teams, nine distinct stops and the tenth wraps) | 9 failed with the legend bound to one stop | 12 passed |
-| `tests/component/components/cooking-team/TeamMemberAddForm.nuxt.spec.ts` | mounts without the removed `teamColor` prop | green |
+Stored dinner dates carry UTC midnight; date-fns and local `Date` values carry local midnight. `computeTeamAssignmentsForEvents` and
+`isCalendarDateInDateList` compare calendar days with `isSameDay`, so team assignment and holiday cells hold in Copenhagen, in UTC (CI, the
+SSR worker) and in between. **Tests:** `season.unit` (UTC-midnight events), `date.unit` (`isCalendarDateInDateList`), `CalendarDisplay.nuxt`,
+run in UTC and Copenhagen. The storage convention: `bug-fix-dinner-page-and-dates.md`.
 
-`designSystemContrast.unit.spec.ts` walks `RAINBOW`, `BACKGROUNDS.hero` and `PANTONE_CHIPS`, so the new stops and chips
-are measured at 4.5:1 in each palette: `KNOWN_FINDINGS` and `PRESET_FINDINGS` gain no entries.
+---
 
-### Affected Areas — Team colours
+## Test coverage
 
-`app/composables/useTheSlopeDesignSystem.ts`, `app/composables/useCookingTeam.ts`,
-`app/components/calendar/TeamCalendarDisplay.vue`, `app/components/cooking-team/CookingTeamCard.vue`,
-`app/components/cooking-team/MyTeamSelector.vue`, `app/components/cooking-team/TeamMemberAddForm.vue`,
-`app/components/shared/CookingTeamBadges.vue`, `app/components/admin/AdminTeams.vue`; specs above; `docs/ui.md`
-"The brand rainbow" and "Cooking Teams".
-
-### Visual check — Team colours
-
-Set the preset from the console: `document.documentElement.dataset.palette = 'tydelig'`, back to Farveglad with
-`delete document.documentElement.dataset.palette`.
-
-| Route + state | Viewport | DS element to expect | Expect |
-|---|---|---|---|
-| `/admin/teams`, view, a season with 9+ teams | 375px + desktop | `getRainbowBand(i)` on the name cell, `CookingTeamBadges` | Team 1-9: pink, orange, ocean, bonbon, party, peach, winery, yellow, sky; team 10 pink again. White text on winery and sky, dark text on the rest |
-| `/admin/teams`, view, Tydelig | desktop | `getRainbowBand(i)` | The nine stay nine: orange and peach are two colours, party and winery are two colours |
-| `/admin/teams`, a row expanded | 375px + desktop | `TeamCalendarDisplay` legend + day badges | Each legend badge wears its team's stop; the cooking days in the calendar wear the same stop |
-| `/admin/teams?mode=edit` | desktop | `CookingTeamCard` edit header, `CookingTeamBadges` in the tabs | Round team icon and the 👨‍🍳 / 📅 badges wear the stop; the dashed frame is the base border colour |
-| `/admin/teams?mode=edit`, member list + finder | desktop | `CookingTeamCard` member badges, status badges | Member names wear the stop; the allocation % is a neutral outline; a member of another team shows that team's stop in the status column; weekday chips are green |
-| `/chef`, team tabs | 375px + desktop | `MyTeamSelector` → `CookingTeamBadges` | Each tab's badge wears the team's stop |
-| `/chef`, team calendar | 375px + desktop | `TeamCalendarDisplay` | Cooking days wear the team's stop; the selected day keeps its primary ring |
-| `/chef` or `/dinner`, "Hvem laver maden?" | 375px + desktop | `CookingTeamCard` monitor | Name, 👨‍🍳 and 📅 badges wear the stop; the avatars carry no team ring |
-| Each row above, Tydelig | desktop | `getRainbowBand(i)` | Same fills as Farveglad (the stops sit on rungs the preset leaves in place, orange one shade deeper) |
-| `/` ticker | desktop | `PANTONE_CHIPS` | Ten chips: pink, orange, ocean, bonbon, party, peach, mocha, winery, yellow, sky |
-
-### Team creation toast — ✅ IMPLEMENTED (2026-09-18)
-
-**Decided by the user (2026-09-18).** The toast after "Opret madhold" on `/admin/teams` states what the operation did,
-in one line.
-
-| | Toast description |
+| Endpoint | API spec |
 |---|---|
-| Old | `<draft count> madhold oprettet med automatisk tildeling` — fixed text, shown also when no dinner was assigned |
-| New | `<n> madhold oprettet · <m> madlavninger tildelt` — both numbers from the response |
+| `GET`, `POST /api/admin/setting/[key]` | `tests/e2e/api/parallel/admin/setting.e2e.spec.ts` |
+| `POST /api/user/preferences`, `POST /api/user/notifications/test` | `tests/e2e/api/parallel/user/preferences.e2e.spec.ts` |
+| `POST /api/admin/season/[id]` | `tests/e2e/api/parallel/admin/season.e2e.spec.ts`; active season: `tests/e2e/api/serial/admin/seasonLiveEdit.e2e.spec.ts` |
+| `PUT /api/admin/team` | `tests/e2e/api/parallel/admin/team.e2e.spec.ts` |
 
-**Solution.** `PUT /api/admin/team` returns `CreateTeamsResponse` `{teams, eventsAssigned}` (`useCookingTeamValidation`),
-an operation result per ADR-009 [API Index Endpoint Data Inclusion Strategy]. `usePlanStore().createTeam()` parses and
-returns it; `AdminTeams.vue` builds the description from `teams.length` and `eventsAssigned`.
-`SeasonFactory.createCookingTeamForSeason` reads `teams[0]` from the envelope.
-
-| Spec | Red | Green |
+| Component or behaviour | E2E | Component spec |
 |---|---|---|
-| `tests/e2e/api/parallel/admin/team.e2e.spec.ts` › `PUT /api/admin/team returns the {teams, eventsAssigned} envelope (ADR-009)` | `PUT must return {teams, eventsAssigned}`: expected `false`, received `true` | green; `eventsAssigned` equals the season's dinners carrying a `cookingTeamId` |
-| `tests/component/stores/plan.nuxt.spec.ts` › `Plan Store - Team creation` › `createTeam returns the {teams, eventsAssigned} envelope` | `Cannot read properties of undefined (reading 'map')` | green |
-| `tests/component/components/admin/AdminTeams.nuxt.spec.ts` (new) › `reports created teams and assigned dinners in the toast` | received `2 madhold oprettet med automatisk tildeling` | green |
-
-| Route + state | Viewport | DS element to expect | Expect |
-|---|---|---|---|
-| `/admin/teams?mode=create`, a season with dinners, 2 new teams → "Opret madhold" | 375px + desktop | success toast | Title "Madhold oprettet"; description `2 madhold oprettet · <m> madlavninger tildelt` on one line, `<m>` matching the cooking days the teams show in view mode |
-
-### Mockup — ✅ signed off 2026-09-16 (behind the [⚙ Indstillinger] button), card faces ✅ 2026-09-17
-
-`Login.vue` owns the composition and draws it in its own header comment; `UserProfileCard.vue` draws the ⚙ in its
-header row; `UserPreferencesCard.vue` draws the two faces below. No drawing line appears in two files.
-
-```
-DASHBOARD /login (logged in)                             AFTER [⚙ Indstillinger] (button filled while open)
-┌ Hej Anna! 👋 ──────────────────────────────────┐       ┌ Hej Anna! 👋 ──────────────────────────────────┐
-│ ┌ UserProfileCard ───────────────────────────┐ │       │ ┌ UserProfileCard ─ [⚙ Indstillinger ●] … ─┐  │
-│ │ [👤] Anna  [⚙ Indstillinger] [Heynabo →]   │ │       │ └──────────────────────────────────────────┘  │
-│ │            [👋 Log ud →]                   │ │       │ ┌ UserPreferencesCard ─────────────────────┐  │
-│ └────────────────────────────────────────────┘ │       │ └──────────────────────────────────────────┘  │
-│ Hvad vil du lave i dag? … ActionCards …        │       │ Hvad vil du lave i dag? … ActionCards …       │
-└────────────────────────────────────────────────┘       └───────────────────────────────────────────────┘
-The ⚙ shows for the current user only (shouldShowActions); on a phone the three buttons wrap under the name.
-Open state is a ref in Login.vue (ADR-006: no persistence); clicking again hides the card.
-```
-
-```
-VIEW  (revealed under UserProfileCard)                   EDIT  (after ✏️ Rediger)
-┌ Mine indstillinger                   [✏️ Rediger] ┐    ┌ Mine indstillinger ───────────────────────┐
-│ 🔔 Notifikationer  [📧 E-mail] [📱 SMS]          │    │ 🔔 Notifikationer                         │
-│ 🎨 Farvevalg       Tydelig  🇪🇺 EN 301 549·AA ✓  │    │    E-mail   anna@…            [———●] ON   │
-│ 🔤 Tekst           Normal                        │    │    SMS      +45 …             [●———] OFF  │
-│                        [📨 Send testbesked]      │    │             (kræver telefonnummer …)      │
-└──────────────────────────────────────────────────┘    │ 🎨 Farvevalg (•) Farveglad                │
-                                                        │             ( ) Tydelig  🇪🇺 EN 301 549 ✓ │
-  badges when a channel is on, "Ingen notifikationer"   │ 🔤 Tekst    (•) Normal ( ) Stor ( ) Større │
-  when none; Send testbesked disabled with no channel   │                  [✕ Annuller]   [✓ Gem]   │
-                                                        └───────────────────────────────────────────┘
-Phone width: the radios stack and the button row is LAYOUTS.formButtonRow (Annuller under Gem).
-```
-
-### Decisions (2026-09-17)
-
-- **The card is revealed by `[⚙ Indstillinger]`** in the `UserProfileCard` header action group, for the current user only. The
-  parent owns the open state: `Login.vue` holds the ref, passes `:preferences-open`, listens to `@toggle-preferences` and renders
-  the card under the profile card. Inside the card the pencil opens the edit face, as the role manager on the same page does.
-- **The values are two `User` columns**, `notificationChannels` and `appearance`, read and written as one record.
-- **One endpoint saves both**: `POST /api/user/preferences` on `Gem`. `POST /api/user/notifications/test` sends a test message to the
-  session user.
-- **The EU badge names the preset that earned it**: `Tydelig` carries `EN 301 549 · WCAG 2.1 AA`, `Farveglad` carries none. The level
-  comes from `PALETTES`, which `designSystemContrast.unit.spec.ts` measures.
-- **Danish labels**: `Farvevalg` names the colour control; the presets read `Farveglad` (`default`) and `Tydelig` (`tydelig`);
-  `Tekst` names the text scale. Keys stay `default` / `tydelig`.
-
-### Test-id contract
-
-| Proposed in `feature-proposal-notifications.md` | Built |
-|---|---|
-| `channel-toggle-EMAIL` / `channel-toggle-SMS` | `pref-channel-EMAIL` / `pref-channel-SMS` |
-| `edit-channels-btn` | `pref-edit` |
-| `save-channels-btn` | `pref-save` |
-| — | `pref-cancel` |
-| `send-test-notification-btn` | `pref-send-test` |
-| — | `pref-toggle` (the ⚙ in the `UserProfileCard` header), `pref-card`, `pref-palette-<key>`, `pref-text-scale-<key>` |
-
-`tests/component/components/user/userPreferencesTestIds.ts` holds the contract for the component specs and the e2e specs.
-
-### TDD
-
-| Test | Change |
-|------|--------|
-| `useUserPreferenceValidation.unit.spec.ts` (new) | enum options, `AppearanceSchema` defaults and rejection, `PALETTES` keys and levels, `UserPreferencesUpdateSchema` partial |
-| `useCoreValidation.unit.spec.ts` | both columns: fragment defaults, `serializeUserInput`, `deserializeUser`, `deserializeUserDetail`, `UserUpdateSchema`, the session |
-| `usePermissions.unit.spec.ts` | `/api/user/` resolves for a member and sits before the generic `/api/` rule |
-| `sender/events/test.unit.spec.ts` | the named recipient, and a named recipient without an admin mailbox |
-| `UserPreferencesCard.nuxt.spec.ts` (new) | view face, stale session falls back to the defaults, empty state, pencil, SMS hint without a phone, badge only on `Tydelig`, `Annuller`, `Gem` posts both fields, `Send testbesked`; real component + real auth store, `describe.each` over `isMd` |
-| `tests/e2e/api/parallel/user/preferences.e2e.spec.ts` (new) | round-trip in the response and the session, appearance-only save, SMS without a phone 400, unlisted palette 400, anonymous 401, test message queued |
-| `UserProfileCard.nuxt.spec.ts` (new) | the ⚙ renders for the current user with actions only, emits `toggle-preferences`, reports `aria-pressed` from `preferencesOpen`; real components and stores |
-| `UserPreferences.e2e.spec.ts` (new) | GIVEN a member on the dashboard WHEN opening the ⚙, picking Tydelig and Stor THEN `html` carries both attributes, after a reload too; picking the defaults removes them |
-| `MobileViewport.e2e.spec.ts` | `/login` at 375px opens the ⚙ (`reveal` hook) so the measurement covers the card |
-
-### Visual check
-
-| Route + state | Viewport | DS element to expect | Expect |
-|---|---|---|---|
-| `/login`, logged in | 375px + desktop | `BUTTONS.secondaryAction` + `ICONS.settings` (`pref-toggle`) | `[⚙ Indstillinger]` sits between the name and `[Heynabo →] [👋 Log ud →]`; on a phone the three wrap under the name. No settings card yet |
-| `/admin/users`, a row expanded | desktop | the same header | No ⚙ on another member's card (`shouldShowActions`) |
-| `/login` → `⚙ Indstillinger` | 375px + desktop | `UCard` + `BUTTONS.edit` (`pref-edit`) | The button fills, and "Mine indstillinger" appears directly under the profile card: the saved channels as badges, `Farvevalg` and `Tekst` on one line each, `Send testbesked`. Clicking the ⚙ again hides it |
-| `/login`, ⚙ open, no channel on | desktop | `TYPOGRAPHY.bodyTextMuted` | "Ingen notifikationer", `Send testbesked` disabled |
-| `/login` → ⚙ → `Rediger` | 375px | `USwitch`, `URadioGroup`, `LAYOUTS.formButtonRow` | Switches carry the address and the number; radios stack; `Gem` above `Annuller` |
-| `/login` → ⚙ → `Rediger`, member without a phone | desktop | `TYPOGRAPHY.finePrint` | The SMS switch is disabled and "SMS kræver telefonnummer i Heynabo" reads under the row |
-| `/login` → ⚙ → `Rediger` | desktop | `UBadge` `COLOR.success`, `TYPOGRAPHY.sectionSubheading` | The badge sits on the verified presets only; `Notifikationer` / `Farvevalg` / `Tekst` read as small bold headings over larger regular options |
-| `/login` → ⚙ → `Tydelig` + `Stor` → `Gem` | 375px + desktop | `html[data-palette]`, `html[data-text-scale]` | The page takes the preset and the larger root size, the card returns to its view face, toast `Indstillinger gemt` |
-| Any page after the save | desktop | the whole app | The preset holds across navigation and a reload |
-| `/login` → ⚙ → `Send testbesked` | desktop | toast | `Testbesked afsendt` plus the message id, or `Notifikationer er ikke sat op i dette miljø` plus `TEST:EMAIL:unconfigured` |
-
-### Affected Areas
-
-`prisma/schema.prisma` (two `User` columns), `migrations/0016_settings.sql`, `app/composables/useUserPreferenceValidation.ts`,
-`app/composables/fragments/domainFragments.ts`, `app/composables/useCoreValidation.ts`, `app/composables/useHeynaboValidation.ts`,
-`server/data/prismaRepository.ts`, `server/routes/api/user/preferences.post.ts`, `server/routes/api/user/notifications/test.post.ts`,
-`server/utils/sender/events/test.ts`, `app/composables/usePermissions.ts`, `app/stores/auth.ts`,
-`app/components/user/UserPreferencesCard.vue`, `app/components/user/UserProfileCard.vue` (the ⚙ toggle),
-`app/components/login/Login.vue` (owns the open state), `app/layouts/default.vue`,
-`app/assets/css/main.css`, `app/composables/useTheSlopeDesignSystem.ts` (`ICONS.notification`, `ICONS.palette`, `ICONS.textScale`),
-`tests/e2e/testDataFactories/userFactory.ts`, `docs/ui.md`, compliance docs.
-
----
-
-## Planning form
-
-### Problem
-
-`/admin/planning` switches modes with a three-button `FormModeSelector` (Vis / Rediger / Opret) while `/admin/allergies` uses a pencil in the
-detail header plus an "Opret" primary action with the form in place. Holiday rows can only be deleted, not edited. Whether an admin may edit
-the live season was unclear. `AdminSeason.vue` is a dead Nuxt UI v2 duplicate; `AdminToCreateSeason.vue` and `FormModeSelector.vue` start
-with stray characters (`BY`, `w`).
-
-### Root Cause
-
-Two generations of admin UX. The live-season question turned out to be a gap, not a design flaw: `POST /api/admin/season/[id]` reconciles
-dinner events on schedule change (`reconcileDinnerEventsForSeason`, ADR-015), but preference clipping and scaffolding only run on activation
-(`active.post.ts:40-45`) and in the nightly job (`dailyMaintenanceService.ts:53-56`). Reconciliation calls `deleteDinnerEvent` without the
-Heynabo callback the admin delete endpoint passes (`reconcileDinnerEvents.ts:39` vs `dinner-event/[id].delete.ts:44`), so announced dinners
-on removed dates stay published in Heynabo. The endpoint also writes `isActive` from the body, bypassing `/active`.
-
-### Solution
-
-- Keep `useEntityFormManager` and `?mode=` sync (ADR-008 [useEntityFormManager Composable Pattern], ADR-006 [URL-Based Navigation and
-  Client-Side State]) — deep links `?mode=create|edit` stay valid. Only the controls change:
-  - Card header: `SeasonSelector` + `[＋ Opret sæson]` (`BUTTONS.primaryAction`, `create-season`, disabled when CREATE is in `disabledModes`).
-  - `AdminPlanningSeason` header: the title carries the season name (Fællesspisning sæson {navn} / Redigerer fællesspisning sæson {navn} / Opret fællesspisning sæson {navn}), so the read-only "Sæson" field goes away; beside it a labelled `Rediger {navn}` (`BUTTONS.secondaryAction` + `COLOR.primary` + `ICONS.edit`, `edit-season`, view mode + `canEdit`).
-  - Footer: `LAYOUTS.formButtonRow`, `BUTTONS.cancel` "Annuller", `BUTTONS.save` "Gem" (`type="submit"`, `:loading`). `id="seasonForm"` untouched.
-  - Activation controls stay in edit mode as today. No delete for seasons.
-  - Picker selection follows what is picked (`CALENDAR.picker`, drawn in the pickers' `#day` slot through the shared `dayCircleClasses` helper): a holiday is the green `CALENDAR.holiday` ring the preview draws, a season date the filled pink `PLANNING_CALENDAR.day.generated` of a cooking day with a dinner. Every calendar day circle in the app now goes through that one helper.
-- **Editable holiday rows**: in edit/create mode each row is a `CalendarDateRangePicker` (`name="holidayRangeList-${i}"`); a change is validated
-  against `holidaysSchema` on the replaced list (overlap / inside season) before it is emitted; view mode keeps the read-only rows.
-- **Live season save**: the endpoint ignores `isActive` (activation only via `/active`); after reconciliation, when the season is active and the
-  schedule changed, it runs `clipPreferences` + `scaffoldPrebookings` — the same idempotent pair activation runs. Response becomes a
-  `SeasonUpdateResponse {season, reconciliation: {created, deleted}, scaffold}` operation envelope (ADR-009 [API Index Endpoint Data Inclusion
-  Strategy]) so the toast can report: "Sæson opdateret — N datoer tilføjet, M fjernet. Forudbestillinger er opdateret. Husk at tildele madhold til nye datoer."
-- **Heynabo cleanup**: `reconcileDinnerEventsForSeason` passes `deleteHeynaboEventAsSystem` (best-effort, ADR-013 [External System Integration Pattern]) — the one-argument callback `deleteDinnerEvent` takes.
-- `FormModeSelector` stays for Teams (stray `w` removed); `AdminSeason.vue` deleted.
-
-### Mockup — ✅ signed off 2026-09-16
-
-```
-VIEW (canEdit)                                              EDIT / CREATE
-┌ [Sæson ▾ 08/26-07/27]              [＋ Opret sæson] ┐     ┌ [Sæson ▾ 08/26-07/27]      [＋ Opret sæson] ┐ (disabled)
-│ 🟢 Aktiv sæson … (SeasonStatusDisplay)              │     │ 🟢 Aktiv sæson … [✕ Deaktiver Sæson]        │ (as today: edit mode)
-│ ┌ Fællesspisning sæson 08/26-07/27                ┐ │     │ ┌ Redigerer fællesspisning sæson 08/26-07/27 ┐ │  create: "Opret fællesspisning
-│ │                    [✏ Rediger 08/26-07/27]      │ │     │ │ Vi følger folkeskolernes feriekalender…  │ │  sæson <navn>", navn once the
-│ │ Vi følger folkeskolernes feriekalender…         │ │     │ │ Hvornår holder fællesspisning fri?       │ │  dates are valid
-│ │ fields disabled … calendar (right/top) …        │ │     │ │ [Start dato ▾][Slut dato ▾] [☀ Tilføj ferie] │  add row (as today)
-│ └─────────────────────────────────────────────────┘ │     │ │ Valgte ferieperioder                     │ │
-└─────────────────────────────────────────────────────┘     │ │ ☀ [13/10/2026][17/10/2026] 🗑            │ │  EACH ROW editable
-                                                            │ │ ☀ [21/12/2026][03/01/2027] 🗑            │ │  (CalendarDateRangePicker);
-LIVE SEASON, after Gem:                                     │ │ … Billetpriser [🎟 Tilføj billet] … 🗑    │ │  list validated on change
-  toast "Sæson opdateret — 3 datoer tilføjet,               │ ├──────────────────────────────────────────┤ │
-  1 fjernet. Forudbestillinger er opdateret.                │ │ fejlliste (if any)                       │ │
-  Husk at tildele madhold til nye datoer."                  │ │              [✕ Annuller]  [✓ Gem]       │ │
-                                                            │ └──────────────────────────────────────────┘ │
-MOBILE: selector + [＋ Opret sæson] stacked full-width     └──────────────────────────────────────────────┘
-(LAYOUTS.cardActionRow/Button); [✏ Rediger <navn>] stays in the card header. View mode: rows read-only as today.
-Removed on planning: FormModeSelector [👁][✏️][＋] and the disabled "Sæson" input (the name is in the title).
-Kept on Teams. No 🗑 for seasons. Members: no ＋ / ✏.
-```
-
-### TDD
-
-| Test | Change |
-|------|--------|
-| `AdminPlanningSeason.nuxt.spec.ts` (new) | `it.each` mode × canEdit: `edit-season` only in view + canEdit, footer only in edit/create; the control is labelled `Rediger {navn}` and emits `edit`; title carries the season name, no `input[name="shortName"]`; 'Annuller'/'Gem'; `form#seasonForm` |
-| `AdminPlanning.nuxt.spec.ts` (new) | pattern `AdminAllergies.nuxt.spec.ts`; `create-season` present and `form-mode-edit` absent; member sees neither; edit/cancel/create drive `?mode=`; toast from the envelope |
-| `CalendarDateRangeListPicker.nuxt.spec.ts` | edit mode row is a picker (`selection="holiday"`); change emits the updated list; overlap shows `'Ferieperioder må ikke overlappe hinanden'` and does not emit |
-| `season.e2e.spec.ts:122` | envelope counts; `isActive` in the body ignored |
-| `tests/e2e/api/serial/admin/seasonLiveEdit.e2e.spec.ts` (new) | own active season inside the 60-day window; add a holiday + a cooking date → orders on the holiday date gone (cascade), the new date scaffolded in the same request, preferences clipped |
-| `tests/e2e/ui/serial/AdminPlanningLiveSeason.e2e.spec.ts` (new) | GIVEN the active season WHEN adding a holiday in the UI THEN the toast reports counts and bookings exist on the new date |
-| `AdminPlanning.e2e`, `AdminPlanningSeason.e2e`, `admin.e2e` | `form-mode-*` → `create-season` / `edit-season`; ring-class assertions dropped; per-tab `editControl` (planning `edit-season`, teams `form-mode-edit`); `holidayRowStartDates` reads the row pickers' `start` inputs |
-| `AdminPlanningSeason.e2e` | edit a holiday row's dates → saved season has the new range |
-| `CalendarDateRangePicker.nuxt.spec.ts` | `selection=cookingDay\|holiday` renders every picked day as the `dayCircleClasses(CALENDAR.picker[selection])` circle, and `[data-selected]` cells exist |
-| `CalendarDisplay.nuxt.spec.ts`, `designSystemUsage.unit.spec.ts` | the day circle comes from `dayCircleClasses`; every `<UCalendar>` binds the grid directly or through `calendarPickerProps` |
-
-### Affected Areas
-
-`AdminPlanning.vue`, `admin/planning/AdminPlanningSeason.vue`, `calendar/CalendarDateRangeListPicker.vue`, `calendar/CalendarDateRangePicker.vue`,
-`calendar/CalendarDatePicker.vue`, `form/FormModeSelector.vue`, `useTheSlopeDesignSystem.ts` (`CALENDAR.picker`, `calendarPickerProps`, `dayCircleClasses`), the four calendar displays,
-`server/routes/api/admin/season/[id].post.ts`, `server/utils/reconcileDinnerEvents.ts`, `useSeasonValidation.ts` (`SeasonUpdateResponse`),
-`app/stores/plan.ts` (`updateSeason` returns the envelope), `app/utils/utils.ts` (`capitalize`), delete `admin/AdminSeason.vue`, compliance docs.
-
-**Verified (2026-09-16):** red first — 4 failing cases in `AdminPlanningSeason.nuxt.spec.ts` (no edit control, footer labelled "Arbejder..."), 6 of 7
-in `AdminPlanning.nuxt.spec.ts` (no `create-season`, no `edit-season`), 3 in `CalendarDateRangeListPicker.nuxt.spec.ts` (no row picker),
-`SeasonFactory.updateSeasonWithResult is not a function` in both season API specs, `isActive: true` accepted, and 2 UI e2e failures on the
-missing `create-season` / `edit-season`. Green: 2255 vitest tests across `tests/component`; `npm run pre:all` clean; e2e
-`season.e2e.spec.ts` 23 passed, `seasonLiveEdit.e2e.spec.ts` (serial) 1 passed, `AdminPlanning` + `AdminPlanningSeason` + `admin` +
-`AdminTeams` + `SeasonSelector` at `--workers=4` 52 passed, `AdminPlanningLiveSeason.e2e.spec.ts` (serial UI) 1 passed. Picker selection
-verified in the browser: `test-results/picker-season-cookingday.png` (filled pink range) and `test-results/picker-holiday-selection.png`
-(green ring circles).
-
-### Visual check — Planning form (walk before the package is approved; copied into the PR description)
-
-| Route + state | Viewport | DS element to expect | Expect |
-|---|---|---|---|
-| `/admin/planning` as ADMIN, a season selected | 375px + desktop | `LAYOUTS.cardActionRow` + `BUTTONS.primaryAction` + `COLOR.primary` + `ICONS.plusCircle` | "⊕ Opret sæson" solid beside the season selector, full width on the phone and inline on desktop; the old [👁][✏️][＋] trio is gone |
-| same | 375px + desktop | `BUTTONS.secondaryAction` + `COLOR.primary` + `ICONS.edit` | the card header reads "Fællesspisning sæson 08/26-07/27" with "✏ Rediger 08/26-07/27" beside it; the form has no read-only "Sæson" field any more |
-| `/admin/planning?mode=edit` | 375px + desktop | `LAYOUTS.formButtonRow` + `BUTTONS.cancel` + `BUTTONS.save` | title "Redigerer fællesspisning sæson 08/26-07/27"; "✕ Annuller" and "✓ Gem" right-aligned on desktop and stacked with Gem on top on the phone; the error list sits above them |
-| `/admin/planning?mode=create` | 375px + desktop | same footer | title "Opret fællesspisning sæson", and the computed name appears as soon as start and slut are valid |
-| `/admin/planning?mode=edit`, season with holidays | 375px + desktop | row `CalendarDateRangePicker` + `BUTTONS.edit` + `ICONS.trash` | each holiday row is ☀ + [Start dato][Slut dato] + 🗑; a date change lands on that row alone; an overlapping change shows "Ferieperioder må ikke overlappe hinanden" by the add row and the row keeps its old dates |
-| same, a holiday row picker open | 375px + desktop | `dayCircleClasses(CALENDAR.picker.holiday)` | every picked day is an empty circle with a green ring, start and end included; adjacent-month days stay hidden (`test-results/picker-holiday-selection.png`) |
-| `/admin/planning?mode=edit`, season date picker open | 375px + desktop | `dayCircleClasses(CALENDAR.picker.cookingDay)` | the picked range is a row of filled pink circles, like the cooking days the preview draws (`test-results/picker-season-cookingday.png`) |
-| `/household/<own>/settings`, pencil → move-out date | 375px + desktop | `dayCircleClasses(CALENDAR.picker.cookingDay)` | the picked date is one filled pink circle; picking a date still works |
-| `/admin/planning?mode=view` | 375px + desktop | read-only rows | holiday rows are disabled inputs "13/10/2026-17/10/2026" with the ☀ leading icon, no 🗑 and no footer buttons |
-| `/admin/planning?mode=edit` on the ACTIVE season: add a holiday over a booked date, then Gem | desktop | toast `ICONS.checkCircle` + `COLOR.success` | "Sæson opdateret — 0 datoer tilføjet, 1 fjernet. Forudbestillinger er opdateret."; adding dates appends "Husk at tildele madhold til nye datoer." |
-| `/dinner`, `/chef`, `/admin/teams` calendars | desktop | `dayCircleClasses(<palette>)` | day circles and legend circles are unchanged after the sweep onto the shared helper |
-| `/admin/planning` as a member | 375px + desktop | — | no "Opret sæson" and no "Rediger …"; the read-only banner shows |
-| `/admin/planning` with no seasons, as ADMIN | 375px + desktop | `ALERTS.emptyState` + `create-first-season` | the empty state with "⊕ Opret ny sæson"; the header keeps "Opret sæson" and shows no "Rediger …" |
-| `/admin/planning?mode=edit`, ACTIVE / FUTURE / PAST season | desktop | `SeasonStatusDisplay` + `ICONS` | the status alert icons are the outline check-circle, calendar and archive-box from `ICONS` |
-| `/admin/teams` | 375px + desktop | `FormModeSelector` | the [👁][✏️][＋] trio is unchanged on Teams |
-
----
-
-## Sorted holidays
-
-### Problem
-
-Holidays display and persist in insertion order. `compareDateRanges` exists (`app/utils/date.ts:91-93`) but only `areRangesOverlapping` uses it, on a copy.
-
-### Solution
-
-One util `sortDateRanges = (r) => r.toSorted(compareDateRanges)` in `app/utils/date.ts`, reused by `areRangesOverlapping`; applied on add in
-`CalendarDateRangeListPicker.vue:39` (the model stays sorted, so index-based removal stays correct) and in `serializeSeason`/`deserializeSeason`
-(canonical storage; CSV import inherits; legacy rows display sorted). Row edits update in place; canonical order is restored on save.
-
-### TDD
-
-| Test | Change |
-|------|--------|
-| `date.unit.spec.ts` | `sortDateRanges`: ascending, non-mutating, empty/single pass-through, stable |
-| `useSeasonValidation.unit.spec.ts` | serialize/deserialize emit chronological holidays |
-| `CalendarDateRangeListPicker.nuxt.spec.ts` | adding an earlier range after a later one → `[A, B]`; row 0 shows `formatDateRange(A)` |
-| `AdminPlanningSeason.e2e.spec.ts` | add later then earlier → chronological in the list |
-
-**Verified (2026-09-16):** 8 new assertions red first — 5 `sortDateRanges` cases, 2 serialize/deserialize cases, 1 picker case; green with 131 vitest tests in the three specs plus `useSeason.nuxt.spec.ts` (78) and `AdminPlanningSeason.e2e.spec.ts` (9 e2e).
-
----
-
-## Calendar grid
-
-### Problem
-
-The season and holiday pickers render the trailing days of month N and the leading days of month N+1 in both grids: the same dates appear twice.
-
-### Root Cause
-
-`reka-ui` marks other-month cells `data-outside-view` (`CalendarCellTrigger.js:49-53,126`). `BaseCalendar.vue:85-86` disables and hides them
-(`COMPONENTS.calendar.cellTrigger 'data-[outside-view]:hidden'`); `CalendarDateRangePicker.vue:143-152` and `CalendarDatePicker.vue:119-126`
-call `UCalendar` directly and never received either. `CalendarDisplay.vue:80-94` also hand-rolls its day classes (`w-8 h-8`, literal pink).
-
-### Solution
-
-One design-system token `COMPONENTS.calendarGrid = {weekStartsOn: 1, fixedWeeks: false, weekdayFormat: 'short', disableDaysOutsideCurrentView: true,
-ui: {cellTrigger: 'data-[outside-view]:hidden'}}` spread with `v-bind` in all three `UCalendar` call sites; `PLANNING_CALENDAR` palette
-(pink `day.generated`, `day.potential`) beside `CHEF_CALENDAR`/`DINNER_CALENDAR`; `CalendarDisplay` uses `SIZES.calendarCircle` + `CALENDAR.day.shape`.
-Rejected: a `CalendarGrid.vue` atom (generic v-model passthrough for zero behaviour); pickers on `BaseCalendar` (readonly, event-list driven).
-
-### Mockup — ✅ applied 2026-09-16
-
-```
-BEFORE (season/holiday pickers)                 AFTER (all calendars share COMPONENTS.calendarGrid)
-  SEP 2026          OKT 2026                      SEP 2026          OKT 2026
-  … 28 29 30  1  2  3  4  |  28 29 30  1  2  3      … 28 29 30        |           1  2  3
-  ↑ Oct 1-4 and Sep 28-30 rendered twice           adjacent-month days disabled + hidden
-```
-
-### TDD
-
-| Test | Change |
-|------|--------|
-| `CalendarDateRangePicker.nuxt.spec.ts`, `CalendarDatePicker.nuxt.spec.ts` | inner `UCalendar` receives `COMPONENTS.calendarGrid` (shared helper `expectSharedCalendarGrid`) |
-| `CalendarDisplay.nuxt.spec.ts` (new) | generated / potential / holiday cells carry the palette + circle classes |
-| `AdminPlanningSeason.e2e.spec.ts` | open the season picker → zero visible `[data-outside-view]` cells |
-
-**Verified (2026-09-16):** red 13-14 duplicate cells in the season picker → 0 after the token; 34 calendar component tests, 9 `AdminPlanningSeason` e2e tests and `npm run pre:all` all green.
-
----
-
-## Planning buttons
-
-### Problem
-
-No planning component uses `BUTTONS.*`: footer buttons, "Tilføj ferie", "Tilføj billet", trash buttons, the activate button, the
-`AdminToCreateSeason` CTA and the pickers' trailing calendar button are all ad hoc; `TicketPriceListEditor` uses `name=` for test hooks.
-
-### Solution
-
-`ICONS.holiday` (`i-heroicons-sun`) and `ICONS.printer` added. Add buttons = `BUTTONS.secondaryAction` + `ICONS.holiday|ticket`; row trash =
-`BUTTONS.edit` + `ICONS.trash` + `aria-label`; activate = `BUTTONS.primaryAction` + `COLOR.success` + `ICONS.playCircle` (label 'Aktiver Sæson'
-kept); date inputs use `:trailing-icon="ICONS.calendar"`; `AdminToCreateSeason` gets a `canEdit` prop and a `BUTTONS.primaryAction` CTA
-(`create-first-season`, deep link `/admin/planning?mode=create` unchanged); `name="addTicketPrice|removeTicketPrice-*"` → `data-testid`.
-Mockup: see "Planning form".
-
-### TDD
-
-| Test | Change |
-|------|--------|
-| `tests/component/components/admin/planningTestIds.ts` (new) | shared test-id contract |
-| `TicketPriceListEditor.nuxt.spec.ts`, `AdminToCreateSeason.nuxt.spec.ts` (new) | add/remove emit; CTA only with `canEdit` |
-| `SeasonStatusDisplay.nuxt.spec.ts` | DS props; migrated to the real store + `registerEndpoint` (testing.md Rule 6) |
-| `CalendarDateRangeListPicker.nuxt.spec.ts` | DS props on add/remove |
-
-**Verified (2026-09-16):** 5 new assertions red first (`ticket-price-add`, `ticket-price-remove-${i}`, the disabled gate, `create-first-season` + its `to`); green with 177 vitest tests across `tests/component/components/admin`, `…/calendar`, `…/shared` and `tests/component/architecture`. `SeasonStatusDisplay.nuxt.spec.ts` now drives the real `usePlanStore` (8 tests). `npm run lint`, `npm run ts:server`, `npm run ts:node` clean; `npm run ts` fails only on the pre-existing `TS2688 @cloudflare/workers-types/2023-07-01` from the in-flight Wrangler upgrade. E2E `AdminPlanning`, `AdminPlanningSeason`, `SeasonSelector`, `AdminTeams`, `AllergyPoster` at `--workers=4`: 26-27 of 28 pass; the two `AdminPlanning` stragglers time out on the page loader ("Vi venter på data") under parallel load and pass when that spec runs alone (9 passed).
-
-Behaviour note: `TicketPriceListEditor`'s add card switched from `v-show` to `v-if`, so view mode drops the draft controls out of the DOM and the tab order — same contract as the row trash and as `CalendarDateRangeListPicker`.
-
-### Visual check — Planning buttons (walk before the package is approved; copied into the PR description)
-
-| Route + state | Viewport | DS element to expect | Expect |
-|---|---|---|---|
-| `/admin/planning?mode=edit`, season with holidays | 375px + desktop | `BUTTONS.secondaryAction` + `COLOR.info` + `ICONS.holiday` | "☀ Tilføj ferie" outline, standard size (was `size="lg"`); the margin nudge beside the picker is unchanged, error state still pushes it down |
-| same | 375px + desktop | `BUTTONS.edit` + `ICONS.trash` | each holiday row's 🗑 is a square neutral ghost button (was small red ghost), with an `aria-label` naming the period; the row's leading ☀ icon is unchanged |
-| `/admin/planning?mode=edit`, ticket prices | 375px + desktop | `BUTTONS.secondaryAction` + `COLOR.info` + `ICONS.ticket` | "🎟 Tilføj billet" outline, standard size |
-| same | 375px + desktop | `BUTTONS.edit` + `ICONS.trash` | each billet row's 🗑 is square neutral ghost (was small red ghost); `aria-label` names the ticket type |
-| `/admin/planning?mode=view` (or any view-mode season) | both | — | no "Tilføj billettyper" card at all (it is now removed from the DOM, not just hidden) and no row 🗑; the price list itself is unchanged |
-| `/admin/planning?mode=create` and `?mode=edit`, season start/end + holiday pickers | 375px + desktop | `UInput :trailing-icon="ICONS.calendar"` | a plain calendar glyph inside the field instead of a nested blue button; tapping anywhere on the field still opens the popover, the grid still hides adjacent-month days |
-| `/household/<own>/settings`, pencil → edit move-out date | 375px + desktop | same `:trailing-icon` on `CalendarDatePicker` | same glyph change on the single-date field; picking a date still works |
-| `/admin/planning?mode=edit`, FUTURE or CURRENT season | 375px + desktop | `BUTTONS.primaryAction` + `COLOR.success` + `ICONS.playCircle` + `ICONS.arrowRight` | "▶ Aktiver Sæson →" solid green inside the status alert, small size, beside the text on desktop and under it on the phone; while activating it shows the spinner instead of the old "Arbejder..." label |
-| same, ACTIVE season | both | `DangerButton` (unchanged) | "Deaktiver Sæson" two-click confirm unchanged |
-| `/admin/planning` and `/admin/teams` with no seasons at all, as ADMIN | 375px + desktop | `ALERTS.emptyState` + `BUTTONS.primaryAction` + `COLOR.primary` + `ICONS.plusCircle` | 🧘 empty state with "⊕ Opret ny sæson" solid primary, full width on the phone and inline on desktop; it links to `/admin/planning?mode=create` |
-| same, as a member (no admin role) | both | `ALERTS.emptyState`, no CTA | the empty state text only — the create button is gone |
-| `/admin/allergies/pdf` | desktop | `BUTTONS.secondaryAction` + `COLOR.secondary` + `ICONS.arrowLeft`, `BUTTONS.primaryAction` + `COLOR.primary` + `ICONS.printer` | "← Tilbage" outline and "🖨 Print" solid, both standard size; print preview unchanged (both controls stay `no-print`) |
-
----
-
-## Test coverage matrix
-
-Every endpoint gets an API spec; every UX component gets a BDD e2e (GIVEN/WHEN/THEN) and a component spec.
-
-| Endpoint (new / changed) | API spec |
-|---|---|
-| `GET`/`POST /api/admin/setting/[key]` | `tests/e2e/api/parallel/admin/setting.e2e.spec.ts` (new) |
-| `GET /api/user/preference`, `POST /api/user/preference/[key]` | `tests/e2e/api/parallel/user/userPreference.e2e.spec.ts` (new) |
-| `POST /api/admin/season/[id]` (envelope, `isActive` ignored, Heynabo cleanup) | `tests/e2e/api/parallel/admin/season.e2e.spec.ts` extended |
-| `POST /api/admin/season/[id]` on the ACTIVE season (clip + scaffold) | `tests/e2e/api/serial/admin/seasonLiveEdit.e2e.spec.ts` (new) |
-| `POST /api/admin/season/import`, `…/generate-dinner-events` (shared reconcile) | existing specs; Heynabo delete is external → code review of the callback argument |
-
-| UX component / behaviour | BDD e2e | Component spec |
-|---|---|---|
-| `ALERTS` sweep | `MobileViewport.e2e.spec.ts` (new) | DS spec + `designSystemAlerts` architecture test |
-| `AllergyNotes` on `/admin/allergies` | `AdminAllergies.e2e.spec.ts` | `AllergyNotes.nuxt.spec.ts` (new), `AdminAllergies.nuxt.spec.ts` |
-| `AllergyNotes` + `QrCode` on the poster | `AllergyPoster.e2e.spec.ts` | `admin-allergies-pdf.nuxt.spec.ts`, `QrCode.nuxt.spec.ts`, `qr.unit.spec.ts` |
-| Teams edit mode with no teams | `AdminTeams.e2e.spec.ts` | — (`AdminTeams` has no component spec) |
-| Booking grid period with no dinners | covered by the component spec | `BookingGridView.nuxt.spec.ts` |
-| Allergy detail edit affordance | `AdminAllergies.e2e.spec.ts` | `AllergyDetailPanel.nuxt.spec.ts`, `AdminAllergies.nuxt.spec.ts` |
-| `UserPreferencesCard` | `UserPreferences.e2e.spec.ts`, `user/preferences.e2e.spec.ts` | `UserPreferencesCard.nuxt.spec.ts`, `useUserPreferenceValidation.unit.spec.ts` |
-| Planning form controls, member gating | `AdminPlanning.e2e`, `AdminPlanningSeason.e2e`, `admin.e2e`, `AdminPlanningLiveSeason.e2e` (serial) | `AdminPlanning.nuxt.spec.ts`, `AdminPlanningSeason.nuxt.spec.ts` |
-| Editable holiday rows | `AdminPlanningSeason.e2e` | `CalendarDateRangeListPicker.nuxt.spec.ts` |
-| Sorted holidays | `AdminPlanningSeason.e2e` | `date.unit`, `useSeasonValidation.unit`, list-picker spec |
-| Calendar grid | `AdminPlanningSeason.e2e` | picker specs, `CalendarDisplay.nuxt.spec.ts` (new) |
-| Planning buttons | planning e2e via test-ids | `TicketPriceListEditor`, `AdminToCreateSeason` (new), `SeasonStatusDisplay` |
-| Live-season save toast | `tests/e2e/ui/serial/AdminPlanningLiveSeason.e2e.spec.ts` (new) | `AdminPlanning.nuxt.spec.ts` |
-
-### Test-id contract (old → new)
+| `ALERTS`, overflow at 375px | `MobileViewport` | `designSystemUsage`, `DinnerModeLegend` |
+| `AllergyNotes` | `AdminAllergies`, `AllergyPoster` | `AllergyNotes`, `AdminAllergies`, `admin-allergies-pdf` |
+| `QrCode` | `AllergyPoster` | `QrCode`, `qr.unit` |
+| Preferences, ⚙ | `UserPreferences`, `MobileViewport` | `UserPreferencesCard`, `UserProfileCard` |
+| Planning form, holidays, pickers | `AdminPlanning`, `AdminPlanningSeason`, `admin`, `AdminPlanningLiveSeason` | `AdminPlanning`, `AdminPlanningSeason`, `CalendarDateRangeListPicker`, `CalendarDateRangePicker`, `CalendarDisplay` |
+| Planning buttons | planning e2e via test-ids | `TicketPriceListEditor`, `AdminToCreateSeason`, `SeasonStatusDisplay` |
+| Teams: empty state, colours, toast | `AdminTeams` | `AdminTeams`, `TeamCalendarDisplay` |
+| Booking grid without dinners | — | `BookingGridView` |
+| Palettes and rainbow | — | `designSystemContrast`, `designSystemColourVision` |
+
+## Test-id contract
 
 | Surface | Old | New |
 |---|---|---|
 | Planning header | `form-mode-create` | `create-season` |
-| Season card header | `form-mode-edit` | `edit-season` (view + canEdit) |
-| Planning | `form-mode-view` | none (URL `mode=view`, `edit-season` visible) |
-| Season footer / form | `cancel-season`, `submit-season`, `form#seasonForm` | unchanged ('Annuller' / 'Gem') |
-| Status alert | `activate-season`, `deactivate-season` | unchanged |
-| Empty state CTA | UAlert `:actions` | `create-first-season` |
-| Holidays | `holiday-range-add`, `holiday-range-remove-${i}`, `holidayRangeList-${i}` | unchanged; edit-mode row = picker (`[name="holidayRangeList-i"] input[name="start|end"]`) |
-| Ticket prices | `name="addTicketPrice|removeTicketPrice-${i}"` | `ticket-price-add`, `ticket-price-remove-${i}` |
-| Notes / QR / preferences | — | `allergy-notes*`, `qr-code`, `pref-channel-*`, `pref-palette`, `pref-text-scale` |
-| Teams | `form-mode-*` | unchanged |
+| Season card | `form-mode-edit`, `form-mode-view` | `edit-season` (view + canEdit) |
+| Empty-state CTA | UAlert `:actions` | `create-first-season` |
+| Ticket prices | `name="addTicketPrice"`, `name="removeTicketPrice-${i}"` | `ticket-price-add`, `ticket-price-remove-${i}` |
+| Profile card | `name="logout-button"`, `name="heynabo-profile-link"` | `data-testid` with the same names; `pref-toggle` |
+| Preferences (proposal: `channel-toggle-*`, `edit-channels-btn`, `save-channels-btn`, `send-test-notification-btn`) | — | `pref-channel-*`, `pref-edit`, `pref-save`, `pref-cancel`, `pref-send-test`, `pref-card`, `pref-palette-<key>`, `pref-text-scale-<key>` |
+| Notes | — | `allergy-notes`, `allergy-notes-item`, `edit-allergy-notes`, `allergy-notes-textarea`, `save-allergy-notes`, `cancel-allergy-notes` |
+| QR, team legend | — | `qr-code`, `team-legend-entry`, `team-legend-badge` |
 
----
+Shared contracts: `planningTestIds.ts`, `allergyTestIds.ts`, `userPreferencesTestIds.ts`.
 
-## Work order, approval gates & supervision
+## Visual check
 
-| Order | Package | Gate before an agent starts |
-|---|---|---|
-| 1 | This doc (done) | — |
-| 2 | Sorted holidays | package brief approved |
-| 3 | Calendar grid | package brief approved; mockup ✅ |
-| 4 | Alerts on mobile | repro screenshots + classification table in this doc; mockup ✅; brief approved |
-| 5 | Planning buttons | mockup "Planning form" ✅; brief approved |
-| 6 | Planning form | ✅ shipped (2026-09-16) |
-| 7 | QR code | ✅ shipped (2026-09-16) — with the teams empty state, the booking grid empty period and the allergy edit affordance |
-| 8 | Colour drift sweep | ✅ shipped (2026-09-16) — DS tokens for every colour, two architecture rules |
-| 9 | Poster notes editing + My preferences (one migration) | ✅ shipped — My preferences (2026-09-17), poster notes editing on the same migration (2026-09-18) |
-| 10 | Ship: the settings ADR, compliance docs, `docs/ui.md`, `docs/testing.md`, `pre:all`, full suites, `/dry` | — |
+The human checks for this branch live in the PR #166 comment, grouped by page. Palettes switch from ⚙ Indstillinger → Rediger → Farvevalg,
+or with `document.documentElement.dataset.palette = '<key>'` in the console.
 
-Per package: red output shown → green output shown → `npm run pre:all` → architect diff review against the package, the coverage matrix
-and the design-system rule → compliance rows in the same change. Agents (`tdd-pair-programmer`, `nuxt-typescript-developer`,
-`test-automation-engineer`) never commit; the user commits per package.
+## ADR notes
 
-**Commands the user runs**
+- **ADR-017** — composables the server imports use explicit imports; presentation lives in `use<Domain>Ui`; `pre:all` typechecks each
+  generated project (C1).
+- **ADR-018** — recorded 2026-09-16: the design system owns shared UI values; architecture tests enforce it.
+- **Next free number — Editable settings as a key-value store with a code registry.** `Setting` holds a key and a JSON value;
+  `SETTING_REGISTRY` declares each key's `valueSchema`, `defaultValue` and `canWrite`. `GET` answers a registered key with the row or the
+  default and an unregistered key with 400; `POST` validates with the key's schema and runs `requireSettingWriteAccess`, so the route table
+  carries one rule per prefix. The repository owns the JSON (ADR-010); the domain store owns the fetch. A user's own values are `User`
+  columns typed by `useUserPreferenceValidation.ts`.
+
+## Commands
 
 ```
-npm i uqr                                                  # QR code
-make d1-prisma                                             # after the schema edit (commit generated zod)
-make d1-create-migration name=settings                     # → migrations/0016_settings.sql (Setting + User.appearance)
-npm run db:migrate:local                                   # dev/prod at deploy
+make palettes                              # regenerate app/assets/css/palettes/*.css after a scale, ui.colors or fill/ink token change
+make d1-create-migration name=<change>     # the user runs it; the Prisma source is rewritten to ALTER TABLE before flattening
+make d1-migrate-local                      # then d1-migrate-dev before deploy-dev, d1-migrate-prod before deploy-prod
+make d1-nuke-allergy-notes                 # remove e2e lines (a UUID in the line) from the allergy notes, local; part of d1-nuke-all
 ```
-
----
-
-## ADR Notes
-
-- **ADR-001 [Core Framework and Technology Stack]** — new components import types from
-  `useAllergyValidation` only; no imports from the generated layer.
-- **ADR-007 [SSR-Friendly Store Pattern with useAsyncData]** — no new server data; the
-  panel is prop-driven; store access + the `householdShortNames` map stay in
-  `AdminAllergies` (container).
-- **ADR-006 [URL-Based Navigation and Client-Side State]** — catalog selection stays
-  client-side (unchanged).
-
-- **ADR-017 [Isomorphic Composables, Pure UI Composables and Per-Context Type Checking]** — new:
-  composables the server imports use explicit imports and carry no UI; presentation lives in
-  `use<Domain>Ui`; `pre:all` typechecks the server and node projects. Introduced by C1.
-
-**Out of scope (noted):** mobile Playwright viewport projects (commented out in
-`playwright.config.ts`); `HouseholdAllergies.vue`.
-
-- **ADR-0xx (next free number when it ships) [Editable settings as a key-value store with a code registry]** — built by "Poster notes",
-  shared with "My preferences": the `Setting` table holds `key` + a JSON `value`; `SETTING_REGISTRY` in `useSettingValidation.ts` declares each
-  key's `valueSchema`, `defaultValue` and `canWrite`. `GET /api/admin/setting/[key]` answers a registered key with the stored row or the
-  registry default (`updatedAt` and `updatedByUserId` null), and an unregistered key with 400. `POST` validates the body against the key's own
-  schema and runs `requireSettingWriteAccess(event, key)`, so the route table carries one coarse rule per prefix and never a key name. The
-  repository owns the JSON (ADR-010); the domain store owns the fetch and keeps its own status refs; a new editable text is a key plus a
-  registry entry. `User.notificationChannels` and `User.appearance` follow the same registry shape per column in `useUserPreferenceValidation.ts`.
-- **ADR-018 [Design system owns shared UI patterns — components bind tokens, never raw Nuxt UI props]** — recorded in `docs/adr.md` 2026-09-16:
-  `BUTTONS`, `ALERTS`, `COMPONENTS.calendarGrid` live in `useTheSlopeDesignSystem`; architecture tests enforce; a new Nuxt UI component
-  family gets a token before its first use.

@@ -179,7 +179,7 @@ d1-seed-master-data-prod: ## Load master data to prod (confidential, manual)
 	@echo "✅ Master data loaded (prod)!"
 
 # --- Queries and test-data cleanup (local)
-.PHONY: d1-list-users-local d1-list-tables d1-list-tables-local d1-nuke-seasons d1-nuke-households d1-nuke-users d1-nuke-allergytypes d1-nuke-all
+.PHONY: d1-list-users-local d1-list-tables d1-list-tables-local d1-nuke-seasons d1-nuke-households d1-nuke-users d1-nuke-allergytypes d1-nuke-allergy-notes d1-nuke-all
 
 d1-list-users-local:
 	$(call d1_exec,theslope,SELECT * FROM User,--local)
@@ -218,7 +218,20 @@ d1-nuke-allergytypes: ## Delete test allergy types (local) - Peanuts-* pattern
 	$(call d1_exec,theslope,DELETE FROM AllergyType WHERE name LIKE 'Peanuts-%' OR name LIKE 'Test %' OR name LIKE 'Updated %',--local)
 	@echo "✅ Test allergy types cleaned up!"
 
-d1-nuke-all: d1-nuke-seasons d1-nuke-households d1-nuke-users d1-nuke-allergytypes ## Nuke all test data from local database
+# The e2e specs salt every line they add to the allergy poster notes with a UUID; a member's text carries none
+NOTES_TEST_LINE := '%________-____-____-____-____________%'
+NOTES_LINES := WITH RECURSIVE src(txt) AS (SELECT json_extract(value, '$$') FROM Setting WHERE key = 'allergy-poster-notes'), split(line, rest, n) AS (SELECT '', txt || char(10), 0 FROM src UNION ALL SELECT substr(rest, 1, instr(rest, char(10)) - 1), substr(rest, instr(rest, char(10)) + 1), n + 1 FROM split WHERE rest <> '')
+NOTES_TEST_LINE_COUNT := $(NOTES_LINES) SELECT count(*) AS test_lines FROM split WHERE n > 0 AND line LIKE $(NOTES_TEST_LINE)
+NOTES_TEST_LINE_DELETE := $(NOTES_LINES) UPDATE Setting SET value = json_quote(coalesce((SELECT group_concat(line, char(10)) FROM (SELECT line FROM split WHERE n > 0 AND line NOT LIKE $(NOTES_TEST_LINE) ORDER BY n)), '')) WHERE key = 'allergy-poster-notes'; DELETE FROM Setting WHERE key = 'allergy-poster-notes' AND json_extract(value, '$$') = ''
+
+d1-nuke-allergy-notes: ## Remove the e2e lines (a UUID in the line) from the allergy poster notes (local)
+	@echo "🔍 Test lines in the allergy notes:"
+	$(call d1_exec,theslope,$(NOTES_TEST_LINE_COUNT),--local)
+	$(call d1_exec,theslope,$(NOTES_TEST_LINE_DELETE),--local)
+	@echo "✅ Remaining test lines:"
+	$(call d1_exec,theslope,$(NOTES_TEST_LINE_COUNT),--local)
+
+d1-nuke-all: d1-nuke-seasons d1-nuke-households d1-nuke-users d1-nuke-allergytypes d1-nuke-allergy-notes ## Nuke all test data from local database
 	@echo "✅ Nuked all test data!"
 
 # --- Time Travel (remote D1, last 30 days) and the dev → local copy. Local has no Time Travel: it is replaced by a copy of dev

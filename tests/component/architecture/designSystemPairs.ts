@@ -368,8 +368,7 @@ const INK_ON_FILL: Record<string, PlacedInk[]> = {
     'RAINBOW[1]': [...SECTION_TITLE, ...KITCHEN_INK, ...TEAM_BADGE],
     'RAINBOW[2]': [...SECTION_TITLE, ...KITCHEN_INK, ...TEAM_BADGE],
     'RAINBOW[3]': [...SECTION_TITLE, ...TEAM_BADGE],
-    'RAINBOW[4]': [...SECTION_TITLE, ...TEAM_BADGE],
-    ...Object.fromEntries(RAINBOW.slice(5).map((_, offset) => [`RAINBOW[${offset + 5}]`, TEAM_BADGE])),
+    ...Object.fromEntries(RAINBOW.slice(4).map((_, offset) => [`RAINBOW[${offset + 4}]`, TEAM_BADGE])),
     'BACKGROUNDS.hero.mocha': [
         // app/components/dinner/DinnerDetailHeader.vue:65-78, app/components/chef/ChefMenuCard.vue:418
         {ink: 'TYPOGRAPHY.bodyTextMedium', at: 'DinnerDetailHeader.vue:74'},
@@ -379,10 +378,8 @@ const INK_ON_FILL: Record<string, PlacedInk[]> = {
     'BACKGROUNDS.hero.orange': [...SECTION_TITLE, ...KITCHEN_INK],
     'BACKGROUNDS.hero.ocean': [...SECTION_TITLE, ...KITCHEN_INK],
     'BACKGROUNDS.hero.bonbon': SECTION_TITLE,
-    // The spare stop and the countdown fill are drawn by no component today; each is graded by
-    // the typography docs/ui.md pairs it with. The day a component puts body text on one, that
-    // component belongs in its row
-    'BACKGROUNDS.hero.party': SECTION_TITLE,
+    // The countdown fill is drawn through `BACKGROUNDS.hero` by no component today and is graded by
+    // the typography docs/ui.md pairs it with; as a team stop it is `RAINBOW[4]`, graded above
     'BACKGROUNDS.hero.peach': [{ink: 'TYPOGRAPHY.heroTitle', at: 'docs/ui.md "The brand rainbow"'}],
     // app/components/landing/Hero.vue:7
     'BACKGROUNDS.landing.titleBar': [{ink: 'TYPOGRAPHY.heroTitle', at: 'Hero.vue:7'}],

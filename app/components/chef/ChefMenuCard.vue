@@ -490,10 +490,8 @@ const handleCardClick = () => {
                 <!-- More - the settings wheel + chevron (BUTTONS.settings), reveals the danger zone -->
                 <UButton
                   v-if="canCancelDinner(dinnerEvent)"
-                  v-bind="BUTTONS.settings"
-                  :trailing-icon="ICONS.chevronDown"
+                  v-bind="{...BUTTONS.settings, ...BUTTONS.disclosure(isMoreOpen)}"
                   class="self-end md:self-auto"
-                  :ui="{ trailingIcon: isMoreOpen ? 'rotate-180 transition-transform duration-200' : 'transition-transform duration-200' }"
                   :disabled="isUpdating"
                   aria-label="Flere handlinger"
                   data-testid="dinner-more-actions"

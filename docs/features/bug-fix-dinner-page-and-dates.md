@@ -1,9 +1,10 @@
-# Bug fix: dinner dates and the dinner page
+# Bug fix: follow-ups found on `bugfix/admin-ux`
 
-**Status:** Proposed | **Date:** 2026-09-18 | **Branch:** bugfix/admin-ux
+**Status:** Parked until the `bugfix/admin-ux` release | **Date:** 2026-09-18 | **Updated:** 2026-09-18 | **Found on:** `bugfix/admin-ux` (PR #166)
 
-Four defects found on 2026-09-18 while chasing a team-assignment failure and a "become chef" error on `/dinner`. All four
-exist on `main`. The first has a one-line fix in place; the rest are proposals.
+Defects and findings from `bugfix/admin-ux`; they exist on `main`. The first four came up on 2026-09-18 while chasing a
+team-assignment failure and a "become chef" error on `/dinner`; the dinner-date matcher is fixed on the branch, the rest are
+proposals. The last four came up while building the notification pipe (`archived/feature-notifications.md`).
 
 ## Fix inventory
 
@@ -13,6 +14,10 @@ exist on `main`. The first has a one-line fix in place; the rest are proposals.
 | Query params synced in one flush | the second auto-sync overwrites the first param | proposed |
 | Dinner page remounts on claim | the whole page swaps to the loader while the season refreshes | proposed |
 | Composables after an await | the plan store injects outside setup on every claim and resign | proposed |
+| Catch-up amounts | invoice amounts and period totals follow the transactions a catch-up run links | proposed |
+| Job schedule labels | `/admin/system` labels the monthly billing job "D. 17." and it runs on the 18th | proposed |
+| Mobile overflow left by the alert token | tables and a settings-tree URL wider than a phone; layouts inside alert descriptions | findings, measured 2026-09-16 |
+| Configuration duplication | values stated in several config files | findings, report only |
 
 ## Stored dinner dates
 
@@ -87,3 +92,63 @@ the other stores do.
 **TDD.** `plan.nuxt`: claim and resign emit no Vue warning (spy on `console.warn`).
 
 **Affected.** `app/stores/plan.ts`.
+
+## Catch-up amounts
+
+**Problem.** A transaction billed into an already-closed period (ADR-015 catch-up: a straggler order transacted after the period's first run) is linked to the household's existing invoice, but the invoice `amount` stays at its creation value and the period's stored aggregates stay at the first run's values. The accountant CSV is built from `invoice.amount` (`useBillingValidation.ts` `generateCsvRow`), so the straggler reaches the CSV as a version bump with unchanged figures; the public page shows the mismatch as `invoiceSum` ≠ `transactionSum`.
+
+**Root cause.** `server/utils/generateBilling.ts` `processBillingPeriod`: `totalAmount`, `householdCount`, `ticketCount` are written only by `createBillingPeriodSummary` (`:144-151`); an existing summary is reused as is (`:139-142`); households with an existing invoice skip `createInvoices` (`:164-183`) and only get transactions linked (`:195`). No write touches `Invoice.amount` or the summary after creation.
+
+**Solution.** After linking, in the same `processBillingPeriod` call:
+- `addToInvoiceAmount(d1, invoiceId, delta)` for each household that already had an invoice (delta = Σ of the transactions linked now).
+- `addToBillingPeriodTotals(d1, summaryId, {totalAmount, householdCount: newInvoices.length, ticketCount})` for an existing summary.
+Both are increments of exactly the transactions linked in this run; a transaction is linked once (unbilled → invoiced), so a re-run adds nothing (ADR-015). `bumpBillingPeriodVersion` stays as it is; the v2 CSV and the `BILLING_PERIOD_UPDATED` mail then carry the corrected figures. Two repository functions in `financesRepository.ts` (`prisma.invoice.update` / `prisma.billingPeriodSummary.update` with `increment`).
+
+**TDD.**
+- `tests/e2e/api/serial/admin/maintenance.e2e.spec.ts`: after the first billing, transact one more order in the same period (order → consume → daily maintenance), run billing again → the household's invoice `amount` and the period's `totalAmount` / `ticketCount` include it, `version` is 2, `invoiceSum` = `transactionSum` on the period detail.
+- Unit: none new — the arithmetic is the repository increment; the control sums (`useBilling` `controlInvoices` / `controlTransactions`) already assert equality.
+
+**Affected.** `server/utils/generateBilling.ts`, `server/data/financesRepository.ts`, the serial maintenance spec, `docs/adr-compliance-backend.md` (Admin – Billing row).
+
+## Job schedule labels
+
+**Problem.** `/admin/system` labels the monthly billing job "D. 17. hver måned kl. 04:00" (`app/composables/useMaintenance.ts:45`), `app/app.config.ts:43` describes it as "D. 18. hver måned kl. 04:00 (dagen efter cutoff)", and the job runs `0 3 18 * *`: the 18th at 03:00 UTC, 05:00 in summer time and 04:00 in winter time. The daily jobs carry the same winter-only clock times ("kl. 02:00", "kl. 03:00" for 01:00 / 02:00 UTC).
+
+**Root cause.** One schedule, written in five places — `wrangler.toml` `[triggers] crons` in the three environment blocks, `nuxt.config.ts` `nitro.scheduledTasks`, `app.config.ts` `theslope.systemJobs` — and labelled in two: `useMaintenance` `jobScheduleLabels` and `systemJobs[].description`.
+
+**Solution.** `app/config/systemJobs.ts`, a plain module (the `notificationTemplates.ts` pattern): per job its cron and its Danish label with the UTC time and the Copenhagen summer/winter times. `nuxt.config.ts` builds `scheduledTasks` from it, `app.config.ts` spreads it into `theslope.systemJobs`, `useMaintenance` labels read it. The three `wrangler.toml` `crons` lists stay per environment block (TOML).
+
+**Mockup.** Text only, on the job cards and the job-run table of `/admin/system` — ⏳ awaiting signoff:
+
+```
+Månedlig fakturering    D. 18. hver måned kl. 05:00 (sommertid) / 04:00 (vintertid)
+```
+
+**TDD.** Unit: every `systemJobs` cron is a key of `scheduledTasks` and appears in each `wrangler.toml` `crons` list (parsed with wrangler's own config reader); `useMaintenance` labels equal the module's labels.
+
+**Affected.** `app/config/systemJobs.ts` (new), `nuxt.config.ts`, `app/app.config.ts`, `app/composables/useMaintenance.ts`, `docs/adr-compliance-frontend.md` (`useMaintenance` row).
+
+## Mobile overflow left by the alert token
+
+Measured 2026-09-16 at 375×812 with `tests/e2e/ui/MobileViewport.e2e.spec.ts` and a per-element probe, after every `<UAlert>` moved
+onto `ALERTS` (ADR-018).
+
+| Finding | Where | Note |
+|---|---|---|
+| `UTable` wrapper scrolls wider than the phone | `/admin/users` (576px), `/admin/system` job history (1596px) | mail and result columns cut off |
+| `span.truncate` clips a long URL by 273px | `/admin/system` settings tree (`holidayUrl`) | a tree cell |
+| 3px document overflow while the skeleton renders | `/dinner`, `UPageCard` inner `p-4 sm:p-6` | the repro's `scrollWidth <= innerWidth` sits on the edge on `/dinner` |
+| Layout inside an alert's `#description` (flex rows, `<ul>`, badges, selectors) | `AllergyManagersList`, `AllergyDetailPanel`, `ActionPreview`, `HouseholdCard`, `UserProfileCard`, `pages/admin/allergies/pdf.vue` | `wrap-anywhere` wraps text; each row needs its own responsive classes or an extraction like `DinnerModeLegend.vue` |
+
+## Configuration duplication
+
+Observed 2026-09-16, re-checked 2026-09-18. Report only.
+
+| Where | Duplication |
+|---|---|
+| `wrangler.toml` | the D1 block and `[triggers] crons` in each environment block (wrangler environments inherit no bindings) |
+| `wrangler.toml`, `workers/sender/wrangler.toml`, `Makefile`, worker secrets | queue names, the compatibility date, host names (routes, `DEPLOY_URL`), and the dev test mailbox (`allowed_destination_addresses` and the two mailbox secrets); consistent on 2026-09-18 |
+| `Makefile` | the Heynabo login body inlined in eight targets (`theslope-login-*`, `heynabo-login-*`, the event targets) beside the `theslope_call` / `heynabo_call` macros |
+| `package.json` | every `db:seed:*` / `db:migrate:*` script names its D1 database |
+| `.github/workflows/cicd.yml` | `HEY_NABO_*` mapped in the job env (line 35) and again in the smoke step (line 231) |
+| `server/integration/heynabo/heynaboClient.ts`, `server/integration/github/githubClient.ts` | two config mechanisms: `process.env` (lines 23–24) and `useRuntimeConfig()` (line 95) |

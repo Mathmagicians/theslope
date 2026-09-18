@@ -15,7 +15,7 @@
   ├ band 2 ─────────────────────────────────────────────┤
   │  ØKOLOGISK FÆLLESSPISNING …         ocean + black   │  getRainbowBand(2)
   ├ band 3 ─────────────────────────────────────────────┤
-  │  DANMARKS SMUKKESTE SOLNEDGANGE …  bonbon + black   │  getRainbowBand(3)
+  │  DANMARKS SMUKKESTE SOLNEDGANGE …  bonbon + white   │  getRainbowBand(3)
   └─────────────────────────────────────────────────────┘
 
   Each band is full-height on phones and a quarter of it from md up. The page owns the

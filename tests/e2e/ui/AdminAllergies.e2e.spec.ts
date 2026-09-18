@@ -13,6 +13,7 @@ const {
     freshMemberContext,
     getSessionUserInfo,
     pollUntil,
+    salt,
     temporaryAndRandom
 } = testHelpers
 
@@ -172,7 +173,7 @@ test.describe('AdminAllergies - poster notes', () => {
         test.use({storageState: adminUIFile})
 
         test('GIVEN a writer WHEN adding a note and saving THEN the bullets, a reload and the poster show it', async ({page}) => {
-            const newNote = `Husk allergener ${temporaryAndRandom()}`
+            const newNote = salt('Husk allergener', temporaryAndRandom())
             addedLines.push(newNote)
 
             await gotoCatalog(page)

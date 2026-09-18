@@ -36,7 +36,7 @@ describe('TeamCalendarDisplay legend', () => {
             expect(badge.classes()).toEqual(expect.arrayContaining(getRainbowBand(index).split(' ')))
         })
 
-    it('the stops a season of teams renders are all different, and the tenth wraps', async () => {
+    it(`the stops a season of teams renders are all different, and team ${RAINBOW.length + 1} wraps`, async () => {
         const wrapper = await mount(teams.length)
         // What a badge renders of the rainbow: its own classes, kept to the ones a stop names
         const stopClasses = new Set(RAINBOW.flatMap(stop => stop.split(' ')))

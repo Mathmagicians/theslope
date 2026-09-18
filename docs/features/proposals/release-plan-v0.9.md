@@ -63,22 +63,11 @@ Analysis, root causes, and TDD steps live in the detail docs — this table is t
 - **Effort:** L (5 phases, includes Transaction migration + snapshot-union rewrite)
 
 ### F2. Accountant mail + offline billing archive
-- **Proposal:** ❌ needs writing (`feature-proposal-billing-archive.md`). When monthly billing runs:
-  1. Generate the billing CSV (exists today as manual export) and **store an offline copy in Cloudflare R2** (immutable, per-period key, e.g. `billing/2026-08/invoices.csv`)
-  2. **Email the external accountant** automatically — period summary + CSV attached (or magic link), single fixed recipient from runtime config
-  3. Idempotent per billing period (ADR-015): re-running billing re-uses/overwrites the archive, doesn't re-spam the accountant
-- **Dependency:** first real consumer of F3 email infra — small, one recipient, monthly cadence: the ideal proving ground before user-facing notifications
-- **Related:** narrows `feature-proposal-backup-export.md` to the billing slice; full-data backup stays out of scope
-- **Effort:** M (R2 binding + archive step + one mail template)
+- **Status:** ✅ implemented with F3 on `bugfix/admin-ux` (PR #166, 2026-09-18) — [`archived/feature-notifications.md`](../archived/feature-notifications.md): monthly billing stores the period CSV in R2 (one object per period version) and mails it to the accountant, cc the admin mailbox; re-runs converge (ADR-015)
 
 ### F3. Notifications (email + SMS)
-- **Proposal:** ✅ written — [`feature-proposal-notifications.md`](../feature-proposal-notifications.md). Scope evolved from the sketch below during proposal work (decisions made 2026-08-31):
-  - **Email + SMS both in v1** (SMS no longer deferred); per-user channel preference none/email/SMS/both in the profile
-  - **Cloudflare Email Service** (native `send_email` binding) + **GatewayAPI** SMS (Danish/EU, 0.307 DKK/SMS), each behind a provider port
-  - **Separate stateless delivery worker** (`workers/notifications/`) consuming a Cloudflare Queue — no outbox table, no send job; queue retries + DLQ replace the ADR-015 outbox sketched earlier
-  - v1 trigger: test notification from profile; trigger catalog (job-failure/I4, dinner cancelled, waitlist/F4, duty/F5b, accountant/F2) are follow-up call sites of the same `notifyUsers()`
-  - Danish templates, rendered app-side
-- **Effort:** M–L (7 phases incl. account setup and second worker)
+- **Status:** ✅ e-mail delivery implemented on `bugfix/admin-ux` (PR #166, 2026-09-18) — [`archived/feature-notifications.md`](../archived/feature-notifications.md): the `theslope-sender` worker, the admin test event, the channel preference
+- **Next:** triggers, landing-page alarms and SMS — [`feature-proposal-notification-triggers.md`](../feature-proposal-notification-triggers.md)
 
 ### F4. Waitlist (released-ticket claim)
 - **Proposal:** ❌ needs writing (`feature-proposal-waitlist.md`). Backend exists (`/api/order/claim` — FIFO by `releasedAt`, retry, audit) and claim detection is partially wired in `GuestBookingForm`/`DinnerBookingForm`. Missing: a first-class UI surfacing released tickets ("N ledige billetter"), an explicit claim flow in day + grid views, and a *subscribe-and-notify* waitlist ("tell me when a ticket frees up") — the latter depends on F3
@@ -105,8 +94,8 @@ Analysis, root causes, and TDD steps live in the detail docs — this table is t
 | M2 | `refactor/store-fetch-consistency` | I1 + I2 consistency sweep (+ I5 docs) | 0.8.5 |
 | M3 | `feature/observability-baseline` | I4: Workers observability, health endpoint, error + job-failure alerting | 0.8.6 |
 | M4 | `feature/ad-hoc-transactions` | F1 ad-hoc transactions, phased per proposal | **0.9.0** 🚀 |
-| M5 | `feature/email-notifications` | F3 email infra (outbox + provider + admin triggers) | 0.9.1 |
-| M6 | `feature/billing-archive` | F2 accountant mail + R2 billing CSV archive | 0.9.2 |
+| M5 | `bugfix/admin-ux` (PR #166) | F3 e-mail delivery (`theslope-sender`) + F2 accountant mail and R2 archive ✅ | 0.9.1 |
+| M6 | — | F2 — in M5 | 0.9.2 |
 | M7 | `feature/waitlist` | F4 claim UI, then subscribe-and-notify | 0.9.3 |
 | M8 | `feature/duty-roster` | F5a roster + audit, then F5b cross-team swap | **0.10.0** |
 
@@ -122,8 +111,8 @@ Rationale for the ordering: bugs and the consistency sweep de-risk everything af
 | `bug-fix-booking-desired-order-builder.md` | Done (uncommitted) | Commit + implement (B1) |
 | `bug-fix-order-snapshot.md` | Done | Implement (B6) |
 | `proposals/bare-fetch-fix.md` | Notes | Expand into I1/I2 workplan |
-| `feature-proposal-notifications.md` | Proposal | Review + sign-off (F3) |
-| `feature-proposal-billing-archive.md` | Missing | Write (F2, references backup-export proposal) |
+| `archived/feature-notifications.md` | ✅ Implemented (PR #166) | — |
+| `feature-proposal-notification-triggers.md` | Proposal | Review + sign-off (triggers, alarms, SMS) |
 | `feature-proposal-waitlist.md` | Missing | Write (F4) |
 | `proposals/guest-booking-form.md` | Notes | Fold into F4 claim-UI work or archive |
 

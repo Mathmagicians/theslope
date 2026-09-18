@@ -27,13 +27,13 @@ Operational procedures for TheSlope infrastructure on Cloudflare.
 
 ## Sender (e-mail delivery worker)
 
-Design: `docs/features/feature-proposal-notifications.md`. The app puts a complete message (`to`, `from`, `replyTo`, subject, body, attachments) on a Cloudflare Queue; `theslope-sender` consumes the queue and delivers through the `send_email` binding. Retries 3× (30/60/120 s); the last attempt logs an error and acknowledges the message.
+Design: `docs/features/archived/feature-notifications.md`. The app puts a complete message (`to`, `from`, `replyTo`, subject, body, attachments) on a Cloudflare Queue; `theslope-sender` consumes the queue and delivers through the `send_email` binding. Retries 3× (30/60/120 s); the last attempt logs an error and acknowledges the message.
 
 ### Resources per environment
 
 | Environment | Worker | Queue | `send_email` binding |
 |-------------|--------|-------|------------------------|
-| local (miniflare) | `theslope-sender-local` | `theslope-sender-dev` (simulated) | sender `no-reply.dev@skraaningen.dk` |
+| local (miniflare) | `theslope-sender-local` | `theslope-sender-dev` (simulated) | sender `no-reply.local@skraaningen.dk` |
 | dev | `theslope-sender-dev` | `theslope-sender-dev` | sender `no-reply.dev@skraaningen.dk`; destinations limited to the dev test mailbox (dev shares the local D1 data) |
 | prod | `theslope-sender-prod` | `theslope-sender-prod` | sender `no-reply@skraaningen.dk` |
 
@@ -92,7 +92,7 @@ The CI e2e job sets placeholder addresses the same way (`cicd.yml`).
 
 ### Templates
 
-One e-mail template per notification kind in `app/config/notificationTemplates.ts` (spread into `app.config.ts` `theslope.notifications`): `subject` and `text` with `{{placeholders}}`, filled by the event that raises the notification; `{{site}}`, `{{environment}}` and `{{dedupeKey}}` are filled for every kind and the signature `— Skråningen · {{site}}` is appended. A placeholder without a value, or a value without a placeholder, throws — the unit tests catch a template edit that breaks an event.
+One e-mail template per notification kind in `app/config/notificationTemplates.ts` (spread into `app.config.ts` `theslope.notifications`): `subject` and `text` with `{{placeholders}}`, filled by the event that raises the notification; `{{senderName}}` (`NOTIFICATION_SENDER_NAME`), `{{site}}`, `{{environment}}` and `{{dedupeKey}}` are filled for every kind and the signature `De bedste hilsner fra — {{senderName}} · {{site}}` is appended. A placeholder without a value, or a value without a placeholder, throws — the unit tests catch a template edit that breaks an event.
 
 | Kind | Event | Recipient |
 |------|-------|-----------|
