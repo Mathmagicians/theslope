@@ -1,6 +1,62 @@
 # Architecture Decision Records
 
 **NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
+## ADR-018: Design System Owns Shared UI Patterns
+
+**Status:** Accepted | **Date:** 2026-09-16
+
+### Context
+
+Shared UI values had drifted into components: 56 `UAlert` sites with per-file colour, variant and `:ui` patches; 178 raw
+Tailwind colour classes and 59 literal colour props across 34 + 31 files; three `UCalendar` call sites with diverging grid
+props (the pickers drew adjacent-month days twice); six table empty states on the Nuxt UI v2 slot name `#empty-state`, dead
+since the v3 migration. The first token sweep merged near-identical values and shifted dark-mode shades — a refactor that
+changed the design.
+
+### Decision
+
+**`useTheSlopeDesignSystem` owns every shared UI value. Components bind a token and pass domain props only.**
+
+| Pattern | Token | Bind |
+|---|---|---|
+| Colour | `COLOR`, `BG`, `TEXT`, `BORDER`, `RING`; surface palettes `CHEF_CALENDAR`, `DINNER_CALENDAR`, `PLANNING_CALENDAR`, `TICKET_TYPE_COLORS`, `ORDER_STATE_COLORS`, `PANTONE_CHIPS` | `:class="TEXT.muted"`, `:color="COLOR.primary"` |
+| Alerts | `ALERTS.<kind>` — `info`, `neutral`, `success`, `warning`, `error`, `legend`, `emptyState`, `emptyStateCompact` — plus the `withActions` modifier | `v-bind="ALERTS.warning"`, `v-bind="{...ALERTS.info, ...ALERTS.withActions}"` |
+| Buttons | `BUTTONS.<kind>` with `ICONS` | `v-bind="BUTTONS.secondaryAction" :color="COLOR.primary" :icon="ICONS.edit"` |
+| Calendars | `COMPONENTS.calendarGrid`, `CALENDAR.picker`, `dayCircleClasses(variant)` | `v-bind="COMPONENTS.calendarGrid"`; every day circle renders through the helper |
+| Table empty states | the `UTable` `#empty` slot | one empty state per table, inside the slot |
+
+A token holds exactly one value. Two values are two tokens, named by where they are used. Merging values is a design
+decision the user takes from a visual proposal.
+
+### Enforcement
+
+`tests/component/architecture/designSystemUsage.unit.spec.ts` reads every `.vue` under `app/` and fails on a raw Tailwind
+colour utility class, a literal colour prop, a `<UAlert` without an `ALERTS` kind or with a raw `color`/`variant`/`type`, a
+`<UCalendar` without `calendarGrid`, or the slot name `#empty-state`. Tests assert usage and behaviour; a test that restates a
+token's value is rejected in review.
+
+### Compliance
+
+1. A new Nuxt UI component family gets a token before its first use, and its architecture rule lands in the same change
+2. Token sweeps are value-preserving; the proof is a before/after comparison of the classes each template renders
+3. The design system is client-only and never imported from `server/` (ADR-017)
+4. `docs/ui.md` documents every token and names the visual check a change requires
+
+### Key Files
+
+| File | Role |
+|------|------|
+| `app/composables/useTheSlopeDesignSystem.ts` | Tokens and the responsive factories `createResponsiveAlerts`, `createResponsiveButtons`, `createDayCircleClasses` |
+| `tests/component/architecture/designSystemUsage.unit.spec.ts` | The six rules |
+| `docs/ui.md` | Token reference, alert kinds, edit affordances, calendar presets |
+
+### Related ADRs
+
+- **ADR-017**: the design system is a client-only composable; `use<Domain>Ui` composables carry domain presentation on top of it
+- **ADR-001**: the design system carries no domain types; those come from validation composables
+
+---
+
 ## ADR-017: Isomorphic Composables, Pure UI Composables and Per-Context Type Checking
 
 **Status:** Accepted | **Date:** 2026-09-02
@@ -19,7 +75,7 @@ Nuxt builds two bundles. App auto-imports (`app/composables`, `app/utils`, Vue, 
 |------|-------------------|-------|
 | **Isomorphic composable** | `app/composables/use<Domain>.ts`, `use<Domain>Validation.ts` — anything imported from `server/` | Explicit imports only (no auto-imports). No Vue reactivity, Pinia stores, nuxt-auth-utils app composables (`useUserSession`), NuxtUI or design-system calls. Types shared with the repository live in validation composables (`TransactionCreateData`), never imported from `server/` |
 | **Pure UI composable** | `app/composables/use<Domain>Ui.ts` (`useBookingUi`, `useUserRolesUi`) | Client-only, never imported from `server/`. Owns badges, icons, labels, action previews, store-aware predicates. May use auto-imports |
-| **Design system** | `useTheSlopeDesignSystem.ts` | Page layout and design tokens only; not booking- or user-aware; never server-reachable |
+| **Design system** | `useTheSlopeDesignSystem.ts` | Owns every shared UI value (ADR-018); not booking- or user-aware; never server-reachable |
 | **Session predicates** | `app/stores/auth.ts` | `isMemberOfHousehold` and other session-aware checks wrap the isomorphic predicates from `usePermissions` |
 | **Type augmentations** | `shared/types/*.d.ts` (or `server/types/` when server-only) | Nuxt 4 rule: augmentations outside `app/`, `server/`, `shared/` are invisible to the per-context projects |
 
@@ -899,7 +955,7 @@ if (order.state === OrderStateSchema.enum.BOOKED) { }
 
 ### Compliance
 
-**Generated:** Committed to git, regenerate with `make prisma`
+**Generated:** Committed to git, regenerate with `make d1-prisma`
 
 **Validation composables:**
 1. MUST import enums from generated layer

@@ -1,3 +1,23 @@
+<!--
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ Login - the login form, and the dashboard once logged in                     │
+├──────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│ DASHBOARD /login (logged in) - this file owns the composition                │
+│ ┌ Hej Anna! 👋 ────────────────────────────────────────────────────────────┐ │
+│ │ ┌ UserProfileCard ([⚙ Indstillinger] in its header) ──────────────────┐  │ │
+│ │ └─────────────────────────────────────────────────────────────────────┘  │ │
+│ │ ┌ UserPreferencesCard ─────────────────────────┐  only while the toggle  │ │
+│ │ └──────────────────────────────────────────────┘  is on (v-if)           │ │
+│ │ Hvad vil du lave i dag?                                                  │ │
+│ │ ┌ ActionCard ─┐ ┌ ActionCard ─┐ ┌ ActionCard ─┐                          │ │
+│ │ └─────────────┘ └─────────────┘ └─────────────┘                          │ │
+│ └──────────────────────────────────────────────────────────────────────────┘ │
+│                                                                              │
+│ The open state is a ref in this file (ADR-006: no persistence); each child    │
+│ draws its own internals in its own header comment.                           │
+└──────────────────────────────────────────────────────────────────────────────┘
+-->
 <script setup lang="ts">
 import type {FormSubmitEvent} from '#ui/types'
 import type {LoginCredentials} from '~/composables/useCoreValidation'
@@ -7,7 +27,7 @@ const {loggedIn, greeting} = storeToRefs(authStore)
 const {signIn} = authStore
 const {LoginSchema} = useCoreValidation()
 const {handleApiError} = useApiHandler()
-const {TYPOGRAPHY, LAYOUTS, COLOR, BG, ICONS} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, LAYOUTS, BG, ICONS, ALERTS, COLOR} = useTheSlopeDesignSystem()
 
 const householdShortName = computed(() => authStore.user?.Inhabitant?.household?.shortName || null)
 const householdPbsId = computed(() => authStore.user?.Inhabitant?.household?.pbsId || null)
@@ -19,6 +39,9 @@ const state = reactive<LoginCredentials>({
 
 const isLoading = ref(false)
 const loginError = ref<string | null>(null)
+
+// Own settings are revealed by the ⚙ toggle in the profile card header (ADR-006: no persistence)
+const preferencesOpen = ref(false)
 
 const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
   loginError.value = null
@@ -49,9 +72,8 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
 
             <UAlert
               v-if="loginError"
-              color="error"
-              variant="soft"
-              icon="i-mage-robot-dead"
+              v-bind="ALERTS.error"
+              :icon="ICONS.robotDead"
               class="mb-4"
             >
               <template #title>Login mislykkedes</template>
@@ -70,7 +92,7 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
               <UFormField label="Adgangskode" name="password">
                 <UInput
                   v-model="state.password"
-                  color="secondary"
+                  :color="COLOR.secondary"
                   type="password"
                   placeholder="Indtast din Heynabo adgangskode"
                 />
@@ -80,7 +102,7 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
             <template #footer>
               <UButton
                 type="submit"
-                color="secondary"
+                :color="COLOR.secondary"
                 :loading="isLoading"
                 block
               >
@@ -97,8 +119,17 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
       <!-- Welcome Title -->
       <h1 :class="[TYPOGRAPHY.sectionSubheadingLight, 'text-2xl md:text-3xl']">Hej {{ greeting }}! 👋</h1>
 
-      <!-- User Profile Card -->
-      <UserProfileCard v-if="authStore.user" :user="authStore.user" :show-actions="true" />
+      <!-- User Profile Card, with the ⚙ toggle for own settings -->
+      <UserProfileCard
+        v-if="authStore.user"
+        :user="authStore.user"
+        :show-actions="true"
+        :preferences-open="preferencesOpen"
+        @toggle-preferences="preferencesOpen = !preferencesOpen"
+      />
+
+      <!-- Own settings: notification channels + appearance, revealed by the toggle -->
+      <UserPreferencesCard v-if="authStore.user && preferencesOpen" />
 
       <!-- Section header -->
       <h2 :class="[TYPOGRAPHY.sectionSubheadingLight, 'pt-4']">Hvad vil du lave i dag?</h2>

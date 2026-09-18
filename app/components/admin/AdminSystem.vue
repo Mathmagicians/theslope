@@ -21,6 +21,23 @@ UX MOCKUP: Admin System Jobs Panel
 
 Jobs run automatically via Nitro scheduledTasks + Cloudflare Cron Triggers.
 Admins can manually re-trigger jobs if they failed.
+
+UX MOCKUP: Job history on a phone
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────┐
+│ 🕑 Jobhistorik                  │
+├───┬─────────┬─────────┬─────────┤
+│   │ Dato    │ Job     │ Status  │
+│ › │ …       │ …       │ [badge] │
+│ ⌄ │ …       │ …       │ [badge] │
+│ ┌─────────────────────────────┐ │
+│ │ Varighed · Kilde            │ │
+│ │ Resultat                    │ │
+│ └─────────────────────────────┘ │
+└─────────────────────────────────┘
+
+From md: Dato, Job, Status, Varighed, Kilde, Resultat; no chevron.
 -->
 
 <script setup lang="ts">
@@ -35,7 +52,8 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, ALERTS, BUTTONS, COMPONENTS, columnVisibility, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const isMd = inject<Ref<boolean>>('isMd', ref(false))
 
 // Maintenance helpers
 const {
@@ -69,7 +87,7 @@ const { isMonthlyBillingRunning, hasMonthlyBillingResult, hasMonthlyBillingError
 const { runDailyMaintenance, runMonthlyBilling } = bookingsStore
 
 // ============================================================================
-// JOB HISTORY - fetch from API (ADR-007: useAsyncData)
+// JOB HISTORY - fetched by the component (useFetch)
 // ============================================================================
 
 const { data: jobRuns, status: jobRunsStatus, refresh: refreshJobRuns } = useFetch<JobRunDisplay[]>(
@@ -118,7 +136,16 @@ const jobHistoryEmpty = `${jobHistoryEmptyMessage.emoji} ${jobHistoryEmptyMessag
 // JOB HISTORY TABLE
 // ============================================================================
 
+// On a phone the chevron opens these in the expanded row; from md every column shows and the chevron hides
+const HIDDEN_ON_PHONE = ['durationMs', 'triggeredBy', 'resultSummary'] as const
+const HIDDEN_FROM_MD = ['expand'] as const
+
+const { expanded } = useExpandableRow()
+// A row opened on a phone has no chevron to close it from md (a phone turned to landscape)
+watch(isMd, () => { expanded.value = {} })
+
 const jobHistoryColumns = [
+  { id: 'expand' },
   { accessorKey: 'startedAt', header: 'Dato' },
   { accessorKey: 'jobType', header: 'Job' },
   { accessorKey: 'status', header: 'Status' },
@@ -210,7 +237,7 @@ const dailyMaintenanceStats = computed(() => {
 const monthlyBillingStats = computed(() => {
   if (!hasMonthlyBillingResult.value || !monthlyBillingResult.value?.results) return []
   return formatStatsWithIcons(
-    formatMonthlyBillingStats(monthlyBillingResult.value.results),
+    formatMonthlyBillingStats(monthlyBillingResult.value),
     jobIconsMap.MONTHLY_BILLING,
     getJobRunTimestamp(monthlyBillingResult.value.jobRunId)
   )
@@ -229,7 +256,6 @@ const heynaboImportStats = computed(() => {
 // JOB DEFINITIONS
 // ============================================================================
 
-// Job definitions following feature-proposal-season-activation.md
 const systemJobs = appConfig.theslope.systemJobs
 
 // Get latest job run result formatted for display (fallback when no fresh result)
@@ -376,9 +402,7 @@ const jobDefinitions = computed(() => {
           <!-- Error state -->
           <UAlert
             v-else-if="job.hasError && job.error"
-            :color="COLOR.error"
-            variant="subtle"
-            :icon="ICONS.exclamationCircle"
+            v-bind="ALERTS.error"
           >
             <template #title>Fejl</template>
             <template #description>{{ job.error.message }}</template>
@@ -437,19 +461,44 @@ const jobDefinitions = computed(() => {
       </template>
 
       <UTable
+        v-model:expanded="expanded"
         :data="jobHistoryRows"
         :columns="jobHistoryColumns"
         :loading="isJobHistoryLoading"
         :empty="jobHistoryEmpty"
         caption="Seneste jobkørsler"
         class="w-full"
+        :ui="COMPONENTS.table.ui"
+        :column-visibility="columnVisibility(HIDDEN_ON_PHONE, HIDDEN_FROM_MD)"
       >
+        <template #expand-cell="{ row }">
+          <UButton
+            v-bind="BUTTONS.edit"
+            :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
+            :aria-label="row.getIsExpanded() ? 'Luk' : 'Vis detaljer'"
+            :aria-expanded="row.getIsExpanded()"
+            :data-testid="`job-history-expand-${row.original.id}`"
+            @click="row.toggleExpanded()"
+          />
+        </template>
+
         <!-- Custom status cell with color and icon -->
         <template #status-cell="{ row }">
           <UBadge :color="row.original.statusColor" variant="subtle" class="gap-1">
             <UIcon :name="row.original.statusIcon" class="text-xs" />
             {{ row.original.statusLabel }}
           </UBadge>
+        </template>
+
+        <!-- Phone: the columns hidden on a phone -->
+        <template #expanded="{ row }">
+          <div :class="['p-4 space-y-1', BG.panel]" data-testid="job-history-details">
+            <p>
+              <span class="font-semibold">Varighed</span> {{ row.original.durationMs }} ·
+              <span class="font-semibold">Kilde</span> {{ row.original.triggeredBy }}
+            </p>
+            <p>{{ row.original.resultSummary }}</p>
+          </div>
         </template>
       </UTable>
     </UCard>

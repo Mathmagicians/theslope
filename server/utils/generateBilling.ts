@@ -1,11 +1,11 @@
-import type {D1Database} from '@cloudflare/workers-types'
 import {
     fetchBillingPeriodSummary,
     fetchUnbilledTransactions,
     fetchInvoicesForBillingPeriod,
     createBillingPeriodSummary,
     createInvoices,
-    linkTransactionsToInvoice
+    linkTransactionsToInvoice,
+    bumpBillingPeriodVersion
 } from '~~/server/data/financesRepository'
 import {useBilling} from '~/composables/useBilling'
 import type {BillingGenerationResult, InvoiceCreate, TransactionDisplay} from '~/composables/useBillingValidation'
@@ -138,7 +138,8 @@ async function processBillingPeriod(
 
     if (existingSummary) {
         summaryId = existingSummary.id
-        console.info(`${LOG} Using existing BillingPeriodSummary id=${summaryId}`)
+        const version = await bumpBillingPeriodVersion(d1Client, summaryId)
+        console.info(`${LOG} Using existing BillingPeriodSummary id=${summaryId}, now version ${version}`)
     } else {
         const created = await createBillingPeriodSummary(d1Client, {
             billingPeriod,

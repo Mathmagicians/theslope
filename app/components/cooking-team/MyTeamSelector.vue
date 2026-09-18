@@ -36,8 +36,8 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { COLOR, SIZES, ORIENTATIONS } = useTheSlopeDesignSystem()
-const { getTeamColor, getTeamShortName } = useCookingTeam()
+const { SIZES, ORIENTATIONS, ICONS, ALERTS } = useTheSlopeDesignSystem()
+const { getTeamShortName } = useCookingTeam()
 
 // Tab orientation using design system helper:
 // - Fewer than 3 teams: always horizontal (fits nicely in a row)
@@ -62,12 +62,12 @@ const selectedTeamIndex = computed({
 
 // Tab items with CookingTeamBadges data (matches AdminTeams pattern)
 // Uses short name for user-facing display (e.g., "Madhold 2" not "Madhold 2 - 08/25-06/26")
+// The team's colour rides on CookingTeamBadges in the tab body, from the team's number
 const teamTabs = computed(() => {
   return props.teams.map((team, index) => ({
     label: getTeamShortName(team.name),
     value: index,
     icon: 'i-fluent-mdl2-team-favorite',
-    color: getTeamColor(index),
     // Data for CookingTeamBadges
     memberCount: team.assignments?.length ?? 0,
     cookingDaysCount: team.cookingDaysCount ?? 0
@@ -80,10 +80,8 @@ const teamTabs = computed(() => {
     <!-- Empty state -->
     <UAlert
       v-if="teams.length === 0"
-      type="info"
-      variant="soft"
-      :color="COLOR.info"
-      icon="i-heroicons-user-group"
+      v-bind="ALERTS.info"
+      :icon="ICONS.userGroup"
     >
       <template #title>
         Ingen madhold

@@ -1,4 +1,3 @@
-import type {D1Database} from '@cloudflare/workers-types'
 import {fetchDinnerEvents, updateDinnerEvent, updateDinnerEventAllergens} from '~~/server/data/financesRepository'
 import {deleteHeynaboEventAsSystem} from '~~/server/integration/heynabo/heynaboClient'
 import {CHEF_LOSS_DINNER_UPDATES} from '~/composables/useBooking'

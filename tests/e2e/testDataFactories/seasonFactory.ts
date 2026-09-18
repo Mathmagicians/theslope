@@ -1,4 +1,4 @@
-import {useSeasonValidation, type Season} from "~/composables/useSeasonValidation"
+import {useSeasonValidation, type Season, type SeasonUpdateResponse} from "~/composables/useSeasonValidation"
 import {useWeekDayMapValidation} from "~/composables/useWeekDayMapValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import type {
@@ -23,7 +23,7 @@ type CookingTeamCreateAssignment = NonNullable<CookingTeamCreate['assignments']>
 // Serialization now handled internally by repository layer
 const {salt, temporaryAndRandom, headers} = testHelpers
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
-const {CookingTeamDetailSchema, CookingTeamAssignmentSchema} = useCookingTeamValidation()
+const {CookingTeamDetailSchema, CookingTeamAssignmentSchema, CreateTeamsResponseSchema} = useCookingTeamValidation()
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
@@ -259,15 +259,15 @@ export class SeasonFactory {
     }
 
     /**
-     * Update an existing season via POST /api/admin/season/{id}
-     * Returns the updated season with reconciled dinner events
+     * POST a season and return the full operation envelope (ADR-009):
+     * the saved season plus what reconciliation and re-scaffolding did.
      */
-    static readonly updateSeason = async (
+    static readonly updateSeasonWithResult = async (
         context: BrowserContext,
         season: Season,
         expectedStatus: number = 200
-    ): Promise<Season> => {
-        const {SeasonSchema} = useSeasonValidation()
+    ): Promise<SeasonUpdateResponse> => {
+        const {SeasonUpdateResponseSchema} = useSeasonValidation()
 
         expect(season.id, 'Season must have an ID to update').toBeDefined()
 
@@ -280,13 +280,20 @@ export class SeasonFactory {
 
         expect(status, `Expected ${expectedStatus}, got ${status}. Response: ${JSON.stringify(responseBody)}`).toBe(expectedStatus)
 
-        if (expectedStatus === 200) {
-            const result = SeasonSchema.safeParse(responseBody)
-            expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
-            return result.data!
-        }
+        if (expectedStatus !== 200) return responseBody
 
-        return responseBody
+        const result = SeasonUpdateResponseSchema.safeParse(responseBody)
+        expect(result.success, `API should return a valid SeasonUpdateResponse. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+        return result.data!
+    }
+
+    static readonly updateSeason = async (
+        context: BrowserContext,
+        season: Season,
+        expectedStatus: number = 200
+    ): Promise<Season> => {
+        const result = await this.updateSeasonWithResult(context, season, expectedStatus)
+        return expectedStatus === 200 ? result.season : (result as unknown as Season)
     }
 
     /**
@@ -398,16 +405,12 @@ export class SeasonFactory {
                 throw new Error('Failed to create singleton and could not find existing singleton season')
             }
 
-            // Activate it if not already active, or poll until active (handle race with other workers)
-            if (!existingSingleton.isActive) {
-                console.info('🌞 > SEASON_FACTORY > Activating existing singleton season')
-                await context.request.post('/api/admin/season/active', {
-                    headers: headers,
-                    data: { seasonId: existingSingleton.id }
-                })
-            }
-
-            // Poll until the season is active (another worker might be activating simultaneously)
+            // The worker that created the singleton activates it; this one only waits for that.
+            // Activation scaffolds prebookings for every household (ADR-015), and a second or
+            // third concurrent activation of the same season queues behind the first on local
+            // D1 - every worker's beforeAll then overruns its 30s budget and the dev server
+            // stalls for the tests running beside it.
+            console.info('🌞 > SEASON_FACTORY > Waiting for the creating worker to activate the singleton')
             const activeSeason = await testHelpers.pollUntil(
                 async () => {
                     const response = await context.request.get(`/api/admin/season/${existingSingleton.id}`, { headers })
@@ -831,10 +834,11 @@ export class SeasonFactory {
 
         if (expectedStatus === 201) {
             const responseBody = await response.json()
-            const validatedTeams = CookingTeamDetailSchema.array().parse(responseBody)
-            expect(validatedTeams[0]!.id, 'Response should contain the new team ID').toBeDefined()
-            expect(validatedTeams[0]!.seasonId).toBe(seasonId)
-            return validatedTeams[0]!
+            // ADR-009 operation result envelope: {teams, eventsAssigned}
+            const {teams} = CreateTeamsResponseSchema.parse(responseBody)
+            expect(teams[0]!.id, 'Response should contain the new team ID').toBeDefined()
+            expect(teams[0]!.seasonId).toBe(seasonId)
+            return teams[0]!
         }
         return null as unknown as CookingTeamDetail
     }
@@ -1043,6 +1047,20 @@ export class SeasonFactory {
     }
 
     // === JOB RUN METHODS ===
+
+    /** A completed daily-maintenance run, as GET /api/admin/maintenance/job-run returns it */
+    static readonly defaultJobRun = (overrides: Partial<JobRunDisplay> = {}): JobRunDisplay => ({
+        id: 1,
+        jobType: 'DAILY_MAINTENANCE',
+        status: 'SUCCESS',
+        startedAt: new Date('2026-09-17T21:33:00Z'),
+        completedAt: new Date('2026-09-17T21:33:04Z'),
+        durationMs: 4500,
+        resultSummary: null,
+        errorMessage: null,
+        triggeredBy: 'ADMIN',
+        ...overrides
+    })
 
     /**
      * Get job runs with optional filtering by job type

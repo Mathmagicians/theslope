@@ -1,4 +1,3 @@
-import type {D1Database} from "@cloudflare/workers-types"
 import {fetchPendingDinnersInActiveSeason, updateDinnersToConsumed} from "~~/server/data/financesRepository"
 import type {ConsumeResult} from "~/composables/useBookingValidation"
 import {useBooking} from "~/composables/useBooking"

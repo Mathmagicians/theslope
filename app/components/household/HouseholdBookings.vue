@@ -26,7 +26,7 @@ const {household} = toRefs(props)
 const {deadlinesForSeason} = useSeason()
 const {formatScaffoldResult, BOOKING_TOAST_TITLES} = useBooking()
 const {handleApiError} = useApiHandler()
-const {ICONS, COLOR} = useTheSlopeDesignSystem()
+const {ICONS, ALERTS} = useTheSlopeDesignSystem()
 const toast = useToast()
 
 const planStore = usePlanStore()
@@ -272,9 +272,8 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
             />
             <UAlert
               v-else
+              v-bind="ALERTS.neutral"
               :icon="ICONS.calendar"
-              :color="COLOR.neutral"
-              variant="soft"
               title="Vælg en dato"
               description="Klik på en dato i kalenderen for at se og redigere bookinger"
             />
@@ -285,9 +284,8 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
   </div>
   <UAlert
     v-else
+    v-bind="ALERTS.info"
     :icon="ICONS.calendar"
-    :color="COLOR.primary"
-    variant="subtle"
     title="Ingen aktiv sæson"
     description="Der er ingen aktiv fællesspisnings sæson i øjeblikket. Kontakt administratoren for at aktivere en sæson."
     data-testid="household-bookings-empty"

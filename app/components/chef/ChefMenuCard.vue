@@ -62,9 +62,10 @@
  * │ [Menu] ⚠️ Om 2d   [Indkøb] ⚠️ Om 4d   [Bestilling] ✅ Åben   💰 1.500 kr │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
- * Action row noise ladder (NOISE: loud -> medium -> quiet) - matches use frequency:
- *   [edit menu] solid primary | [publish] outline secondary | [more] ghost overflow
- * The "more" overflow reveals a danger zone holding the rare cancel-dinner action.
+ * Action row noise ladder (NOISE: loud -> medium) - matches use frequency:
+ *   [edit menu] solid primary | [publish] outline secondary | [⚙ ▾] outline settings wheel
+ * The ⚙ ▾ trigger (BUTTONS.settings + chevron) reveals a danger zone holding the rare
+ * cancel-dinner action.
  *
  * ADR Compliance:
  * - ADR-001: Types from validation composables, FORM_MODES from ~/types/form
@@ -126,7 +127,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { TYPOGRAPHY, SIZES, ICONS, COLOR, BUTTONS, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS, BG, TEXT } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, SIZES, ICONS, ALERTS, BUTTONS, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS, BG, TEXT, BORDER, RING } = useTheSlopeDesignSystem()
 
 // Hero panel button colors (ChefMenuCard sits on hero background with food image)
 const HERO_BUTTON = COMPONENTS.heroPanel.light
@@ -287,9 +288,7 @@ const costAlternativeDisplay = computed(() => {
 
 const isEditingMenu = ref(false)
 
-// Overflow panel reveal - hosts the danger zone (cancel-dinner action).
-// Rare + destructive actions are spatially separated from routine controls (NOISE.quiet trigger),
-// so a chef hunting for "edit" can no longer mis-tap a prominent cancel button.
+// The danger zone (cancel dinner) sits behind the actions trigger, away from the routine edit controls
 const isMoreOpen = ref(false)
 
 // Reset transient edit/panel state when navigating to another dinner - never carry a stale
@@ -378,7 +377,7 @@ const handleCardClick = () => {
 
       <!-- Menu title -->
       <div class="flex-1 min-w-0">
-        <div :class="['text-sm truncate', hasMenuTitle ? 'font-medium' : 'italic text-neutral-500']">
+        <div :class="['text-sm truncate', hasMenuTitle ? 'font-medium' : `italic ${TEXT.neutral[500]}`]">
           {{ menuTitle }}
         </div>
       </div>
@@ -415,7 +414,7 @@ const handleCardClick = () => {
     v-else
     :name="`chef-menu-card-${dinnerEvent.id}`"
     :class="LAYOUTS.cardResponsive"
-    :ui="{ root: 'ring-amber-500 relative overflow-hidden', header: `p-0 ${BACKGROUNDS.hero.mocha}` }"
+    :ui="{ root: `${RING.amber[500]} relative overflow-hidden`, header: `p-0 ${BACKGROUNDS.hero.mocha}` }"
   >
     <!-- Cancelled ribbon -->
     <div
@@ -450,7 +449,7 @@ const handleCardClick = () => {
           <template #default>
             <div class="flex flex-col md:flex-row md:items-center gap-2">
               <!-- Menu title -->
-              <div :class="['text-lg font-medium md:flex-1', hasMenuTitle ? '' : 'italic text-neutral-500']" data-testid="chef-menu-title">
+              <div :class="['text-lg font-medium md:flex-1', hasMenuTitle ? '' : `italic ${TEXT.neutral[500]}`]" data-testid="chef-menu-title">
                 {{ menuTitle }}
               </div>
 
@@ -486,12 +485,11 @@ const handleCardClick = () => {
                   {{ isUpdating ? 'Arbejder...' : (dinnerEvent.heynaboEventId ? 'Publiceret' : 'Publicer') }}
                 </UButton>
 
-                <!-- More - overflow trigger (NOISE.quiet): "..." + chevron, reveals the danger zone -->
+                <!-- More - the settings wheel + chevron (BUTTONS.settings), reveals the danger zone -->
                 <UButton
                   v-if="canCancelDinner(dinnerEvent)"
-                  v-bind="BUTTONS.more"
+                  v-bind="{...BUTTONS.settings, ...BUTTONS.disclosure(isMoreOpen)}"
                   class="self-end md:self-auto"
-                  :ui="{ trailingIcon: isMoreOpen ? 'rotate-180 transition-transform duration-200' : 'transition-transform duration-200' }"
                   :disabled="isUpdating"
                   aria-label="Flere handlinger"
                   data-testid="dinner-more-actions"
@@ -552,7 +550,7 @@ const handleCardClick = () => {
           </template>
         </UCollapsible>
 
-        <div v-if="dinnerEvent.menuDescription" class="text-sm text-neutral-600 dark:text-neutral-400 mt-1" data-testid="chef-menu-description">
+        <div v-if="dinnerEvent.menuDescription" :class="[TYPOGRAPHY.bodyTextSmall, TEXT.menuBody, 'mt-1']" data-testid="chef-menu-description">
           {{ dinnerEvent.menuDescription }}
         </div>
 
@@ -560,13 +558,13 @@ const handleCardClick = () => {
         <div class="pt-4 mt-4 flex items-center gap-3 flex-wrap">
           <div
             class="flex items-center gap-3 cursor-pointer"
-            :class="{ [`${BG.mocha[950]} border-2 border-dashed border-amber-600 rounded-lg p-3 -skew-x-1 w-fit`]: !dinnerEvent.chef }"
+            :class="{ [`${BG.mocha[950]} border-2 border-dashed ${BORDER.amber[600]} rounded-lg p-3 -skew-x-1 w-fit`]: !dinnerEvent.chef }"
             :data-testid="dinnerEvent.chef ? 'chef-display' : 'chef-wanted'"
             @click="roleAssignmentRef?.open()"
           >
             <!-- Portrait frame around avatar -->
             <div class="relative">
-              <div class="rounded-full ring-2 md:ring-4 ring-amber-500">
+              <div :class="`rounded-full ring-2 md:ring-4 ${RING.amber[500]}`">
                 <UserListItem
                   v-if="dinnerEvent.chef"
                   :inhabitants="dinnerEvent.chef"
@@ -577,7 +575,7 @@ const handleCardClick = () => {
                 <UAvatar v-else :icon="ICONS.help" :size="SIZES.standard" :ui="{ icon: TEXT.mocha[50] }" :class="BG.mocha[800]" />
               </div>
               <!-- Chef hat on top -->
-              <UIcon :name="ICONS.chef" class="absolute -top-5 md:-top-7 left-1/2 -translate-x-1/2 text-amber-500 text-xl md:text-3xl -rotate-9 drop-shadow-md" />
+              <UIcon :name="ICONS.chef" :class="`absolute -top-5 md:-top-7 left-1/2 -translate-x-1/2 ${TEXT.mocha[500]} text-xl md:text-3xl -rotate-9 drop-shadow-md`" />
             </div>
             <!-- Name or WANTED -->
             <div class="flex flex-col">
@@ -599,10 +597,9 @@ const handleCardClick = () => {
         <!-- Warning when menu title missing -->
         <UAlert
           v-if="isEditing && canAnnounce && !canAdvanceState"
-          :color="COLOR.warning"
-          variant="soft"
+          v-bind="ALERTS.warning"
           :icon="ICONS.info"
-          :ui="{ root: 'p-2 mt-2', description: 'text-xs' }"
+          class="mt-2"
         >
           <template #description>Chefkokken skal oprette en menu, før den kan publiceres</template>
         </UAlert>

@@ -38,7 +38,7 @@ import type { TeamRole, CookingTeamAssignment } from '~/composables/useCookingTe
 import { ROLE_LABELS, ROLE_ICONS } from '~/composables/useCookingTeamValidation'
 
 // Design system
-const { COLOR, COMPONENTS, SIZES, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { SIZES, ICONS, ALERTS, COLOR, TYPOGRAPHY, TEXT, BG, getRainbowBand, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 type DisplayMode = 'monitor' | 'regular' | 'edit'
 
@@ -111,17 +111,9 @@ watch(teamName, (newName) => {
   editedName.value = newName
 })
 
-const { getTeamColor } = useCookingTeam()
-const teamColor = computed(() => {
-  return getTeamColor(props.teamNumber - 1)
-})
-
-const appConfig = useAppConfig()
-const resolvedColor = computed(() => {
-  const colorName = teamColor.value as string
-  const colors = appConfig.ui?.colors as Record<string, string> | undefined
-  return colors?.[colorName] ?? 'neutral'
-})
+// The team wears the rainbow stop of its number: fill and ink as classes, so a badge needs
+// no colour slot (ADR-018)
+const teamBand = computed(() => getRainbowBand(props.teamNumber - 1))
 
 const roleGroups = computed(() => {
   const groups = {
@@ -163,7 +155,7 @@ const emptyStateMessage = getRandomEmptyMessage('cookingTeam')
 
 // ========== INHABITANT SELECTOR (EDIT mode) ==========
 
-const {mergeInhabitantsWithAssignments, getTeamColor: getTeamColorByIndex} = useCookingTeam()
+const {mergeInhabitantsWithAssignments} = useCookingTeam()
 const householdsStore = useHouseholdsStore()
 
 const inhabitantsWithAssignments = computed(() =>
@@ -186,9 +178,10 @@ const getCurrentAssignment = (id: number) =>
 const getTeamName = (cookingTeamId: number) =>
     getTeamShortName(props.teams?.find(t => t.id === cookingTeamId)?.name ?? '')
 
-const getTeamColorForId = (cookingTeamId: number) => {
+/** The band of another team in the season - empty when the season does not list it */
+const getTeamBandForId = (cookingTeamId: number) => {
   const idx = props.teams?.findIndex(t => t.id === cookingTeamId) ?? -1
-  return idx >= 0 ? getTeamColorByIndex(idx) : 'neutral' as TeamColor
+  return idx >= 0 ? getRainbowBand(idx) : ''
 }
 
 const sortByStatusThenName = (rowA: {original: InhabitantDisplay}, rowB: {original: InhabitantDisplay}): number => {
@@ -224,10 +217,8 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
   <!-- No team state (funny message) -->
   <UAlert
     v-else-if="isNoTeam"
-    variant="soft"
-    :color="COLOR.neutral"
+    v-bind="ALERTS.emptyState"
     :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar }"
-    :ui="COMPONENTS.emptyStateAlert"
   >
     <template #title>
       {{ emptyStateMessage.text }}
@@ -238,16 +229,16 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
   </UAlert>
 
   <!-- MONITOR MODE: Large display for kitchen monitors -->
-  <div v-else-if="mode === 'monitor'" class="bg-violet-850 py-4 md:py-6">
+  <div v-else-if="mode === 'monitor'" class="py-4 md:py-6">
     <!-- Team name header (always visible) -->
     <div class="mb-3 md:mb-4 px-3 md:px-4 flex items-center gap-2 flex-wrap">
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
+      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
         <UIcon :name="ICONS.team" :size="SIZES.largeIconSize" class="inline" /> {{ teamName }}
       </UBadge>
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
+      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
         👨‍🍳 {{ assignments.length }}
       </UBadge>
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
+      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
         📅 {{ cookingDaysCount }}
       </UBadge>
     </div>
@@ -258,13 +249,12 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
       <div v-if="roleGroups.CHEF.length > 0" class="flex items-start gap-3 md:gap-4">
         <div class="flex flex-col items-center">
           <span class="text-2xl md:text-3xl">{{ ROLE_ICONS.CHEF }}</span>
-          <span class="text-xs text-gray-500 dark:text-gray-400">Chefkokke</span>
+          <span :class="[TYPOGRAPHY.finePrint, TEXT.muted]">Chefkokke</span>
         </div>
         <UserListItem
           :inhabitants="roleGroups.CHEF.map(m => m.inhabitant)"
           :compact="false"
           :size="SIZES.standard"
-          :ring-color="teamColor"
           class="mt-2"
         />
       </div>
@@ -273,13 +263,12 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
       <div v-if="roleGroups.COOK.length > 0" class="flex items-start gap-3 md:gap-4">
         <div class="flex flex-col items-center">
           <span class="text-2xl md:text-3xl">{{ ROLE_ICONS.COOK }}</span>
-          <span class="text-xs text-gray-500 dark:text-gray-400">Kokke</span>
+          <span :class="[TYPOGRAPHY.finePrint, TEXT.muted]">Kokke</span>
         </div>
         <UserListItem
           :inhabitants="roleGroups.COOK.map(m => m.inhabitant)"
           :compact="false"
           :size="SIZES.standard"
-          :ring-color="teamColor"
           class="mt-2"
         />
       </div>
@@ -288,23 +277,20 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
       <div v-if="roleGroups.JUNIORHELPER.length > 0" class="flex items-start gap-3 md:gap-4">
         <div class="flex flex-col items-center">
           <span class="text-2xl md:text-3xl">{{ ROLE_ICONS.JUNIORHELPER }}</span>
-          <span class="text-xs text-gray-500 dark:text-gray-400">Kokkespirer</span>
+          <span :class="[TYPOGRAPHY.finePrint, TEXT.muted]">Kokkespirer</span>
         </div>
         <UserListItem
           :inhabitants="roleGroups.JUNIORHELPER.map(m => m.inhabitant)"
           :compact="false"
           :size="SIZES.standard"
-          :ring-color="teamColor"
           class="mt-2"
         />
       </div>
     </div>
     <UAlert
       v-else
-      variant="soft"
-      :color="COLOR.neutral"
+      v-bind="ALERTS.emptyState"
       :avatar="{ text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar }"
-      :ui="COMPONENTS.emptyStateAlert"
     >
       <template #title>
         {{ emptyStateMessage.text }}
@@ -322,11 +308,9 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
     <div
       v-if="isEditable"
       class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 py-2 px-0 md:px-4 border-y-2 md:border-2 border-dashed"
-      :class="`border-${teamColor}-400 dark:border-${teamColor}-700`"
-      :style="{ borderColor: `var(--color-${resolvedColor}-300)` }"
     >
       <div class="flex flex-col md:flex-row md:items-center gap-3 flex-1">
-        <UBadge :color="teamColor" variant="soft" :size="SIZES.standard" class="rounded-full p-2 md:p-3">
+        <UBadge :class="[teamBand, 'rounded-full p-2 md:p-3']" :size="SIZES.standard">
           <UIcon :name="ICONS.team" :size="SIZES.standardIconSize" />
         </UBadge>
         <UFormField label="Holdnavn" class="flex-1 min-w-fit" >
@@ -358,15 +342,13 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             </UTooltip>
           </UAvatarGroup>
           <UBadge
-            :color="teamColor"
-            variant="soft"
+            :class="teamBand"
             :size="SIZES.large"
           >
             👨‍🍳 {{ assignments.length }}
           </UBadge>
           <UBadge
-            :color="teamColor"
-            variant="soft"
+            :class="teamBand"
             :size="SIZES.large"
           >
             📅 {{ cookingDaysCount }}
@@ -383,14 +365,14 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
     </div>
 
     <!-- VIEW MODE: Team name header -->
-    <div v-else class="flex items-center gap-2 flex-wrap p-4 border" :class="`border-${teamColor}-300 dark:border-${teamColor}-700`">
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
+    <div v-else class="flex items-center gap-2 flex-wrap p-4 border">
+      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
         <UIcon :name="ICONS.team" :size="SIZES.largeIconSize" class="inline" /> {{ teamName }}
       </UBadge>
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
+      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
         👨‍🍳 {{ assignments.length }}
       </UBadge>
-      <UBadge :color="teamColor" variant="soft" :size="SIZES.large" class="w-fit">
+      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
         📅 {{ cookingDaysCount }}
       </UBadge>
     </div>
@@ -401,18 +383,18 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
       <div class="flex flex-col md:flex-row gap-2 md:gap-4">
         <!-- LEFT: Team members -->
         <div :class="isEditable ? 'w-full md:w-1/2' : 'w-full'" class="space-y-4">
-          <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Holdmedlemmer</h4>
+          <h4 :class="TYPOGRAPHY.sectionSubheading">Holdmedlemmer</h4>
           <div class="flex flex-col gap-4">
             <div
               v-for="(members, role) in roleGroups"
               :key="role"
               class="space-y-2"
             >
-              <h5 class="text-xs font-medium text-gray-600 dark:text-gray-400">
+              <h5 :class="[TYPOGRAPHY.caption, TEXT.toned]">
                 {{ ROLE_LABELS[role] }}
               </h5>
 
-              <div v-if="members.length > 0" class="flex flex-col gap-2 p-3 bg-gray-50 dark:bg-gray-800">
+              <div v-if="members.length > 0" :class="['flex flex-col gap-2 p-3', BG.inset]">
                 <div v-for="member in members" :key="member.id" class="flex items-center gap-2 flex-wrap">
                   <UAvatar
                     :src="member.inhabitant?.pictureUrl ?? undefined"
@@ -424,20 +406,18 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                   />
                   <UBadge
                     size="md"
-                    variant="subtle"
-                    :color="teamColor"
-                    class="cursor-pointer hover:opacity-80 transition-opacity"
+                    :class="[teamBand, 'cursor-pointer hover:opacity-80 transition-opacity']"
                     @click="member.inhabitant && navigateToInhabitant(member.inhabitant.id)"
                   >
                     {{ member.inhabitant?.name }} {{ member.inhabitant?.lastName }}
                   </UBadge>
-                  <UBadge :color="teamColor" variant="outline" :size="SIZES.small" class="w-fit">
+                  <UBadge :color="COLOR.neutral" variant="outline" :size="SIZES.small" class="w-fit">
                     {{ member.allocationPercentage }}%
                   </UBadge>
-                  <WeekDayMapDisplay v-if="member.affinity" :model-value="member.affinity" compact disabled :color="teamColor" />
+                  <WeekDayMapDisplay v-if="member.affinity" :model-value="member.affinity" compact disabled />
                   <UButton
                     v-if="isEditable && member.id"
-                    color="winery"
+                    :color="COLOR.winery"
                     variant="ghost"
                     size="xs"
                     icon="i-heroicons-x-mark"
@@ -446,7 +426,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                 </div>
               </div>
 
-              <div v-else class="text-sm text-gray-500 italic p-3">
+              <div v-else :class="[TYPOGRAPHY.bodyTextSmall, TEXT.gray[500], 'italic p-3']">
                 Ingen {{ ROLE_LABELS[role].toLowerCase() }}
               </div>
             </div>
@@ -455,7 +435,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
 
         <!-- RIGHT: Inhabitant finder (EDIT mode only) -->
         <div v-if="isEditable" class="w-full md:w-1/2 space-y-4">
-          <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">Tilføj medlemmer</h4>
+          <h4 :class="TYPOGRAPHY.sectionSubheading">Tilføj medlemmer</h4>
           <InhabitantSelector
             v-if="teamId && seasonId"
             :inhabitants="inhabitantsWithAssignments"
@@ -468,14 +448,14 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             <!-- Status: one badge per team assignment, or LEDIG -->
             <template #status="{ row }">
               <div v-if="getAssignmentsFor(row.original.id).length === 0">
-                <UBadge color="success" variant="outline" :size="SIZES.small">LEDIG</UBadge>
+                <UBadge :color="COLOR.success" variant="outline" :size="SIZES.small">LEDIG</UBadge>
               </div>
               <div v-else class="flex flex-col gap-1">
                 <div v-for="(a, idx) in getAssignmentsFor(row.original.id)" :key="idx" class="flex flex-col gap-0.5">
-                  <UBadge :color="getTeamColorForId(a.cookingTeamId)" variant="solid" :size="SIZES.small" class="w-fit">
+                  <UBadge :class="[getTeamBandForId(a.cookingTeamId), 'w-fit']" :size="SIZES.small">
                     {{ getTeamName(a.cookingTeamId) }} · {{ a.allocationPercentage }}%
                   </UBadge>
-                  <WeekDayMapDisplay v-if="a.affinity" :model-value="a.affinity" compact disabled :color="getTeamColorForId(a.cookingTeamId)" />
+                  <WeekDayMapDisplay v-if="a.affinity" :model-value="a.affinity" compact disabled />
                 </div>
               </div>
             </template>
@@ -483,7 +463,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             <!-- Actions: Tilføj or Rediger, both expand the form -->
             <template #actions="{ row }">
               <UButton
-                color="primary"
+                :color="COLOR.primary"
                 variant="soft"
                 :size="SIZES.small"
                 @click="row.toggleExpanded()"
@@ -497,10 +477,9 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
 
             <!-- Expanded row: add/edit member form, pre-filled for existing members -->
             <template #expanded="{ row }">
-              <div class="p-4 bg-neutral-50 dark:bg-neutral-900">
+              <div :class="['p-4', BG.panel]">
                 <TeamMemberAddForm
                   :team-affinity="affinity"
-                  :team-color="teamColor"
                   :initial-role="getCurrentAssignment(row.original.id)?.role"
                   :initial-percentage="getCurrentAssignment(row.original.id)?.allocationPercentage"
                   :initial-affinity="getCurrentAssignment(row.original.id)?.affinity"
@@ -510,7 +489,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
               </div>
             </template>
           </InhabitantSelector>
-          <div v-else class="p-6 border-2 border-dashed text-center text-gray-500">
+          <div v-else :class="['p-6 border-2 border-dashed text-center', TEXT.gray[500]]">
             <UIcon name="i-heroicons-users" class="text-4xl mb-2" />
             <p class="text-sm">Hold skal gemmes før medlemmer kan tilføjes</p>
           </div>
@@ -528,7 +507,6 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             :compact="!isEditable"
             hide-restricted
             :label="isEditable ? 'Holdets madlavningsdage' : 'Madlavningsdage'"
-            :color="teamColor"
             @update:model-value="(value) => emit('update:affinity', value)"
           />
         </div>
@@ -542,7 +520,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             :dinner-events="dinnerEvents"
             :holidays="holidays"
           />
-          <div v-else class="p-6 border-2 border-dashed text-center text-gray-500">
+          <div v-else :class="['p-6 border-2 border-dashed text-center', TEXT.gray[500]]">
             <UIcon name="i-heroicons-calendar" class="text-4xl mb-2" />
             <p class="text-sm">Ingen fællesspisninger tildelt endnu</p>
           </div>

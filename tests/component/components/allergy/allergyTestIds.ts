@@ -14,10 +14,20 @@ export const ALLERGY_TEST_IDS = {
     confirmDelete: 'confirm-delete-allergy-type',
     // AdminAllergies toolbar
     create: 'create-allergy-type',
+    createFirst: 'create-first-allergy-type',
     compare: 'multiselect-toggle',
     sort: 'sort-by-count',
     // AllergenMultiSelector
     summaryBar: 'compare-summary-bar',
+    // Shared QrCode on the poster
+    qr: 'qr-code',
+    // AllergyNotes - catalog footer and poster
+    notes: 'allergy-notes',
+    notesItem: 'allergy-notes-item',
+    editNotes: 'edit-allergy-notes',
+    saveNotes: 'save-allergy-notes',
+    cancelNotes: 'cancel-allergy-notes',
+    notesTextarea: 'allergy-notes-textarea',
     // AllergyCatalogTable rows
     row: (allergyTypeId: number) => `allergy-row-${allergyTypeId}`
 } as const

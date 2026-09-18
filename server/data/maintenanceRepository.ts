@@ -1,4 +1,3 @@
-import type {D1Database} from '@cloudflare/workers-types'
 import {Prisma as _PrismaSkip, Prisma} from '@prisma/client'
 import {getPrismaClientConnection} from './allergyRepository'
 import type {
@@ -11,15 +10,15 @@ import type {
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import type {DailyMaintenanceResult} from '~/composables/useBookingValidation'
 import type {HeynaboImportResponse} from '~/composables/useHeynaboValidation'
-import type {BillingGenerationResult} from '~/composables/useBillingValidation'
+import type {MonthlyBillingJobResult} from '~/composables/useBillingValidation'
 
 const LOG = '🔧 > JOB_RUN'
 
 /**
  * Result types that can be stored in JobRun.resultSummary
- * Monthly billing stores {results: BillingGenerationResult[]} for multi-period support
+ * Monthly billing stores MonthlyBillingJobResult ({results, periods}) for multi-period support
  */
-export type JobResultSummary = DailyMaintenanceResult | HeynaboImportResponse | {results: BillingGenerationResult[]} | SeasonImportResponse
+export type JobResultSummary = DailyMaintenanceResult | HeynaboImportResponse | MonthlyBillingJobResult | SeasonImportResponse
 
 /**
  * Fetch recent job runs with optional filtering by job type

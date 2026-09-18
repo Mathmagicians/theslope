@@ -125,7 +125,9 @@ The schema defines entity relationships, onDelete behaviors (CASCADE vs SET NULL
 - Include clear summary of what was updated and why
 
 ### Collaboration Approach
-- **Planning and Strategy**: Discuss features, create a detailed written plan
+- **Planning and Strategy**: Discuss features, create a detailed written plan — follow `.claude/skills/plan-and-supervise/SKILL.md` (named packages, mockup signoff, per-package approval gate, coverage matrix)
+- **Schema and migrations**: any change to `prisma/schema.prisma` or a D1 migration follows `.claude/skills/prisma/SKILL.md` — model signed off first, Make targets produce every migration file (`make d1-create-migration`, `make d1-flatten-migrations`, `make d1-prisma`), backfills convergent in the Prisma source, the user applies with `make d1-migrate-*`
+- **Documentation**: any prose under `docs/` (runbook, guides, ADR notes, proposal text) follows `.claude/skills/documentation/SKILL.md` — compact, factual, present tense, only what we do; no negatives, alternatives, futures or loaded adjectives; placeholders for mailboxes and secrets
 - **Implementation**:
   - You write the core application code
   - Claude helps with test boilerplate, debugging, and refactoring

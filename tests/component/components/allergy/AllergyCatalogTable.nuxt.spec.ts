@@ -143,4 +143,19 @@ describe('AllergyCatalogTable', () => {
             expect(findByTestId(wrapper, 'docked-detail').exists()).toBe(false)
         })
     })
+
+    // The consumer owns the empty state (AdminAllergies shows a create CTA);
+    // the table forwards it to UTable's #empty slot
+    describe('empty slot forwarding', () => {
+        const emptySlot = {empty: () => h('div', {'data-testid': 'catalog-empty'}, 'INTET KATALOG')}
+
+        it.each([
+            {when: 'there are no allergy types', allergyTypes: [], expected: true},
+            {when: 'rows exist', allergyTypes: mockAllergyTypes, expected: false}
+        ])('renders the #empty slot when $when', async ({allergyTypes, expected}) => {
+            const wrapper = await mountTable({mode: 'single', allergyTypes}, emptySlot)
+
+            expect(findByTestId(wrapper, 'catalog-empty').exists()).toBe(expected)
+        })
+    })
 })

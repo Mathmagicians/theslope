@@ -127,7 +127,7 @@ const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Design system
-const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, getRandomEmptyMessage, getResidencyDisplay} = useTheSlopeDesignSystem()
+const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, getResidencyDisplay} = useTheSlopeDesignSystem()
 const emptyStateMessage = getRandomEmptyMessage('household')
 
 // Ticket business logic
@@ -537,8 +537,7 @@ const actionPreviewItems = computed(() => {
 <template>
   <UAlert
     v-if="residencyAlert"
-    :color="residencyAlert.color"
-    variant="soft"
+    v-bind="ALERTS[residencyAlert.color]"
     :icon="residencyAlert.icon"
     :title="residencyAlert.alertTitle"
     :description="residencyAlert.alertDescription"
@@ -547,10 +546,8 @@ const actionPreviewItems = computed(() => {
 
   <UAlert
     v-else-if="!household?.inhabitants?.length"
-    :color="COLOR.neutral"
-    variant="soft"
+    v-bind="ALERTS.emptyState"
     :avatar="{text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar}"
-    :ui="COMPONENTS.emptyStateAlert"
   >
     <template #title>{{ emptyStateMessage.text }}</template>
     <template #description>Ingen husstandsmedlemmer fundet</template>
@@ -574,8 +571,7 @@ const actionPreviewItems = computed(() => {
     <div v-if="!canBook" class="space-y-2">
       <UAlert
         v-if="householdReleasedTickets.length > 0"
-        color="warning"
-        variant="soft"
+        v-bind="ALERTS.warning"
         :icon="ICONS.released"
       >
         <template #title>
@@ -583,7 +579,7 @@ const actionPreviewItems = computed(() => {
         </template>
         <template #description>Du betaler, medmindre andre køber</template>
       </UAlert>
-      <UAlert v-if="hasReleasedTickets" color="info" variant="soft" :icon="ICONS.claim">
+      <UAlert v-if="hasReleasedTickets" v-bind="ALERTS.info" :icon="ICONS.claim">
         <template #title>Har du brug for flere billetter?</template>
         <template #description>Lukket for ændringer, men der er {{ props.releasedTicketCounts.total }} ledig{{ props.releasedTicketCounts.total === 1 ? ' billet' : 'e billetter' }} til salg.</template>
       </UAlert>
@@ -596,7 +592,7 @@ const actionPreviewItems = computed(() => {
       :columns="columns"
       row-key="id"
       data-testid="booking-table"
-      :ui="{tbody: '[&_tr:first-child]:bg-warning/10', tr: 'data-[expanded=true]:bg-elevated/50', th: 'px-1 py-1 md:px-4 md:py-3', td: 'px-1 md:px-4'}"
+      :ui="{...COMPONENTS.table.denseUi, tbody: '[&_tr:first-child]:bg-warning/10', tr: 'data-[expanded=true]:bg-elevated/50'}"
     >
       <!-- Expand button column - uses BUTTONS.edit for standardized sizing -->
       <template #expand-cell="{row}">
@@ -793,9 +789,8 @@ const actionPreviewItems = computed(() => {
           <!-- Power mode warning -->
           <UAlert
             v-if="row.original.rowType === 'power'"
-            :icon="COMPONENTS.powerMode.alert.icon"
-            :color="COMPONENTS.powerMode.alert.color"
-            :variant="COMPONENTS.powerMode.alert.variant"
+            v-bind="ALERTS.warning"
+            :icon="COMPONENTS.powerMode.icon"
             title="Du er ved at aktivere power mode"
             :description="`Ændringer påvirker alle ${household?.inhabitants?.length ?? 0} medlemmer.`"
           />
@@ -828,7 +823,7 @@ const actionPreviewItems = computed(() => {
           <!-- Order history toggle + display (in body, near the content it reveals) -->
           <div v-if="row.original.order?.id">
             <UButton
-                color="neutral"
+                :color="COLOR.neutral"
                 variant="ghost"
                 :icon="historyOrderId === row.original.order.id ? ICONS.chevronUp : ICONS.clipboard"
                 square
@@ -872,24 +867,7 @@ const actionPreviewItems = computed(() => {
       </template>
     </UTable>
 
-    <!-- Legend: DinnerModeSelector in VIEW mode with labels (DRY) -->
-    <UAlert
-      v-if="isEditModeAllowed"
-      :icon="ICONS.info"
-      :color="COLOR.neutral"
-      variant="subtle"
-      title="Forklaring"
-      class="mt-4"
-    >
-      <template #description>
-        <div class="flex flex-wrap gap-x-6 gap-y-2">
-          <DinnerModeSelector :model-value="DinnerModeEnum.DINEIN" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" />
-          <DinnerModeSelector :model-value="DinnerModeEnum.DINEINLATE" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" />
-          <DinnerModeSelector :model-value="DinnerModeEnum.TAKEAWAY" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" />
-          <DinnerModeSelector :model-value="DinnerModeEnum.NONE" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" />
-          <DinnerModeSelector :model-value="DinnerModeEnum.DINEIN" :form-mode="FORM_MODES.VIEW" show-label :size="SIZES.xs" :consensus="false" />
-        </div>
-      </template>
-    </UAlert>
+    <!-- Legend: shared with the week/month grid -->
+    <DinnerModeLegend v-if="isEditModeAllowed" class="mt-4"/>
   </div>
 </template>

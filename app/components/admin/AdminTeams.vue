@@ -132,12 +132,11 @@ const props = withDefaults(defineProps<Props>(), {
   canEdit: false
 })
 
-const {getDefaultCookingTeam, getTeamColor} = useCookingTeam()
+const {getDefaultCookingTeam} = useCookingTeam()
 const store = usePlanStore()
 const {
   isSeasonsLoading,
   isSelectedSeasonLoading,
-  isPlanStoreReady,
   isNoSeasons,
   selectedSeason,
   activeSeason,
@@ -155,7 +154,6 @@ const {
 
 // Get teams from selected season - ALWAYS show live data
 const teams = computed(() => selectedSeason.value?.CookingTeams ?? [])
-const isNoTeams = computed(() => teams.value.length === 0)
 
 // FORM MANAGEMENT - useEntityFormManager for URL/mode management only
 const {formMode, onModeChange: baseOnModeChange} = useEntityFormManager<CookingTeamDisplay[]>({
@@ -238,14 +236,15 @@ const teamTabs = computed(() => {
     label: team.name,
     value: index,
     icon: 'i-fluent-mdl2-team-favorite',
-    color: getTeamColor(index),
+    // The team's colour rides on CookingTeamBadges in the tab body, from the team's number
     memberCount: team.assignments?.length ?? 0,
     cookingDaysCount: team.cookingDaysCount ?? 0
   }))
 })
 
 const showAdminTeams = computed(() => {
-  return !isSelectedSeasonLoading.value && selectedSeason.value && (!isNoTeams.value || formMode.value === FORM_MODES.CREATE)
+  // A season with no teams still renders: the table shows its own #empty slot
+  return !isSelectedSeasonLoading.value && !!selectedSeason.value
 })
 
 // Action button loading state - used for both :loading and :disabled (NuxtUI pattern)
@@ -269,8 +268,9 @@ const handleBatchCreateTeams = async () => {
   if (!createDraft.value.length || !selectedSeason.value?.id) return
 
   try {
-    await createTeam(createDraft.value)
-    showSuccessToast('Madhold oprettet', `${createDraft.value.length} madhold oprettet med automatisk tildeling`)
+    // The toast reports the operation result (ADR-009), not the draft
+    const {teams: createdTeams, eventsAssigned} = await createTeam(createDraft.value)
+    showSuccessToast('Madhold oprettet', `${createdTeams.length} madhold oprettet · ${eventsAssigned} madlavninger tildelt`)
     await onModeChange(FORM_MODES.VIEW)
   } catch (error) {
     console.error('👥 > ADMIN_TEAMS > [CREATE] Error creating teams:', error)
@@ -402,7 +402,7 @@ interface TableRow {
   original: CookingTeamDisplay
 }
 
-const {ICONS} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, TEXT, BG, COMPONENTS} = useTheSlopeDesignSystem()
 
 const columns = [
   {
@@ -424,10 +424,6 @@ const columns = [
   {
     accessorKey: 'affinity',
     header: 'Madlavningsdage'
-  },
-  {
-    accessorKey: 'assignments',
-    header: 'Medlemmer'
   }
 ]
 
@@ -456,23 +452,7 @@ const columns = [
 
     <template #default>
       <Loader v-if="isSelectedSeasonLoading || isSeasonsLoading" text="Henter data for fællesspisningssæson"/>
-      <AdminToCreateSeason v-else-if="isNoSeasons"/>
-      <UAlert
-          v-else-if="isPlanStoreReady && isNoTeams && formMode !== FORM_MODES.CREATE"
-          title="Her ser lidt tomt ud!"
-          description="Ingen madhold oprettet endnu ..."
-          :avatar="{text: '💤'}"
-          :actions="[
-      {
-        label: 'Opret nye madhold',
-        color: 'secondary',
-        variant: 'solid',
-        to: '/admin/teams?mode=create',
-        icon: 'i-heroicons-plus-circle',
-      }
-    ]"
-          color="info"
-          class="space-y-4"/>
+      <AdminToCreateSeason v-else-if="isNoSeasons" :can-edit="props.canEdit"/>
       <div v-if="showAdminTeams">
         <!-- CREATE MODE: Team count input + preview -->
         <div v-if="formMode === FORM_MODES.CREATE" class="px-4 pb-4 space-y-4">
@@ -499,8 +479,8 @@ const columns = [
           </div>
         </div>
 
-        <!-- EDIT MODE: Master-Detail Layout -->
-        <div v-else-if="formMode === FORM_MODES.EDIT" class="px-4 pb-4 space-y-6 md:space-y-4">
+        <!-- EDIT MODE: Master-Detail Layout (with no teams the table branch below owns the empty state) -->
+        <div v-else-if="formMode === FORM_MODES.EDIT && displayedTeams.length > 0" class="px-4 pb-4 space-y-6 md:space-y-4">
           <!-- MOBILE: Dropdown team selector (only visible on mobile) -->
           <div class="block md:hidden">
             <USelect
@@ -566,7 +546,7 @@ const columns = [
 
               <div
 v-else
-                   class="flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg text-gray-500">
+                   :class="['flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg', TEXT.gray[500]]">
                 <UIcon name="i-heroicons-arrow-left" class="text-4xl mb-2"/>
                 <p>Vælg et madhold for at redigere</p>
               </div>
@@ -574,37 +554,16 @@ v-else
           </div>
         </div>
 
-        <!-- VIEW MODE: Table with team assignments -->
+        <!-- VIEW MODE, and EDIT MODE with no teams: the table and its own #empty slot -->
         <div v-else class="px-4 pb-4 space-y-6">
           <UTable
               v-model:expanded="expanded"
               :columns="columns"
               :data="displayedTeams"
               :loading="isSelectedSeasonLoading"
-              :ui="{ td: 'py-2' }"
+              :ui="COMPONENTS.table.ui"
           >
-            <!-- Team name column with colored badge -->
             <template #name-cell="{ row }">
-              <UBadge
-                  :color="getTeamColor(displayedTeams.findIndex(t => t.id === row.original.id))"
-                  variant="solid"
-                  size="md"
-              >
-                {{ row.original.name }}
-              </UBadge>
-            </template>
-
-            <!-- Team affinity column with compact WeekDayMapDisplay -->
-            <template #affinity-cell="{ row }">
-              <WeekDayMapDisplay
-                  :model-value="row.original.affinity"
-                  :color="getTeamColor(displayedTeams.findIndex(t => t.id === row.original.id))"
-                  compact
-              />
-            </template>
-
-            <!-- Team assignments column with CookingTeamBadges -->
-            <template #assignments-cell="{ row }">
               <CookingTeamBadges
                   :team-number="displayedTeams.findIndex(t => t.id === row.original.id) + 1"
                   :team-name="row.original.name"
@@ -614,9 +573,16 @@ v-else
               />
             </template>
 
+            <template #affinity-cell="{ row }">
+              <WeekDayMapDisplay
+                  :model-value="row.original.affinity"
+                  compact
+              />
+            </template>
+
             <!-- Expanded row content: Full team card (single expansion, selectedSeason guaranteed by showAdminTeams) -->
             <template #expanded>
-              <div v-if="expandedTeam?.id" class="p-4 bg-neutral-50 dark:bg-neutral-900">
+              <div v-if="expandedTeam?.id" :class="['p-4', BG.panel]">
                 <CookingTeamCard
                     :team-id="expandedTeam.id"
                     :team-number="displayedTeams.findIndex(t => t.id === expandedTeam!.id) + 1"
@@ -628,23 +594,28 @@ v-else
               </div>
             </template>
 
-            <template #empty-state>
-              <div class="flex flex-col items-center justify-center py-6 gap-3">
-                <UIcon name="i-heroicons-user-group" class="w-8 h-8 text-gray-400"/>
-                <p data-testid="teams-empty-state" class="text-sm text-gray-500">Ingen madhold endnu. Opret nogle
-                  madhold
-                  for at komme i gang!</p>
-                <UButton
-                    v-if="props.canEdit && !disabledModes.includes(FORM_MODES.CREATE)"
-                    name="create-new-team"
-                    color="secondary"
-                    size="sm"
-                    icon="i-heroicons-plus-circle"
-                    @click="onModeChange(FORM_MODES.CREATE)"
-                >
-                  Opret madhold
-                </UButton>
-              </div>
+            <!-- The table owns its empty state: no separate alert rendered instead of the table -->
+            <template #empty>
+              <UAlert
+                  v-bind="ALERTS.emptyState"
+                  data-testid="teams-empty-state"
+                  :avatar="{text: '💤', size: SIZES.emptyStateAvatar}"
+                  title="Her ser lidt tomt ud!"
+                  description="Ingen madhold oprettet endnu - opret nogle madhold for at komme i gang!"
+              >
+                <template v-if="props.canEdit && !disabledModes.includes(FORM_MODES.CREATE)" #actions>
+                  <UButton
+                      v-bind="BUTTONS.primaryAction"
+                      name="create-new-team"
+                      data-testid="create-new-team"
+                      :color="COLOR.secondary"
+                      :icon="ICONS.plusCircle"
+                      @click="onModeChange(FORM_MODES.CREATE)"
+                  >
+                    Opret madhold
+                  </UButton>
+                </template>
+              </UAlert>
             </template>
           </UTable>
 
@@ -662,18 +633,19 @@ v-else
 
     <template #footer>
       <div v-if="formMode === FORM_MODES.CREATE" class="flex gap-2">
-        <UButton color="secondary" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
+        <UButton :color="COLOR.secondary" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
           {{ isActionLoading ? 'Arbejder...' : 'Opret madhold' }}
         </UButton>
-        <UButton color="neutral" variant="ghost" @click="handleCancel">
+        <UButton :color="COLOR.neutral" variant="ghost" @click="handleCancel">
           Annuller
         </UButton>
       </div>
 
-      <div v-else-if="formMode === FORM_MODES.EDIT" class="flex gap-2">
+      <!-- The empty state carries the only CTA when there is nothing to edit yet -->
+      <div v-else-if="formMode === FORM_MODES.EDIT && displayedTeams.length > 0" class="flex gap-2">
         <UButton
             data-testid="add-team-button"
-            color="secondary"
+            :color="COLOR.secondary"
             icon="i-heroicons-plus-circle"
             :loading="isActionLoading"
             :disabled="isActionLoading"
@@ -681,7 +653,7 @@ v-else
         >
           {{ isActionLoading ? 'Arbejder...' : 'Tilføj madhold' }}
         </UButton>
-        <UButton color="secondary" variant="ghost" @click="handleCancel">
+        <UButton :color="COLOR.secondary" variant="ghost" @click="handleCancel">
           Annuller
         </UButton>
       </div>

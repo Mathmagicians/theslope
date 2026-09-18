@@ -50,6 +50,7 @@ Ikke-admin ser en **"Se, men ikke røre"**-besked og kan ikke ændre data:
 | **Ret bookinger (admin)** | [Økonomi](https://www.skraaningen.dk/admin/economy) → Fremtidige bestillinger |
 | Kør systemjobs | [System](https://www.skraaningen.dk/admin/system) |
 | Importér sæson fra CSV | `make theslope-import-season-*` |
+| Eksportér holdmedlemmer til CSV | `make theslope-export-teams env=<env>` |
 | Synkronisér fra Heynabo | `make heynabo-import-*` |
 
 ---
@@ -240,11 +241,22 @@ Admin kan tildele systemroller til brugere:
 Importér sæsonkalender og holdtildelinger fra CSV-filer.
 
 ```bash
-make theslope-import-season-prod   # Produktion
-make theslope-import-season-local  # Lokal
+make theslope-import-season-prod    # Produktion: calendar.csv + teams.csv
+make theslope-import-season-dev     # Dev: calendar.csv + test_teams.csv
+make theslope-import-season-local   # Lokal: calendar.csv + test_teams.csv
+make theslope-import-season-prod TEAMS_CSV_PROD=.theslope/team-import/teams-prod.csv   # anden holdfil (dev/lokal: TEAMS_CSV_TEST)
 ```
 
 **Placering af CSV-filer:** `.theslope/team-import/`
+
+Sæsonens navn (`MM/yy-MM/yy`) dannes af første og sidste række i `calendar.csv`. Findes en sæson med det navn, opdateres den; ellers oprettes en ny sæson.
+
+**Import i en eksisterende sæson:**
+- Datoer, madlavningsdage og ferier kommer fra `calendar.csv`, og middagene følger dem: middage på feriedatoer slettes, madlavningsdage uden middag får en
+- Hver middag får holdet fra sin række i `calendar.csv`
+- Hold får de medlemmer fra `teams.csv`, der mangler; eksisterende medlemmer beholder deres rolle
+- Frister sættes til standardværdierne i `app/app.config.ts`; standardbilletpriser, der mangler, tilføjes
+- Sæsonen bliver inaktiv. Aktivér den igen som beskrevet i [Sådan aktiverer du en sæson](#sådan-aktiverer-du-en-sæson)
 
 #### `calendar.csv` - Sæsonplan
 
@@ -261,7 +273,7 @@ date,weekday,team
 | weekday | Dansk | mandag, tirsdag, onsdag, torsdag |
 | team | Nummer eller tekst | Holdnummer (1-8) eller ferienavn |
 
-Ferienavne: `Efterårsferie`, `Juleferie`, `Vinterferie`, `Påskeferie`, `Kr. Himmelfart`, `Pinse`, `FRIT`
+Filen har én række pr. madlavningsdag fra sæsonens første til sidste dag. Tekst i `team` er et ferienavn, og fortløbende rækker med samme navn bliver én ferie, fx `Efterårsferie`, `Juleferie`, `Vinterferie`, `Påskeferie`, `Kr. Himmelfart`, `Pinse`, `FRIT`.
 
 #### `teams.csv` - Holdtildelinger
 
@@ -272,10 +284,21 @@ Madhold 1,COOK,Søren L.,man
 Madhold 1,JUNIORHELPER,Asta G.,man
 ```
 
+Filen har mindst én medlemsrække.
+
+#### Eksport af holdmedlemmer
+
+```bash
+make theslope-export-teams env=prod   # env=local|dev|prod; expect: <antal> members → .theslope/team-import/teams-prod.csv
+```
+
+Skriver den aktive sæsons holdmedlemmer i `teams.csv`-formatet med fulde navne til `.theslope/team-import/teams-<env>.csv`. En import med denne fil beholder holdenes medlemmer, som de er.
+
 #### Navnematching
 
 | Format | Eksempel | Matcher |
 |--------|----------|---------|
+| Fuldt navn | `Maria Hansen` | Fornavn + efternavn |
 | Kun fornavn | `Maria` | Unikt fornavn |
 | Fornavn + initial | `Søren L.` | Fornavn + efternavn der starter med L |
 | Fornavn + flere initialer | `Mads B.H.` | Fornavn + efternavn "Bruun Hovgaard" |
@@ -284,11 +307,10 @@ Tjek `unmatchedNames` i svaret - disse skal tildeles manuelt eller rettes i CSV.
 
 ### Heynabo-import
 
-Synkronisér husstande og beboere fra Heynabo:
+Synkronisér husstande og beboere fra Heynabo. På dev og prod: Admin → System → Heynabo-import. Lokalt:
 
 ```bash
-make heynabo-import-prod   # Produktion
-make heynabo-import-local  # Lokal
+make theslope-login-local && make theslope-admin-import   # GET /api/admin/heynabo/import på den lokale server
 ```
 
 ---

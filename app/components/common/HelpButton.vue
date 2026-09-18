@@ -43,7 +43,7 @@ const requestUrl = useRequestURL()
 const isOpen = ref(false)
 const doClose = () => isOpen.value = false
 
-const { NAVIGATION, ICONS, SIZES, COLOR, TYPOGRAPHY } = useTheSlopeDesignSystem()
+const { NAVIGATION, ICONS, SIZES, COLOR, TYPOGRAPHY, BUTTONS } = useTheSlopeDesignSystem()
 
 // Feedback form
 type FeedbackType = FeedbackPayload['type']
@@ -158,8 +158,7 @@ watch(() => route.path, () => {
                 label="Rapporter fejl"
                 :size="SIZES.small"
                 variant="ghost"
-                trailing-icon="i-heroicons-chevron-down"
-                :ui="{ trailingIcon: showFeedbackForm ? 'rotate-180 transition-transform duration-200' : 'transition-transform duration-200' }"
+                v-bind="BUTTONS.disclosure(showFeedbackForm)"
                 @click="showFeedbackForm = !showFeedbackForm"
             />
 
@@ -181,7 +180,7 @@ watch(() => route.path, () => {
                     />
                   </div>
                   <div v-else-if="isError" class="text-center py-2 md:py-3 space-y-1">
-                    <UBadge color="error" variant="soft">❌ Kunne ikke sende feedback</UBadge>
+                    <UBadge :color="COLOR.error" variant="soft">❌ Kunne ikke sende feedback</UBadge>
                     <p :class="[TYPOGRAPHY.finePrint, 'text-muted']">{{ feedbackError?.message || 'Ukendt fejl' }}</p>
                   </div>
                   <template v-else>

@@ -77,7 +77,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { COLOR, SIZES, COMPONENTS, TYPOGRAPHY, ICONS } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, ALERTS, TYPOGRAPHY, ICONS, BG } = useTheSlopeDesignSystem()
 
 // Internal selection state (Set for efficient .has() lookup)
 const selectedAllergyIds = ref<Set<number>>(new Set(props.modelValue))
@@ -161,8 +161,8 @@ const allergyStatistics = computed(() => {
     <!-- Empty state - subtle, no title -->
     <UAlert
         v-else
-        icon="i-mdi-food-allergy-off-outline"
-        :ui="COMPONENTS.emptyStateAlertCompact"
+        v-bind="ALERTS.emptyStateCompact"
+        :icon="ICONS.allergy"
         description="Ingen allergener i menuen"
     />
   </div>
@@ -204,9 +204,9 @@ const allergyStatistics = computed(() => {
         <h3 :class="TYPOGRAPHY.cardTitle">📊 Statistik</h3>
 
         <UAlert
+            v-bind="ALERTS.info"
             title="Unikke beboere berørt"
             description="Disse bofæller kan ikke tåle denne kombination af allergener."
-            :color="COLOR.primary"
             :avatar="{text: allergyStatistics.totalInhabitants.toString()}"
         />
 
@@ -224,7 +224,7 @@ const allergyStatistics = computed(() => {
           <h4 :class="TYPOGRAPHY.sectionSubheading">Fordeling pr. allergen</h4>
           <div
 v-for="item in allergyStatistics.breakdownByAllergy" :key="item.name"
-               class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 rounded">
+               :class="['flex items-center justify-between p-2 rounded', BG.inset]">
             <div class="flex items-center gap-2">
               <span class="text-lg">{{ item.icon || '�️' }}</span>
               <span :class="TYPOGRAPHY.bodyTextSmall">{{ item.name }}</span>
@@ -250,8 +250,8 @@ v-for="item in allergyStatistics.breakdownByAllergy" :key="item.name"
       <!-- No selection state -->
       <UAlert
           v-else
-          icon="i-mdi-food-allergy-off-outline"
-          :ui="COMPONENTS.emptyStateAlertCompact"
+          v-bind="ALERTS.emptyStateCompact"
+          :icon="ICONS.allergy"
       >
         <template #title>
           Vælg allergener, for at se hvem de påvirker

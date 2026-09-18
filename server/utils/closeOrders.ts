@@ -1,4 +1,3 @@
-import type {D1Database} from "@cloudflare/workers-types"
 import {fetchPendingOrdersOnConsumedDinners, updateOrdersBatch, type OrderBatchUpdate} from "~~/server/data/financesRepository"
 import {useBookingValidation, type CloseOrdersResult} from "~/composables/useBookingValidation"
 import {getSystemUserId} from "~~/server/utils/systemUser"

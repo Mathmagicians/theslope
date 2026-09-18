@@ -626,6 +626,21 @@ describe('computeTeamAssignmentsForEvents', () => {
             expectedAssignments: [1, 2, 1, 2]
         },
         {
+            // The repository stores a dinner date at UTC midnight while eachDayOfInterval yields local midnight;
+            // the match is by calendar day, so the roster reaches the events in Copenhagen as well as in UTC
+            scenario: '2 teams, 4 events stored at UTC midnight (the repository shape), consecutiveCookingDays=1',
+            teams: [createTeam(1, 'Hold 1'), createTeam(2, 'Hold 2')],
+            cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
+            events: [
+                createEvent(1, new Date('2025-01-06T00:00:00.000Z')),  // Mon
+                createEvent(2, new Date('2025-01-08T00:00:00.000Z')),  // Wed
+                createEvent(3, new Date('2025-01-10T00:00:00.000Z')),  // Fri
+                createEvent(4, new Date('2025-01-13T00:00:00.000Z'))   // Mon
+            ],
+            consecutiveCookingDays: 1,
+            expectedAssignments: [1, 2, 1, 2]
+        },
+        {
             scenario: '3 teams, 9 events (Mon/Wed/Fri), consecutiveCookingDays=3',
             teams: [createTeam(1, 'Hold 1'), createTeam(2, 'Hold 2'), createTeam(3, 'Hold 3')],
             cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),

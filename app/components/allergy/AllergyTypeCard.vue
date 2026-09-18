@@ -2,7 +2,7 @@
 import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
 
 // Design system
-const { COLOR, COMPONENTS, SIZES, LAYOUTS, BUTTONS, ICONS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { COLOR, COMPONENTS, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, TYPOGRAPHY, TEXT, RING, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 // PROPS - allergyType absent in edit mode means CREATE.
 // householdShortNames is supplied by the parent (ADR-007: no server data in this card).
@@ -123,7 +123,7 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
   <!-- COMPACT VIEW -->
   <div v-else-if="allergyType && compact" class="flex items-center gap-3 p-3">
     <!-- Icon -->
-    <div class="flex items-center justify-center w-10 h-10 rounded-full ring-1 md:ring-2 ring-red-700 flex-shrink-0">
+    <div :class="['flex items-center justify-center w-10 h-10 rounded-full ring-1 md:ring-2 flex-shrink-0', RING.red[700]]">
       <UIcon
           v-if="allergyType.icon?.startsWith('i-')"
           :name="allergyType.icon"
@@ -140,7 +140,7 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
         <h4 class="font-medium text-sm">{{ allergyType.name }}</h4>
         <UIcon v-if="hasRecentAllergies" :name="ICONS.new" :class="COMPONENTS.rowIconClass"/>
       </div>
-      <p class="text-xs text-gray-600 dark:text-gray-400">
+      <p :class="[TYPOGRAPHY.finePrint, TEXT.toned]">
         {{ inhabitantCount }} beboer{{ inhabitantCount !== 1 ? 'e' : '' }}
       </p>
     </div>
@@ -150,7 +150,7 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
   <div v-else-if="allergyType" class="space-y-4">
     <!-- Header with Icon and Title -->
     <div class="flex items-start gap-4">
-      <div class="flex items-center justify-center w-16 h-16 rounded-full ring-1 md:ring-2 ring-red-700 flex-shrink-0">
+      <div :class="['flex items-center justify-center w-16 h-16 rounded-full ring-1 md:ring-2 flex-shrink-0', RING.red[700]]">
         <UIcon
             v-if="allergyType.icon?.startsWith('i-')"
             :name="allergyType.icon"
@@ -166,7 +166,7 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
           <h3 class="text-lg font-semibold break-words">{{ allergyType.name }}</h3>
           <UIcon v-if="hasRecentAllergies" :name="ICONS.new" :class="COMPONENTS.rowIconClass"/>
         </div>
-        <p class="text-sm text-gray-600 dark:text-gray-400 mt-1 break-words">
+        <p :class="[TYPOGRAPHY.bodyTextMuted, 'mt-1 break-words']">
           {{ allergyType.description }}
         </p>
       </div>
@@ -174,7 +174,7 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
 
     <!-- Inhabitants List -->
     <div v-if="allergyType.inhabitants && allergyType.inhabitants.length > 0" class="space-y-3">
-      <h4 class="text-sm font-semibold text-gray-700 dark:text-gray-300">
+      <h4 :class="TYPOGRAPHY.sectionSubheading">
         Berørte beboere ({{ inhabitantCount }})
       </h4>
 
@@ -211,11 +211,11 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
 
           <!-- Additional info: Comment and timestamp -->
           <div v-if="inhabitant.inhabitantComment || inhabitant.allergyUpdatedAt" class="pl-14 space-y-1">
-            <div v-if="inhabitant.inhabitantComment" class="text-xs text-gray-700 dark:text-gray-300 italic">
+            <div v-if="inhabitant.inhabitantComment" :class="[TYPOGRAPHY.finePrint, TEXT.strong, 'italic']">
               "{{ inhabitant.inhabitantComment }}"
             </div>
             <!-- NuxtTime: wall-clock text can never match between SSR and hydration -->
-            <div v-if="inhabitant.allergyUpdatedAt" class="text-xs text-gray-500 dark:text-gray-500">
+            <div v-if="inhabitant.allergyUpdatedAt" :class="[TYPOGRAPHY.finePrint, TEXT.timestamp]">
               <NuxtTime :datetime="inhabitant.allergyUpdatedAt" relative :locale="DATE_SETTINGS.localeString"/>
             </div>
           </div>
@@ -226,10 +226,8 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
     <!-- Empty State -->
     <UAlert
       v-else
-      variant="soft"
-      :color="COLOR.success"
+      v-bind="ALERTS.emptyState"
       :avatar="{ text: emptyStateMessage!.emoji, size: SIZES.emptyStateAvatar }"
-      :ui="COMPONENTS.emptyStateAlert"
     >
       <template #title>
         {{ emptyStateMessage!.text }}

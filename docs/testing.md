@@ -154,6 +154,7 @@ const wrapper = await mountWithTooltipProvider(AdminAllergies, {props: {canEdit:
 | `z.coerce.date()` in form schemas | `z.date()` — strict rejects `null` (coerce turns `null` into 1970-01-01) |
 | `mockComponent()` of a house component | Render it - supply its context (`mountWithTooltipProvider()`) and register its endpoints (Rule 6) |
 | `mockNuxtImport('useXStore', …)` in a component test | Real store + `registerEndpoint()` - fake the HTTP, not the code (Rule 6) |
+| `#empty-state` on a `UTable` (Nuxt UI v2 name - silently never renders) | `#empty` (Nuxt UI 4 slot name); assert the empty text, not just the absence of rows |
 
 ---
 
@@ -356,6 +357,58 @@ it('does not emit save when validation fails', async () => {
 4. **Dates in form state should be strict `z.date()` in form schemas** — not `z.coerce.date()`. Coercion silently accepts `null` as 1970-01-01 and fails your "missing date blocks submit" tests.
 
 **Reference implementation:** `tests/component/components/admin/HouseholdCreateForm.nuxt.spec.ts`
+
+---
+
+## Architecture Tests
+
+`tests/component/architecture/*.unit.spec.ts` read the `.vue` sources and fail on a *pattern*, not on a render. They are
+how a design-system sweep stays swept: once every `<UAlert>` binds an `ALERTS` kind, the test is what stops the 57th one
+from being written with a raw `:color` (ADR-018). `designSystemUsage.unit.spec.ts` guards four rules — every `<UAlert`
+binds `ALERTS.`, none passes a raw `color`/`variant`/`type`, every `<UCalendar` binds `COMPONENTS.calendarGrid`, and no
+template uses the dead Nuxt UI v2 slot name `#empty-state`. Violations are reported as `file:line`, so a failure names
+the sites to fix.
+
+Add one whenever a fix to a Nuxt UI component family becomes a token: add the token, sweep all instances, add the rule.
+
+### `designSystemContrast.unit.spec.ts` — the palette's contrast, not its class strings
+
+The one architecture test that reads *values* instead of sources, and it is still a property, not a token value: it
+encodes **EN 301 549 → WCAG 2.1** contrast. It resolves every colour the design system names through the same
+stylesheets the browser reads (`main.css` `@theme static`, Tailwind 4's oklch defaults, `app.config.ts` `ui.colors`,
+Nuxt UI's `--ui-*` semantics), composites the alpha surfaces (`bg-primary/10`, `bg-gray-800/50`), and measures
+`(L1 + 0.05) / (L2 + 0.05)` for every pair the tokens define — light **and** dark. Thresholds: **4.5:1** body text
+(1.4.3 AA), **3:1** borders, rings and outlines (1.4.11 AA), **7:1** for the `Høj kontrast` palette preset (1.4.6 AAA).
+The colour maths lives in `tests/component/architecture/contrast.ts` (`hexToRgb`, `oklchToHex`, `relativeLuminance`,
+`contrastRatio`, `composite`) so the palette generator reuses the same functions it is measured by — no colour
+dependency, no second implementation.
+
+The pairs are **derived by walking the exported tokens**, so a token added tomorrow is measured tomorrow. Four groups:
+text on the neutral surfaces (`BG.panel`, `BG.inset`, …), a token that carries both its ink and its fill (hero
+backgrounds, calendar days, kitchen panels, Pantone chips), borders/rings against the page and `BG.panel`, and the Nuxt
+UI semantic slots (`text-<slot>` on the page and on the soft `bg-<slot>/10` alert surface, `text-inverted` on the solid
+fill). Three scoping rules keep the inventory on the standard: a token whose own classes make its text large-scale
+(24px, or 18.66px bold) is measured at the 3:1 rung of 1.4.3; a fill takes its bar from the typography a component
+places on it (`INK_ON_FILL`, one row per surface with the component and line that draws it); and the dividers and
+table banding listed in docs/ui.md "Palettes" sit outside 1.4.11.
+
+Every palette under `app/assets/css/palettes/` — the base `default.css` and each preset — is measured at the level its
+`PALETTES` entry carries (`tests/component/architecture/palettes.ts` derives the list from the registry). `color="neutral"`
+badges, buttons and alerts are measured on the faces Nuxt UI gives them (`bg-inverted`, `bg-elevated`, `bg-elevated/50`).
+One case per palette and mode lists every pair below its bar and expects exactly the pairs listed in `PRESET_FINDINGS`.
+
+`designSystemColourVision.unit.spec.ts` measures the meaning pairs of `designSystemMeanings.ts` (shared with the generator)
+under protanopia, deuteranopia and tritanopia for the base and every `colourSafe` palette, and the rainbow stops apart in
+every palette; its case per palette and mode expects exactly the pairs listed in `FINDINGS` (the base's meaning pairs).
+
+**When it fails, fix the token — never the threshold.** A listed pair cuts both ways: a green pair that starts failing
+and a listed pair that starts passing both fail the case, and the second asks for the entry to be deleted. Never add an
+entry to silence a new failure — a new miss is a regression.
+
+**Do NOT assert design-token values.** `expect(ui.title).toContain('text-lg')` restates the design and guards nothing —
+the colour, size and padding of a token are the user's visual check. Architecture tests assert *usage*; component specs
+assert *behaviour* (text renders, CTA present or absent, events emitted); e2e asserts no horizontal overflow at 375px
+(`MobileViewport.e2e.spec.ts`). A getter that branches on `isMd` may get one case per branch.
 
 ---
 

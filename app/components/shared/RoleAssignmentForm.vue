@@ -20,7 +20,7 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-const {ICONS, BUTTONS, TYPOGRAPHY, LAYOUTS} = useTheSlopeDesignSystem()
+const {ICONS, BUTTONS, TYPOGRAPHY, LAYOUTS, COLOR} = useTheSlopeDesignSystem()
 const {getTeamShortName} = useCookingTeam()
 const {DinnerStateSchema, MenuSwapStrategySchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
@@ -59,7 +59,7 @@ const handleSubmit = () => {
 </script>
 
 <template>
-    <UCard color="primary" variant="soft">
+    <UCard :color="COLOR.primary" variant="soft">
         <template #header>
             <div class="flex items-center gap-2">
                 <UIcon :name="ICONS.chef" />

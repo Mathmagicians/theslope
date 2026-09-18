@@ -32,7 +32,7 @@ const props = withDefaults(defineProps<Props>(), {
   loading: false
 })
 
-const { SIZES, COMPONENTS } = useTheSlopeDesignSystem()
+const { SIZES, COMPONENTS, TYPOGRAPHY, TEXT } = useTheSlopeDesignSystem()
 
 // Search + sort at data level (same pattern as AdminHouseholds, AdminUsers)
 const searchQuery = ref('')
@@ -138,10 +138,10 @@ const table = useTemplateRef('table')
         <slot name="expanded" :row="row" />
       </template>
 
-      <template #empty-state>
+      <template #empty>
         <div class="flex flex-col items-center justify-center py-6 gap-3">
-          <UIcon name="i-heroicons-users" class="w-8 h-8 text-gray-400"/>
-          <p class="text-sm text-gray-500">
+          <UIcon name="i-heroicons-users" :class="['w-8 h-8', TEXT.gray[400]]"/>
+          <p :class="[TYPOGRAPHY.bodyTextSmall, TEXT.gray[500]]">
             {{ searchQuery ? 'Ingen beboere fundet' : emptyText }}
           </p>
         </div>

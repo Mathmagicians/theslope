@@ -1,5 +1,7 @@
 <script setup lang="ts">
 
+const {ALERTS, COLOR} = useTheSlopeDesignSystem()
+
 // AUTHORIZATION - Admin role check for edit actions (ADR pattern from household page)
 const authStore = useAuthStore()
 const {isAdmin, isAllergyManager} = storeToRefs(authStore)
@@ -153,10 +155,9 @@ useHead({
     <!-- Non-admin banner: shown when viewing as non-admin user -->
     <UAlert
       v-if="!canEdit"
+      v-bind="ALERTS.neutral"
       data-testid="admin-readonly-banner"
       icon="i-heroicons-eye"
-      color="neutral"
-      variant="soft"
       title="Hej, du er ikke administrator"
       description="Se, men ikke røre"
       class="mb-4"
@@ -169,7 +170,7 @@ useHead({
           label: 'hidden md:inline',
           list: 'sticky top-12 md:top-16 z-20 rounded-none md:rounded-lg'
         }"
-        color="primary"
+        :color="COLOR.primary"
     >
       <template #content="{ item }">
         <ViewError

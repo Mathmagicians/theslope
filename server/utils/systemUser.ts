@@ -1,4 +1,3 @@
-import type {D1Database} from "@cloudflare/workers-types"
 import {fetchUsersByRole} from "~~/server/data/prismaRepository"
 import {SystemRoleSchema} from '~~/prisma/generated/zod'
 

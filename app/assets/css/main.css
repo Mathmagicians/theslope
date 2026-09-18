@@ -1,6 +1,12 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
 
+/* Palettes - generated: the base under `html:not([data-palette])`, each preset under its
+   `html[data-palette="…"]`. See docs/ui.md "Palettes" */
+@import "./palettes/default.css";
+@import "./palettes/colorblind.css";
+@import "./palettes/high-contrast.css";
+
 @theme static {
     /* Custom amber color palette */
     --color-amber-50: #f8f5f2;
@@ -168,4 +174,14 @@
             transform: translateX(-100%);
         }
     }
+}
+
+/* Text scale preference - `html[data-text-scale]` is set by the layout from User.appearance.
+   Every rem in the app scales with the root font size. See docs/ui.md "Palettes". */
+html[data-text-scale="large"] {
+    font-size: 112.5%;
+}
+
+html[data-text-scale="larger"] {
+    font-size: 125%;
 }

@@ -20,7 +20,7 @@ withDefaults(defineProps<Props>(), {
   compact: false
 })
 
-const {SIZES} = useTheSlopeDesignSystem()
+const {SIZES, TYPOGRAPHY, TEXT} = useTheSlopeDesignSystem()
 </script>
 
 <template>
@@ -29,7 +29,7 @@ const {SIZES} = useTheSlopeDesignSystem()
       <template v-if="!compact">{{ badge.label }}: </template>
       {{ badge.value }}
     </UBadge>
-    <span v-if="!compact" class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+    <span v-if="!compact" :class="[TYPOGRAPHY.finePrint, TEXT.muted, 'mt-0.5']">
       {{ badge.helpText }}
     </span>
   </div>

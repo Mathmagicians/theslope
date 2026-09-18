@@ -317,3 +317,14 @@ const result = await prisma.entity.upsert({
 - Maintain technology choice justifications
 - Record design patterns and their usage
 - Keep architectural guidelines current with project evolution
+
+## Working preferences (plans and subagent supervision)
+
+Follow `.claude/skills/plan-and-supervise/SKILL.md` whenever you write a plan doc or supervise implementation:
+
+- Packages and mockups carry plain names, never codes (`U1`, `M3`, `Phase 1`).
+- ASCII mockups in the doc **and** the component header; the user signs each off before implementation.
+- Post a package brief and wait for approval before launching any programming agent; one agent per package; agents never commit.
+- Every endpoint gets an API spec; every UX component gets a BDD e2e and a component spec - show the matrix.
+- Trace code and cite `file:line` before claiming; answer the question asked instead of redesigning behaviour the ADRs intended.
+- Shared UI patterns are design-system tokens; sweep all instances; never raw Nuxt UI props or app.config theme overrides.

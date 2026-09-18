@@ -2,18 +2,12 @@
 import { describe, it, expect } from 'vitest'
 import { mountSuspended } from "@nuxt/test-utils/runtime"
 import {findByTestId} from '~~/tests/component/testHelpers'
+import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTestIds'
+import {formatDate} from '~/utils/date'
 import CalendarDateRangeListPicker from '~/components/calendar/CalendarDateRangeListPicker.vue'
 import { nextTick, ref } from 'vue'
 
 describe('CalendarDateRangeListPicker', () => {
-    const ELEMENT_TESTIDS = {
-        addButton: 'holiday-range-add',
-        dateRangePicker: 'holidayRangeList',
-        errorContainer: 'holidayPicker',
-        holidayListItem: (index: number) => `holidayRangeList-${index}`,
-        removeButton: (index: number) => `holiday-range-remove-${index}`
-    } as const
-
     interface DateRange {
         start: Date;
         end: Date;
@@ -39,7 +33,7 @@ describe('CalendarDateRangeListPicker', () => {
     }
 
     const clickAddButton = async (wrapper: WrapperType) => {
-        const addButton = findByTestId(wrapper, ELEMENT_TESTIDS.addButton)
+        const addButton = findByTestId(wrapper, PLANNING_TEST_IDS.holidayAdd)
         await addButton.trigger('click')
         await nextTick()
     }
@@ -47,7 +41,7 @@ describe('CalendarDateRangeListPicker', () => {
     it('renders with empty date ranges', async () => {
         const wrapper = await createWrapper()
         expect(wrapper.exists()).toBe(true)
-        const addButton = findByTestId(wrapper, ELEMENT_TESTIDS.addButton)
+        const addButton = findByTestId(wrapper, PLANNING_TEST_IDS.holidayAdd)
         expect(addButton.text()).toContain('Tilføj ferie')
     })
 
@@ -71,8 +65,24 @@ describe('CalendarDateRangeListPicker', () => {
             }
         ])
 
-        const holidayInput = findByTestId(wrapper, ELEMENT_TESTIDS.holidayListItem(0))
+        const holidayInput = findByTestId(wrapper, PLANNING_TEST_IDS.holidayItem(0))
         expect(holidayInput.exists()).toBe(true)
+    })
+
+    it('inserts an earlier range before an existing later one', async () => {
+        const later = {start: new Date(2025, 0, 10), end: new Date(2025, 0, 12)}
+        const earlier = {start: new Date(2025, 0, 1), end: new Date(2025, 0, 3)}
+        const wrapper = await createWrapper([later])
+
+        await setDateRange(wrapper, earlier.start, earlier.end)
+        await clickAddButton(wrapper)
+
+        const emitted = wrapper.emitted('update:modelValue')
+        expect(emitted![0]![0]).toEqual([earlier, later])
+
+        // Edit mode renders each row as a picker: its first input holds the start date
+        const firstRow = findByTestId(wrapper, PLANNING_TEST_IDS.holidayItem(0))
+        expect(firstRow.find('input').element.value).toBe(formatDate(earlier.start))
     })
 
     it('validates overlapping ranges', async () => {
@@ -115,10 +125,10 @@ describe('CalendarDateRangeListPicker', () => {
         });
 
         // Verify the holiday input exists before removal
-        expect(findByTestId(wrapper, ELEMENT_TESTIDS.holidayListItem(0)).exists()).toBe(true)
+        expect(findByTestId(wrapper, PLANNING_TEST_IDS.holidayItem(0)).exists()).toBe(true)
 
         // Click the remove button
-        const removeButton = findByTestId(wrapper, ELEMENT_TESTIDS.removeButton(0))
+        const removeButton = findByTestId(wrapper, PLANNING_TEST_IDS.holidayRemove(0))
         await removeButton.trigger('click')
         await nextTick()
         
@@ -147,15 +157,15 @@ describe('CalendarDateRangeListPicker', () => {
         expect(wrapper.exists()).toBe(true);
         
         // Verify the holiday input exists
-        const holidayInput = findByTestId(wrapper, ELEMENT_TESTIDS.holidayListItem(0));
+        const holidayInput = findByTestId(wrapper, PLANNING_TEST_IDS.holidayItem(0));
         expect(holidayInput.exists()).toBe(true);
 
         // In disabled mode, the add button and datepicker should not be visible
-        const addButton = findByTestId(wrapper, ELEMENT_TESTIDS.addButton);
+        const addButton = findByTestId(wrapper, PLANNING_TEST_IDS.holidayAdd);
         expect(addButton.exists()).toBe(false);
 
         // In disabled mode, the delete button should not be visible
-        const removeButton = findByTestId(wrapper, ELEMENT_TESTIDS.removeButton(0));
+        const removeButton = findByTestId(wrapper, PLANNING_TEST_IDS.holidayRemove(0));
         expect(removeButton.exists()).toBe(false);
         
         // In disabled mode, we should have an icon instead of the remove button
@@ -207,7 +217,7 @@ describe('CalendarDateRangeListPicker', () => {
         await nextTick(); // Sometimes two ticks are needed
         
         // Verify the component renders the holiday properly
-        const holidayListItem = findByTestId(wrapper, ELEMENT_TESTIDS.holidayListItem(0));
+        const holidayListItem = findByTestId(wrapper, PLANNING_TEST_IDS.holidayItem(0));
         expect(holidayListItem.exists()).toBe(true);
     })
     
@@ -257,7 +267,71 @@ describe('CalendarDateRangeListPicker', () => {
         await nextTick();
         
         // Verify component properly renders the store data
-        const holidayItem = findByTestId(wrapper, ELEMENT_TESTIDS.holidayListItem(0));
+        const holidayItem = findByTestId(wrapper, PLANNING_TEST_IDS.holidayItem(0));
         expect(holidayItem.exists()).toBe(true);
+    })
+
+    /**
+     * Edit mode: each row is its own CalendarDateRangePicker, so a period can be
+     * corrected in place (the add row keeps name="holidayRangeList").
+     */
+    describe('editable rows', () => {
+        const first = {start: new Date(2025, 0, 1), end: new Date(2025, 0, 5)}
+        const second = {start: new Date(2025, 0, 10), end: new Date(2025, 0, 12)}
+
+        type PickerWrapper = ReturnType<WrapperType['findAllComponents']>[number]
+
+        const rowPicker = (wrapper: WrapperType, index: number) =>
+            wrapper.findAllComponents({name: 'CalendarDateRangePicker'})
+                .find((picker: PickerWrapper) => picker.props('name') === `holidayRangeList-${index}`)
+
+        const editRow = async (wrapper: WrapperType, index: number, range: DateRange) => {
+            await rowPicker(wrapper, index)!.vm.$emit('update:modelValue', range)
+            await nextTick()
+        }
+
+        it('renders a picker per row', async () => {
+            const wrapper = await createWrapper([first, second])
+            expect(rowPicker(wrapper, 0)).toBeDefined()
+            expect(rowPicker(wrapper, 1)).toBeDefined()
+        })
+
+        it('picks holidays, so every picker uses the holiday selection style', async () => {
+            const wrapper = await createWrapper([first, second])
+            const selections = wrapper.findAllComponents({name: 'CalendarDateRangePicker'})
+                .map((picker: PickerWrapper) => picker.props('selection'))
+
+            expect(selections.length).toBeGreaterThan(0)
+            expect(selections.every(selection => selection === 'holiday')).toBe(true)
+        })
+
+        it('emits the list with the edited row replaced', async () => {
+            const wrapper = await createWrapper([first, second])
+            const corrected = {start: new Date(2025, 0, 1), end: new Date(2025, 0, 7)}
+
+            await editRow(wrapper, 0, corrected)
+
+            const emitted = wrapper.emitted('update:modelValue')
+            expect(emitted).toBeTruthy()
+            expect(emitted![0]![0]).toEqual([corrected, second])
+        })
+
+        it('rejects an edit that overlaps another period', async () => {
+            const wrapper = await createWrapper([first, second])
+
+            await editRow(wrapper, 0, {start: new Date(2025, 0, 1), end: new Date(2025, 0, 11)})
+
+            expect(wrapper.html()).toContain('Ferieperioder må ikke overlappe hinanden')
+            expect(wrapper.emitted('update:modelValue')).toBeFalsy()
+        })
+
+        it('keeps rows read-only when disabled', async () => {
+            const wrapper = await mountSuspended(CalendarDateRangeListPicker, {
+                props: {modelValue: [first], disabled: true},
+                global: {provide: {isMd: ref(true)}}
+            })
+            expect(rowPicker(wrapper, 0)).toBeUndefined()
+            expect(findByTestId(wrapper, PLANNING_TEST_IDS.holidayItem(0)).exists()).toBe(true)
+        })
     })
 })

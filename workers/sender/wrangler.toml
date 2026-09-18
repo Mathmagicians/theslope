@@ -1,0 +1,83 @@
+#:schema ../../node_modules/wrangler/config-schema.json
+
+# theslope-sender — the notification delivery pipe (Nitro queue consumer, no Vue).
+#
+# Resource names are configuration: this file is their single source (theslope-sender-<env>, queue
+# theslope-sender-<env>); the root wrangler.toml's producer names the same queue.
+# Every environment block repeats vars, bindings and consumers: wrangler reads them per environment.
+
+# ---------------------------------------------------------------------------
+# local (top level) — miniflare / `wrangler dev`
+# ---------------------------------------------------------------------------
+name = "theslope-sender-local"
+main = "./.output/server/index.mjs"        # same artefact shape as the root worker
+compatibility_date = "2026-09-16"          # = COMPATIBILITY_DATE (workers/common/cloudflare.ts)
+compatibility_flags = ["nodejs_compat"]
+
+[observability]
+enabled = true
+[observability.traces]
+enabled = true
+
+# Wrangler's local-server settings (its key is named `dev`): the LOCAL worker under `make run-sender-local`; the dev and prod
+# environments run deployed. Port 3100 keeps clear of the app's `nuxt dev` on 3000.
+[dev]
+port = 3100
+
+[[queues.consumers]]
+queue = "theslope-sender-dev"              # same name as [env.dev], like the D1 database at the root; local = miniflare
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 3                            # retried at 30/60/120 s; the last attempt logs an error and acknowledges
+
+# Sender and recipient restrictions live on the binding: a disallowed address
+# fails inside env.EMAIL.send() with a terminal E_* code, which the consumer acks and logs.
+# The sender address is per environment — no-reply.<environment>@ (local, dev), no-reply@ on prod —
+# the rule senderAddress() in app/config/notificationTemplates.ts derives the app's `from` with.
+[[send_email]]
+name = "EMAIL"
+allowed_sender_addresses = ["no-reply.local@skraaningen.dk"]
+
+# ---------------------------------------------------------------------------
+# dev — dev.skraaningen.dk
+# ---------------------------------------------------------------------------
+[env.dev]
+name = "theslope-sender-dev"
+workers_dev = false
+routes = [
+    { pattern = "dev.skraaningen.dk/sender/*", zone_name = "skraaningen.dk" }   # /sender/health; the most specific route wins over the app's /*
+]
+
+[[env.dev.queues.consumers]]
+queue = "theslope-sender-dev"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 3
+
+# dev shares the local D1 data, so real residents' addresses are reachable from here.
+# The destination allowlist is what keeps a dev run away from them; prod omits it (= everyone).
+[[env.dev.send_email]]
+name = "EMAIL"
+allowed_sender_addresses = ["no-reply.dev@skraaningen.dk"]
+allowed_destination_addresses = ["test@mathmagicians.dk"]
+
+# ---------------------------------------------------------------------------
+# prod — www.skraaningen.dk and skraaningen.dk
+# ---------------------------------------------------------------------------
+[env.prod]
+name = "theslope-sender-prod"
+workers_dev = false
+routes = [
+    { pattern = "www.skraaningen.dk/sender/*", zone_name = "skraaningen.dk" },   # /sender/health; the most specific route wins over the app's /*
+    { pattern = "skraaningen.dk/sender/*", zone_name = "skraaningen.dk" }
+]
+
+[[env.prod.queues.consumers]]
+queue = "theslope-sender-prod"
+max_batch_size = 10
+max_batch_timeout = 5
+max_retries = 3
+
+[[env.prod.send_email]]
+name = "EMAIL"
+allowed_sender_addresses = ["no-reply@skraaningen.dk"]

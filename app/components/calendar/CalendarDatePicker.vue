@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import {DATE_SETTINGS, translateToDanish} from "~/utils/date"
+import {DATE_SETTINGS, translateToDanish, isCalendarDateInDateList} from "~/utils/date"
+import type {DateValue} from '@internationalized/date'
 import type {Ref} from "vue"
 import {mapZodErrorsToFormErrors, getErrorMessage} from "~/utils/validtation"
 
@@ -12,7 +13,11 @@ const props = withDefaults(defineProps<{ label?: string, name?: string }>(), {
 const emit = defineEmits(['update:model-value'])
 
 // DESIGN SYSTEM
-const {SIZES} = useTheSlopeDesignSystem()
+const {SIZES, ICONS, CALENDAR, calendarPickerProps, dayCircleClasses} = useTheSlopeDesignSystem()
+const calendarProps = calendarPickerProps()
+
+// A single date is always a cooking-day pick (CALENDAR.picker); the slot draws it
+const isDaySelected = (day: DateValue) => isCalendarDateInDateList(day, model.value ? [model.value] : [])
 
 // STATE
 const errors = ref<Map<string, string[]>>(new Map())
@@ -117,17 +122,18 @@ defineExpose({
     }">
     <template #content>
       <UCalendar
+        v-bind="calendarProps"
         v-model="pickerDate"
         :size="SIZES.calendar"
-        :week-starts-on="1"
-        :fixed-weeks="false"
-        weekday-format="short"
-        color="success"
       >
         <template #week-day="{ day }">
           <span class="text-sm text-muted uppercase">
             {{ translateToDanish(day) }}
           </span>
+        </template>
+        <template #day="{ day }">
+          <div v-if="isDaySelected(day)" :class="dayCircleClasses(CALENDAR.picker.cookingDay)">{{ day.day }}</div>
+          <span v-else class="text-sm">{{ day.day }}</span>
         </template>
       </UCalendar>
     </template>
@@ -140,12 +146,9 @@ defineExpose({
         :placeholder="DATE_SETTINGS.USER_MASK"
         type="string"
         :name="props.name"
+        :trailing-icon="ICONS.calendar"
         @update:model-value="handleInputChange($event as string)"
-      >
-        <template #trailing>
-          <UButton icon="i-heroicons-calendar" color="info"/>
-        </template>
-      </UInput>
+      />
     </UFormField>
   </UPopover>
 </template>

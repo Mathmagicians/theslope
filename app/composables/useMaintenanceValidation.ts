@@ -2,7 +2,7 @@ import {z} from 'zod'
 import {JobTypeSchema, JobStatusSchema} from '~~/prisma/generated/zod'
 import {useBookingValidation, type DailyMaintenanceResult} from './useBookingValidation'
 import {useHeynaboValidation, type HeynaboImportResponse} from './useHeynaboValidation'
-import {useBillingValidation, type BillingGenerationResult} from './useBillingValidation'
+import {useBillingValidation, type MonthlyBillingJobResult} from './useBillingValidation'
 
 /**
  * Validation schemas for maintenance/job entities
@@ -18,7 +18,7 @@ export const useMaintenanceValidation = () => {
     // Import result schemas for deserialization
     const {DailyMaintenanceResultSchema} = useBookingValidation()
     const {HeynaboImportResponseSchema} = useHeynaboValidation()
-    const {BillingGenerationResultSchema} = useBillingValidation()
+    const {MonthlyBillingJobResultSchema} = useBillingValidation()
 
     /**
      * JobRun Display - for index endpoint (GET /api/admin/job-run)
@@ -92,19 +92,19 @@ export const useMaintenanceValidation = () => {
 
     /**
      * Serialize result summary for storage in DB
-     * Monthly billing stores {results: BillingGenerationResult[]}
+     * Monthly billing stores {results, periods} (MonthlyBillingJobResult)
      */
-    const serializeResultSummary = (result: DailyMaintenanceResult | HeynaboImportResponse | {results: BillingGenerationResult[]} | _SeasonImportResponse): string =>
+    const serializeResultSummary = (result: DailyMaintenanceResult | HeynaboImportResponse | MonthlyBillingJobResult | _SeasonImportResponse): string =>
         JSON.stringify(result)
 
     /**
      * Deserialize and validate result summary from DB based on job type
-     * Monthly billing returns array of results
+     * Monthly billing returns {results, periods}
      */
     const deserializeResultSummary = (
         jobType: z.infer<typeof JobTypeSchema>,
         resultSummary: string | null
-    ): DailyMaintenanceResult | HeynaboImportResponse | BillingGenerationResult[] | _SeasonImportResponse | null => {
+    ): DailyMaintenanceResult | HeynaboImportResponse | MonthlyBillingJobResult | _SeasonImportResponse | null => {
         if (!resultSummary) return null
 
         const parsed = JSON.parse(resultSummary)
@@ -117,7 +117,7 @@ export const useMaintenanceValidation = () => {
             case JobType.MAINTENANCE_IMPORT:
                 return SeasonImportResponseSchema.parse(parsed)
             case JobType.MONTHLY_BILLING:
-                return parsed.results.map((r: unknown) => BillingGenerationResultSchema.parse(r))
+                return MonthlyBillingJobResultSchema.parse(parsed)
             default:
                 throw new Error(`Unknown job type: ${jobType}`)
         }

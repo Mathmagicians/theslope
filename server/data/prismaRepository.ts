@@ -1,4 +1,3 @@
-import type {D1Database} from '@cloudflare/workers-types'
 import {Prisma as PrismaFromClient, Prisma} from "@prisma/client"
 import eventHandlerHelper from "../utils/eventHandlerHelper"
 import {getPrismaClientConnection} from "../utils/database"
@@ -52,7 +51,9 @@ const serializeUserPartial = (user: Partial<UserCreate>) => ({
     email:        user.email        !== undefined ? user.email                       : PrismaFromClient.skip,
     phone:        user.phone        !== undefined ? (user.phone ?? null)             : PrismaFromClient.skip,
     passwordHash: user.passwordHash !== undefined ? user.passwordHash                : PrismaFromClient.skip,
-    systemRoles:  user.systemRoles  !== undefined ? JSON.stringify(user.systemRoles) : PrismaFromClient.skip
+    systemRoles:  user.systemRoles  !== undefined ? JSON.stringify(user.systemRoles) : PrismaFromClient.skip,
+    notificationChannels: user.notificationChannels !== undefined ? JSON.stringify(user.notificationChannels) : PrismaFromClient.skip,
+    appearance:           user.appearance           !== undefined ? JSON.stringify(user.appearance)           : PrismaFromClient.skip
 })
 
 const toUserDetail = (row: Parameters<typeof deserializeUser>[0]): UserDetail => ({

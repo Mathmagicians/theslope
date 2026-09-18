@@ -1,7 +1,7 @@
 # ADR-002 Compliance Violations - API Endpoints
 
 **Generated:** 2025-01-09
-**Last Updated:** 2026-03-05 (Household self-service update endpoint for move-out date + residency fields)
+**Last Updated:** 2026-09-18 (Settings: `GET`/`POST /api/admin/setting/[key]` on the `Setting` table, with keys, value schemas, defaults and writers declared in `SETTING_REGISTRY`; `requireSettingWriteAccess()` runs the per-key writer)
 
 ### Repository Column Legend
 - ✅ = Repository function validates with `Schema.parse()`
@@ -29,7 +29,7 @@
 | `/api/admin/team/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeams() → CookingTeamWithMembers[]                                                          |
 | `/api/admin/team/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateTeamWithAssignments() auto-assigns affinities + events                                     |
 | `/api/admin/team/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeam() → CookingTeamWithMembers                                                             |
-| `/api/admin/team/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createTeamsWithAssignments() auto-assigns affinities + events                                    |
+| `/api/admin/team/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createTeamsWithAssignments() auto-assigns affinities + events → `CreateTeamsResponse` `{teams, eventsAssigned}` (ADR-009 operation result, 201); `team.e2e.spec.ts` asserts `eventsAssigned` equals the season's dinners carrying a `cookingTeamId` |
 | `/api/admin/team/assignment/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteCookingTeamAssignments() → number                                                          |
 | `/api/admin/team/assignment/index.get.ts` | ❌ | ✅ | N/A | N/A | Stub endpoint (returns static message)                                                           |
 | `/api/admin/team/assignment/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeamAssignment() → CookingTeamAssignment                                                    |
@@ -51,10 +51,10 @@
 | `/api/admin/household/inhabitants/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateInhabitant() → InhabitantUpdateResponse (ADR-015: triggers scaffoldPrebookings on preference/birthDate/householdId change). Accepts `householdId` for admin move (validates same-address via heynaboId) |
 | `/api/admin/household/inhabitants/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchInhabitants() → Inhabitant[] with deserialization                                           |
 | `/api/admin/household/inhabitants/index.put.ts` | ✅ | ✅ | ✅ | ✅ | saveInhabitant() → Inhabitant with deserializeInhabitant()                                       |
-| **Admin - Seasons** | | | | | **✅ FULLY COMPLIANT**                                                                            |
+| **Admin - Seasons** | | | | | **✅ FULLY COMPLIANT (2026-09-16)** - Live season edit re-scaffolds in the same request |
 | `/api/admin/season/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteSeason() → Season                                                                          |
 | `/api/admin/season/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchSeason() → Season                                                                           |
-| `/api/admin/season/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateSeason() → Season                                                                          |
+| `/api/admin/season/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateSeason() → SeasonUpdateResponse (ADR-009 envelope: season + reconciliation + scaffold). `isActive` in the body is ignored (activation lives in `/active`). On the ACTIVE season a schedule change also runs `clipPreferences` + `scaffoldPrebookings` (ADR-015). Reconciliation deletes the Heynabo events of removed dates (ADR-013) |
 | `/api/admin/season/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchSeasons() → Season[]                                                                        |
 | `/api/admin/season/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createSeason() → Season                                                                          |
 | `/api/admin/season/active.get.ts` | ✅ | ✅ | ✅ | ✅ | Returns active season ID (number \| null)                                                        |
@@ -62,12 +62,17 @@
 | `/api/admin/season/[id]/assign-team-affinities.post.ts` | ✅ | ✅ | ✅ | ✅ | Returns AssignAffinitiesResponse                                                                 |
 | `/api/admin/season/import.post.ts` | ✅ | ✅ | ✅ | ✅ | CSV import with ADR-002/015 patterns, job tracking, uses teamService                             |
 | `/api/admin/season/[id]/scaffold-prebookings.post.ts` | ✅ | ✅ | ✅ | ✅ | scaffoldPrebookings() → ScaffoldResult (ADR-015 idempotent)                                      |
+| `server/utils/reconcileDinnerEvents.ts` | ✅ | N/A | ✅ | ✅ Unit | reconcileDinnerEventsForSeason() → ReconciliationResult; unit-covered in `tests/component/composables/useSeason.nuxt.spec.ts` incl. Heynabo deletion of dropped dinner dates (ADR-013 best-effort) |
 | **Admin - Allergy Types** | | | | | **✅ FULLY COMPLIANT**                                                                            |
 | `/api/admin/allergy-type/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchAllergyTypes() validates with AllergyTypDetailSchema                                        |
 | `/api/admin/allergy-type/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchAllergyType() validates with AllergyTypeDisplaySchema                                       |
 | `/api/admin/allergy-type/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createAllergyType() validates with AllergyTypeDisplaySchema                                      |
 | `/api/admin/allergy-type/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateAllergyType() validates with AllergyTypeDisplaySchema                                      |
 | `/api/admin/allergy-type/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteAllergyType() validates with AllergyTypeDisplaySchema                                      |
+| **Admin - Settings** | | | | | **✅ FULLY COMPLIANT (2026-09-18)** - Key-value store with a code registry (`SETTING_REGISTRY` in `useSettingValidation`) |
+| `/api/admin/setting/[key].get.ts` | ✅ | ✅ | ✅ | ✅ | `fetchSetting()` → SettingDetail; every authenticated user reads (the poster is member-facing). A registered key answers with the registry default (`updatedAt`/`updatedByUserId` null) when it has no row; an unregistered key is 400 |
+| `/api/admin/setting/[key].post.ts` | ✅ | ✅ | ✅ | ✅ | `upsertSetting()` → SettingDetail; body validated with the key's own `valueSchema`; `requireSettingWriteAccess(event, key)` runs the key's `canWrite` (403); the session user is stored as `updatedByUserId` |
+| `server/data/settingsRepository.ts` | ✅ | N/A | ✅ | ✅ | `fetchSetting` / `upsertSetting`, keyed on `Setting.key` (ADR-010 rule 5). The `value` column holds JSON for every key: `JSON.stringify` on write, `JSON.parse` + the key's `valueSchema` on read |
 | **Household - Allergies** | | | | | **✅ FULLY COMPLIANT **                                                                           |
 | `/api/household/allergy/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteAllergy() → AllergyResponse                                                                |
 | `/api/household/allergy/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchAllergiesForInhabitant/fetchAllergiesForHousehold() → AllergyWithRelations[]                |
@@ -80,8 +85,15 @@
 | `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | updateInhabitantPreferences() for non-admin users, triggers scaffoldPrebookings                  |
 | **Household - Bookings** | | | | | **✅ FULLY COMPLIANT (2026-01-13)** - ADR-016 unified booking through scaffold                   |
 | `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ✅ | ADR-016 unified booking endpoint, `requireHouseholdAccess()`, returns ScaffoldOrdersResponse     |
+| **Admin - Sender events** | | | | | **✅ FULLY COMPLIANT (2026-09-16)** - HTTP twins of notification triggers; message contract from `useNotificationValidation` (re-export of `workers/sender/contract.ts`) |
+| `/api/admin/sender/event/test.post.ts` | ✅ | N/A (no body) | N/A | ✅ | `emitTestEmail(queue, config)` → `composeEmail` (TEST template) to `config.adminEmail` → `emit()` (returns a result in every case; degraded without admin mailbox or `SENDER`) → `SenderEmitResult`; admin via route table; `tests/e2e/api/parallel/admin/sender-event-test.e2e.spec.ts` |
+| `/api/admin/sender/event/monthly-billing.post.ts` | ✅ | ✅ | ✅ | ✅ | Body `{billingPeriodSummaryId}`; `fetchBillingPeriodSummary()` → 404 when missing → `emitBillingPeriodClosed(queue, config, summary)` (CSV attached, cc admin; degraded without accountant mailbox) → `SenderEmitResult`; serial `tests/e2e/api/serial/admin/sender-event-monthly-billing.e2e.spec.ts` |
+| `/api/admin/maintenance/monthly.post.ts` | ✅ | N/A | ✅ | ✅ | `runMonthlyBilling(db, triggeredBy, {queue, archive, notifications})`; after generation every closed period converges (ADR-015): `useBilling().decideBillingSideEffects({version, archivedVersion, notifiedVersion})` (delivered versions from `Delivery` via `fetchDeliveries`, `financesRepository.ts`) → `archiveBillingCsv()` (R2, one object per version) / `notifyBillingPeriod()` (queue; v1 CLOSED, later UPDATED), each recorded as a `Delivery` row with the run's `jobRunId`; response `periods[]` with `version` / `csvUploaded` / `emailSent`; billing completes independently of the side effects; `maintenance.e2e.spec.ts` asserts the end state and that a second run reports the same state |
 | **Household - Update** | | | | | **✅ FULLY COMPLIANT (2026-03-04)** - Self-service household update with admin bypass            |
 | `/api/household/[id]/update.post.ts` | ✅ | ✅ | ✅ | ✅ | updateHousehold() + `rescaffoldOnFieldChange()`, `requireHouseholdAccess()`, `?adminBypass=true`, returns HouseholdUpdateResponse |
+| **User - Own settings** | | | | | **✅ FULLY COMPLIANT (2026-09-17)** - Session user only, no id in the path; route rule `{prefix: '/api/user/', methods: null, check: isAuthenticated}` before the generic `/api/` rule |
+| `/api/user/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | `requireUserSession` → `readValidatedBody(UserPreferencesUpdateSchema)` → 400 `SMS kræver et telefonnummer` without a phone → `saveUser(delta, id)` (`serializeUserPartial` + `Prisma.skip`, ADR-012) → `replaceUserSession` with the saved user (Heynabo token kept) → `UserDetail`; `tests/e2e/api/parallel/user/preferences.e2e.spec.ts` |
+| `/api/user/notifications/test.post.ts` | ✅ | N/A (no body) | N/A | ✅ | `emitTestEmail(queue, config, session user's email)` — the member twin of the admin test event; 200 with the degraded result when `SENDER` is missing → `SenderEmitResult` |
 | **Teams (Public)** |
 | `/api/team/index.get.ts` | ❌ | ✅ | |
 | `/api/team/[id].get.ts` | ❌ | ✅ | |
@@ -101,7 +113,7 @@
 | `/api/admin/heynabo/import.get.ts` | ✅ | ✅ | ✅ | ✅ | GET endpoint with proper business logic try-catch, uses transformation functions from composable |
 | **Authorization Infrastructure** | | | | | **✅ COMPLIANT (2025-12-23)** - Route-level + resource-level authorization                       |
 | `server/middleware/2.authorize.ts` | N/A | N/A | N/A | ✅ | Route-level authorization middleware, uses `usePermissions` composable                           |
-| `server/utils/authorizationHelper.ts` | N/A | N/A | N/A | ✅ | `requireHouseholdAccess()`, `requireRoutePermission()` helpers with ADR-004 logging              |
+| `server/utils/authorizationHelper.ts` | N/A | N/A | N/A | ✅ | `requireHouseholdAccess()`, `requireRoutePermission()`, `requireSettingWriteAccess()` helpers with ADR-004 logging. The settings helper runs the key's `canWrite` from `SETTING_REGISTRY`, so the route table carries the coarse rule `{prefix: '/api/admin/setting/', methods: ['POST'], check: isAuthenticated}` and never a key name |
 | **User Feedback** | | | | | **✅ FULLY COMPLIANT (2025-12-29)**                                                               |
 | `/api/feedback.post.ts` | ✅ | ✅ | N/A | ❌ | Creates GitHub issue via PAT, requires auth (Inhabitant), ADR-002 separate try-catch            |
 | `server/integration/github/githubClient.ts` | ✅ | ✅ | N/A | ❌ | GitHub API client with Zod validation, uses `useRuntimeConfig()`                                 |

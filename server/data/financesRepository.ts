@@ -1,6 +1,6 @@
-import type {D1Database} from '@cloudflare/workers-types'
 import eventHandlerHelper from "../utils/eventHandlerHelper"
 import {getPrismaClientConnection} from "../utils/database"
+import {useDeliveryValidation, type Delivery, type DeliveryCreate} from '~/composables/useDeliveryValidation'
 import {chunkArray, groupBy} from '~/utils/batchUtils'
 
 import type {
@@ -1658,6 +1658,34 @@ export async function createBillingPeriodSummary(
         data: {...data, shareToken: crypto.randomUUID()}
     })
     return BillingPeriodSummaryIdSchema.parse(created)
+}
+
+/** A period's content changed (catch-up billing): the next run archives and mails the new version */
+export async function bumpBillingPeriodVersion(d1Client: D1Database, id: number): Promise<number> {
+    const prisma = await getPrismaClientConnection(d1Client)
+    const updated = await prisma.billingPeriodSummary.update({where: {id}, data: {version: {increment: 1}}, select: {version: true}})
+    return updated.version
+}
+
+/*** DELIVERIES (ADR-015 convergence): one row per version of a subject that reached a channel ***/
+
+/** All deliveries of one subject — a handful of rows (one per version and channel, plus re-sends) */
+export async function fetchDeliveries(d1Client: D1Database, subjectType: Delivery['subjectType'], subjectId: number): Promise<Delivery[]> {
+    const {DeliverySchema} = useDeliveryValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const rows = await prisma.delivery.findMany({where: {subjectType, subjectId}, orderBy: {id: 'asc'}})
+    return rows.map(row => DeliverySchema.parse(row))
+}
+
+/** jobRunId null = re-sent by an admin (ADR-012: written as null, never as undefined) */
+export async function recordDelivery(d1Client: D1Database, data: DeliveryCreate): Promise<Delivery> {
+    const {DeliverySchema} = useDeliveryValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    const row = await prisma.delivery.create({data: {...data, jobRunId: data.jobRunId ?? null}})
+    console.info(`📬 > DELIVERY > [RECORD] ${data.subjectType} ${data.subjectId} v${data.version} ${data.kind}`)
+    return DeliverySchema.parse(row)
 }
 
 export async function createInvoices(

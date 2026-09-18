@@ -3,10 +3,9 @@
  * BaseCalendar - Renderless calendar foundation with slot-based rendering
  *
  * Provides:
- * - UCalendar structure with common configuration
+ * - UCalendar structure with common configuration (COMPONENTS.calendarGrid)
  * - Event map for efficient day lookup (multiple event lists support)
  * - Responsive sizing via design system (SIZES.calendar, SIZES.calendarMonths)
- * - Consistent UI (hides days outside current view)
  * - Scoped slots for custom domain-specific rendering
  *
  * Domain-specific calendars use this component to avoid duplication while
@@ -72,6 +71,7 @@ const restrictedNextPage = (placeholder: DateValue): DateValue => {
 <template>
   <div>
     <UCalendar
+        v-bind="COMPONENTS.calendarGrid"
         :size="SIZES.calendar"
         :number-of-months="monthsToDisplay"
         :placeholder="focusDateAsCalendarDate"
@@ -80,11 +80,6 @@ const restrictedNextPage = (placeholder: DateValue): DateValue => {
         :prev-page="restrictedPrevPage"
         :next-page="restrictedNextPage"
         :year-controls="false"
-        :week-starts-on="1"
-        :fixed-weeks="false"
-        :disable-days-outside-current-view="true"
-        :ui="COMPONENTS.calendar"
-        weekday-format="short"
         readonly
     >
       <!-- Day slot - pass day and event lists to wrapper for custom rendering -->

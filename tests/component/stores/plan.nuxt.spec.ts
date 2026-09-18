@@ -25,6 +25,14 @@ registerEndpoint('/api/admin/season/1', seasonByIdEndpoint)
 registerEndpoint('/api/admin/season/2', seasonByIdEndpoint)
 registerEndpoint('/api/admin/season', seasonIndexEndpoint)
 
+// Team creation returns the operation result envelope (ADR-009)
+const createdTeams = [
+    { ...SeasonFactory.defaultCookingTeamDetail(), id: 11, name: 'Hold 1' },
+    { ...SeasonFactory.defaultCookingTeamDetail(), id: 12, name: 'Hold 2' }
+]
+const createTeamsEndpoint = vi.fn(() => ({ teams: createdTeams, eventsAssigned: 6 }))
+registerEndpoint('/api/admin/team', { method: 'PUT', handler: createTeamsEndpoint })
+
 // Test helpers
 const setupStore = async (initStore = false, shortName?: string) => {
     const store = usePlanStore()
@@ -85,5 +93,29 @@ describe('Plan Store - Basic Initialization', () => {
 
         expect(store.isNoSeasons).toBe(expected)
         expect(store.seasons).toHaveLength(data.length)
+    })
+})
+
+describe('Plan Store - Team creation', () => {
+    beforeEach(() => {
+        setActivePinia(createPinia())
+        clearNuxtData()
+        vi.clearAllMocks()
+        seasonIndexEndpoint.mockReturnValue(mockSeasons)
+        seasonByIdEndpoint.mockReturnValue(season1)
+        activeSeasonIdEndpoint.mockReturnValue(season1.id)
+        createTeamsEndpoint.mockReturnValue({ teams: createdTeams, eventsAssigned: 6 })
+    })
+
+    it('createTeam returns the {teams, eventsAssigned} envelope', async () => {
+        const store = await setupStore()
+
+        const result = await store.createTeam([
+            { seasonId: 1, name: 'Hold 1' },
+            { seasonId: 1, name: 'Hold 2' }
+        ])
+
+        expect(result.teams.map(team => team.id)).toEqual([11, 12])
+        expect(result.eventsAssigned).toBe(6)
     })
 })

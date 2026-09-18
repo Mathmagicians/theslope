@@ -1,10 +1,14 @@
-import type { D1Database } from '@cloudflare/workers-types'
+// D1Database is a global from shared/types/worker-configuration.d.ts (`make typegen`, generated from wrangler.toml).
+// The `export {}` keeps this file a module, which makes the blocks below augment h3 / nitropack.
+export {}
 
 declare module 'h3' {
   interface H3EventContext {
     cloudflare: {
       env: {
         DB: D1Database
+        SENDER: Queue
+        ARCHIVE: R2Bucket
       }
     }
   }
@@ -15,6 +19,8 @@ declare module 'nitropack' {
     cloudflare?: {
       env?: {
         DB?: D1Database
+        SENDER?: Queue
+        ARCHIVE?: R2Bucket
       }
     }
   }

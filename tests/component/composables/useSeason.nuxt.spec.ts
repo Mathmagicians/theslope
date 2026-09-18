@@ -1,15 +1,70 @@
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, vi, beforeEach} from 'vitest'
 import {useSeason} from '~/composables/useSeason'
 import type {Season} from '~/composables/useSeasonValidation'
 import type {DateRange, WeekDayMap} from "~/types/dateTypes"
 import {WEEKDAYS} from "~/types/dateTypes"
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useBookingValidation, type DinnerEventDisplay} from '~/composables/useBookingValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {reconcileDinnerEventsForSeason} from '~~/server/utils/reconcileDinnerEvents'
+import {deleteHeynaboEventAsSystem} from '~~/server/integration/heynabo/heynaboClient'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const {DinnerEventCreateSchema} = useBookingValidation()
+
+// Faked: the two things the test runtime cannot provide - the D1 binding Prisma connects to,
+// and the Heynabo HTTP client. useSeason and the repository (fetch/save/deleteDinnerEvent) run for real.
+const {dinnerEventRows, fakePrisma} = vi.hoisted(() => {
+    type DinnerEventWhere = {seasonId?: number, id?: {in: number[]}}
+    const dinnerEventRows: DinnerEventDisplay[] = []
+    const matches = (row: DinnerEventDisplay, where: DinnerEventWhere = {}) =>
+        (where.seasonId === undefined || row.seasonId === where.seasonId)
+        && (where.id === undefined || where.id.in.includes(row.id))
+
+    const fakePrisma = {
+        dinnerEvent: {
+            findMany: async ({where}: {where?: DinnerEventWhere}) => dinnerEventRows.filter(row => matches(row, where)),
+            createManyAndReturn: async ({data}: {data: Omit<DinnerEventDisplay, 'id'>[]}) => {
+                const created = data.map((row, index) => ({...row, id: dinnerEventRows.length + index + 1}))
+                dinnerEventRows.push(...created)
+                return created
+            },
+            deleteMany: async ({where}: {where?: DinnerEventWhere}) => {
+                const remaining = dinnerEventRows.filter(row => !matches(row, where))
+                const count = dinnerEventRows.length - remaining.length
+                dinnerEventRows.splice(0, dinnerEventRows.length, ...remaining)
+                return {count}
+            }
+        }
+    }
+    return {dinnerEventRows, fakePrisma}
+})
+vi.mock('~~/server/utils/database', () => ({getPrismaClientConnection: async () => fakePrisma}))
+vi.mock('~~/server/integration/heynabo/heynaboClient', () => ({deleteHeynaboEventAsSystem: vi.fn(async () => {})}))
+
+const BASE_SEASON_ID = 1
+
+// Shared fixtures: the schedule-change and both reconciliation describes run on the same season
+const baseSeason = (): Season => ({
+    ...SeasonFactory.defaultSeason(),
+    id: BASE_SEASON_ID,
+    seasonDates: {
+        start: new Date(2025, 0, 6),  // Mon Jan 6
+        end: new Date(2025, 0, 12)    // Sun Jan 12
+    },
+    cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
+    holidays: []
+})
+
+// Existing dinner event on the base season (DinnerEventDisplay - has id)
+const createExisting = (id: number, date: Date, heynaboEventId: number | null = null): DinnerEventDisplay => ({
+    ...DinnerEventFactory.defaultDinnerEventDisplay(),
+    id,
+    date,
+    heynaboEventId,
+    seasonId: BASE_SEASON_ID
+})
 
 describe('useSeasonSchema', () => {
     it('should validate default season', async () => {
@@ -794,18 +849,6 @@ describe('createPreferenceClipper', () => {
 describe('getScheduleChangeDesiredEvents', () => {
     const {getScheduleChangeDesiredEvents} = useSeason()
 
-    // Base season for comparison
-    const baseSeason = (): Season => ({
-        ...SeasonFactory.defaultSeason(),
-        id: 1,
-        seasonDates: {
-            start: new Date(2025, 0, 6),  // Mon Jan 6
-            end: new Date(2025, 0, 12)    // Sun Jan 12
-        },
-        cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
-        holidays: []
-    })
-
     it.each([
         {
             desc: 'identical seasons',
@@ -886,19 +929,11 @@ describe('getScheduleChangeDesiredEvents', () => {
 describe('reconcileDinnerEvents', () => {
     const {reconcileDinnerEvents} = useSeason()
 
-    // Helper to create existing dinner event (DinnerEventDisplay - has id)
-    const createExisting = (id: number, date: Date) => ({
-        ...DinnerEventFactory.defaultDinnerEventDisplay(),
-        id,
-        date,
-        seasonId: 1
-    })
-
     // Helper to create incoming dinner event (DinnerEventCreate - no id)
     const createIncoming = (date: Date) => ({
         ...DinnerEventFactory.defaultDinnerEventCreate(),
         date,
-        seasonId: 1
+        seasonId: BASE_SEASON_ID
     })
 
     it.each([
@@ -942,6 +977,55 @@ describe('reconcileDinnerEvents', () => {
 
         expect(result.delete).toHaveLength(1)
         expect(result.delete[0]!.id).toBe(42)
+    })
+})
+
+describe('reconcileDinnerEventsForSeason - Heynabo cleanup of dropped dinner dates', () => {
+    const {generateDinnerEventDataForSeason} = useSeason()
+    const mockedHnDelete = vi.mocked(deleteHeynaboEventAsSystem)
+    const d1Client = {} as D1Database
+    const LOG = '🌞 > SEASON > [TEST]'
+
+    // Tue Jan 7 is not a cooking day of baseSeason(), so an event on that date is a dropped date
+    const droppedDate = new Date(2025, 0, 7)
+
+    // Seed the database with the season's scheduled events (+ an optional dropped one), return the scheduled ones
+    const seedDinnerEvents = (droppedEvent?: DinnerEventDisplay): DinnerEventDisplay[] => {
+        const scheduled = generateDinnerEventDataForSeason(baseSeason())
+            .map((event, index) => createExisting(index + 1, event.date))
+        dinnerEventRows.splice(0, dinnerEventRows.length, ...scheduled, ...(droppedEvent ? [droppedEvent] : []))
+        return scheduled
+    }
+
+    beforeEach(() => {
+        vi.clearAllMocks()
+    })
+
+    it.each([
+        {scenario: 'dropped date with an announced Heynabo event → the Heynabo event is deleted too', heynaboEventId: 4711, heynaboFails: false},
+        {scenario: 'dropped date without a Heynabo event → Heynabo is untouched', heynaboEventId: null, heynaboFails: false},
+        {scenario: 'Heynabo deletion fails → the dinner event is still deleted (best-effort, ADR-013)', heynaboEventId: 4711, heynaboFails: true}
+    ])('$scenario', async ({heynaboEventId, heynaboFails}) => {
+        const droppedEvent = createExisting(99, droppedDate, heynaboEventId)
+        const scheduled = seedDinnerEvents(droppedEvent)
+        if (heynaboFails) mockedHnDelete.mockRejectedValueOnce(new Error('HN down'))
+
+        const result = await reconcileDinnerEventsForSeason(d1Client, baseSeason(), LOG)
+
+        expect(mockedHnDelete, 'Heynabo is called only for dropped dates that have an event').toHaveBeenCalledTimes(heynaboEventId ? 1 : 0)
+        if (heynaboEventId) expect(mockedHnDelete).toHaveBeenCalledWith(heynaboEventId)
+        expect(result, 'the dropped date is the only change').toEqual({created: 0, idempotent: scheduled.length, deleted: 1})
+        expect(dinnerEventRows.map(e => e.id), 'the dropped dinner event is gone, the scheduled ones remain').toEqual(scheduled.map(e => e.id))
+    })
+
+    it('GIVEN an unchanged schedule THEN nothing is deleted and Heynabo is untouched', async () => {
+        const scheduled = seedDinnerEvents()
+
+        const result = await reconcileDinnerEventsForSeason(d1Client, baseSeason(), LOG)
+
+        expect(result).toEqual({created: 0, idempotent: scheduled.length, deleted: 0})
+        expect(mockedHnDelete).not.toHaveBeenCalled()
+        expect(dinnerEventRows.map(e => e.id)).toEqual(scheduled.map(e => e.id))
     })
 })
 

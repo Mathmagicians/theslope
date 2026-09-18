@@ -47,6 +47,13 @@ describe('AllergyDetailPanel', () => {
             expect(wrapper.emitted(event)).toBeTruthy()
         })
 
+        // The detail header carries the square pencil; form cards carry a labelled edit button
+        it('offers the edit entry as the pencil with an accessible name', async () => {
+            const wrapper = await mountPanel()
+
+            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.edit).attributes('aria-label')).toBe('Rediger')
+        })
+
         it.each([ALLERGY_TEST_IDS.edit, ALLERGY_TEST_IDS.delete])('hides %s when canEdit is false', async (testId) => {
             const wrapper = await mountPanel({canEdit: false})
 

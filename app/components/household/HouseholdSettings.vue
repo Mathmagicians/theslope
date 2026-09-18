@@ -53,7 +53,7 @@ const props = withDefaults(defineProps<Props>(), {
   adminBypass: false
 })
 
-const {TYPOGRAPHY, ICONS, SIZES, LAYOUTS, BUTTONS, getResidencyDisplay} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, ICONS, SIZES, LAYOUTS, BUTTONS, ALERTS, COLOR, BG, getResidencyDisplay} = useTheSlopeDesignSystem()
 
 // Store integration
 const householdsStore = useHouseholdsStore()
@@ -200,9 +200,8 @@ const getCalendarFeedForUser = async () => {
         <!-- Edit mode: contextual alert + date picker -->
         <template v-if="isEditing">
           <UAlert
+            v-bind="ALERTS.warning"
             :icon="editAlert.icon"
-            color="warning"
-            variant="soft"
             :title="editAlert.title"
             :description="editAlert.description"
             :data-testid="editAlert.testid"
@@ -237,7 +236,7 @@ const getCalendarFeedForUser = async () => {
             label="Sæt fraflytningsdato"
             confirm-label="Klik igen for at bekræfte fraflytning"
             :icon="ICONS.moveOut"
-            initial-color="error"
+            :initial-color="COLOR.error"
             initial-variant="soft"
             :loading="isSaving"
             :disabled="!moveOutDate"
@@ -270,9 +269,8 @@ const getCalendarFeedForUser = async () => {
     <!-- Last operation result (persistent, below card) -->
     <UAlert
       v-if="canEdit && lastMoveOutResult"
+      v-bind="lastMoveOutResult.errored > 0 ? ALERTS.error : ALERTS.neutral"
       :icon="lastMoveOutResult.errored > 0 ? ICONS.robotDead : ICONS.robotHappy"
-      :color="lastMoveOutResult.errored > 0 ? 'error' : 'neutral'"
-      variant="subtle"
       title="Sidste ændring"
       :description="`Fraflytningsdato ændret, og familiens bookinger har ændret sig: ${formatScaffoldResult(lastMoveOutResult, 'past')}`"
       data-testid="last-move-out-result-alert"
@@ -288,14 +286,14 @@ const getCalendarFeedForUser = async () => {
 
       <UButton
         :icon="ICONS.calendar"
-        color="primary"
+        :color="COLOR.primary"
         :size="SIZES.standard"
         @click="getCalendarFeedForUser"
       >
         Hent kalender (.ical)
       </UButton>
 
-      <div v-if="calendarFeed" class="mt-4 p-4 bg-gray-50 dark:bg-gray-800 rounded">
+      <div v-if="calendarFeed" :class="['mt-4 p-4 rounded', BG.inset]">
         <p :class="TYPOGRAPHY.bodyTextMuted" class="mb-2">Kalenderfeed genereret:</p>
         <a
           href="/api/calendar/feed"

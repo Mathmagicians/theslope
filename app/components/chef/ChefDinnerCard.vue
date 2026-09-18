@@ -54,7 +54,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system & badge factory
-const { CALENDAR, CHEF_CALENDAR, TYPOGRAPHY } = useTheSlopeDesignSystem()
+const { CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, TEXT } = useTheSlopeDesignSystem()
 const { createChefBadges } = useBookingUi()
 
 // Get released ticket count from store (for booking badge)
@@ -111,7 +111,7 @@ const handleClick = () => {
         :class="[
           TYPOGRAPHY.bodyTextMedium,
           'line-clamp-2 text-balance text-center',
-          isMenuAnnounced ? '' : 'italic text-neutral-500'
+          isMenuAnnounced ? '' : `italic ${TEXT.neutral[500]}`
         ]"
       >
         {{ menuTitle }}

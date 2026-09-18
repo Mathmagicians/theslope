@@ -1,7 +1,8 @@
-import {nextTick, h, defineComponent, ref, type Component} from 'vue'
+import {nextTick, h, defineComponent, ref, isRef, type Component, type Ref} from 'vue'
+import {expect} from 'vitest'
 import {TooltipProvider} from 'reka-ui'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
-import type {BaseWrapper} from '@vue/test-utils'
+import {flushPromises, type BaseWrapper, type VueWrapper} from '@vue/test-utils'
 
 /**
  * Generic polling function for component tests
@@ -62,15 +63,43 @@ export const withTooltipProvider = (component: Component, props: Record<string, 
 /**
  * mountSuspended under a TooltipProvider and return the wrapper of the component itself,
  * so find/text/emitted/props read the component rather than the provider shell.
- * `isMd` provides the layout's responsive breakpoint ref when given.
+ * `isMd` provides the layout's responsive breakpoint ref when given; pass a ref to change the breakpoint after mount.
  */
 export const mountWithTooltipProvider = async <T extends MountableComponent>(
     component: T,
-    {props = {}, isMd}: {props?: Record<string, unknown>, isMd?: boolean} = {}
+    {props = {}, isMd}: {props?: Record<string, unknown>, isMd?: boolean | Ref<boolean>} = {}
 ) => {
     const root = await mountSuspended(
         withTooltipProvider(component, props),
-        isMd === undefined ? {} : {global: {provide: {isMd: ref(isMd)}}}
+        isMd === undefined ? {} : {global: {provide: {isMd: isRef(isMd) ? isMd : ref(isMd)}}}
     )
     return root.findComponent(component)
+}
+
+/**
+ * Opens a UPopover by clicking its trigger, then lets reka-ui mount the teleported content.
+ */
+export const openPopover = async (wrapper: Searchable) => {
+    await wrapper.find('[aria-expanded]').trigger('click')
+    await flushPromises()
+    await nextTick()
+}
+
+/**
+ * Asserts the UCalendar below `wrapper` was configured from the ONE shared design-system
+ * root token (COMPONENTS.calendarGrid). The literals ARE the contract: Monday-first, no
+ * padding weeks, and adjacent-month days both disabled and hidden - so a date never renders
+ * twice across two neighbouring month grids.
+ */
+export const expectSharedCalendarGrid = (wrapper: Pick<VueWrapper, 'findComponent'>) => {
+    const calendar = wrapper.findComponent({name: 'UCalendar'})
+    expect(calendar.exists()).toBe(true)
+    expect(calendar.props()).toMatchObject({
+        disableDaysOutsideCurrentView: true,
+        fixedWeeks: false,
+        weekStartsOn: 1,
+        weekdayFormat: 'short'
+    })
+    // A picker's selection preset appends to the same cellTrigger, so assert the rule is there
+    expect(calendar.props('ui').cellTrigger).toContain('data-[outside-view]:hidden')
 }

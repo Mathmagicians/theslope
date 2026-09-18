@@ -2,6 +2,7 @@ import type {H3Event} from 'h3'
 import type {UserDetail} from '~/composables/useCoreValidation'
 import {getRoutePermission, isInHousehold} from '~/composables/usePermissions'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import {SETTING_REGISTRY, type SettingKey} from '~/composables/useSettingValidation'
 import {fetchDinnerEvent} from '~~/server/data/financesRepository'
 import {findTeamAssignmentByTeamAndInhabitant} from '~~/server/data/prismaRepository'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
@@ -66,6 +67,32 @@ export const requireHouseholdAccess = async (
         return throwH3Error(
             `${PREFIX} User ${user.email} denied access to household ${targetHouseholdId}`,
             new Error('Access denied to this household'),
+            403
+        )
+    }
+    return user
+}
+
+/**
+ * Verify the caller may write the given setting.
+ *
+ * The route table lets any authenticated caller reach the settings endpoint, because the
+ * writer is declared per key in `SETTING_REGISTRY` - key names never enter the route table.
+ *
+ * @returns the authenticated UserDetail on success
+ * @throws 401 when not authenticated
+ * @throws 403 when the key's `canWrite` predicate says no
+ */
+export const requireSettingWriteAccess = async (
+    event: H3Event,
+    key: SettingKey
+): Promise<UserDetail> => {
+    const user = await getRequiredUser(event)
+
+    if (!SETTING_REGISTRY[key].canWrite(user)) {
+        return throwH3Error(
+            `${PREFIX} User ${user.email} denied write access to setting ${key}`,
+            new Error('Insufficient permissions'),
             403
         )
     }
@@ -140,6 +167,7 @@ const authorizationHelper = {
     getRequiredUser,
     requireRoutePermission,
     requireHouseholdAccess,
+    requireSettingWriteAccess,
     requireChefForDinner
 }
 

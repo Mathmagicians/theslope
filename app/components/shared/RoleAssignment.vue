@@ -15,7 +15,7 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-const {ICONS, SIZES, COMPONENTS} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, COMPONENTS, BUTTONS} = useTheSlopeDesignSystem()
 const heroPrimary = COMPONENTS.heroPanel.light.primaryButton
 const planStore = usePlanStore()
 const authStore = useAuthStore()
@@ -62,12 +62,11 @@ defineExpose({open: () => { if (isActionable.value) isOpen.value = true }})
 <template>
     <div v-if="isActionable" class="role-assignment">
         <UButton
+            v-bind="BUTTONS.disclosure(isOpen)"
             :icon="ICONS.chef"
-            :trailing-icon="ICONS.chevronDown"
             :size="SIZES.standard"
             :color="heroPrimary"
             variant="outline"
-            :ui="{trailingIcon: isOpen ? 'rotate-180 transition-transform duration-200' : 'transition-transform duration-200'}"
             data-testid="role-assignment-trigger"
             @click="isOpen = !isOpen"
         >

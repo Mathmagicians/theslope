@@ -1,21 +1,22 @@
 #:schema node_modules/wrangler/config-schema.json
 # Top-level configuration: Used for LOCAL development (nuxt dev, wrangler dev)
 name = "theslope-local"
-compatibility_date = "2025-10-01"
+compatibility_date = "2026-09-16"   # = COMPATIBILITY_DATE in workers/common/cloudflare.ts (nuxt.config.ts reads it from there)
 compatibility_flags = ["nodejs_compat"]
 main = "./.output/server/index.mjs"
 assets = { directory = "./.output/public/", binding = "ASSETS" }
 
 [vars]
 NUXT_PUBLIC_HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
-DB_D1_NAME = "theslope"
 
 [limits]
 # Increase the default CPU time limit to 60s
 cpu_ms=180_000
 
-# Workers Logs
+# Workers Logs + Traces
 [observability]
+enabled = true
+[observability.traces]
 enabled = true
 
 [[d1_databases]]
@@ -23,6 +24,16 @@ binding = "DB"
 database_name = "theslope"
 database_id = "3ed9b6b3-b9b9-45db-aa72-58f64c682142"
 migrations_dir = "migrations"
+
+# Notification queue (producer). Consumed by theslope-sender (workers/sender). Local = miniflare sink, like D1 above.
+[[queues.producers]]
+binding = "SENDER"
+queue = "theslope-sender-dev"
+
+# Billing archive (R2): the monthly billing CSV per period. Local + dev share one bucket, prod has its own.
+[[r2_buckets]]
+binding = "ARCHIVE"
+bucket_name = "theslope-archive-dev"
 
 # Cron Triggers - must match scheduledTasks in nuxt.config.ts
 # These patterns invoke Nitro scheduled tasks
@@ -39,13 +50,20 @@ routes = [
 [env.dev.vars]
 DEPLOY_URL = "https://dev.skraaningen.dk"
 NUXT_PUBLIC_HEY_NABO_API = "https://demo.spaces.heynabo.com/api"
-DB_D1_NAME = "theslope"
 
 [[env.dev.d1_databases]]
 binding = "DB"
 database_name = "theslope"
 database_id = "3ed9b6b3-b9b9-45db-aa72-58f64c682142"
 migrations_dir = "migrations"
+
+[[env.dev.queues.producers]]
+binding = "SENDER"
+queue = "theslope-sender-dev"
+
+[[env.dev.r2_buckets]]
+binding = "ARCHIVE"
+bucket_name = "theslope-archive-dev"
 
 [env.dev.triggers]
 crons = ["0 1 * * *", "0 2 * * *", "0 3 18 * *"]
@@ -62,13 +80,20 @@ routes = [
 [env.prod.vars]
 DEPLOY_URL = "https://www.skraaningen.dk"
 NUXT_PUBLIC_HEY_NABO_API = "https://skraaningeni.spaces.heynabo.com/api"
-DB_D1_NAME = "theslope-prod"
 
 [[env.prod.d1_databases]]
 binding = "DB"
 database_name = "theslope-prod"
 database_id = "495e319b-3b88-4cc8-949a-64a96ba2c019"
 migrations_dir = "migrations"
+
+[[env.prod.queues.producers]]
+binding = "SENDER"
+queue = "theslope-sender-prod"
+
+[[env.prod.r2_buckets]]
+binding = "ARCHIVE"
+bucket_name = "theslope-archive-prod"
 
 [env.prod.triggers]
 crons = ["0 1 * * *", "0 2 * * *", "0 3 18 * *"]

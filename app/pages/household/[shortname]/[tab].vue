@@ -130,7 +130,7 @@ const ribbon = computed(() => {
 
 // Format household title: address + family name
 const { formatHouseholdFamilyName } = useHousehold()
-const { TYPOGRAPHY, ICONS, COMPONENTS, COLOR } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, ICONS, COMPONENTS, COLOR, ALERTS } = useTheSlopeDesignSystem()
 const householdAddress = computed(() => selectedHousehold.value?.address ?? '')
 const householdFamilyName = computed(() =>
   selectedHousehold.value?.inhabitants
@@ -179,10 +179,9 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
           <!-- Visitor banner: non-member, admin override NOT active -->
           <UAlert
             v-if="!isMember && !adminOverrideActive"
+            v-bind="{...ALERTS.info, ...ALERTS.withActions}"
             data-testid="visitor-banner"
             icon="i-heroicons-eye"
-            color="info"
-            variant="subtle"
             title="Du besøger nu en anden husstand end din egen"
             description="Kigge, ikke røre"
           >
@@ -192,7 +191,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
                 label="Admin røre alligevel"
                 confirm-label="Klik igen for at låse op"
                 :icon="ICONS.authorize"
-                initial-color="info"
+                :initial-color="COLOR.info"
                 initial-variant="subtle"
                 @confirm="adminOverrideActive = true"
               />
@@ -202,10 +201,9 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
           <!-- Admin override active banner -->
           <UAlert
             v-if="adminOverrideActive"
+            v-bind="{...ALERTS.warning, ...ALERTS.withActions}"
             data-testid="admin-override-active"
             :icon="ICONS.authorize"
-            color="warning"
-            variant="subtle"
             title="Admin rører, men forsigtigt"
           >
             <template #actions>
@@ -227,7 +225,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
           :items="tabItems"
           class="mt-1 mb-1 md:mt-0 md:mb-4"
           :ui="{ label: 'hidden md:inline' }"
-          color="primary"
+          :color="COLOR.primary"
       >
         <template #content="{ item }">
           <component :is="asyncComponents[item.value]" :household="selectedHousehold" :can-edit="canEdit" :admin-bypass="adminOverrideActive"/>

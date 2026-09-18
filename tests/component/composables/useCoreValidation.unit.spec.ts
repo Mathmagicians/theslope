@@ -7,13 +7,22 @@
 import {describe, it, expect} from 'vitest'
 import type {z} from 'zod'
 import {useCoreValidation, getHouseholdShortName} from '~/composables/useCoreValidation'
+import type {UserCreate} from '~/composables/useCoreValidation'
 import {DinnerModeSchema} from '~~/prisma/generated/zod'
+import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} from '~/composables/useUserPreferenceValidation'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import type {WeekDayMap} from '~/types/dateTypes'
 
 const DinnerMode = DinnerModeSchema.enum
 type DinnerModeType = z.infer<typeof DinnerModeSchema>
+
+/** The JSON columns a User row carries in the database: roles plus the two preference columns (ADR-010) */
+const serializedUserColumns = (user: UserCreate) => ({
+    systemRoles: JSON.stringify(user.systemRoles),
+    notificationChannels: JSON.stringify(user.notificationChannels),
+    appearance: JSON.stringify(user.appearance)
+})
 
 // ============================================================================
 // ID SCHEMA — shared building block for entity ids (ADR-001)
@@ -383,7 +392,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
         const serialized = {
             ...UserFactory.defaultUser(),
             id: 1,
-            systemRoles: '["ADMIN"]',
+            ...serializedUserColumns({...UserFactory.defaultUser(), systemRoles: ['ADMIN']}),
             createdAt: new Date(),
             updatedAt: new Date(),
             Inhabitant: {
@@ -416,7 +425,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
         const userData = {...factoryUser, systemRoles: [...factoryUser.systemRoles]}
         const serializedUser = {
             ...userData,
-            systemRoles: JSON.stringify(userData.systemRoles),
+            ...serializedUserColumns(userData),
             id: 1,
             createdAt: new Date('2025-01-01'),
             updatedAt: new Date('2025-01-02'),
@@ -447,7 +456,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
 
         const serializedUser = {
             ...userData,
-            systemRoles: JSON.stringify(userData.systemRoles),
+            ...serializedUserColumns(userData),
             id: 1,
             createdAt: new Date(),
             updatedAt: new Date(),
@@ -1359,5 +1368,84 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
 
             checkFields(original, deserialized)
         })
+    })
+})
+
+// ============================================================================
+// USER PREFERENCE COLUMNS (notificationChannels + appearance, ADR-010)
+// ============================================================================
+
+describe('useCoreValidation - User preference columns', () => {
+    const {
+        BaseUserSchema,
+        UserUpdateSchema,
+        UserDetailSchema,
+        UserSessionSchema,
+        serializeUserInput,
+        deserializeUser,
+        deserializeUserDetail
+    } = useCoreValidation()
+
+    const preferences: Pick<UserCreate, 'notificationChannels' | 'appearance'> = {
+        notificationChannels: ['EMAIL', 'SMS'],
+        appearance: {palette: 'high-contrast', textScale: 'large'}
+    }
+
+    it('GIVEN a user without the columns THEN the domain schema fills the defaults', () => {
+        const {notificationChannels: _c, appearance: _a, ...withoutPreferences} = UserFactory.defaultUser()
+        const parsed = BaseUserSchema.parse({...withoutPreferences, id: 1})
+
+        expect(parsed.notificationChannels).toEqual(DEFAULT_NOTIFICATION_CHANNELS)
+        expect(parsed.appearance).toEqual(DEFAULT_APPEARANCE)
+    })
+
+    it('GIVEN domain preferences THEN serializeUserInput writes both columns as JSON strings', () => {
+        const serialized = serializeUserInput({...UserFactory.defaultUser(), ...preferences})
+
+        expect(serialized.notificationChannels).toBe(JSON.stringify(preferences.notificationChannels))
+        expect(serialized.appearance).toBe(JSON.stringify(preferences.appearance))
+    })
+
+    it('GIVEN a database row THEN deserializeUser parses both columns back to domain values', () => {
+        const user = {...UserFactory.defaultUser(), ...preferences}
+        const row = {...user, ...serializedUserColumns(user), id: 1, createdAt: new Date(), updatedAt: new Date()}
+
+        const deserialized = deserializeUser(row)
+
+        expect(deserialized.notificationChannels).toEqual(preferences.notificationChannels)
+        expect(deserialized.appearance).toEqual(preferences.appearance)
+    })
+
+    it('GIVEN a database row THEN deserializeUserDetail parses both columns back to domain values', () => {
+        const user = {...UserFactory.defaultUser(), ...preferences}
+        const row = {
+            ...user,
+            ...serializedUserColumns(user),
+            id: 1,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            Inhabitant: null
+        }
+
+        const detail = deserializeUserDetail(row)
+
+        expect(detail.notificationChannels).toEqual(preferences.notificationChannels)
+        expect(detail.appearance).toEqual(preferences.appearance)
+    })
+
+    it.each([
+        {desc: 'channels only', update: {id: 1, notificationChannels: ['SMS']}},
+        {desc: 'appearance only', update: {id: 1, appearance: {palette: 'default', textScale: 'larger'}}}
+    ])('GIVEN $desc THEN UserUpdateSchema accepts the partial', ({update}) => {
+        expect(() => UserUpdateSchema.parse(update)).not.toThrow()
+    })
+
+    it('GIVEN a session user THEN the session carries both columns', () => {
+        const user = UserFactory.defaultUserWithInhabitant('test-session', preferences)
+        const session = UserSessionSchema.parse({...user, passwordHash: 'heynabo-token'})
+
+        expect(session.notificationChannels).toEqual(preferences.notificationChannels)
+        expect(session.appearance).toEqual(preferences.appearance)
+        expect(UserDetailSchema.parse(user).appearance).toEqual(preferences.appearance)
     })
 })

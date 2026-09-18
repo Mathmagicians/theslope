@@ -1,11 +1,12 @@
 // https://nuxt.com/docs/api/configuration/nuxt-config
 import { defineNuxtConfig } from 'nuxt/config'
+import { nitroBase } from './workers/common/cloudflare'
 
 export default defineNuxtConfig({
     colorMode: {
         preference: 'light'
     },
-    compatibilityDate: '2025-10-01',
+    compatibilityDate: nitroBase.compatibilityDate,
     components: [
         {
             path: '~/components',
@@ -20,7 +21,7 @@ export default defineNuxtConfig({
     },
 
     nitro: {
-        preset: "cloudflare_module",
+        preset: nitroBase.preset,
         experimental: {
             wasm: true,
             tasks: true  // Enable Nitro scheduled tasks (still experimental)
@@ -72,24 +73,8 @@ export default defineNuxtConfig({
     },
 
     icon: {
-        // Server-side bundling - embed icons in build to eliminate runtime CDN requests
-        serverBundle: {
-            collections: [
-                'heroicons',                    // Primary collection (23 icons)
-                'fluent-emoji-high-contrast',   // Power mode icon
-                'fluent-mdl2',                  // Team favorite icon
-                'lucide',                       // Sorting arrows
-                'pajamas',                      // Admin/user icons
-                'guidance',                     // Contact icons
-                'healthicons',                  // Death/allergy icons
-                'hugeicons',                    // Authorization icon
-                'mage',                         // Robot icon
-                'material-symbols',             // Celebration icon
-                'mdi',                          // Allergy icon
-                'streamline',                   // Dining icon
-                'tdesign'                       // Wave icon
-            ]
-        },
+        // Server-side bundling (icons embedded in the build); the collections are the installed @iconify-json/* packages (package.json)
+        serverBundle: {},
         // Client-side settings - automatic tree-shaking
         clientBundle: {
             scan: true,  // Only bundle icons actually used in components
@@ -104,12 +89,17 @@ export default defineNuxtConfig({
 
 
     runtimeConfig: {
-        HEY_NABO_USERNAME: process.env.NUXT_HEY_NABO_USERNAME || '', //Set in NUXT_HEYNABO_USERNAME env variable
-        HEY_NABO_PASSWORD: process.env.NUXT_HEY_NABO_PASSWORD, //Set in NUXT_HEYNABO_PASSWORD env variable
         // GitHub integration for user feedback
         GITHUB_TOKEN: '',  // Set via NUXT_GITHUB_TOKEN env variable
         GITHUB_OWNER: 'Mathmagicians',  // Override via NUXT_GITHUB_OWNER if needed
         GITHUB_REPO: 'theslope',  // Override via NUXT_GITHUB_REPO if needed
+        // Notifications (sender events): mailboxes only — NUXT_NOTIFICATIONS_* from .env locally, worker secrets deployed;
+        // an unset mailbox means the mail that needs it reports degraded. Environment and site derive from DEPLOY_URL / the
+        // request (deploymentFromUrl); sender address and display name derive from the environment (senderAddress, senderDisplayName).
+        notifications: {
+            accountantEmail: process.env.NUXT_NOTIFICATIONS_ACCOUNTANT_EMAIL || '',   // receives the monthly billing CSV
+            adminEmail: process.env.NUXT_NOTIFICATIONS_ADMIN_EMAIL || ''              // reply-to of every mail, test mail recipient, cc on the monthly billing mail
+        },
         // Public keys that are exposed to the client
         public: {
             RELEASE_VERSION: process.env.NUXT_PUBLIC_RELEASE_VERSION || "",  // Baked at build time

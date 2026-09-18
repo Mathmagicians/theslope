@@ -3,11 +3,12 @@ import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
-const {validateCookingTeam, getTeamMemberCounts} = useCookingTeamValidation()
+const {validateCookingTeam, getTeamMemberCounts, CreateTeamsResponseSchema} = useCookingTeamValidation()
 const {createWeekDayMapFromSelection} = useWeekDayMapValidation()
-const {headers, validatedBrowserContext} = testHelpers
+const {headers, validatedBrowserContext, salt} = testHelpers
 
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
@@ -69,6 +70,38 @@ test.describe('Admin Teams API', () => {
 
             // Cleanup household
             await HouseholdFactory.deleteHousehold(context, testTeam.householdId)
+        })
+
+        test('PUT /api/admin/team returns the {teams, eventsAssigned} envelope (ADR-009)', async ({browser}) => {
+            // GIVEN: an own season with auto-generated dinner events (parallel-safe: no shared season)
+            const context = await validatedBrowserContext(browser)
+            const testSalt = Date.now().toString()
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
+            additionalSeasonIds.push(season.id as number)
+            expect(dinnerEvents.length).toBeGreaterThan(0)
+
+            // WHEN: two teams are created in one PUT
+            const response = await context.request.put(ADMIN_TEAM_ENDPOINT, {
+                headers: headers,
+                data: [
+                    {name: salt('Envelope-Team-A', testSalt), seasonId: season.id},
+                    {name: salt('Envelope-Team-B', testSalt), seasonId: season.id}
+                ]
+            })
+            expect(response.status()).toBe(201)
+
+            // THEN: the body is the operation result envelope, not a bare team array
+            const body = await response.json()
+            expect(Array.isArray(body), 'PUT must return {teams, eventsAssigned}').toBe(false)
+            const envelope = CreateTeamsResponseSchema.parse(body)
+            expect(envelope.teams.length).toBe(2)
+            expect(envelope.teams.every(team => team.seasonId === season.id)).toBe(true)
+
+            // AND: eventsAssigned counts the season's dinners that now carry a cooking team
+            const eventsAfter = await DinnerEventFactory.getDinnerEventsForSeason(context, season.id as number)
+            const assignedEvents = eventsAfter.filter(dinnerEvent => dinnerEvent.cookingTeamId !== null)
+            expect(assignedEvents.length).toBeGreaterThan(0)
+            expect(envelope.eventsAssigned).toBe(assignedEvents.length)
         })
 
         test('GET /api/admin/team should list all teams', async ({browser}) => {
@@ -152,12 +185,17 @@ test.describe('Admin Teams API', () => {
             // AND: Contains dinnerEvents array (Detail pattern)
             expect(teamDetail).toHaveProperty('dinnerEvents')
             expect(Array.isArray(teamDetail.dinnerEvents)).toBe(true)
-            expect(teamDetail.dinnerEvents.length).toBe(2)
-            expect(teamDetail.dinnerEvents.map((e: {id: number}) => e.id).sort()).toEqual([dinnerEvent1.id, dinnerEvent2.id].sort())
+            // Creating the team also auto-assigns the season's unassigned dinners (ADR-015), so the source of truth is
+            // the season's dinner list, not a fixed number: the Detail carries exactly the dinners that name this team
+            const seasonDinners = await DinnerEventFactory.getDinnerEventsForSeason(context, testSeasonId)
+            const teamDinnerIds = seasonDinners.filter(e => e.cookingTeamId === createdTeam.id).map(e => e.id).sort()
+            const detailIds = teamDetail.dinnerEvents.map((e: {id: number}) => e.id).sort()
+            expect(detailIds).toEqual(teamDinnerIds)
+            expect(detailIds).toEqual(expect.arrayContaining([dinnerEvent1.id, dinnerEvent2.id]))
 
             // AND: Contains cookingDaysCount aggregate
             expect(teamDetail).toHaveProperty('cookingDaysCount')
-            expect(teamDetail.cookingDaysCount).toBe(2)
+            expect(teamDetail.cookingDaysCount).toBe(teamDinnerIds.length)
         })
 
         test('GET /api/admin/team/[id] should return 404 for non-existent team', async ({browser}) => {

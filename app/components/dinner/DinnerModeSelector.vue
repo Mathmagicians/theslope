@@ -42,7 +42,7 @@ type ButtonSize = NonNullable<ButtonProps['size']>
 type ButtonVariant = NonNullable<ButtonProps['variant']>
 
 // Local styling constant (field group only - badge size from design system)
-const FIELD_GROUP_CLASSES = 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-neutral gap-0 md:gap-1'
+const FIELD_GROUP_CLASSES = 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-default gap-0 md:gap-1'
 
 interface Props {
   modelValue?: WeekDay | DinnerMode // Optional - defaults to NONE when no order exists
@@ -85,7 +85,7 @@ watch(() => props.consensus, () => {
 })
 
 // Design system
-const { WEEKDAY, ORIENTATIONS, ICONS, SIZES, TYPOGRAPHY } = useTheSlopeDesignSystem()
+const { WEEKDAY, ORIENTATIONS, ICONS, SIZES, TYPOGRAPHY, TEXT } = useTheSlopeDesignSystem()
 
 // Responsive size: use prop if provided, otherwise use responsive default
 const responsiveSize = computed(() => props.size ?? SIZES.small)
@@ -254,7 +254,7 @@ const shouldPulse = (mode: DinnerMode): boolean => {
         :name="name"
         :data-testid="name"
       >
-        <div :class="`${iconSizeClass} flex items-center justify-center text-xs font-medium text-gray-900 dark:text-white`">
+        <div :class="`${iconSizeClass} flex items-center justify-center ${TYPOGRAPHY.caption} ${TEXT.ink}`">
           {{ WEEKDAY.getLabel(modelValue as WeekDay) }}
         </div>
       </UBadge>

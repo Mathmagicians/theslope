@@ -30,19 +30,14 @@ export const tryAutoClaim = async <T>(
     return true
 }
 
-const TEAM_COLORS = ['party', 'peach', 'secondary', 'neutral', 'info', 'warning', 'error', 'ocean', 'winery', 'primary', 'caramel'] as const
-export type TeamColor = typeof TEAM_COLORS[number]
-
 /**
  * Business logic for working with cooking teams
+ *
+ * A team's colour is not here: it is the brand rainbow stop of the team's number, which a
+ * consumer takes from `getRainbowBand` in the design system (ADR-017, ADR-018).
  */
 export const useCookingTeam = () => {
     const {CookingTeamSchema, TeamRoleSchema} = useCookingTeamValidation()
-
-    const getTeamColor = (index: number): TeamColor => {
-        const colorIndex = index % TEAM_COLORS.length
-        return TEAM_COLORS[colorIndex] ?? 'neutral'
-    }
 
     const createDefaultTeamName = (seasonShortName: string, teamNumber: number): string => {
         return `Madhold ${teamNumber} - ${seasonShortName}`
@@ -148,7 +143,6 @@ export const useCookingTeam = () => {
 
     return {
         CookingTeamSchema,
-        getTeamColor,
         createDefaultTeamName,
         extractTeamNumber,
         getTeamShortName,

@@ -37,7 +37,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {SIZES, COLOR, ICONS, BUTTONS, COMPONENTS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
+const {SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
 
 // Ticket type config for styled badges
 const {getTicketPriceSelectItems} = useTicket()
@@ -189,10 +189,8 @@ const handleCancel = () => emit('cancel')
   <!-- Empty state: no booking action available -->
   <UAlert
     v-if="!bookingOptions.action"
-    :color="COLOR.neutral"
-    variant="soft"
+    v-bind="ALERTS.emptyState"
     :avatar="{text: emptyStateMessage.emoji, size: SIZES.emptyStateAvatar}"
-    :ui="COMPONENTS.emptyStateAlert"
   >
     <template #title>{{ emptyStateMessage.text }}</template>
   </UAlert>
@@ -207,7 +205,7 @@ const handleCancel = () => emit('cancel')
   >
     <template #default="{ errors }">
       <UCard
-      color="info"
+      :color="COLOR.info"
       variant="soft"
       :ui="{body: 'p-4 flex flex-col gap-4', footer: 'p-4'}"
     >

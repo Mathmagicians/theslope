@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import type {DateRange} from "~/types/dateTypes"
-import {DATE_SETTINGS, translateToDanish} from "~/utils/date"
+import {DATE_SETTINGS, translateToDanish, eachDayOfManyIntervals, isCalendarDateInDateList} from "~/utils/date"
+import type {DateValue} from '@internationalized/date'
 import type {Ref} from "vue"
 import {mapZodErrorsToFormErrors, getErrorMessage} from "~/utils/validtation"
+import type {CalendarPickerSelection} from "~/composables/useTheSlopeDesignSystem"
 
 // TYPES
 type DateRangeInput = {
@@ -12,14 +14,23 @@ type DateRangeInput = {
 
 // COMPONENT DEFINITIONS
 const model = defineModel<DateRange>({required: true})
-const props = withDefaults(defineProps<{ name?: string, disabled?: boolean }>(), {
+const props = withDefaults(defineProps<{ name?: string, disabled?: boolean, selection?: CalendarPickerSelection }>(), {
   name: undefined,
-  disabled: false
+  disabled: false,
+  selection: 'cookingDay'
 })
 const emit = defineEmits(['update:model-value', 'close'])
 
 // DESIGN SYSTEM
-const {SIZES} = useTheSlopeDesignSystem()
+const {SIZES, ICONS, CALENDAR, calendarPickerProps, dayCircleClasses} = useTheSlopeDesignSystem()
+const calendarProps = calendarPickerProps()
+
+// What is being picked decides how a selected day reads (CALENDAR.picker); the slot draws it
+const selectionVariant = computed(() => CALENDAR.picker[props.selection])
+const selectedDays = computed(() => model.value?.start && model.value?.end
+    ? eachDayOfManyIntervals([{start: model.value.start, end: model.value.end}])
+    : [])
+const isDaySelected = (day: DateValue) => isCalendarDateInDateList(day, selectedDays.value)
 
 // STATE
 const errors = ref<Map<string, string[]>>(new Map())
@@ -141,19 +152,20 @@ defineExpose({
     }">
     <template #content>
       <UCalendar
+        v-bind="calendarProps"
         v-model="pickerDateRange"
         range
         :size="SIZES.calendar"
         :number-of-months="SIZES.calendarMonths"
-        :week-starts-on="1"
-        :fixed-weeks="false"
-        weekday-format="short"
-        color="success"
       >
         <template #week-day="{ day }">
           <span class="text-sm text-muted uppercase">
             {{ translateToDanish(day) }}
           </span>
+        </template>
+        <template #day="{ day }">
+          <div v-if="isDaySelected(day)" :class="dayCircleClasses(selectionVariant)">{{ day.day }}</div>
+          <span v-else class="text-sm">{{ day.day }}</span>
         </template>
       </UCalendar>
     </template>
@@ -169,12 +181,9 @@ defineExpose({
           type="string"
           :name="key"
           :disabled="props.disabled"
+          :trailing-icon="ICONS.calendar"
           @update:model-value="handleInputChange($event, key)"
-        >
-          <template #trailing>
-            <UButton icon="i-heroicons-calendar" color="info"/>
-          </template>
-        </UInput>
+        />
       </UFormField>
     </div>
   </UPopover>

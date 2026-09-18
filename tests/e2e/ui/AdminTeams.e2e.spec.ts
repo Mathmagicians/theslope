@@ -36,6 +36,43 @@ test.describe('AdminTeams Form UI', () => {
         await expect(page.getByTestId('form-mode-create')).toBeVisible()
     })
 
+    test('GIVEN a season without madhold WHEN viewing it THEN the table renders its own empty state with the create CTA',
+        async ({page, browser}) => {
+            const context = await validatedBrowserContext(browser)
+
+            // GIVEN: Fresh season with NO teams
+            const season = await SeasonFactory.createSeason(context)
+            createdSeasonIds.push(season.id!)
+
+            // WHEN: Viewing the teams tab for that season
+            await page.goto(`${adminTeamsUrl}?season=${season.shortName}`)
+
+            // THEN: The empty state is the table's own #empty slot, not an alert rendered instead of the table
+            const table = page.locator('table')
+            await expect(table).toBeVisible({timeout: 10000})
+            await expect(table.getByTestId('teams-empty-state')).toBeVisible()
+            await expect(table.getByTestId('create-new-team')).toBeVisible()
+        })
+
+    test('GIVEN a season without madhold WHEN switching to edit mode THEN the same table empty state and create CTA render',
+        async ({page, browser}) => {
+            const context = await validatedBrowserContext(browser)
+
+            // GIVEN: Fresh season with NO teams
+            const season = await SeasonFactory.createSeason(context)
+            createdSeasonIds.push(season.id!)
+
+            // WHEN: Opening the teams tab in edit mode - the state reached by deleting the last team
+            await page.goto(`${adminTeamsUrl}?season=${season.shortName}&mode=edit`)
+
+            // THEN: ONE empty state, the table's own - not the "Vælg et madhold" master-detail placeholder
+            const table = page.locator('table')
+            await expect(table).toBeVisible({timeout: 10000})
+            await expect(table.getByTestId('teams-empty-state')).toBeVisible()
+            await expect(table.getByTestId('create-new-team')).toBeVisible()
+            await expect(page.getByText('Vælg et madhold for at redigere')).toBeHidden()
+        })
+
     test.describe('Create Mode', () => {
         test('GIVEN user in create mode WHEN entering team count and submitting THEN teams are created',
             async ({page, browser}) => {

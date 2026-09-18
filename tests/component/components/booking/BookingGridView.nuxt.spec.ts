@@ -5,6 +5,8 @@ import {findByTestId} from '~~/tests/component/testHelpers'
 import BookingGridView from '~/components/booking/BookingGridView.vue'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {addDays, startOfDay} from 'date-fns'
 
 const ticketPrices = TicketFactory.defaultTicketPrices()
 // Use real deadlinesForSeason() to stay in sync with SeasonDeadlines interface
@@ -104,6 +106,36 @@ describe('BookingGridView', () => {
     it('shows save button when canEdit=true in edit mode', async () => {
       const wrapper = await mount({view: 'week', canEdit: true, formMode: 'edit'})
       expect(findByTestId(wrapper, 'grid-save').exists()).toBe(true)
+    })
+  })
+
+  // A week or month with no dinners has nothing to grid: the table's own #empty slot is the
+  // one empty state, so the synthetic power row must not keep the table populated.
+  describe('period without dinners', () => {
+    const weekAroundToday = {
+      start: startOfDay(addDays(new Date(), -3)),
+      end: startOfDay(addDays(new Date(), 3))
+    }
+
+    it.each([
+      {view: 'week' as const, text: 'Ingen middage denne uge'},
+      {view: 'month' as const, text: 'Ingen middage denne måned'}
+    ])('renders the $view empty state instead of an empty grid', async ({view, text}) => {
+      const wrapper = await mount({view, dateRange: weekAroundToday, dinnerEvents: []})
+
+      expect(wrapper.text()).toContain(text)
+      expect(wrapper.text()).not.toContain('Anna')
+    })
+
+    it('grids the household again as soon as the period holds a dinner', async () => {
+      const wrapper = await mount({
+        view: 'week',
+        dateRange: weekAroundToday,
+        dinnerEvents: [DinnerEventFactory.dinnerEventAt(1, 1)]
+      })
+
+      expect(wrapper.text()).not.toContain('Ingen middage')
+      expect(wrapper.text()).toContain('Anna')
     })
   })
 })

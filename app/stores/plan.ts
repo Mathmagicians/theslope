@@ -1,5 +1,5 @@
-import type {Season} from '~/composables/useSeasonValidation'
-import type {CookingTeamDisplay, CookingTeamDetail, CookingTeamAssignment, CookingTeamCreate, CookingTeamUpdate, CookingTeamAssignmentCreate, TeamRole} from '~/composables/useCookingTeamValidation'
+import type {Season, SeasonUpdateResponse} from '~/composables/useSeasonValidation'
+import type {CookingTeamDisplay, CookingTeamDetail, CookingTeamAssignment, CookingTeamCreate, CookingTeamUpdate, CookingTeamAssignmentCreate, CreateTeamsResponse, TeamRole} from '~/composables/useCookingTeamValidation'
 import {ROLE_ICONS} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay, DinnerEventDetail, MenuSwapStrategy} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
@@ -7,7 +7,7 @@ import {FORM_MODES, type FormMode} from '~/types/form'
 export const usePlanStore = defineStore("Plan", () => {
         // DEPENDENCIES
         const {handleApiError} = useApiHandler()
-        const {SeasonSchema} = useSeasonValidation()
+        const {SeasonSchema, SeasonUpdateResponseSchema} = useSeasonValidation()
         const authStore = useAuthStore()
         const {isAdmin} = storeToRefs(authStore)
 
@@ -74,14 +74,15 @@ export const usePlanStore = defineStore("Plan", () => {
         // No store state - components use useAsyncData with this function
         // Pattern: Store provides fetch logic, components manage their own data
         // Note: HTTP converts Date→ISO strings, schema.parse() with z.coerce.date() converts back
-        const {CookingTeamDetailSchema} = useCookingTeamValidation()
+        const {CookingTeamDetailSchema, CreateTeamsResponseSchema} = useCookingTeamValidation()
         const fetchTeamDetail = async (teamId: number): Promise<CookingTeamDetail> => {
             const data = await $fetch(`/api/admin/team/${teamId}`)
             return CookingTeamDetailSchema.parse(data)
         }
 
         // Create team operation - useAsyncData pattern for mutations
-        const createTeamData = ref<CookingTeamDetail | CookingTeamDetail[]>([])
+        const emptyCreateTeamsResponse = (): CreateTeamsResponse => ({teams: [], eventsAssigned: 0})
+        const createTeamData = ref<CreateTeamsResponse>(emptyCreateTeamsResponse())
         const {
             status: createTeamStatus,
             error: createTeamError,
@@ -91,17 +92,18 @@ export const usePlanStore = defineStore("Plan", () => {
             () => Promise.resolve(createTeamData.value),
             {
                 immediate: false,
-                default: () => []
+                default: emptyCreateTeamsResponse
             }
         )
 
         // Save season operation - useAsyncData pattern for loading state
         const saveSeasonParams = ref<{ season: Season | null, isCreate: boolean }>({ season: null, isCreate: false })
         const {
+            data: saveSeasonData,
             status: saveSeasonStatus,
             error: saveSeasonError,
             execute: executeSaveSeason
-        } = useAsyncData(
+        } = useAsyncData<Season | SeasonUpdateResponse | null>(
             'plan-store-save-season',
             async () => {
                 const { season, isCreate } = saveSeasonParams.value
@@ -113,7 +115,7 @@ export const usePlanStore = defineStore("Plan", () => {
                         headers: { 'Content-Type': 'application/json' }
                     })
                 } else {
-                    return await $fetch<Season>(`/api/admin/season/${season.id}`, {
+                    return await $fetch<SeasonUpdateResponse>(`/api/admin/season/${season.id}`, {
                         method: 'POST',
                         body: season,
                         headers: { 'Content-Type': 'application/json' }
@@ -333,7 +335,8 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
-        const updateSeason = async (season: Season): Promise<Season | null> => {
+        // Returns the operation envelope (ADR-009) so callers can report what the save changed
+        const updateSeason = async (season: Season): Promise<SeasonUpdateResponse | null> => {
             saveSeasonParams.value = { season, isCreate: false }
             await executeSaveSeason()
 
@@ -342,11 +345,13 @@ export const usePlanStore = defineStore("Plan", () => {
                 return null
             }
 
+            const result = SeasonUpdateResponseSchema.parse(saveSeasonData.value)
+
             await loadSeasons()
             if (selectedSeasonId.value) {
                 await refreshSelectedSeason()
             }
-            return season
+            return result
         }
 
         // Shared implementation for activate/deactivate
@@ -379,14 +384,16 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         // COOKING TEAM ACTIONS - Part of Season aggregate (ADR-005)
-        const createTeam = async (teamOrTeams: CookingTeamCreate | CookingTeamCreate[]): Promise<CookingTeamDetail[]> => {
+        const createTeam = async (teamOrTeams: CookingTeamCreate | CookingTeamCreate[]): Promise<CreateTeamsResponse> => {
             const teams = Array.isArray(teamOrTeams) ? teamOrTeams : [teamOrTeams]
 
-            createTeamData.value = await $fetch<CookingTeamDetail[]>('/api/admin/team', {
+            // ADR-009 operation result: teams created + dinner events the assignment touched
+            const response = await $fetch('/api/admin/team', {
                 method: 'PUT',
                 body: teams,
                 headers: {'Content-Type': 'application/json'}
             })
+            createTeamData.value = CreateTeamsResponseSchema.parse(response)
 
             await executeCreateTeam()
 
@@ -395,13 +402,13 @@ export const usePlanStore = defineStore("Plan", () => {
                 throw createTeamError.value
             }
 
-            console.info(`👥 > PLAN_STORE > Created ${createTeamData.value.length} team(s)`)
+            console.info(`👥 > PLAN_STORE > Created ${createTeamData.value.teams.length} team(s), assigned ${createTeamData.value.eventsAssigned} dinner event(s)`)
 
             if (selectedSeasonId.value) {
                 await refreshSelectedSeason()
             }
 
-            return Array.isArray(createTeamData.value) ? createTeamData.value : [createTeamData.value]
+            return createTeamData.value
         }
 
         const updateTeam = async (team: CookingTeamUpdate) => {

@@ -92,7 +92,7 @@ const emit = defineEmits<{
 const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
 const {sortDinnerEventsByTemporal} = useSeason()
 const {getChefDeadlineAlarm} = useBooking()
-const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS, URGENCY_TO_CHIP_COLOR} = useTheSlopeDesignSystem()
+const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS, TEXT, URGENCY_TO_CHIP_COLOR, dayCircleClasses} = useTheSlopeDesignSystem()
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
@@ -210,22 +210,22 @@ const legendItems = computed(() => [
   {
     label: 'Næste madlavning',
     type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next}`
+    circleClass: dayCircleClasses(CHEF_CALENDAR.day.next)
   },
   {
     label: 'Valgt dato',
     type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.next} ${CHEF_CALENDAR.selection}`
+    circleClass: dayCircleClasses(CHEF_CALENDAR.day.next, CHEF_CALENDAR.selection)
   },
   {
     label: 'Planlagt madlavning',
     type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CHEF_CALENDAR.day.future}`
+    circleClass: dayCircleClasses(CHEF_CALENDAR.day.future)
   },
   {
     label: 'Tidligere madlavning',
     type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.day.past}`
+    circleClass: dayCircleClasses(CALENDAR.day.past)
   },
   {
     label: 'Deadline overskredet',
@@ -245,7 +245,7 @@ const legendItems = computed(() => [
   {
     label: 'Aflyst madlavning',
     type: 'circle' as const,
-    circleClass: `${SIZES.calendarCircle} ${CALENDAR.day.shape} ${CALENDAR.day.past} line-through`
+    circleClass: dayCircleClasses(CALENDAR.day.past, 'line-through')
   }
 ])
 
@@ -342,10 +342,10 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => {
               />
             </template>
 
-            <template #empty-state>
+            <template #empty>
               <div class="flex flex-col items-center justify-center py-6 gap-3">
-                <UIcon name="i-heroicons-calendar" class="w-8 h-8 text-gray-400"/>
-                <p class="text-sm text-gray-500">Ingen fællesspisninger planlagt for dette hold</p>
+                <UIcon name="i-heroicons-calendar" :class="['w-8 h-8', TEXT.gray[400]]"/>
+                <p :class="[TYPOGRAPHY.bodyTextSmall, TEXT.gray[500]]">Ingen fællesspisninger planlagt for dette hold</p>
               </div>
             </template>
           </UTable>
@@ -365,12 +365,7 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => {
               >
                 <div
                   :data-testid="`calendar-dinner-date-${day.day}`"
-                  :class="[
-                    SIZES.calendarCircle,
-                    CALENDAR.day.shape,
-                    getDayColorClass(getDayType(eventLists)!),
-                    isSelected(day) ? CHEF_CALENDAR.selection : ''
-                  ]"
+                  :class="dayCircleClasses(getDayColorClass(getDayType(eventLists)!), isSelected(day) && CHEF_CALENDAR.selection)"
                   @click="handleDateClick(day)"
                 >
                   {{ day.day }}
@@ -381,12 +376,10 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => {
               <div
                 v-else-if="getDayType(eventLists)"
                 :data-testid="`calendar-dinner-date-${day.day}`"
-                :class="[
-                  SIZES.calendarCircle,
-                  CALENDAR.day.shape,
+                :class="dayCircleClasses(
                   isCancelledDay(day) ? `${CALENDAR.day.past} line-through` : getDayColorClass(getDayType(eventLists)!),
-                  isSelected(day) ? CHEF_CALENDAR.selection : ''
-                ]"
+                  isSelected(day) && CHEF_CALENDAR.selection
+                )"
                 @click="handleDateClick(day)"
               >
                 {{ day.day }}
@@ -402,7 +395,7 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => {
                 <div v-for="legendItem in legendItems" :key="legendItem.label" class="flex items-center gap-4">
                   <!-- Chip for deadline indicators (wraps styled circle like calendar) -->
                   <UChip v-if="legendItem.type === 'chip'" show size="md" :color="legendItem.chipColor as NuxtUIColor">
-                    <div :class="[SIZES.calendarCircle, CALENDAR.day.shape, CHEF_CALENDAR.day.future]">1</div>
+                    <div :class="dayCircleClasses(CHEF_CALENDAR.day.future)">1</div>
                   </UChip>
                   <!-- Circle for other indicators -->
                   <div v-else :class="legendItem.circleClass">

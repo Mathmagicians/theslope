@@ -2,10 +2,11 @@
 /**
  * CalendarDisplay - Shows potential cooking days and actual generated events
  *
- * Displays:
- * - Holidays (green rings)
- * - Potential cooking days (pink rings) - days matching cookingDays pattern minus holidays
- * - Generated dinner events (pink filled) - actual events created for the season
+ * Displays (design-system day circle: dayCircleClasses(variant)):
+ * - Holidays (CALENDAR.holiday - green ring)
+ * - Potential cooking days (PLANNING_CALENDAR.day.potential - pink outline) - days matching
+ *   cookingDays pattern minus holidays
+ * - Generated dinner events (PLANNING_CALENDAR.day.generated - pink filled)
  *
  * Uses BaseCalendar for consistent calendar structure and event management.
  * Domain-specific rendering via slots (rings for potential, filled for actual).
@@ -26,7 +27,7 @@ interface Props {
 const props = defineProps<Props>()
 const {createEventList} = useCalendarEvents()
 const {getHolidayDatesFromDateRangeList, computeCookingDates} = useSeason()
-const {CALENDAR} = useTheSlopeDesignSystem()
+const {PLANNING_CALENDAR, CALENDAR, dayCircleClasses} = useTheSlopeDesignSystem()
 
 // Expand holiday ranges into individual dates
 const holidayDates = computed(() => getHolidayDatesFromDateRangeList(props.holidays))
@@ -79,17 +80,16 @@ const hasGeneratedEvent = (eventLists: DayEventList[]) => {
       <!-- Holiday takes precedence (green ring) -->
       <div
         v-if="isHoliday(day)"
-        class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium"
-        :class="CALENDAR.holiday"
+        :class="dayCircleClasses(CALENDAR.holiday)"
       >
         {{ day.day }}
       </div>
 
-      <!-- Potential cooking day with optional generated event (filled vs ring) -->
+      <!-- Potential cooking day with optional generated event (filled vs outline) -->
       <div
-v-else-if="hasPotentialCooking(eventLists)"
-           class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium"
-           :class="hasGeneratedEvent(eventLists) ? 'bg-pink-800 text-pink-50' : 'border-2 border-pink-300 text-pink-800'">
+        v-else-if="hasPotentialCooking(eventLists)"
+        :class="dayCircleClasses(hasGeneratedEvent(eventLists) ? PLANNING_CALENDAR.day.generated : PLANNING_CALENDAR.day.potential)"
+      >
         {{ day.day }}
       </div>
 

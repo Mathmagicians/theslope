@@ -26,6 +26,14 @@ MOBILE (<md) - the SAME panel docks under the tapped row (UTable #expanded)
 CREATE on mobile docks under the toolbar (adjacent to the button that opened it)
 and suppresses row expansion, so the toolbar panel is the single live mount.
 Multiselect mode replaces master+detail with AllergenMultiSelector.
+
+The card HEADER carries AllergyNotes above the managers list, in the poster's order - the same
+box, from the same Setting row, that the poster prints. The pencil edits it in place:
+┌ Allergi Katalog                    [📄 Plakat] ┐
+│ ⚠ Vigtige bemærkninger                    [✏️] │
+│  • Glutenfri boller findes i fryseren …         │
+│ ⓘ Spørgsmål om allergier? (AllergyManagersList) │
+├─ toolbar + master/detail ───────────────────────┤
 -->
 <script setup lang="ts">
 import {FORM_MODES, type FormMode} from '~/types/form'
@@ -39,7 +47,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR, COMPONENTS, SIZES, LAYOUTS, BUTTONS, ICONS } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS } = useTheSlopeDesignSystem()
 
 // Responsive mount point for the detail panel - provided by the default layout;
 // false during SSR, so first paint renders the mobile mount
@@ -60,9 +68,10 @@ const {
   allergyTypes,
   isAllergyTypesLoading,
   isAllergyTypesErrored,
-  allergyTypesError
+  allergyTypesError,
+  posterNotes
 } = storeToRefs(store)
-const {createAllergyType, updateAllergyType, deleteAllergyType} = store
+const {createAllergyType, updateAllergyType, deleteAllergyType, savePosterNotes} = store
 
 // Initialize store
 store.initAllergiesStore()
@@ -240,6 +249,21 @@ const panelEvents = {
   'cancel-delete': cancelDelete
 }
 
+// POSTER NOTES - the one Setting row this card and the poster share
+const isSavingNotes = ref(false)
+
+const handleNotesSave = async (notes: string) => {
+  isSavingNotes.value = true
+  try {
+    await savePosterNotes(notes)
+    showSuccessToast('Bemærkninger gemt')
+  } catch (error) {
+    console.error('🥜 > AdminAllergies > Error saving poster notes:', error)
+  } finally {
+    isSavingNotes.value = false
+  }
+}
+
 // Funny empty state message for allergy catalog
 const catalogEmptyState = {
   emoji: '🎉',
@@ -267,7 +291,7 @@ const catalogEmptyState = {
             <div class="text-lg font-semibold">Allergi Katalog</div>
             <div class="flex items-center gap-2">
               <UButton
-                  color="secondary"
+                  :color="COLOR.secondary"
                   variant="outline"
                   :icon="ICONS.document"
                   to="/admin/allergies/pdf"
@@ -279,6 +303,12 @@ const catalogEmptyState = {
               </UButton>
             </div>
           </div>
+          <AllergyNotes
+              :notes="posterNotes"
+              :can-edit="props.canEdit"
+              :is-saving="isSavingNotes"
+              @save="handleNotesSave"
+          />
           <AllergyManagersList/>
         </div>
       </template>
@@ -295,7 +325,7 @@ const catalogEmptyState = {
             data-testid="multiselect-toggle"
             @click="toggleMultiselectMode"
         >
-          {{ multiselectMode ? 'Afslut sammenligning' : 'Sammenlign' }}
+          {{ multiselectMode ? 'Afslut kombinering' : 'Kombiner allergener' }}
         </UButton>
 
         <UButton
@@ -356,12 +386,10 @@ const catalogEmptyState = {
               <AllergyDetailPanel v-bind="panelProps" v-on="panelEvents"/>
             </template>
             <!-- Empty state -->
-            <template #empty-state>
+            <template #empty>
               <UAlert
-                  variant="soft"
-                  :color="COLOR.success"
+                  v-bind="ALERTS.emptyState"
                   :avatar="{ text: catalogEmptyState.emoji, size: SIZES.emptyStateAvatar }"
-                  :ui="COMPONENTS.emptyStateAlert"
               >
                 <template #title>
                   {{ catalogEmptyState.text }}
@@ -395,6 +423,7 @@ const catalogEmptyState = {
         </div>
       </div>
       </div>
+
     </UCard>
   </div>
 </template>

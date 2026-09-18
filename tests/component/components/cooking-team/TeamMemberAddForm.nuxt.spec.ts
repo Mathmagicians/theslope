@@ -13,7 +13,7 @@ describe('TeamMemberAddForm', () => {
 
     const mount = (props: Record<string, unknown> = {}) =>
         mountSuspended(TeamMemberAddForm, {
-            props: {teamColor: 'primary', ...props},
+            props: {...props},
             global: {provide: {isMd: ref(true)}}
         })
 

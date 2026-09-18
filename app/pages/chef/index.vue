@@ -40,7 +40,7 @@ import {FORM_MODES, type FormMode} from '~/types/form'
 import type {DinnerEventDisplay, ChefMenuForm} from '~/composables/useBookingValidation'
 
 // Design system
-const {COLOR, ICONS, LAYOUTS} = useTheSlopeDesignSystem()
+const {COLOR, ICONS, LAYOUTS, ALERTS} = useTheSlopeDesignSystem()
 
 // Initialize stores
 const planStore = usePlanStore()
@@ -266,7 +266,7 @@ useHead({
 </script>
 
 <template>
-  <UPage :ui="LAYOUTS.masterDetailPage">
+  <UPage :ui="LAYOUTS.masterDetailPage" data-testid="chef-page">
     <!-- Master: Team selector and calendar (left slot) -->
     <template #left>
         <CalendarMasterPanel title="Mine Madhold">
@@ -319,9 +319,7 @@ useHead({
             <!-- No events for team -->
             <UAlert
                 v-else-if="teamDinnerEvents.length === 0"
-                type="info"
-                variant="soft"
-                :color="COLOR.info"
+                v-bind="ALERTS.info"
                 :icon="ICONS.calendarDays"
             >
               <template #title>
@@ -396,8 +394,7 @@ useHead({
             />
             <UAlert
                 v-else
-                variant="soft"
-                :color="COLOR.neutral"
+                v-bind="ALERTS.neutral"
                 :icon="ICONS.userGroup"
             >
               <template #title>Intet madhold tildelt endnu</template>

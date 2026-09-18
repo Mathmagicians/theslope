@@ -1,3 +1,4 @@
+import type {SettingDetail} from '~/composables/useSettingValidation'
 import type {
     AllergyTypeDetail,
     AllergyTypeCreate,
@@ -7,6 +8,10 @@ import type {
     AllergyUpdate,
     AllergyDetail
 } from '~/composables/useAllergyValidation'
+
+/** The one Setting row the allergy surfaces read */
+const POSTER_NOTES_KEY = 'allergy-poster-notes'
+const POSTER_NOTES_ENDPOINT = `/api/admin/setting/${POSTER_NOTES_KEY}`
 
 /**
  * Allergy store - manages allergy types (admin catalog) and household/inhabitant allergies
@@ -18,6 +23,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     // DEPENDENCIES
     const {handleApiError} = useApiHandler()
     const {AllergyTypeDetailSchema} = useAllergyValidation()
+    const {SettingDetailSchema, SETTING_REGISTRY} = useSettingValidation()
 
     // ========================================
     // State - useAsyncData with useRequestFetch for SSR-safe auth context (ADR-007)
@@ -66,6 +72,28 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         },
         {
             default: () => null
+        }
+    )
+
+    // Poster notes - ONE Setting row, read by the catalog card header and the poster.
+    // It keeps its own status refs and stays out of isAllergyStoreReady, so the poster
+    // prints its notes even while the catalog is still loading.
+    const {
+        data: posterNotesSetting,
+        status: posterNotesStatus,
+        error: posterNotesError,
+        refresh: refreshPosterNotes
+    } = useAsyncData<SettingDetail>(
+        'allergy-store-poster-notes',
+        () => requestFetch<SettingDetail>(POSTER_NOTES_ENDPOINT, {
+            onResponseError: ({response}) => {
+                console.error(`🥜 > ALLERGY_STORE > fetchPosterNotes failed: ${response.status} ${response.statusText}`)
+                handleApiError(response._data, 'Kunne ikke hente bemærkninger')
+            }
+        }),
+        {
+            // ADR-007/ADR-010: parse to domain types - updatedAt arrives as a JSON string over HTTP
+            transform: (data: SettingDetail) => SettingDetailSchema.parse(data)
         }
     )
 
@@ -129,6 +157,17 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     const isAllergiesErrored = computed(() => allergiesStatus.value === 'error')
     const isAllergiesInitialized = computed(() => allergiesStatus.value === 'success')
     const isNoAllergies = computed(() => isAllergiesInitialized.value && allergies.value.length === 0)
+
+    // Poster notes status - deliberately NOT folded into isAllergyStoreReady
+    const isPosterNotesLoading = computed(() => posterNotesStatus.value === 'pending')
+    const isPosterNotesErrored = computed(() => posterNotesStatus.value === 'error')
+    const isPosterNotesInitialized = computed(() =>
+        posterNotesStatus.value === 'success' && posterNotesSetting.value !== null
+    )
+    // The registry default covers the first paint and a failed fetch, so the box is never empty
+    const posterNotes = computed(() =>
+        posterNotesSetting.value?.value ?? SETTING_REGISTRY[POSTER_NOTES_KEY].defaultValue
+    )
 
     // Convenience computed for components
     const isAllergyStoreReady = computed(() => isAllergyTypesInitialized.value)
@@ -194,6 +233,37 @@ export const useAllergiesStore = defineStore("Allergies", () => {
             console.info(`🥜 > ALLERGY_STORE > Deleted allergy type ID: ${id}`)
         } catch (e: unknown) {
             handleApiError(e, 'deleteAllergyType')
+            throw e
+        }
+    }
+
+    // ========================================
+    // Actions - Poster notes (Setting)
+    // ========================================
+
+    const loadPosterNotes = async () => {
+        await refreshPosterNotes()
+        if (posterNotesError.value) {
+            handleApiError(posterNotesError.value, 'loadPosterNotes')
+            throw posterNotesError.value
+        }
+        console.info('🥜 > ALLERGY_STORE > Loaded poster notes')
+    }
+
+    // The endpoint returns the stored row (ADR-009), so the response IS the new value.
+    // Reading it back in a second round trip would put the box one failed request away from
+    // the registry default - old notes on screen under a "saved" toast.
+    const savePosterNotes = async (value: string): Promise<void> => {
+        try {
+            const saved = await $fetch<SettingDetail>(POSTER_NOTES_ENDPOINT, {
+                method: 'POST',
+                body: {value},
+                headers: {'Content-Type': 'application/json'}
+            })
+            posterNotesSetting.value = SettingDetailSchema.parse(saved)
+            console.info('🥜 > ALLERGY_STORE > Saved poster notes')
+        } catch (e: unknown) {
+            handleApiError(e, 'savePosterNotes')
             throw e
         }
     }
@@ -290,6 +360,8 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         selectedAllergyType,
         // State - Allergies
         allergies,
+        // State - Poster notes
+        posterNotes,
         // Computed - AllergyTypes
         isAllergyTypesLoading,
         isAllergyTypesErrored,
@@ -306,6 +378,11 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         isAllergiesInitialized,
         isNoAllergies,
         allergiesError,
+        // Computed - Poster notes
+        isPosterNotesLoading,
+        isPosterNotesErrored,
+        isPosterNotesInitialized,
+        posterNotesError,
         // Computed - Store Ready
         isAllergyStoreReady,
         // Actions - AllergyTypes
@@ -314,6 +391,9 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         createAllergyType,
         updateAllergyType,
         deleteAllergyType,
+        // Actions - Poster notes
+        loadPosterNotes,
+        savePosterNotes,
         // Actions - Allergies
         loadAllergiesForHousehold,
         loadAllergiesForInhabitant,

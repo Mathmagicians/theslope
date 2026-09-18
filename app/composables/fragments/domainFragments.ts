@@ -5,8 +5,10 @@ import {
     TicketTypeSchema,
     DinnerModeSchema,
     DinnerStateSchema,
-    OrderStateSchema
+    OrderStateSchema,
+    NotificationChannelSchema
 } from '~~/prisma/generated/zod'
+import {AppearanceSchema, DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} from '~/composables/useUserPreferenceValidation'
 
 /**
  * Domain Fragments - Minimal entity schemas for cross-domain reuse
@@ -31,14 +33,19 @@ import {
 // ============================================================================
 
 /**
- * User Fragment - Authentication and system access
+ * User Fragment - Authentication, system access and own settings
  * Used by: useCoreValidation, useBookingValidation (bookedByUser)
+ *
+ * notificationChannels and appearance carry the column defaults, so application code reads
+ * `user.appearance.palette` without a fallback (ADR-010: the repository holds the JSON strings).
  */
 export const UserFragmentSchema = z.object({
     id: z.number().int().positive(),
     email: z.string().email(),
     phone: z.string().nullable().optional(),
-    systemRoles: z.array(SystemRoleSchema).default([])
+    systemRoles: z.array(SystemRoleSchema).default([]),
+    notificationChannels: z.array(NotificationChannelSchema).default(DEFAULT_NOTIFICATION_CHANNELS),
+    appearance: AppearanceSchema.default(DEFAULT_APPEARANCE)
 })
 
 /**

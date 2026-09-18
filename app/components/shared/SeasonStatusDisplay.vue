@@ -63,7 +63,7 @@ const emit = defineEmits<{
 
 const planStore = usePlanStore()
 const {getSeasonStatus, canSeasonBeActive} = useSeason()
-const {ICONS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
+const {BUTTONS, COLOR, ICONS, SIZES, TYPOGRAPHY, ALERTS} = useTheSlopeDesignSystem()
 
 // Reactively get season from store - updates when store changes
 const season = computed(() => {
@@ -104,46 +104,35 @@ const alertConfig = computed(() => {
   switch (status.value) {
     case SEASON_STATUS.ACTIVE:
       return {
-        color: 'success' as const,
-        icon: 'i-heroicons-check-circle-solid',
-        variant: 'subtle' as const,
+        kind: 'success' as const,
+        icon: ICONS.checkCircle,
         title: `Aktiv sæson ${emoji}`,
         description: 'Denne sæson er synlig for alle brugere, som kan se og booke fællesspisninger. Kun én sæson kan være aktiv ad gangen.'
       }
     case SEASON_STATUS.FUTURE:
       return {
-        color: 'success' as const,
-        icon: 'i-heroicons-calendar',
-        variant: 'outline' as const,
+        kind: 'info' as const,
+        icon: ICONS.calendar,
         title: `Fremtidig sæson ${emoji}`,
         description: 'Denne sæson er kun synlig for administratorer. Når du aktiverer sæsonen, kan beboere se og booke fællesspisninger.'
       }
     case SEASON_STATUS.CURRENT:
       return {
-        color: 'success' as const,
-        icon: 'i-heroicons-calendar',
-        variant: 'outline' as const,
+        kind: 'warning' as const,
+        icon: ICONS.calendar,
         title: `Inaktiv sæson ${emoji}`,
         description: 'Datoerne for denne sæson siger det er nu! Men den er ikke aktiveret. Aktiver sæsonen for at gøre den synlig for beboere.'
       }
     case SEASON_STATUS.PAST:
     default:
       return {
-        color: 'neutral' as const,
-        icon: 'i-heroicons-archive-box-solid',
-        variant: 'outline' as const,
+        kind: 'neutral' as const,
+        icon: ICONS.archive,
         title: `Arkiveret sæson ${emoji}`,
         description: 'Denne sæson er afsluttet og kun synlig for administratorer. Gamle sæsoner kan ikke genaktiveres.'
       }
   }
 })
-
-// Activate button config (deactivate now uses DangerButton)
-const activateButtonConfig = {
-  color: 'success' as const,
-  leadingIcon: ICONS.playCircle,
-  trailingIcon: ICONS.arrowRight
-}
 
 // Show button only if season is eligible (can be activated or is already active)
 const showButton = computed(() => {
@@ -155,11 +144,10 @@ const showButton = computed(() => {
 <template>
   <UAlert
     v-if="alertConfig"
-    :color="alertConfig.color"
+    v-bind="{...ALERTS[alertConfig.kind], ...ALERTS.withActions}"
     :icon="alertConfig.icon"
     :title="alertConfig.title"
     :description="alertConfig.description"
-    :variant="alertConfig.variant"
   >
     <template v-if="showButton" #actions>
       <UFormField :hint="season?.isActive ? 'Fællesspisnings sæson er i gang' : 'Denne sæson er ikke aktiv'" :ui="{hint: TYPOGRAPHY.bodyTextMuted}">
@@ -176,16 +164,17 @@ const showButton = computed(() => {
         <!-- Activate uses regular button (constructive action) -->
         <UButton
           v-else
+          v-bind="BUTTONS.primaryAction"
           data-testid="activate-season"
-          :color="activateButtonConfig.color"
-          :leading-icon="activateButtonConfig.leadingIcon"
-          :trailing-icon="activateButtonConfig.trailingIcon"
+          :color="COLOR.success"
+          :icon="ICONS.playCircle"
+          :trailing-icon="ICONS.arrowRight"
           :size="SIZES.small"
           :loading="isActivatingSeason"
           :disabled="isActivatingSeason"
           @click="emit('activate')"
         >
-          {{ isActivatingSeason ? 'Arbejder...' : 'Aktiver Sæson' }}
+          Aktiver Sæson
         </UButton>
       </UFormField>
     </template>

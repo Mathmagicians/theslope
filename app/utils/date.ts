@@ -7,6 +7,7 @@ import {
 import {da} from "date-fns/locale"
 import type {DateRange, WeekDay, WeekDayMap} from "~/types/dateTypes"
 import {WEEKDAYS} from "~/types/dateTypes"
+import {capitalize} from "~/utils/utils"
 import {CalendarDate, type DateValue, toZoned, toCalendarDateTime, Time} from '@internationalized/date'
 
 export const DATE_SETTINGS =
@@ -92,9 +93,13 @@ export function compareDateRanges(a: DateRange, b: DateRange): number {
     return a.start.getTime() - b.start.getTime()
 }
 
+export function sortDateRanges(ranges: DateRange[]): DateRange[] {
+    return ranges.toSorted(compareDateRanges)
+}
+
 export function areRangesOverlapping(ranges: DateRange[]): boolean {
     if (ranges.length < 2) return false
-    return ranges.toSorted(compareDateRanges)
+    return sortDateRanges(ranges)
         .reduce((acc, current, index, sorted) => {
             if (index === 0) return acc
             const prev = sorted[index - 1]
@@ -141,7 +146,8 @@ export function toCalendarDateRange(range: DateRange | undefined): { start?: Cal
 
 // Check if a CalendarDate is in a list of Date objects
 export function isCalendarDateInDateList(dateValue: DateValue, dateList: Date[]): boolean {
-    const dateToCheck = dateValue.toDate(DATE_SETTINGS.timezone)
+    // The cell names a calendar day; compare it as that day at the runtime's local midnight, the clock the list was built in
+    const dateToCheck = new Date(dateValue.year, dateValue.month - 1, dateValue.day)
     return dateList.some(date => isSameDay(date, dateToCheck))
 }
 
@@ -167,8 +173,7 @@ export function translateToDanish(day: string): string {
  */
 export function formatWeekdayCompact(day: WeekDay, ultraCompact: boolean = false): string {
     const length = ultraCompact ? 1 : 3
-    const abbreviated = day.substring(0, length)
-    return abbreviated.charAt(0).toUpperCase() + abbreviated.slice(1)
+    return capitalize(day.substring(0, length))
 }
 
 /**

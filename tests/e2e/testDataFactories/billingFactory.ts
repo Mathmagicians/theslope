@@ -6,7 +6,7 @@ import testHelpers from '../testHelpers'
 import {
     useBillingValidation,
     type BillingImportResponse,
-    type BillingPeriodSummaryDetail,
+    type BillingPeriodSideEffects, type BillingPeriodSummaryDetail,
     type BillingPeriodSummaryDisplay,
     type HouseholdBillingResponse,
     type InvoiceDisplay,
@@ -66,6 +66,7 @@ export class BillingFactory {
         paymentDate: new Date(2025, 11, 1), // Dec 1
         createdAt: new Date(2025, 10, 18),
         shareToken: salt('token', testSalt),
+        version: 1,
         invoices: [{
             id: 1,
             cutoffDate: new Date('2025-11-17'),
@@ -96,6 +97,16 @@ export class BillingFactory {
      * Default billing period summary data for unit tests
      * Uses deserializer to compute dinnerCount, ticketCountsByType, invoiceSum, transactionSum
      */
+    /** State of one period after a monthly run (periods[] of MonthlyBillingResponse): archived and mailed at v1 unless overridden */
+    static readonly defaultPeriodSideEffects = (overrides: Partial<BillingPeriodSideEffects> = {}): BillingPeriodSideEffects => ({
+        billingPeriodSummaryId: 1,
+        billingPeriod: '18/10/2025-17/11/2025',
+        version: 1,
+        csvUploaded: true,
+        emailSent: true,
+        ...overrides
+    })
+
     static readonly defaultSummaryData = (testSalt: string = 'default'): BillingPeriodSummaryDetail => {
         const raw = BillingFactory.defaultRawBillingPeriod(testSalt)
         return deserializeBillingPeriodDetail(raw, BillingFactory.mockTicketPrices)!

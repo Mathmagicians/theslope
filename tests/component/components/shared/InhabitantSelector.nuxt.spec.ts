@@ -77,12 +77,14 @@ describe('InhabitantSelector', () => {
 
     // ========== EMPTY STATE ==========
 
+    // The table's own empty text renders through UTable's #empty slot
     it.each([
-        ['no inhabitants', [], undefined],
-        ['search yields no results', inhabitants, 'zzz-no-match']
-    ])('empty state: %s shows no inhabitant names', async (_, data, searchQuery) => {
+        ['no inhabitants', [], undefined, 'Ingen beboere tilgængelige'],
+        ['search yields no results', inhabitants, 'zzz-no-match', 'Ingen beboere fundet']
+    ])('empty state: %s shows the empty text instead of inhabitant names', async (_, data, searchQuery, emptyText) => {
         const wrapper = await mount({inhabitants: data})
         if (searchQuery) await typeSearch(wrapper, searchQuery)
+        expect(wrapper.text()).toContain(emptyText)
         inhabitants.forEach(i =>
             expect(wrapper.text()).not.toContain(`${i.name} ${i.lastName}`)
         )

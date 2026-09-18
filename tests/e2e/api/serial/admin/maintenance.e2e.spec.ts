@@ -255,6 +255,22 @@ test.describe('Daily Maintenance API', () => {
         expect(billingResult.billingPeriod).toBeDefined()
         expect(billingResult.transactionCount).toBeGreaterThanOrEqual(2)
 
+        // End state of the closed period under nuxt dev: CSV in miniflare R2 (ARCHIVE), accountant mail in the miniflare queue sink (SENDER)
+        const periodState = billingResponse!.periods.find(p => p.billingPeriodSummaryId === billingResult.billingPeriodSummaryId)
+        expect(periodState, 'every closed period is reported').toBeDefined()
+        expect(periodState!.csvUploaded, 'period CSV archived').toBe(true)
+        expect(periodState!.emailSent, 'accountant mail queued').toBe(true)
+        expect(periodState!.archive?.key).toMatch(/^billing\/\d{4}-\d{2}\/pbs-opgoerelse-\d{4}-\d{2}-v\d+\.csv$/)
+        // v1 closes the period, a later version (catch-up into an existing period) is mailed as an update
+        expect(periodState!.notification?.dedupeKey).toMatch(new RegExp(`^BILLING_PERIOD_${periodState!.version > 1 ? 'UPDATED' : 'CLOSED'}:EMAIL:`))
+
+        // ADR-015: a re-run bills nothing new and redoes no side effect — the period keeps its end state
+        const rerun = await BillingFactory.generateBilling(context)
+        const rerunState = rerun!.periods.find(p => p.billingPeriodSummaryId === billingResult.billingPeriodSummaryId)
+        expect(rerunState).toMatchObject({csvUploaded: true, emailSent: true, version: periodState!.version})
+        expect(rerunState!.archive, 'nothing re-archived').toBeUndefined()
+        expect(rerunState!.notification, 'nothing re-sent').toBeUndefined()
+
         // GET billing period by ID from generate response
         const createdPeriodId = billingResponse!.results[0]!.billingPeriodSummaryId
         const periodDetail = await BillingFactory.getBillingPeriodById(context, createdPeriodId)

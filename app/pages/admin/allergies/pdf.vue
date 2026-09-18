@@ -4,7 +4,7 @@ import {formatDate} from '~/utils/date'
 // Age categories - the active season's ticket prices carry the age limits
 const {groupInhabitantsByTicketCategory, ticketTypeConfig} = useTicket()
 const {formatTicketCounts} = useBilling()
-const {TYPOGRAPHY, COLOR} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, BUTTONS, COLOR, ICONS, TEXT, BG, BORDER} = useTheSlopeDesignSystem()
 
 // No layout for printing
 definePageMeta({
@@ -13,7 +13,7 @@ definePageMeta({
 
 // STORES
 const store = useAllergiesStore()
-const {allergyTypes, isAllergyTypesLoading} = storeToRefs(store)
+const {allergyTypes, isAllergyTypesLoading, posterNotes} = storeToRefs(store)
 const planStore = usePlanStore()
 const {activeSeason} = storeToRefs(planStore)
 
@@ -27,12 +27,6 @@ const currentDate = computed(() => formatDate(new Date(), 'd. MMMM yyyy'))
 // QR Code URL (uses current request URL for correct environment - local/dev/prod)
 const requestUrl = useRequestURL()
 const qrCodeUrl = computed(() => `${requestUrl.origin}/admin/allergies/pdf`)
-
-// Generate QR code data URL using a simple service
-const qrCodeDataUrl = computed(() => {
-  if (!qrCodeUrl.value) return ''
-  return `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrCodeUrl.value)}`
-})
 
 // Inhabitants per allergy, classified into age categories (ADULT, CHILD, BABY order)
 const allergyData = computed(() => {
@@ -68,16 +62,17 @@ const printPage = () => {
       <!-- No-print controls -->
       <div class="no-print mb-6 flex justify-between items-center">
         <UButton
-            icon="i-heroicons-arrow-left"
+            v-bind="BUTTONS.secondaryAction"
+            :color="COLOR.secondary"
+            :icon="ICONS.arrowLeft"
             to="/admin/allergies"
-            variant="outline"
-            color="secondary"
         >
           Tilbage
         </UButton>
         <UButton
-            icon="i-heroicons-printer"
-            color="primary"
+            v-bind="BUTTONS.primaryAction"
+            :color="COLOR.primary"
+            :icon="ICONS.printer"
             @click="printPage"
         >
           Print
@@ -96,19 +91,19 @@ const printPage = () => {
         </div>
 
         <!-- Main content with QR code -->
-        <div class="flex gap-6 mb-6">
+        <div class="poster-row flex flex-col md:flex-row gap-6 mb-6">
           <!-- Allergy table -->
           <div class="flex-1">
             <table data-testid="allergy-table" class="w-full border-collapse">
               <thead>
               <tr>
-                <th class="w-1/3 border-2 border-gray-700 p-3 text-left bg-gray-100 font-bold">ALLERGEN / INTOLERANCE</th>
-                <th class="w-2/3 border-2 border-gray-700 p-3 text-left bg-gray-100 font-bold">PERSON</th>
+                <th :class="`w-1/3 border-2 p-3 text-left font-bold ${BORDER.gray[700]} ${BG.gray[100]}`">ALLERGEN / INTOLERANCE</th>
+                <th :class="`w-2/3 border-2 p-3 text-left font-bold ${BORDER.gray[700]} ${BG.gray[100]}`">PERSON</th>
               </tr>
               </thead>
               <tbody>
               <tr v-for="allergy in allergyData" :key="allergy.id">
-                <td class="border-2 border-gray-700 p-3 align-top">
+                <td :class="`border-2 p-3 align-top ${BORDER.gray[700]}`">
                   <div :class="`${TYPOGRAPHY.cardTitle} mb-2`">
                     {{ allergy.icon }} {{ allergy.name.toUpperCase() }}
                   </div>
@@ -116,7 +111,7 @@ const printPage = () => {
                     {{ allergy.description }}
                   </div>
                 </td>
-                <td class="border-2 border-gray-700 p-3 align-top">
+                <td :class="`border-2 p-3 align-top ${BORDER.gray[700]}`">
                   <div class="space-y-2">
                     <!-- List inhabitants with compact category marker (V/B/b) -->
                     <div>
@@ -124,7 +119,7 @@ const printPage = () => {
                         {{ person.name }} ({{ ticketTypeConfig[person.ticketType].compactLabel }})
                         <span
                             v-if="person.inhabitantComment"
-                            :class="`${TYPOGRAPHY.finePrint} text-gray-600`">
+                            :class="`${TYPOGRAPHY.finePrint} ${TEXT.gray[600]}`">
                           - {{ person.inhabitantComment }}
                         </span>
                         <span v-if="idx < allergy.members.length - 1">, </span>
@@ -142,31 +137,23 @@ const printPage = () => {
             </table>
           </div>
 
-          <!-- QR Code (no-print on screen) -->
-          <div v-if="qrCodeDataUrl" class="no-print">
-            <img :src="qrCodeDataUrl" alt="QR Code" class="w-40 h-40 border-2 border-gray-300">
-            <p :class="`${TYPOGRAPHY.caption} text-gray-600 mt-2 text-center`">Scan for online version</p>
+          <!-- QR code to the online list - drawn inline, so it prints with the poster -->
+          <div class="shrink-0">
+            <QrCode
+                :value="qrCodeUrl"
+                label="Scan for online version"
+                :class="`border-2 ${BORDER.gray[300]}`"
+            />
+            <p :class="`${TYPOGRAPHY.caption} ${TEXT.gray[600]} mt-2 text-center`">Scan for online version</p>
           </div>
         </div>
 
-        <!-- Footer notes -->
-        <UAlert :color="COLOR.warning" variant="outline" class="mt-4">
-          <template #description>
-            <p :class="`${TYPOGRAPHY.sectionSubheading} mb-2`">Vigtige bemærkninger:</p>
-            <ul :class="`list-disc list-inside space-y-1 ${TYPOGRAPHY.bodyTextSmall}`">
-              <li>Glutenfri boller findes i fryseren og tages op af madholdet</li>
-              <li>Ved mælkeprodukter i brød, vil mælke-allergikere også have brug for glutenfrit brød (som altid er
-                mælkefrit)
-              </li>
-              <li>Husk at give besked om allergener ved menu-præsentationen</li>
-            </ul>
-          </template>
-        </UAlert>
+        <!-- Footer notes - same component and same Setting row as the catalog header; edited there -->
+        <AllergyNotes :notes="posterNotes" class="mt-4"/>
 
         <!-- Allergy manager contact -->
         <AllergyManagersList
-            :color="COLOR.neutral"
-            variant="outline"
+            kind="legend"
             message="Tal med allergiansvarlig for hjælp til at spotte allergener i opskrifterne og udtænke allergihensyn!"
             class="mt-6"
         />
@@ -185,6 +172,11 @@ const printPage = () => {
   :deep(body) {
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
+  }
+
+  /* A4 content is ~680px, below the md breakpoint, so the printed row keeps the QR beside the table */
+  .poster-row {
+    flex-direction: row;
   }
 
   .no-print {

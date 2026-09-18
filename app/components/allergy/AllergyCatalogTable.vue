@@ -37,7 +37,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {COLOR, COMPONENTS, ICONS} = useTheSlopeDesignSystem()
+const {COLOR, COMPONENTS, ICONS, RING} = useTheSlopeDesignSystem()
 
 // Business logic
 const {hasNewAllergyInhabitants} = useAllergy()
@@ -81,7 +81,7 @@ const columns = computed(() => [
 // Tighter horizontal cell padding - the catalog lives in the narrow master column
 const tableUi = {
   ...COMPONENTS.table.ui,
-  td: `${COMPONENTS.table.ui.td} px-1`,
+  td: `${COMPONENTS.table.ui.td} px-1 md:px-1`,
   th: 'px-1'
 }
 
@@ -119,7 +119,7 @@ const clickableCellClass = computed(() => props.readonly ? '' : COMPONENTS.table
           ]"
           @click="handleRowClick(row.original.id!)"
       >
-        <div class="flex items-center justify-center w-8 h-8 rounded-full ring-1 ring-red-700 shrink-0">
+        <div :class="['flex items-center justify-center w-8 h-8 rounded-full ring-1 shrink-0', RING.red[700]]">
           <UIcon
               v-if="row.original.icon?.startsWith('i-')"
               :name="row.original.icon"
@@ -178,8 +178,8 @@ const clickableCellClass = computed(() => props.readonly ? '' : COMPONENTS.table
     </template>
 
     <!-- Empty state owned by the parent -->
-    <template v-if="$slots['empty-state']" #empty-state>
-      <slot name="empty-state"/>
+    <template v-if="$slots.empty" #empty>
+      <slot name="empty"/>
     </template>
   </UTable>
 </template>

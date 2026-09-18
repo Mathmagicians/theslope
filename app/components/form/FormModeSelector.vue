@@ -1,4 +1,4 @@
-w<script setup lang="ts">
+<script setup lang="ts">
 
 import type {FormMode} from "~/types/form"
 import {FORM_MODES} from "~/types/form"
@@ -12,6 +12,8 @@ interface FormModeButton {
 interface Props {
   disabledModes?: FormMode[]
 }
+
+const {COLOR, COMPONENTS} = useTheSlopeDesignSystem()
 
 const model = defineModel<FormMode>({default: FORM_MODES.VIEW})
 
@@ -66,8 +68,8 @@ const getButtonVariant = (mode: FormMode) => {
         :disabled="isDisabled(item.mode)"
         :active="isSelected(item.mode)"
         :variant="getButtonVariant(item.mode)"
-        color="info"
-        active-class="ring-2 border-2 ring-orange-200 shadow-md"
+        :color="COLOR.info"
+        :active-class="COMPONENTS.segmentedActive"
         @click="handleSelect(item.mode)"
     >
       <template #leading>

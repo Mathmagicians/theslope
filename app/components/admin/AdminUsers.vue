@@ -1,3 +1,22 @@
+<!--
+UX MOCKUP: /admin/users table on a phone
+
+MOBILE (<md)                        DESKTOP (md+)
+┌─────────────────────────────────┐ › · # · Navn · Mail · Telefon ·
+│ 🔍 Søg efter navn eller email…  │ Systemroller · Sidst opdateret
+│ [⇅ Navn] [«] [‹] [1] [›] [»]    │
+├───┬───────────┬─────────────────┤
+│   │ Navn      │ Mail            │
+│ › │ …         │ …               │
+│ ⌄ │ …         │ …               │
+│ ┌─────────────────────────────┐ │
+│ │ UserProfileCard             │ │
+│ └─────────────────────────────┘ │
+└─────────────────────────────────┘
+On a phone #, Telefon, Systemroller and Sidst opdateret are hidden (columnVisibility);
+phone and roles show in the expanded UserProfileCard.
+-->
+
 <script setup lang="ts">
 import {h, resolveComponent} from 'vue'
 import {getPaginationRowModel} from '@tanstack/vue-table'
@@ -17,7 +36,7 @@ const {users, isUsersLoading, isUsersErrored, usersError} = storeToRefs(store)
 
 // Use existing role badge definitions
 const {roleLabels} = useUserRolesUi()
-const {COMPONENTS, ICONS} = useTheSlopeDesignSystem()
+const {COMPONENTS, ICONS, ALERTS, COLOR, TEXT, BG, columnVisibility} = useTheSlopeDesignSystem()
 
 // Search/filter state
 const searchQuery = ref('')
@@ -110,6 +129,9 @@ interface TableRow {
   original: typeof formattedUsers.value[number]
 }
 
+// Shown in the expanded UserProfileCard on a phone (mockup above)
+const HIDDEN_ON_PHONE = ['id', 'phone', 'systemRoles', 'updatedAt'] as const
+
 const userColumns = [
   {
     id: 'expand',
@@ -149,10 +171,10 @@ const pagination = ref({
     <template #header>
       <div class="px-6">
         <UAlert
+            v-bind="ALERTS.info"
+            icon="i-hugeicons-authorized"
             title=" Brugere"
             description="Her kan du se de brugere, som vi har importeret fra Heynabo. Du kan også se, hvilke systemroller brugerne har. Brug System-fanen til at køre Heynabo import."
-            icon="i-hugeicons-authorized"
-            variant="outline"
         />
       </div>
     </template>
@@ -182,11 +204,12 @@ const pagination = ref({
         :data="formattedUsers"
         :columns="userColumns"
         :loading="isUsersLoading"
-        loading-color="secondary" loading-animation="carousel"
+        :loading-color="COLOR.secondary" loading-animation="carousel"
         empty="Ingen brugere at vise ..."
         caption="Brugere - importeret fra Heynabo"
         class="w-full"
         :ui="COMPONENTS.table.ui"
+        :column-visibility="columnVisibility(HIDDEN_ON_PHONE)"
         :pagination-options="{
           getPaginationRowModel: getPaginationRowModel()
         }"
@@ -196,7 +219,7 @@ const pagination = ref({
           <UBadge
             v-for="role in row.original.systemRoles"
             :key="role"
-            :color="roleLabels[role]?.color || 'neutral'"
+            :color="roleLabels[role]?.color || COLOR.neutral"
             variant="soft"
             size="md"
           >
@@ -214,14 +237,14 @@ const pagination = ref({
 
       <!-- Expanded row content -->
       <template #expanded>
-        <div class="p-4 bg-neutral-50 dark:bg-neutral-900">
+        <div :class="['p-4', BG.panel]">
           <UserProfileCard
             v-if="expandedUser"
             :user="expandedUser"
             :show-actions="false"
             :show-role-manager="props.canEdit"
           />
-          <p v-else class="text-gray-500">Ingen brugerdata tilgængelig</p>
+          <p v-else :class="TEXT.gray[500]">Ingen brugerdata tilgængelig</p>
         </div>
       </template>
     </UTable>

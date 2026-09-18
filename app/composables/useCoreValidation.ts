@@ -2,6 +2,7 @@ import {z} from 'zod'
 import {isBefore} from 'date-fns'
 import {SystemRoleSchema, DinnerModeSchema} from '~~/prisma/generated/zod'
 import {UserFragmentSchema, InhabitantFragmentSchema, HouseholdFragmentSchema} from '~/composables/fragments/domainFragments'
+import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} from '~/composables/useUserPreferenceValidation'
 import {useWeekDayMapValidation} from './useWeekDayMapValidation'
 
 /**
@@ -144,7 +145,9 @@ export const useCoreValidation = () => {
         createdAt: true,
         updatedAt: true
     }).extend({
-        systemRoles: z.string().default('[]') // JSON stringified array
+        systemRoles: z.string().default('[]'), // JSON stringified array
+        notificationChannels: z.string().default(JSON.stringify(DEFAULT_NOTIFICATION_CHANNELS)), // JSON stringified array
+        appearance: z.string().default(JSON.stringify(DEFAULT_APPEARANCE)) // JSON stringified object
     })
 
     // Serialized schema for database OUTPUT (read operations)
@@ -395,7 +398,9 @@ export const useCoreValidation = () => {
             email: user.email,
             phone: user.phone ?? null,
             passwordHash: user.passwordHash,
-            systemRoles: JSON.stringify(user.systemRoles)
+            systemRoles: JSON.stringify(user.systemRoles),
+            notificationChannels: JSON.stringify(user.notificationChannels ?? DEFAULT_NOTIFICATION_CHANNELS),
+            appearance: JSON.stringify(user.appearance ?? DEFAULT_APPEARANCE)
         })
     }
 
@@ -406,7 +411,9 @@ export const useCoreValidation = () => {
     const deserializeUser = (serialized: SerializedUser): User => {
         return {
             ...serialized,
-            systemRoles: JSON.parse(serialized.systemRoles)
+            systemRoles: JSON.parse(serialized.systemRoles),
+            notificationChannels: JSON.parse(serialized.notificationChannels),
+            appearance: JSON.parse(serialized.appearance)
         }
     }
 
@@ -453,6 +460,8 @@ export const useCoreValidation = () => {
         return UserDetailSchema.parse({
             ...serializedUser,
             systemRoles: JSON.parse(serializedUser.systemRoles as string),
+            notificationChannels: JSON.parse(serializedUser.notificationChannels as string),
+            appearance: JSON.parse(serializedUser.appearance as string),
             Inhabitant: inhabitant ? {
                 ...deserializeInhabitantDisplay(inhabitant),
                 household: household ? {

@@ -1,7 +1,37 @@
+<!--
+  Landing page - the brand rainbow, walked in hue order.
+
+  ┌ Hero ───────────────────────────────────────────────┐
+  │  TheSlope                              mocha + 50   │  BACKGROUNDS.landing.titleBar
+  └─────────────────────────────────────────────────────┘
+  ┌ Ticker ─────────────────────────────────────────────┐
+  │  [natur] [fællesskab] [bæredygtighed] …  mocha + 50 │  BACKGROUNDS.landing.ticker
+  │   ↑ PANTONE_CHIPS, the same family order as below   │
+  └─────────────────────────────────────────────────────┘
+  ┌ band 0 ─────────────────────────────────────────────┐
+  │  46 HUSSTANDE                        pink + black   │  getRainbowBand(0)
+  ├ band 1 ─────────────────────────────────────────────┤
+  │  FORPLIGTENDE FÆLLESSKAB           orange + black   │  getRainbowBand(1)
+  ├ band 2 ─────────────────────────────────────────────┤
+  │  ØKOLOGISK FÆLLESSPISNING …         ocean + black   │  getRainbowBand(2)
+  ├ band 3 ─────────────────────────────────────────────┤
+  │  DANMARKS SMUKKESTE SOLNEDGANGE …  bonbon + white   │  getRainbowBand(3)
+  └─────────────────────────────────────────────────────┘
+
+  Each band is full-height on phones and a quarter of it from md up. The page owns the
+  composition; the fill and the ink of a stop come from the design system (ADR-018).
+-->
 <script setup lang="ts">
 const words = ['natur', 'fællesskab', 'bæredygtighed', 'nationalpark', 'fællesspisning', 'fredagsbar', 'hjemmekoncerter', 'pool', 'byttehylde', 'lånebiler', 'hugelbede', 'børneleg', 'bålplads','solnedgange','bier']
 
-const { BACKGROUNDS, TYPOGRAPHY } = useTheSlopeDesignSystem()
+const sections = [
+    '46 husstande',
+    'Forpligtende fællesskab',
+    'Økologisk fællesspisning fire gange om ugen skaber fællesskab',
+    'Danmarks smukkeste solnedgange i smørhullet Lejre'
+]
+
+const { BACKGROUNDS, TYPOGRAPHY, getRainbowBand } = useTheSlopeDesignSystem()
 </script>
 
 <template>
@@ -11,17 +41,13 @@ const { BACKGROUNDS, TYPOGRAPHY } = useTheSlopeDesignSystem()
       <Ticker :words="words" class="my-2"/>
     </div>
 
-    <div :class="`min-h-screen md:min-h-1/4 ${BACKGROUNDS.landing.section1}`">
-      <h2 :class="TYPOGRAPHY.sectionTitle">46 husstande</h2>
-    </div>
-    <div :class="`min-h-screen md:min-h-1/4 ${BACKGROUNDS.landing.section2}`">
-      <h2 :class="TYPOGRAPHY.sectionTitle">Forpligtende fællesskab</h2>
-    </div>
-    <div :class="`min-h-screen md:min-h-1/4 ${BACKGROUNDS.landing.section3}`">
-      <h2 :class="TYPOGRAPHY.sectionTitle">Økologisk fællesspisning fire gange om ugen skaber fællesskab</h2>
-    </div>
-    <div :class="`min-h-screen md:min-h-1/4 ${BACKGROUNDS.landing.section4}`">
-      <h2 :class="TYPOGRAPHY.sectionTitle">Danmarks smukkeste solnedgange i smørhullet Lejre</h2>
+    <div
+      v-for="(section, index) in sections"
+      :key="section"
+      :class="`min-h-screen md:min-h-1/4 ${getRainbowBand(index)}`"
+      :data-testid="`landing-band-${index}`"
+    >
+      <h2 :class="TYPOGRAPHY.sectionTitle">{{ section }}</h2>
     </div>
   </div>
 </template>

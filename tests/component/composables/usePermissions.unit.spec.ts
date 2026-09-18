@@ -16,6 +16,7 @@ import {
 } from '~/composables/usePermissions'
 import { useCoreValidation } from '~/composables/useCoreValidation'
 import type { UserDetail } from '~/composables/useCoreValidation'
+import { DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS } from '~/composables/useUserPreferenceValidation'
 
 const { SystemRoleSchema } = useCoreValidation()
 const SystemRole = SystemRoleSchema.enum
@@ -29,6 +30,8 @@ const createUser = (overrides: Partial<UserDetail> = {}): UserDetail => ({
     email: 'test@example.com',
     phone: null,
     systemRoles: [],
+    notificationChannels: [...DEFAULT_NOTIFICATION_CHANNELS],
+    appearance: {...DEFAULT_APPEARANCE},
     createdAt: new Date(),
     updatedAt: new Date(),
     Inhabitant: null,
@@ -173,6 +176,10 @@ describe('usePermissions - Route Permission Table', () => {
             { pathname: '/api/order/', method: 'PUT', expectsCheck: true, description: 'order PUT' },
             { pathname: '/api/household/1', method: 'GET', expectsCheck: true, description: 'household GET' },
             { pathname: '/api/team/my', method: 'GET', expectsCheck: true, description: 'team GET' },
+            { pathname: '/api/admin/setting/allergy-poster-notes', method: 'POST', expectsCheck: true, description: 'setting POST' },
+            { pathname: '/api/admin/setting/allergy-poster-notes', method: 'GET', expectsCheck: true, description: 'setting GET' },
+            { pathname: '/api/user/preferences', method: 'POST', expectsCheck: true, description: 'own preferences POST' },
+            { pathname: '/api/user/notifications/test', method: 'POST', expectsCheck: true, description: 'own test notification POST' },
 
             // Fallback
             { pathname: '/api/unknown', method: 'GET', expectsCheck: true, description: 'unknown api route' },
@@ -230,6 +237,22 @@ describe('usePermissions - Route Permission Table', () => {
             const check = getRoutePermission('/api/order/', 'PUT')
             expect(check!(regularUser)).toBe(true)
         })
+
+        it('own user routes should allow any authenticated user', () => {
+            const check = getRoutePermission('/api/user/preferences', 'POST')
+            expect(check!(regularUser)).toBe(true)
+        })
+
+        // Settings carry a per-key writer in the registry, so the route table is a coarse
+        // gate: it lets any authenticated caller reach the endpoint, which then runs the
+        // key's own predicate. Key names never enter the route table.
+        it('setting POST reaches the endpoint for any authenticated user', () => {
+            const check = getRoutePermission('/api/admin/setting/allergy-poster-notes', 'POST')
+
+            expect(check!(adminUser)).toBe(true)
+            expect(check!(allergyManagerUser)).toBe(true)
+            expect(check!(regularUser)).toBe(true)
+        })
     })
 
     describe('ROUTE_PERMISSIONS order matters', () => {
@@ -242,6 +265,26 @@ describe('usePermissions - Route Permission Table', () => {
             )
 
             expect(allergyTypeRuleIndex).toBeLessThan(generalAdminRuleIndex)
+        })
+
+        it('should have the setting rule before the general admin rule', () => {
+            const settingRuleIndex = ROUTE_PERMISSIONS.findIndex(
+                r => r.prefix === '/api/admin/setting/' && r.methods?.includes('POST')
+            )
+            const generalAdminRuleIndex = ROUTE_PERMISSIONS.findIndex(
+                r => r.prefix === '/api/admin/' && r.methods?.includes('POST')
+            )
+
+            expect(settingRuleIndex).toBeGreaterThanOrEqual(0)
+            expect(settingRuleIndex).toBeLessThan(generalAdminRuleIndex)
+        })
+
+        it('should have the own-user rule before the generic api fallback', () => {
+            const userRuleIndex = ROUTE_PERMISSIONS.findIndex(r => r.prefix === '/api/user/')
+            const fallbackIndex = ROUTE_PERMISSIONS.findIndex(r => r.prefix === '/api/')
+
+            expect(userRuleIndex).toBeGreaterThanOrEqual(0)
+            expect(userRuleIndex).toBeLessThan(fallbackIndex)
         })
 
         it('should have more specific rules before less specific', () => {

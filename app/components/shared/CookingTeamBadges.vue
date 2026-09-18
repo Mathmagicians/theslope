@@ -12,11 +12,11 @@
  * - AdminTeams VIEW mode table
  * - Any list where team summary is needed
  *
- * Design System: Provides consistent team display across the app
+ * Design System: the badges wear the team's rainbow stop - fill and ink as classes, so the
+ * badge needs no colour slot (ADR-018)
  */
 
-const { SIZES } = useTheSlopeDesignSystem()
-const { getTeamColor } = useCookingTeam()
+const { SIZES, getRainbowBand } = useTheSlopeDesignSystem()
 
 interface Props {
   teamNumber: number        // Logical number 1..N in season (for color)
@@ -34,30 +34,27 @@ const props = withDefaults(defineProps<Props>(), {
   cookingDaysCount: 0
 })
 
-const teamColor = computed(() => getTeamColor(props.teamNumber - 1))
+const teamBand = computed(() => getRainbowBand(props.teamNumber - 1))
 const badgeSize = computed(() => props.compact ? SIZES.small : SIZES.standard)
 </script>
 
 <template>
   <div class="flex items-center gap-2 flex-wrap">
     <UBadge
-      :color="teamColor"
-      variant="soft"
+      :class="teamBand"
       :size="badgeSize"
     >
       {{ teamName }}
     </UBadge>
     <template v-if="showCounts">
       <UBadge
-        :color="teamColor"
-        variant="soft"
+        :class="teamBand"
         :size="badgeSize"
       >
         👥 {{ memberCount }}
       </UBadge>
       <UBadge
-        :color="teamColor"
-        variant="soft"
+        :class="teamBand"
         :size="badgeSize"
       >
         📅 {{ cookingDaysCount }}

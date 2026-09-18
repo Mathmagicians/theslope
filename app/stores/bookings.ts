@@ -671,8 +671,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         if (hasMonthlyBillingError.value) {
             handleApiError(monthlyBillingError.value, 'Månedlig fakturering fejlede')
         } else if (hasMonthlyBillingResult.value) {
-            const results = monthlyBillingResult.value!.results
-            const stats = formatMonthlyBillingStats(results)
+            const stats = formatMonthlyBillingStats(monthlyBillingResult.value!)
             const description = stats.map(s => `${s.label}: ${s.value}`).join(', ')
             console.info(CTX, `Monthly billing completed: ${description}`)
             // Billing moves transactions out of the unbilled current period into invoiced periods.

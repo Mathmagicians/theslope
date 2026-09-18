@@ -1,4 +1,3 @@
-import type {D1Database} from "@cloudflare/workers-types"
 import {fetchClosedOrdersWithoutTransaction, createTransactionsBatch} from "~~/server/data/financesRepository"
 import type {CreateTransactionsResult} from "~/composables/useBookingValidation"
 import {useBooking} from "~/composables/useBooking"

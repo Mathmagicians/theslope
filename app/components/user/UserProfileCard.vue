@@ -7,8 +7,11 @@
 │ ┌─────────────────────────────────────────────────────────────────────────┐ │
 │ │ #header                                                                 │ │
 │ │                                                                         │ │
-│ │  [👤] Anna Hansen                        [Heynabo →] [👋 Log ud →]     │ │
+│ │  [👤] Anna Hansen                  [⚙ ▾] [Heynabo →] [👋 Log ud →]     │ │
 │ │       [🛡️ Admin] [💚 Allergichef]                                      │ │
+│ │                                      ↑ own settings, current user only  │ │
+│ │                                        aria-label "Indstillinger"       │ │
+│ │  One outline shape: BUTTONS.settings + BUTTONS.secondaryAction          │ │
 │ │                                                                         │ │
 │ ├─────────────────────────────────────────────────────────────────────────┤ │
 │ │ #default                                                                │ │
@@ -27,7 +30,7 @@
 │ │  [👤] Anna Hansen                                                      │ │
 │ │       [🛡️ Admin] [💚 Allergichef]                                      │ │
 │ │                                                                         │ │
-│ │  [Heynabo →] [👋 Log ud →]                                             │ │
+│ │  [⚙ ▾] [Heynabo →] [👋 Log ud →]         (wraps when the row is full)   │ │
 │ │                                                                         │ │
 │ ├─────────────────────────────────────────────────────────────────────────┤ │
 │ │ #default                                                                │ │
@@ -40,7 +43,8 @@
 │ └─────────────────────────────────────────────────────────────────────────┘ │
 │                                                                             │
 │ Used in:                                                                    │
-│ - Login.vue (dashboard, showActions=true)                                   │
+│ - Login.vue (dashboard, showActions=true; owns `preferencesOpen` and        │
+│   renders UserPreferencesCard under this card on `toggle-preferences`)      │
 │ - AdminUsers.vue (expanded row, showActions=false)                          │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -53,14 +57,19 @@ interface Props {
   user: UserDetail | UserDisplay
   showActions?: boolean
   showRoleManager?: boolean
+  /** Whether the settings panel the parent renders under this card is open (ADR-006: no persistence) */
+  preferencesOpen?: boolean
 }
+
+const emit = defineEmits<{'toggle-preferences': []}>()
 
 const props = withDefaults(defineProps<Props>(), {
   showActions: false,
-  showRoleManager: false
+  showRoleManager: false,
+  preferencesOpen: false
 })
 
-const {TYPOGRAPHY, SIZES, ICONS, IMG, COMPONENTS} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, SIZES, ICONS, IMG, BUTTONS, ALERTS, COLOR} = useTheSlopeDesignSystem()
 const {roleLabels} = useUserRolesUi()
 const {getUserUrl} = useHeynabo()
 const authStore = useAuthStore()
@@ -181,35 +190,44 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
           </template>
         </UserListItem>
 
-        <!-- Right: Action buttons -->
-        <UFieldGroup  :size="SIZES.standard" class="gap-2 md:gap-4 md:justify-end">
+        <!-- Right: action buttons - one outline shape; they wrap on a phone, one row from md -->
+        <div class="flex flex-wrap items-center gap-2 md:gap-4 md:flex-nowrap md:shrink-0 md:ml-auto">
+          <!-- Own settings: reveals UserPreferencesCard under this card -->
+          <UButton
+            v-if="shouldShowActions"
+            v-bind="{...BUTTONS.settings, ...BUTTONS.disclosure(preferencesOpen)}"
+            aria-label="Indstillinger"
+            data-testid="pref-toggle"
+            @click="emit('toggle-preferences')"
+          />
+
           <!-- Heynabo profile link -->
           <UButton
             v-if="heynaboProfileUrl"
+            v-bind="BUTTONS.secondaryAction"
+            :color="COLOR.primary"
             :to="heynaboProfileUrl"
             target="_blank"
-            name="heynabo-profile-link"
-            :color="COMPONENTS.cardAction.neutral.color"
-            :variant="COMPONENTS.cardAction.neutral.variant"
             :avatar="{src: IMG.heynabo, alt: 'Heynabo'}"
             :trailing-icon="ICONS.arrowRight"
+            data-testid="heynabo-profile-link"
           >
             Heynabo
           </UButton>
 
           <!-- Logout button -->
           <UButton
-              v-if="shouldShowActions"
-            name="logout-button"
+            v-if="shouldShowActions"
+            v-bind="BUTTONS.secondaryAction"
+            :color="COLOR.error"
             :leading-icon="ICONS.logout"
             :trailing-icon="ICONS.arrowRight"
-            :color="COMPONENTS.cardAction.destructive.color"
-            :variant="COMPONENTS.cardAction.destructive.variant"
+            data-testid="logout-button"
             @click="handleLogout"
           >
             Log ud
           </UButton>
-        </UFieldGroup>
+        </div>
       </div>
     </template>
 
@@ -254,7 +272,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
         <UButton
           v-if="isViewMode && canEditRoles"
           :icon="ICONS.edit"
-          color="neutral"
+          :color="COLOR.neutral"
           variant="ghost"
           size="sm"
           data-testid="edit-roles-btn"
@@ -267,7 +285,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
         <div v-if="isEditMode" class="flex gap-2">
           <UButton
             :icon="ICONS.check"
-            color="primary"
+            :color="COLOR.primary"
             variant="soft"
             size="sm"
             :loading="isSavingRoles"
@@ -278,7 +296,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
           </UButton>
           <UButton
             :icon="ICONS.xMark"
-            color="neutral"
+            :color="COLOR.neutral"
             variant="ghost"
             size="sm"
             :disabled="isSavingRoles"
@@ -332,11 +350,9 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
 
         <!-- Info alert -->
         <UAlert
-          icon="i-heroicons-shield-check"
-          color="info"
-          variant="soft"
+          v-bind="ALERTS.info"
+          :icon="ICONS.authorize"
           title="Om systemroller"
-          :ui="{ description: 'text-sm' }"
         >
           <template #description>
             <ul class="list-disc list-inside space-y-1 mt-1">
