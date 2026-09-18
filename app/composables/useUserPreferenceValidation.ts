@@ -15,7 +15,7 @@ import {NotificationChannelSchema} from '~~/prisma/generated/zod'
  */
 export const PaletteSchema = z.enum(['default', 'high-contrast', 'colorblind'])
 
-/** `tydelig` became the default palette; an appearance stored while it was an option reads as `default` */
+/** Palette keys that are no longer offered, and the palette an appearance stored with one reads as */
 const RETIRED_PALETTES: Record<string, Palette> = {tydelig: 'default'}
 
 /** One text scale per `html[data-text-scale="…"]` rule in app/assets/css/main.css */
@@ -34,6 +34,20 @@ export type NotificationChannel = z.infer<typeof NotificationChannelSchema>
 
 /** The `User.appearance` column default */
 export const DEFAULT_APPEARANCE: Appearance = {palette: 'default', textScale: 'normal'}
+
+/**
+ * A stored appearance read field by field: a value that is not offered falls back to that field's
+ * default. A session keeps the appearance it was issued with, unparsed.
+ */
+export const readAppearance = (stored: unknown): Appearance => {
+    const fields = typeof stored === 'object' && stored !== null ? stored as Record<string, unknown> : {}
+    const palette = AppearanceSchema.shape.palette.safeParse(fields.palette)
+    const textScale = AppearanceSchema.shape.textScale.safeParse(fields.textScale)
+    return {
+        palette: palette.success ? palette.data : DEFAULT_APPEARANCE.palette,
+        textScale: textScale.success ? textScale.data : DEFAULT_APPEARANCE.textScale
+    }
+}
 
 /** The `User.notificationChannels` column default */
 export const DEFAULT_NOTIFICATION_CHANNELS: NotificationChannel[] = ['EMAIL']
@@ -66,5 +80,6 @@ export const useUserPreferenceValidation = () => ({
     UserPreferencesUpdateSchema,
     PALETTES,
     DEFAULT_APPEARANCE,
-    DEFAULT_NOTIFICATION_CHANNELS
+    DEFAULT_NOTIFICATION_CHANNELS,
+    readAppearance
 })

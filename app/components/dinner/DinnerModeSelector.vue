@@ -42,7 +42,7 @@ type ButtonSize = NonNullable<ButtonProps['size']>
 type ButtonVariant = NonNullable<ButtonProps['variant']>
 
 // Local styling constant (field group only - badge size from design system)
-const FIELD_GROUP_CLASSES = 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-neutral gap-0 md:gap-1'
+const FIELD_GROUP_CLASSES = 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-default gap-0 md:gap-1'
 
 interface Props {
   modelValue?: WeekDay | DinnerMode // Optional - defaults to NONE when no order exists

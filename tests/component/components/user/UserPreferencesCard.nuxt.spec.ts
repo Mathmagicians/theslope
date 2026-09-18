@@ -135,6 +135,15 @@ describe.each([
         expect(wrapper.text()).not.toContain('Ingen notifikationer')
     })
 
+    it.each(['tydelig', 'neon'])('GIVEN a session holding the palette %s, which is not offered THEN the card shows Glade farver and keeps the text scale', async palette => {
+        // Set after the factory, which parses the user: the session holds the value unparsed
+        const stale = {...userWith({}), appearance: {palette, textScale: 'large'}} as unknown as UserDetail
+        const wrapper = await mountCard(stale, isMd)
+
+        expect(wrapper.text()).toContain('Glade farver')
+        expect(wrapper.text()).toContain('Stor')
+    })
+
     it('GIVEN no channels WHEN the card renders THEN it says so and the test button is disabled', async () => {
         const wrapper = await mountCard(userWith({notificationChannels: []}), isMd)
 

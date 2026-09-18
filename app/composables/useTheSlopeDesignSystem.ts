@@ -1399,7 +1399,7 @@ const createWeekdayDisplay = (isMd: Ref<boolean>) => ({
      * Used in table headers and weekday selector rows
      * Responsive padding, borders, background, and minimum widths
      */
-    fieldGroupClasses: 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-neutral gap-0 md:gap-1 min-w-16 md:min-w-32',
+    fieldGroupClasses: 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-default gap-0 md:gap-1 min-w-16 md:min-w-32',
 
     /**
      * Badge/button content size for dinner mode icons

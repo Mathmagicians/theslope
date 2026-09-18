@@ -1,6 +1,6 @@
 import type {UserDetail} from '~/composables/useCoreValidation'
 import type {SenderEmitResult} from '~/composables/useNotificationValidation'
-import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS, type Appearance, type NotificationChannel, type UserPreferencesUpdate} from '~/composables/useUserPreferenceValidation'
+import {DEFAULT_NOTIFICATION_CHANNELS, readAppearance, type Appearance, type NotificationChannel, type UserPreferencesUpdate} from '~/composables/useUserPreferenceValidation'
 
 export const useAuthStore = defineStore("Auth", () => {
     const {loggedIn, user: _user, session, clear, fetch} = useUserSession()
@@ -36,7 +36,7 @@ export const useAuthStore = defineStore("Auth", () => {
     // A session snapshot written before the columns existed carries neither key: fall back to the
     // column defaults, never to "nothing" - an explicit empty array is a real choice and survives
     const notificationChannels = computed<NotificationChannel[]>(() => user.value?.notificationChannels ?? DEFAULT_NOTIFICATION_CHANNELS)
-    const appearance = computed<Appearance>(() => user.value?.appearance ?? DEFAULT_APPEARANCE)
+    const appearance = computed<Appearance>(() => readAppearance(user.value?.appearance))
 
     /**
      * Save the user's own channels and appearance, then refresh the session so the new

@@ -10,7 +10,8 @@ import {
     useUserPreferenceValidation,
     PALETTES,
     DEFAULT_APPEARANCE,
-    DEFAULT_NOTIFICATION_CHANNELS
+    DEFAULT_NOTIFICATION_CHANNELS,
+    readAppearance
 } from '~/composables/useUserPreferenceValidation'
 
 const {
@@ -62,6 +63,19 @@ describe('useUserPreferenceValidation - AppearanceSchema', () => {
 
     it('GIVEN an unlisted palette THEN the appearance is rejected', () => {
         expect(() => AppearanceSchema.parse({palette: 'neon', textScale: 'normal'})).toThrow()
+    })
+})
+
+describe('useUserPreferenceValidation - readAppearance', () => {
+    it.each([
+        {desc: 'nothing stored', stored: undefined, expected: DEFAULT_APPEARANCE},
+        {desc: 'a valid appearance', stored: {palette: 'colorblind', textScale: 'larger'}, expected: {palette: 'colorblind', textScale: 'larger'}},
+        {desc: 'the retired palette tydelig', stored: {palette: 'tydelig', textScale: 'large'}, expected: {palette: 'default', textScale: 'large'}},
+        {desc: 'an unlisted palette', stored: {palette: 'neon', textScale: 'large'}, expected: {palette: 'default', textScale: 'large'}},
+        {desc: 'an unlisted text scale', stored: {palette: 'high-contrast', textScale: 'huge'}, expected: {palette: 'high-contrast', textScale: 'normal'}},
+        {desc: 'a value that is no object', stored: 'high-contrast', expected: DEFAULT_APPEARANCE}
+    ])('GIVEN $desc THEN each field reads as stored or falls back to its default', ({stored, expected}) => {
+        expect(readAppearance(stored)).toEqual(expected)
     })
 })
 
