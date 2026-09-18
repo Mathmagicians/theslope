@@ -153,12 +153,16 @@ test.describe('AdminAllergies - catalog CRUD', () => {
  * "Vigtige bemærkninger" is one Setting row read by the catalog card header and printed on
  * the poster. ADMIN and ALLERGYMANAGER edit it in place; everyone else reads it.
  *
- * The row is global, so the suite restores the registry default afterwards.
+ * The row is global and the API suite writes it too, so this suite only ever APPENDS its own
+ * salted line, asserts that line, and removes that line again - never the whole row
+ * (docs/testing.md Rule 3).
  */
 test.describe('AdminAllergies - poster notes', () => {
+    const addedLines: string[] = []
+
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        await SettingFactory.restoreDefault(context, NOTES_KEY)
+        await SettingFactory.removeLines(context, NOTES_KEY, addedLines)
     })
 
     /** The rendered bullets - the notes the user actually reads, not the textarea they typed into */
@@ -169,6 +173,7 @@ test.describe('AdminAllergies - poster notes', () => {
         const memberSession = await memberValidatedBrowserContext(browser)
         const {userId} = await getSessionUserInfo(memberSession)
         const newNote = `Husk allergener ${temporaryAndRandom()}`
+        addedLines.push(newNote)
 
         await UserFactory.withSystemRoles(adminContext, userId, [SystemRoleSchema.enum.ALLERGYMANAGER], async () => {
             const context = await freshMemberContext(browser)

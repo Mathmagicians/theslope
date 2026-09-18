@@ -2,7 +2,6 @@ import {test, expect} from '@playwright/test'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {SettingFactory} from '~~/tests/e2e/testDataFactories/settingFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
-import {SETTING_REGISTRY} from '~/composables/useSettingValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 
 const {
@@ -16,20 +15,28 @@ const {
 const {SystemRoleSchema} = useCoreValidation()
 
 const NOTES_KEY = 'allergy-poster-notes'
-const DEFAULT_NOTES = SETTING_REGISTRY[NOTES_KEY].defaultValue
 
 /**
- * Settings are global: one row per registered key, shared by every surface that reads it.
- * The suite restores the registry default in `afterAll`, so the app is left with the text
- * it ships with.
+ * Settings are global: ONE row per key, shared by every spec in every project, and the UI
+ * suite writes this same row. So each test appends its own salted line and asserts only that
+ * line, and `afterAll` removes the lines this file added rather than resetting the row -
+ * two suites never clobber each other (docs/testing.md Rule 3).
  *
  * A registered key never answers 404 - without a row the endpoint answers with the registry
  * default, so the poster renders before anyone has edited anything.
  */
 test.describe('/api/admin/setting/[key]', () => {
+    const addedLines: string[] = []
+
+    const saltedLine = (base: string) => {
+        const line = salt(base, temporaryAndRandom())
+        addedLines.push(line)
+        return line
+    }
+
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        await SettingFactory.restoreDefault(context, NOTES_KEY)
+        await SettingFactory.removeLines(context, NOTES_KEY, addedLines)
     })
 
     test('GIVEN a registered key WHEN reading it THEN it answers with a value, never 404', async ({browser}) => {
@@ -42,28 +49,19 @@ test.describe('/api/admin/setting/[key]', () => {
         expect(setting!.value.length).toBeGreaterThan(0)
     })
 
-    test('GIVEN the registry default WHEN it is written THEN the key reads the shipped text back', async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
-
-        await SettingFactory.restoreDefault(context, NOTES_KEY)
-
-        const setting = await SettingFactory.getSetting(context, NOTES_KEY)
-        expect(setting!.value).toBe(DEFAULT_NOTES)
-    })
-
-    test('GIVEN an admin WHEN writing the notes THEN the row is stored and read back', async ({browser}) => {
+    test('GIVEN an admin WHEN adding a note THEN the row keeps it and names the author', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const {userId} = await getSessionUserInfo(context)
-        const value = salt('Glutenfri boller findes i fryseren', temporaryAndRandom())
+        const line = saltedLine('Glutenfri boller findes i fryseren')
 
-        const written = await SettingFactory.updateSetting(context, NOTES_KEY, value)
+        const written = await SettingFactory.appendLine(context, NOTES_KEY, line)
 
-        expect(written!.value).toBe(value)
-        expect(written!.updatedByUserId).toBe(userId)
-        expect(written!.updatedAt).not.toBeNull()
+        expect(written.value).toContain(line)
+        expect(written.updatedByUserId).toBe(userId)
+        expect(written.updatedAt).not.toBeNull()
 
         const readBack = await SettingFactory.getSetting(context, NOTES_KEY)
-        expect(readBack!.value).toBe(value)
+        expect(readBack!.value).toContain(line)
     })
 
     /**
@@ -78,22 +76,22 @@ test.describe('/api/admin/setting/[key]', () => {
         await UserFactory.withSystemRoles(adminContext, userId, [], async () => {
             const memberContext = await freshMemberContext(browser)
 
+            // A rejected write leaves the row untouched, so the value here does not matter
             await SettingFactory.updateSetting(memberContext, NOTES_KEY, 'Min egen bemærkning', 403)
         })
 
         await UserFactory.withSystemRoles(adminContext, userId, [SystemRoleSchema.enum.ALLERGYMANAGER], async () => {
             const managerContext = await freshMemberContext(browser)
+            const line = saltedLine('Allergiansvarlig skrev')
 
-            const written = await SettingFactory.updateSetting(
-                managerContext,
-                NOTES_KEY,
-                salt('Allergiansvarlig skrev', temporaryAndRandom())
-            )
+            const written = await SettingFactory.appendLine(managerContext, NOTES_KEY, line)
 
-            expect(written!.updatedByUserId).toBe(userId)
+            expect(written.value).toContain(line)
+            expect(written.updatedByUserId).toBe(userId)
         })
     })
 
+    // Every case here is rejected, so none of them touches the shared row
     test.describe('validation', () => {
         test('GIVEN an unknown key WHEN reading it THEN 400', async ({browser}) => {
             const context = await validatedBrowserContext(browser)

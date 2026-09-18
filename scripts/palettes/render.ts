@@ -357,10 +357,42 @@ export const solvePreset = (preset: Preset): RenderedPreset => {
             if (passing === pairs.length) break
         }
 
-        const solved = best.lightness
+        /**
+         * The rounds publish the palette that passed the most pairs, and a round is all variables at
+         * once - so a variable that alone would close a pair is dropped with the round that traded
+         * something else away. The repair takes the winning palette and offers each still-failing
+         * pair the move it asks for, one variable at a time, keeping it only when the whole inventory
+         * comes out ahead. One variable at a time in inventory order, so a rerun repairs the same way.
+         */
+        const repair = (start: Lightness): Lightness => {
+            const lightness_ = new Map(start)
+            const count = () => buildPairs(toScales(lightness_), level).filter(meetsThreshold).length
+            let passing = count()
+            for (const pair of buildPairs(toScales(lightness_), level).filter(pair_ => !meetsThreshold(pair_))) {
+                for (const asInk of [true, false]) {
+                    const source = asInk ? pair.ink.source : pair.fill.source
+                    const key = source && stepKey(pair.mode, source)
+                    if (!key || held.has(key)) continue
+                    const wanted = required(constraintFor(pair, asInk))
+                    if (wanted === null) continue
+                    const previous = lightness_.get(key)
+                    lightness_.set(key, wanted)
+                    if (count() > passing) {
+                        passing = count()
+                        break
+                    }
+                    if (previous === undefined) lightness_.delete(key)
+                    else lightness_.set(key, previous)
+                }
+            }
+            return lightness_
+        }
+
+        const solved = repair(best.lightness)
         return {
             lightness: solved,
             failing: buildPairs(toScales(solved), level).filter(pair => !meetsThreshold(pair)),
+            repaired: buildPairs(toScales(solved), level).filter(meetsThreshold).length - best.passing,
             roundsUsed
         }
     }
@@ -386,7 +418,7 @@ export const solvePreset = (preset: Preset): RenderedPreset => {
         })
 
     const published = buildPairs(NO_OVERRIDE, level)
-    const {lightness, failing, roundsUsed} = solve()
+    const {lightness, failing, repaired, roundsUsed} = solve()
     const scales = toScales(lightness)
     const solved = buildPairs(scales, level)
     const written = emit(scales)
@@ -402,7 +434,7 @@ export const solvePreset = (preset: Preset): RenderedPreset => {
             : []),
         `👨‍💻 > [PALETTE] > [${name}] ${solved.length} pairs, ${solved.filter(meetsThreshold).length} pass`,
         ...groupCounts(solved),
-        `👨‍💻 > [PALETTE] > [${name}] steps published after ${roundsUsed} rounds`,
+        `👨‍💻 > [PALETTE] > [${name}] steps published after ${roundsUsed} rounds and ${repaired} repaired pairs`,
         ...MODES.map(mode => `    ${mode} block: ${written[mode].steps} steps, ${written[mode].slots} slots`),
         `👨‍💻 > [PALETTE] > [${name}] slots re-pointed to ${REPOINTED_RUNG.light}/${REPOINTED_RUNG.dark}: ${repointedSlots.join(', ')}`,
         `👨‍💻 > [PALETTE] > [${name}] renders ${output}`

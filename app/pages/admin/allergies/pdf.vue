@@ -153,7 +153,7 @@ const printPage = () => {
 
         <!-- Allergy manager contact -->
         <AllergyManagersList
-            kind="neutral"
+            kind="legend"
             message="Tal med allergiansvarlig for hjælp til at spotte allergener i opskrifterne og udtænke allergihensyn!"
             class="mt-6"
         />

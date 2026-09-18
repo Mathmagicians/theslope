@@ -666,7 +666,7 @@ and three sites now show the kind's default icon where they had none or another 
 | `/admin/teams?mode=edit&season=<season without teams>` | both | master-detail placeholder (no alert) | "Vælg et madhold for at redigere" (URL-only edge case) |
 | `/admin/allergies`, empty catalog | 375px + desktop | `UTable #empty` → `ALERTS.emptyState` + `create-first-allergy-type` | neutral (was green); "Tilføj allergi" unchanged |
 | `/admin/allergies` footer | both | `AllergyManagersList kind="info"` → `ALERTS.info` + its description flex row | unchanged look; managers beside the message on desktop, under it on the phone |
-| `/admin/allergies/pdf` + print preview | desktop + print | `ALERTS.legend` + `:icon="ICONS.warning"` (notes — decided 2026-09-16: unchanged neutral outline, dark text, ⚠ added; same on page and poster), `AllergyManagersList kind="neutral"` → `ALERTS.neutral` | "Vigtige bemærkninger" as before, with a ⚠ next to the heading; managers box subtle |
+| `/admin/allergies/pdf` + print preview | desktop + print | `ALERTS.legend` + `:icon="ICONS.warning"` (notes — decided 2026-09-16: unchanged neutral outline, dark text, ⚠ added; same on page and poster), `AllergyManagersList kind="legend"` → `ALERTS.legend` (outline, as on main; corrected 2026-09-18 after the print check) | "Vigtige bemærkninger" as before, with a ⚠ next to the heading; managers box outline, no fill on paper |
 | `/admin/users` | both | `ALERTS.info` | violet subtle (was amber outline); `authorized` icon kept |
 | `/admin/system`, a job with an error | both | `ALERTS.error` | soft (stronger red) |
 | `/admin/economy` (3 empty states) | both | `ALERTS.neutral` | unchanged |
@@ -881,11 +881,11 @@ Rejected: under the toolbar (competes with the mobile CREATE dock from D1).
 |------|--------|
 | `useSettingValidation.unit.spec.ts` (new) | 🟢 keys, `SettingDetailSchema` (date coercion, nullable author), registry entry per key, value schema, default, `canWrite` for ADMIN / ALLERGYMANAGER / member, `splitNotes` |
 | `usePermissions.unit.spec.ts` | 🟢 `/api/admin/setting/` POST and GET resolve; the setting rule sits before the generic admin rule |
-| `tests/e2e/api/parallel/admin/setting.e2e.spec.ts` + `settingFactory.ts` (new) | 🟢 registered key never 404s, registry default reads back, admin POST round-trip with `updatedByUserId`, member 403 then ALLERGYMANAGER 200 (`UserFactory.withSystemRoles` + `freshMemberContext`), unknown key 400, empty / wrong type / over-long value 400; restore in `afterAll` |
+| `tests/e2e/api/parallel/admin/setting.e2e.spec.ts` + `settingFactory.ts` (new) | 🟢 registered key never 404s, admin append keeps the line and names the author, member 403 then ALLERGYMANAGER 200 (`UserFactory.withSystemRoles` + `freshMemberContext`), unknown key 400, empty / wrong type / over-long value 400. The row is global, so every write is a salted `SettingFactory.appendLine` and `afterAll` calls `removeLines` with just this file's lines |
 | `allergies.nuxt.spec.ts` | 🟢 `posterNotes` loads, `savePosterNotes` posts and shows the stored text — including when a later read of the row fails (the regression guard for the old-notes-after-Gem bug), the registry default, errors exposed |
 | `AllergyNotes.nuxt.spec.ts` | 🟢 bullets per line, pencil gating, textarea seeded, Annuller restores, Gem emits the trimmed text, the editor waits for the parent's `isSaving`; `describe.each` over `isMd` |
 | `AdminAllergies.nuxt.spec.ts` | 🟢 setting endpoint registered (real store), stored notes render, the edit round trip posts, no pencil without `canEdit` |
-| `AdminAllergies.e2e.spec.ts` | 🟢 an allergy manager adds a line → Gem → the rendered `allergy-notes-item` bullets carry it with no reload, again after a reload, and on the poster; a member without the role sees no pencil; roles arranged with `UserFactory.withSystemRoles` + `freshMemberContext`; restore in `afterAll` |
+| `AdminAllergies.e2e.spec.ts` | 🟢 an allergy manager adds a salted line → Gem → the rendered `allergy-notes-item` bullets carry it with no reload, again after a reload, and on the poster; a member without the role sees no pencil; roles arranged with `UserFactory.withSystemRoles` + `freshMemberContext`; `afterAll` removes only this suite's line, so the API suite's lines survive |
 | `admin-allergies-pdf.nuxt.spec.ts`, `AllergyPoster.e2e.spec.ts` | 🟢 stored notes rendered, no pencil on the poster; existing `(V)` / `[1V 1B]` assertions kept |
 
 ### Affected Areas
@@ -910,6 +910,10 @@ Rejected: under the toolbar (competes with the mobile CREATE dock from D1).
 - **Editing — ✅ IMPLEMENTED (2026-09-18):** the text moved from the registry default into the `Setting` row, and only the source changed —
   `AllergyNotes` keeps its `notes` prop and gained `canEdit`, `isSaving` and `save`. Test-ids added: `edit-allergy-notes`,
   `allergy-notes-textarea`, `save-allergy-notes`, `cancel-allergy-notes`.
+- **A setting row is shared state (2026-09-18):** the API suite and the UI suite write the same row in projects that have no dependency on each
+  other, so neither may set it. `SettingFactory.appendLine` / `removeLines` read, change the lines and write back, re-reading to confirm the
+  change survived a concurrent write and retrying when it did not. Each spec asserts only its own salted line and removes only that line, which
+  also leaves the text a real user typed in place. Verified by running both projects in one `--workers=4` pass.
 - **Bug found and fixed in the same package (2026-09-18):** Gem toasted "Bemærkninger gemt" while the old bullets stayed on screen. The store
   read the row back after the POST, and `useAsyncData`'s `refresh()` resolves on a failed request — it leaves `data` null, so `posterNotes` fell
   through to the registry default. The POST already returns the stored row (ADR-009), so `savePosterNotes` now takes the response as the new

@@ -270,7 +270,7 @@ export const computeTeamAssignmentsForEvents = (teams: CookingTeamDisplay[], coo
             const assignedTeam = roster[rosterIndex]!
             quotaCounter++
 
-            const isActualEvent = needsAssignment.find(e => e.date.getTime() === cookingDate.getTime())
+            const isActualEvent = needsAssignment.find(e => isSameDay(e.date, cookingDate))  // calendar day: events are stored at UTC midnight, cooking days come out at local midnight
             return isActualEvent ? [[isActualEvent.id, assignedTeam.id] as [number, number]] : []
         })
     )
