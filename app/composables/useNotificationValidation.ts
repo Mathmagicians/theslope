@@ -73,7 +73,7 @@ const NotificationConfigSchema = z.object({
 const SenderEmitResultSchema = z.object({
     queued: z.boolean(),
     dedupeKey: z.string(),
-    /** true when the SENDER binding is missing in this environment — the message was dropped, the caller continues */
+    /** true when the SENDER binding is missing in this environment: the message is dropped and the caller continues */
     degraded: z.boolean()
 })
 

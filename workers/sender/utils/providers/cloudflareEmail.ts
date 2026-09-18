@@ -8,7 +8,7 @@ import type {EmailMessage} from '~/contract'
 import {RetryableError, TerminalError} from '~/utils/delivery'
 import type {DeliveryResult, EmailProvider} from '~/utils/providers/types'
 
-/** Verified against the Email Service docs (2026-09-16); every other `E_*` code is terminal. */
+/** The retryable codes of the Email Service; every other `E_*` code is terminal. */
 const RETRYABLE_CODES: readonly string[] = ['E_RATE_LIMIT_EXCEEDED', 'E_DAILY_LIMIT_EXCEEDED', 'E_INTERNAL_SERVER_ERROR']
 
 /** A throw without an `E_*` code is a transport failure (TypeError from fetch), not a rejected message. */

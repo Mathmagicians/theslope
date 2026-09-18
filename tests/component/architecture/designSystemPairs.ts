@@ -455,6 +455,16 @@ const TEXT_THRESHOLD: Record<Level, {body: number, large: number}> = {
 /** 1.4.11 Non-text Contrast has no enhanced level - 3:1 at every palette */
 const EDGE_THRESHOLD = 3
 
+/**
+ * `color="neutral"` on a badge, button or alert: Nuxt UI paints it with its neutral semantics, not
+ * the neutral slot (`.nuxt/ui/badge.ts`, `button.ts`, `alert.ts`)
+ */
+const NEUTRAL_COMPONENT_FACES = [
+    {face: 'solid', ink: 'inverted', fill: 'inverted'},
+    {face: 'soft', ink: 'default', fill: 'elevated'},
+    {face: 'alert', ink: 'highlighted', fill: 'elevated/50'}
+] as const
+
 /** The last reference on this channel that names a colour (`text-sm text-gray-700` → grey) */
 export const pickColour = (
     resolve: ReturnType<typeof createResolver>, classes: string, channel: Channel, mode: Mode
@@ -605,6 +615,17 @@ export const buildPairs = (override: PaletteOverride, level: Level): Pair[] => {
                 TEXT_THRESHOLD[level].body)
             add('semantic slot', `text-inverted on bg-${slot}`, `${mode}|slot.${slot}|solid`,
                 inverted, {colour: composite(fill.colour, page.colour), source: fill.source, alpha: fill.colour.alpha, ground: page.colour},
+                TEXT_THRESHOLD[level].body)
+        }
+
+        // 3b - the faces Nuxt UI gives `color="neutral"` badges, buttons and alerts
+        for (const {face, ink: inkName, fill: fillName} of NEUTRAL_COMPONENT_FACES) {
+            const ink = resolve(inkName, 'text', mode)
+            const fill = resolve(fillName, 'bg', mode)
+            const page = surfaceOf('bg-default', mode)
+            if (!ink || !fill || !page) continue
+            add('neutral component', `text-${inkName} on bg-${fillName} (${face})`, `${mode}|neutral.${face}`,
+                ink, {colour: composite(fill.colour, page.colour), source: fill.source, alpha: fill.colour.alpha, ground: page.colour},
                 TEXT_THRESHOLD[level].body)
         }
     }

@@ -74,7 +74,7 @@ that adds to a kind's `ui` merges on top of it (`AllergyManagersList.vue`). The 
 
 ### Tables
 
-The empty state renders in the `UTable` `#empty` slot. `COMPONENTS.table.ui` wraps the cell under an expanded row.
+The empty state renders in the `UTable` `#empty` slot. `COMPONENTS.table.ui` cells wrap between words and keep words, dates and e-mails whole; a data table wider than a phone scrolls inside its own box.
 
 ### Choice groups
 
@@ -88,19 +88,23 @@ takes `TYPOGRAPHY.sectionSubheading`.
 ## Brand rainbow
 
 - `PANTONE_FAMILIES` orders the families; `RAINBOW_FAMILIES` lists the stops; `HERO` (read as `BACKGROUNDS.hero`) pairs each family's fill with its ink.
-- Mocha (`amber-500`) is the frame: title bar, ticker, app shell, dinner header.
+- Mocha (`amber-500`) is the frame: title bar, ticker, app shell, dinner header. Its rainbow stop is `HERO.mochaStop` (`amber-700`).
+- Eight stops: pink, orange, ocean, bonbon (`violet-800`, white ink), peach, yellow, sky (`sky-700`, white ink), mocha. Til farveblinde
+  publishes the eight Color Universal Design colours on them (`scripts/palettes/presets.ts`).
 - The landing bands walk stops 0-3 (`app/pages/index.vue`), the kitchen panels 0-2 with TIL SALG grey
-  (`COMPONENTS.kitchenPanel`), cooking team n wears stop n-1 and the list wraps (`getRainbowBand`). The ticker chips follow the
-  family order.
+  (`COMPONENTS.kitchenPanel`), cooking team n wears stop n-1 and team 9 repeats team 1 (`getRainbowBand`). The ticker chips follow
+  the family order.
 - Mockups: `app/pages/index.vue` and `app/components/dinner/KitchenPreparation.vue` headers.
 
 ## Palettes
 
-- **Options.** `PALETTES` holds the keys and the level each preset is measured at; `UserPreferencesCard.vue` renders them with the
-  EU badge for that level. Farveglad is the published palette.
-- **Mechanism.** A preset redeclares `--color-<family>-<step>`, `--ui-<slot>` and `--ui-color-<slot>-<step>` under
-  `html[data-palette="<key>"]` and its `.dark` mirror. `app/layouts/default.vue` writes `data-palette` and `data-text-scale` from
-  the session user's `appearance`; SSR renders them.
+- **Options.** Glade farver (`default`, AA), Høj kontrast (`high-contrast`, AAA), Til farveblinde (`colorblind`, AA, colour-safe).
+  `PALETTES` holds each key's level and `colourSafe`; `UserPreferencesCard.vue` renders the contrast badge from the level and the
+  colour-vision badge from `colourSafe`.
+- **Mechanism.** Glade farver is the base: `palettes/default.css` applies under `html:not([data-palette])`. A preset redeclares
+  `--color-<family>-<step>`, `--ui-<slot>` and `--ui-color-<slot>-<step>` under `html[data-palette="<key>"]`. Each block has a `.dark`
+  mirror and outranks the variables Nuxt UI writes at runtime. `app/layouts/default.vue` writes `data-palette` (omitted for
+  `default`) and `data-text-scale` from the session user's `appearance`; SSR renders them.
 - **Generator.** `scripts/palettes/presets.ts` (data), `render.ts` (hue map, slot re-pointing, OKLCH lightness walk to the preset's
   level), `generate.ts` (CLI). Run after a change to the `main.css` scales, `ui.colors` or a token that adds a fill or an ink, and
   commit the output:
@@ -116,8 +120,8 @@ takes `TYPOGRAPHY.sectionSubheading`.
 - **Preview** in the browser console:
 
   ```js
-  document.documentElement.dataset.palette = 'tydelig'   // 'colorblind', 'high-contrast'
-  delete document.documentElement.dataset.palette       // Farveglad
+  document.documentElement.dataset.palette = 'high-contrast'   // 'colorblind'
+  delete document.documentElement.dataset.palette             // Glade farver
   document.documentElement.classList.toggle('dark')
   ```
 

@@ -6,13 +6,19 @@
 │ VIEW  (dashboard /login, under UserProfileCard)          EDIT  (after ✏️)                             │
 │ ┌ Mine indstillinger                           [✏️] ┐    ┌ Mine indstillinger ───────────────────────┐ │
 │ │ 🔔 Notifikationer  [📧 E-mail] [📱 SMS]          │    │ 🔔 Notifikationer                         │ │
-│ │ 🎨 Farvevalg       Tydelig  🇪🇺 EN 301 549·AA ✓  │    │    E-mail   anna@…            [———●] ON   │ │
-│ │ 🔤 Tekst           Normal                        │    │    SMS      +45 …             [●———] OFF  │ │
-│ │                        [📨 Send testbesked]      │    │             (kræver telefonnummer …)      │ │
-│ └──────────────────────────────────────────────────┘    │ 🎨 Farvevalg (•) Farveglad                │ │
-│                                                         │             ( ) Tydelig  🇪🇺 EN 301 549 ✓ │ │
-│   badges when a channel is on, "Ingen notifikationer"   │ 🔤 Tekst    (•) Normal ( ) Stor ( ) Større │ │
-│   when none; Send testbesked disabled with no channel   │                  [✕ Annuller]   [✓ Gem]   │ │
+│ │ 🎨 Farvevalg  Glade farver                       │    │    E-mail   anna@…            [———●] ON   │ │
+│ │     [🇪🇺 EN 301 549 · Kontrast AA ✓]             │    │    SMS      +45 …             [●———] OFF  │ │
+│ │ 🔤 Tekst           Normal                        │    │             (kræver telefonnummer …)      │ │
+│ │                        [📨 Send testbesked]      │    │ 🎨 Farvevalg                              │ │
+│ └──────────────────────────────────────────────────┘    │  (•) Glade farver                         │ │
+│                                                         │      [🇪🇺 EN 301 549 · Kontrast AA ✓]      │ │
+│   badges when a channel is on, "Ingen notifikationer"   │  ( ) Høj kontrast                         │ │
+│   when none; Send testbesked disabled with no channel   │      [🇪🇺 EN 301 549 · Kontrast AAA ✓]     │ │
+│                                                         │  ( ) Til farveblinde                      │ │
+│   the contrast badge from PALETTES[key].level, the      │      [🇪🇺 EN 301 549 · Kontrast AA ✓]      │ │
+│   👁 badge from PALETTES[key].colourSafe - in both      │      [👁 Nedsat farvesyn · Okabe–Ito ✓]   │ │
+│   faces                                                 │ 🔤 Tekst    (•) Normal ( ) Stor ( ) Større │ │
+│                                                         │                  [✕ Annuller]   [✓ Gem]   │ │
 │                                                         └───────────────────────────────────────────┘ │
 │                                                                                                      │
 │ Phone width: the radios stack and the button row is LAYOUTS.formButtonRow (Annuller under Gem).       │
@@ -36,22 +42,23 @@ const authStore = useAuthStore()
 const {TYPOGRAPHY, LAYOUTS, BUTTONS, COMPONENTS, ICONS, COLOR, SIZES} = useTheSlopeDesignSystem()
 const {NotificationChannelSchema, PaletteSchema, TextScaleSchema} = useUserPreferenceValidation()
 
-// Danish labels and the badge wording live here; the registry only knows the verified level (ADR-017)
+// Danish labels and the badge wording live here; the registry only knows what is verified (ADR-017)
 const CHANNEL_LABELS: Record<NotificationChannel, {label: string, icon: string}> = {
   EMAIL: {label: 'E-mail', icon: ICONS.mail},
   SMS: {label: 'SMS', icon: ICONS.phone}
 }
 const PALETTE_LABELS: Record<Palette, string> = {
-  default: 'Farveglad',
-  tydelig: 'Tydelig',
-  colorblind: 'Farveblind',
-  'high-contrast': 'Høj kontrast'
+  default: 'Glade farver',
+  'high-contrast': 'Høj kontrast',
+  colorblind: 'Til farveblinde'
 }
 const TEXT_SCALE_LABELS: Record<TextScale, string> = {normal: 'Normal', large: 'Stor', larger: 'Større'}
+// The contrast badge claims contrast only - not full conformance - and names no WCAG version
 const LEVEL_BADGES: Record<'AA' | 'AAA', string> = {
-  AA: '🇪🇺 EN 301 549 · WCAG 2.1 AA ✓',
-  AAA: '🇪🇺 EN 301 549 · WCAG 2.1 AAA ✓'
+  AA: '🇪🇺 EN 301 549 · Kontrast AA ✓',
+  AAA: '🇪🇺 EN 301 549 · Kontrast AAA ✓'
 }
+const COLOUR_SAFE_BADGE = '👁 Nedsat farvesyn · Okabe–Ito ✓'
 
 const channels = computed<NotificationChannel[]>(() => authStore.notificationChannels)
 const appearance = computed<Appearance>(() => authStore.appearance)
@@ -68,10 +75,10 @@ const draftAppearance = ref<Appearance>({...DEFAULT_APPEARANCE})
 const paletteItems = computed(() => PaletteSchema.options.map(value => ({value, label: PALETTE_LABELS[value]})))
 const textScaleItems = computed(() => TextScaleSchema.options.map(value => ({value, label: TEXT_SCALE_LABELS[value]})))
 
-/** The badge a preset earns from its verified contrast level, or null when it has none */
-const paletteBadge = (palette: Palette): string | null => {
-  const {level} = PALETTES[palette]
-  return level ? LEVEL_BADGES[level] : null
+/** The badges a palette earns: its verified contrast level, and colour safety where it is verified */
+const paletteBadges = (palette: Palette): string[] => {
+  const {level, colourSafe} = PALETTES[palette]
+  return [...(level ? [LEVEL_BADGES[level]] : []), ...(colourSafe ? [COLOUR_SAFE_BADGE] : [])]
 }
 
 /** SMS needs a number, and phone numbers come from Heynabo */
@@ -162,12 +169,13 @@ const sendTest = async () => {
         <span :class="TYPOGRAPHY.sectionSubheading">Farvevalg</span>
         <span :class="TYPOGRAPHY.bodyText">{{ PALETTE_LABELS[appearance.palette] }}</span>
         <UBadge
-          v-if="paletteBadge(appearance.palette)"
+          v-for="badge in paletteBadges(appearance.palette)"
+          :key="badge"
           :color="COLOR.success"
           variant="subtle"
           :size="SIZES.small"
         >
-          {{ paletteBadge(appearance.palette) }}
+          {{ badge }}
         </UBadge>
       </div>
 
@@ -241,12 +249,13 @@ const sendTest = async () => {
             <span :data-testid="`pref-palette-${item.value}`" class="flex items-center gap-2 flex-wrap">
               {{ item.label }}
               <UBadge
-                v-if="paletteBadge(item.value as Palette)"
+                v-for="badge in paletteBadges(item.value as Palette)"
+                :key="badge"
                 :color="COLOR.success"
                 variant="subtle"
                 :size="SIZES.small"
               >
-                {{ paletteBadge(item.value as Palette) }}
+                {{ badge }}
               </UBadge>
             </span>
           </template>

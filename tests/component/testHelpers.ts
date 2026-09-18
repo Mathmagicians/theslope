@@ -1,4 +1,4 @@
-import {nextTick, h, defineComponent, ref, type Component} from 'vue'
+import {nextTick, h, defineComponent, ref, isRef, type Component, type Ref} from 'vue'
 import {expect} from 'vitest'
 import {TooltipProvider} from 'reka-ui'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
@@ -63,15 +63,15 @@ export const withTooltipProvider = (component: Component, props: Record<string, 
 /**
  * mountSuspended under a TooltipProvider and return the wrapper of the component itself,
  * so find/text/emitted/props read the component rather than the provider shell.
- * `isMd` provides the layout's responsive breakpoint ref when given.
+ * `isMd` provides the layout's responsive breakpoint ref when given; pass a ref to change the breakpoint after mount.
  */
 export const mountWithTooltipProvider = async <T extends MountableComponent>(
     component: T,
-    {props = {}, isMd}: {props?: Record<string, unknown>, isMd?: boolean} = {}
+    {props = {}, isMd}: {props?: Record<string, unknown>, isMd?: boolean | Ref<boolean>} = {}
 ) => {
     const root = await mountSuspended(
         withTooltipProvider(component, props),
-        isMd === undefined ? {} : {global: {provide: {isMd: ref(isMd)}}}
+        isMd === undefined ? {} : {global: {provide: {isMd: isRef(isMd) ? isMd : ref(isMd)}}}
     )
     return root.findComponent(component)
 }

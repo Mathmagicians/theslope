@@ -110,7 +110,7 @@ d1-flatten-migrations:
 
 # --- Parent-link check: the counts of child rows without a parent on every ON DELETE SET NULL link. A migration is done when
 #     the counts are the same before and after the apply (children without a parent are legitimate: inhabitants without a login,
-#     orders of deleted users) — a rebuilt parent table shows up as every count jumping to the row count (2026-09-17)
+#     orders of deleted users) — a rebuilt parent table shows up as every count jumping to the row count
 # $(1)=database, $(2)=location flags (--local | --remote --env dev|prod) → one line of counts
 define d1_link_counts
 	npx wrangler d1 execute $(1) $(2) --json --command "SELECT (SELECT COUNT(*) FROM Inhabitant WHERE userId IS NULL) AS inhabitantsWithoutUser, (SELECT COUNT(*) FROM \"Order\" WHERE bookedByUserId IS NULL) AS ordersWithoutUser, (SELECT COUNT(*) FROM OrderHistory WHERE performedByUserId IS NULL) AS historyWithoutUser, (SELECT COUNT(*) FROM Invoice WHERE billingPeriodSummaryId IS NULL) AS invoicesWithoutPeriod" | jq -c '.[0].results[0]'

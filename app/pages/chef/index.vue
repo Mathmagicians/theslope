@@ -266,7 +266,7 @@ useHead({
 </script>
 
 <template>
-  <UPage :ui="LAYOUTS.masterDetailPage">
+  <UPage :ui="LAYOUTS.masterDetailPage" data-testid="chef-page">
     <!-- Master: Team selector and calendar (left slot) -->
     <template #left>
         <CalendarMasterPanel title="Mine Madhold">

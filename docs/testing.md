@@ -392,15 +392,17 @@ fill). Three scoping rules keep the inventory on the standard: a token whose own
 places on it (`INK_ON_FILL`, one row per surface with the component and line that draws it); and the dividers and
 table banding listed in docs/ui.md "Palettes" sit outside 1.4.11.
 
-Palette presets under `app/assets/css/palettes/` are measured the same way, at the level the preset's name promises,
-with the pairs a preset cannot answer listed per preset in `PRESET_FINDINGS`; a preset that does not exist yet has its
-cases **skipped by name** via `describe.skipIf`, never faked.
+Every palette under `app/assets/css/palettes/` — the base `default.css` and each preset — is measured at the level its
+`PALETTES` entry carries (`tests/component/architecture/palettes.ts` derives the list from the registry). A pair a palette
+cannot answer is listed in `PRESET_FINDINGS` (empty today) with its ratio and runs as `it.fails`.
 
-**When it fails, fix the token — never the threshold.** Pairs the default theme misses today are listed in
-`KNOWN_FINDINGS` with the ratio measured on 2026-09-16 and run as `it.fails`. That cuts both ways: a green pair that
-starts failing breaks its own case, and a listed pair that starts passing breaks its `it.fails` and asks for the entry
-to be deleted. Never add an entry to silence a new failure — a new miss is a regression, and the baseline is a
-record of one dated decision, not a mute button.
+`designSystemColourVision.unit.spec.ts` measures the meaning pairs of `designSystemMeanings.ts` (shared with the generator)
+under protanopia, deuteranopia and tritanopia for the base and every `colourSafe` palette, and the rainbow stops apart in
+every palette. Its dated `FINDINGS` rows (the base's meaning pairs, 2026-09-18) run as `it.fails`.
+
+**When it fails, fix the token — never the threshold.** A listed row cuts both ways: a green pair that starts failing
+breaks its own case, and a listed pair that starts passing breaks its `it.fails` and asks for the entry to be deleted.
+Never add an entry to silence a new failure — a new miss is a regression, and a row is the record of one dated decision.
 
 **Do NOT assert design-token values.** `expect(ui.title).toContain('text-lg')` restates the design and guards nothing —
 the colour, size and padding of a token are the user's visual check. Architecture tests assert *usage*; component specs

@@ -94,7 +94,6 @@ test.describe('AdminPlanning UI', () => {
     await expect(page.getByTestId('edit-season')).toBeVisible()
 
     // WHEN: opening the form from the pencil (client-side navigation, no reload)
-    // Regression guard: a mode write that bypassed draft init showed an empty box
     await page.getByTestId('edit-season').click()
 
     // THEN: the edit form renders with the season loaded and the URL follows (ADR-006)

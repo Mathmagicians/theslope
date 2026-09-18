@@ -1048,6 +1048,20 @@ export class SeasonFactory {
 
     // === JOB RUN METHODS ===
 
+    /** A completed daily-maintenance run, as GET /api/admin/maintenance/job-run returns it */
+    static readonly defaultJobRun = (overrides: Partial<JobRunDisplay> = {}): JobRunDisplay => ({
+        id: 1,
+        jobType: 'DAILY_MAINTENANCE',
+        status: 'SUCCESS',
+        startedAt: new Date('2026-09-17T21:33:00Z'),
+        completedAt: new Date('2026-09-17T21:33:04Z'),
+        durationMs: 4500,
+        resultSummary: null,
+        errorMessage: null,
+        triggeredBy: 'ADMIN',
+        ...overrides
+    })
+
     /**
      * Get job runs with optional filtering by job type
      * @param context - Browser context for API requests

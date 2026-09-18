@@ -47,7 +47,7 @@ describe('AllergyDetailPanel', () => {
             expect(wrapper.emitted(event)).toBeTruthy()
         })
 
-        // The detail header keeps the row-style pencil (decided 2026-09-16); only form cards carry a labelled edit button
+        // The detail header carries the square pencil; form cards carry a labelled edit button
         it('offers the edit entry as the pencil with an accessible name', async () => {
             const wrapper = await mountPanel()
 

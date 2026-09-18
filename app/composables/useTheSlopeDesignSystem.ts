@@ -467,29 +467,32 @@ export type PantoneFamily = typeof PANTONE_FAMILIES[number]
  * inherits both.
  *
  * Ink is whichever of `TEXT.black` and `TEXT.white` clears 4.5:1 on the fill in both modes; a
- * light fill carries its own family's darkest rung. Ratios measured 2026-09-18 in Farveglad,
- * Tydelig and Farveblind - the lowest of the three is the one written here.
+ * light fill carries its own family's darkest rung. Ratios measured 2026-09-18 in the AA palettes,
+ * Glade farver and Til farveblinde - the lower of the two is the one written here. Høj kontrast
+ * holds every surface at 7:1.
  */
 const HERO = {
-    pink: `${BG.pink[500]} ${TEXT.black}`,            // Pink Lemonade   8.33:1
-    orange: `${BG.orange[500]} ${TEXT.black}`,        // Mandarin Orange 6.27:1
-    ocean: `${BG.ocean[500]} ${TEXT.black}`,          // Ocean           7.2:1
-    bonbon: `${BG.bonbon[800]} ${TEXT.white}`,        // Bonbon          8.23:1
-    peach: `${BG.peach[300]} ${TEXT.peach[950]}`,     // Countdown       9.01:1
+    pink: `${BG.pink[500]} ${TEXT.black}`,            // Pink Lemonade   6.86:1
+    orange: `${BG.orange[500]} ${TEXT.black}`,        // Mandarin Orange 6.68:1
+    ocean: `${BG.ocean[500]} ${TEXT.black}`,          // Ocean           6.14:1
+    bonbon: `${BG.bonbon[800]} ${TEXT.white}`,        // Bonbon          4.66:1
+    peach: `${BG.peach[300]} ${TEXT.peach[950]}`,     // Countdown       6.77:1
     yellow: `${BG.yellow[400]} ${TEXT.black}`,        // Yellow         13.71:1
-    sky: `${BG.sky[700]} ${TEXT.white}`,              // Sky             7.03:1
+    sky: `${BG.sky[700]} ${TEXT.white}`,              // Sky             5.19:1
     /** The frame: title bar, ticker, dinner header */
-    mocha: `${BG.mocha[500]} ${TEXT.mocha[50]}`,
+    mocha: `${BG.mocha[500]} ${TEXT.mocha[50]}`,      // Mocha Mousse    4.66:1
     /** Mocha as a rainbow stop, two rungs under the frame so a team never reads as the frame */
-    mochaStop: `${BG.mocha[700]} ${TEXT.white}`        // Mocha Mousse    7.22:1
+    mochaStop: `${BG.mocha[700]} ${TEXT.white}`       // Mocha Mousse    7.22:1
 } as const
 
 /**
  * RAINBOW_FAMILIES - the stops a list walks, in hue order
  *
  * Eight hues, each one its own: the nearest pair stays 0.100 apart in Oklab (the bar
- * `designSystemColourVision.unit.spec.ts` reads off the Color Universal Design set is 0.075),
- * in every registered palette, light and dark. A red-pink family has room for a light fill with
+ * `designSystemColourVision.unit.spec.ts` reads off the Color Universal Design set is 0.075)
+ * in Glade farver and Høj kontrast, light and dark. Til farveblinde publishes the eight colours of
+ * that set on the stops, which keep the bar under protanopia, deuteranopia and tritanopia as well
+ * (`scripts/palettes/presets.ts`). A red-pink family has room for a light fill with
  * black ink and a dark fill with white ink at 7:1, so pink is the light one and Bonbon, at its
  * 800 rung, the dark one. Mocha's stop is its 700 rung (`HERO.mochaStop`); its 500 rung stays
  * the frame.
@@ -582,8 +585,8 @@ const CHOICE_LABEL_UI = {
     description: 'text-sm'
 } as const
 
-/** Table cells break a long value instead of widening the table (overflow-wrap: anywhere) */
-const TABLE_CELL_WRAP = 'whitespace-normal wrap-anywhere'
+/** Table cells wrap between words; a word stays whole */
+const TABLE_CELL_WRAP = 'whitespace-normal'
 
 export const COMPONENTS = {
     // Kitchen panels (functional data) - Vibrant Pantone colors
@@ -655,9 +658,8 @@ export const COMPONENTS = {
         /**
          * THE table cell styling (ADR-018): every UTable binds one of these three
          * (`designSystemUsage.unit.spec.ts` rejects a table without).
-         * Cells wrap on every viewport - Nuxt UI's theme cell is `whitespace-nowrap`, so one long value (an e-mail,
-         * a name without spaces) or the panel docked under an expanded row would widen the table past a phone.
-         * `wrap-anywhere` lets such a value break, so the column shrinks to the screen (MobileViewport.e2e).
+         * Cells wrap between words on every viewport (Nuxt UI's theme cell is `whitespace-nowrap`); a word stays whole.
+         * A data table wider than a phone scrolls inside its own box, the page never does (MobileViewport.e2e).
          */
         ui: {th: 'px-2 md:px-4', td: `px-2 py-1 md:px-4 md:py-2 ${TABLE_CELL_WRAP}`},
         /** Compact tables with many narrow columns (booking form, household preferences, household allergies) */
@@ -1597,19 +1599,21 @@ export const CALENDAR = {
 export type CalendarPickerSelection = keyof typeof CALENDAR.picker
 
 /**
+ * UTable column visibility by breakpoint: `hiddenOnPhone` columns hide on a phone, `hiddenFromMd` columns hide from md.
+ * The content of a column hidden on a phone lives in the row's expanded panel; its expand column is `hiddenFromMd`
+ * when every column fits from md.
+ * @example <UTable :column-visibility="columnVisibility(['id', 'phone'])" />
+ * @example <UTable :column-visibility="columnVisibility(['durationMs'], ['expand'])" />
+ */
+export const createColumnVisibility = (isMd: Ref<boolean>) =>
+    (hiddenOnPhone: readonly string[], hiddenFromMd: readonly string[] = []): Record<string, boolean> =>
+        Object.fromEntries((isMd.value ? hiddenFromMd : hiddenOnPhone).map(column => [column, false]))
+
+/**
  * The shared calendar day circle: responsive size + shape + the variant the surface adds
  * (CALENDAR.holiday, PLANNING_CALENDAR.day.generated, CHEF_CALENDAR.day.next, …).
  * Exposed from the composable because the size depends on `isMd`.
  */
-/**
- * UTable column visibility by breakpoint: the columns listed are hidden on a phone, every column shows from md.
- * The content of a hidden column lives in the row's expanded panel.
- * @example <UTable :column-visibility="columnVisibility(['id', 'phone'])" />
- */
-export const createColumnVisibility = (isMd: Ref<boolean>) =>
-    (hiddenOnPhone: readonly string[]): Record<string, boolean> =>
-        isMd.value ? {} : Object.fromEntries(hiddenOnPhone.map(column => [column, false]))
-
 export const createDayCircleClasses = (isMd: Ref<boolean>) =>
     (...variants: (string | false | null | undefined)[]): string[] =>
         [createResponsiveSizes(isMd).calendarCircle, CALENDAR.day.shape, ...variants.filter((variant): variant is string => Boolean(variant))]

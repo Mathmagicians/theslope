@@ -12,7 +12,7 @@ defineProps<{ text?: string }>()
     <div class="flex items-center gap-4">
       <USkeleton class="h-12 w-12 shrink-0 rounded-full" />
 
-      <!-- The bars keep their 250/200px and shrink with a phone's card instead of widening it -->
+      <!-- The bars are at most 250/200px wide and shrink with the card -->
       <div class="grid flex-1 min-w-0 gap-2">
         <USkeleton class="h-4 w-full max-w-[250px]" />
         <USkeleton class="h-4 w-full max-w-[200px]" />

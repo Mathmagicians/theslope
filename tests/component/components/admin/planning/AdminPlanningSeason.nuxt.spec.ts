@@ -44,7 +44,7 @@ describe('AdminPlanningSeason', () => {
         // The title says what the form is doing; the edit control keeps the imperative "Rediger"
         it.each([
             {mode: FORM_MODES.EDIT, heading: 'Redigerer fællesspisning sæson'},
-            {mode: FORM_MODES.CREATE, heading: 'Opret fællesspisning sæson'}
+            {mode: FORM_MODES.CREATE, heading: 'Opretter fællesspisning sæson'}
         ])('mode=$mode reads "$heading"', async ({mode, heading}) => {
             const wrapper = await mount(mode)
             expect(wrapper.find('h2').text()).toContain(heading)

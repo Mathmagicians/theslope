@@ -57,7 +57,7 @@ const columns = [
 </script>
 
 <template>
-  <div :class="['min-h-screen py-8', BG.invoiceGround]">
+  <div :class="['min-h-screen py-8', BG.invoiceGround]" data-testid="public-billing">
     <div class="max-w-6xl mx-auto px-4">
       <!-- Error States -->
       <UCard v-if="isNotFound" class="text-center">

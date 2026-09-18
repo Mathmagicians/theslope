@@ -24,8 +24,8 @@ import {RAINBOW} from '../../../app/composables/useTheSlopeDesignSystem'
  * comes from.
  *
  * When a case fails, fix the palette - never the threshold. Pairs that miss today are listed in
- * FINDINGS with the distance measured on 2026-09-18 and run as `it.fails`, so both a regression in
- * a green pair and a fix of a listed one break the build.
+ * FINDINGS with the distance measured on 2026-09-18; the case per mode expects exactly the listed
+ * pairs to miss, so both a regression in a green pair and a fix of a listed one break the build.
  */
 
 // ---------------------------------------------------------------------------
@@ -145,23 +145,14 @@ describe('WCAG 2.1 §1.4.1: the design system keeps its meanings apart under col
 
             const named = (test: typeof cases[number]) =>
                 `${test.set}: ${test.a.label} vs ${test.b.label} under ${test.vision}`
-
-            const green = cases.filter(test => test.finding === undefined)
-                .map(test => ({test, name: `${named(test)} ≥ ${THRESHOLD}`}))
-
-            const findings = cases.filter(test => test.finding !== undefined)
-                .map(test => ({test, name: `${named(test)} — ${test.finding} (finding 2026-09-18, awaiting the user's decision)`}))
-
-            const message = (test: typeof cases[number]) =>
-                `${named(test)} measures ${Math.round(test.distance * 1000) / 1000}`
                 + ` (${rgbToHex(colour(test.a))} vs ${rgbToHex(colour(test.b))})`
 
-            it.each(green)('$name', ({test}) => {
-                expect(test.distance >= THRESHOLD, message(test)).toBe(true)
-            })
-
-            it.fails.each(findings)('$name', ({test}) => {
-                expect(test.distance >= THRESHOLD, message(test)).toBe(true)
+            // One case per mode: it names every pair closer than the bar, and a listed finding that
+            // starts passing drops out of the list, so both directions fail the case
+            it(`keeps every meaning pair ≥ ${THRESHOLD} apart`, () => {
+                const misses = cases.filter(test => test.distance < THRESHOLD)
+                const listed = cases.filter(test => test.finding !== undefined)
+                expect(misses.map(named)).toEqual(listed.map(named))
             })
         })
     })

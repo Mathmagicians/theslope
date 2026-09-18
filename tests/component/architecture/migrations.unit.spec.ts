@@ -4,10 +4,9 @@ import {join} from 'node:path'
 
 /**
  * D1 runs a migration inside a transaction where `PRAGMA foreign_keys=OFF` is a no-op, so a table rebuild
- * (Prisma's "RedefineTables": copy, DROP TABLE, rename) fires every child's ON DELETE action — 0015 as generated
- * nulled every Inhabitant.userId, Order.bookedByUserId, OrderHistory.performedByUserId and Invoice.billingPeriodSummaryId
- * on local and dev (2026-09-17). A required column is added with ALTER TABLE … ADD COLUMN … NOT NULL DEFAULT instead.
- * Migrations up to 0014 predate the rule and stay as applied.
+ * (Prisma's "RedefineTables": copy, DROP TABLE, rename) fires every child's ON DELETE action and nulls every
+ * SET NULL link to the rebuilt table. A required column is added with ALTER TABLE … ADD COLUMN … NOT NULL DEFAULT.
+ * The rule starts at 0015; applied migrations are immutable.
  */
 const MIGRATIONS_DIR = join(process.cwd(), 'migrations')
 const FIRST_GUARDED = 15

@@ -433,7 +433,7 @@ export const useBillingValidation = () => {
     const MonthlyBillingJobResultSchema = z.object({
         /** What this run billed (one per period with unbilled transactions) */
         results: z.array(BillingGenerationResultSchema),
-        /** Every closed period after this run: CSV in R2 and accountant mail, done or redone as needed ([] on runs stored before 2026-09-17) */
+        /** Every closed period after this run: CSV in R2 and accountant mail, done or redone as needed; a stored run without the field reads as [] */
         periods: z.array(BillingPeriodSideEffectsSchema).default([])
     })
 

@@ -22,13 +22,13 @@ The allergy catalog fixes D1, D2 and A1 shipped in #165. Follow-up defects found
 | QR code | in-house QR that prints with the poster | ✅ 2026-09-16 | `app/utils/qr.ts`, `shared/QrCode.vue` |
 | Poster notes | "Vigtige bemærkninger" stored in `Setting`, edited in place by allergy managers | ✅ 2026-09-18 | `useSettingValidation.ts`, `settingsRepository.ts`, `api/admin/setting/[key]`, `AllergyNotes.vue` |
 | My preferences | channels and appearance per user behind ⚙ on the dashboard | ✅ 2026-09-18 | `User` columns, `useUserPreferenceValidation.ts`, `api/user/preferences.post.ts`, `UserPreferencesCard.vue` |
-| Palettes | Glade farver (AA, default), Høj kontrast (AAA), Til farveblinde (AA, colour-safe) | 🟡 in progress: Tydelig becomes the base, Høj kontrast team stops (option A), Farveblind colour-safe pass | `scripts/palettes/`, `app/assets/css/palettes/` |
+| Palettes | Glade farver (AA, default), Høj kontrast (AAA), Til farveblinde (AA, colour-safe) | ✅ 2026-09-18 | `scripts/palettes/`, `app/assets/css/palettes/`, `PALETTES` |
 | Brand rainbow | one ordered rainbow for landing, kitchen panels and ticker | ✅ 2026-09-17 | `PANTONE_FAMILIES`, `HERO`, `RAINBOW`, `getRainbowBand` |
 | Team colours | team n wears rainbow stop n | ✅ 2026-09-18 | `RAINBOW_FAMILIES`; `TeamCalendarDisplay`, `CookingTeamBadges`, `CookingTeamCard`, `AdminTeams` |
 | Team creation toast | the toast states teams created and dinners assigned | ✅ 2026-09-18 | `CreateTeamsResponse`, `api/admin/team/index.put.ts`, `AdminTeams.vue` |
 | Dev feedback round 1 | six findings from the dev walk | ✅ 2026-09-18 | see "Dev feedback round 1" |
 | Calendar-day matching | team assignment and holiday cells compare calendar days | ✅ 2026-09-18 | `computeTeamAssignmentsForEvents` in `app/utils/season.ts`, `isCalendarDateInDateList` in `app/utils/date.ts` |
-| Mobile tables | tables fit a phone: cells wrap, the users table hides four columns behind its expanded row; the loader fits its card | 🟡 users, catalog, loader ✅ 2026-09-18; job history and the settings tree OPEN | `COMPONENTS.table.ui` / `denseUi` / `gridUi`, `columnVisibility`, every `UTable`, `AdminUsers.vue`, `Loader.vue` |
+| Mobile tables | the page fits a phone: cells wrap between words, wide data tables scroll in their own box, the users and job-history tables hide columns behind their expanded row; the loader fits its card | ✅ 2026-09-18 | `COMPONENTS.table.ui` / `denseUi` / `gridUi`, `columnVisibility`, every `UTable`, `AdminUsers.vue`, `AdminSystem.vue`, `Loader.vue` |
 
 ---
 
@@ -43,7 +43,7 @@ The allergy catalog fixes D1, D2 and A1 shipped in #165. Follow-up defects found
 - **Edit affordances** (2026-09-16, 2026-09-18). Rows, detail panels, card headers and the notes box use the square ghost pencil
   `BUTTONS.edit`; the season card uses the labelled `Rediger <navn>`. The ⚙ settings control is `BUTTONS.settings`.
 - **Planning** (2026-09-16). `/admin/planning` uses `Opret sæson` and `Rediger <navn>`; `/admin/teams` keeps `FormModeSelector`. The card title
-  reads "Fællesspisning sæson …", "Redigerer fællesspisning sæson …" (edit), "Opret fællesspisning sæson …" (create).
+  reads "Fællesspisning sæson …", "Redigerer fællesspisning sæson …" (edit), "Opretter fællesspisning sæson …" (create, 2026-09-18).
 - **Picker selection** (2026-09-16). A picked holiday is the green holiday ring, a picked season date the pink cooking-day circle, drawn by
   `dayCircleClasses`. Green belongs to holidays.
 - **The live season is edited in place** (2026-09-16). Saving reconciles the dinner events (ADR-015), runs `clipPreferences` and
@@ -51,14 +51,18 @@ The allergy catalog fixes D1, D2 and A1 shipped in #165. Follow-up defects found
 - **Palettes** (2026-09-16 to 2026-09-18). Three options: Glade farver (the Tydelig solve, AA, the default for every visitor), Høj kontrast
   (AAA), Til farveblinde (AA, colour-safe). The published Farveglad colours leave the UI; the `main.css` scales stay as the generator's input.
   The level comes from `PALETTES` in `useUserPreferenceValidation.ts`, which the contrast spec asserts. `make palettes` writes the preset files.
+- **Colour vision in Glade farver** (2026-09-18). Colour-blind members pick Til farveblinde. Glade farver keeps 42 of 72 meaning cases (the
+  Farveglad colours kept 57); its 30 rows stay dated in `FINDINGS` of `designSystemColourVision.unit.spec.ts`.
 - **Palette badges** (2026-09-18). "🇪🇺 EN 301 549 · Kontrast AA ✓" or "… Kontrast AAA ✓" from the `PALETTES` level: the badge claims
   contrast (WCAG 1.4.3, 1.4.6, 1.4.11), never full conformance. "👁 Nedsat farvesyn · Okabe–Ito ✓" from `PALETTES.colourSafe` (EN 301 549
   clause 4.2.3, WCAG 1.4.1 "Anvendelse af farve"). "Farvesikker" describes a person who passes a colour-vision test and is not used.
 - **Farveblind is the Color Universal Design standard** (2026-09-18). Every colour comes from the eight CUD colours; neutral maps to sky blue,
   primary to black; teams 1-8 take the eight colours and team 9 repeats team 1.
 - **Brand rainbow** (2026-09-17). Order pink, orange, ocean, bonbon, then the team stops. Black ink on the vibrant fills. TIL SALG stays grey.
-  The landing walks stops 0-3, the kitchen panels 0-2, the ticker chips follow the same order.
-- **Team colours** (2026-09-18). Team n wears rainbow stop n, 8-10 distinct colours; the team name on the badge carries the identity.
+  The landing walks stops 0-3, the kitchen panels 0-2, the ticker chips follow the same order. The kitchen panel arrows show on panels
+  with orders (2026-09-18).
+- **Team colours** (2026-09-18). Team n wears rainbow stop n; eight stops (option A), team 9 repeats team 1; the team name on the badge
+  carries the identity.
 - **Preferences** (2026-09-16, 2026-09-17). The card sits behind ⚙ in the profile card header; the pencil opens the edit face with Gem and
   Annuller. Labels: Notifikationer, Farvevalg (Glade farver, Høj kontrast, Til farveblinde), Tekst (Normal, Stor, Større).
 - **Poster boxes are outline** (2026-09-18). The poster prints without grey fills.
@@ -67,89 +71,34 @@ The allergy catalog fixes D1, D2 and A1 shipped in #165. Follow-up defects found
   (`BUTTONS.disclosure`): the ⚙ on the dashboard and on `/chef`, the role assignment, "Rapporter fejl".
 - **Toasts state results** (2026-09-18). The team toast reads `<n> madhold oprettet · <m> madlavninger tildelt`; the test-message toast carries
   the message id.
+- **Tables on a phone** (2026-09-18). A wide data table scrolls sideways inside its own box; the page never does. Words, dates, badges and
+  e-mails stay whole. The chevron and expanded row serve the users and job-history tables, whose extra columns are detail. The settings
+  tree keeps its ellipsis.
 
 ## Open
 
-### Høj kontrast team separation — OPEN, awaiting ✅
-
-Team badges put body text (`text-[10px]` to `text-sm`) on every rainbow stop, so `INK_ON_FILL` in `designSystemPairs.ts` grades all nine
-stops as body text (`TEAM_BADGE`): 4.5:1 in the AA palettes, 7:1 in Høj kontrast. At 7:1 the generator lifts the black-ink stops:
-`violet-500` → `#f066a6`, `party-700` → `#e8718a`. Pink, bonbon and party then carry black ink on three light pinks, and
-`designSystemColourVision.unit.spec.ts` › `'Høj kontrast': the brand rainbow › keeps its 9 stops apart ≥ 0.075` fails in light and dark:
-
-| Pair | ΔE (Oklab) | Bar |
-|---|---:|---:|
-| pink – party | 0.042 | 0.075 |
-| bonbon – party | 0.053 | 0.075 |
-| pink – bonbon | 0.062 | 0.075 |
-
-At AAA a hue family has room for two versions, a light fill with black ink and a dark fill with white ink; the rainbow holds four red-pinks
-(pink, bonbon, party, winery). Measured 2026-09-18 with the spec's resolver (nearest pair across the stops; lowest ink contrast):
-
-| Option | Stops | Nearest pair | Lowest ink |
-|---|---|---|---|
-| Today | pink, orange, ocean, bonbon, party-700, peach, winery, yellow, sky | Høj kontrast pink–party 0.042; the other palettes bonbon–party 0.079 | 4.74 AA / 7.03 AAA |
-| Keep party and bonbon at their published fills | as today | 0.079 | party 4.74, bonbon 5.88 — below 7:1 |
-| Lighten pink | as today | the three pairs stay below the bar | — |
-| Bonbon at `violet-700` + party at `party-900`, white ink | nine stops | bonbon–winery 0.044 | — |
-| Bonbon at `violet-800` + party at `party-900`, white ink | nine stops | bonbon–party 0.036 | — |
-| Bonbon at `violet-700` + party at `party-800`, white ink | nine stops | party–winery 0.028 | — |
-| **A — recommended**: pink, orange, ocean, bonbon `violet-800` (white), peach, yellow, sky (white), mocha `amber-700` (white) | eight stops, team 9 repeats team 1 | 0.100 in all four palettes, light and dark (bonbon–mocha) | 6.27 AA palettes / 7.03 Høj kontrast |
-| B: party `party-800` (white) instead of bonbon; bonbon and winery out | eight stops | 0.101-0.107 | 6.27 / 7.03 |
-| C: bonbon light, party out, winery dark | eight stops | Høj kontrast pink–bonbon 0.062 | — |
-
-White-ink ratios of the dark candidates: `party-800` 7.83, `party-900` 9.37, `violet-700` 6.40, `violet-800` 8.23, `violet-900` 9.87,
-`winery-700` 6.99, `winery-800` 8.72, `sky-700` 7.03, `amber-700` 7.22. Option A keeps the landing's four families; landing band 4 becomes
-deep magenta `#91234d` with a white heading, and teams from number 5 up change colour. Option A matches Farveblind's eight colour-blind
-colours with team 9 repeating team 1. The two architecture cases stay red until the choice lands in `HERO` / `RAINBOW_FAMILIES`.
-
-### Farveblind colour-safe pass — approved 2026-09-18, starts after the team stops
-
-The preset maps the meaning scales onto the Color Universal Design anchors (green `#009E73`, red `#D55E00`, orange `#E69F00`, yellow
-`#F0E442`, pink `#CC79A7`, the info slot `#0072B2`) and meets AA on all 438 pairs. The simulation spec measures 12 meaning pairs × 3
-vision types × 2 modes = 72 cases per palette at ΔE ≥ 0.075: the default theme clears 57, Farveblind 54. The misses AA takes away:
-
-| Pair | Vision | Default | Farveblind | Cause |
-|---|---|---|---:|---|
-| `error vs warning` | protanopia, deuteranopia | 0.073 / 0.084 | 0.019 / 0.025 | The CUD set separates vermillion and orange by lightness (0.62 against 0.75); a solid slot fill is both `text-<slot>` on the page and the fill under `text-inverted`, so 4.5:1 puts every slot at one lightness and leaves the hue axis these viewers lack |
-| `ADULT vs CHILD` | protanopia, deuteranopia | 0.211 / 0.128 | 0.030 / 0.041 | `primary` is Mocha Mousse, untouched by the hue map, and at the contrast ceiling it sits beside the bluish green |
-| `CHILD vs BABY` | tritanopia | 0.144 | 0.014 | `neutral` is the Ocean teal, beside the CUD bluish green for a tritanope at the ceiling |
-
-A measured ceiling: re-pointing each meaning slot at the rung that spreads the meanings furthest lifts the worst pair from 0.019 to 0.078
-(light) and 0.056 (dark), with near-black meaning fills (`#00533b` success, `#3e1600` error).
-
-The user's decisions (2026-09-18): Farveblind is the CUD standard with no weak pairs. The pass:
-1. Keeps each anchor's own lightness where AA allows, so the meanings keep the separation the set is built on.
-2. Maps `neutral` to sky blue `#56B4E9` and `primary` to black `#000000` inside Farveblind: black primary buttons, sky-blue neutrals,
-   a black ADULT ticket.
-3. Maps team stops 1-8 to the eight CUD colours; team 9 repeats team 1.
-4. Ends with zero Farveblind rows in `FINDINGS` of `designSystemColourVision.unit.spec.ts`; the default theme keeps its dated rows.
-
-A regression found by the chroma clamp (2026-09-18) stands until the pass lands: Farveblind light mode, `normal vs released` under
-deuteranopia, 0.0761 → **0.0746** (`#8d5f52` against `red-600`, which moved one byte `#b14d00` → `#b14c00`). Protanopia on the same
-pair stays at its listed 0.074. The case fails in the architecture suite. The pass replaces `normal` (primary) with black, which moves
-this pair.
-
 ### Smaller open items
 
-- **Create title.** "Opret fællesspisning sæson …" as built, or "Opretter fællesspisning sæson …" to match "Redigerer".
+- **`MobileViewport.e2e.spec.ts` under parallel load.** With four workers one screen per run stays on "Henter sæsondata..." for 64s
+  (`admin-planning`, then `dinner`), and one run drew the page header 152px wide for a frame (`household-bookings-week`); each case
+  passes alone. CI runs one worker.
 - **Inhabitant create on an existing email.** `serializeUserInput` writes both preference columns on the email-keyed upsert, so an admin
   creating an inhabitant whose email already exists resets that user's channels and appearance to the defaults — the same as it resets
   `systemRoles`. The Heynabo import creates through `createUsers` and updates through the id-keyed `saveUser`, so it keeps them.
 - **Tokens without a consumer:** `COMPONENTS.cardAction.{neutral,destructive,toggle,toggleActive}`, `BUTTONS.more`, `LAYOUTS.hero`, the
-  `CLASSES.hero.primary` example in the design-system header (names an export that does not exist), `TEXT.orange[100]`, `TEXT.party[50]`.
+  `CLASSES.hero.primary` example in the design-system header (names an export that does not exist), `TEXT.orange[100]`, `getRainbowFamily`.
+- **Neutral badges.** The contrast spec measures `color="neutral"` on `bg-neutral`; Nuxt UI paints solid neutral on `bg-inverted` and
+  soft/subtle on `bg-elevated`. In Til farveblinde a solid BABY badge renders `neutral-900`, not sky blue.
+- **Til farveblinde choices made by the generator** (visual check). Error and warning part by lightness; light `neutral` (L .43) sits
+  below `success` (L .52); faces keep at least half their anchor's chroma; `neutral` keeps the ladder's chroma (dark page `#2d4351`);
+  dark `primary` is `#d2d2d2`; ocean and peach swap anchors (ocean bluish green, peach sky blue); bonbon takes vermillion darkened to
+  `#c05400` for its white ink.
+- **Høj kontrast dark peach stop** is `#fff3eb`.
 - **Countdown token names.** `CHEF_CALENDAR.countdown` / `DINNER_CALENDAR.countdown` read `accent` = 200, `accentMedium` = 300,
   `accentLight` = 50 since the accent moved to the 200 rung.
-- **`HERO` comment.** It records "Mandarin Orange 6.27:1" as the lowest across palettes; Tydelig now publishes `#ec6a37` (6.68) and
-  Farveblind `#c78900` (7.01), so the lowest is 6.68.
 - **Nuxt UI colour observations.** Nuxt UI's colours plugin emits no `--ui-neutral`; each preset declares it. `mocha` and `bonbon` are
   declared in `nuxt.config.ts` `ui.theme.colors` and mapped nowhere in `app.config.ts` `ui.colors`, so `bg-mocha-*` and `bg-bonbon-*` paint
   nothing; `BG.mocha` names `amber`, `BG.bonbon` names `violet`.
-- **Base palette swap** (in progress, 2026-09-18). The Tydelig blocks render under `html:not([data-palette])` as `palettes/default.css`,
-  registry key `default` at AA; `tydelig` leaves `PaletteSchema` and a stored `tydelig` reads as `default` (no migration: the `User.appearance`
-  column default already holds `default`). The 170 default-theme entries in `KNOWN_FINDINGS` go. Høj kontrast and Til farveblinde keep their
-  mechanism and solve input: they set `data-palette`, so the base blocks never apply beneath them.
-- **Mobile tables** — job history on a phone and the settings tree's long values: OPEN, see "Mobile tables".
 - **`AdminAllergies.e2e.spec.ts` poster-notes cases** fail with four workers: `apiRequestContext.get: Request context disposed` in the
   catalog `beforeAll` and `apiRequestContext.post: Target page, context or browser has been closed` inside `UserFactory.withSystemRoles`.
   The describe runs serially; the cause (a context closed while another test uses it) is being traced in `settingFactory.ts` /
@@ -267,25 +216,23 @@ on screen and a row in print. **Mockup:** `pdf.vue` header (✅ 2026-09-16). **T
 
 ## Palettes
 
-- **Mechanism.** A preset redeclares `--color-<family>-<step>` and `--ui-<slot>` under `html[data-palette="<key>"]` and its `.dark` mirror
-  (`app/assets/css/palettes/<key>.css`, imported by `main.css`). One attribute on `<html>` reaches Nuxt UI and the design-system utilities.
-- **Registry.** `PALETTES` in `useUserPreferenceValidation.ts` holds each preset's level and `colourSafe`; the card renders the registry.
-- **Generator.** `scripts/palettes/presets.ts` (data), `render.ts` (`solvePreset`, `renderPreset`), `generate.ts` (CLI). A preset applies its
-  hue map, re-points the solid slots, then walks OKLCH lightness until every pair meets the preset's level. Run: `make palettes`.
-- **Measurement.** `tests/component/architecture/`: `contrast.ts` (colour maths shared with the generator), `designSystemPairs.ts` (the pair
-  inventory walked from the tokens), `palettes.ts` (the list derived from the registry), `designSystemContrast.unit.spec.ts` (every pair at the
-  registry's level; committed file equals a fresh render), `designSystemColourVision.unit.spec.ts` (meaning pairs under three vision types,
-  rainbow stops apart, ΔE ≥ 0.075 in Oklab). `KNOWN_FINDINGS` (default theme) and `PRESET_FINDINGS` run as dated `it.fails`.
+- **Mechanism.** The base `palettes/default.css` (the Tydelig solve) applies under `html:not([data-palette])`; a preset redeclares
+  `--color-<family>-<step>` and `--ui-<slot>` under `html[data-palette="<key>"]`; each has a `.dark` mirror. `main.css` imports all three.
+- **Registry.** `PALETTES` in `useUserPreferenceValidation.ts` holds each key's level and `colourSafe`; `AppearanceSchema` reads a stored
+  `tydelig` as `default`. `UserPreferencesCard.vue` renders the labels and badges.
+- **Generator.** `scripts/palettes/presets.ts` (data), `render.ts` (`solvePreset`, `renderPreset`, the meaning faces), `generate.ts` (CLI). Run:
+  `make palettes`. Til farveblinde maps every meaning face and the eight stops onto the Color Universal Design colours.
+- **Measurement.** `tests/component/architecture/`: `contrast.ts`, `designSystemPairs.ts`, `designSystemMeanings.ts`, `palettes.ts`,
+  `designSystemContrast.unit.spec.ts`, `designSystemColourVision.unit.spec.ts` (`docs/testing.md` → Architecture Tests).
 - **Counts (2026-09-18).**
 
-  | Palette | Level | Pairs meeting the level |
+  | Palette | Contrast pairs at its level | Meaning cases (3 vision types × 2 modes) |
   |---|---|---|
-  | Farveglad | — | 268 of 438 at AA (170 listed in `KNOWN_FINDINGS`) |
-  | Tydelig | AA | 438 of 438 |
-  | Farveblind | AA | 438 of 438 |
-  | Høj kontrast | AAA | 438 of 438 |
+  | Glade farver | 434 of 434 at AA | 42 of 72 |
+  | Høj kontrast | 434 of 434 at AAA | not measured |
+  | Til farveblinde | 434 of 434 at AA | 72 of 72 |
 
-  Ratios, blocks and old → new values: the generator's run report and the file headers.
+- **Mockups.** `UserPreferencesCard.vue` header (badges ✅ 2026-09-18).
 
 ## Brand rainbow and team colours
 
@@ -328,33 +275,33 @@ run in UTC and Copenhagen. The storage convention: `bug-fix-dinner-page-and-date
 ## Mobile tables
 
 **Problem.** Measured at 375px by `MobileViewport.e2e.spec.ts` on 2026-09-18: the users table scrolled 555px sideways, the job-history
-table 1146px, the allergy catalog 192px with a row expanded; `/dinner` was 3px wider than the phone while its loaders showed; the
-settings tree cuts `holidayUrl` by 273px.
-**Root cause.** Nuxt UI's table cell is `whitespace-nowrap` with `p-4`, so the widest value in a column (an e-mail, a name without
-spaces, the job result text) sets the table's width, and a panel docked under an expanded row spans it. Ten of the seventeen tables bound
-no table token. `Loader.vue` draws a fixed 48 + 16 + 250px row, 378px inside a card on a phone. The tree label is `truncate`.
+table 1146px, the allergy catalog 192px with a row expanded; `/dinner` was 3px wider than the phone while its loaders showed.
+**Root cause.** Nuxt UI's table cell is `whitespace-nowrap` with `p-4`, so a multi-word value keeps to one line. Ten of the seventeen
+tables bound no table token. `Loader.vue` draws a fixed 48 + 16 + 250px row, 378px inside a card on a phone.
 **Solution.**
-- `COMPONENTS.table.ui` (cells `px-2 md:px-4`, `py-1 md:py-2`, `whitespace-normal wrap-anywhere`), `denseUi` (the compact padding of the
-  booking form, household preferences and household allergies) and `gridUi` (the booking grid); every `<UTable>` binds one of them —
-  `designSystemUsage.unit.spec.ts` rule "every <UTable> binds a COMPONENTS.table token".
-- `columnVisibility(hiddenOnPhone)` in the design system (`createColumnVisibility`); the users table hides `#`, Telefon, Systemroller and
-  Sidst opdateret on a phone, their content is in the expanded `UserProfileCard`.
+- `COMPONENTS.table.ui` (cells `px-2 md:px-4`, `py-1 md:py-2`, `whitespace-normal`: a cell wraps between words, a word and an e-mail stay
+  whole), `denseUi` (the compact padding of the booking form, household preferences and household allergies) and `gridUi` (the booking
+  grid); every `<UTable>` binds one of them — `designSystemUsage.unit.spec.ts` rule "every <UTable> binds a COMPONENTS.table token".
+- A data table wider than a phone scrolls inside its own box (the economy tables, households, teams); the page stays at the phone's width.
+- `columnVisibility(hiddenOnPhone, hiddenFromMd)` in the design system (`createColumnVisibility`). The users table hides `#`, Telefon,
+  Systemroller and Sidst opdateret on a phone, their content is in the expanded `UserProfileCard`. The job history hides Varighed, Kilde
+  and Resultat on a phone behind a chevron (`job-history-expand-<id>`, the panel `job-history-details`); from md the chevron hides and an
+  open row closes.
 - `Loader.vue`: the bars keep 250/200px as a maximum and shrink with the card.
 
-**Mockup — users table on a phone** ✅ signed off 2026-09-18; in the header of `AdminUsers.vue`.
+**Mockup — users table on a phone** ✅ signed off 2026-09-18, addresses whole 2026-09-18; in the header of `AdminUsers.vue`.
+**Mockup — job history on a phone** ✅ signed off 2026-09-18; in the header of `AdminSystem.vue`.
 
-**Mockup — job history on a phone** — OPEN. The wrapping cells alone fit the six columns at about 50px each: words break mid-letter and a
-row is about 300px tall. Options and their measurements: the reply of 2026-09-18.
-
-**Settings tree** — OPEN: the ellipsis stays, or the tree's labels wrap.
-
-**TDD.** `MobileViewport.e2e.spec.ts` samples the document every animation frame (skeletons included), checks every alert for clipped
-content, measures the tables' own scroll boxes and the truncating tree labels, and names the elements that reach past the phone; red on
-four cases, green on eight of nine after the change. `designSystemUsage.unit.spec.ts` red on seven sites, then green.
-`useTheSlopeDesignSystem.unit.spec.ts`: `columnVisibility` per breakpoint.
+**TDD.** `MobileViewport.e2e.spec.ts` covers every route, admin and household tab, booking view and revealed state (`SCREENS`). Per
+screen it samples the document every animation frame (skeletons included), checks every alert for clipped content, and checks that no
+word in a table, a badge or a button breaks across two lines (alerts break anywhere by design). Red on the badges ("Igangværende",
+"Gennemført", "Fraflyttet") and on the cell text (`17/09/202|6`) under `wrap-anywhere`, then green. `designSystemUsage.unit.spec.ts` red
+on seven sites, then green. `useTheSlopeDesignSystem.unit.spec.ts`: `columnVisibility` per breakpoint. `AdminSystem.nuxt.spec.ts`: the
+columns and the chevron per breakpoint, the expanded row's content, the row closing at md.
 **Affected.** `useTheSlopeDesignSystem.ts`; `AdminUsers.vue`, `AdminSystem.vue`, `AdminTeams.vue`, `BookingGridView.vue`,
 `DinnerBookingForm.vue`, `HouseholdCard.vue`, `HouseholdAllergies.vue`, `AllergyCatalogTable.vue`, `CostEntry.vue` (doc example),
-`Loader.vue`; every table that already bound `COMPONENTS.table.ui` takes the new padding and wrapping.
+`Loader.vue`; every table that already bound `COMPONENTS.table.ui` takes the new padding and wrapping; root test-ids `chef-page` and
+`public-billing`. Tests: `SeasonFactory.defaultJobRun`, `mountWithTooltipProvider` takes an `isMd` ref.
 
 ## Test coverage
 

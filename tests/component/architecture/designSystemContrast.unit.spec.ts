@@ -29,8 +29,9 @@ import {renderPreset} from '../../../scripts/palettes/render'
  *   1.4.11 Non-text Contrast, AA    - 3:1 borders, rings, UI boundaries (no AAA level exists)
  *
  * When a case fails, fix the token - never the threshold. A pair a palette cannot meet is listed in
- * PRESET_FINDINGS with the ratio it reaches and runs as `it.fails`, so both a regression in a green
- * pair and a fix of a listed one break the build. Every palette meets its level today.
+ * PRESET_FINDINGS with the ratio it reaches; the case per mode expects exactly the listed pairs to
+ * miss, so both a regression in a green pair and a fix of a listed one break the build. Every
+ * palette meets its level today.
  */
 
 // ---------------------------------------------------------------------------
@@ -54,8 +55,8 @@ const PALETTES = PALETTES_UNDER_TEST
 const RENDER_TIMEOUT_MS = 30_000
 
 /**
- * Pairs a palette cannot answer, keyed `<palette>|<pair>`, with the ratio it reaches. They run as
- * `it.fails`, so a regeneration that fixes one breaks the build and asks for the entry to go.
+ * Pairs a palette cannot answer, keyed `<palette>|<pair>`, with the ratio it reaches. A regeneration
+ * that fixes one fails its mode's case and asks for the entry to go.
  *
  * Glade farver and Til farveblinde meet AA on every pair, in light and dark. The nine tokens that used to
  * hold them back drew one rung as a fill and as ink at once; each now carries its own `dark:` face
@@ -69,6 +70,9 @@ const RENDER_TIMEOUT_MS = 30_000
  * border no longer shares its rung with the orange band fill.
  */
 const PRESET_FINDINGS = new Map<string, number>([])
+
+/** A pair as a failing case prints it */
+const describePair = (pair: Pair) => `${pair.group}: ${pair.name} ${round(pair.ratio)}:1 < ${pair.threshold}`
 
 /** The selectors a stylesheet opens its blocks with, its comments left out */
 const blockSelectors = (css: string) =>
@@ -199,29 +203,14 @@ describe('EN 301 549 / WCAG 2.1: the design system meets its contrast level', ()
         // A preset with no stylesheet has already failed above; its pairs would measure the
         // published palette and say nothing about the preset, so they do not run
         const pairs = file !== null && !published ? [] : buildPairs(override ?? NO_OVERRIDE, level)
-        const groups = [...new Set(pairs.map(pair => pair.group))]
 
-        describe.each(groups)('%s', group => {
-            const cases = pairs.filter(pair => pair.group === group)
-            const finding = (pair: Pair) => PRESET_FINDINGS.get(`${id}|${pair.key}`)
-
-            const green = cases.filter(pair => finding(pair) === undefined)
-                .map(pair => ({pair, name: `${pair.mode}: ${pair.name} ≥ ${pair.threshold} (${level})`}))
-
-
-            const findings = cases.filter(pair => finding(pair) !== undefined)
-                .map(pair => ({
-                    pair,
-                    name: `${pair.mode}: ${pair.name} — ${finding(pair)} (finding 2026-09-18, awaiting the user's decision)`
-                }))
-
-            it.each(green)('$name', ({pair}) => {
-                expect(meetsThreshold(pair), `${pair.name} measures ${round(pair.ratio)}:1`).toBe(true)
-            })
-
-            it.fails.each(findings)('$name', ({pair}) => {
-                expect(meetsThreshold(pair), `${pair.name} measures ${round(pair.ratio)}:1`).toBe(true)
-            })
+        // One case per mode: it names every pair below its bar, and a listed finding that starts
+        // passing drops out of the list, so both directions fail the case
+        it.each(MODES)(`%s mode: every pair meets ${level}`, mode => {
+            const measured = pairs.filter(pair => pair.mode === mode)
+            const misses = measured.filter(pair => !meetsThreshold(pair))
+            const listed = measured.filter(pair => PRESET_FINDINGS.has(`${id}|${pair.key}`))
+            expect(misses.map(describePair)).toEqual(listed.map(describePair))
         })
     })
 })

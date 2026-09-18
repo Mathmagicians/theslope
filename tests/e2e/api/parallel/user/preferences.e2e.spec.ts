@@ -43,7 +43,7 @@ test.describe('User preferences', () => {
         const context = await memberValidatedBrowserContext(browser)
         const preferences = {
             notificationChannels: ['EMAIL'] as NotificationChannel[],
-            appearance: {palette: 'tydelig', textScale: 'large'} as Appearance
+            appearance: {palette: 'high-contrast', textScale: 'large'} as Appearance
         }
 
         const updated = await UserFactory.updateMyPreferences(context, preferences)

@@ -60,28 +60,28 @@ test.describe('My preferences', () => {
         test.setTimeout(90_000)
     })
 
-    test('GIVEN a logged-in member on the dashboard WHEN picking Tydelig and Stor THEN html carries the appearance, also after reload', async ({page}) => {
+    test('GIVEN a logged-in member on the dashboard WHEN picking Høj kontrast and Stor THEN html carries the appearance, also after reload', async ({page}) => {
         await page.goto('/login')
         await waitForHydration(page)
         await openPreferences(page)
 
-        await saveAppearance(page, 'tydelig', 'large')
+        await saveAppearance(page, 'high-contrast', 'large')
 
-        await expect(html(page)).toHaveAttribute('data-palette', 'tydelig')
+        await expect(html(page)).toHaveAttribute('data-palette', 'high-contrast')
         await expect(html(page)).toHaveAttribute('data-text-scale', 'large')
 
         await page.reload()
         await waitForHydration(page)
 
-        await expect(html(page)).toHaveAttribute('data-palette', 'tydelig')
+        await expect(html(page)).toHaveAttribute('data-palette', 'high-contrast')
         await expect(html(page)).toHaveAttribute('data-text-scale', 'large')
     })
 
-    test('GIVEN a member on Tydelig WHEN picking Standard and Normal THEN html carries neither attribute', async ({page}) => {
+    test('GIVEN a member on Høj kontrast WHEN picking Glade farver and Normal THEN html carries neither attribute', async ({page}) => {
         await page.goto('/login')
         await waitForHydration(page)
         await openPreferences(page)
-        await saveAppearance(page, 'tydelig', 'large')
+        await saveAppearance(page, 'high-contrast', 'large')
 
         await saveAppearance(page, 'default', 'normal')
 

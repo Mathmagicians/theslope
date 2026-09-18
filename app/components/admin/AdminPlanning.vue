@@ -1,5 +1,5 @@
 <!--
-UX MOCKUP: /admin/planning card (signed off 2026-09-16) - composition only.
+UX MOCKUP: /admin/planning card - composition only.
 The season form draws its own layout in AdminPlanningSeason.vue.
 
 DESKTOP                                                  MOBILE (<md)

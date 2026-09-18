@@ -52,4 +52,12 @@ describe('createColumnVisibility', () => {
         isMd.value = md
         expect(columnVisibility(['id', 'phone'])).toEqual(visibility)
     })
+
+    it.each([
+        [false, {durationMs: false}],
+        [true, {expand: false}]
+    ] as const)('isMd=%s with an expand column hidden from md → %j', (md, visibility) => {
+        isMd.value = md
+        expect(columnVisibility(['durationMs'], ['expand'])).toEqual(visibility)
+    })
 })

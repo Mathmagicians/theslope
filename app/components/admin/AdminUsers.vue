@@ -1,21 +1,18 @@
 <!--
-UX MOCKUP: /admin/users table on a phone (signed off 2026-09-18)
+UX MOCKUP: /admin/users table on a phone
 
-MOBILE (<md)                            DESKTOP (md+)
-┌─────────────────────────────────────┐ all seven columns:
-│ 🔍 Søg efter navn eller email…      │ › · # · Navn · Mail · Telefon ·
-│ [⇅ Navn]  [«] [‹] [1] [›] [»]       │ Systemroller · Sidst opdateret
-├───┬────────────┬────────────────────┤
-│   │ Navn       │ Mail               │
-│ › │ Lasse      │ lassefm@gmail.com  │
-│ › │ Alexander  │ smedegaard1987@gma │
-│   │            │ il.com             │ a long address wraps (COMPONENTS.table.ui)
-│ ⌄ │ Anders     │ anders@hey.com     │
-│ ┌─────────────────────────────────┐ │
-│ │ UserProfileCard (mail, telefon, │ │ expanded row, unchanged
-│ │ systemroller)                   │ │
-│ └─────────────────────────────────┘ │
-└─────────────────────────────────────┘
+MOBILE (<md)                        DESKTOP (md+)
+┌─────────────────────────────────┐ › · # · Navn · Mail · Telefon ·
+│ 🔍 Søg efter navn eller email…  │ Systemroller · Sidst opdateret
+│ [⇅ Navn] [«] [‹] [1] [›] [»]    │
+├───┬───────────┬─────────────────┤
+│   │ Navn      │ Mail            │
+│ › │ …         │ …               │
+│ ⌄ │ …         │ …               │
+│ ┌─────────────────────────────┐ │
+│ │ UserProfileCard             │ │
+│ └─────────────────────────────┘ │
+└─────────────────────────────────┘
 On a phone #, Telefon, Systemroller and Sidst opdateret are hidden (columnVisibility);
 phone and roles show in the expanded UserProfileCard.
 -->

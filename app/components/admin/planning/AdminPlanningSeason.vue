@@ -1,11 +1,11 @@
 <!--
-UX MOCKUP: season form (signed off 2026-09-16) - this component's own layout.
+UX MOCKUP: season form - this component's own layout.
 Where the form sits on the page: see AdminPlanning.vue.
 
 VIEW (canEdit)                                    EDIT / CREATE
 ┌ Fællesspisning sæson 08/26-07/27             ┐   ┌ Redigerer fællesspisning sæson 08/26-07/27┐
-│                     [✏ Rediger 08/26-07/27]  │   │ (create: Opret fællesspisning sæson <navn>,│
-│ Vi følger folkeskolernes feriekalender…      │   │  navn as soon as the dates are valid)      │
+│                     [✏ Rediger 08/26-07/27]  │   │ (create: Opretter fællesspisning sæson     │
+│ Vi følger folkeskolernes feriekalender…      │   │  <navn>, navn once the dates are valid)    │
 │ [Start dato][Slut dato]            (disabled)│   │ Vi følger folkeskolernes feriekalender…    │
 │ Ugedage · ferier (read-only) · billetpriser  │   │ [Start dato ▾][Slut dato ▾]                │
 │ CalendarDisplay right (above on mobile)      │   │ Hvilke ugedage skal der være fællesspisning?│
@@ -65,7 +65,7 @@ const EDIT_VERB = 'Rediger'
 const TITLE_VERBS: Record<FormMode, string> = {
   [FORM_MODES.VIEW]: '',
   [FORM_MODES.EDIT]: 'Redigerer',
-  [FORM_MODES.CREATE]: 'Opret'
+  [FORM_MODES.CREATE]: 'Opretter'
 }
 
 // The season's name lives in the title (create shows it as soon as the dates are valid)
