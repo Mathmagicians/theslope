@@ -530,6 +530,21 @@ theslope-import-season-prod: ## Import season CSV to production
 	$(call theslope_import_season,$(ENV_prod),$(CALENDAR_CSV),$(TEAMS_CSV_PROD))
 
 # ============================================================================
+# SEASON TEAMS EXPORT (teams CSV in the season importer's format)
+# ============================================================================
+.PHONY: theslope-export-teams
+
+# GET /api/admin/team → team,role,name,affinity. The full name matches the importer exactly; a member's affinity becomes
+# the importer's weekday abbreviation when it holds exactly one weekday
+TEAMS_EXPORT_JQ = if type != "array" then error("no teams for the active season: \(.)") else ("team,role,name,affinity", (.[] | (.name | capture("(?<n>[0-9]+)").n) as $$n | .assignments | sort_by(.role, .inhabitant.name)[] | ["Madhold " + $$n, .role, .inhabitant.name + " " + .inhabitant.lastName, ((.affinity // {}) | with_entries(select(.value)) | keys | if length == 1 then ({"mandag": "man", "tirsdag": "tirs", "onsdag": "ons", "torsdag": "tors"}[.[0]] // "") else "" end)] | @csv)) end
+
+# The season is the active one (GET /api/admin/season/active), read after the login
+theslope-export-teams: ## Export the active season's team members as teams CSV - env=local|dev|prod → .theslope/team-import/teams-<env>.csv
+	@test -n "$(ENV_$(env))" || { echo "usage: make $@ env=local|dev|prod"; exit 1; }
+	$(call theslope_call,$(ENV_$(env)),"$$BASE_URL/api/admin/team?seasonId=$$(curl -s -b .cookies.txt "$$BASE_URL/api/admin/season/active")") | jq -r '$(TEAMS_EXPORT_JQ)' > .theslope/team-import/teams-$(env).csv
+	@echo "$$(($$(wc -l < .theslope/team-import/teams-$(env).csv) - 1)) members → .theslope/team-import/teams-$(env).csv"
+
+# ============================================================================
 # HEAL USER BOOKINGS (bugfix - one-time healing)
 # ============================================================================
 # Usage: make heal-local hid=123 dryrun=false
