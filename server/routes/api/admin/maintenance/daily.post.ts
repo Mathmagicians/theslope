@@ -12,7 +12,7 @@ const {throwH3Error} = eventHandlerHelper
  * Same logic as cron task, but triggered via HTTP.
  *
  * Query params:
- * - triggeredBy: "ADMIN:<userId>" for manual triggers
+ * - triggeredBy: "ADMIN:<email>" from the admin UI, "ADMIN" when absent
  */
 export default defineEventHandler(async (event): Promise<DailyMaintenanceResult> => {
     const {cloudflare} = event.context

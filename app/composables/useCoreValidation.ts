@@ -590,7 +590,5 @@ export type HouseholdCreateFormData = z.infer<ReturnType<ReturnType<typeof useCo
 export type HouseholdUpdate = z.infer<ReturnType<typeof useCoreValidation>['HouseholdUpdateSchema']>
 
 // ROLE OWNERSHIP TYPES
-// RoleOwner: Enum for which system owns each role (HN = Heynabo, TS = TheSlope)
-export type RoleOwner = z.infer<ReturnType<typeof useCoreValidation>['RoleOwnerSchema']>
 // ReconcileResult: Result of role reconciliation with admin change tracking
 export type ReconcileResult = z.infer<ReturnType<typeof useCoreValidation>['ReconcileResultSchema']>

@@ -402,7 +402,7 @@ model JobRun {
   durationMs    Int?
   resultSummary String? // JSON - flexible per job type
   errorMessage  String?
-  triggeredBy   String     @default("CRON") // "CRON" | "ADMIN:<userId>"
+  triggeredBy   String     @default("CRON") // "CRON" | "ADMIN" | "ADMIN:<email>"
   deliveries    Delivery[]
 
   @@index([jobType, startedAt])

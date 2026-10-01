@@ -1,16 +1,14 @@
-import type {SystemRole, ReconcileResult} from '~/composables/useCoreValidation'
-import {z} from 'zod'
+import {useCoreValidation, type SystemRole, type ReconcileResult} from '~/composables/useCoreValidation'
+import type {z} from 'zod'
 import {SystemRoleSchema} from '~~/prisma/generated/zod'
 
 // ============================================================================
 // MODULE-LEVEL EXPORTS (Server-safe, explicit imports only - ADR-017)
 // ============================================================================
 
-/**
- * Role ownership schema - which system owns which role
- * HN = Heynabo (external), TS = TheSlope (local)
- */
-export const RoleOwnerSchema = z.enum(['HN', 'TS'])
+const {RoleOwnerSchema} = useCoreValidation()
+
+/** Which system owns a role: HN = Heynabo (external), TS = TheSlope (local) */
 export const RoleOwner = RoleOwnerSchema.enum
 export type RoleOwnerValue = z.infer<typeof RoleOwnerSchema>
 
