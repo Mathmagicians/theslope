@@ -1,6 +1,6 @@
 # Technology refresh: Nuxt 4.5 and dependencies
 
-**Status:** Proposal | **Date:** 2026-09-19 | **Updated:** 2026-09-19 | **Branch:** `chore/npm-dependencies`
+**Status:** In progress | **Date:** 2026-09-19 | **Updated:** 2026-10-02 | **Branch:** `chore/npm-dependencies`
 
 The branch runs Nuxt 4.5.2 and Nuxt UI 4.11.1. The goal is code that works with the framework: where Nuxt or Nuxt UI provides a
 thing, the app uses it and the hand-written version leaves. The user runs installs and upgrades; each package lists the commands.
@@ -9,24 +9,23 @@ thing, the app uses it and the hand-written version leaves. The user runs instal
 
 | Package | What | Status |
 |---|---|---|
-| Node and npm versions | one pinned Node and npm for local and CI (`devEngines`), Node 24.21.0 with npm 11.19.0 | ⏳ awaiting signoff |
-| Test tooling | vitest 4.1 and `@nuxt/test-utils` 4, the versions Nuxt 4.5.2 builds with | ⏳ awaiting signoff |
+| Node and npm versions | Node 24.21.0 with npm 11.19.0, pinned in `engines`, read by CI | ✅ done |
+| Test tooling | vitest 5.0.3 and `@nuxt/test-utils` 4.3.2; 111 spec files, 2625 tests pass | ✅ done |
 | Vite 8 build | the app, dev server and sender build on Vite 8 | ⏳ awaiting signoff |
 | Nuxt UI 4.11 | the 4.4–4.11 changes checked against our components | ⏳ awaiting signoff |
 | Danish locale | `UApp` locale `da`; the hand-translated week days leave | ⏳ awaiting signoff |
 | Date pickers | `UInputDate` with the calendar in its trailing popover | ⏳ mockup awaiting signoff |
 | Fetch gating | the `enabled` option of `useAsyncData` replaces fetchers that return empty values | ⏳ awaiting signoff |
 | Page composition | master/detail and tab pages, the `md` breakpoint | OPEN |
-| Tailwind | `tailwindcss` 4.3.3 | ⏳ awaiting signoff |
+| Tailwind | `tailwindcss` 4.3.3; declared floors follow installed versions | ⏳ awaiting signoff |
 | Dependency clusters | majors outside Nuxt and Nuxt UI | OPEN — survey in progress |
 
-Node and npm versions comes first: npm 10 crashes on the Nuxt 4.5 graph. Test tooling follows: the Nuxt component specs that
-verify the other packages run on it.
+Vite 8 build is next: the upgraded test tooling and `pre:all` verify it.
 
 ## Decisions (2026-09-19)
 
-- The test tooling follows the Nuxt 4.5.2 catalog (`pnpm-workspace.yaml` at `v4.5.2`: vitest 4.1.10, `@nuxt/test-utils` 4.1.0,
-  `@vue/test-utils` 2.4.11, happy-dom 20.11.1). vitest `^4.1.11` carries the `@vitest/mocker` fix (GHSA-82fw-gwwq-j7x9).
+- The test tooling runs the newest releases inside `@nuxt/test-utils` 4.3.2's peer ranges: vitest 5.0.3 (carries the
+  `@vitest/mocker` fix, GHSA-82fw-gwwq-j7x9), `@vue/test-utils` 2.5.1, happy-dom 20.14.5.
 - A package installs the newest release the project accepts: the newest version on the major line Nuxt 4.5.2 builds with, inside
   the peer ranges of the packages that depend on it.
 - Install commands name `@latest` when the newest release is accepted, and the major (`vitest@4`) when the accepted line is older
@@ -38,62 +37,60 @@ verify the other packages run on it.
 
 ## Done on the branch
 
-- `nuxt` 4.5.2, `@nuxt/ui` 4.11.1, `vitest` 3.2.7 (`npm audit fix`, `npm update --save`).
+- `nuxt` 4.5.2, `@nuxt/ui` 4.11.1.
+- Node 24.21.0 with npm 11.19.0: `engines` pins `node ^24.21.0` and `npm ^11.19.0`; `.node-version` removed.
+- CI actions on `cicd.yml`: `actions/checkout@v7`, `actions/setup-node@v7` (reads `node-version-file: 'package.json'`),
+  `actions/upload-artifact@v7`.
+- `h3` pinned `^1.15.11` as a devDependency: the root `node_modules/h3` slot carries the 1.15 line that `@nuxt/nitro-server`
+  runs and the generated tsconfigs alias; `@eslint/config-inspector`'s h3 2.x RC nests under its own dependents. Dependabot's
+  `nuxt-ecosystem` group carries the pin forward with Nuxt.
+- `eslint` 10.11.0 (the `@nuxt/eslint-config` peer line).
+- vitest 5.0.3 and `@nuxt/test-utils` 4.3.2; the suite runs 111 files with 2625 tests (see Test tooling).
 - `ChefMenuFormSchema.menuDescription` is a string (`useBookingValidation.ts`); `UTextarea` 4.11 types `v-model` as `string | undefined`.
 - `RoleOwnerSchema` lives in `useCoreValidation`; `useUserRoles` derives `RoleOwner` and `RoleOwnerValue` from it.
 - `JobRun.triggeredBy` is documented as `"CRON" | "ADMIN" | "ADMIN:<email>"` (`prisma/schema.prisma`, the three job endpoints).
 
 ---
 
-## Node and npm versions
+## Node and npm versions — done
 
-**Problem.** Local and CI run different Node and npm versions. CI's `actions/setup-node@v5` (`cicd.yml:51-53`, `:222-224`) installs the
-newest Node 22 that `engines.node` (`>=22.0.0 <23.0.0`) allows, with its bundled npm; the local machine runs Node 22.20.0 with npm
-10.9.4. `.node-version` is empty. npm 10.9.x crashes on the Nuxt 4.5 dependency graph (`Cannot read properties of null (reading
-'edgesOut')`, `#loadPeerSet`, npm/cli#9787, reproduced there with `{"nuxt": "4.5.0"}`); npm 11.18.0 resolves it.
-**Solution.** `devEngines` in `package.json` is the one source: npm checks it before `install`, `ci` and `run` (`onFail: error`), and
-`actions/setup-node` reads its Node version from `devEngines.runtime` from v6.5.0 (`src/util.ts:30-39`). Node 24.21.0 (LTS "Krypton",
-2026-09-07) bundles npm 11.19.0, so pinning Node pins the pair. Node 24 satisfies the engines of `nuxt` 4.5.2 (`^24.11.0`),
-`@nuxt/test-utils` 4.3.2, vitest 4, wrangler 4, Prisma 6, Playwright, Nuxt UI 4.11.1 and nitropack 2.13.4. `engines` and the empty
-`.node-version` leave. CI moves to `actions/setup-node@v7` with `node-version-file: 'package.json'`.
-**Commands.**
+Local and CI run Node 24.21.0 with npm 11.19.0. `engines` in `package.json` (`node ^24.21.0`, `npm ^11.19.0`) is the one
+source; CI reads it through `actions/setup-node@v7` with `node-version-file: 'package.json'` (`cicd.yml:51-53`, `:222-224`).
+Node 24.21.0 (LTS "Krypton") bundles npm 11.19.0, so pinning Node pins the pair; npm 10.9.x crashes on the Nuxt 4.5
+dependency graph (npm/cli#9787). Node 24 satisfies the engines of `nuxt` 4.5.2 (`^24.11.0`), `@nuxt/test-utils` 4.3.2,
+vitest 5, wrangler 4, Prisma 6, Playwright and Nuxt UI 4.11.1.
+**Verify.**
 ```bash
-nvm install 24.21.0 && nvm alias default 24.21.0
-npm pkg set devEngines.runtime.name=node devEngines.runtime.version=24.21.0 devEngines.runtime.onFail=error
-npm pkg set devEngines.packageManager.name=npm devEngines.packageManager.version=11.19.0 devEngines.packageManager.onFail=error
-npm pkg delete engines
-rm .node-version
 node -v && npm -v            # expect: v24.21.0 and 11.19.0
 ```
-**TDD.** `npm ci` passes the `devEngines` check locally and in CI; the CI log's setup-node step reports Node 24.21.0.
-**Affected.** `package.json`, `.node-version`, `.github/workflows/cicd.yml`.
+The CI log's setup-node step reports Node 24.21.x.
 
-## Test tooling
+## Test tooling — done
 
-**Problem.** The 65 `*.nuxt.spec.ts` files stop before their first test with `Unknown Error: [object Object]`; the 46 unit spec
-files pass (1,359 tests).
-**Root cause.** The Nuxt test environment builds the app and reports `[nuxt] build:error`: Nuxt 4.5.2 builds with Vite 8 (8.3.0);
-vitest 3.2.7 and `@nuxt/test-utils` 3.23.0 run on Vite 7 (7.3.6).
-**Solution.** vitest 4.1.11, `@nuxt/test-utils` 4.3.2, `@vue/test-utils` 2.5.1, happy-dom 20.14.5: the newest releases on the
-lines Nuxt 4.5.2 uses (`@nuxt/test-utils` 4.3.2 peers vitest `^4.0.2 || ^5.0.0`, `@vue/test-utils` `^2.4.2`, happy-dom `>=20.0.11`). `@nuxt/test-utils` 4
-starts Nuxt in `beforeAll`: a composable called at the top level of a `describe` block throws `[nuxt] instance unavailable` and moves
-into `beforeAll` or the test. `@nuxt/test-utils` 4 replaces `vite-node` with Vite's module runner (release notes `v4.0.0`).
-**Spec work (dependency survey, 2026-09-19).** 36 call sites in 10 spec files call a Nuxt composable at module level or in a
-`describe` body; each chain ends in `useAppConfig()` (`useSeason.ts:75`) or `useToast()`. `useBooking`, `useBookingUi`, `useBilling`
-and `useMaintenance` call `useSeason()` eagerly. Files: `useSeason.nuxt.spec.ts` (14 sites), `useBooking.nuxt.spec.ts` (12),
-`useBookingUi.nuxt.spec.ts` (3), one site each in `useBilling`, `useMaintenance`, `useApiHandler`, `DinnerBookingForm`,
-`BookingGridView`, `ChefMenuCard`, `ChefDinnerCard` specs. Three mocks replace modules Nuxt reads at boot: `vue-router` with
-`useRoute` only (`useEntityFormManager.nuxt.spec.ts:19`), `useRuntimeConfig` without `app` (`DinnerDetailHeader.nuxt.spec.ts:7`),
-`#imports` with `useToast` only (`useApiHandler.nuxt.spec.ts:6`).
-**Commands.**
+vitest 5.0.3, `@nuxt/test-utils` 4.3.2, `@vue/test-utils` 2.5.1, happy-dom 20.14.5: the newest releases inside
+`@nuxt/test-utils` 4.3.2's peer ranges (vitest `^4.0.2 || ^5.0.0`, `@vue/test-utils` `^2.4.2`, happy-dom `>=20.0.11`).
+vitest 5 runs on the rolldown Vite the Nuxt 4.5 toolchain builds with; vitest 3's transform pipeline fails on it
+(`Missing field 'moduleType'`, plugin `builtin:replace`, swallowed as `Unknown Error: [object Object]`).
+
+`@nuxt/test-utils` 4 starts the Nuxt app in a per-file `beforeAll` and replaces `vite-node` with Vite's module runner
+(release notes `v4.0.0`). The specs follow:
+
+- A composable whose chain reaches `useAppConfig()`/`useNuxtApp()` (`useSeason`, `useBooking`, `useBookingUi`, `useBilling`,
+  `useMaintenance`) runs in `beforeAll` or in the test. A describe body declares `let` bindings and one `beforeAll`
+  destructures them, so call sites stay unchanged; repeated names merge into one module-level block per file.
+- Collection-time data (`it.each` tables, module constants) reads the config through `import appConfig from '~/app.config'`.
+- A module a spec steers is overridden per export: `useEntityFormManager.nuxt.spec.ts` spreads `importOriginal()` of
+  `vue-router` and replaces `useRoute`; `useApiHandler.nuxt.spec.ts` uses `mockNuxtImport('useToast', …)`; the test runtime
+  boots the real router and the real config.
+- The nuxt vitest project (`vitest.config.ts`) sets `hookTimeout: 60_000` (a cold app boot under full parallel load passes
+  the 10s default) and `runtimeConfig.public.HEY_NABO_API` for specs that render Heynabo links.
+
+**Verify.**
 ```bash
-npm install -D vitest@4 @nuxt/test-utils@latest @vue/test-utils@latest happy-dom@latest   # one resolution: test-utils peers the other three
-npm ls vite                     # expect: vite 8.x at the root (vitest 3 holds 7.3.6 there today)
-npx nuxt prepare
-npx vitest run            # expect: Test Files 111
+make unit-test            # expect: Test Files 111 passed, Tests 2625 passed
 ```
-**TDD.** The existing suite is the specification: the 111 files load and pass.
-**Affected.** `package.json`, `vitest.config.ts`, the `*.nuxt.spec.ts` files that call a composable at `describe` level.
+**Open.** Factory data builders and their HTTP methods share one module, so a component spec importing a factory loads
+`@playwright/test`; the module runner's fetch of it logs one `ECONNREFUSED 127.0.0.1:3000` after the run and the run exits 0.
 
 ## Vite 8 build
 
@@ -103,12 +100,13 @@ npx vitest run            # expect: Test Files 111
 **Commands.**
 ```bash
 npx nuxt upgrade --dedupe
+npm ls h3                            # expect: h3@1.15.11 at the root
 npm run build
 npm run dev                          # expect: pages render in one load
-npx nitro build --dir workers/sender
+make run-sender-local                # builds the sender (nitro build) and serves it on :3100
 npm run pre:all
 ```
-**TDD.** `npm run build`, `npm run pre:all`, the unit suite and `npm run test:e2e`.
+**TDD.** `npm run build`, `npm run pre:all`, `make unit-test` and `npm run test:e2e`.
 **Affected.** `package-lock.json`.
 
 ## Nuxt UI 4.11
@@ -236,24 +234,26 @@ The rendered pages stay the same in A and B; the visual check covers `/chef`, `/
 
 ## Tailwind
 
-**Problem.** `package.json` declares `tailwindcss` `^4.1.18`; the installed version is 4.3.3.
+**Problem.** `package.json` declares `tailwindcss` `^4.1.18`; the installed version is 4.3.3. The floors of `@nuxt/eslint`,
+`zod`, `@vueuse/core`, `typescript`, `@prisma/*` and the `@iconify-json/*` packs sit behind their installed versions the same way.
 **Facts (2026-09-19).** `tailwindcss` 4.3.3 is the latest release. Nuxt UI 4.11.1 depends on `tailwindcss` `^4.3.3` and
 `@tailwindcss/vite` `^4.3.3`; `@tailwindcss/vite` 4.3.3 supports Vite `^5.2.0 || ^6 || ^7 || ^8`. Nuxt UI brings Tailwind to Nuxt.
-**Solution.** The declared range follows the installed version.
+**Solution.** Declared ranges follow the installed versions.
 **Commands.**
 ```bash
-npm update --save tailwindcss
-git diff package.json        # expect: "tailwindcss": "^4.3.3"
+npm update --save
+git diff package.json        # expect: "tailwindcss": "^4.3.3" among the raised floors
 ```
-**Affected.** `package.json`.
+**Affected.** `package.json`, `package-lock.json`.
 
 ## Dependency clusters — OPEN
 
 The survey of every direct dependency (installed, latest, breaking changes against our code, upgrade clusters and their order) is in
-progress. Majors listed by `npm outdated` on 2026-09-19: `prisma` / `@prisma/client` / `@prisma/adapter-d1` 7.x (8.0 in release
-candidate), `pinia` 4 with `@pinia/nuxt` 1, `@vueuse/core` 15, `typescript` 7, `eslint` 10, `@types/node` 26, `ical-generator` 11.
-`npm audit` on 2026-09-19 reports the Prisma CLI (`deepmerge-ts` below 8; Prisma 6.13 to 8.1.0-dev depend on it), `@vitest/mocker` (the Test tooling
-package) and `esbuild` 0.27 (Windows dev server).
+progress. Majors listed by `npm outdated` on 2026-10-02: `prisma` / `@prisma/client` / `@prisma/adapter-d1` 7.10 (8.0 in release
+candidate), `pinia` 4 with `@pinia/nuxt` 1, `@vueuse/core` 15, `typescript` 7, `zod` 4, `@types/node` 26, `ical-generator` 11.
+`@types/node` tracks the runtime: the Node 24 line is `npm install -D @types/node@24`.
+`npm audit` on 2026-10-02 reports 11 advisories (1 low, 10 high): the Prisma CLI chain (`deepmerge-ts` below 8; Prisma 6.13 to
+8.1.0-dev depend on it), `esbuild` 0.27 (Windows dev server) and `node-forge`.
 
 ## Coverage
 

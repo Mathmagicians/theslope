@@ -1,4 +1,4 @@
-import {describe, it, expect, vi, beforeEach} from 'vitest'
+import {describe, it, expect, vi, beforeEach, beforeAll} from 'vitest'
 import {useSeason} from '~/composables/useSeason'
 import type {Season} from '~/composables/useSeasonValidation'
 import type {DateRange, WeekDayMap} from "~/types/dateTypes"
@@ -12,6 +12,42 @@ import {deleteHeynaboEventAsSystem} from '~~/server/integration/heynabo/heynaboC
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 const {DinnerEventCreateSchema} = useBookingValidation()
+
+// @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not in the describe body
+type UseSeasonT = ReturnType<typeof useSeason>
+type SeasonDeadlines = ReturnType<UseSeasonT['deadlinesForSeason']>
+let coalesceSeason: UseSeasonT['coalesceSeason']
+let getDefaultSeason: UseSeasonT['getDefaultSeason']
+let getDefaultHolidays: UseSeasonT['getDefaultHolidays']
+let generateDinnerEventDataForSeason: UseSeasonT['generateDinnerEventDataForSeason']
+let assignAffinitiesToTeams: UseSeasonT['assignAffinitiesToTeams']
+let assignTeamsToEvents: UseSeasonT['assignTeamsToEvents']
+let getHolidaysForSeason: UseSeasonT['getHolidaysForSeason']
+let deadlinesForSeason: UseSeasonT['deadlinesForSeason']
+let getMenuAnnouncementDeadlineDays: UseSeasonT['getMenuAnnouncementDeadlineDays']
+let isOnTeam: UseSeasonT['isOnTeam']
+let createPreferenceClipper: UseSeasonT['createPreferenceClipper']
+let getScheduleChangeDesiredEvents: UseSeasonT['getScheduleChangeDesiredEvents']
+let reconcileDinnerEvents: UseSeasonT['reconcileDinnerEvents']
+let isChefFor: UseSeasonT['isChefFor']
+beforeAll(() => {
+    ({
+        coalesceSeason,
+        getDefaultSeason,
+        getDefaultHolidays,
+        generateDinnerEventDataForSeason,
+        assignAffinitiesToTeams,
+        assignTeamsToEvents,
+        getHolidaysForSeason,
+        deadlinesForSeason,
+        getMenuAnnouncementDeadlineDays,
+        isOnTeam,
+        createPreferenceClipper,
+        getScheduleChangeDesiredEvents,
+        reconcileDinnerEvents,
+        isChefFor
+    } = useSeason())
+})
 
 // Faked: the two things the test runtime cannot provide - the D1 binding Prisma connects to,
 // and the Heynabo HTTP client. useSeason and the repository (fetch/save/deleteDinnerEvent) run for real.
@@ -115,7 +151,6 @@ describe('useSeasonSchema', () => {
 })
 
 describe('coalesceSeason', () => {
-    const { coalesceSeason, getDefaultSeason } = useSeason()
 
     it('should return the default season when no season is provided', () => {
         const defaultSeason = getDefaultSeason()
@@ -192,7 +227,6 @@ describe('getDefaultSeason', () => {
 })
 
 describe('getDefaultHolidays', () => {
-    const { getDefaultHolidays } = useSeason()
 
     it('should calculate holidays within full production season', () => {
         // GIVEN: A typical production season (Aug - Jun)
@@ -245,7 +279,6 @@ describe('getDefaultHolidays', () => {
 })
 
 describe('generateDinnerEventDataForSeason', () => {
-    const { generateDinnerEventDataForSeason } = useSeason()
 
     it('should return empty array for invalid season', () => {
         // GIVEN: Invalid season (missing required fields)
@@ -283,7 +316,6 @@ describe('generateDinnerEventDataForSeason', () => {
 })
 
 describe('assignAffinitiesToTeams', () => {
-    const { assignAffinitiesToTeams } = useSeason()
 
     it('should return empty array for invalid season', () => {
         // GIVEN: Invalid season (missing required fields)
@@ -338,7 +370,6 @@ describe('assignAffinitiesToTeams', () => {
 })
 
 describe('assignTeamsToEvents', () => {
-    const { assignTeamsToEvents } = useSeason()
 
     it('should return empty array for invalid season', () => {
         // GIVEN: Invalid season (missing required fields)
@@ -377,7 +408,6 @@ describe('assignTeamsToEvents', () => {
 })
 
 describe('getHolidaysForSeason', () => {
-    const { getHolidaysForSeason } = useSeason()
 
     it.each([
         {
@@ -435,7 +465,6 @@ describe('getHolidaysForSeason', () => {
 })
 
 describe('deadlinesForSeason', () => {
-    const { deadlinesForSeason, getMenuAnnouncementDeadlineDays } = useSeason()
 
     // Default season config (matches app.config.ts defaults)
     // Note: booking deadline (8 days) is from season, menu deadline (10 days) is from config
@@ -443,10 +472,16 @@ describe('deadlinesForSeason', () => {
         ticketIsCancellableDaysBefore: 8,  // Booking deadline (from season)
         diningModeIsEditableMinutesBefore: 60
     }
-    const menuDeadlineDays = getMenuAnnouncementDeadlineDays()  // Menu deadline (from config = 10)
+    let menuDeadlineDays: number  // Menu deadline (from config = 10)
+    beforeAll(() => {
+        menuDeadlineDays = getMenuAnnouncementDeadlineDays()
+    })
 
     describe('canModifyOrders (booking deadline from season = 8 days)', () => {
-        const { canModifyOrders } = deadlinesForSeason(defaultSeasonConfig)
+        let canModifyOrders: SeasonDeadlines['canModifyOrders']
+        beforeAll(() => {
+            ({ canModifyOrders } = deadlinesForSeason(defaultSeasonConfig))
+        })
 
         it('should allow modifications when dinner is far in future', () => {
             // GIVEN: Dinner 15 days from now (at start of day)
@@ -510,7 +545,10 @@ describe('deadlinesForSeason', () => {
     })
 
     describe('canEditDiningMode', () => {
-        const { canEditDiningMode } = deadlinesForSeason(defaultSeasonConfig)
+        let canEditDiningMode: SeasonDeadlines['canEditDiningMode']
+        beforeAll(() => {
+            ({ canEditDiningMode } = deadlinesForSeason(defaultSeasonConfig))
+        })
 
         it('should allow editing when dinner is far in future', () => {
             // GIVEN: Dinner 10 days from now (at start of day)
@@ -553,7 +591,10 @@ describe('deadlinesForSeason', () => {
     })
 
     describe('isAnnounceMenuPastDeadline (menu deadline from config = 10 days)', () => {
-        const { isAnnounceMenuPastDeadline } = deadlinesForSeason(defaultSeasonConfig)
+        let isAnnounceMenuPastDeadline: SeasonDeadlines['isAnnounceMenuPastDeadline']
+        beforeAll(() => {
+            ({ isAnnounceMenuPastDeadline } = deadlinesForSeason(defaultSeasonConfig))
+        })
 
         // Verify the menu deadline is correctly read from config
         it('should use menu deadline from app config (not season)', () => {
@@ -634,7 +675,6 @@ describe('deadlinesForSeason', () => {
 }) // Close deadlinesForSeason describe
 
 describe('isOnTeam', () => {
-    const { isOnTeam } = useSeason()
     const { TeamRoleSchema } = useCookingTeamValidation()
     const TeamRole = TeamRoleSchema.enum
 
@@ -695,7 +735,6 @@ describe('isOnTeam', () => {
 })
 
 describe('createPreferenceClipper', () => {
-    const {createPreferenceClipper} = useSeason()
     const {DinnerModeSchema} = useBookingValidation()
     const DinnerMode = DinnerModeSchema.enum
 
@@ -847,7 +886,6 @@ describe('createPreferenceClipper', () => {
 
 
 describe('getScheduleChangeDesiredEvents', () => {
-    const {getScheduleChangeDesiredEvents} = useSeason()
 
     it.each([
         {
@@ -927,7 +965,6 @@ describe('getScheduleChangeDesiredEvents', () => {
 })
 
 describe('reconcileDinnerEvents', () => {
-    const {reconcileDinnerEvents} = useSeason()
 
     // Helper to create incoming dinner event (DinnerEventCreate - no id)
     const createIncoming = (date: Date) => ({
@@ -981,7 +1018,6 @@ describe('reconcileDinnerEvents', () => {
 })
 
 describe('reconcileDinnerEventsForSeason - Heynabo cleanup of dropped dinner dates', () => {
-    const {generateDinnerEventDataForSeason} = useSeason()
     const mockedHnDelete = vi.mocked(deleteHeynaboEventAsSystem)
     const d1Client = {} as D1Database
     const LOG = '🌞 > SEASON > [TEST]'
@@ -1030,7 +1066,6 @@ describe('reconcileDinnerEventsForSeason - Heynabo cleanup of dropped dinner dat
 })
 
 describe('getOrderCancellationAction', () => {
-    const { deadlinesForSeason } = useSeason()
     const { DinnerModeSchema, OrderStateSchema, OrderAuditActionSchema } = useBookingValidation()
     const DinnerMode = DinnerModeSchema.enum
     const OrderState = OrderStateSchema.enum
@@ -1038,7 +1073,10 @@ describe('getOrderCancellationAction', () => {
 
     // Use default season for deadline calculation
     const testSeason = SeasonFactory.defaultSeason()
-    const { getOrderCancellationAction } = deadlinesForSeason(testSeason)
+    let getOrderCancellationAction: SeasonDeadlines['getOrderCancellationAction']
+    beforeAll(() => {
+        ({ getOrderCancellationAction } = deadlinesForSeason(testSeason))
+    })
     const cancellableDaysBefore = testSeason.ticketIsCancellableDaysBefore
 
     // Helper to create dinner date relative to today
@@ -1097,7 +1135,6 @@ describe('getOrderCancellationAction', () => {
 })
 
 describe('isChefFor', () => {
-    const { isChefFor } = useSeason()
     const { TeamRoleSchema } = useCookingTeamValidation()
     const TeamRole = TeamRoleSchema.enum
 

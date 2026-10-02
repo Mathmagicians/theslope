@@ -1,5 +1,5 @@
 // @vitest-environment nuxt
-import {describe, it, expect, vi, beforeEach} from 'vitest'
+import {describe, it, expect, vi, beforeEach, beforeAll} from 'vitest'
 import {mountSuspended, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {findByTestId, withTooltipProvider} from '~~/tests/component/testHelpers'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
@@ -31,12 +31,17 @@ mockNuxtImport('useAuthStore', () => () => ({
 }))
 
 // Test fixtures - use real deadlinesForSeason() to stay in sync with SeasonDeadlines interface
-const {deadlinesForSeason} = useSeason()
-const baseDeadlines = deadlinesForSeason(SeasonFactory.defaultSeasonData)
+// @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not at module level
+let baseDeadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
+beforeAll(() => {
+  const {deadlinesForSeason} = useSeason()
+  baseDeadlines = deadlinesForSeason(SeasonFactory.defaultSeasonData)
+})
 const baseProps = {
   dinnerEvent: DinnerEventFactory.defaultDinnerEventDisplay(),
   ticketPrices: TicketFactory.defaultTicketPrices(),
-  deadlines: baseDeadlines
+  // Getter: baseDeadlines is assigned in beforeAll, read when a test mounts with baseProps
+  get deadlines() { return baseDeadlines }
 }
 const householdWithInhabitants = HouseholdFactory.defaultHouseholdDetail('test')
 

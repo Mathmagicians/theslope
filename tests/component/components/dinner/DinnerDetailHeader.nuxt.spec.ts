@@ -1,14 +1,10 @@
 import {describe, it, expect, vi, beforeEach} from 'vitest'
-import {mountSuspended, mockNuxtImport} from '@nuxt/test-utils/runtime'
+import {mountSuspended} from '@nuxt/test-utils/runtime'
 import DinnerDetailHeader from '~/components/dinner/DinnerDetailHeader.vue'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 
-// Mock useRuntimeConfig to provide HEY_NABO_API
-mockNuxtImport('useRuntimeConfig', () => () => ({
-    public: {
-        HEY_NABO_API: 'https://test.heynabo.com/api'
-    }
-}))
+// HEY_NABO_API comes from the nuxt project's runtimeConfig override (vitest.config.ts):
+// a useRuntimeConfig mock replaces the whole config and breaks the test runtime boot
 
 describe('DinnerDetailHeader', () => {
     beforeEach(() => {

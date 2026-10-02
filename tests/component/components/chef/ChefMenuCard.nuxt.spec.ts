@@ -1,5 +1,5 @@
 // @vitest-environment nuxt
-import {describe, it, expect, vi} from 'vitest'
+import {describe, it, expect, vi, beforeAll} from 'vitest'
 import {mountSuspended, mockNuxtImport, mockComponent} from '@nuxt/test-utils/runtime'
 import {findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
 import ChefMenuCard from '~/components/chef/ChefMenuCard.vue'
@@ -57,8 +57,12 @@ mockComponent('DinnerBookingForm', {
 })
 
 describe('ChefMenuCard', () => {
-    const {deadlinesForSeason} = useSeason()
-    const defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
+    // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not in the describe body
+    let defaultDeadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
+    beforeAll(() => {
+        const {deadlinesForSeason} = useSeason()
+        defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
+    })
 
     // DRY: Create wrapper with defaults
     const createWrapper = async (props: Record<string, unknown> = {}) => {

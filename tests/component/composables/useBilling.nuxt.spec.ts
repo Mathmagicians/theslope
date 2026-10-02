@@ -1,4 +1,4 @@
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeAll} from 'vitest'
 import {isSameDay} from 'date-fns'
 import {useBilling} from '~/composables/useBilling'
 import {useBookingValidation} from '~/composables/useBookingValidation'
@@ -7,17 +7,30 @@ import type {OrderDisplay} from '~/composables/useBookingValidation'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 
 describe('useBilling', () => {
-    const {
-        calculateClosedBillingPeriod,
-        calculateCurrentBillingPeriod,
-        getBillingPeriodForDate,
-        controlInvoices,
-        controlTransactions,
-        controlOrders,
-        formatTicketCounts,
-        groupByHouseholdEntry,
-        decideBillingSideEffects
-    } = useBilling()
+    // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not in the describe body
+    type Billing = ReturnType<typeof useBilling>
+    let calculateClosedBillingPeriod: Billing['calculateClosedBillingPeriod']
+    let calculateCurrentBillingPeriod: Billing['calculateCurrentBillingPeriod']
+    let getBillingPeriodForDate: Billing['getBillingPeriodForDate']
+    let controlInvoices: Billing['controlInvoices']
+    let controlTransactions: Billing['controlTransactions']
+    let controlOrders: Billing['controlOrders']
+    let formatTicketCounts: Billing['formatTicketCounts']
+    let groupByHouseholdEntry: Billing['groupByHouseholdEntry']
+    let decideBillingSideEffects: Billing['decideBillingSideEffects']
+    beforeAll(() => {
+        ({
+            calculateClosedBillingPeriod,
+            calculateCurrentBillingPeriod,
+            getBillingPeriodForDate,
+            controlInvoices,
+            controlTransactions,
+            controlOrders,
+            formatTicketCounts,
+            groupByHouseholdEntry,
+            decideBillingSideEffects
+        } = useBilling())
+    })
     const {TicketTypeSchema} = useBookingValidation()
     const TicketType = TicketTypeSchema.enum
 

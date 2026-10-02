@@ -1,16 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
+import { mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { ref } from 'vue'
 import { useApiHandler } from '~/composables/useApiHandler'
 
-// Mock the useToast composable
-vi.mock('#imports', () => ({
-    useToast: () => ({
-        add: vi.fn()
-    })
+// Mock the useToast composable (mockNuxtImport replaces the one auto-import; a #imports module mock breaks the runtime boot)
+mockNuxtImport('useToast', () => () => ({
+    add: vi.fn()
 }))
 
 describe('useApiHandler', () => {
-    const { apiCall } = useApiHandler()
+    // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not in the describe body
+    let apiCall: ReturnType<typeof useApiHandler>['apiCall']
+    beforeAll(() => {
+        ({apiCall} = useApiHandler())
+    })
     const state = ref('idle')
 
     beforeEach(() => {

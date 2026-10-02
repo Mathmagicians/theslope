@@ -1,22 +1,26 @@
 // @vitest-environment nuxt
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { ref, computed, effectScope, nextTick, type EffectScope } from 'vue'
 import { useEntityFormManager } from '~/composables/useEntityFormManager'
 import { FORM_MODES } from '~/types/form'
 
-// Mock navigateTo and useRoute (Nuxt auto-imports)
-// Note: In Nuxt test environment, these need proper app context to work
 // Navigation behavior is fully tested in E2E tests
-const mockNavigateTo = vi.fn()
-vi.stubGlobal('navigateTo', mockNavigateTo)
+const { mockNavigateTo, mockRoute } = vi.hoisted(() => ({
+  mockNavigateTo: vi.fn(),
+  mockRoute: {
+    path: '/admin/planning',
+    query: {},
+    hash: ''
+  }
+}))
 
-const mockRoute = {
-  path: '/admin/planning',
-  query: {},
-  hash: ''
-}
+mockNuxtImport('navigateTo', () => mockNavigateTo)
 
-vi.mock('vue-router', () => ({
+// The composable imports useRoute from vue-router directly; override only that export —
+// the test runtime boots the real router and needs the rest of the module intact
+vi.mock('vue-router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('vue-router')>()),
   useRoute: () => mockRoute
 }))
 

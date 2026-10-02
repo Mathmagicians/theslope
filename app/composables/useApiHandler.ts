@@ -68,7 +68,7 @@ export const useApiHandler = () => {
             return result
         } catch (e: unknown) {
             state.value = 'error'
-            throw new Error(handleApiError(e, actionName))
+            throw new Error(handleApiError(e, actionName), {cause: e})
         }
     }
 

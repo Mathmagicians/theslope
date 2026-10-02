@@ -34,6 +34,9 @@ export default defineConfig({
                     name: 'nuxt',
                     include: ['tests/component/**/*.nuxt.spec.ts'],
                     environment: 'nuxt',
+                    // setupNuxt boots the app in a beforeAll per file; under full parallel
+                    // load a cold boot exceeds vitest's default 10s hook timeout
+                    hookTimeout: 60_000,
                     environmentOptions: {
                         nuxt: {
                             // Disable Nuxt's app manifest plugin under tests.
@@ -41,7 +44,13 @@ export default defineConfig({
                             // on app boot — a tear-down race throws `$fetch is not defined`.
                             // The plugin only matters for live build-staleness checks.
                             overrides: {
-                                experimental: { appManifest: false }
+                                experimental: { appManifest: false },
+                                // Deterministic value for specs that render Heynabo links
+                                // (DinnerDetailHeader); a useRuntimeConfig mock would replace
+                                // the whole config and break the test runtime boot
+                                runtimeConfig: {
+                                    public: { HEY_NABO_API: 'https://test.heynabo.com/api' }
+                                }
                             }
                         }
                     }

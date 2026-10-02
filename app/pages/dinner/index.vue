@@ -205,8 +205,6 @@ useHead({
 <template>
   <Loader v-if="!isPlanStoreReady" text="Henter sæsondata..." />
   <ViewError v-else-if="isSelectedSeasonErrored" text="Kan ikke hente sæsondata" />
-
-  <!-- No selected season state -->
   <UPage v-else-if="isSelectedSeasonInitialized && !selectedSeason">
     <div :class="`p-4 md:p-8 ${BACKGROUNDS.card}`">
       <UAlert
@@ -233,8 +231,6 @@ useHead({
       </UAlert>
     </div>
   </UPage>
-
-  <!-- Main master-detail layout -->
   <UPage v-else-if="isSelectedSeasonInitialized && selectedSeason">
     <!-- Master: Calendar (left slot) -->
     <template #left>
