@@ -293,6 +293,8 @@ candidate), `pinia` 4 with `@pinia/nuxt` 1, `@vueuse/core` 15, `typescript` 7, `
 
 - ADR-007 [SSR-Friendly Store Pattern with useAsyncData], amendment "fetch gating": a fetch is gated with `enabled`; a disabled slice
   reads as idle.
-- Isomorphic composables and per-context type checking (ADR-017): `nuxt typecheck` (`vue-tsc -b`) exits 0 on Nuxt 4.5.2 with
-  CLI 3.37; collapsing `ts` + `ts:server` + `ts:node` into it is a `pre:all`/CI change and carries its own signoff.
-  `ts:workers` stays: `workers/sender` is its own Nitro app.
+- Isomorphic composables and per-context type checking (ADR-017): the root `references` layout was tried on 2026-10-02 and
+  reverted. On the legacy union, `nuxt typecheck` passes a bare `useToast()` in `server/utils/` that `ts:server` flags TS2304;
+  on the references layout, the solution build drops the ambient h3 augmentation of `shared/types/cloudflare.d.ts` for the
+  server routes `.nuxt/types/nitro-routes.d.ts` imports into the app project (158× TS2345, with and without a
+  `typescript.tsConfig` override — nuxt/nuxt#34385, open). The four-script gate stays; the ADR carries the follow-up.

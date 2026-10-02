@@ -90,7 +90,7 @@ Nuxt builds two bundles. App auto-imports (`app/composables`, `app/utils`, Vue, 
 
 CI runs `pre:all` before unit tests. A bare auto-import in a server-reachable composable now fails as `TS2304` in `ts:server`.
 
-**Follow-up:** adopt Nuxt 4's root `references` layout + `nuxt typecheck` (`vue-tsc -b`) once nuxt/nuxt#34385 is fixed (broken on Nuxt 4.3.1 / @nuxt/cli 3.33.1). Until then `server/tsconfig.json` stays as the stable gate target.
+**Follow-up:** adopt Nuxt 4's root `references` layout + `nuxt typecheck` (`vue-tsc -b`) once nuxt/nuxt#34385 is fixed (verified still open on Nuxt 4.5.2 / @nuxt/cli 3.37, 2026-10-02: the solution build drops the ambient h3 augmentation of `shared/types/cloudflare.d.ts` for the server routes `.nuxt/types/nitro-routes.d.ts` imports into the app project — 158× TS2345 `event.context.cloudflare` is `unknown`). Until then `server/tsconfig.json` stays as the stable gate target.
 
 ### Compliance
 
