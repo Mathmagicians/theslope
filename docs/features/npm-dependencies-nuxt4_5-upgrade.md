@@ -13,7 +13,7 @@ thing, the app uses it and the hand-written version leaves. The user runs instal
 | Test tooling | vitest 5.0.3 and `@nuxt/test-utils` 4.3.2; 111 spec files, 2625 tests pass | ✅ done |
 | Vite 8 build | the app, dev server and sender build on Vite 8 | ✅ done |
 | Nuxt UI 4.11 | the 4.4–4.11 changes checked against our components | ⏳ awaiting signoff |
-| Danish locale | `UApp` locale `da`; the hand-translated week days leave | ⏳ awaiting signoff |
+| Danish locale | `UApp` locale `da`; the hand-translated week days left | ✅ done — visual check with the Nuxt UI pass |
 | Date pickers | `UInputDate` with the calendar in its trailing popover | ⏳ mockup awaiting signoff |
 | Fetch gating | the `enabled` option of `useAsyncData` replaces fetchers that return empty values | ⏳ awaiting signoff |
 | Page composition | master/detail and tab pages, the `md` breakpoint | OPEN |
@@ -39,14 +39,18 @@ Nuxt UI 4.11 is next: the e2e pair and the visual check run on the built branch.
 ## Done on the branch
 
 - `nuxt` 4.5.2, `@nuxt/ui` 4.11.1.
-- Node 24.21.0 with npm 11.19.0: `engines` pins `node ^24.21.0` and `npm ^11.19.0`; `.node-version` removed.
-- CI actions on `cicd.yml`: `actions/checkout@v7`, `actions/setup-node@v7` (reads `node-version-file: 'package.json'`),
-  `actions/upload-artifact@v7`.
+- Node 24.21.0 with npm 11.19.0: `engines` pins `node ^24.21.0` and `npm ^11.19.0`, CI reads it via `setup-node`'s
+  `node-version-file`; `.node-version` removed. npm 10.9.x crashes on the Nuxt 4.5 graph (npm/cli#9787).
+- CI actions on `cicd.yml`: `actions/checkout@v7`, `actions/setup-node@v7`, `actions/upload-artifact@v7`.
 - `h3` pinned `^1.15.11` as a devDependency: the root `node_modules/h3` slot carries the 1.15 line that `@nuxt/nitro-server`
   runs and the generated tsconfigs alias; `@eslint/config-inspector`'s h3 2.x RC nests under its own dependents. Dependabot's
   `nuxt-ecosystem` group carries the pin forward with Nuxt.
 - `eslint` 10.11.0 (the `@nuxt/eslint-config` peer line).
-- vitest 5.0.3 and `@nuxt/test-utils` 4.3.2; the suite runs 111 files with 2625 tests (see Test tooling).
+- Test tooling: vitest 5.0.3, `@nuxt/test-utils` 4.3.2, `@vue/test-utils` 2.5.1, happy-dom 20.14.5 — the newest releases
+  inside test-utils' peer ranges; vitest 5 runs on the rolldown Vite, vitest 3's transforms fail on it. `make unit-test`
+  runs 111 files with 2625 tests. Spec conventions for the test-utils 4 runtime live in `docs/testing.md`.
+- Vite 8 build: `npx nuxt upgrade --dedupe` (`h3` stays 1.15.11 at root); `npm run build`, `npm run dev`,
+  `make run-sender-local` and `npm run pre:all` pass.
 - `ICONS.github` is `i-hugeicons-github-01` (`useTheSlopeDesignSystem.ts`): the glyph ships from an installed collection.
 - `icon.clientBundle` keeps `scan: true` only (`nuxt.config.ts`): Nuxt UI 4.10 pre-bundles its own internal icons.
 - `experimental.watcher: 'builder'` (`nuxt.config.ts`): the shared Vite watcher, the default from `compatibilityVersion: 5`.
@@ -55,55 +59,6 @@ Nuxt UI 4.11 is next: the e2e pair and the visual check run on the built branch.
 - `JobRun.triggeredBy` is documented as `"CRON" | "ADMIN" | "ADMIN:<email>"` (`prisma/schema.prisma`, the three job endpoints).
 
 ---
-
-## Node and npm versions — done
-
-Local and CI run Node 24.21.0 with npm 11.19.0. `engines` in `package.json` (`node ^24.21.0`, `npm ^11.19.0`) is the one
-source; CI reads it through `actions/setup-node@v7` with `node-version-file: 'package.json'` (`cicd.yml:51-53`, `:222-224`).
-Node 24.21.0 (LTS "Krypton") bundles npm 11.19.0, so pinning Node pins the pair; npm 10.9.x crashes on the Nuxt 4.5
-dependency graph (npm/cli#9787). Node 24 satisfies the engines of `nuxt` 4.5.2 (`^24.11.0`), `@nuxt/test-utils` 4.3.2,
-vitest 5, wrangler 4, Prisma 6, Playwright and Nuxt UI 4.11.1.
-**Verify.**
-```bash
-node -v && npm -v            # expect: v24.21.0 and 11.19.0
-```
-The CI log's setup-node step reports Node 24.21.x.
-
-## Test tooling — done
-
-vitest 5.0.3, `@nuxt/test-utils` 4.3.2, `@vue/test-utils` 2.5.1, happy-dom 20.14.5: the newest releases inside
-`@nuxt/test-utils` 4.3.2's peer ranges (vitest `^4.0.2 || ^5.0.0`, `@vue/test-utils` `^2.4.2`, happy-dom `>=20.0.11`).
-vitest 5 runs on the rolldown Vite the Nuxt 4.5 toolchain builds with; vitest 3's transform pipeline fails on it
-(`Missing field 'moduleType'`, plugin `builtin:replace`, swallowed as `Unknown Error: [object Object]`).
-
-`@nuxt/test-utils` 4 starts the Nuxt app in a per-file `beforeAll` and replaces `vite-node` with Vite's module runner
-(release notes `v4.0.0`). The specs follow:
-
-- A composable whose chain reaches `useAppConfig()`/`useNuxtApp()` (`useSeason`, `useBooking`, `useBookingUi`, `useBilling`,
-  `useMaintenance`) runs in `beforeAll` or in the test. A describe body declares `let` bindings and one `beforeAll`
-  destructures them, so call sites stay unchanged; repeated names merge into one module-level block per file.
-- Collection-time data (`it.each` tables, module constants) reads the config through `import appConfig from '~/app.config'`.
-- A module a spec steers is overridden per export: `useEntityFormManager.nuxt.spec.ts` spreads `importOriginal()` of
-  `vue-router` and replaces `useRoute`; `useApiHandler.nuxt.spec.ts` uses `mockNuxtImport('useToast', …)`; the test runtime
-  boots the real router and the real config.
-- The nuxt vitest project (`vitest.config.ts`) sets `hookTimeout: 60_000` (a cold app boot under full parallel load passes
-  the 10s default) and `runtimeConfig.public.HEY_NABO_API` for specs that render Heynabo links.
-
-**Verify.**
-```bash
-make unit-test            # expect: Test Files 111 passed, Tests 2625 passed
-```
-**Open.** Factory data builders and their HTTP methods share one module, so a component spec importing a factory loads
-`@playwright/test`; the module runner's fetch of it logs one `ECONNREFUSED 127.0.0.1:3000` after the run and the run exits 0.
-
-## Vite 8 build — done
-
-The app, dev server and sender build and run on Vite 8 (rolldown): `npx nuxt upgrade --dedupe` deduplicated the lockfile
-(`h3` stays 1.15.11 at the root), `npm run build`, `npm run dev`, `make run-sender-local` and `npm run pre:all` pass.
-**Verify.**
-```bash
-npm run build && npm run pre:all
-```
 
 ## Nuxt UI 4.11
 
@@ -144,22 +99,20 @@ npx playwright test tests/e2e/ui/MobileViewport.e2e.spec.ts tests/e2e/ui/AdminPl
 
 **Affected.** The e2e selectors above, where the run reports a changed slot.
 
-## Danish locale
+## Danish locale — done
 
-**Problem.** `<UApp>` in `app/app.vue:2` runs on Nuxt UI's default locale, English, for the built-in texts: calendar month headings,
-table empty text, pagination and select labels. Week-day names come from `translateToDanish` (`app/utils/date.ts:155`) in the
-`#week-day` slots of `BaseCalendar.vue`, `CalendarDatePicker.vue` and `CalendarDateRangePicker.vue`.
-**Solution.** `<UApp :locale="da">` with `import {da} from '@nuxt/ui/locale'`. The calendar renders Danish week days from the locale;
-the three `#week-day` slots and `translateToDanish` leave.
-**TDD.** Component spec: the calendar renders Danish month and week-day names.
-**Visual check.**
+`<UApp :locale="da">` (`app/app.vue`) renders Nuxt UI's built-in texts in Danish: calendar month headings, table empty text,
+pagination and select labels. `COMPONENTS.calendarGrid` carries `weekdayFormat: 'narrow'`, so the week-day headers render the
+single letters M T O T F L S from the locale, and `ui.headCell` carries the head-cell type (`TEXT.toned`: body-size text
+measures at the 4.5:1 rung). The three `#week-day` slots and `translateToDanish` left (`BaseCalendar.vue`,
+`CalendarDatePicker.vue`, `CalendarDateRangePicker.vue`, `app/utils/date.ts`). `CalendarDisplay.nuxt.spec.ts` asserts the
+rendered letters and the Danish month heading under the UApp frame.
+**Visual check** (with the Nuxt UI 4.11 pass).
 
 | Route (state) | Viewport | Element | Expect |
 |---|---|---|---|
-| `/admin/planning?mode=edit`, open a date picker | phone | `UCalendar` | month heading and week days in Danish, from the locale |
+| `/admin/planning?mode=edit`, open a date picker | phone | `UCalendar` | Danish month heading; M T O T F L S week letters in the head-cell type |
 | `/admin/users` | desktop | `UPagination` | Danish labels |
-
-**Affected.** `app/app.vue`, `BaseCalendar.vue`, `CalendarDatePicker.vue`, `CalendarDateRangePicker.vue`, `app/utils/date.ts`.
 
 ## Date pickers
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type {DateRange} from "~/types/dateTypes"
-import {DATE_SETTINGS, translateToDanish, eachDayOfManyIntervals, isCalendarDateInDateList} from "~/utils/date"
+import {DATE_SETTINGS, eachDayOfManyIntervals, isCalendarDateInDateList} from "~/utils/date"
 import type {DateValue} from '@internationalized/date'
 import type {Ref} from "vue"
 import {mapZodErrorsToFormErrors, getErrorMessage} from "~/utils/validtation"
@@ -158,11 +158,6 @@ defineExpose({
         :size="SIZES.calendar"
         :number-of-months="SIZES.calendarMonths"
       >
-        <template #week-day="{ day }">
-          <span class="text-sm text-muted uppercase">
-            {{ translateToDanish(day) }}
-          </span>
-        </template>
         <template #day="{ day }">
           <div v-if="isDaySelected(day)" :class="dayCircleClasses(selectionVariant)">{{ day.day }}</div>
           <span v-else class="text-sm">{{ day.day }}</span>

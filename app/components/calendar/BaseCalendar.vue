@@ -14,7 +14,7 @@
 import type {DateRange} from '~/types/dateTypes'
 import type {CalendarEventList, DayEventList} from '~/composables/useCalendarEvents'
 import type {DateValue} from "@internationalized/date"
-import {toCalendarDate, toCalendarDateRange, translateToDanish} from "~/utils/date"
+import {toCalendarDate, toCalendarDateRange} from "~/utils/date"
 
 interface Props {
   seasonDates: DateRange
@@ -25,7 +25,6 @@ interface Props {
 
 interface Slots {
   day?: (props: { day: DateValue, eventLists: DayEventList[] }) => unknown
-  'week-day'?: (props: { day: string }) => unknown
   legend?: () => unknown
 }
 
@@ -90,15 +89,6 @@ const restrictedNextPage = (placeholder: DateValue): DateValue => {
         </slot>
       </template>
 
-      <!-- Week day slot - pass day for custom weekday labels -->
-      <template #week-day="{ day }">
-        <slot name="week-day" :day="day">
-          <!-- Default: Danish abbreviated weekday -->
-          <span class="text-sm text-muted uppercase">
-            {{ translateToDanish(day) }}
-          </span>
-        </slot>
-      </template>
     </UCalendar>
 
     <!-- Legend slot - only shown if defined -->

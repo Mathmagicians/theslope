@@ -702,12 +702,17 @@ export const COMPONENTS = {
     // Shared UCalendar root: Monday-first, no padding weeks, and other-month days both disabled
     // (reka data-outside-view) and hidden, so a day number never appears twice across
     // neighbouring month grids. Spread with v-bind at every UCalendar call site.
+    // weekdayFormat narrow + the UApp da locale render the single-letter headers M T O T F L S.
     calendarGrid: {
         weekStartsOn: 1,
         fixedWeeks: false,
-        weekdayFormat: 'short',
+        weekdayFormat: 'narrow',
         disableDaysOutsideCurrentView: true,
-        ui: {cellTrigger: 'data-[outside-view]:hidden'}
+        ui: {
+            cellTrigger: 'data-[outside-view]:hidden',
+            // TEXT.toned, not muted: the head letters are body-size text and measure at the 4.5:1 rung
+            headCell: `text-sm uppercase ${TEXT.toned}`
+        }
     },
 
     // Economy table hierarchy - ready-to-grab classes for each nesting level
@@ -1623,7 +1628,10 @@ export const createDayCircleClasses = (isMd: Ref<boolean>) =>
  */
 export const calendarPickerProps = () => ({
     ...COMPONENTS.calendarGrid,
-    ui: {cellTrigger: `${COMPONENTS.calendarGrid.ui.cellTrigger} ${CALENDAR.pickerCell}`}
+    ui: {
+        ...COMPONENTS.calendarGrid.ui,
+        cellTrigger: `${COMPONENTS.calendarGrid.ui.cellTrigger} ${CALENDAR.pickerCell}`
+    }
 })
 
 /**

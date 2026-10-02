@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {DATE_SETTINGS, translateToDanish, isCalendarDateInDateList} from "~/utils/date"
+import {DATE_SETTINGS, isCalendarDateInDateList} from "~/utils/date"
 import type {DateValue} from '@internationalized/date'
 import type {Ref} from "vue"
 import {mapZodErrorsToFormErrors, getErrorMessage} from "~/utils/validtation"
@@ -126,11 +126,6 @@ defineExpose({
         v-model="pickerDate"
         :size="SIZES.calendar"
       >
-        <template #week-day="{ day }">
-          <span class="text-sm text-muted uppercase">
-            {{ translateToDanish(day) }}
-          </span>
-        </template>
         <template #day="{ day }">
           <div v-if="isDaySelected(day)" :class="dayCircleClasses(CALENDAR.picker.cookingDay)">{{ day.day }}</div>
           <span v-else class="text-sm">{{ day.day }}</span>

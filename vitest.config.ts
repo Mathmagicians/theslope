@@ -2,6 +2,10 @@ import { defineConfig } from 'vitest/config'
 import { defineVitestProject } from '@nuxt/test-utils/config'
 import { fileURLToPath } from 'node:url'
 
+// Specs import the e2e factories for their data builders; the factories' eager
+// `expect` import from '@playwright/test' resolves to a stub in every vitest project
+const playwrightStub = fileURLToPath(new URL('./tests/component/playwrightStub.ts', import.meta.url))
+
 export default defineConfig({
     test: {
         projects: [
@@ -13,6 +17,7 @@ export default defineConfig({
                 },
                 resolve: {
                     alias: {
+                        '@playwright/test': playwrightStub,
                         '~/': fileURLToPath(new URL('./app/', import.meta.url)),
                         '~~/': fileURLToPath(new URL('./', import.meta.url)),
                     },
@@ -25,18 +30,26 @@ export default defineConfig({
                     include: ['workers/sender/**/*.unit.spec.ts'],
                     environment: 'node',
                     alias: {
+                        '@playwright/test': playwrightStub,
                         '~/': fileURLToPath(new URL('./workers/sender/', import.meta.url)),
                     },
                 },
             },
             await defineVitestProject({
+                resolve: {
+                    alias: {
+                        '@playwright/test': playwrightStub,
+                    },
+                },
                 test: {
                     name: 'nuxt',
                     include: ['tests/component/**/*.nuxt.spec.ts'],
                     environment: 'nuxt',
                     // setupNuxt boots the app in a beforeAll per file; under full parallel
-                    // load a cold boot exceeds vitest's default 10s hook timeout
+                    // load a cold boot exceeds vitest's default 10s hook timeout, and a
+                    // file's first mount can exceed the default 5s test timeout
                     hookTimeout: 60_000,
+                    testTimeout: 20_000,
                     environmentOptions: {
                         nuxt: {
                             // Disable Nuxt's app manifest plugin under tests.

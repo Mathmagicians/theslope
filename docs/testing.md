@@ -224,6 +224,20 @@ Shared `data-testid` contracts live next to the specs that share them, e.g. `tes
 
 ## Component Testing (Nuxt UI v4+)
 
+### Nuxt test environment (@nuxt/test-utils 4)
+
+The Nuxt app starts in a per-file `beforeAll`. Rules for `*.nuxt.spec.ts`:
+
+- A composable whose chain reaches `useAppConfig()`/`useNuxtApp()` (`useSeason`, `useBooking`, `useBookingUi`, `useBilling`,
+  `useMaintenance`) runs in `beforeAll` or in the test — at module level or in a `describe` body it throws `NUXT_E1001`.
+  Declare `let` bindings and destructure in one `beforeAll` per file; call sites stay unchanged.
+- Collection-time data (`it.each` tables, module constants) reads the config via `import appConfig from '~/app.config'`.
+- Override a module per export: spread `importOriginal()` and replace the one export the spec steers
+  (`vue-router`'s `useRoute`), or `mockNuxtImport` for an auto-import (`useToast`, `navigateTo`). The runtime boots the
+  real router and the real config; a wholesale `vue-router`, `#imports` or `useRuntimeConfig` mock breaks the boot.
+- The nuxt vitest project (`vitest.config.ts`) sets `hookTimeout: 60_000` (a cold app boot under full parallel load passes
+  the 10s default) and `runtimeConfig.public.HEY_NABO_API` for specs that render Heynabo links.
+
 ### Render Real Components
 
 Rule 6 in practice: mount the component with its real children and let the store fetch from registered endpoints.
@@ -742,6 +756,7 @@ test('RELEASE bucket: after-deadline orders are RELEASED not deleted', async ({b
 | Reactive updates | Assertion fails after trigger | Add `await nextTick()` |
 | Linux CI failures | Strict mode violation | Use `getByRole()` or `.first()` for dropdowns |
 | Tooltip provider error | `UTooltip` needs the `TooltipProvider` context `UApp` supplies in the app | Mount via `mountWithTooltipProvider()` (`tests/component/testHelpers.ts`) |
+| `ECONNREFUSED 127.0.0.1:3000` printed after a component run (exit 0) | A component spec imports an e2e factory, which value-imports `@playwright/test`; the module runner fetches it post-run | Split factory data builders from their HTTP methods (open) |
 
 ### Linux vs macOS Differences
 
