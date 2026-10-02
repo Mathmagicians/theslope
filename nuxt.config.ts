@@ -15,6 +15,8 @@ export default defineNuxtConfig({
     ],
     css: ['~/assets/css/main.css'],
     devtools: {enabled: true},
+    // Shared Vite watcher (dev only); the default from compatibilityVersion 5
+    experimental: {watcher: 'builder'},
 
     eslint: {
         // options here
@@ -75,14 +77,9 @@ export default defineNuxtConfig({
     icon: {
         // Server-side bundling (icons embedded in the build); the collections are the installed @iconify-json/* packages (package.json)
         serverBundle: {},
-        // Client-side settings - automatic tree-shaking
+        // Client-side settings - automatic tree-shaking; Nuxt UI 4.10+ pre-bundles its own internal icons
         clientBundle: {
-            scan: true,  // Only bundle icons actually used in components
-            // Explicitly include icons used by NuxtUI internally (not detected by scanning)
-            icons: [
-                'lucide:sun',
-                'lucide:moon'
-            ]
+            scan: true  // Only bundle icons actually used in components
         },
         provider: 'server'  // Use server-side icon provider
     },

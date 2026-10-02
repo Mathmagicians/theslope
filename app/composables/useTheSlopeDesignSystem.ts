@@ -956,7 +956,7 @@ export const ICONS = {
     externalLink: 'i-heroicons-arrow-top-right-on-square',
 
     // External links
-    github: 'i-simple-icons-github',
+    github: 'i-hugeicons-github-01',
     book: 'i-heroicons-book-open'
 } as const
 

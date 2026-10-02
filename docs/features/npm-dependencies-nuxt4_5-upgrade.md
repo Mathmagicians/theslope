@@ -11,16 +11,17 @@ thing, the app uses it and the hand-written version leaves. The user runs instal
 |---|---|---|
 | Node and npm versions | Node 24.21.0 with npm 11.19.0, pinned in `engines`, read by CI | ✅ done |
 | Test tooling | vitest 5.0.3 and `@nuxt/test-utils` 4.3.2; 111 spec files, 2625 tests pass | ✅ done |
-| Vite 8 build | the app, dev server and sender build on Vite 8 | ⏳ awaiting signoff |
+| Vite 8 build | the app, dev server and sender build on Vite 8 | ✅ done |
 | Nuxt UI 4.11 | the 4.4–4.11 changes checked against our components | ⏳ awaiting signoff |
 | Danish locale | `UApp` locale `da`; the hand-translated week days leave | ⏳ awaiting signoff |
 | Date pickers | `UInputDate` with the calendar in its trailing popover | ⏳ mockup awaiting signoff |
 | Fetch gating | the `enabled` option of `useAsyncData` replaces fetchers that return empty values | ⏳ awaiting signoff |
 | Page composition | master/detail and tab pages, the `md` breakpoint | OPEN |
+| Store fetcher factory | `createUseAsyncData` bakes `useRequestFetch` + schema transform into one store fetcher | ⏳ API sketch awaiting signoff |
 | Tailwind | `tailwindcss` 4.3.3; declared floors follow installed versions | ⏳ awaiting signoff |
 | Dependency clusters | majors outside Nuxt and Nuxt UI | OPEN — survey in progress |
 
-Vite 8 build is next: the upgraded test tooling and `pre:all` verify it.
+Nuxt UI 4.11 is next: the e2e pair and the visual check run on the built branch.
 
 ## Decisions (2026-09-19)
 
@@ -46,6 +47,9 @@ Vite 8 build is next: the upgraded test tooling and `pre:all` verify it.
   `nuxt-ecosystem` group carries the pin forward with Nuxt.
 - `eslint` 10.11.0 (the `@nuxt/eslint-config` peer line).
 - vitest 5.0.3 and `@nuxt/test-utils` 4.3.2; the suite runs 111 files with 2625 tests (see Test tooling).
+- `ICONS.github` is `i-hugeicons-github-01` (`useTheSlopeDesignSystem.ts`): the glyph ships from an installed collection.
+- `icon.clientBundle` keeps `scan: true` only (`nuxt.config.ts`): Nuxt UI 4.10 pre-bundles its own internal icons.
+- `experimental.watcher: 'builder'` (`nuxt.config.ts`): the shared Vite watcher, the default from `compatibilityVersion: 5`.
 - `ChefMenuFormSchema.menuDescription` is a string (`useBookingValidation.ts`); `UTextarea` 4.11 types `v-model` as `string | undefined`.
 - `RoleOwnerSchema` lives in `useCoreValidation`; `useUserRoles` derives `RoleOwner` and `RoleOwnerValue` from it.
 - `JobRun.triggeredBy` is documented as `"CRON" | "ADMIN" | "ADMIN:<email>"` (`prisma/schema.prisma`, the three job endpoints).
@@ -92,22 +96,14 @@ make unit-test            # expect: Test Files 111 passed, Tests 2625 passed
 **Open.** Factory data builders and their HTTP methods share one module, so a component spec importing a factory loads
 `@playwright/test`; the module runner's fetch of it logs one `ECONNREFUSED 127.0.0.1:3000` after the run and the run exits 0.
 
-## Vite 8 build
+## Vite 8 build — done
 
-**Problem.** Nuxt 4.5 builds on Vite 8 (Rolldown). `nuxt.config.ts` takes Vite from Nuxt. The sender worker builds with
-`nitro build` (nitropack 2.13.4).
-**Solution.** Deduplicate the lockfile as the Nuxt 4.5 release notes advise, then build and run on Vite 8.
-**Commands.**
+The app, dev server and sender build and run on Vite 8 (rolldown): `npx nuxt upgrade --dedupe` deduplicated the lockfile
+(`h3` stays 1.15.11 at the root), `npm run build`, `npm run dev`, `make run-sender-local` and `npm run pre:all` pass.
+**Verify.**
 ```bash
-npx nuxt upgrade --dedupe
-npm ls h3                            # expect: h3@1.15.11 at the root
-npm run build
-npm run dev                          # expect: pages render in one load
-make run-sender-local                # builds the sender (nitro build) and serves it on :3100
-npm run pre:all
+npm run build && npm run pre:all
 ```
-**TDD.** `npm run build`, `npm run pre:all`, `make unit-test` and `npm run test:e2e`.
-**Affected.** `package-lock.json`.
 
 ## Nuxt UI 4.11
 
@@ -128,6 +124,8 @@ npm run pre:all
 | Logical properties in the theme (4.10.0) | physical classes sit on our own elements (`KITCHEN_PANEL_BOX`, the ribbon, icon margins) |
 | `UTable` excludes hidden columns from `colspan` (4.11.1) | expanded rows in the users and job-history tables |
 | Calendar size scale, focus styles, radio-group borders, motion (4.9.0–4.11.1) | the contrast and colour-vision architecture specs pass on the 4.11 theme |
+| Uniform `focus-visible` halo on every component (4.9.0) | the visual check's focus-ring row verifies the restyle |
+| Duplicate toasts pulse the existing toast (4.5.0) | our `dedupeKey` is domain data in the description; specs that read `useToast().toasts` (`AdminTeams.nuxt.spec.ts`) see fewer entries when identical toasts repeat |
 
 **Solution.** The e2e run on 4.11 and the visual check.
 **Commands.**
@@ -232,6 +230,29 @@ store reports ready.
 
 The rendered pages stay the same in A and B; the visual check covers `/chef`, `/dinner`, `/admin/*` and `/household/*`.
 
+## Store fetcher factory
+
+**Problem.** Thirty keyed `useAsyncData` calls across the five stores (`plan` 12, `bookings` 7, `allergies` 5, `households` 5,
+`users` 1) each hand-repeat the same three options: a `useRequestFetch` fetcher, a Zod-parse `transform` and a `default`.
+**Solution.** `createUseAsyncData` (Nuxt 4.4) builds one project fetcher that bakes in `useRequestFetch`; a store slice
+declares its key, endpoint, schema and default. The factory is the blessed shape of the SSR-friendly store pattern (ADR-007);
+the ADR gains the amendment. The factory composes with the `enabled` option, so the Fetch gating package converts onto it.
+
+**API sketch** ⏳ awaiting signoff
+
+```ts
+// app/composables/useStoreAsyncData.ts
+const {data: seasons, status, error, refresh} = useStoreAsyncData(
+    'plan-store-seasons', '/api/admin/season',
+    {schema: SeasonSchema.array(), default: () => []}
+)
+// reactive keys/urls and enabled pass through: useStoreAsyncData(computed(() => `season-${id.value}`), url, {…, enabled})
+```
+
+**TDD.** The store specs stay the specification; `allergies.ts` converts first (full specs), the other stores follow.
+**Affected.** `app/stores/*`, one new composable with its unit spec, `docs/adr.md` (ADR-007 amendment),
+`docs/adr-compliance-frontend.md` store rows.
+
 ## Tailwind
 
 **Problem.** `package.json` declares `tailwindcss` `^4.1.18`; the installed version is 4.3.3. The floors of `@nuxt/eslint`,
@@ -272,5 +293,6 @@ candidate), `pinia` 4 with `@pinia/nuxt` 1, `@vueuse/core` 15, `typescript` 7, `
 
 - ADR-007 [SSR-Friendly Store Pattern with useAsyncData], amendment "fetch gating": a fetch is gated with `enabled`; a disabled slice
   reads as idle.
-- ADR-017 [Isomorphic Composables, Pure UI Composables and Per-Context Type Checking]: the typecheck layout stays on
-  `server/tsconfig.json` while nuxt/nuxt#34385 is open.
+- Isomorphic composables and per-context type checking (ADR-017): `nuxt typecheck` (`vue-tsc -b`) exits 0 on Nuxt 4.5.2 with
+  CLI 3.37; collapsing `ts` + `ts:server` + `ts:node` into it is a `pre:all`/CI change and carries its own signoff.
+  `ts:workers` stays: `workers/sender` is its own Nitro app.
