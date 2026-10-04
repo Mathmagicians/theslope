@@ -66,8 +66,7 @@ Nuxt UI 4.11 is next: the e2e pair and the visual check run on the built branch.
   and `translateToDanish`-era sync watchers left. E2e fills go through `testHelpers.fillDateField`/`readDateField` on the
   picker's `[name]` scope (self-verifying via `pollUntil`).
 - Cooking-day counter: `COMPONENTS.statBox` (framed at the 3:1 edge rung) in the season card header shows the dinners the
-  season scaffolds, computed with `getEachDayOfIntervalWithSelectedWeekdays` and `excludeDatesFromInterval`; the palette
-  presets regenerated (`make palettes`).
+  season scaffolds, computed with `computeCookingDates`; the palette presets regenerated (`make palettes`).
 - `ICONS.github` is `i-hugeicons-github-01` (`useTheSlopeDesignSystem.ts`): the glyph ships from an installed collection.
 - `icon.clientBundle` keeps `scan: true` only (`nuxt.config.ts`): Nuxt UI 4.10 pre-bundles its own internal icons.
 - `experimental.watcher: 'builder'` (`nuxt.config.ts`): the shared Vite watcher, the default from `compatibilityVersion: 5`.

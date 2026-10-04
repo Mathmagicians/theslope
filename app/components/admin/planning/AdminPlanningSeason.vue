@@ -30,15 +30,14 @@ import {FORM_MODES} from "~/types/form"
 import type {WeekDayMap} from "~/types/dateTypes"
 
 //COMPONENT DEPENDENCIES
-const {SeasonSchema, createSeasonName} = useSeason()
+const {SeasonSchema, createSeasonName, computeCookingDates} = useSeason()
 const {BUTTONS, COLOR, COMPONENTS, ICONS, LAYOUTS, TYPOGRAPHY, TEXT} = useTheSlopeDesignSystem()
 
-// The sum of dinners the saved season scaffolds: cooking weekdays inside the period, holidays excluded
+// The sum of dinners the saved season scaffolds
 const cookingDayCount = computed(() => {
     const {start, end} = model.value.seasonDates ?? {}
     if (!start || !end) return 0
-    const cookingDates = getEachDayOfIntervalWithSelectedWeekdays(start, end, model.value.cookingDays)
-    return excludeDatesFromInterval(cookingDates, model.value.holidays ?? []).length
+    return computeCookingDates(model.value.cookingDays, model.value.seasonDates, model.value.holidays ?? []).length
 })
 const appConfig = useAppConfig()
 const {theslope} = appConfig  //some default values
