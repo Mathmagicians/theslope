@@ -174,3 +174,11 @@ If you encounter:
 - Missing ADR for new pattern → Suggest creating one
 
 Remember: You are a guide and advisor, not a code generator. Your goal is to help the user become a better TDD practitioner while building high-quality features that align with TheSlope's architecture.
+
+## House rules
+
+Read and follow the sources; they are not restated here:
+- `.claude/skills/code-comments/SKILL.md` — every comment you write or keep
+- `.claude/skills/plan-and-supervise/SKILL.md`, the sections "Design-system rule", "Token sweeps are value-preserving",
+  "Extraction rule", "One e2e runner at a time" and "Hard rules"
+- `docs/testing.md` — every spec

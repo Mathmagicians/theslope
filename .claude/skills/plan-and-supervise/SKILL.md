@@ -62,6 +62,11 @@ at a time behind an explicit approval. The plan document is the deliverable; the
   token (`v-bind="ALERTS.info"`) and pass only domain props. No `app.config` theme overrides, no per-site `:ui` patches.
 - A fix to a Nuxt UI component family = add the token, sweep **all** instances onto it, add an architecture test under
   `tests/component/architecture/` so the raw form cannot come back.
+- No styles in components: no `<style>` block in a `.vue` (sole exemption: print CSS in `app/pages/admin/allergies/pdf.vue`)
+  and no raw utility classes — every class binds a token. Animation keyframes live in `app/assets/css/main.css` `@theme`
+  (`--animate-*`) and reach components only through a token; infinite animations carry `motion-reduce:animate-none`.
+- Extracting a value to the design system sweeps every occurrence codebase-wide in the same package, DS-internal class
+  strings included — a partial sweep is a violation, not progress.
 
 ## Coverage rule (show it as a matrix in the plan)
 
@@ -91,6 +96,9 @@ Wait for approval or fine-tuning. Launch one agent per package with the brief, t
 - The brief covers the ask and nothing wider: the smallest change that does what the user asked. A wider idea is one optional
   line after the brief, never part of its scope or its decisions. "Measure the contrast correctly" is the pairs the components
   paint, not their hover states, checkbox parts and a button sweep; "change the default palette" is a selector, not a rebase.
+- The brief points the agent at `.claude/skills/code-comments/SKILL.md` and never dictates comment text. Source comments
+  carry no dates, decisions, sign-offs or doc references — those live in the plan doc; the architect's diff review checks
+  the comments too.
 
 ## Per-package gate
 
@@ -147,6 +155,9 @@ matrix and the design-system rule → 5. compliance rows (`docs/adr-compliance-*
   values (`dark:bg-gray-800` vs `dark:bg-gray-900`, `/50` alpha, a different grey step) get two tokens, named by where they
   are used; unifying them is a separate design decision the user takes from a visual proposal. Prove it: compare the set of
   classes each template renders before and after the sweep.
+- A site whose rendered classes differ from the token's even subtly is stopped on and presented as options, never silently
+  merged or silently kept. The user's stated default for a meaningless accidental delta (a missing duration on one state)
+  is converge on the token — still their call, per delta.
 
 ## ADR numbers are taken at write time
 

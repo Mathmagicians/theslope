@@ -111,6 +111,19 @@ The store, page and dependency work lives in feature-proposal-framework-adoption
 - PWA manifest: `public/manifest.webmanifest` (standalone, `da`, brand colours) with the icon set rendered from
   `public/app-icon.svg`; `app.head` links the manifest and apple-touch-icon and carries theme-color and the iOS standalone
   metas; installable without a service worker. `pages.e2e.spec.ts` smoke-asserts the manifest and its icons serve.
+- Install guidance: `InstallPrompt.vue` on the dashboard (mockup in its header, composition box in `Login.vue`'s header),
+  driven by `decideInstallFace` in `useInstallPrompt.ts` — capability only (C3), precedence standalone → dismissed →
+  install event (button) → iOS share sheet (`navigator.standalone` false: "Åbn Del-menuen og vælg 'Føj til hjemmeskærm'")
+  → touch-first (`(pointer: coarse) and (hover: none)`: "Åbn browserens menu og vælg 'Føj til startskærm'") → nothing;
+  copy is generic, no browser names. `app/plugins/installPrompt.client.ts` captures the install event from app start
+  (`markRaw`); the event is not cancelled, so the browser's own install bar shows alongside the card and `appinstalled`
+  hides the card whichever path installs. Ikke nu writes a 90-day cookie. The app icon is framed and pulsed by
+  `COMPONENTS.installIcon` + `--animate-tap-pulse` (`main.css` `@theme`, static under `motion-reduce`). A pre-PWA
+  home-screen bookmark opens in the browser and lands on these faces; the stale icon is deleted by hand. Specs:
+  `useInstallPrompt.unit`, `InstallPrompt.nuxt`, `InstallPrompt.e2e`; rows in `docs/adr-compliance-frontend.md`.
+- `BUTTONS.disclosure` renamed `BUTTONS.flipOpen`; its turn classes are single-sourced as `BUTTONS.flipOpenTurn`, and
+  `HouseholdAllergies`'s hand-rolled copy binds them (its closing flip gains `duration-200`). The remaining raw motion
+  classes are inventoried in bug-fix-motion-tokens.md for the next release.
 
 ---
 
