@@ -72,7 +72,7 @@ describe('InstallPrompt', () => {
             const wrapper = await mountWith(capability)
             const card = findByTestId(wrapper, INSTALL_TEST_IDS.card)
 
-            expect(card.text()).toContain('Få Skråningen som app')
+            expect(card.find('h2').text()).toBe('Få Skråningen som app')
             expect(card.text()).toContain(description)
             expect(card.find(`img[src="${ICON_SRC}"]`).exists()).toBe(true)
         })

@@ -656,6 +656,12 @@ export const COMPONENTS = {
     },
 
     /**
+     * The circular team chip beside the team-name input: w-fit pins the circle to its
+     * content, where a flex column's cross-axis stretch would pull it into a full-width pill
+     */
+    teamChip: 'rounded-full p-2 md:p-3 w-fit',
+
+    /**
      * The detail mounts of a master-detail page: the framed pane beside the master table,
      * the framed dock under the tapped row, and the dock's header bar, which stays pinned
      * under the sticky admin tab bar while the dock's body scrolls.
@@ -663,7 +669,14 @@ export const COMPONENTS = {
     masterDetail: {
         pane: 'border rounded-lg p-4',
         dock: `border rounded-lg p-2 ${BG.panel}`,
-        dockHeader: `sticky top-24 z-10 py-2 ${BG.panel}`
+        dockHeader: `sticky top-24 z-10 py-2 ${BG.panel}`,
+        // A td sizes to its content's minimum width: zero width takes the dock out of that
+        // equation and min-w-full stretches it back to the cell, so a wide detail can never
+        // widen the master table
+        dockClamp: 'w-0 min-w-full',
+        // Wide detail content scrolls inside its own box; the dock header above it stays
+        // outside the scroll container, so its stickiness keeps tracking the page
+        dockBody: 'overflow-x-auto'
     },
 
     /**

@@ -435,7 +435,8 @@ const columns = [
 
             <!-- Docked detail (phone): the same card as the pane, its header pinned while the body scrolls -->
             <template #expanded>
-              <div v-if="selectedTeam?.id" :class="[COMPONENTS.masterDetail.dock, 'space-y-2']">
+              <div v-if="selectedTeam?.id" :class="COMPONENTS.masterDetail.dockClamp">
+              <div :class="[COMPONENTS.masterDetail.dock, 'space-y-2']">
                 <div :class="[COMPONENTS.masterDetail.dockHeader, 'flex items-center justify-between gap-2']">
                   <CookingTeamBadges
                       :team-number="selectedTeamIndex + 1"
@@ -464,7 +465,10 @@ const columns = [
                     Tilbage
                   </UButton>
                 </div>
-                <CookingTeamCard v-bind="detailProps" v-on="detailEvents" />
+                <div :class="COMPONENTS.masterDetail.dockBody">
+                  <CookingTeamCard v-bind="detailProps" v-on="detailEvents" />
+                </div>
+              </div>
               </div>
             </template>
 
@@ -496,7 +500,7 @@ const columns = [
 
           <!-- Detail pane (md+): the same card as the dock, framed so the team's own
                calendar reads apart from the all-teams calendar of the overview -->
-          <div v-if="selectedTeam?.id" :class="['hidden md:block md:w-2/3 space-y-4 self-start', COMPONENTS.masterDetail.pane]">
+          <div v-if="isMd && selectedTeam?.id" :class="['md:w-2/3 space-y-4 self-start', COMPONENTS.masterDetail.pane]">
             <div class="flex items-center justify-between gap-2">
               <CookingTeamBadges
                   :team-number="selectedTeamIndex + 1"

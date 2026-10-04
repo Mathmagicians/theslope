@@ -52,6 +52,7 @@ const handleSubmit = () => {
           :items="roleOptions"
           value-key="value"
           placeholder="Vælg rolle..."
+          class="w-full"
           :size="SIZES.small"
       />
     </UFormField>
@@ -62,6 +63,7 @@ const handleSubmit = () => {
           :items="ALLOCATION_PERCENTAGE_OPTIONS"
           value-key="value"
           placeholder="Vælg procent..."
+          class="w-full"
           :size="SIZES.small"
       />
     </UFormField>

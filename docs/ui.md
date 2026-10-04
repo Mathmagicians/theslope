@@ -38,7 +38,7 @@ Nuxt 4.3, Nuxt UI 4.3, Tailwind 4.1. Pages use Nuxt UI components; every shared 
 | `TYPOGRAPHY`, `LAYOUTS`, `SIZES`, `ICONS` | text styles, layout classes, responsive sizes, icon names |
 | `BUTTONS` | `edit`, `cancel`, `save`, `primaryAction`, `secondaryAction`, `settings` |
 | `ALERTS` | alert kinds and the `withActions` / `withCornerAction` modifiers |
-| `COMPONENTS` | `calendarGrid`, `dateField`, `installIcon`, `statBox`, `table.ui`, `teamTabs`, `masterDetail` (framed `pane`/`dock` + sticky `dockHeader`), `choiceGroup`, `kitchenPanel`, `segmentedActive`, `economyTable`, `powerMode`, `guestRow` |
+| `COMPONENTS` | `calendarGrid`, `dateField`, `installIcon`, `statBox`, `table.ui`, `teamTabs`, `masterDetail` (framed `pane`/`dock`, sticky `dockHeader`, `dockClamp` keeps a wide dock out of the master table's sizing, `dockBody` scrolls it in its own box), `choiceGroup`, `kitchenPanel`, `segmentedActive`, `economyTable`, `powerMode`, `guestRow` |
 | `CALENDAR`, `PLANNING_CALENDAR`, `CHEF_CALENDAR`, `DINNER_CALENDAR`, `dayCircleClasses`, `calendarPickerProps` | calendar days, pickers, countdowns |
 | `BACKGROUNDS`, `RAINBOW`, `RAINBOW_FAMILIES`, `getRainbowBand`, `getRainbowFamily`, `getRainbowAccent` (selected team row's left tab), `PANTONE_CHIPS` | brand surfaces |
 | `TICKET_TYPE_COLORS`, `ORDER_STATE_COLORS`, `DINNER_STATE_BADGES`, `DEADLINE_BADGES`, `RESIDENCY_CONFIG`, `ROLE_ICONS` | domain colour and glyph maps |

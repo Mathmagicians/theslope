@@ -38,7 +38,7 @@ import type { TeamRole, CookingTeamAssignment } from '~/composables/useCookingTe
 import { ROLE_LABELS } from '~/composables/useCookingTeamValidation'
 
 // Design system
-const { SIZES, ICONS, ALERTS, COLOR, TYPOGRAPHY, TEXT, BG, ROLE_ICONS, getRainbowBand, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { SIZES, ICONS, ALERTS, COLOR, TYPOGRAPHY, TEXT, BG, COMPONENTS, ROLE_ICONS, getRainbowBand, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 type DisplayMode = 'monitor' | 'regular' | 'edit'
 
@@ -311,7 +311,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
       class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 py-2 px-0 md:px-4 border-y-2 md:border-2 border-dashed"
     >
       <div class="flex flex-col md:flex-row md:items-center gap-3 flex-1">
-        <UBadge :class="[teamBand, 'rounded-full p-2 md:p-3']" :size="SIZES.standard">
+        <UBadge :class="[teamBand, COMPONENTS.teamChip]" :size="SIZES.standard">
           <UIcon :name="ICONS.team" :size="SIZES.standardIconSize" />
         </UBadge>
         <UFormField label="Holdnavn" class="flex-1 min-w-fit" >
