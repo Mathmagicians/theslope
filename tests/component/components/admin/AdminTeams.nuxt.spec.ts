@@ -10,7 +10,6 @@ import AdminTeams from '~/components/admin/AdminTeams.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {usePlanStore} from '~/stores/plan'
 import {useAuthStore} from '~/stores/auth'
-import {FORM_MODES} from '~/types/form'
 
 // The test environment has no router to navigate: useEntityFormManager and useQueryParam
 // write the URL state through navigateTo (ADR-006 / ADR-008)
@@ -46,8 +45,7 @@ const mountTeams = async () => {
 }
 
 const clickCreateTeams = async (wrapper: Awaited<ReturnType<typeof mountTeams>>) => {
-    const button = wrapper.findAll('button').find(candidate => candidate.text().includes('Opret madhold'))
-    await button!.trigger('click')
+    await clickByTestId(wrapper, 'submit-create-teams')
     await flushPromises()
     await nextTick()
 }
@@ -73,7 +71,7 @@ describe('AdminTeams', () => {
 
     it('reports created teams and assigned dinners in the toast', async () => {
         const wrapper = await mountTeams()
-        await clickByTestId(wrapper, `form-mode-${FORM_MODES.CREATE}`)
+        await clickByTestId(wrapper, 'create-team')
         await flushPromises()
 
         expect(wrapper.find('#team-count').exists()).toBe(true)

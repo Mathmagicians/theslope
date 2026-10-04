@@ -76,6 +76,9 @@ const bindsTableToken = (source: string, tagText: string): boolean => {
 // (calendarPickerProps merges COMPONENTS.calendarGrid with a CALENDAR.picker selection)
 const BINDS_CALENDAR_GRID = /v-bind="(COMPONENTS\.calendarGrid|calendarProps)"/
 
+/** The team tab strip (a UTabs whose file renders CookingTeamBadges triggers) binds its token in the tag */
+const BINDS_TEAM_TABS = /v-bind="COMPONENTS\.teamTabs"/
+
 /** Every palette family a Tailwind colour utility can name here: defaults plus our custom ones */
 const COLOUR_FAMILIES = [
     'amber', 'blue', 'pink', 'orange', 'sky', 'red', 'violet', 'winery', 'party', 'peach',
@@ -143,6 +146,17 @@ describe('ADR-018: components bind design-system tokens, never raw Nuxt UI props
             return openingTags(source, 'UTable')
                 .filter(tag => !bindsTableToken(source, tag.text))
                 .map(tag => `app/${file}:${tag.line} - no table token (use :ui="COMPONENTS.table.ui", or spread a COMPONENTS.table token)`)
+        })
+        expect(report(violations)).toBe('')
+    })
+
+    it('every team <UTabs> binds COMPONENTS.teamTabs', () => {
+        const violations = vueFiles.flatMap(file => {
+            const source = readVue(file)
+            if (!source.includes('<CookingTeamBadges')) return []
+            return openingTags(source, 'UTabs')
+                .filter(tag => !BINDS_TEAM_TABS.test(tag.text))
+                .map(tag => `app/${file}:${tag.line} - no team tabs token (use v-bind="COMPONENTS.teamTabs")`)
         })
         expect(report(violations)).toBe('')
     })

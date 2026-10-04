@@ -2,7 +2,7 @@
 /**
  * BookingViewSwitcher - Toggle between Day/Week/Month booking views
  *
- * Button group pattern (same as FormModeSelector):
+ * Button group pattern:
  * - Mobile: icons only
  * - Desktop: icons + labels
  *

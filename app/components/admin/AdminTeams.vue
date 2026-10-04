@@ -1,123 +1,34 @@
 <script setup lang="ts">
 /**
- * AdminTeams Component - Master-Detail Pattern for Team Management
+ * AdminTeams - one master table, one portable team detail (the AdminAllergies pattern)
  *
- * ═══════════════════════════════════════════════════════════════════════════
- * DESKTOP EDIT MODE (lg+): Side-by-side master-detail with 2-row layout
- * ═══════════════════════════════════════════════════════════════════════════
- * ┌──────────────┬──────────────────────────────────────────────────────────┐
- * │  TEAMS       │  ╔═══════════════════════════════════════════════════╗  │
- * │  (Master)    │  ║ 🏆 [Madhold 2___✏️]  [8 medlemmer]  [☠️ Slet]   ║  │
- * │              │  ╚═══════════════════════════════════════════════════╝  │
- * │ ┌──────────┐ │                                                          │
- * │ │Hold 1  🔵│ │  ┌──────────────────────┬───────────────────────────┐  │
- * │ │8 medl.   │ │  │ HOLDMEDLEMMER        │ TILFØJ MEDLEMMER          │  │
- * │ └──────────┘ │  ├──────────────────────┼───────────────────────────┤  │
- * │ ┏━━━━━━━━━━┓ │  │ Chefkok:             │ [Søg: ______🔍] [⇈⇊ 1/8] │  │
- * │ ┃Hold 2  🟢┃ │  │ 👤 Anna    [❌]      │ ┌───────────────────────┐ │  │
- * │ ┃6 medl.   ┃ │  │                      │ │👤 Bo Nielsen  LEDIG  │ │  │
- * │ ┗━━━━━━━━━━┛ │  │ Kok:                 │ │  [Chef][Kok][Spire]  │ │  │
- * │ ┌──────────┐ │  │ 👤 Bob     [❌]      │ ├───────────────────────┤ │  │
- * │ │Hold 3  🟣│ │  │ 👤 Carl    [❌]      │ │👤 Ida Olsen   Hold 3 │ │  │
- * │ │0 medl.   │ │  │                      │ │  I andet hold         │ │  │
- * │ └──────────┘ │  │ Kokkespire:          │ ├───────────────────────┤ │  │
- * │              │  │ 👤 Diana   [❌]      │ │👤 John Doe    Hold 2 │ │  │
- * │ ┌──────────┐ │  │ 👤 Eva     [❌]      │ │  [❌ Fjern]          │ │  │
- * │ │Hold 4  🟡│ │  │ 👤 Fred    [❌]      │ └───────────────────────┘ │  │
- * │ │5 medl.   │ │  └──────────────────────┴───────────────────────────┘  │
- * │ └──────────┘ │                                                          │
- * │              │  ┌──────────────────────┬───────────────────────────┐  │
- * │              │  │ MADLAVNINGSDAGE      │ KALENDER                  │  │
- * │              │  ├──────────────────────┼───────────────────────────┤  │
- * │              │  │ ☐ Mandag             │ Jan 2025                  │  │
- * │              │  │ ☑ Tirsdag            │ Mo Tu We Th Fr Sa Su      │  │
- * │              │  │ ☐ Onsdag             │     1  2  3  4  5         │  │
- * │              │  │ ☑ Torsdag            │  6 🟢  8  9 10 11 12      │  │
- * │              │  │ ☐ Fredag             │ 13 14 🟢 16 17 18 19      │  │
- * │              │  │ ☐ Lørdag             │ 20 21 🟢 23 24 25 26      │  │
- * │              │  │ ☐ Søndag             │ 27 28 🟢 30 31            │  │
- * │              │  │                      │ Feb 2025...               │  │
- * │              │  └──────────────────────┴───────────────────────────┘  │
- * └──────────────┴──────────────────────────────────────────────────────────┘
+ * Selection rides in ?team=, the detail's face in ?mode=view|edit|create (ADR-006).
+ * Everything inside the edit face saves immediately.
  *
- * ═══════════════════════════════════════════════════════════════════════════
- * MOBILE EDIT MODE (< lg): Dropdown + vertical stack (single scroll direction)
- * ═══════════════════════════════════════════════════════════════════════════
- * ┌────────────────────────────────────────────────────────┐
- * │ Vælg hold: [Madhold 2 (8 medl.) ▼]      (dropdown)     │
- * ├────────────────────────────────────────────────────────┤
- * │ ╔════════════════════════════════════════════════════╗ │
- * │ ║ 🏆 [Madhold 2_____✏️]  [8 medl.]  [☠️ Slet]     ║ │
- * │ ╚════════════════════════════════════════════════════╝ │
- * ├────────────────────────────────────────────────────────┤
- * │ HOLDMEDLEMMER                                          │
- * │ ─────────────────────────────────────────────────────  │
- * │ Chefkok:                                               │
- * │ 👤 Anna Jensen        [❌]                            │
- * │                                                        │
- * │ Kok:                                                   │
- * │ 👤 Bob Smith          [❌]                            │
- * │ 👤 Carl Lee           [❌]                            │
- * │                                                        │
- * │ Kokkespire:                                            │
- * │ 👤 Diana Park         [❌]                            │
- * │ 👤 Eva Green          [❌]                            │
- * │ 👤 Fred White         [❌]                            │
- * ├────────────────────────────────────────────────────────┤
- * │ TILFØJ MEDLEMMER                                       │
- * │ ─────────────────────────────────────────────────────  │
- * │ [Søg: ___________________________________🔍] [⇈⇊ 1/8] │
- * │ ┌────────────────────────────────────────────────────┐ │
- * │ │ 👤 Bo Nielsen                            LEDIG    │ │
- * │ │    [Chef] [Kok] [Spire]                           │ │
- * │ ├────────────────────────────────────────────────────┤ │
- * │ │ 👤 Ida Olsen                             Hold 3   │ │
- * │ │    I andet hold                                    │ │
- * │ ├────────────────────────────────────────────────────┤ │
- * │ │ 👤 John Doe                              Hold 2   │ │
- * │ │    [❌ Fjern]                                     │ │
- * │ └────────────────────────────────────────────────────┘ │
- * ├────────────────────────────────────────────────────────┤
- * │ MADLAVNINGSDAGE                                        │
- * │ ─────────────────────────────────────────────────────  │
- * │ ☐ Mandag                                               │
- * │ ☑ Tirsdag                                              │
- * │ ☐ Onsdag                                               │
- * │ ☑ Torsdag                                              │
- * │ ☐ Fredag                                               │
- * │ ☐ Lørdag                                               │
- * │ ☐ Søndag                                               │
- * ├────────────────────────────────────────────────────────┤
- * │ KALENDER                                               │
- * │ ─────────────────────────────────────────────────────  │
- * │ Jan 2025                                               │
- * │ Mo Tu We Th Fr Sa Su                                   │
- * │     1  2  3  4  5                                      │
- * │  6 🟢  8  9 10 11 12                                   │
- * │ 13 14 🟢 16 17 18 19                                   │
- * │ 20 21 🟢 23 24 25 26                                   │
- * │ 27 28 🟢 30 31                                         │
- * │                                                        │
- * │ Feb 2025...                                            │
- * └────────────────────────────────────────────────────────┘
+ * DESKTOP (md+) - master table 1/5, detail pane 4/5
+ * +--Madhold-------------------------------------------------------------+
+ * | [Saeson: 12/26-01/27 v]                       [(plus) Opret madhold] |
+ * +--------------------------------+---------------------------------------+
+ * | MASTER (table, compact names)  | Madhold 2         [(pencil) Rediger]  |
+ * | [Madhold 1][(hat)1][(mem)4]    |  CookingTeamCard (regular or edit):   |
+ * | [Madhold 2][(hat)0][(mem)6] *  |  medlemmer, finder, dage, kalender    |
+ * | [Madhold 3][(hat)2][(mem)5]    |  (edit face shows [(arrow) Tilbage])  |
+ * +--------------------------------+---------------------------------------+
+ *   * selected row highlighted (COMPONENTS.table.selectedRow)
  *
- * ═══════════════════════════════════════════════════════════════════════════
- * Key Layout Features:
- * ═══════════════════════════════════════════════════════════════════════════
- * Desktop:
- *   - Master list: Vertical tabs (left 20%)
- *   - Detail view: 2-row layout (right 80%)
- *     - Row 1: Members (left 50%) + Finder (right 50%)
- *     - Row 2: Cooking Days (left 25%) + Calendar (right 75%)
+ * PHONE (<md) - the same detail docks under the tapped row (#expanded);
+ * its header (badge + Rediger/Tilbage) is sticky while the body scrolls
+ * +-----------------------------------------+
+ * | [Madhold 1][(hat)1][(mem)4]  | tir, tor |
+ * |-----------------------------------------|
+ * | [Madhold 2]      [(pencil) Rediger]     | <- sticky under the tab bar
+ * |   CookingTeamCard ...                   |
+ * |-----------------------------------------|
+ * | [Madhold 3][(hat)2][(mem)5]  | man      |
+ * +-----------------------------------------+
  *
- * Mobile:
- *   - Dropdown team selector (replaces vertical tabs)
- *   - Vertical stack: Header → Members → Finder → Days → Calendar
- *   - Single scroll direction (vertical only)
- *
- * Common:
- *   - Team header: Inline name editing (✏️), member count, delete button
- *   - Side-by-side sections become vertically stacked on mobile
+ * CREATE (?mode=create, from the header button) - count stepper + previews,
+ * footer [Annuller] [Opret N madhold]; batch create numbers from N+1.
  */
 import {h, resolveComponent} from 'vue'
 import {FORM_MODES} from "~/types/form"
@@ -132,7 +43,10 @@ const props = withDefaults(defineProps<Props>(), {
   canEdit: false
 })
 
-const {getDefaultCookingTeam, countChefs} = useCookingTeam()
+const {getDefaultCookingTeam, countChefs, getTeamShortName} = useCookingTeam()
+
+// Layout breakpoint from the default layout - drives the detail's mount point
+const isMd = inject<Ref<boolean>>('isMd', ref(false))
 const store = usePlanStore()
 const {
   isSeasonsLoading,
@@ -222,7 +136,7 @@ const {value: selectedTeamId} = useQueryParam<number>('team', {
     return displayedTeams.value[0]?.id ?? null
   },
   defaultValue: () => displayedTeams.value[0]?.id ?? 0,
-  syncWhen: () => formMode.value === FORM_MODES.EDIT && displayedTeams.value.some(t => t.id)
+  syncWhen: () => formMode.value !== FORM_MODES.CREATE && displayedTeams.value.some(t => t.id)
 })
 const selectedTeamIndex = computed(() => {
   const idx = displayedTeams.value.findIndex(t => t.id === selectedTeamId.value)
@@ -230,17 +144,59 @@ const selectedTeamIndex = computed(() => {
 })
 const selectedTeam = computed(() => displayedTeams.value[selectedTeamIndex.value] ?? null)
 
-// Team tabs for vertical navigation
-const teamTabs = computed(() => {
-  return displayedTeams.value.map((team, index) => ({
-    label: team.name,
-    value: index,
-    // The team's colour rides on CookingTeamBadges in the tab body, from the team's number
-    chefCount: countChefs(team.assignments ?? []),
-    memberCount: team.assignments?.length ?? 0,
-    cookingDaysCount: team.cookingDaysCount ?? 0
-  }))
+// On a phone the detail docks under the selected row; the dock opens on tap and folds on
+// a second tap while the selection itself stays (the pane needs one from md up)
+const dockOpen = ref(false)
+
+const handleSelectTeam = (id: number) => {
+  if (!isMd.value && selectedTeamId.value === id && dockOpen.value) {
+    dockOpen.value = false
+    return
+  }
+  dockOpen.value = true
+  selectedTeamId.value = id
+}
+
+// MOBILE EXPANSION - derived from the selection (the AdminAllergies pattern): UTable-initiated
+// collapse closes the dock, expansion routes through the selection
+const expanded = computed({
+  get: (): Record<number, boolean> => {
+    if (isMd.value || formMode.value === FORM_MODES.CREATE || !dockOpen.value) return {}
+    const index = selectedTeamIndex.value
+    return index === -1 ? {} : {[index]: true}
+  },
+  set: (value: Record<number, boolean>) => {
+    const openIndex = Object.keys(value).find(key => value[Number(key)])
+    if (openIndex !== undefined) {
+      dockOpen.value = true
+      selectedTeamId.value = displayedTeams.value[Number(openIndex)]?.id ?? 0
+    } else {
+      dockOpen.value = false
+    }
+  }
 })
+
+// ONE detail, two mount points (desktop pane / mobile expanded row) - shared bindings
+const detailProps = computed(() => ({
+  teamId: selectedTeam.value?.id ?? 0,
+  teamNumber: selectedTeamIndex.value + 1,
+  seasonId: selectedSeason.value?.id,
+  seasonCookingDays: selectedSeason.value?.cookingDays,
+  seasonDates: selectedSeason.value?.seasonDates,
+  holidays: selectedSeason.value?.holidays,
+  teams: displayedTeams.value.map(t => ({id: t.id!, name: t.name})),
+  mode: formMode.value === FORM_MODES.EDIT ? 'edit' as const : 'regular' as const,
+  useShortName: true
+}))
+
+const detailEvents = computed(() => ({
+  'update:teamName': (newName: string) => handleUpdateTeamName(selectedTeam.value!.id!, newName),
+  'update:affinity': (affinity: WeekDayMap<boolean> | null) => handleUpdateTeamAffinity(selectedTeam.value!.id!, affinity),
+  'delete': handleDeleteTeam,
+  'add:member': handleAddMember,
+  'update:member': handleUpdateMember,
+  'remove:member': handleRemoveMember
+}))
 
 const showAdminTeams = computed(() => {
   // A season with no teams still renders: the table shows its own #empty slot
@@ -274,25 +230,6 @@ const handleBatchCreateTeams = async () => {
     await onModeChange(FORM_MODES.VIEW)
   } catch (error) {
     console.error('👥 > ADMIN_TEAMS > [CREATE] Error creating teams:', error)
-    throw error
-  }
-}
-
-// EDIT MODE: Add new team (IMMEDIATE SAVE, server auto-assigns affinities + events)
-const handleAddTeam = async () => {
-  if (!selectedSeason.value?.id) return
-
-  try {
-    const newTeam = getDefaultCookingTeam(
-        selectedSeason.value.id,
-        selectedSeason.value.shortName ?? '',
-        teams.value.length + 1
-    )
-    await createTeam(newTeam)
-    showSuccessToast('Madhold tilføjet', 'Madlavningsdage og fællesspisninger opdateret automatisk')
-    // teams reactively updates from store refresh - no manual update needed
-  } catch (error) {
-    console.error('👥 > ADMIN_TEAMS > [ADD] Error adding team:', error)
     throw error
   }
 }
@@ -363,46 +300,14 @@ const handleCancel = async () => {
   await onModeChange(FORM_MODES.VIEW)
 }
 
-// VIEW MODE: Expandable rows state (TanStack Table pattern from AdminUsers)
-const expanded = ref<Record<number, boolean>>({})
-const expandedTeam = ref<CookingTeamDisplay | null>(null)
-
-// Watch for row expansion to track expanded team and enforce single expansion
-watch(expanded, (newExpanded, oldExpanded) => {
-  const expandedKeys = Object.keys(newExpanded).filter(key => newExpanded[Number(key)])
-
-  if (expandedKeys.length > 1) {
-    // More than one row expanded - close all except the most recently opened
-    const newlyExpandedKey = expandedKeys.find(key => !oldExpanded[Number(key)])
-    if (newlyExpandedKey) {
-      Object.keys(expanded.value).forEach(key => {
-        if (key !== newlyExpandedKey) {
-          expanded.value[Number(key)] = false
-        }
-      })
-
-      // Set expanded team for the newly expanded row
-      const rowIndex = Number(newlyExpandedKey)
-      expandedTeam.value = displayedTeams.value[rowIndex] ?? null
-    }
-  } else if (expandedKeys.length === 1) {
-    // Exactly one row expanded - set expanded team
-    const rowIndex = Number(expandedKeys[0])
-    expandedTeam.value = displayedTeams.value[rowIndex] ?? null
-  } else {
-    // No rows expanded - clear expanded team
-    expandedTeam.value = null
-  }
-})
-
-// TABLE COLUMNS for VIEW mode - using TanStack Table API
+// TABLE COLUMNS - using TanStack Table API
 interface TableRow {
   getIsExpanded: () => boolean
   toggleExpanded: () => void
   original: CookingTeamDisplay
 }
 
-const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, TEXT, BG, COMPONENTS} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, BG, COMPONENTS, columnVisibility} = useTheSlopeDesignSystem()
 
 const columns = [
   {
@@ -445,7 +350,17 @@ const columns = [
               :disabled="disabledModes.includes(FORM_MODES.CREATE)"
               @update:model-value="handleSeasonChange"
           />
-          <FormModeSelector v-if="props.canEdit && !isNoSeasons" v-model="formMode" :disabled-modes="disabledModes"/>
+          <UButton
+              v-if="props.canEdit && !isNoSeasons"
+              v-bind="BUTTONS.primaryAction"
+              :color="COLOR.secondary"
+              :icon="ICONS.plusCircle"
+              data-testid="create-team"
+              :disabled="disabledModes.includes(FORM_MODES.CREATE)"
+              @click="onModeChange(FORM_MODES.CREATE)"
+          >
+            Opret madhold
+          </UButton>
         </div>
       </div>
     </template>
@@ -479,100 +394,33 @@ const columns = [
           </div>
         </div>
 
-        <!-- EDIT MODE: Master-Detail Layout (with no teams the table branch below owns the empty state) -->
-        <div v-else-if="formMode === FORM_MODES.EDIT && displayedTeams.length > 0" class="px-4 pb-4 space-y-6 md:space-y-4">
-          <!-- MOBILE: Dropdown team selector (only visible on mobile) -->
-          <div class="block md:hidden">
-            <USelect
-              :model-value="selectedTeamIndex"
-              :options="teamTabs.map((tab, index) => ({
-                value: index,
-                label: `${tab.label} (${tab.memberCount} medl.)`
-              }))"
-              option-value="value"
-              option-label="label"
-              placeholder="Vælg hold"
-              size="lg"
-              @update:model-value="(idx) => selectedTeamId = displayedTeams[Number(idx)]?.id ?? 0"
-            />
-          </div>
-
-          <div class="flex flex-col md:flex-row gap-6 md:gap-3">
-            <!-- LEFT PANEL: Vertical Team Tabs (hidden on mobile) -->
-            <div class="hidden md:block md:w-1/5 space-y-3" data-testid="team-tabs-list">
-              <h3 class="text-lg font-semibold mb-4">Madhold</h3>
-
-              <UTabs
-                  v-bind="COMPONENTS.teamTabs"
-                  :model-value="selectedTeamIndex"
-                  :items="teamTabs"
-                  orientation="vertical"
-                  :size="SIZES.large"
-                  @update:model-value="(idx) => selectedTeamId = displayedTeams[Number(idx)]?.id ?? 0"
-              >
-                <template #default="{ item }">
-                  <CookingTeamBadges
-                      :team-number="item.value + 1"
-                      :team-name="item.label"
-                      :chef-count="item.chefCount"
-                      :member-count="item.memberCount"
-                      :cooking-days-count="item.cookingDaysCount"
-                      size="small"
-                  />
-                </template>
-              </UTabs>
-            </div>
-
-            <!-- RIGHT PANEL: Edit Selected Team -->
-            <div class="w-full md:w-4/5 space-y-4">
-              <div v-if="selectedTeam?.id" class="space-y-4">
-                <CookingTeamCard
-                    ref="cookingTeamCardRef"
-                    :team-id="selectedTeam.id"
-                    :team-number="displayedTeams.findIndex(t => t.id === selectedTeam!.id) + 1"
-                    :season-id="selectedSeason?.id"
-                    :season-cooking-days="selectedSeason?.cookingDays"
-                    :season-dates="selectedSeason?.seasonDates"
-                    :holidays="selectedSeason?.holidays"
-                    :teams="displayedTeams.map(t => ({ id: t.id!, name: t.name }))"
-                    :mode="FORM_MODES.EDIT"
-                    @update:team-name="(newName) => handleUpdateTeamName(selectedTeam!.id!, newName)"
-                    @update:affinity="(affinity) => handleUpdateTeamAffinity(selectedTeam!.id!, affinity)"
-                    @delete="handleDeleteTeam"
-                    @add:member="handleAddMember"
-                    @update:member="handleUpdateMember"
-                    @remove:member="handleRemoveMember"
-                />
-              </div>
-
-              <div
-v-else
-                   :class="['flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-lg', TEXT.gray[500]]">
-                <UIcon name="i-heroicons-arrow-left" class="text-4xl mb-2"/>
-                <p>Vælg et madhold for at redigere</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- VIEW MODE, and EDIT MODE with no teams: the table and its own #empty slot -->
+        <!-- VIEW + EDIT: one master table; the detail mounts in the md+ pane or docks under the selected row -->
         <div v-else class="px-4 pb-4 space-y-6">
+          <div class="flex flex-col md:flex-row gap-6 md:gap-3">
+          <div class="w-full md:w-1/5">
           <UTable
               v-model:expanded="expanded"
               :columns="columns"
+              :column-visibility="columnVisibility([], ['affinity', 'expand'])"
               :data="displayedTeams"
               :loading="isSelectedSeasonLoading"
               :ui="COMPONENTS.table.ui"
           >
             <template #name-cell="{ row }">
-              <CookingTeamBadges
-                  :team-number="displayedTeams.findIndex(t => t.id === row.original.id) + 1"
-                  :team-name="row.original.name"
-                  :chef-count="countChefs(row.original.assignments ?? [])"
-                  :member-count="row.original.assignments?.length ?? 0"
-                  :cooking-days-count="row.original.cookingDaysCount ?? 0"
-                  size="small"
-              />
+              <div
+                  :class="['cursor-pointer rounded-md p-1', row.original.id === selectedTeamId && COMPONENTS.table.selectedRow]"
+                  :data-testid="`team-row-${row.original.id}`"
+                  @click="handleSelectTeam(row.original.id!)"
+              >
+                <CookingTeamBadges
+                    :team-number="displayedTeams.findIndex(t => t.id === row.original.id) + 1"
+                    :team-name="getTeamShortName(row.original.name)"
+                    :chef-count="countChefs(row.original.assignments ?? [])"
+                    :member-count="row.original.assignments?.length ?? 0"
+                    :cooking-days-count="row.original.cookingDaysCount ?? 0"
+                    size="small"
+                />
+              </div>
             </template>
 
             <template #affinity-cell="{ row }">
@@ -582,17 +430,38 @@ v-else
               />
             </template>
 
-            <!-- Expanded row content: Full team card (single expansion, selectedSeason guaranteed by showAdminTeams) -->
+            <!-- Docked detail (phone): the same card as the pane, its header pinned while the body scrolls -->
             <template #expanded>
-              <div v-if="expandedTeam?.id" :class="['p-4', BG.panel]">
-                <CookingTeamCard
-                    :team-id="expandedTeam.id"
-                    :team-number="displayedTeams.findIndex(t => t.id === expandedTeam!.id) + 1"
-                    :season-cooking-days="selectedSeason!.cookingDays"
-                    :season-dates="selectedSeason!.seasonDates"
-                    :holidays="selectedSeason!.holidays"
-                    mode="regular"
-                />
+              <div v-if="selectedTeam?.id" :class="['p-2 space-y-2', BG.panel]">
+                <div :class="['sticky top-24 z-10 flex items-center justify-between gap-2 py-2', BG.panel]">
+                  <CookingTeamBadges
+                      :team-number="selectedTeamIndex + 1"
+                      :team-name="getTeamShortName(selectedTeam.name)"
+                      :show-counts="false"
+                      size="small"
+                  />
+                  <UButton
+                      v-if="props.canEdit && formMode === FORM_MODES.VIEW"
+                      v-bind="BUTTONS.secondaryAction"
+                      :color="COLOR.primary"
+                      :icon="ICONS.edit"
+                      data-testid="edit-team"
+                      :aria-label="`Rediger ${getTeamShortName(selectedTeam.name)}`"
+                      @click="onModeChange(FORM_MODES.EDIT)"
+                  >
+                    Rediger
+                  </UButton>
+                  <UButton
+                      v-else-if="formMode === FORM_MODES.EDIT"
+                      v-bind="BUTTONS.secondaryAction"
+                      :icon="ICONS.arrowLeft"
+                      data-testid="back-to-view"
+                      @click="onModeChange(FORM_MODES.VIEW)"
+                  >
+                    Tilbage
+                  </UButton>
+                </div>
+                <CookingTeamCard v-bind="detailProps" v-on="detailEvents" />
               </div>
             </template>
 
@@ -620,6 +489,40 @@ v-else
               </UAlert>
             </template>
           </UTable>
+          </div>
+
+          <!-- DETAIL pane (md+): the same card as the dock -->
+          <div v-if="selectedTeam?.id" class="hidden md:block md:w-4/5 space-y-4 self-start">
+            <div class="flex items-center justify-between gap-2">
+              <CookingTeamBadges
+                  :team-number="selectedTeamIndex + 1"
+                  :team-name="getTeamShortName(selectedTeam.name)"
+                  :show-counts="false"
+              />
+              <UButton
+                  v-if="props.canEdit && formMode === FORM_MODES.VIEW"
+                  v-bind="BUTTONS.secondaryAction"
+                  :color="COLOR.primary"
+                  :icon="ICONS.edit"
+                  data-testid="edit-team"
+                  :aria-label="`Rediger ${getTeamShortName(selectedTeam.name)}`"
+                  @click="onModeChange(FORM_MODES.EDIT)"
+              >
+                Rediger {{ getTeamShortName(selectedTeam.name) }}
+              </UButton>
+              <UButton
+                  v-else-if="formMode === FORM_MODES.EDIT"
+                  v-bind="BUTTONS.secondaryAction"
+                  :icon="ICONS.arrowLeft"
+                  data-testid="back-to-view"
+                  @click="onModeChange(FORM_MODES.VIEW)"
+              >
+                Tilbage
+              </UButton>
+            </div>
+            <CookingTeamCard v-bind="detailProps" v-on="detailEvents" />
+          </div>
+          </div>
 
           <!-- Team calendar view -->
           <TeamCalendarDisplay
@@ -635,7 +538,7 @@ v-else
 
     <template #footer>
       <div v-if="formMode === FORM_MODES.CREATE" class="flex gap-2">
-        <UButton :color="COLOR.secondary" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
+        <UButton data-testid="submit-create-teams" :color="COLOR.secondary" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
           {{ isActionLoading ? 'Arbejder...' : 'Opret madhold' }}
         </UButton>
         <UButton :color="COLOR.neutral" variant="ghost" @click="handleCancel">
@@ -643,22 +546,6 @@ v-else
         </UButton>
       </div>
 
-      <!-- The empty state carries the only CTA when there is nothing to edit yet -->
-      <div v-else-if="formMode === FORM_MODES.EDIT && displayedTeams.length > 0" class="flex gap-2">
-        <UButton
-            data-testid="add-team-button"
-            :color="COLOR.secondary"
-            icon="i-heroicons-plus-circle"
-            :loading="isActionLoading"
-            :disabled="isActionLoading"
-            @click="handleAddTeam"
-        >
-          {{ isActionLoading ? 'Arbejder...' : 'Tilføj madhold' }}
-        </UButton>
-        <UButton :color="COLOR.secondary" variant="ghost" @click="handleCancel">
-          Annuller
-        </UButton>
-      </div>
     </template>
   </UCard>
 </template>

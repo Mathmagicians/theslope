@@ -236,7 +236,7 @@ test.describe('Admin season URL persistence', () => {
  * Admin authorization tests - parametrized for admin vs member contexts
  *
  * Tests that:
- * - Admin users see the tab's edit control (planning: the season pencil, teams: FormModeSelector)
+ * - Admin users see the tab's edit control (planning: the season pencil, teams: the create button)
  * - Member users see "admin-readonly-banner" and the edit control is absent
  */
 test.describe('Admin page authorization', () => {
@@ -261,7 +261,7 @@ test.describe('Admin page authorization', () => {
   // Tabs with edit controls to test - each tab names the control that opens its form
   const tabsWithEditControls = [
     { path: 'planning', selector: '[data-testid="admin-planning"]', editControl: 'edit-season' },
-    { path: 'teams', selector: '[data-testid="admin-teams"]', editControl: 'form-mode-edit' }
+    { path: 'teams', selector: '[data-testid="admin-teams"]', editControl: 'create-team' }
   ]
 
   for (const userContext of userContexts) {

@@ -17,7 +17,7 @@ No seasons at all: AdminToCreateSeason. None selected: ALERTS.emptyState "Her se
 "Opret sæson" is disabled while CREATE is in disabledModes; members see neither ＋ nor ✏.
 After Gem on the live season the toast reads "Sæson opdateret — 3 datoer tilføjet, 1 fjernet.
 Forudbestillinger er opdateret. Husk at tildele madhold til nye datoer."
-Removed here: FormModeSelector [👁][✏️][＋] (kept on Teams). No 🗑 for seasons.
+No delete control for seasons.
 -->
 
 <script setup lang="ts">

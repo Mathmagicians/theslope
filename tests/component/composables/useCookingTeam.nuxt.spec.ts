@@ -40,6 +40,22 @@ describe('useCookingTeam', () => {
     })
   })
 
+  describe('countChefs', () => {
+    const { countChefs } = useCookingTeam()
+    const { TeamRoleSchema } = useCookingTeamValidation()
+    const { CHEF, COOK, JUNIORHELPER } = TeamRoleSchema.enum
+    const roles = (...values: TeamRole[]) => values.map(role => ({ role }))
+
+    it.each([
+      { assignments: roles(), expected: 0, description: 'no assignments' },
+      { assignments: roles(COOK, JUNIORHELPER), expected: 0, description: 'no chefs among members' },
+      { assignments: roles(CHEF, COOK, JUNIORHELPER), expected: 1, description: 'one chef in a mixed team' },
+      { assignments: roles(CHEF, CHEF, COOK), expected: 2, description: 'two chefs' }
+    ])('counts $expected ($description)', ({ assignments, expected }) => {
+      expect(countChefs(assignments)).toBe(expected)
+    })
+  })
+
   describe('getTeamShortName', () => {
     const { getTeamShortName } = useCookingTeam()
 

@@ -1,7 +1,8 @@
 # ADR Compliance - Frontend Routes & Components
 
 **Generated:** 2025-11-11
-**Last Updated:** 2026-10-04 (Role glyphs: `ROLE_ICONS` moved from `useCookingTeamValidation` to the design system (ADR-017) as icon names — chef hat / cooking pot / sprout — rendered via `UIcon` in `CookingTeamCard`, `WorkAssignment` and `TeamMemberAddForm`'s select item icons; `ROLE_OPTIONS` labels are plain. Team tabs: `COMPONENTS.teamTabs` (link variant, non-shrinking triggers, a horizontal row with more tabs than fit scrolls sideways) bound by `MyTeamSelector` and the `AdminTeams` vertical strip, enforced by a `designSystemUsage` rule; on a phone the `MyTeamSelector` trigger stacks `ICONS.team` over the compact badge so four names fit at 375px. Earlier: Date pickers: one `UInputDate range` box per period with `COMPONENTS.dateField` segments and the shared `CalendarPickerPopover`; the season header carries the `COMPONENTS.statBox` cooking-day counter in `AdminPlanningSeason`. Earlier: Mobile tables: table cells wrap between words and keep words, dates and e-mails whole, a wide data table scrolls inside its own box; `columnVisibility(hiddenOnPhone, hiddenFromMd)`; the `/admin/system` job history hides Varighed, Kilde and Resultat behind a chevron on a phone; the route row reads `/admin/system` → `AdminSystem.vue`. Earlier: Palettes: Glade farver is the base every visitor sees - the Tydelig solve published as `palettes/default.css` under `html:not([data-palette])` / `html.dark:not([data-palette])`, `PALETTES.default = {level: 'AA'}`; three options `default` / `high-contrast` / `colorblind`, a stored `tydelig` reads as `default`; the card shows "🇪🇺 EN 301 549 · Kontrast AA|AAA ✓" and, on Til farveblinde, "👁 Nedsat farvesyn · Okabe–Ito ✓"; the rainbow holds eight stops (team 9 repeats team 1) and Til farveblinde publishes the eight Color Universal Design colours on them and on the meaning faces. Earlier: Dev feedback round 1: `BUTTONS.settings` (the ⚙ alone, outline, square) on the `UserProfileCard` header beside `BUTTONS.secondaryAction` Heynabo / Log ud in a wrapping row, and on the `ChefMenuCard` actions trigger with `ICONS.chevronDown`; `ALERTS.withCornerAction` puts the `AllergyNotes` pencil top-right on phone and desktop; `ALERTS` roots and the `COMPONENTS.table.ui` cell under an expanded row carry `whitespace-normal`; the `UserPreferencesCard` pencil is the bare `BUTTONS.edit` glyph; "Kombiner allergener" on `/admin/allergies`. Earlier: Team colours: team n wears brand rainbow stop n — `RAINBOW` holds nine stops (`RAINBOW_FAMILIES`: pink, orange, ocean, bonbon, party at 700, peach, winery, yellow, sky), `getRainbowFamily(i)` beside `getRainbowBand(i)`; `TEAM_COLORS` / `getTeamColor` leave `useCookingTeam`; `TeamCalendarDisplay`, `CookingTeamCard`, `CookingTeamBadges` and the `AdminTeams` name cell bind the stop as the badge's class; `designSystemColourVision.unit.spec.ts` measures the nine apart in each palette. Earlier: Høj kontrast: a fourth palette option, key `high-contrast`, generated at WCAG 2.1 AAA into `app/assets/css/palettes/high-contrast.css`; `PALETTES['high-contrast'] = {level: 'AAA', colourSafe: false}` badges it and `designSystemContrast.unit.spec.ts` measures every pair at 7:1 / 4.5:1 / 3:1, met on all 438; the generator clamps chroma to the sRGB gamut per rung and `BORDER.orange[500]` draws the 600 rung in light mode. Earlier: Poster notes: "Vigtige bemærkninger" is a `Setting` row; `useSettingValidation` carries the keys, schemas and `SETTING_REGISTRY`; `allergies.ts` owns `posterNotes` / `savePosterNotes`; `AllergyNotes` gained the pencil + textarea edit face. Earlier: Farveblind: the `colorblind` preset generated onto the Color Universal Design anchors, `PALETTES.colourSafe`, `designSystemColourVision.unit.spec.ts`. Earlier: My preferences: `UserPreferencesCard` on the dashboard, `useUserPreferenceValidation`, auth-store `savePreferences` / `sendTestNotification`, `html[data-palette]` + `html[data-text-scale]` from `layouts/default.vue`. Earlier: The brand rainbow: `PANTONE_FAMILIES` orders `HERO`, `RAINBOW` and `PANTONE_CHIPS`; landing bands and kitchen panels walk `getRainbowBand(i)` with `TEXT.black`; TIL SALG grey. Earlier: colour drift sweep: every colour in `app/` comes from `useTheSlopeDesignSystem.ts`; new `TEXT.ink/strong/toned/muted/dimmed/timestamp/menuBody`, `BG.panel/panelNested/panelHover/inset/ticket/budgetHead/invoiceGround/invoiceStat`, `LAYOUTS.panelDivider`, `RING`, `COMPONENTS.segmentedActive`, `economyTable.level{1,2}.tableHead`, `BACKGROUNDS.appShell`, `PANTONE_CHIPS`; two architecture rules in `designSystemUsage.unit.spec.ts`)
+**Last Updated:** 2026-10-04
+**History:** git and the feature plans under `docs/features/` (shipped plans in `docs/features/archived/`)
 
 ## Legend
 
@@ -51,19 +52,20 @@
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
 | `AdminPlanning.vue` | `/admin/planning` | `usePlanStore()` | `useEntityFormManager()`, `useSeasonValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 7 tests | ✅ Full | **✅ COMPLIANT** — Card header is `LAYOUTS.cardActionRow` with `SeasonSelector` + `create-season` (`BUTTONS.primaryAction` + `ICONS.plusCircle`); `AdminPlanningSeason` `@edit` drives `?mode=edit` through `useEntityFormManager` (ADR-006/ADR-008); the save toast reports the `SeasonUpdateResponse` counts |
-| `AdminPlanningSeason.vue` | `/admin/planning` | `usePlanStore()` (saving state) | `useSeasonValidation()`, `useSeason()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 16 tests | ✅ Indirect | **✅ COMPLIANT** — Title carries the season name (view / Rediger / Opret); the header holds the `COMPONENTS.statBox` cooking-day counter (`cooking-day-count`) and, in view mode with `canEdit`, `edit-season` (`BUTTONS.secondaryAction` + `ICONS.edit`, labelled `Rediger {shortName}`); footer `LAYOUTS.formButtonRow` with `BUTTONS.cancel` / `BUTTONS.save`; `id="seasonForm"` unchanged — colour via DS tokens |
+| `AdminPlanningSeason.vue` | `/admin/planning` | `usePlanStore()` (saving state) | `useSeasonValidation()`, `useSeason()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 16 tests | ✅ Indirect | **✅ COMPLIANT** — Title carries the season name (view / Rediger / Opret); the header holds the `COMPONENTS.statBox` cooking-day counter (`cooking-day-count`) and, in view mode with `canEdit`, `edit-season` (`BUTTONS.secondaryAction` + `ICONS.edit`, labelled `Rediger {shortName}`); footer `LAYOUTS.formButtonRow` with `BUTTONS.cancel` / `BUTTONS.save`; `id="seasonForm"` — colour via DS tokens |
 | `AdminToCreateSeason.vue` | `/admin/planning`, `/admin/teams` | None (prop-driven) | `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 2 tests | ❌ | **✅ COMPLIANT** — `canEdit` gates the `create-first-season` CTA (`BUTTONS.primaryAction` + `ICONS.plusCircle`); both hosts pass `:can-edit` |
-| `TicketPriceListEditor.vue` | `/admin/planning` | Parent props | `useTicketPriceValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 4 tests | ✅ Indirect | **✅ COMPLIANT** — `BUTTONS.secondaryAction` + `ICONS.ticket` add, `BUTTONS.edit` + `ICONS.trash` row remove; `name=` hooks replaced by `ticket-price-add` / `ticket-price-remove-${i}` — colour via DS tokens |
+| `TicketPriceListEditor.vue` | `/admin/planning` | Parent props | `useTicketPriceValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 4 tests | ✅ Indirect | **✅ COMPLIANT** — `BUTTONS.secondaryAction` + `ICONS.ticket` add, `BUTTONS.edit` + `ICONS.trash` row remove; testids `ticket-price-add` / `ticket-price-remove-${i}` — colour via DS tokens |
 
 ### Admin Team Components
 
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
 | `AdminTeams.vue` | `/admin/teams` | `usePlanStore()`, `useHouseholdsStore()` | `useEntityFormManager()`, `useCookingTeam()`, `useQueryParam()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ⚠️ 1 test | ✅ Full | **⚠️ PARTIAL UNIT** — create toast reports the `CreateTeamsResponse` counts (`<n> madhold oprettet · <m> madlavninger tildelt`), `AdminTeams.nuxt.spec.ts` reads it from `useToast().toasts`; `?team=` query param bleeds to other tabs (parked); the table branch and its `#empty` slot (`ALERTS.emptyState` + `create-new-team`) serve VIEW and EDIT alike — the master-detail branch and the edit footer are gated on `displayedTeams.length > 0`, covered by two `AdminTeams.e2e.spec.ts` cases; the table's Madhold cell renders the `CookingTeamBadges` triple (name, member and cooking-day counts with icons in the team's rainbow stop) beside Madlavningsdage; the EDIT-mode vertical team strip binds `COMPONENTS.teamTabs` + `SIZES.large`; the tab items carry no colour (`CookingTeamBadges` in the tab body does) — colour via DS tokens |
-| `CookingTeamCard.vue` | `/admin/teams`, `/chef`, `/dinner` | `usePlanStore()`, `useHouseholdsStore()` | `useCookingTeam()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** — Uses shared InhabitantSelector + TeamMemberAddForm; the monitor, edit and view headers render the `CookingTeamBadges` triple (large; the edit row counts-only via `showName`); another team's status badge binds its own rainbow stop; the frames take the base border colour and the allocation badge is `COLOR.neutral` outline, so colour comes from the design system alone — colour via DS tokens |
-| `TeamMemberAddForm.vue` | `/admin/teams` (via CookingTeamCard) | None | `useCookingTeamValidation()` | ✅ | ✅ | ✅ 13 tests | ✅ Indirect | **✅ COMPLIANT** — `teamColor` prop removed; the affinity checkboxes take `WeekDayMapDisplay`'s default colour |
+| `CookingTeamCard.vue` | `/admin/teams`, `/chef`, `/dinner` | `usePlanStore()`, `useHouseholdsStore()` | `useCookingTeam()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** — Uses shared InhabitantSelector + TeamMemberAddForm; the monitor, edit and view headers render the `CookingTeamBadges` triple (large; the edit row counts-only via `showName`); another team's status badge binds its own rainbow stop; the frames take the base border colour and the allocation badge is `COLOR.neutral` outline, so colour comes from the design system alone; role glyphs render via `UIcon` from the design system's `ROLE_ICONS` — colour via DS tokens |
+| `TeamMemberAddForm.vue` | `/admin/teams` (via CookingTeamCard) | None | `useCookingTeamValidation()` | ✅ | ✅ | ✅ 13 tests | ✅ Indirect | **✅ COMPLIANT** — the affinity checkboxes take `WeekDayMapDisplay`'s default colour; the role select item icons come from `ROLE_ICONS` |
 | `MyTeamSelector.vue` | `/chef` | Parent props | `useCookingTeam()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** — `UTabs` of `CookingTeamBadges` bound to `COMPONENTS.teamTabs`; on a phone the trigger stacks `ICONS.team` over the compact badge (mockup in the component header); the tab items carry no colour; empty state `ALERTS.info` |
-| `InhabitantSelector.vue` | `/admin/teams`, future `/admin/households` | None | - | ✅ | ✅ | ✅ 22 tests | ✅ Indirect | **✅ COMPLIANT** — Moved to `shared/`; generic slots; empty state uses the `#empty` table slot — colour via DS tokens |
+| `WorkAssignment.vue` | `/dinner`, `/chef` | `usePlanStore()`, `useAuthStore()` | `useCookingTeamValidation()`, `useBookingValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** — Volunteer buttons for cooking roles with `ROLE_ICONS` glyphs via `UIcon`; mockup in the component header |
+| `InhabitantSelector.vue` | `/admin/teams` | None | - | ✅ | ✅ | ✅ 22 tests | ✅ Indirect | **✅ COMPLIANT** — Lives in `shared/`; generic slots; empty state uses the `#empty` table slot — colour via DS tokens |
 
 ### Admin Household Components
 
@@ -81,14 +83,14 @@
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
 | `AdminAllergies.vue` | `/admin/allergies` | `useAllergiesStore()`, `useHouseholdsStore()` | `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 41 tests | ✅ Full | **✅ COMPLIANT** — Master/detail with a responsive detail mount point: `AllergyDetailPanel` in the sticky pane (md+) or docked under the tapped row (`#expanded`, `<md`); selection is the single state; spec parametrized over `isMd`; owns the households lookup; empty catalog CTA renders through the `#empty` table slot; the card header carries `AllergyNotes` on the store's `posterNotes`, with `canEdit` and a local `isSavingNotes`, and `@save` calling `savePosterNotes` then toasting "Bemærkninger gemt"; the `multiselect-toggle` reads "Kombiner allergener" / "Afslut kombinering"; the docked detail wraps inside the expanded row (`COMPONENTS.table.ui`, `MobileViewport.e2e` `admin-allergies-expanded-row`) — colour via DS tokens |
-| `AllergyCatalogTable.vue` | `/admin/allergies`, `/chef` (via `AllergenMultiSelector`) | Parent props | `useAllergy()`, `useAllergyValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 17 tests | ✅ Indirect | **✅ COMPLIANT** — ONE catalog master table (`mode: 'single' \| 'multi'`); forwards `#expanded` + `#empty`; deduplicates the former AdminAllergies/AllergenMultiSelector tables — colour via DS tokens |
+| `AllergyCatalogTable.vue` | `/admin/allergies`, `/chef` (via `AllergenMultiSelector`) | Parent props | `useAllergy()`, `useAllergyValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 17 tests | ✅ Indirect | **✅ COMPLIANT** — ONE catalog master table (`mode: 'single' \| 'multi'`); forwards `#expanded` + `#empty` — colour via DS tokens |
 | `AllergyDetailPanel.vue` | `/admin/allergies` | None (prop-driven) | `useAllergyValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 13 tests | ✅ Indirect | **✅ COMPLIANT** — Portable detail (view / edit / create / delete-confirm); the "Detaljer" header carries the labelled `BUTTONS.secondaryAction` + `COLOR.primary` + `ICONS.edit` "Rediger <navn>" entry beside the ghost trash (docs/ui.md Edit affordances); identical testids at every mount point — colour via DS tokens |
 | `AllergenMultiSelector.vue` | `/admin/allergies`, `/chef` | Parent props | `useAllergyValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 17 tests | ✅ Indirect | **✅ COMPLIANT** — Consumes `AllergyCatalogTable` (multi); mobile fixed summary bar jumps to the statistics panel — colour via DS tokens |
 | `HouseholdAllergies.vue` | `/household/[shortname]/allergies` | `useAllergiesStore()`, `useHouseholdsStore()` | `useAllergyValidation()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** — colour via DS tokens |
 | `AllergyTypeCard.vue` | `/admin/allergies`, `/household/[shortname]/allergies` | Parent props + `usePlanStore()` (activeSeason read) | `useAllergyValidation()`, `useTicket()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 13 tests | ✅ Indirect | **✅ COMPLIANT** — Serves view/compact/edit **and create** (`allergyType` optional); household rendered via `UserListItem` `#badge` slot; per-inhabitant age badge (`getTicketTypeConfig`, HouseholdCard pattern); `<NuxtTime relative>` for timestamps (SSR-safe) — colour via DS tokens |
 | `AllergyTypeDisplay.vue` | `/admin/allergies/pdf` | Parent props | `useAllergyValidation()` | ✅ | ✅ | ❌ | N/A | **N/A DISPLAY** |
 | `AllergyNotes.vue` | `/admin/allergies` (card header), `/admin/allergies/pdf` | None (prop-driven) | `useSettingValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 17 tests | ✅ Indirect | **✅ COMPLIANT** — ONE "Vigtige bemærkninger" box for both surfaces; props `notes` / `canEdit` / `isSaving`, emits `save`; one note per line via `splitNotes`; `{...ALERTS.legend, ...ALERTS.withCornerAction}` + `ICONS.warning`; the pencil is `BUTTONS.edit` + `aria-label="Rediger bemærkninger"` in `#actions` with `canEdit`, top-right on phone and desktop; the edit face is a `UTextarea` (rows 5) over `LAYOUTS.formButtonRow` with `BUTTONS.cancel` / `BUTTONS.save`, closing when the parent's `isSaving` resolves; no `UTooltip` (the poster has no `UApp`); margins belong to the mount point |
-| `AllergyManagersList.vue` | `/admin/allergies`, `/household/[shortname]/allergies`, `/admin/allergies/pdf` | `useUsersStore()` | `useUserValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** — API is now `kind?: AlertKind` (default `info`; poster passes `legend` (outline, no fill on paper)) instead of `color`/`variant`; its description `:ui` merges on top of the kind (ADR-018) |
+| `AllergyManagersList.vue` | `/admin/allergies`, `/household/[shortname]/allergies`, `/admin/allergies/pdf` | `useUsersStore()` | `useUserValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** — API is `kind?: AlertKind` (default `info`; poster passes `legend`, outline without fill on paper); its description `:ui` merges on top of the kind (ADR-018) |
 
 ### Form & Shared Components
 
@@ -97,11 +99,11 @@
 | `FormModeSelector.vue` | `/admin/teams` | None | - | N/A | N/A | ✅ Full | ✅ Indirect | **✅ COMPLIANT** — `/admin/planning` uses the pencil + "Opret sæson" pair instead — colour via DS tokens |
 | `SeasonSelector.vue` | `/admin/planning`, `/admin/teams` | `usePlanStore()` | `useSeasonSelector()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** — colour via DS tokens |
 | `TableSearchPagination.vue` | `/admin/users`, `/admin/households` | None | `useTheSlopeDesignSystem()` | N/A | N/A | ✅ | ✅ Indirect | **✅ COMPLIANT** — colour via DS tokens |
-| `SeasonStatusDisplay.vue` | `/admin/planning` | `usePlanStore()` | `useSeasonValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ | ✅ Indirect | **✅ COMPLIANT** — `alertConfig` maps season status → `ALERTS` kind (ACTIVE success, FUTURE info, CURRENT warning, PAST neutral) + `withActions` (ADR-018); activate = `BUTTONS.primaryAction` + `COLOR.success` + `ICONS.playCircle`/`ICONS.arrowRight` with `:loading`; spec migrated off the mocked store to the real `usePlanStore` + `registerEndpoint` (testing.md Rule 6) |
+| `SeasonStatusDisplay.vue` | `/admin/planning` | `usePlanStore()` | `useSeasonValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ | ✅ Indirect | **✅ COMPLIANT** — `alertConfig` maps season status → `ALERTS` kind (ACTIVE success, FUTURE info, CURRENT warning, PAST neutral) + `withActions` (ADR-018); activate = `BUTTONS.primaryAction` + `COLOR.success` + `ICONS.playCircle`/`ICONS.arrowRight` with `:loading`; spec uses the real `usePlanStore` + `registerEndpoint` (testing.md Rule 6) |
 | `UserPreferencesCard.vue` | `/login` (dashboard, behind the ⚙ in `UserProfileCard`) | `useAuthStore()` | `useUserPreferenceValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 26 tests | ✅ `UserPreferences.e2e.spec.ts` | **✅ COMPLIANT** — "Mine indstillinger": view face + `BUTTONS.edit` pencil (`aria-label="Rediger"`, no text), edit face with a `USwitch` per channel (SMS disabled + hint without a phone), `URadioGroup` for palette and text scale bound to `COMPONENTS.choiceGroup`, `TYPOGRAPHY.sectionSubheading` section titles over body-size options, `LAYOUTS.formButtonRow` footer; options "Glade farver" / "Høj kontrast" / "Til farveblinde" in `PaletteSchema` order; "🇪🇺 EN 301 549 · Kontrast AA|AAA ✓" renders from `PALETTES[key].level` and "👁 Nedsat farvesyn · Okabe–Ito ✓" from `PALETTES[key].colourSafe`, in both faces; test-ids `pref-*` shared via `tests/component/components/user/userPreferencesTestIds.ts`; spec parametrized over `isMd`, real auth store with only the session faked |
 | `UserProfileCard.vue` | `/login` (dashboard), `/admin/users` (expanded row) | `useAuthStore()`, `useUsersStore()` | `useUserRolesUi()`, `useHeynabo()`, `useCoreValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 7 tests (header actions) | ✅ `MobileViewport.e2e.spec.ts` (`login`) | **✅ COMPLIANT** — Header actions in a wrapping flex row, one right-aligned row from md: `[⚙]` (`BUTTONS.settings`, `aria-label="Indstillinger"`, `pref-toggle`, `aria-pressed`) and `[👋 Log ud →]` (`BUTTONS.secondaryAction` + `COLOR.error`, `logout-button`) for the current user only, `[Heynabo →]` (`BUTTONS.secondaryAction` + `COLOR.primary`, `heynabo-profile-link`) whenever the inhabitant has a Heynabo URL; the parent owns the open state (`preferencesOpen` prop, `toggle-preferences` emit, ADR-006); the role manager in `#footer` is still spec-less |
 | `UserView.vue` | All routes (PageHeader) | `useAuthStore()` | `useUserValidation()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
-| `UserListItem.vue` | `/admin/users`, `/admin/allergies` | Parent props | `useUserValidation()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ `label`/`labelPlural` declared but not rendered (removed in #62)** — colour via DS tokens |
+| `UserListItem.vue` | `/admin/users`, `/admin/allergies` | Parent props | `useUserValidation()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ `label`/`labelPlural` declared but not rendered** — colour via DS tokens |
 | `DangerButton.vue` | `/household/[shortname]/settings`, `/admin/economy` | None | - | N/A | N/A | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - Two-click confirm pattern for destructive actions — colour via DS tokens |
 | `CookingTeamBadges.vue` | `/admin/teams` (table + strip), `/chef` (via `MyTeamSelector`), `/dinner` + `/chef` (via `CookingTeamCard`) | None (prop-driven) | `useTheSlopeDesignSystem()` | N/A | N/A | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** — THE team badge row: name (`ICONS.team`), chef count (`ICONS.chef`, via `countChefs`), member count (`ICONS.members`, solid silhouettes) and cooking days (`ICONS.calendar`) bind `getRainbowBand(teamNumber - 1)` as class; `size` small/standard/large; `showName`/`showCounts`/`showTeamIcon` pick the face per host |
 | `QrCode.vue` | `/admin/allergies/pdf` | None (prop-driven) | `encodeQrPath()` (`app/utils/qr.ts`, `uqr`) | N/A | N/A | ✅ 3 tests (+ 5 unit on `encodeQrPath`) | ✅ Indirect | **✅ COMPLIANT** — Inline `<svg role="img">`, white `<rect>` + one black `<path>`, `data-testid="qr-code"`; literal `#000000`/`#ffffff` so it prints under `print-color-adjust: exact`; `aria-label` reads `<label>: <value>`; caption and layout belong to the page |
@@ -114,7 +116,7 @@
 | `CalendarDateRangePicker.vue` | `/admin/planning` | None | `useDateRangeValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ Full | ✅ Indirect | **✅ COMPLIANT** — one `UInputDate range` box per period (`COMPONENTS.dateField`); `selection` picks the `CALENDAR.picker` preset in the shared `CalendarPickerPopover`; a disabled range reads as one compact field; `icon` renders as the field's leading icon |
 | `CalendarPickerPopover.vue` | via both pickers | None | `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ Indirect | ✅ Indirect | **✅ COMPLIANT** — THE calendar popover of the date pickers: calendar button trigger, `calendarPickerProps` grid, the `#day` circle via `isDaySelected` |
 | `CalendarDateRangeListPicker.vue` | `/admin/planning` | None | `useSeasonValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 13 tests | ✅ Indirect | **✅ COMPLIANT** — Edit/create renders each row as a `CalendarDateRangePicker` (`selection="holiday"`, `name="holidayRangeList-${i}"`) validated against `holidaysSchema` before it reaches the model; view keeps read-only rows; holidays kept chronological via `sortDateRanges`; testids shared via `tests/component/components/admin/planningTestIds.ts` |
-| `WeekDayMapDisplay.vue` | `/admin/planning`, `/admin/teams` | None | `useWeekday()` | ✅ | ✅ | ✅ 9 tests | ✅ Indirect | **✅ COMPLIANT** — Added `hideRestricted` prop; compact view only renders active days |
+| `WeekDayMapDisplay.vue` | `/admin/planning`, `/admin/teams` | None | `useWeekday()` | ✅ | ✅ | ✅ 9 tests | ✅ Indirect | **✅ COMPLIANT** — `hideRestricted` prop; compact view only renders active days |
 | `WeekDayMapDinnerModeDisplay.vue` | `/household/[shortname]/settings` | None | `useWeekday()`, `useDinnerMode()` | ✅ | ✅ | ❌ | ❌ | **❌ NO TESTS** |
 | `BaseCalendar.vue` | All calendar displays | None | `useTheSlopeDesignSystem()`, `useCalendarEvents()` | N/A | N/A | ❌ | N/A | **N/A DISPLAY** — spreads `COMPONENTS.calendarGrid` |
 | `CalendarDisplay.vue` | `/admin/planning` | None | `useSeason()`, `useCalendarEvents()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ `CalendarDisplay.nuxt.spec.ts` | ❌ | **✅ COMPLIANT** - potential-cooking/generated-events preview on `PLANNING_CALENDAR` + `SIZES.calendarCircle` |
@@ -132,7 +134,7 @@
 | `ActionPreview.vue` | `/household/[shortname]/bookings`, `/admin/economy` | Parent props | `useBookingUi()` | ✅ | ✅ | ✅ | ✅ Indirect | **✅ COMPLIANT** - Shows booking changes before save |
 | `GuestBookingForm.vue` | `/household/[shortname]/bookings`, `/admin/economy` | Parent props | `useBooking()`, `useBookingUi()`, `useBookingValidation()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - Guest ticket form — colour via DS tokens |
 | `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | `useBookingsStore()`, `useAuthStore()` | `useBooking()`, `useBookingUi()`, `useBookingValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ | ✅ Serial | **✅ COMPLIANT** - ADR-016 booking form, admin override support; legend delegated to `DinnerModeLegend` — colour via DS tokens |
-| `DinnerModeLegend.vue` | `/household/[shortname]/bookings` (day + grid), `/dinner` | Parent props | `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 4 tests | ✅ Indirect | **✅ COMPLIANT** — THE "Forklaring" panel (`ALERTS.legend`); deduplicates the identical legends in `BookingGridView` and `DinnerBookingForm`; `modes`/`showNoConsensus`/`showModified`/`hint` props |
+| `DinnerModeLegend.vue` | `/household/[shortname]/bookings` (day + grid), `/dinner` | Parent props | `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 4 tests | ✅ Indirect | **✅ COMPLIANT** — THE "Forklaring" panel (`ALERTS.legend`), shared by `BookingGridView` and `DinnerBookingForm`; `modes`/`showNoConsensus`/`showModified`/`hint` props |
 | `DinnerEvent.vue` | `/household/[shortname]/bookings`, `/dinner` | Parent props | `useDinnerEvent()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
 | `DinnerTicket.vue` | `/household/[shortname]/bookings` | Parent props | `useTicket()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** — colour via DS tokens |
 | `KitchenPreparation.vue` | `/dinner`, `/chef`, `/chef/dinner/[id]` | Parent props | `useOrder()`, `useAllergy()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** — The three dining modes walk `RAINBOW` (TAKEAWAY pink, SPISESAL orange, SPIS SENT ocean); TIL SALG is `gray-400`. Dark ink, AA on the base theme. Colour order is in the component header mockup |
@@ -160,7 +162,7 @@
 |-------|------------------|--------------------------|-----------------|---------------------|-----------------|--------|
 | `plan.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** — `updateSeason()` returns the parsed `SeasonUpdateResponse` envelope (ADR-009) and refreshes the season list and selection; `createTeam()` returns the parsed `CreateTeamsResponse` envelope (ADR-009) |
 | `households.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** - `setMoveOutDate()`, `lastMoveOutResult`, `moveInhabitant()`, `deleteHousehold()`, `lastMoveResult`, `updateInhabitantPreferences()`, `updateAllInhabitantPreferences()`, `initHouseholdsStore(shortName?, pbsId?)` disambiguation |
-| `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** — Catalog converted from `useFetch` to `useAsyncData` + `useRequestFetch`; `isAllergyTypesInitialized` checks data presence (ADR-007 rule 3); mutations refetch the catalog; catalog `transform` parses with `AllergyTypeDetailSchema` so dates are domain types (ADR-010). `posterNotes` is a second `useAsyncData` slice on `GET /api/admin/setting/allergy-poster-notes` with its own `isPosterNotesLoading` / `isPosterNotesErrored` / `isPosterNotesInitialized` and `loadPosterNotes` / `savePosterNotes`; it stays out of `isAllergyStoreReady` so the poster prints its notes while the catalog loads, and falls back to the registry default. `savePosterNotes` takes the POST response as the new value (ADR-009: the mutation returns the row) rather than reading the row back — `refresh()` resolves on a failed request, so a second round trip put the box one failure away from the registry default under a success toast |
+| `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ Full | **✅ COMPLIANT** — Catalog uses `useAsyncData` + `useRequestFetch`; `isAllergyTypesInitialized` checks data presence (ADR-007 rule 3); mutations refetch the catalog; catalog `transform` parses with `AllergyTypeDetailSchema` so dates are domain types (ADR-010). `posterNotes` is a second `useAsyncData` slice on `GET /api/admin/setting/allergy-poster-notes` with its own `isPosterNotesLoading` / `isPosterNotesErrored` / `isPosterNotesInitialized` and `loadPosterNotes` / `savePosterNotes`; it stays out of `isAllergyStoreReady` so the poster prints its notes while the catalog loads, and falls back to the registry default. `savePosterNotes` takes the POST response as the new value (ADR-009: the mutation returns the row) |
 | `users.ts` | ✅ | ✅ | ✅ | ✅ | ❌ | **⚠️ MISSING TESTS** |
 | `auth.ts` | N/A | ✅ | N/A | N/A | ✅ via `UserPreferencesCard.nuxt.spec.ts` | **✅ COMPLIANT** - Uses `usePermissions()` for role checks, `isMemberOfHousehold()` (session-aware wrapper over `isInHousehold`, ADR-017); own settings: `notificationChannels`, `appearance` (both fall back to the column defaults), `savePreferences()` → POST + session `fetch()` + toast, `sendTestNotification()` → POST + toast per result |
 | `event.ts` | ❓ | ❓ | ❓ | ❓ | ❌ | **❓ AUDIT NEEDED** |
@@ -172,10 +174,10 @@
 | Composable | ADR-001 Zod Schemas | ADR-001 Enum Re-export | ADR-010 Domain Types | Unit Tests | Status |
 |------------|---------------------|------------------------|----------------------|------------|--------|
 | **Validation Composables** |
-| `useCoreValidation()` | ✅ | ✅ `SystemRoleSchema`, `DinnerModeSchema` | ✅ User, Inhabitant, Household (Display + Detail) | ✅ Full | **✅ COMPLIANT** - Merged useUserValidation + useHouseholdValidation via fragment pattern (ADR-001) |
+| `useCoreValidation()` | ✅ | ✅ `SystemRoleSchema`, `DinnerModeSchema` | ✅ User, Inhabitant, Household (Display + Detail) | ✅ Full | **✅ COMPLIANT** - User + household schemas composed via the fragment pattern (ADR-001) |
 | `useBookingValidation()` | ✅ | ✅ `OrderStateSchema`, `DinnerModeSchema` | ✅ Order, DinnerEvent, DesiredOrder, ScaffoldResult, HouseholdUpdateResponse | ✅ Full | **✅ COMPLIANT** - ADR-016 schemas, operation result types (ADR-009) |
 | `useSeasonValidation()` | ✅ | ✅ | ✅ SerializedSeason, SeasonUpdateResponse | ✅ Full | **✅ COMPLIANT** — holidays serialized/deserialized in chronological order; owns the `SeasonUpdateResponse` operation result (ADR-009) |
-| `useCookingTeamValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
+| `useCookingTeamValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - `ROLE_OPTIONS` carries plain labels; role glyphs live in the design system `ROLE_ICONS` (ADR-017) |
 | `useAllergyValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
 | `useTicketPriceValidation()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** |
 | `useDateRangeValidation()` | ✅ | N/A | ✅ DateRange schemas (required + nullable end) | ✅ Full | **✅ COMPLIANT** - Factory pattern for date range schemas with composable refinements |
@@ -189,7 +191,7 @@
 | `useSettingValidation()` | ✅ | N/A | ✅ SettingDetail (one entity type, ADR-009) | ✅ Full | **✅ COMPLIANT** - THE settings file: `SETTING_KEYS`, `SettingKeySchema`, `SettingDetailSchema` (nullable `updatedAt`/`updatedByUserId` for an unwritten key) and `SETTING_REGISTRY` (`valueSchema`, `defaultValue`, `canWrite`), plus `DEFAULT_ALLERGY_POSTER_NOTES` and `splitNotes`. Isomorphic (ADR-017): explicit imports, including `canMutateAllergies` from `usePermissions`; imported by the repository, the authorization helper and both endpoints |
 | `useUserPreferenceValidation()` | ✅ | ✅ `NotificationChannelSchema` | ✅ Appearance, UserPreferencesUpdate | ✅ Full | **✅ COMPLIANT** - The two `User` settings columns: `PaletteSchema`, `TextScaleSchema`, `AppearanceSchema` + `DEFAULT_APPEARANCE`, `DEFAULT_NOTIFICATION_CHANNELS`, `PALETTES` (per palette: the contrast level the card badges, and `colourSafe` for the preset built on the Color Universal Design colours); three options — `default` (Glade farver, the base, AA), `high-contrast` (AAA), `colorblind` (AA, colour-safe); `AppearanceSchema` reads a stored `tydelig` as `default`; the single source of a preset's level: `tests/component/architecture/palettes.ts` derives the measured palettes from it, so the badge and the contrast assertion are one value, and `scripts/palettes/presets.ts` solves each preset at the level its entry carries; isomorphic (ADR-017), imported by `domainFragments.ts` and the preferences endpoint |
 | **Business Logic Composables** |
-| `useBooking()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - ADR-016 `decideOrderAction`, bucket resolvers, `resolveUserBookingBuckets()`; ADR-017 isomorphic (explicit imports; badges/action preview moved to `useBookingUi`, `DINNER_STEP_MAP` icon-free) |
+| `useBooking()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - ADR-016 `decideOrderAction`, bucket resolvers, `resolveUserBookingBuckets()`; ADR-017 isomorphic (explicit imports; badges/action preview live in `useBookingUi`, `DINNER_STEP_MAP` icon-free) |
 | `useHousehold()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - `isHouseholdActiveOnDay()` residency predicate (ADR-016), `getResidencyStatus()`, consensus, name formatting |
 | `useSeason()` | ✅ | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Exposes pre-configured `splitDinnerEvents`, `getNextDinnerDate`, `getAdjacentDinner` (the last powers `useBookingView` arrow nav) ; ADR-017 explicit imports |
 | `useCookingTeam()` | ✅ | ✅ | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - ADR-017 explicit imports; carries no presentation — a team's colour is the design-system rainbow stop (`getRainbowBand`) |
@@ -197,11 +199,11 @@
 | `useHeynabo()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Heynabo import merge logic, `mergeHouseholdForUpdate()`, `resolveInhabitantImportPlan()` (4-bucket inhabitant plan: ADR-016 decide/execute, global deletion + placement routing) |
 | `useOrder()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Order business logic |
 | `useTicket()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Ticket display logic; `ticketTypeConfig.compactLabel` (V/B/b single source, read by `formatTicketCounts`); `groupInhabitantsByTicketCategory` aggregator; `getTicketTypeConfig` falls back to `determineTicketType` (never silently ADULT) |
-| `useUserRoles` (module) | N/A | N/A | ✅ Domain types | ✅ Unit | **✅ COMPLIANT** - Server-safe `reconcileUserRoles` / `ROLE_OWNERSHIP` only (ADR-017); display moved to `useUserRolesUi` |
+| `useUserRoles` (module) | N/A | N/A | ✅ Domain types | ✅ Unit | **✅ COMPLIANT** - Server-safe `reconcileUserRoles` / `ROLE_OWNERSHIP` only (ADR-017); display lives in `useUserRolesUi` |
 | **UI/Navigation Composables** |
-| `useBookingView()` | ✅ `BookingViewSchema` | N/A | ✅ DateRange | ✅ Full | **✅ COMPLIANT** - ADR-006 URL-synced view/date for booking calendar. Single `findAdjacent(direction)` helper (boundary from `getPeriodBoundary` → `getAdjacentDinner`) replaces per-view switches; `seasonDates` option dropped (implicit via `dinnerDates`) |
+| `useBookingView()` | ✅ `BookingViewSchema` | N/A | ✅ DateRange | ✅ Full | **✅ COMPLIANT** - ADR-006 URL-synced view/date for booking calendar. Single `findAdjacent(direction)` helper (boundary from `getPeriodBoundary` → `getAdjacentDinner`); season bounds come from `dinnerDates` |
 | `useEntityFormManager()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
-| `useTabNavigation()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
+| `useTabNavigation()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** - query params (`?pbs`) pass through on tab switches (ADR-006) |
 | `useSeasonSelector()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
 | `useQueryParam()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** - Generic query param composable for URL state |
 | `useApiHandler()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** |
@@ -209,314 +211,22 @@
 | `useBookingUi()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Pure UI composable (ADR-017): deadline badges, `STEP_ICONS`, `formatActionPreview`; never server-imported |
 | `useUserRolesUi()` | N/A | N/A | N/A | ✅ Full | **✅ COMPLIANT** - Pure UI composable (ADR-017): role labels/icons/`visibleRoles` from the auth store |
 | `useTemporalCalendar()` | N/A | N/A | ✅ Domain types | ✅ Full | **✅ COMPLIANT** - Uses `MaybeRefOrGetter` + `toValue()` for reactive inputs, shared by ChefCalendarDisplay and DinnerCalendarDisplay (DRY) |
-| `useTheSlopeDesignSystem()` | N/A | N/A | N/A | ✅ `withActions` branch | **N/A UTILITY** - Page layout + design tokens only (ADR-017); no longer reachable from `server/`. Owns `ALERTS` (+ `AlertKind`, `withActions`, `withCornerAction`; kind roots carry `whitespace-normal`) alongside `BUTTONS` (incl. `settings`), `COMPONENTS.table.ui` (the cell under an expanded row wraps), `COMPONENTS.calendarGrid` and `CALENDAR.picker` (+ `calendarPickerProps`, `CalendarPickerSelection`); owns every colour value in the app (`COLOR`, `BG`, `TEXT`, `BORDER`, `RING`, `TYPOGRAPHY`, `BACKGROUNDS`, `PANTONE_CHIPS`, and the eight-stop `RAINBOW` with `RAINBOW_FAMILIES` / `getRainbowBand` / `getRainbowFamily` that landing bands, kitchen panels and cooking teams walk - `HERO.mochaStop` is Mocha's stop, `HERO.mocha` the frame); usage enforced by the ADR-018 rules in `tests/component/architecture/designSystemUsage.unit.spec.ts` (alerts, calendar grid, table token, team tabs, the two colour rules, the dead `#empty-state` slot); the values are measured by `designSystemContrast.unit.spec.ts` (EN 301 549 → WCAG 2.1, per palette preset) and `designSystemColourVision.unit.spec.ts` (WCAG 2.1 §1.4.1, meanings and - in the colour-safe preset - the rainbow stops under protanopia / deuteranopia / tritanopia; the meaning inventory lives in `designSystemMeanings.ts`, shared with the palette generator) |
-
-## ADR Compliance Summary
-
-### ADR-001: Core Framework and Technology Stack
-**Status:** ✅ **Fully Compliant**
-
-**Three-layer architecture strictly enforced:**
-
-1. **Generated Layer** (`~~/prisma/generated/zod/`)
-   - ✅ Stays in repository (committed to git)
-   - ✅ ONLY imported by validation composables
-   - ✅ Never imported by application code
-
-2. **Validation Layer** (`composables/use*Validation.ts`)
-   - ✅ All validation composables import from generated layer
-   - ✅ Re-export enum schemas for application code
-   - ✅ Define Zod validation schemas
-   - ✅ Export TypeScript types via `z.infer`
-
-3. **Application Layer** (stores, components, pages)
-   - ✅ Import ONLY from validation composables
-   - ✅ Use `.enum` property for runtime values
-   - ✅ No string literals for enum values
-   - ✅ No direct imports from `~~/prisma/generated/zod`
-
-**Issues:**
-- None identified
-
-### ADR-006: URL-Based Navigation
-**Status:** ✅ **Compliant**
-
-All admin and household pages use:
-- ✅ Path-based routing for tabs (`/admin/[tab].vue`)
-- ✅ Query parameters for form mode (`?mode=edit|create|view`)
-- ✅ Dynamic tab loading with async components
-- ✅ Household URLs use `?pbs=X` for disambiguation (`getHouseholdUrl()` utility in `app/utils/household.ts`)
-- ✅ `?pbs` preserved on tab switches (via `useTabNavigation` query passthrough) and index redirects
-
-**Issues:**
-- None identified
-
-### ADR-007: SSR-Friendly Store Pattern
-**Status:** ⚠️ **Partially Compliant**
-
-**Compliant stores:**
-- ✅ `plan.ts` - Full compliance (tested)
-- ✅ `households.ts` - Full compliance (tested)
-- ✅ `allergies.ts` - Full compliance (tested)
-- ✅ `users.ts` - Full compliance (not tested)
-
-**Needs audit:**
-- ❓ `event.ts` - Not audited
-- ❓ `tickets.ts` - Not audited
-
-**Note:** `auth.ts` uses `useUserSession()` from nuxt-auth-utils (not `useAsyncData`), so ADR-007 patterns don't fully apply. It's compliant for its use case.
-
-### ADR-008: useEntityFormManager Pattern
-**Status:** ⚠️ **Partially Compliant**
-
-**Compliant:**
-- ✅ `AdminPlanning.vue` - Full usage (tested)
-- ✅ `AdminTeams.vue` - Partial usage (tested)
-
-**Needs audit:**
-- ❓ `AdminHouseholds.vue` - Not audited
-- ❓ Other CRUD forms
-
-### ADR-010: Domain-Driven Serialization
-**Status:** ✅ **Compliant**
-
-All components and stores work with domain types:
-- ✅ UI/Client: Domain types (Season with Date objects, arrays)
-- ✅ HTTP: Domain types (transparent via $fetch)
-- ✅ Store: Domain types throughout
-- ✅ Repository: Handles serialization (backend concern)
-
-**Issues:**
-- None identified
-
-## Test Coverage Summary
-
-### E2E Test Coverage (Playwright)
-
-**Full Coverage:**
-- ✅ Landing page (`pages.e2e.spec.ts`)
-- ✅ Admin planning (`AdminPlanning.e2e.spec.ts`, `AdminPlanningSeason.e2e.spec.ts`)
-- ✅ Admin teams (`AdminTeams.e2e.spec.ts`)
-- ✅ Admin households (`AdminHouseholds.e2e.spec.ts`)
-- ✅ Admin economy (`AdminEconomy.e2e.spec.ts` - serial, admin corrections)
-- ✅ Household members (`HouseholdMembers.e2e.spec.ts`)
-- ✅ Household navigation (`household.e2e.spec.ts`)
-- ✅ Household bookings (`DinnerBookingForm.e2e.spec.ts` - serial, `HouseholdBookingsCrossHousehold.e2e.spec.ts`)
-- ✅ Public billing (`PublicBilling.e2e.spec.ts`)
-- ✅ Chef page (`Chef.e2e.spec.ts` - team tab switching, calendar reactivity)
-- ✅ Household settings (`household.e2e.spec.ts` - move-out date management, tab navigation)
-
-- ✅ Admin allergies (`AdminAllergies.e2e.spec.ts` - catalog CRUD)
-
-**Missing E2E:**
-- ❌ Admin users
-- ❌ Household allergies
-- ❌ Household economy
-- ❌ Login flow
-- ❌ Dinner calendar
-- ❌ Chef dinner editing
-
-### Component Test Coverage (Vitest + Nuxt)
-
-**Full Coverage:**
-- ✅ Calendar components (`CalendarDatePicker`, `CalendarDateRangePicker`, `CalendarDateRangeListPicker`)
-- ✅ Form components (`FormModeSelector`, `SeasonSelector`)
-- ✅ Composables (`useEntityFormManager`, `useTabNavigation`, `useSeasonSelector`, `useApiHandler`, `useSeason`, `useCookingTeam`, `useTemporalCalendar`)
-- ✅ Stores (`plan`, `households`, `allergies`)
-- ✅ Landing (`Hero.vue`)
-
-**Partial Coverage (indirect via E2E):**
-- ⚠️ `AdminPlanning` components
-- ⚠️ `AdminTeams` components
-- ⚠️ `AdminHouseholds` components
-
-**Missing Component Tests:**
-- ❌ Most form components (tested indirectly via E2E)
-- ❌ Calendar display components
-- ❌ Allergy components
-- ❌ Layout components (ViewError, Loader, etc.)
-- ✅ Validation composables (all `use*Validation()` composables have comprehensive unit tests)
-- ✅ Booking components (`ActionPreview.nuxt.spec.ts`, `DinnerBookingForm.nuxt.spec.ts`, `useBooking.nuxt.spec.ts`)
-
-## Priority Actions
-
-### High Priority (Critical Gaps)
-
-1. **Store Audits** - Audit remaining 3 stores for ADR-007 compliance
-   - `auth.ts`
-   - `event.ts`
-   - `tickets.ts`
-
-2. **Validation Composable Tests** - ✅ COMPLETE
-   - All `use*Validation()` composables now have comprehensive unit tests
-   - Tests cover schemas, serialization/deserialization, validation rules, and edge cases
-   - All tests passing (262 tests across 8 validation composables)
-
-3. **Core Component Tests** - Add component tests for high-risk components
-   - `UserProfileCard.vue` (role management UI needs component tests)
-   - `HouseholdAllergies.vue` (complex state management)
-   - `HouseholdBookings.vue` (booking flow)
-
-### Medium Priority (Coverage Gaps)
-
-4. **E2E Coverage** - Add E2E tests for untested user flows
-   - Login flow (authentication)
-   - Admin users (system roles)
-   - Household allergies (user-facing CRUD)
-   - Household settings (profile management)
-
-5. **Component Test Cleanup** - Add unit tests for display components
-   - Error handling components (`ViewError`, `Loader`)
-   - Card components (already tested via E2E but should have unit tests)
-
-### Low Priority (Nice to Have)
-
-6. **Documentation Components** - Test documentation/help components
-   - `HelpButton.vue`
-   - Layout components
-
-7. **Calendar Components** - Component tests for calendar displays
-   - Already tested via E2E but would benefit from unit tests
+| `useTheSlopeDesignSystem()` | N/A | N/A | N/A | ✅ `withActions` branch | **N/A UTILITY** - Page layout + design tokens only, client-only (ADR-017). Owns `ALERTS` (+ `AlertKind`, `withActions`, `withCornerAction`; kind roots carry `whitespace-normal`) alongside `BUTTONS` (incl. `settings`), `COMPONENTS.table.ui` (the cell under an expanded row wraps), `COMPONENTS.calendarGrid` and `CALENDAR.picker` (+ `calendarPickerProps`, `CalendarPickerSelection`); owns every colour value in the app (`COLOR`, `BG`, `TEXT`, `BORDER`, `RING`, `TYPOGRAPHY`, `BACKGROUNDS`, `PANTONE_CHIPS`, and the eight-stop `RAINBOW` with `RAINBOW_FAMILIES` / `getRainbowBand` / `getRainbowFamily` that landing bands, kitchen panels and cooking teams walk - `HERO.mochaStop` is Mocha's stop, `HERO.mocha` the frame); usage enforced by the ADR-018 rules in `tests/component/architecture/designSystemUsage.unit.spec.ts` (alerts, calendar grid, table token, team tabs, the two colour rules, the dead `#empty-state` slot); the values are measured by `designSystemContrast.unit.spec.ts` (EN 301 549 → WCAG 2.1, per palette preset) and `designSystemColourVision.unit.spec.ts` (WCAG 2.1 §1.4.1, meanings and - in the colour-safe preset - the rainbow stops under protanopia / deuteranopia / tritanopia; the meaning inventory lives in `designSystemMeanings.ts`, shared with the palette generator) |
 
 ## Compliance Checklist
 
-Use this checklist when creating/reviewing frontend components.
+Use this checklist when creating/reviewing frontend code:
 
-### Critical Architectural Principles
-
-**Before implementing ANY frontend code, understand these core principles:**
-
-1. **🎨 NuxtUI First** - Use NuxtUI components (UButton, UInput, UCard, USelect) instead of custom HTML. We use the Nuxt ecosystem.
-
-2. **📱 Mobile First** - 90% of users on mobile. Design mobile-first, use `isMd` (injected from layout) for desktop enhancements, use Tailwind `md:` breakpoint for responsive styling.
-
-3. **📡 Stores Own Network** - ALL API calls (`$fetch`) happen in stores. Components/pages NEVER call APIs directly. (ADR-007)
-
-4. **✅ Validation Composables Are Truth** - ALL validation schemas, types, and enums live in `use*Validation.ts` composables. Application code imports from there, NEVER from `~~/prisma/generated/zod` or `@prisma/client`. (ADR-001)
-
-5. **🔄 Three-Layer Architecture** (ADR-001):
-   - **Generated Layer** (`~~/prisma/generated/zod/`) → **Validation Layer** (`use*Validation.ts`) → **Application Layer** (components, stores, pages)
-   - Each layer imports from the previous layer only
-   - Application code gets everything from validation composables
-
-6. **🎯 Domain Types Everywhere** - Work with domain types (Season with Date objects) throughout application code. Serialization happens in repository layer. (ADR-010)
-
----
-
-### Components (Application Layer)
-
-**UI & Presentation:**
-- [ ] **CRITICAL:** Use NuxtUI components (UButton, UInput, UCard, USelect, UCheckbox, etc.) instead of hand-coded HTML (Nuxt stack principle)
-- [ ] **CRITICAL:** Bind design-system tokens, never raw Nuxt UI props, on a family that has one (`v-bind="ALERTS.<kind>"`, `v-bind="BUTTONS.<role>"`, `v-bind="COMPONENTS.calendarGrid"`) — enforced by `tests/component/architecture/designSystemUsage.unit.spec.ts` (ADR-018)
-- [ ] **CRITICAL:** Colour comes from the design system - `:color="COLOR.<name>"` or a domain token, and `BG`/`TEXT`/`BORDER`/`RING`/`TYPOGRAPHY` for classes; a Tailwind palette shade or a literal colour prop fails `tests/component/architecture/designSystemUsage.unit.spec.ts` (see docs/ui.md)
-- [ ] **CRITICAL:** Mobile-first responsive design - 90% of users on mobile
-- [ ] **CRITICAL:** DRY components - extract repeated logic into reusable atomic components
-- [ ] **CRITICAL:** Clean template structure - use single if-else instead of checking same condition multiple times (e.g., `v-if="isTitle"` / `v-else` instead of `v-if="isTitle"` / `v-else-if="!isTitle && ..."`)
-- [ ] Inject `isMd` from layout via `inject<Ref<boolean>>('isMd')` for reactive breakpoint detection
-- [ ] Use `md:` breakpoint in Tailwind classes for responsive styling
-- [ ] For NuxtUI component props (colors, variants, size), use `isMd` ref to switch between mobile/desktop values
-- [ ] Use `name` attribute for form elements (E2E test selectors)
-- [ ] Use `data-testid` for complex UI components that may not forward `name` to DOM
-
-**Data & Types:**
-- [ ] **CRITICAL:** NO direct API calls (`$fetch`) in components - ALL network communication goes through stores (ADR-007)
-- [ ] **CRITICAL:** Import types/enums ONLY from validation composables, NEVER from `~~/prisma/generated/zod` or `@prisma/client` (ADR-001)
-- [ ] Use domain types from validation composables (ADR-010)
-- [ ] Use `.enum` property for enum values (e.g., `TicketTypeSchema.enum.ADULT`)
-- [ ] NO validation logic in components - ALL validation in validation composables (ADR-001)
-
-**State Management:**
-- [ ] Interact with stores for all server data (read/write)
-- [ ] Own UI state only (formMode, draft, UI flags)
-- [ ] Show reactive loaders based on store's `isReady` flags (ADR-007)
-
-**Testing:**
-- [ ] Component tests for components with logic
-- [ ] E2E tests for user-facing flows
-- [ ] Adequate test coverage (see test coverage tables)
-
-### Pages (Application Layer)
-
-**Initialization & Navigation:**
-- [ ] **CRITICAL:** Store initialization is synchronous - NO `await` on init (ADR-007)
-- [ ] Show reactive loaders based on `isStoreReady` (ADR-007)
-- [ ] Use URL parameters for navigation state (ADR-006)
-- [ ] Path-based routing for tabs, query params for modes (`?mode=edit`)
-
-**Data & State:**
-- [ ] **CRITICAL:** NO direct API calls - ALL network communication through stores
-- [ ] **CRITICAL:** Import types/enums from validation composables only (ADR-001)
-- [ ] Use `useEntityFormManager` for CRUD forms (ADR-008)
-- [ ] Pages coordinate between stores and components, don't own data
-
-**Testing:**
-- [ ] E2E test coverage for critical user paths
-
-### Stores (Application Layer)
-
-**Data Fetching:**
-- [ ] **CRITICAL:** Prefer `useAsyncData` over `useFetch` (ADR-007)
-- [ ] **CRITICAL:** ALL API calls happen in stores - NO direct $fetch in components/pages (ADR-007)
-- [ ] Use unique string keys for static endpoints, computed keys for reactive (ADR-007)
-- [ ] Internal watchers for reactive initialization (ADR-007)
-
-**State Management:**
-- [ ] Export status-derived computeds: `isLoading`, `isErrored`, `isInitialized`, `isEmpty` (ADR-007)
-- [ ] Export `isStoreReady` convenience computed combining all checks (ADR-007)
-- [ ] Expose raw error ref for statusCode access (ADR-007)
-- [ ] Provide `refresh()` actions wrapping `useAsyncData` refresh (ADR-007)
-- [ ] Init methods are synchronous - NO async/await (ADR-007)
-
-**Types & Validation:**
-- [ ] **CRITICAL:** Import types/enums from validation composables, NEVER from generated layer or @prisma/client (ADR-001)
-- [ ] Work with domain types throughout (ADR-010)
-- [ ] NO validation logic in stores - validation in composables only
-
-**Testing:**
-- [ ] Component tests for store logic (initialization, CRUD actions, computeds)
-- [ ] Mock endpoints using `registerEndpoint` pattern
-- [ ] Use `clearNuxtData()` in `beforeEach()` to prevent test pollution
-
-### Validation Composables (Validation Layer - `use*Validation.ts`)
-
-**Single Source of Truth:**
-- [ ] **CRITICAL:** ALL validation schemas defined here - NEVER in components, stores, or pages (ADR-001)
-- [ ] **CRITICAL:** ALL types exported via `z.infer` - application code imports types from here (ADR-001)
-- [ ] **CRITICAL:** ALL enum schemas re-exported - application code gets enums from here (ADR-001)
-
-**Schema Definition:**
-- [ ] Import enum schemas from `~~/prisma/generated/zod` ONLY (not @prisma/client) (ADR-001)
-- [ ] Re-export enum schemas for application code (ADR-001)
-- [ ] Define all validation schemas using Zod (ADR-001)
-- [ ] Export TypeScript types via `z.infer` (ADR-001)
-
-**Domain Serialization (if needed):**
-- [ ] Define domain types (ADR-010)
-- [ ] Define serialized types for database format (ADR-010)
-- [ ] Export serialize/deserialize functions (ADR-010)
-- [ ] Transformation functions stay in validation composable
-
-**Testing:**
-- [ ] Unit tests for all validation schemas
-- [ ] Unit tests for serialize/deserialize functions
-- [ ] Unit tests for edge cases and validation rules
-
-### Business Logic Composables (`use*.ts`)
-
-**Types & Validation:**
-- [ ] **CRITICAL:** Import types/enums from validation composables ONLY (ADR-001)
-- [ ] NO validation schemas here - validation in `use*Validation.ts` only
-- [ ] Work with domain types from validation composables (ADR-010)
-
-**Logic & Utilities:**
-- [ ] Complex business logic and calculations
-- [ ] Default value creation
-- [ ] Domain-specific utilities
-- [ ] Functions depending on multiple composables
-
-**Testing:**
-- [ ] Unit tests for all complex logic functions
-- [ ] Parametrized tests for similar cases with different data
+- [ ] UI renders NuxtUI components (`UButton`, `UInput`, `UCard`, `USelect`)
+- [ ] Shared UI patterns bind design-system tokens and colour comes from `useTheSlopeDesignSystem` (ADR-018, docs/ui.md); enforced by `tests/component/architecture/designSystemUsage.unit.spec.ts`
+- [ ] Mobile-first: `md:` Tailwind breakpoints; components inject the layout's `isMd` ref for prop switches
+- [ ] Network calls live in stores via `useAsyncData`; stores expose `isLoading` / `isErrored` / `isInitialized` / `isStoreReady`; init methods are synchronous (ADR-007)
+- [ ] Types, schemas and enums come from validation composables; enum values via `.enum` (ADR-001)
+- [ ] Domain types throughout; serialization lives in the repository (ADR-010)
+- [ ] Tabs are path-based, form mode is `?mode=`, household URLs go through `getHouseholdUrl()` (ADR-006)
+- [ ] CRUD forms manage mode through `useEntityFormManager` (ADR-008)
+- [ ] Form elements carry `name`; interactive elements carry `data-testid` (docs/testing.md)
+- [ ] Component and E2E coverage recorded in the tables above
 
 ## Fully Compliant Examples
 
