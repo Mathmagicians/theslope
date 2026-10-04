@@ -6,8 +6,9 @@ const isApiError = (error: unknown): error is ApiError => {
 }
 
 export const useApiHandler = () => {
-    // Capture toast reference during setup context
+    // Capture toast and route references during setup context
     const toast = useToast()
+    const route = useRoute()
 
     const handleApiError = (error: ApiError | unknown, action: string, customMessage?: string): string => {
         // Extract serializable parts (FetchError is not a POJO)
@@ -68,6 +69,10 @@ export const useApiHandler = () => {
             return result
         } catch (e: unknown) {
             state.value = 'error'
+            // A mid-session 401 re-authenticates and returns in place (the login page follows ?redirect)
+            if (isApiError(e) && (e.statusCode === 401 || (e as Record<string, unknown>).status === 401) && route.path !== '/login') {
+                await navigateTo({path: '/login', query: {redirect: route.fullPath}})
+            }
             throw new Error(handleApiError(e, actionName), {cause: e})
         }
     }

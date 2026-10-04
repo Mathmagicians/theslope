@@ -19,6 +19,7 @@
 └──────────────────────────────────────────────────────────────────────────────┘
 -->
 <script setup lang="ts">
+import {hasProtocol} from 'ufo'
 import type {FormSubmitEvent} from '#ui/types'
 import type {LoginCredentials} from '~/composables/useCoreValidation'
 
@@ -39,6 +40,13 @@ const state = reactive<LoginCredentials>({
 
 const isLoading = ref(false)
 const loginError = ref<string | null>(null)
+const route = useRoute()
+
+// The guard parks the original URL in ?redirect; only an internal path is followed
+const redirectTarget = computed(() => {
+  const redirect = route.query.redirect
+  return typeof redirect === 'string' && redirect.startsWith('/') && !hasProtocol(redirect, {acceptRelative: true}) ? redirect : null
+})
 
 // Own settings are revealed by the ⚙ toggle in the profile card header (ADR-006: no persistence)
 const preferencesOpen = ref(false)
@@ -49,6 +57,9 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
     isLoading.value = true
     await signIn(event.data.email, event.data.password)
     console.info('🔑 > Login > lykkedes')
+    if (redirectTarget.value) {
+      await navigateTo(redirectTarget.value)
+    }
   } catch (error: unknown) {
     console.error('🔑 Login mislykkedes:', error)
     loginError.value = 'Vi kunne ikke logge dig på, prøv igen. Du skal bruge dit Heynabo brugernavn og password.'

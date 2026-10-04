@@ -25,6 +25,7 @@
 | C6 | A password prompt only on Heynabo write-back is unacceptable |
 | C7 | Heynabo API is poorly documented; probe it with `make heynabo-*`; local and dev share the demo Heynabo; test users need a unique e-mail |
 | C8 | This sprint is investigation |
+| C9 | The session cookie's `maxAge` stays at or under 24 hours; longevity comes from re-login (S5), Heynabo has no OIDC server |
 
 ## Causes found in code
 
@@ -38,14 +39,16 @@
 
 - `nuxt-auth-utils` latest is 0.5.30; lockfile pins 0.5.26; 0.5.27–0.5.30 change nothing in sessions or WebAuthn.
 - h3 v1 sessions expire absolutely: `createdAt` is set on creation only, `update()` keeps it.
-- The Heynabo token is a JWT; `login.post.ts` stores it in the session as `passwordHash`; `LoggedInHeynaboUserSchema` strips unknown keys from the `/login` response.
+- The Heynabo token is a 32-hex opaque string, and the `/login` response carries no expiry field (verified
+  `make heynabo-login-dev`, 2026-10-04); `login.post.ts` stores it in the session as `passwordHash`;
+  `LoggedInHeynaboUserSchema` strips unknown keys from the `/login` response.
 - ADR-006 keeps navigation state in the URL, so returning to the last URL restores the user's place.
 
 ## Solution elements
 
 | # | Element | Serves |
 |---|---|---|
-| S1 | Session cookie `maxAge = exp − now`, from the JWT `exp` decoded in `login.post.ts`; no lifetime of its own | D1, D5, C4, C5 |
+| S1 | Session cookie `maxAge: 24h` set in `login.post.ts` (C9; the token is opaque and the login response carries no expiry) | D1, D5, C4, C5 |
 | S2 | Guard redirect carries the original URL; login returns there; a 401 re-authenticates and returns in place | D3 |
 | S3 | PWA manifest and service worker (`@vite-pwa/nuxt`), `display: standalone` | D4, D2 |
 | S4 | Install guidance driven by capability: standalone → nothing; `beforeinstallprompt` → install button; otherwise → Add to Home Screen instructions | D2 |
@@ -59,7 +62,7 @@ Rejected: a theslope session lifetime independent of Heynabo; a periodic Heynabo
 
 | # | Unknown | Resolves | Decides |
 |---|---|---|---|
-| U1 | JWT `exp − iat` | `make heynabo-login-dev \| jq -r .token \| cut -d. -f2 \| tr '_-' '/+' \| base64 -d 2>/dev/null \| jq '{iat, exp, ttl_hours: ((.exp - .iat) / 3600)}'` | weight of S5: long `exp` → S1 + S2 carry D1; short → S5 carries D1 |
+| U1 | The opaque token's TTL: when (and whether) Heynabo expires it | mint a token (`make heynabo-login-dev`), call a read endpoint with it after hours and days (`make heynabo-get-locations-dev` with the saved token) | the `maxAge` S1 sets, and the weight of S5: a long TTL → S1 + S2 carry D1; short → S5 carries D1 |
 | U2 | PRF in the installed PWA on iOS 18+, Android, one desktop | spike after S3 | S5 coverage |
 
 ## Next

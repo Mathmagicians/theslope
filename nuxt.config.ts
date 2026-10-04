@@ -13,6 +13,21 @@ export default defineNuxtConfig({
             pathPrefix: false,
         },
     ],
+    app: {
+        head: {
+            link: [
+                {rel: 'manifest', href: '/manifest.webmanifest'},
+                {rel: 'apple-touch-icon', href: '/apple-touch-icon.png'}
+            ],
+            meta: [
+                {name: 'theme-color', content: '#66a28f'},
+                // iOS reads these for the standalone (installed) face
+                {name: 'apple-mobile-web-app-capable', content: 'yes'},
+                {name: 'apple-mobile-web-app-status-bar-style', content: 'default'},
+                {name: 'apple-mobile-web-app-title', content: 'Skråningen'}
+            ]
+        }
+    },
     css: ['~/assets/css/main.css'],
     devtools: {enabled: true},
     // Shared Vite watcher (dev only); the default from compatibilityVersion 5
@@ -86,6 +101,10 @@ export default defineNuxtConfig({
 
 
     runtimeConfig: {
+        // Heynabo tokens carry no expiry; the cookie lives a day at most and re-login carries longevity
+        session: {
+            maxAge: 60 * 60 * 24
+        },
         // GitHub integration for user feedback
         GITHUB_TOKEN: '',  // Set via NUXT_GITHUB_TOKEN env variable
         GITHUB_OWNER: 'Mathmagicians',  // Override via NUXT_GITHUB_OWNER if needed

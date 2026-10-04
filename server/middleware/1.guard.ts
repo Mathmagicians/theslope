@@ -44,8 +44,8 @@ export default defineEventHandler(async (event) => {
                 statusMessage: "Unauthorized - Please login"
             })
         } else {
-            // For page routes, redirect to login
-            return sendRedirect(event, "/login", 302)
+            // The login page follows ?redirect back to the page the guard stopped
+            return sendRedirect(event, `/login?redirect=${encodeURIComponent(pathname + url.search)}`, 302)
         }
     }
 
