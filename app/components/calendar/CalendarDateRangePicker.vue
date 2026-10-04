@@ -2,7 +2,7 @@
 import type {DateRange} from "~/types/dateTypes"
 import {eachDayOfManyIntervals, isCalendarDateInDateList} from "~/utils/date"
 import type {DateValue} from '@internationalized/date'
-import {mapZodErrorsToFormErrors, getErrorMessage} from "~/utils/validtation"
+import {applyValidation, getErrorMessage} from "~/utils/validtation"
 import type {CalendarPickerSelection} from "~/composables/useTheSlopeDesignSystem"
 
 // COMPONENT DEFINITIONS
@@ -17,11 +17,8 @@ const props = withDefaults(defineProps<{ name?: string, disabled?: boolean, sele
 const emit = defineEmits(['update:model-value', 'close'])
 
 // DESIGN SYSTEM
-const {SIZES, ICONS, CALENDAR, BUTTONS, COMPONENTS, calendarPickerProps, dayCircleClasses} = useTheSlopeDesignSystem()
-const calendarProps = calendarPickerProps()
+const {SIZES, COMPONENTS} = useTheSlopeDesignSystem()
 
-// What is being picked decides how a selected day reads (CALENDAR.picker); the slot draws it
-const selectionVariant = computed(() => CALENDAR.picker[props.selection])
 const selectedDays = computed(() => model.value?.start && model.value?.end
     ? eachDayOfManyIntervals([{start: model.value.start, end: model.value.end}])
     : [])
@@ -35,8 +32,8 @@ const errors = ref<Map<string, string[]>>(new Map())
 const calendarRange = computed(() => {
   if (model.value?.start && model.value?.end) {
     return {
-      start: toCalendarDate(model.value.start),
-      end: toCalendarDate(model.value.end)
+      start: toCalendarDate(model.value.start)!,
+      end: toCalendarDate(model.value.end)!
     }
   }
   return null
@@ -64,19 +61,11 @@ const pickerDateRange = computed({
 
 // ACTIONS
 const updateDateRange = (newRange: DateRange) => {
-  const validation = dateRangeSchema.safeParse(newRange)
-  if (validation.success) {
-    model.value = newRange
-    emit('update:model-value', newRange)
-    errors.value.clear()
-    return true
-  }
-  const errorMap = mapZodErrorsToFormErrors(validation.error)
-  errors.value.clear()
-  errorMap.forEach((value, key) => {
-    errors.value.set(key, value)
-  })
-  return false
+  const validated = applyValidation(dateRangeSchema, newRange, errors)
+  if (validated === undefined) return false
+  model.value = newRange
+  emit('update:model-value', newRange)
+  return true
 }
 
 // The disabled face: a range reads as one compact field, the presentation every range shares
@@ -114,32 +103,13 @@ defineExpose({
           :icon="props.icon"
       >
         <template #trailing>
-          <UPopover
-              :content="{
-                align: 'center',
-                side: 'bottom',
-                sideOffset: 16
-              }">
-            <UButton
-                v-bind="BUTTONS.edit"
-                :icon="ICONS.calendar"
-                aria-label="Åbn kalender"
-            />
-            <template #content>
-              <UCalendar
-                  v-bind="calendarProps"
-                  v-model="pickerDateRange"
-                  range
-                  :size="SIZES.calendar"
-                  :number-of-months="SIZES.calendarMonths"
-              >
-                <template #day="{ day }">
-                  <div v-if="isDaySelected(day)" :class="dayCircleClasses(selectionVariant)">{{ day.day }}</div>
-                  <span v-else class="text-sm">{{ day.day }}</span>
-                </template>
-              </UCalendar>
-            </template>
-          </UPopover>
+          <CalendarPickerPopover
+              v-model="pickerDateRange"
+              range
+              :selection="props.selection"
+              :number-of-months="SIZES.calendarMonths"
+              :is-day-selected="isDaySelected"
+          />
         </template>
       </UInputDate>
     </UFormField>

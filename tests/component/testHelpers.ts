@@ -3,6 +3,7 @@ import {expect} from 'vitest'
 import {TooltipProvider} from 'reka-ui'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {flushPromises, type BaseWrapper, type VueWrapper} from '@vue/test-utils'
+import {toCalendarDate} from '~/utils/date'
 
 /**
  * Generic polling function for component tests
@@ -84,6 +85,13 @@ export const openPopover = async (wrapper: Searchable) => {
     await flushPromises()
     await nextTick()
 }
+
+/** A Date as its calendar day ('2025-01-05'): the model may carry local or UTC midnight of the same day */
+export const calendarDay = (date: Date) => toCalendarDate(date)!.toString()
+
+/** Ranges as calendar days, for asserting emitted DateRange payloads */
+export const asCalendarDays = (ranges: Array<{start: Date, end: Date}>) =>
+    ranges.map(range => ({start: calendarDay(range.start), end: calendarDay(range.end)}))
 
 /** The typed date segments (reka DateField) of one kind, in field order: one per date field below `wrapper` */
 export const findDateSegments = (wrapper: Searchable, segment: 'day' | 'month' | 'year') =>

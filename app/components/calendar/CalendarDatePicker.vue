@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {isCalendarDateInDateList} from "~/utils/date"
 import type {DateValue} from '@internationalized/date'
-import {mapZodErrorsToFormErrors, getErrorMessage} from "~/utils/validtation"
+import {applyValidation, getErrorMessage} from "~/utils/validtation"
 
 // COMPONENT DEFINITIONS
 const model = defineModel<Date | null>({required: true})
@@ -12,8 +12,7 @@ const props = withDefaults(defineProps<{ label?: string, name?: string }>(), {
 const emit = defineEmits(['update:model-value'])
 
 // DESIGN SYSTEM
-const {SIZES, ICONS, CALENDAR, BUTTONS, COMPONENTS, calendarPickerProps, dayCircleClasses} = useTheSlopeDesignSystem()
-const calendarProps = calendarPickerProps()
+const {COMPONENTS} = useTheSlopeDesignSystem()
 
 // A single date is always a cooking-day pick (CALENDAR.picker); the slot draws it
 const isDaySelected = (day: DateValue) => isCalendarDateInDateList(day, model.value ? [model.value] : [])
@@ -39,19 +38,11 @@ const updateDate = (newDate: Date | null) => {
     return true
   }
 
-  const validation = dateSchema.safeParse(newDate)
-  if (validation.success) {
-    model.value = validation.data
-    emit('update:model-value', validation.data)
-    errors.value.clear()
-    return true
-  }
-  const errorMap = mapZodErrorsToFormErrors(validation.error)
-  errors.value.clear()
-  errorMap.forEach((value, key) => {
-    errors.value.set(key, value)
-  })
-  return false
+  const validated = applyValidation(dateSchema, newDate, errors)
+  if (validated === undefined) return false
+  model.value = validated
+  emit('update:model-value', validated)
+  return true
 }
 
 // Expose for testing
@@ -73,26 +64,7 @@ defineExpose({
       :name="props.name"
     >
       <template #trailing>
-        <UPopover
-          :content="{
-            align: 'center',
-            side: 'bottom',
-            sideOffset: 16
-          }">
-          <UButton v-bind="BUTTONS.edit" :icon="ICONS.calendar" aria-label="Åbn kalender" />
-          <template #content>
-            <UCalendar
-              v-bind="calendarProps"
-              v-model="pickerDate"
-              :size="SIZES.calendar"
-            >
-              <template #day="{ day }">
-                <div v-if="isDaySelected(day)" :class="dayCircleClasses(CALENDAR.picker.cookingDay)">{{ day.day }}</div>
-                <span v-else class="text-sm">{{ day.day }}</span>
-              </template>
-            </UCalendar>
-          </template>
-        </UPopover>
+        <CalendarPickerPopover v-model="pickerDate" :is-day-selected="isDaySelected" />
       </template>
     </UInputDate>
   </UFormField>

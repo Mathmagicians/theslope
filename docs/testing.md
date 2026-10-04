@@ -497,7 +497,7 @@ test('GIVEN create mode WHEN submit THEN created', async ({ page, browser }) => 
   // GIVEN: Setup via factory (fast)
   // WHEN: Interact via UI
   await page.goto('/admin/planning?mode=create')
-  await page.locator('input[name="start"]').fill('01/01/2025')
+  await testHelpers.fillDateField(page.locator('[name="seasonDates"]'), 'start', '01/01/2025')
   await page.getByTestId('submit-season').click()
 
   // THEN: Verify via API (reliable)
@@ -514,7 +514,12 @@ await page.getByTestId('season-selector').click()
 await page.getByTestId('submit-season').click()
 
 // Form inputs - name attribute works (native HTML)
-await page.locator('input[name="start"]').fill('01/01/2025')
+await page.locator('input[name="pbsId"]').fill('123')
+
+// Date fields are typed segments (UInputDate): fill and read through the helpers,
+// scoped to the picker's [name] wrapper; a range field holds start and end
+await testHelpers.fillDateField(page.locator('[name="seasonDates"]'), 'start', '01/01/2025')
+const start = await testHelpers.readDateField(page.locator('[name="seasonDates"]'), 'start')
 ```
 
 ### Waiting Patterns

@@ -3,9 +3,8 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { mountSuspended } from "@nuxt/test-utils/runtime"
 import CalendarDateRangePicker from '~/components/calendar/CalendarDateRangePicker.vue'
 import { nextTick, ref } from 'vue'
-import { openPopover, expectSharedCalendarGrid, findDateSegments, typeIntoSegment } from '~~/tests/component/testHelpers'
+import { openPopover, expectSharedCalendarGrid, findDateSegments, typeIntoSegment, calendarDay } from '~~/tests/component/testHelpers'
 import { CALENDAR, createDayCircleClasses } from '~/composables/useTheSlopeDesignSystem'
-import { toCalendarDate } from '~/utils/date'
 import type { DateRange } from '~/types/dateTypes'
 
 const IS_MD = true
@@ -47,8 +46,8 @@ describe('CalendarDateRangePicker', () => {
     const emitted = wrapper.emitted('update:modelValue')
     expect(emitted).toBeTruthy()
     const lastRange = emitted!.at(-1)![0] as DateRange
-    expect(toCalendarDate(lastRange.start)!.toString()).toBe('2025-01-03')
-    expect(toCalendarDate(lastRange.end)!.toString()).toBe('2025-01-05')
+    expect(calendarDay(lastRange.start)).toBe('2025-01-03')
+    expect(calendarDay(lastRange.end)).toBe('2025-01-05')
   })
 
   it('typing a start after the end reports the range error', async () => {

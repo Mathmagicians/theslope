@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest'
 import { mountSuspended } from "@nuxt/test-utils/runtime"
 import CalendarDatePicker from '~/components/calendar/CalendarDatePicker.vue'
 import { ref } from 'vue'
-import { openPopover, expectSharedCalendarGrid, findDateSegments, typeIntoSegment } from '~~/tests/component/testHelpers'
+import { openPopover, expectSharedCalendarGrid, findDateSegments, typeIntoSegment, calendarDay } from '~~/tests/component/testHelpers'
 
 const JAN_1 = new Date(2025, 0, 1)
 
@@ -56,9 +56,7 @@ describe('CalendarDatePicker', () => {
 
     const emitted = wrapper.emitted('update:modelValue')
     expect(emitted).toBeTruthy()
-    // Round-trip through the component's own boundary util: the typed date, independent of timezone
-    const lastValue = emitted!.at(-1)![0] as Date
-    expect(toCalendarDate(lastValue)!.toString()).toBe('2025-06-15')
+    expect(calendarDay(emitted!.at(-1)![0] as Date)).toBe('2025-06-15')
   })
 
   it('updateDate rejects an invalid Date and reports errors', async () => {

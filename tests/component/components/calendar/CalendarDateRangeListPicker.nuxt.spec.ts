@@ -1,16 +1,11 @@
 // @vitest-environment nuxt
 import { describe, it, expect } from 'vitest'
 import { mountSuspended } from "@nuxt/test-utils/runtime"
-import {findByTestId, findDateSegments} from '~~/tests/component/testHelpers'
+import {findByTestId, findDateSegments, asCalendarDays} from '~~/tests/component/testHelpers'
 import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTestIds'
 import CalendarDateRangeListPicker from '~/components/calendar/CalendarDateRangeListPicker.vue'
 import { nextTick, ref } from 'vue'
-import {formatDateRange, toCalendarDate} from '~/utils/date'
-import type {DateRange} from '~/types/dateTypes'
-
-/** Ranges as calendar days: the model may carry a date as local or UTC midnight of the same day */
-const asCalendarDays = (ranges: DateRange[]) =>
-    ranges.map(range => ({start: toCalendarDate(range.start)!.toString(), end: toCalendarDate(range.end)!.toString()}))
+import {formatDateRange} from '~/utils/date'
 
 describe('CalendarDateRangeListPicker', () => {
     interface DateRange {

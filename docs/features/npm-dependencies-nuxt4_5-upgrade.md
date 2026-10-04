@@ -14,7 +14,7 @@ thing, the app uses it and the hand-written version leaves. The user runs instal
 | Vite 8 build | the app, dev server and sender build on Vite 8 | ✅ done |
 | Nuxt UI 4.11 | the 4.4–4.11 changes checked against our components | ⏳ awaiting signoff |
 | Danish locale | `UApp` locale `da`; the hand-translated week days left | ✅ done — visual check with the Nuxt UI pass |
-| Date pickers | `UInputDate` segments in the two-field layout | ⏳ implementation |
+| Date pickers | one `UInputDate range` box per period, `COMPONENTS.dateField` mask | ✅ done — visual check with the Nuxt UI pass |
 | Fetch gating | the `enabled` option of `useAsyncData` replaces fetchers that return empty values | ⏳ awaiting signoff |
 | Page composition | master/detail and tab pages, the `md` breakpoint | OPEN |
 | Store fetcher factory | `createUseAsyncData` bakes `useRequestFetch` + schema transform into one store fetcher | ⏳ API sketch awaiting signoff |
@@ -59,6 +59,15 @@ Nuxt UI 4.11 is next: the e2e pair and the visual check run on the built branch.
   factories for their data builders only. The nuxt project runs with `hookTimeout: 60_000` and `testTimeout: 20_000`.
 - `SeasonFactory.createActiveSeason` retries once (`CREATE_ACTIVE_SEASON_RETRIES`): the list→activate window races with
   workers recreating or cleaning the singleton.
+- Date pickers: one `UInputDate range` box per period (`CalendarDateRangePicker`, `CalendarDatePicker`); segments render
+  the house mask dd/MM/yyyy via `COMPONENTS.dateField`; the shared popover calendar lives in `CalendarPickerPopover.vue`;
+  a disabled range reads as one compact field; the season label is `Fællesspisning sæsonens start - slut datoer`, the
+  holiday rows carry the holiday icon as the field's leading icon. `stringDateRangeSchema`, the free-text `inputState`
+  and `translateToDanish`-era sync watchers left. E2e fills go through `testHelpers.fillDateField`/`readDateField` on the
+  picker's `[name]` scope (self-verifying via `pollUntil`).
+- Cooking-day counter: `COMPONENTS.statBox` (framed at the 3:1 edge rung) in the season card header shows the dinners the
+  season scaffolds, computed with `getEachDayOfIntervalWithSelectedWeekdays` and `excludeDatesFromInterval`; the palette
+  presets regenerated (`make palettes`).
 - `ICONS.github` is `i-hugeicons-github-01` (`useTheSlopeDesignSystem.ts`): the glyph ships from an installed collection.
 - `icon.clientBundle` keeps `scan: true` only (`nuxt.config.ts`): Nuxt UI 4.10 pre-bundles its own internal icons.
 - `experimental.watcher: 'builder'` (`nuxt.config.ts`): the shared Vite watcher, the default from `compatibilityVersion: 5`.
@@ -105,39 +114,10 @@ npx playwright test tests/e2e/ui/MobileViewport.e2e.spec.ts tests/e2e/ui/AdminPl
 | `/login`, ⚙ | phone | `URadioGroup` (`COMPONENTS.choiceGroup`) | palette and text-size cards with borders |
 | any form, tab through fields | desktop | focus ring | one focus style across inputs and buttons |
 | `/admin/planning?mode=edit`, open a date picker | phone | `UCalendar` | Danish month heading; M T O T F L S week letters in the head-cell type |
+| `/admin/planning`, view and edit | phone + desktop | date boxes + counter | one framed box per period (dd/MM/yyyy segments, `/` literals, holiday icon leading the rows); the counter box in the card header, framed, with the dinner icon |
 | `/admin/users` | desktop | `UPagination` | Danish labels |
 
 **Affected.** The e2e selectors above, where the run reports a changed slot.
-
-## Date pickers
-
-**Problem.** `CalendarDateRangePicker.vue` reads two free-text `UInput`s (`type="string"`) and parses them with `stringDateRangeSchema`;
-the range lives as text (`inputState`), as `Date` (the model) and as `CalendarDate` (`pickerDateRange`), synchronised by a watcher.
-The input row is the popover trigger. `CalendarDatePicker.vue` follows the same pattern for one date.
-**Solution.** One `UInputDate range` box per period, bound to the `{start, end}` `CalendarDate` pair; the `#trailing`
-slot holds the calendar button opening the `UPopover` with `UCalendar range`. The models convert to `Date` at the
-component boundary; `dateRangeSchema` validates; `CALENDAR.picker` draws the selected days in the `#day` slot;
-`stringDateRangeSchema`, the free-text `inputState` and the sync watcher leave. `CalendarDatePicker.vue` uses one
-`UInputDate` with `UCalendar`. `COMPONENTS.dateField` renders the house mask dd/MM/yyyy on the field (`en-GB` segment
-order and `/` literals, compact segments, room for the calendar button); the UApp locale keeps the calendars Danish.
-A disabled range renders as one compact field (`formatDateRange`) under the same label. The season dates carry the label
-`Fællesspisning sæsonens start - slut datoer`; the holiday rows carry the holiday icon as the field's leading icon, so the
-boxes share one left edge.
-
-**Mockup — one box per period** ✅
-
-```
-Fællesspisning sæsonens start - slut datoer
-[10/08/2026 - 23/06/2027 (cal)]
- six typed segments, one calendar button opening the range calendar
-```
-
-**TDD.** Component specs for both pickers: typing segments and picking in the calendar update one model; an invalid range shows the
-schema message. E2e: the season dates in `AdminPlanningSeason.e2e.spec.ts`, the move-out date in `household.e2e.spec.ts`.
-**Test-ids.** The e2e specs fill `input[name="start"]` / `input[name="end"]`; the old → new contract table comes with the mockup
-signoff.
-**Affected.** `CalendarDateRangePicker.vue`, `CalendarDatePicker.vue`, `CalendarDateRangeListPicker.vue`, `useDateRangeValidation.ts`
-(`stringDateRangeSchema`), their component specs, the e2e specs above.
 
 ## Fetch gating
 
