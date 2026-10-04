@@ -20,7 +20,8 @@ Nuxt 4.3, Nuxt UI 4.3, Tailwind 4.1. Pages use Nuxt UI components; every shared 
 
 - A component binds a design-system token and passes domain props only. `tests/component/architecture/designSystemUsage.unit.spec.ts`
   fails on a Tailwind palette shade, a literal colour prop, a `<UAlert>` without an `ALERTS` kind, a `<UCalendar>` without
-  `COMPONENTS.calendarGrid`, and the slot name `#empty-state`; it reports `file:line`.
+  `COMPONENTS.calendarGrid`, a `<UTable>` without a `COMPONENTS.table` token, a team `<UTabs>` without `COMPONENTS.teamTabs`,
+  and the slot name `#empty-state`; it reports `file:line`.
 - A token holds one rendered value, light and dark together. Two values are two tokens, named by where they are used.
 - A Nuxt UI component family gets a token, and an architecture rule, before its first use.
 - Layout responds with `md:` classes; `isMd` (provided by `app/layouts/default.vue`) sets prop values.
@@ -37,10 +38,10 @@ Nuxt 4.3, Nuxt UI 4.3, Tailwind 4.1. Pages use Nuxt UI components; every shared 
 | `TYPOGRAPHY`, `LAYOUTS`, `SIZES`, `ICONS` | text styles, layout classes, responsive sizes, icon names |
 | `BUTTONS` | `edit`, `cancel`, `save`, `primaryAction`, `secondaryAction`, `settings` |
 | `ALERTS` | alert kinds and the `withActions` / `withCornerAction` modifiers |
-| `COMPONENTS` | `calendarGrid`, `dateField`, `statBox`, `table.ui`, `choiceGroup`, `kitchenPanel`, `segmentedActive`, `economyTable`, `powerMode`, `guestRow` |
+| `COMPONENTS` | `calendarGrid`, `dateField`, `statBox`, `table.ui`, `teamTabs`, `choiceGroup`, `kitchenPanel`, `segmentedActive`, `economyTable`, `powerMode`, `guestRow` |
 | `CALENDAR`, `PLANNING_CALENDAR`, `CHEF_CALENDAR`, `DINNER_CALENDAR`, `dayCircleClasses`, `calendarPickerProps` | calendar days, pickers, countdowns |
 | `BACKGROUNDS`, `RAINBOW`, `RAINBOW_FAMILIES`, `getRainbowBand`, `getRainbowFamily`, `PANTONE_CHIPS` | brand surfaces |
-| `TICKET_TYPE_COLORS`, `ORDER_STATE_COLORS`, `DINNER_STATE_BADGES`, `DEADLINE_BADGES`, `RESIDENCY_CONFIG` | domain colour maps |
+| `TICKET_TYPE_COLORS`, `ORDER_STATE_COLORS`, `DINNER_STATE_BADGES`, `DEADLINE_BADGES`, `RESIDENCY_CONFIG`, `ROLE_ICONS` | domain colour and glyph maps |
 
 ## Patterns
 
@@ -80,6 +81,12 @@ The empty state renders in the `UTable` `#empty` slot. `COMPONENTS.table.ui` cel
 
 `URadioGroup` and `USwitch` bind a `COMPONENTS.choiceGroup` shape (`stacked`, `inline`, `single`); the section heading above them
 takes `TYPOGRAPHY.sectionSubheading`.
+
+### Team tabs
+
+A `UTabs` whose triggers render `CookingTeamBadges` binds `COMPONENTS.teamTabs`: the link variant, triggers that keep their
+full label, and a horizontal row that scrolls sideways when more tabs than fit. On a phone the trigger stacks `ICONS.team`
+over the compact badge (`MyTeamSelector`); the visual check is `/chef` at 375px with four teams.
 
 ### QR codes
 

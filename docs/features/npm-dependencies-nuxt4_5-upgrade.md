@@ -64,10 +64,27 @@ The store, page and dependency work lives in feature-proposal-framework-adoption
   picker's `[name]` scope (self-verifying via `pollUntil`).
 - Cooking-day counter: `COMPONENTS.statBox` (framed at the 3:1 edge rung) in the season card header shows the dinners the
   season scaffolds, computed with `computeCookingDates`; the palette presets regenerated (`make palettes`).
-- Nuxt UI 4.11: the 129 changelog entries from 4.4.0–4.11.1 checked against the 41 components in use (the two breaking
-  changes, `moduleDependencies` and the `UInputMenu` rename, touch nothing here); the e2e pair, the contrast and
-  colour-vision specs and the visual pass are clean, including the 4.9 focus-visible halo and the 4.5 duplicate-toast
-  suppression.
+- Nuxt UI 4.11: the baseline on main is 4.3.0; the 129 changelog entries from 4.4.0–4.11.1 checked against the 41
+  components in use (the two breaking changes, `moduleDependencies` and the `UInputMenu` rename, touch nothing here), and
+  the 4.3.0→4.4.0 window verified by diffing the tabs and badge themes (an SSR indicator fallback and focus outlines —
+  no layout change); the e2e pair, the contrast and colour-vision specs and the visual pass are clean, including the 4.9
+  focus-visible halo and the 4.5 duplicate-toast suppression.
+- Madhold tabs: team tab strips (`UTabs` with `CookingTeamBadges` triggers) bind `COMPONENTS.teamTabs` — the link variant
+  with non-shrinking triggers, so a horizontal row with more tabs than fit scrolls sideways instead of squeezing the
+  names — enforced by a `designSystemUsage` rule and documented in docs/ui.md. On a phone `MyTeamSelector` stacks
+  `ICONS.team` over the compact badge, so four full names fit at 375px (mockup in the component header); desktop keeps
+  the icon beside the badge and the 3+-teams vertical sidebar list. `AdminTeams` binds the token and `SIZES.large` on its
+  vertical strip. The token carries `content: false` (both strips are pure selectors; the empty panels squeezed a vertical
+  list) and scopes the scroll to the horizontal face, where the selection bar moves onto the border line - a scroll
+  container clips the link variant's bar, which sits 1px outside the list.
+- Team role glyphs: `ROLE_ICONS` lives in the design system (ADR-017: presentation out of the validation composable) -
+  chef hat (`ICONS.chef`), cooking pot and sprout render as `UIcon`s in `CookingTeamCard`, `WorkAssignment` and the
+  role select's item icons; the paired emojis and the emoji-in-label `ROLE_OPTIONS` left; the plan-store logs carry
+  the plain team prefix.
+- Team badge row: `CookingTeamBadges` is the one badge row - name (`ICONS.team`), chef count (`ICONS.chef`, from
+  `useCookingTeam().countChefs`), member count (`ICONS.members`, solid silhouettes) and cooking days (`ICONS.calendar`)
+  on the team's rainbow stop, `size` small/standard/large with `showName`/`showCounts`/`showTeamIcon` per host; the
+  emojis and `CookingTeamCard`'s three hand-rolled badge rows left.
 - Visual pass (2026-10-04): calendars, pickers, counter, pagination and focus ring verified on phone and desktop.
 - `ICONS.github` is `i-hugeicons-github-01` (`useTheSlopeDesignSystem.ts`): the glyph ships from an installed collection.
 - `icon.clientBundle` keeps `scan: true` only (`nuxt.config.ts`): Nuxt UI 4.10 pre-bundles its own internal icons.
