@@ -132,7 +132,7 @@ const props = withDefaults(defineProps<Props>(), {
   canEdit: false
 })
 
-const {getDefaultCookingTeam} = useCookingTeam()
+const {getDefaultCookingTeam, countChefs} = useCookingTeam()
 const store = usePlanStore()
 const {
   isSeasonsLoading,
@@ -235,8 +235,8 @@ const teamTabs = computed(() => {
   return displayedTeams.value.map((team, index) => ({
     label: team.name,
     value: index,
-    icon: 'i-fluent-mdl2-team-favorite',
     // The team's colour rides on CookingTeamBadges in the tab body, from the team's number
+    chefCount: countChefs(team.assignments ?? []),
     memberCount: team.assignments?.length ?? 0,
     cookingDaysCount: team.cookingDaysCount ?? 0
   }))
@@ -503,20 +503,21 @@ const columns = [
               <h3 class="text-lg font-semibold mb-4">Madhold</h3>
 
               <UTabs
+                  v-bind="COMPONENTS.teamTabs"
                   :model-value="selectedTeamIndex"
                   :items="teamTabs"
                   orientation="vertical"
-                  variant="link"
-                  size="xl"
+                  :size="SIZES.large"
                   @update:model-value="(idx) => selectedTeamId = displayedTeams[Number(idx)]?.id ?? 0"
               >
                 <template #default="{ item }">
                   <CookingTeamBadges
                       :team-number="item.value + 1"
                       :team-name="item.label"
+                      :chef-count="item.chefCount"
                       :member-count="item.memberCount"
                       :cooking-days-count="item.cookingDaysCount"
-                      compact
+                      size="small"
                   />
                 </template>
               </UTabs>
@@ -567,9 +568,10 @@ v-else
               <CookingTeamBadges
                   :team-number="displayedTeams.findIndex(t => t.id === row.original.id) + 1"
                   :team-name="row.original.name"
+                  :chef-count="countChefs(row.original.assignments ?? [])"
                   :member-count="row.original.assignments?.length ?? 0"
                   :cooking-days-count="row.original.cookingDaysCount ?? 0"
-                  compact
+                  size="small"
               />
             </template>
 

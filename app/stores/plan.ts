@@ -1,6 +1,5 @@
 import type {Season, SeasonUpdateResponse} from '~/composables/useSeasonValidation'
 import type {CookingTeamDisplay, CookingTeamDetail, CookingTeamAssignment, CookingTeamCreate, CookingTeamUpdate, CookingTeamAssignmentCreate, CreateTeamsResponse, TeamRole} from '~/composables/useCookingTeamValidation'
-import {ROLE_ICONS} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay, DinnerEventDetail, MenuSwapStrategy} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
@@ -491,7 +490,7 @@ export const usePlanStore = defineStore("Plan", () => {
                     body: { inhabitantId, role, ...(menuStrategy && {menuStrategy}) },
                     headers: {'Content-Type': 'application/json'}
                 })
-                console.info(`${ROLE_ICONS[role]} > PLAN_STORE > Assigned ${role} role to inhabitant ${inhabitantId} for dinner event ${dinnerEventId}`)
+                console.info(`👥 > PLAN_STORE > Assigned ${role} role to inhabitant ${inhabitantId} for dinner event ${dinnerEventId}`)
                 // Refresh selected detail LAST: on /chef the page watchEffect re-derives the
                 // selected dinner id from myTeams/season, so settle those first or its re-run
                 // reloads stale detail over the fresh fetch.
@@ -539,7 +538,7 @@ export const usePlanStore = defineStore("Plan", () => {
                     headers: {'Content-Type': 'application/json'},
                     onResponse: ({response}) => { heynaboSyncDegraded = response.status === 207 }
                 })
-                console.info(`${ROLE_ICONS[role]} > PLAN_STORE > Removed ${role} role from inhabitant ${inhabitantId} for dinner event ${dinnerEvent.id}`)
+                console.info(`👥 > PLAN_STORE > Removed ${role} role from inhabitant ${inhabitantId} for dinner event ${dinnerEvent.id}`)
                 // Refresh selected detail LAST: on /chef the page watchEffect re-derives the
                 // selected dinner id from myTeams/season, so settle those first or its re-run
                 // reloads stale detail over the fresh fetch.

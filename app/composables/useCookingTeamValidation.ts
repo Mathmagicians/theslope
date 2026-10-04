@@ -14,19 +14,11 @@ export const ROLE_LABELS = {
 } as const
 
 /**
- * Role icons for visual distinction
- */
-export const ROLE_ICONS = {
-    CHEF: '👑👨‍🍳',
-    COOK: '👨‍🍳👨‍🍳',
-    JUNIORHELPER: '🌱👨‍🍳'
-} as const
-
-/**
- * Role select options for forms — derived from ROLE_LABELS + ROLE_ICONS
+ * Role select options for forms — derived from ROLE_LABELS; the role glyphs live in the
+ * design system (`ROLE_ICONS`), which the form adds as item icons (ADR-017)
  */
 export const ROLE_OPTIONS = (Object.keys(ROLE_LABELS) as Array<keyof typeof ROLE_LABELS>).map(role => ({
-    label: `${ROLE_ICONS[role]} ${ROLE_LABELS[role]}`,
+    label: ROLE_LABELS[role],
     value: role
 }))
 

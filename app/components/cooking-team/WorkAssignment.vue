@@ -13,7 +13,7 @@
  *
  * ┌──────────────────────────────────────────────────────────────────────────┐
  * │ 🍽️ Vil du hjælpe til med madlavningen?                                  │
- * │ [Bliv kok 👥]  [Bliv kokkespire 🌱]                                       │
+ * │ [(cooking pot) Kok +]  [(sprout) Kokkespire +]   (ROLE_ICONS glyphs)      │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
  * Used in:
@@ -26,7 +26,6 @@
  * - Mobile-first responsive design
  */
 import type { DinnerEventDetail } from '~/composables/useBookingValidation'
-import { ROLE_ICONS } from '~/composables/useCookingTeamValidation'
 
 interface Props {
   dinnerEvent: DinnerEventDetail
@@ -39,7 +38,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { COMPONENTS, ICONS } = useTheSlopeDesignSystem()
+const { COMPONENTS, ICONS, ROLE_ICONS } = useTheSlopeDesignSystem()
 
 // Store integration
 const planStore = usePlanStore()
@@ -103,7 +102,7 @@ const handleRoleAssignment = async (role: typeof TeamRole[keyof typeof TeamRole]
         :disabled="isAssigningRole || !canVolunteer"
         @click="handleRoleAssignment(TeamRole.COOK)"
       >
-        <template #leading>{{ ROLE_ICONS.COOK }}</template>
+        <template #leading><UIcon :name="ROLE_ICONS.COOK" /></template>
         Kok
         <template #trailing><UIcon :name="ICONS.plusCircle" /></template>
       </UButton>
@@ -116,7 +115,7 @@ const handleRoleAssignment = async (role: typeof TeamRole[keyof typeof TeamRole]
         :disabled="isAssigningRole || !canVolunteer"
         @click="handleRoleAssignment(TeamRole.JUNIORHELPER)"
       >
-        <template #leading>{{ ROLE_ICONS.JUNIORHELPER }}</template>
+        <template #leading><UIcon :name="ROLE_ICONS.JUNIORHELPER" /></template>
         Kokkespire
         <template #trailing><UIcon :name="ICONS.plusCircle" /></template>
       </UButton>

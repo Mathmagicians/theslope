@@ -626,6 +626,26 @@ export const COMPONENTS = {
         single: {ui: CHOICE_LABEL_UI}
     },
 
+    /**
+     * Team tabs: a `UTabs` whose triggers render `CookingTeamBadges`. The strip is a pure
+     * selector - the selected team renders outside the tabs, and `content: false` keeps the
+     * empty panels from squeezing a vertical list to a fraction of its box. Triggers never
+     * shrink below their label, so a horizontal row with more tabs than fit scrolls sideways
+     * instead of squeezing the names. The link variant's selection bar sits 1px outside the
+     * list's border-box, which a scroll container clips - so the scroll applies on the
+     * horizontal face only, where the bar moves onto the border line; the vertical side bar
+     * stays untouched.
+     */
+    teamTabs: {
+        variant: 'link' as const,
+        content: false,
+        ui: {
+            list: 'data-[orientation=horizontal]:overflow-x-auto',
+            trigger: 'shrink-0',
+            indicator: 'in-data-[orientation=horizontal]:bottom-0'
+        }
+    },
+
     // Power mode - family-wide bulk editing pattern
     powerMode: {
         color: 'warning' as const,
@@ -892,6 +912,8 @@ export const ICONS = {
     userPlus: 'i-heroicons-user-plus',
     users: 'i-heroicons-users',
     userGroup: 'i-heroicons-user-group',
+    /** Filled person silhouettes for member counts - the outline glyphs blur at badge size */
+    members: 'i-heroicons-users-solid',
     ticket: 'i-heroicons-ticket',
 
     // Header navigation
@@ -982,6 +1004,16 @@ export const ICONS = {
     // External links
     github: 'i-hugeicons-github-01',
     book: 'i-heroicons-book-open'
+} as const
+
+/**
+ * Team role glyphs: the chef hat is the chef's symbol, the cook stands at the pot,
+ * a kokkespire sprouts
+ */
+export const ROLE_ICONS = {
+    CHEF: ICONS.chef,
+    COOK: 'i-lucide-cooking-pot',
+    JUNIORHELPER: 'i-lucide-sprout'
 } as const
 
 /** Residency colours double as alert kinds, so a residency alert is `v-bind="ALERTS[residency.color]"` */
@@ -1889,6 +1921,7 @@ export const useTheSlopeDesignSystem = () => {
         COLOR,
         NOISE,
         TICKET_TYPE_COLORS,
+        ROLE_ICONS,
         DINNER_STATE_BADGES,
         CALENDAR,
         calendarPickerProps,
