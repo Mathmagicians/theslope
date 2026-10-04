@@ -5,6 +5,8 @@
 │                                                                              │
 │ DASHBOARD /login (logged in) - this file owns the composition                │
 │ ┌ Hej Anna! 👋 ────────────────────────────────────────────────────────────┐ │
+│ │ ┌ InstallPrompt ──────────────────────────────────────────────────────┐  │ │
+│ │ └─────────────────────────────────────────────────────────────────────┘  │ │
 │ │ ┌ UserProfileCard ([⚙ Indstillinger] in its header) ──────────────────┐  │ │
 │ │ └─────────────────────────────────────────────────────────────────────┘  │ │
 │ │ ┌ UserPreferencesCard ─────────────────────────┐  only while the toggle  │ │
@@ -14,6 +16,8 @@
 │ │ └─────────────┘ └─────────────┘ └─────────────┘                          │ │
 │ └──────────────────────────────────────────────────────────────────────────┘ │
 │                                                                              │
+│ InstallPrompt renders inside <ClientOnly> and only when the browser offers   │
+│ an install path.                                                             │
 │ The open state is a ref in this file (ADR-006: no persistence); each child    │
 │ draws its own internals in its own header comment.                           │
 └──────────────────────────────────────────────────────────────────────────────┘
@@ -129,6 +133,11 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
     <div v-else class="py-6 px-4 md:px-8 max-w-5xl mx-auto space-y-6">
       <!-- Welcome Title -->
       <h1 :class="[TYPOGRAPHY.sectionSubheadingLight, 'text-2xl md:text-3xl']">Hej {{ greeting }}! 👋</h1>
+
+      <!-- Install guidance: capability is a browser fact, so SSR renders nothing -->
+      <ClientOnly>
+        <InstallPrompt />
+      </ClientOnly>
 
       <!-- User Profile Card, with the ⚙ toggle for own settings -->
       <UserProfileCard

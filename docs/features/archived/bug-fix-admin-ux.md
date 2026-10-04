@@ -75,7 +75,7 @@ The allergy catalog fixes D1, D2 and A1 shipped in #165. Follow-up defects found
 - **Poster boxes are outline** (2026-09-18). The poster prints without grey fills.
 - **Allergy toolbar** (2026-09-18). "Kombiner allergener", and "Afslut kombinering" while active.
 - **Disclosure buttons** (2026-09-18). A button that opens a panel below it carries a chevron that turns while the panel is open
-  (`BUTTONS.disclosure`): the ⚙ on the dashboard and on `/chef`, the role assignment, "Rapporter fejl".
+  (`BUTTONS.flipOpen`): the ⚙ on the dashboard and on `/chef`, the role assignment, "Rapporter fejl".
 - **Toasts state results** (2026-09-18). The team toast reads `<n> madhold oprettet · <m> madlavninger tildelt`; the test-message toast carries
   the message id.
 - **Tables on a phone** (2026-09-18). A wide data table scrolls sideways inside its own box; the page never does. Words, dates, badges and

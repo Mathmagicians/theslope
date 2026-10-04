@@ -81,6 +81,17 @@ The store, page and dependency work lives in feature-proposal-framework-adoption
   chef hat (`ICONS.chef`), cooking pot and sprout render as `UIcon`s in `CookingTeamCard`, `WorkAssignment` and the
   role select's item icons; the paired emojis and the emoji-in-label `ROLE_OPTIONS` left; the plan-store logs carry
   the plain team prefix.
+- AdminTeams master-detail: a constant master table (md 1/3, compact names via `getTeamShortName`, badge rows and the
+  days column in every state) with the region beside it swapping - the all-teams calendar with no selection (the
+  overview, at a glance), the framed detail (`COMPONENTS.masterDetail`, md 2/3, sticky dock header on the phone) when a
+  row is open; selection is the open state in `?team=`, the toggle chevron turns toward the open detail (down closed; up
+  folds the phone dock, right points into the md+ pane) and the row click toggles the same way; the open row wears
+  `getRainbowAccent` (new `BORDER` 600 rungs, measured by the contrast gate); the detail face rides in `?mode=`
+  (`edit-team` pencil, `back-to-view`, header `create-team`); URL writes are sequential and awaited, so the mode and team
+  keys never resurrect each other's stale value (the kick-out race, pinned by the row-click e2e before the fix); a
+  background season refresh keeps the page mounted and the team card refetches in place; `FormModeSelector` and its spec
+  deleted, the edit-mode add-team footer left (creation goes through the create face); `AdminTeams.e2e.spec.ts` asserts
+  `expectMode` after every immediate save, select/switch/deselect, and member-add through the finder.
 - Team badge row: `CookingTeamBadges` is the one badge row - name (`ICONS.team`), chef count (`ICONS.chef`, from
   `useCookingTeam().countChefs`), member count (`ICONS.members`, solid silhouettes) and cooking days (`ICONS.calendar`)
   on the team's rainbow stop, `size` small/standard/large with `showName`/`showCounts`/`showTeamIcon` per host; the

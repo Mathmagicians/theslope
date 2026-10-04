@@ -153,10 +153,11 @@ test.describe('AdminTeams Form UI', () => {
                 10
             )
 
-            // THEN: Verify the master table lists both teams
+            // THEN: Verify the master table lists both teams in the overview (nothing opened)
             const teamRows = page.locator('[data-testid^="team-row-"]')
             await expect(teamRows.first()).toBeVisible()
             await expect(teamRows).toHaveCount(2)
+            await expect(page.getByTestId('team-name-input')).toBeHidden()
 
             // Documentation screenshot: Admin Teams management view
             await doScreenshot(page, 'admin/admin-teams-edit', true)
@@ -166,8 +167,8 @@ test.describe('AdminTeams Form UI', () => {
             // GIVEN: Create one team
             const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Name')
 
-            // Navigate to see the team
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
+            // Navigate with the team open in the edit face
+            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
             await pollUntil(
                 async () => await page.getByTestId('admin-teams').isVisible(),
                 (isVisible) => isVisible,
@@ -201,10 +202,10 @@ test.describe('AdminTeams Form UI', () => {
 
         test('GIVEN season with team WHEN deleting team via UI THEN team is removed', async () => {
             // GIVEN: Create one team
-            const _ = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team to Delete')
+            const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team to Delete')
 
-            // Navigate to see the team
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
+            // Navigate with the team open in the edit face
+            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
             await pollUntil(
                 async () => await page.getByTestId('admin-teams').isVisible(),
                 (isVisible) => isVisible,
@@ -269,6 +270,11 @@ test.describe('AdminTeams Form UI', () => {
                 await page.getByTestId(`team-row-${team.id}`).click()
                 await expect(teamInput).toHaveValue(new RegExp(name))
             }
+
+            // AND: clicking the open row again deselects back to the overview
+            await page.getByTestId(`team-row-${alpha.id}`).click()
+            await expect(teamInput).toBeHidden()
+            await expect(page).not.toHaveURL(/team=/)
         })
 
         test('GIVEN user in edit mode WHEN adding a member to a team THEN the assignment is saved', async ({browser: _browser}) => {
@@ -279,7 +285,7 @@ test.describe('AdminTeams Form UI', () => {
             createdHouseholdIds.push(household.id)
             await HouseholdFactory.createInhabitantForHousehold(context, household.id, `Medlem-${testSalt} Testesen`)
 
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
+            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
             await pollUntil(
                 async () => await page.getByTestId('admin-teams').isVisible(),
                 (isVisible) => isVisible,

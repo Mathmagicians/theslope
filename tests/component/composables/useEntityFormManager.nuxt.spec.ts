@@ -213,8 +213,8 @@ describe('useEntityFormManager', () => {
       expect(currentModel.value).toEqual(draftCopy)
     })
   })
-  describe('Direct formMode set (FormModeSelector v-model path)', () => {
-    // FormModeSelector writes formMode via v-model without calling onModeChange.
+  describe('Direct formMode set (v-model path)', () => {
+    // A consumer may write formMode via v-model without calling onModeChange.
     // The composable must apply the same draft side effects (regression: #62 removed
     // the fullPath page-key remount that masked the missing draft init).
     it.each([

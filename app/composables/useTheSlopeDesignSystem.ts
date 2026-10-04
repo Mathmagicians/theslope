@@ -308,7 +308,21 @@ export const BORDER = {
         800: 'border-gray-800 dark:border-gray-600'
     },
     peach: {
-        400: 'border-peach-400'    // Calendar - countdown, rings
+        400: 'border-peach-400',   // Calendar - countdown, rings
+        600: 'border-peach-600'    // Team accent - selected row tab
+    },
+    // Bonbon names the violet scale and mocha the amber scale (the BG alias convention)
+    bonbon: {
+        600: 'border-violet-600'   // Team accent - selected row tab
+    },
+    yellow: {
+        600: 'border-yellow-600'   // Team accent - selected row tab
+    },
+    sky: {
+        600: 'border-sky-600'      // Team accent - selected row tab
+    },
+    mocha: {
+        600: 'border-amber-600'    // Team accent - selected row tab
     },
     ocean: {
         400: 'border-ocean-400',   // Chef calendar - countdown, rings
@@ -518,6 +532,21 @@ export const getRainbowBand = (index: number): string => RAINBOW[index % RAINBOW
 export const getRainbowFamily = (index: number): PantoneFamily =>
     RAINBOW_FAMILIES[index % RAINBOW_FAMILIES.length]!
 
+/** The selected team row's left tab: the team's own family at the 600 border rung */
+const RAINBOW_ACCENTS: Record<RainbowFamily, string> = {
+    pink: BORDER.pink[600],
+    orange: BORDER.orange[600],
+    ocean: BORDER.ocean[600],
+    bonbon: BORDER.bonbon[600],
+    peach: BORDER.peach[600],
+    yellow: BORDER.yellow[600],
+    sky: BORDER.sky[600],
+    mocha: BORDER.mocha[600]
+}
+
+export const getRainbowAccent = (index: number): string =>
+    `border-s-4 ps-2 ${RAINBOW_ACCENTS[RAINBOW_FAMILIES[index % RAINBOW_FAMILIES.length]!]}`
+
 /**
  * BACKGROUNDS - Background patterns for sections
  *
@@ -627,6 +656,17 @@ export const COMPONENTS = {
     },
 
     /**
+     * The detail mounts of a master-detail page: the framed pane beside the master table,
+     * the framed dock under the tapped row, and the dock's header bar, which stays pinned
+     * under the sticky admin tab bar while the dock's body scrolls.
+     */
+    masterDetail: {
+        pane: 'border rounded-lg p-4',
+        dock: `border rounded-lg p-2 ${BG.panel}`,
+        dockHeader: `sticky top-24 z-10 py-2 ${BG.panel}`
+    },
+
+    /**
      * Team tabs: a `UTabs` whose triggers render `CookingTeamBadges`. The strip is a pure
      * selector - the selected team renders outside the tabs, and `content: false` keeps the
      * empty panels from squeezing a vertical list to a fraction of its box. Triggers never
@@ -718,6 +758,10 @@ export const COMPONENTS = {
         }
     },
 
+
+    // The app icon in a home-screen frame (InstallPrompt): ~48px, rounded, shadowed, a double press-pulse;
+    // reduced-motion users get the static icon
+    installIcon: 'size-12 shrink-0 rounded-2xl shadow-md animate-tap-pulse motion-reduce:animate-none',
 
     // A framed summary: an icon beside a bold count over its label; the frame measures at the 3:1 edge rung
     statBox: {
@@ -1175,6 +1219,9 @@ const createResponsiveIcons = (isMd: Ref<boolean>) => ({
     }
 })
 
+// The turn of an open-panel chevron; the classes go on whichever icon slot carries the chevron
+const flipOpenTurn = (isOpen: boolean): string => `${isOpen ? 'rotate-180 ' : ''}transition-transform duration-200`
+
 /**
  * createResponsiveButtons - Standardized button configurations with responsive sizing
  *
@@ -1267,15 +1314,19 @@ const createResponsiveButtons = (isMd: Ref<boolean>) => {
 
         /**
          * Modifier for a button that opens a panel below it: a chevron that turns while the panel is open, and
-         * `aria-expanded` for screen readers. Spread after a kind: `v-bind="{...BUTTONS.settings, ...BUTTONS.disclosure(isOpen)}"`
+         * `aria-expanded` for screen readers. Spread after a kind: `v-bind="{...BUTTONS.settings, ...BUTTONS.flipOpen(isOpen)}"`
          */
-        disclosure(isOpen: boolean) {
+        flipOpen(isOpen: boolean) {
             return {
                 trailingIcon: ICONS.chevronDown,
                 'aria-expanded': isOpen,
-                ui: {trailingIcon: isOpen ? 'rotate-180 transition-transform duration-200' : 'transition-transform duration-200'}
+                ui: {trailingIcon: flipOpenTurn(isOpen)}
             }
-        }
+        },
+
+        // `flipOpen`'s turn classes alone, for a site whose chevron is not the trailing icon:
+        // `:ui="{leadingIcon: [size, BUTTONS.flipOpenTurn(isOpen)]}"`
+        flipOpenTurn
     }
 }
 
@@ -1944,6 +1995,7 @@ export const useTheSlopeDesignSystem = () => {
         RAINBOW_FAMILIES,
         getRainbowBand,
         getRainbowFamily,
+        getRainbowAccent,
         ICONS,
         IMG,
 

@@ -195,7 +195,7 @@ const isEditMode = computed(() => roleFormMode.value === FORM_MODES.EDIT)
           <!-- Own settings: reveals UserPreferencesCard under this card -->
           <UButton
             v-if="shouldShowActions"
-            v-bind="{...BUTTONS.settings, ...BUTTONS.disclosure(preferencesOpen)}"
+            v-bind="{...BUTTONS.settings, ...BUTTONS.flipOpen(preferencesOpen)}"
             aria-label="Indstillinger"
             data-testid="pref-toggle"
             @click="emit('toggle-preferences')"

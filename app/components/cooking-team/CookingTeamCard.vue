@@ -84,7 +84,9 @@ const {data: team, status, error} = useAsyncData(
   () => planStore.fetchTeamDetail(props.teamId),
   {
     default: () => null,
-    watch: [() => props.teamId],
+    // The season carries the team aggregates: when a save refreshes it, the detail
+    // refetches in place while the previous data keeps rendering
+    watch: [() => props.teamId, () => planStore.selectedSeason],
     immediate: true
   }
 )
@@ -209,7 +211,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
 
 <template>
   <!-- Loading state -->
-  <Loader v-if="isLoading" text="Henter madhold..." />
+  <Loader v-if="isLoading && !team" text="Henter madhold..." />
 
   <!-- Error state -->
   <ViewError v-else-if="isErrored" :error="error?.statusCode" :cause="error" />

@@ -21,8 +21,7 @@
  * - /chef/index.vue (master panel)
  *
  * Pattern:
- * - Matches AdminTeams tab display with CookingTeamBadges
- * - Reusable TeamListItem display (team name, color, member count, cooking days)
+ * - CookingTeamBadges in the tab bodies (the shared team badge row)
  *
  * ADR Compliance:
  * - ADR-001: Types from useCookingTeamValidation

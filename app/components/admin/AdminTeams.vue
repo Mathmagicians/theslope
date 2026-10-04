@@ -1,31 +1,41 @@
 <script setup lang="ts">
 /**
- * AdminTeams - one master table, one portable team detail (the AdminAllergies pattern)
+ * AdminTeams - one master table, one portable team detail
  *
- * Selection rides in ?team=, the detail's face in ?mode=view|edit|create (ADR-006).
- * Everything inside the edit face saves immediately.
+ * Selection is the open state and rides in ?team=; the detail's face rides in
+ * ?mode=view|edit|create (ADR-006). The master table is constant - one third
+ * of the row from md, the same columns in every state - and only the region
+ * beside it swaps: the all-teams calendar with no selection (the overview, at
+ * a glance), the framed team detail when a row is open. Everything inside the
+ * edit face saves immediately. The toggle chevron turns toward the open detail
+ * (up folds the phone dock, right points into the md+ pane) and the row click
+ * toggles the same way.
  *
- * DESKTOP (md+) - master table 1/5, detail pane 4/5
+ * Overview (default; desktop shown, the phone stacks the calendar below)
  * +--Madhold-------------------------------------------------------------+
  * | [Saeson: 12/26-01/27 v]                       [(plus) Opret madhold] |
- * +--------------------------------+---------------------------------------+
- * | MASTER (table, compact names)  | Madhold 2         [(pencil) Rediger]  |
- * | [Madhold 1][(hat)1][(mem)4]    |  CookingTeamCard (regular or edit):   |
- * | [Madhold 2][(hat)0][(mem)6] *  |  medlemmer, finder, dage, kalender    |
- * | [Madhold 3][(hat)2][(mem)5]    |  (edit face shows [(arrow) Tilbage])  |
- * +--------------------------------+---------------------------------------+
- *   * selected row highlighted (COMPONENTS.table.selectedRow)
+ * +---------------------------------+-------------------------------------+
+ * | v | Madhold           | Dage    |                                     |
+ * | v | [Madhold 1]...    | tir, ons|   ALL-TEAMS CALENDAR                |
+ * | v | [Madhold 2]...    | man, tor|   (all teams at a glance)           |
+ * +---------------------------------+-------------------------------------+
  *
- * PHONE (<md) - the same detail docks under the tapped row (#expanded);
- * its header (badge + Rediger/Tilbage) is sticky while the body scrolls
- * +-----------------------------------------+
- * | [Madhold 1][(hat)1][(mem)4]  | tir, tor |
- * |-----------------------------------------|
- * | [Madhold 2]      [(pencil) Rediger]     | <- sticky under the tab bar
- * |   CookingTeamCard ...                   |
- * |-----------------------------------------|
- * | [Madhold 3][(hat)2][(mem)5]  | man      |
- * +-----------------------------------------+
+ * Desktop (md+), team open - the same master, the framed detail in its place
+ * +---------------------------------+-------------------------------------+
+ * | v | Madhold           | Dage    | +---------------------------------+ |
+ * | > I [Madhold 2]...    | man, tor| | Madhold 2  [(pencil) Rediger]   | |
+ * | v | [Madhold 3]...    | man     | | medlemmer, finder, dage +       | |
+ * |   |                   |         | | holdets kalender                | |
+ * +---------------------------------+-+---------------------------------+-+
+ *   I = left tab accent in the team's rainbow colour (getRainbowAccent)
+ *   the edit face swaps the pencil for [(arrow) Tilbage]
+ *
+ * Phone (<md), team open - the framed dock under the row, header sticky
+ * | ^ I [Madhold 2][(hat)2][(mem)6] | man, tor |
+ * |   +-------------------------------------+ |
+ * |   | Madhold 2          [(pencil)]       | | <- sticky under the tab bar
+ * |   | CookingTeamCard ...                 | |
+ * |   +-------------------------------------+ |
  *
  * CREATE (?mode=create, from the header button) - count stepper + previews,
  * footer [Annuller] [Opret N madhold]; batch create numbers from N+1.
@@ -124,57 +134,47 @@ const displayedTeams = computed(() => {
 
 // EDIT MODE - Team selection via ?team= query param (ADR-006, survives store refresh)
 // Cleanup (strip ?team= on mode change) handled by onModeChange wrapper above.
-const {value: selectedTeamId} = useQueryParam<number>('team', {
+const {value: selectedTeamId, setValue: setSelectedTeamParam} = useQueryParam<number>('team', {
   serialize: (id) => id.toString(),
   deserialize: (s) => {
     const parsed = parseInt(s)
     return !isNaN(parsed) ? parsed : null
   },
   validate: (id) => displayedTeams.value.some(t => t.id === id),
-  normalize: (id) => {
-    if (id && displayedTeams.value.some(t => t.id === id)) return id
-    return displayedTeams.value[0]?.id ?? null
-  },
-  defaultValue: () => displayedTeams.value[0]?.id ?? 0,
+  normalize: (id) => (id && displayedTeams.value.some(t => t.id === id)) ? id : null,
+  defaultValue: () => 0,
   syncWhen: () => formMode.value !== FORM_MODES.CREATE && displayedTeams.value.some(t => t.id)
 })
-const selectedTeamIndex = computed(() => {
-  const idx = displayedTeams.value.findIndex(t => t.id === selectedTeamId.value)
-  return idx >= 0 ? idx : 0
-})
+
+// Selection IS the open state: with no team selected the page shows the overview
+// (full-width table + the all-teams calendar); the toggle deselects like a chevron folds
+const selectedTeamIndex = computed(() => displayedTeams.value.findIndex(t => t.id === selectedTeamId.value))
 const selectedTeam = computed(() => displayedTeams.value[selectedTeamIndex.value] ?? null)
 
-// On a phone the detail docks under the selected row; the dock opens on tap and folds on
-// a second tap while the selection itself stays (the pane needs one from md up)
-const dockOpen = ref(false)
-
-const handleSelectTeam = (id: number) => {
-  if (!isMd.value && selectedTeamId.value === id && dockOpen.value) {
-    dockOpen.value = false
+const handleToggleTeam = async (id: number) => {
+  if (selectedTeamId.value === id) {
+    // Sequential, awaited URL writes: each spread of route.query sees the previous one,
+    // so neither the mode nor the team key resurrects the other's stale value
+    if (formMode.value === FORM_MODES.EDIT) await onModeChange(FORM_MODES.VIEW)
+    await setSelectedTeamParam(0)
     return
   }
-  dockOpen.value = true
   selectedTeamId.value = id
 }
 
-// MOBILE EXPANSION - derived from the selection (the AdminAllergies pattern): UTable-initiated
-// collapse closes the dock, expansion routes through the selection
+// MOBILE EXPANSION - derived from the selection: the dock under the row IS the open detail
 const expanded = computed({
   get: (): Record<number, boolean> => {
-    if (isMd.value || formMode.value === FORM_MODES.CREATE || !dockOpen.value) return {}
-    const index = selectedTeamIndex.value
-    return index === -1 ? {} : {[index]: true}
+    if (isMd.value || formMode.value === FORM_MODES.CREATE || selectedTeamIndex.value < 0) return {}
+    return {[selectedTeamIndex.value]: true}
   },
   set: (value: Record<number, boolean>) => {
     const openIndex = Object.keys(value).find(key => value[Number(key)])
-    if (openIndex !== undefined) {
-      dockOpen.value = true
-      selectedTeamId.value = displayedTeams.value[Number(openIndex)]?.id ?? 0
-    } else {
-      dockOpen.value = false
-    }
+    const target = openIndex !== undefined ? displayedTeams.value[Number(openIndex)]?.id : selectedTeam.value?.id
+    if (target) void handleToggleTeam(target)
   }
 })
+
 
 // ONE detail, two mount points (desktop pane / mobile expanded row) - shared bindings
 const detailProps = computed(() => ({
@@ -198,10 +198,9 @@ const detailEvents = computed(() => ({
   'remove:member': handleRemoveMember
 }))
 
-const showAdminTeams = computed(() => {
-  // A season with no teams still renders: the table shows its own #empty slot
-  return !isSelectedSeasonLoading.value && !!selectedSeason.value
-})
+// Gated on data presence, not on the fetch state: a background season refresh (every
+// immediate save runs one) keeps the mounted page, it never swaps it for the loader
+const showAdminTeams = computed(() => !!selectedSeason.value)
 
 // Action button loading state - used for both :loading and :disabled (NuxtUI pattern)
 const isActionLoading = computed(() => isSeasonsLoading.value || isSelectedSeasonLoading.value || isCreatingTeams.value)
@@ -307,20 +306,25 @@ interface TableRow {
   original: CookingTeamDisplay
 }
 
-const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, BG, COMPONENTS, columnVisibility} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, COMPONENTS, getRainbowAccent} = useTheSlopeDesignSystem()
 
 const columns = [
   {
     id: 'expand',
-    cell: ({row}: {row: TableRow}) =>
-        h(resolveComponent('UButton'), {
-          color: 'neutral',
-          variant: 'ghost',
-          icon: row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight,
-          square: true,
-          'aria-label': row.getIsExpanded() ? 'Luk' : 'Åbn detaljer',
-          onClick: () => row.toggleExpanded()
-        })
+    // The toggle turns toward the open detail: up folds the phone dock, right points into
+    // the md+ pane; closed is down on both
+    cell: ({row}: {row: TableRow}) => {
+      const isOpen = row.original.id === selectedTeamId.value
+      return h(resolveComponent('UButton'), {
+        color: COLOR.neutral,
+        variant: 'ghost',
+        icon: isOpen ? (isMd.value ? ICONS.chevronRight : ICONS.chevronUp) : ICONS.chevronDown,
+        square: true,
+        'aria-label': isOpen ? 'Luk' : 'Åbn detaljer',
+        'data-testid': `team-toggle-${row.original.id}`,
+        onClick: () => handleToggleTeam(row.original.id!)
+      })
+    }
   },
   {
     accessorKey: 'name',
@@ -366,7 +370,7 @@ const columns = [
     </template>
 
     <template #default>
-      <Loader v-if="isSelectedSeasonLoading || isSeasonsLoading" text="Henter data for fællesspisningssæson"/>
+      <Loader v-if="(isSelectedSeasonLoading || isSeasonsLoading) && !selectedSeason" text="Henter data for fællesspisningssæson"/>
       <AdminToCreateSeason v-else-if="isNoSeasons" :can-edit="props.canEdit"/>
       <div v-if="showAdminTeams">
         <!-- CREATE MODE: Team count input + preview -->
@@ -397,20 +401,19 @@ const columns = [
         <!-- VIEW + EDIT: one master table; the detail mounts in the md+ pane or docks under the selected row -->
         <div v-else class="px-4 pb-4 space-y-6">
           <div class="flex flex-col md:flex-row gap-6 md:gap-3">
-          <div class="w-full md:w-1/5">
+          <div class="w-full md:w-1/3">
           <UTable
               v-model:expanded="expanded"
               :columns="columns"
-              :column-visibility="columnVisibility([], ['affinity', 'expand'])"
               :data="displayedTeams"
               :loading="isSelectedSeasonLoading"
               :ui="COMPONENTS.table.ui"
           >
             <template #name-cell="{ row }">
               <div
-                  :class="['cursor-pointer rounded-md p-1', row.original.id === selectedTeamId && COMPONENTS.table.selectedRow]"
+                  :class="[COMPONENTS.table.clickableCell, row.original.id === selectedTeamId && getRainbowAccent(displayedTeams.findIndex(t => t.id === row.original.id))]"
                   :data-testid="`team-row-${row.original.id}`"
-                  @click="handleSelectTeam(row.original.id!)"
+                  @click="handleToggleTeam(row.original.id!)"
               >
                 <CookingTeamBadges
                     :team-number="displayedTeams.findIndex(t => t.id === row.original.id) + 1"
@@ -432,8 +435,8 @@ const columns = [
 
             <!-- Docked detail (phone): the same card as the pane, its header pinned while the body scrolls -->
             <template #expanded>
-              <div v-if="selectedTeam?.id" :class="['p-2 space-y-2', BG.panel]">
-                <div :class="['sticky top-24 z-10 flex items-center justify-between gap-2 py-2', BG.panel]">
+              <div v-if="selectedTeam?.id" :class="[COMPONENTS.masterDetail.dock, 'space-y-2']">
+                <div :class="[COMPONENTS.masterDetail.dockHeader, 'flex items-center justify-between gap-2']">
                   <CookingTeamBadges
                       :team-number="selectedTeamIndex + 1"
                       :team-name="getTeamShortName(selectedTeam.name)"
@@ -491,8 +494,9 @@ const columns = [
           </UTable>
           </div>
 
-          <!-- DETAIL pane (md+): the same card as the dock -->
-          <div v-if="selectedTeam?.id" class="hidden md:block md:w-4/5 space-y-4 self-start">
+          <!-- Detail pane (md+): the same card as the dock, framed so the team's own
+               calendar reads apart from the all-teams calendar of the overview -->
+          <div v-if="selectedTeam?.id" :class="['hidden md:block md:w-2/3 space-y-4 self-start', COMPONENTS.masterDetail.pane]">
             <div class="flex items-center justify-between gap-2">
               <CookingTeamBadges
                   :team-number="selectedTeamIndex + 1"
@@ -522,16 +526,17 @@ const columns = [
             </div>
             <CookingTeamCard v-bind="detailProps" v-on="detailEvents" />
           </div>
-          </div>
 
-          <!-- Team calendar view -->
-          <TeamCalendarDisplay
-              v-if="selectedSeason && displayedTeams.length > 0"
-              :season-dates="selectedSeason.seasonDates"
-              :teams="displayedTeams"
-              :dinner-events="selectedSeason.dinnerEvents ?? []"
-              :holidays="selectedSeason.holidays"
-          />
+          <!-- No selection: the all-teams calendar fills the detail region, at a glance -->
+          <div v-else-if="selectedSeason && displayedTeams.length > 0" class="w-full md:w-2/3 self-start">
+            <TeamCalendarDisplay
+                :season-dates="selectedSeason.seasonDates"
+                :teams="displayedTeams"
+                :dinner-events="selectedSeason.dinnerEvents ?? []"
+                :holidays="selectedSeason.holidays"
+            />
+          </div>
+          </div>
         </div>
       </div>
     </template>

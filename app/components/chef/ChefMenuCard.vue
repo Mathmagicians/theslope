@@ -488,7 +488,7 @@ const handleCardClick = () => {
                 <!-- More - the settings wheel + chevron (BUTTONS.settings), reveals the danger zone -->
                 <UButton
                   v-if="canCancelDinner(dinnerEvent)"
-                  v-bind="{...BUTTONS.settings, ...BUTTONS.disclosure(isMoreOpen)}"
+                  v-bind="{...BUTTONS.settings, ...BUTTONS.flipOpen(isMoreOpen)}"
                   class="self-end md:self-auto"
                   :disabled="isUpdating"
                   aria-label="Flere handlinger"
