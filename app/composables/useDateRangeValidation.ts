@@ -29,11 +29,6 @@ export const dateSchema = z.union([
     z.date()
 ])
 
-export const stringDateRangeSchema = z.object({
-    start: dateSchema,
-    end: dateSchema
-})
-
 // Shared refinement messages
 const END_AFTER_START_MSG = 'Tidsmaskinen er ikke opfundet endnu - slutdato skal være efter startdato'
 const MAX_ONE_YEAR_MSG = 'Wow, wow, lidt for meget planlægning - max et år ad gangen'

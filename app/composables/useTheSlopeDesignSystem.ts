@@ -699,6 +699,25 @@ export const COMPONENTS = {
     },
 
 
+    // A framed summary: an icon beside a bold count over its label; the frame measures at the 3:1 edge rung
+    statBox: {
+        box: `flex items-center gap-2 px-3 py-2 w-fit rounded-md border ${BORDER.gray[500]}`,
+        icon: 'text-xl text-primary'
+    },
+
+    // The typed date field (UInputDate) renders the house mask dd/MM/yyyy: en-GB gives the
+    // day-month-year segment order and the "/" literals; the UApp locale (da) keeps the
+    // calendars and built-in texts Danish. Content-width segments keep the field compact.
+    dateField: {
+        locale: 'en-GB',
+        ui: {
+            // align-top: the field is inline-flex, which otherwise baseline-shifts against siblings;
+            // the end padding holds the trailing calendar button (~w-9) plus air after the year segment
+            base: 'gap-0.5 align-top pe-12',
+            segment: 'data-[segment=day]:w-auto data-[segment=month]:w-auto data-[segment=year]:w-auto'
+        }
+    },
+
     // Shared UCalendar root: Monday-first, no padding weeks, and other-month days both disabled
     // (reka data-outside-view) and hidden, so a day number never appears twice across
     // neighbouring month grids. Spread with v-bind at every UCalendar call site.
@@ -710,7 +729,7 @@ export const COMPONENTS = {
         disableDaysOutsideCurrentView: true,
         ui: {
             cellTrigger: 'data-[outside-view]:hidden',
-            // TEXT.toned, not muted: the head letters are body-size text and measure at the 4.5:1 rung
+            // The head letters are body-size text: their ink measures at the 4.5:1 rung
             headCell: `text-sm uppercase ${TEXT.toned}`
         }
     },

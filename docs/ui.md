@@ -37,7 +37,7 @@ Nuxt 4.3, Nuxt UI 4.3, Tailwind 4.1. Pages use Nuxt UI components; every shared 
 | `TYPOGRAPHY`, `LAYOUTS`, `SIZES`, `ICONS` | text styles, layout classes, responsive sizes, icon names |
 | `BUTTONS` | `edit`, `cancel`, `save`, `primaryAction`, `secondaryAction`, `settings` |
 | `ALERTS` | alert kinds and the `withActions` / `withCornerAction` modifiers |
-| `COMPONENTS` | `calendarGrid`, `table.ui`, `choiceGroup`, `kitchenPanel`, `segmentedActive`, `economyTable`, `powerMode`, `guestRow` |
+| `COMPONENTS` | `calendarGrid`, `dateField`, `statBox`, `table.ui`, `choiceGroup`, `kitchenPanel`, `segmentedActive`, `economyTable`, `powerMode`, `guestRow` |
 | `CALENDAR`, `PLANNING_CALENDAR`, `CHEF_CALENDAR`, `DINNER_CALENDAR`, `dayCircleClasses`, `calendarPickerProps` | calendar days, pickers, countdowns |
 | `BACKGROUNDS`, `RAINBOW`, `RAINBOW_FAMILIES`, `getRainbowBand`, `getRainbowFamily`, `PANTONE_CHIPS` | brand surfaces |
 | `TICKET_TYPE_COLORS`, `ORDER_STATE_COLORS`, `DINNER_STATE_BADGES`, `DEADLINE_BADGES`, `RESIDENCY_CONFIG` | domain colour maps |

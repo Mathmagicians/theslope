@@ -85,6 +85,16 @@ export const openPopover = async (wrapper: Searchable) => {
     await nextTick()
 }
 
+/** The typed date segments (reka DateField) of one kind, in field order: one per date field below `wrapper` */
+export const findDateSegments = (wrapper: Searchable, segment: 'day' | 'month' | 'year') =>
+    wrapper.findAll(`[data-segment="${segment}"]`)
+
+/** Types digits into one segment and waits a tick; the field commits when every segment holds a value */
+export const typeIntoSegment = async (segment: {trigger: (e: string, o: {key: string}) => Promise<unknown>}, keys: string[]) => {
+    for (const key of keys) await segment.trigger('keydown', {key})
+    await nextTick()
+}
+
 /**
  * Asserts the OUTCOME of the shared calendar grid token (COMPONENTS.calendarGrid): every
  * rendered month shows one Monday-first week header of 7 single-letter days. That a

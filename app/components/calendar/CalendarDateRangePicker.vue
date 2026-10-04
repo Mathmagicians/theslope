@@ -1,28 +1,23 @@
 <script setup lang="ts">
 import type {DateRange} from "~/types/dateTypes"
-import {DATE_SETTINGS, eachDayOfManyIntervals, isCalendarDateInDateList} from "~/utils/date"
+import {eachDayOfManyIntervals, isCalendarDateInDateList} from "~/utils/date"
 import type {DateValue} from '@internationalized/date'
-import type {Ref} from "vue"
 import {mapZodErrorsToFormErrors, getErrorMessage} from "~/utils/validtation"
 import type {CalendarPickerSelection} from "~/composables/useTheSlopeDesignSystem"
 
-// TYPES
-type DateRangeInput = {
-  start: string;
-  end: string;
-}
-
 // COMPONENT DEFINITIONS
 const model = defineModel<DateRange>({required: true})
-const props = withDefaults(defineProps<{ name?: string, disabled?: boolean, selection?: CalendarPickerSelection }>(), {
+const props = withDefaults(defineProps<{ name?: string, disabled?: boolean, selection?: CalendarPickerSelection, label?: string, icon?: string }>(), {
   name: undefined,
   disabled: false,
-  selection: 'cookingDay'
+  selection: 'cookingDay',
+  label: 'Start dato - Slut dato',
+  icon: undefined
 })
 const emit = defineEmits(['update:model-value', 'close'])
 
 // DESIGN SYSTEM
-const {SIZES, ICONS, CALENDAR, calendarPickerProps, dayCircleClasses} = useTheSlopeDesignSystem()
+const {SIZES, ICONS, CALENDAR, BUTTONS, COMPONENTS, calendarPickerProps, dayCircleClasses} = useTheSlopeDesignSystem()
 const calendarProps = calendarPickerProps()
 
 // What is being picked decides how a selected day reads (CALENDAR.picker); the slot draws it
@@ -35,32 +30,33 @@ const isDaySelected = (day: DateValue) => isCalendarDateInDateList(day, selected
 // STATE
 const errors = ref<Map<string, string[]>>(new Map())
 
-const inputState: Ref<DateRangeInput> = ref({
-  start: formatDate(model.value.start),
-  end: formatDate(model.value.end)
+// COMPUTED STATE
+// One model: the field's typed segments and the range calendar read and write the same range
+const calendarRange = computed(() => {
+  if (model.value?.start && model.value?.end) {
+    return {
+      start: toCalendarDate(model.value.start),
+      end: toCalendarDate(model.value.end)
+    }
+  }
+  return null
 })
 
-// COMPUTED STATE
+const fieldRange = computed({
+  get: () => calendarRange.value ?? undefined,
+  set: (value) => {
+    // The range commits once both ends hold a full date
+    if (value?.start && value?.end) {
+      updateDateRange({start: toDate(value.start), end: toDate(value.end)})
+    }
+  }
+})
 
 const pickerDateRange = computed({
-  get: () => {
-    // Convert Date objects to CalendarDate for UCalendar
-    if (model.value?.start && model.value?.end) {
-      return {
-        start: toCalendarDate(model.value.start),
-        end: toCalendarDate(model.value.end)
-      }
-    }
-    return null
-  },
+  get: () => calendarRange.value,
   set: (value) => {
     if (value?.start && value?.end) {
-      // Convert CalendarDate back to Date objects
-      const dateRange = {
-        start: toDate(value.start),
-        end: toDate(value.end)
-      }
-      updateDateRange(dateRange)
+      updateDateRange({start: toDate(value.start), end: toDate(value.end)})
       emit('close')
     }
   }
@@ -71,16 +67,10 @@ const updateDateRange = (newRange: DateRange) => {
   const validation = dateRangeSchema.safeParse(newRange)
   if (validation.success) {
     model.value = newRange
-    inputState.value = {
-      start: formatDate(newRange.start),
-      end: formatDate(newRange.end)
-    }
     emit('update:model-value', newRange)
-    // Clear errors
     errors.value.clear()
     return true
   }
-  // Set errors properly from validation
   const errorMap = mapZodErrorsToFormErrors(validation.error)
   errors.value.clear()
   errorMap.forEach((value, key) => {
@@ -89,50 +79,14 @@ const updateDateRange = (newRange: DateRange) => {
   return false
 }
 
-const handleInputChange = (value: string, key: keyof DateRange) => {
-  // Update the input field
-  inputState.value[key] = value
-
-  // Create an object to validate with stringDateRangeSchema
-  const stringRange = {
-    start: key === 'start' ? value : inputState.value.start,
-    end: key === 'end' ? value : inputState.value.end
-  }
-
-  // Validate using the string schema first
-  const validation = stringDateRangeSchema.safeParse(stringRange)
-
-  if (validation.success) {
-    // If validation passes, update with the transformed dates
-    updateDateRange(validation.data)
-  } else {
-    // If validation fails, map the errors
-    const errorMap = mapZodErrorsToFormErrors(validation.error)
-    errors.value.clear()
-    errorMap.forEach((value, key) => {
-      errors.value.set(key, value)
-    })
-  }
-}
-
-const formatLabel = (key: keyof DateRange): string => {
-  switch (key) {
-    case 'start':
-      return 'Start dato'
-    case 'end':
-      return 'Slut dato'
-  }
-}
-
-// Watch for external model changes
-watch(() => model.value, (newModelValue) => {
-  if (newModelValue) {
-    inputState.value = {
-      start: formatDate(newModelValue.start),
-      end: formatDate(newModelValue.end)
-    }
-  }
-}, {deep: true})
+// The disabled face: a range reads as one compact field, the presentation every range shares
+const viewInput = computed(() => ({
+  modelValue: formatDateRange(model.value),
+  name: props.name,
+  icon: props.icon,
+  disabled: true,
+  ui: {base: 'w-fit min-w-full'}
+}))
 
 // Expose for testing
 defineExpose({
@@ -143,43 +97,51 @@ defineExpose({
 </script>
 
 <template>
-  <UPopover
-    :disabled="props.disabled"
-    :content="{
-      align: 'center',
-      side: 'bottom',
-      sideOffset: 16
-    }">
-    <template #content>
-      <UCalendar
-        v-bind="calendarProps"
-        v-model="pickerDateRange"
-        range
-        :size="SIZES.calendar"
-        :number-of-months="SIZES.calendarMonths"
-      >
-        <template #day="{ day }">
-          <div v-if="isDaySelected(day)" :class="dayCircleClasses(selectionVariant)">{{ day.day }}</div>
-          <span v-else class="text-sm">{{ day.day }}</span>
-        </template>
-      </UCalendar>
-    </template>
-    <div :name="props.name" class="flex flex-row gap-1 md:gap-4">
-      <UFormField
-        v-for="key in ['start', 'end'] as const" :key="key"
+  <!-- A host with its own UFormField passes label="": nested UFormFields recurse Nuxt UI's props forwarding -->
+  <UFormField v-if="props.disabled && props.label" class="p-2" :label="props.label">
+    <UInput v-bind="viewInput" />
+  </UFormField>
+  <UInput v-else-if="props.disabled" v-bind="viewInput" />
+  <div v-else :name="props.name">
+    <UFormField
         class="p-2"
-        :label="formatLabel(key)"
-        :error="getErrorMessage(errors, [key, '_'])">
-        <UInput
-          v-model="inputState[key]"
-          :placeholder="DATE_SETTINGS.USER_MASK"
-          type="string"
-          :name="key"
-          :disabled="props.disabled"
-          :trailing-icon="ICONS.calendar"
-          @update:model-value="handleInputChange($event, key)"
-        />
-      </UFormField>
-    </div>
-  </UPopover>
+        :label="props.label"
+        :error="getErrorMessage(errors, ['_', 'start', 'end'])">
+      <UInputDate
+          v-bind="COMPONENTS.dateField"
+          v-model="fieldRange"
+          range
+          :icon="props.icon"
+      >
+        <template #trailing>
+          <UPopover
+              :content="{
+                align: 'center',
+                side: 'bottom',
+                sideOffset: 16
+              }">
+            <UButton
+                v-bind="BUTTONS.edit"
+                :icon="ICONS.calendar"
+                aria-label="Åbn kalender"
+            />
+            <template #content>
+              <UCalendar
+                  v-bind="calendarProps"
+                  v-model="pickerDateRange"
+                  range
+                  :size="SIZES.calendar"
+                  :number-of-months="SIZES.calendarMonths"
+              >
+                <template #day="{ day }">
+                  <div v-if="isDaySelected(day)" :class="dayCircleClasses(selectionVariant)">{{ day.day }}</div>
+                  <span v-else class="text-sm">{{ day.day }}</span>
+                </template>
+              </UCalendar>
+            </template>
+          </UPopover>
+        </template>
+      </UInputDate>
+    </UFormField>
+  </div>
 </template>

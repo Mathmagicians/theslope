@@ -756,7 +756,7 @@ test('RELEASE bucket: after-deadline orders are RELEASED not deleted', async ({b
 | Reactive updates | Assertion fails after trigger | Add `await nextTick()` |
 | Linux CI failures | Strict mode violation | Use `getByRole()` or `.first()` for dropdowns |
 | Tooltip provider error | `UTooltip` needs the `TooltipProvider` context `UApp` supplies in the app | Mount via `mountWithTooltipProvider()` (`tests/component/testHelpers.ts`) |
-| `ECONNREFUSED 127.0.0.1:3000` printed after a component run (exit 0) | A component spec imports an e2e factory, which value-imports `@playwright/test`; the module runner fetches it post-run | Split factory data builders from their HTTP methods (open) |
+| "Factory HTTP methods are e2e-only" thrown in a component test | The spec called a factory method that asserts with playwright's `expect` — `@playwright/test` resolves to a stub in the vitest projects (`tests/component/playwrightStub.ts`) | Use the factory's data builders; HTTP methods run under playwright in `tests/e2e` |
 
 ### Linux vs macOS Differences
 

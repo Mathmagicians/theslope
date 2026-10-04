@@ -13,6 +13,7 @@ export const PLANNING_TEST_IDS = {
     submit: 'submit-season',
     cancel: 'cancel-season',
     createFirst: 'create-first-season',
+    cookingDayCount: 'cooking-day-count',
     holidayAdd: 'holiday-range-add',
     holidayItem: (index: number) => `holidayRangeList-${index}`,
     holidayRemove: (index: number) => `holiday-range-remove-${index}`,

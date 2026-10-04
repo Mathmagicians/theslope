@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { dateRangeSchema, nullableEndDateRangeSchema, createDateRangeSchema, stringDateRangeSchema, validateDateRange } from '~/composables/useDateRangeValidation'
+import { dateRangeSchema, nullableEndDateRangeSchema, createDateRangeSchema, validateDateRange } from '~/composables/useDateRangeValidation'
 import { mapZodErrorsToFormErrors } from '~/utils/validtation'
 
 /**
@@ -14,7 +14,7 @@ describe('useDateRangeValidation', () => {
     const endDate = new Date(2025, 0, 7) // Jan 7, 2025
     const twoYearsLater = new Date(2027, 0, 1)
 
-    describe('stringDateRangeSchema - valid formats', () => {
+    describe('dateRangeSchema - accepted date formats (the dateSchema union)', () => {
         it.each([
             { format: 'ISO strings', start: '2025-01-01T00:00:00.000Z', end: '2025-01-07T00:00:00.000Z' },
             { format: 'dd/MM/yyyy strings', start: '01/01/2025', end: '07/01/2025' },
@@ -23,7 +23,7 @@ describe('useDateRangeValidation', () => {
             { format: 'mixed ISO and dd/MM/yyyy', start: '2025-01-01T00:00:00.000Z', end: '07/01/2025' },
             { format: 'mixed Date and string', start: testDate, end: '07/01/2025' }
         ])('should accept $format', ({ start, end }) => {
-            const result = stringDateRangeSchema.safeParse({ start, end })
+            const result = dateRangeSchema.safeParse({ start, end })
             expect(result.success).toBe(true)
             if (result.success) {
                 expect(result.data.start).toBeInstanceOf(Date)
@@ -33,7 +33,7 @@ describe('useDateRangeValidation', () => {
         })
     })
 
-    describe('stringDateRangeSchema - invalid inputs', () => {
+    describe('dateRangeSchema - rejected date inputs', () => {
         it.each([
             { format: 'invalid string', start: 'not-a-date', end: '07/01/2025' },
             { format: 'wrong ISO format', start: '2025-01-01', end: '07/01/2025' },
@@ -41,7 +41,7 @@ describe('useDateRangeValidation', () => {
             { format: 'null', start: null, end: endDate },
             { format: 'undefined', start: undefined, end: endDate }
         ])('should reject $format', ({ start, end }) => {
-            const result = stringDateRangeSchema.safeParse({ start, end })
+            const result = dateRangeSchema.safeParse({ start, end })
             expect(result.success).toBe(false)
         })
     })

@@ -14,7 +14,7 @@ thing, the app uses it and the hand-written version leaves. The user runs instal
 | Vite 8 build | the app, dev server and sender build on Vite 8 | ✅ done |
 | Nuxt UI 4.11 | the 4.4–4.11 changes checked against our components | ⏳ awaiting signoff |
 | Danish locale | `UApp` locale `da`; the hand-translated week days left | ✅ done — visual check with the Nuxt UI pass |
-| Date pickers | `UInputDate` with the calendar in its trailing popover | ⏳ mockup awaiting signoff |
+| Date pickers | `UInputDate` segments in the two-field layout | ⏳ implementation |
 | Fetch gating | the `enabled` option of `useAsyncData` replaces fetchers that return empty values | ⏳ awaiting signoff |
 | Page composition | master/detail and tab pages, the `md` breakpoint | OPEN |
 | Store fetcher factory | `createUseAsyncData` bakes `useRequestFetch` + schema transform into one store fetcher | ⏳ API sketch awaiting signoff |
@@ -51,6 +51,14 @@ Nuxt UI 4.11 is next: the e2e pair and the visual check run on the built branch.
   runs 111 files with 2625 tests. Spec conventions for the test-utils 4 runtime live in `docs/testing.md`.
 - Vite 8 build: `npx nuxt upgrade --dedupe` (`h3` stays 1.15.11 at root); `npm run build`, `npm run dev`,
   `make run-sender-local` and `npm run pre:all` pass.
+- Danish locale: `<UApp :locale="da">` (`app/app.vue`); `COMPONENTS.calendarGrid` carries `weekdayFormat: 'narrow'` (the
+  M T O T F L S headers) and `ui.headCell` (`TEXT.toned`: body-size text measures at the 4.5:1 rung); the three `#week-day`
+  slots and `translateToDanish` left; `CalendarDisplay.nuxt.spec.ts` asserts the rendered letters and the Danish month
+  heading under the UApp frame.
+- The vitest projects resolve `@playwright/test` to a stub (`tests/component/playwrightStub.ts`): specs import the e2e
+  factories for their data builders only. The nuxt project runs with `hookTimeout: 60_000` and `testTimeout: 20_000`.
+- `SeasonFactory.createActiveSeason` retries once (`CREATE_ACTIVE_SEASON_RETRIES`): the list→activate window races with
+  workers recreating or cleaning the singleton.
 - `ICONS.github` is `i-hugeicons-github-01` (`useTheSlopeDesignSystem.ts`): the glyph ships from an installed collection.
 - `icon.clientBundle` keeps `scan: true` only (`nuxt.config.ts`): Nuxt UI 4.10 pre-bundles its own internal icons.
 - `experimental.watcher: 'builder'` (`nuxt.config.ts`): the shared Vite watcher, the default from `compatibilityVersion: 5`.
@@ -96,41 +104,32 @@ npx playwright test tests/e2e/ui/MobileViewport.e2e.spec.ts tests/e2e/ui/AdminPl
 | `/admin/system` | phone | `UTree` | settings tree indentation |
 | `/login`, ⚙ | phone | `URadioGroup` (`COMPONENTS.choiceGroup`) | palette and text-size cards with borders |
 | any form, tab through fields | desktop | focus ring | one focus style across inputs and buttons |
-
-**Affected.** The e2e selectors above, where the run reports a changed slot.
-
-## Danish locale — done
-
-`<UApp :locale="da">` (`app/app.vue`) renders Nuxt UI's built-in texts in Danish: calendar month headings, table empty text,
-pagination and select labels. `COMPONENTS.calendarGrid` carries `weekdayFormat: 'narrow'`, so the week-day headers render the
-single letters M T O T F L S from the locale, and `ui.headCell` carries the head-cell type (`TEXT.toned`: body-size text
-measures at the 4.5:1 rung). The three `#week-day` slots and `translateToDanish` left (`BaseCalendar.vue`,
-`CalendarDatePicker.vue`, `CalendarDateRangePicker.vue`, `app/utils/date.ts`). `CalendarDisplay.nuxt.spec.ts` asserts the
-rendered letters and the Danish month heading under the UApp frame.
-**Visual check** (with the Nuxt UI 4.11 pass).
-
-| Route (state) | Viewport | Element | Expect |
-|---|---|---|---|
 | `/admin/planning?mode=edit`, open a date picker | phone | `UCalendar` | Danish month heading; M T O T F L S week letters in the head-cell type |
 | `/admin/users` | desktop | `UPagination` | Danish labels |
+
+**Affected.** The e2e selectors above, where the run reports a changed slot.
 
 ## Date pickers
 
 **Problem.** `CalendarDateRangePicker.vue` reads two free-text `UInput`s (`type="string"`) and parses them with `stringDateRangeSchema`;
 the range lives as text (`inputState`), as `Date` (the model) and as `CalendarDate` (`pickerDateRange`), synchronised by a watcher.
 The input row is the popover trigger. `CalendarDatePicker.vue` follows the same pattern for one date.
-**Solution.** The Nuxt UI docs pattern "As a date range picker" (`UInputDate`, v4.11.1): `UInputDate range` bound to one
-`{start, end}` `CalendarDate` model; its `#trailing` slot holds a `UPopover` anchored to the input with a calendar button and
-`UCalendar range`. The model converts to `Date` at the component boundary; `dateRangeSchema` validates the model; `CALENDAR.picker`
-draws the selected days in the `#day` slot. `CalendarDatePicker.vue` uses `UInputDate` with `UCalendar`.
+**Solution.** One `UInputDate range` box per period, bound to the `{start, end}` `CalendarDate` pair; the `#trailing`
+slot holds the calendar button opening the `UPopover` with `UCalendar range`. The models convert to `Date` at the
+component boundary; `dateRangeSchema` validates; `CALENDAR.picker` draws the selected days in the `#day` slot;
+`stringDateRangeSchema`, the free-text `inputState` and the sync watcher leave. `CalendarDatePicker.vue` uses one
+`UInputDate` with `UCalendar`. `COMPONENTS.dateField` renders the house mask dd/MM/yyyy on the field (`en-GB` segment
+order and `/` literals, compact segments, room for the calendar button); the UApp locale keeps the calendars Danish.
+A disabled range renders as one compact field (`formatDateRange`) under the same label. The season dates carry the label
+`Fællesspisning sæsonens start - slut datoer`; the holiday rows carry the holiday icon as the field's leading icon, so the
+boxes share one left edge.
 
-**Mockup — date range picker** ⏳ awaiting signoff
+**Mockup — one box per period** ✅
 
 ```
-TODAY                                     PROPOSED
-Start dato          Slut dato             Periode
-[10/08/2026  📅]    [23/06/2027  📅]      [10 / 08 / 2026 – 23 / 06 / 2027  📅]
- click in a field opens the calendar       day / month / year segments; 📅 opens the calendar
+Fællesspisning sæsonens start - slut datoer
+[10/08/2026 - 23/06/2027 (cal)]
+ six typed segments, one calendar button opening the range calendar
 ```
 
 **TDD.** Component specs for both pickers: typing segments and picking in the calendar update one model; an invalid range shows the

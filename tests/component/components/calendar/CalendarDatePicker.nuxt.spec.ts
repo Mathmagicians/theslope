@@ -2,8 +2,8 @@
 import { describe, it, expect } from 'vitest'
 import { mountSuspended } from "@nuxt/test-utils/runtime"
 import CalendarDatePicker from '~/components/calendar/CalendarDatePicker.vue'
-import { nextTick, ref } from 'vue'
-import { openPopover, expectSharedCalendarGrid } from '~~/tests/component/testHelpers'
+import { ref } from 'vue'
+import { openPopover, expectSharedCalendarGrid, findDateSegments, typeIntoSegment } from '~~/tests/component/testHelpers'
 
 const JAN_1 = new Date(2025, 0, 1)
 
@@ -20,16 +20,16 @@ const mountPicker = async (modelValue: Date | null, extraProps: Record<string, u
 
 describe('CalendarDatePicker', () => {
 
-  describe.each([
-    { name: 'with Date model', model: JAN_1, expectedValue: '01/01/2025' },
-    { name: 'with null model', model: null, expectedValue: '' }
-  ])('$name', ({ model, expectedValue }) => {
-    it(`renders input with value "${expectedValue}"`, async () => {
-      const wrapper = await mountPicker(model)
-      const inputs = wrapper.findAll('input')
-      expect(inputs.length).toBe(1)
-      expect(inputs[0]!.element.value).toBe(expectedValue)
-    })
+  it('renders the model date in typed day/month/year segments', async () => {
+    const wrapper = await mountPicker(JAN_1)
+    expect(findDateSegments(wrapper, 'day')[0]!.attributes('aria-valuenow')).toBe('1')
+    expect(findDateSegments(wrapper, 'year')[0]!.attributes('aria-valuenow')).toBe('2025')
+  })
+
+  it('renders empty segments with a null model', async () => {
+    const wrapper = await mountPicker(null)
+    expect(findDateSegments(wrapper, 'day').length).toBe(1)
+    expect(wrapper.text()).not.toContain('2025')
   })
 
   it('renders custom label', async () => {
@@ -48,32 +48,31 @@ describe('CalendarDatePicker', () => {
     expectSharedCalendarGrid(wrapper)
   })
 
-  it('shows error for invalid date format', async () => {
+  it('typing digits in the segments updates the model', async () => {
     const wrapper = await mountPicker(JAN_1)
-    await wrapper.find('input').setValue('31-01-2025')
-    await nextTick()
-    await nextTick()
+    await typeIntoSegment(findDateSegments(wrapper, 'day')[0]!, ['1', '5'])
+    await typeIntoSegment(findDateSegments(wrapper, 'month')[0]!, ['0', '6'])
+    await typeIntoSegment(findDateSegments(wrapper, 'year')[0]!, ['2', '0', '2', '5'])
+
+    const emitted = wrapper.emitted('update:modelValue')
+    expect(emitted).toBeTruthy()
+    // Round-trip through the component's own boundary util: the typed date, independent of timezone
+    const lastValue = emitted!.at(-1)![0] as Date
+    expect(toCalendarDate(lastValue)!.toString()).toBe('2025-06-15')
+  })
+
+  it('updateDate rejects an invalid Date and reports errors', async () => {
+    const wrapper = await mountPicker(JAN_1)
     const vm = wrapper.vm as unknown as PickerVm
+    expect(vm.updateDate(new Date(Number.NaN))).toBe(false)
     expect(vm.errors.size).toBeGreaterThan(0)
   })
 
-  it('accepts valid date input and updates model', async () => {
+  it('updateDate clears the model to null', async () => {
     const wrapper = await mountPicker(JAN_1)
-    const input = wrapper.find('input')
-    await input.setValue('15/06/2025')
-    await nextTick()
     const vm = wrapper.vm as unknown as PickerVm
+    expect(vm.updateDate(null)).toBe(true)
     expect(vm.errors.size).toBe(0)
-    expect(input.element.value).toBe('15/06/2025')
-  })
-
-  it('clears to null on empty string input', async () => {
-    const wrapper = await mountPicker(JAN_1)
-    const input = wrapper.find('input')
-    await input.setValue('')
-    await nextTick()
-    const vm = wrapper.vm as unknown as PickerVm
-    expect(vm.errors.size).toBe(0)
-    expect(input.element.value).toBe('')
+    expect(wrapper.emitted('update:modelValue')!.at(-1)![0]).toBeNull()
   })
 })

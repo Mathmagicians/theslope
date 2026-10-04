@@ -11,7 +11,7 @@ import {formatDate} from '~/utils/date'
 import type {Season} from '~/composables/useSeasonValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, temporaryAndRandom, waitForHydration} = testHelpers
+const {validatedBrowserContext, pollUntil, temporaryAndRandom, waitForHydration, fillDateField} = testHelpers
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const {createDefaultWeekdayMap: createDefaultDinnerModeMap} = useCoreValidation()
@@ -95,8 +95,8 @@ test.describe('AdminPlanning on the live season - Serial UI', () => {
         await waitForHydration(page)
 
         // WHEN: a one-day holiday is added over a booked dinner and the season saved
-        await page.locator('[name="holidayRangeList"] input[name="start"]').fill(formatDate(holidayEvent.date))
-        await page.locator('[name="holidayRangeList"] input[name="end"]').fill(formatDate(holidayEvent.date))
+        await fillDateField(page.locator('[name="holidayRangeList"]'), 'start', formatDate(holidayEvent.date))
+        await fillDateField(page.locator('[name="holidayRangeList"]'), 'end', formatDate(holidayEvent.date))
         await page.getByTestId('holiday-range-add').click()
         await expect(page.locator('[name="holidayRangeList-0"]')).toBeVisible()
 
