@@ -16,7 +16,7 @@ thing, the app uses it and the hand-written version leaves. The user runs instal
 | Danish locale | `UApp` locale `da`; the hand-translated week days left | ✅ done |
 | Date pickers | one `UInputDate range` box per period, `COMPONENTS.dateField` mask | ✅ done |
 | Tailwind | `tailwindcss` 4.3.3; declared floors follow installed versions | ⏳ awaiting signoff |
-| Native-feel fruits | login returns to the original URL; the PWA manifest installs the app; the session outlives the app process | ⏳ awaiting signoff |
+| Native-feel fruits | login returns to the original URL; the PWA manifest installs the app; the session cookie lives 24h | ✅ done |
 
 The store, page and dependency work lives in feature-proposal-framework-adoption.md; the native-feel investigation in feature-proposal-mobile-native-feel.md.
 
@@ -75,6 +75,14 @@ The store, page and dependency work lives in feature-proposal-framework-adoption
 - `ChefMenuFormSchema.menuDescription` is a string (`useBookingValidation.ts`); `UTextarea` 4.11 types `v-model` as `string | undefined`.
 - `RoleOwnerSchema` lives in `useCoreValidation`; `useUserRoles` derives `RoleOwner` and `RoleOwnerValue` from it.
 - `JobRun.triggeredBy` is documented as `"CRON" | "ADMIN" | "ADMIN:<email>"` (`prisma/schema.prisma`, the three job endpoints).
+- Session cookie: `runtimeConfig.session.maxAge` 24h (`nuxt.config.ts`); Heynabo tokens carry no expiry, longevity comes from
+  re-login (feature-proposal-mobile-native-feel.md, C9).
+- Login return path: the guard redirects to `/login?redirect=<original URL>`; `Login.vue` follows an internal `?redirect`
+  after sign-in (`hasProtocol` from `ufo` rejects external targets); a 401 in `useApiHandler` navigates to
+  `/login?redirect=<current page>`. `tests/e2e/ui/Login.e2e.spec.ts` covers the deep link and the cookie lifetime.
+- PWA manifest: `public/manifest.webmanifest` (standalone, `da`, brand colours) with the icon set rendered from
+  `public/app-icon.svg`; `app.head` links the manifest and apple-touch-icon and carries theme-color and the iOS standalone
+  metas; installable without a service worker. `pages.e2e.spec.ts` smoke-asserts the manifest and its icons serve.
 
 ---
 

@@ -1,13 +1,20 @@
+import type {Page} from '@playwright/test'
 import {test, expect} from '@playwright/test'
-import testHelpers from '../testHelpers'
+import testHelpers from '~~/tests/e2e/testHelpers'
+import {testCredentials} from '~~/tests/e2e/config'
 
 const {waitForHydration} = testHelpers
-
-const adminUserName = process.env.HEY_NABO_USERNAME as string
-const password = process.env.HEY_NABO_PASSWORD as string
+const {adminUserName, password} = testCredentials
 
 const DEEP_LINK = '/admin/planning'
 const DAY_SECONDS = 60 * 60 * 24
+
+const logInThroughForm = async (page: Page) => {
+    await waitForHydration(page)
+    await page.locator('input[type="email"]').fill(adminUserName)
+    await page.locator('input[type="password"]').fill(password)
+    await page.getByRole('button', {name: /log ind/i}).click()
+}
 
 // The return path and the session lifetime start logged out
 test.use({storageState: {cookies: [], origins: []}})
@@ -18,12 +25,9 @@ test.describe('Login flow', () => {
         // GIVEN: the guard sends the deep link to login and carries the return path
         await page.goto(DEEP_LINK)
         await page.waitForURL(`/login?redirect=${encodeURIComponent(DEEP_LINK)}`)
-        await waitForHydration(page)
 
         // WHEN: logging in through the form
-        await page.locator('input[type="email"]').fill(adminUserName)
-        await page.locator('input[type="password"]').fill(password)
-        await page.getByRole('button', {name: /log ind/i}).click()
+        await logInThroughForm(page)
 
         // THEN: the user lands on the deep link
         await page.waitForURL(new RegExp(`${DEEP_LINK}$`))
@@ -38,10 +42,7 @@ test.describe('Login flow', () => {
 
     test('GIVEN a plain login WHEN logging in THEN the dashboard shows', async ({page}) => {
         await page.goto('/login')
-        await waitForHydration(page)
-        await page.locator('input[type="email"]').fill(adminUserName)
-        await page.locator('input[type="password"]').fill(password)
-        await page.getByRole('button', {name: /log ind/i}).click()
+        await logInThroughForm(page)
 
         await expect(page.getByTestId('logout-button')).toBeVisible()
         await expect(page).toHaveURL(/\/login$/)

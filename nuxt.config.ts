@@ -17,6 +17,9 @@ export default defineNuxtConfig({
         head: {
             link: [
                 {rel: 'manifest', href: '/manifest.webmanifest'},
+                // Safari takes the ico, every other browser prefers the vector
+                {rel: 'icon', href: '/favicon.ico', sizes: '32x32'},
+                {rel: 'icon', type: 'image/svg+xml', href: '/app-icon.svg'},
                 {rel: 'apple-touch-icon', href: '/apple-touch-icon.png'}
             ],
             meta: [

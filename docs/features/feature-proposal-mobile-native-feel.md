@@ -1,6 +1,6 @@
 # Feature Proposal: Native feel on mobile — sprint investigation
 
-**Status:** Investigation | **Date:** 2026-09-28
+**Status:** S1–S3 implemented, S4–S5 open | **Date:** 2026-09-28 | **Updated:** 2026-10-04
 
 ## Drivers
 
@@ -46,13 +46,15 @@
 
 ## Solution elements
 
-| # | Element | Serves |
-|---|---|---|
-| S1 | Session cookie `maxAge: 24h` set in `login.post.ts` (C9; the token is opaque and the login response carries no expiry) | D1, D5, C4, C5 |
-| S2 | Guard redirect carries the original URL; login returns there; a 401 re-authenticates and returns in place | D3 |
-| S3 | PWA manifest and service worker (`@vite-pwa/nuxt`), `display: standalone` | D4, D2 |
-| S4 | Install guidance driven by capability: standalone → nothing; `beforeinstallprompt` → install button; otherwise → Add to Home Screen instructions | D2 |
-| S5 | Re-login at `exp`: passkey with PRF-wrapped Heynabo password (ciphertext in D1, key never on the server); password form where PRF is missing | D5 |
+| # | Element | Serves | Status |
+|---|---|---|---|
+| S1 | Session cookie `maxAge: 24h` via `runtimeConfig.session` (C9; the token is opaque and the login response carries no expiry) | D1, D5, C4, C5 | ✅ |
+| S2 | Guard redirect carries the original URL; login returns there; a 401 re-authenticates and returns in place | D3 | ✅ |
+| S3 | PWA manifest, `display: standalone`, icon set from `public/app-icon.svg`; installable without a service worker | D4, D2 | ✅ |
+| S4 | Install guidance driven by capability: standalone → nothing; `beforeinstallprompt` → install button; otherwise → Add to Home Screen instructions | D2 | open |
+| S5 | Re-login at `exp`: passkey with PRF-wrapped Heynabo password (ciphertext in D1, key never on the server); password form where PRF is missing | D5 | open |
+
+S1–S3 live on `chore/npm-dependencies`; the file-level detail sits in npm-dependencies-nuxt4_5-upgrade.md, "Done on the branch".
 
 Accepted residual: a token Heynabo revokes before `exp` keeps the theslope session until `exp`; Heynabo write-backs fail with 401 in that window.
 
@@ -68,4 +70,4 @@ Rejected: a theslope session lifetime independent of Heynabo; a periodic Heynabo
 ## Next
 
 1. Run U1.
-2. Plan S1 + S2 as the first code chunk, with explicit insertion points, for sign-off.
+2. Plan S4 and S5 for sign-off; U2 spikes after S5 is planned.
