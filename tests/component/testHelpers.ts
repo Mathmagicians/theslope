@@ -3,6 +3,7 @@ import {expect} from 'vitest'
 import {TooltipProvider} from 'reka-ui'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {flushPromises, type BaseWrapper, type VueWrapper} from '@vue/test-utils'
+import {toCalendarDate} from '~/utils/date'
 
 /**
  * Generic polling function for component tests
@@ -85,21 +86,35 @@ export const openPopover = async (wrapper: Searchable) => {
     await nextTick()
 }
 
+/** A Date as its calendar day ('2025-01-05'): the model may carry local or UTC midnight of the same day */
+export const calendarDay = (date: Date) => toCalendarDate(date)!.toString()
+
+/** Ranges as calendar days, for asserting emitted DateRange payloads */
+export const asCalendarDays = (ranges: Array<{start: Date, end: Date}>) =>
+    ranges.map(range => ({start: calendarDay(range.start), end: calendarDay(range.end)}))
+
+/** The typed date segments (reka DateField) of one kind, in field order: one per date field below `wrapper` */
+export const findDateSegments = (wrapper: Searchable, segment: 'day' | 'month' | 'year') =>
+    wrapper.findAll(`[data-segment="${segment}"]`)
+
+/** Types digits into one segment and waits a tick; the field commits when every segment holds a value */
+export const typeIntoSegment = async (segment: {trigger: (e: string, o: {key: string}) => Promise<unknown>}, keys: string[]) => {
+    for (const key of keys) await segment.trigger('keydown', {key})
+    await nextTick()
+}
+
 /**
- * Asserts the UCalendar below `wrapper` was configured from the ONE shared design-system
- * root token (COMPONENTS.calendarGrid). The literals ARE the contract: Monday-first, no
- * padding weeks, and adjacent-month days both disabled and hidden - so a date never renders
- * twice across two neighbouring month grids.
+ * Asserts the OUTCOME of the shared calendar grid token (COMPONENTS.calendarGrid): every
+ * rendered month shows one Monday-first week header of 7 single-letter days. That a
+ * UCalendar binds the token is the architecture spec's rule (designSystemUsage); how the
+ * grid looks (hidden outside-view days, head-cell type) is the visual check's.
  */
-export const expectSharedCalendarGrid = (wrapper: Pick<VueWrapper, 'findComponent'>) => {
-    const calendar = wrapper.findComponent({name: 'UCalendar'})
-    expect(calendar.exists()).toBe(true)
-    expect(calendar.props()).toMatchObject({
-        disableDaysOutsideCurrentView: true,
-        fixedWeeks: false,
-        weekStartsOn: 1,
-        weekdayFormat: 'short'
-    })
-    // A picker's selection preset appends to the same cellTrigger, so assert the rule is there
-    expect(calendar.props('ui').cellTrigger).toContain('data-[outside-view]:hidden')
+export const expectSharedCalendarGrid = (wrapper: Pick<VueWrapper, 'findAll'>) => {
+    // A picker's open calendar teleports to body (UPopover): read the document when the wrapper subtree holds no grid
+    const inWrapper = wrapper.findAll('th').map(th => th.text())
+    const headDays = (inWrapper.length ? inWrapper : Array.from(document.querySelectorAll('th')).map(th => th.textContent ?? ''))
+        .map(text => text.trim()).filter(Boolean)
+    expect(headDays.length).toBeGreaterThan(0)
+    expect(headDays.length % 7).toBe(0)
+    headDays.filter((_, i) => i % 7 === 0).forEach(monday => expect(monday).toBe('M'))
 }

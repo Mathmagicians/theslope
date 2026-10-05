@@ -308,7 +308,21 @@ export const BORDER = {
         800: 'border-gray-800 dark:border-gray-600'
     },
     peach: {
-        400: 'border-peach-400'    // Calendar - countdown, rings
+        400: 'border-peach-400',   // Calendar - countdown, rings
+        600: 'border-peach-600'    // Team accent - selected row tab
+    },
+    // Bonbon names the violet scale and mocha the amber scale (the BG alias convention)
+    bonbon: {
+        600: 'border-violet-600'   // Team accent - selected row tab
+    },
+    yellow: {
+        600: 'border-yellow-600'   // Team accent - selected row tab
+    },
+    sky: {
+        600: 'border-sky-600'      // Team accent - selected row tab
+    },
+    mocha: {
+        600: 'border-amber-600'    // Team accent - selected row tab
     },
     ocean: {
         400: 'border-ocean-400',   // Chef calendar - countdown, rings
@@ -437,6 +451,10 @@ export const LAYOUTS = {
     cardActionRow: 'flex flex-col md:flex-row md:flex-wrap md:items-center gap-2',
     cardActionButton: 'w-full md:w-auto justify-center',
 
+    // Card header row: content (selector, title) left, the rare action in the right corner -
+    // the admin pages' shared header shape. Stacked with full-width children on a phone.
+    cardHeaderRow: 'flex flex-col md:flex-row md:items-center md:justify-between gap-2',
+
     // Section content (card body sections)
     sectionContent: 'px-4 md:px-6 py-4 md:py-6 space-y-4',           // Standard section with padding
     sectionContentNoPadX: 'px-0 py-4 md:py-6 space-y-4',             // No horizontal padding (full-bleed)
@@ -517,6 +535,21 @@ export const getRainbowBand = (index: number): string => RAINBOW[index % RAINBOW
 /** The family behind that stop, for a consumer that needs another rung of the same colour */
 export const getRainbowFamily = (index: number): PantoneFamily =>
     RAINBOW_FAMILIES[index % RAINBOW_FAMILIES.length]!
+
+/** The selected team row's left tab: the team's own family at the 600 border rung */
+const RAINBOW_ACCENTS: Record<RainbowFamily, string> = {
+    pink: BORDER.pink[600],
+    orange: BORDER.orange[600],
+    ocean: BORDER.ocean[600],
+    bonbon: BORDER.bonbon[600],
+    peach: BORDER.peach[600],
+    yellow: BORDER.yellow[600],
+    sky: BORDER.sky[600],
+    mocha: BORDER.mocha[600]
+}
+
+export const getRainbowAccent = (index: number): string =>
+    `border-s-4 ps-2 ${RAINBOW_ACCENTS[RAINBOW_FAMILIES[index % RAINBOW_FAMILIES.length]!]}`
 
 /**
  * BACKGROUNDS - Background patterns for sections
@@ -626,6 +659,50 @@ export const COMPONENTS = {
         single: {ui: CHOICE_LABEL_UI}
     },
 
+    /**
+     * The circular team chip beside the team-name input: w-fit pins the circle to its
+     * content, where a flex column's cross-axis stretch would pull it into a full-width pill
+     */
+    teamChip: 'rounded-full p-2 md:p-3 w-fit',
+
+    /**
+     * The detail mounts of a master-detail page: the framed pane beside the master table,
+     * the framed dock under the tapped row, and the dock's header bar, which stays pinned
+     * under the sticky admin tab bar while the dock's body scrolls.
+     */
+    masterDetail: {
+        pane: 'border rounded-lg p-4',
+        dock: `border rounded-lg p-2 ${BG.panel}`,
+        dockHeader: `sticky top-24 z-10 py-2 ${BG.panel}`,
+        // A td sizes to its content's minimum width: zero width takes the dock out of that
+        // equation and min-w-full stretches it back to the cell, so a wide detail can never
+        // widen the master table
+        dockClamp: 'w-0 min-w-full',
+        // Wide detail content scrolls inside its own box; the dock header above it stays
+        // outside the scroll container, so its stickiness keeps tracking the page
+        dockBody: 'overflow-x-auto'
+    },
+
+    /**
+     * Team tabs: a `UTabs` whose triggers render `CookingTeamBadges`. The strip is a pure
+     * selector - the selected team renders outside the tabs, and `content: false` keeps the
+     * empty panels from squeezing a vertical list to a fraction of its box. Triggers never
+     * shrink below their label, so a horizontal row with more tabs than fit scrolls sideways
+     * instead of squeezing the names. The link variant's selection bar sits 1px outside the
+     * list's border-box, which a scroll container clips - so the scroll applies on the
+     * horizontal face only, where the bar moves onto the border line; the vertical side bar
+     * stays untouched.
+     */
+    teamTabs: {
+        variant: 'link' as const,
+        content: false,
+        ui: {
+            list: 'data-[orientation=horizontal]:overflow-x-auto',
+            trigger: 'shrink-0',
+            indicator: 'in-data-[orientation=horizontal]:bottom-0'
+        }
+    },
+
     // Power mode - family-wide bulk editing pattern
     powerMode: {
         color: 'warning' as const,
@@ -699,15 +776,43 @@ export const COMPONENTS = {
     },
 
 
+    // The app icon in a home-screen frame (InstallPrompt): ~48px, rounded, shadowed, a double press-pulse;
+    // reduced-motion users get the static icon
+    installIcon: 'size-12 shrink-0 rounded-2xl shadow-md animate-tap-pulse motion-reduce:animate-none',
+
+    // A framed summary: an icon beside a bold count over its label; the frame measures at the 3:1 edge rung
+    statBox: {
+        box: `flex items-center gap-2 px-3 py-2 w-fit rounded-md border ${BORDER.gray[500]}`,
+        icon: 'text-xl text-primary'
+    },
+
+    // The typed date field (UInputDate) renders the house mask dd/MM/yyyy: en-GB gives the
+    // day-month-year segment order and the "/" literals; the UApp locale (da) keeps the
+    // calendars and built-in texts Danish. Content-width segments keep the field compact.
+    dateField: {
+        locale: 'en-GB',
+        ui: {
+            // align-top: the field is inline-flex, which otherwise baseline-shifts against siblings;
+            // the end padding holds the trailing calendar button (~w-9) plus air after the year segment
+            base: 'gap-0.5 align-top pe-12',
+            segment: 'data-[segment=day]:w-auto data-[segment=month]:w-auto data-[segment=year]:w-auto'
+        }
+    },
+
     // Shared UCalendar root: Monday-first, no padding weeks, and other-month days both disabled
     // (reka data-outside-view) and hidden, so a day number never appears twice across
     // neighbouring month grids. Spread with v-bind at every UCalendar call site.
+    // weekdayFormat narrow + the UApp da locale render the single-letter headers M T O T F L S.
     calendarGrid: {
         weekStartsOn: 1,
         fixedWeeks: false,
-        weekdayFormat: 'short',
+        weekdayFormat: 'narrow',
         disableDaysOutsideCurrentView: true,
-        ui: {cellTrigger: 'data-[outside-view]:hidden'}
+        ui: {
+            cellTrigger: 'data-[outside-view]:hidden',
+            // The head letters are body-size text: their ink measures at the 4.5:1 rung
+            headCell: `text-sm uppercase ${TEXT.toned}`
+        }
     },
 
     // Economy table hierarchy - ready-to-grab classes for each nesting level
@@ -868,6 +973,8 @@ export const ICONS = {
     userPlus: 'i-heroicons-user-plus',
     users: 'i-heroicons-users',
     userGroup: 'i-heroicons-user-group',
+    /** Filled person silhouettes for member counts - the outline glyphs blur at badge size */
+    members: 'i-heroicons-users-solid',
     ticket: 'i-heroicons-ticket',
 
     // Header navigation
@@ -956,8 +1063,18 @@ export const ICONS = {
     externalLink: 'i-heroicons-arrow-top-right-on-square',
 
     // External links
-    github: 'i-simple-icons-github',
+    github: 'i-hugeicons-github-01',
     book: 'i-heroicons-book-open'
+} as const
+
+/**
+ * Team role glyphs: the chef hat is the chef's symbol, the cook stands at the pot,
+ * a kokkespire sprouts
+ */
+export const ROLE_ICONS = {
+    CHEF: ICONS.chef,
+    COOK: 'i-lucide-cooking-pot',
+    JUNIORHELPER: 'i-lucide-sprout'
 } as const
 
 /** Residency colours double as alert kinds, so a residency alert is `v-bind="ALERTS[residency.color]"` */
@@ -1119,6 +1236,9 @@ const createResponsiveIcons = (isMd: Ref<boolean>) => ({
     }
 })
 
+// The turn of an open-panel chevron; the classes go on whichever icon slot carries the chevron
+const flipOpenTurn = (isOpen: boolean): string => `${isOpen ? 'rotate-180 ' : ''}transition-transform duration-200`
+
 /**
  * createResponsiveButtons - Standardized button configurations with responsive sizing
  *
@@ -1211,15 +1331,19 @@ const createResponsiveButtons = (isMd: Ref<boolean>) => {
 
         /**
          * Modifier for a button that opens a panel below it: a chevron that turns while the panel is open, and
-         * `aria-expanded` for screen readers. Spread after a kind: `v-bind="{...BUTTONS.settings, ...BUTTONS.disclosure(isOpen)}"`
+         * `aria-expanded` for screen readers. Spread after a kind: `v-bind="{...BUTTONS.settings, ...BUTTONS.flipOpen(isOpen)}"`
          */
-        disclosure(isOpen: boolean) {
+        flipOpen(isOpen: boolean) {
             return {
                 trailingIcon: ICONS.chevronDown,
                 'aria-expanded': isOpen,
-                ui: {trailingIcon: isOpen ? 'rotate-180 transition-transform duration-200' : 'transition-transform duration-200'}
+                ui: {trailingIcon: flipOpenTurn(isOpen)}
             }
-        }
+        },
+
+        // `flipOpen`'s turn classes alone, for a site whose chevron is not the trailing icon:
+        // `:ui="{leadingIcon: [size, BUTTONS.flipOpenTurn(isOpen)]}"`
+        flipOpenTurn
     }
 }
 
@@ -1623,7 +1747,10 @@ export const createDayCircleClasses = (isMd: Ref<boolean>) =>
  */
 export const calendarPickerProps = () => ({
     ...COMPONENTS.calendarGrid,
-    ui: {cellTrigger: `${COMPONENTS.calendarGrid.ui.cellTrigger} ${CALENDAR.pickerCell}`}
+    ui: {
+        ...COMPONENTS.calendarGrid.ui,
+        cellTrigger: `${COMPONENTS.calendarGrid.ui.cellTrigger} ${CALENDAR.pickerCell}`
+    }
 })
 
 /**
@@ -1862,6 +1989,7 @@ export const useTheSlopeDesignSystem = () => {
         COLOR,
         NOISE,
         TICKET_TYPE_COLORS,
+        ROLE_ICONS,
         DINNER_STATE_BADGES,
         CALENDAR,
         calendarPickerProps,
@@ -1884,6 +2012,7 @@ export const useTheSlopeDesignSystem = () => {
         RAINBOW_FAMILIES,
         getRainbowBand,
         getRainbowFamily,
+        getRainbowAccent,
         ICONS,
         IMG,
 

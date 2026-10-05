@@ -30,8 +30,15 @@ import {FORM_MODES} from "~/types/form"
 import type {WeekDayMap} from "~/types/dateTypes"
 
 //COMPONENT DEPENDENCIES
-const {SeasonSchema, createSeasonName} = useSeason()
-const {BUTTONS, COLOR, ICONS, LAYOUTS, TYPOGRAPHY, TEXT} = useTheSlopeDesignSystem()
+const {SeasonSchema, createSeasonName, computeCookingDates} = useSeason()
+const {BUTTONS, COLOR, COMPONENTS, ICONS, LAYOUTS, TYPOGRAPHY, TEXT} = useTheSlopeDesignSystem()
+
+// The sum of dinners the saved season scaffolds
+const cookingDayCount = computed(() => {
+    const {start, end} = model.value.seasonDates ?? {}
+    if (!start || !end) return 0
+    return computeCookingDates(model.value.cookingDays, model.value.seasonDates, model.value.holidays ?? []).length
+})
 const appConfig = useAppConfig()
 const {theslope} = appConfig  //some default values
 
@@ -96,6 +103,13 @@ const onSubmitSeason = () => {
                 <a :href="theslope.holidayUrl" :class="[TEXT.blue[500], 'underline']" target="_blank">Lejre Kommune.</a>
               </h3>
             </div>
+            <div :class="COMPONENTS.statBox.box" data-testid="cooking-day-count">
+              <UIcon :name="ICONS.dinner" :class="COMPONENTS.statBox.icon"/>
+              <div class="text-center">
+                <p class="font-semibold">{{ cookingDayCount }}</p>
+                <p class="text-xs text-muted">Madlavningsdage</p>
+              </div>
+            </div>
             <UButton
                 v-if="isViewMode && props.canEdit"
                 v-bind="BUTTONS.secondaryAction"
@@ -118,6 +132,7 @@ const onSubmitSeason = () => {
                 <CalendarDateRangePicker
                     v-model="model.seasonDates"
                     name="seasonDates"
+                    label="Fællesspisning sæsonens start - slut datoer"
                     :disabled="isViewMode"/>
 
                 <!-- Pick weekdays for cooking -->

@@ -115,10 +115,10 @@ export function useEntityFormManager<T>(options: {
 
   /**
    * Watch for formMode changes: apply draft side effects and update URL.
-   * This handles formMode updates via v-model (FormModeSelector) without calling
-   * onModeChange - since #62 removed the fullPath page-key, no remount re-initializes
-   * the draft, so it MUST happen here. Re-applying after onModeChange is idempotent
-   * (fresh copy/default of the same data, applied before render - pre-flush).
+   * This covers direct formMode writes that bypass onModeChange - no remount
+   * re-initializes the draft, so it MUST happen here. Re-applying after
+   * onModeChange is idempotent (fresh copy/default of the same data, applied
+   * before render - pre-flush).
    */
   watch(formMode, async (newMode) => {
     initDraftForMode(newMode)

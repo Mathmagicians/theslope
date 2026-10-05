@@ -15,7 +15,7 @@
 
 html[data-palette="high-contrast"] {
     --color-amber-500: #714836;
-    --color-amber-600: #6e4236;
+    --color-amber-600: #6d4135;
     --color-blue-200: #dcfdff;
     --color-blue-400: #00616a;
     --color-blue-600: #005462;
@@ -86,6 +86,7 @@ html.dark[data-palette="high-contrast"] {
     --color-party-300: #fff2f5;
     --color-peach-300: #fff3eb;
     --color-peach-400: #ffe3d3;
+    --color-peach-600: #f55c1f;
     --color-peach-700: #ed633d;
     --color-pink-300: #fff2f5;
     --color-pink-600: #f6537a;
@@ -98,11 +99,13 @@ html.dark[data-palette="high-contrast"] {
     --color-sky-200: #cbeef5;
     --color-sky-300: #e1faff;
     --color-sky-400: #b4f2ff;
+    --color-sky-600: #5997a9;
     --color-sky-700: #305f6e;
     --color-violet-300: #fff1f8;
     --color-violet-600: #ffe0e9;
     --color-winery-300: #fff2f3;
     --color-yellow-300: #fff6c5;
+    --color-yellow-600: #ca8a04;
     --ui-caramel: var(--ui-color-caramel-300);
     --ui-error: var(--ui-color-error-300);
     --ui-info: var(--ui-color-info-300);

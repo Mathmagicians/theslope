@@ -1,10 +1,8 @@
 import type {APIRequestContext, Page} from '@playwright/test'
 import {test as setup, expect} from '@playwright/test'
-import {authFiles} from './config'
+import {authFiles, testCredentials} from '~~/tests/e2e/config'
 
-const adminUserName = process.env.HEY_NABO_USERNAME as string
-const memberUserName = process.env.HEY_NABO_EJ_ADMIN_USERNAME as string
-const password = process.env.HEY_NABO_PASSWORD as string
+const {adminUserName, memberUserName, password} = testCredentials
 const headers = {'Content-Type': 'application/json'}
 
 async function performLogin(request: APIRequestContext, userName: string) {

@@ -3,8 +3,9 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { mountSuspended } from "@nuxt/test-utils/runtime"
 import CalendarDateRangePicker from '~/components/calendar/CalendarDateRangePicker.vue'
 import { nextTick, ref } from 'vue'
-import { openPopover, expectSharedCalendarGrid } from '~~/tests/component/testHelpers'
+import { openPopover, expectSharedCalendarGrid, findDateSegments, typeIntoSegment, calendarDay } from '~~/tests/component/testHelpers'
 import { CALENDAR, createDayCircleClasses } from '~/composables/useTheSlopeDesignSystem'
+import type { DateRange } from '~/types/dateTypes'
 
 const IS_MD = true
 const dayCircleClasses = createDayCircleClasses(ref(IS_MD))
@@ -29,31 +30,33 @@ describe('CalendarDateRangePicker', () => {
   // The popover teleports into the body; clear it so each test reads its own calendar
   beforeEach(() => { document.body.innerHTML = '' })
 
-  it('renders start and end inputs with formatted dates', async () => {
+  it('renders start and end dates in typed segments', async () => {
     const wrapper = await mountPicker({ start: JAN_1, end: JAN_5 })
-    const inputs = wrapper.findAll('input')
-    expect(inputs.length).toBe(2)
-    expect(inputs[0]!.element.value).toBe('01/01/2025')
-    expect(inputs[1]!.element.value).toBe('05/01/2025')
+    const days = findDateSegments(wrapper, 'day')
+    expect(days.length).toBe(2)
+    expect(days[0]!.attributes('aria-valuenow')).toBe('1')
+    expect(days[1]!.attributes('aria-valuenow')).toBe('5')
+    findDateSegments(wrapper, 'year').forEach(year => expect(year.attributes('aria-valuenow')).toBe('2025'))
   })
 
-  it('updates start input while preserving end', async () => {
+  it('typing the start day updates start and preserves end', async () => {
     const wrapper = await mountPicker({ start: JAN_1, end: JAN_5 })
-    const inputs = wrapper.findAll('input')
-    await inputs[0]!.setValue('10/01/2025')
-    await nextTick()
-    expect(inputs[0]!.element.value).toBe('10/01/2025')
-    expect(inputs[1]!.element.value).toBe('05/01/2025')
+    await typeIntoSegment(findDateSegments(wrapper, 'day')[0]!, ['0', '3'])
+
+    const emitted = wrapper.emitted('update:modelValue')
+    expect(emitted).toBeTruthy()
+    const lastRange = emitted!.at(-1)![0] as DateRange
+    expect(calendarDay(lastRange.start)).toBe('2025-01-03')
+    expect(calendarDay(lastRange.end)).toBe('2025-01-05')
   })
 
-  it('shows error for invalid date format', async () => {
+  it('typing a start after the end reports the range error', async () => {
     const wrapper = await mountPicker({ start: JAN_1, end: JAN_5 })
-    const inputs = wrapper.findAll('input')
-    await inputs[0]!.setValue('31-01-2025')
-    await nextTick()
-    await nextTick()
+    await typeIntoSegment(findDateSegments(wrapper, 'day')[0]!, ['0', '7'])
+
     const vm = wrapper.vm as unknown as PickerVm
-    expect(vm.errors.size).toBeGreaterThan(0)
+    const allErrors = Array.from(vm.errors.values()).flat()
+    expect(allErrors.some((msg: string) => msg.includes('Tidsmaskinen'))).toBe(true)
   })
 
   it('configures its calendar from the shared design-system grid token', async () => {

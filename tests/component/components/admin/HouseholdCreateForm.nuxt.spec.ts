@@ -5,7 +5,7 @@ import {flushPromises} from '@vue/test-utils'
 import HouseholdCreateForm from '~/components/admin/HouseholdCreateForm.vue'
 import {nextTick, ref} from 'vue'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
-import {formatDate} from '~/utils/date'
+import {findDateSegments} from '~~/tests/component/testHelpers'
 
 // ---- Test data helpers ----
 
@@ -144,8 +144,9 @@ describe('HouseholdCreateForm', () => {
 
         const moveInDate = new Date('2026-05-15')
         await pickMoveInDate(wrapper, moveInDate)
-        const dateInput = wrapper.find('input[name="movedInDate"]').element as HTMLInputElement
-        expect(dateInput.value).toBe(formatDate(moveInDate))
+        const movedInPicker = wrapper.findAllComponents({name: 'CalendarDatePicker'}).find(p => p.props('name') === 'movedInDate')!
+        expect(findDateSegments(movedInPicker, 'day')[0]!.attributes('aria-valuenow')).toBe(String(moveInDate.getDate()))
+        expect(findDateSegments(movedInPicker, 'year')[0]!.attributes('aria-valuenow')).toBe(String(moveInDate.getFullYear()))
 
         await clickSubmit(wrapper)
 

@@ -5,9 +5,36 @@ const isApiError = (error: unknown): error is ApiError => {
     return 'statusCode' in error || 'status' in error
 }
 
+export type UncaughtApiErrorHandler = () => void
+
+export interface UncaughtApiErrorActions {
+    login: (redirect: string) => void
+    toast: (error: unknown) => void
+}
+
+/**
+ * The application's error floor (plugins/apiErrors.client.ts): picks the handler an uncaught
+ * error gets. A dead session re-authenticates and returns in place (the login page follows
+ * ?redirect, and its own 401s stay put), any other API error surfaces as the standard toast;
+ * an error that is not an API response is not this floor's to handle (null).
+ */
+export const resolveUncaughtApiError = (
+    error: unknown,
+    route: {path: string, fullPath: string},
+    actions: UncaughtApiErrorActions
+): UncaughtApiErrorHandler | null => {
+    if (!isApiError(error)) return null
+    const statusCode = error.statusCode ?? (error as Record<string, unknown>).status
+    if (statusCode === 401) {
+        return route.path === '/login' ? null : () => actions.login(route.fullPath)
+    }
+    return () => actions.toast(error)
+}
+
 export const useApiHandler = () => {
-    // Capture toast reference during setup context
+    // Capture toast and route references during setup context
     const toast = useToast()
+    const route = useRoute()
 
     const handleApiError = (error: ApiError | unknown, action: string, customMessage?: string): string => {
         // Extract serializable parts (FetchError is not a POJO)
@@ -68,7 +95,11 @@ export const useApiHandler = () => {
             return result
         } catch (e: unknown) {
             state.value = 'error'
-            throw new Error(handleApiError(e, actionName))
+            // A mid-session 401 re-authenticates and returns in place (the login page follows ?redirect)
+            if (isApiError(e) && (e.statusCode === 401 || (e as Record<string, unknown>).status === 401) && route.path !== '/login') {
+                await navigateTo({path: '/login', query: {redirect: route.fullPath}})
+            }
+            throw new Error(handleApiError(e, actionName), {cause: e})
         }
     }
 

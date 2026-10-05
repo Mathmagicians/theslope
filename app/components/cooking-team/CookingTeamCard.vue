@@ -9,11 +9,11 @@
  *
  * MODE: 'monitor' (with volunteer buttons - always visible)
  * ┌──────────────────────────────────────────────────────────────────────────┐
- * │ 🍳 Team A   👥 4   📅 12                                                 │
+ * │ CookingTeamBadges (large): [(team) Team A] [(members) 4] [(calendar) 12] │
  * ├──────────────────────────────────────────────────────────────────────────┤
- * │ 👨‍🍳 Holdets chefkokke: [Anna H]                                          │
- * │ 👥 Holdets kokke: [Lars B] [Maria S]                                     │
- * │ 🌱 Holdets kokkespirer: [Peter J]                                        │
+ * │ (chef hat)    Chefkokke    [Anna H]                                      │
+ * │ (cooking pot) Kokke        [Lars B] [Maria S]                            │
+ * │ (sprout)      Kokkespirer  [Peter J]           (ROLE_ICONS glyphs)       │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
  * Already volunteered:
@@ -35,10 +35,10 @@
  */
 import type { WeekDayMap, DateRange } from '~/types/dateTypes'
 import type { TeamRole, CookingTeamAssignment } from '~/composables/useCookingTeamValidation'
-import { ROLE_LABELS, ROLE_ICONS } from '~/composables/useCookingTeamValidation'
+import { ROLE_LABELS } from '~/composables/useCookingTeamValidation'
 
 // Design system
-const { SIZES, ICONS, ALERTS, COLOR, TYPOGRAPHY, TEXT, BG, getRainbowBand, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { SIZES, ICONS, ALERTS, COLOR, TYPOGRAPHY, TEXT, BG, COMPONENTS, ROLE_ICONS, getRainbowBand, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 type DisplayMode = 'monitor' | 'regular' | 'edit'
 
@@ -84,7 +84,9 @@ const {data: team, status, error} = useAsyncData(
   () => planStore.fetchTeamDetail(props.teamId),
   {
     default: () => null,
-    watch: [() => props.teamId],
+    // The season carries the team aggregates: when a save refreshes it, the detail
+    // refetches in place while the previous data keeps rendering
+    watch: [() => props.teamId, () => planStore.selectedSeason],
     immediate: true
   }
 )
@@ -209,7 +211,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
 
 <template>
   <!-- Loading state -->
-  <Loader v-if="isLoading" text="Henter madhold..." />
+  <Loader v-if="isLoading && !team" text="Henter madhold..." />
 
   <!-- Error state -->
   <ViewError v-else-if="isErrored" :error="error?.statusCode" :cause="error" />
@@ -231,16 +233,15 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
   <!-- MONITOR MODE: Large display for kitchen monitors -->
   <div v-else-if="mode === 'monitor'" class="py-4 md:py-6">
     <!-- Team name header (always visible) -->
-    <div class="mb-3 md:mb-4 px-3 md:px-4 flex items-center gap-2 flex-wrap">
-      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
-        <UIcon :name="ICONS.team" :size="SIZES.largeIconSize" class="inline" /> {{ teamName }}
-      </UBadge>
-      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
-        👨‍🍳 {{ assignments.length }}
-      </UBadge>
-      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
-        📅 {{ cookingDaysCount }}
-      </UBadge>
+    <div class="mb-3 md:mb-4 px-3 md:px-4">
+      <CookingTeamBadges
+        :team-number="teamNumber"
+        :team-name="teamName"
+        :chef-count="roleGroups.CHEF.length"
+        :member-count="assignments.length"
+        :cooking-days-count="cookingDaysCount"
+        size="large"
+      />
     </div>
 
     <!-- Members display OR empty state -->
@@ -248,7 +249,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
       <!-- Chefs group -->
       <div v-if="roleGroups.CHEF.length > 0" class="flex items-start gap-3 md:gap-4">
         <div class="flex flex-col items-center">
-          <span class="text-2xl md:text-3xl">{{ ROLE_ICONS.CHEF }}</span>
+          <UIcon :name="ROLE_ICONS.CHEF" class="text-2xl md:text-3xl" />
           <span :class="[TYPOGRAPHY.finePrint, TEXT.muted]">Chefkokke</span>
         </div>
         <UserListItem
@@ -262,7 +263,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
       <!-- Cooks group -->
       <div v-if="roleGroups.COOK.length > 0" class="flex items-start gap-3 md:gap-4">
         <div class="flex flex-col items-center">
-          <span class="text-2xl md:text-3xl">{{ ROLE_ICONS.COOK }}</span>
+          <UIcon :name="ROLE_ICONS.COOK" class="text-2xl md:text-3xl" />
           <span :class="[TYPOGRAPHY.finePrint, TEXT.muted]">Kokke</span>
         </div>
         <UserListItem
@@ -276,7 +277,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
       <!-- Junior helpers group -->
       <div v-if="roleGroups.JUNIORHELPER.length > 0" class="flex items-start gap-3 md:gap-4">
         <div class="flex flex-col items-center">
-          <span class="text-2xl md:text-3xl">{{ ROLE_ICONS.JUNIORHELPER }}</span>
+          <UIcon :name="ROLE_ICONS.JUNIORHELPER" class="text-2xl md:text-3xl" />
           <span :class="[TYPOGRAPHY.finePrint, TEXT.muted]">Kokkespirer</span>
         </div>
         <UserListItem
@@ -310,7 +311,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
       class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 py-2 px-0 md:px-4 border-y-2 md:border-2 border-dashed"
     >
       <div class="flex flex-col md:flex-row md:items-center gap-3 flex-1">
-        <UBadge :class="[teamBand, 'rounded-full p-2 md:p-3']" :size="SIZES.standard">
+        <UBadge :class="[teamBand, COMPONENTS.teamChip]" :size="SIZES.standard">
           <UIcon :name="ICONS.team" :size="SIZES.standardIconSize" />
         </UBadge>
         <UFormField label="Holdnavn" class="flex-1 min-w-fit" >
@@ -341,18 +342,15 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
               />
             </UTooltip>
           </UAvatarGroup>
-          <UBadge
-            :class="teamBand"
-            :size="SIZES.large"
-          >
-            👨‍🍳 {{ assignments.length }}
-          </UBadge>
-          <UBadge
-            :class="teamBand"
-            :size="SIZES.large"
-          >
-            📅 {{ cookingDaysCount }}
-          </UBadge>
+          <CookingTeamBadges
+            :team-number="teamNumber"
+            :team-name="teamName"
+            :chef-count="roleGroups.CHEF.length"
+            :member-count="assignments.length"
+            :cooking-days-count="cookingDaysCount"
+            :show-name="false"
+            size="large"
+          />
         </div>
       </div>
       <DangerButton
@@ -365,16 +363,15 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
     </div>
 
     <!-- VIEW MODE: Team name header -->
-    <div v-else class="flex items-center gap-2 flex-wrap p-4 border">
-      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
-        <UIcon :name="ICONS.team" :size="SIZES.largeIconSize" class="inline" /> {{ teamName }}
-      </UBadge>
-      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
-        👨‍🍳 {{ assignments.length }}
-      </UBadge>
-      <UBadge :class="[teamBand, 'w-fit']" :size="SIZES.large">
-        📅 {{ cookingDaysCount }}
-      </UBadge>
+    <div v-else class="p-4 border">
+      <CookingTeamBadges
+        :team-number="teamNumber"
+        :team-name="teamName"
+        :chef-count="roleGroups.CHEF.length"
+        :member-count="assignments.length"
+        :cooking-days-count="cookingDaysCount"
+        size="large"
+      />
     </div>
 
     <!-- REGULAR/EDIT MODE: Shared two-row layout -->

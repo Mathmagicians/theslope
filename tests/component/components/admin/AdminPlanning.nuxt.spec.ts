@@ -59,10 +59,9 @@ describe('AdminPlanning', () => {
     })
 
     describe('header controls', () => {
-        it('shows the create action and no form-mode selector for an admin', async () => {
+        it('shows the create action for an admin', async () => {
             const wrapper = await mountPlanning()
             expect(findByTestId(wrapper, PLANNING_TEST_IDS.create).exists()).toBe(true)
-            expect(findByTestId(wrapper, 'form-mode-edit').exists()).toBe(false)
         })
 
         it('shows the pencil and no save button in view mode', async () => {

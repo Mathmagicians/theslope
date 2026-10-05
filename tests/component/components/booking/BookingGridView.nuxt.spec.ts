@@ -1,5 +1,5 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeAll} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {findByTestId} from '~~/tests/component/testHelpers'
 import BookingGridView from '~/components/booking/BookingGridView.vue'
@@ -10,8 +10,12 @@ import {addDays, startOfDay} from 'date-fns'
 
 const ticketPrices = TicketFactory.defaultTicketPrices()
 // Use real deadlinesForSeason() to stay in sync with SeasonDeadlines interface
-const {deadlinesForSeason} = useSeason()
-const deadlines = deadlinesForSeason(SeasonFactory.defaultSeasonData)
+// @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not at module level
+let deadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
+beforeAll(() => {
+  const {deadlinesForSeason} = useSeason()
+  deadlines = deadlinesForSeason(SeasonFactory.defaultSeasonData)
+})
 
 // Mock household with inhabitants (inline to avoid type imports)
 const mockHousehold = {
@@ -36,7 +40,8 @@ const baseProps = {
   dinnerEvents: [],
   orders: [],
   ticketPrices,
-  deadlines
+  // Getter: deadlines is assigned in beforeAll, read when a test spreads baseProps
+  get deadlines() { return deadlines }
 }
 
 const mount = (props = {}) => mountSuspended(BookingGridView, {

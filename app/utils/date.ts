@@ -151,20 +151,6 @@ export function isCalendarDateInDateList(dateValue: DateValue, dateList: Date[])
     return dateList.some(date => isSameDay(date, dateToCheck))
 }
 
-// Translate English weekday abbreviations to Danish
-export function translateToDanish(day: string): string {
-    const mapping: Record<string, string> = {
-        'Mon': 'M',
-        'Tue': 'T',
-        'Wed': 'O',
-        'Thu': 'T',
-        'Fri': 'F',
-        'Sat': 'L',
-        'Sun': 'S'
-    }
-    return mapping[day] || day
-}
-
 /**
  * Format Danish weekday to compact form
  * @param day - Full Danish weekday name (e.g., 'mandag')

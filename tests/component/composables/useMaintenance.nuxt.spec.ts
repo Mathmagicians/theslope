@@ -1,9 +1,16 @@
-import {describe, expect, it} from 'vitest'
+import {beforeAll, describe, expect, it} from 'vitest'
 import {useMaintenance} from '~/composables/useMaintenance'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 
-const {formatMonthlyBillingStats, parseResultSummary, formatResultSummary} = useMaintenance()
+// @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not at module level
+type Maintenance = ReturnType<typeof useMaintenance>
+let formatMonthlyBillingStats: Maintenance['formatMonthlyBillingStats']
+let parseResultSummary: Maintenance['parseResultSummary']
+let formatResultSummary: Maintenance['formatResultSummary']
+beforeAll(() => {
+    ({formatMonthlyBillingStats, parseResultSummary, formatResultSummary} = useMaintenance())
+})
 const {JobType} = useMaintenanceValidation()
 
 const billed = {billingPeriodSummaryId: 8, billingPeriod: '18/08/2026-17/09/2026', invoiceCount: 3, transactionCount: 12, totalAmount: 41230}

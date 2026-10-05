@@ -1,7 +1,7 @@
 import {test, expect} from '@playwright/test'
+import {testCredentials} from '~~/tests/e2e/config'
 
-const userName = process.env.HEY_NABO_USERNAME as string
-const password = process.env.HEY_NABO_PASSWORD as string
+const {adminUserName: userName, password} = testCredentials
 const headers = {'Content-Type': 'application/json'}
 
 test.describe('POST /api/auth/login - UserDetail schema (ADR-009)', () => {

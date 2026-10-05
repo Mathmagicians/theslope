@@ -13,8 +13,28 @@ export default defineNuxtConfig({
             pathPrefix: false,
         },
     ],
+    app: {
+        head: {
+            link: [
+                {rel: 'manifest', href: '/manifest.webmanifest'},
+                // Safari takes the ico, every other browser prefers the vector
+                {rel: 'icon', href: '/favicon.ico', sizes: '32x32'},
+                {rel: 'icon', type: 'image/svg+xml', href: '/app-icon.svg'},
+                {rel: 'apple-touch-icon', href: '/apple-touch-icon.png'}
+            ],
+            meta: [
+                {name: 'theme-color', content: '#66a28f'},
+                // iOS reads these for the standalone (installed) face
+                {name: 'apple-mobile-web-app-capable', content: 'yes'},
+                {name: 'apple-mobile-web-app-status-bar-style', content: 'default'},
+                {name: 'apple-mobile-web-app-title', content: 'Skråningen'}
+            ]
+        }
+    },
     css: ['~/assets/css/main.css'],
     devtools: {enabled: true},
+    // Shared Vite watcher (dev only); the default from compatibilityVersion 5
+    experimental: {watcher: 'builder'},
 
     eslint: {
         // options here
@@ -75,20 +95,19 @@ export default defineNuxtConfig({
     icon: {
         // Server-side bundling (icons embedded in the build); the collections are the installed @iconify-json/* packages (package.json)
         serverBundle: {},
-        // Client-side settings - automatic tree-shaking
+        // Client-side settings - automatic tree-shaking; Nuxt UI 4.10+ pre-bundles its own internal icons
         clientBundle: {
-            scan: true,  // Only bundle icons actually used in components
-            // Explicitly include icons used by NuxtUI internally (not detected by scanning)
-            icons: [
-                'lucide:sun',
-                'lucide:moon'
-            ]
+            scan: true  // Only bundle icons actually used in components
         },
         provider: 'server'  // Use server-side icon provider
     },
 
 
     runtimeConfig: {
+        // Heynabo tokens carry no expiry; the cookie lives a day at most and re-login carries longevity
+        session: {
+            maxAge: 60 * 60 * 24
+        },
         // GitHub integration for user feedback
         GITHUB_TOKEN: '',  // Set via NUXT_GITHUB_TOKEN env variable
         GITHUB_OWNER: 'Mathmagicians',  // Override via NUXT_GITHUB_OWNER if needed

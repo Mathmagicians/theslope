@@ -224,6 +224,20 @@ Shared `data-testid` contracts live next to the specs that share them, e.g. `tes
 
 ## Component Testing (Nuxt UI v4+)
 
+### Nuxt test environment (@nuxt/test-utils 4)
+
+The Nuxt app starts in a per-file `beforeAll`. Rules for `*.nuxt.spec.ts`:
+
+- A composable whose chain reaches `useAppConfig()`/`useNuxtApp()` (`useSeason`, `useBooking`, `useBookingUi`, `useBilling`,
+  `useMaintenance`) runs in `beforeAll` or in the test — at module level or in a `describe` body it throws `NUXT_E1001`.
+  Declare `let` bindings and destructure in one `beforeAll` per file; call sites stay unchanged.
+- Collection-time data (`it.each` tables, module constants) reads the config via `import appConfig from '~/app.config'`.
+- Override a module per export: spread `importOriginal()` and replace the one export the spec steers
+  (`vue-router`'s `useRoute`), or `mockNuxtImport` for an auto-import (`useToast`, `navigateTo`). The runtime boots the
+  real router and the real config; a wholesale `vue-router`, `#imports` or `useRuntimeConfig` mock breaks the boot.
+- The nuxt vitest project (`vitest.config.ts`) sets `hookTimeout: 60_000` (a cold app boot under full parallel load passes
+  the 10s default) and `runtimeConfig.public.HEY_NABO_API` for specs that render Heynabo links.
+
 ### Render Real Components
 
 Rule 6 in practice: mount the component with its real children and let the store fetch from registered endpoints.
@@ -364,12 +378,17 @@ it('does not emit save when validation fails', async () => {
 
 `tests/component/architecture/*.unit.spec.ts` read the `.vue` sources and fail on a *pattern*, not on a render. They are
 how a design-system sweep stays swept: once every `<UAlert>` binds an `ALERTS` kind, the test is what stops the 57th one
-from being written with a raw `:color` (ADR-018). `designSystemUsage.unit.spec.ts` guards four rules — every `<UAlert`
-binds `ALERTS.`, none passes a raw `color`/`variant`/`type`, every `<UCalendar` binds `COMPONENTS.calendarGrid`, and no
-template uses the dead Nuxt UI v2 slot name `#empty-state`. Violations are reported as `file:line`, so a failure names
-the sites to fix.
+from being written with a raw `:color` (ADR-018). `designSystemUsage.unit.spec.ts` guards the ADR-018 rules — every `<UAlert`
+binds `ALERTS.` and none passes a raw `color`/`variant`/`type`, every `<UCalendar` binds `COMPONENTS.calendarGrid`, every
+`<UTable` binds a `COMPONENTS.table` token, every team `<UTabs` (one whose file renders `CookingTeamBadges`) binds
+`COMPONENTS.teamTabs`, no `.vue` names a Tailwind palette shade or passes a literal colour prop, and no template uses the
+dead Nuxt UI v2 slot name `#empty-state`. Violations are reported as `file:line`, so a failure names the sites to fix.
 
 Add one whenever a fix to a Nuxt UI component family becomes a token: add the token, sweep all instances, add the rule.
+
+A property check runs one case per dimension — a rule, a palette and mode — that collects every failing item and prints
+them in its message (`expect(misses).toEqual([])`). One case per item turns a 50-case suite into thousands and says the
+same thing.
 
 ### `designSystemContrast.unit.spec.ts` — the palette's contrast, not its class strings
 
@@ -479,7 +498,7 @@ test('GIVEN create mode WHEN submit THEN created', async ({ page, browser }) => 
   // GIVEN: Setup via factory (fast)
   // WHEN: Interact via UI
   await page.goto('/admin/planning?mode=create')
-  await page.locator('input[name="start"]').fill('01/01/2025')
+  await testHelpers.fillDateField(page.locator('[name="seasonDates"]'), 'start', '01/01/2025')
   await page.getByTestId('submit-season').click()
 
   // THEN: Verify via API (reliable)
@@ -496,7 +515,12 @@ await page.getByTestId('season-selector').click()
 await page.getByTestId('submit-season').click()
 
 // Form inputs - name attribute works (native HTML)
-await page.locator('input[name="start"]').fill('01/01/2025')
+await page.locator('input[name="pbsId"]').fill('123')
+
+// Date fields are typed segments (UInputDate): fill and read through the helpers,
+// scoped to the picker's [name] wrapper; a range field holds start and end
+await testHelpers.fillDateField(page.locator('[name="seasonDates"]'), 'start', '01/01/2025')
+const start = await testHelpers.readDateField(page.locator('[name="seasonDates"]'), 'start')
 ```
 
 ### Waiting Patterns
@@ -738,6 +762,7 @@ test('RELEASE bucket: after-deadline orders are RELEASED not deleted', async ({b
 | Reactive updates | Assertion fails after trigger | Add `await nextTick()` |
 | Linux CI failures | Strict mode violation | Use `getByRole()` or `.first()` for dropdowns |
 | Tooltip provider error | `UTooltip` needs the `TooltipProvider` context `UApp` supplies in the app | Mount via `mountWithTooltipProvider()` (`tests/component/testHelpers.ts`) |
+| "Factory HTTP methods are e2e-only" thrown in a component test | The spec called a factory method that asserts with playwright's `expect` — `@playwright/test` resolves to a stub in the vitest projects (`tests/component/playwrightStub.ts`) | Use the factory's data builders; HTTP methods run under playwright in `tests/e2e` |
 
 ### Linux vs macOS Differences
 

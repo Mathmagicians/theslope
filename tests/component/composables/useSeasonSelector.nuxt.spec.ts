@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest'
 import { mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { computed, ref, type Ref } from 'vue'
 import type { Season } from '~/composables/useSeasonValidation'
@@ -12,7 +12,6 @@ const { mockNavigateTo, mockRouteData } = vi.hoisted(() => ({
 
 mockNuxtImport('navigateTo', () => mockNavigateTo)
 mockNuxtImport('useRoute', () => () => mockRouteData)
-mockNuxtImport('useRouter', () => () => ({ push: vi.fn(), replace: vi.fn() }))
 
 // Mock seasons using factory pattern
 const mockSeasons: Season[] = [
@@ -48,7 +47,7 @@ describe('useSeasonSelector', () => {
   let mockSeasonsRef: Ref<Season[]>
   let mockSelectedSeasonIdRef: Ref<number | null>
   let mockActiveSeasonRef: Ref<Season | null>
-  let mockOnSeasonSelect: ReturnType<typeof vi.fn>
+  let mockOnSeasonSelect: Mock<(id: number) => void>
 
   beforeEach(() => {
     vi.clearAllMocks()

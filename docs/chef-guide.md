@@ -2,7 +2,7 @@
 
 Denne guide er til dig, der er chefkok på et madhold.
 
-> **Se også:** [Brugerguide](user-guide.md) | [Administratorguide](admin-guide.md) | [Systemoversigt](features.md)
+> **Se også:** [Brugerguide](user-guide.md) | [Administratorguide](admin-guide.md) | [Systemoversigt](features/features.md)
 
 ---
 

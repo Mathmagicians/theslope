@@ -1,5 +1,5 @@
 <template>
-  <UApp>
+  <UApp :locale="da">
     <NuxtLayout>
       <!-- Use route.path (not fullPath) to prevent component remount on query param changes -->
       <!-- See: https://github.com/nuxt/nuxt/discussions/24062 -->
@@ -8,4 +8,5 @@
   </UApp>
 </template>
 <script setup lang="ts">
+import {da} from '@nuxt/ui/locale'
 </script>

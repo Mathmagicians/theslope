@@ -13,7 +13,7 @@ const {throwH3Error} = eventHandlerHelper
  * Same logic as cron task, but triggered via HTTP: generation, CSV archive (ARCHIVE), accountant mail (SENDER).
  *
  * Query params:
- * - triggeredBy: "ADMIN:<userId>" for manual triggers
+ * - triggeredBy: "ADMIN:<email>" from the admin UI, "ADMIN" when absent
  */
 export default defineEventHandler(async (event): Promise<MonthlyBillingResponse> => {
     const {env} = event.context.cloudflare

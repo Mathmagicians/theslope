@@ -1,4 +1,4 @@
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, differenceInDays, nextDay, type Day} from 'date-fns'
 import {useBooking, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, type OrderDecisionInput} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
@@ -8,27 +8,66 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
+import appConfig from '~/app.config'
 
 // Shared test constant: days offset for dinners before cancellation deadline
-const FAR_FUTURE_DAYS = useAppConfig().theslope.defaultSeason.ticketIsCancellableDaysBefore + 20
+const FAR_FUTURE_DAYS = appConfig.theslope.defaultSeason.ticketIsCancellableDaysBefore + 20
 
 // Helper: days from today to next occurrence of weekday (0=Sun..6=Sat), at least minDaysAhead from now
 const today = new Date()
 const daysToWeekday = (dayOfWeek: Day, minDaysAhead: number = FAR_FUTURE_DAYS): number =>
     differenceInDays(nextDay(addDays(today, minDaysAhead), dayOfWeek), today)
 
-describe('useBooking', () => {
-    const {
+// @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not in the describe body
+type UseBookingT = ReturnType<typeof useBooking>
+type UseBookingUiT = ReturnType<typeof useBookingUi>
+let buildDinnerUrl: UseBookingT['buildDinnerUrl']
+let createHeynaboEventPayload: UseBookingT['createHeynaboEventPayload']
+let HEYNABO_EVENT_TEMPLATE: UseBookingT['HEYNABO_EVENT_TEMPLATE']
+let canCancelDinner: UseBookingT['canCancelDinner']
+let getStepConfig: UseBookingT['getStepConfig']
+let getDinnerStepState: UseBookingT['getDinnerStepState']
+let getPastDinnerIds: UseBookingT['getPastDinnerIds']
+let prepareTransactionData: UseBookingT['prepareTransactionData']
+let buildOrderSnapshot: UseBookingT['buildOrderSnapshot']
+let getLockedFutureDinnerIds: UseBookingT['getLockedFutureDinnerIds']
+let computeLockStatus: UseBookingT['computeLockStatus']
+let countReleasedOrdersByDinner: UseBookingT['countReleasedOrdersByDinner']
+let getBookingOptions: UseBookingT['getBookingOptions']
+let groupGuestOrders: UseBookingT['groupGuestOrders']
+let getDayBillSummary: UseBookingT['getDayBillSummary']
+let hasChanges: UseBookingT['hasChanges']
+let countChanges: UseBookingT['countChanges']
+let formatActionPreview: UseBookingUiT['formatActionPreview']
+let ACTION_PREVIEW: UseBookingUiT['ACTION_PREVIEW']
+let defaultDeadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
+beforeAll(() => {
+    ({
         buildDinnerUrl,
         createHeynaboEventPayload,
         HEYNABO_EVENT_TEMPLATE,
         canCancelDinner,
         getStepConfig,
-        getDinnerStepState
-    } = useBooking()
+        getDinnerStepState,
+        getPastDinnerIds,
+        prepareTransactionData,
+        buildOrderSnapshot,
+        getLockedFutureDinnerIds,
+        computeLockStatus,
+        countReleasedOrdersByDinner,
+        getBookingOptions,
+        groupGuestOrders,
+        getDayBillSummary,
+        hasChanges,
+        countChanges
+    } = useBooking());
+    ({formatActionPreview, ACTION_PREVIEW} = useBookingUi())
 
     const {deadlinesForSeason} = useSeason()
-    const defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
+    defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
+})
+
+describe('useBooking', () => {
 
     describe('buildDinnerUrl', () => {
         it.each([
@@ -299,7 +338,6 @@ describe('useBooking', () => {
     })
 
     describe('getPastDinnerIds', () => {
-        const {getPastDinnerIds} = useBooking()
         const daysFromNow = (days: number) => {
             const d = new Date()
             d.setDate(d.getDate() + days)
@@ -319,7 +357,6 @@ describe('useBooking', () => {
     })
 
     describe('prepareTransactionData', () => {
-        const {prepareTransactionData} = useBooking()
         const {OrderSnapshotSchema} = useBillingValidation()
 
         it.each([
@@ -349,7 +386,6 @@ describe('useBooking', () => {
     })
 
     describe('buildOrderSnapshot', () => {
-        const {buildOrderSnapshot} = useBooking()
 
         // Base order data reused across tests
         const baseOrder = () => ({
@@ -1341,7 +1377,6 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
 // =============================================================================
 
 describe('Lock Status Utilities', () => {
-    const {getLockedFutureDinnerIds, computeLockStatus, countReleasedOrdersByDinner} = useBooking()
     const {OrderStateSchema} = useBookingValidation()
     const OrderState = OrderStateSchema.enum
 
@@ -1486,7 +1521,6 @@ describe('Lock Status Utilities', () => {
 // =============================================================================
 
 describe('getBookingOptions', () => {
-    const {getBookingOptions} = useBooking()
     const {DinnerModeSchema, OrderStateSchema, DinnerStateSchema} = useBookingValidation()
     const DM = DinnerModeSchema.enum
     const OS = OrderStateSchema.enum
@@ -1540,7 +1574,6 @@ describe('getBookingOptions', () => {
 // =============================================================================
 
 describe('groupGuestOrders', () => {
-    const {groupGuestOrders} = useBooking()
 
     const order = (overrides: {id?: number, allergies?: string[] | null, provenance?: string | null} = {}) => ({
         inhabitantId: 1, ticketType: 'ADULT', dinnerEventId: 101,
@@ -1572,7 +1605,6 @@ describe('groupGuestOrders', () => {
 // =============================================================================
 
 describe('getDayBillSummary', () => {
-    const {getDayBillSummary} = useBooking()
     const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
     const DM = DinnerModeSchema.enum
     const OS = OrderStateSchema.enum
@@ -1603,8 +1635,6 @@ describe('getDayBillSummary', () => {
 // =============================================================================
 
 describe('Action Preview', () => {
-    const {hasChanges, countChanges} = useBooking()
-    const {formatActionPreview, ACTION_PREVIEW} = useBookingUi()
     const {orderStateConfig} = useOrder()
     const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
     const DM = DinnerModeSchema.enum

@@ -4,7 +4,7 @@ import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import testHelpers from '../testHelpers'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, temporaryAndRandom, salt, saltedId, doScreenshot, waitForHydration} = testHelpers
+const {validatedBrowserContext, pollUntil, temporaryAndRandom, salt, saltedId, doScreenshot, waitForHydration, fillDateField, readDateField} = testHelpers
 
 /**
  * UI TEST STRATEGY:
@@ -99,10 +99,10 @@ test.describe('AdminHouseholds View', () => {
         await pbsInput.fill(String(newPbsId))
         await expect(pbsInput).toHaveValue(String(newPbsId))
 
-        const moveInInput = page.locator('input[name="movedInDate"]')
-        await moveInInput.fill('15/05/2026')
-        await moveInInput.press('Tab')
-        await expect(moveInInput).toHaveValue('15/05/2026')
+        // The form renders ONE date field at this step (the prevOwner pickers mount after the address pick)
+        await fillDateField(page.locator('body'), 'start', '15/05/2026')
+        expect((await readDateField(page.locator('body'), 'start')).getTime())
+            .toBe(new Date(2026, 4, 15).getTime())
 
         // Now pick the seed's address (USelect offers "{address} · HN {heynaboId}")
         await page.getByTestId('create-household-address').click()

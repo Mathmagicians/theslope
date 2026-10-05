@@ -62,7 +62,7 @@ defineExpose({open: () => { if (isActionable.value) isOpen.value = true }})
 <template>
     <div v-if="isActionable" class="role-assignment">
         <UButton
-            v-bind="BUTTONS.disclosure(isOpen)"
+            v-bind="BUTTONS.flipOpen(isOpen)"
             :icon="ICONS.chef"
             :size="SIZES.standard"
             :color="heroPrimary"

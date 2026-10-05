@@ -9,6 +9,7 @@ import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTes
 import AdminPlanningSeason from '~/components/admin/planning/AdminPlanningSeason.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {FORM_MODES, type FormMode} from '~/types/form'
+import {computeCookingDates} from '~/utils/season'
 
 // The form reads its saving state from the real plan store; only HTTP is faked (testing.md Rule 6)
 registerEndpoint('/api/admin/season/active', () => null)
@@ -33,6 +34,15 @@ describe('AdminPlanningSeason', () => {
     it('renders the season form', async () => {
         const wrapper = await mount(FORM_MODES.VIEW)
         expect(wrapper.find('form#seasonForm').exists()).toBe(true)
+    })
+
+    it('counts the cooking days the saved season scaffolds', async () => {
+        const wrapper = await mount(FORM_MODES.VIEW)
+        const expected = computeCookingDates(season.cookingDays, season.seasonDates, season.holidays).length
+        expect(expected).toBeGreaterThan(0)
+        const counter = findByTestId(wrapper, PLANNING_TEST_IDS.cookingDayCount)
+        expect(counter.text()).toContain(String(expected))
+        expect(counter.text()).toContain('Madlavningsdage')
     })
 
     describe('title', () => {

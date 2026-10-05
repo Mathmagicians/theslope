@@ -1,7 +1,8 @@
 import { test, expect } from '@playwright/test'
-import { authFiles } from '../config'
-import testHelpers from '../testHelpers'
-import { SeasonFactory } from '../testDataFactories/seasonFactory'
+import { authFiles } from '~~/tests/e2e/config'
+import testHelpers from '~~/tests/e2e/testHelpers'
+import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
+import { FORM_MODES } from '~/types/form'
 
 const { adminUIFile, memberUIFile } = authFiles
 const { validatedBrowserContext, pollUntil, doScreenshot } = testHelpers
@@ -20,11 +21,7 @@ test.describe('Admin page path-based navigation', () => {
   const adminUrl = '/admin'
   const createdSeasonIds: number[] = []
 
-  const formModes = [
-    { mode: 'view', buttonName: 'form-mode-view' },
-    { mode: 'edit', buttonName: 'form-mode-edit' },
-    { mode: 'create', buttonName: 'form-mode-create' }
-  ]
+  const formModes = Object.values(FORM_MODES)
 
   test.use({ storageState: adminUIFile })
 
@@ -103,19 +100,19 @@ test.describe('Admin page path-based navigation', () => {
 
   for (const tab of tabs.filter(t => t.hasFormModes)) {
     for (const formMode of formModes) {
-      test(`Tab "${tab.name}" supports mode=${formMode.mode} in URL query`, async ({ page }) => {
-        await page.goto(`${adminUrl}/${tab.path}?mode=${formMode.mode}`)
-        await doScreenshot(page, `admin-${tab.path}-mode-${formMode.mode}-after-goto`)
+      test(`Tab "${tab.name}" supports mode=${formMode} in URL query`, async ({ page }) => {
+        await page.goto(`${adminUrl}/${tab.path}?mode=${formMode}`)
+        await doScreenshot(page, `admin-${tab.path}-mode-${formMode}-after-goto`)
 
         await pollUntil(
           async () => await page.locator(tab.selector).isVisible(),
           (isVisible) => isVisible,
           10
         )
-        await doScreenshot(page, `admin-${tab.path}-mode-${formMode.mode}-after-visible-check`)
+        await doScreenshot(page, `admin-${tab.path}-mode-${formMode}-after-visible-check`)
 
         expect(page.url()).toContain(`/admin/${tab.path}`)
-        expect(page.url()).toContain(`mode=${formMode.mode}`)
+        expect(page.url()).toContain(`mode=${formMode}`)
       })
     }
   }
@@ -236,7 +233,7 @@ test.describe('Admin season URL persistence', () => {
  * Admin authorization tests - parametrized for admin vs member contexts
  *
  * Tests that:
- * - Admin users see the tab's edit control (planning: the season pencil, teams: FormModeSelector)
+ * - Admin users see the tab's edit control (planning: the season pencil, teams: the create button)
  * - Member users see "admin-readonly-banner" and the edit control is absent
  */
 test.describe('Admin page authorization', () => {
@@ -261,7 +258,7 @@ test.describe('Admin page authorization', () => {
   // Tabs with edit controls to test - each tab names the control that opens its form
   const tabsWithEditControls = [
     { path: 'planning', selector: '[data-testid="admin-planning"]', editControl: 'edit-season' },
-    { path: 'teams', selector: '[data-testid="admin-teams"]', editControl: 'form-mode-edit' }
+    { path: 'teams', selector: '[data-testid="admin-teams"]', editControl: 'create-team' }
   ]
 
   for (const userContext of userContexts) {

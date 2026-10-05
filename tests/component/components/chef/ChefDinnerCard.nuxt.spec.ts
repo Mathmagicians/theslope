@@ -1,4 +1,4 @@
-import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
+import {describe, it, expect, vi, beforeEach, afterEach, beforeAll} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {findByTestId, findAllByTestId} from '~~/tests/component/testHelpers'
 import ChefDinnerCard from '~/components/chef/ChefDinnerCard.vue'
@@ -8,14 +8,18 @@ import {nextTick} from 'vue'
 
 describe('ChefDinnerCard', () => {
     const {DinnerStateSchema} = useBookingValidation()
-    const {deadlinesForSeason} = useSeason()
     const DinnerState = DinnerStateSchema.enum
 
     // Fixed reference time for temporal tests: January 11, 2025 at 18:00
     const REFERENCE_TIME = new Date(2025, 0, 11, 18, 0)
 
     // Default deadlines from factory season
-    const defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
+    // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not in the describe body
+    let defaultDeadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
+    beforeAll(() => {
+        const {deadlinesForSeason} = useSeason()
+        defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
+    })
 
     beforeEach(() => {
         // Use fake timers for temporal consistency

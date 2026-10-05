@@ -1,6 +1,5 @@
 import type {Season, SeasonUpdateResponse} from '~/composables/useSeasonValidation'
 import type {CookingTeamDisplay, CookingTeamDetail, CookingTeamAssignment, CookingTeamCreate, CookingTeamUpdate, CookingTeamAssignmentCreate, CreateTeamsResponse, TeamRole} from '~/composables/useCookingTeamValidation'
-import {ROLE_ICONS} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay, DinnerEventDetail, MenuSwapStrategy} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
@@ -387,28 +386,32 @@ export const usePlanStore = defineStore("Plan", () => {
         const createTeam = async (teamOrTeams: CookingTeamCreate | CookingTeamCreate[]): Promise<CreateTeamsResponse> => {
             const teams = Array.isArray(teamOrTeams) ? teamOrTeams : [teamOrTeams]
 
-            // ADR-009 operation result: teams created + dinner events the assignment touched
-            const response = await $fetch('/api/admin/team', {
-                method: 'PUT',
-                body: teams,
-                headers: {'Content-Type': 'application/json'}
-            })
-            createTeamData.value = CreateTeamsResponseSchema.parse(response)
+            try {
+                // ADR-009 operation result: teams created + dinner events the assignment touched
+                const response = await $fetch('/api/admin/team', {
+                    method: 'PUT',
+                    body: teams,
+                    headers: {'Content-Type': 'application/json'}
+                })
+                createTeamData.value = CreateTeamsResponseSchema.parse(response)
 
-            await executeCreateTeam()
+                await executeCreateTeam()
 
-            if (createTeamError.value) {
-                handleApiError(createTeamError.value, 'createTeam')
-                throw createTeamError.value
+                if (createTeamError.value) {
+                    throw createTeamError.value
+                }
+
+                console.info(`👥 > PLAN_STORE > Created ${createTeamData.value.teams.length} team(s), assigned ${createTeamData.value.eventsAssigned} dinner event(s)`)
+
+                if (selectedSeasonId.value) {
+                    await refreshSelectedSeason()
+                }
+
+                return createTeamData.value
+            } catch (e: unknown) {
+                handleApiError(e, 'createTeam')
+                throw e
             }
-
-            console.info(`👥 > PLAN_STORE > Created ${createTeamData.value.teams.length} team(s), assigned ${createTeamData.value.eventsAssigned} dinner event(s)`)
-
-            if (selectedSeasonId.value) {
-                await refreshSelectedSeason()
-            }
-
-            return createTeamData.value
         }
 
         const updateTeam = async (team: CookingTeamUpdate) => {
@@ -491,7 +494,7 @@ export const usePlanStore = defineStore("Plan", () => {
                     body: { inhabitantId, role, ...(menuStrategy && {menuStrategy}) },
                     headers: {'Content-Type': 'application/json'}
                 })
-                console.info(`${ROLE_ICONS[role]} > PLAN_STORE > Assigned ${role} role to inhabitant ${inhabitantId} for dinner event ${dinnerEventId}`)
+                console.info(`👥 > PLAN_STORE > Assigned ${role} role to inhabitant ${inhabitantId} for dinner event ${dinnerEventId}`)
                 // Refresh selected detail LAST: on /chef the page watchEffect re-derives the
                 // selected dinner id from myTeams/season, so settle those first or its re-run
                 // reloads stale detail over the fresh fetch.
@@ -539,7 +542,7 @@ export const usePlanStore = defineStore("Plan", () => {
                     headers: {'Content-Type': 'application/json'},
                     onResponse: ({response}) => { heynaboSyncDegraded = response.status === 207 }
                 })
-                console.info(`${ROLE_ICONS[role]} > PLAN_STORE > Removed ${role} role from inhabitant ${inhabitantId} for dinner event ${dinnerEvent.id}`)
+                console.info(`👥 > PLAN_STORE > Removed ${role} role from inhabitant ${inhabitantId} for dinner event ${dinnerEvent.id}`)
                 // Refresh selected detail LAST: on /chef the page watchEffect re-derives the
                 // selected dinner id from myTeams/season, so settle those first or its re-run
                 // reloads stale detail over the fresh fetch.

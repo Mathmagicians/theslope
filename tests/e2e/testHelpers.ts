@@ -1,4 +1,4 @@
-import type {Browser, Page, BrowserContext, BrowserContextOptions} from "@playwright/test"
+import type {Browser, Page, BrowserContext, BrowserContextOptions, Locator} from "@playwright/test"
 import {expect} from "@playwright/test"
 import {authFiles} from './config'
 import {randomUUID} from 'crypto'
@@ -249,6 +249,35 @@ async function waitForHydration(page: Page): Promise<void> {
     )
 }
 
+/**
+ * Types a dd/MM/yyyy date into a UInputDate field: clicks the field's day segment and
+ * types the digits - the segments auto-advance through day, month and year.
+ * `scope` holds the picker (e.g. `page.locator('[name="seasonDates"]')`); a range picker
+ * has two fields, `field` picks one.
+ */
+const fillDateField = async (scope: Locator, field: 'start' | 'end', date: string) => {
+    const day = scope.locator('[data-segment="day"]').nth(field === 'start' ? 0 : 1)
+    await day.click()
+    await expect(day, 'the day segment takes focus before typing').toBeFocused()
+    await day.page().keyboard.type(date.replaceAll('/', ''))
+    // The field commits through v-model after the last segment; readers and clicks that
+    // follow need the committed value, so poll until the segments read the typed date back
+    const [d, m, y] = date.split('/').map(Number)
+    const typed = new Date(y!, m! - 1, d!)
+    await pollUntil(
+        () => readDateField(scope, field),
+        (read) => read.getTime() === typed.getTime()
+    )
+}
+
+/** The date a UInputDate field holds, read from its segments' values */
+const readDateField = async (scope: Locator, field: 'start' | 'end'): Promise<Date> => {
+    const index = field === 'start' ? 0 : 1
+    const segment = async (kind: string) =>
+        Number(await scope.locator(`[data-segment="${kind}"]`).nth(index).getAttribute('aria-valuenow'))
+    return new Date(await segment('year'), await segment('month') - 1, await segment('day'))
+}
+
 const testHelpers = {
     salt,
     saltedId,
@@ -263,7 +292,9 @@ const testHelpers = {
     getSessionUserInfo,
     assertNoOrdersWithOrphanPrices,
     daysFromNow,
-    waitForHydration
+    waitForHydration,
+    fillDateField,
+    readDateField
 }
 
 export default testHelpers

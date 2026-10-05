@@ -24,7 +24,10 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
-const {SIZES, BUTTONS, ICONS} = useTheSlopeDesignSystem()
+const {SIZES, BUTTONS, ICONS, ROLE_ICONS} = useTheSlopeDesignSystem()
+
+// Role choices carry their glyphs as item icons
+const roleOptions = ROLE_OPTIONS.map(option => ({...option, icon: ROLE_ICONS[option.value]}))
 const {TeamRoleSchema} = useCookingTeamValidation()
 const Role = TeamRoleSchema.enum
 
@@ -46,9 +49,10 @@ const handleSubmit = () => {
     <UFormField label="Vælg rolle på hold" :size="SIZES.small">
       <USelectMenu
           v-model="form.role"
-          :items="ROLE_OPTIONS"
+          :items="roleOptions"
           value-key="value"
           placeholder="Vælg rolle..."
+          class="w-full"
           :size="SIZES.small"
       />
     </UFormField>
@@ -59,6 +63,7 @@ const handleSubmit = () => {
           :items="ALLOCATION_PERCENTAGE_OPTIONS"
           value-key="value"
           placeholder="Vælg procent..."
+          class="w-full"
           :size="SIZES.small"
       />
     </UFormField>

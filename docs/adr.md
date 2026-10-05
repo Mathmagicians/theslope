@@ -7,11 +7,7 @@
 
 ### Context
 
-Shared UI values had drifted into components: 56 `UAlert` sites with per-file colour, variant and `:ui` patches; 178 raw
-Tailwind colour classes and 59 literal colour props across 34 + 31 files; three `UCalendar` call sites with diverging grid
-props (the pickers drew adjacent-month days twice); six table empty states on the Nuxt UI v2 slot name `#empty-state`, dead
-since the v3 migration. The first token sweep merged near-identical values and shifted dark-mode shades — a refactor that
-changed the design.
+Shared UI values had drifted into per-component colour, variant and `:ui` patches; a token sweep that merged near-identical values changed the design.
 
 ### Decision
 
@@ -30,10 +26,7 @@ decision the user takes from a visual proposal.
 
 ### Enforcement
 
-`tests/component/architecture/designSystemUsage.unit.spec.ts` reads every `.vue` under `app/` and fails on a raw Tailwind
-colour utility class, a literal colour prop, a `<UAlert` without an `ALERTS` kind or with a raw `color`/`variant`/`type`, a
-`<UCalendar` without `calendarGrid`, or the slot name `#empty-state`. Tests assert usage and behaviour; a test that restates a
-token's value is rejected in review.
+`tests/component/architecture/designSystemUsage.unit.spec.ts` reads every `.vue` under `app/` and fails on a rule breach; the rule inventory lives in `docs/testing.md` (Architecture Tests). Tests assert usage and behaviour, never a token's value.
 
 ### Compliance
 
@@ -63,9 +56,7 @@ token's value is rejected in review.
 
 ### Context
 
-Nuxt builds two bundles. App auto-imports (`app/composables`, `app/utils`, Vue, Pinia, nuxt-auth-utils app composables) exist only in the app bundle; the Nitro bundle auto-imports `server/utils` and h3 only. ADR-001 allows `server/` to import selected composables explicitly, so those composables run in both bundles. A bare `useTicket()` in `useBilling.ts` (2026-09-01) typechecked and passed every unit test, then threw `useTicket is not defined` on the first server call and broke CI in the e2e API step.
-
-`npm run ts` could not catch it: the root `tsconfig.json` extends the legacy app-flavoured `.nuxt/tsconfig.json`, so `.nuxt/types/imports.d.ts` declares every auto-import as a global for server files too. Nuxt 4 generates per-context configs (`.nuxt/tsconfig.{app,server,shared,node}.json`); the server project flagged the defect plus 43 latent errors of the same class.
+Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, Pinia, nuxt-auth-utils app composables) exist only in the app bundle; the Nitro bundle auto-imports `server/utils` and h3 only. ADR-001 allows `server/` to import selected composables explicitly, so those composables run in both bundles — a bare auto-imported call in one typechecks under the legacy root tsconfig and throws on the first server call.
 
 ### Decision
 
@@ -81,16 +72,9 @@ Nuxt builds two bundles. App auto-imports (`app/composables`, `app/utils`, Vue, 
 
 ### Gate
 
-```
-"ts":        "npx vue-tsc --noEmit",                              // root: app + tests (legacy union)
-"ts:server": "npx vue-tsc --noEmit -p server/tsconfig.json",      // Nitro project: server/** + composables it imports
-"ts:node":   "npx vue-tsc --noEmit -p .nuxt/tsconfig.node.json",  // nuxt.config, app.config, vitest.config
-"pre:all":   "npm run lint && npm run ts && npm run ts:server && npm run ts:node"
-```
+`npm run pre:all` (lint + the three typecheck projects — commands in `CLAUDE.md`) runs in CI before unit tests; a bare auto-import in a server-reachable composable fails as `TS2304` in `ts:server`.
 
-CI runs `pre:all` before unit tests. A bare auto-import in a server-reachable composable now fails as `TS2304` in `ts:server`.
-
-**Follow-up:** adopt Nuxt 4's root `references` layout + `nuxt typecheck` (`vue-tsc -b`) once nuxt/nuxt#34385 is fixed (broken on Nuxt 4.3.1 / @nuxt/cli 3.33.1). Until then `server/tsconfig.json` stays as the stable gate target.
+**Follow-up:** adopt Nuxt 4's root `references` layout + `nuxt typecheck` (`vue-tsc -b`) once nuxt/nuxt#34385 is fixed; until then `server/tsconfig.json` is the gate target.
 
 ### Compliance
 
@@ -135,35 +119,10 @@ Abstract composite keys (`inhabitantId-dinnerEventId`) caused bugs:
 
 ### Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         GENERATOR (useBooking.ts)                   │
-├─────────────────────────────────────────────────────────────────────┤
-│ decideOrderAction(input) → { bucket, order } | null                 │
-│   - Pure function, no side effects                                  │
-│   - Returns bucket: create | update | delete | idempotent           │
-│   - Sets state (BOOKED/RELEASED) and dinnerMode                     │
-├─────────────────────────────────────────────────────────────────────┤
-│ resolveDesiredOrdersToBuckets() - User mode (explicit orders)       │
-│ resolveOrdersFromPreferencesToBuckets() - System mode (preferences) │
-└─────────────────────────────────────────────────────────────────────┘
-                                 │
-                                 ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                    SCAFFOLDER (scaffoldPrebookings.ts)              │
-├─────────────────────────────────────────────────────────────────────┤
-│ Transform: DesiredOrder → OrderCreateWithPrice                      │
-│   - Add bookedByUserId (from context)                               │
-│   - Lookup priceAtBooking (from ticketPrices)                       │
-│   - Add householdId                                                 │
-├─────────────────────────────────────────────────────────────────────┤
-│ Execute buckets:                                                    │
-│   - create → createOrders()                                         │
-│   - update → updateOrder() + releasedAt for releases                │
-│   - delete → deleteOrder()                                          │
-│   - idempotent → skip                                               │
-└─────────────────────────────────────────────────────────────────────┘
-```
+| Stage | File | Role |
+|-------|------|------|
+| **Generator** | `useBooking.ts` | `decideOrderAction(input) → { bucket, order } \| null` — pure function, returns bucket `create \| update \| delete \| idempotent`, sets `state` (BOOKED/RELEASED) and `dinnerMode`. Entry points: `resolveDesiredOrdersToBuckets` (user mode), `resolveOrdersFromPreferencesToBuckets` (system mode) |
+| **Scaffolder** | `scaffoldPrebookings.ts` | Transforms `DesiredOrder → OrderCreateWithPrice` (adds `bookedByUserId`, `priceAtBooking`, `householdId`) and executes the buckets: `createOrders()`, `updateOrder()` + `releasedAt` for releases, `deleteOrder()`, skip idempotent |
 
 ### Decision Matrix
 
@@ -208,23 +167,6 @@ DesiredOrderSchema = {
 | **System** | Preference change, cron, field change | `resolveOrdersFromPreferencesToBuckets` | Scaffolding, preference updates, residency changes |
 | **User** | UI booking | `resolveDesiredOrdersToBuckets` | Grid view, single booking |
 
-### Frontend Pattern
-
-UI components emit `DesiredOrder[]` with `orderId` for existing orders:
-
-```typescript
-// Component emits orders with orderId from existing
-const desiredOrders = selectedInhabitants.map(inhabitant => ({
-  inhabitantId: inhabitant.id,
-  dinnerEventId: event.id,
-  dinnerMode: selectedMode,
-  ticketPriceId: ticketPrice.id,
-  isGuestTicket: false,
-  state: OrderState.BOOKED,
-  orderId: existingOrder?.id  // Key: include orderId for updates
-}))
-```
-
 ### Compliance
 
 1. Generator MUST set `state` and `dinnerMode` - scaffolder doesn't re-derive
@@ -258,7 +200,7 @@ const desiredOrders = selectedInhabitants.map(inhabitant => ({
 
 ### Context
 
-TheSlope runs automated maintenance jobs (daily cron, season activation, billing imports) that must be resilient to failures, retries, and manual re-runs. In a serverless environment (Cloudflare Workers), jobs can fail mid-execution, be triggered multiple times, or need manual intervention after outages.
+Automated jobs (daily cron, season activation, billing imports) run on Cloudflare Workers, where a run can fail mid-execution, fire twice, or be re-run manually after an outage.
 
 ### Decision
 
@@ -273,23 +215,7 @@ TheSlope runs automated maintenance jobs (daily cron, season activation, billing
 
 ### Rolling Window Pattern
 
-```
-Day 0 (Season Activation):
-├── Scaffold pre-bookings: Day 1 → Day 60
-└── Users can manually book: Day 61+
-
-Day 1 (Daily Maintenance):
-├── Consume past dinners (SCHEDULED/ANNOUNCED → CONSUMED)
-├── Close orders on consumed dinners (BOOKED/RELEASED → CLOSED)
-├── Create transactions for closed orders without one
-└── Scaffold pre-bookings: Day 2 → Day 61 (window rolls forward)
-
-Day N (After 3-day outage, manual re-run):
-├── Consume ALL past unconsumed dinners (catch-up)
-├── Close ALL pending orders on consumed dinners (catch-up)
-├── Create transactions for ALL untransacted closed orders (catch-up)
-└── Scaffold: Day N+1 → Day N+60 (current window)
-```
+Daily maintenance consumes past dinners (SCHEDULED/ANNOUNCED → CONSUMED), closes orders on consumed dinners (BOOKED/RELEASED → CLOSED), creates transactions for closed orders without one, then scaffolds pre-bookings for `today → today + 60 days`. A re-run after an outage catches up by itself: each step processes all qualifying records and the scaffold window starts from the current day. Users book manually beyond the window.
 
 ### Idempotency Patterns
 
@@ -323,13 +249,6 @@ const tomorrow = new Date()
 tomorrow.setDate(tomorrow.getDate() + 1)
 seasonDates: { start: tomorrow, end: threeDaysFromNow }
 ```
-
-### Benefits
-
-1. **Resilience**: Server outages don't corrupt state - just re-run the job
-2. **Simplicity**: No "last run" tracking or complex delta logic
-3. **Debuggability**: Admin can trigger any job manually at any time
-4. **User flexibility**: 60-day automated booking + unlimited manual booking ahead
 
 ### Compliance
 
@@ -368,55 +287,15 @@ Since Prisma 5.15.0, the D1 adapter automatically chunks certain queries to stay
 
 ### Raw SQL Workaround for Nested Includes
 
-**Problem (2026-01-15):** Prisma's nested includes with large result sets exceed D1's 100 variable limit.
-
-```
-Query 1: SELECT orders WHERE dinnerEventId = ? (returns 139 orders) ✅
-Query 2: SELECT orderHistory WHERE orderId IN (?,?,?...139 IDs...) ❌ D1_ERROR
-```
-
-Prisma D1 adapter does NOT support `relationJoins` (uses query splitting instead). When a parent query returns many rows, nested includes generate `WHERE IN (?,?,?...)` with too many variables.
-
-**Solution:** Use raw SQL with proper JOINs for high-cardinality relations:
-
-```typescript
-// ❌ Prisma nested include - fails with 100+ parent rows
-const orders = await prisma.order.findMany({
-    where: { dinnerEventId },
-    include: { OrderHistory: true }  // Generates WHERE orderId IN (?,?,?...)
-})
-
-// ✅ Raw SQL with JOIN - no variable limit issue
-const sql = `
-    SELECT o.*, oh.auditData
-    FROM "Order" o
-    LEFT JOIN (
-        SELECT orderId, auditData,
-            ROW_NUMBER() OVER (PARTITION BY orderId ORDER BY timestamp DESC) as rn
-        FROM OrderHistory WHERE action = 'USER_CLAIMED'
-    ) oh ON oh.orderId = o.id AND oh.rn = 1
-    WHERE o.dinnerEventId = ?
-`
-const results = await d1Client.prepare(sql).bind(dinnerEventId).all()
-```
-
-**When to use raw SQL:**
-- Nested includes on relations with unbounded cardinality
-- Parent query may return 50+ rows with 2+ nested relations
-- Performance-critical bulk reads
-
-**Reference:** `fetchOrders()` in `financesRepository.ts` uses this pattern for provenance data.
+The Prisma D1 adapter splits queries instead of using `relationJoins`: when a parent query returns many rows, a nested include generates `WHERE <fk> IN (?,?,?...)` past the 100 variable limit (`D1_ERROR: too many SQL variables`). Use raw SQL with JOINs when a nested include targets a relation with unbounded cardinality, the parent query may return 50+ rows with 2+ nested relations, or the read is a performance-critical bulk read. Reference: `fetchOrders()` in `financesRepository.ts`.
 
 ### Prisma Bulk Operations
 
 ```typescript
-// ✅ Use createManyAndReturn (Prisma auto-chunks for D1)
+// Bulk insert: createManyAndReturn (Prisma auto-chunks for D1); per-row creates hit the 1,000 query limit
 await prisma.order.createManyAndReturn({ data: orders })
 
-// ❌ Not Promise.all of individual creates (N queries, hits 1000 query limit)
-await Promise.all(events.map(e => prisma.dinnerEvent.create({ data: e })))
-
-// ✅ For updates - batch to avoid param limit on IN clause
+// Updates: chunk IDs, Promise.all per batch (param limit on IN clauses)
 for (const batch of batches) {
     await Promise.all(batch.map(item => prisma.entity.update({ where: { id: item.id }, data: item })))
 }
@@ -486,11 +365,11 @@ const { create, update, idempotent, delete: toDelete } = reconcile(existing)(inc
 
 | Entity | Lifecycle rule |
 |--------|----------------|
-| **Household** | **Preserved on move-out.** The row keeps `moveOutDate` for billing history; it is never deleted by the import while its address exists in Heynabo. |
-| **Inhabitant** | **Always follows Heynabo.** Deleted in Heynabo → hard-deleted in TheSlope. Identity is global via `Inhabitant.heynaboId @unique`, so reconciliation MUST be global (all existing vs all incoming), never scoped to one household — otherwise inhabitants in sibling households at the same address escape deletion. No soft-delete/tombstone rows, no view-level residency filtering as a substitute for deletion. |
+| **Household** | **Preserved on move-out.** The row keeps `moveOutDate` for billing history; the import keeps the row while its address exists in Heynabo. |
+| **Inhabitant** | **Always follows Heynabo.** Deleted in Heynabo → hard-deleted in TheSlope (no tombstones, no view-level residency filtering as a substitute). Identity is global via `Inhabitant.heynaboId @unique`, so reconciliation MUST be global (all existing vs all incoming) — household-scoped reconciliation lets inhabitants in sibling households at the same address escape deletion. |
 | **User** | Deleted before its inhabitant (import order). Payer identity survives in `Transaction.userSnapshot`. |
 
-**Deletion safety is schema-designed, not caller-guarded** (ADR-005 + ADR-011): `Allergy`/`Order`/`CookingTeamAssignment` CASCADE; billing survives via `Transaction.orderSnapshot` (SET NULL); audit survives via `OrderHistory`'s denormalized `inhabitantId`/`dinnerEventId`/`seasonId`. Past dinners lose chef attribution (`chefId → null`) — accepted 2026-08-19: no view renders past chefs, and duty roster (`DutyHistory`) owns attribution history when a surface exists. Business-level chef-loss handling (Heynabo event delete + `CHEF_LOSS_DINNER_UPDATES` + allergen clear) lives in ONE shared server routine — callers MUST NOT duplicate guard logic.
+**Deletion safety is schema-designed, not caller-guarded** (ADR-005 + ADR-011): `Allergy`/`Order`/`CookingTeamAssignment` CASCADE; billing survives via `Transaction.orderSnapshot` (SET NULL); audit survives via `OrderHistory`'s denormalized `inhabitantId`/`dinnerEventId`/`seasonId`. Past dinners lose chef attribution (`chefId → null`); no view renders past chefs, and duty roster (`DutyHistory`) owns attribution history. Business-level chef-loss handling (Heynabo event delete + `CHEF_LOSS_DINNER_UPDATES` + allergen clear) lives in ONE shared server routine — callers MUST NOT duplicate guard logic.
 
 **Operational timing:** Heynabo admins delete users ~1 month AFTER move-out, and orders are never scaffolded past `moveOutDate` (#88). By deletion time no unbilled orders exist, so the nightly cron order (heynabo-import 01:00 UTC before daily-maintenance 02:00 UTC) is intentionally safe — do not reorder.
 
@@ -648,31 +527,7 @@ Create lightweight repository functions for bulk updates (>10 entities).
 
 ### Operation Result Types
 
-**The "two types per entity" rule applies to ENTITIES, not operation responses.**
-
-Operation result types are **response envelopes** for operations with side effects (imports, scaffolding, maintenance jobs). They describe what the operation did, not the entities themselves.
-
-| Category | Naming Pattern | Examples |
-|----------|----------------|----------|
-| **Entity types** | `EntityDisplay`, `EntityDetail` | `OrderDisplay`, `SeasonDetail` |
-| **Operation results** | `OperationResult`, `OperationResponse` | `ScaffoldResult`, `BillingImportResponse` |
-
-**When to use operation result types:**
-- Batch operations that create/update/delete multiple entities
-- Import operations summarizing what was processed
-- Maintenance jobs reporting counts and side effects
-- Operations returning both entities AND metadata (counts, errors, jobRunId)
-
-**Codebase examples:**
-
-| Composable | Operation Result Types |
-|------------|------------------------|
-| `useBookingValidation` | `CreateOrdersResult`, `ScaffoldResult`, `DailyMaintenanceResult` |
-| `useBillingValidation` | `BillingImportResponse`, `BillingGenerationResult`, `MonthlyBillingResponse` |
-| `useHeynaboValidation` | `HeynaboImportResponse` |
-| `useMaintenanceValidation` | `SeasonImportResponse` |
-
-**Placement:** Define operation result types in the validation composable where the operation's domain logic lives.
+**The "two types per entity" rule applies to ENTITIES, not operation responses.** Operation result types (`<Operation>Result` / `<Operation>Response`, e.g. `ScaffoldResult`, `BillingImportResponse`) are response envelopes for operations with side effects — batch mutations, imports, maintenance jobs, and operations returning entities plus metadata (counts, errors, jobRunId). They describe what the operation did, not the entities. Define them in the validation composable where the operation's domain logic lives; the inventory lives in `docs/adr-compliance-frontend.md` (Composable Compliance).
 
 ### Compliance
 
@@ -737,13 +592,6 @@ const { data: seasons, status, error, refresh } = useAsyncData<Season[]>(
     'plan-store-seasons',
     () => $fetch('/api/admin/season'),
     { default: () => [], transform: data => data.map(s => SeasonSchema.parse(s)) }
-)
-
-// Detail endpoint with reactive key
-const selectedId = ref<number | null>(null)
-const { data: selected } = useAsyncData<Season | null>(
-    computed(() => `season-${selectedId.value}`),
-    () => selectedId.value ? $fetch(`/api/admin/season/${selectedId.value}`) : null
 )
 
 // Status computeds (4-state UI)

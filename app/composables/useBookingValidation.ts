@@ -91,7 +91,7 @@ export const useBookingValidation = () => {
         menuTitle: z.string()
             .min(1, 'Menu titel er påkrævet')
             .max(500, 'Menu titel må maks være 500 tegn'),
-        menuDescription: z.string().max(500, 'Beskrivelse må maks være 500 tegn').nullable(),
+        menuDescription: z.string().max(500, 'Beskrivelse må maks være 500 tegn'),
         totalCost: z.number().int().min(0, 'Indkøbsomkostninger kan ikke være negative')
     })
 

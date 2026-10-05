@@ -4,10 +4,14 @@ PRAGMA defer_foreign_keys=TRUE;
 INSERT OR IGNORE INTO User (id, email, phone, passwordHash, systemRoles, createdAt, updatedAt)
 VALUES(1, 'agata@mathmagicians.dk', '12345678', 'removeme', json('["ADMIN","ALLERGYMANAGER"]'), datetime('now'), datetime('now'));
 
--- Seed Admin Household (idempotent - skips if exists)
--- Uses REAL heynaboId=2 (Heynabo! location) so Heynabo import can upsert this record
-INSERT OR IGNORE INTO Household (id, heynaboId, pbsId, movedInDate, name, address)
-VALUES(1, 2, 2, datetime('2020-01-01'), 'Heynabo!', 'Heynabo! ');
+-- Seed Admin Household (idempotent - converges the TheSlope-owned fields on the existing row)
+-- Uses REAL heynaboId=2 (Heynabo! location); the Heynabo import maintains name and address
+INSERT INTO Household (id, heynaboId, pbsId, movedInDate, name, address)
+VALUES(1, 2, 2, datetime('2020-01-01'), 'Heynabo!', 'Heynabo! ')
+ON CONFLICT(id) DO UPDATE SET
+    heynaboId = excluded.heynaboId,
+    pbsId = excluded.pbsId,
+    movedInDate = excluded.movedInDate;
 
 -- Seed Admin Inhabitant linking User to Household (idempotent - skips if exists)
 -- Uses REAL heynaboId=153 so Heynabo import can upsert (update) this record with real data

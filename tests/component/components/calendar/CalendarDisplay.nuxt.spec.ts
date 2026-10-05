@@ -1,6 +1,9 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
-import {ref} from 'vue'
+import {ref, defineComponent} from 'vue'
+import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {da} from '@nuxt/ui/locale'
+import {UApp} from '#components'
 import type {VueWrapper} from '@vue/test-utils'
 import CalendarDisplay from '~/components/calendar/CalendarDisplay.vue'
 import {CALENDAR, PLANNING_CALENDAR, createDayCircleClasses} from '~/composables/useTheSlopeDesignSystem'
@@ -19,13 +22,15 @@ const GENERATED_DAY = '2025-01-06'
 const HOLIDAY_DAY = '2025-01-13'
 const POTENTIAL_DAY = '2025-01-20'
 
+const DISPLAY_PROPS = {
+    seasonDates: {start: jan(1), end: jan(31)},
+    holidays: [{start: jan(13), end: jan(13)}],
+    cookingDays: MONDAYS_ONLY,
+    dinnerEvents: [{...DinnerEventFactory.defaultDinnerEventDisplay(), date: jan(6)}]
+}
+
 const mountDisplay = async () => await mountWithTooltipProvider(CalendarDisplay, {
-    props: {
-        seasonDates: {start: jan(1), end: jan(31)},
-        holidays: [{start: jan(13), end: jan(13)}],
-        cookingDays: MONDAYS_ONLY,
-        dinnerEvents: [{...DinnerEventFactory.defaultDinnerEventDisplay(), date: jan(6)}]
-    },
+    props: DISPLAY_PROPS,
     isMd: IS_MD
 })
 
@@ -53,5 +58,16 @@ describe('CalendarDisplay', () => {
     it('configures its calendar from the shared design-system grid token', async () => {
         const wrapper = await mountDisplay()
         expectSharedCalendarGrid(wrapper)
+    })
+
+    it('renders Danish week-day letters and month heading from the UApp da locale', async () => {
+        // The locale flows from UApp (app.vue) - mount the same frame the app renders
+        const wrapper = await mountSuspended(defineComponent({
+            components: {UApp, CalendarDisplay},
+            setup: () => ({da, displayProps: DISPLAY_PROPS}),
+            template: '<UApp :locale="da"><CalendarDisplay v-bind="displayProps" /></UApp>'
+        }))
+        expect(wrapper.findAll('th').map(th => th.text()).join('')).toBe('MTOTFLS')
+        expect(wrapper.text()).toContain('januar 2025')
     })
 })

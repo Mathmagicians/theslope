@@ -1,11 +1,11 @@
 // @vitest-environment nuxt
 import { describe, it, expect } from 'vitest'
 import { mountSuspended } from "@nuxt/test-utils/runtime"
-import {findByTestId} from '~~/tests/component/testHelpers'
+import {findByTestId, findDateSegments, asCalendarDays} from '~~/tests/component/testHelpers'
 import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTestIds'
-import {formatDate} from '~/utils/date'
 import CalendarDateRangeListPicker from '~/components/calendar/CalendarDateRangeListPicker.vue'
 import { nextTick, ref } from 'vue'
+import {formatDateRange} from '~/utils/date'
 
 describe('CalendarDateRangeListPicker', () => {
     interface DateRange {
@@ -58,11 +58,8 @@ describe('CalendarDateRangeListPicker', () => {
 
         const emitted = wrapper.emitted('update:modelValue')
         expect(emitted).toBeTruthy()
-        expect(emitted![0]![0]).toEqual([
-            {
-                start: new Date(2025, 0, 1),
-                end: new Date(2025, 0, 5)
-            }
+        expect(asCalendarDays(emitted![0]![0] as DateRange[])).toEqual([
+            {start: '2025-01-01', end: '2025-01-05'}
         ])
 
         const holidayInput = findByTestId(wrapper, PLANNING_TEST_IDS.holidayItem(0))
@@ -78,11 +75,15 @@ describe('CalendarDateRangeListPicker', () => {
         await clickAddButton(wrapper)
 
         const emitted = wrapper.emitted('update:modelValue')
-        expect(emitted![0]![0]).toEqual([earlier, later])
+        expect(asCalendarDays(emitted![0]![0] as DateRange[])).toEqual([
+            {start: '2025-01-01', end: '2025-01-03'},
+            {start: '2025-01-10', end: '2025-01-12'}
+        ])
 
-        // Edit mode renders each row as a picker: its first input holds the start date
+        // Edit mode renders each row as a picker: its start-day segments hold the earlier date
         const firstRow = findByTestId(wrapper, PLANNING_TEST_IDS.holidayItem(0))
-        expect(firstRow.find('input').element.value).toBe(formatDate(earlier.start))
+        expect(findDateSegments(firstRow, 'day')[0]!.attributes('aria-valuenow')).toBe(String(earlier.start.getDate()))
+        expect(findDateSegments(firstRow, 'year')[0]!.attributes('aria-valuenow')).toBe(String(earlier.start.getFullYear()))
     })
 
     it('validates overlapping ranges', async () => {
@@ -330,8 +331,12 @@ describe('CalendarDateRangeListPicker', () => {
                 props: {modelValue: [first], disabled: true},
                 global: {provide: {isMd: ref(true)}}
             })
-            expect(rowPicker(wrapper, 0)).toBeUndefined()
-            expect(findByTestId(wrapper, PLANNING_TEST_IDS.holidayItem(0)).exists()).toBe(true)
+            const row = findByTestId(wrapper, PLANNING_TEST_IDS.holidayItem(0))
+            expect(row.exists()).toBe(true)
+            expect(findDateSegments(row, 'day').length).toBe(0)
+            const input = row.find('input')
+            expect(input.attributes('disabled')).toBeDefined()
+            expect(input.element.value).toBe(formatDateRange(first))
         })
     })
 })

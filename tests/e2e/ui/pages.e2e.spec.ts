@@ -22,6 +22,22 @@ publicPages.forEach(pageName => {
     })
 })
 
+test('@smoke PWA manifest serves with its icons, and the page head links it', async ({page, request}) => {
+    const response = await request.get('/manifest.webmanifest')
+    expect(response.status()).toBe(200)
+
+    const manifest = await response.json()
+    expect(manifest.display).toBe('standalone')
+    expect(manifest.icons.length).toBeGreaterThan(0)
+    for (const icon of manifest.icons) {
+        const iconResponse = await request.get(icon.src)
+        expect(iconResponse.status(), `icon ${icon.src}`).toBe(200)
+    }
+
+    await page.goto('/')
+    await expect(page.locator('link[rel="manifest"]')).toHaveAttribute('href', '/manifest.webmanifest')
+})
+
 protectedPages.forEach(pageName => {
     test(`All protected pages redirect to login when not logged in - /${pageName}`, async ({page}) => {
         for (const pageName of protectedPages) {

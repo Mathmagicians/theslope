@@ -5,6 +5,8 @@
 │                                                                              │
 │ DASHBOARD /login (logged in) - this file owns the composition                │
 │ ┌ Hej Anna! 👋 ────────────────────────────────────────────────────────────┐ │
+│ │ ┌ InstallPrompt ──────────────────────────────────────────────────────┐  │ │
+│ │ └─────────────────────────────────────────────────────────────────────┘  │ │
 │ │ ┌ UserProfileCard ([⚙ Indstillinger] in its header) ──────────────────┐  │ │
 │ │ └─────────────────────────────────────────────────────────────────────┘  │ │
 │ │ ┌ UserPreferencesCard ─────────────────────────┐  only while the toggle  │ │
@@ -14,11 +16,14 @@
 │ │ └─────────────┘ └─────────────┘ └─────────────┘                          │ │
 │ └──────────────────────────────────────────────────────────────────────────┘ │
 │                                                                              │
+│ InstallPrompt renders inside <ClientOnly> and only when the browser offers   │
+│ an install path.                                                             │
 │ The open state is a ref in this file (ADR-006: no persistence); each child    │
 │ draws its own internals in its own header comment.                           │
 └──────────────────────────────────────────────────────────────────────────────┘
 -->
 <script setup lang="ts">
+import {hasProtocol} from 'ufo'
 import type {FormSubmitEvent} from '#ui/types'
 import type {LoginCredentials} from '~/composables/useCoreValidation'
 
@@ -39,6 +44,13 @@ const state = reactive<LoginCredentials>({
 
 const isLoading = ref(false)
 const loginError = ref<string | null>(null)
+const route = useRoute()
+
+// The guard parks the original URL in ?redirect; only an internal path is followed
+const redirectTarget = computed(() => {
+  const redirect = route.query.redirect
+  return typeof redirect === 'string' && redirect.startsWith('/') && !hasProtocol(redirect, {acceptRelative: true}) ? redirect : null
+})
 
 // Own settings are revealed by the ⚙ toggle in the profile card header (ADR-006: no persistence)
 const preferencesOpen = ref(false)
@@ -49,6 +61,9 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
     isLoading.value = true
     await signIn(event.data.email, event.data.password)
     console.info('🔑 > Login > lykkedes')
+    if (redirectTarget.value) {
+      await navigateTo(redirectTarget.value)
+    }
   } catch (error: unknown) {
     console.error('🔑 Login mislykkedes:', error)
     loginError.value = 'Vi kunne ikke logge dig på, prøv igen. Du skal bruge dit Heynabo brugernavn og password.'
@@ -118,6 +133,11 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
     <div v-else class="py-6 px-4 md:px-8 max-w-5xl mx-auto space-y-6">
       <!-- Welcome Title -->
       <h1 :class="[TYPOGRAPHY.sectionSubheadingLight, 'text-2xl md:text-3xl']">Hej {{ greeting }}! 👋</h1>
+
+      <!-- Install guidance: capability is a browser fact, so SSR renders nothing -->
+      <ClientOnly>
+        <InstallPrompt />
+      </ClientOnly>
 
       <!-- User Profile Card, with the ⚙ toggle for own settings -->
       <UserProfileCard

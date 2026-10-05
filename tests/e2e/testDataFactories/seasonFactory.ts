@@ -46,6 +46,8 @@ export class SeasonFactory {
 
     // Fixed singleton name for parallel-safe active season (shared across all test workers)
     static readonly E2E_SINGLETON_NAME = 'TestSeason-E2E-Singleton'
+    // createActiveSeason retries once: the list→activate window races with workers recreating or cleaning the singleton
+    static readonly CREATE_ACTIVE_SEASON_RETRIES = 1
 
     // Singleton cache for active season (only one can exist at a time)
     private static activeSeason: Season | null = null
@@ -324,6 +326,24 @@ export class SeasonFactory {
      * @returns Active Season (singleton in local/CI, existing in dev/prod)
      */
     static readonly createActiveSeason = async (
+        context: BrowserContext,
+        aSeason: Partial<Season> = {}
+    ): Promise<Season> => {
+        let lastError: unknown
+        for (let attempt = 0; attempt <= this.CREATE_ACTIVE_SEASON_RETRIES; attempt++) {
+            try {
+                return await this.resolveActiveSeason(context, aSeason)
+            } catch (error) {
+                lastError = error
+                this.activeSeason = null
+                console.warn(`🌞 > SEASON_FACTORY > Active-season resolve failed (attempt ${attempt + 1} of ${this.CREATE_ACTIVE_SEASON_RETRIES + 1})`)
+            }
+        }
+        throw lastError
+    }
+
+    // The single-pass resolve that createActiveSeason retries
+    private static readonly resolveActiveSeason = async (
         context: BrowserContext,
         aSeason: Partial<Season> = {}
     ): Promise<Season> => {

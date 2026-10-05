@@ -1,5 +1,5 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
 import {useBookingUi, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges} from '~/composables/useBookingUi'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, type ReleasedTicketCounts} from '~/composables/useBooking'
@@ -7,15 +7,19 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import appConfig from '~/app.config'
 
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 const {ICONS} = useTheSlopeDesignSystem()
-const {deadlinesForSeason} = useSeason()
-const deadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
+// @nuxt/test-utils 4 starts Nuxt in beforeAll: useSeason runs there, not at module level
+let deadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
+beforeAll(() => {
+    deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason())
+})
 
-// Far enough ahead that every deadline is still open
-const FAR_FUTURE_DAYS = useAppConfig().theslope.defaultSeason.ticketIsCancellableDaysBefore + 20
+// Far enough ahead that every deadline is still open (app.config imported directly: the value feeds collection-time it.each data)
+const FAR_FUTURE_DAYS = appConfig.theslope.defaultSeason.ticketIsCancellableDaysBefore + 20
 const farFutureDinner = (overrides = {}) =>
     ({...DinnerEventFactory.defaultDinnerEventDisplay(), date: addDays(new Date(), FAR_FUTURE_DAYS), ...overrides})
 
@@ -61,7 +65,10 @@ describe('useBookingUi', () => {
     })
 
     describe('createChefBadges', () => {
-        const {createChefBadges} = useBookingUi()
+        let createChefBadges: ReturnType<typeof useBookingUi>['createChefBadges']
+        beforeAll(() => {
+            ({createChefBadges} = useBookingUi())
+        })
 
         it('returns badges for steps 1-4', () => {
             const badges = createChefBadges(farFutureDinner(), deadlines)

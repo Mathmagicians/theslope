@@ -20,7 +20,8 @@ Nuxt 4.3, Nuxt UI 4.3, Tailwind 4.1. Pages use Nuxt UI components; every shared 
 
 - A component binds a design-system token and passes domain props only. `tests/component/architecture/designSystemUsage.unit.spec.ts`
   fails on a Tailwind palette shade, a literal colour prop, a `<UAlert>` without an `ALERTS` kind, a `<UCalendar>` without
-  `COMPONENTS.calendarGrid`, and the slot name `#empty-state`; it reports `file:line`.
+  `COMPONENTS.calendarGrid`, a `<UTable>` without a `COMPONENTS.table` token, a team `<UTabs>` without `COMPONENTS.teamTabs`,
+  and the slot name `#empty-state`; it reports `file:line`.
 - A token holds one rendered value, light and dark together. Two values are two tokens, named by where they are used.
 - A Nuxt UI component family gets a token, and an architecture rule, before its first use.
 - Layout responds with `md:` classes; `isMd` (provided by `app/layouts/default.vue`) sets prop values.
@@ -37,10 +38,10 @@ Nuxt 4.3, Nuxt UI 4.3, Tailwind 4.1. Pages use Nuxt UI components; every shared 
 | `TYPOGRAPHY`, `LAYOUTS`, `SIZES`, `ICONS` | text styles, layout classes, responsive sizes, icon names |
 | `BUTTONS` | `edit`, `cancel`, `save`, `primaryAction`, `secondaryAction`, `settings` |
 | `ALERTS` | alert kinds and the `withActions` / `withCornerAction` modifiers |
-| `COMPONENTS` | `calendarGrid`, `table.ui`, `choiceGroup`, `kitchenPanel`, `segmentedActive`, `economyTable`, `powerMode`, `guestRow` |
+| `COMPONENTS` | `calendarGrid`, `dateField`, `installIcon`, `statBox`, `table.ui`, `teamTabs`, `teamChip` (the circular team icon beside the team-name input), `masterDetail` (framed `pane`/`dock`, sticky `dockHeader`, `dockClamp` keeps a wide dock out of the master table's sizing, `dockBody` scrolls it in its own box), `choiceGroup`, `kitchenPanel`, `segmentedActive`, `economyTable`, `powerMode`, `guestRow` |
 | `CALENDAR`, `PLANNING_CALENDAR`, `CHEF_CALENDAR`, `DINNER_CALENDAR`, `dayCircleClasses`, `calendarPickerProps` | calendar days, pickers, countdowns |
-| `BACKGROUNDS`, `RAINBOW`, `RAINBOW_FAMILIES`, `getRainbowBand`, `getRainbowFamily`, `PANTONE_CHIPS` | brand surfaces |
-| `TICKET_TYPE_COLORS`, `ORDER_STATE_COLORS`, `DINNER_STATE_BADGES`, `DEADLINE_BADGES`, `RESIDENCY_CONFIG` | domain colour maps |
+| `BACKGROUNDS`, `RAINBOW`, `RAINBOW_FAMILIES`, `getRainbowBand`, `getRainbowFamily`, `getRainbowAccent` (selected team row's left tab), `PANTONE_CHIPS` | brand surfaces |
+| `TICKET_TYPE_COLORS`, `ORDER_STATE_COLORS`, `DINNER_STATE_BADGES`, `DEADLINE_BADGES`, `RESIDENCY_CONFIG`, `ROLE_ICONS` | domain colour and glyph maps |
 
 ## Patterns
 
@@ -49,11 +50,12 @@ Nuxt 4.3, Nuxt UI 4.3, Tailwind 4.1. Pages use Nuxt UI components; every shared 
 | Surface | Binding |
 |---|---|
 | Table row, card header, notes box | `v-bind="BUTTONS.edit"` + `aria-label="Rediger"`: square ghost pencil |
-| Form card (the season card) | `v-bind="BUTTONS.secondaryAction"` + `:color="COLOR.primary"` + `:icon="ICONS.edit"`, label "Rediger &lt;navn&gt;" |
+| Form card (the season card), detail panel header (the team detail) | `v-bind="BUTTONS.secondaryAction"` + `:color="COLOR.primary"` + `:icon="ICONS.edit"`, label "Rediger &lt;navn&gt;" |
 
 The ⚙ is `BUTTONS.settings` with an `aria-label`; labelled actions beside it bind `BUTTONS.secondaryAction`. A button that opens a
-panel below it spreads `BUTTONS.disclosure(isOpen)`: a chevron that turns while the panel is open, and `aria-expanded`
-(`UserProfileCard` and `ChefMenuCard` ⚙, `RoleAssignment`, `HelpButton`).
+panel below it spreads `BUTTONS.flipOpen(isOpen)`: a chevron that turns while the panel is open, and `aria-expanded`
+(`UserProfileCard` and `ChefMenuCard` ⚙, `RoleAssignment`, `HelpButton`). A chevron on another icon slot binds the same turn
+through `BUTTONS.flipOpenTurn(isOpen)` in that slot's `ui` (`HouseholdAllergies` row toggle, leading icon).
 
 ### Alerts
 
@@ -80,6 +82,20 @@ The empty state renders in the `UTable` `#empty` slot. `COMPONENTS.table.ui` cel
 
 `URadioGroup` and `USwitch` bind a `COMPONENTS.choiceGroup` shape (`stacked`, `inline`, `single`); the section heading above them
 takes `TYPOGRAPHY.sectionSubheading`.
+
+### Team tabs
+
+A `UTabs` whose triggers render `CookingTeamBadges` binds `COMPONENTS.teamTabs`: the link variant, triggers that keep their
+full label, and a horizontal row that scrolls sideways when more tabs than fit. On a phone the trigger stacks `ICONS.team`
+over the compact badge (`MyTeamSelector`); the visual check is `/chef` at 375px with four teams.
+
+### Install icon
+
+`COMPONENTS.installIcon` frames `public/app-icon.svg` as a home-screen icon (48px, rounded, drop shadow) in the leading slot of
+`InstallPrompt` and runs `animate-tap-pulse` (`--animate-tap-pulse` in `main.css` `@theme`): two presses to 92% in the first
+0.6 s of a 3.6 s period. `motion-reduce:animate-none` holds the icon still. The visual check is `/login` (dashboard) on a phone at
+375px with the install card showing: the icon taps twice, then rests; with reduced motion on (macOS Accessibility → Display →
+Reduce motion, or DevTools Rendering → `prefers-reduced-motion: reduce`) it stands still.
 
 ### QR codes
 

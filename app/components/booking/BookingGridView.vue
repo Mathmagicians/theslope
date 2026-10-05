@@ -287,7 +287,7 @@ const handleGuestSave = (orders: DesiredOrder[]) => {
   expanded.value = {}
 }
 
-// Handle mode change from FormModeSelector (reserved for future use)
+// Handle mode change from the view switcher (reserved for future use)
 const _handleModeChange = (mode: FormMode) => {
   if (mode === FORM_MODES.VIEW && hasPendingChanges.value) {
     // If switching back to VIEW with pending changes, clear them

@@ -1,0 +1,9 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+    <!-- The app icon: the slope from app/assets/logo.svg (same curve, scaled 3.6x) filled
+         as the hill, with the mocha ball resting on the ridge the wordmark rides. -->
+    <rect width="512" height="512" fill="#faf5f0"/>
+    <circle cx="321" cy="218" r="54" fill="#a47864"/>
+    <path
+        fill="#66a28f"
+        d="M 0 296 L 80 275 Q 224 210 257 253 Q 322 264 325 311 Q 343 351 430 394 L 512 412 L 512 512 L 0 512 Z"/>
+</svg>

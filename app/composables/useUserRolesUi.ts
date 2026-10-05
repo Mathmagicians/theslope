@@ -2,7 +2,7 @@
  * Pure UI composable for user role display (ADR-017)
  *
  * Client-only: reads the auth store and the design system. The server-safe role
- * reconciliation (RoleOwnerSchema, ROLE_OWNERSHIP, reconcileUserRoles) stays in
+ * reconciliation (RoleOwner, ROLE_OWNERSHIP, reconcileUserRoles) lives in
  * useUserRoles, which server code imports.
  */
 import type {ComputedRef} from 'vue'

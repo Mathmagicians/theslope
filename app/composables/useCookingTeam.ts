@@ -1,4 +1,4 @@
-import {useCookingTeamValidation, ROLE_LABELS, type CookingTeamDisplay, type TeamRole, type RoleAssignmentPlan} from '~/composables/useCookingTeamValidation'
+import {useCookingTeamValidation, ROLE_LABELS, type CookingTeamDisplay, type CookingTeamAssignment, type TeamRole, type RoleAssignmentPlan} from '~/composables/useCookingTeamValidation'
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {DinnerEventDetail} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
@@ -58,6 +58,10 @@ export const useCookingTeam = () => {
      * Cuts off everything after the first dash
      * Fallback: Returns full name if no dash found
      */
+    /** Number of CHEF-role assignments on a team */
+    const countChefs = (assignments: Pick<CookingTeamAssignment, 'role'>[]): number =>
+        assignments.filter(assignment => assignment.role === TeamRoleSchema.enum.CHEF).length
+
     const getTeamShortName = (teamName: string): string => {
         const dashIndex = teamName.indexOf(' - ')
         return dashIndex !== -1 ? teamName.substring(0, dashIndex) : teamName
@@ -145,6 +149,7 @@ export const useCookingTeam = () => {
         CookingTeamSchema,
         createDefaultTeamName,
         extractTeamNumber,
+        countChefs,
         getTeamShortName,
         formatRoleClaimedTitle,
         getDefaultCookingTeam,

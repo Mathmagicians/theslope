@@ -34,7 +34,7 @@ import type {AllergyDisplay, AllergyTypeDisplay} from '~/composables/useAllergyV
 import type {TicketTypeConfig} from '~/composables/useTicket'
 
 // Design system
-const {SIZES, COLOR, COMPONENTS} = useTheSlopeDesignSystem()
+const {SIZES, COLOR, COMPONENTS, BUTTONS} = useTheSlopeDesignSystem()
 
 // Ticket type config for display (label, color, icon); active season prices carry the age limits
 const {getTicketTypeConfig} = useTicket()
@@ -241,8 +241,7 @@ const columns = computed(() => [
                 :ui="{
                   leadingIcon: [
                     'text-sm md:text-base',
-                    'transition-transform',
-                    row.getIsExpanded() ? 'duration-200 rotate-180' : ''
+                    BUTTONS.flipOpenTurn(row.getIsExpanded())
                   ]
                 }"
                 @click="row.toggleExpanded()"

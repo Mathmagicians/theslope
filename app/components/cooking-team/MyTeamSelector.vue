@@ -5,16 +5,23 @@
  * Features:
  * - Shows teams user is member of (any role)
  * - Uses UTabs with CookingTeamBadges for consistent display
- * - Responsive: horizontal tabs (mobile), vertical tabs (desktop)
  * - Emits selection changes via v-model
  * - Handles empty state internally
+ *
+ * Phone (horizontal at any count - the list scrolls when tabs outgrow the row):
+ *   +--------------------------------------------------+
+ *   |   (team)      (team)      (team)      (team)     |
+ *   | [Madhold 1] [Madhold 2] [Madhold 3] [Madhold 4]  |
+ *   |  =========                                       |
+ *   +--------------------------------------------------+
+ *   (team) = ICONS.team above the badge, so the full width serves the name
+ * Desktop: icon beside the badge; 3+ teams render as a vertical list (sidebar)
  *
  * Used in:
  * - /chef/index.vue (master panel)
  *
  * Pattern:
- * - Matches AdminTeams tab display with CookingTeamBadges
- * - Reusable TeamListItem display (team name, color, member count, cooking days)
+ * - CookingTeamBadges in the tab bodies (the shared team badge row)
  *
  * ADR Compliance:
  * - ADR-001: Types from useCookingTeamValidation
@@ -36,7 +43,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { SIZES, ORIENTATIONS, ICONS, ALERTS } = useTheSlopeDesignSystem()
+const { SIZES, ORIENTATIONS, ICONS, ALERTS, COMPONENTS } = useTheSlopeDesignSystem()
 const { getTeamShortName } = useCookingTeam()
 
 // Tab orientation using design system helper:
@@ -60,17 +67,12 @@ const selectedTeamIndex = computed({
   }
 })
 
-// Tab items with CookingTeamBadges data (matches AdminTeams pattern)
 // Uses short name for user-facing display (e.g., "Madhold 2" not "Madhold 2 - 08/25-06/26")
 // The team's colour rides on CookingTeamBadges in the tab body, from the team's number
 const teamTabs = computed(() => {
   return props.teams.map((team, index) => ({
     label: getTeamShortName(team.name),
-    value: index,
-    icon: 'i-fluent-mdl2-team-favorite',
-    // Data for CookingTeamBadges
-    memberCount: team.assignments?.length ?? 0,
-    cookingDaysCount: team.cookingDaysCount ?? 0
+    value: index
   }))
 })
 </script>
@@ -92,22 +94,25 @@ const teamTabs = computed(() => {
     </UAlert>
 
     <!-- Team tabs with CookingTeamBadges (matches AdminTeams pattern) -->
-    <!-- Mobile: horizontal tabs, Desktop: vertical tabs -->
     <UTabs
       v-else
+      v-bind="COMPONENTS.teamTabs"
       v-model="selectedTeamIndex"
       :items="teamTabs"
       :orientation="tabOrientation"
-      variant="link"
       :size="SIZES.large"
     >
       <template #default="{ item }">
-        <CookingTeamBadges
-          :team-number="item.value + 1"
-          :team-name="item.label"
-          :show-counts="false"
-          compact
-        />
+        <span class="flex flex-col items-center gap-1 md:flex-row md:gap-2">
+          <UIcon :name="ICONS.team" class="shrink-0" />
+          <CookingTeamBadges
+            :team-number="item.value + 1"
+            :team-name="item.label"
+            :show-counts="false"
+            :show-team-icon="false"
+            size="small"
+          />
+        </span>
       </template>
     </UTabs>
   </div>

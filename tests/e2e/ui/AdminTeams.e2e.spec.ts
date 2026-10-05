@@ -1,8 +1,10 @@
 import {test, expect, type BrowserContext, type Page, type Response} from '@playwright/test'
-import {authFiles} from '../config'
-import {SeasonFactory} from '../testDataFactories/seasonFactory'
-import testHelpers from '../testHelpers'
+import {authFiles} from '~~/tests/e2e/config'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
+import {FORM_MODES, type FormMode} from '~/types/form'
 
 const {adminUIFile} = authFiles
 const {validatedBrowserContext, pollUntil, doScreenshot} = testHelpers
@@ -10,12 +12,16 @@ const {validatedBrowserContext, pollUntil, doScreenshot} = testHelpers
 test.describe('AdminTeams Form UI', () => {
     const adminTeamsUrl = '/admin/teams'
     const createdSeasonIds: number[] = []
+    const createdHouseholdIds: number[] = []
 
     test.use({storageState: adminUIFile})
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        for (const householdId of createdHouseholdIds) {
+            await HouseholdFactory.deleteHousehold(context, householdId)
+        }
     })
 
     test('Can load admin teams page', async ({page, browser}) => {
@@ -25,15 +31,13 @@ test.describe('AdminTeams Form UI', () => {
 
         await page.goto(`${adminTeamsUrl}?season=${season.shortName}`)
 
-        // Wait for page to be interactive - verify form mode buttons are visible (poll for store init)
+        // Wait for page to be interactive - the header create button marks store init (poll)
         await pollUntil(
-            async () => await page.getByTestId('form-mode-view').isVisible(),
+            async () => await page.getByTestId('create-team').isVisible(),
             (isVisible) => isVisible,
             10
         )
-        await expect(page.getByTestId('form-mode-view')).toBeVisible()
-        await expect(page.getByTestId('form-mode-edit')).toBeVisible()
-        await expect(page.getByTestId('form-mode-create')).toBeVisible()
+        await expect(page.getByTestId('create-team')).toBeVisible()
     })
 
     test('GIVEN a season without madhold WHEN viewing it THEN the table renders its own empty state with the create CTA',
@@ -92,7 +96,7 @@ test.describe('AdminTeams Form UI', () => {
 
                 // WHEN: Create 2 teams
                 await page.locator('input#team-count').fill('2')
-                await page.getByRole('button', {name: /Opret madhold/i}).click()
+                await page.getByTestId('submit-create-teams').click()
 
                 // THEN: Poll until teams are created
                 const teams = await pollUntil(
@@ -106,12 +110,36 @@ test.describe('AdminTeams Form UI', () => {
                 expect(teams[1]!.name).toContain('Madhold 2')
                 expect(teams[1]!.name).toContain(season.shortName)
             })
+
+        test('GIVEN an expired session WHEN submitting THEN the user lands on login with a return path',
+            async ({page, browser}) => {
+                const context = await validatedBrowserContext(browser)
+                const season = await SeasonFactory.createSeason(context)
+                createdSeasonIds.push(season.id!)
+
+                await page.goto(`${adminTeamsUrl}?mode=create&season=${season.shortName}`)
+                await expect(page.locator('input#team-count')).toBeVisible({timeout: 10000})
+
+                // WHEN: the session dies before the save
+                await page.context().clearCookies()
+                await page.locator('input#team-count').fill('2')
+                await page.getByTestId('submit-create-teams').click()
+
+                // THEN: the error floor re-authenticates with the page as the return path
+                await expect(page).toHaveURL(/\/login\?redirect=/)
+                expect(decodeURIComponent(page.url())).toContain('/admin/teams')
+            })
     })
 
     test.describe('Edit Mode', () => {
         let context: BrowserContext
         let season: Season
         let page: Page
+
+        // Every immediate save must leave the user in the mode they were in
+        const expectMode = async (mode: FormMode) => {
+            await expect(page).toHaveURL(new RegExp(`mode=${mode}`))
+        }
 
         // Common setup for all edit mode tests
         test.beforeEach(async ({page: testPage, browser}) => {
@@ -125,7 +153,7 @@ test.describe('AdminTeams Form UI', () => {
             // Navigate to edit mode with season in URL
             await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
             await pollUntil(
-                async () => await page.getByTestId('form-mode-edit').isVisible(),
+                async () => await page.getByTestId('admin-teams').isVisible(),
                 (isVisible) => isVisible === true,
                 10
             )
@@ -139,15 +167,16 @@ test.describe('AdminTeams Form UI', () => {
             // Navigate to see the teams
             await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
             await pollUntil(
-                async () => await page.getByTestId('form-mode-edit').isVisible(),
+                async () => await page.getByTestId('admin-teams').isVisible(),
                 (isVisible) => isVisible,
                 10
             )
 
-            // THEN: Verify we can see 2 team tabs in navigation (master-detail pattern shows 1 input at a time)
-            const teamTabs = page.locator('[data-testid="team-tabs-list"] button[role="tab"]')
-            await expect(teamTabs.first()).toBeVisible()
-            await expect(teamTabs).toHaveCount(2)
+            // THEN: Verify the master table lists both teams in the overview (nothing opened)
+            const teamRows = page.locator('[data-testid^="team-row-"]')
+            await expect(teamRows.first()).toBeVisible()
+            await expect(teamRows).toHaveCount(2)
+            await expect(page.getByTestId('team-name-input')).toBeHidden()
 
             // Documentation screenshot: Admin Teams management view
             await doScreenshot(page, 'admin/admin-teams-edit', true)
@@ -157,10 +186,10 @@ test.describe('AdminTeams Form UI', () => {
             // GIVEN: Create one team
             const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Name')
 
-            // Navigate to see the team
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
+            // Navigate with the team open in the edit face
+            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
             await pollUntil(
-                async () => await page.getByTestId('form-mode-edit').isVisible(),
+                async () => await page.getByTestId('admin-teams').isVisible(),
                 (isVisible) => isVisible,
                 10
             )
@@ -187,60 +216,17 @@ test.describe('AdminTeams Form UI', () => {
             const updatedTeam = await SeasonFactory.getCookingTeamById(context, team.id!)
             expect(updatedTeam).not.toBeNull()
             expect(updatedTeam!.name).toContain('Q')
-        })
-
-        test('GIVEN user in edit mode WHEN adding new team THEN team is saved immediately', async () => {
-            // GIVEN: Create one team
-            await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Existing Team')
-
-            // Navigate to see the team
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
-            await pollUntil(
-                async () => await page.getByTestId('form-mode-edit').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
-
-            // Verify initial state via API (source of truth)
-            const initialTeams = await SeasonFactory.getCookingTeamsForSeason(context, season.id!)
-            expect(initialTeams.length).toBe(1)
-
-            // Verify UI reflects initial state - wait for team tabs to be visible
-            const teamTabs = page.locator('[data-testid="team-tabs-list"] button[role="tab"]')
-            await expect(teamTabs.first()).toBeVisible()
-            await expect(teamTabs).toHaveCount(1)
-
-            // WHEN: Add new team (saves immediately)
-            const addButton = page.getByTestId('add-team-button')
-            await expect(addButton).toBeVisible()
-
-            // Wait for the API call to complete
-            const responsePromise = page.waitForResponse(
-                (response: Response) => response.url().includes('/api/admin/team') && response.request().method() === 'PUT',
-                { timeout: 5000 }
-            )
-            await addButton.click()
-            await responsePromise
-
-            // THEN: Team should be saved immediately via API
-            const teams = await pollUntil(
-                () => SeasonFactory.getCookingTeamsForSeason(context, season.id!),
-                (teams) => teams.length === 2
-            )
-            expect(teams.length).toBe(2)
-
-            // Verify UI reflects updated state
-            await expect(teamTabs).toHaveCount(2)
+            await expectMode(FORM_MODES.EDIT)
         })
 
         test('GIVEN season with team WHEN deleting team via UI THEN team is removed', async () => {
             // GIVEN: Create one team
-            const _ = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team to Delete')
+            const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team to Delete')
 
-            // Navigate to see the team
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
+            // Navigate with the team open in the edit face
+            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
             await pollUntil(
-                async () => await page.getByTestId('form-mode-edit').isVisible(),
+                async () => await page.getByTestId('admin-teams').isVisible(),
                 (isVisible) => isVisible,
                 10
             )
@@ -270,46 +256,86 @@ test.describe('AdminTeams Form UI', () => {
                 (teams) => teams.length === 0
             )
             expect(teams.length).toBe(0)
+            await expectMode(FORM_MODES.EDIT)
         })
 
-        test('GIVEN season with 3 teams WHEN clicking team tabs THEN detail panel shows selected team', async () => {
+        test('GIVEN season with 3 teams WHEN clicking team rows THEN detail panel shows selected team', async () => {
             // GIVEN: Create 3 teams
-            await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Alpha')
-            await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Beta')
-            await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Gamma')
+            const alpha = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Alpha')
+            const beta = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Beta')
+            const gamma = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Gamma')
 
             // Navigate to see the teams
             await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
             await pollUntil(
-                async () => await page.getByTestId('form-mode-edit').isVisible(),
+                async () => await page.getByTestId('admin-teams').isVisible(),
                 (isVisible) => isVisible,
                 10
             )
 
-            // Wait for team tabs to load
-            const teamTabs = page.getByTestId('team-tabs-list').locator('button[role="tab"]')
-            await expect(teamTabs.first()).toBeVisible()
-            await expect(teamTabs).toHaveCount(3)
+            // Wait for the master table rows to load
+            const teamRows = page.locator('[data-testid^="team-row-"]')
+            await expect(teamRows.first()).toBeVisible()
+            await expect(teamRows).toHaveCount(3)
+            await testHelpers.waitForHydration(page)
 
-            // WHEN: Click different team tabs
-            // Click second tab (Team Beta)
-            await teamTabs.nth(1).click()
-
-            // THEN: Detail panel shows Team Beta
+            // WHEN/THEN: clicking a row shows that team in the detail panel
             const teamInput = page.getByTestId('team-name-input')
-            await expect(teamInput).toHaveValue(/Team Beta/)
+            for (const {team, name} of [
+                {team: beta, name: 'Team Beta'},
+                {team: gamma, name: 'Team Gamma'},
+                {team: alpha, name: 'Team Alpha'}
+            ]) {
+                await page.getByTestId(`team-row-${team.id}`).click()
+                await expect(teamInput).toHaveValue(new RegExp(name))
+            }
 
-            // Click third tab (Team Gamma)
-            await teamTabs.nth(2).click()
+            // AND: clicking the open row again deselects back to the overview
+            await page.getByTestId(`team-row-${alpha.id}`).click()
+            await expect(teamInput).toBeHidden()
+            await expect(page).not.toHaveURL(/team=/)
+        })
 
-            // THEN: Detail panel shows Team Gamma
-            await expect(teamInput).toHaveValue(/Team Gamma/)
+        test('GIVEN user in edit mode WHEN adding a member to a team THEN the assignment is saved', async ({browser: _browser}) => {
+            // GIVEN: a team and an inhabitant to add
+            const testSalt = Date.now().toString()
+            const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Medlem')
+            const household = await HouseholdFactory.createHousehold(context)
+            createdHouseholdIds.push(household.id)
+            await HouseholdFactory.createInhabitantForHousehold(context, household.id, `Medlem-${testSalt} Testesen`)
 
-            // Click first tab (Team Alpha)
-            await teamTabs.nth(0).click()
+            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
+            await pollUntil(
+                async () => await page.getByTestId('admin-teams').isVisible(),
+                (isVisible) => isVisible,
+                10
+            )
 
-            // THEN: Detail panel shows Team Alpha
-            await expect(teamInput).toHaveValue(/Team Alpha/)
+            // WHEN: adding the inhabitant through the member finder
+            const search = page.getByPlaceholder('Søg efter navn...')
+            await expect(search).toBeVisible()
+            await search.fill(`Medlem-${testSalt}`)
+            // The row action expands the add form (its label flips to 'Luk'), so the
+            // remaining 'Tilføj' button is the form's submit
+            await page.getByRole('button', {name: 'Tilføj'}).first().click()
+            const responsePromise = page.waitForResponse(
+                (response: Response) => response.url().includes('/api/admin/team/assignment') && response.request().method() === 'PUT',
+                {timeout: 15000}
+            )
+            await page.getByRole('button', {name: 'Tilføj', exact: true}).click()
+            const response = await responsePromise
+            expect(response.status()).toBe(201)
+
+            // THEN: the assignment lands via API
+            const savedTeam = await pollUntil(
+                () => SeasonFactory.getCookingTeamById(context, team.id!),
+                (t) => (t?.assignments?.length ?? 0) === 1
+            )
+            expect(savedTeam!.assignments!.length).toBe(1)
+
+            // AND: the page stays in edit mode with the member finder on screen
+            await expectMode(FORM_MODES.EDIT)
+            await expect(search).toBeVisible()
         })
     })
 })

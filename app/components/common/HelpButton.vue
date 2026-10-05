@@ -158,7 +158,7 @@ watch(() => route.path, () => {
                 label="Rapporter fejl"
                 :size="SIZES.small"
                 variant="ghost"
-                v-bind="BUTTONS.disclosure(showFeedbackForm)"
+                v-bind="BUTTONS.flipOpen(showFeedbackForm)"
                 @click="showFeedbackForm = !showFeedbackForm"
             />
 

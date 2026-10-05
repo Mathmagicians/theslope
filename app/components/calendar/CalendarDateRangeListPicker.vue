@@ -116,25 +116,14 @@ const onUpdateHoliday = (index: number, range: DateRange) => {
           :data-testid="rowName(index)">
         <UFormField :label="index === 0 ?  'Valgte ferieperioder' : '' ">
           <div class="flex items-center gap-2">
-            <UIcon v-if="!props.disabled" :name="ICONS.holiday"/>
             <CalendarDateRangePicker
-                v-if="!props.disabled"
                 :model-value="dates"
                 :name="rowName(index)"
                 :selection="SELECTION"
+                :disabled="props.disabled"
+                :icon="ICONS.holiday"
+                label=""
                 @update:model-value="onUpdateHoliday(index, $event)"/>
-            <UInput
-                v-else
-                :model-value="formatDateRange(dates)"
-                :name="rowName(index)"
-                disabled
-                placeholder="Ferieperiode"
-                :ui="{ base: 'w-fit min-w-full mr-4' }"
-            >
-            <template #leading>
-              <UIcon :name="ICONS.holiday"/>
-            </template>
-            </UInput>
             <UButton
                 v-if="!props.disabled"
                 v-bind="BUTTONS.edit"
