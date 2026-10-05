@@ -282,7 +282,24 @@ d1-copy-dev-to-local: ## Replace the local D1 with a copy of dev (schema, data, 
 # ============================================================================
 # TESTING
 # ============================================================================
-.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod
+.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod test-report
+
+TEST_REPORT_JQ = {passed: (.stats.expected // 0), failed: (.stats.unexpected // 0), flaky: (.stats.flaky // 0), skipped: (.stats.skipped // 0)} as $$r \
+	| (if $$r.failed > 0 then "❌" else "✅" end) as $$icon \
+	| "\#\# \($$icon) \($$title)\n\n| Passed | Failed | Flaky | Skipped |\n|---:|---:|---:|---:|\n| \($$r.passed) | \($$r.failed) | \($$r.flaky) | \($$r.skipped) |\n" \
+	+ (if ($$r.failed > 0) and (($$note | length) > 0) then "\n> ⚠️ \($$note)\n" else "" end) \
+	+ (if ($$link | length) > 0 then "\n[Playwright report (artifact)](\($$link))\n" else "" end)
+
+TEST_REPORT_USAGE := usage: make test-report report=<playwright json> title=<text> [link=<url>] [note=<warning shown when failed > 0>]
+
+test-report: ## Markdown summary of a Playwright suite - report=<json> title=<text> [link=<url>] [note=<text>]
+	@test -n "$(report)" -a -n "$(title)" || { echo "$(TEST_REPORT_USAGE)"; exit 1; }
+	@if [ -f "$(report)" ]; then \
+		jq -r --arg title "$(title)" --arg link "$(link)" --arg note "$(note)" '$(TEST_REPORT_JQ)' "$(report)" \
+			|| echo "## ⚠️ $(title) — could not parse $(report)"; \
+	else \
+		echo "## ⚠️ $(title) — no results file at $(report)"; \
+	fi
 
 unit-test: ## Run all unit tests
 	@npx vitest --run
