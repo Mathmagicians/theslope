@@ -13,7 +13,7 @@ Sizing is informal t-shirt sizes.
 | Package | What | Detail | Size | Status |
 |---|---|---|---|---|
 | Framework research spike | prisma 7/8-RC + zod 4 + `zod-prisma-types` compatibility; removable workarounds and adoptable features; Nuxt roadmap evidence that `useAsyncData`'s option surface (`enabled`, `createUseAsyncData`) and named layout slots survive coming releases | `feature-proposal-framework-adoption.md` § Dependency clusters | S | ✅ decided — spike first |
-| CI test reporting | Job summary: per-category counts, e2e suites, report artifact links; ui failures red | below | S | ✅ decided |
+| CI test reporting | Job summary: vitest stats line + per-suite Playwright sections with report links | below | S | ✅ approved 2026-10-05 |
 | Store fetcher factory | `useStoreAsyncData`; schema-driven types | `feature-proposal-framework-adoption.md` | M | ⏳ API awaiting signoff |
 | Fetch gating | `enabled` carries the fetch condition | `feature-proposal-framework-adoption.md` | M | ⏳ awaiting signoff |
 | Prisma bundle | ALL prisma/zod/migration work in one go: the prisma + zod majors the spike green-lights, `zod-prisma-types` regen, every new model of the push, one migration | below | L | models drafted, sign-off pending |

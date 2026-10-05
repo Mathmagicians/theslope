@@ -1,12 +1,13 @@
 import {describe, it, expect, beforeAll} from 'vitest'
-import {addDays, differenceInDays, nextDay, type Day} from 'date-fns'
-import {useBooking, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, type OrderDecisionInput} from '~/composables/useBooking'
+import {addDays, addYears, differenceInDays, nextDay, type Day} from 'date-fns'
+import {useBooking, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, buildDesiredOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useBookingValidation, type OrderDisplay, type DinnerMode, type DesiredOrder} from '~/composables/useBookingValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 import appConfig from '~/app.config'
 
@@ -41,6 +42,7 @@ let countChanges: UseBookingT['countChanges']
 let formatActionPreview: UseBookingUiT['formatActionPreview']
 let ACTION_PREVIEW: UseBookingUiT['ACTION_PREVIEW']
 let defaultDeadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
+let resolveTicketPrice: ReturnType<typeof useTicket>['resolveTicketPrice']
 beforeAll(() => {
     ({
         buildDinnerUrl,
@@ -62,6 +64,7 @@ beforeAll(() => {
         countChanges
     } = useBooking());
     ({formatActionPreview, ACTION_PREVIEW} = useBookingUi())
+    resolveTicketPrice = useTicket().resolveTicketPrice
 
     const {deadlinesForSeason} = useSeason()
     defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
@@ -887,6 +890,61 @@ describe('resolveDesiredOrdersToBuckets', () => {
             DinnerMode,
             OrderState
         )).toThrow('Dinner event 999 not found')
+    })
+})
+
+// =============================================================================
+// buildDesiredOrder - one booking intent → DesiredOrder (grid, preview, day view)
+// =============================================================================
+
+describe('buildDesiredOrder', () => {
+    const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
+    const DinnerMode = DinnerModeSchema.enum
+    const OrderState = OrderStateSchema.enum
+    const TicketType = TicketTypeSchema.enum
+
+    const ticketPrices = TicketFactory.defaultTicketPrices()
+    const priceIdOf = (ticketType: typeof TicketType[keyof typeof TicketType]) =>
+        ticketPrices.find(tp => tp.ticketType === ticketType)!.id!
+    const resolver: TicketPriceResolver = (birthDate, priceAtBooking, referenceDate) =>
+        resolveTicketPrice(birthDate, priceAtBooking, ticketPrices, referenceDate)
+
+    const EVENT_DAYS_AHEAD = 30
+    const dinnerEvent = DinnerEventFactory.dinnerEventAt(101, EVENT_DAYS_AHEAD)
+    const inhabitant = {...HouseholdFactory.defaultInhabitantData(), id: 1}
+    const intent: BookingIntent = {inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, dinnerMode: DinnerMode.TAKEAWAY}
+
+    const order = (id: number, isGuestTicket: boolean): OrderDisplay =>
+        OrderFactory.defaultOrder(undefined, {id, inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, ticketPriceId: priceIdOf(TicketType.ADULT), isGuestTicket})
+    const REGULAR_ID = 42
+    const GUEST_ID = 7
+
+    const build = (existingOrders: OrderDisplay[], inhabitants = [inhabitant], resolve = resolver) =>
+        buildDesiredOrder(intent, existingOrders, inhabitants, [dinnerEvent], resolve, OrderState.BOOKED)
+
+    it.each([
+        {desc: 'new booking', existingOrders: [], expectedOrderId: undefined},
+        {desc: 'existing regular order', existingOrders: [order(REGULAR_ID, false)], expectedOrderId: REGULAR_ID},
+        {desc: 'guest-only order on the event', existingOrders: [order(GUEST_ID, true)], expectedOrderId: undefined},
+        {desc: 'guest listed before regular order', existingOrders: [order(GUEST_ID, true), order(REGULAR_ID, false)], expectedOrderId: REGULAR_ID}
+    ])('$desc → orderId $expectedOrderId', ({existingOrders, expectedOrderId}) => {
+        expect(build(existingOrders)).toEqual({
+            ...intent,
+            ticketPriceId: priceIdOf(TicketType.ADULT),
+            isGuestTicket: false,
+            orderId: expectedOrderId,
+            state: OrderState.BOOKED
+        })
+    })
+
+    it('prices a new booking by age on the dinner date', () => {
+        // 11 today, 12 on the dinner date
+        const birthDate = addDays(addYears(today, -12), EVENT_DAYS_AHEAD - 10)
+        expect(build([], [{...inhabitant, birthDate}])?.ticketPriceId).toBe(priceIdOf(TicketType.ADULT))
+    })
+
+    it('returns null when no ticket price resolves', () => {
+        expect(build([], [inhabitant], () => undefined)).toBeNull()
     })
 })
 

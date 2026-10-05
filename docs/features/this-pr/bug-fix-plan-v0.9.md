@@ -17,7 +17,7 @@
 | B1 — Grid booking save | "fejlede" toast despite 200s; day view works | ⏳ this PR — section below |
 | B5 — Holidays on new season | errors adding holidays in create mode | ✅ closed 2026-10-05 — shipped with the #166/#167 holiday rework |
 | B6 — Kitchen portions | 0 portions when `ticketPriceId` is null | ⏳ this PR — "Order snapshot" package in [release-0.9.0.md](release-0.9.0.md); detail in [bug-fix-order-snapshot.md](../bug-fix-order-snapshot.md) |
-| Order uniqueness | duplicate regular orders per inhabitant + dinner (release-plan I3) | **OPEN** — options below |
+| Order uniqueness | duplicate regular orders per inhabitant + dinner (release-plan I3) | dropped 2026-10-05 — zero duplicates in all envs, B1 unifies the builders, an index adds write cost + a failure mode |
 | Billing delivery report | run reports count only what the displayed run did | **OPEN** decisions — section below |
 | Interrupted job runs | a run whose request dies stays RUNNING | **OPEN** — section below |
 
@@ -44,7 +44,7 @@ parallel agents, one e2e runner at a time sequences their suites. The only const
 | Package | Blocked by |
 |---|---|
 | B1 — Grid booking save | nothing — unblocked now (booking files only, no migration); lands before the waitlist builds on scaffold + portions |
-| B6 schema (+ Order uniqueness option 1) | the Prisma bundle model sign-off; the Order uniqueness decision comes first |
+| B6 schema | the Prisma bundle model sign-off |
 | B6 resolver fallback | the bundle migration applied (`Order.orderSnapshot` + backfill) |
 | Billing delivery report | its two OPEN decisions; lands before Adhoc + EXPENSE writes the ledger |
 | Interrupted job runs | its OPEN option; shares surfaces with the billing report (`JobRun`, job history) — one package or sequenced |
@@ -166,27 +166,6 @@ the bundle. High priority in this PR: the waitlist resolver fits queue entries b
 
 ---
 
-## Order uniqueness — OPEN
-
-**Problem.** `Order` has no uniqueness over `(inhabitantId, dinnerEventId)`, so duplicate regular orders
-can exist, and the class of bug B1 fixes (a stale or duplicate id attached to a cell change) can return
-after B1's builder lands. Release-plan I3 names this companion hardening.
-
-**Why not a plain constraint.** Guest tickets share the booking member's `inhabitantId`
-(`isGuestTicket: true`), so several orders per `(inhabitantId, dinnerEventId)` are by design.
-A bare `@@unique([inhabitantId, dinnerEventId])` breaks guest booking.
-
-**Options.**
-1. Partial unique index (`WHERE isGuestTicket = 0`) — raw SQL in the bundle migration; Prisma does not
-   model partial indexes, so the schema file cannot declare it (documented drift) while D1 enforces it.
-2. Application-level guard — the scaffolder rejects a second regular order per key; no schema drift,
-   no DB enforcement.
-
-Either way a dedup backfill of existing duplicate regular orders runs first. Decided before the
-Prisma bundle signs off; option 1 rides its migration.
-
----
-
 ## Billing delivery report
 
 **Problem.** The monthly billing card, the job history and the toast count what the displayed run did
@@ -243,7 +222,8 @@ Every proposal in `this-pr/` checked for open defects:
 - Shipped fixes compacted to pointers; B1 folded in from its own doc (file removed); B6 stays in
   [bug-fix-order-snapshot.md](../bug-fix-order-snapshot.md) as the Order snapshot package's detail doc.
 - B4 closed with B3 — reopens on a fresh report with repro.
-- **OPEN — Order uniqueness:** partial index vs application guard (options above); decided before the Prisma bundle signs off.
+- Order uniqueness dropped: zero duplicate regular orders in all envs, B1 unifies the client builders; an
+  index adds write cost and a new runtime failure mode.
 - B5 closed — shipped with the #166/#167 holiday rework; create-mode auto-recalc of default holidays is intended behaviour.
 - No sprint ordering: each fix is its own package behind its own brief; packages with disjoint files run as parallel
   agents (one e2e runner at a time). Dependencies only — see This PR — parallelization.

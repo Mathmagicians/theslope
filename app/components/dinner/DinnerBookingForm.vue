@@ -400,20 +400,16 @@ const tableData = computed((): TableRow[] => {
 // Build desired orders for a row (DRY: used by handleSave and actionPreviewItems)
 const buildDesiredOrdersForRow = (row: TableRow): DesiredOrder[] => {
   const dinnerEventId = props.dinnerEvent.id
+  const buildForInhabitants = (inhabitantIds: number[]) => buildDesiredOrders(
+    inhabitantIds.map(inhabitantId => ({inhabitantId, dinnerEventId, dinnerMode: draftMode.value})),
+    eventOrders.value,
+    household.value?.inhabitants ?? [],
+    [props.dinnerEvent],
+    props.ticketPrices
+  )
 
   if (row.rowType === 'power') {
-    const inhabitantRows = tableData.value.filter((r: TableRow) => r.rowType === 'inhabitant')
-    return inhabitantRows
-      .filter(r => r.ticketPriceId !== null)
-      .map((r: TableRow) => ({
-        inhabitantId: r.id as number,
-        dinnerEventId,
-        dinnerMode: draftMode.value,
-        ticketPriceId: r.ticketPriceId!,
-        isGuestTicket: false,
-        orderId: r.order?.id,
-        state: OrderStateEnum.BOOKED
-      }))
+    return buildForInhabitants(tableData.value.filter(r => r.rowType === 'inhabitant').map(r => r.id as number))
   }
 
   if (row.rowType === 'guest-order' && row.ticketPriceId) {
@@ -429,16 +425,8 @@ const buildDesiredOrdersForRow = (row: TableRow): DesiredOrder[] => {
     }))
   }
 
-  if (row.rowType === 'inhabitant' && typeof row.id === 'number' && row.ticketPriceId) {
-    return [{
-      inhabitantId: row.id,
-      dinnerEventId,
-      dinnerMode: draftMode.value,
-      ticketPriceId: row.ticketPriceId,
-      isGuestTicket: false,
-      orderId: row.order?.id,
-      state: OrderStateEnum.BOOKED
-    }]
+  if (row.rowType === 'inhabitant' && typeof row.id === 'number') {
+    return buildForInhabitants([row.id])
   }
 
   return []
@@ -494,7 +482,7 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
 // HELPER TEXT
 // ============================================================================
 
-const {partitionGuestOrders, groupGuestOrders, getBookingOptions, getDayBillSummary, resolveUserBookingBuckets} = useBooking()
+const {partitionGuestOrders, groupGuestOrders, getBookingOptions, getDayBillSummary, resolveUserBookingBuckets, buildDesiredOrders} = useBooking()
 const {createBookingBadges, formatActionPreview} = useBookingUi()
 
 // Deadline badges

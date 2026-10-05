@@ -173,9 +173,9 @@ it trades the universal phone-first paint for a guessed width.
 
 ## Dependency clusters — OPEN
 
-Spike of 2026-10-05 on this branch: `npm outdated`, `npm audit`, npm registry release dates, vendor changelogs
-(prisma.io/changelog, zod.dev/v4, nuxt.com/blog, github release pages). Nuxt roadmap evidence lives under Page
-composition → Research.
+Spike of 2026-10-05 on this branch: `npm view` dist-tags, `npm audit`, vendor changelogs (prisma.io/changelog,
+zod.dev/v4, nuxt.com/blog, github release pages), generator source reads under `node_modules/zod-prisma-types`.
+Nuxt roadmap evidence lives under Page composition → Research and under Nuxt option surface below.
 
 ### Majors
 
@@ -184,11 +184,11 @@ composition → Research.
 | `prisma` / `@prisma/client` / `@prisma/adapter-d1` | 6.19.3 | 7.10.0 (2026-08-25); the `latest` npm tag of `prisma` points at 8.0.0-rc.20 (2026-10-05), so installs pin `7.10` explicitly | generator rewrite, `prisma.config.ts`, ESM — details below |
 | `zod` | 3.25.76 | 4.6.5 (2026-09-13) | 8 code sites — details below |
 | `zod-prisma-types` | 3.3.11 | 3.3.11 (2026-01-24) | the gate — details below |
-| `pinia` + `@pinia/nuxt` | 3.0.4 / 0.11.3 | 4.0.3 / 1.0.2 (2026-08-12) | ESM-only; `@vue/devtools-api` becomes a peer; the store API is unchanged and public migration reports show zero source change; the pair upgrades together (`@pinia/nuxt` 1.0.2 requires `pinia ^4.0.3`) |
-| `@vueuse/core` | 14.4.0 | 15.0.0 (2026-09-16) | v15 drops `templateRef`, Node 20, the deprecated timer options, and flips `useThrottleFn` trailing to true — the repo holds zero `@vueuse` imports, so the bump is version-only; Node ≥22 holds (engines `^24.21.0`) |
-| `typescript` | 5.9.3 | 7.0.2 (2026-07-08) | TS 7 is the Go-native compiler; the JS compiler API is gone and `vue-tsc` 3.3.x loads it, so `npm run ts*` crashes; TS 7.1 (autumn 2026) carries the programmatic API Vue tooling waits for |
+| `pinia` + `@pinia/nuxt` | 3.0.4 / 0.11.3 | 4.0.3 / 1.0.2 (2026-08-12) | ESM-only; `@vue/devtools-api` becomes a peer; the store API is unchanged and public migration reports show zero source change (github.com/vuejs/pinia/releases); the pair upgrades together (`@pinia/nuxt` 1.0.2 requires `pinia ^4.0.3`) |
+| `@vueuse/core` | 14.4.0 | 15.0.0 (2026-09-16) | v15 drops `templateRef` (Vue 3.5 `useTemplateRef`), Node 20 and the deprecated timer options (github.com/vueuse/vueuse/releases/tag/v15.0.0) — the repo holds zero `@vueuse` imports, so the bump is version-only; engines `^24.21.0` holds |
+| `typescript` | 5.9.3 | 7.0.2 (2026-07-08) | TS 7 is the Go-native compiler; the JS compiler API is gone and `vue-tsc` 3.3.x loads it, so `npm run ts*` crashes (github.com/vuejs/language-tools/discussions/6121); TS 7.1 (`next` is 7.1.0-dev) carries the programmatic API Vue tooling waits for |
 | `@types/node` | 24.19.1 | 26.6.4 (2026-10-01) | tracks Node 26 (26.0.0, 2026-06-19); engines pin `node ^24.21.0` — the types follow the runtime |
-| `ical-generator` | 10.2.0 | 11.1.2 (11.0.0, 2026-06-02) | v11's breaking change is dropping Node 20/23; one call site, `server/routes/api/calendar/feed.ts` |
+| `ical-generator` | 10.2.0 | 11.1.2 (11.0.0, 2026-06-02) | v11's breaking change is dropping Node 20/23 (sebbo2002/ical-generator CHANGELOG); one call site, `server/routes/api/calendar/feed.ts` |
 | `h3` (dev) | 1.15.11 | 2.0.1 | h3 v2 arrives with Nuxt 5 / Nitro 3; pinned until then |
 
 ### Prisma 7
@@ -203,20 +203,25 @@ Released 2025-11-19 (prisma.io/blog/announcing-prisma-orm-7-0-0); the line sits 
   `allergyRepository.ts`).
 - `strictUndefinedChecks` graduates to the default: the `previewFeatures` flag goes, and ADR-012's `Prisma.skip`
   data-object pattern is v7's native behaviour; the ADR-012 WHERE-clause rule stays.
-- `@prisma/adapter-d1` 7.10.0 ships; since 7.10.0 parameter-chunked statements run in a transaction and roll back when
-  a later chunk fails (adapter chunking for D1's 100-bind-value limit exists since 5.15.0).
+- `@prisma/adapter-d1` carries the npm `latest` tag at 7.10.0; since 7.10.0 parameter-chunked statements run in a
+  transaction and roll back when a later chunk fails (github.com/prisma/prisma/releases/tag/7.10.0; adapter chunking
+  for D1's 100-bind-value limit exists since 5.15.0).
+- Partial indexes: the `partialIndexes` preview lands in 7.4.0 (prisma.io/changelog/2026-02-11) — `where` on
+  `@unique`/`@@unique`/`@@index`, SQLite among the supported databases — and stays a preview flag in the v7 docs
+  (prisma.io/docs/orm/v7/prisma-schema/data-model/indexes). This repo's migrations hold plain indexes only; nothing
+  here waits on it.
 - Upgrade work: `prisma.config.ts` at the root (the CLI's config home), the generator block, re-checking the Make
   targets (`--schema`/`--url` CLI flags are removed, the post-install generate is gone — `make d1-prisma` already calls
   `prisma generate` explicitly), client middleware and metrics are removed (unused here).
 
-Workarounds per version:
+Workarounds per version (sites in this repo):
 
-| Workaround (ADR) | On Prisma 7 |
-|---|---|
-| `previewFeatures = ["strictUndefinedChecks"]` (ADR-012) | deleted — default behaviour |
-| Manual ID chunking for `updateMany`/`deleteMany` WHERE IN (ADR-014) | kept until an e2e run on the branch proves 7.10's chunk handling covers it |
-| Raw SQL JOINs for unbounded nested includes (ADR-014) | kept — `relationJoins` stays unavailable on SQLite/D1 and the query splitter's `WHERE fk IN (…)` meets the same 100-bind limit (prisma/orm#23743 open) |
-| `createManyAndReturn` bulk inserts (ADR-014) | kept — supported on SQLite in 7 |
+| Workaround (ADR) | Sites | On Prisma 7 |
+|---|---|---|
+| `previewFeatures = ["strictUndefinedChecks"]` (ADR-012) | `prisma/schema.prisma:9` | deleted — default behaviour; the 27 `Prisma.skip` sites (`server/data/prismaRepository.ts`, `financesRepository.ts`, `maintenanceRepository.ts`) stay as written |
+| Manual ID chunking for `updateMany`/`deleteMany` WHERE IN (ADR-014) | `server/utils/heynaboImportService.ts:51`, `:155`, `:238`; `server/data/financesRepository.ts:838`, `:1471` | kept until an e2e run on the branch proves 7.10's chunk handling covers it |
+| Raw SQL JOINs for unbounded nested includes (ADR-014) | `server/data/financesRepository.ts:941` (`$queryRawUnsafe`) | kept — `relationJoins` stays unavailable on SQLite/D1 and the query splitter's `WHERE fk IN (…)` meets the same 100-bind limit (prisma/orm#23743 open) |
+| `createManyAndReturn` bulk inserts (ADR-014) | `server/data/financesRepository.ts`, `prismaRepository.ts` | kept — supported on SQLite in 7 |
 
 Prisma 8: 8.0.0-rc.20 (2026-10-05), accumulating breaking changes — collection `.take`/`.skip` become
 `.limit`/`.offset`, Postgres date columns return Temporal values — and it runs on the Prisma 7 schema. The ecosystem's
@@ -233,16 +238,20 @@ production line is 7.10.
 
 ### zod-prisma-types — the gate
 
-- Latest 3.3.11 (2026-01-24, npm). Peer range `prisma ^4–^7`, `zod ^3.25 || ^4`; its dependencies are
-  `@prisma/dmmf` / `@prisma/generator-helper` / `@prisma/client-runtime-utils` `^7.3.0`. The 3.3.6–3.3.10 run
-  (2025-11-26, a week after Prisma 7) fixes Prisma 7 bugs; 3.3.0 (2025-09-30) adds zod 4 output.
-- README: "Due to time constraints, this package will only receive critical bug fixes and essential updates" and
-  points new projects at `prisma-zod-generator`.
-- Open issue #363: generated `JsonValue` import from the moved `runtime/library` path — it needs a schema with `Json`
-  fields; `prisma/schema.prisma` has none (SQLite) and our generated `index.ts` carries no such import. Issue #362
-  (Prisma 7 support) is closed.
-- The generated file imports `Prisma` from `@prisma/client`; under the `prisma-client` generator the type lives at the
-  generated output — the generator's `prismaClientPath` option carries the path.
+- Latest 3.3.11 (2026-01-24, npm). Peer range `prisma ^4–^7`, `zod ^3.25 || ^4` (verified via `npm view
+  zod-prisma-types@3.3.11 peerDependencies`); its dependencies are `@prisma/dmmf` / `@prisma/generator-helper` /
+  `@prisma/client-runtime-utils` `^7.3.0` and `zod ^4.3.6`. The 3.3.6–3.3.10 run (2025-11-26, a week after Prisma 7)
+  fixes Prisma 7 bugs; 3.3.0 (2025-09-30) adds zod 4 output.
+- README (github.com/chrishoermann/zod-prisma-types): "Due to time constraints, this package will only receive
+  critical bug fixes and essential updates" and points new projects at `prisma-zod-generator`.
+- Open issue #363: generated `JsonValue` import from the moved `runtime/library` path. Verified at generator source:
+  the import is written only when the DMMF carries `Json` fields
+  (`node_modules/zod-prisma-types/dist/functions/writeSingleFileImportStatements.js:13-16`,
+  `dmmf.schema.hasJsonTypes`); `prisma/schema.prisma` has no `Json` or `Decimal` field, so the break misses this
+  schema. Issue #362 (Prisma 7 support) is closed.
+- 3.3.11 branches on the new generator (`isPrismaClientGenerator`) and takes the library import path from the
+  `prismaLibraryPath` config, so the `prisma-client` generator is a supported target; the generated file's `Prisma`
+  type import follows the generator's `prismaClientPath` option.
 - The app consumes 13 enum schemas from the generated layer (`SystemRoleSchema` … `OrderAuditActionSchema`) and zero
   model schemas; the file is 13.7k lines.
 
@@ -270,7 +279,7 @@ Migration surface from the composable scan (`app/composables/*.ts`):
 
 | Pattern | Count | zod 4 |
 |---|---|---|
-| `invalid_type_error` / `required_error` | 5 + 1 (`useDateRangeValidation`, `useCoreValidation`, `useBookingValidation`) | the unified `error` param replaces them (zod.dev/v4/changelog) |
+| `invalid_type_error` / `required_error` | 6 lines (`useBookingValidation.ts:718`, `:722`; `useDateRangeValidation.ts:15-16`; `useCoreValidation.ts:275`, `:278`) | the unified `error` param replaces them (zod.dev/v4/changelog) |
 | `z.record(EnumSchema, V)` | 2 (`useNotificationValidation.ts:69`, `useBillingValidation.ts:40`) | enum-keyed records become exhaustive; sparse `TicketCountsByTypeSchema` moves to `z.partialRecord`, the exhaustive-by-design `templates` stays |
 | `z.coerce.*` | 52 | kept — the input type widens to `unknown` |
 | `.refine` / `.transform` / `z.union` / `z.preprocess` / `z.lazy` / `safeParse` | 15 / 16 / 9 / 1 / 1 / 7 | kept |
@@ -285,13 +294,27 @@ Standard Schema, which zod 4 implements.
 
 **Recommendation:** ship zod 4 inside the Prisma one-go — regenerate the layer, convert the 8 sites, run the suites.
 
+### Nuxt option surface and nuxt/nuxt#34385
+
+- `enabled` ships stable in 4.5.0 (nuxt.com/blog/v4-5); `createUseAsyncData` / `createUseFetch` gain an `addons`
+  extension point in 4.6 (nuxt/nuxt#35797, merged 2026-09-26, milestone 4.6; the `nuxt-nightly` `latest` tag is a
+  4.6.0 build) — the option surface is where the 4.x line invests, and the 4.4/4.5 posts carry no deprecation of it.
+- The nightly channel publishes a `5x` tag (5.0.0 builds); Nuxt 5 rides the opt-in `future.compatibilityVersion: 5`
+  path documented in the 4.x release posts.
+- Named layout slots stay experimental in 4.5 behind `experimental.typescriptPlugin` +
+  `dxup.features.namedLayoutSlots` (nuxt.com/blog/v4-5).
+- nuxt/nuxt#34385 (`nuxi typecheck` misses `server/types/` ambient declarations; gates the ADR-017 `nuxt typecheck` /
+  `vue-tsc -b` follow-up) is open; the fix PR nuxt/nuxt#35195 is open with label 5.x, and its author reports the bug
+  gone on current main and Nuxt 4 (comment 2026-07-28, maintainer confirmation pending). Verification is one
+  `nuxt typecheck` run on this branch; until it is green, `ts:server` targets `server/tsconfig.json`.
+
 ### Clusters and order
 
-| Cluster | Contents | Order | Gate |
+| Cluster | Contents | Verdict | Gate |
 |---|---|---|---|
-| Framework pair | `pinia` 4 + `@pinia/nuxt` 1, `@vueuse/core` 15, `ical-generator` 11 | first — small, each verifiable alone | `npm run pre:all` + unit suite per bump |
-| Prisma + zod one-go | `prisma` + `@prisma/client` + `@prisma/adapter-d1` 7.10.0 (pinned), `zod` 4.6, regeneration via `zod-prisma-types` 3.3.11, `prisma.config.ts`, generator block, the 8 composable sites | second — owns the generated layer | `make d1-prisma` + `npm run pre:all` green; `npm run test:e2e:api` covers the ADR-014 chunking rows |
-| Deferred | `typescript` 7 (waits for `vue-tsc` on TS 7.1), `@types/node` 26 (waits for the Node 26 runtime move), `h3` 2 (arrives with Nuxt 5) | — | upstream releases |
+| Framework pair | `pinia` 4 + `@pinia/nuxt` 1, `@vueuse/core` 15, `ical-generator` 11 | adopt now — first, small, each verifiable alone | `npm run pre:all` + unit suite per bump |
+| Prisma + zod one-go | `prisma` + `@prisma/client` + `@prisma/adapter-d1` 7.10.0 (pinned), `zod` 4.6, regeneration via `zod-prisma-types` 3.3.11, `prisma.config.ts`, generator block, the 8 composable sites | adopt now — second, owns the generated layer | `make d1-prisma` + `npm run pre:all` green; `npm run test:e2e:api` covers the ADR-014 chunking rows |
+| Deferred | `typescript` 7 (waits for `vue-tsc` on TS 7.1), `@types/node` 26 (waits for the Node 26 runtime move), `h3` 2 (arrives with Nuxt 5) | wait | upstream releases |
 
 The store factory and fetch gating packages build on Nuxt 4.5 surfaces and touch no package in these clusters; the
 clusters and the adoption packages order freely around each other.

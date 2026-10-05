@@ -59,7 +59,7 @@ import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {BookingView} from '~/composables/useBookingView'
 import type {DateRange} from '~/types/dateTypes'
 import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
-import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import type {BookingIntent, ReleasedTicketCounts} from '~/composables/useBooking'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 // Row types for synthetic rows (same pattern as HouseholdCard)
@@ -116,7 +116,7 @@ const props = withDefaults(defineProps<Props>(), {
 const calendarOpen = defineModel<boolean>('calendarOpen', { default: true })
 
 const emit = defineEmits<{
-  save: [changes: { inhabitantId: number, dinnerEventId: number, dinnerMode: DinnerMode }[]]
+  save: [changes: BookingIntent[]]
   cancel: []
   'update:formMode': [mode: FormMode]
   navigate: [direction: 'prev' | 'next']
@@ -131,7 +131,7 @@ const emptyState = getRandomEmptyMessage('noDinners')
 const {formatPrice, getTicketTypeConfig, resolveTicketPrice, ticketTypeConfig} = useTicket()
 
 // Booking helpers (shared with DinnerBookingForm)
-const {groupGuestOrders, partitionGuestOrders, getDayBillSummary, resolveUserBookingBuckets, getBookingOptions} = useBooking()
+const {groupGuestOrders, partitionGuestOrders, getDayBillSummary, resolveUserBookingBuckets, getBookingOptions, buildDesiredOrders} = useBooking()
 const {formatActionPreview} = useBookingUi()
 
 // Inhabitant name lookup (used by actionPreviewItems)
@@ -150,32 +150,17 @@ const OrderStateEnum = OrderStateSchema.enum
 const draftChanges = ref<Map<string, DinnerMode>>(new Map())
 const hasPendingChanges = computed(() => draftChanges.value.size > 0)
 
+const draftIntents = (): BookingIntent[] =>
+  Array.from(draftChanges.value.entries()).map(([key, dinnerMode]) => {
+    const [inhabitantId, dinnerEventId] = key.split('-').map(Number)
+    return {inhabitantId: inhabitantId!, dinnerEventId: dinnerEventId!, dinnerMode}
+  })
+
 // Action preview: show what will happen when saving (uses same resolver as server)
 const actionPreviewItems = computed(() => {
   if (!hasPendingChanges.value) return []
 
-  // Build desired orders from draft changes
-  const desiredOrders: DesiredOrder[] = Array.from(draftChanges.value.entries()).map(([key, dinnerMode]) => {
-    const [inhabitantId, dinnerEventId] = key.split('-').map(Number)
-    const existingOrder = props.orders.find(o => o.inhabitantId === inhabitantId && o.dinnerEventId === dinnerEventId && !o.isGuestTicket)
-    const inhabitant = props.household.inhabitants.find(i => i.id === inhabitantId)
-    const ticketPriceId = existingOrder?.ticketPriceId ?? resolveTicketPrice(
-      inhabitant?.birthDate ?? null,
-      null,
-      props.ticketPrices
-    )?.id
-
-    return {
-      inhabitantId: inhabitantId!,
-      dinnerEventId: dinnerEventId!,
-      dinnerMode,
-      ticketPriceId: ticketPriceId!,
-      isGuestTicket: false,
-      orderId: existingOrder?.id,
-      state: OrderStateEnum.BOOKED
-    }
-  }).filter(o => o.ticketPriceId) as DesiredOrder[]
-
+  const desiredOrders = buildDesiredOrders(draftIntents(), props.orders, props.household.inhabitants, props.dinnerEvents, props.ticketPrices)
   if (desiredOrders.length === 0) return []
 
   const buckets = resolveUserBookingBuckets(
@@ -225,11 +210,7 @@ const handleCancel = () => {
 }
 
 const handleSave = () => {
-  const changes = Array.from(draftChanges.value.entries()).map(([key, dinnerMode]) => {
-    const [inhabitantId, dinnerEventId] = key.split('-').map(Number)
-    return { inhabitantId: inhabitantId!, dinnerEventId: dinnerEventId!, dinnerMode }
-  })
-  emit('save', changes)
+  emit('save', draftIntents())
   draftChanges.value.clear()
   emit('update:formMode', FORM_MODES.VIEW)
 }

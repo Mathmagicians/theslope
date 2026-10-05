@@ -219,6 +219,39 @@ export const resolveDesiredOrdersToBuckets = (
     return result
 }
 
+/** A user's booking change for one inhabitant at one dinner */
+export type BookingIntent = Pick<DesiredOrder, 'inhabitantId' | 'dinnerEventId' | 'dinnerMode'>
+
+/** `useTicket().resolveTicketPrice` bound to the season's ticket prices */
+export type TicketPriceResolver = (
+    birthDate: Date | null,
+    priceAtBooking: number | null | undefined,
+    referenceDate: Date | undefined
+) => TicketPrice | undefined
+
+/**
+ * Turn a user's booking intent for an inhabitant into a DesiredOrder.
+ * Guest tickets are never the inhabitant's own order: the intent targets the regular order only.
+ * An existing order keeps its ticket price; a new booking is priced by age on the dinner date.
+ * Returns null when no ticket price resolves.
+ */
+export const buildDesiredOrder = (
+    intent: BookingIntent,
+    existingOrders: OrderDisplay[],
+    inhabitants: Pick<InhabitantDisplay, 'id' | 'birthDate'>[],
+    dinnerEvents: Pick<DinnerEventDisplay, 'id' | 'date'>[],
+    resolveTicketPrice: TicketPriceResolver,
+    BOOKED: OrderState
+): DesiredOrder | null => {
+    const {inhabitantId, dinnerEventId} = intent
+    const existing = existingOrders.find(o => o.inhabitantId === inhabitantId && o.dinnerEventId === dinnerEventId && !o.isGuestTicket)
+    const birthDate = inhabitants.find(i => i.id === inhabitantId)?.birthDate ?? null
+    const eventDate = dinnerEvents.find(de => de.id === dinnerEventId)?.date
+    const ticketPriceId = existing?.ticketPriceId ?? resolveTicketPrice(birthDate, existing?.priceAtBooking, eventDate)?.id
+    if (!ticketPriceId) return null
+    return {...intent, ticketPriceId, isGuestTicket: false, orderId: existing?.id, state: BOOKED}
+}
+
 /**
  * Generate DesiredOrder[] from inhabitant preferences for system scaffolding.
  * Unified loop handles: guest preservation, user intent keys, and preference-based orders.
@@ -616,6 +649,7 @@ export const useBooking = () => {
     const {getDefaultDinnerStartTime, getDefaultDinnerDuration, getDinnerTimeRange, splitDinnerEvents} = useSeason()
     const {DinnerStateSchema, OrderSnapshotSchema} = useBookingValidation()
     const {formatNameWithInitials} = useHousehold()
+    const {resolveTicketPrice} = useTicket()
     const DinnerState = DinnerStateSchema.enum
 
     // ============================================================================
@@ -1165,6 +1199,22 @@ export const useBooking = () => {
         )
     }
 
+    /** buildDesiredOrder over a list of intents, priced from the season's ticket prices; unpriced intents drop out */
+    const buildDesiredOrders = (
+        intents: BookingIntent[],
+        existingOrders: OrderDisplay[],
+        inhabitants: Pick<InhabitantDisplay, 'id' | 'birthDate'>[],
+        dinnerEvents: Pick<DinnerEventDisplay, 'id' | 'date'>[],
+        ticketPrices: TicketPrice[]
+    ): DesiredOrder[] => {
+        const {OrderStateSchema} = useBookingValidation()
+        const resolveSeasonTicketPrice: TicketPriceResolver = (birthDate, priceAtBooking, referenceDate) =>
+            resolveTicketPrice(birthDate, priceAtBooking, ticketPrices, referenceDate)
+        return intents.flatMap(intent =>
+            buildDesiredOrder(intent, existingOrders, inhabitants, dinnerEvents, resolveSeasonTicketPrice, OrderStateSchema.enum.BOOKED) ?? []
+        )
+    }
+
     // ============================================================================
     // Action Preview - bucket change detection (formatting lives in useBookingUi)
     // ============================================================================
@@ -1274,6 +1324,7 @@ export const useBooking = () => {
         BOOKING_TOAST_TITLES,
         // Action Preview (show users what will happen before save)
         resolveUserBookingBuckets,
+        buildDesiredOrders,
         hasChanges,
         countChanges
     }
