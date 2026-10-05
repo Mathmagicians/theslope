@@ -29,6 +29,12 @@ validation composable's schema (ADR-001). Remaining `AsyncDataOptions` (`watch`,
 through. The factory is the blessed shape of the SSR-friendly store pattern (ADR-007); the ADR gains the amendment.
 `createUseAsyncData` (Nuxt 4.4) bakes static defaults only, so the wrapper owns the per-call schema coupling.
 
+The package also closes the error-handling seams the error floor (`plugins/apiErrors.client.ts` +
+`resolveUncaughtApiError`) leaves open: the factory surfaces read-path 401s to the floor, the per-store
+try/catch + `handleApiError` blocks collapse into one mutation wrapper, the caller-less `apiCall` and its
+spec cases are deleted, and an architecture rule fails any bare `$fetch(` under `app/` so the sanctioned
+fetch path is mechanical, not remembered.
+
 **API** ⏳ awaiting signoff
 
 ```ts

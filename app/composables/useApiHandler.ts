@@ -5,6 +5,32 @@ const isApiError = (error: unknown): error is ApiError => {
     return 'statusCode' in error || 'status' in error
 }
 
+export type UncaughtApiErrorHandler = () => void
+
+export interface UncaughtApiErrorActions {
+    login: (redirect: string) => void
+    toast: (error: unknown) => void
+}
+
+/**
+ * The application's error floor (plugins/apiErrors.client.ts): picks the handler an uncaught
+ * error gets. A dead session re-authenticates and returns in place (the login page follows
+ * ?redirect, and its own 401s stay put), any other API error surfaces as the standard toast;
+ * an error that is not an API response is not this floor's to handle (null).
+ */
+export const resolveUncaughtApiError = (
+    error: unknown,
+    route: {path: string, fullPath: string},
+    actions: UncaughtApiErrorActions
+): UncaughtApiErrorHandler | null => {
+    if (!isApiError(error)) return null
+    const statusCode = error.statusCode ?? (error as Record<string, unknown>).status
+    if (statusCode === 401) {
+        return route.path === '/login' ? null : () => actions.login(route.fullPath)
+    }
+    return () => actions.toast(error)
+}
+
 export const useApiHandler = () => {
     // Capture toast and route references during setup context
     const toast = useToast()

@@ -306,7 +306,7 @@ interface TableRow {
   original: CookingTeamDisplay
 }
 
-const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, COMPONENTS, getRainbowAccent} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, COMPONENTS, LAYOUTS, getRainbowAccent} = useTheSlopeDesignSystem()
 
 const columns = [
   {
@@ -344,28 +344,27 @@ const columns = [
       class="w-full px-0"
   >
     <template #header>
-      <div class="flex flex-col md:flex-row items-center justify-between w-full gap-4">
-        <div class="w-full md:w-auto flex flex-row items-center gap-2">
-          <SeasonSelector
-              :model-value="selectedSeasonId"
-              :seasons="seasons"
-              :loading="isSeasonsLoading"
-              class="w-full md:w-auto"
-              :disabled="disabledModes.includes(FORM_MODES.CREATE)"
-              @update:model-value="handleSeasonChange"
-          />
-          <UButton
-              v-if="props.canEdit && !isNoSeasons"
-              v-bind="BUTTONS.primaryAction"
-              :color="COLOR.secondary"
-              :icon="ICONS.plusCircle"
-              data-testid="create-team"
-              :disabled="disabledModes.includes(FORM_MODES.CREATE)"
-              @click="onModeChange(FORM_MODES.CREATE)"
-          >
-            Opret madhold
-          </UButton>
-        </div>
+      <div :class="LAYOUTS.cardHeaderRow">
+        <SeasonSelector
+            :model-value="selectedSeasonId"
+            :seasons="seasons"
+            :loading="isSeasonsLoading"
+            class="w-full md:w-auto"
+            :disabled="disabledModes.includes(FORM_MODES.CREATE)"
+            @update:model-value="handleSeasonChange"
+        />
+        <UButton
+            v-if="props.canEdit && !isNoSeasons"
+            v-bind="BUTTONS.primaryAction"
+            :class="LAYOUTS.cardActionButton"
+            :color="COLOR.primary"
+            :icon="ICONS.plusCircle"
+            data-testid="create-team"
+            :disabled="disabledModes.includes(FORM_MODES.CREATE)"
+            @click="onModeChange(FORM_MODES.CREATE)"
+        >
+          Opret madhold
+        </UButton>
       </div>
     </template>
 

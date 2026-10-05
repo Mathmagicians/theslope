@@ -155,7 +155,7 @@ const handleDeactivateSeason = async () => {
       class="w-full px-0"
   >
     <template #header>
-      <div :class="LAYOUTS.cardActionRow">
+      <div :class="LAYOUTS.cardHeaderRow">
         <SeasonSelector
             :model-value="selectedSeasonId"
             :seasons="seasons"

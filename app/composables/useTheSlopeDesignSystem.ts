@@ -451,6 +451,10 @@ export const LAYOUTS = {
     cardActionRow: 'flex flex-col md:flex-row md:flex-wrap md:items-center gap-2',
     cardActionButton: 'w-full md:w-auto justify-center',
 
+    // Card header row: content (selector, title) left, the rare action in the right corner -
+    // the admin pages' shared header shape. Stacked with full-width children on a phone.
+    cardHeaderRow: 'flex flex-col md:flex-row md:items-center md:justify-between gap-2',
+
     // Section content (card body sections)
     sectionContent: 'px-4 md:px-6 py-4 md:py-6 space-y-4',           // Standard section with padding
     sectionContentNoPadX: 'px-0 py-4 md:py-6 space-y-4',             // No horizontal padding (full-bleed)

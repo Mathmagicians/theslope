@@ -110,6 +110,25 @@ test.describe('AdminTeams Form UI', () => {
                 expect(teams[1]!.name).toContain('Madhold 2')
                 expect(teams[1]!.name).toContain(season.shortName)
             })
+
+        test('GIVEN an expired session WHEN submitting THEN the user lands on login with a return path',
+            async ({page, browser}) => {
+                const context = await validatedBrowserContext(browser)
+                const season = await SeasonFactory.createSeason(context)
+                createdSeasonIds.push(season.id!)
+
+                await page.goto(`${adminTeamsUrl}?mode=create&season=${season.shortName}`)
+                await expect(page.locator('input#team-count')).toBeVisible({timeout: 10000})
+
+                // WHEN: the session dies before the save
+                await page.context().clearCookies()
+                await page.locator('input#team-count').fill('2')
+                await page.getByTestId('submit-create-teams').click()
+
+                // THEN: the error floor re-authenticates with the page as the return path
+                await expect(page).toHaveURL(/\/login\?redirect=/)
+                expect(decodeURIComponent(page.url())).toContain('/admin/teams')
+            })
     })
 
     test.describe('Edit Mode', () => {

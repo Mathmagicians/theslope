@@ -386,28 +386,32 @@ export const usePlanStore = defineStore("Plan", () => {
         const createTeam = async (teamOrTeams: CookingTeamCreate | CookingTeamCreate[]): Promise<CreateTeamsResponse> => {
             const teams = Array.isArray(teamOrTeams) ? teamOrTeams : [teamOrTeams]
 
-            // ADR-009 operation result: teams created + dinner events the assignment touched
-            const response = await $fetch('/api/admin/team', {
-                method: 'PUT',
-                body: teams,
-                headers: {'Content-Type': 'application/json'}
-            })
-            createTeamData.value = CreateTeamsResponseSchema.parse(response)
+            try {
+                // ADR-009 operation result: teams created + dinner events the assignment touched
+                const response = await $fetch('/api/admin/team', {
+                    method: 'PUT',
+                    body: teams,
+                    headers: {'Content-Type': 'application/json'}
+                })
+                createTeamData.value = CreateTeamsResponseSchema.parse(response)
 
-            await executeCreateTeam()
+                await executeCreateTeam()
 
-            if (createTeamError.value) {
-                handleApiError(createTeamError.value, 'createTeam')
-                throw createTeamError.value
+                if (createTeamError.value) {
+                    throw createTeamError.value
+                }
+
+                console.info(`👥 > PLAN_STORE > Created ${createTeamData.value.teams.length} team(s), assigned ${createTeamData.value.eventsAssigned} dinner event(s)`)
+
+                if (selectedSeasonId.value) {
+                    await refreshSelectedSeason()
+                }
+
+                return createTeamData.value
+            } catch (e: unknown) {
+                handleApiError(e, 'createTeam')
+                throw e
             }
-
-            console.info(`👥 > PLAN_STORE > Created ${createTeamData.value.teams.length} team(s), assigned ${createTeamData.value.eventsAssigned} dinner event(s)`)
-
-            if (selectedSeasonId.value) {
-                await refreshSelectedSeason()
-            }
-
-            return createTeamData.value
         }
 
         const updateTeam = async (team: CookingTeamUpdate) => {
