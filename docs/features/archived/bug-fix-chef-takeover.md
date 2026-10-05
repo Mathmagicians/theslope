@@ -2,7 +2,7 @@
 
 **Status:** Implemented
 **Date:** 2026-08-31 | **Updated:** 2026-09-01
-**Builds on:** [feature-proposal-chef-swap.md](feature-proposal-chef-swap.md) (panel spec, menu decision, Heynabo token flow)
+**Builds on:** [feature-chef-swap.md](feature-chef-swap.md) (panel spec, menu decision, Heynabo token flow)
 
 ## Problem
 
@@ -68,7 +68,7 @@ slice of Phase 3b**, not a one-line re-enable.
 ## Fix — takeover slice of Phase 3b
 
 Panel spec, menu-decision table, and Heynabo token flow are as designed in
-[feature-proposal-chef-swap.md](feature-proposal-chef-swap.md) →
+[feature-chef-swap.md](feature-chef-swap.md) →
 "Swap Panel", "Contextual Commit Button", "Menu Decision", "Heynabo Token Flow".
 
 - **`RoleAssignmentForm.vue`** — swap branch gets the takeover content ("Du overtager fra

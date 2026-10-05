@@ -2,7 +2,8 @@
 
 **Status:** Draft
 **Date:** 2026-04-29
-**Builds on:** `feature-proposal-chef-swap.md` (in flight)
+**Updated:** 2026-10-05 — refreshed for the work-roster push (`release-0.9.0.md`): chef-swap shipped (`assign-role`, `remove-role` live; `assignment/swap` did not ship — cross-team duty swap in Phase 5 covers the swap need); instrumentation of shipped endpoints is retroactive; Joker section added; schema lands via the PR's bundled Prisma package
+**Builds on:** `../archived/feature-chef-swap.md` (shipped; its unshipped Phase 4 move-out cascade is carried here under Phase 5)
 
 ## Problem
 
@@ -287,9 +288,8 @@ This audit is **per-duty timeline only**. Out of scope: team-membership events, 
 
 | Endpoint / code path | Audit action — `performedByUserId` |
 |---|---|
-| `POST /api/team/cooking/[id]/assign-role` (chef-swap Phase 1, shipped) | `ASSIGNED` (caller) — covers volunteer / claim / takeover / chef-assign |
-| `POST /api/team/cooking/[id]/remove-role` (chef-swap Phase 3, pending) | `UNASSIGNED` (caller) |
-| `POST /api/team/cooking/assignment/swap` (chef-swap Phase 3, pending) | TWO `SWAPPED` rows sharing `swapGroupId` (caller) |
+| `POST /api/team/cooking/[id]/assign-role` (shipped) | `ASSIGNED` (caller) — covers volunteer / claim / takeover / chef-assign |
+| `POST /api/team/cooking/[id]/remove-role` (shipped) | `UNASSIGNED` (caller) |
 | `POST /api/team/cooking/duty/swap` (this proposal, Phase 5) | TWO `SWAPPED` rows sharing `swapGroupId` (caller) |
 | Move-out cascade (chef-swap Phase 4 / extends here) | `UNASSIGNED` per affected duty (`performedByUserId` = the admin who triggered the move-out) |
 | Chef sign-off (this proposal, Phase 4) | `SIGNED_OFF` × N duties (one per duty in the dinner; chef hits "sign off roster" → backend writes N rows) |
@@ -399,6 +399,87 @@ export const useDutyValidation = () => {
 }
 ```
 
+## Joker — time-bounded team vacancy (decisions 2026-10-05)
+
+A joker is a vacancy the team plans for: a member is away for a period (maternity leave, travel) and the team needs
+a stand-in on its cooking days. The admin creates the slot on the team, bounded in time and weekdays; the duty
+scaffolder expands it to one vacant `DinnerDuty` per matching dinner; any inhabitant volunteers, one dinner at a
+time (`ASSIGNED` audit; releasing writes `UNASSIGNED` and the duty is claimable again).
+
+```prisma
+model JokerSlot {
+  id            Int         @id @default(autoincrement())
+  cookingTeamId Int
+  cookingTeam   CookingTeam @relation(fields: [cookingTeamId], references: [id], onDelete: Cascade)
+  role          Role        @default(COOK)
+  affinity      String      // weekday map JSON — same shape as CookingTeamAssignment.affinity
+  startDate     DateTime
+  endDate       DateTime
+  note          String?     // "Anna barsel"
+  createdAt     DateTime    @default(now())
+
+  duties        DinnerDuty[]
+  @@index([cookingTeamId])
+}
+// DinnerDuty gains: jokerSlotId Int? + relation (onDelete: SetNull) — a vacant duty knows which slot spawned it
+```
+
+### Vacancy is a "missing" on the dinner
+
+A dinner missing its chef or carrying a vacant duty (regular or joker) surfaces the gap on the dinner itself — the
+existing missing-chef display pattern extends to "mangler: 1 kok". Volunteer actions live on the dinner roster
+(`/chef` is where team members plan their work and see the roster).
+
+### Admin overviews
+
+The team administrator sees vacancies and load in `/admin/teams`:
+- **Team card:** the team's joker slots (CRUD) and, per member, the season's shift counts split by kind
+  (chefkok / fast tjans / joker) — volunteers see how the extra load spreads.
+- **Big overview:** all vacancies across the season, split on teams and split on people.
+
+**Mockup — team card, joker slots + shift counts** ⏳ awaiting signoff
+
+```
+Jokertjanser — Hold 3
+  Periode          Ugedage    Rolle   Note
+  07/10 - 01/12    tirsdag    KOK     Anna barsel     [slet]
+  [ + Tilfoj jokertjans ]
+
+Tjanser — Hold 3 (sæson 2026/1)
+  Navn     Chefkok   Fast tjans   Joker   I alt
+  Anna     2         8            0       10
+  Per      0         10           1       11
+  Bo*      0         0            3       3        * frivillig, ikke medlem
+```
+
+**Mockup — big overview (admin teams)** ⏳ awaiting signoff
+
+```
+Ledige tjanser — sæson 2026/1          [Pr. hold | Pr. person]
+  Pr. hold:
+    Hold 3   ti 14/10  Madlavning (joker)    ti 21/10  Madlavning (joker)
+    Hold 6   on 22/10  Opvask (ledig)
+  Pr. person:
+    Anna (Hold 3)   fraværende 07/10-01/12 — 8 tjanser dækkes af joker
+```
+
+**Mockup — joker row in the dinner roster** ✅-pending, carried from the first draft
+
+```
+Vagtplan — tirsdag 15/04
+  15:00-18:00  Madlavning   KOK          Anna
+  16:30-19:30  Mellemvagt   KOK          Ledig tjans (joker)    [Tag tjansen]
+  18:30-21:30  Opvask       KOK          Per
+```
+
+### Volunteering moves from membership to duty
+
+Today `assign-role` writes a `CookingTeamAssignment` — the designed way to live without a roster layer. With the
+roster, a one-dinner volunteer claims the dinner's duty (or takes the chef duty) and season membership stays what it
+is. The endpoint's write target changes with Phase 4, and the shipped rows get a one-time data separation before
+this feature ships: genuine season members keep their `CookingTeamAssignment`, one-off volunteers are re-expressed
+as duty history. The separation list is produced for the user to review; the user applies it.
+
 ## ADR compliance
 
 | ADR | Compliance |
@@ -415,7 +496,7 @@ export const useDutyValidation = () => {
 
 ## Phases
 
-This feature ships **on top of** the chef-swap PR (in flight). Chef-swap delivers role swap *for the CHEF role only*, intra-team. This proposal delivers everything else.
+Chef-swap shipped volunteer/claim/resign for the CHEF role (`assign-role`, `remove-role`). This proposal delivers everything else; its Phase 1 instruments the shipped endpoints retroactively.
 
 ### Phase 0 — This proposal ✍️
 
@@ -428,7 +509,7 @@ The current document. Reviewable artifact before code.
 - `getDutyTimeRange` added to `app/utils/season.ts` next to `getDinnerTimeRange` + unit tests.
 - Repository functions in `cookingRepository.ts` (or extend `prismaRepository.ts`): `writeDutyHistory(entries[])`, `fetchDutyHistoryForDinner(dinnerEventId)`, `fetchDutyHistoryForMember(cookingTeamId, inhabitantId)`.
 - Instrument existing mutation sites: `assign-role`, `admin/team/assignment` PUT/DELETE/POST, `admin/dinner-event/[id]`, `admin/season/[id]/assign-cooking-teams`, `admin/season/import`. Each site adds a paired audit write in the same pass.
-- Instrument chef-swap endpoints **as they land** (`remove-role`, `assignment/swap`, move-out cascade) — coordinated with the chef-swap PR; if chef-swap merges first, instrument retroactively in this PR.
+- Instrument the shipped chef-swap endpoints retroactively (`assign-role`, `remove-role`, move-out cascade).
 - E2E tests: each mutation site asserts the corresponding `DutyHistory` row is created with the right action and actor.
 
 ### Phase 2 — Read endpoints + generic `AuditTimeline.vue`
@@ -460,7 +541,12 @@ The current document. Reviewable artifact before code.
 - **Cross-team supported**: A and B may belong to different `CookingTeam`s and on different `DinnerEvent`s. The swap exchanges `inhabitantId` between the two duty rows; everything else (role, time slot, task, dinner) stays put on each row. Both teams' chefs see the swap in their roster timelines.
 - **Authorization**: caller must own one of the two duties (or be admin). The other party's consent is via the `agreementConfirmed` flag — out-of-band negotiation, in-app one-sided commit, mirrors chef-swap pattern.
 - Member-facing UI: "Byt tjans" panel on any duty row (extends generic `RoleAssignment.vue` from chef-swap to all roles). Selector lists candidate duties from `usersStore.myDuties` (existing data).
-- Move-out cascade nulls `inhabitantId` on future PLANNED duties for the moving inhabitant; emits `UNASSIGNED` per affected duty (`performedByUserId` = the admin who triggered the move-out).
+- Move-out cascade (carried from chef-swap Phase 4, unshipped): on a `moveOutDate` change,
+  `server/utils/cleanupAssignmentsOnMoveOut.ts` deletes the inhabitant's future `CookingTeamAssignment` rows, fully
+  resets future dinners where they are chef (`CHEF_LOSS_DINNER_UPDATES`), nulls `inhabitantId` on their future
+  PLANNED duties and emits `UNASSIGNED` per affected duty (`performedByUserId` = the admin who triggered the
+  move-out); wired into `POST /api/household/[id]/update`. `CookingTeamCard.vue` shows a "Flytter {date}" badge for
+  members with a future `moveOutDate`. Tests: `cleanupAssignmentsOnMoveOut.unit.spec.ts`, `moveout-cascade.e2e.spec.ts`.
 - E2E: Anna (team 7, Mon prep) ↔ Peter (team 2, Thu prep); both teams' rosters reflect the swap; both timelines show the paired audit rows with shared `swapGroupId`.
 
 ## Reuse

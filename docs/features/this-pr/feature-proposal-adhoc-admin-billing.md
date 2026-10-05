@@ -2,6 +2,7 @@
 
 **Status:** Proposal
 **Date:** 2026-04-20
+**Updated:** 2026-10-05 — the EXPENSE transaction type joins the scope: a cost record against a dinner's kitchen money, excluded from invoicing (work-roster push, `release-0.9.0.md` § Chef spending)
 
 ## Problem
 
@@ -142,6 +143,7 @@ New on `Transaction`:
 enum TransactionType {
   ORDER_CHARGE
   ADHOC_CHARGE
+  EXPENSE
 }
 
 model Transaction {
@@ -187,6 +189,37 @@ OrderSnapshotSchema = z.discriminatedUnion('type', [
 ```
 
 `TransactionDisplay` mirrors this shape. Top-level `household` is always populated, resolved as: live `Transaction.household` relation → else `snapshot.household`. Same live-first pattern the order variant already uses for `inhabitant` / `dinnerEvent`.
+
+### Expense type — chef spending ⏳ awaiting signoff (2026-10-05)
+
+An EXPENSE is a cost record that answers one question: **how much can I spend?** Payment happens automatically in
+the bank; the feature tracks where the spending stands. It is bookkeeping, nothing more: `householdId` null, never
+invoiced, no PBS flow — reimbursing a person is a separate stream, outside this feature.
+
+Two kinds, split on whether the row names a dinner:
+
+| Kind | `dinnerEvent` | Drawn from | Balance |
+|---|---|---|---|
+| Dinner expense (grocery) | set | the dinner's rådighedsbeløb | per chef across the season: a chef is responsible for all the dinners they chef and may overspend a single dinner as long as the season balances |
+| Basisvarer | null | the køkkenbidrag pool | pool balance per period/season: sum of køkkenbidrag vs basisvarer rows; purchases happen randomly |
+
+```ts
+ExpenseSnapshotSchema = TransactionSnapshotBase.extend({
+  type:        z.literal('EXPENSE'),
+  dinnerEvent: z.object({id, date, menuTitle}).nullable(),  // null = basisvarer (køkkenbidrag pool)
+  inhabitant:  z.object({id, name}),                        // who recorded it
+  description: z.string()                                   // "Grønt + kolonial", "Olie, salt, mel"
+})
+```
+
+- The chef enters dinner expenses on their dinner (`ChefMenuCard`, under the budget); line-wise delete.
+- Per-dinner reading: Brugt = sum of the dinner's EXPENSE rows, Balance = rådighedsbeløb (ex moms) − Brugt
+  (`DinnerBudget.vue` + `useOrder.calculateBudget`).
+- "Mit forbrug" on `/chef` carries the chef's season running balance and the spend room for the next dinner
+  (its budget + carried balance); the admin economy spending section shows per-chef balances and the
+  køkkenbidrag/basisvarer pool — mockups in `release-0.9.0.md` § Chef spending.
+- Every billing query excludes EXPENSE: `fetchUnbilledTransactions`, invoicing, `BillingPeriodSummary.totalAmount`
+  and `ticketCount`, the CSV export.
 
 ### Query ergonomics
 

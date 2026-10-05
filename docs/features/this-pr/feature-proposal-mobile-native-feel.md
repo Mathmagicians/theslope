@@ -39,7 +39,7 @@
 
 ## Solution elements
 
-S1–S4 (24h session cookie, login return path, PWA manifest, install guidance card) shipped on `chore/npm-dependencies`; their record lives in archived/npm-dependencies-nuxt4_5-upgrade.md, "Done on the branch".
+S1–S4 (24h session cookie, login return path, PWA manifest, install guidance card) shipped on `chore/npm-dependencies`; their record lives in ../archived/npm-dependencies-nuxt4_5-upgrade.md, "Done on the branch".
 
 | # | Element | Serves | Status |
 |---|---|---|---|

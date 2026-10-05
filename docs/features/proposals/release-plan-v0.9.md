@@ -21,7 +21,7 @@
 | Item | State |
 |------|-------|
 | `app/stores/plan.ts` — refresh-ordering fix (chef page stale detail after role change) | Working tree, ready to test + commit |
-| `docs/features/bug-fix-booking-desired-order-builder.md` — root-caused grid-save bug + TDD plan | Doc done, implementation not started |
+| B1 grid-save root cause + TDD plan — folded into [bug-fix-plan-v0.9.md](../this-pr/bug-fix-plan-v0.9.md) § B1 | Doc done, implementation not started |
 | Chef screenshots (role-assigned/role-wanted) | Regenerated |
 
 ---
@@ -32,14 +32,14 @@ Analysis, root causes, and TDD steps live in the detail docs — this table is t
 
 | # | Bug | Status | Detail doc | Effort |
 |---|-----|--------|------------|--------|
-| B1 | Grid booking save shows "fejlede" despite 200s; day view works | ✅ Root-caused | [bug-fix-booking-desired-order-builder.md](../bug-fix-booking-desired-order-builder.md) | M |
-| B2 | Inhabitant deleted on Heynabo survives in TheSlope (appears in allergy views) — rule: inhabitants follow Heynabo, households preserved | ✅ Root-caused + decisions made | [bug-fix-plan-v0.9.md](../bug-fix-plan-v0.9.md) | M–L |
-| B3 | `/admin/allergies` intermittently shows no data | ✅ Root-caused (SSR-fragile store fetch) | [bug-fix-plan-v0.9.md](../bug-fix-plan-v0.9.md) | S–M |
-| B4 | Errors editing allergies in `/admin/allergies` | 🔎 Repro first; likely same store as B3 | [bug-fix-plan-v0.9.md](../bug-fix-plan-v0.9.md) | S |
-| B5 | Errors adding holidays to a new season | 🔎 Repro first; suspects ranked | [bug-fix-plan-v0.9.md](../bug-fix-plan-v0.9.md) | S–M |
+| B1 | Grid booking save shows "fejlede" despite 200s; day view works | ✅ Root-caused | [bug-fix-plan-v0.9.md](../this-pr/bug-fix-plan-v0.9.md) § B1 | M |
+| B2 | Inhabitant deleted on Heynabo survives in TheSlope (appears in allergy views) — rule: inhabitants follow Heynabo, households preserved | ✅ Root-caused + decisions made | [bug-fix-plan-v0.9.md](../this-pr/bug-fix-plan-v0.9.md) | M–L |
+| B3 | `/admin/allergies` intermittently shows no data | ✅ Root-caused (SSR-fragile store fetch) | [bug-fix-plan-v0.9.md](../this-pr/bug-fix-plan-v0.9.md) | S–M |
+| B4 | Errors editing allergies in `/admin/allergies` | 🔎 Repro first; likely same store as B3 | [bug-fix-plan-v0.9.md](../this-pr/bug-fix-plan-v0.9.md) | S |
+| B5 | Errors adding holidays to a new season | 🔎 Repro first; suspects ranked | [bug-fix-plan-v0.9.md](../this-pr/bug-fix-plan-v0.9.md) | S–M |
 | B6 | Kitchen stats show 0 portions when `ticketPriceId` is null | ✅ Root-caused | [bug-fix-order-snapshot.md](../bug-fix-order-snapshot.md) | S |
 
-**Approach:** see [bug-fix-plan-v0.9.md](../bug-fix-plan-v0.9.md) — TDD per ADR-003, one branch, per-bug commits, and a DRY mandate: every fix removes the duplicated logic that caused it.
+**Approach:** see [bug-fix-plan-v0.9.md](../this-pr/bug-fix-plan-v0.9.md) — TDD per ADR-003, one branch, per-bug commits, and a DRY mandate: every fix removes the duplicated logic that caused it.
 
 ---
 
@@ -47,7 +47,7 @@ Analysis, root causes, and TDD steps live in the detail docs — this table is t
 
 | # | Improvement | Why now | Effort |
 |---|-------------|---------|--------|
-| I1 | **SSR-safe data loading sweep** — replace bare `$fetch` with `useRequestFetch`, kill the page-level `useAsyncData`-wrapping-store anti-pattern, one canonical loading-state pattern (proposal exists: `proposals/bare-fetch-fix.md`). Known symptoms it fixes: admin economy not loading past periods, chef page transient hydration issues, likely B3 | New features (waitlist, ad-hoc UI) build on these stores — fix the foundation first | M |
+| I1 | **SSR-safe data loading sweep** — replace bare `$fetch` with `useRequestFetch`, kill the page-level `useAsyncData`-wrapping-store anti-pattern, one canonical loading-state pattern (proposal exists: `../archived/bare-fetch-fix.md`). Known symptoms it fixes: admin economy not loading past periods, chef page transient hydration issues, likely B3 | New features (waitlist, ad-hoc UI) build on these stores — fix the foundation first | M |
 | I2 | **DRY sweep of stores + data loading** — the 7 stores implement ADR-007 with drift (e.g., `allergies.ts` alone mixes `useFetch`/`useAsyncData`/`$fetch`; repeated status-computed boilerplate). Extract a shared store-fetch helper or at minimum align every store to one reference pattern (`plan.ts`); audit `event.ts` + `tickets.ts` (still ❓ in compliance doc) | Same as I1; also cuts the copy-paste class of bugs the release is fixing | M |
 | I3 | **`Order` uniqueness** — add `@@unique([inhabitantId, dinnerEventId])` guard against duplicate regular orders + backfill/dedup migration (flagged out-of-scope in the B1 doc; without it the bug class returns) | Companion hardening to B1 | S–M |
 | I4 | **Observability baseline — stop driving blind.** Today the only signals are `console.*` logs (ADR-004) and the JobRun history panel. Add: Workers observability enabled in `wrangler.toml` (structured log retention + querying), error alerting on 5xx rates and failed jobs (Cloudflare notifications or a lightweight error tracker), a `/api/health` endpoint wired to an uptime monitor, and job-failure alerts to admins (email — first consumer of F4 infra once it lands, Cloudflare notification until then). Document in `ops-runbook.md` | Debugging B3/B4-class "sometimes fails" bugs and operating billing/notifications safely requires seeing prod. Cheap to add, pays off in every later milestone | M |
@@ -67,7 +67,7 @@ Analysis, root causes, and TDD steps live in the detail docs — this table is t
 
 ### F3. Notifications (email + SMS)
 - **Status:** ✅ e-mail delivery implemented on `bugfix/admin-ux` (PR #166, 2026-09-18) — [`archived/feature-notifications.md`](../archived/feature-notifications.md): the `theslope-sender` worker, the admin test event, the channel preference
-- **Next:** triggers, landing-page alarms and SMS — [`feature-proposal-notification-triggers.md`](../feature-proposal-notification-triggers.md)
+- **Next:** triggers, landing-page alarms and SMS — [`feature-proposal-notification-triggers.md`](../this-pr/feature-proposal-notification-triggers.md)
 
 ### F4. Waitlist (released-ticket claim)
 - **Proposal:** ❌ needs writing (`feature-proposal-waitlist.md`). Backend exists (`/api/order/claim` — FIFO by `releasedAt`, retry, audit) and claim detection is partially wired in `GuestBookingForm`/`DinnerBookingForm`. Missing: a first-class UI surfacing released tickets ("N ledige billetter"), an explicit claim flow in day + grid views, and a *subscribe-and-notify* waitlist ("tell me when a ticket frees up") — the latter depends on F3
@@ -107,14 +107,13 @@ Rationale for the ordering: bugs and the consistency sweep de-risk everything af
 |----------|--------|--------|
 | `feature-proposal-adhoc-admin-billing.md` | Proposal | Review + sign-off (Phase 0) |
 | `feature-proposal-duty-roster.md` | Draft | Review, split into F5a/F5b |
-| `bug-fix-plan-v0.9.md` | Accepted | Implement M1 bug sprint (B2–B5) |
-| `bug-fix-booking-desired-order-builder.md` | Done (uncommitted) | Commit + implement (B1) |
+| `bug-fix-plan-v0.9.md` | Accepted | Implement remaining fixes (B1, B5, B6; B2–B4 shipped); B1 folded in 2026-10-05 |
 | `bug-fix-order-snapshot.md` | Done | Implement (B6) |
-| `proposals/bare-fetch-fix.md` | Notes | Expand into I1/I2 workplan |
+| `../archived/bare-fetch-fix.md` | Notes | Expand into I1/I2 workplan |
 | `archived/feature-notifications.md` | ✅ Implemented (PR #166) | — |
 | `feature-proposal-notification-triggers.md` | Proposal | Review + sign-off (triggers, alarms, SMS) |
 | `feature-proposal-waitlist.md` | Missing | Write (F4) |
-| `proposals/guest-booking-form.md` | Notes | Fold into F4 claim-UI work or archive |
+| `../archived/guest-booking-form.md` (archived) | Notes | Fold into F4 claim-UI work or archive |
 
 ## Out of Scope (this cycle)
 
