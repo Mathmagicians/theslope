@@ -74,35 +74,47 @@ The chef also sees the live queue size on the dinner (`ChefMenuCard`).
 
 ## Mockups
 
-**Day view — sold out, join the queue** ⏳ awaiting signoff
+**Member faces — queued is a badge on Ingen, never a mode** ✅ signed 2026-10-06
+
+A new `ICONS.waitlist` design-system token (hourglass glyph, picked at implementation); the badge renders through
+the same `useBookingUi` badge path as the swap/deadline markers, shared by day and grid. On assignment the order
+lands as Spiser med (DINEIN), changeable afterwards like any order within the rules.
 
 ```
-Lasagne — tirsdag 15/04              Udsolgt — 3 på venteliste
-  Anna     [Skriv på venteliste]
-  Bo       Nr. 2 på ventelisten      [Forlad ventelisten]
+DinnerBookingForm — efter deadline, udsolgt
+  Anna    Ingen                                  [Skriv på venteliste]
+  Bo      Ingen  [sandglas #2 i køen]            [Forlad ventelisten]
+  Emil    Spiser med                             (har billet)
+  ...billet tildelt -> Bo: Spiser med (badge væk, normal ordre)
+
+BookingGridView — celle for en person i kø: Ingen-tilstanden med
+sandglas-badge i hjørnet; legenden får "sandglas = på venteliste (#n)".
+Ledige billetter efter deadline viser [Tag billet] som i dag (claim).
 ```
 
-**Day view — tickets available after deadline** ⏳ awaiting signoff
+**Chef side — demand-driven release** ✅ signed 2026-10-05
+
+One release-portions form, two triggers: a permanent entry `Frigiv portioner` in ChefMenuCard's [Flere]-menu (the
+findable home next to the chef's actions), and a CTA alert directly under the action row that renders only while
+the queue is non-empty. Both open the same form; the prefill is the queue's portion need.
 
 ```
-Lasagne — tirsdag 15/04              2 ledige billetter
-  Anna     [Tag billet]
+ChefMenuCard
+  [Rediger menu] [Annoncer] [Flere v]
+                             +- Frigiv portioner
+  +----------------------------------------------------------------+
+  | (i) Mange skrånere mangler en billet til din middag — har du   |
+  |     mulighed for at mætte flere munde?    [Frigiv portioner]   |
+  +----------------------------------------------------------------+
+  form:  Kan du frigive [ 2,5 ] portioner?  [Frigiv] [Fortryd]
 ```
 
-**Grid view cell** ⏳ awaiting signoff
+Queue/for-sale status lives in the kitchen stats panel as the alternating fourth box — never both, since
+auto-assign consumes supply while anyone queues:
 
 ```
-  ti 15/04          ┌──────────┐   ┌──────────┐
-                    │ Lasagne  │   │ Lasagne  │
-                    │ 2 ledige │   │ 3 i kø   │
-                    └──────────┘   └──────────┘
-```
-
-**ChefMenuCard — queue size + extra portions** ⏳ awaiting signoff
-
-```
-Venteliste: 4 (2,5 portioner)
-Ekstra portioner:  [ 2,5 ]  [Frigiv]       Frigivet: 2,5 · Solgt: 2,5
+KitchenPreparation:  TAKEAWAY 12   SPISESAL 28   SPIS SENT 5   TIL SALG 2
+                                                        eller: VENTELISTE 4
 ```
 
 ## TDD

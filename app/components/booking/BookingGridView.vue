@@ -59,7 +59,7 @@ import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {BookingView} from '~/composables/useBookingView'
 import type {DateRange} from '~/types/dateTypes'
 import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
-import type {BookingIntent, ReleasedTicketCounts} from '~/composables/useBooking'
+import type {BookingChanges, GuestBookingIntent, ReleasedTicketCounts} from '~/composables/useBooking'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 // Row types for synthetic rows (same pattern as HouseholdCard)
@@ -116,7 +116,7 @@ const props = withDefaults(defineProps<Props>(), {
 const calendarOpen = defineModel<boolean>('calendarOpen', { default: true })
 
 const emit = defineEmits<{
-  save: [changes: BookingIntent[]]
+  save: [changes: BookingChanges]
   cancel: []
   'update:formMode': [mode: FormMode]
   navigate: [direction: 'prev' | 'next']
@@ -131,7 +131,7 @@ const emptyState = getRandomEmptyMessage('noDinners')
 const {formatPrice, getTicketTypeConfig, resolveTicketPrice, ticketTypeConfig} = useTicket()
 
 // Booking helpers (shared with DinnerBookingForm)
-const {groupGuestOrders, partitionGuestOrders, getDayBillSummary, resolveUserBookingBuckets, getBookingOptions, buildDesiredOrders} = useBooking()
+const {groupGuestOrders, partitionGuestOrders, getDayBillSummary, resolveUserBookingBuckets, getBookingOptions, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
 const {formatActionPreview} = useBookingUi()
 
 // Inhabitant name lookup (used by actionPreviewItems)
@@ -148,19 +148,29 @@ const OrderStateEnum = OrderStateSchema.enum
 // ============================================================================
 
 const draftChanges = ref<Map<string, DinnerMode>>(new Map())
-const hasPendingChanges = computed(() => draftChanges.value.size > 0)
+// Keyed by the guest group's first order id: a guest ticket carries its booker's inhabitantId, so the cell key would collide with the booker's own cell
+const guestDraftChanges = ref<Map<number, GuestBookingIntent>>(new Map())
+const guestDraftKey = (guestOrders: OrderDisplay[]): number => guestOrders[0]!.id
+const hasPendingChanges = computed(() => draftChanges.value.size + guestDraftChanges.value.size > 0)
 
-const draftIntents = (): BookingIntent[] =>
-  Array.from(draftChanges.value.entries()).map(([key, dinnerMode]) => {
+const draftBookingChanges = (): BookingChanges => ({
+  intents: Array.from(draftChanges.value.entries()).map(([key, dinnerMode]) => {
     const [inhabitantId, dinnerEventId] = key.split('-').map(Number)
     return {inhabitantId: inhabitantId!, dinnerEventId: dinnerEventId!, dinnerMode}
-  })
+  }),
+  guestIntents: Array.from(guestDraftChanges.value.values())
+})
+
+const clearDrafts = () => {
+  draftChanges.value.clear()
+  guestDraftChanges.value.clear()
+}
 
 // Action preview: show what will happen when saving (uses same resolver as server)
 const actionPreviewItems = computed(() => {
   if (!hasPendingChanges.value) return []
 
-  const desiredOrders = buildDesiredOrders(draftIntents(), props.orders, props.household.inhabitants, props.dinnerEvents, props.ticketPrices)
+  const desiredOrders = buildBookingChanges(draftBookingChanges(), props.orders, props.household.inhabitants, props.dinnerEvents, props.ticketPrices)
   if (desiredOrders.length === 0) return []
 
   const buckets = resolveUserBookingBuckets(
@@ -176,8 +186,11 @@ const actionPreviewItems = computed(() => {
 // Effective form mode - VIEW when saving to prevent cell edits
 const effectiveFormMode = computed(() => props.isSaving ? FORM_MODES.VIEW : props.formMode)
 
+const getOrderForCell = (inhabitantId: number, eventId: number): OrderDisplay | undefined =>
+  findRegularOrder(props.orders, inhabitantId, eventId)
+
 const getServerMode = (inhabitantId: number, eventId: number): DinnerMode =>
-  props.orders.find(o => o.inhabitantId === inhabitantId && o.dinnerEventId === eventId)?.dinnerMode ?? DinnerModeEnum.NONE
+  getOrderForCell(inhabitantId, eventId)?.dinnerMode ?? DinnerModeEnum.NONE
 
 const getCellMode = (inhabitantId: number, eventId: number): DinnerMode => {
   const key = `${inhabitantId}-${eventId}`
@@ -197,21 +210,37 @@ const handleCellUpdate = (inhabitantId: number, eventId: number, newMode: Dinner
   }
 }
 
+const getGuestCellMode = (guestOrders: OrderDisplay[]): DinnerMode =>
+  guestDraftChanges.value.get(guestDraftKey(guestOrders))?.dinnerMode ?? guestOrders[0]!.dinnerMode
+
+const isGuestCellModified = (guestOrders: OrderDisplay[]): boolean => guestDraftChanges.value.has(guestDraftKey(guestOrders))
+
+const handleGuestCellUpdate = ({guestOrders, dinnerMode}: GuestBookingIntent) => {
+  const key = guestDraftKey(guestOrders)
+  if (dinnerMode === guestOrders[0]!.dinnerMode) {
+    guestDraftChanges.value.delete(key)
+  } else {
+    guestDraftChanges.value.set(key, {guestOrders, dinnerMode})
+  }
+}
+
+const householdInhabitantIds = computed(() => props.household.inhabitants.map(i => i.id))
+
 const handlePowerUpdate = (eventId: number, newMode: DinnerMode) => {
-  props.household.inhabitants.forEach(inhabitant => {
-    handleCellUpdate(inhabitant.id, eventId, newMode)
-  })
+  const {intents, guestIntents} = getPowerChanges(householdInhabitantIds.value, props.orders, eventId, newMode)
+  intents.forEach(({inhabitantId, dinnerMode}) => handleCellUpdate(inhabitantId, eventId, dinnerMode))
+  guestIntents.forEach(handleGuestCellUpdate)
 }
 
 const handleCancel = () => {
-  draftChanges.value.clear()
+  clearDrafts()
   emit('update:formMode', FORM_MODES.VIEW)
   emit('cancel')
 }
 
 const handleSave = () => {
-  emit('save', draftIntents())
-  draftChanges.value.clear()
+  emit('save', draftBookingChanges())
+  clearDrafts()
   emit('update:formMode', FORM_MODES.VIEW)
 }
 
@@ -272,7 +301,7 @@ const handleGuestSave = (orders: DesiredOrder[]) => {
 const _handleModeChange = (mode: FormMode) => {
   if (mode === FORM_MODES.VIEW && hasPendingChanges.value) {
     // If switching back to VIEW with pending changes, clear them
-    draftChanges.value.clear()
+    clearDrafts()
   }
   emit('update:formMode', mode)
 }
@@ -395,20 +424,11 @@ const tableData = computed((): GridRow[] => {
 // HELPERS
 // ============================================================================
 
-const getOrderForCell = (inhabitantId: number, eventId: number): OrderDisplay | undefined =>
-  props.orders.find(o => o.inhabitantId === inhabitantId && o.dinnerEventId === eventId)
-
-const _getDinnerModeForCell = (inhabitantId: number, eventId: number): DinnerMode =>
-  getOrderForCell(inhabitantId, eventId)?.dinnerMode ?? DinnerModeEnum.NONE
-
 // Order counts for inhabitant in visible range
 const getOrderCountsForInhabitant = (inhabitantId: number): { total: number, released: number } => {
-  const visibleEventIds = new Set(flatEvents.value.map(e => e.id))
-  const orders = props.orders.filter(o =>
-    o.inhabitantId === inhabitantId &&
-    (o.state === OrderStateEnum.BOOKED || o.state === OrderStateEnum.RELEASED) &&
-    visibleEventIds.has(o.dinnerEventId)
-  )
+  const orders = flatEvents.value
+    .flatMap(e => getOrderForCell(inhabitantId, e.id) ?? [])
+    .filter(o => o.state === OrderStateEnum.BOOKED || o.state === OrderStateEnum.RELEASED)
   return {
     total: orders.length,
     released: orders.filter(o => o.state === OrderStateEnum.RELEASED).length
@@ -419,20 +439,11 @@ const getOrderCountsForInhabitant = (inhabitantId: number): { total: number, rel
 const _isOrderReleased = (inhabitantId: number, eventId: number): boolean =>
   getOrderForCell(inhabitantId, eventId)?.state === OrderStateEnum.RELEASED
 
-// Consensus for power row - check if all inhabitants have same mode for an event
-const getEventConsensus = (eventId: number): { mode: DinnerMode, hasConsensus: boolean } => {
-  const inhabitants = props.household.inhabitants
-  if (inhabitants.length === 0) return { mode: DinnerModeEnum.DINEIN, hasConsensus: true }
-
-  const modes = inhabitants.map(i => getCellMode(i.id, eventId))
-  const firstMode = modes[0]!
-  const hasConsensus = modes.every(m => m === firstMode)
-
-  return {
-    mode: hasConsensus ? firstMode : DinnerModeEnum.DINEIN,
-    hasConsensus
-  }
-}
+const getEventConsensus = (eventId: number): { value: DinnerMode, consensus: boolean } =>
+  getPowerConsensus(householdInhabitantIds.value, props.orders, eventId, {
+    inhabitant: inhabitantId => draftChanges.value.get(`${inhabitantId}-${eventId}`),
+    guestGroup: guestOrders => guestDraftChanges.value.get(guestDraftKey(guestOrders))?.dinnerMode
+  })
 
 const isFirstEventOfWeek = (event: DinnerEventDisplay, idx: number): boolean => {
   if (idx === 0) return false
@@ -457,10 +468,9 @@ const isHouseholdInResidency = isHouseholdActiveOnDay(props.household.movedInDat
 const isEventDisabled = (event: DinnerEventDisplay): boolean =>
   isDinnerPast(event.date) || !isHouseholdInResidency(event.date)
 
-const getCellDisabledModes = (inhabitantId: number, event: DinnerEventDisplay): DinnerMode[] => {
+const getDisabledModes = (order: OrderDisplay | undefined, event: DinnerEventDisplay): DinnerMode[] => {
   if (isDinnerPast(event.date)) return ALL_MODES
 
-  const order = getOrderForCell(inhabitantId, event.id)
   const releasedCount = props.lockStatus?.get(event.id)?.total ?? 0
 
   const {enabledModes} = getBookingOptions(
@@ -473,6 +483,9 @@ const getCellDisabledModes = (inhabitantId: number, event: DinnerEventDisplay): 
   )
   return ALL_MODES.filter(m => !enabledModes.includes(m))
 }
+
+const getCellDisabledModes = (inhabitantId: number, event: DinnerEventDisplay): DinnerMode[] =>
+  getDisabledModes(getOrderForCell(inhabitantId, event.id), event)
 
 // Residency alert: shown when any visible event falls outside residency
 const residencyAlert = computed(() => {
@@ -654,6 +667,7 @@ const getEventSummary = (eventId: number) => {
           <!-- Ticket count badge (only if > 0) -->
           <UBadge
             v-if="getOrderCountsForInhabitant(row.original.inhabitant.id).total > 0"
+            :data-testid="`inhabitant-ticket-count-${row.original.inhabitant.id}`"
             :color="COLOR.neutral"
             variant="soft"
             :size="SIZES.xs"
@@ -664,6 +678,7 @@ const getEventSummary = (eventId: number) => {
           <!-- Released badge (only if > 0) -->
           <UBadge
             v-if="getOrderCountsForInhabitant(row.original.inhabitant.id).released > 0"
+            :data-testid="`inhabitant-released-count-${row.original.inhabitant.id}`"
             :color="getOrderStateColor(true, false)"
             variant="soft"
             :size="SIZES.xs"
@@ -708,11 +723,11 @@ const getEventSummary = (eventId: number) => {
         <!-- Power row: consensus mode or ? (DinnerModeSelector handles both) -->
         <DinnerModeSelector
           v-if="row.original.rowType === 'power'"
-          :model-value="getEventConsensus(event.id).mode"
+          :model-value="getEventConsensus(event.id).value"
           :form-mode="isEventDisabled(event) ? FORM_MODES.VIEW : effectiveFormMode"
           :interaction="effectiveFormMode === FORM_MODES.EDIT && !isEventDisabled(event) ? 'toggle' : 'buttons'"
           :disabled-modes="getPowerDisabledModes(event)"
-          :consensus="getEventConsensus(event.id).hasConsensus"
+          :consensus="getEventConsensus(event.id).consensus"
           :size="SIZES.standard"
           :name="`power-${event.id}`"
           @update:model-value="(mode: DinnerMode) => handlePowerUpdate(event.id, mode)"
@@ -729,13 +744,17 @@ const getEventSummary = (eventId: number) => {
           :is-modified="isCellModified(row.original.inhabitant.id, event.id)"
           @update:model-value="(mode: DinnerMode) => handleCellUpdate(row.original.inhabitant!.id, event.id, mode)"
         />
-        <!-- Guest order row - show mode for orders in this event -->
+        <!-- Guest order row: a group holds the guest tickets of one dinner -->
         <DinnerModeSelector
           v-else-if="row.original.rowType === 'guest-order' && row.original.guestOrders?.some(o => o.dinnerEventId === event.id)"
-          :model-value="row.original.guestOrders.find(o => o.dinnerEventId === event.id)!.dinnerMode"
-          :form-mode="FORM_MODES.VIEW"
+          :model-value="getGuestCellMode(row.original.guestOrders)"
+          :form-mode="isEventDisabled(event) ? FORM_MODES.VIEW : effectiveFormMode"
+          :interaction="effectiveFormMode === FORM_MODES.EDIT && !isEventDisabled(event) ? 'toggle' : 'buttons'"
+          :disabled-modes="getDisabledModes(row.original.guestOrders[0], event)"
           :size="SIZES.standard"
           :name="`guest-${row.original.id}-${event.id}`"
+          :is-modified="isGuestCellModified(row.original.guestOrders)"
+          @update:model-value="(mode: DinnerMode) => handleGuestCellUpdate({guestOrders: row.original.guestOrders!, dinnerMode: mode})"
         />
         <!-- Guest add row: + button for future events -->
         <UButton

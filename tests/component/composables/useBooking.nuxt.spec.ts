@@ -1,6 +1,6 @@
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, addYears, differenceInDays, nextDay, type Day} from 'date-fns'
-import {useBooking, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, buildDesiredOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
+import {useBooking, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useBookingValidation, type OrderDisplay, type DinnerMode, type DesiredOrder} from '~/composables/useBookingValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -39,6 +39,8 @@ let groupGuestOrders: UseBookingT['groupGuestOrders']
 let getDayBillSummary: UseBookingT['getDayBillSummary']
 let hasChanges: UseBookingT['hasChanges']
 let countChanges: UseBookingT['countChanges']
+let getPowerChanges: UseBookingT['getPowerChanges']
+let getPowerConsensus: UseBookingT['getPowerConsensus']
 let formatActionPreview: UseBookingUiT['formatActionPreview']
 let ACTION_PREVIEW: UseBookingUiT['ACTION_PREVIEW']
 let defaultDeadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
@@ -61,7 +63,9 @@ beforeAll(() => {
         groupGuestOrders,
         getDayBillSummary,
         hasChanges,
-        countChanges
+        countChanges,
+        getPowerChanges,
+        getPowerConsensus
     } = useBooking());
     ({formatActionPreview, ACTION_PREVIEW} = useBookingUi())
     resolveTicketPrice = useTicket().resolveTicketPrice
@@ -945,6 +949,71 @@ describe('buildDesiredOrder', () => {
 
     it('returns null when no ticket price resolves', () => {
         expect(build([], [inhabitant], () => undefined)).toBeNull()
+    })
+
+    describe('findRegularOrder', () => {
+        it.each([
+            {desc: 'no orders', orders: [], expectedId: undefined},
+            {desc: 'guest-only order', orders: [order(GUEST_ID, true)], expectedId: undefined},
+            {desc: 'guest listed before regular order', orders: [order(GUEST_ID, true), order(REGULAR_ID, false)], expectedId: REGULAR_ID}
+        ])('$desc → order $expectedId', ({orders, expectedId}) => {
+            expect(findRegularOrder(orders, inhabitant.id, dinnerEvent.id)?.id).toBe(expectedId)
+        })
+    })
+
+    describe('buildGuestDesiredOrder', () => {
+        const guestOrders = [order(GUEST_ID, true), order(GUEST_ID + 1, true)]
+        const buildGuest = (orders: OrderDisplay[], resolve = resolver) =>
+            buildGuestDesiredOrder({guestOrders: orders, dinnerMode: DinnerMode.TAKEAWAY}, resolve, OrderState.BOOKED)
+
+        it('turns a guest group of N orders into N guest DesiredOrders in the new mode', () => {
+            expect(buildGuest(guestOrders)).toEqual(guestOrders.map(o => ({
+                inhabitantId: inhabitant.id,
+                dinnerEventId: dinnerEvent.id,
+                dinnerMode: DinnerMode.TAKEAWAY,
+                ticketPriceId: priceIdOf(TicketType.ADULT),
+                isGuestTicket: true,
+                orderId: o.id,
+                state: OrderState.BOOKED
+            })))
+        })
+
+        it('prices a group whose ticket price is gone by its price at booking', () => {
+            const adultPrice = ticketPrices.find(tp => tp.ticketType === TicketType.ADULT)!.price
+            const orphaned = guestOrders.map(o => ({...o, ticketPriceId: null, priceAtBooking: adultPrice}))
+            expect(buildGuest(orphaned).map(o => o.ticketPriceId)).toEqual(guestOrders.map(() => priceIdOf(TicketType.ADULT)))
+        })
+
+        it.each([
+            {desc: 'an empty group', orders: [], resolve: resolver},
+            {desc: 'a group with no resolvable price', orders: guestOrders.map(o => ({...o, ticketPriceId: null})), resolve: () => undefined}
+        ])('returns [] for $desc', ({orders, resolve}) => {
+            expect(buildGuest(orders, resolve)).toEqual([])
+        })
+    })
+
+    describe('power mode targets', () => {
+        const otherEvent = DinnerEventFactory.dinnerEventAt(102, EVENT_DAYS_AHEAD + 1)
+        const guestOn = (id: number, dinnerEventId: number, dinnerMode: DinnerMode): OrderDisplay =>
+            ({...order(id, true), dinnerEventId, dinnerMode})
+        const regular = {...order(REGULAR_ID, false), dinnerMode: DinnerMode.DINEIN}
+        const guest = guestOn(GUEST_ID, dinnerEvent.id, DinnerMode.DINEINLATE)
+        const orders = [regular, guest, guestOn(GUEST_ID + 1, otherEvent.id, DinnerMode.TAKEAWAY)]
+
+        it('targets every inhabitant and only the guest groups of the dinner', () => {
+            expect(getPowerChanges([inhabitant.id], orders, dinnerEvent.id, DinnerMode.TAKEAWAY)).toEqual({
+                intents: [{inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, dinnerMode: DinnerMode.TAKEAWAY}],
+                guestIntents: [{guestOrders: [guest], dinnerMode: DinnerMode.TAKEAWAY}]
+            })
+        })
+
+        it.each([
+            {desc: 'saved modes, guest differs', drafts: {}, expected: {value: DinnerMode.DINEIN, consensus: false}},
+            {desc: 'a guest draft matching the inhabitant', drafts: {guestGroup: () => DinnerMode.DINEIN}, expected: {value: DinnerMode.DINEIN, consensus: true}},
+            {desc: 'an inhabitant draft matching the guest', drafts: {inhabitant: () => DinnerMode.DINEINLATE}, expected: {value: DinnerMode.DINEINLATE, consensus: true}}
+        ])('consensus over $desc', ({drafts, expected}) => {
+            expect(getPowerConsensus([inhabitant.id], orders, dinnerEvent.id, drafts)).toEqual(expected)
+        })
     })
 })
 

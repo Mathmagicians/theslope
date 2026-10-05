@@ -110,9 +110,6 @@ const {selectedHousehold} = storeToRefs(householdsStore)
 householdsStore.initHouseholdsStore()
 const household = computed(() => props.household ?? selectedHousehold.value)
 
-// Household business logic for consensus
-const {computeConsensus} = useHousehold()
-
 // Permission-based form mode - EDIT if user is member of household (session predicate on the auth store, ADR-017)
 // Admin can override via canEditAdminOverride prop
 const {isMemberOfHousehold} = useAuthStore()
@@ -337,9 +334,7 @@ const tableData = computed((): TableRow[] => {
       }
     })
 
-  // Compute consensus from inhabitant dinnerModes
-  const inhabitantModes = inhabitantRows.map(r => r.dinnerMode)
-  const {value: consensusMode, consensus: hasConsensus} = computeConsensus(inhabitantModes, DinnerModeEnum.DINEIN)
+  const {value: consensusMode, consensus: hasConsensus} = getPowerConsensus(allInhabitants.map(i => i.id), eventOrders.value, props.dinnerEvent.id)
 
   // Default synthetic row template
   const defaultSyntheticRow = {
@@ -409,20 +404,19 @@ const buildDesiredOrdersForRow = (row: TableRow): DesiredOrder[] => {
   )
 
   if (row.rowType === 'power') {
-    return buildForInhabitants(tableData.value.filter(r => r.rowType === 'inhabitant').map(r => r.id as number))
+    const inhabitantIds = (household.value?.inhabitants ?? []).map(i => i.id)
+    return buildBookingChanges(
+      getPowerChanges(inhabitantIds, eventOrders.value, dinnerEventId, draftMode.value),
+      eventOrders.value,
+      household.value?.inhabitants ?? [],
+      [props.dinnerEvent],
+      props.ticketPrices
+    )
   }
 
-  if (row.rowType === 'guest-order' && row.ticketPriceId) {
+  if (row.rowType === 'guest-order') {
     const guestOrders = row.orders ?? (row.order ? [row.order] : [])
-    return guestOrders.map((guestOrder: OrderDisplay) => ({
-      inhabitantId: guestOrder.inhabitantId,
-      dinnerEventId,
-      dinnerMode: draftMode.value,
-      ticketPriceId: row.ticketPriceId!,
-      isGuestTicket: true,
-      orderId: guestOrder.id,
-      state: OrderStateEnum.BOOKED
-    }))
+    return buildGuestDesiredOrders([{guestOrders, dinnerMode: draftMode.value}], props.ticketPrices)
   }
 
   if (row.rowType === 'inhabitant' && typeof row.id === 'number') {
@@ -482,7 +476,7 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
 // HELPER TEXT
 // ============================================================================
 
-const {partitionGuestOrders, groupGuestOrders, getBookingOptions, getDayBillSummary, resolveUserBookingBuckets, buildDesiredOrders} = useBooking()
+const {partitionGuestOrders, groupGuestOrders, getBookingOptions, getDayBillSummary, resolveUserBookingBuckets, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
 const {createBookingBadges, formatActionPreview} = useBookingUi()
 
 // Deadline badges

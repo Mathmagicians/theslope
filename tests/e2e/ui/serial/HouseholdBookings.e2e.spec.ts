@@ -168,7 +168,7 @@ test('week forward arrow hides at last dinner of season', async ({page}) => {
     await expect(nextBtn).toBeHidden()
 })
 
-test('GIVEN an inhabitant holding only a guest ticket on a dinner WHEN the week grid power mode books the family THEN a regular order is booked and the guest ticket is untouched', async ({page, browser}) => {
+test('GIVEN an inhabitant holding only a guest ticket on a dinner WHEN the week grid power mode books the family THEN a regular order is booked and the guest ticket carries the family\'s mode', async ({page, browser}) => {
     const context = await validatedBrowserContext(browser)
     const {userId} = await getSessionUserInfo(context)
 
@@ -208,6 +208,58 @@ test('GIVEN an inhabitant holding only a guest ticket on a dinner WHEN the week 
     // THEN
     const orders = (await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id))
         .filter(o => o.inhabitantId === inhabitant.id)
-    expect(orders.find(o => o.id === guestOrderId)).toMatchObject({isGuestTicket: true, dinnerMode: DinnerMode.DINEIN, state: OrderState.BOOKED})
-    expect(orders.filter(o => !o.isGuestTicket)).toEqual([expect.objectContaining({state: OrderState.BOOKED})])
+    const regularOrders = orders.filter(o => !o.isGuestTicket)
+    expect(regularOrders).toEqual([expect.objectContaining({state: OrderState.BOOKED})])
+    // The guest was booked DINEIN: a power mode other than DINEIN proves the guest moved with the family
+    expect(regularOrders[0]!.dinnerMode).not.toBe(DinnerMode.DINEIN)
+    expect(orders.find(o => o.id === guestOrderId)).toMatchObject({isGuestTicket: true, dinnerMode: regularOrders[0]!.dinnerMode, state: OrderState.BOOKED})
+})
+
+test('GIVEN a member holding a regular order and a guest ticket on a dinner WHEN the week grid changes the guest cell\'s mode and saves THEN the guest order carries the new mode and the regular order is untouched', async ({page, browser}) => {
+    const context = await validatedBrowserContext(browser)
+    const {userId} = await getSessionUserInfo(context)
+
+    // GIVEN: NONE preferences, so the member's orders on the dinner are exactly the two created here
+    const inhabitant = await HouseholdFactory.createInhabitantWithConfig(context, householdId, {
+        name: salt('GuestEditor', testSalt),
+        dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)
+    })
+    // The season's second-to-last dinner: before its cancellation deadline, apart from the power-mode test's dinner
+    const dinnerEvent: DinnerEventDisplay = [...testSeason.dinnerEvents].sort((a, b) => a.date.getTime() - b.date.getTime()).at(-2)!
+    const adultPrice = testSeason.season.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
+    const created = await OrderFactory.createOrder(context, {
+        householdId,
+        dinnerEventId: dinnerEvent.id,
+        orders: [
+            {inhabitantId: inhabitant.id, bookedByUserId: userId, ticketPriceId: adultPrice.id!, dinnerMode: DinnerMode.DINEIN, isGuestTicket: false},
+            {inhabitantId: inhabitant.id, bookedByUserId: userId, ticketPriceId: adultPrice.id!, dinnerMode: DinnerMode.DINEIN, isGuestTicket: true}
+        ]
+    }, 201, true)
+    const before = (await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id))
+        .filter(o => created!.createdIds.includes(o.id))
+    const regularOrder = before.find(o => !o.isGuestTicket)!
+    const guestOrder = before.find(o => o.isGuestTicket)!
+
+    // WHEN: admin unlocks the household, toggles the guest cell once (DINEIN → DINEINLATE) and saves
+    await page.goto(buildBookingsUrl('week', dinnerEvent.date))
+    await waitForHydration(page)
+    const adminOverride = page.getByTestId('admin-override-btn')
+    await adminOverride.click()
+    await adminOverride.click()
+    await page.getByTestId('grid-edit').click()
+    await page.locator(`[data-testid^="guest-guest-group-${inhabitant.id}-"][data-testid$="-${dinnerEvent.id}"]`).click()
+
+    const scaffoldResponse = page.waitForResponse(r =>
+        r.url().includes('/api/household/order/scaffold') && r.request().method() === 'POST'
+    )
+    await page.getByTestId('grid-save').click()
+    const response = await scaffoldResponse
+    expect(response.status()).toBe(200)
+    const {scaffoldResult} = await response.json() as ScaffoldOrdersResponse
+    expect(scaffoldResult.errored).toBe(0)
+
+    // THEN
+    const after = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
+    expect(after.find(o => o.id === guestOrder.id)).toMatchObject({isGuestTicket: true, dinnerMode: DinnerMode.DINEINLATE, state: OrderState.BOOKED})
+    expect(after.find(o => o.id === regularOrder.id)).toMatchObject({isGuestTicket: false, dinnerMode: DinnerMode.DINEIN, state: OrderState.BOOKED})
 })

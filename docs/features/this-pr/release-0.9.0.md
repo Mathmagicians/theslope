@@ -14,19 +14,20 @@ Sizing is informal t-shirt sizes.
 |---|---|---|---|---|
 | Framework research spike | prisma 7/8-RC + zod 4 + `zod-prisma-types` compatibility; removable workarounds and adoptable features; Nuxt roadmap evidence that `useAsyncData`'s option surface (`enabled`, `createUseAsyncData`) and named layout slots survive coming releases | `feature-proposal-framework-adoption.md` § Dependency clusters | S | ✅ decided — spike first |
 | CI test reporting | Job summary: vitest stats line + per-suite Playwright sections with report links | below | S | ✅ approved 2026-10-05 |
-| Store fetcher factory | `useStoreAsyncData`; schema-driven types | `feature-proposal-framework-adoption.md` | M | ⏳ API awaiting signoff |
+| Framework pair upgrade | pinia 4 + @pinia/nuxt 1, @vueuse/core 15, ical-generator 11 | `feature-proposal-framework-adoption.md` § Clusters and order | S | ✅ implemented 2026-10-05 — zero source changes, user commit pending |
+| Store fetcher factory + store alignment | `useStoreAsyncData`, schema-driven types; every store converges on it (the misaligned fetch handling across stores, release-plan I2) | `feature-proposal-framework-adoption.md` | M–L | ✅ approved 2026-10-05 |
 | Fetch gating | `enabled` carries the fetch condition | `feature-proposal-framework-adoption.md` | M | ⏳ awaiting signoff |
 | Prisma bundle | ALL prisma/zod/migration work in one go: the prisma + zod majors the spike green-lights, `zod-prisma-types` regen, every new model of the push, one migration | below | L | models drafted, sign-off pending |
 | Duty roster (F5a) | Templates, duties, audit trail | `feature-proposal-duty-roster.md` | L | Draft |
-| Joker + vacancy overviews | `JokerSlot`, dinner "missing" face, team-card + big overview, shift counts, volunteering moves to duty level + data separation | `feature-proposal-duty-roster.md` § Joker | L | ⏳ mockups awaiting signoff |
-| Roster sign-off + cross-team swap (F5b) | Chef sign-off, duty swap | `feature-proposal-duty-roster.md` Phases 4–5 | M | Draft |
-| Waitlist | Queue, auto-assign sweep, extra portions, UI | `feature-proposal-waitlist.md` | L | ⏳ mockups awaiting signoff |
+| Joker + vacancy overviews | `JokerSlot`, dinner "missing" face, CTC faces, shift counts, volunteering moves to duty level + data separation | `feature-proposal-duty-roster.md` § Joker + § Roster UX | L | ✅ UX signed (CTC 2026-10-05, big overview + calendar markers 2026-10-06) |
+| Roster sign-off + cross-team swap (F5b) | Derived auto-sign + godkend-alligevel, duty swap | `feature-proposal-duty-roster.md` Phases 4–5 | M | roster UX ✅ signed 2026-10-05 |
+| Waitlist | Queue, auto-assign sweep, extra portions, UI | `feature-proposal-waitlist.md` | L | ✅ UX signed (chef 2026-10-05, member faces 2026-10-06) |
 | Notifications | Waitlist + duty-swap kinds, buildup threshold | `feature-proposal-notification-triggers.md` § Trigger catalog | M | catalog updated |
 | Adhoc billing + EXPENSE | Ad-hoc charges + chef spending as EXPENSE transactions; Mit forbrug + admin economy spending views | `feature-proposal-adhoc-admin-billing.md` | L | ⏳ EXPENSE design awaiting signoff; OPEN — in this push or next |
 | Sealed cookies | PRF spike, then S5 passkey re-login | `feature-proposal-mobile-native-feel.md` | S + M | spike first; S5 brief after |
 | Page composition | Master/detail + tab frames, `md` breakpoint | `feature-proposal-framework-adoption.md` | M | OPEN — decided from spike findings |
 | Order snapshot | Frozen `ticketType` on Order + backfill — the portion resolver reads it | `bug-fix-order-snapshot.md` | S | schema in the Prisma bundle |
-| Grid booking save | One `buildDesiredOrder` builder for day/grid/preview; toast severity | `bug-fix-plan-v0.9.md` § B1 | M | root-caused, unblocked |
+| Grid booking save | One `buildDesiredOrder` builder for day/grid/preview; toast severity | `bug-fix-plan-v0.9.md` § B1 | M | ✅ implemented 2026-10-05 — user commit pending |
 | Motion tokens | Raw motion classes into the design system | `bug-fix-motion-tokens.md` | S | parked for this release |
 | Dinner-page follow-ups | PR #166 leftovers on `/dinner` | `bug-fix-dinner-page-and-dates.md` | S | parked for this release |
 
@@ -35,11 +36,12 @@ Sizing is informal t-shirt sizes.
 The push starts from the framework corner (decision 2026-10-05): the upgrade philosophy is remove workarounds,
 follow the framework's own shapes, adopt new features where they earn it.
 
-1. Framework research spike + PRF spike + CI test reporting (independent; the PRF spike runs early so the
-   `WebAuthnCredential` shape is fixed before the single migration)
-2. Prisma bundle: prisma/zod majors per spike findings + every model of the push + one migration (models signed
-   off, Make targets produce the files, user applies)
-3. Store fetcher factory → Fetch gating (on the new zod)
+1. Framework research spike ✅ + CI test reporting ✅ + PRF spike (runs early so the `WebAuthnCredential`
+   shape is fixed before the single migration)
+2. Framework pair upgrade (pinia 4 + @pinia/nuxt 1, @vueuse/core 15, ical-generator 11)
+3. Prisma bundle: prisma 7.10 + zod 4.6 per spike findings + every model of the push + one migration (models
+   signed off, Make targets produce the files, user applies)
+4. Store fetcher factory + store alignment → Fetch gating (on the new zod)
 4. Duty roster F5a → Joker + overviews (+ data separation) → F5b
 5. Waitlist → Notifications
 6. Adhoc + EXPENSE (this release, lower priority)
@@ -80,20 +82,31 @@ One package, one migration, produced by the Make targets after the user signs of
 Expenses are EXPENSE rows in the transaction ledger, excluded from invoicing (decision 2026-10-05) —
 `feature-proposal-adhoc-admin-billing.md` § Expense type. Surfaces:
 
-**Mockup — expense entry (ChefMenuCard, under Budget)** ⏳ awaiting signoff
+**Mockup — ChefMenuCard budget expand** ✅ signed 2026-10-05 (the dinner economy lives in one collapsed pane)
 
 ```
-Forbrug
-  12/04  Grønt + kolonial         1.012 kr   [slet]
-  14/04  Mejeri                     298 kr   [slet]
-  [ beløb ] [ note          ]  [Tilføj]
-  Brugt: 1.310 kr   Rådighedsbeløb (ex moms): 1.425 kr   Rest: 115 kr
+Budget: 1.425 kr til rådighed                                [v]
+ +- udfoldet:
+    INDTÆGTER / RÅDIGHEDSBELØB / KØKKENBIDRAG   (3 bokse, exists)
+    Billettype-tabel: Voksen / Barn / Baby      <- FIX: dansk navn via useTicket;
+                                                   i dag rå enum (DinnerBudget.vue:171)
+    Forbrug
+      12/04  Grønt + kolonial         1.012 kr   [slet]
+      14/04  Mejeri                     298 kr   [slet]
+      [ beløb ] [ note          ]  [Tilføj]
+      Brugt: 1.310 kr   Balance denne middag: +115 kr
+    [Se sæsontrend]                             <- knap, udfolder sæsonvisningen
 ```
 
-**Mockup — single-chef overview (`/chef`, "Mit forbrug" card)** ⏳ awaiting signoff
+**Mockup — season view (opens from [Se sæsontrend]; same component serves admin economy)** ✅ signed 2026-10-05
 
 ```
-Mit forbrug — sæson 2026/1
+Sæsonstatus — Anna, 2026/1
+  Budget i alt: 4.435 kr   Brugt: 2.935 kr   Balance: +2 kr   [I BALANCE]
+
+  kr (akkumuleret)      graf: budget-linje vs forbrugs-linje over sæsonens
+                        middage; grøn under budget / rød over
+
   Dato        Middag            Budget(ex)   Brugt      Balance
   15/04/2026  Lasagne           1.425 kr     1.540 kr   -115 kr
   22/04/2026  Boller i karry    1.512 kr     1.395 kr   +117 kr
@@ -103,22 +116,32 @@ Mit forbrug — sæson 2026/1
   Du kan bruge 1.500 kr til Risotto 06/05  (budget 1.498 kr + balance +2 kr)
 ```
 
-**Mockup — admin economy spending section** ⏳ awaiting signoff
+**Mockup — admin economy "Forbrug" (big overview)** ✅ signed 2026-10-06 — months as rows, a month opens to its
+dinners (the admin-economy drill-down pattern); same `SeasonBudgetOverview` component with the month table as the
+admin layer
 
 ```
-Forbrug — [periode-vælger]
+AdminEconomy — Forbrug
+  Scope: [Alle chefkokke v]  (vælg chefkok | Madbudget)      Sæson: [2026/1 v]
 
-Middage (pr. chefkok)
-  Chefkok   Middage   Budget(ex)   Brugt       Balance
-  Anna      4         5.698 kr     5.540 kr    +158 kr
-  Bo        3         4.230 kr     4.390 kr    -160 kr
-  I alt     12        14.250 kr    13.980 kr   +270 kr
+  Budget i alt: 32.100 kr   Brugt: 21.362 kr   Balance: +38 kr   [I BALANCE]
+  [graf: akkumuleret budget vs forbrug — grøn under / rød over]
 
-Basisvarer (køkkenbidrag)
-  Dato     Note              Beløb
-  03/04    Olie, salt, mel   642 kr
-  Køkkenbidrag i perioden: 712 kr · Basisvarer: 642 kr · Balance: +70 kr
+  Måned        Middage   Budget(ex)   Brugt       Balance
+  > august     8         9.500 kr     9.102 kr    +398 kr
+  v september  10        11.900 kr    12.260 kr   -360 kr
+      Dato     Middag        Chefkok   Budget(ex)   Brugt      Balance
+      02/09    Lasagne       Anna      1.425 kr     1.540 kr   -115 kr
+      09/09    Risotto       Bo        1.498 kr     1.395 kr   +103 kr
+  > oktober    9         10.700 kr    —            —
+  I alt        27        32.100 kr    21.362 kr    +38 kr
 ```
+
+Grouping is a component parameter (`day` | `month`), not scope-wired: the mount decides the data points. The
+chef's own view and the single-chef scope pass `day` (flat table, dinners as graph points); the aggregate
+scopes pass `month` (month rows, drill-down to dinners). Madbudget scope: the graph plots køkkenbidrag-accrual vs
+basisvarer-spend and the month drill-down lists basisvarer purchases (dato, note, beløb). Basisvarer entry lives
+here, admin-only.
 
 ## Decisions
 
@@ -139,6 +162,16 @@ Basisvarer (køkkenbidrag)
 - Framework corner first; research spike before any major upgrade. e2e ui keeps `continue-on-error`, failures red.
 - CI reporting is per-tool (correction 2026-10-05): vitest prints its own stats line; `make test-report` is
   Playwright-only, one call per suite (api, ui, smoke) — no cross-format normalization.
+
+**2026-10-05** (round 2, after the spike)
+- Store fetcher factory approved, paired with the store alignment sweep: every store converges on the factory in
+  the same package (the misaligned fetch handling across stores, release-plan I2).
+- No experimental framework features unless avoiding one costs heavy workarounds — named layout slots stay out;
+  `enabled` is stable and in.
+- Framework pair upgrade approved, runs first. Prisma + zod ride the Prisma bundle pinned at 7.10 + 4.6 — RC
+  versions are out of discussion (npm `latest` of prisma is an 8-RC).
+- No dependency we don't actively import: `@vueuse/core` (zero imports) leaves package.json; the package that
+  first imports it (the `isMd` work) adds it back.
 - Adhoc + EXPENSE ship in this release, sequenced last among the feature packages (not highest priority).
 - All prisma, zod and migration work happens in one go: the Prisma bundle carries the majors, the regen and every
   new model in a single package.
@@ -150,6 +183,30 @@ Basisvarer (køkkenbidrag)
 - **OPEN — store fetcher factory API:** drafted in `feature-proposal-framework-adoption.md`; signoff waits for the
   spike's Nuxt-roadmap evidence that the underlying option surface stays — building on a surface Nuxt is about to
   change is premature (user, 2026-10-05).
+
+**2026-10-05** (round 3, `/chef` UX iteration — all signed, mockups in the linked docs)
+- CTC drives the roster: dinner face leads with "who comes today" (vacancies, swaps, joker status), season face
+  (admin teams) leads with the regular team + jokertjanser + shift counts + view-only game-plan drill-down; which
+  face leads follows the dinner context. The Flytter badge is dropped from `/chef`.
+- A template row IS one seat — capacity is modelled with rows, counts in the UI are derived; no `requiredCount`.
+  Slot times/tasks are templates, edited in the team's template editor, not on the daily roster.
+- Sign-off is derived: all seats filled → auto-signed (system actor); short → "MANGLER n" + chef's
+  [Godkend alligevel] (chef actor). Members self-serve their own rows; duty-level admin bypass parked.
+- Release-portions is demand-driven with a permanent home: entry in ChefMenuCard's [Flere]-menu + a CTA alert under
+  the action row while the queue is non-empty; both open one form prefilled with the queue's portion need.
+- Queue/for-sale status is the kitchen stats panel's alternating fourth box (TIL SALG n / VENTELISTE n — never both).
+- The dinner economy is one collapsed Budget pane (3 boxes + ticket table + Forbrug entry + [Se sæsontrend] button
+  unfolding the season view). Broken window fixed with the package: the budget's ticket table renders raw enum
+  (`ADULT`/`CHILD`, `DinnerBudget.vue:171`) — Danish names via `useTicket`.
+
+**2026-10-06** (round 4, UX)
+- Waitlist member faces: queued is a badge on Ingen, never a mode — `ICONS.waitlist` (hourglass) through the
+  `useBookingUi` badge path, "#n i køen"; assignment defaults the order to Spiser med, changeable afterwards.
+- Admin economy Forbrug: month rows with dinner drill-down, scope switcher (alle chefkokke / én chefkok /
+  Madbudget); basisvarer entry is admin-only, in that section. `SeasonBudgetOverview` takes `grouping: day | month`.
+- Vacancy big overview: per team, chronological, origin on each hole (joker note / who released); no person
+  linkage — no `coversInhabitantId`. Calendar gap markers as DS tokens, ink-coloured: chef hat = missing chef,
+  joker hat = unfilled joker seat, dot = unfilled regular seat.
 
 ## Coverage
 

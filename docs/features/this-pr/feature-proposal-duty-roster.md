@@ -164,7 +164,7 @@ enum DutyAuditAction {
   UNASSIGNED      // someone unassigned (release / chef clear / move-out cascade)
   SWAPPED         // pair-swap (with swapGroupId)
   UPDATED         // chef edited time / task / role
-  SIGNED_OFF      // chef confirmed this duty (chef hits "sign off roster" → N rows, one per duty)
+  SIGNED_OFF      // roster approved: system actor on auto-sign (every seat filled), chef actor on "Godkend alligevel"
   MISSED          // someone flagged this duty as no-show after the dinner
 
   // System cascades (performedByUserId null)
@@ -174,6 +174,7 @@ enum DutyAuditAction {
 
 // Actor invariant (Zod refine on DutyHistoryCreateSchema):
 //   COMPLETED, CANCELLED → performedByUserId MUST be null (system-only cascades)
+//   SIGNED_OFF           → either: null on auto-sign, set on "Godkend alligevel"
 //   All other actions    → performedByUserId MUST be set (human actions)
 ```
 
@@ -437,40 +438,47 @@ The team administrator sees vacancies and load in `/admin/teams`:
   (chefkok / fast tjans / joker) — volunteers see how the extra load spreads.
 - **Big overview:** all vacancies across the season, split on teams and split on people.
 
-**Mockup — team card, joker slots + shift counts** ⏳ awaiting signoff
+The team card's joker slots and shift counts are part of the signed CTC season face — § Roster UX.
+
+**Mockup — joker slot form** ✅ signed 2026-10-06 (admin teams, team detail, under the Jokertjanser list)
 
 ```
-Jokertjanser — Hold 3
-  Periode          Ugedage    Rolle   Note
-  07/10 - 01/12    tirsdag    KOK     Anna barsel     [slet]
-  [ + Tilfoj jokertjans ]
-
-Tjanser — Hold 3 (sæson 2026/1)
-  Navn     Chefkok   Fast tjans   Joker   I alt
-  Anna     2         8            0       10
-  Per      0         10           1       11
-  Bo*      0         0            3       3        * frivillig, ikke medlem
+[ + Tilføj jokertjans ]
+   +- form:
+      Periode   [07/10/2026] - [01/12/2026]      <- CalendarDateRangePicker
+      Ugedage   [man][tir][ons][tor][fre][lør][søn]   <- affinity-checkboxes fra TeamMemberAddForm
+      Rolle     [KOK v]                               <- ROLE_ICONS select
+      Note      [Anna barsel            ]             <- fri tekst, valgfri
+      [Opret]  [Fortryd]
 ```
 
-**Mockup — big overview (admin teams)** ⏳ awaiting signoff
+The scaffolder expands the slot to one vacant seat per matching cooking day in the period. Deleting a slot removes
+its unclaimed future seats; claimed seats survive — the volunteer keeps their duty (audited).
+
+**Mockup — vacancy big overview (admin teams)** ✅ signed 2026-10-06
+
+Mounts in the admin teams overview region (no team selected), under the all-teams calendar. Per team,
+chronological; a vacant seat shows its origin — the joker slot's note, or who released a regular seat (audit).
+No person linkage beyond that: a joker slot covers no named member (no `coversInhabitantId`). Rows link into the
+day's game plan.
 
 ```
-Ledige tjanser — sæson 2026/1          [Pr. hold | Pr. person]
-  Pr. hold:
-    Hold 3   ti 14/10  Madlavning (joker)    ti 21/10  Madlavning (joker)
-    Hold 6   on 22/10  Opvask (ledig)
-  Pr. person:
-    Anna (Hold 3)   fraværende 07/10-01/12 — 8 tjanser dækkes af joker
+AdminTeams — overblik (intet hold valgt)
+  [all-teams kalender med mangler-markeringer]
+
+  Ledige tjanser — sæson 2026/1   (pr. hold, kronologisk)
+    Hold 3 — 2 huller
+      ti 14/10   Madlavning   (joker: Anna barsel)     ledig
+      ti 21/10   Madlavning   (joker: Anna barsel)     ledig
+    Hold 6 — 1 hul
+      on 22/10   Opvask       (afgivet af Per)         ledig
 ```
 
-**Mockup — joker row in the dinner roster** ✅-pending, carried from the first draft
+**Calendar marker vocabulary** ✅ signed 2026-10-06 — design-system tokens, ink-coloured ("black"), one glyph per
+gap kind on a calendar day: chef hat = missing chef, joker hat = unfilled joker seat, dot = unfilled regular seat.
+Glyphs picked from the icon set at implementation; the token names are the contract.
 
-```
-Vagtplan — tirsdag 15/04
-  15:00-18:00  Madlavning   KOK          Anna
-  16:30-19:30  Mellemvagt   KOK          Ledig tjans (joker)    [Tag tjansen]
-  18:30-21:30  Opvask       KOK          Per
-```
+The dinner-roster rendering of jokers lives in § Roster UX (the CookingTeamCard dinner face).
 
 ### Volunteering moves from membership to duty
 
@@ -479,6 +487,58 @@ roster, a one-dinner volunteer claims the dinner's duty (or takes the chef duty)
 is. The endpoint's write target changes with Phase 4, and the shipped rows get a one-time data separation before
 this feature ships: genuine season members keep their `CookingTeamAssignment`, one-off volunteers are re-expressed
 as duty history. The separation list is produced for the user to review; the user applies it.
+
+## Roster UX — CookingTeamCard drives it ✅ signed 2026-10-05
+
+A template row IS one seat: three cooks 15–18 are three identical template rows; the scaffold makes one duty per
+seat; a vacancy is a seat-duty without a person. Capacity is edited by adding/removing template rows; counts in the
+UI are derived by grouping identical (time, task, role) seats. A duty row keeps its own time fields for one-off
+deviations ("Emil kommer 15-16 i dag"), shown inline.
+
+**Sign-off is derived.** Every seat filled → the roster auto-signs (SIGNED_OFF, system actor). Short → the status
+line reads "MANGLER n" and the chef's [Godkend alligevel] appears (SIGNED_OFF, chef actor — approved short-handed).
+Any later change re-evaluates. Duty-level admin bypass is parked as nice-to-have; the admin's lever is moving
+people between teams (existing membership UI).
+
+| Role | Powers |
+|---|---|
+| Team member | take a vacant seat, give up / swap their own |
+| Chef | godkend-alligevel, ad-hoc extra seat (rare), release extra portions (`feature-proposal-waitlist.md`) |
+| Admin | membership moves; game-plan drill-down is view-only |
+| System | auto-sign, re-evaluation, cascades |
+
+**Mockup — CTC dinner face** (`/chef`, `/dinner`; members get the same table with self-service on own rows) ✅ signed 2026-10-05
+
+```
+CookingTeamCard — Hold 3 — tirsdag 15/04
+  Hvem kommer: 4 af 5 — MANGLER 1          [Godkend alligevel]   <- kun ved mangel
+
+  08:00-11:00   Prep (1)        Anna                     [byt/afgiv på egne rækker]
+  15:00-18:00   Madlavning (3)  Maria (byt: Per) · Per · Ledig  [Tag tjansen]
+  15:00-16:00   Børnetjans (1)  Emil — hjælper med mad eller borddækning
+  18:30-21:30   Opvask (1)      Bo (joker-vikar)
+
+  ...sidste plads tages ->  Hvem kommer: 5 af 5 — GODKENDT (auto)
+
+  Fast hold                                         [v]   <- collapsed footer
+```
+
+**Mockup — CTC season face** (admin teams) ✅ signed 2026-10-05
+
+```
+CookingTeamCard — Hold 3
+  [holdbadges] + medlemsliste med roller/ugedage            (som i dag)
+  Jokertjanser:  07/10-01/12  tirsdag  KOK  "Anna barsel"  [slet]  [ + ]
+  Tjanser pr. medlem:  Anna 10 · Per 11 · Bo* 3   (*frivillig, ikke medlem)
+
+  Spilleplan:  [vælg maddag v]   -> den valgte dags vagtplan-tabel, view-only
+```
+
+Which face leads is decided by whether CTC receives a dinner context. Deviation markers come from the audit trail
+(SWAPPED → "byt", ASSIGNED on a joker seat → "joker-vikar", vacant joker seat → "Ledig (joker)"). Vacancies also
+surface as a "mangler"-marker on the day in the calendar and on the dinner (the missing-chef pattern). The Flytter
+badge is dropped from `/chef` — the vacancy itself carries the story; admin teams reads it from the joker slot's
+note. No `requiredCount` field — rows model capacity.
 
 ## ADR compliance
 
@@ -516,21 +576,50 @@ The current document. Reviewable artifact before code.
 
 - `GET /api/dinner-event/[id]/duty-history` and `GET /api/team/cooking/[id]/member/[inhabitantId]/history`.
 - Extract `AuditTimeline.vue` (generic) from `OrderHistoryDisplay.vue`. Both order and roster timelines render via it.
-- Wire into `ChefMenuCard.vue` and `CookingTeamCard.vue` as expandable section. Per-row expand pattern matches the existing order-history "expand to see history" UX.
+- Wire into the CTC faces as collapsed-by-default expandables ✅ signed 2026-10-06: per dinner under the roster
+  table (dinner face), per member on the member row (season face) — one component, two mounts, the order-history
+  `actionConfig` pattern (icon + colour + Danish label per verb); system events name "automatisk" as actor.
+
+```
+Historik                                              [v]
+ +- 06/10 14:02   Byt: Maria overtog Madlavning fra Per (aftalt)
+    05/10 09:11   Emil tog Børnetjansen (joker)
+    04/10 21:30   Vagtplan godkendt (automatisk — alle sæder besat)
+    01/10 08:00   Per afgav Madlavning
+```
 - Tests: component unit + E2E.
 
 ### Phase 3 — DinnerDutyTemplate CRUD + duty scaffolding
 
-- Admin team UI: edit `DinnerDutyTemplate` rows for a team (CRUD). Form fields: role, `minutesFromDinnerStart` (rendered as "X min/h before/after dinner"), `durationMinutes`, `taskDescription`.
+- Admin team UI: edit `DinnerDutyTemplate` rows for a team (CRUD) — mockup below (✅ signed 2026-10-06). Entry is
+  wall-clock, stored as `minutesFromDinnerStart` + `durationMinutes` composed with the global dinner start, and
+  displayed with the relative hint; the add-form keeps its values between adds so identical seats duplicate fast.
+
+```
+Standardvagter — Hold 3            (admin teams, holdets detalje — ✅ 2026-10-06)
+  Tid                             Opgave           Rolle
+  08:00-11:00  (10t før middag)   Prep             KOK        [slet]
+  15:00-18:00  (3t før)           Madlavning       KOK        [slet]
+  15:00-18:00  (3t før)           Madlavning       KOK        [slet]   <- 2 sæder = 2 rækker
+  16:30-18:00  (1,5t før)         Børnetjans       JUNIOR     [slet]
+  18:30-21:30  (0,5t efter)       Opvask           KOK        [slet]
+  [ + Tilføj vagt ]                        [Indlæs standardvagter]
+     +- form: fra [15:00] til [18:00]  opgave [        ]  rolle [KOK v]
+```
 - Season activation triggers `scaffoldDuties(seasonId)` — generator decides desired duties from team members × cooking days per their `affinity`; scaffolder reconciles via `pruneAndCreate` (idempotent per ADR-015) keyed on `(dinnerEventId, sourceTemplateId, inhabitantId)`.
 - E2E: activate season, verify duties materialized respecting Anna's two-team multi-affinity case (Tuesday duty in team 7, Wednesday duty in team 6); reactivate, verify idempotent.
 
-### Phase 4 — Single-dinner roster editing + chef sign-off
+### Phase 4 — Single-dinner roster + derived sign-off (UX in § Roster UX)
 
-- **Single-day scope**: chef edits the roster of *one* dinner at a time. No multi-day grid.
-- Chef view per dinner: roster table (members × time slots derived via `getDutyTimeRange`); chef can reassign duties between team members, edit time/task, remove vacant slots, add ad-hoc slots, mark no-shows. All writes audited.
-- Sign-off action: chef hits "sign off roster" → backend writes one `SIGNED_OFF` audit row per duty in the dinner. No state column on duty for sign-off; "is this duty signed off?" is derived from history (latest `SIGNED_OFF` for this duty AFTER any subsequent `ASSIGNED`/`UNASSIGNED`/`SWAPPED`/`UPDATED` on the same duty).
-- E2E: chef edits roster, signs off (N rows written), edits a single duty post-sign-off (only that duty's sign-off invalidated; others stay confirmed), re-signs that one duty.
+- **Single-day scope**: one dinner's roster at a time, inside the CTC dinner face. No multi-day grid.
+- Members self-serve their own rows (take / give up / swap); the chef adds a rare ad-hoc seat and marks no-shows;
+  slot times/tasks come from the templates and are edited there, not on the daily roster. All writes audited.
+- Sign-off is derived: every seat filled → the system writes one `SIGNED_OFF` row per duty (system actor); short →
+  [Godkend alligevel] writes them with the chef as actor. No state column; "is this duty signed off?" is derived
+  from history (latest `SIGNED_OFF` for this duty AFTER any subsequent `ASSIGNED`/`UNASSIGNED`/`SWAPPED`/`UPDATED`).
+  Any change re-evaluates — a roster falls out of GODKENDT when a seat empties and re-signs when it fills.
+- E2E: fill the last seat → auto-sign rows written; empty a seat → sign-off invalidated; chef godkend-alligevel on
+  a short roster → chef-actor rows; refill → auto re-sign.
 
 ### Phase 5 — Cross-team duty swap (the headline)
 
@@ -540,7 +629,23 @@ The current document. Reviewable artifact before code.
   ```
 - **Cross-team supported**: A and B may belong to different `CookingTeam`s and on different `DinnerEvent`s. The swap exchanges `inhabitantId` between the two duty rows; everything else (role, time slot, task, dinner) stays put on each row. Both teams' chefs see the swap in their roster timelines.
 - **Authorization**: caller must own one of the two duties (or be admin). The other party's consent is via the `agreementConfirmed` flag — out-of-band negotiation, in-app one-sided commit, mirrors chef-swap pattern.
-- Member-facing UI: "Byt tjans" panel on any duty row (extends generic `RoleAssignment.vue` from chef-swap to all roles). Selector lists candidate duties from `usersStore.myDuties` (existing data).
+- Member-facing UI ✅ signed 2026-10-06: [byt/afgiv] on own rows in the CTC dinner face opens the inline panel
+  (extends `RoleAssignment.vue` to all roles). Afgiv = release (seat goes vacant, `UNASSIGNED`). Byt = pair swap
+  against a searchable cross-team list of ALL members' upcoming duties; one-sided commit with the
+  `agreementConfirmed` checkbox; the result line spells out both directions; plain commit (a swap reverses by
+  swapping back).
+
+```
+Min tjans: Madlavning, tirsdag 15/04 (Hold 3)
+  ( ) Afgiv tjansen
+  (x) Byt med en anden
+  Byt med:  [vælg tjans v]      <- alle medlemmers kommende tjanser, søgbar
+     to 17/10  Opvask      Per (Hold 2)
+     ti 22/10  Madlavning  Maria (Hold 3)
+  [x] Vi har aftalt byttet
+  Resultat: Du tager Pers Opvask to 17/10 — Per tager din Madlavning ti 15/04
+  [Byt tjanser]   [Fortryd]
+```
 - Move-out cascade (carried from chef-swap Phase 4, unshipped): on a `moveOutDate` change,
   `server/utils/cleanupAssignmentsOnMoveOut.ts` deletes the inhabitant's future `CookingTeamAssignment` rows, fully
   resets future dinners where they are chef (`CHEF_LOSS_DINNER_UPDATES`), nulls `inhabitantId` on their future

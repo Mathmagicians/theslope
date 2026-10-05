@@ -8,7 +8,7 @@
  */
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import type {DesiredOrder, ScaffoldResult} from '~/composables/useBookingValidation'
-import type {BookingIntent} from '~/composables/useBooking'
+import type {BookingChanges} from '~/composables/useBooking'
 import {useQueryParam} from '~/composables/useQueryParam'
 import {useDinnerDateParam, BookingViewSchema, type BookingView} from '~/composables/useBookingView'
 
@@ -25,7 +25,7 @@ const props = withDefaults(defineProps<Props>(), {
 const {household} = toRefs(props)
 
 const {deadlinesForSeason} = useSeason()
-const {formatScaffoldResult, BOOKING_TOAST_TITLES, buildDesiredOrders} = useBooking()
+const {formatScaffoldResult, BOOKING_TOAST_TITLES, buildBookingChanges} = useBooking()
 const {handleApiError} = useApiHandler()
 const {ICONS, ALERTS, COLOR} = useTheSlopeDesignSystem()
 const toast = useToast()
@@ -124,13 +124,12 @@ const toastScaffoldResult = (title: string, scaffoldResult: ScaffoldResult, suff
   color: scaffoldResult.errored > 0 ? COLOR.error : COLOR.success
 })
 
-const handleGridSave = async (changes: BookingIntent[]) => {
-  if (!selectedSeason.value || changes.length === 0) return
+const handleGridSave = async (changes: BookingChanges) => {
+  const desiredOrders = buildBookingChanges(changes, orders.value, household.value.inhabitants, dinnerEvents.value, ticketPrices.value)
+  if (!selectedSeason.value || desiredOrders.length === 0) return
 
   // Only process dinner events that have changes (not all visible events!)
-  const changedEventIds = [...new Set(changes.map(c => c.dinnerEventId))]
-
-  const desiredOrders = buildDesiredOrders(changes, orders.value, household.value.inhabitants, dinnerEvents.value, ticketPrices.value)
+  const changedEventIds = [...new Set(desiredOrders.map(o => o.dinnerEventId))]
 
   const result = await bookingsStore.processMultipleEventsBookings(
     household.value.id,

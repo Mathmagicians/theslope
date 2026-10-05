@@ -13,7 +13,7 @@ majors. Packages are signed off one at a time in chat; the user runs installs an
 | Store fetcher factory | `useStoreAsyncData` wraps `useAsyncData`: schema-driven types, `useRequestFetch` baked in | ⏳ API refined, awaiting signoff |
 | Fetch gating | the `enabled` option carries the fetch condition; a gated slice reads as idle | ⏳ awaiting signoff |
 | Page composition | master/detail and tab pages, the `md` breakpoint | OPEN |
-| Dependency clusters | majors beyond the Nuxt 4.5 branch | OPEN — spike done 2026-10-05, awaiting signoff |
+| Dependency clusters | majors beyond the Nuxt 4.5 branch | Framework pair approved 2026-10-05 (runs first); Prisma + zod ride the Prisma bundle; TS 7 / @types/node 26 / h3 2 wait |
 
 The factory lands first; Fetch gating converts the gated slices onto it, so each slice is touched once.
 
@@ -86,7 +86,8 @@ store reports ready.
 - Named layout slots (Nuxt 4.5, experimental runtime opt-in `experimental.typescriptPlugin: true` with
   `dxup: {features: {namedLayoutSlots: true}}`): a page's top-level `<template #name>` fills the layout's named slot.
 - `useLayout()` (Nuxt 4.5): the resolved layout of the current route.
-- `useBreakpoints(breakpointsTailwind)` from `@vueuse/core` (installed, `^14.1.0`).
+- `useBreakpoints(breakpointsTailwind)` from `@vueuse/core` (not installed — the package that first imports it
+  adds the dependency; decision 2026-10-05).
 
 **Options.**
 

@@ -14,7 +14,10 @@
 | B2 — Heynabo inhabitant lifecycle | member deleted in Heynabo survives in TheSlope (allergy views) | ✅ shipped 2026-08-19 |
 | B3 — Allergies catalog empty | `/admin/allergies` intermittently shows no data | ✅ shipped |
 | B4 — Allergy edit errors | errors editing in `/admin/allergies` | ✅ closed with B3 (2026-10-05) |
-| B1 — Grid booking save | "fejlede" toast despite 200s; day view works | ⏳ this PR — section below |
+| B1 — Grid booking save | "fejlede" toast despite 200s; day view works | ✅ implemented 2026-10-05 — user commit pending |
+| Grid cell guest display | a cell and the power consensus show a guest ticket's mode | ✅ implemented 2026-10-05 — e2e guard closed 2026-10-06, user commit pending |
+| B1 (continued) — guest orders on the one path | guest mode editable in day view only; grid hardcodes guest cells to view | ✅ implemented 2026-10-06 — user commit pending |
+| Power mode includes guests | power changes everyone in one go, guest bookings included; consensus counts guests | ✅ implemented 2026-10-06 — user commit pending |
 | B5 — Holidays on new season | errors adding holidays in create mode | ✅ closed 2026-10-05 — shipped with the #166/#167 holiday rework |
 | B6 — Kitchen portions | 0 portions when `ticketPriceId` is null | ⏳ this PR — "Order snapshot" package in [release-0.9.0.md](release-0.9.0.md); detail in [bug-fix-order-snapshot.md](../bug-fix-order-snapshot.md) |
 | Order uniqueness | duplicate regular orders per inhabitant + dinner (release-plan I3) | dropped 2026-10-05 — zero duplicates in all envs, B1 unifies the builders, an index adds write cost + a failure mode |
@@ -43,7 +46,7 @@ parallel agents, one e2e runner at a time sequences their suites. The only const
 
 | Package | Blocked by |
 |---|---|
-| B1 — Grid booking save | nothing — unblocked now (booking files only, no migration); lands before the waitlist builds on scaffold + portions |
+| Grid cell guest display | nothing — unblocked (`BookingGridView.vue` only) |
 | B6 schema | the Prisma bundle model sign-off |
 | B6 resolver fallback | the bundle migration applied (`Order.orderSnapshot` + backfill) |
 | Billing delivery report | its two OPEN decisions; lands before Adhoc + EXPENSE writes the ledger |
@@ -56,7 +59,6 @@ Every bug in this sprint exists because the same logic was written more than onc
 
 | Rule | One source of truth | Fixes |
 |------|---------------------|-------|
-| One DesiredOrder builder | `buildDesiredOrder` in `useBooking.ts` | B1 |
 | One snapshot pattern | ADR-011 live-first fallback (Transaction's pattern; Order gets frozen `ticketType`) | B6 |
 | DRY tests | Factories + `describe.each` per [testing.md](../../testing.md); no copy-paste setup | all |
 
@@ -64,83 +66,68 @@ Shipped rules (global reconciliation, one chef-loss routine, one store fetch pat
 
 ---
 
-## B1 — Grid booking save shows "fejlede" despite 200s
+## B1 — Grid booking save ✅ implemented 2026-10-05 (user commit pending)
 
-Folded from `bug-fix-booking-desired-order-builder.md` (2026-10-05); root-caused, not implemented.
+One module-level pure `buildDesiredOrder` + list form `buildDesiredOrders` in `useBooking.ts` feed all three
+intent→order sites: `HouseholdBookings.handleGridSave`, the `BookingGridView` preview (which now shares its draft
+`BookingIntent[]` with the `save` emit) and `DinnerBookingForm`'s inhabitant/power rows; guest creation keeps its
+own builder. The builder matches regular orders only (`!isGuestTicket`), prices by age on the dinner date and skips
+with `null` when no price resolves. The grid, day and guest toasts share `toastScaffoldResult` (`COLOR.error` when
+`scaffoldResult.errored > 0`). The e2e red run showed the true severity: a power save over a guest-only dinner
+returned 200 / `errored: 0` and silently flipped the guest ticket's mode. Specs: `useBooking.nuxt.spec.ts` (6
+builder cases), week-grid guest e2e in `tests/e2e/ui/serial/HouseholdBookings.e2e.spec.ts`, day-view guard green,
+`pre:all` clean. Pricing note: preview/day-form new bookings price by age on the dinner date (was: today).
+Compliance rows updated.
 
-### Problem
+---
 
-In the week/month grid view (`/household/.../bookings`), saving a power-mode change for the whole
-family shows a toast saying "fejlede" even though every network call returns 200 and no server
-**error** is logged. The same operation works in day view.
+## Grid cell guest display
 
-### Root cause
+**Problem.** An inhabitant's grid cell and the power consensus show a guest ticket's mode when the inhabitant
+holds no regular order (why B1's e2e power toggle started from DINEIN).
+**Root cause.** Three read-path lookups in `BookingGridView.vue` match orders without filtering `isGuestTicket`:
+`getServerMode` (`:179`, feeds every cell and the power consensus), `getOrderForCell` (`:398`) and
+`getOrderCountsForInhabitant` (`:405`, guest tickets inflate the per-inhabitant counts) — the display-side twin
+of the save bug B1 fixed. "The regular order for (inhabitant, event)" exists as a rule only inside
+`buildDesiredOrder`; the read path re-derives it unfiltered. Day view is clean (`DinnerBookingForm.vue:275`
+reads through `regularOrders`). Found during B1 (2026-10-05).
+**Solution.** One exported regular-order lookup in `useBooking.ts`, used by `buildDesiredOrder` and the three
+display helpers — read and write paths share the same matching rule; no local patches.
+**TDD.** Red component cases: a guest-only cell renders NONE / neutral consensus; guest tickets excluded from the
+inhabitant counts; B1's e2e stays green (it asserts orders, not cells).
+**Affected.** `app/composables/useBooking.ts`, `app/components/booking/BookingGridView.vue`,
+`BookingGridView.nuxt.spec.ts`, `useBooking.nuxt.spec.ts`.
 
-There are **three** independent "intent → `DesiredOrder`" builders that have drifted apart:
+---
 
-| Concern | Day — `DinnerBookingForm.buildDesiredOrdersForRow` | Grid preview — `BookingGridView.actionPreviewItems` | Grid save — `HouseholdBookings.handleGridSave` |
-|---|---|---|---|
-| Guest exclusion | ✅ via `regularOrders` | ✅ `&& !o.isGuestTicket` | ❌ **none** |
-| Ticket price | pre-resolved `r.ticketPriceId` | `resolveTicketPrice(birthDate, null, prices)` (no event date) | `getTicketPriceForInhabitant(birthDate, prices, eventDate)` |
-| orderId | `r.order?.id` (regular) | `existingOrder?.id` (regular) | `existingOrder?.id` (**incl. guest/duplicate**) |
+## B1 (continued) — guest orders on the one path ✅ implemented 2026-10-06 (user commit pending)
 
-The grid **save** path omits the guest filter (and uses a different price resolution than the
-preview). Because `Order` has no `@@unique([inhabitantId, dinnerEventId])`, an unfiltered
-`find` can attach a **guest or stale/duplicate order id** to a regular cell change. The server
-then receives an `update` for an order its fresh fetch doesn't return and hits the silent skip
-in `scaffoldPrebookings.ts:282` (`Order … not found … skipping`, `householdUpdateErrors++`),
-which only emits `console.warn` — hence 200 + `errored=1` + no visible server error.
+Part of B1's one-builder consolidation (decision 2026-10-06). `buildGuestDesiredOrder` / `buildGuestDesiredOrders`
+sit next to `buildDesiredOrder` in `useBooking.ts`; `buildBookingChanges` is the single regular+guest merge read by
+the grid preview and `handleGridSave` (one scaffold call per save, scoped to the dinners the orders touch); grid
+guest cells follow `effectiveFormMode` with the inhabitant cells' locking, drafts keyed by guest row (the
+inhabitant key collides with the booker's own cell); the day form's guest branch builds through the shared
+builder. Specs: 4 builder unit cases, 5 grid guest-cell cases, 3 day-view guest-save cases
+(`DinnerBookingForm.nuxt.spec.ts`), week-grid guest-edit e2e in the serial booking spec (7/7); `pre:all` clean.
+Rule 6 debt (pre-existing, untouched): the day-form spec still mocks the households/allergies/auth stores.
 
-Two consequences:
-1. Grid preview and grid save disagree → "clean preview, failing save".
-2. Day vs week/month behave differently purely because the builders differ — not by design.
+---
 
-**Symptom decode:** `processMultipleEventsBookings: !1` (compact format) = `errored=1`, all other
-counts `0`. The toast hardcodes `color: 'success'` and renders `formatScaffoldResult(..., 'past')`,
-so the `errored` past-label "fejlede" is shown inside a green success toast.
+## Power mode includes guests
 
-### Solution
-
-1. Extract one **module-level pure** builder in `useBooking.ts` (mirrors `decideOrderAction` —
-   deps injected, unit-testable):
-   `buildDesiredOrder(intent, existingOrders, inhabitants, dinnerEvents, resolveTicketPrice, BOOKED): DesiredOrder | null`
-   - filters `!o.isGuestTicket` (single place)
-   - one consistent, event-date-aware ticket-price resolution
-   - single skip rule (`null` when no ticket price)
-2. Repoint all three sites at it: `handleGridSave`, `actionPreviewItems`, and
-   `DinnerBookingForm`'s inhabitant/power rows. Guest **creation** (`GuestBookingForm`) stays
-   separate (guests are genuinely special).
-3. Fix the toasts to read `result.scaffoldResult.errored` and switch to `color: 'error'`
-   when non-zero (`handleGridSave`, `handleDayViewSave`, `handleAddGuest`).
-4. Cleanup: `actionPreviewItems` lazily calls `useOrder()` → `useTheSlopeDesignSystem()` inside a
-   `computed`, triggering `inject() outside setup` warnings. Resolve at setup, pass in.
-
-### TDD
-
-1. **Red** — parametrized unit test on `buildDesiredOrder` (`useBooking` spec):
-   - new booking → `orderId: undefined`
-   - existing regular → `orderId: <regular id>`
-   - **guest-only on event → `orderId: undefined`** (today returns the guest id)
-   - **regular + guest → `orderId: <regular id>`** (today may return the guest id)
-   - E2E: member holds a guest ticket on a date; week-grid power-mode save asserts
-     `scaffoldResult.errored === 0`, regular order updated, guest order untouched.
-2. **Green** — implement builder; repoint the three call sites.
-3. **Refactor/guard** — toast severity fix; existing day-view + preview tests stay green
-   (proves no behavior change there).
-
-### Affected areas
-
-- `app/composables/useBooking.ts` — new `buildDesiredOrder` (+ unit tests)
-- `app/components/household/HouseholdBookings.vue` — `handleGridSave`, toast severity
-- `app/components/booking/BookingGridView.vue` — `actionPreviewItems`, inject cleanup
-- `app/components/dinner/DinnerBookingForm.vue` — `buildDesiredOrdersForRow`
-- `tests/component/.../useBooking.*.spec.ts`, new E2E booking regression
-
-### ADR notes
-
-- ADR-016 [Unified Booking Through Scaffold]: builder feeds the existing generator/scaffolder unchanged (still emits `DesiredOrder[]`).
-- ADR-001/ADR-010: builder is pure, deps injected, domain types only.
-- The missing `@@unique([inhabitantId, dinnerEventId])` is the Order uniqueness item below.
+**Decision (2026-10-06).** Power mode changes everyone in one go — guest bookings included ("if you invited a
+guest and everyone takes takeaway, you don't want extra clicks for the guest bookings"). A differing guest shows
+as no consensus, and the power toggle resolves it. **Day view is a one-column grid: the two views carry the SAME
+functionality, so power scope and consensus are one shared function consumed by both — never two parallel
+implementations.**
+**Implemented 2026-10-06.** `getPowerChanges` (power scope: one intent per inhabitant, one guest intent per
+guest group on the dinner) and `getPowerConsensus` (consensus over the same targets, composing `computeConsensus`
+from `useHousehold`) live in `useBooking.ts`; the grid (`handlePowerUpdate`, `getEventConsensus` with drafts as
+overrides) and the day form (power branch of `buildDesiredOrdersForRow`, power-row consensus) are the only
+consumers — both hand-written versions deleted, grep-verified. Guest drafts key by the group's first order id.
+Specs: grid 34, day 14, `useBooking` power cases; serial e2e 7/7 with the power test renamed to assert the guest
+ticket carries the family's mode; `pre:all` clean. Known wrinkle: a guest group with no resolvable price is
+skipped silently on a power save (`buildGuestDesiredOrder` returns `[]`).
 
 ---
 
