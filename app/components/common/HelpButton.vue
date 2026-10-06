@@ -57,22 +57,34 @@ const feedbackOptions: Array<{ label: string, value: FeedbackType }> = [
     { label: '❓ Spørgsmål', value: 'question' }
 ]
 
-const { execute: submitFeedback, status, data: feedbackResult, error: feedbackError } = useAsyncData<GitHubIssueResponse>(
-    'feedback-submit',
-    () => $fetch<GitHubIssueResponse>('/api/feedback', {
-        method: 'POST',
-        body: {
-            type: feedbackType.value,
-            description: feedbackDescription.value,
-            currentUrl: requestUrl.href
-        }
-    }),
-    { immediate: false }
-)
+const { apiRequest } = useApiHandler()
+const feedbackResult = ref<GitHubIssueResponse | null>(null)
+const feedbackError = ref<Error | null>(null)
+const isSubmitting = ref(false)
 
-const isSubmitting = computed(() => status.value === 'pending')
-const isSuccess = computed(() => status.value === 'success' && feedbackResult.value !== null)
-const isError = computed(() => status.value === 'error')
+const submitFeedback = async () => {
+    isSubmitting.value = true
+    feedbackResult.value = null
+    feedbackError.value = null
+    try {
+        feedbackResult.value = await apiRequest<GitHubIssueResponse>('/api/feedback', {
+            method: 'POST',
+            body: {
+                type: feedbackType.value,
+                description: feedbackDescription.value,
+                currentUrl: requestUrl.href
+            },
+            action: 'submitFeedback'
+        })
+    } catch (error) {
+        feedbackError.value = error as Error
+    } finally {
+        isSubmitting.value = false
+    }
+}
+
+const isSuccess = computed(() => feedbackResult.value !== null)
+const isError = computed(() => feedbackError.value !== null)
 
 const cancelFeedback = () => {
     showFeedbackForm.value = false

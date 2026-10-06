@@ -2,17 +2,22 @@ import type {UserDetail} from '~/composables/useCoreValidation'
 import type {SenderEmitResult} from '~/composables/useNotificationValidation'
 import {DEFAULT_NOTIFICATION_CHANNELS, readAppearance, type Appearance, type NotificationChannel, type UserPreferencesUpdate} from '~/composables/useUserPreferenceValidation'
 
+/** The toast and the login form both show it when a sign-in fails */
+export const LOGIN_FAILED_MESSAGE = 'Vi kunne ikke logge dig på, prøv igen. Du skal bruge dit Heynabo brugernavn og password.'
+
 export const useAuthStore = defineStore("Auth", () => {
     const {loggedIn, user: _user, session, clear, fetch} = useUserSession()
     const permissions = usePermissions()
-    const {handleApiError} = useApiHandler()
+    const {apiRequest} = useApiHandler()
 
     const user = computed(() => _user.value as UserDetail | null)
 
     const signIn = async (email: string, password: string) => {
-        await $fetch("/api/auth/login", {
-            method: "POST",
-            body: {email, password}
+        await apiRequest('/api/auth/login', {
+            method: 'POST',
+            body: {email, password},
+            action: 'login',
+            errorMessage: LOGIN_FAILED_MESSAGE
         })
         await fetch()
     }
@@ -43,14 +48,9 @@ export const useAuthStore = defineStore("Auth", () => {
      * appearance reaches the layout's html attributes on the next render.
      */
     const savePreferences = async (update: UserPreferencesUpdate) => {
-        try {
-            await $fetch('/api/user/preferences', {method: 'POST', body: update})
-            await fetch()
-            useToast().add({title: 'Indstillinger gemt', color: 'success'})
-        } catch (error) {
-            handleApiError(error, 'savePreferences')
-            throw error
-        }
+        await apiRequest('/api/user/preferences', {method: 'POST', body: update, action: 'savePreferences'})
+        await fetch()
+        useToast().add({title: 'Indstillinger gemt', color: 'success'})
     }
 
     /**
@@ -58,16 +58,11 @@ export const useAuthStore = defineStore("Auth", () => {
      * The toast carries `dedupeKey` — the id one grep finds in the producer log and the sender log.
      */
     const sendTestNotification = async (): Promise<SenderEmitResult> => {
-        try {
-            const result = await $fetch<SenderEmitResult>('/api/user/notifications/test', {method: 'POST'})
-            useToast().add(result.degraded
-                ? {title: 'Notifikationer er ikke sat op i dette miljø', description: result.dedupeKey, color: 'warning'}
-                : {title: 'Testbesked afsendt – tjek din indbakke/telefon', description: result.dedupeKey, color: 'success'})
-            return result
-        } catch (error) {
-            handleApiError(error, 'sendTestNotification')
-            throw error
-        }
+        const result = await apiRequest<SenderEmitResult>('/api/user/notifications/test', {method: 'POST', action: 'sendTestNotification'})
+        useToast().add(result.degraded
+            ? {title: 'Notifikationer er ikke sat op i dette miljø', description: result.dedupeKey, color: 'warning'}
+            : {title: 'Testbesked afsendt – tjek din indbakke/telefon', description: result.dedupeKey, color: 'success'})
+        return result
     }
 
     return {signIn, greeting, avatar, name, lastName, email, phone, birthDate, inhabitantId, systemRoles, isAdmin, isAllergyManager, isMemberOfHousehold, address, notificationChannels, appearance, savePreferences, sendTestNotification, loggedIn, user, session, clear, fetch}

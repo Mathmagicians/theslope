@@ -1,4 +1,24 @@
+import type {AsyncData, AsyncDataOptions, NuxtError} from '#app'
+import type {NitroFetchOptions, NitroFetchRequest} from 'nitropack/types'
+import type {ZodType, ZodTypeDef} from 'zod'
+
 type ApiError = { message?: string; statusCode?: number; statusMessage?: string; data?: unknown }
+
+type ResponseSchema<T> = ZodType<T, ZodTypeDef, unknown>
+
+export type StoreAsyncDataOptions<T> = Omit<AsyncDataOptions<unknown, T>, 'default' | 'transform' | 'pick'> & {
+    schema: ResponseSchema<T>
+    default: () => T
+    errorMessage?: string
+}
+
+export type ApiRequestOptions<T> = NitroFetchOptions<NitroFetchRequest> & {
+    action: string
+    errorMessage?: string
+    schema?: ResponseSchema<T>
+}
+
+const SKIPPED = Symbol('skipped')
 
 const isApiError = (error: unknown): error is ApiError => {
     if (typeof error !== 'object' || error === null) return false
@@ -32,9 +52,9 @@ export const resolveUncaughtApiError = (
 }
 
 export const useApiHandler = () => {
-    // Capture toast and route references during setup context
+    // Captured in the setup context: the request fetch forwards the session cookie during SSR
     const toast = useToast()
-    const route = useRoute()
+    const requestFetch = useRequestFetch()
 
     const handleApiError = (error: ApiError | unknown, action: string, customMessage?: string): string => {
         // Extract serializable parts (FetchError is not a POJO)
@@ -82,29 +102,63 @@ export const useApiHandler = () => {
         return message
     }
 
-    const apiCall = async <T>(
-        action: () => Promise<T>,
-        state: Ref<string>,
-        actionName: string
-    ) => {
-        const prevState = state.value
-        state.value = 'loading'
-        try {
-            const result = await action()
-            state.value = prevState
-            return result
-        } catch (e: unknown) {
-            state.value = 'error'
-            // A mid-session 401 re-authenticates and returns in place (the login page follows ?redirect)
-            if (isApiError(e) && (e.statusCode === 401 || (e as Record<string, unknown>).status === 401) && route.path !== '/login') {
-                await navigateTo({path: '/login', query: {redirect: route.fullPath}})
+    /**
+     * A store read: useAsyncData over the request fetch, the response parsed by `schema`, so the
+     * slice's type is the schema's output. A null url resolves the default without a request.
+     */
+    const storeAsyncData = <T>(
+        key: MaybeRefOrGetter<string>,
+        url: MaybeRefOrGetter<string | null>,
+        {schema, default: defaultValue, errorMessage, ...options}: StoreAsyncDataOptions<T>
+    ): AsyncData<T, NuxtError | undefined> => {
+        const surface = (error: unknown): never => {
+            handleApiError(error, toValue(key), errorMessage)
+            throw error
+        }
+        return useAsyncData(key, async (_nuxtApp, {signal}) => {
+            const target = toValue(url)
+            if (target === null) return SKIPPED
+            try {
+                return await requestFetch<unknown>(target, {signal})
+            } catch (error) {
+                // A superseded request is cancelled, not failed
+                if (signal.aborted) throw error
+                return surface(error)
             }
-            throw new Error(handleApiError(e, actionName), {cause: e})
+        }, {
+            ...options,
+            default: defaultValue,
+            transform: (data: unknown) => {
+                if (data === SKIPPED) return defaultValue()
+                try {
+                    return schema.parse(data)
+                } catch (error) {
+                    return surface(error)
+                }
+            }
+        }) as AsyncData<T, NuxtError | undefined>
+    }
+
+    /**
+     * A mutation, or a one-shot read outside a store slice: the response parsed by `schema` when
+     * given; a failure toasts and rethrows.
+     */
+    const apiRequest = async <T = unknown>(
+        url: string,
+        {action, errorMessage, schema, ...fetchOptions}: ApiRequestOptions<T>
+    ): Promise<T> => {
+        try {
+            const response = await requestFetch<unknown>(url, fetchOptions)
+            return schema ? schema.parse(response) : response as T
+        } catch (error) {
+            handleApiError(error, action, errorMessage)
+            throw error
         }
     }
 
     return {
-        apiCall,
+        storeAsyncData,
+        apiRequest,
         handleApiError
     }
 }

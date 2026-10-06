@@ -33,6 +33,15 @@ const createdTeams = [
 const createTeamsEndpoint = vi.fn(() => ({ teams: createdTeams, eventsAssigned: 6 }))
 registerEndpoint('/api/admin/team', { method: 'PUT', handler: createTeamsEndpoint })
 
+// Method-specific registrations come after the generic ones above (reverse-order lookup)
+const seasonUpdate = SeasonFactory.defaultSeasonUpdateResponse(season1, {reconciliation: {created: 3, idempotent: 5, deleted: 1}})
+const updateSeasonEndpoint = vi.fn(() => seasonUpdate)
+const createSeasonEndpoint = vi.fn(() => season2)
+const activateSeasonEndpoint = vi.fn(() => season2)
+registerEndpoint('/api/admin/season/1', { method: 'POST', handler: updateSeasonEndpoint })
+registerEndpoint('/api/admin/season', { method: 'PUT', handler: createSeasonEndpoint })
+registerEndpoint('/api/admin/season/active', { method: 'POST', handler: activateSeasonEndpoint })
+
 // Test helpers
 const setupStore = async (initStore = false, shortName?: string) => {
     const store = usePlanStore()
@@ -117,5 +126,107 @@ describe('Plan Store - Team creation', () => {
 
         expect(result.teams.map(team => team.id)).toEqual([11, 12])
         expect(result.eventsAssigned).toBe(6)
+    })
+
+    it('createTeam reports the created teams and assigned dinners in a toast', async () => {
+        useToast().clear()
+        const store = await setupStore()
+
+        await store.createTeam([{ seasonId: 1, name: 'Hold 1' }, { seasonId: 1, name: 'Hold 2' }])
+
+        expect(useToast().toasts.value.at(-1)).toMatchObject({
+            title: 'Madhold oprettet',
+            description: '2 madhold oprettet · 6 madlavninger tildelt'
+        })
+    })
+})
+
+describe('Plan Store - Season save and activation', () => {
+    const failure = () => {
+        throw createError({statusCode: 500})
+    }
+
+    beforeEach(() => {
+        setActivePinia(createPinia())
+        clearNuxtData()
+        vi.clearAllMocks()
+        seasonIndexEndpoint.mockReturnValue(mockSeasons)
+        seasonByIdEndpoint.mockReturnValue(season1)
+        activeSeasonIdEndpoint.mockReturnValue(season1.id)
+        updateSeasonEndpoint.mockImplementation(() => seasonUpdate)
+        createSeasonEndpoint.mockImplementation(() => season2)
+    })
+
+    it('updateSeason returns the SeasonUpdateResponse envelope and reloads the seasons', async () => {
+        const store = await setupStore()
+        const seasonFetchesBefore = seasonIndexEndpoint.mock.calls.length
+
+        const result = await store.updateSeason(season1)
+
+        expect(result?.reconciliation).toEqual(seasonUpdate.reconciliation)
+        expect(seasonIndexEndpoint.mock.calls.length).toBeGreaterThan(seasonFetchesBefore)
+        expect(store.isSavingSeasonFlowInProgress).toBe(false)
+    })
+
+    it('createSeason returns the season and reloads the seasons', async () => {
+        const store = await setupStore()
+        const seasonFetchesBefore = seasonIndexEndpoint.mock.calls.length
+
+        expect(await store.createSeason(season2)).toEqual(season2)
+        expect(seasonIndexEndpoint.mock.calls.length).toBeGreaterThan(seasonFetchesBefore)
+    })
+
+    it.each([
+        {action: 'updateSeason', endpoint: updateSeasonEndpoint, save: (store: ReturnType<typeof usePlanStore>) => store.updateSeason(season1)},
+        {action: 'createSeason', endpoint: createSeasonEndpoint, save: (store: ReturnType<typeof usePlanStore>) => store.createSeason(season2)}
+    ])('$action resolves null when the save fails', async ({endpoint, save}) => {
+        endpoint.mockImplementation(failure)
+        const store = await setupStore()
+
+        expect(await save(store)).toBeNull()
+        expect(store.isSavingSeasonFlowInProgress).toBe(false)
+    })
+
+    it.each([
+        {
+            action: 'createSeason',
+            save: (store: ReturnType<typeof usePlanStore>) => store.createSeason(season2),
+            title: 'Sæson oprettet',
+            description: undefined
+        },
+        {
+            action: 'updateSeason',
+            save: (store: ReturnType<typeof usePlanStore>) => store.updateSeason(season1),
+            title: 'Sæson opdateret',
+            description: '3 datoer tilføjet, 1 fjernet. Husk at tildele madhold til nye datoer.'
+        }
+    ])('$action reports the save in a toast', async ({save, title, description}) => {
+        useToast().clear()
+        const store = await setupStore()
+
+        await save(store)
+
+        expect(useToast().toasts.value.at(-1)).toMatchObject({title, description})
+    })
+
+    it('a failed save shows no success toast', async () => {
+        useToast().clear()
+        updateSeasonEndpoint.mockImplementation(failure)
+        const store = await setupStore()
+
+        await store.updateSeason(season1)
+
+        expect(useToast().toasts.value.map(toast => toast.title)).not.toContain('Sæson opdateret')
+    })
+
+    it('activateSeason posts the season and reloads the active season', async () => {
+        const store = await setupStore()
+        const activeFetchesBefore = activeSeasonIdEndpoint.mock.calls.length
+
+        await store.activateSeason(season2.id!)
+
+        expect(activateSeasonEndpoint).toHaveBeenCalledTimes(1)
+        expect(activeSeasonIdEndpoint.mock.calls.length).toBeGreaterThan(activeFetchesBefore)
+        expect(store.isActivatingSeasonFlowInProgress).toBe(false)
     })
 })

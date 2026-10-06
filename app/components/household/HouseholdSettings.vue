@@ -146,7 +146,7 @@ const clearMoveOutDate = async () => {
 // Calendar feed
 const calendarFeed = ref<string | null>(null)
 const getCalendarFeedForUser = async () => {
-  calendarFeed.value = await $fetch<string>('/api/calendar/feed')
+  calendarFeed.value = await householdsStore.fetchCalendarFeed()
 }
 </script>
 

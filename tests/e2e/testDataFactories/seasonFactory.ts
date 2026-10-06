@@ -211,6 +211,17 @@ export class SeasonFactory {
         }
     }
 
+    /** SeasonUpdateResponse data for component tests (no API call): the saved season and what the save set in motion */
+    static readonly defaultSeasonUpdateResponse = (
+        season: Season,
+        overrides: Partial<Omit<SeasonUpdateResponse, 'season'>> = {}
+    ): SeasonUpdateResponse => ({
+        season,
+        reconciliation: {created: 0, idempotent: 0, deleted: 0},
+        scaffold: null,
+        ...overrides
+    })
+
     static readonly createSeason = async (
         context: BrowserContext,
         aSeason: Partial<Season> = {},

@@ -28,7 +28,6 @@ const props = withDefaults(defineProps<{
 const {formatPrice} = useTicket()
 const {groupByCostEntry, groupByHouseholdEntry, calculateCurrentBillingPeriod, controlInvoices, formatTicketCounts} = useBilling()
 const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG} = useTheSlopeDesignSystem()
-const {OrderDisplaySchema} = useBookingValidation()
 
 // Plan store for future dinners
 const planStore = usePlanStore()
@@ -74,27 +73,11 @@ const getInhabitantName = (id: number) => inhabitantsMap.value.get(id) ?? `#${id
 const {getHouseholdForInhabitant} = householdsStore
 
 const selectedSeasonId = computed(() => selectedSeason.value?.id)
-const upcomingOrdersKey = computed(() =>
-    `admin-economy-upcoming-orders-season-${selectedSeasonId.value ?? 'none'}`
-)
-const {data: upcomingOrders, status: upcomingOrdersStatus, refresh: refreshUpcomingOrders} = useAsyncData<OrderDisplay[]>(
-    upcomingOrdersKey,
-    () => {
-        if (!selectedSeasonId.value) return Promise.resolve([])
-        const params = new URLSearchParams()
-        params.append('upcomingForSeason', String(selectedSeasonId.value))
-        params.append('allHouseholds', 'true')
-        params.append('includeDinnerContext', 'true')
-        return $fetch<OrderDisplay[]>(`/api/order?${params.toString()}`)
-    },
-    {
-        default: () => [],
-        transform: (data: unknown[]) => (data as Record<string, unknown>[]).map(o => OrderDisplaySchema.parse(o)),
-        watch: [selectedSeasonId]
-    }
-)
+const {upcomingOrders, isUpcomingOrdersLoading: isUpcomingOrdersFetching} = storeToRefs(bookingsStore)
+const {refreshUpcomingOrders} = bookingsStore
+watch(selectedSeasonId, seasonId => bookingsStore.loadUpcomingOrders(seasonId ?? null), {immediate: true})
 const isUpcomingOrdersLoading = computed(() =>
-    !isPlanStoreReady.value || upcomingOrdersStatus.value === 'pending'
+    !isPlanStoreReady.value || isUpcomingOrdersFetching.value
 )
 
 type OrderWithInhabitant = OrderDisplay & { inhabitant: InhabitantInfo, dinnerEvent: DinnerEventInfo }

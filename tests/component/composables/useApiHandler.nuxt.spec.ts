@@ -1,48 +1,135 @@
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
-import { mockNuxtImport } from '@nuxt/test-utils/runtime'
-import { ref } from 'vue'
-import { useApiHandler, resolveUncaughtApiError } from '~/composables/useApiHandler'
+import {describe, it, expect, vi, beforeAll, beforeEach, expectTypeOf} from 'vitest'
+import {registerEndpoint} from '@nuxt/test-utils/runtime'
+import {clearNuxtData} from '#app'
+import {ref, type Ref} from 'vue'
+import {useApiHandler, resolveUncaughtApiError, type StoreAsyncDataOptions} from '~/composables/useApiHandler'
+import {useAllergyValidation, type AllergyTypeDetail} from '~/composables/useAllergyValidation'
+import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 
-// Mock the useToast composable (mockNuxtImport replaces the one auto-import; a #imports module mock breaks the runtime boot)
-mockNuxtImport('useToast', () => () => ({
-    add: vi.fn()
-}))
+const CATALOG = '/api/admin/allergy-type'
+const ERROR_MESSAGE = 'Kunne ikke hente allergi katalog'
+
+const catalogEndpoint = vi.fn()
+const createEndpoint = vi.fn()
+registerEndpoint(`${CATALOG}/1`, () => AllergyFactory.createMockAllergyTypesWithInhabitants().slice(0, 1))
+registerEndpoint(CATALOG, catalogEndpoint)
+registerEndpoint(CATALOG, {handler: createEndpoint, method: 'PUT'})
+
+const failWith = (statusCode: number) => () => {
+    throw createError({statusCode})
+}
+const lastToast = () => useToast().toasts.value.at(-1)
 
 describe('useApiHandler', () => {
     // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not in the describe body
-    let apiCall: ReturnType<typeof useApiHandler>['apiCall']
+    let storeAsyncData: ReturnType<typeof useApiHandler>['storeAsyncData']
+    let apiRequest: ReturnType<typeof useApiHandler>['apiRequest']
+    let AllergyTypeDetailSchema: ReturnType<typeof useAllergyValidation>['AllergyTypeDetailSchema']
     beforeAll(() => {
-        ({apiCall} = useApiHandler())
+        ({storeAsyncData, apiRequest} = useApiHandler())
+        ;({AllergyTypeDetailSchema} = useAllergyValidation())
     })
-    const state = ref('idle')
 
     beforeEach(() => {
-        state.value = 'idle'
+        clearNuxtData()
+        useToast().clear()
         vi.clearAllMocks()
+        catalogEndpoint.mockImplementation(() => AllergyFactory.createMockAllergyTypesWithInhabitants())
+        createEndpoint.mockImplementation(() => AllergyFactory.createMockAllergyTypesWithInhabitants()[0])
     })
 
-    it('should handle successful API calls', async () => {
-        const mockData = { id: 1, name: 'test' }
-        const mockAction = vi.fn().mockResolvedValue(mockData)
+    describe('storeAsyncData', () => {
+        const readCatalog = (key: string, options: Pick<StoreAsyncDataOptions<AllergyTypeDetail[]>, 'immediate' | 'watch'> = {}) =>
+            storeAsyncData(key, CATALOG, {schema: AllergyTypeDetailSchema.array(), default: () => [], errorMessage: ERROR_MESSAGE, ...options})
 
-        const result = await apiCall(mockAction, state, 'testAction')
+        it('types the data by the schema and parses the response with it', async () => {
+            const {data, status} = await readCatalog('catalog-parse')
 
-        expect(result).toEqual(mockData)
-        expect(state.value).toBe('idle')
-        expect(mockAction).toHaveBeenCalledTimes(1)
+            expectTypeOf(data).toEqualTypeOf<Ref<AllergyTypeDetail[]>>()
+            expect(status.value).toBe('success')
+            expect(data.value).toHaveLength(AllergyFactory.createMockAllergyTypesWithInhabitants().length)
+            expect(data.value[0]!.inhabitants[0]!.allergyUpdatedAt).toBeInstanceOf(Date)
+        })
+
+        it.each([
+            {description: 'a failed request', key: 'catalog-request-failure', respond: failWith(500)},
+            {description: 'a response the schema rejects', key: 'catalog-parse-failure', respond: () => [{id: 'not-a-number'}]}
+        ])('surfaces $description through handleApiError with the call\'s message', async ({key, respond}) => {
+            catalogEndpoint.mockImplementation(respond)
+
+            const {data, status} = await readCatalog(key)
+
+            expect(status.value).toBe('error')
+            expect(data.value).toEqual([])
+            expect(lastToast()?.description).toBe(ERROR_MESSAGE)
+        })
+
+        it('resolves the default without a request when the url is null', async () => {
+            const {data, status} = await storeAsyncData('catalog-gated', () => null, {schema: AllergyTypeDetailSchema.array(), default: () => []})
+
+            expect(status.value).toBe('success')
+            expect(data.value).toEqual([])
+            expect(catalogEndpoint).not.toHaveBeenCalled()
+        })
+
+        it('passes immediate through: nothing is fetched until execute', async () => {
+            const {status, execute} = readCatalog('catalog-deferred', {immediate: false})
+            expect(status.value).toBe('idle')
+            expect(catalogEndpoint).not.toHaveBeenCalled()
+
+            await execute()
+            expect(status.value).toBe('success')
+            expect(catalogEndpoint).toHaveBeenCalledTimes(1)
+        })
+
+        it('passes watch through: a change of the source refetches', async () => {
+            const source = ref(0)
+            const {status} = await readCatalog('catalog-watched', {watch: [source]})
+            source.value++
+            await vi.waitFor(() => expect(catalogEndpoint).toHaveBeenCalledTimes(2))
+            expect(status.value).toBe('success')
+        })
+
+        it('follows a reactive key and url', async () => {
+            const selectedId = ref<number | null>(null)
+            const {data} = await storeAsyncData(
+                () => `catalog-entry-${selectedId.value}`,
+                () => selectedId.value ? `${CATALOG}/${selectedId.value}` : null,
+                {schema: AllergyTypeDetailSchema.array(), default: () => []}
+            )
+            expect(data.value).toEqual([])
+
+            selectedId.value = 1
+            await vi.waitFor(() => expect(data.value).toHaveLength(1))
+        })
     })
 
-    it('should handle API errors', async () => {
-        // Mock must include all 4 properties checked by isApiError()
-        const mockError = { statusCode: 400, message: 'Bad Request', statusMessage: 'Bad Request', data: null }
-        const mockAction = vi.fn().mockRejectedValue(mockError)
+    describe('apiRequest', () => {
+        const createType = (errorMessage?: string) => apiRequest(CATALOG, {
+            method: 'PUT',
+            body: AllergyFactory.createMockAllergyTypes()[0],
+            action: 'createAllergyType',
+            errorMessage,
+            schema: AllergyTypeDetailSchema
+        })
 
-        await expect(apiCall(mockAction, state, 'testAction'))
-            .rejects
-            .toThrow('Ugyldig forespørgsel. Tjek venligst dine data')
+        it('returns the response parsed with the schema', async () => {
+            const created = await createType()
 
-        expect(state.value).toBe('error')
-        expect(mockAction).toHaveBeenCalledTimes(1)
+            expectTypeOf(created).toEqualTypeOf<AllergyTypeDetail>()
+            expect(created.inhabitants[0]!.allergyUpdatedAt).toBeInstanceOf(Date)
+            expect(createEndpoint).toHaveBeenCalledTimes(1)
+        })
+
+        it.each([
+            {errorMessage: ERROR_MESSAGE, expected: ERROR_MESSAGE},
+            {errorMessage: undefined, expected: 'Ugyldig forespørgsel. Tjek venligst dine data'}
+        ])('toasts $expected and rethrows the error', async ({errorMessage, expected}) => {
+            createEndpoint.mockImplementation(failWith(400))
+
+            await expect(createType(errorMessage)).rejects.toMatchObject({statusCode: 400})
+            expect(lastToast()?.description).toBe(expected)
+        })
     })
 
     describe('resolveUncaughtApiError (the error floor of plugins/apiErrors.client.ts)', () => {

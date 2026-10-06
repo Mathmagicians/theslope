@@ -46,7 +46,7 @@
  */
 
 import {FORM_MODES} from '~/types/form'
-import type {OrderDisplay, DesiredOrder} from '~/composables/useBookingValidation'
+import type {DesiredOrder} from '~/composables/useBookingValidation'
 import {useDinnerDateParam, useBookingView} from '~/composables/useBookingView'
 import {useQueryParam} from '~/composables/useQueryParam'
 
@@ -136,31 +136,14 @@ watchEffect(() => {
   if (id !== null) bookingsStore.loadDinnerEventDetail(id)
 })
 
-const { OrderDisplaySchema } = useBookingValidation()
-
-// Fetch household-specific orders via user-facing endpoint (security: session-filtered)
-// This is separate from dinnerEventDetail.tickets which includes ALL households for kitchen stats
-const {
-  data: householdOrders,
-  refresh: _refreshHouseholdOrders
-} = useAsyncData(
-  computed(() => `household-orders-${selectedDinnerId.value || 'null'}`),
-  () => selectedDinnerId.value
-    ? $fetch<OrderDisplay[]>(`/api/order?dinnerEventIds=${selectedDinnerId.value}&includeProvenance=true`)
-    : Promise.resolve([]),
-  {
-    default: () => [],
-    watch: [selectedDinnerId],
-    immediate: true,
-    transform: (data: unknown) => {
-      if (!Array.isArray(data)) return []
-      return data.map(order => OrderDisplaySchema.parse(order))
-    }
-  }
-)
+// Household-specific orders via the user-facing endpoint (security: session-filtered).
+// Separate from dinnerEventDetail.tickets, which includes ALL households for kitchen stats.
+// No dinner selected loads no dinners, which the store answers without a request.
+const {orders: householdOrders} = storeToRefs(bookingsStore)
+watch(selectedDinnerId, id => bookingsStore.loadOrdersForDinners(id ?? [], true), {immediate: true})
 
 const refreshBookingData = () =>
-  Promise.all([bookingsStore.refreshSelectedDinnerEventDetail(), _refreshHouseholdOrders()])
+  Promise.all([bookingsStore.refreshSelectedDinnerEventDetail(), bookingsStore.refreshOrders()])
 
 // ADR-016: Unified booking handler via scaffold endpoint
 const handleSaveBookings = async (orders: DesiredOrder[]) => {

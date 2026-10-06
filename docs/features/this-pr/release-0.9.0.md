@@ -16,18 +16,19 @@ Sizing is informal t-shirt sizes.
 | CI test reporting | Job summary: vitest stats line + per-suite Playwright sections with report links | below | S | ✅ approved 2026-10-05 |
 | Framework pair upgrade | pinia 4 + @pinia/nuxt 1, @vueuse/core 15, ical-generator 11 | `feature-proposal-framework-adoption.md` § Clusters and order | S | ✅ implemented 2026-10-05 — zero source changes, user commit pending |
 | Store fetcher factory + store alignment | `useStoreAsyncData`, schema-driven types; every store converges on it (the misaligned fetch handling across stores, release-plan I2) | `feature-proposal-framework-adoption.md` | M–L | ✅ approved 2026-10-05 |
-| Fetch gating | `enabled` carries the fetch condition | `feature-proposal-framework-adoption.md` | M | ⏳ awaiting signoff |
-| Prisma bundle | ALL prisma/zod/migration work in one go: the prisma + zod majors the spike green-lights, `zod-prisma-types` regen, every new model of the push, one migration | below | L | models drafted, sign-off pending |
+| Fetch gating | `enabled` carries the fetch condition; id-in-key gates need nothing extra, login gates clear on logout | `feature-proposal-framework-adoption.md` | M | ✅ approved 2026-10-07 — after the factory lands |
+| Prisma bundle | ALL prisma/zod/migration work in one go: the prisma + zod majors the spike green-lights, `zod-prisma-types` regen, every new model of the push, one migration | below | L | 🔧 IN PROGRESS — model set signed 2026-10-07 (§ Prisma bundle is the contract) |
 | Duty roster (F5a) | Templates, duties, audit trail | `feature-proposal-duty-roster.md` | L | Draft |
 | Joker + vacancy overviews | `JokerSlot`, dinner "missing" face, CTC faces, shift counts, volunteering moves to duty level + data separation | `feature-proposal-duty-roster.md` § Joker + § Roster UX | L | ✅ UX signed (CTC 2026-10-05, big overview + calendar markers 2026-10-06) |
 | Roster sign-off + cross-team swap (F5b) | Derived auto-sign + godkend-alligevel, duty swap | `feature-proposal-duty-roster.md` Phases 4–5 | M | roster UX ✅ signed 2026-10-05 |
 | Waitlist | Queue, auto-assign sweep, extra portions, UI | `feature-proposal-waitlist.md` | L | ✅ UX signed (chef 2026-10-05, member faces 2026-10-06) |
 | Notifications | Waitlist + duty-swap kinds, buildup threshold | `feature-proposal-notification-triggers.md` § Trigger catalog | M | catalog updated |
 | Adhoc billing + EXPENSE | Ad-hoc charges + chef spending as EXPENSE transactions; Mit forbrug + admin economy spending views | `feature-proposal-adhoc-admin-billing.md` | L | ⏳ EXPENSE design awaiting signoff; OPEN — in this push or next |
-| Sealed cookies | PRF spike, then S5 passkey re-login | `feature-proposal-mobile-native-feel.md` | S + M | spike first; S5 brief after |
+| PRF spike | Passkey/PRF research + device protocol | `../feature-proposal-relogin-faceid.md` (parked proposal), `../archived/feature-mobile-native-feel.md` | S | ✅ done 2026-10-06; S5 re-login parked out of 0.9, no option chosen |
 | Page composition | Master/detail + tab frames, `md` breakpoint | `feature-proposal-framework-adoption.md` | M | OPEN — decided from spike findings |
 | Order snapshot | Frozen `ticketType` on Order + backfill — the portion resolver reads it | `bug-fix-order-snapshot.md` | S | schema in the Prisma bundle |
-| Grid booking save | One `buildDesiredOrder` builder for day/grid/preview; toast severity | `bug-fix-plan-v0.9.md` § B1 | M | ✅ implemented 2026-10-05 — user commit pending |
+| Booking one-path | One builder family for regular + guest orders across grid/preview/day; guest cells editable; power includes guests; honest toasts | `../archived/bug-fix-plan-v0.9.md` | M–L | ✅ approved 2026-10-06 — user commit pending |
+| Billing delivery report + interrupted runs | Repository fills delivery state on every read; stale RUNNING runs | `bug-fix-billing-delivery-report.md` | M | OPEN decisions |
 | Motion tokens | Raw motion classes into the design system | `bug-fix-motion-tokens.md` | S | parked for this release |
 | Dinner-page follow-ups | PR #166 leftovers on `/dinner` | `bug-fix-dinner-page-and-dates.md` | S | parked for this release |
 
@@ -36,16 +37,15 @@ Sizing is informal t-shirt sizes.
 The push starts from the framework corner (decision 2026-10-05): the upgrade philosophy is remove workarounds,
 follow the framework's own shapes, adopt new features where they earn it.
 
-1. Framework research spike ✅ + CI test reporting ✅ + PRF spike (runs early so the `WebAuthnCredential`
-   shape is fixed before the single migration)
-2. Framework pair upgrade (pinia 4 + @pinia/nuxt 1, @vueuse/core 15, ical-generator 11)
-3. Prisma bundle: prisma 7.10 + zod 4.6 per spike findings + every model of the push + one migration (models
+1. Framework research spike ✅ + CI test reporting ✅ + PRF spike ✅ (S5 parked, nothing of it in the bundle)
+2. Framework pair upgrade ✅ (pinia 4 + @pinia/nuxt 1, ical-generator 11; @vueuse/core removed)
+3. Store fetcher factory + store alignment (in progress 2026-10-07) → Fetch gating — the spike found they order
+   freely around the dependency clusters, so they run before the bundle
+4. Prisma bundle: prisma 7.10 + zod 4.6 per spike findings + every model of the push + one migration (models
    signed off, Make targets produce the files, user applies)
-4. Store fetcher factory + store alignment → Fetch gating (on the new zod)
-4. Duty roster F5a → Joker + overviews (+ data separation) → F5b
-5. Waitlist → Notifications
-6. Adhoc + EXPENSE (this release, lower priority)
-7. Sealed cookies S5 (model already in the bundle)
+5. Duty roster F5a → Joker + overviews (+ data separation) → F5b
+6. Waitlist → Notifications
+7. Adhoc + EXPENSE (this release, lower priority)
 8. Page composition (if signed off)
 
 One e2e runner at a time; packages that run Playwright are sequenced.
@@ -74,8 +74,59 @@ One package, one migration, produced by the Make targets after the user signs of
 | `TicketWaitlist`, `WaitlistState`, `DinnerEvent.extraPortionsReleased` | `feature-proposal-waitlist.md` |
 | `TicketPrice.portionSize` (closes the `useOrder.ts` TODO; portion weights become data) | waitlist resolver |
 | `Transaction.type` (+ `EXPENSE`), `householdId`, `description` + snapshot migration | `feature-proposal-adhoc-admin-billing.md` — the type/snapshot changes ship with chef spending; the adhoc-charge endpoints are the OPEN part |
-| `WebAuthnCredential` incl. wrapped-password ciphertext | sealed cookies — shape fixed by the PRF spike |
 | `Order.orderSnapshot` (frozen `ticketType`) + backfill | `bug-fix-order-snapshot.md` |
+
+### Signed model set (2026-10-07) — the contract for the implementing agent
+
+**Majors.** prisma + @prisma/client + @prisma/adapter-d1 7.10.0 (pinned; npm `latest` is the 8-RC), zod 4.6.5,
+zod-prisma-types 3.3.11. Work: `prisma.config.ts`; generator `provider = "prisma-client"` + `output` (import sweep at
+the three client sites + repositories); delete `previewFeatures = ["strictUndefinedChecks"]` (default in 7; the 27
+`Prisma.skip` sites stay); add `previewFeatures = ["partialIndexes"]` (Prisma 7.4+) for the two partial unique
+indexes below; the zod-4 sites: 6 `invalid_type_error`/`required_error` → `error`, 2 enum-keyed `z.record` →
+`z.partialRecord` (composables), plus the error utilities the spike's scan missed — `app/utils/validtation.ts:6` and
+`useDateRangeValidation.ts:94` (`.errors` → `.issues`, `TypeOf` → `z.infer`), `server/utils/eventHandlerHelper.ts`
+(`instanceof ZodError` — confirm the v4 class hierarchy on the branch), `server/utils/sender/emit.ts:21` and
+`workers/sender/utils/consumeBatch.ts:36` (`issue.path.join` — no symbol keys here, stays). Manual chunking and
+raw-SQL joins stay (ADR-014). Gate proof: `make d1-prisma` +
+`npm run pre:all` green on the branch.
+
+**New tables** (Prisma blocks in the linked docs; every other column required):
+
+| Table | Column | Decision |
+|---|---|---|
+| `DinnerDutyTemplate` | `role` | required, default `COOK` |
+| `DinnerDuty` | `inhabitantId` | nullable (vacant seat) |
+| | `minutesFromDinnerStart`, `durationMinutes`, `taskDescription` | nullable (slot TBD) |
+| | `sourceTemplateId`, `jokerSlotId` | nullable, SET NULL |
+| | `state` | required, default `PLANNED` |
+| `DutyHistory` | `performedByUserId` | nullable (system actor), SET NULL |
+| | `dinnerDutyId` | nullable, SET NULL |
+| `JokerSlot` | `role` / `affinity` / `note` | default `COOK` / required (weekday map JSON) / nullable |
+| `TicketWaitlist` | `state` / `assignedOrderId` | default `WAITING` / nullable |
+| | `isGuestTicket` | required, default `false` |
+| | `ticketPriceId` | nullable, SET NULL — set for a guest entry (validation requires it), null for a regular entry (age-at-dinner-date resolver) |
+| | `allergyTypeIds` | nullable (guest allergies, JSON) |
+| | unique | partial unique `(dinnerEventId, inhabitantId) WHERE isGuestTicket = 0` via `partialIndexes` |
+| enums | `DutyState`, `DutyAuditAction`, `WaitlistState`, `TransactionType` | as drafted |
+
+**Columns on existing tables** — written as `ALTER TABLE … ADD COLUMN … NOT NULL DEFAULT` in the Prisma source (no
+table rebuild on D1):
+
+| Column | Decision | Convergent data line |
+|---|---|---|
+| `DinnerEvent.extraPortionsReleased` | `Float`, required, default `0` | — |
+| `TicketPrice.portionSize` | `Float`, required, default `1` | `SET portionSize` by `ticketType` (adult 1, child 0.5, baby 0 — the `getPortionsForTicketType` mapping) |
+| `Transaction.type` | `TransactionType`, required, default `ORDER_CHARGE` | — |
+| `Transaction.householdId` | nullable, SET NULL | — |
+| `Transaction.description` | nullable | — |
+| `Transaction.orderSnapshot` | existing JSON | rewrite: inject `type`, hoist `inhabitant.household` → root; idempotent |
+| `Order.orderSnapshot` | `String`, nullable | rows with `ticketPriceId` null: match `priceAtBooking` to the season's ticket prices → frozen `ticketType` |
+| `Order` partial unique `(inhabitantId, dinnerEventId) WHERE isGuestTicket = 0` | via `partialIndexes` (decision 2026-10-07, reverses the earlier drop) | none — zero duplicate regular orders verified in every environment; the index creation is the proof |
+
+**Sequence.** schema + config + majors → `make d1-prisma` + `pre:all` (gate) → user: `make d1-create-migration
+name=release-0-9` → data lines appended to the Prisma source, flattened copy regenerated by the target → user:
+`make d1-migrate-local` → suites + `make d1-verify-local` clean. Fixtures and spec literals carry the new columns;
+validation composables re-export the new enums.
 
 ## Chef spending
 
@@ -207,6 +258,22 @@ here, admin-only.
 - Vacancy big overview: per team, chronological, origin on each hole (joker note / who released); no person
   linkage — no `coversInhabitantId`. Calendar gap markers as DS tokens, ink-coloured: chef hat = missing chef,
   joker hat = unfilled joker seat, dot = unfilled regular seat.
+- PRF spike complete; S5 re-login parked out of 0.9 — the lightweight-vs-full comparison by platform, the
+  hypotheses and the spike findings live in `../feature-proposal-relogin-faceid.md`; `WebAuthnCredential` leaves
+  the bundle; the mobile-native-feel sprint doc is archived to pointers.
+
+**2026-10-07** (round 5, Prisma bundle fine-tuning)
+- The bundle is the ux session's with the user (model set + implementation); the majors install and the
+  orchestrator's store packages never run concurrently — the bundle starts after the factory package lands and is
+  committed.
+- `TicketWaitlist` carries guest entries like orders do (`isGuestTicket`, chosen `ticketPriceId`, `allergyTypeIds`
+  on the booking member's `inhabitantId`); a regular entry stores no ticket — the sweep resolves it by age at the
+  dinner date with the existing resolver, so a birthday changes nothing; the order freezes the price.
+- Partial unique indexes via Prisma 7.4's `partialIndexes` preview: one regular waitlist entry per person per
+  dinner, and one regular order per person per dinner (reverses the 2026-10-05 drop; zero duplicates verified, no
+  backfill).
+- The zod-4 surface includes the error utilities outside the composables (`validtation.ts`,
+  `useDateRangeValidation.ts`, `eventHandlerHelper.ts`, the two sender sites).
 
 ## Coverage
 
@@ -220,14 +287,12 @@ here, admin-only.
 | Waitlist | per `feature-proposal-waitlist.md` § TDD |
 | Notifications | serial e2e per kind: event writes its Delivery row |
 | Adhoc + EXPENSE | per `feature-proposal-adhoc-admin-billing.md` phases |
-| Sealed cookies S5 | spike protocol; S5 specs in its brief |
 
 ## Verifications with human eyes
 
 | Check | Where | When |
 |---|---|---|
 | Visual check per UI package | route → viewport → DS element → expectation, posted per package, carried into the PR description | per package |
-| PRF spike | installed PWA on iOS 18+, Android, one desktop | before the S5 brief |
 | PWA install + icon | phone home screen (carried over from `chore/npm-dependencies`) | any time |
 | CI summary | Actions run page: categories, counts, red ui failures, report links | first CI run |
 | Data separation list | membership vs one-off volunteer rows, reviewed and applied by the user | before duty roster ships |

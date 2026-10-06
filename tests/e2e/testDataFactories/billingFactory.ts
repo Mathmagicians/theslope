@@ -107,6 +107,15 @@ export class BillingFactory {
         ...overrides
     })
 
+    /** HouseholdBillingResponse data for component tests (no API call): an empty current period, no past invoices */
+    static readonly defaultHouseholdBilling = (householdId: number = 1): HouseholdBillingResponse => ({
+        householdId,
+        pbsId: 1000 + householdId,
+        address: 'Skråningen 1',
+        currentPeriod: {periodStart: new Date(2025, 9, 18), periodEnd: new Date(2025, 10, 17), totalAmount: 0, transactions: []},
+        pastInvoices: []
+    })
+
     static readonly defaultSummaryData = (testSalt: string = 'default'): BillingPeriodSummaryDetail => {
         const raw = BillingFactory.defaultRawBillingPeriod(testSalt)
         return deserializeBillingPeriodDetail(raw, BillingFactory.mockTicketPrices)!

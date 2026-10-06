@@ -1,21 +1,21 @@
 import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder, DinnerState, DinnerMode} from '~/composables/useBookingValidation'
-import type {MonthlyBillingResponse, BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail, TransactionDisplay} from '~/composables/useBillingValidation'
+import type {MonthlyBillingResponse} from '~/composables/useBillingValidation'
 import {type ReleasedTicketCounts, resolveDesiredOrdersToBuckets} from '~/composables/useBooking'
 import {useBilling} from '~/composables/useBilling'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
-    const {handleApiError} = useApiHandler()
-    const {OrderDisplaySchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema} = useBookingValidation()
+    const {storeAsyncData, apiRequest, handleApiError} = useApiHandler()
+    const {OrderDisplaySchema, OrderDetailSchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema} = useBookingValidation()
     const {formatScaffoldResult} = useBooking()
     const {formatDailyMaintenanceStats} = useMaintenance()
     const DinnerState = DinnerStateSchema.enum
-    const requestFetch = useRequestFetch()
+    const toast = useToast()
 
     const CTX = `${LOG_CTX} 🎟️ > BOOKINGS_STORE >`
 
     // ========================================
-    // State - useFetch with status exposed internally
+    // State (ADR-007)
     // ========================================
 
     // Selected context for filtering orders
@@ -45,25 +45,17 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const {
         data: orders, status: ordersStatus,
         error: ordersError, refresh: refreshOrders
-    } = useAsyncData<OrderDisplay[]>(
+    } = storeAsyncData(
         ordersKey,
         () => {
             // Skip fetch until filters are set (prevents initial "fetch all" on store init)
-            if (!hasFilters.value) return Promise.resolve([])
-            return requestFetch<OrderDisplay[]>(`/api/order?${buildOrdersQuery()}`, {
-                onResponseError: ({response}) => { handleApiError(response._data, 'Kunne ikke hente bookinger') }
-            })
+            if (!hasFilters.value) return null
+            return `/api/order?${buildOrdersQuery()}`
         },
         {
+            schema: OrderDisplaySchema.array(),
             default: () => [],
-            transform: (data: unknown[]) => {
-                try {
-                    return (data as Record<string, unknown>[]).map(order => OrderDisplaySchema.parse(order))
-                } catch (e) {
-                    handleApiError(e, 'parseOrders')
-                    throw e
-                }
-            }
+            errorMessage: 'Kunne ikke hente bookinger'
         }
     )
 
@@ -106,74 +98,90 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
     // Internal order methods - only used by processAdminCorrection
     const createOrder = async (request: CreateOrdersRequest): Promise<CreateOrdersResult> => {
-        try {
-            const result = await $fetch<CreateOrdersResult>(`/api/order?adminBypass=${authStore.isAdmin}`, {
-                method: 'PUT',
-                body: request
-            })
-            console.info(CTX, `Created ${result.createdIds.length} order(s)`)
-            await refreshOrders()
-            return result
-        } catch (e: unknown) {
-            handleApiError(e, 'Kunne ikke oprette bestilling')
-            throw e
-        }
+        const result = await apiRequest<CreateOrdersResult>(`/api/order?adminBypass=${authStore.isAdmin}`, {
+            method: 'PUT',
+            body: request,
+            action: 'Kunne ikke oprette bestilling'
+        })
+        console.info(CTX, `Created ${result.createdIds.length} order(s)`)
+        await refreshOrders()
+        return result
     }
 
     const deleteOrder = async (orderId: number): Promise<void> => {
-        try {
-            await $fetch(`/api/order/${orderId}?adminBypass=${authStore.isAdmin}`, {
-                method: 'DELETE'
-            })
-            console.info(CTX, `Deleted order ${orderId}`)
-            await refreshOrders()
-        } catch (e: unknown) {
-            handleApiError(e, 'Kunne ikke slette bestilling')
-            throw e
-        }
+        await apiRequest(`/api/order/${orderId}?adminBypass=${authStore.isAdmin}`, {
+            method: 'DELETE',
+            action: 'Kunne ikke slette bestilling'
+        })
+        console.info(CTX, `Deleted order ${orderId}`)
+        await refreshOrders()
     }
 
     const updateOrder = async (orderId: number, orderData: { dinnerMode: DinnerMode }): Promise<OrderDisplay> => {
-        try {
-            const updatedOrder = await $fetch<OrderDisplay>(`/api/order/${orderId}?adminBypass=${authStore.isAdmin}`, {
-                method: 'POST',
-                body: orderData
-            })
-            console.info(CTX, `Updated order ${orderId}`)
-            await refreshOrders()
-            return updatedOrder
-        } catch (e: unknown) {
-            handleApiError(e, 'Kunne ikke opdatere bestilling')
-            throw e
-        }
+        const updatedOrder = await apiRequest<OrderDisplay>(`/api/order/${orderId}?adminBypass=${authStore.isAdmin}`, {
+            method: 'POST',
+            body: orderData,
+            action: 'Kunne ikke opdatere bestilling'
+        })
+        console.info(CTX, `Updated order ${orderId}`)
+        await refreshOrders()
+        return updatedOrder
     }
 
     const claimOrder = async (dinnerEventId: number, ticketPriceId: number, inhabitantId: number, isGuestTicket: boolean = false): Promise<OrderDetail> => {
-        try {
-            const claimedOrder = await $fetch<OrderDetail>('/api/order/claim', {
-                method: 'POST',
-                body: {dinnerEventId, ticketPriceId, inhabitantId, isGuestTicket}
-            })
-            console.info(CTX, `Claimed ticket (dinner=${dinnerEventId}, ticketPrice=${ticketPriceId}) for inhabitant ${inhabitantId}, guest=${isGuestTicket}`)
-            await Promise.all([refreshOrders(), refreshReleasedCounts()])
-            return claimedOrder
-        } catch (e: unknown) {
-            handleApiError(e, 'Kunne ikke overtage billet')
-            throw e
-        }
+        const claimedOrder = await apiRequest<OrderDetail>('/api/order/claim', {
+            method: 'POST',
+            body: {dinnerEventId, ticketPriceId, inhabitantId, isGuestTicket},
+            action: 'Kunne ikke overtage billet'
+        })
+        console.info(CTX, `Claimed ticket (dinner=${dinnerEventId}, ticketPrice=${ticketPriceId}) for inhabitant ${inhabitantId}, guest=${isGuestTicket}`)
+        await Promise.all([refreshOrders(), refreshReleasedCounts()])
+        return claimedOrder
     }
 
-    const fetchReleasedOrders = async (dinnerEventId: number): Promise<OrderDisplay[]> => {
-        try {
-            const released = await $fetch<OrderDisplay[]>('/api/order', {
-                query: {dinnerEventIds: dinnerEventId, state: 'RELEASED', allHouseholds: true, sortBy: 'releasedAt'}
-            })
-            console.info(CTX, `Fetched ${released.length} released orders for dinner ${dinnerEventId}`)
-            return released.map(order => OrderDisplaySchema.parse(order))
-        } catch (e: unknown) {
-            handleApiError(e, 'Kunne ikke hente ledige billetter')
-            throw e
+    // Upcoming orders of a season with their dinner context, for one household or all of them
+    const upcomingOrdersSeasonId = ref<number | null>(null)
+    const upcomingOrdersHouseholdId = ref<number | null>(null)
+
+    const {
+        data: upcomingOrders, status: upcomingOrdersStatus,
+        refresh: refreshUpcomingOrders
+    } = storeAsyncData(
+        computed(() => `bookings-store-upcoming-orders-${upcomingOrdersSeasonId.value ?? 'none'}-${upcomingOrdersHouseholdId.value ?? 'all'}`),
+        () => {
+            if (!upcomingOrdersSeasonId.value) return null
+            const params = new URLSearchParams()
+            params.append('upcomingForSeason', String(upcomingOrdersSeasonId.value))
+            if (upcomingOrdersHouseholdId.value) params.append('householdId', String(upcomingOrdersHouseholdId.value))
+            else params.append('allHouseholds', 'true')
+            params.append('includeDinnerContext', 'true')
+            return `/api/order?${params.toString()}`
+        },
+        {
+            schema: OrderDisplaySchema.array(),
+            default: () => []
         }
+    )
+
+    const isUpcomingOrdersLoading = computed(() => upcomingOrdersStatus.value === 'pending')
+
+    const loadUpcomingOrders = (seasonId: number | null, householdId: number | null = null) => {
+        upcomingOrdersSeasonId.value = seasonId
+        upcomingOrdersHouseholdId.value = householdId
+    }
+
+    // Order detail with its audit history - no store state, a component keeps one per expanded row
+    const fetchOrderDetail = (orderId: number): Promise<OrderDetail> =>
+        apiRequest(`/api/order/${orderId}`, {schema: OrderDetailSchema, action: 'fetchOrderDetail'})
+
+    const fetchReleasedOrders = async (dinnerEventId: number): Promise<OrderDisplay[]> => {
+        const released = await apiRequest('/api/order', {
+            query: {dinnerEventIds: dinnerEventId, state: 'RELEASED', allHouseholds: true, sortBy: 'releasedAt'},
+            schema: OrderDisplaySchema.array(),
+            action: 'Kunne ikke hente ledige billetter'
+        })
+        console.info(CTX, `Fetched ${released.length} released orders for dinner ${dinnerEventId}`)
+        return released
     }
 
     // ========================================
@@ -188,24 +196,28 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const releasedCountsKey = computed(() => `released-counts-${releasedCountsDinnerIds.value.join('-') || 'none'}`)
     const {formatTicketCounts} = useBilling()
 
-    const {data: releasedCounts, status: releasedCountsStatus, refresh: refreshReleasedCounts} = useAsyncData<Map<number, ReleasedTicketCounts>>(
+    const {data: releasedCounts, status: releasedCountsStatus, refresh: refreshReleasedCounts} = storeAsyncData(
         releasedCountsKey,
-        async () => {
-            if (releasedCountsDinnerIds.value.length === 0) return new Map()
+        () => {
+            if (releasedCountsDinnerIds.value.length === 0) return null
             const params = new URLSearchParams()
             releasedCountsDinnerIds.value.forEach(id => params.append('dinnerEventIds', String(id)))
             params.append('state', 'RELEASED')
             params.append('allHouseholds', 'true')
-            const released = await $fetch<OrderDisplay[]>(`/api/order?${params.toString()}`)
-            // Group orders by dinnerEventId
-            const grouped = Map.groupBy(released, o => o.dinnerEventId)
-            const counts = new Map<number, ReleasedTicketCounts>()
-            for (const [dinnerEventId, orders] of grouped) {
-                counts.set(dinnerEventId, { total: orders.length, formatted: formatTicketCounts(orders) })
-            }
-            return counts
+            return `/api/order?${params.toString()}`
         },
-        {default: () => new Map()}
+        {
+            // Group orders by dinnerEventId
+            schema: OrderDisplaySchema.array().transform(released => {
+                const grouped = Map.groupBy(released, o => o.dinnerEventId)
+                const counts = new Map<number, ReleasedTicketCounts>()
+                for (const [dinnerEventId, orders] of grouped) {
+                    counts.set(dinnerEventId, { total: orders.length, formatted: formatTicketCounts(orders) })
+                }
+                return counts
+            }),
+            default: () => new Map<number, ReleasedTicketCounts>()
+        }
     )
 
     // Watch season → compute locked IDs → fetch released counts
@@ -233,64 +245,68 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
     const isProcessingBookings = ref(false)
 
+    // A scaffold result toast: the title names the view, the suffix the dinner (guest bookings)
+    type ScaffoldToast = {title: string, suffix?: string}
+    const describeScaffoldResult = (scaffoldResult: ScaffoldResult, suffix = '') =>
+        `${formatScaffoldResult(scaffoldResult, 'past')}${suffix}`
+
     /**
-     * ADR-016: Internal scaffold endpoint call.
+     * ADR-016: Scaffold endpoint call shared by the single- and multi-event entry points;
+     * with a toast given, the result is reported in it.
      */
-    const _scaffoldOrders = async (request: ScaffoldOrdersRequest, adminBypass = false): Promise<ScaffoldOrdersResponse> => {
-        const result = await $fetch<ScaffoldOrdersResponse>('/api/household/order/scaffold', {
-            method: 'POST',
-            body: request,
-            query: {adminBypass}
-        })
-        await Promise.all([refreshOrders(), refreshReleasedCounts()])
-        return ScaffoldOrdersResponseSchema.parse(result)
+    const processBookings = async (
+        request: ScaffoldOrdersRequest,
+        adminBypass: boolean,
+        report: ScaffoldToast | undefined,
+        label: string
+    ): Promise<ScaffoldOrdersResponse> => {
+        isProcessingBookings.value = true
+        try {
+            const result = await apiRequest('/api/household/order/scaffold', {
+                method: 'POST',
+                body: request,
+                query: {adminBypass},
+                schema: ScaffoldOrdersResponseSchema,
+                action: 'Kunne ikke gemme bookinger'
+            })
+            await Promise.all([refreshOrders(), refreshReleasedCounts()])
+            console.info(CTX, `${label}: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
+            if (report) toast.add({
+                title: report.title,
+                description: describeScaffoldResult(result.scaffoldResult, report.suffix),
+                color: result.scaffoldResult.errored > 0 ? COLOR.error : COLOR.success
+            })
+            return result
+        } finally {
+            isProcessingBookings.value = false
+        }
     }
 
     /**
      * ADR-016: Process bookings for a single dinner event.
      * Used by day view, power mode, and guest booking.
      */
-    const processSingleEventBookings = async (
+    const processSingleEventBookings = (
         householdId: number,
         dinnerEventId: number,
         orders: DesiredOrder[],
-        adminBypass = false
-    ): Promise<ScaffoldOrdersResponse> => {
-        isProcessingBookings.value = true
-        try {
-            const result = await _scaffoldOrders({ householdId, dinnerEventIds: [dinnerEventId], orders }, adminBypass)
-            console.info(CTX, `processSingleEventBookings: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
-            return result
-        } catch (e: unknown) {
-            handleApiError(e, 'Kunne ikke gemme bookinger')
-            throw e
-        } finally {
-            isProcessingBookings.value = false
-        }
-    }
+        adminBypass = false,
+        report?: ScaffoldToast
+    ): Promise<ScaffoldOrdersResponse> =>
+        processBookings({householdId, dinnerEventIds: [dinnerEventId], orders}, adminBypass, report, 'processSingleEventBookings')
 
     /**
      * ADR-016: Process bookings for multiple dinner events.
      * Used by grid view (week/month).
      */
-    const processMultipleEventsBookings = async (
+    const processMultipleEventsBookings = (
         householdId: number,
         dinnerEventIds: number[],
         orders: DesiredOrder[],
-        adminBypass = false
-    ): Promise<ScaffoldOrdersResponse> => {
-        isProcessingBookings.value = true
-        try {
-            const result = await _scaffoldOrders({ householdId, dinnerEventIds, orders }, adminBypass)
-            console.info(CTX, `processMultipleEventsBookings: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
-            return result
-        } catch (e: unknown) {
-            handleApiError(e, 'Kunne ikke gemme bookinger')
-            throw e
-        } finally {
-            isProcessingBookings.value = false
-        }
-    }
+        adminBypass = false,
+        report?: ScaffoldToast
+    ): Promise<ScaffoldOrdersResponse> =>
+        processBookings({householdId, dinnerEventIds, orders}, adminBypass, report, 'processMultipleEventsBookings')
 
     /**
      * Admin-only: Process order corrections bypassing deadlines.
@@ -377,9 +393,6 @@ export const useBookingsStore = defineStore("Bookings", () => {
             }
             console.info(CTX, `processAdminCorrection: ${formatScaffoldResult(result, 'compact')}`)
             return result
-        } catch (e: unknown) {
-            handleApiError(e, 'Kunne ikke rette bookinger')
-            throw e
         } finally {
             isProcessingBookings.value = false
         }
@@ -396,17 +409,16 @@ export const useBookingsStore = defineStore("Bookings", () => {
         status: selectedDinnerEventStatus,
         error: selectedDinnerEventError,
         refresh: refreshSelectedDinnerEventDetail
-    } = useAsyncData<DinnerEventDetail | null>(
+    } = storeAsyncData(
         selectedDinnerEventKey,
         () => {
-            if (!selectedDinnerEventId.value) return Promise.resolve(null)
-            return useRequestFetch()<DinnerEventDetail>(`/api/admin/dinner-event/${selectedDinnerEventId.value}`, {
-                onResponseError: ({response}) => { handleApiError(response._data, 'Kunne ikke hente fællesspisning') }
-            })
+            if (!selectedDinnerEventId.value) return null
+            return `/api/admin/dinner-event/${selectedDinnerEventId.value}`
         },
         {
+            schema: DinnerEventDetailSchema.nullable(),
             default: () => null,
-            transform: data => data ? DinnerEventDetailSchema.parse(data) : null
+            errorMessage: 'Kunne ikke hente fællesspisning'
         }
     )
 
@@ -420,10 +432,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
     }
 
     const isDinnerUpdating = ref(false)
-    const toast = useToast()
 
-    const updateDinner = async (id: number, updates: DinnerUpdate): Promise<DinnerEventDetail> => {
-        const updated = await $fetch(`/api/chef/dinner/${id}`, {
+    const updateDinner = async (id: number, updates: DinnerUpdate, action: string): Promise<DinnerEventDetail> => {
+        const parsed = await apiRequest(`/api/chef/dinner/${id}`, {
             method: 'POST',
             body: updates,
             onResponse: ({response}) => {
@@ -438,26 +449,28 @@ export const useBookingsStore = defineStore("Bookings", () => {
                         color: 'error'
                     })
                 }
-            }
+            },
+            schema: DinnerEventDetailSchema,
+            action
         })
-        const parsed = DinnerEventDetailSchema.parse(updated)
         console.info(`${CTX} Updated dinner ${id}: ${Object.keys(updates).join(', ')} → state: ${parsed.state}`)
         if (selectedDinnerEventId.value === id) await refreshSelectedDinnerEventDetail()
         return parsed
     }
 
-    const withLoadingAndErrorHandler = <T extends unknown[], R>(fn: (...args: T) => Promise<R>, msg: string) =>
+    // Resolves null on failure; the request has already toasted it
+    const withLoading = <T extends unknown[], R>(fn: (...args: T) => Promise<R>) =>
         async (...args: T): Promise<R | null> => {
             isDinnerUpdating.value = true
             try { return await fn(...args) }
-            catch (e: unknown) { handleApiError(e, msg); return null }
+            catch { return null }
             finally { isDinnerUpdating.value = false }
         }
 
-    const updateDinnerEventAllergens = withLoadingAndErrorHandler((id: number, allergenIds: number[]) => updateDinner(id, {allergenIds}), 'Kunne ikke gemme allergeninformation')
-    const announceDinner = withLoadingAndErrorHandler((id: number) => updateDinner(id, {state: DinnerState.ANNOUNCED}), 'Kunne ikke annoncere fællesspisningen')
-    const cancelDinner = withLoadingAndErrorHandler((id: number) => updateDinner(id, {state: DinnerState.CANCELLED}), 'Kunne ikke aflyse fællesspisningen')
-    const undoCancelDinner = withLoadingAndErrorHandler((id: number, targetState: DinnerState = DinnerState.SCHEDULED) => updateDinner(id, {state: targetState}), 'Kunne ikke annullere aflysningen')
+    const updateDinnerEventAllergens = withLoading((id: number, allergenIds: number[]) => updateDinner(id, {allergenIds}, 'Kunne ikke gemme allergeninformation'))
+    const announceDinner = withLoading((id: number) => updateDinner(id, {state: DinnerState.ANNOUNCED}, 'Kunne ikke annoncere fællesspisningen'))
+    const cancelDinner = withLoading((id: number) => updateDinner(id, {state: DinnerState.CANCELLED}, 'Kunne ikke aflyse fællesspisningen'))
+    const undoCancelDinner = withLoading((id: number, targetState: DinnerState = DinnerState.SCHEDULED) => updateDinner(id, {state: targetState}, 'Kunne ikke annullere aflysningen'))
 
     /**
      * Update dinner menu fields with implicit chef auto-claim.
@@ -468,18 +481,16 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const {TeamRoleSchema} = useCookingTeamValidation()
     const {tryAutoClaim, formatRoleClaimedTitle} = useCookingTeam()
 
-    const performAutoClaim = withLoadingAndErrorHandler(
+    const performAutoClaim = withLoading(
         (id: number, currentChefId: number | null) => tryAutoClaim(
             currentChefId,
             authStore.inhabitantId,
             () => planStore.assignRoleToDinner(id, authStore.inhabitantId!, TeamRoleSchema.enum.CHEF)
-        ),
-        'Kunne ikke blive chefkok'
+        )
     )
 
-    const saveMenuFields = withLoadingAndErrorHandler(
-        (id: number, updates: Partial<DinnerEventUpdate>) => updateDinner(id, updates),
-        'Kunne ikke gemme ændringer til menuen'
+    const saveMenuFields = withLoading(
+        (id: number, updates: Partial<DinnerEventUpdate>) => updateDinner(id, updates, 'Kunne ikke gemme ændringer til menuen')
     )
 
     const updateDinnerEventField = async (
@@ -508,64 +519,80 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // ========================================
     const authStore = useAuthStore()
 
-    const {
-        data: dailyMaintenanceResult,
-        status: dailyMaintenanceStatus,
-        error: dailyMaintenanceError,
-        execute: executeDailyMaintenance
-    } = useAsyncData<DailyMaintenanceResult | null>(
-        'bookings-store-daily-maintenance',
-        () => $fetch<DailyMaintenanceResult>('/api/admin/maintenance/daily', {
-            method: 'POST',
-            query: { triggeredBy: `ADMIN:${authStore.email}` }
-        }),
-        {
-            immediate: false,
-            transform: (data) => data ? DailyMaintenanceResultSchema.parse(data) : null
-        }
-    )
-
-    const isDailyMaintenanceRunning = computed(() => dailyMaintenanceStatus.value === 'pending')
-    const hasDailyMaintenanceResult = computed(() => dailyMaintenanceStatus.value === 'success' && dailyMaintenanceResult.value !== null)
-    const hasDailyMaintenanceError = computed(() => dailyMaintenanceStatus.value === 'error')
+    const dailyMaintenanceResult = ref<DailyMaintenanceResult | null>(null)
+    const dailyMaintenanceError = ref<Error | null>(null)
+    const isDailyMaintenanceRunning = ref(false)
+    const hasDailyMaintenanceResult = computed(() => !isDailyMaintenanceRunning.value && dailyMaintenanceError.value === null && dailyMaintenanceResult.value !== null)
+    const hasDailyMaintenanceError = computed(() => dailyMaintenanceError.value !== null)
 
     const runDailyMaintenance = async () => {
-        await executeDailyMaintenance()
-
-        if (hasDailyMaintenanceError.value) {
-            handleApiError(dailyMaintenanceError.value, 'Daglig vedligeholdelse fejlede')
-        } else if (hasDailyMaintenanceResult.value) {
-            const r = dailyMaintenanceResult.value!
-            const stats = formatDailyMaintenanceStats(r)
-            const description = stats.map(s => `${s.label}: ${s.value}`).join(', ')
-            console.info(CTX, `Daily maintenance completed: ${description}`)
-            // Maintenance closes orders and creates transactions server-side.
-            await Promise.all([refreshOrders(), refreshCurrentPeriodTransactions()])
-            toast.add({
-                title: 'Daglig vedligeholdelse afsluttet',
-                description,
-                color: 'success'
+        isDailyMaintenanceRunning.value = true
+        dailyMaintenanceError.value = null
+        try {
+            dailyMaintenanceResult.value = await apiRequest('/api/admin/maintenance/daily', {
+                method: 'POST',
+                query: { triggeredBy: `ADMIN:${authStore.email}` },
+                schema: DailyMaintenanceResultSchema,
+                action: 'Daglig vedligeholdelse fejlede'
             })
+        } catch (error) {
+            dailyMaintenanceResult.value = null
+            dailyMaintenanceError.value = error as Error
+            return
+        } finally {
+            isDailyMaintenanceRunning.value = false
         }
+
+        const stats = formatDailyMaintenanceStats(dailyMaintenanceResult.value)
+        const description = stats.map(s => `${s.label}: ${s.value}`).join(', ')
+        console.info(CTX, `Daily maintenance completed: ${description}`)
+        // Maintenance closes orders and creates transactions server-side.
+        await Promise.all([refreshOrders(), refreshCurrentPeriodTransactions()])
+        toast.add({
+            title: 'Daglig vedligeholdelse afsluttet',
+            description,
+            color: 'success'
+        })
     }
 
     // ========================================
     // BILLING PERIODS (ADR-007)
     // ========================================
 
-    const {MonthlyBillingResponseSchema, TransactionDisplaySchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema} = useBillingValidation()
+    const {MonthlyBillingResponseSchema, TransactionDisplaySchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema, HouseholdBillingResponseSchema} = useBillingValidation()
+
+    // One household's billing: the current period and its past invoices
+    const householdBillingId = ref<number | null>(null)
+
+    const {
+        data: householdBilling, status: householdBillingStatus,
+        error: householdBillingError
+    } = storeAsyncData(
+        computed(() => `bookings-store-household-billing-${householdBillingId.value ?? 'none'}`),
+        () => {
+            if (!householdBillingId.value) return null
+            return `/api/billing?householdId=${householdBillingId.value}`
+        },
+        {
+            schema: HouseholdBillingResponseSchema.nullable(),
+            default: () => null
+        }
+    )
+
+    const isHouseholdBillingLoading = computed(() => householdBillingStatus.value === 'pending')
+    const isHouseholdBillingErrored = computed(() => householdBillingStatus.value === 'error')
+
+    const loadHouseholdBilling = (householdId: number) => {
+        householdBillingId.value = householdId
+    }
 
     const {
         data: billingPeriods, status: billingPeriodsStatus,
         error: billingPeriodsError, refresh: refreshBillingPeriods
-    } = useFetch<BillingPeriodSummaryDisplay[]>(
-        '/api/admin/billing/periods',
-        {
-            key: 'bookings-store-billing-periods',
-            default: () => [],
-            transform: (data: unknown[]) => (data as unknown[]).map(s => BillingPeriodSummaryDisplaySchema.parse(s))
-        }
-    )
+    } = storeAsyncData('bookings-store-billing-periods', '/api/admin/billing/periods', {
+        schema: BillingPeriodSummaryDisplaySchema.array(),
+        default: () => []
+    })
 
     const isBillingPeriodsLoading = computed(() => billingPeriodsStatus.value === 'pending')
     const isBillingPeriodsErrored = computed(() => billingPeriodsStatus.value === 'error')
@@ -578,15 +605,15 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const {
         data: selectedBillingPeriodDetail, status: selectedBillingPeriodStatus,
         error: selectedBillingPeriodError
-    } = useAsyncData<BillingPeriodSummaryDetail | null>(
+    } = storeAsyncData(
         selectedBillingPeriodKey,
         () => {
-            if (!selectedBillingPeriodId.value) return Promise.resolve(null)
-            return $fetch<BillingPeriodSummaryDetail>(`/api/admin/billing/periods/${selectedBillingPeriodId.value}`)
+            if (!selectedBillingPeriodId.value) return null
+            return `/api/admin/billing/periods/${selectedBillingPeriodId.value}`
         },
         {
-            default: () => null,
-            transform: (data) => data ? BillingPeriodSummaryDetailSchema.parse(data) : null
+            schema: BillingPeriodSummaryDetailSchema.nullable(),
+            default: () => null
         }
     )
 
@@ -601,14 +628,10 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const {
         data: currentPeriodTransactions, status: currentPeriodStatus,
         error: currentPeriodError, refresh: refreshCurrentPeriodTransactions
-    } = useFetch<TransactionDisplay[]>(
-        '/api/admin/billing/current-period',
-        {
-            key: 'bookings-store-current-period',
-            default: () => [],
-            transform: (data: unknown[]) => (data as unknown[]).map(tx => TransactionDisplaySchema.parse(tx))
-        }
-    )
+    } = storeAsyncData('bookings-store-current-period', '/api/admin/billing/current-period', {
+        schema: TransactionDisplaySchema.array(),
+        default: () => []
+    })
 
     const isCurrentPeriodLoading = computed(() => currentPeriodStatus.value === 'pending')
     const isCurrentPeriodErrored = computed(() => currentPeriodStatus.value === 'error')
@@ -619,15 +642,15 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
     const {
         data: selectedInvoiceTransactions, status: selectedInvoiceStatus
-    } = useAsyncData<TransactionDisplay[]>(
+    } = storeAsyncData(
         selectedInvoiceKey,
         () => {
-            if (!selectedInvoiceId.value) return Promise.resolve([])
-            return $fetch<TransactionDisplay[]>(`/api/admin/billing/invoices/${selectedInvoiceId.value}`)
+            if (!selectedInvoiceId.value) return null
+            return `/api/admin/billing/invoices/${selectedInvoiceId.value}`
         },
         {
-            default: () => [],
-            transform: (data: unknown[]) => (data as unknown[]).map(tx => TransactionDisplaySchema.parse(tx))
+            schema: TransactionDisplaySchema.array(),
+            default: () => []
         }
     )
 
@@ -642,46 +665,42 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // MONTHLY BILLING JOB (ADR-007)
     // ========================================
 
-    const {
-        data: monthlyBillingResult,
-        status: monthlyBillingStatus,
-        error: monthlyBillingError,
-        execute: executeMonthlyBilling
-    } = useAsyncData<MonthlyBillingResponse | null>(
-        'bookings-store-monthly-billing',
-        () => $fetch<MonthlyBillingResponse>('/api/admin/maintenance/monthly', {
-            method: 'POST',
-            query: { triggeredBy: `ADMIN:${authStore.email}` }
-        }),
-        {
-            immediate: false,
-            transform: (data) => data ? MonthlyBillingResponseSchema.parse(data) : null
-        }
-    )
-
-    const isMonthlyBillingRunning = computed(() => monthlyBillingStatus.value === 'pending')
-    const hasMonthlyBillingResult = computed(() => monthlyBillingStatus.value === 'success' && monthlyBillingResult.value !== null)
-    const hasMonthlyBillingError = computed(() => monthlyBillingStatus.value === 'error')
+    const monthlyBillingResult = ref<MonthlyBillingResponse | null>(null)
+    const monthlyBillingError = ref<Error | null>(null)
+    const isMonthlyBillingRunning = ref(false)
+    const hasMonthlyBillingResult = computed(() => !isMonthlyBillingRunning.value && monthlyBillingError.value === null && monthlyBillingResult.value !== null)
+    const hasMonthlyBillingError = computed(() => monthlyBillingError.value !== null)
 
     const {formatMonthlyBillingStats} = useMaintenance()
 
     const runMonthlyBilling = async () => {
-        await executeMonthlyBilling()
-
-        if (hasMonthlyBillingError.value) {
-            handleApiError(monthlyBillingError.value, 'Månedlig fakturering fejlede')
-        } else if (hasMonthlyBillingResult.value) {
-            const stats = formatMonthlyBillingStats(monthlyBillingResult.value!)
-            const description = stats.map(s => `${s.label}: ${s.value}`).join(', ')
-            console.info(CTX, `Monthly billing completed: ${description}`)
-            // Billing moves transactions out of the unbilled current period into invoiced periods.
-            await Promise.all([refreshBillingPeriods(), refreshCurrentPeriodTransactions()])
-            toast.add({
-                title: 'Månedlig fakturering afsluttet',
-                description,
-                color: 'success'
+        isMonthlyBillingRunning.value = true
+        monthlyBillingError.value = null
+        try {
+            monthlyBillingResult.value = await apiRequest('/api/admin/maintenance/monthly', {
+                method: 'POST',
+                query: { triggeredBy: `ADMIN:${authStore.email}` },
+                schema: MonthlyBillingResponseSchema,
+                action: 'Månedlig fakturering fejlede'
             })
+        } catch (error) {
+            monthlyBillingResult.value = null
+            monthlyBillingError.value = error as Error
+            return
+        } finally {
+            isMonthlyBillingRunning.value = false
         }
+
+        const stats = formatMonthlyBillingStats(monthlyBillingResult.value)
+        const description = stats.map(s => `${s.label}: ${s.value}`).join(', ')
+        console.info(CTX, `Monthly billing completed: ${description}`)
+        // Billing moves transactions out of the unbilled current period into invoiced periods.
+        await Promise.all([refreshBillingPeriods(), refreshCurrentPeriodTransactions()])
+        toast.add({
+            title: 'Månedlig fakturering afsluttet',
+            description,
+            color: 'success'
+        })
     }
 
     return {
@@ -703,7 +722,13 @@ export const useBookingsStore = defineStore("Bookings", () => {
         // actions
         refreshOrders,
         loadOrdersForDinners,
+        // upcoming orders (economy views)
+        upcomingOrders,
+        isUpcomingOrdersLoading,
+        loadUpcomingOrders,
+        refreshUpcomingOrders,
         claimOrder,
+        fetchOrderDetail,
         fetchReleasedOrders,
         // Lock status (calendar display)
         lockStatus,
@@ -745,6 +770,13 @@ export const useBookingsStore = defineStore("Bookings", () => {
         hasMonthlyBillingResult,
         hasMonthlyBillingError,
         runMonthlyBilling,
+
+        // household billing (household economy)
+        householdBilling,
+        householdBillingError,
+        isHouseholdBillingLoading,
+        isHouseholdBillingErrored,
+        loadHouseholdBilling,
 
         // billing periods
         billingPeriods,

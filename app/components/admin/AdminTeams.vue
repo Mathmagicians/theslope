@@ -223,9 +223,8 @@ const handleBatchCreateTeams = async () => {
   if (!createDraft.value.length || !selectedSeason.value?.id) return
 
   try {
-    // The toast reports the operation result (ADR-009), not the draft
-    const {teams: createdTeams, eventsAssigned} = await createTeam(createDraft.value)
-    showSuccessToast('Madhold oprettet', `${createdTeams.length} madhold oprettet · ${eventsAssigned} madlavninger tildelt`)
+    // The store's toast reports the operation result (ADR-009), not the draft
+    await createTeam(createDraft.value)
     await onModeChange(FORM_MODES.VIEW)
   } catch (error) {
     console.error('👥 > ADMIN_TEAMS > [CREATE] Error creating teams:', error)

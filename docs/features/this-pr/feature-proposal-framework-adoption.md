@@ -10,19 +10,19 @@ majors. Packages are signed off one at a time in chat; the user runs installs an
 
 | Package | What | Status |
 |---|---|---|
-| Store fetcher factory | `useStoreAsyncData` wraps `useAsyncData`: schema-driven types, `useRequestFetch` baked in | ⏳ API refined, awaiting signoff |
-| Fetch gating | the `enabled` option carries the fetch condition; a gated slice reads as idle | ⏳ awaiting signoff |
+| Store fetcher factory | `useApiHandler().storeAsyncData` wraps `useAsyncData`: schema-driven types, `useRequestFetch` baked in; `apiRequest` for writes and one-shot reads | ✅ implemented 2026-10-07 — fine-tuning with the user |
+| Fetch gating | the `enabled` option carries the fetch condition; a gated dataset reads as idle | ✅ approved 2026-10-07 — after the factory |
 | Page composition | master/detail and tab pages, the `md` breakpoint | OPEN |
 | Dependency clusters | majors beyond the Nuxt 4.5 branch | Framework pair approved 2026-10-05 (runs first); Prisma + zod ride the Prisma bundle; TS 7 / @types/node 26 / h3 2 wait |
 
-The factory lands first; Fetch gating converts the gated slices onto it, so each slice is touched once.
+The factory lands first; Fetch gating converts the gated datasets onto it, so each dataset is touched once.
 
 ## Store fetcher factory
 
 **Problem.** Thirty keyed `useAsyncData` calls across the five stores (`plan` 12, `bookings` 7, `allergies` 5, `households` 5,
 `users` 1) each hand-repeat the same three options: a `useRequestFetch` fetcher, a Zod-parse `transform` and a `default`.
-The slice's declared type (`useAsyncData<Season[]>`) and its transform are two hand-kept claims.
-**Solution.** `useStoreAsyncData` in `app/composables/useStoreAsyncData.ts`: a typed wrapper over `useAsyncData` that
+The dataset's declared type (`useAsyncData<Season[]>`) and its transform are two hand-kept claims.
+**Solution.** `storeAsyncData` in the existing `app/composables/useApiHandler.ts` (zero new composables, decision 2026-10-07): a typed wrapper over `useAsyncData` that
 captures `useRequestFetch` in the store's setup and takes `(key, url, {schema, default, ...options})`. The data type is
 inferred from the schema (`schema: ZodType<T>`), so the compile-time type and the runtime parse share one source — the
 validation composable's schema (ADR-001). Remaining `AsyncDataOptions` (`watch`, `immediate`, `lazy`, `enabled`) pass
@@ -38,17 +38,17 @@ fetch path is mechanical, not remembered.
 **API** ⏳ awaiting signoff
 
 ```ts
-const {data: seasons, status, error, refresh} = useStoreAsyncData(
+const {data: seasons, status, error, refresh} = storeAsyncData(
     'plan-store-seasons', '/api/admin/season',
     {schema: SeasonSchema.array(), default: () => []}
 )
-// detail slice: reactive key and url, null default
-const {data: selected} = useStoreAsyncData(
+// detail dataset: reactive key and url, null default
+const {data: selected} = storeAsyncData(
     () => `season-${selectedId.value}`, () => `/api/admin/season/${selectedId.value}`,
     {schema: SeasonSchema, default: () => null})
 ```
 
-**Scope.** This package converts the ungated slices (~17); the 13 gated fetchers convert in Fetch gating, on top of the
+**Scope.** This package converts the ungated datasets (~17); the 13 gated fetchers convert in Fetch gating, on top of the
 factory.
 **TDD.** A unit spec for the composable; the store specs stay the specification; `allergies.ts` converts first (full
 specs), then `plan`, `bookings`, `households`, `users`, each with a green spec run between.
@@ -60,15 +60,22 @@ specs), then `plan`, `bookings`, `households`, `users`, each with a green spec r
 **Problem.** Thirteen `useAsyncData` fetchers skip their request by returning an empty value:
 `plan.ts:62`; `bookings.ts:52`, `:402`, `:584`, `:625`; `households.ts:49`, `:81`; `allergies.ts:68`, `:123`;
 `OrderHistoryDisplay.vue:27`, `AdminEconomy.vue:83`, `HouseholdEconomy.vue:61`, `pages/dinner/index.vue:150`. A skipped fetch resolves:
-the slice reports `success` with `null` or `[]`.
+the dataset reports `success` with `null` or `[]`.
 **Framework.** Nuxt 4.5 `enabled`: while it is `false`, `execute` returns the current data and the status stays
 (`node_modules/nuxt/dist/app/composables/asyncData.js:326`); switching it to `false` mid-flight aborts the request and sets the status
 to `idle` (`asyncData.js:153-160`). The data stays.
-**Solution.** The fetcher fetches; `enabled` carries the condition through `useStoreAsyncData`. The status computeds read
-`idle` with `enabled` `false` as "idle"; the store's ready flag counts the slices it requests. Logout clears the gated
-household list (`clearNuxtData`). `allergies.ts` goes first (two gated slices, full specs); the other eleven follow.
-**TDD.** Store specs per converted store: the slice fetches when its condition holds, reports "idle" while the condition is false, and the
-store reports ready.
+**Solution.** The fetcher fetches; `enabled` carries the condition through `storeAsyncData`. The status computeds read
+`idle` with `enabled` `false` as "idle"; the store's ready flag counts the datasets it requests. Logout clears the gated
+household list (`clearNuxtData`). `allergies.ts` goes first (two gated datasets, full specs); the other eleven follow.
+**Decided 2026-10-07 (approved).** The 13 gates are two shapes with fixed rules: **id in the key** (selected
+season/household/allergy type, dinner and order detail) — the key swap lands on the `default` when the id goes
+null, empty like today, nothing extra; **login gate with a constant key** (the households list shape) — `enabled`
+alone would keep the previous user's data in memory, so logout clears every login-gated dataset (`clearNuxtData`),
+mandatory and spec-asserted. The ready flag counts only the datasets the store requests; no new public status
+flags unless a consumer needs one. Starts after the Store fetcher factory lands (every conversion is two lines on
+`storeAsyncData`).
+**TDD.** Store specs per converted store: the dataset fetches when its condition holds, reports idle while it does
+not, shape-2 datasets empty on logout, and the store reports ready correctly in both states.
 **Affected.** The files above, `docs/adr.md` (ADR-007 amendment), `docs/adr-compliance-frontend.md` store rows.
 
 ## Page composition — OPEN
@@ -338,5 +345,5 @@ clusters and the adoption packages order freely around each other.
 
 ## ADR notes
 
-- SSR-friendly store pattern (ADR-007), amendments: `useStoreAsyncData` is the blessed store fetcher; a fetch is gated
-  with `enabled`, and a disabled slice reads as idle.
+- SSR-friendly store pattern (ADR-007), amendments: `useApiHandler().storeAsyncData` is the blessed store fetcher; a fetch is gated
+  with `enabled`, and a disabled dataset reads as idle.

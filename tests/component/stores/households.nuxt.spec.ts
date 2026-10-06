@@ -44,6 +44,13 @@ registerEndpoint('/api/admin/household/inhabitants/1', { handler: moveInhabitant
 registerEndpoint('/api/admin/household/1', { handler: deleteHouseholdEndpoint, method: 'DELETE' })
 registerEndpoint('/api/admin/household/2', { handler: deleteHouseholdEndpoint, method: 'DELETE' })
 registerEndpoint('/api/admin/household', householdIndexEndpoint)
+// Method-specific after the generic index above (reverse-order lookup)
+const createHouseholdEndpoint = vi.fn()
+const moveOutEndpoint = vi.fn()
+registerEndpoint('/api/admin/household', { handler: createHouseholdEndpoint, method: 'PUT' })
+registerEndpoint('/api/household/1/update', { handler: moveOutEndpoint, method: 'POST' })
+const calendarFeedEndpoint = vi.fn()
+registerEndpoint('/api/calendar/feed', calendarFeedEndpoint)
 
 // ========================================
 // Test Helpers - Use factory data + schema validation
@@ -526,5 +533,72 @@ describe('Households Store', () => {
       // deleteHousehold catches errors with handleApiError and does not rethrow
       await expect(store.deleteHousehold(1)).resolves.toBeUndefined()
     })
+  })
+
+  describe('setMoveOutDate', () => {
+    it('returns the scaffold result and keeps it in lastMoveOutResult', async () => {
+      const scaffoldResult = createMockScaffoldResult({ deleted: 4 })
+      moveOutEndpoint.mockReturnValue({ household: createMockHouseholdDetail(), scaffoldResult })
+      const store = await setupStore()
+
+      const result = await store.setMoveOutDate(1, new Date())
+
+      expect(result).toEqual(scaffoldResult)
+      expect(store.lastMoveOutResult).toEqual(scaffoldResult)
+    })
+
+    it('rethrows a failed update', async () => {
+      moveOutEndpoint.mockImplementation(() => {
+        throw createError({ statusCode: 500, statusMessage: 'Server error' })
+      })
+      const store = await setupStore()
+
+      await expect(store.setMoveOutDate(1, null)).rejects.toThrow()
+    })
+  })
+
+  describe('createHousehold', () => {
+    const payload = () => {
+      const { pbsId, address, movedInDate, heynaboId, name } = createMockHouseholdDetail()
+      return { pbsId, address, movedInDate, heynaboId, name }
+    }
+
+    it('returns the created household and refreshes the list', async () => {
+      createHouseholdEndpoint.mockReturnValue(createMockHouseholdDetail())
+      const store = await setupStore()
+      householdIndexEndpoint.mockClear()
+
+      const created = await store.createHousehold(payload())
+
+      expect(created?.id).toBe(createMockHouseholdDetail().id)
+      expect(householdIndexEndpoint).toHaveBeenCalled()
+    })
+
+    it('resolves null when the create fails', async () => {
+      createHouseholdEndpoint.mockImplementation(() => {
+        throw createError({ statusCode: 400, statusMessage: 'Bad request' })
+      })
+      const store = await setupStore()
+
+      await expect(store.createHousehold(payload())).resolves.toBeNull()
+    })
+  })
+})
+
+describe('Households Store - calendar feed', () => {
+  const FEED_URL = 'webcal://example.test/api/calendar/feed.ics'
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it.each([
+    { description: 'returns the feed URL', respond: () => FEED_URL, expected: FEED_URL },
+    { description: 'resolves null when the request fails', respond: () => { throw createError({ statusCode: 500 }) }, expected: null }
+  ])('fetchCalendarFeed $description', async ({ respond, expected }) => {
+    calendarFeedEndpoint.mockImplementation(respond)
+    const store = useHouseholdsStore()
+
+    await expect(store.fetchCalendarFeed()).resolves.toBe(expected)
   })
 })

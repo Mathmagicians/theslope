@@ -104,6 +104,9 @@ export const useSeasonValidation = () => {
         scaffold: ScaffoldResultSchema.nullable()
     })
 
+    // GET /api/admin/season/active: a null id arrives as an empty body
+    const ActiveSeasonIdSchema = z.preprocess(id => id || null, z.number().int().positive().nullable())
+
     // Serialization and deserialization functions
     const serializeSeason = (season: Season): SerializedSeason => SerializedSeasonSchema.parse(season)
 
@@ -153,6 +156,7 @@ export const useSeasonValidation = () => {
         SerializedSeasonSchema,
         ReconciliationResultSchema,
         SeasonUpdateResponseSchema,
+        ActiveSeasonIdSchema,
         serializeSeason,
         deserializeSeason,
         createWeekDayMapFromSelection,

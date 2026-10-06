@@ -362,7 +362,7 @@ DutyEntitySnapshotSchema = z.object({
 |---|---|---|
 | **`DinnerCard` / `ChefMenuCard`** — expandable section per dinner | Timeline of all events for dinner D + relevant team-level events for D's `cookingTeamId` since season start. Mirror of `OrderHistoryDisplay.vue` UTimeline. | `GET /api/dinner-event/[id]/duty-history` (NEW) |
 | **`CookingTeamCard`** — expandable per team member | Timeline of that member's assignment history. | `GET /api/team/cooking/[id]/member/[inhabitantId]/history` (NEW) |
-| **`MyDuties` view** — per-inhabitant ("my upcoming + past duties") | List of `DinnerDuty` rows; expand each row to see its history. | Extends existing `GET /api/team/my` |
+| **Member planning face** — my duties on `/chef` ✅ signed 2026-10-06 | The existing calendar/agenda carries it: my duty days marked on the calendar (+ the signed gap markers), the agenda row gains the duty line, vacancy rows render inline with [Tag tjansen]; day select opens the CTC dinner face where byt/afgiv/tag live. No new component. | Extends existing `GET /api/team/my` |
 
 Reuse `OrderHistoryDisplay.vue`'s pattern — extract a generic `AuditTimeline.vue` (props: `entries: AuditEntryDisplay[]`, `actionConfig: Record<Action, {icon, color, labelDa}>`) so both order history and roster history render via the same component.
 

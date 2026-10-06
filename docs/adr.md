@@ -576,23 +576,44 @@ const createDraft = ref<CookingTeam[]>([])
 
 ## ADR-007: SSR-Friendly Store Pattern with useAsyncData
 
-**Status:** Accepted | **Date:** 2025-01-28 | **Updated:** 2025-11-11
+**Status:** Accepted | **Date:** 2025-01-28 | **Updated:** 2026-10-07
 
 ### Decision
 
-**Stores use `useAsyncData` with status-derived state. NO AWAITS anywhere.**
+**Stores read through `storeAsyncData` and write through `apiRequest`, both from `useApiHandler`. State is status-derived. NO AWAITS anywhere.**
 
-**Why `useAsyncData`:** Explicit `refresh()`, comprehensive status refs, works for static and reactive URLs.
+| Call | Shape | What it owns |
+|------|-------|--------------|
+| `storeAsyncData(key, url, {schema, default, errorMessage?, ...options})` | `useAsyncData` over the request fetch (`useRequestFetch`, captured once) | The dataset's type is the schema's output (`schema: ZodType<T>` → `data: Ref<T>`); `transform` parses with the schema; a failed request or parse goes through `handleApiError` with `errorMessage`; `watch`, `immediate`, `lazy`, `enabled`, `deep` pass through; `key` and `url` take a value or a getter; a `null` url resolves the default without a request |
+| `apiRequest(url, {action, errorMessage?, schema?, ...fetchOptions})` | The request fetch for a write or a one-shot read | Parses the response with `schema` when given; a failure goes through `handleApiError` and rethrows |
 
 ### Store Pattern (Reference: `app/stores/plan.ts`)
 
 ```typescript
-// List endpoint
-const { data: seasons, status, error, refresh } = useAsyncData<Season[]>(
-    'plan-store-seasons',
-    () => $fetch('/api/admin/season'),
-    { default: () => [], transform: data => data.map(s => SeasonSchema.parse(s)) }
+const {storeAsyncData, apiRequest} = useApiHandler()
+
+// List endpoint: typed Ref<Season[]> by the schema
+const {data: seasons, status, error, refresh} = storeAsyncData('plan-store-seasons', '/api/admin/season', {
+    schema: SeasonSchema.array(),
+    default: () => []
+})
+
+// Detail endpoint: reactive key and url, gated by a null url
+const {data: selectedSeason} = storeAsyncData(
+    () => `season-${selectedSeasonId.value}`,
+    () => selectedSeasonId.value ? `/api/admin/season/${selectedSeasonId.value}` : null,
+    {schema: SeasonSchema.nullable(), default: () => null, errorMessage: 'Kunne ikke hente sæson'}
 )
+
+// Write: the store action owns the request, the refresh and the success toast
+const updateSeason = async (season: Season) => {
+    const result = await apiRequest(`/api/admin/season/${season.id}`, {
+        method: 'POST', body: season, schema: SeasonUpdateResponseSchema, action: 'updateSeason'
+    })
+    await refresh()
+    toast.add({title: 'Sæson opdateret', description: formatSeasonUpdate(result), color: COLOR.success})
+    return result
+}
 
 // Status computeds (4-state UI)
 const isLoading = computed(() => status.value === 'pending')
@@ -605,7 +626,7 @@ const isStoreReady = computed(() => /* combine all checks */)
 
 | Layer | Owns |
 |-------|------|
-| **Store** | Server data, CRUD, business logic, initialization timing |
+| **Store** | Server data, CRUD, business logic, initialization timing, the toast that reports a store action's result |
 | **Component** | UI state (formMode, draft), URL sync, reactive loaders |
 | **Page** | Call `initStore()` (synchronous, no await) |
 
@@ -614,16 +635,17 @@ const isStoreReady = computed(() => /* combine all checks */)
 Components MAY use `useAsyncData` directly when:
 - Data is component-specific (not shared)
 - Multiple instances need separate data
-- Fetch calls **store methods** (NEVER direct `$fetch`)
+- Fetch calls **store methods** built on `apiRequest` (`planStore.fetchTeamDetail`, `bookingsStore.fetchOrderDetail`)
 
 ### Compliance
 
-1. MUST prefer `useAsyncData` over `useFetch`
+1. Store reads MUST use `storeAsyncData`; writes and one-shot reads MUST use `apiRequest`
 2. MUST expose: `isLoading`, `isErrored`, `isInitialized`, `isEmpty`, `isStoreReady`
 3. `isInitialized` MUST check data exists (not just status='success')
 4. Init methods MUST be synchronous
 5. Components MUST NOT contain server data (exception: component-local)
 6. Components MUST show loaders based on `isStoreReady`
+7. `tests/component/architecture/fetchUsage.unit.spec.ts` fails a `$fetch(` or `useRequestFetch(` under `app/` outside `app/composables/useApiHandler.ts`
 
 ---
 

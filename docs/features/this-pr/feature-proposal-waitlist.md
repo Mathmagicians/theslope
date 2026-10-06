@@ -19,15 +19,21 @@ the race avoidance, ADR-015).
 
 ```prisma
 model TicketWaitlist {
-  id             Int           @id @default(autoincrement())
-  dinnerEventId  Int
-  dinnerEvent    DinnerEvent   @relation(fields: [dinnerEventId], references: [id], onDelete: Cascade)
-  inhabitantId   Int
-  inhabitant     Inhabitant    @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
-  state          WaitlistState @default(WAITING)   // WAITING | ASSIGNED | CANCELLED
+  id              Int           @id @default(autoincrement())
+  dinnerEventId   Int
+  dinnerEvent     DinnerEvent   @relation(fields: [dinnerEventId], references: [id], onDelete: Cascade)
+  inhabitantId    Int           // the person, or the booking member for a guest
+  inhabitant      Inhabitant    @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
+  isGuestTicket   Boolean       @default(false)
+  ticketPriceId   Int?          // guest: chosen at join (validation requires it); regular: null
+  ticketPrice     TicketPrice?  @relation(fields: [ticketPriceId], references: [id], onDelete: SetNull)
+  allergyTypeIds  String?       // guest allergies, JSON — the guest-order shape
+  state           WaitlistState @default(WAITING)   // WAITING | ASSIGNED | CANCELLED
   assignedOrderId Int?                              // the order the assignment produced / claimed
-  createdAt      DateTime      @default(now())
+  createdAt       DateTime      @default(now())
 
+  // one regular entry per person per dinner; guests share the member's inhabitantId like orders do
+  // partial unique index via the Prisma 7.4 `partialIndexes` preview: WHERE isGuestTicket = 0
   @@unique([dinnerEventId, inhabitantId])
   @@index([dinnerEventId, state])
 }
@@ -49,7 +55,12 @@ write — ticket release, extra-portion release, queue join — and from the dai
 
 ### Portion resolver
 
-Supply is measured in portions (`getPortionsForTicketType`, `useOrder.ts`). The resolver walks the queue in strict
+A regular entry's ticket is derived at sweep time with the existing age-at-dinner-date resolver
+(`getTicketPriceForInhabitant`, the one scaffolding uses) — nothing is stored on the entry, a birthday between join
+and dinner changes nothing, and a mid-season price edit reaches unassigned entries as it reaches unscaffolded
+bookings. A guest entry carries its chosen `ticketPriceId` and allergies. Freezing happens on the order the sweep
+creates (`ticketPriceId` + `priceAtBooking`), regular or guest (`buildDesiredOrder` / `buildGuestDesiredOrder`
+shapes). Supply is measured in portions (`ticketPrice.portionSize`). The resolver walks the queue in strict
 FIFO (no overtaking) and consumes each entry's portion weight while it fits: 2.5 released portions against a queue
 voksen, barn, voksen, barn feeds the first three (1 + 0.5 + 1), the fourth waits.
 

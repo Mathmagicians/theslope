@@ -7,7 +7,7 @@
  * - Detail (Booking panel): 2/3 width, shows selected day details
  */
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
-import type {DesiredOrder, ScaffoldResult} from '~/composables/useBookingValidation'
+import type {DesiredOrder} from '~/composables/useBookingValidation'
 import type {BookingChanges} from '~/composables/useBooking'
 import {useQueryParam} from '~/composables/useQueryParam'
 import {useDinnerDateParam, BookingViewSchema, type BookingView} from '~/composables/useBookingView'
@@ -25,10 +25,9 @@ const props = withDefaults(defineProps<Props>(), {
 const {household} = toRefs(props)
 
 const {deadlinesForSeason} = useSeason()
-const {formatScaffoldResult, BOOKING_TOAST_TITLES, buildBookingChanges} = useBooking()
+const {BOOKING_TOAST_TITLES, buildBookingChanges} = useBooking()
 const {handleApiError} = useApiHandler()
-const {ICONS, ALERTS, COLOR} = useTheSlopeDesignSystem()
-const toast = useToast()
+const {ICONS, ALERTS} = useTheSlopeDesignSystem()
 
 const planStore = usePlanStore()
 const {selectedSeason, isSelectedSeasonInitialized, isSelectedSeasonLoading, isSelectedSeasonErrored} = storeToRefs(planStore)
@@ -118,12 +117,6 @@ const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selec
 // Grid view form mode
 const gridFormMode = ref<'view' | 'edit'>('view')
 
-const toastScaffoldResult = (title: string, scaffoldResult: ScaffoldResult, suffix = '') => toast.add({
-  title,
-  description: `${formatScaffoldResult(scaffoldResult, 'past')}${suffix}`,
-  color: scaffoldResult.errored > 0 ? COLOR.error : COLOR.success
-})
-
 const handleGridSave = async (changes: BookingChanges) => {
   const desiredOrders = buildBookingChanges(changes, orders.value, household.value.inhabitants, dinnerEvents.value, ticketPrices.value)
   if (!selectedSeason.value || desiredOrders.length === 0) return
@@ -131,13 +124,13 @@ const handleGridSave = async (changes: BookingChanges) => {
   // Only process dinner events that have changes (not all visible events!)
   const changedEventIds = [...new Set(desiredOrders.map(o => o.dinnerEventId))]
 
-  const result = await bookingsStore.processMultipleEventsBookings(
+  await bookingsStore.processMultipleEventsBookings(
     household.value.id,
     changedEventIds,
     desiredOrders,
-    props.adminBypass
+    props.adminBypass,
+    {title: BOOKING_TOAST_TITLES.grid}
   )
-  toastScaffoldResult(BOOKING_TOAST_TITLES.grid, result.scaffoldResult)
 }
 
 // Day view save handler - DinnerBookingForm emits DesiredOrder[]
@@ -145,13 +138,13 @@ const handleDayViewSave = async (desiredOrders: DesiredOrder[]) => {
   const dinnerEventId = selectedDinnerEvent.value?.id
   if (!dinnerEventId || desiredOrders.length === 0) return
 
-  const result = await bookingsStore.processSingleEventBookings(
+  await bookingsStore.processSingleEventBookings(
     household.value.id,
     dinnerEventId,
     desiredOrders,
-    props.adminBypass
+    props.adminBypass,
+    {title: BOOKING_TOAST_TITLES.day}
   )
-  toastScaffoldResult(BOOKING_TOAST_TITLES.day, result.scaffoldResult)
 }
 
 // Grid view guest booking - receives DesiredOrder[] from GuestBookingForm (all goes through scaffolder)
@@ -165,13 +158,13 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
   const dateStr = event ? formatDate(new Date(event.date)) : ''
 
   try {
-    const result = await bookingsStore.processSingleEventBookings(
+    await bookingsStore.processSingleEventBookings(
       household.value.id,
       eventId,
       guestOrders,
-      props.adminBypass
+      props.adminBypass,
+      {title: BOOKING_TOAST_TITLES.guest, suffix: ` d. ${dateStr}`}
     )
-    toastScaffoldResult(BOOKING_TOAST_TITLES.guest, result.scaffoldResult, ` d. ${dateStr}`)
   } catch (e) {
     handleApiError(e, 'handleAddGuest', 'Kunne ikke tilføje gæst')
   }

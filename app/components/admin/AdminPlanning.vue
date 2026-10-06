@@ -22,7 +22,7 @@ No delete control for seasons.
 
 <script setup lang="ts">
 import {FORM_MODES} from "~/types/form"
-import type {Season, SeasonUpdateResponse} from "~/composables/useSeasonValidation"
+import type {Season} from "~/composables/useSeasonValidation"
 
 // Props - canEdit from parent for authorization
 interface Props {
@@ -97,27 +97,16 @@ const showSuccessToast = (title: string, description?: string) => {
   })
 }
 
-// Report what the save set in motion: reconciled dates, and on the live season the re-scaffolding
-const describeSeasonUpdate = (result: SeasonUpdateResponse): string => {
-  const {created, deleted} = result.reconciliation
-  const sentences = [`${created} datoer tilføjet, ${deleted} fjernet.`]
-  if (result.scaffold) sentences.push('Forudbestillinger er opdateret.')
-  if (created > 0) sentences.push('Husk at tildele madhold til nye datoer.')
-  return sentences.join(' ')
-}
-
 // SEASON-SPECIFIC BUSINESS LOGIC
 const handleSeasonUpdate = async (updatedSeason: Season) => {
   if (formMode.value === FORM_MODES.CREATE) {
     // Create season (PUT auto-generates dinner events per ADR-015)
     const createdSeason = await createSeason(updatedSeason)
     if (!createdSeason) return
-    showSuccessToast('Sæson oprettet')
   } else if (formMode.value === FORM_MODES.EDIT && updatedSeason.id) {
     // Update season (POST reconciles dinner events and re-scaffolds the live season per ADR-015)
     const result = await updateSeason(updatedSeason)
     if (!result) return
-    showSuccessToast('Sæson opdateret', describeSeasonUpdate(result))
   }
   await onModeChange(FORM_MODES.VIEW)
 }

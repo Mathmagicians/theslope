@@ -26,12 +26,12 @@
 import {hasProtocol} from 'ufo'
 import type {FormSubmitEvent} from '#ui/types'
 import type {LoginCredentials} from '~/composables/useCoreValidation'
+import {LOGIN_FAILED_MESSAGE} from '~/stores/auth'
 
 const authStore = useAuthStore()
 const {loggedIn, greeting} = storeToRefs(authStore)
 const {signIn} = authStore
 const {LoginSchema} = useCoreValidation()
-const {handleApiError} = useApiHandler()
 const {TYPOGRAPHY, LAYOUTS, BG, ICONS, ALERTS, COLOR} = useTheSlopeDesignSystem()
 
 const householdShortName = computed(() => authStore.user?.Inhabitant?.household?.shortName || null)
@@ -66,8 +66,7 @@ const handleSubmit = async (event: FormSubmitEvent<LoginCredentials>) => {
     }
   } catch (error: unknown) {
     console.error('🔑 Login mislykkedes:', error)
-    loginError.value = 'Vi kunne ikke logge dig på, prøv igen. Du skal bruge dit Heynabo brugernavn og password.'
-    handleApiError(error, 'login', loginError.value)
+    loginError.value = LOGIN_FAILED_MESSAGE
   } finally {
     isLoading.value = false
   }
