@@ -5,28 +5,15 @@
 ### Architecture Decision Records
 **ALWAYS REFERENCE BEFORE IMPLEMENTING:** @docs/adr.md
 
-Key patterns:
-- **ADR-011:** Booking system schema (three-state order model with audit trail)
-- **ADR-010:** Domain-driven serialization (repository-layer serialization)
-- **ADR-009:** API index endpoint data inclusion strategy
-- **ADR-008:** useEntityFormManager composable pattern
-- **ADR-007:** SSR-friendly store pattern with useAsyncData
-- **ADR-006:** URL-based navigation and client-side state
-- **ADR-005:** Strong (CASCADE) vs Weak (SET NULL) relationships - Prisma schema onDelete behavior
-- **ADR-004:** Logging standards - `console.info`/`warn`/`error`, never log sensitive data
-- **ADR-003:** Factory pattern for tests in `/tests/e2e/testDataFactories/`
-- **ADR-002:** Separate try-catch for validation vs business logic
-- **ADR-001:** Zod schemas in composables for shared validation
-
 ### ADR Compliance Tracking
-**CRITICAL: Keep compliance documents updated as part of implementation:**
+**CRITICAL: Keep compliance documents updated as part of implementation.** The two tables are read on demand (not auto-loaded): open the one you need before the work starts.
 
-- **@docs/adr-compliance-backend.md** - Tracks API endpoint compliance
+- **`docs/adr-compliance-backend.md`** - Tracks API endpoint compliance
   - Update when implementing/modifying API endpoints
   - Mark validation, return types, repository patterns, and test coverage
   - Reference this before creating new endpoints to ensure compliance
 
-- **@docs/adr-compliance-frontend.md** - Tracks frontend compliance
+- **`docs/adr-compliance-frontend.md`** - Tracks frontend compliance
   - Update when creating/modifying pages, components, or stores
   - Track route usage, store dependencies, composable usage, ADR compliance
   - Reference this to ensure components follow established patterns
@@ -43,17 +30,18 @@ Key patterns:
 - Tables show relationships (routes ↔ components, endpoints ↔ tests) without duplication
 
 ### Prisma Schema
-**ALWAYS REFERENCE BEFORE WORKING WITH ENTITIES:** @prisma/schema.prisma
+**ALWAYS READ BEFORE WORKING WITH ENTITIES:** `prisma/schema.prisma` (read on demand, not auto-loaded)
 
 The schema defines entity relationships, onDelete behaviors (CASCADE vs SET NULL), and data model.
 
 **Critical:** Repository deletion methods rely on Prisma's automatic cascade handling (D1 has no transactions)
 
 ## Remember Important Files
-- **REFERENCE** @docs/adr.md for architectural patterns before implementation
-- **REFERENCE** @docs/adr-compliance-backend.md before implementing API endpoints
-- **REFERENCE** @docs/adr-compliance-frontend.md before implementing components/stores
-- **REFERENCE** @prisma/schema.prisma for entity relationships and deletion behavior
+- **REFERENCE** `docs/adr.md` (auto-loaded above) for architectural patterns before implementation
+- **READ** `docs/adr-compliance-backend.md` before implementing API endpoints
+- **READ** `docs/adr-compliance-frontend.md` before implementing components/stores
+- **READ** `prisma/schema.prisma` for entity relationships and deletion behavior
+- **READ** `docs/testing.md` before writing or changing any test
 - `.github/copilot-instructions.md` for project-specific guidelines and conventions
 
 ## Commands
@@ -70,23 +58,16 @@ The schema defines entity relationships, onDelete behaviors (CASCADE vs SET NULL
   - Single E2E test: `npx playwright test tests/e2e/path/file.e2e.spec.ts --reporter=line` - Run specific Playwright test with simplified output
   - Run test once and exit: `npx vitest run tests/component/path/file.unit.spec.ts` - Run without watch mode (won't hang)
   - Run test with verbose output: `npx vitest run tests/component/path/file.unit.spec.ts --reporter=verbose` - Detailed test output
-- **Database**:
-  - Local seed: `npm run db:seed:local` - Seed local database with initial data
-  - Local migrate: `npm run db:migrate:local` - Apply migrations to local database
-  - Remote migrate: `npm run db:migrate` - Apply migrations to production database
-  - Generate client: `npm run db:generate-client` - Generate Prisma client after schema changes
-  
-  > 📝 **Note**: For detailed database setup and migration instructions, refer to the Database section in [README.md](./README.md).
+- **Database**: the Database section in [README.md](./README.md) holds the setup and migration commands; schema and migration work follows `.claude/skills/prisma/SKILL.md`
 
 ## Code Style
-- **Stack**: Nuxt 3, TypeScript, Pinia, Prisma, Cloudflare
 - **Approach**: Test-Driven Development (TDD)
 - **Architecture**: Vue 3 Composition API
 - **Nuxt Auto-imports**: 
   - Don't manually import utils from `~/utils/*` - they're auto-imported
   - Don't manually import composables from `~/composables/*` - they're auto-imported
   - Don't manually import components - they're auto-imported
-- **Testing**: @docs/testing.md
+- **Testing**: `docs/testing.md` — read it before writing or changing any test (not auto-loaded)
   - `*.unit.spec.ts`: Pure function tests (Vitest)
   - `*.nuxt.spec.ts`: Nuxt component tests
   - `*.e2e.spec.ts`: End-to-end tests (Playwright)

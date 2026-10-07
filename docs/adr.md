@@ -584,7 +584,7 @@ const createDraft = ref<CookingTeam[]>([])
 
 | Call | Shape | What it owns |
 |------|-------|--------------|
-| `storeAsyncData(key, url, {schema, default, errorMessage?, ...options})` | `useAsyncData` over the request fetch (`useRequestFetch`, captured once) | The dataset's type is the schema's output (`schema: ZodType<T>` → `data: Ref<T>`); `transform` parses with the schema; a failed request or parse goes through `handleApiError` with `errorMessage`; `watch`, `immediate`, `lazy`, `enabled`, `deep` pass through; `key` and `url` take a value or a getter; a `null` url resolves the default without a request |
+| `storeAsyncData(key, url, {schema, default, errorMessage?, enabled?, dependsOn?, ...options})` | `useAsyncData` over the request fetch (`useRequestFetch`, captured once) | The dataset's type is the schema's output (`schema: ZodType<T>` → `data: Ref<T>`); `transform` parses with the schema; a failed request or parse goes through `handleApiError` with `errorMessage`; `key` and `url` take a value or a getter, and the dataset refetches when its url changes or its gate opens; `enabled` gates the request: while it is false the dataset reads `idle` with its default; `dependsOn: [dataset, …]` resolves the url and the gate once those datasets have loaded, so the server render awaits the chain; `watch`, `immediate`, `lazy`, `deep` pass through |
 | `apiRequest(url, {action, errorMessage?, schema?, ...fetchOptions})` | The request fetch for a write or a one-shot read | Parses the response with `schema` when given; a failure goes through `handleApiError` and rethrows |
 
 ### Store Pattern (Reference: `app/stores/plan.ts`)
@@ -598,11 +598,17 @@ const {data: seasons, status, error, refresh} = storeAsyncData('plan-store-seaso
     default: () => []
 })
 
-// Detail endpoint: reactive key and url, gated by a null url
+// Selection-driven detail: the url reads the selection, `enabled` gates it, `dependsOn` awaits the
+// datasets the selection resolves from; the key stays constant because the id resolves mid-render
+const selectedSeasonId = computed(() => chosenSeasonId.value ?? getDefaultSeasonId())
 const {data: selectedSeason} = storeAsyncData(
-    () => `season-${selectedSeasonId.value}`,
-    () => selectedSeasonId.value ? `/api/admin/season/${selectedSeasonId.value}` : null,
-    {schema: SeasonSchema.nullable(), default: () => null, errorMessage: 'Kunne ikke hente sæson'}
+    'plan-store-selected-season',
+    () => `/api/admin/season/${selectedSeasonId.value}`,
+    {
+        schema: SeasonSchema.nullable(), default: () => null, errorMessage: 'Kunne ikke hente sæson',
+        enabled: () => !!selectedSeasonId.value,
+        dependsOn: [seasonsDataset, activeSeasonIdDataset]
+    }
 )
 
 // Write: the store action owns the request, the refresh and the success toast
@@ -646,6 +652,8 @@ Components MAY use `useAsyncData` directly when:
 5. Components MUST NOT contain server data (exception: component-local)
 6. Components MUST show loaders based on `isStoreReady`
 7. `tests/component/architecture/fetchUsage.unit.spec.ts` fails a `$fetch(` or `useRequestFetch(` under `app/` outside `app/composables/useApiHandler.ts`
+8. A gated read puts its condition on `enabled`; the dataset reads `idle` while the condition is false, and the store's ready flag counts the datasets the store requests
+9. A dataset reads its selection through getters (`planStore.selectedSeasonId`, `householdsStore.selectedHouseholdId`, the store's own selected ids) and declares the datasets that selection resolves from in `dependsOn`; its key stays constant. A page calls a setter for a scope no store holds (`loadOrdersForDinners`, `loadUpcomingOrders`, `loadHouseholdBilling`)
 
 ---
 
