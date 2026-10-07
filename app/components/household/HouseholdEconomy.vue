@@ -49,8 +49,7 @@ const periodControlSumAccessor = (period: UnifiedBillingPeriod) => ({
 const periodItemsAccessor = (period: UnifiedBillingPeriod) => period.groups
 
 const planStore = usePlanStore()
-const {selectedSeason, isSelectedSeasonInitialized} = storeToRefs(planStore)
-planStore.initPlanStore()
+const {isSelectedSeasonInitialized} = storeToRefs(planStore)
 
 const bookingsStore = useBookingsStore()
 const {
@@ -61,10 +60,8 @@ const {
     isHouseholdBillingLoading: isLoading,
     isHouseholdBillingErrored: isErrored
 } = storeToRefs(bookingsStore)
-const selectedSeasonId = computed(() => selectedSeason.value?.id)
-watch(() => props.household.id, householdId => bookingsStore.loadHouseholdBilling(householdId), {immediate: true})
-watch([() => props.household.id, selectedSeasonId], ([householdId, seasonId]) =>
-    bookingsStore.loadUpcomingOrders(seasonId ?? null, householdId), {immediate: true})
+bookingsStore.loadHouseholdBilling()
+bookingsStore.loadUpcomingOrders(false)
 const isUpcomingOrdersLoading = computed(() => isOrdersLoading.value || !isSelectedSeasonInitialized.value)
 
 

@@ -4,6 +4,7 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {getHouseholdUrl} from '~/utils/household'
 
 const {adminUIFile} = authFiles
 const {validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot} = testHelpers
@@ -23,6 +24,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
     let testHouseholdId: number
     let testInhabitantId: number
     let householdAddress: string
+    let householdEconomyUrl: string
     const testSalt = `admin-economy-${Date.now()}`
 
     test.use({storageState: adminUIFile})
@@ -65,6 +67,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         const households = await adminContext.request.get('/api/admin/household').then(r => r.json())
         const household = households.find((h: { id: number }) => h.id === testHouseholdId)
         householdAddress = household?.address ?? 'Unknown'
+        householdEconomyUrl = getHouseholdUrl(household.shortName, household.pbsId, 'economy')
 
         const result = await OrderFactory.createOrder(adminContext, {
             householdId: testHouseholdId,
@@ -83,6 +86,20 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         if (testSeason?.season?.id) {
             await SeasonFactory.deleteSeason(adminContext, testSeason.season.id)
         }
+    })
+
+    test('GIVEN an order on the active season WHEN the admin economy page is server-rendered THEN its HTML carries the upcoming orders', async () => {
+        const html = await adminContext.request.get('/admin/economy').then(r => r.text())
+
+        expect(html).toContain(`data-testid="future-orders-expand-${testDinnerEventId}"`)
+    })
+
+    test('GIVEN an order of the household WHEN its economy page is server-rendered THEN its HTML carries the billing and the upcoming orders', async () => {
+        const html = await adminContext.request.get(householdEconomyUrl).then(r => r.text())
+
+        expect(html).toContain('data-testid="household-economy"')
+        expect(html).toContain('Faktureringsperioder')
+        expect(html).not.toContain('Ingen kommende bestillinger')
     })
 
     test('GIVEN order exists WHEN admin uses correction UI THEN order mode is updated', async ({page}) => {

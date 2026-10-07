@@ -56,7 +56,6 @@ const isMd = inject<Ref<boolean>>('isMd', ref(false))
 // Household shortnames for the detail card - owned here, passed down as a plain map
 const householdsStore = useHouseholdsStore()
 const {households} = storeToRefs(householdsStore)
-householdsStore.initHouseholdsStore()
 
 const householdShortNames = computed(() =>
     Object.fromEntries(households.value.map(h => [h.id, h.shortName]))

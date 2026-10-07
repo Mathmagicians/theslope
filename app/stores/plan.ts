@@ -14,40 +14,66 @@ export const usePlanStore = defineStore("Plan", () => {
         // State (ADR-007)
         // ========================================
 
-        const {
-            data: activeSeasonId, status: activeSeasonIdStatus,
-            error: activeSeasonIdError, refresh: refreshActiveSeasonId
-        } = storeAsyncData('plan-store-active-season-id', '/api/admin/season/active', {
+        const activeSeasonIdDataset = storeAsyncData('plan-store-active-season-id', '/api/admin/season/active', {
             schema: ActiveSeasonIdSchema,
             default: () => null
         })
-
         const {
-            data: seasons, status: seasonsStatus,
-            error: seasonsError, refresh: refreshSeasons
-        } = storeAsyncData('plan-store-seasons', '/api/admin/season', {
+            data: activeSeasonId, status: activeSeasonIdStatus,
+            error: activeSeasonIdError, refresh: refreshActiveSeasonId
+        } = activeSeasonIdDataset
+
+        const seasonsDataset = storeAsyncData('plan-store-seasons', '/api/admin/season', {
             schema: SeasonSchema.array(),
             default: () => []
         })
-
-        const selectedSeasonId = ref<number | null>(null)
-        const selectedSeasonKey = computed(() => `/api/admin/season/${selectedSeasonId.value || 'null'}`)
-
         const {
-            data: selectedSeason, status: selectedSeasonStatus,
-            error: selectedSeasonError, refresh: refreshSelectedSeason
-        } = storeAsyncData(
-            selectedSeasonKey,
-            () => {
-                if (!selectedSeasonId.value) return null
-                return `/api/admin/season/${selectedSeasonId.value}`
-            },
+            data: seasons, status: seasonsStatus,
+            error: seasonsError, refresh: refreshSeasons
+        } = seasonsDataset
+
+        // Helper: Get default season ID (active season or first available)
+        const getDefaultSeasonId = (): number | null => {
+            if (activeSeasonId.value) {
+                console.info(`${LOG_CTX} 🗓️ > Using active season ID: ${activeSeasonId.value}`)
+                return activeSeasonId.value
+            } else if (seasons.value.length > 0) {
+                const {sortSeasonsByActivePriority} = useSeason()
+                const sortedSeasons = sortSeasonsByActivePriority(seasons.value)
+                const firstId = sortedSeasons[0]?.id ?? null
+                console.info(`${LOG_CTX} 🗓️ > No active season, using first sorted season ID: ${firstId}`)
+                return firstId
+            }
+            console.warn(`${LOG_CTX} 🗓️ > No seasons available, cannot determine default`)
+            return null
+        }
+
+        // A shortName resolves once the seasons have loaded; an unknown one falls back to the default
+        const userChoice = ref<{id: number} | {shortName: string} | null>(null)
+        const chosenSeasonId = computed(() => {
+            const choice = userChoice.value
+            if (!choice) return null
+            if ('id' in choice) return choice.id
+            return seasons.value.find(s => s.shortName === choice.shortName)?.id ?? null
+        })
+        const selectedSeasonId = computed(() => chosenSeasonId.value ?? getDefaultSeasonId())
+
+        // The key stays constant: the id resolves after the seasons load, mid-render on the server
+        const selectedSeasonDataset = storeAsyncData(
+            'plan-store-selected-season',
+            () => `/api/admin/season/${selectedSeasonId.value}`,
             {
                 schema: SeasonSchema.nullable(),
                 default: () => null,
+                enabled: () => !!selectedSeasonId.value,
+                dependsOn: [seasonsDataset, activeSeasonIdDataset],
                 errorMessage: 'Kunne ikke hente sæson'
             }
         )
+        const {
+            data: selectedSeason, status: selectedSeasonStatus,
+            error: selectedSeasonError, refresh: refreshSelectedSeason
+        } = selectedSeasonDataset
 
         // Fetch cooking team detail (ADR-009: Detail data with dinnerEvents)
         // No store state - components use useAsyncData with this function
@@ -152,9 +178,7 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         const loadSeason = (id: number) => {
-            selectedSeasonId.value = id
-            // Setting selectedSeasonId triggers reactive useAsyncData fetch
-            // Logging happens immediately but data may still be loading
+            userChoice.value = {id}
             console.info(`🗓️ > PLAN_STORE > Loading season ID: ${id}`)
         }
 
@@ -164,31 +188,9 @@ export const usePlanStore = defineStore("Plan", () => {
         console.info('🗓️ > PLAN_STORE > Loaded active season ID:', activeSeasonId.value)
     }
 
-        // Helper: Get default season ID (active season or first available)
-        const getDefaultSeasonId = (): number | null => {
-            if (activeSeasonId.value) {
-                console.info(`${LOG_CTX} 🗓️ > Using active season ID: ${activeSeasonId.value}`)
-                return activeSeasonId.value
-            } else if (seasons.value.length > 0) {
-                const {sortSeasonsByActivePriority} = useSeason()
-                const sortedSeasons = sortSeasonsByActivePriority(seasons.value)
-                const firstId = sortedSeasons[0]?.id ?? null
-                console.info(`${LOG_CTX} 🗓️ > No active season, using first sorted season ID: ${firstId}`)
-                return firstId
-            }
-            console.warn(`${LOG_CTX} 🗓️ > No seasons available, cannot determine default`)
-            return null
-        }
-
         const loadSeasonByShortName = (shortName: string) => {
-            const season = seasons.value.find(s => s.shortName === shortName)
-            if (season?.id) {
-                loadSeason(season.id)
-            } else {
-                console.warn(`${LOG_CTX} 🗓️ > No season found with shortName "${shortName}", falling back to default`)
-                const defaultId = getDefaultSeasonId()
-                if (defaultId) loadSeason(defaultId)
-            }
+            userChoice.value = {shortName}
+            console.info(`${LOG_CTX} 🗓️ > PLAN_STORE > Loading season by shortName: ${shortName}`)
         }
 
         const onSeasonSelect = (id: number) => {
@@ -440,31 +442,13 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
 
-        const initPlanStore = (shortName?: string) => {
-            console.info(`${LOG_CTX} 🗓️ > PLAN_STORE > initPlanStore > shortName: ${shortName ?? 'none'}, selected: ${selectedSeasonId.value}, active: ${activeSeasonId.value}`)
-            if (shortName) {
-                loadSeasonByShortName(shortName)  // Handles fallback if shortName is invalid
-            } else {
-                const defaultId = getDefaultSeasonId()
-                if (defaultId) loadSeason(defaultId)
-            }
-        }
-
-        // AUTO-INITIALIZATION - Watch for data to load, then auto-select active season
-        // Don't call initPlanStore immediately - wait for both data sources to load
-        watch([isSeasonsInitialized, isActiveSeasonIdInitialized], () => {
-            if (!isSeasonsInitialized.value) return
-            if (!isActiveSeasonIdInitialized.value) return // Wait for activeSeasonId to load
-            if (selectedSeasonId.value !== null) return // Already selected
-
-            console.info(`${LOG_CTX} 🗓️ > PLAN_STORE > Data loaded, calling initPlanStore`)
-            initPlanStore()
-        }, { immediate: true }) // Check immediately in case data is already loaded
 
 
         return {
             // state
             selectedSeason,
+            selectedSeasonId,
+            selectedSeasonDataset: markRaw(selectedSeasonDataset),
             seasons,
             // computed state
             isActiveSeasonIdLoading,
@@ -489,7 +473,7 @@ export const usePlanStore = defineStore("Plan", () => {
             disabledModes,
             isCreatingTeams,
             // actions
-            initPlanStore,
+            loadSeasonByShortName,
             loadSeasons,
             onSeasonSelect,
             fetchTeamDetail,  // Fetch function, not state

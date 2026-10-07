@@ -22,11 +22,10 @@ const bookingsStore = useBookingsStore()
 // Lazy-load order detail with history
 const {data: orderDetail, status, error} = useAsyncData(
     computed(() => `order-history-${props.orderId ?? 'null'}`),
-    () => props.orderId
-        ? bookingsStore.fetchOrderDetail(props.orderId)
-        : Promise.resolve(null),
+    () => bookingsStore.fetchOrderDetail(props.orderId!),
     {
-        default: () => null
+        default: () => null,
+        enabled: () => !!props.orderId
     }
 )
 

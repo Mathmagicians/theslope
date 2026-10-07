@@ -2,6 +2,8 @@ import {nextTick, h, defineComponent, ref, isRef, type Component, type Ref} from
 import {expect} from 'vitest'
 import {TooltipProvider} from 'reka-ui'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {useNuxtApp, clearNuxtData} from '#app'
+import {createPinia, getActivePinia, setActivePinia} from 'pinia'
 import {flushPromises, type BaseWrapper, type VueWrapper} from '@vue/test-utils'
 import {toCalendarDate} from '~/utils/date'
 
@@ -30,6 +32,21 @@ export async function pollFor(
     }
 
     if( shouldFail) throw new Error(`Condition not met after ${maxAttempts} attempts`)
+}
+
+/** The status of a keyed useAsyncData dataset; stores expose flags, the status itself lives under the key */
+export const asyncDataStatus = (key: string) => useNuxtApp()._asyncData[key]?.status.value
+
+/**
+ * Fresh stores over a fresh data layer per test: clearNuxtData keeps the keyed entries earlier stores
+ * registered, and an earlier store left alive keeps watching them; a new app has neither
+ */
+export const resetStores = () => {
+    const nuxtApp = useNuxtApp()
+    getActivePinia()?._s.forEach(store => store.$dispose())
+    setActivePinia(createPinia())
+    clearNuxtData()
+    Object.keys(nuxtApp._asyncData).forEach(key => delete nuxtApp._asyncData[key])
 }
 
 // Anything with find/findAll: a mountSuspended root, a findComponent() result or a DOMWrapper

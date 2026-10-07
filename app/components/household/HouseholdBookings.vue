@@ -31,7 +31,6 @@ const {ICONS, ALERTS} = useTheSlopeDesignSystem()
 
 const planStore = usePlanStore()
 const {selectedSeason, isSelectedSeasonInitialized, isSelectedSeasonLoading, isSelectedSeasonErrored} = storeToRefs(planStore)
-planStore.initPlanStore()
 
 const bookingsStore = useBookingsStore()
 const {orders, isProcessingBookings, lockStatus} = storeToRefs(bookingsStore)
@@ -104,11 +103,11 @@ const visibleDinnerEventIds = computed(() =>
 
 // Load orders for visible dinner events (grid view doesn't need provenance)
 // Pass household.id to fetch orders for the viewed household (not session user's)
-watchEffect(() => {
-  if (visibleDinnerEventIds.value.length > 0 && household.value?.id) {
-    bookingsStore.loadOrdersForDinners(visibleDinnerEventIds.value, !isGridView.value, household.value.id)
-  }
-})
+bookingsStore.loadOrdersForDinners(() => ({
+  dinnerEventIds: household.value?.id ? visibleDinnerEventIds.value : [],
+  householdId: household.value?.id,
+  includeProvenance: !isGridView.value
+}))
 
 // Season data for view components
 const ticketPrices = computed(() => selectedSeason.value?.ticketPrices ?? [])

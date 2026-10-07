@@ -107,7 +107,6 @@ const emit = defineEmits<{
 // Self-initialize household store
 const householdsStore = useHouseholdsStore()
 const {selectedHousehold} = storeToRefs(householdsStore)
-householdsStore.initHouseholdsStore()
 const household = computed(() => props.household ?? selectedHousehold.value)
 
 // Permission-based form mode - EDIT if user is member of household (session predicate on the auth store, ADR-017)

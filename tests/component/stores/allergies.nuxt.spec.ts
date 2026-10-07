@@ -4,6 +4,7 @@ import { setActivePinia, createPinia } from 'pinia'
 import { registerEndpoint } from '@nuxt/test-utils/runtime'
 import { clearNuxtData } from '#app'
 import { AllergyFactory } from '~~/tests/e2e/testDataFactories/allergyFactory'
+import { asyncDataStatus, resetStores } from '~~/tests/component/testHelpers'
 
 import { useAllergiesStore } from '~/stores/allergies'
 import { DEFAULT_ALLERGY_POSTER_NOTES } from '~/composables/useSettingValidation'
@@ -156,6 +157,71 @@ describe('Allergies Store - Allergies (Household/Inhabitant)', () => {
         const created = await store.createAllergy(newAllergy)
 
         expect(created).toBeDefined()
+    })
+})
+
+describe('Allergies Store - gated reads', () => {
+    type Store = ReturnType<typeof useAllergiesStore>
+
+    beforeEach(() => {
+        resetStores()
+        vi.clearAllMocks()
+        allergyTypesEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypesWithInhabitants())
+        allergyTypeByIdEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypes()[0])
+        allergiesEndpoint.mockReturnValue(AllergyFactory.createMockAllergies())
+    })
+
+    const gatedReads = [
+        {
+            dataset: 'selected allergy type',
+            idleKey: '/api/admin/allergy-type/null',
+            requestedKey: '/api/admin/allergy-type/1',
+            endpoint: allergyTypeByIdEndpoint,
+            request: (store: Store) => store.loadAllergyType(1)
+        },
+        {
+            dataset: 'household allergies',
+            idleKey: '/api/household/allergy-null',
+            requestedKey: '/api/household/allergy?householdId=1',
+            endpoint: allergiesEndpoint,
+            request: (store: Store) => store.loadAllergiesForHousehold(1)
+        }
+    ]
+
+    it.each(gatedReads)('$dataset is idle and unrequested while its condition is false', async ({idleKey, endpoint}) => {
+        const store = await setupStore()
+
+        expect(endpoint).not.toHaveBeenCalled()
+        expect(asyncDataStatus(idleKey)).toBe('idle')
+        expect(store.isAllergyStoreReady).toBe(true)
+    })
+
+    it.each(gatedReads)('$dataset fetches once its condition holds', async ({requestedKey, endpoint, request}) => {
+        const store = await setupStore()
+
+        request(store)
+
+        await vi.waitFor(() => expect(asyncDataStatus(requestedKey)).toBe('success'))
+        expect(endpoint).toHaveBeenCalled()
+        expect(store.isAllergyStoreReady).toBe(true)
+    })
+
+    it('reads idle household allergies as neither loading, errored, loaded nor empty', async () => {
+        const store = await setupStore()
+
+        expect({
+            isAllergiesLoading: store.isAllergiesLoading,
+            isAllergiesErrored: store.isAllergiesErrored,
+            isAllergiesInitialized: store.isAllergiesInitialized,
+            isNoAllergies: store.isNoAllergies,
+            isSelectedAllergyTypeInitialized: store.isSelectedAllergyTypeInitialized
+        }).toEqual({
+            isAllergiesLoading: false,
+            isAllergiesErrored: false,
+            isAllergiesInitialized: false,
+            isNoAllergies: false,
+            isSelectedAllergyTypeInitialized: false
+        })
     })
 })
 

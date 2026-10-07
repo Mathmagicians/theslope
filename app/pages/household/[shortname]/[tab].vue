@@ -77,12 +77,12 @@ const tabItems = tabs.map(tab => ({
 // Initialize stores
 const householdStore = useHouseholdsStore()
 const {
-  selectedHousehold, selectedHouseholdId, isSelectedHouseholdErrored, selectedHouseholdError,
+  selectedHousehold, isSelectedHouseholdErrored, selectedHouseholdError,
   householdsError, isHouseholdsErrored, isHouseholdsStoreReady,
   households, isHouseholdsInitialized, myHousehold
 } = storeToRefs(householdStore)
 
-const {loadHousehold} = householdStore
+const {selectHouseholdByPbs} = householdStore
 
 // URL-driven household resolution (ADR-006)
 // Valid ?pbs= → load that household. Invalid/missing ?pbs= → fall back to myHousehold.
@@ -97,11 +97,9 @@ const {value: pbsId} = useQueryParam<number | null>('pbs', {
   syncWhen: () => isHouseholdsInitialized.value
 })
 
-// Watch pbsId to load the corresponding household
+// The URL names the household; the store resolves the pbs once the households have loaded
 watch(pbsId, (pbs) => {
-  if (!pbs) return
-  const hh = households.value.find(h => h.pbsId === pbs)
-  if (hh && hh.id !== selectedHouseholdId.value) loadHousehold(hh.id)
+  if (pbs) selectHouseholdByPbs(pbs)
 }, {immediate: true})
 
 // Access control: check if current user is member of this household

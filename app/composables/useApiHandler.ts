@@ -10,6 +10,8 @@ export type StoreAsyncDataOptions<T> = Omit<AsyncDataOptions<unknown, T>, 'defau
     schema: ResponseSchema<T>
     default: () => T
     errorMessage?: string
+    /** Datasets the url reads; the fetch resolves its url and its gate once they have loaded */
+    dependsOn?: PromiseLike<unknown>[]
 }
 
 export type ApiRequestOptions<T> = NitroFetchOptions<NitroFetchRequest> & {
@@ -18,7 +20,7 @@ export type ApiRequestOptions<T> = NitroFetchOptions<NitroFetchRequest> & {
     schema?: ResponseSchema<T>
 }
 
-const SKIPPED = Symbol('skipped')
+const gateClosed = () => new DOMException('The dataset gate closed', 'AbortError')
 
 const isApiError = (error: unknown): error is ApiError => {
     if (typeof error !== 'object' || error === null) return false
@@ -104,22 +106,26 @@ export const useApiHandler = () => {
 
     /**
      * A store read: useAsyncData over the request fetch, the response parsed by `schema`, so the
-     * slice's type is the schema's output. A null url resolves the default without a request.
+     * slice's type is the schema's output. `enabled` gates the request; a closed gate reads idle with the
+     * default. The dataset refetches when its url changes or its gate opens.
      */
     const storeAsyncData = <T>(
         key: MaybeRefOrGetter<string>,
-        url: MaybeRefOrGetter<string | null>,
-        {schema, default: defaultValue, errorMessage, ...options}: StoreAsyncDataOptions<T>
+        url: MaybeRefOrGetter<string>,
+        {schema, default: defaultValue, errorMessage, dependsOn = [], enabled, watch: sources = [], ...options}: StoreAsyncDataOptions<T>
     ): AsyncData<T, NuxtError | undefined> => {
         const surface = (error: unknown): never => {
             handleApiError(error, toValue(key), errorMessage)
             throw error
         }
-        return useAsyncData(key, async (_nuxtApp, {signal}) => {
-            const target = toValue(url)
-            if (target === null) return SKIPPED
+        const isOpen = () => toValue(enabled ?? true)
+        const asyncData = useAsyncData(key, async (_nuxtApp, {signal}) => {
+            // Yields once even without dependencies: a gate the caller opens right after creating the store
+            // counts on the server, where no watcher runs
+            await Promise.all(dependsOn)
+            if (!isOpen()) throw gateClosed()
             try {
-                return await requestFetch<unknown>(target, {signal})
+                return await requestFetch<unknown>(toValue(url), {signal})
             } catch (error) {
                 // A superseded request is cancelled, not failed
                 if (signal.aborted) throw error
@@ -127,9 +133,12 @@ export const useApiHandler = () => {
             }
         }, {
             ...options,
+            // On the server the fetcher reads the gate, after the dependencies
+            enabled: import.meta.server ? true : enabled,
+            // Nuxt's enabled watcher only cancels; opening the gate fetches through this watch
+            watch: [...sources, () => toValue(url), isOpen],
             default: defaultValue,
             transform: (data: unknown) => {
-                if (data === SKIPPED) return defaultValue()
                 try {
                     return schema.parse(data)
                 } catch (error) {
@@ -137,6 +146,13 @@ export const useApiHandler = () => {
                 }
             }
         }) as AsyncData<T, NuxtError | undefined>
+        // A closing gate keeps the data, and a key swap seeds the new key with the old key's data
+        if (enabled !== undefined) {
+            watch(() => toValue(enabled), (isEnabled) => {
+                if (!isEnabled) asyncData.clear()
+            })
+        }
+        return asyncData
     }
 
     /**

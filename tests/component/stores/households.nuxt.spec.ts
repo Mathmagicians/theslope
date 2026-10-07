@@ -1,22 +1,28 @@
 // @vitest-environment nuxt
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest'
+import { flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { registerEndpoint, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import type {
   HouseholdDisplay,
-  HouseholdDetail
+  HouseholdDetail,
+  UserDetail
 } from '~/composables/useCoreValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
+import { UserFactory } from '~~/tests/e2e/testDataFactories/userFactory'
+import { asyncDataStatus, resetStores } from '~~/tests/component/testHelpers'
 
 import { useHouseholdsStore } from '~/stores/households'
 
-// Mock useUserSession to return loggedIn: true
-// This prevents the store from skipping fetch due to auth check
-const { mockLoggedIn } = vi.hoisted(() => ({ mockLoggedIn: { value: true } }))
+// nuxt-auth-utils has no session in the test environment; the spec logs in and out and sets the session user
+const { mockLoggedIn, mockSessionUser } = await vi.hoisted(async () => {
+  const { ref } = await import('vue')
+  return { mockLoggedIn: ref(true), mockSessionUser: ref<UserDetail | null>(null) }
+})
 mockNuxtImport('useUserSession', () => () => ({
   loggedIn: mockLoggedIn,
-  user: { value: null },
+  user: mockSessionUser,
   session: { value: null },
   clear: vi.fn(),
   fetch: vi.fn()
@@ -201,38 +207,6 @@ describe('Households Store', () => {
 
     expect(store.isNoHouseholds).toBe(expected)
     expect(store.households).toHaveLength(data.length)
-  })
-
-  describe('initHouseholdsStore', () => {
-    beforeEach(() => {
-      setActivePinia(createPinia())
-    })
-
-    it('auto-selects when no household is selected and store is initialized', async () => {
-      const store = await setupStore()
-      householdByIdEndpoint.mockClear()
-
-      // No household selected yet, initHouseholdsStore should auto-select
-      store.initHouseholdsStore()
-
-      // Should attempt to load a household (falls back to first available since no myHousehold)
-      // The exact behavior depends on resolveHouseholdId which is tested in household.unit.spec.ts
-    })
-
-    it('does not re-select when household is already selected', async () => {
-      const store = await setupStore()
-
-      // First select a household
-      store.loadHousehold(1)
-      await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
-
-      householdByIdEndpoint.mockClear()
-
-      // Second call should not re-select
-      store.initHouseholdsStore()
-
-      expect(householdByIdEndpoint).not.toHaveBeenCalled()
-    })
   })
 
   describe('updateInhabitantPreferences', () => {
@@ -600,5 +574,171 @@ describe('Households Store - calendar feed', () => {
     const store = useHouseholdsStore()
 
     await expect(store.fetchCalendarFeed()).resolves.toBe(expected)
+  })
+})
+
+describe('Households Store - gated reads', () => {
+  const HOUSEHOLDS_KEY = 'households-store-households'
+  const SELECTED_KEY = 'households-store-selected-household'
+
+  beforeEach(() => {
+    resetStores()
+    vi.clearAllMocks()
+    mockLoggedIn.value = true
+    householdIndexEndpoint.mockReturnValue(createMockHouseholds())
+    householdByIdEndpoint.mockReturnValue(createMockHouseholdDetail())
+    deleteHouseholdEndpoint.mockReturnValue(null)
+  })
+
+  afterEach(() => {
+    mockLoggedIn.value = true
+  })
+
+  const readFlags = (store: ReturnType<typeof useHouseholdsStore>) => ({
+    isHouseholdsLoading: store.isHouseholdsLoading,
+    isHouseholdsErrored: store.isHouseholdsErrored,
+    isHouseholdsInitialized: store.isHouseholdsInitialized,
+    isNoHouseholds: store.isNoHouseholds,
+    isHouseholdsStoreReady: store.isHouseholdsStoreReady
+  })
+  const IDLE_FLAGS = {
+    isHouseholdsLoading: false,
+    isHouseholdsErrored: false,
+    isHouseholdsInitialized: false,
+    isNoHouseholds: false,
+    isHouseholdsStoreReady: false
+  }
+
+  describe('households list (login gate, constant key)', () => {
+    it('is idle and unrequested while logged out, and the store is not ready', async () => {
+      mockLoggedIn.value = false
+
+      const store = useHouseholdsStore()
+      await flushPromises()
+
+      expect(householdIndexEndpoint).not.toHaveBeenCalled()
+      expect(asyncDataStatus(HOUSEHOLDS_KEY)).toBe('idle')
+      expect(readFlags(store)).toEqual(IDLE_FLAGS)
+    })
+
+    it('fetches once the user logs in', async () => {
+      mockLoggedIn.value = false
+      const store = useHouseholdsStore()
+      await flushPromises()
+
+      mockLoggedIn.value = true
+
+      await vi.waitFor(() => expect(asyncDataStatus(HOUSEHOLDS_KEY)).toBe('success'))
+      expect(householdIndexEndpoint).toHaveBeenCalled()
+      expect(store.households).toHaveLength(createMockHouseholds().length)
+    })
+
+    it('empties on logout', async () => {
+      const store = await setupStore()
+      expect(store.households).toHaveLength(createMockHouseholds().length)
+
+      mockLoggedIn.value = false
+
+      await vi.waitFor(() => expect(asyncDataStatus(HOUSEHOLDS_KEY)).toBe('idle'))
+      expect(store.households).toEqual([])
+      expect(readFlags(store)).toEqual(IDLE_FLAGS)
+    })
+  })
+
+  describe('selected household (id in the key)', () => {
+    it('is idle and unrequested with no household selected', async () => {
+      const store = await setupStore()
+
+      expect(householdByIdEndpoint).not.toHaveBeenCalled()
+      expect(asyncDataStatus(SELECTED_KEY)).toBe('idle')
+      expect(store.isSelectedHouseholdLoading).toBe(false)
+      expect(store.isSelectedHouseholdInitialized).toBe(false)
+      expect(store.isHouseholdsStoreReady).toBe(false)
+    })
+
+    it('fetches once a household is selected, and the store is ready', async () => {
+      const store = await setupStore()
+
+      store.loadHousehold(1)
+
+      await vi.waitFor(() => expect(store.isHouseholdsStoreReady).toBe(true))
+      expect(asyncDataStatus(SELECTED_KEY)).toBe('success')
+      expect(householdByIdEndpoint).toHaveBeenCalled()
+    })
+
+    it('lands on the empty default when the selected household is deleted', async () => {
+      const store = await setupStore()
+      store.loadHousehold(1)
+      await vi.waitFor(() => expect(store.isSelectedHouseholdInitialized).toBe(true))
+
+      await store.deleteHousehold(1)
+
+      await vi.waitFor(() => expect(asyncDataStatus(SELECTED_KEY)).toBe('idle'))
+      expect(store.selectedHousehold).toBeNull()
+    })
+  })
+})
+
+describe('Households Store - household selection', () => {
+  const [mine, other] = createMockHouseholds()
+
+  beforeEach(() => {
+    resetStores()
+    vi.clearAllMocks()
+    mockSessionUser.value = UserFactory.defaultUserWithInhabitant('households-selection')
+    householdIndexEndpoint.mockReturnValue(createMockHouseholds())
+    householdByIdEndpoint.mockReturnValue(createMockHouseholdDetail())
+    deleteHouseholdEndpoint.mockReturnValue(null)
+  })
+
+  afterEach(() => {
+    mockSessionUser.value = null
+  })
+
+  it('selects my household by default once the households load', async () => {
+    const store = useHouseholdsStore()
+
+    await vi.waitFor(() => expect(store.isHouseholdsStoreReady).toBe(true))
+    expect(store.selectedHouseholdId).toBe(mine!.id)
+  })
+
+  it('a user choice wins over the default', async () => {
+    const store = await setupStore()
+
+    store.loadHousehold(other!.id)
+
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(other!.id))
+  })
+
+  it('deleting the selected household returns to my household', async () => {
+    const store = await setupStore()
+    store.loadHousehold(other!.id)
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(other!.id))
+
+    await store.deleteHousehold(other!.id)
+
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(mine!.id))
+  })
+
+  it.each([
+    {when: 'after the households have loaded', awaitHouseholds: true},
+    {when: 'before the households have loaded', awaitHouseholds: false}
+  ])('selects the household a pbs names, requested $when', async ({awaitHouseholds}) => {
+    const store = useHouseholdsStore()
+    if (awaitHouseholds) await store.loadHouseholds()
+
+    store.selectHouseholdByPbs(other!.pbsId)
+
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(other!.id))
+    await vi.waitFor(() => expect(store.isHouseholdsStoreReady).toBe(true))
+  })
+
+  it('falls back to my household for a pbs no household carries', async () => {
+    const store = await setupStore()
+
+    store.selectHouseholdByPbs(-1)
+
+    await vi.waitFor(() => expect(store.isHouseholdsStoreReady).toBe(true))
+    expect(store.selectedHouseholdId).toBe(mine!.id)
   })
 })

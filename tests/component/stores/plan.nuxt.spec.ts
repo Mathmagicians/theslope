@@ -1,8 +1,8 @@
 // @vitest-environment nuxt
-import { setActivePinia, createPinia } from 'pinia'
-import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerEndpoint } from '@nuxt/test-utils/runtime'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
+import { asyncDataStatus, resetStores } from '~~/tests/component/testHelpers'
 
 import { usePlanStore } from '~/stores/plan'
 
@@ -18,11 +18,11 @@ const mockSeasons = [season1, season2]
 // Register with default return values for auto-loading store
 const seasonIndexEndpoint = vi.fn(() => mockSeasons)
 const seasonByIdEndpoint = vi.fn(() => season1)
-const activeSeasonIdEndpoint = vi.fn(() => season1.id)
+const activeSeasonIdEndpoint = vi.fn((): number | null => season1.id)
 
 registerEndpoint('/api/admin/season/active', activeSeasonIdEndpoint)
 registerEndpoint('/api/admin/season/1', seasonByIdEndpoint)
-registerEndpoint('/api/admin/season/2', seasonByIdEndpoint)
+registerEndpoint('/api/admin/season/2', () => season2)
 registerEndpoint('/api/admin/season', seasonIndexEndpoint)
 
 // Team creation returns the operation result envelope (ADR-009)
@@ -43,19 +43,17 @@ registerEndpoint('/api/admin/season', { method: 'PUT', handler: createSeasonEndp
 registerEndpoint('/api/admin/season/active', { method: 'POST', handler: activateSeasonEndpoint })
 
 // Test helpers
-const setupStore = async (initStore = false, shortName?: string) => {
+const SELECTED_SEASON_KEY = 'plan-store-selected-season'
+
+const setupStore = async () => {
     const store = usePlanStore()
     await store.loadSeasons()
-    if (initStore) store.initPlanStore(shortName)
     return store
 }
 
 describe('Plan Store - Basic Initialization', () => {
-    beforeAll(() => {
-        setActivePinia(createPinia())
-    })
-
     beforeEach(() => {
+        resetStores()
         vi.clearAllMocks()
         seasonIndexEndpoint.mockClear()
         seasonByIdEndpoint.mockClear()
@@ -107,8 +105,7 @@ describe('Plan Store - Basic Initialization', () => {
 
 describe('Plan Store - Team creation', () => {
     beforeEach(() => {
-        setActivePinia(createPinia())
-        clearNuxtData()
+        resetStores()
         vi.clearAllMocks()
         seasonIndexEndpoint.mockReturnValue(mockSeasons)
         seasonByIdEndpoint.mockReturnValue(season1)
@@ -147,8 +144,7 @@ describe('Plan Store - Season save and activation', () => {
     }
 
     beforeEach(() => {
-        setActivePinia(createPinia())
-        clearNuxtData()
+        resetStores()
         vi.clearAllMocks()
         seasonIndexEndpoint.mockReturnValue(mockSeasons)
         seasonByIdEndpoint.mockReturnValue(season1)
@@ -228,5 +224,97 @@ describe('Plan Store - Season save and activation', () => {
         expect(activateSeasonEndpoint).toHaveBeenCalledTimes(1)
         expect(activeSeasonIdEndpoint.mock.calls.length).toBeGreaterThan(activeFetchesBefore)
         expect(store.isActivatingSeasonFlowInProgress).toBe(false)
+    })
+})
+
+describe('Plan Store - gated selected season', () => {
+    beforeEach(() => {
+        resetStores()
+        vi.clearAllMocks()
+        seasonByIdEndpoint.mockReturnValue(season1)
+        activeSeasonIdEndpoint.mockReturnValue(season1.id)
+    })
+
+    it('stays idle and unrequested with no season to select, and the store is ready', async () => {
+        seasonIndexEndpoint.mockReturnValue([])
+        activeSeasonIdEndpoint.mockReturnValue(null)
+
+        const store = await setupStore()
+        await vi.waitFor(() => expect(store.isActiveSeasonIdInitialized).toBe(true))
+
+        expect(seasonByIdEndpoint).not.toHaveBeenCalled()
+        expect(asyncDataStatus(SELECTED_SEASON_KEY)).toBe('idle')
+        expect({
+            isSelectedSeasonLoading: store.isSelectedSeasonLoading,
+            isSelectedSeasonErrored: store.isSelectedSeasonErrored,
+            isPlanStoreReady: store.isPlanStoreReady
+        }).toEqual({isSelectedSeasonLoading: false, isSelectedSeasonErrored: false, isPlanStoreReady: true})
+    })
+
+    it('fetches the selected season once one is selected, and the store is ready', async () => {
+        seasonIndexEndpoint.mockReturnValue(mockSeasons)
+
+        const store = await setupStore()
+
+        await vi.waitFor(() => expect(store.isPlanStoreReady).toBe(true))
+        expect(asyncDataStatus(SELECTED_SEASON_KEY)).toBe('success')
+        expect(seasonByIdEndpoint).toHaveBeenCalled()
+        expect(store.selectedSeason?.id).toBe(season1.id)
+    })
+})
+
+describe('Plan Store - season selection', () => {
+    beforeEach(() => {
+        resetStores()
+        vi.clearAllMocks()
+        seasonIndexEndpoint.mockReturnValue(mockSeasons)
+        seasonByIdEndpoint.mockReturnValue(season1)
+        activeSeasonIdEndpoint.mockReturnValue(season1.id)
+    })
+
+    const selectedSeasonOnceReady = async (store: ReturnType<typeof usePlanStore>) => {
+        await vi.waitFor(() => expect(store.isPlanStoreReady).toBe(true))
+        return store.selectedSeason?.id
+    }
+
+    it.each([
+        {rule: 'the active season', activeId: season1.id, expected: season1.id},
+        {rule: 'the first sorted season without an active one', activeId: null, expected: season1.id}
+    ])('selects $rule by default once seasons and the active id resolve', async ({activeId, expected}) => {
+        activeSeasonIdEndpoint.mockReturnValue(activeId)
+
+        const store = usePlanStore()
+
+        expect(await selectedSeasonOnceReady(store)).toBe(expected)
+    })
+
+    it('a user choice wins over the default', async () => {
+        const store = usePlanStore()
+        await selectedSeasonOnceReady(store)
+
+        store.onSeasonSelect(season2.id)
+
+        await vi.waitFor(() => expect(store.selectedSeason?.id).toBe(season2.id))
+    })
+
+    it.each([
+        {when: 'after the seasons have loaded', awaitSeasons: true},
+        {when: 'before the seasons have loaded', awaitSeasons: false}
+    ])('selects the season a shortName names, requested $when', async ({awaitSeasons}) => {
+        const store = usePlanStore()
+        if (awaitSeasons) await store.loadSeasons()
+
+        store.loadSeasonByShortName(season2.shortName)
+
+        await vi.waitFor(() => expect(store.selectedSeason?.id).toBe(season2.id))
+    })
+
+    it('falls back to the default for a shortName no season carries', async () => {
+        const store = usePlanStore()
+        await store.loadSeasons()
+
+        store.loadSeasonByShortName('no-such-season')
+
+        expect(await selectedSeasonOnceReady(store)).toBe(season1.id)
     })
 })

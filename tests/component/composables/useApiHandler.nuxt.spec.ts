@@ -64,12 +64,67 @@ describe('useApiHandler', () => {
             expect(lastToast()?.description).toBe(ERROR_MESSAGE)
         })
 
-        it('resolves the default without a request when the url is null', async () => {
-            const {data, status} = await storeAsyncData('catalog-gated', () => null, {schema: AllergyTypeDetailSchema.array(), default: () => []})
+        it('stays idle without a request while its gate is closed', async () => {
+            const {data, status} = await storeAsyncData('catalog-gated', CATALOG, {
+                schema: AllergyTypeDetailSchema.array(), default: () => [], enabled: () => false
+            })
 
-            expect(status.value).toBe('success')
+            expect(status.value).toBe('idle')
             expect(data.value).toEqual([])
             expect(catalogEndpoint).not.toHaveBeenCalled()
+        })
+
+        it('fetches once its gate opens', async () => {
+            const isOpen = ref(false)
+            const {data} = await storeAsyncData('catalog-opening', CATALOG, {
+                schema: AllergyTypeDetailSchema.array(), default: () => [], enabled: () => isOpen.value
+            })
+
+            isOpen.value = true
+
+            await vi.waitFor(() => expect(data.value).toHaveLength(AllergyFactory.createMockAllergyTypesWithInhabitants().length))
+        })
+
+        it('refetches when its url changes under a constant key', async () => {
+            const selectedId = ref(0)
+            const {data} = await storeAsyncData('catalog-entry', () => selectedId.value ? `${CATALOG}/${selectedId.value}` : CATALOG, {
+                schema: AllergyTypeDetailSchema.array(), default: () => []
+            })
+            expect(data.value).toHaveLength(AllergyFactory.createMockAllergyTypesWithInhabitants().length)
+
+            selectedId.value = 1
+
+            await vi.waitFor(() => expect(data.value).toHaveLength(1))
+        })
+
+        it('resolves its url only after the datasets it depends on', async () => {
+            let release = () => {}
+            catalogEndpoint.mockImplementation(() => new Promise(resolve => {
+                release = () => resolve(AllergyFactory.createMockAllergyTypesWithInhabitants())
+            }))
+            const upstream = storeAsyncData('catalog-upstream', CATALOG, {schema: AllergyTypeDetailSchema.array(), default: () => []})
+            const downstream = storeAsyncData('catalog-downstream', () => `${CATALOG}/${upstream.data.value[0]?.id}`, {
+                schema: AllergyTypeDetailSchema.array(), default: () => [], dependsOn: [upstream]
+            })
+
+            await vi.waitFor(() => expect(catalogEndpoint).toHaveBeenCalled())
+            release()
+
+            await vi.waitFor(() => expect(downstream.status.value).toBe('success'))
+            expect(downstream.data.value).toHaveLength(1)
+        })
+
+        it('reads its gate after the datasets it depends on and stays idle when it closed meanwhile', async () => {
+            const isOpen = ref(true)
+            const upstream = storeAsyncData('catalog-upstream-gate', CATALOG, {schema: AllergyTypeDetailSchema.array(), default: () => []})
+            const downstream = storeAsyncData('catalog-downstream-gate', `${CATALOG}/1`, {
+                schema: AllergyTypeDetailSchema.array(), default: () => [], dependsOn: [upstream], enabled: () => isOpen.value
+            })
+
+            isOpen.value = false
+
+            await vi.waitFor(() => expect(downstream.status.value).toBe('idle'))
+            expect(downstream.data.value).toEqual([])
         })
 
         it('passes immediate through: nothing is fetched until execute', async () => {
@@ -90,12 +145,30 @@ describe('useApiHandler', () => {
             expect(status.value).toBe('success')
         })
 
+        it.each([
+            {description: 'a constant key', key: (_isOpen: boolean) => 'catalog-gate-constant'},
+            {description: 'a key carrying the gate', key: (isOpen: boolean) => `catalog-gate-${isOpen}`}
+        ])('clears to the default and idle when the gate closes, with $description', async ({key}) => {
+            const isOpen = ref(true)
+            const {data, status} = await storeAsyncData(() => key(isOpen.value), `${CATALOG}/1`, {
+                schema: AllergyTypeDetailSchema.array(),
+                default: () => [],
+                enabled: () => isOpen.value
+            })
+            expect(data.value).toHaveLength(1)
+
+            isOpen.value = false
+
+            await vi.waitFor(() => expect(status.value).toBe('idle'))
+            expect(data.value).toEqual([])
+        })
+
         it('follows a reactive key and url', async () => {
             const selectedId = ref<number | null>(null)
             const {data} = await storeAsyncData(
                 () => `catalog-entry-${selectedId.value}`,
-                () => selectedId.value ? `${CATALOG}/${selectedId.value}` : null,
-                {schema: AllergyTypeDetailSchema.array(), default: () => []}
+                () => `${CATALOG}/${selectedId.value}`,
+                {schema: AllergyTypeDetailSchema.array(), default: () => [], enabled: () => selectedId.value !== null}
             )
             expect(data.value).toEqual([])
 

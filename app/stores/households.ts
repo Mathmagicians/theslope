@@ -17,9 +17,6 @@ export const useHouseholdsStore = defineStore("Households", () => {
     const {formatScaffoldResult} = useBooking()
     const {HouseholdDisplaySchema, HouseholdDetailSchema} = useCoreValidation()
 
-    // STATE - Server data only
-    const selectedHouseholdId = ref<number | null>(null)
-
     // Last preference update result (persists across component remounts)
     const lastPreferenceResult = ref<ScaffoldResult | null>(null)
 
@@ -34,48 +31,57 @@ export const useHouseholdsStore = defineStore("Households", () => {
     // PageHeader instantiates this store before session is hydrated
     const {loggedIn} = useUserSession()
 
+    const householdsDataset = storeAsyncData('households-store-households', '/api/admin/household', {
+        schema: HouseholdDisplaySchema.array(),
+        default: () => [],
+        enabled: () => loggedIn.value,
+        errorMessage: 'Kunne ikke hente husstande'
+    })
     const {
         data: households,
         status: householdsStatus,
         error: householdsError,
         refresh: refreshHouseholds
-    } = storeAsyncData(
-        'households-store-households',
-        () => {
-            // Don't fetch until session is ready - prevents 401 on initial load
-            if (!loggedIn.value) {
-                console.info('🏠 > HOUSEHOLDS_STORE > Skipping fetch - not logged in yet')
-                return null
-            }
-            return '/api/admin/household'
-        },
+    } = householdsDataset
+
+    const authStore = useAuthStore()
+
+    /**
+     * Get the logged-in user's household (from auth session)
+     * Returns full household object from session, or null if not authenticated
+     */
+    const myHousehold = computed(() => {
+        return authStore.user?.Inhabitant?.household ?? null
+    })
+
+    // A pbs resolves once the households have loaded; an unknown one falls back to my household
+    const userChoice = ref<{id: number} | {pbsId: number} | null>(null)
+    const chosenHouseholdId = computed(() => {
+        const choice = userChoice.value
+        if (!choice) return null
+        if ('id' in choice) return choice.id
+        return households.value.find(h => h.pbsId === choice.pbsId)?.id ?? null
+    })
+    const selectedHouseholdId = computed(() => chosenHouseholdId.value ?? myHousehold.value?.id ?? null)
+
+    // The key stays constant: a pbs resolves after the households load, mid-render on the server
+    const selectedHouseholdDataset = storeAsyncData(
+        'households-store-selected-household',
+        () => `/api/admin/household/${selectedHouseholdId.value}`,
         {
-            schema: HouseholdDisplaySchema.array(),
-            default: () => [],
-            watch: [loggedIn],  // Re-fetch when login state changes
-            errorMessage: 'Kunne ikke hente husstande'
+            schema: HouseholdDetailSchema.nullable(),
+            default: () => null,
+            enabled: () => !!selectedHouseholdId.value,
+            dependsOn: [householdsDataset],
+            errorMessage: 'Kunne ikke hente husstand'
         }
     )
-
-    const selectedHouseholdKey = computed(() => `/api/admin/household/${selectedHouseholdId.value || 'null'}`)
-
     const {
         data: selectedHousehold,
         status: selectedHouseholdStatus,
         error: selectedHouseholdError,
         refresh: refreshSelectedHousehold
-    } = storeAsyncData(
-        selectedHouseholdKey,
-        () => {
-            if (!selectedHouseholdId.value) return null
-            return `/api/admin/household/${selectedHouseholdId.value}`
-        },
-        {
-            schema: HouseholdDetailSchema.nullable(),
-            default: () => null,
-            errorMessage: 'Kunne ikke hente husstand'
-        }
-    )
+    } = selectedHouseholdDataset
 
     // ========================================
     // Computed - Public API (derived from status)
@@ -93,17 +99,6 @@ export const useHouseholdsStore = defineStore("Households", () => {
     const isHouseholdsStoreReady = computed(() =>
         isHouseholdsInitialized.value && (isNoHouseholds.value || isSelectedHouseholdInitialized.value)
     )
-
-    // DEPENDENCIES - access auth store
-    const authStore = useAuthStore()
-
-    /**
-     * Get the logged-in user's household (from auth session)
-     * Returns full household object from session, or null if not authenticated
-     */
-    const myHousehold = computed(() => {
-        return authStore.user?.Inhabitant?.household ?? null
-    })
 
     const myInhabitant = computed(() => authStore.user?.Inhabitant ?? null)
 
@@ -123,13 +118,14 @@ export const useHouseholdsStore = defineStore("Households", () => {
         console.info(`🏠 > HOUSEHOLDS_STORE > Loaded ${households.value.length} households`)
     }
 
-    /**
-     * Fetch single household with inhabitants
-     * Setting selectedHouseholdId triggers reactive useAsyncData fetch
-     */
     const loadHousehold = (id: number) => {
-        selectedHouseholdId.value = id
+        userChoice.value = {id}
         console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Loading household ID: ${id}`)
+    }
+
+    const selectHouseholdByPbs = (pbsId: number) => {
+        userChoice.value = {pbsId}
+        console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Loading household PBS: ${pbsId}`)
     }
 
     /**
@@ -328,7 +324,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Household ${householdId} deleted`)
 
         if (selectedHouseholdId.value === householdId) {
-            selectedHouseholdId.value = null
+            userChoice.value = null
         }
         await refreshHouseholds()
 
@@ -375,30 +371,12 @@ export const useHouseholdsStore = defineStore("Households", () => {
         }
     }
 
-    /**
-     * Initialize store - ensures households are fetched and auto-selects user's own household
-     * Used by components that just need "ensure store is initialized" (AdminHouseholds, AdminEconomy, DinnerBookingForm)
-     * The household page uses useQueryParam('pbs') for URL-driven resolution instead.
-     */
-    const initHouseholdsStore = () => {
-        if (isHouseholdsInitialized.value && !selectedHouseholdId.value && myHousehold.value?.id) {
-            console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > initHouseholdsStore > auto-selecting myHousehold: ${myHousehold.value.id}`)
-            loadHousehold(myHousehold.value.id)
-        }
-    }
-
-    // AUTO-INITIALIZATION - Watch for households to load, then auto-select user's household
-    watch([isHouseholdsInitialized, selectedHouseholdId, myHousehold], () => {
-        if (!isHouseholdsInitialized.value) return
-        if (selectedHouseholdId.value) return // Already selected
-        initHouseholdsStore()
-    })
-
     return {
         // State
         households,
         selectedHousehold,
         selectedHouseholdId,
+        selectedHouseholdDataset: markRaw(selectedHouseholdDataset),
         lastPreferenceResult,
         lastMoveOutResult,
         lastMoveResult,
@@ -421,7 +399,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         fetchHouseholdDetail,
         fetchCalendarFeed,
         refreshSelectedHousehold,
-        initHouseholdsStore,
+        selectHouseholdByPbs,
         updateInhabitantPreferences,
         updateAllInhabitantPreferences,
         setMoveOutDate,

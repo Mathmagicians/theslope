@@ -13,7 +13,6 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 
 // Mock stores
 const mockHouseholdsStore = {
-  initHouseholdsStore: vi.fn(),
   selectedHousehold: null,
   myInhabitant: {id: 1, name: 'Test', lastName: 'User'}
 }
@@ -58,11 +57,6 @@ describe('DinnerBookingForm', () => {
   it('renders empty state when no household', async () => {
     const wrapper = await mountSuspended(DinnerBookingForm, {props: baseProps})
     expect(wrapper.text()).toContain('Ingen husstandsmedlemmer')
-  })
-
-  it('initializes household store on mount', async () => {
-    await mountSuspended(DinnerBookingForm, {props: baseProps})
-    expect(mockHouseholdsStore.initHouseholdsStore).toHaveBeenCalled()
   })
 
   describe('edit permission (canEditAdminOverride + isMemberOfHousehold)', () => {

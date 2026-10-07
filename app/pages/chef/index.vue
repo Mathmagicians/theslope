@@ -45,7 +45,6 @@ const {COLOR, ICONS, LAYOUTS, ALERTS} = useTheSlopeDesignSystem()
 // Initialize stores
 const planStore = usePlanStore()
 const {isPlanStoreReady, isPlanStoreErrored, planStoreError, selectedSeason} = storeToRefs(planStore)
-planStore.initPlanStore()
 
 const usersStore = useUsersStore()
 const {myTeams, isMyTeamsLoading, isMyTeamsErrored, isMyTeamsInitialized, myTeamsError} = storeToRefs(usersStore)

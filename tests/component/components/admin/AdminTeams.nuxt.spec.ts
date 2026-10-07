@@ -35,7 +35,6 @@ const mountTeams = async () => {
     await useAuthStore().fetch()
     const store = usePlanStore()
     await store.loadSeasons()
-    store.initPlanStore()
     await pollFor(() => store.isPlanStoreReady, 40, false)
 
     const wrapper = await mountWithTooltipProvider(AdminTeams, {props: {canEdit: true}, isMd: true})

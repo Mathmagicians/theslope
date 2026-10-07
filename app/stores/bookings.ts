@@ -13,48 +13,43 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const toast = useToast()
 
     const CTX = `${LOG_CTX} 🎟️ > BOOKINGS_STORE >`
+    const planStore = usePlanStore()
+    const householdsStore = useHouseholdsStore()
 
     // ========================================
     // State (ADR-007)
     // ========================================
 
-    // Selected context for filtering orders
-    const selectedDinnerEventIds = ref<number[]>([]) // Empty = all events
-    const selectedInhabitantId = ref<number | null>(null)
-    const selectedHouseholdId = ref<number | null>(null) // Explicit household (admin viewing another household)
-    const includeProvenance = ref(false) // Only true for household booking view (shows "🔄 fra AR_1" on claimed tickets)
+    // Keys of datasets that read the season or household selection stay constant: the selection
+    // resolves after its upstream loads, mid-render on the server
 
-    // Fetch orders - reactive based on selected filters
-    const buildOrdersQuery = () => {
+    // The page names the orders it shows; a getter keeps them in step with its selection
+    type OrdersFilter = {dinnerEventIds: number[], householdId?: number | null, includeProvenance?: boolean}
+    const ordersFilter = shallowRef<() => OrdersFilter>(() => ({dinnerEventIds: []}))
+
+    const ordersQuery = computed(() => {
+        const {dinnerEventIds, householdId, includeProvenance} = ordersFilter.value()
         const params = new URLSearchParams()
-        // Array of IDs: empty=all, otherwise filter
-        selectedDinnerEventIds.value.forEach(id => params.append('dinnerEventIds', String(id)))
-        if (selectedInhabitantId.value) params.append('inhabitantId', String(selectedInhabitantId.value))
-        if (selectedHouseholdId.value) params.append('householdId', String(selectedHouseholdId.value))
-        if (includeProvenance.value) params.append('includeProvenance', 'true')
+        dinnerEventIds.forEach(id => params.append('dinnerEventIds', String(id)))
+        if (householdId) params.append('householdId', String(householdId))
+        if (includeProvenance) params.append('includeProvenance', 'true')
         return params.toString()
-    }
+    })
 
-    const ordersKey = computed(() => `/api/order?${buildOrdersQuery()}`)
-
-    // Only fetch when filters are explicitly set (prevents fetching ALL orders on init)
-    const hasFilters = computed(() =>
-        selectedDinnerEventIds.value.length > 0 || selectedInhabitantId.value !== null
-    )
+    // An unfiltered request returns every order of the household
+    const hasFilters = computed(() => ordersFilter.value().dinnerEventIds.length > 0)
 
     const {
         data: orders, status: ordersStatus,
         error: ordersError, refresh: refreshOrders
     } = storeAsyncData(
-        ordersKey,
-        () => {
-            // Skip fetch until filters are set (prevents initial "fetch all" on store init)
-            if (!hasFilters.value) return null
-            return `/api/order?${buildOrdersQuery()}`
-        },
+        'bookings-store-orders',
+        () => `/api/order?${ordersQuery.value}`,
         {
             schema: OrderDisplaySchema.array(),
             default: () => [],
+            enabled: hasFilters,
+            dependsOn: [planStore.selectedSeasonDataset],
             errorMessage: 'Kunne ikke hente bookinger'
         }
     )
@@ -68,7 +63,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const isNoOrders = computed(() => isOrdersInitialized.value && orders.value.length === 0)
 
     // Convenience computed for components - true when store is fully initialized and ready to use
-    const isBookingsStoreReady = computed(() => isOrdersInitialized.value)
+    const isBookingsStoreReady = computed(() => !hasFilters.value || isOrdersInitialized.value)
 
     // Business logic computeds
     const totalOrdersCount = computed(() => orders.value.length)
@@ -87,13 +82,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // Actions
     // ========================================
 
-    const loadOrdersForDinners = (dinnerEventIds: number | number[], withProvenance = false, householdId?: number) => {
-        const ids = [dinnerEventIds].flat()
-        selectedDinnerEventIds.value = ids
-        selectedInhabitantId.value = null
-        selectedHouseholdId.value = householdId ?? null
-        includeProvenance.value = withProvenance
-        console.info(CTX, `Loading orders for ${ids.length} dinner(s)${householdId ? ` (household ${householdId})` : ''}${withProvenance ? ' (with provenance)' : ''}`)
+    const loadOrdersForDinners = (filter: MaybeRefOrGetter<OrdersFilter>) => {
+        ordersFilter.value = () => toValue(filter)
+        console.info(CTX, `Loading orders for ${toValue(filter).dinnerEventIds.length} dinner(s)`)
     }
 
     // Internal order methods - only used by processAdminCorrection
@@ -139,35 +130,36 @@ export const useBookingsStore = defineStore("Bookings", () => {
         return claimedOrder
     }
 
-    // Upcoming orders of a season with their dinner context, for one household or all of them
-    const upcomingOrdersSeasonId = ref<number | null>(null)
-    const upcomingOrdersHouseholdId = ref<number | null>(null)
+    // Upcoming orders of the selected season with their dinner context. The page names the scope:
+    // every household or the selected one; nothing is requested until a page asks
+    const upcomingOrdersForAllHouseholds = ref<boolean | null>(null)
 
     const {
         data: upcomingOrders, status: upcomingOrdersStatus,
         refresh: refreshUpcomingOrders
     } = storeAsyncData(
-        computed(() => `bookings-store-upcoming-orders-${upcomingOrdersSeasonId.value ?? 'none'}-${upcomingOrdersHouseholdId.value ?? 'all'}`),
+        'bookings-store-upcoming-orders',
         () => {
-            if (!upcomingOrdersSeasonId.value) return null
             const params = new URLSearchParams()
-            params.append('upcomingForSeason', String(upcomingOrdersSeasonId.value))
-            if (upcomingOrdersHouseholdId.value) params.append('householdId', String(upcomingOrdersHouseholdId.value))
-            else params.append('allHouseholds', 'true')
+            params.append('upcomingForSeason', String(planStore.selectedSeasonId))
+            if (upcomingOrdersForAllHouseholds.value) params.append('allHouseholds', 'true')
+            else params.append('householdId', String(householdsStore.selectedHouseholdId))
             params.append('includeDinnerContext', 'true')
             return `/api/order?${params.toString()}`
         },
         {
             schema: OrderDisplaySchema.array(),
-            default: () => []
+            default: () => [],
+            enabled: () => upcomingOrdersForAllHouseholds.value !== null && !!planStore.selectedSeasonId
+                && (upcomingOrdersForAllHouseholds.value || !!householdsStore.selectedHouseholdId),
+            dependsOn: [planStore.selectedSeasonDataset, householdsStore.selectedHouseholdDataset]
         }
     )
 
     const isUpcomingOrdersLoading = computed(() => upcomingOrdersStatus.value === 'pending')
 
-    const loadUpcomingOrders = (seasonId: number | null, householdId: number | null = null) => {
-        upcomingOrdersSeasonId.value = seasonId
-        upcomingOrdersHouseholdId.value = householdId
+    const loadUpcomingOrders = (allHouseholds: boolean) => {
+        upcomingOrdersForAllHouseholds.value = allHouseholds
     }
 
     // Order detail with its audit history - no store state, a component keeps one per expanded row
@@ -189,19 +181,20 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // ========================================
     const {getLockedFutureDinnerIds, computeLockStatus} = useBooking()
     const {deadlinesForSeason, splitDinnerEvents} = useSeason()
-    const planStore = usePlanStore()
-
-    // Released counts fetch (internal)
-    const releasedCountsDinnerIds = ref<number[]>([])
-    const releasedCountsKey = computed(() => `released-counts-${releasedCountsDinnerIds.value.join('-') || 'none'}`)
+    // The selected season's future dinners past their booking deadline
+    const lockedDinnerIds = computed(() => {
+        const season = planStore.selectedSeason
+        if (!season?.dinnerEvents?.length) return []
+        const {nextDinner, futureDinners} = splitDinnerEvents(season.dinnerEvents)
+        return getLockedFutureDinnerIds(nextDinner, futureDinners, deadlinesForSeason(season))
+    })
     const {formatTicketCounts} = useBilling()
 
     const {data: releasedCounts, status: releasedCountsStatus, refresh: refreshReleasedCounts} = storeAsyncData(
-        releasedCountsKey,
+        'bookings-store-released-counts',
         () => {
-            if (releasedCountsDinnerIds.value.length === 0) return null
             const params = new URLSearchParams()
-            releasedCountsDinnerIds.value.forEach(id => params.append('dinnerEventIds', String(id)))
+            lockedDinnerIds.value.forEach(id => params.append('dinnerEventIds', String(id)))
             params.append('state', 'RELEASED')
             params.append('allHouseholds', 'true')
             return `/api/order?${params.toString()}`
@@ -216,23 +209,11 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 }
                 return counts
             }),
-            default: () => new Map<number, ReleasedTicketCounts>()
+            default: () => new Map<number, ReleasedTicketCounts>(),
+            enabled: () => lockedDinnerIds.value.length > 0,
+            dependsOn: [planStore.selectedSeasonDataset]
         }
     )
-
-    // Watch season → compute locked IDs → fetch released counts
-    watchEffect(() => {
-        const season = planStore.selectedSeason
-        if (!season?.dinnerEvents?.length) return
-
-        const {nextDinner, futureDinners} = splitDinnerEvents(season.dinnerEvents)
-        const deadlines = deadlinesForSeason(season)
-
-        const lockedIds = getLockedFutureDinnerIds(nextDinner, futureDinners, deadlines)
-        if (lockedIds.length > 0 && lockedIds.join(',') !== releasedCountsDinnerIds.value.join(',')) {
-            releasedCountsDinnerIds.value = lockedIds
-        }
-    })
 
     // Exposed computed: lockStatus map for calendar display
     const lockStatus = computed(() => {
@@ -411,13 +392,11 @@ export const useBookingsStore = defineStore("Bookings", () => {
         refresh: refreshSelectedDinnerEventDetail
     } = storeAsyncData(
         selectedDinnerEventKey,
-        () => {
-            if (!selectedDinnerEventId.value) return null
-            return `/api/admin/dinner-event/${selectedDinnerEventId.value}`
-        },
+        () => `/api/admin/dinner-event/${selectedDinnerEventId.value}`,
         {
             schema: DinnerEventDetailSchema.nullable(),
             default: () => null,
+            enabled: () => !!selectedDinnerEventId.value,
             errorMessage: 'Kunne ikke hente fællesspisning'
         }
     )
@@ -561,29 +540,29 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
     const {MonthlyBillingResponseSchema, TransactionDisplaySchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema, HouseholdBillingResponseSchema} = useBillingValidation()
 
-    // One household's billing: the current period and its past invoices
-    const householdBillingId = ref<number | null>(null)
+    // The selected household's billing: the current period and its past invoices. Only the economy
+    // page shows it, so nothing is requested until a page asks
+    const isHouseholdBillingRequested = ref(false)
 
     const {
         data: householdBilling, status: householdBillingStatus,
         error: householdBillingError
     } = storeAsyncData(
-        computed(() => `bookings-store-household-billing-${householdBillingId.value ?? 'none'}`),
-        () => {
-            if (!householdBillingId.value) return null
-            return `/api/billing?householdId=${householdBillingId.value}`
-        },
+        'bookings-store-household-billing',
+        () => `/api/billing?householdId=${householdsStore.selectedHouseholdId}`,
         {
             schema: HouseholdBillingResponseSchema.nullable(),
-            default: () => null
+            default: () => null,
+            enabled: () => isHouseholdBillingRequested.value && !!householdsStore.selectedHouseholdId,
+            dependsOn: [householdsStore.selectedHouseholdDataset]
         }
     )
 
     const isHouseholdBillingLoading = computed(() => householdBillingStatus.value === 'pending')
     const isHouseholdBillingErrored = computed(() => householdBillingStatus.value === 'error')
 
-    const loadHouseholdBilling = (householdId: number) => {
-        householdBillingId.value = householdId
+    const loadHouseholdBilling = () => {
+        isHouseholdBillingRequested.value = true
     }
 
     const {
@@ -607,13 +586,11 @@ export const useBookingsStore = defineStore("Bookings", () => {
         error: selectedBillingPeriodError
     } = storeAsyncData(
         selectedBillingPeriodKey,
-        () => {
-            if (!selectedBillingPeriodId.value) return null
-            return `/api/admin/billing/periods/${selectedBillingPeriodId.value}`
-        },
+        () => `/api/admin/billing/periods/${selectedBillingPeriodId.value}`,
         {
             schema: BillingPeriodSummaryDetailSchema.nullable(),
-            default: () => null
+            default: () => null,
+            enabled: () => !!selectedBillingPeriodId.value
         }
     )
 
@@ -644,13 +621,11 @@ export const useBookingsStore = defineStore("Bookings", () => {
         data: selectedInvoiceTransactions, status: selectedInvoiceStatus
     } = storeAsyncData(
         selectedInvoiceKey,
-        () => {
-            if (!selectedInvoiceId.value) return null
-            return `/api/admin/billing/invoices/${selectedInvoiceId.value}`
-        },
+        () => `/api/admin/billing/invoices/${selectedInvoiceId.value}`,
         {
             schema: TransactionDisplaySchema.array(),
-            default: () => []
+            default: () => [],
+            enabled: () => !!selectedInvoiceId.value
         }
     )
 

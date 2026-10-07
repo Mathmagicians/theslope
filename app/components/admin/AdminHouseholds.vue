@@ -12,7 +12,6 @@ const props = withDefaults(defineProps<Props>(), {
 const householdsStore = useHouseholdsStore()
 const {households, isHouseholdsLoading, isHouseholdsErrored, householdsError} = storeToRefs(householdsStore)
 
-householdsStore.initHouseholdsStore()
 
 const {COMPONENTS, SIZES, BUTTONS, ICONS, TYPOGRAPHY, TEXT, getResidencyDisplay} = useTheSlopeDesignSystem()
 

@@ -51,13 +51,11 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         error: selectedAllergyTypeError
     } = storeAsyncData(
         selectedAllergyTypeKey,
-        () => {
-            if (!selectedAllergyTypeId.value) return null
-            return `/api/admin/allergy-type/${selectedAllergyTypeId.value}`
-        },
+        () => `/api/admin/allergy-type/${selectedAllergyTypeId.value}`,
         {
             schema: AllergyTypeDisplaySchema.nullable(),
             default: () => null,
+            enabled: () => !!selectedAllergyTypeId.value,
             errorMessage: 'Kunne ikke hente allergitype'
         }
     )
@@ -97,16 +95,12 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         refresh: refreshAllergies
     } = storeAsyncData(
         allergiesQueryKey,
-        () => {
-            if (!filterInhabitantId.value && !filterHouseholdId.value) {
-                return null
-            }
-            return allergiesQueryKey.value
-        },
+        allergiesQueryKey,
         {
             schema: AllergyDetailSchema.array(),
             immediate: true,
             default: () => [],
+            enabled: () => !!filterInhabitantId.value || !!filterHouseholdId.value,
             errorMessage: 'Kunne ikke hente allergier'
         }
     )
@@ -281,12 +275,6 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         // AllergyTypes auto-load on store creation (immediate: true)
         console.info('🥜 > ALLERGY_STORE > Store initialized')
     }
-
-    // AUTO-INITIALIZATION - Watch for allergy types to load
-    watch(isAllergyTypesInitialized, () => {
-        if (!isAllergyTypesInitialized.value) return
-        console.info('🥜 > ALLERGY_STORE > Allergy types loaded')
-    })
 
     return {
         // State - AllergyTypes

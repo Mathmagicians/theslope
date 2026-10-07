@@ -13,7 +13,7 @@ const canMutateAllergies = computed(() => isAdmin.value || isAllergyManager.valu
 
 // COMPONENT DEPENDENCIES
 const store = usePlanStore()
-const {initPlanStore} = store
+const {loadSeasonByShortName} = store
 const {
   isPlanStoreReady,
   isPlanStoreErrored,
@@ -114,9 +114,6 @@ const {activeTab} = useTabNavigation({
   basePath: '/admin'
 })
 
-// INITIALIZATION - Initialize store to load seasons list
-initPlanStore()
-
 // SEASON QUERY PARAMETER - Auto-validates and corrects invalid season URLs
 const {seasons, selectedSeason} = storeToRefs(store)
 const {value: seasonShortName} = useQueryParam<string | undefined>('season', {
@@ -130,7 +127,7 @@ const {value: seasonShortName} = useQueryParam<string | undefined>('season', {
 // Watch season query and initialize store with the selected season
 watch(seasonShortName, (shortName) => {
   if (shortName && shortName !== selectedSeason.value?.shortName) {
-    initPlanStore(shortName)
+    loadSeasonByShortName(shortName)
     console.info(LOG_CTX, '🔗 > Admin > Loading season from URL:', shortName)
   }
 }, { immediate: true })

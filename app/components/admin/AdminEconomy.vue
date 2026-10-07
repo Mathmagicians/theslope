@@ -32,12 +32,10 @@ const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG} = useTheSl
 // Plan store for future dinners
 const planStore = usePlanStore()
 const {selectedSeason, isPlanStoreReady} = storeToRefs(planStore)
-planStore.initPlanStore()
 
 // Households store for inhabitant name lookup and admin correction
 const householdsStore = useHouseholdsStore()
 const {households} = storeToRefs(householdsStore)
-householdsStore.initHouseholdsStore()
 
 // Derive all inhabitants from all households
 const allInhabitants = computed(() =>
@@ -72,10 +70,9 @@ const getInhabitantName = (id: number) => inhabitantsMap.value.get(id) ?? `#${id
 // Household lookup from store (reused in KitchenPreparation)
 const {getHouseholdForInhabitant} = householdsStore
 
-const selectedSeasonId = computed(() => selectedSeason.value?.id)
 const {upcomingOrders, isUpcomingOrdersLoading: isUpcomingOrdersFetching} = storeToRefs(bookingsStore)
 const {refreshUpcomingOrders} = bookingsStore
-watch(selectedSeasonId, seasonId => bookingsStore.loadUpcomingOrders(seasonId ?? null), {immediate: true})
+bookingsStore.loadUpcomingOrders(true)
 const isUpcomingOrdersLoading = computed(() =>
     !isPlanStoreReady.value || isUpcomingOrdersFetching.value
 )

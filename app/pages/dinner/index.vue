@@ -80,8 +80,6 @@ const {value: calendarOpen, setValue: setCalendarOpen} = useQueryParam<boolean>(
   defaultValue: () => isMd?.value ?? false,
   syncWhen: () => isPlanStoreReady.value
 })
-// Initialize without await for SSR hydration consistency
-planStore.initPlanStore()
 
 // Initialize allergies store for allergen data
 const allergiesStore = useAllergiesStore()
@@ -138,9 +136,11 @@ watchEffect(() => {
 
 // Household-specific orders via the user-facing endpoint (security: session-filtered).
 // Separate from dinnerEventDetail.tickets, which includes ALL households for kitchen stats.
-// No dinner selected loads no dinners, which the store answers without a request.
 const {orders: householdOrders} = storeToRefs(bookingsStore)
-watch(selectedDinnerId, id => bookingsStore.loadOrdersForDinners(id ?? [], true), {immediate: true})
+bookingsStore.loadOrdersForDinners(() => ({
+  dinnerEventIds: selectedDinnerId.value === null ? [] : [selectedDinnerId.value],
+  includeProvenance: true
+}))
 
 const refreshBookingData = () =>
   Promise.all([bookingsStore.refreshSelectedDinnerEventDetail(), bookingsStore.refreshOrders()])

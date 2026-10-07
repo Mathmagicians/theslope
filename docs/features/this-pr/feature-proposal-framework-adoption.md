@@ -57,10 +57,40 @@ specs), then `plan`, `bookings`, `households`, `users`, each with a green spec r
 
 ## Fetch gating
 
-**Problem.** Thirteen `useAsyncData` fetchers skip their request by returning an empty value:
-`plan.ts:62`; `bookings.ts:52`, `:402`, `:584`, `:625`; `households.ts:49`, `:81`; `allergies.ts:68`, `:123`;
-`OrderHistoryDisplay.vue:27`, `AdminEconomy.vue:83`, `HouseholdEconomy.vue:61`, `pages/dinner/index.vue:150`. A skipped fetch resolves:
-the dataset reports `success` with `null` or `[]`.
+**Problem.** Thirteen reads skip their request when their condition is false — on the committed tree (33a3567) as a
+`storeAsyncData` url getter that returns `null`, which resolves the default without a request. A skipped fetch resolves:
+the dataset reports `success` with `null` or `[]`, so "not asked yet" and "asked, empty" read the same.
+
+**Inventory (2026-10-07, post-factory).** Each conversion: the url getter becomes unconditional, the condition moves to
+`enabled`. Shape 1 = the gate variable is in the key, so a dropped gate lands on the default entry, nothing extra;
+shape 2 = constant key, logout clears.
+
+| Store / component | Read | Gate | Key carries the gate | Shape |
+|---|---|---|---|---|
+| `plan.ts:39` | selected season | `selectedSeasonId` | `selectedSeasonKey` | 1 |
+| `allergies.ts:52` | selected allergy type | `selectedAllergyTypeId` | `selectedAllergyTypeKey` | 1 |
+| `allergies.ts:98` | allergies by inhabitant/household filter | `filterInhabitantId \|\| filterHouseholdId` | `allergiesQueryKey` | 1 |
+| `households.ts:42` | households list | `loggedIn` | constant `'households-store-households'` | **2** |
+| `households.ts:67` | selected household | `selectedHouseholdId` | `selectedHouseholdKey` | 1 |
+| `bookings.ts:48` | orders | `hasFilters` | `ordersKey` (built from the query) | 1 |
+| `bookings.ts:149` | upcoming orders | `upcomingOrdersSeasonId` | key has season + household | 1 |
+| `bookings.ts:199` | released counts | `releasedCountsDinnerIds.length` | `releasedCountsKey` | 1 |
+| `bookings.ts:412` | selected dinner event detail | `selectedDinnerEventId` | `selectedDinnerEventKey` | 1 |
+| `bookings.ts:570` | household billing | `householdBillingId` | key has household | 1 |
+| `bookings.ts:608` | selected billing period | `selectedBillingPeriodId` | `selectedBillingPeriodKey` | 1 |
+| `bookings.ts:645` | selected invoice | `selectedInvoiceId` | `selectedInvoiceKey` | 1 |
+| `OrderHistoryDisplay.vue:23` (component-local) | order detail | `props.orderId` | key has `orderId` | 1 |
+
+Shape 2's `watch: [loggedIn]` refetch is re-examined at conversion: whether a false→true flip of `enabled` fetches by
+itself or still needs the watch is read from the installed `asyncData.js` and cited. **Folded in (user decision 2026-10-07): selection-driven datasets and `dependsOn`.** The component watches that copy a
+selection into a second store ref through a `load*` setter (`AdminEconomy.vue:78`, `HouseholdEconomy.vue:65-67`,
+`pages/dinner/index.vue:143`; the bookings store's copy refs and setters) go: a dataset's key/url getter reads the real
+selection — `planStore.selectedSeasonId`, `householdsStore.selectedHouseholdId`, the bookings store's own selected ids.
+`selectedSeasonId` becomes `computed(() => userChoice ?? getDefaultSeasonId())` with `getDefaultSeasonId()`
+(`plan.ts:166`) unchanged as the rule; the auto-select watch (`plan.ts:453`) and the page-level `initPlanStore()` calls
+it needed go. `storeAsyncData` gains `dependsOn: [upstream datasets]`: the fetcher awaits them before resolving its url,
+so the server renders dependent chains (selected season → season-scoped reads) and the default season's data is in the
+first paint. Simplify and DRY wherever the conversion touches.
 **Framework.** Nuxt 4.5 `enabled`: while it is `false`, `execute` returns the current data and the status stays
 (`node_modules/nuxt/dist/app/composables/asyncData.js:326`); switching it to `false` mid-flight aborts the request and sets the status
 to `idle` (`asyncData.js:153-160`). The data stays.
