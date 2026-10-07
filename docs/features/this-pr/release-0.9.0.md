@@ -71,8 +71,7 @@ One package, one migration, produced by the Make targets after the user signs of
 |---|---|
 | `DinnerDutyTemplate`, `DinnerDuty` (+ `jokerSlotId`), `DutyHistory`, `DutyState`, `DutyAuditAction` | `feature-proposal-duty-roster.md` § Schema additions |
 | `JokerSlot` | `feature-proposal-duty-roster.md` § Joker |
-| `TicketWaitlist`, `WaitlistState`, `DinnerEvent.extraPortionsReleased` | `feature-proposal-waitlist.md` |
-| `TicketPrice.portionSize` (closes the `useOrder.ts` TODO; portion weights become data) | waitlist resolver |
+| `TicketWaitlist` (an unplaced order in its create shape, as JSON) | `feature-proposal-waitlist.md` § Design |
 | `Transaction.type` (+ `EXPENSE`), `householdId`, `description` + snapshot migration | `feature-proposal-adhoc-admin-billing.md` — the type/snapshot changes ship with chef spending; the adhoc-charge endpoints are the OPEN part |
 | `Order.orderSnapshot` (frozen `ticketType`) + backfill | `bug-fix-order-snapshot.md` |
 
@@ -102,20 +101,15 @@ raw-SQL joins stay (ADR-014). Gate proof: `make d1-prisma` +
 | `DutyHistory` | `performedByUserId` | nullable (system actor), SET NULL |
 | | `dinnerDutyId` | nullable, SET NULL |
 | `JokerSlot` | `role` / `affinity` / `note` | default `COOK` / required (weekday map JSON) / nullable |
-| `TicketWaitlist` | `state` / `assignedOrderId` | default `WAITING` / nullable |
-| | `isGuestTicket` | required, default `false` |
-| | `ticketPriceId` | nullable, SET NULL — set for a guest entry (validation requires it), null for a regular entry (age-at-dinner-date resolver) |
-| | `allergyTypeIds` | nullable (guest allergies, JSON) |
+| `TicketWaitlist` | `isGuestTicket` / `order` | default `false` / required JSON (order-create shape) |
 | | unique | partial unique `(dinnerEventId, inhabitantId) WHERE isGuestTicket = 0` via `partialIndexes` |
-| enums | `DutyState`, `DutyAuditAction`, `WaitlistState`, `TransactionType` | as drafted |
+| enums | `DutyAuditAction`, `DutyOrigin`, `TransactionType` | as signed |
 
 **Columns on existing tables** — written as `ALTER TABLE … ADD COLUMN … NOT NULL DEFAULT` in the Prisma source (no
 table rebuild on D1):
 
 | Column | Decision | Convergent data line |
 |---|---|---|
-| `DinnerEvent.extraPortionsReleased` | `Float`, required, default `0` | — |
-| `TicketPrice.portionSize` | `Float`, required, default `1` | `SET portionSize` by `ticketType` (adult 1, child 0.5, baby 0 — the `getPortionsForTicketType` mapping) |
 | `Transaction.type` | `TransactionType`, required, default `ORDER_CHARGE` | — |
 | `Transaction.householdId` | nullable, SET NULL | — |
 | `Transaction.description` | nullable | — |
@@ -266,9 +260,10 @@ here, admin-only.
 - The bundle is the ux session's with the user (model set + implementation); the majors install and the
   orchestrator's store packages never run concurrently — the bundle starts after the factory package lands and is
   committed.
-- `TicketWaitlist` carries guest entries like orders do (`isGuestTicket`, chosen `ticketPriceId`, `allergyTypeIds`
-  on the booking member's `inhabitantId`); a regular entry stores no ticket — the sweep resolves it by age at the
-  dinner date with the existing resolver, so a birthday changes nothing; the order freezes the price.
+- `TicketWaitlist` carries an unplaced order: the order-create shape as JSON (`order`), keyed by dinner, inhabitant
+  and `isGuestTicket`; a guest entry sits on the booking member's `inhabitantId`. Assignment places the order through
+  `createOrders` and deletes the entry; the chef's release is an action, nothing about supply is stored on the dinner;
+  portion weights stay the config mapping (no `portionSize` column).
 - Partial unique indexes via Prisma 7.4's `partialIndexes` preview: one regular waitlist entry per person per
   dinner, and one regular order per person per dinner (reverses the 2026-10-05 drop; zero duplicates verified, no
   backfill).

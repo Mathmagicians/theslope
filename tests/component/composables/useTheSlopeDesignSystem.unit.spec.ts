@@ -21,8 +21,7 @@ describe('getRandomEmptyMessage', () => {
             .toBe(getRandomEmptyMessage(context, danishEveningInstant))
     })
 
-    it.each(['dinnerGone', 'seasonGone', 'householdGone'] as const)('%s: picks one of its four lines', (context) => {
-        expect(EMPTY_STATE_MESSAGES[context]).toHaveLength(4)
+    it.each(['dinnerGone', 'seasonGone', 'household'] as const)('%s: picks one of its lines', (context) => {
         expect(EMPTY_STATE_MESSAGES[context]).toContain(getRandomEmptyMessage(context))
     })
 })

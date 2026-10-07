@@ -9,66 +9,49 @@ first-click-wins (`POST /api/order/claim` — FIFO by `releasedAt`, retry, USER_
 member that tickets exist, a member on a sold-out dinner has no way to stand in line, and a chef who cooked for more
 has no way to sell the surplus.
 
-## Design
+## Design ✅ signed 2026-10-07
 
 ### Queue
 
-One inhabitant, one ticket per entry. The queue is the authoritative structure; every hand-out is a state transition
-on a queue row, idempotent and safe to replay (D1 has no transactions — single-statement conditional updates carry
-the race avoidance, ADR-015).
+The waiting list carries unplaced orders: an entry holds the order in its create shape (the `DesiredOrder` /
+`OrderCreateWithPrice` schema the scaffolder uses — ticket price, price, dinner mode, guest flag, booker, guest
+allergies) as a JSON column typed by that schema (ADR-010), plus the keys the queue is read and constrained by.
+One inhabitant, one ticket per entry; a guest entry carries the booking member's `inhabitantId` with
+`isGuestTicket` true. FIFO by `createdAt`. An entry exists while waiting: leaving deletes it, assignment places its
+order through `createOrders` and deletes it.
 
 ```prisma
+// An unplaced order waiting for a ticket; `order` holds it in the order-create shape
 model TicketWaitlist {
-  id              Int           @id @default(autoincrement())
-  dinnerEventId   Int
-  dinnerEvent     DinnerEvent   @relation(fields: [dinnerEventId], references: [id], onDelete: Cascade)
-  inhabitantId    Int           // the person, or the booking member for a guest
-  inhabitant      Inhabitant    @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
-  isGuestTicket   Boolean       @default(false)
-  ticketPriceId   Int?          // guest: chosen at join (validation requires it); regular: null
-  ticketPrice     TicketPrice?  @relation(fields: [ticketPriceId], references: [id], onDelete: SetNull)
-  allergyTypeIds  String?       // guest allergies, JSON — the guest-order shape
-  state           WaitlistState @default(WAITING)   // WAITING | ASSIGNED | CANCELLED
-  assignedOrderId Int?                              // the order the assignment produced / claimed
-  createdAt       DateTime      @default(now())
+  id            Int         @id @default(autoincrement())
+  dinnerEventId Int
+  dinnerEvent   DinnerEvent @relation(fields: [dinnerEventId], references: [id], onDelete: Cascade)
+  inhabitantId  Int
+  inhabitant    Inhabitant  @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
+  isGuestTicket Boolean     @default(false)
+  order         String // JSON typed by the order-create schema
+  createdAt     DateTime    @default(now())
 
-  // one regular entry per person per dinner; guests share the member's inhabitantId like orders do
-  // partial unique index via the Prisma 7.4 `partialIndexes` preview: WHERE isGuestTicket = 0
-  @@unique([dinnerEventId, inhabitantId])
-  @@index([dinnerEventId, state])
+  @@index([dinnerEventId, createdAt])
+  @@index([inhabitantId])
 }
 ```
 
-Joining = committing to buy. FIFO by `createdAt`. Leaving the queue sets CANCELLED.
+Back-relations `DinnerEvent.waitlist`, `Inhabitant.waitlistEntries`. Partial unique index
+`(dinnerEventId, inhabitantId) WHERE isGuestTicket = 0` (Prisma 7.4 `partialIndexes`): one regular entry per person
+per dinner. The matching index on `Order` refuses a second regular order for the same person and dinner, which makes
+the assignment replay-safe.
 
-### Auto-assign sweep
+### Assignment
 
-`assignWaitlist(dinnerEventId)` is an ADR-016-shaped reconciliation: a pure resolver computes desired assignments
-from (WAITING entries in FIFO order, available supply), the executor applies them. It runs on every supply or demand
-write — ticket release, extra-portion release, queue join — and from the daily maintenance as backstop.
-
-- Ownership of an entry is taken with `updateMany WHERE id = ? AND state = 'WAITING'` → 1 affected row wins.
-- A RELEASED order is consumed through the existing conditional-claim mechanism; an extra portion produces a new
-  order priced by the claimant's own ticket type at assignment time.
-- A replay repairs half-done work: an ASSIGNED entry without `assignedOrderId` gets its order created; nothing is
-  done twice.
-
-### Portion resolver
-
-A regular entry's ticket is derived at sweep time with the existing age-at-dinner-date resolver
-(`getTicketPriceForInhabitant`, the one scaffolding uses) — nothing is stored on the entry, a birthday between join
-and dinner changes nothing, and a mid-season price edit reaches unassigned entries as it reaches unscaffolded
-bookings. A guest entry carries its chosen `ticketPriceId` and allergies. Freezing happens on the order the sweep
-creates (`ticketPriceId` + `priceAtBooking`), regular or guest (`buildDesiredOrder` / `buildGuestDesiredOrder`
-shapes). Supply is measured in portions (`ticketPrice.portionSize`). The resolver walks the queue in strict
-FIFO (no overtaking) and consumes each entry's portion weight while it fits: 2.5 released portions against a queue
-voksen, barn, voksen, barn feeds the first three (1 + 0.5 + 1), the fourth waits.
-
-### Chef releases extra portions
-
-The chef enters a portion count on the dinner ("N ekstra portioner"); the sweep consumes them for the queue,
-leftovers stay claimable in the UI. Stored on the dinner (`DinnerEvent.extraPortionsReleased`); the remaining supply
-is derived (released minus portions of orders the sweep created), so the write is convergent.
+`assignWaitlist(dinnerEventId, portions)` is an ADR-016-shaped reconciliation: a pure resolver walks the entries in
+strict FIFO (no overtaking) and takes each entry whose portion weight fits the supply; the executor places those
+orders and deletes the entries. Supply arrives as an event, never as a stored quantity: a RELEASED order (the
+existing conditional claim consumes it) or the chef's release of N portions, which turns the first entries that fit
+into orders at once. The entry's price stands as written at join — age at the dinner date for a regular entry, the
+chosen price for a guest — and freezes on the order (`ticketPriceId`, `priceAtBooking`). Portion weights come from
+the config mapping (`getPortionsForTicketType`): 2.5 portions against a queue voksen, barn, voksen, barn feed the
+first three (1 + 0.5 + 1), the fourth waits. Daily maintenance deletes the entries of a dinner that reaches CONSUMED.
 
 ### Notifications
 
@@ -140,6 +123,6 @@ KitchenPreparation:  TAKEAWAY 12   SPISESAL 28   SPIS SENT 5   TIL SALG 2
 
 ## Affected
 
-Prisma bundle (`TicketWaitlist`, `WaitlistState`, `DinnerEvent.extraPortionsReleased`), sweep in `server/utils/`,
+Prisma bundle (`TicketWaitlist`), assignment in `server/utils/`,
 queue endpoints, `bookings.ts` store, `DinnerBookingForm.vue`, `BookingGridView.vue`, `ChefMenuCard.vue`,
 `useBookingUi`, sender events + templates, `docs/adr-compliance-*.md` rows.

@@ -47,6 +47,7 @@ let testSeason: Awaited<ReturnType<typeof SeasonFactory.createSeasonWithDinnerEv
 let householdId: number
 let shortName: string
 let pbsId: number
+const hydrationHouseholdIds: number[] = []
 
 test.use({storageState: adminUIFile})
 
@@ -83,6 +84,7 @@ test.afterAll(async ({browser}) => {
     if (householdId) {
         await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
     }
+    await Promise.all(hydrationHouseholdIds.map(id => HouseholdFactory.deleteHousehold(context, id).catch(() => {})))
     await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
 })
 
@@ -263,3 +265,27 @@ test('GIVEN a member holding a regular order and a guest ticket on a dinner WHEN
     expect(after.find(o => o.id === guestOrder.id)).toMatchObject({isGuestTicket: true, dinnerMode: DinnerMode.DINEINLATE, state: OrderState.BOOKED})
     expect(after.find(o => o.id === regularOrder.id)).toMatchObject({isGuestTicket: false, dinnerMode: DinnerMode.DINEIN, state: OrderState.BOOKED})
 })
+
+for (const view of ['day', 'week', 'month'] as const) {
+    test(`GIVEN a household of more inhabitants than the avatar row shows WHEN the ${view} view loads at desktop width THEN the client hydrates the server markup without a mismatch`, async ({page, browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const household = await HouseholdFactory.createHousehold(context, {name: salt(`Hydration-${view}`, testSalt)})
+        hydrationHouseholdIds.push(household.id)
+        await Promise.all(Array.from({length: 6}, (_, i) => HouseholdFactory.createInhabitantWithConfig(context, household.id, {
+            name: salt(`Avatar${i}`, testSalt),
+            pictureUrl: `https://theslope.example/avatar-${i}.png`,
+            dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)
+        })))
+
+        const hydrationWarnings: string[] = []
+        page.on('console', message => {
+            if (message.text().includes('Hydration')) hydrationWarnings.push(message.text())
+        })
+        await page.setViewportSize({width: 1280, height: 900})
+        await page.goto(`/household/${encodeURIComponent(household.shortName)}/bookings?pbs=${household.pbsId}&view=${view}`)
+        await waitForHydration(page)
+        await expect(page.getByTestId('household-bookings')).toBeVisible()
+
+        expect(hydrationWarnings).toEqual([])
+    })
+}

@@ -303,7 +303,10 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
                 await selectDropdownOption(page, 'season-selector', goneSeason.shortName)
 
                 expect((await goneRequested).status()).toBe(404)
-                await expect(page.getByText(`Kan ikke finde sæsonen ${goneSeason.shortName}`).first()).toBeVisible()
+                // exact: the toaster's screen-reader announcement prefixes the same text
+                const goneToast = page.getByText(`Kan ikke finde sæsonen ${goneSeason.shortName}`, {exact: true})
+                await expect(goneToast).toHaveCount(1)
+                await expect(goneToast).toBeVisible()
                 await expect(page.getByTestId('season-selector')).toContainText(testSeason.season.shortName)
                 await expect(page.getByText('FEJL 404')).toHaveCount(0)
                 await expectNoApiErrorToast(page)

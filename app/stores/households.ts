@@ -83,7 +83,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
                 retries: 1,
                 toast: () => `Kan ikke finde husstanden ${households.value.find(h => h.id === selectedHouseholdId.value)?.shortName ?? selectedHouseholdId.value}`,
                 message: () => {
-                    const {emoji, text} = getRandomEmptyMessage('householdGone')
+                    const {emoji, text} = getRandomEmptyMessage('household')
                     return `${emoji} ${text}`
                 }
             }

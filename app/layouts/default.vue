@@ -53,9 +53,6 @@ provide('isMd', isMd) //exposes the reactive variable to all children - it detec
     <div class="flex-grow">
       <slot/>
     </div>
-    <ClientOnly>
-      <UToaster />
-    </ClientOnly>
     <PageFooter class="flex-shrink-0"/>
     <div id="breakpoint-md" class="hidden md:block w-0 h-0"/>
   </div>

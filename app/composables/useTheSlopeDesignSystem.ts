@@ -640,6 +640,17 @@ export const COMPONENTS = {
     // Responsive row icon sizing (matches birthday cake pattern)
     rowIconClass: 'size-4 md:size-6',
 
+    /**
+     * Inhabitant avatars (`UserListItem`): the server renders before the breakpoint is known, so
+     * `max` and `size` are one value everywhere and `fit` steps the avatar up a size from md.
+     * `fit` goes on each `UAvatar` and on the group's `ui.base`, which reaches the overflow count.
+     */
+    avatar: {
+        max: 5,
+        regular: {size: 'md' as const, fit: 'md:size-9 md:text-lg'},
+        compact: {size: 'sm' as const, fit: 'md:size-8 md:text-base'}
+    },
+
     // The selected item in a segmented control (form mode, booking view) - a ring, not a fill,
     // so the item's own colour still reads through
     segmentedActive: `ring-2 border-2 ${RING.orange[200]} shadow-md`,
@@ -1976,12 +1987,6 @@ export const EMPTY_STATE_MESSAGES = {
         { emoji: '📅', text: 'Sæsonen er pakket sammen og sat op på loftet' },
         { emoji: '🍂', text: 'Denne sæson er måske blæst væk med bladene' },
         { emoji: '🗓️', text: 'Kalenderen har vendt bladet, sæsonen er væk' }
-    ],
-    householdGone: [
-        { emoji: '🏚️', text: 'Husstanden er flyttet, uden at sige farvel' },
-        { emoji: '📦', text: 'Flyttekasserne er kørt, her bor ingen mere' },
-        { emoji: '🔑', text: 'Nøglen passer ikke længere, husstanden er væk' },
-        { emoji: '🗺️', text: 'Husstanden er faldet af kortet' }
     ]
 } as const
 
