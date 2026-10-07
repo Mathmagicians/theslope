@@ -75,17 +75,7 @@ jobs:
         run: npm run pre:all
       - run: npx prisma validate
       - name: Run unit tests
-        id: unit_tests
-        run: |
-          mkdir -p test-results
-          npm run test:unit 2>&1 | tee test-results/vitest.log
-      - name: Unit test summary
-        if: ${{ !cancelled() && steps.unit_tests.outcome != 'skipped' }}
-        run: |
-          echo "## Unit tests" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          grep -E "^ *(Test Files|Tests|Duration) " test-results/vitest.log >> "$GITHUB_STEP_SUMMARY" || echo "no stats line in test-results/vitest.log" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+        run: npm run test:unit
       - name: Install Playwright and browser friends
         run: npx playwright install chromium
       - name: Prepare local D1 database for testing
