@@ -46,7 +46,7 @@ export const resetStores = () => {
     getActivePinia()?._s.forEach(store => store.$dispose())
     setActivePinia(createPinia())
     clearNuxtData()
-    Object.keys(nuxtApp._asyncData).forEach(key => delete nuxtApp._asyncData[key])
+    Object.keys(nuxtApp._asyncData).forEach(key => Reflect.deleteProperty(nuxtApp._asyncData, key))
 }
 
 // Anything with find/findAll: a mountSuspended root, a findComponent() result or a DOMWrapper

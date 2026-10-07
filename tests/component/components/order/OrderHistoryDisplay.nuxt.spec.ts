@@ -1,6 +1,5 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, vi} from 'vitest'
-import {setActivePinia, createPinia} from 'pinia'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {flushPromises} from '@vue/test-utils'
 import OrderHistoryDisplay from '~/components/order/OrderHistoryDisplay.vue'
