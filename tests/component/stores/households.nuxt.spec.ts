@@ -46,6 +46,10 @@ registerEndpoint('/api/household/inhabitants/2/preferences', preferencesEndpoint
 // Generic (no method) registered BEFORE method-specific so method-specific wins (reverse-order lookup)
 registerEndpoint('/api/admin/household/1', householdByIdEndpoint)
 registerEndpoint('/api/admin/household/2', householdByIdEndpoint)
+const GONE_HOUSEHOLD_ID = 3
+registerEndpoint(`/api/admin/household/${GONE_HOUSEHOLD_ID}`, () => {
+  throw createError({ statusCode: 404 })
+})
 registerEndpoint('/api/admin/household/inhabitants/1', { handler: moveInhabitantEndpoint, method: 'POST' })
 registerEndpoint('/api/admin/household/1', { handler: deleteHouseholdEndpoint, method: 'DELETE' })
 registerEndpoint('/api/admin/household/2', { handler: deleteHouseholdEndpoint, method: 'DELETE' })
@@ -731,6 +735,21 @@ describe('Households Store - household selection', () => {
 
     await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(other!.id))
     await vi.waitFor(() => expect(store.isHouseholdsStoreReady).toBe(true))
+  })
+
+  it('a chosen household that no longer exists: toasts it, drops the choice and refreshes the households, so my household loads', async () => {
+    const gone = {...other!, id: GONE_HOUSEHOLD_ID, shortName: 'gone'}
+    householdIndexEndpoint.mockReturnValue([...createMockHouseholds(), gone])
+    const store = await setupStore()
+    householdIndexEndpoint.mockReturnValue(createMockHouseholds())
+    const householdListRequests = householdIndexEndpoint.mock.calls.length
+
+    store.loadHousehold(GONE_HOUSEHOLD_ID)
+
+    await vi.waitFor(() => expect(householdIndexEndpoint.mock.calls.length).toBeGreaterThan(householdListRequests))
+    await vi.waitFor(() => expect(store.selectedHousehold?.id).toBe(mine!.id))
+    expect(store.selectedHouseholdId).toBe(mine!.id)
+    expect(useToast().toasts.value.at(-1)?.title).toBe(`Kan ikke finde husstanden ${gone.shortName}`)
   })
 
   it('falls back to my household for a pbs no household carries', async () => {

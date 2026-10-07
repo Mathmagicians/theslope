@@ -7,7 +7,7 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import {getHouseholdUrl} from '~/utils/household'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot} = testHelpers
+const {validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot, waitForHydration} = testHelpers
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -110,6 +110,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
 
         // Navigate and select the test season (UI shows selected season's dinner events)
         await page.goto('/admin/planning')
+        await waitForHydration(page)
         await page.waitForSelector('[data-testid="season-selector"]')
 
         // Select test season from dropdown

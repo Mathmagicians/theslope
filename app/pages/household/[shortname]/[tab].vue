@@ -84,6 +84,10 @@ const {
 
 const {selectHouseholdByPbs} = householdStore
 
+// PageHeader creates the store, so its datasets prefetch under PageHeader; the server render of a
+// sibling waits only for its own prefetch
+onServerPrefetch(() => householdStore.selectedHouseholdDataset)
+
 // URL-driven household resolution (ADR-006)
 // Valid ?pbs= → load that household. Invalid/missing ?pbs= → fall back to myHousehold.
 const {value: pbsId} = useQueryParam<number | null>('pbs', {

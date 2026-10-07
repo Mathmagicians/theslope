@@ -1,5 +1,5 @@
 import {describe, it, expect, vi, beforeAll, beforeEach, expectTypeOf} from 'vitest'
-import {registerEndpoint} from '@nuxt/test-utils/runtime'
+import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {clearNuxtData} from '#app'
 import {ref, type Ref} from 'vue'
 import {useApiHandler, resolveUncaughtApiError, type StoreAsyncDataOptions} from '~/composables/useApiHandler'
@@ -9,8 +9,18 @@ import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 const CATALOG = '/api/admin/allergy-type'
 const ERROR_MESSAGE = 'Kunne ikke hente allergi katalog'
 
+// The real showError swaps the test app for the Nuxt error page
+const {showErrorSpy} = vi.hoisted(() => ({showErrorSpy: vi.fn()}))
+mockNuxtImport('showError', () => showErrorSpy)
+
 const catalogEndpoint = vi.fn()
 const createEndpoint = vi.fn()
+const goneEndpoint = vi.fn()
+const foundEndpoint = vi.fn()
+const GONE = [`${CATALOG}/404`, `${CATALOG}/410`] as const
+const FOUND = `${CATALOG}/2`
+GONE.forEach(path => registerEndpoint(path, goneEndpoint))
+registerEndpoint(FOUND, foundEndpoint)
 registerEndpoint(`${CATALOG}/1`, () => AllergyFactory.createMockAllergyTypesWithInhabitants().slice(0, 1))
 registerEndpoint(CATALOG, catalogEndpoint)
 registerEndpoint(CATALOG, {handler: createEndpoint, method: 'PUT'})
@@ -36,6 +46,9 @@ describe('useApiHandler', () => {
         vi.clearAllMocks()
         catalogEndpoint.mockImplementation(() => AllergyFactory.createMockAllergyTypesWithInhabitants())
         createEndpoint.mockImplementation(() => AllergyFactory.createMockAllergyTypesWithInhabitants()[0])
+        goneEndpoint.mockImplementation(failWith(404))
+        foundEndpoint.mockImplementation(() => AllergyFactory.createMockAllergyTypesWithInhabitants().slice(0, 1))
+        showErrorSpy.mockImplementation((error: {statusCode: number, message: string}) => createError(error))
     })
 
     describe('storeAsyncData', () => {
@@ -174,6 +187,123 @@ describe('useApiHandler', () => {
 
             selectedId.value = 1
             await vi.waitFor(() => expect(data.value).toHaveLength(1))
+        })
+
+        describe('a missing resource (404)', () => {
+            type Options = StoreAsyncDataOptions<AllergyTypeDetail[]>
+            const TOAST = 'Kan ikke finde allergitypen'
+            const MESSAGE = 'Den findes ikke længere'
+            const DEFAULT_TEXT = 'Kan ikke finde det, du leder efter'
+            // Long enough for a second, unwanted request to land before the counts are read
+            const settled = () => new Promise(resolve => setTimeout(resolve, 50))
+            // The selection a store holds: the url derives from it, recover replaces it
+            const readSelection = (key: string, path: Ref<string>, options: Pick<Options, 'notFound' | 'errorMessage'>) =>
+                storeAsyncData(key, () => path.value, {schema: AllergyTypeDetailSchema.array(), default: () => [], ...options})
+            const toggle = (path: Ref<string>) => () => {
+                path.value = path.value === GONE[0] ? GONE[1] : GONE[0]
+            }
+            const requests = () => ({gone: goneEndpoint.mock.calls.length, found: foundEndpoint.mock.calls.length})
+
+            it('recovers from the first 404: toast, recover once, the re-derived url requested once, no error page', async () => {
+                const path = ref<string>(GONE[0])
+                const recover = vi.fn(() => {
+                    path.value = FOUND
+                })
+
+                const {data, status} = readSelection('gone-recover', path, {notFound: {recover, toast: TOAST, message: MESSAGE}})
+
+                await vi.waitFor(() => expect(data.value).toHaveLength(1))
+                await settled()
+                expect(status.value).toBe('success')
+                expect(recover).toHaveBeenCalledTimes(1)
+                expect(requests()).toEqual({gone: 1, found: 1})
+                expect(lastToast()?.title).toBe(TOAST)
+                expect(showErrorSpy).not.toHaveBeenCalled()
+            })
+
+            it('ends the request idle and never re-requests the dead url when recover leaves the url', async () => {
+                const path = ref<string>(GONE[0])
+                const recover = vi.fn()
+
+                const {data, status} = readSelection('gone-idle', path, {notFound: {recover, toast: TOAST}})
+
+                await vi.waitFor(() => expect(recover).toHaveBeenCalledTimes(1))
+                await settled()
+                expect(status.value).toBe('idle')
+                expect(data.value).toEqual([])
+                expect(requests()).toEqual({gone: 1, found: 0})
+                expect(showErrorSpy).not.toHaveBeenCalled()
+            })
+
+            it.each([1, 2])('shows the error page once %i retries are spent, after retries + 1 requests', async (retries) => {
+                const path = ref<string>(GONE[0])
+                const recover = vi.fn(toggle(path))
+
+                readSelection(`gone-exhausted-${retries}`, path, {notFound: {recover, retries, toast: TOAST, message: MESSAGE}})
+
+                await vi.waitFor(() => expect(showErrorSpy).toHaveBeenCalledWith({statusCode: 404, message: MESSAGE}))
+                await settled()
+                expect(requests()).toEqual({gone: retries + 1, found: 0})
+                expect(recover).toHaveBeenCalledTimes(retries)
+                expect(showErrorSpy).toHaveBeenCalledTimes(1)
+            })
+
+            it('retries 0: the error page on the first 404, recover still runs, no recovery toast', async () => {
+                const path = ref<string>(GONE[0])
+                const recover = vi.fn()
+
+                readSelection('gone-no-retry', path, {notFound: {recover, retries: 0, toast: TOAST, message: MESSAGE}})
+
+                await vi.waitFor(() => expect(showErrorSpy).toHaveBeenCalledWith({statusCode: 404, message: MESSAGE}))
+                await settled()
+                expect(recover).toHaveBeenCalledTimes(1)
+                expect(requests()).toEqual({gone: 1, found: 0})
+                expect(lastToast()).toBeUndefined()
+            })
+
+            it('a success resets the count: a later 404 recovers again', async () => {
+                const path = ref<string>(GONE[0])
+                const recover = vi.fn(() => {
+                    path.value = FOUND
+                })
+                const {data} = readSelection('gone-reset', path, {notFound: {recover, toast: TOAST}})
+                await vi.waitFor(() => expect(data.value).toHaveLength(1))
+
+                path.value = GONE[1]
+
+                await vi.waitFor(() => expect(recover).toHaveBeenCalledTimes(2))
+                await settled()
+                expect(requests()).toEqual({gone: 2, found: 2})
+                expect(showErrorSpy).not.toHaveBeenCalled()
+            })
+
+            it.each([
+                {description: 'the getters at use time', toast: (name: Ref<string>) => () => `Kan ikke finde ${name.value}`, message: (name: Ref<string>) => () => `Væk: ${name.value}`, expected: {toast: 'Kan ikke finde anden', page: 'Væk: anden'}},
+                {description: 'the toast when no message is given', toast: () => TOAST, message: () => undefined, expected: {toast: TOAST, page: TOAST}},
+                {description: 'the default for both', toast: () => undefined, message: () => undefined, expected: {toast: DEFAULT_TEXT, page: DEFAULT_TEXT}}
+            ])('the toast and the error page read $description', async ({toast, message, expected}) => {
+                const name = ref('første')
+                const path = ref<string>(GONE[0])
+                readSelection(`gone-text-${expected.page}`, path, {
+                    notFound: {recover: toggle(path), toast: toast(name), message: message(name)}
+                })
+                name.value = 'anden'
+
+                await vi.waitFor(() => expect(showErrorSpy).toHaveBeenCalledWith({statusCode: 404, message: expected.page}))
+                expect(lastToast()?.title).toBe(expected.toast)
+            })
+
+            it.each([
+                {description: 'the errorMessage', errorMessage: TOAST, expected: TOAST},
+                {description: 'the 404 default', errorMessage: undefined, expected: DEFAULT_TEXT}
+            ])('without notFound a 404 toasts $description, no error page', async ({errorMessage, expected}) => {
+                const {status} = readSelection(`gone-toast-${expected}`, ref<string>(GONE[0]), {errorMessage})
+
+                await vi.waitFor(() => expect(status.value).toBe('error'))
+                expect(lastToast()?.description).toBe(expected)
+                expect(String(lastToast()?.title)).toContain('404')
+                expect(showErrorSpy).not.toHaveBeenCalled()
+            })
         })
     })
 

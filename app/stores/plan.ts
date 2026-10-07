@@ -67,7 +67,20 @@ export const usePlanStore = defineStore("Plan", () => {
                 default: () => null,
                 enabled: () => !!selectedSeasonId.value,
                 dependsOn: [seasonsDataset, activeSeasonIdDataset],
-                errorMessage: 'Kunne ikke hente sæson'
+                errorMessage: 'Kunne ikke hente sæson',
+                // The choice re-derives through getDefaultSeasonId from the refreshed lists
+                notFound: {
+                    recover: async () => {
+                        userChoice.value = null
+                        await Promise.all([refreshSeasons(), refreshActiveSeasonId()])
+                    },
+                    retries: 1,
+                    toast: () => `Kan ikke finde sæsonen ${seasons.value.find(s => s.id === selectedSeasonId.value)?.shortName ?? selectedSeasonId.value}`,
+                    message: () => {
+                        const {emoji, text} = getRandomEmptyMessage('seasonGone')
+                        return `${emoji} ${text}`
+                    }
+                }
             }
         )
         const {

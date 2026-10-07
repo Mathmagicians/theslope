@@ -397,7 +397,18 @@ export const useBookingsStore = defineStore("Bookings", () => {
             schema: DinnerEventDetailSchema.nullable(),
             default: () => null,
             enabled: () => !!selectedDinnerEventId.value,
-            errorMessage: 'Kunne ikke hente fællesspisning'
+            errorMessage: 'Kunne ikke hente fællesspisning',
+            notFound: {
+                recover: () => {
+                    selectedDinnerEventId.value = null
+                },
+                retries: 0,
+                toast: 'Kan ikke finde middagen',
+                message: () => {
+                    const {emoji, text} = getRandomEmptyMessage('dinnerGone')
+                    return `${emoji} ${text}`
+                }
+            }
         }
     )
 
@@ -590,7 +601,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
         {
             schema: BillingPeriodSummaryDetailSchema.nullable(),
             default: () => null,
-            enabled: () => !!selectedBillingPeriodId.value
+            enabled: () => !!selectedBillingPeriodId.value,
+            errorMessage: 'Kan ikke finde faktureringsperioden'
         }
     )
 
@@ -625,7 +637,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
         {
             schema: TransactionDisplaySchema.array(),
             default: () => [],
-            enabled: () => !!selectedInvoiceId.value
+            enabled: () => !!selectedInvoiceId.value,
+            errorMessage: 'Kan ikke finde fakturaen'
         }
     )
 
@@ -714,6 +727,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
         processAdminCorrection,
 
         // dinner event detail (reactive-key, store-owned per ADR-007)
+        // A getter, not state: Pinia hydrates state refs, and the selection is set only through loadDinnerEventDetail
+        selectedDinnerEventId: computed(() => selectedDinnerEventId.value),
         selectedDinnerEventDetail,
         selectedDinnerEventError,
         isSelectedDinnerEventLoading,

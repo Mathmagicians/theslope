@@ -24,6 +24,7 @@ export default defineNuxtConfig({
             ],
             meta: [
                 {name: 'theme-color', content: '#66a28f'},
+                {name: 'mobile-web-app-capable', content: 'yes'},
                 // iOS reads these for the standalone (installed) face
                 {name: 'apple-mobile-web-app-capable', content: 'yes'},
                 {name: 'apple-mobile-web-app-status-bar-style', content: 'default'},

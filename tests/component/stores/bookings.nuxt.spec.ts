@@ -15,7 +15,7 @@ import {useBookingsStore} from '~/stores/bookings'
 import {usePlanStore} from '~/stores/plan'
 import {useCookingTeam} from '~/composables/useCookingTeam'
 import {useBooking} from '~/composables/useBooking'
-import {COLOR} from '~/composables/useTheSlopeDesignSystem'
+import {COLOR, EMPTY_STATE_MESSAGES} from '~/composables/useTheSlopeDesignSystem'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {UserDetail} from '~/composables/useCoreValidation'
 import type {Season} from '~/composables/useSeasonValidation'
@@ -41,6 +41,16 @@ mockNuxtImport('useUserSession', () => {
         fetch: vi.fn()
     })
 })
+
+// The real showError swaps the test app for the Nuxt error page
+const {showErrorSpy} = vi.hoisted(() => ({showErrorSpy: vi.fn()}))
+mockNuxtImport('showError', () => showErrorSpy)
+
+const GONE_DINNER_ID = 404
+const goneDinnerEndpoint = vi.fn(() => {
+    throw createError({statusCode: 404})
+})
+registerEndpoint(`/api/admin/dinner-event/${GONE_DINNER_ID}`, goneDinnerEndpoint)
 
 const assignRoleEndpoint = vi.fn()
 const updateDinnerEndpoint = vi.fn()
@@ -405,6 +415,25 @@ describe('Bookings store — gated reads', () => {
 
         await vi.waitFor(() => expect(store.isBookingsStoreReady).toBe(true))
         expect(store.isOrdersInitialized).toBe(true)
+    })
+})
+
+describe('Bookings store — a selected dinner that no longer exists', () => {
+    beforeEach(() => {
+        resetStores()
+        showErrorSpy.mockImplementation((error: {statusCode: number, message: string}) => createError(error))
+    })
+
+    it('drops the dinner selection and shows the error page with a dinnerGone line', async () => {
+        const store = useBookingsStore()
+
+        store.loadDinnerEventDetail(GONE_DINNER_ID)
+
+        await vi.waitFor(() => expect(showErrorSpy).toHaveBeenCalledTimes(1))
+        const shownLines = EMPTY_STATE_MESSAGES.dinnerGone.map(({emoji, text}) => `${emoji} ${text}`)
+        expect(shownLines).toContain(showErrorSpy.mock.calls[0]![0].message)
+        expect(store.selectedDinnerEventId).toBeNull()
+        expect(goneDinnerEndpoint).toHaveBeenCalledTimes(1)
     })
 })
 

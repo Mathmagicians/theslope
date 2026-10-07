@@ -73,7 +73,20 @@ export const useHouseholdsStore = defineStore("Households", () => {
             default: () => null,
             enabled: () => !!selectedHouseholdId.value,
             dependsOn: [householdsDataset],
-            errorMessage: 'Kunne ikke hente husstand'
+            errorMessage: 'Kunne ikke hente husstand',
+            // The choice re-derives to my household
+            notFound: {
+                recover: async () => {
+                    userChoice.value = null
+                    await refreshHouseholds()
+                },
+                retries: 1,
+                toast: () => `Kan ikke finde husstanden ${households.value.find(h => h.id === selectedHouseholdId.value)?.shortName ?? selectedHouseholdId.value}`,
+                message: () => {
+                    const {emoji, text} = getRandomEmptyMessage('householdGone')
+                    return `${emoji} ${text}`
+                }
+            }
         }
     )
     const {

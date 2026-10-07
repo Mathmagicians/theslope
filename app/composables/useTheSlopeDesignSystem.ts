@@ -1919,7 +1919,7 @@ export const getLockStatusConfig = (releasedCount: number | null) => {
  */
 export const EMPTY_STATE_MESSAGES = {
     cookingTeam: [
-        { emoji: '🌱', text: 'Køkkenholdet lytter til græs der gror' },
+        { emoji: '🌱', text: 'Køkkenholdet er her ikke, de lytter til græs der gror' },
         { emoji: '☁️', text: 'Køkkenholdet kigger på skyer' },
         { emoji: '💨', text: 'Køkkenholdet øver sig på luftfrikadeller' },
         { emoji: '🎨', text: 'Køkkenholdet ser maling tørre' },
@@ -1965,6 +1965,23 @@ export const EMPTY_STATE_MESSAGES = {
         { emoji: '🍕', text: 'Du kan desværre ikke være med, men der er en dejlig pizzeria i Lejre Downtown' },
         { emoji: '🎫', text: 'Du kan få en fribillet til Store Bededag i stedet for' },
         { emoji: '🦆', text: 'Ænderne i Lejre Å har også travlt i dag - prøv igen i morgen!' }
+    ],
+    dinnerGone: [
+        { emoji: '🚪', text: 'Skulle du til middag? Den er gået' },
+        { emoji: '🍽️', text: 'Tallerkenen er vasket op, middagen findes ikke mere' },
+        { emoji: '🏃', text: 'Middag? Spisning er vild overvurderet' },
+        { emoji: '🌫️', text: 'Den middag er vist gået op i damp og røg' }
+    ],
+    seasonGone: [
+        { emoji: '📅', text: 'Sæsonen er pakket sammen og sat op på loftet' },
+        { emoji: '🍂', text: 'Denne sæson er måske blæst væk med bladene' },
+        { emoji: '🗓️', text: 'Kalenderen har vendt bladet, sæsonen er væk' }
+    ],
+    householdGone: [
+        { emoji: '🏚️', text: 'Husstanden er flyttet, uden at sige farvel' },
+        { emoji: '📦', text: 'Flyttekasserne er kørt, her bor ingen mere' },
+        { emoji: '🔑', text: 'Nøglen passer ikke længere, husstanden er væk' },
+        { emoji: '🗺️', text: 'Husstanden er faldet af kortet' }
     ]
 } as const
 

@@ -50,7 +50,7 @@ interface Props {
   labelPlural?: string  // Plural form of label
 }
 
-const {ICONS, COLOR, TYPOGRAPHY, TEXT} = useTheSlopeDesignSystem()
+const {ICONS, COLOR, TYPOGRAPHY, TEXT, COMPONENTS} = useTheSlopeDesignSystem()
 
 const props = withDefaults(defineProps<Props>(), {
   compact: false,
@@ -129,17 +129,12 @@ const groupNamesDisplay = computed(() => {
   return inhabitantsList.value.map(formatName).join(' · ')
 })
 
-// Responsive breakpoint injection - default keeps layout-less pages (e.g. print) warning-free
-const isMd = inject<Ref<boolean>>('isMd', ref(false))
-const getIsMd = computed((): boolean => isMd?.value ?? false)
-
-// Avatar display settings
-const maxAvatars = computed(() => getIsMd.value ? 5 : 3)
+// An explicit size is fixed; the defaults step up from md through CSS
 const avatarSize = computed(() => {
-  if (props.size) return props.size
-  if (props.compact) return getIsMd.value ? 'md' : 'sm'
-  return getIsMd.value ? 'lg' : 'md'
+  if (props.size) return {size: props.size, fit: ''}
+  return props.compact ? COMPONENTS.avatar.compact : COMPONENTS.avatar.regular
 })
+const avatarClass = computed(() => [avatarSize.value.fit, props.ringColor ? `md:ring-2 md:ring-${props.ringColor}` : ''])
 
 // Heynabo integration
 const {getUserUrl} = useHeynabo()
@@ -154,7 +149,7 @@ const {getUserUrl} = useHeynabo()
     <!-- Avatars + Names row -->
     <div class="flex items-center gap-2">
       <!-- Avatar group -->
-      <UAvatarGroup :max="maxAvatars" :size="avatarSize">
+      <UAvatarGroup :max="COMPONENTS.avatar.max" :size="avatarSize.size" :ui="{base: avatarSize.fit}">
         <template v-for="inhabitant in inhabitantsList" :key="inhabitant.heynaboId">
           <ULink
             v-if="linkToProfile"
@@ -167,7 +162,7 @@ const {getUserUrl} = useHeynabo()
                 :src="inhabitant.pictureUrl ?? undefined"
                 :alt="`${inhabitant.name} ${inhabitant.lastName}`"
                 :icon="avatarIcon"
-                :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
+                :class="avatarClass"
               />
             </UTooltip>
           </ULink>
@@ -176,7 +171,7 @@ const {getUserUrl} = useHeynabo()
               :src="inhabitant.pictureUrl ?? undefined"
               :alt="`${inhabitant.name} ${inhabitant.lastName}`"
               :icon="avatarIcon"
-              :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
+              :class="avatarClass"
             />
           </UTooltip>
         </template>
@@ -206,18 +201,18 @@ const {getUserUrl} = useHeynabo()
       <UAvatar
         :src="singleInhabitant.pictureUrl ?? undefined"
         :alt="`${singleInhabitant.name} ${singleInhabitant.lastName}`"
-        :size="avatarSize"
+        :size="avatarSize.size"
         :icon="avatarIcon"
-        :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
+        :class="avatarClass"
       />
     </ULink>
     <UAvatar
       v-else
       :src="singleInhabitant.pictureUrl ?? undefined"
       :alt="`${singleInhabitant.name} ${singleInhabitant.lastName}`"
-      :size="avatarSize"
+      :size="avatarSize.size"
       :icon="avatarIcon"
-      :class="ringColor ? `md:ring-2 md:ring-${ringColor}` : ''"
+      :class="avatarClass"
     />
 
     <!-- Name + badge slot -->

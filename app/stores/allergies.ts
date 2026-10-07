@@ -56,7 +56,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
             schema: AllergyTypeDisplaySchema.nullable(),
             default: () => null,
             enabled: () => !!selectedAllergyTypeId.value,
-            errorMessage: 'Kunne ikke hente allergitype'
+            errorMessage: 'Kan ikke finde allergitypen'
         }
     )
 

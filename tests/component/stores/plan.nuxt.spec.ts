@@ -23,6 +23,10 @@ const activeSeasonIdEndpoint = vi.fn((): number | null => season1.id)
 registerEndpoint('/api/admin/season/active', activeSeasonIdEndpoint)
 registerEndpoint('/api/admin/season/1', seasonByIdEndpoint)
 registerEndpoint('/api/admin/season/2', () => season2)
+const GONE_SEASON_ID = 3
+registerEndpoint(`/api/admin/season/${GONE_SEASON_ID}`, () => {
+    throw createError({statusCode: 404})
+})
 registerEndpoint('/api/admin/season', seasonIndexEndpoint)
 
 // Team creation returns the operation result envelope (ADR-009)
@@ -316,5 +320,33 @@ describe('Plan Store - season selection', () => {
         store.loadSeasonByShortName('no-such-season')
 
         expect(await selectedSeasonOnceReady(store)).toBe(season1.id)
+    })
+})
+
+describe('Plan Store - a selected season that no longer exists', () => {
+    beforeEach(() => {
+        resetStores()
+        vi.clearAllMocks()
+        seasonIndexEndpoint.mockReturnValue(mockSeasons)
+        seasonByIdEndpoint.mockReturnValue(season1)
+        activeSeasonIdEndpoint.mockReturnValue(season1.id)
+    })
+
+    const goneSeason = {...SeasonFactory.defaultSeason('gone'), id: GONE_SEASON_ID}
+
+    it('toasts the season, drops the choice and refreshes the seasons and the active season id, so the default season loads', async () => {
+        seasonIndexEndpoint.mockReturnValue([...mockSeasons, goneSeason])
+        const store = await setupStore()
+        await vi.waitFor(() => expect(asyncDataStatus(SELECTED_SEASON_KEY)).toBe('success'))
+        seasonIndexEndpoint.mockReturnValue(mockSeasons)
+        const before = {seasons: seasonIndexEndpoint.mock.calls.length, active: activeSeasonIdEndpoint.mock.calls.length}
+
+        store.onSeasonSelect(GONE_SEASON_ID)
+
+        await vi.waitFor(() => expect(activeSeasonIdEndpoint.mock.calls.length).toBeGreaterThan(before.active))
+        await vi.waitFor(() => expect(store.selectedSeason?.id).toBe(season1.id))
+        expect(store.selectedSeasonId).toBe(season1.id)
+        expect(seasonIndexEndpoint.mock.calls.length).toBeGreaterThan(before.seasons)
+        expect(useToast().toasts.value.at(-1)?.title).toBe(`Kan ikke finde sæsonen ${goneSeason.shortName}`)
     })
 })
