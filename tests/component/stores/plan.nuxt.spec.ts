@@ -5,6 +5,7 @@ import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 import { asyncDataStatus, resetStores } from '~~/tests/component/testHelpers'
 
 import { usePlanStore } from '~/stores/plan'
+import { ROLE_LABELS } from '~/composables/useCookingTeamValidation'
 
 // IMPORTANT: Register endpoints BEFORE importing the store
 // The store's module-level useFetch executes on import
@@ -45,6 +46,22 @@ const activateSeasonEndpoint = vi.fn(() => season2)
 registerEndpoint('/api/admin/season/1', { method: 'POST', handler: updateSeasonEndpoint })
 registerEndpoint('/api/admin/season', { method: 'PUT', handler: createSeasonEndpoint })
 registerEndpoint('/api/admin/season/active', { method: 'POST', handler: activateSeasonEndpoint })
+
+// Team aggregate writes: a create returns the created entity, a delete the deleted count (ADR-009)
+const TEAM_ID = 11
+const ASSIGNMENT_ID = 7
+const JOKER_SLOT_ID = 5
+const assignment = SeasonFactory.defaultCookingTeamAssignment({id: ASSIGNMENT_ID, cookingTeamId: TEAM_ID})
+const jokerSlot = SeasonFactory.defaultJokerSlot()
+const createdJokerSlot = {...jokerSlot, id: JOKER_SLOT_ID, cookingTeamId: TEAM_ID, note: null, createdAt: new Date(), updatedAt: new Date()}
+const addTeamMemberEndpoint = vi.fn(() => assignment)
+const removeTeamMemberEndpoint = vi.fn(() => 1)
+const createJokerSlotEndpoint = vi.fn(() => createdJokerSlot)
+const deleteJokerSlotEndpoint = vi.fn(() => 1)
+registerEndpoint(`/api/admin/team/assignment/${ASSIGNMENT_ID}`, { method: 'DELETE', handler: removeTeamMemberEndpoint })
+registerEndpoint('/api/admin/team/assignment', { method: 'PUT', handler: addTeamMemberEndpoint })
+registerEndpoint(`/api/admin/team/${TEAM_ID}/joker-slot/${JOKER_SLOT_ID}`, { method: 'DELETE', handler: deleteJokerSlotEndpoint })
+registerEndpoint(`/api/admin/team/${TEAM_ID}/joker-slot`, { method: 'PUT', handler: createJokerSlotEndpoint })
 
 // Test helpers
 const SELECTED_SEASON_KEY = 'plan-store-selected-season'
@@ -348,5 +365,62 @@ describe('Plan Store - a selected season that no longer exists', () => {
         expect(store.selectedSeasonId).toBe(season1.id)
         expect(seasonIndexEndpoint.mock.calls.length).toBeGreaterThan(before.seasons)
         expect(useToast().toasts.value.at(-1)?.title).toBe(`Kan ikke finde sæsonen ${goneSeason.shortName}`)
+    })
+})
+
+describe('Plan Store - Team members and joker slots', () => {
+    beforeEach(() => {
+        resetStores()
+        vi.clearAllMocks()
+        seasonIndexEndpoint.mockReturnValue(mockSeasons)
+        seasonByIdEndpoint.mockReturnValue(season1)
+        activeSeasonIdEndpoint.mockReturnValue(season1.id)
+    })
+
+    // Dates in `parsed` are Date objects: only a schema parse turns the JSON strings back into dates
+    it.each([
+        {
+            action: 'addTeamMember',
+            endpoint: addTeamMemberEndpoint,
+            write: (store: ReturnType<typeof usePlanStore>) => store.addTeamMember({
+                cookingTeamId: TEAM_ID, inhabitantId: assignment.inhabitantId, role: assignment.role, allocationPercentage: 100
+            }),
+            parsed: assignment,
+            toast: {title: 'Medlem tilføjet til hold', description: `${assignment.inhabitant.name} ${assignment.inhabitant.lastName}`}
+        },
+        {
+            action: 'removeTeamMember',
+            endpoint: removeTeamMemberEndpoint,
+            write: (store: ReturnType<typeof usePlanStore>) => store.removeTeamMember(ASSIGNMENT_ID),
+            parsed: 1,
+            toast: {title: 'Medlem fjernet fra hold'}
+        },
+        {
+            action: 'createJokerSlot',
+            endpoint: createJokerSlotEndpoint,
+            write: (store: ReturnType<typeof usePlanStore>) => store.createJokerSlot(TEAM_ID, jokerSlot),
+            parsed: createdJokerSlot,
+            toast: {title: 'Joker tilføjet', description: ROLE_LABELS[jokerSlot.role]}
+        },
+        {
+            action: 'deleteJokerSlot',
+            endpoint: deleteJokerSlotEndpoint,
+            write: (store: ReturnType<typeof usePlanStore>) => store.deleteJokerSlot(TEAM_ID, JOKER_SLOT_ID),
+            parsed: 1,
+            toast: {title: 'Joker fjernet'}
+        }
+    ])('$action returns the parsed response, refreshes the selected season and toasts once', async ({endpoint, write, parsed, toast}) => {
+        useToast().clear()
+        const store = await setupStore()
+        await vi.waitFor(() => expect(store.selectedSeason?.id).toBe(season1.id))
+        const seasonFetchesBefore = seasonByIdEndpoint.mock.calls.length
+
+        const result = await write(store)
+
+        expect(endpoint).toHaveBeenCalledTimes(1)
+        expect(result).toEqual(parsed)
+        expect(seasonByIdEndpoint.mock.calls.length).toBeGreaterThan(seasonFetchesBefore)
+        expect(useToast().toasts.value).toHaveLength(1)
+        expect(useToast().toasts.value[0]).toMatchObject(toast)
     })
 })

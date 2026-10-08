@@ -38,10 +38,10 @@ Nuxt 4.3, Nuxt UI 4.3, Tailwind 4.1. Pages use Nuxt UI components; every shared 
 | `TYPOGRAPHY`, `LAYOUTS`, `SIZES`, `ICONS` | text styles, layout classes, responsive sizes, icon names |
 | `BUTTONS` | `edit`, `cancel`, `save`, `primaryAction`, `secondaryAction`, `settings` |
 | `ALERTS` | alert kinds and the `withActions` / `withCornerAction` modifiers |
-| `COMPONENTS` | `calendarGrid`, `legend` (inside an `ALERTS.legend` panel: `entries`, `entry`, `stackedEntry`, `badge`, `hint`), `dateField`, `installIcon`, `statBox`, `table.ui`, `teamTabs`, `teamChip` (the circular team icon beside the team-name input), `masterDetail` (framed `pane`/`dock`, sticky `dockHeader`, `dockClamp` keeps a wide dock out of the master table's sizing, `dockBody` scrolls it in its own box), `choiceGroup`, `kitchenPanel`, `segmentedActive`, `economyTable`, `powerMode`, `guestRow`, `wantedPoster` (the chef portrait: `trigger`, `frame`, `portrait`, `ring`, `avatar`, `hat` with its ink `hatOnFrame` or `hatOnPage`, `nameStack`, `lettering`, `role`) |
+| `COMPONENTS` | `calendarGrid`, `legend` (inside an `ALERTS.legend` panel: `entries`, `entry`, `stackedEntry`, `badge`, `hint`), `dateField`, `installIcon`, `statBox`, `table.ui`, `teamTabs`, `teamChip` (the circular team icon beside the team-name input), `masterDetail` (framed `pane`/`dock`, sticky `dockHeader`, `dockClamp` keeps a wide dock out of the master table's sizing, `dockBody` scrolls it in its own box), `choiceGroup`, `kitchenPanel`, `segmentedActive`, `economyTable`, `powerMode`, `guestRow`, `roleBox` (the team card's role groups on one glyph column: `box`, `heading` with its `glyph`, `list`, `row`, `empty`, the edit face's `add` button and joker slot `form` panel, and the monitor face's `monitorGrid` and `monitorRow`), `teamForm` (the team card's inline forms: the field `stack`, a select or input `control` filling its field), `wantedPoster` (the chef portrait: `trigger`, `frame`, `portrait`, `ring`, `avatar`, `hat` with its ink `hatOnFrame` or `hatOnPage`, `nameStack`, `lettering`, `role`) |
 | `CALENDAR`, `PLANNING_CALENDAR`, `CHEF_CALENDAR`, `DINNER_CALENDAR`, `dayCircleClasses`, `calendarPickerProps` | calendar days, pickers, countdowns |
 | `BACKGROUNDS`, `RAINBOW`, `RAINBOW_FAMILIES`, `getRainbowBand`, `getRainbowFamily`, `getRainbowAccent` (selected team row's left tab), `PANTONE_CHIPS` | brand surfaces |
-| `TICKET_TYPE_COLORS`, `ORDER_STATE_COLORS`, `DINNER_STATE_BADGES`, `DEADLINE_BADGES`, `RESIDENCY_CONFIG`, `ROLE_ICONS` | domain colour and glyph maps; the role and dinner glyphs are one set, Hugeicons: `ICONS.chef` (chef hat, Chefkok), `ROLE_ICONS.COOK` (whisk, Kok), `ROLE_ICONS.JUNIORHELPER` (plant, Kokkespire), `ICONS.dinner` (dish, Middag and Spisesal) |
+| `TICKET_TYPE_COLORS`, `ORDER_STATE_COLORS`, `DINNER_STATE_BADGES`, `DEADLINE_BADGES`, `RESIDENCY_CONFIG`, `ROLE_ICONS` | domain colour and glyph maps; the role and dinner glyphs are one set, Hugeicons: `ICONS.chef` (chef hat, Chefkok), `ROLE_ICONS.COOK` (whisk, Kok), `ROLE_ICONS.JUNIORHELPER` (plant, Kokkespire), `ICONS.joker` (joker, Jokere), `ICONS.dinner` (dish, Middag and Spisesal) |
 
 ## Patterns
 
@@ -104,6 +104,21 @@ avatar inside the amber `ring`, the `hat` (`ICONS.chef`) tilted on top, and the 
 without a chef adds `frame` (dashed amber border on mocha 950, a slight skew) to the trigger, renders a question-mark `UAvatar`
 through `avatar` (fill and icon ink) and sets WANTED in `lettering` over the `role` line. The visual check is `/chef` and
 `/dinner` at 375px and on desktop, on a dinner with and without a chef, in light and dark mode.
+
+### Role boxes
+
+`CookingTeamCard` sets its members in one box per role and a Jokere box after Kokkespirer, all bound to `COMPONENTS.roleBox`. A
+heading carries its glyph once (`ROLE_ICONS[role]`, `ICONS.joker`) beside the label, centred on one line at one glyph size; the
+rows inside a box carry no role glyph. A joker line reads period, weekdays (`WeekDayMapDisplay` compact), the role's glyph and
+label, the note and the shifts the slot covers (`countJokerSlotShifts` in `useCookingTeam`). An empty box shows the muted
+`empty` line. The monitor face sets the same heading in `monitorGrid`, a heading column beside the avatars. The role and allocation fields are `TeamRoleFields`, shared by
+`TeamMemberAddForm` and `JokerSlotForm`; the role select shows the selected role's glyph on its trigger. In the edit face each joker
+line ends in a slet (`BUTTONS.edit` with `ICONS.trash` and an `aria-label`), and the `add` button (`BUTTONS.secondaryAction` +
+`BUTTONS.flipOpen`) opens `JokerSlotForm` in the `form` panel under the box; Opret and Fortryd close it. Every face starts with the 1rem glyph column: a box is the
+`box` grid with the heading as a subgrid row, so the label, the list and the empty line start on one line; the monitor face is
+`monitorGrid` (glyph, label, list) with one `monitorRow` subgrid per group, so the glyphs share one axis and every avatar list
+starts on one line. The visual check is `/admin/teams` with a team open in view
+and edit mode, the add-member form with each role, the joker slot form open and a joker line's slet, and the monitor face on `/chef` and `/dinner`, at 375px and on desktop.
 
 ### QR codes
 

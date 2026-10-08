@@ -24,7 +24,8 @@
  *   (plant) Kokkespire
  *   |  Ingen kokkespire
  *   (joker) Jokere
- *   |  07/10/2026-01/12/2026  tir  (whisk) Kok  Anna barsel  8 vagter
+ *   |  07/10/2026-01/12/2026  tir  (whisk) Kok  Anna barsel  8 vagter   [(trash)]   <- edit face only
+ *   |  [ + Tilføj jokertjans v ]                                        <- edit face, opens JokerSlotForm below
  *
  * Already volunteered:
  * ┌──────────────────────────────────────────────────────────────────────────┐
@@ -46,9 +47,10 @@
 import type { WeekDayMap, DateRange } from '~/types/dateTypes'
 import type { TeamRole, CookingTeamAssignment } from '~/composables/useCookingTeamValidation'
 import { ROLE_LABELS } from '~/composables/useCookingTeamValidation'
+import type { JokerSlotCreate } from '~/composables/useDutyValidation'
 
 // Design system
-const { SIZES, ICONS, ALERTS, COLOR, TYPOGRAPHY, TEXT, BG, COMPONENTS, ROLE_ICONS, getRainbowBand, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { SIZES, ICONS, ALERTS, BUTTONS, COLOR, TYPOGRAPHY, TEXT, BG, COMPONENTS, ROLE_ICONS, getRainbowBand, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 type DisplayMode = 'monitor' | 'regular' | 'edit'
 
@@ -82,6 +84,8 @@ const emit = defineEmits<{
   'add:member': [inhabitantId: number, role: TeamRole, allocationPercentage: number, affinity: WeekDayMap | null]
   'update:member': [assignmentId: number, inhabitantId: number, role: TeamRole, allocationPercentage: number, affinity: WeekDayMap | null]
   'remove:member': [assignmentId: number]
+  'add:jokerSlot': [slot: JokerSlotCreate]
+  'remove:jokerSlot': [slotId: number]
 }>()
 
 // Store integration - use fetch function, not shared state
@@ -121,6 +125,13 @@ const jokerLines = computed(() => {
   const cookingDates = dinnerEvents.value.map(event => event.date)
   return jokerSlots.value.map(slot => ({slot, shifts: countJokerSlotShifts(slot, cookingDates)}))
 })
+
+const isJokerFormOpen = ref(false)
+
+const handleJokerSlotSubmit = (slot: JokerSlotCreate) => {
+  emit('add:jokerSlot', slot)
+  isJokerFormOpen.value = false
+}
 
 const editedName = ref(teamName.value)
 
@@ -438,12 +449,40 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                   <span>{{ ROLE_LABELS[slot.role] }}</span>
                   <span v-if="slot.note">{{ slot.note }}</span>
                   <span>{{ shifts }} {{ shifts === 1 ? 'vagt' : 'vagter' }}</span>
+                  <UButton
+                    v-if="isEditable"
+                    v-bind="BUTTONS.edit"
+                    :icon="ICONS.trash"
+                    :aria-label="`Slet jokertjans ${formatDateRange({start: slot.startDate, end: slot.endDate})}`"
+                    :data-testid="`joker-slot-delete-${slot.id}`"
+                    @click="emit('remove:jokerSlot', slot.id)"
+                  />
                 </div>
               </div>
 
               <div v-else :class="COMPONENTS.roleBox.empty">
                 Ingen jokere
               </div>
+
+              <template v-if="isEditable">
+                <UButton
+                  v-bind="{...BUTTONS.secondaryAction, ...BUTTONS.flipOpen(isJokerFormOpen)}"
+                  :color="COLOR.primary"
+                  :icon="ICONS.plusCircle"
+                  :class="COMPONENTS.roleBox.add"
+                  data-testid="joker-slot-add"
+                  @click="isJokerFormOpen = !isJokerFormOpen"
+                >
+                  Tilføj jokertjans
+                </UButton>
+                <div v-if="isJokerFormOpen" :class="COMPONENTS.roleBox.form">
+                  <JokerSlotForm
+                    :team-affinity="affinity"
+                    @submit="handleJokerSlotSubmit"
+                    @cancel="isJokerFormOpen = false"
+                  />
+                </div>
+              </template>
             </div>
           </div>
         </div>

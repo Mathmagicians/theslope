@@ -1,6 +1,7 @@
 import type {Season, SeasonUpdateResponse} from '~/composables/useSeasonValidation'
-import type {CookingTeamDisplay, CookingTeamDetail, CookingTeamAssignment, CookingTeamCreate, CookingTeamUpdate, CookingTeamAssignmentCreate, CreateTeamsResponse, TeamRole} from '~/composables/useCookingTeamValidation'
+import {ROLE_LABELS, type CookingTeamDisplay, type CookingTeamDetail, type CookingTeamAssignment, type CookingTeamCreate, type CookingTeamUpdate, type CookingTeamAssignmentCreate, type CreateTeamsResponse, type TeamRole} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay, DinnerEventDetail, MenuSwapStrategy} from '~/composables/useBookingValidation'
+import type {JokerSlot, JokerSlotCreate} from '~/composables/useDutyValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 export const usePlanStore = defineStore("Plan", () => {
@@ -90,7 +91,8 @@ export const usePlanStore = defineStore("Plan", () => {
 
         // Fetch cooking team detail (ADR-009: Detail data with dinnerEvents)
         // No store state - components use useAsyncData with this function
-        const {CookingTeamDetailSchema, CreateTeamsResponseSchema} = useCookingTeamValidation()
+        const {CookingTeamDetailSchema, CreateTeamsResponseSchema, CookingTeamAssignmentSchema, DeletedCountSchema} = useCookingTeamValidation()
+        const {JokerSlotSchema} = useDutyValidation()
         const fetchTeamDetail = (teamId: number): Promise<CookingTeamDetail> =>
             apiRequest(`/api/admin/team/${teamId}`, {schema: CookingTeamDetailSchema, action: 'fetchTeamDetail'})
 
@@ -352,28 +354,64 @@ export const usePlanStore = defineStore("Plan", () => {
             }
         }
 
-        // TEAM MEMBER ASSIGNMENT ACTIONS - Part of Team aggregate (ADR-005)
+        // TEAM MEMBER AND JOKER SLOT ACTIONS - Part of Team aggregate (ADR-005); a create returns the
+        // created entity, a delete the deleted count, and the season refresh carries the team (ADR-009)
         const addTeamMember = async (assignment: CookingTeamAssignmentCreate): Promise<CookingTeamAssignment> => {
-            const created = await apiRequest<CookingTeamAssignment>('/api/admin/team/assignment', {
+            const created = await apiRequest('/api/admin/team/assignment', {
                 method: 'PUT',
                 body: assignment,
+                schema: CookingTeamAssignmentSchema,
                 action: 'addTeamMember'
             })
             console.info(`👥🔗 > PLAN_STORE > Added member ${assignment.inhabitantId} to team ${assignment.cookingTeamId} as ${assignment.role}`)
-            // Refresh selected season to get updated teams
             if (selectedSeasonId.value) {
                 await refreshSelectedSeason()
             }
+            toastSaved('Medlem tilføjet til hold', `${created.inhabitant.name} ${created.inhabitant.lastName}`)
             return created
         }
 
-        const removeTeamMember = async (assignmentId: number) => {
-            await apiRequest(`/api/admin/team/assignment/${assignmentId}`, {method: 'DELETE', action: 'removeTeamMember'})
+        const removeTeamMember = async (assignmentId: number): Promise<number> => {
+            const deleted = await apiRequest(`/api/admin/team/assignment/${assignmentId}`, {
+                method: 'DELETE',
+                schema: DeletedCountSchema,
+                action: 'removeTeamMember'
+            })
             console.info(`👥🔗 > PLAN_STORE > Removed team member assignment ${assignmentId}`)
-            // Refresh selected season to get updated teams
             if (selectedSeasonId.value) {
                 await refreshSelectedSeason()
             }
+            toastSaved('Medlem fjernet fra hold')
+            return deleted
+        }
+
+        const createJokerSlot = async (teamId: number, slot: JokerSlotCreate): Promise<JokerSlot> => {
+            const created = await apiRequest(`/api/admin/team/${teamId}/joker-slot`, {
+                method: 'PUT',
+                body: slot,
+                schema: JokerSlotSchema,
+                action: 'createJokerSlot'
+            })
+            console.info(`🃏 > PLAN_STORE > Added ${slot.role} joker slot to team ${teamId}`)
+            if (selectedSeasonId.value) {
+                await refreshSelectedSeason()
+            }
+            toastSaved('Joker tilføjet', ROLE_LABELS[created.role])
+            return created
+        }
+
+        const deleteJokerSlot = async (teamId: number, slotId: number): Promise<number> => {
+            const deleted = await apiRequest(`/api/admin/team/${teamId}/joker-slot/${slotId}`, {
+                method: 'DELETE',
+                schema: DeletedCountSchema,
+                action: 'deleteJokerSlot'
+            })
+            console.info(`🃏 > PLAN_STORE > Removed joker slot ${slotId} from team ${teamId}`)
+            if (selectedSeasonId.value) {
+                await refreshSelectedSeason()
+            }
+            toastSaved('Joker fjernet')
+            return deleted
         }
 
         // DINNER EVENT ACTIONS
@@ -500,6 +538,8 @@ export const usePlanStore = defineStore("Plan", () => {
             deleteTeam,
             addTeamMember,
             removeTeamMember,
+            createJokerSlot,
+            deleteJokerSlot,
             assignRoleToDinner,
             claimRoleForMe,
             resignRoleForMe,

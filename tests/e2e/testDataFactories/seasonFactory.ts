@@ -10,7 +10,7 @@ import type {
 } from "~/composables/useCookingTeamValidation"
 import {useBookingValidation, type DinnerEventDisplay, type ScaffoldResult, type DailyMaintenanceResult} from "~/composables/useBookingValidation"
 import {useMaintenanceValidation, type JobRunDisplay} from "~/composables/useMaintenanceValidation"
-import {useDutyValidation, type JokerSlotCreate} from "~/composables/useDutyValidation"
+import {useDutyValidation, type JokerSlot, type JokerSlotCreate} from "~/composables/useDutyValidation"
 import {getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
@@ -24,8 +24,8 @@ type CookingTeamCreateAssignment = NonNullable<CookingTeamCreate['assignments']>
 // Serialization now handled internally by repository layer
 const {salt, temporaryAndRandom, headers} = testHelpers
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
-const {CookingTeamDetailSchema, CookingTeamDisplaySchema, CookingTeamAssignmentSchema, CreateTeamsResponseSchema} = useCookingTeamValidation()
-const {RoleSchema} = useDutyValidation()
+const {CookingTeamDetailSchema, CookingTeamDisplaySchema, CookingTeamAssignmentSchema, CreateTeamsResponseSchema, DeletedCountSchema} = useCookingTeamValidation()
+const {RoleSchema, JokerSlotSchema} = useDutyValidation()
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
@@ -1031,7 +1031,7 @@ export class SeasonFactory {
         teamId: number,
         slot: JokerSlotCreate = this.defaultJokerSlot(),
         expectedStatus: number = 201
-    ): Promise<CookingTeamDetail | null> => {
+    ): Promise<JokerSlot | null> => {
         const response = await context.request.put(`${ADMIN_TEAM_ENDPOINT}/${teamId}/joker-slot`, {
             headers: headers,
             data: slot
@@ -1040,7 +1040,7 @@ export class SeasonFactory {
         const errorBody = status !== expectedStatus ? await response.text() : ''
         expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
-        return expectedStatus === 201 ? CookingTeamDetailSchema.parse(await response.json()) : null
+        return expectedStatus === 201 ? JokerSlotSchema.parse(await response.json()) : null
     }
 
     static readonly deleteJokerSlot = async (
@@ -1048,13 +1048,13 @@ export class SeasonFactory {
         teamId: number,
         slotId: number,
         expectedStatus: number = 200
-    ): Promise<CookingTeamDetail | null> => {
+    ): Promise<number | null> => {
         const response = await context.request.delete(`${ADMIN_TEAM_ENDPOINT}/${teamId}/joker-slot/${slotId}`)
         const status = response.status()
         const errorBody = status !== expectedStatus ? await response.text() : ''
         expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
-        return expectedStatus === 200 ? CookingTeamDetailSchema.parse(await response.json()) : null
+        return expectedStatus === 200 ? DeletedCountSchema.parse(await response.json()) : null
     }
 
     static readonly getCookingTeamsForSeason = async (

@@ -145,6 +145,9 @@ export const useCookingTeamValidation = () => {
         eventsAssigned: z.number().int().min(0)
     })
 
+    // Response of a team aggregate delete whose entity no caller renders (ADR-009)
+    const DeletedCountSchema = z.number().int().min(0)
+
     /**
      * PrismaTeamUpdateData - Return type for toPrismaUpdateData
      * Derived from CookingTeamDetailSchema, excludes computed fields, serializes affinity
@@ -326,6 +329,7 @@ export const useCookingTeamValidation = () => {
         CookingTeamCreateSchema,             // For PUT operations (ADR-009)
         CookingTeamUpdateSchema,             // For POST operations (ADR-009)
         CreateTeamsResponseSchema,           // Operation result for PUT /api/admin/team (ADR-009)
+        DeletedCountSchema,                  // Operation result for assignment and joker slot DELETE (ADR-009)
         CookingTeamAssignmentSchema,         // For nested assignments
         CookingTeamAssignmentCreateSchema,   // For creating assignments (ADR-009)
         RoleAssignmentPlanSchema,            // Plan output from decideRoleAssignmentWrites

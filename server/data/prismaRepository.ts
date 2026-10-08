@@ -29,6 +29,8 @@ import type {
     CookingTeamAssignment
 } from '~/composables/useCookingTeamValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import type {JokerSlot, JokerSlotCreate} from '~/composables/useDutyValidation'
+import {useDutyValidation} from '~/composables/useDutyValidation'
 import type {BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 
@@ -1686,6 +1688,51 @@ export async function deleteTeam(d1Client: D1Database, id: number): Promise<Cook
         return deserializeCookingTeamDetail(teamWithEmptyRelations)
     } catch (error) {
         return throwH3Error(`👥 > TEAM > [DELETE] > Error deleting team with ID ${id}`, error)
+    }
+}
+
+/*** SEASON > TEAM > JOKER SLOT ***/
+
+const {serializeJokerSlot, deserializeJokerSlot} = useDutyValidation()
+
+/**
+ * Create a joker slot on a team; returns the created slot (ADR-009)
+ * The relation connect answers a missing team with P2025 (404)
+ */
+export async function createJokerSlot(d1Client: D1Database, teamId: number, slot: JokerSlotCreate): Promise<JokerSlot> {
+    console.info(`🃏 > JOKER_SLOT > [CREATE] Creating ${slot.role} joker slot on team ${teamId}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+    const {note, ...data} = serializeJokerSlot(slot)
+
+    try {
+        const created = await prisma.jokerSlot.create({
+            data: {
+                ...data,
+                note: note ?? skip,
+                cookingTeam: {connect: {id: teamId}}
+            }
+        })
+        console.info(`🃏 > JOKER_SLOT > [CREATE] Created joker slot ${created.id} on team ${teamId}`)
+        return deserializeJokerSlot(created)
+    } catch (error) {
+        return throwH3Error(`🃏 > JOKER_SLOT > [CREATE]: Error creating joker slot on team ${teamId}`, error)
+    }
+}
+
+/**
+ * Delete a team's joker slot; returns the deleted count (ADR-009)
+ * The team id in the WHERE makes a slot of another team a P2025 (404)
+ */
+export async function deleteJokerSlot(d1Client: D1Database, teamId: number, slotId: number): Promise<number> {
+    console.info(`🃏 > JOKER_SLOT > [DELETE] Deleting joker slot ${slotId} on team ${teamId}`)
+    const prisma = await getPrismaClientConnection(d1Client)
+
+    try {
+        await prisma.jokerSlot.delete({where: {id: slotId, cookingTeamId: teamId}})
+        console.info(`🃏 > JOKER_SLOT > [DELETE] Deleted joker slot ${slotId} on team ${teamId}`)
+        return 1
+    } catch (error) {
+        return throwH3Error(`🃏 > JOKER_SLOT > [DELETE]: Error deleting joker slot ${slotId} on team ${teamId}`, error)
     }
 }
 

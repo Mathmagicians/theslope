@@ -933,8 +933,17 @@ export const COMPONENTS = {
         list: `col-start-2 flex flex-col gap-2 p-3 ${BG.inset}`,
         row: 'flex items-center gap-2 flex-wrap',
         empty: `col-start-2 ${TYPOGRAPHY.bodyTextPlaceholder} italic p-3`,
+        // The edit face: the Jokere box add button and the joker slot form it opens, in the content column
+        add: 'col-start-2 justify-self-start',
+        form: `col-start-2 p-4 ${BG.panel}`,
         monitorGrid: 'grid grid-cols-[1rem_auto_minmax(0,1fr)] gap-x-3 gap-y-3 md:gap-y-4 px-3 md:px-4',
         monitorRow: 'col-span-3 grid grid-cols-subgrid items-center'
+    },
+
+    /** The team card's inline forms (TeamMemberAddForm, JokerSlotForm): the field stack, and a select or input filling its field */
+    teamForm: {
+        stack: 'flex flex-col gap-3 py-2',
+        control: 'w-full'
     },
 
     /**

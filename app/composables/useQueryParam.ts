@@ -49,6 +49,7 @@ export function useQueryParam<T>(
   options: UseQueryParamOptions<T>
 ) {
   const route = useRoute()
+  const nuxtApp = useNuxtApp()
 
   const serialize = options.serialize ?? ((v: T) => String(v))
   const deserialize = options.deserialize ?? ((s: string) => s as T)
@@ -114,30 +115,37 @@ export function useQueryParam<T>(
     return deserialized
   }
 
+  // URL writes land one after another, each on the route the previous write produced: instances syncing in the same
+  // flush would otherwise navigate from one stale query and keep only the last key
   const updateURL = async (newValue: T) => {
-    const serialized = serialize(newValue)
-    const currentQueryValue = route.query[key] as string | undefined
+    const write = (nuxtApp._urlWrites ?? Promise.resolve()).then(async () => {
+      const serialized = serialize(newValue)
+      const currentQueryValue = route.query[key] as string | undefined
 
-    if (currentQueryValue === serialized) return
+      if (currentQueryValue === serialized) return
 
-    const query = preserveOtherParams ? {...route.query} : {}
+      const query = preserveOtherParams ? {...route.query} : {}
 
-    // If normalize returns null, remove the query param
-    if (options.normalize) {
-      const normalized = options.normalize(newValue)
-      if (normalized === null) {
-        query[key] = undefined as unknown as string
+      // If normalize returns null, remove the query param
+      if (options.normalize) {
+        const normalized = options.normalize(newValue)
+        if (normalized === null) {
+          query[key] = undefined as unknown as string
+        } else {
+          query[key] = serialized
+        }
       } else {
         query[key] = serialized
       }
-    } else {
-      query[key] = serialized
-    }
 
-    await navigateTo(
-      {path: route.path, query},
-      {replace: replaceHistory}
-    )
+      await navigateTo(
+        {path: route.path, query},
+        {replace: replaceHistory}
+      )
+    })
+    // A failed navigation does not block the writes behind it
+    nuxtApp._urlWrites = write.catch(() => undefined)
+    await write
   }
 
   const value = computed<T>({

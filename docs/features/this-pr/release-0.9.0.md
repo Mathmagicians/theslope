@@ -351,6 +351,8 @@ here, admin-only.
   before the suites run.
 - The framelding billing import books every ticket on the first inhabitant and now answers 409; its e2e test is skipped
   and the import in the export format is the third chore in `../chores-0.9.1.md`.
+- Local Playwright runs use three workers (CI runs one): at the default of half the cores the local D1 proxy drops
+  requests, seen as `fetch failed` 500s and a data-mapper error on the dev copy; both vanish at one worker and in CI.
 
 ## Coverage
 

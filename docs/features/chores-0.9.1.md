@@ -100,3 +100,36 @@ which the Order unique index refuses. The e2e test is skipped; the endpoint stay
 `server/routes/api/admin/billing/import.post.ts`, `app/composables/useBillingValidation.ts`,
 `tests/e2e/testDataFactories/billingFactory.ts`, `tests/e2e/api/serial/local-theslope/billingImport.e2e.spec.ts`,
 `docs/adr-compliance-backend.md` (billing rows), `docs/adr.md` (ADR-009 example).
+
+## Server payload of the shared stores
+
+### Problem
+
+Nuxt 4.6 reports the server payload per page (`NUXT_E8006`, above 100 kB). On production-sized data `/chef` ships
+about 870 kB: `bookings-store-current-period` alone is about 700 kB, read by one component (`AdminEconomy`), and
+`households-store-households` and `users` add about 150 kB. A store that several pages share requests every dataset
+it holds on init, and every page that opens the store pays for all of them. The existing `loadHouseholdBilling`,
+`loadUpcomingOrders` and `loadOrdersForDinners` setters keep a "requested" flag in the store, which is page state.
+
+### Solution
+
+1. Data one component reads lives with that component: a component-local `useAsyncData` over a store method built on
+   `apiRequest` (ADR-007, component-local data), as `CookingTeamCard` and `OrderHistoryDisplay` do. The current
+   period moves to `AdminEconomy` this way.
+2. Seldom-used datasets that stay in a store load lazily through the framework: `immediate: false` with `execute()`
+   from the page, or `lazy` where the route must not wait. No requested flags in stores; the existing ones go the same
+   way, and ADR-007 rule 9 is rewritten to the framework's trigger.
+3. `/chef` reads from `households` and `users` only what the page shows; the heavy shapes stay on the admin pages.
+4. The payload line for `/chef`, `/household/[shortname]/bookings` and `/dinner` stays under 100 kB on a copy of dev.
+
+### TDD
+
+- Store specs: the gated-dataset rows become store-method tests; a shared store's init requests no dataset a page
+  did not ask for.
+- E2E: the dev log shows no `NUXT_E8006` for the three pages above.
+
+### Affected
+
+`app/stores/bookings.ts`, `app/stores/households.ts`, `app/stores/users.ts`, `app/components/admin/AdminEconomy.vue`,
+`app/pages/chef/index.vue`, `tests/component/stores/*.nuxt.spec.ts`, `docs/adr.md` (ADR-007 rule 9),
+`docs/adr-compliance-frontend.md` (store rows).

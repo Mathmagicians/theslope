@@ -3,7 +3,7 @@ import {describe, it, expect, beforeEach} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {flushPromises, type VueWrapper} from '@vue/test-utils'
 import {nextTick, type ComponentPublicInstance} from 'vue'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
 import CookingTeamCard from '~/components/cooking-team/CookingTeamCard.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {COMPONENTS, ICONS, ROLE_ICONS} from '~/composables/useTheSlopeDesignSystem'
@@ -11,6 +11,7 @@ import {useCookingTeamValidation, type CookingTeamDetail} from '~/composables/us
 import type {JokerSlot} from '~/composables/useDutyValidation'
 import {createDefaultWeekdayMap} from '~/types/dateTypes'
 import {formatDate} from '~/utils/date'
+import {JOKER_SLOT_IDS, tickFirstWeekday, submitJokerSlotForm} from '~~/tests/component/components/cooking-team/jokerSlotForm'
 
 const {TeamRoleSchema} = useCookingTeamValidation()
 const Role = TeamRoleSchema.enum
@@ -137,6 +138,42 @@ describe('CookingTeamCard', () => {
             expect(findAllByTestId(box, TEST_IDS.jokerSlot)).toHaveLength(0)
             expect(box.text()).toContain('Ingen jokere')
         })
+    })
+
+    describe('edit face, Jokere', () => {
+        it('every slot line carries a slet that emits remove:jokerSlot with its id', async () => {
+            const wrapper = await mountCard('edit')
+            const lines = findAllByTestId(findByTestId(wrapper, TEST_IDS.jokerBox), TEST_IDS.jokerSlot)
+            slots.forEach(({slot}, index) => {
+                expect(findByTestId(lines[index]!, JOKER_SLOT_IDS.delete(slot.id)).attributes('aria-label')).toBeTruthy()
+            })
+            await clickByTestId(wrapper, JOKER_SLOT_IDS.delete(slots[1]!.slot.id))
+            expect(wrapper.emitted('remove:jokerSlot')).toEqual([[slots[1]!.slot.id]])
+        })
+
+        it('the add button opens the form, and Opret emits add:jokerSlot and closes it', async () => {
+            const wrapper = await mountCard('edit')
+            expect(findByTestId(wrapper, JOKER_SLOT_IDS.form).exists()).toBe(false)
+
+            await clickByTestId(wrapper, JOKER_SLOT_IDS.add)
+            await flushPromises()
+            expect(findByTestId(wrapper, JOKER_SLOT_IDS.add).attributes('aria-expanded')).toBe('true')
+            expect(findByTestId(wrapper, JOKER_SLOT_IDS.form).exists()).toBe(true)
+
+            await tickFirstWeekday(wrapper)
+            await submitJokerSlotForm(wrapper)
+            const emitted = wrapper.emitted('add:jokerSlot')
+            expect(emitted).toHaveLength(1)
+            expect(emitted![0]![0]).toMatchObject({role: Role.COOK, allocationPercentage: 100})
+            expect(findByTestId(wrapper, JOKER_SLOT_IDS.add).attributes('aria-expanded')).toBe('false')
+        })
+    })
+
+    it('the view face shows the slots without the add or slet buttons', async () => {
+        const wrapper = await mountCard('regular')
+        expect(findAllByTestId(wrapper, TEST_IDS.jokerSlot)).toHaveLength(slots.length)
+        expect(findByTestId(wrapper, JOKER_SLOT_IDS.add).exists()).toBe(false)
+        slots.forEach(({slot}) => expect(findByTestId(wrapper, JOKER_SLOT_IDS.delete(slot.id)).exists()).toBe(false))
     })
 
     describe('monitor face', () => {

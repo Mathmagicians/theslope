@@ -337,5 +337,30 @@ test.describe('AdminTeams Form UI', () => {
             await expectMode(FORM_MODES.EDIT)
             await expect(search).toBeVisible()
         })
+
+        test('GIVEN a team in edit mode WHEN adding a joker slot through the form THEN the Jokere box lists it', async () => {
+            // GIVEN: a team open in the edit face
+            const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Joker')
+            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
+            await expect(page.getByTestId('joker-slot-add')).toBeVisible({timeout: 10000})
+            await testHelpers.waitForHydration(page)
+
+            // WHEN: opening the form, ticking a weekday and creating the slot
+            await page.getByTestId('joker-slot-add').click()
+            const form = page.getByTestId('joker-slot-form')
+            await form.getByRole('checkbox').first().check()
+            const responsePromise = page.waitForResponse(
+                (response: Response) => response.url().includes(`/api/admin/team/${team.id}/joker-slot`) && response.request().method() === 'PUT',
+                {timeout: 15000}
+            )
+            await page.getByTestId('joker-slot-submit').click()
+            expect((await responsePromise).status()).toBe(201)
+
+            // THEN: the Jokere box shows the slot line, and the team counts it
+            await expect(page.getByTestId('team-joker-box').getByTestId('team-joker-slot')).toHaveCount(1)
+            const teams = await SeasonFactory.getCookingTeamsForSeason(context, season.id!)
+            expect(teams.find(t => t.id === team.id)?.jokerSlotCount).toBe(1)
+            await expectMode(FORM_MODES.EDIT)
+        })
     })
 })

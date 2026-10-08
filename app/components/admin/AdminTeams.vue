@@ -44,6 +44,7 @@ import {h, resolveComponent} from 'vue'
 import {FORM_MODES} from "~/types/form"
 import type {TeamRole, CookingTeamDisplay} from "~/composables/useCookingTeamValidation"
 import type {WeekDayMap} from "~/types/dateTypes"
+import type {JokerSlotCreate} from "~/composables/useDutyValidation"
 
 // Props - canEdit from parent for authorization
 interface Props {
@@ -73,7 +74,9 @@ const {
   updateTeam,
   deleteTeam,
   addTeamMember,
-  removeTeamMember
+  removeTeamMember,
+  createJokerSlot,
+  deleteJokerSlot
 } = store
 
 // Get teams from selected season - ALWAYS show live data
@@ -195,7 +198,9 @@ const detailEvents = computed(() => ({
   'delete': handleDeleteTeam,
   'add:member': handleAddMember,
   'update:member': handleUpdateMember,
-  'remove:member': handleRemoveMember
+  'remove:member': handleRemoveMember,
+  'add:jokerSlot': handleAddJokerSlot,
+  'remove:jokerSlot': handleRemoveJokerSlot
 }))
 
 // Gated on data presence, not on the fetch state: a background season refresh (every
@@ -260,7 +265,7 @@ const handleDeleteTeam = async (teamId: number | undefined) => {
   // teams reactively updates from store refresh - no manual update needed
 }
 
-// EDIT MODE: Add member to team (IMMEDIATE SAVE)
+// EDIT MODE: Members and joker slots (IMMEDIATE SAVE) - the store toasts each action
 const handleAddMember = async (inhabitantId: number, role: TeamRole, allocationPercentage: number = 100, affinity: WeekDayMap | null = null) => {
   if (!selectedTeam.value?.id) return
 
@@ -271,10 +276,9 @@ const handleAddMember = async (inhabitantId: number, role: TeamRole, allocationP
     allocationPercentage,
     ...(affinity ? {affinity} : {})
   })
-  showSuccessToast('Medlem tilføjet til hold')
 }
 
-// EDIT MODE: Update member (delete old + create new, single refresh)
+// EDIT MODE: Update member (delete old + create new)
 const handleUpdateMember = async (assignmentId: number, inhabitantId: number, role: TeamRole, allocationPercentage: number = 100, affinity: WeekDayMap | null = null) => {
   if (!selectedTeam.value?.id) return
   await removeTeamMember(assignmentId)
@@ -285,13 +289,20 @@ const handleUpdateMember = async (assignmentId: number, inhabitantId: number, ro
     allocationPercentage,
     ...(affinity ? {affinity} : {})
   })
-  showSuccessToast('Medlem opdateret')
 }
 
-// EDIT MODE: Remove member from team (IMMEDIATE DELETE)
 const handleRemoveMember = async (assignmentId: number) => {
   await removeTeamMember(assignmentId)
-  showSuccessToast('Medlem fjernet fra hold')
+}
+
+const handleAddJokerSlot = async (slot: JokerSlotCreate) => {
+  if (!selectedTeam.value?.id) return
+  await createJokerSlot(selectedTeam.value.id, slot)
+}
+
+const handleRemoveJokerSlot = async (slotId: number) => {
+  if (!selectedTeam.value?.id) return
+  await deleteJokerSlot(selectedTeam.value.id, slotId)
 }
 
 const handleCancel = async () => {

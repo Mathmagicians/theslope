@@ -25,11 +25,13 @@
 | `/api/admin/dinner-event/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchDinnerEvents() validates with DinnerEventResponseSchema                                     |
 | `/api/admin/dinner-event/index.put.ts` | ✅ | ✅ | ✅ | ✅ | saveDinnerEvent() validates with DinnerEventResponseSchema                                       |
 | **Admin - Teams** | | | | | **✅ FULLY COMPLIANT (2025-12-15)** - Uses teamService for auto-assignment                       |
-| `/api/admin/team/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteTeam() → CookingTeamWithMembers                                                            |
-| `/api/admin/team/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeams() → CookingTeamWithMembers[]                                                          |
-| `/api/admin/team/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateTeamWithAssignments() auto-assigns affinities + events                                     |
-| `/api/admin/team/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeam() → CookingTeamWithMembers                                                             |
-| `/api/admin/team/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createTeamsWithAssignments() auto-assigns affinities + events → `CreateTeamsResponse` `{teams, eventsAssigned}` (ADR-009 operation result, 201); `team.e2e.spec.ts` asserts `eventsAssigned` equals the season's dinners carrying a `cookingTeamId` |
+| `/api/admin/team/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteTeam() → `CookingTeamDetail` carrying the deleted team's `jokerSlots` (read before the cascade), empty assignments and dinnerEvents; `team.e2e.spec.ts` asserts `jokerSlots: []` |
+| `/api/admin/team/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeams() → `CookingTeamDisplay[]` (ADR-009 index: assignments and the aggregates `cookingDaysCount`, `jokerSlotCount`; no dinnerEvents or jokerSlots); `team.e2e.spec.ts` asserts `jokerSlotCount: 0` on a fresh team |
+| `/api/admin/team/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateTeamWithAssignments() auto-assigns affinities + events → `CookingTeamDetail` with `jokerSlots`; `team.e2e.spec.ts` asserts `jokerSlots: []` |
+| `/api/admin/team/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeam() → `CookingTeamDetail` with assignments, dinnerEvents and `jokerSlots` (ADR-009 Detail); `team.e2e.spec.ts` asserts a team without slots carries `jokerSlots: []` and a `jokerSlotCount` equal to its length |
+| `/api/admin/team/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createTeamsWithAssignments() auto-assigns affinities + events → `CreateTeamsResponse` `{teams, eventsAssigned}` (ADR-009 operation result, 201), each team a `CookingTeamDetail` with `jokerSlots`; `team.e2e.spec.ts` asserts `eventsAssigned` equals the season's dinners carrying a `cookingTeamId` and the created team carries `jokerSlots: []` |
+| `/api/admin/team/[id]/joker-slot/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createJokerSlot() → `CookingTeamDetail` (ADR-009 mutation, 201) with the new slot in `jokerSlots`; body `JokerSlotCreateSchema` (at least one weekday, end on or after start, allocation 1-100 default 100); a missing team answers 404; `jokerSlot.e2e.spec.ts` asserts the Detail and the `GET /api/admin/team/[id]` read-back, and 400 per invalid slot |
+| `/api/admin/team/[id]/joker-slot/[slotId].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteJokerSlot() → `CookingTeamDetail` without the slot; the WHERE carries the team id, so a slot of another team answers 404; `jokerSlot.e2e.spec.ts` asserts `jokerSlotCount: 0` after delete and 404 across teams |
 | `/api/admin/team/assignment/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteCookingTeamAssignments() → number                                                          |
 | `/api/admin/team/assignment/index.get.ts` | ❌ | ✅ | N/A | N/A | Stub endpoint (returns static message)                                                           |
 | `/api/admin/team/assignment/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeamAssignment() → CookingTeamAssignment                                                    |
@@ -97,7 +99,7 @@
 | **Teams (Public)** |
 | `/api/team/index.get.ts` | ❌ | ✅ | |
 | `/api/team/[id].get.ts` | ❌ | ✅ | |
-| `/api/team/my.get.ts` | ❌ | ✅ | |
+| `/api/team/my.get.ts` | ❌ | ✅ | | | fetchMyTeams() → `CookingTeamDetail[]` with assignments, dinnerEvents and `jokerSlots`; `tests/e2e/api/parallel/team.e2e.spec.ts` asserts `jokerSlots: []` |
 | `/api/team/cooking/[id]/assign-role.post.ts` | ✅ | ✅ | ✅ | ❌ | **FULLY COMPLIANT** - Uses repository functions only (ADR-001, ADR-010) |
 | `/api/team/cooking/[id]/remove-role.post.ts` | ✅ | ✅ | ✅ | ✅ | Delegates chef-loss to shared `removeChefRole` util (HN event delete best-effort, CHEF_LOSS_DINNER_UPDATES, allergen clear); 207 on degraded HN sync |
 | **Other** |
