@@ -26,11 +26,11 @@ export const InhabitantScalarFieldEnumSchema = z.enum(['id','heynaboId','userId'
 
 export const HouseholdScalarFieldEnumSchema = z.enum(['id','heynaboId','pbsId','movedInDate','moveOutDate','name','address']);
 
-export const DinnerEventScalarFieldEnumSchema = z.enum(['id','date','menuTitle','menuDescription','menuPictureUrl','state','totalCost','heynaboEventId','chefId','cookingTeamId','createdAt','updatedAt','seasonId']);
+export const DinnerEventScalarFieldEnumSchema = z.enum(['id','date','menuTitle','menuDescription','menuPictureUrl','state','heynaboEventId','chefId','cookingTeamId','createdAt','updatedAt','seasonId']);
 
 export const OrderScalarFieldEnumSchema = z.enum(['id','dinnerEventId','inhabitantId','bookedByUserId','ticketPriceId','priceAtBooking','dinnerMode','state','isGuestTicket','releasedAt','closedAt','createdAt','updatedAt']);
 
-export const TransactionScalarFieldEnumSchema = z.enum(['id','orderId','orderSnapshot','userSnapshot','amount','userEmailHandle','createdAt','invoiceId']);
+export const TransactionScalarFieldEnumSchema = z.enum(['id','orderId','type','orderSnapshot','userSnapshot','amount','description','userEmailHandle','createdAt','invoiceId']);
 
 export const InvoiceScalarFieldEnumSchema = z.enum(['id','cutoffDate','paymentDate','billingPeriod','amount','createdAt','householdId','billingPeriodSummaryId','pbsId','address']);
 
@@ -59,6 +59,8 @@ export const DinnerDutyScalarFieldEnumSchema = z.enum(['id','dinnerEventId','inh
 export const DutyHistoryScalarFieldEnumSchema = z.enum(['id','dinnerDutyId','action','performedByUserId','auditData','timestamp','swapGroupId','inhabitantId','dinnerEventId','seasonId']);
 
 export const TicketWaitlistScalarFieldEnumSchema = z.enum(['id','dinnerEventId','inhabitantId','isGuestTicket','order','createdAt']);
+
+export const ExpenseScalarFieldEnumSchema = z.enum(['id','type','dinnerEventId','paidByUserId','userSnapshot','amount','description','createdAt','updatedAt']);
 
 export const SortOrderSchema = z.enum(['asc','desc']);
 
@@ -119,4 +121,8 @@ export type DutyAuditActionType = `${z.infer<typeof DutyAuditActionSchema>}`
 export const DutyOriginSchema = z.enum(['TEAM','JOKER','VOLUNTEER','SWAP']);
 
 export type DutyOriginType = `${z.infer<typeof DutyOriginSchema>}`
+
+export const LedgerEntryTypeSchema = z.enum(['REGULAR','ADHOC']);
+
+export type LedgerEntryTypeType = `${z.infer<typeof LedgerEntryTypeSchema>}`
 

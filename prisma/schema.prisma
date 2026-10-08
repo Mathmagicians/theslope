@@ -138,6 +138,7 @@ model User {
   orderHistory         OrderHistory[]
   settingsUpdated      Setting[]      @relation("SettingUpdatedBy")
   dutyHistory          DutyHistory[]
+  expenses             Expense[]
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 }
@@ -202,7 +203,6 @@ model DinnerEvent {
   menuDescription String?
   menuPictureUrl  String?
   state           DinnerState           @default(SCHEDULED)
-  totalCost       Int                   @default(0) // Price in DKK øre, total grocery costs
   heynaboEventId  Int?                  @unique
   chefId          Int?
   chef            Inhabitant?           @relation(fields: [chefId], references: [id], onDelete: SetNull)
@@ -216,6 +216,7 @@ model DinnerEvent {
   allergens       DinnerEventAllergen[] // Many-to-many with AllergyType via join table
   dinnerDuties    DinnerDuty[]
   waitlist        TicketWaitlist[]
+  expenses        Expense[]
 
   @@index([seasonId])
   @@index([chefId])
@@ -251,19 +252,22 @@ model Order {
 }
 
 model Transaction {
-  id              Int      @id @default(autoincrement())
-  orderId         Int?     @unique
-  order           Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  id              Int             @id @default(autoincrement())
+  orderId         Int?            @unique
+  order           Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  type            LedgerEntryType @default(REGULAR) // REGULAR: orderId set; ADHOC: the household in orderSnapshot
   orderSnapshot   String // JSON stringified snapshot of the order at the time of transaction
   userSnapshot    String // JSON stringified snapshot of the user at the time of transaction
   amount          Int // price in DKK øre
+  description     String? // ADHOC
   userEmailHandle String
-  createdAt       DateTime @default(now())
+  createdAt       DateTime        @default(now())
   invoiceId       Int? // Many transactions per invoice (1 invoice aggregates all household orders in billing period)
-  invoice         Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  invoice         Invoice?        @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
   @@index([invoiceId])
+  @@index([type])
 }
 
 model Invoice {
@@ -525,4 +529,30 @@ model TicketWaitlist {
   @@unique([dinnerEventId, inhabitantId], where: { isGuestTicket: false }) // one regular entry per person and dinner
   @@index([dinnerEventId, createdAt])
   @@index([inhabitantId])
+}
+
+// Shared by Transaction and Expense: REGULAR hangs off its source (an order, a dinner), ADHOC stands alone
+enum LedgerEntryType {
+  REGULAR
+  ADHOC
+}
+
+// A cost paid from the kitchen's money: REGULAR rows belong to a dinner, ADHOC rows are basisvarer
+model Expense {
+  id            Int             @id @default(autoincrement())
+  type          LedgerEntryType @default(REGULAR)
+  dinnerEventId Int? // REGULAR: set; ADHOC: null
+  dinnerEvent   DinnerEvent?    @relation(fields: [dinnerEventId], references: [id], onDelete: SetNull)
+  paidByUserId  Int? // the user to reimburse; null = paid by the kitchen directly
+  paidByUser    User?           @relation(fields: [paidByUserId], references: [id], onDelete: SetNull)
+  userSnapshot  String // JSON snapshot of the payer at the time of the expense
+  amount        Int // DKK øre
+  description   String
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([dinnerEventId])
+  @@index([paidByUserId])
+  @@index([type])
+  @@index([createdAt])
 }

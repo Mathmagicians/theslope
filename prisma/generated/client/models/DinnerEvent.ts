@@ -28,7 +28,6 @@ export type AggregateDinnerEvent = {
 
 export type DinnerEventAvgAggregateOutputType = {
   id: number | null
-  totalCost: number | null
   heynaboEventId: number | null
   chefId: number | null
   cookingTeamId: number | null
@@ -37,7 +36,6 @@ export type DinnerEventAvgAggregateOutputType = {
 
 export type DinnerEventSumAggregateOutputType = {
   id: number | null
-  totalCost: number | null
   heynaboEventId: number | null
   chefId: number | null
   cookingTeamId: number | null
@@ -51,7 +49,6 @@ export type DinnerEventMinAggregateOutputType = {
   menuDescription: string | null
   menuPictureUrl: string | null
   state: $Enums.DinnerState | null
-  totalCost: number | null
   heynaboEventId: number | null
   chefId: number | null
   cookingTeamId: number | null
@@ -67,7 +64,6 @@ export type DinnerEventMaxAggregateOutputType = {
   menuDescription: string | null
   menuPictureUrl: string | null
   state: $Enums.DinnerState | null
-  totalCost: number | null
   heynaboEventId: number | null
   chefId: number | null
   cookingTeamId: number | null
@@ -83,7 +79,6 @@ export type DinnerEventCountAggregateOutputType = {
   menuDescription: number
   menuPictureUrl: number
   state: number
-  totalCost: number
   heynaboEventId: number
   chefId: number
   cookingTeamId: number
@@ -96,7 +91,6 @@ export type DinnerEventCountAggregateOutputType = {
 
 export type DinnerEventAvgAggregateInputType = {
   id?: true | runtime.Types.Skip
-  totalCost?: true | runtime.Types.Skip
   heynaboEventId?: true | runtime.Types.Skip
   chefId?: true | runtime.Types.Skip
   cookingTeamId?: true | runtime.Types.Skip
@@ -105,7 +99,6 @@ export type DinnerEventAvgAggregateInputType = {
 
 export type DinnerEventSumAggregateInputType = {
   id?: true | runtime.Types.Skip
-  totalCost?: true | runtime.Types.Skip
   heynaboEventId?: true | runtime.Types.Skip
   chefId?: true | runtime.Types.Skip
   cookingTeamId?: true | runtime.Types.Skip
@@ -119,7 +112,6 @@ export type DinnerEventMinAggregateInputType = {
   menuDescription?: true | runtime.Types.Skip
   menuPictureUrl?: true | runtime.Types.Skip
   state?: true | runtime.Types.Skip
-  totalCost?: true | runtime.Types.Skip
   heynaboEventId?: true | runtime.Types.Skip
   chefId?: true | runtime.Types.Skip
   cookingTeamId?: true | runtime.Types.Skip
@@ -135,7 +127,6 @@ export type DinnerEventMaxAggregateInputType = {
   menuDescription?: true | runtime.Types.Skip
   menuPictureUrl?: true | runtime.Types.Skip
   state?: true | runtime.Types.Skip
-  totalCost?: true | runtime.Types.Skip
   heynaboEventId?: true | runtime.Types.Skip
   chefId?: true | runtime.Types.Skip
   cookingTeamId?: true | runtime.Types.Skip
@@ -151,7 +142,6 @@ export type DinnerEventCountAggregateInputType = {
   menuDescription?: true | runtime.Types.Skip
   menuPictureUrl?: true | runtime.Types.Skip
   state?: true | runtime.Types.Skip
-  totalCost?: true | runtime.Types.Skip
   heynaboEventId?: true | runtime.Types.Skip
   chefId?: true | runtime.Types.Skip
   cookingTeamId?: true | runtime.Types.Skip
@@ -254,7 +244,6 @@ export type DinnerEventGroupByOutputType = {
   menuDescription: string | null
   menuPictureUrl: string | null
   state: $Enums.DinnerState
-  totalCost: number
   heynaboEventId: number | null
   chefId: number | null
   cookingTeamId: number | null
@@ -293,7 +282,6 @@ export type DinnerEventWhereInput = {
   menuDescription?: Prisma.StringNullableFilter<"DinnerEvent"> | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.StringNullableFilter<"DinnerEvent"> | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFilter<"DinnerEvent"> | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFilter<"DinnerEvent"> | number | runtime.Types.Skip
   heynaboEventId?: Prisma.IntNullableFilter<"DinnerEvent"> | number | null | runtime.Types.Skip
   chefId?: Prisma.IntNullableFilter<"DinnerEvent"> | number | null | runtime.Types.Skip
   cookingTeamId?: Prisma.IntNullableFilter<"DinnerEvent"> | number | null | runtime.Types.Skip
@@ -307,6 +295,7 @@ export type DinnerEventWhereInput = {
   allergens?: Prisma.DinnerEventAllergenListRelationFilter | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyListRelationFilter | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistListRelationFilter | runtime.Types.Skip
+  expenses?: Prisma.ExpenseListRelationFilter | runtime.Types.Skip
 }
 
 export type DinnerEventOrderByWithRelationInput = {
@@ -316,7 +305,6 @@ export type DinnerEventOrderByWithRelationInput = {
   menuDescription?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
   menuPictureUrl?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
   state?: Prisma.SortOrder | runtime.Types.Skip
-  totalCost?: Prisma.SortOrder | runtime.Types.Skip
   heynaboEventId?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
   chefId?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
   cookingTeamId?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
@@ -330,6 +318,7 @@ export type DinnerEventOrderByWithRelationInput = {
   allergens?: Prisma.DinnerEventAllergenOrderByRelationAggregateInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyOrderByRelationAggregateInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistOrderByRelationAggregateInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseOrderByRelationAggregateInput | runtime.Types.Skip
 }
 
 export type DinnerEventWhereUniqueInput = Prisma.AtLeast<{
@@ -343,7 +332,6 @@ export type DinnerEventWhereUniqueInput = Prisma.AtLeast<{
   menuDescription?: Prisma.StringNullableFilter<"DinnerEvent"> | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.StringNullableFilter<"DinnerEvent"> | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFilter<"DinnerEvent"> | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFilter<"DinnerEvent"> | number | runtime.Types.Skip
   chefId?: Prisma.IntNullableFilter<"DinnerEvent"> | number | null | runtime.Types.Skip
   cookingTeamId?: Prisma.IntNullableFilter<"DinnerEvent"> | number | null | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFilter<"DinnerEvent"> | Date | string | runtime.Types.Skip
@@ -356,6 +344,7 @@ export type DinnerEventWhereUniqueInput = Prisma.AtLeast<{
   allergens?: Prisma.DinnerEventAllergenListRelationFilter | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyListRelationFilter | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistListRelationFilter | runtime.Types.Skip
+  expenses?: Prisma.ExpenseListRelationFilter | runtime.Types.Skip
 }, "id" | "heynaboEventId">
 
 export type DinnerEventOrderByWithAggregationInput = {
@@ -365,7 +354,6 @@ export type DinnerEventOrderByWithAggregationInput = {
   menuDescription?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
   menuPictureUrl?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
   state?: Prisma.SortOrder | runtime.Types.Skip
-  totalCost?: Prisma.SortOrder | runtime.Types.Skip
   heynaboEventId?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
   chefId?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
   cookingTeamId?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
@@ -389,7 +377,6 @@ export type DinnerEventScalarWhereWithAggregatesInput = {
   menuDescription?: Prisma.StringNullableWithAggregatesFilter<"DinnerEvent"> | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.StringNullableWithAggregatesFilter<"DinnerEvent"> | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateWithAggregatesFilter<"DinnerEvent"> | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntWithAggregatesFilter<"DinnerEvent"> | number | runtime.Types.Skip
   heynaboEventId?: Prisma.IntNullableWithAggregatesFilter<"DinnerEvent"> | number | null | runtime.Types.Skip
   chefId?: Prisma.IntNullableWithAggregatesFilter<"DinnerEvent"> | number | null | runtime.Types.Skip
   cookingTeamId?: Prisma.IntNullableWithAggregatesFilter<"DinnerEvent"> | number | null | runtime.Types.Skip
@@ -404,7 +391,6 @@ export type DinnerEventCreateInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   createdAt?: Date | string | runtime.Types.Skip
   updatedAt?: Date | string | runtime.Types.Skip
@@ -415,6 +401,7 @@ export type DinnerEventCreateInput = {
   allergens?: Prisma.DinnerEventAllergenCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedCreateInput = {
@@ -424,7 +411,6 @@ export type DinnerEventUncheckedCreateInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   chefId?: number | null | runtime.Types.Skip
   cookingTeamId?: number | null | runtime.Types.Skip
@@ -435,6 +421,7 @@ export type DinnerEventUncheckedCreateInput = {
   allergens?: Prisma.DinnerEventAllergenUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
 }
 
 export type DinnerEventUpdateInput = {
@@ -443,7 +430,6 @@ export type DinnerEventUpdateInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
@@ -454,6 +440,7 @@ export type DinnerEventUpdateInput = {
   allergens?: Prisma.DinnerEventAllergenUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedUpdateInput = {
@@ -463,7 +450,6 @@ export type DinnerEventUncheckedUpdateInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   chefId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   cookingTeamId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
@@ -474,6 +460,7 @@ export type DinnerEventUncheckedUpdateInput = {
   allergens?: Prisma.DinnerEventAllergenUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
 }
 
 export type DinnerEventCreateManyInput = {
@@ -483,7 +470,6 @@ export type DinnerEventCreateManyInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   chefId?: number | null | runtime.Types.Skip
   cookingTeamId?: number | null | runtime.Types.Skip
@@ -498,7 +484,6 @@ export type DinnerEventUpdateManyMutationInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
@@ -511,7 +496,6 @@ export type DinnerEventUncheckedUpdateManyInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   chefId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   cookingTeamId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
@@ -542,7 +526,6 @@ export type DinnerEventCountOrderByAggregateInput = {
   menuDescription?: Prisma.SortOrder | runtime.Types.Skip
   menuPictureUrl?: Prisma.SortOrder | runtime.Types.Skip
   state?: Prisma.SortOrder | runtime.Types.Skip
-  totalCost?: Prisma.SortOrder | runtime.Types.Skip
   heynaboEventId?: Prisma.SortOrder | runtime.Types.Skip
   chefId?: Prisma.SortOrder | runtime.Types.Skip
   cookingTeamId?: Prisma.SortOrder | runtime.Types.Skip
@@ -553,7 +536,6 @@ export type DinnerEventCountOrderByAggregateInput = {
 
 export type DinnerEventAvgOrderByAggregateInput = {
   id?: Prisma.SortOrder | runtime.Types.Skip
-  totalCost?: Prisma.SortOrder | runtime.Types.Skip
   heynaboEventId?: Prisma.SortOrder | runtime.Types.Skip
   chefId?: Prisma.SortOrder | runtime.Types.Skip
   cookingTeamId?: Prisma.SortOrder | runtime.Types.Skip
@@ -567,7 +549,6 @@ export type DinnerEventMaxOrderByAggregateInput = {
   menuDescription?: Prisma.SortOrder | runtime.Types.Skip
   menuPictureUrl?: Prisma.SortOrder | runtime.Types.Skip
   state?: Prisma.SortOrder | runtime.Types.Skip
-  totalCost?: Prisma.SortOrder | runtime.Types.Skip
   heynaboEventId?: Prisma.SortOrder | runtime.Types.Skip
   chefId?: Prisma.SortOrder | runtime.Types.Skip
   cookingTeamId?: Prisma.SortOrder | runtime.Types.Skip
@@ -583,7 +564,6 @@ export type DinnerEventMinOrderByAggregateInput = {
   menuDescription?: Prisma.SortOrder | runtime.Types.Skip
   menuPictureUrl?: Prisma.SortOrder | runtime.Types.Skip
   state?: Prisma.SortOrder | runtime.Types.Skip
-  totalCost?: Prisma.SortOrder | runtime.Types.Skip
   heynaboEventId?: Prisma.SortOrder | runtime.Types.Skip
   chefId?: Prisma.SortOrder | runtime.Types.Skip
   cookingTeamId?: Prisma.SortOrder | runtime.Types.Skip
@@ -594,11 +574,15 @@ export type DinnerEventMinOrderByAggregateInput = {
 
 export type DinnerEventSumOrderByAggregateInput = {
   id?: Prisma.SortOrder | runtime.Types.Skip
-  totalCost?: Prisma.SortOrder | runtime.Types.Skip
   heynaboEventId?: Prisma.SortOrder | runtime.Types.Skip
   chefId?: Prisma.SortOrder | runtime.Types.Skip
   cookingTeamId?: Prisma.SortOrder | runtime.Types.Skip
   seasonId?: Prisma.SortOrder | runtime.Types.Skip
+}
+
+export type DinnerEventNullableScalarRelationFilter = {
+  is?: Prisma.DinnerEventWhereInput | null | runtime.Types.Skip
+  isNot?: Prisma.DinnerEventWhereInput | null | runtime.Types.Skip
 }
 
 export type DinnerEventCreateNestedOneWithoutAllergensInput = {
@@ -787,13 +771,28 @@ export type DinnerEventUpdateOneRequiredWithoutWaitlistNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.DinnerEventUpdateToOneWithWhereWithoutWaitlistInput, Prisma.DinnerEventUpdateWithoutWaitlistInput>, Prisma.DinnerEventUncheckedUpdateWithoutWaitlistInput> | runtime.Types.Skip
 }
 
+export type DinnerEventCreateNestedOneWithoutExpensesInput = {
+  create?: Prisma.XOR<Prisma.DinnerEventCreateWithoutExpensesInput, Prisma.DinnerEventUncheckedCreateWithoutExpensesInput> | runtime.Types.Skip
+  connectOrCreate?: Prisma.DinnerEventCreateOrConnectWithoutExpensesInput | runtime.Types.Skip
+  connect?: Prisma.DinnerEventWhereUniqueInput | runtime.Types.Skip
+}
+
+export type DinnerEventUpdateOneWithoutExpensesNestedInput = {
+  create?: Prisma.XOR<Prisma.DinnerEventCreateWithoutExpensesInput, Prisma.DinnerEventUncheckedCreateWithoutExpensesInput> | runtime.Types.Skip
+  connectOrCreate?: Prisma.DinnerEventCreateOrConnectWithoutExpensesInput | runtime.Types.Skip
+  upsert?: Prisma.DinnerEventUpsertWithoutExpensesInput | runtime.Types.Skip
+  disconnect?: Prisma.DinnerEventWhereInput | boolean | runtime.Types.Skip
+  delete?: Prisma.DinnerEventWhereInput | boolean | runtime.Types.Skip
+  connect?: Prisma.DinnerEventWhereUniqueInput | runtime.Types.Skip
+  update?: Prisma.XOR<Prisma.XOR<Prisma.DinnerEventUpdateToOneWithWhereWithoutExpensesInput, Prisma.DinnerEventUpdateWithoutExpensesInput>, Prisma.DinnerEventUncheckedUpdateWithoutExpensesInput> | runtime.Types.Skip
+}
+
 export type DinnerEventCreateWithoutAllergensInput = {
   date: Date | string
   menuTitle: string
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   createdAt?: Date | string | runtime.Types.Skip
   updatedAt?: Date | string | runtime.Types.Skip
@@ -803,6 +802,7 @@ export type DinnerEventCreateWithoutAllergensInput = {
   Season?: Prisma.SeasonCreateNestedOneWithoutDinnerEventsInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedCreateWithoutAllergensInput = {
@@ -812,7 +812,6 @@ export type DinnerEventUncheckedCreateWithoutAllergensInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   chefId?: number | null | runtime.Types.Skip
   cookingTeamId?: number | null | runtime.Types.Skip
@@ -822,6 +821,7 @@ export type DinnerEventUncheckedCreateWithoutAllergensInput = {
   tickets?: Prisma.OrderUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
 }
 
 export type DinnerEventCreateOrConnectWithoutAllergensInput = {
@@ -846,7 +846,6 @@ export type DinnerEventUpdateWithoutAllergensInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
@@ -856,6 +855,7 @@ export type DinnerEventUpdateWithoutAllergensInput = {
   Season?: Prisma.SeasonUpdateOneWithoutDinnerEventsNestedInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedUpdateWithoutAllergensInput = {
@@ -865,7 +865,6 @@ export type DinnerEventUncheckedUpdateWithoutAllergensInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   chefId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   cookingTeamId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
@@ -875,6 +874,7 @@ export type DinnerEventUncheckedUpdateWithoutAllergensInput = {
   tickets?: Prisma.OrderUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
 }
 
 export type DinnerEventCreateWithoutChefInput = {
@@ -883,7 +883,6 @@ export type DinnerEventCreateWithoutChefInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   createdAt?: Date | string | runtime.Types.Skip
   updatedAt?: Date | string | runtime.Types.Skip
@@ -893,6 +892,7 @@ export type DinnerEventCreateWithoutChefInput = {
   allergens?: Prisma.DinnerEventAllergenCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedCreateWithoutChefInput = {
@@ -902,7 +902,6 @@ export type DinnerEventUncheckedCreateWithoutChefInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   cookingTeamId?: number | null | runtime.Types.Skip
   createdAt?: Date | string | runtime.Types.Skip
@@ -912,6 +911,7 @@ export type DinnerEventUncheckedCreateWithoutChefInput = {
   allergens?: Prisma.DinnerEventAllergenUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
 }
 
 export type DinnerEventCreateOrConnectWithoutChefInput = {
@@ -949,7 +949,6 @@ export type DinnerEventScalarWhereInput = {
   menuDescription?: Prisma.StringNullableFilter<"DinnerEvent"> | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.StringNullableFilter<"DinnerEvent"> | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFilter<"DinnerEvent"> | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFilter<"DinnerEvent"> | number | runtime.Types.Skip
   heynaboEventId?: Prisma.IntNullableFilter<"DinnerEvent"> | number | null | runtime.Types.Skip
   chefId?: Prisma.IntNullableFilter<"DinnerEvent"> | number | null | runtime.Types.Skip
   cookingTeamId?: Prisma.IntNullableFilter<"DinnerEvent"> | number | null | runtime.Types.Skip
@@ -964,7 +963,6 @@ export type DinnerEventCreateWithoutTicketsInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   createdAt?: Date | string | runtime.Types.Skip
   updatedAt?: Date | string | runtime.Types.Skip
@@ -974,6 +972,7 @@ export type DinnerEventCreateWithoutTicketsInput = {
   allergens?: Prisma.DinnerEventAllergenCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedCreateWithoutTicketsInput = {
@@ -983,7 +982,6 @@ export type DinnerEventUncheckedCreateWithoutTicketsInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   chefId?: number | null | runtime.Types.Skip
   cookingTeamId?: number | null | runtime.Types.Skip
@@ -993,6 +991,7 @@ export type DinnerEventUncheckedCreateWithoutTicketsInput = {
   allergens?: Prisma.DinnerEventAllergenUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
 }
 
 export type DinnerEventCreateOrConnectWithoutTicketsInput = {
@@ -1017,7 +1016,6 @@ export type DinnerEventUpdateWithoutTicketsInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
@@ -1027,6 +1025,7 @@ export type DinnerEventUpdateWithoutTicketsInput = {
   allergens?: Prisma.DinnerEventAllergenUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedUpdateWithoutTicketsInput = {
@@ -1036,7 +1035,6 @@ export type DinnerEventUncheckedUpdateWithoutTicketsInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   chefId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   cookingTeamId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
@@ -1046,6 +1044,7 @@ export type DinnerEventUncheckedUpdateWithoutTicketsInput = {
   allergens?: Prisma.DinnerEventAllergenUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
 }
 
 export type DinnerEventCreateWithoutCookingTeamInput = {
@@ -1054,7 +1053,6 @@ export type DinnerEventCreateWithoutCookingTeamInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   createdAt?: Date | string | runtime.Types.Skip
   updatedAt?: Date | string | runtime.Types.Skip
@@ -1064,6 +1062,7 @@ export type DinnerEventCreateWithoutCookingTeamInput = {
   allergens?: Prisma.DinnerEventAllergenCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedCreateWithoutCookingTeamInput = {
@@ -1073,7 +1072,6 @@ export type DinnerEventUncheckedCreateWithoutCookingTeamInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   chefId?: number | null | runtime.Types.Skip
   createdAt?: Date | string | runtime.Types.Skip
@@ -1083,6 +1081,7 @@ export type DinnerEventUncheckedCreateWithoutCookingTeamInput = {
   allergens?: Prisma.DinnerEventAllergenUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
 }
 
 export type DinnerEventCreateOrConnectWithoutCookingTeamInput = {
@@ -1116,7 +1115,6 @@ export type DinnerEventCreateWithoutSeasonInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   createdAt?: Date | string | runtime.Types.Skip
   updatedAt?: Date | string | runtime.Types.Skip
@@ -1126,6 +1124,7 @@ export type DinnerEventCreateWithoutSeasonInput = {
   allergens?: Prisma.DinnerEventAllergenCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedCreateWithoutSeasonInput = {
@@ -1135,7 +1134,6 @@ export type DinnerEventUncheckedCreateWithoutSeasonInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   chefId?: number | null | runtime.Types.Skip
   cookingTeamId?: number | null | runtime.Types.Skip
@@ -1145,6 +1143,7 @@ export type DinnerEventUncheckedCreateWithoutSeasonInput = {
   allergens?: Prisma.DinnerEventAllergenUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
 }
 
 export type DinnerEventCreateOrConnectWithoutSeasonInput = {
@@ -1178,7 +1177,6 @@ export type DinnerEventCreateWithoutDinnerDutiesInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   createdAt?: Date | string | runtime.Types.Skip
   updatedAt?: Date | string | runtime.Types.Skip
@@ -1188,6 +1186,7 @@ export type DinnerEventCreateWithoutDinnerDutiesInput = {
   Season?: Prisma.SeasonCreateNestedOneWithoutDinnerEventsInput | runtime.Types.Skip
   allergens?: Prisma.DinnerEventAllergenCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedCreateWithoutDinnerDutiesInput = {
@@ -1197,7 +1196,6 @@ export type DinnerEventUncheckedCreateWithoutDinnerDutiesInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   chefId?: number | null | runtime.Types.Skip
   cookingTeamId?: number | null | runtime.Types.Skip
@@ -1207,6 +1205,7 @@ export type DinnerEventUncheckedCreateWithoutDinnerDutiesInput = {
   tickets?: Prisma.OrderUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   allergens?: Prisma.DinnerEventAllergenUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
 }
 
 export type DinnerEventCreateOrConnectWithoutDinnerDutiesInput = {
@@ -1231,7 +1230,6 @@ export type DinnerEventUpdateWithoutDinnerDutiesInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
@@ -1241,6 +1239,7 @@ export type DinnerEventUpdateWithoutDinnerDutiesInput = {
   Season?: Prisma.SeasonUpdateOneWithoutDinnerEventsNestedInput | runtime.Types.Skip
   allergens?: Prisma.DinnerEventAllergenUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedUpdateWithoutDinnerDutiesInput = {
@@ -1250,7 +1249,6 @@ export type DinnerEventUncheckedUpdateWithoutDinnerDutiesInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   chefId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   cookingTeamId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
@@ -1260,6 +1258,7 @@ export type DinnerEventUncheckedUpdateWithoutDinnerDutiesInput = {
   tickets?: Prisma.OrderUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   allergens?: Prisma.DinnerEventAllergenUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
 }
 
 export type DinnerEventCreateWithoutWaitlistInput = {
@@ -1268,7 +1267,6 @@ export type DinnerEventCreateWithoutWaitlistInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   createdAt?: Date | string | runtime.Types.Skip
   updatedAt?: Date | string | runtime.Types.Skip
@@ -1278,6 +1276,7 @@ export type DinnerEventCreateWithoutWaitlistInput = {
   Season?: Prisma.SeasonCreateNestedOneWithoutDinnerEventsInput | runtime.Types.Skip
   allergens?: Prisma.DinnerEventAllergenCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedCreateWithoutWaitlistInput = {
@@ -1287,7 +1286,6 @@ export type DinnerEventUncheckedCreateWithoutWaitlistInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   chefId?: number | null | runtime.Types.Skip
   cookingTeamId?: number | null | runtime.Types.Skip
@@ -1297,6 +1295,7 @@ export type DinnerEventUncheckedCreateWithoutWaitlistInput = {
   tickets?: Prisma.OrderUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   allergens?: Prisma.DinnerEventAllergenUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
 }
 
 export type DinnerEventCreateOrConnectWithoutWaitlistInput = {
@@ -1321,7 +1320,6 @@ export type DinnerEventUpdateWithoutWaitlistInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
@@ -1331,6 +1329,7 @@ export type DinnerEventUpdateWithoutWaitlistInput = {
   Season?: Prisma.SeasonUpdateOneWithoutDinnerEventsNestedInput | runtime.Types.Skip
   allergens?: Prisma.DinnerEventAllergenUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedUpdateWithoutWaitlistInput = {
@@ -1340,7 +1339,6 @@ export type DinnerEventUncheckedUpdateWithoutWaitlistInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   chefId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   cookingTeamId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
@@ -1350,6 +1348,97 @@ export type DinnerEventUncheckedUpdateWithoutWaitlistInput = {
   tickets?: Prisma.OrderUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   allergens?: Prisma.DinnerEventAllergenUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+}
+
+export type DinnerEventCreateWithoutExpensesInput = {
+  date: Date | string
+  menuTitle: string
+  menuDescription?: string | null | runtime.Types.Skip
+  menuPictureUrl?: string | null | runtime.Types.Skip
+  state?: $Enums.DinnerState | runtime.Types.Skip
+  heynaboEventId?: number | null | runtime.Types.Skip
+  createdAt?: Date | string | runtime.Types.Skip
+  updatedAt?: Date | string | runtime.Types.Skip
+  chef?: Prisma.InhabitantCreateNestedOneWithoutDinnerEventInput | runtime.Types.Skip
+  cookingTeam?: Prisma.CookingTeamCreateNestedOneWithoutDinnersInput | runtime.Types.Skip
+  tickets?: Prisma.OrderCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  Season?: Prisma.SeasonCreateNestedOneWithoutDinnerEventsInput | runtime.Types.Skip
+  allergens?: Prisma.DinnerEventAllergenCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  dinnerDuties?: Prisma.DinnerDutyCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  waitlist?: Prisma.TicketWaitlistCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+}
+
+export type DinnerEventUncheckedCreateWithoutExpensesInput = {
+  id?: number | runtime.Types.Skip
+  date: Date | string
+  menuTitle: string
+  menuDescription?: string | null | runtime.Types.Skip
+  menuPictureUrl?: string | null | runtime.Types.Skip
+  state?: $Enums.DinnerState | runtime.Types.Skip
+  heynaboEventId?: number | null | runtime.Types.Skip
+  chefId?: number | null | runtime.Types.Skip
+  cookingTeamId?: number | null | runtime.Types.Skip
+  createdAt?: Date | string | runtime.Types.Skip
+  updatedAt?: Date | string | runtime.Types.Skip
+  seasonId?: number | null | runtime.Types.Skip
+  tickets?: Prisma.OrderUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  allergens?: Prisma.DinnerEventAllergenUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  dinnerDuties?: Prisma.DinnerDutyUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+  waitlist?: Prisma.TicketWaitlistUncheckedCreateNestedManyWithoutDinnerEventInput | runtime.Types.Skip
+}
+
+export type DinnerEventCreateOrConnectWithoutExpensesInput = {
+  where: Prisma.DinnerEventWhereUniqueInput
+  create: Prisma.XOR<Prisma.DinnerEventCreateWithoutExpensesInput, Prisma.DinnerEventUncheckedCreateWithoutExpensesInput>
+}
+
+export type DinnerEventUpsertWithoutExpensesInput = {
+  update: Prisma.XOR<Prisma.DinnerEventUpdateWithoutExpensesInput, Prisma.DinnerEventUncheckedUpdateWithoutExpensesInput>
+  create: Prisma.XOR<Prisma.DinnerEventCreateWithoutExpensesInput, Prisma.DinnerEventUncheckedCreateWithoutExpensesInput>
+  where?: Prisma.DinnerEventWhereInput | runtime.Types.Skip
+}
+
+export type DinnerEventUpdateToOneWithWhereWithoutExpensesInput = {
+  where?: Prisma.DinnerEventWhereInput | runtime.Types.Skip
+  data: Prisma.XOR<Prisma.DinnerEventUpdateWithoutExpensesInput, Prisma.DinnerEventUncheckedUpdateWithoutExpensesInput>
+}
+
+export type DinnerEventUpdateWithoutExpensesInput = {
+  date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  menuTitle?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
+  menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
+  menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
+  state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
+  heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  chef?: Prisma.InhabitantUpdateOneWithoutDinnerEventNestedInput | runtime.Types.Skip
+  cookingTeam?: Prisma.CookingTeamUpdateOneWithoutDinnersNestedInput | runtime.Types.Skip
+  tickets?: Prisma.OrderUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  Season?: Prisma.SeasonUpdateOneWithoutDinnerEventsNestedInput | runtime.Types.Skip
+  allergens?: Prisma.DinnerEventAllergenUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  dinnerDuties?: Prisma.DinnerDutyUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  waitlist?: Prisma.TicketWaitlistUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+}
+
+export type DinnerEventUncheckedUpdateWithoutExpensesInput = {
+  id?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
+  date?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  menuTitle?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
+  menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
+  menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
+  state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
+  heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
+  chefId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
+  cookingTeamId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  seasonId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
+  tickets?: Prisma.OrderUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  allergens?: Prisma.DinnerEventAllergenUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  dinnerDuties?: Prisma.DinnerDutyUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  waitlist?: Prisma.TicketWaitlistUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
 }
 
 export type DinnerEventCreateManyChefInput = {
@@ -1359,7 +1448,6 @@ export type DinnerEventCreateManyChefInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   cookingTeamId?: number | null | runtime.Types.Skip
   createdAt?: Date | string | runtime.Types.Skip
@@ -1373,7 +1461,6 @@ export type DinnerEventUpdateWithoutChefInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
@@ -1383,6 +1470,7 @@ export type DinnerEventUpdateWithoutChefInput = {
   allergens?: Prisma.DinnerEventAllergenUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedUpdateWithoutChefInput = {
@@ -1392,7 +1480,6 @@ export type DinnerEventUncheckedUpdateWithoutChefInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   cookingTeamId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
@@ -1402,6 +1489,7 @@ export type DinnerEventUncheckedUpdateWithoutChefInput = {
   allergens?: Prisma.DinnerEventAllergenUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedUpdateManyWithoutChefInput = {
@@ -1411,7 +1499,6 @@ export type DinnerEventUncheckedUpdateManyWithoutChefInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   cookingTeamId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
@@ -1426,7 +1513,6 @@ export type DinnerEventCreateManyCookingTeamInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   chefId?: number | null | runtime.Types.Skip
   createdAt?: Date | string | runtime.Types.Skip
@@ -1440,7 +1526,6 @@ export type DinnerEventUpdateWithoutCookingTeamInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
@@ -1450,6 +1535,7 @@ export type DinnerEventUpdateWithoutCookingTeamInput = {
   allergens?: Prisma.DinnerEventAllergenUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedUpdateWithoutCookingTeamInput = {
@@ -1459,7 +1545,6 @@ export type DinnerEventUncheckedUpdateWithoutCookingTeamInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   chefId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
@@ -1469,6 +1554,7 @@ export type DinnerEventUncheckedUpdateWithoutCookingTeamInput = {
   allergens?: Prisma.DinnerEventAllergenUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedUpdateManyWithoutCookingTeamInput = {
@@ -1478,7 +1564,6 @@ export type DinnerEventUncheckedUpdateManyWithoutCookingTeamInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   chefId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
@@ -1493,7 +1578,6 @@ export type DinnerEventCreateManySeasonInput = {
   menuDescription?: string | null | runtime.Types.Skip
   menuPictureUrl?: string | null | runtime.Types.Skip
   state?: $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: number | runtime.Types.Skip
   heynaboEventId?: number | null | runtime.Types.Skip
   chefId?: number | null | runtime.Types.Skip
   cookingTeamId?: number | null | runtime.Types.Skip
@@ -1507,7 +1591,6 @@ export type DinnerEventUpdateWithoutSeasonInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
@@ -1517,6 +1600,7 @@ export type DinnerEventUpdateWithoutSeasonInput = {
   allergens?: Prisma.DinnerEventAllergenUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedUpdateWithoutSeasonInput = {
@@ -1526,7 +1610,6 @@ export type DinnerEventUncheckedUpdateWithoutSeasonInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   chefId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   cookingTeamId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
@@ -1536,6 +1619,7 @@ export type DinnerEventUncheckedUpdateWithoutSeasonInput = {
   allergens?: Prisma.DinnerEventAllergenUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   dinnerDuties?: Prisma.DinnerDutyUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
   waitlist?: Prisma.TicketWaitlistUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutDinnerEventNestedInput | runtime.Types.Skip
 }
 
 export type DinnerEventUncheckedUpdateManyWithoutSeasonInput = {
@@ -1545,7 +1629,6 @@ export type DinnerEventUncheckedUpdateManyWithoutSeasonInput = {
   menuDescription?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   menuPictureUrl?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   state?: Prisma.EnumDinnerStateFieldUpdateOperationsInput | $Enums.DinnerState | runtime.Types.Skip
-  totalCost?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   heynaboEventId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   chefId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
   cookingTeamId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
@@ -1563,6 +1646,7 @@ export type DinnerEventCountOutputType = {
   allergens: number
   dinnerDuties: number
   waitlist: number
+  expenses: number
 }
 
 export type DinnerEventCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1570,6 +1654,7 @@ export type DinnerEventCountOutputTypeSelect<ExtArgs extends runtime.Types.Exten
   allergens?: boolean | DinnerEventCountOutputTypeCountAllergensArgs
   dinnerDuties?: boolean | DinnerEventCountOutputTypeCountDinnerDutiesArgs
   waitlist?: boolean | DinnerEventCountOutputTypeCountWaitlistArgs
+  expenses?: boolean | DinnerEventCountOutputTypeCountExpensesArgs
 }
 
 /**
@@ -1610,6 +1695,13 @@ export type DinnerEventCountOutputTypeCountWaitlistArgs<ExtArgs extends runtime.
   where?: Prisma.TicketWaitlistWhereInput | runtime.Types.Skip
 }
 
+/**
+ * DinnerEventCountOutputType without action
+ */
+export type DinnerEventCountOutputTypeCountExpensesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ExpenseWhereInput | runtime.Types.Skip
+}
+
 
 export type DinnerEventSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean | runtime.Types.Skip
@@ -1618,7 +1710,6 @@ export type DinnerEventSelect<ExtArgs extends runtime.Types.Extensions.InternalA
   menuDescription?: boolean | runtime.Types.Skip
   menuPictureUrl?: boolean | runtime.Types.Skip
   state?: boolean | runtime.Types.Skip
-  totalCost?: boolean | runtime.Types.Skip
   heynaboEventId?: boolean | runtime.Types.Skip
   chefId?: boolean | runtime.Types.Skip
   cookingTeamId?: boolean | runtime.Types.Skip
@@ -1632,6 +1723,7 @@ export type DinnerEventSelect<ExtArgs extends runtime.Types.Extensions.InternalA
   allergens?: boolean | Prisma.DinnerEvent$allergensArgs<ExtArgs> | runtime.Types.Skip
   dinnerDuties?: boolean | Prisma.DinnerEvent$dinnerDutiesArgs<ExtArgs> | runtime.Types.Skip
   waitlist?: boolean | Prisma.DinnerEvent$waitlistArgs<ExtArgs> | runtime.Types.Skip
+  expenses?: boolean | Prisma.DinnerEvent$expensesArgs<ExtArgs> | runtime.Types.Skip
   _count?: boolean | Prisma.DinnerEventCountOutputTypeDefaultArgs<ExtArgs> | runtime.Types.Skip
 }, ExtArgs["result"]["dinnerEvent"]>
 
@@ -1642,7 +1734,6 @@ export type DinnerEventSelectCreateManyAndReturn<ExtArgs extends runtime.Types.E
   menuDescription?: boolean | runtime.Types.Skip
   menuPictureUrl?: boolean | runtime.Types.Skip
   state?: boolean | runtime.Types.Skip
-  totalCost?: boolean | runtime.Types.Skip
   heynaboEventId?: boolean | runtime.Types.Skip
   chefId?: boolean | runtime.Types.Skip
   cookingTeamId?: boolean | runtime.Types.Skip
@@ -1661,7 +1752,6 @@ export type DinnerEventSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.E
   menuDescription?: boolean | runtime.Types.Skip
   menuPictureUrl?: boolean | runtime.Types.Skip
   state?: boolean | runtime.Types.Skip
-  totalCost?: boolean | runtime.Types.Skip
   heynaboEventId?: boolean | runtime.Types.Skip
   chefId?: boolean | runtime.Types.Skip
   cookingTeamId?: boolean | runtime.Types.Skip
@@ -1680,7 +1770,6 @@ export type DinnerEventSelectScalar = {
   menuDescription?: boolean | runtime.Types.Skip
   menuPictureUrl?: boolean | runtime.Types.Skip
   state?: boolean | runtime.Types.Skip
-  totalCost?: boolean | runtime.Types.Skip
   heynaboEventId?: boolean | runtime.Types.Skip
   chefId?: boolean | runtime.Types.Skip
   cookingTeamId?: boolean | runtime.Types.Skip
@@ -1689,7 +1778,7 @@ export type DinnerEventSelectScalar = {
   seasonId?: boolean | runtime.Types.Skip
 }
 
-export type DinnerEventOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "date" | "menuTitle" | "menuDescription" | "menuPictureUrl" | "state" | "totalCost" | "heynaboEventId" | "chefId" | "cookingTeamId" | "createdAt" | "updatedAt" | "seasonId", ExtArgs["result"]["dinnerEvent"], runtime.Types.Skip>
+export type DinnerEventOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "date" | "menuTitle" | "menuDescription" | "menuPictureUrl" | "state" | "heynaboEventId" | "chefId" | "cookingTeamId" | "createdAt" | "updatedAt" | "seasonId", ExtArgs["result"]["dinnerEvent"], runtime.Types.Skip>
 export type DinnerEventInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   chef?: boolean | Prisma.DinnerEvent$chefArgs<ExtArgs> | runtime.Types.Skip
   cookingTeam?: boolean | Prisma.DinnerEvent$cookingTeamArgs<ExtArgs> | runtime.Types.Skip
@@ -1698,6 +1787,7 @@ export type DinnerEventInclude<ExtArgs extends runtime.Types.Extensions.Internal
   allergens?: boolean | Prisma.DinnerEvent$allergensArgs<ExtArgs> | runtime.Types.Skip
   dinnerDuties?: boolean | Prisma.DinnerEvent$dinnerDutiesArgs<ExtArgs> | runtime.Types.Skip
   waitlist?: boolean | Prisma.DinnerEvent$waitlistArgs<ExtArgs> | runtime.Types.Skip
+  expenses?: boolean | Prisma.DinnerEvent$expensesArgs<ExtArgs> | runtime.Types.Skip
   _count?: boolean | Prisma.DinnerEventCountOutputTypeDefaultArgs<ExtArgs> | runtime.Types.Skip
 }
 export type DinnerEventIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1721,6 +1811,7 @@ export type $DinnerEventPayload<ExtArgs extends runtime.Types.Extensions.Interna
     allergens: Prisma.$DinnerEventAllergenPayload<ExtArgs>[]
     dinnerDuties: Prisma.$DinnerDutyPayload<ExtArgs>[]
     waitlist: Prisma.$TicketWaitlistPayload<ExtArgs>[]
+    expenses: Prisma.$ExpensePayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: number
@@ -1729,7 +1820,6 @@ export type $DinnerEventPayload<ExtArgs extends runtime.Types.Extensions.Interna
     menuDescription: string | null
     menuPictureUrl: string | null
     state: $Enums.DinnerState
-    totalCost: number
     heynaboEventId: number | null
     chefId: number | null
     cookingTeamId: number | null
@@ -2137,6 +2227,7 @@ export interface Prisma__DinnerEventClient<T, Null = never, ExtArgs extends runt
   allergens<T extends Prisma.DinnerEvent$allergensArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.DinnerEvent$allergensArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DinnerEventAllergenPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   dinnerDuties<T extends Prisma.DinnerEvent$dinnerDutiesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.DinnerEvent$dinnerDutiesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DinnerDutyPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   waitlist<T extends Prisma.DinnerEvent$waitlistArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.DinnerEvent$waitlistArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$TicketWaitlistPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  expenses<T extends Prisma.DinnerEvent$expensesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.DinnerEvent$expensesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ExpensePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -2172,7 +2263,6 @@ export interface DinnerEventFieldRefs {
   readonly menuDescription: Prisma.FieldRef<"DinnerEvent", 'String'>
   readonly menuPictureUrl: Prisma.FieldRef<"DinnerEvent", 'String'>
   readonly state: Prisma.FieldRef<"DinnerEvent", 'DinnerState'>
-  readonly totalCost: Prisma.FieldRef<"DinnerEvent", 'Int'>
   readonly heynaboEventId: Prisma.FieldRef<"DinnerEvent", 'Int'>
   readonly chefId: Prisma.FieldRef<"DinnerEvent", 'Int'>
   readonly cookingTeamId: Prisma.FieldRef<"DinnerEvent", 'Int'>
@@ -2728,6 +2818,30 @@ export type DinnerEvent$waitlistArgs<ExtArgs extends runtime.Types.Extensions.In
   take?: number | runtime.Types.Skip
   skip?: number | runtime.Types.Skip
   distinct?: Prisma.TicketWaitlistScalarFieldEnum | Prisma.TicketWaitlistScalarFieldEnum[] | runtime.Types.Skip
+}
+
+/**
+ * DinnerEvent.expenses
+ */
+export type DinnerEvent$expensesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Expense
+   */
+  select?: Prisma.ExpenseSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Expense
+   */
+  omit?: Prisma.ExpenseOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ExpenseInclude<ExtArgs> | null
+  where?: Prisma.ExpenseWhereInput | runtime.Types.Skip
+  orderBy?: Prisma.ExpenseOrderByWithRelationInput | Prisma.ExpenseOrderByWithRelationInput[] | runtime.Types.Skip
+  cursor?: Prisma.ExpenseWhereUniqueInput | runtime.Types.Skip
+  take?: number | runtime.Types.Skip
+  skip?: number | runtime.Types.Skip
+  distinct?: Prisma.ExpenseScalarFieldEnum | Prisma.ExpenseScalarFieldEnum[] | runtime.Types.Skip
 }
 
 /**

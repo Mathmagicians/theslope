@@ -249,6 +249,23 @@ export type BoolWithAggregatesFilter<$PrismaModel = never> = {
   _max?: Prisma.NestedBoolFilter<$PrismaModel> | runtime.Types.Skip
 }
 
+export type EnumLedgerEntryTypeFilter<$PrismaModel = never> = {
+  equals?: $Enums.LedgerEntryType | Prisma.EnumLedgerEntryTypeFieldRefInput<$PrismaModel> | runtime.Types.Skip
+  in?: $Enums.LedgerEntryType[] | runtime.Types.Skip
+  notIn?: $Enums.LedgerEntryType[] | runtime.Types.Skip
+  not?: Prisma.NestedEnumLedgerEntryTypeFilter<$PrismaModel> | $Enums.LedgerEntryType | runtime.Types.Skip
+}
+
+export type EnumLedgerEntryTypeWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.LedgerEntryType | Prisma.EnumLedgerEntryTypeFieldRefInput<$PrismaModel> | runtime.Types.Skip
+  in?: $Enums.LedgerEntryType[] | runtime.Types.Skip
+  notIn?: $Enums.LedgerEntryType[] | runtime.Types.Skip
+  not?: Prisma.NestedEnumLedgerEntryTypeWithAggregatesFilter<$PrismaModel> | $Enums.LedgerEntryType | runtime.Types.Skip
+  _count?: Prisma.NestedIntFilter<$PrismaModel> | runtime.Types.Skip
+  _min?: Prisma.NestedEnumLedgerEntryTypeFilter<$PrismaModel> | runtime.Types.Skip
+  _max?: Prisma.NestedEnumLedgerEntryTypeFilter<$PrismaModel> | runtime.Types.Skip
+}
+
 export type EnumDeliverySubjectFilter<$PrismaModel = never> = {
   equals?: $Enums.DeliverySubject | Prisma.EnumDeliverySubjectFieldRefInput<$PrismaModel> | runtime.Types.Skip
   in?: $Enums.DeliverySubject[] | runtime.Types.Skip
@@ -652,6 +669,23 @@ export type NestedBoolWithAggregatesFilter<$PrismaModel = never> = {
   _count?: Prisma.NestedIntFilter<$PrismaModel> | runtime.Types.Skip
   _min?: Prisma.NestedBoolFilter<$PrismaModel> | runtime.Types.Skip
   _max?: Prisma.NestedBoolFilter<$PrismaModel> | runtime.Types.Skip
+}
+
+export type NestedEnumLedgerEntryTypeFilter<$PrismaModel = never> = {
+  equals?: $Enums.LedgerEntryType | Prisma.EnumLedgerEntryTypeFieldRefInput<$PrismaModel> | runtime.Types.Skip
+  in?: $Enums.LedgerEntryType[] | runtime.Types.Skip
+  notIn?: $Enums.LedgerEntryType[] | runtime.Types.Skip
+  not?: Prisma.NestedEnumLedgerEntryTypeFilter<$PrismaModel> | $Enums.LedgerEntryType | runtime.Types.Skip
+}
+
+export type NestedEnumLedgerEntryTypeWithAggregatesFilter<$PrismaModel = never> = {
+  equals?: $Enums.LedgerEntryType | Prisma.EnumLedgerEntryTypeFieldRefInput<$PrismaModel> | runtime.Types.Skip
+  in?: $Enums.LedgerEntryType[] | runtime.Types.Skip
+  notIn?: $Enums.LedgerEntryType[] | runtime.Types.Skip
+  not?: Prisma.NestedEnumLedgerEntryTypeWithAggregatesFilter<$PrismaModel> | $Enums.LedgerEntryType | runtime.Types.Skip
+  _count?: Prisma.NestedIntFilter<$PrismaModel> | runtime.Types.Skip
+  _min?: Prisma.NestedEnumLedgerEntryTypeFilter<$PrismaModel> | runtime.Types.Skip
+  _max?: Prisma.NestedEnumLedgerEntryTypeFilter<$PrismaModel> | runtime.Types.Skip
 }
 
 export type NestedEnumDeliverySubjectFilter<$PrismaModel = never> = {

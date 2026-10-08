@@ -253,6 +253,7 @@ export type UserWhereInput = {
   orderHistory?: Prisma.OrderHistoryListRelationFilter | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingListRelationFilter | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryListRelationFilter | runtime.Types.Skip
+  expenses?: Prisma.ExpenseListRelationFilter | runtime.Types.Skip
 }
 
 export type UserOrderByWithRelationInput = {
@@ -270,6 +271,7 @@ export type UserOrderByWithRelationInput = {
   orderHistory?: Prisma.OrderHistoryOrderByRelationAggregateInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingOrderByRelationAggregateInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryOrderByRelationAggregateInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseOrderByRelationAggregateInput | runtime.Types.Skip
 }
 
 export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -290,6 +292,7 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   orderHistory?: Prisma.OrderHistoryListRelationFilter | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingListRelationFilter | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryListRelationFilter | runtime.Types.Skip
+  expenses?: Prisma.ExpenseListRelationFilter | runtime.Types.Skip
 }, "id" | "email">
 
 export type UserOrderByWithAggregationInput = {
@@ -338,6 +341,7 @@ export type UserCreateInput = {
   orderHistory?: Prisma.OrderHistoryCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingCreateNestedManyWithoutUpdatedByInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseCreateNestedManyWithoutPaidByUserInput | runtime.Types.Skip
 }
 
 export type UserUncheckedCreateInput = {
@@ -355,6 +359,7 @@ export type UserUncheckedCreateInput = {
   orderHistory?: Prisma.OrderHistoryUncheckedCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingUncheckedCreateNestedManyWithoutUpdatedByInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryUncheckedCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutPaidByUserInput | runtime.Types.Skip
 }
 
 export type UserUpdateInput = {
@@ -371,6 +376,7 @@ export type UserUpdateInput = {
   orderHistory?: Prisma.OrderHistoryUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingUpdateManyWithoutUpdatedByNestedInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUpdateManyWithoutPaidByUserNestedInput | runtime.Types.Skip
 }
 
 export type UserUncheckedUpdateInput = {
@@ -388,6 +394,7 @@ export type UserUncheckedUpdateInput = {
   orderHistory?: Prisma.OrderHistoryUncheckedUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingUncheckedUpdateManyWithoutUpdatedByNestedInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryUncheckedUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutPaidByUserNestedInput | runtime.Types.Skip
 }
 
 export type UserCreateManyInput = {
@@ -554,6 +561,22 @@ export type UserUpdateOneWithoutDutyHistoryNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutDutyHistoryInput, Prisma.UserUpdateWithoutDutyHistoryInput>, Prisma.UserUncheckedUpdateWithoutDutyHistoryInput> | runtime.Types.Skip
 }
 
+export type UserCreateNestedOneWithoutExpensesInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutExpensesInput, Prisma.UserUncheckedCreateWithoutExpensesInput> | runtime.Types.Skip
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutExpensesInput | runtime.Types.Skip
+  connect?: Prisma.UserWhereUniqueInput | runtime.Types.Skip
+}
+
+export type UserUpdateOneWithoutExpensesNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutExpensesInput, Prisma.UserUncheckedCreateWithoutExpensesInput> | runtime.Types.Skip
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutExpensesInput | runtime.Types.Skip
+  upsert?: Prisma.UserUpsertWithoutExpensesInput | runtime.Types.Skip
+  disconnect?: Prisma.UserWhereInput | boolean | runtime.Types.Skip
+  delete?: Prisma.UserWhereInput | boolean | runtime.Types.Skip
+  connect?: Prisma.UserWhereUniqueInput | runtime.Types.Skip
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutExpensesInput, Prisma.UserUpdateWithoutExpensesInput>, Prisma.UserUncheckedUpdateWithoutExpensesInput> | runtime.Types.Skip
+}
+
 export type UserCreateWithoutSettingsUpdatedInput = {
   email: string
   phone?: string | null | runtime.Types.Skip
@@ -567,6 +590,7 @@ export type UserCreateWithoutSettingsUpdatedInput = {
   bookedOrders?: Prisma.OrderCreateNestedManyWithoutBookedByUserInput | runtime.Types.Skip
   orderHistory?: Prisma.OrderHistoryCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseCreateNestedManyWithoutPaidByUserInput | runtime.Types.Skip
 }
 
 export type UserUncheckedCreateWithoutSettingsUpdatedInput = {
@@ -583,6 +607,7 @@ export type UserUncheckedCreateWithoutSettingsUpdatedInput = {
   bookedOrders?: Prisma.OrderUncheckedCreateNestedManyWithoutBookedByUserInput | runtime.Types.Skip
   orderHistory?: Prisma.OrderHistoryUncheckedCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryUncheckedCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutPaidByUserInput | runtime.Types.Skip
 }
 
 export type UserCreateOrConnectWithoutSettingsUpdatedInput = {
@@ -614,6 +639,7 @@ export type UserUpdateWithoutSettingsUpdatedInput = {
   bookedOrders?: Prisma.OrderUpdateManyWithoutBookedByUserNestedInput | runtime.Types.Skip
   orderHistory?: Prisma.OrderHistoryUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUpdateManyWithoutPaidByUserNestedInput | runtime.Types.Skip
 }
 
 export type UserUncheckedUpdateWithoutSettingsUpdatedInput = {
@@ -630,6 +656,7 @@ export type UserUncheckedUpdateWithoutSettingsUpdatedInput = {
   bookedOrders?: Prisma.OrderUncheckedUpdateManyWithoutBookedByUserNestedInput | runtime.Types.Skip
   orderHistory?: Prisma.OrderHistoryUncheckedUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryUncheckedUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutPaidByUserNestedInput | runtime.Types.Skip
 }
 
 export type UserCreateWithoutInhabitantInput = {
@@ -645,6 +672,7 @@ export type UserCreateWithoutInhabitantInput = {
   orderHistory?: Prisma.OrderHistoryCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingCreateNestedManyWithoutUpdatedByInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseCreateNestedManyWithoutPaidByUserInput | runtime.Types.Skip
 }
 
 export type UserUncheckedCreateWithoutInhabitantInput = {
@@ -661,6 +689,7 @@ export type UserUncheckedCreateWithoutInhabitantInput = {
   orderHistory?: Prisma.OrderHistoryUncheckedCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingUncheckedCreateNestedManyWithoutUpdatedByInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryUncheckedCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutPaidByUserInput | runtime.Types.Skip
 }
 
 export type UserCreateOrConnectWithoutInhabitantInput = {
@@ -692,6 +721,7 @@ export type UserUpdateWithoutInhabitantInput = {
   orderHistory?: Prisma.OrderHistoryUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingUpdateManyWithoutUpdatedByNestedInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUpdateManyWithoutPaidByUserNestedInput | runtime.Types.Skip
 }
 
 export type UserUncheckedUpdateWithoutInhabitantInput = {
@@ -708,6 +738,7 @@ export type UserUncheckedUpdateWithoutInhabitantInput = {
   orderHistory?: Prisma.OrderHistoryUncheckedUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingUncheckedUpdateManyWithoutUpdatedByNestedInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryUncheckedUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutPaidByUserNestedInput | runtime.Types.Skip
 }
 
 export type UserCreateWithoutBookedOrdersInput = {
@@ -723,6 +754,7 @@ export type UserCreateWithoutBookedOrdersInput = {
   orderHistory?: Prisma.OrderHistoryCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingCreateNestedManyWithoutUpdatedByInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseCreateNestedManyWithoutPaidByUserInput | runtime.Types.Skip
 }
 
 export type UserUncheckedCreateWithoutBookedOrdersInput = {
@@ -739,6 +771,7 @@ export type UserUncheckedCreateWithoutBookedOrdersInput = {
   orderHistory?: Prisma.OrderHistoryUncheckedCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingUncheckedCreateNestedManyWithoutUpdatedByInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryUncheckedCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutPaidByUserInput | runtime.Types.Skip
 }
 
 export type UserCreateOrConnectWithoutBookedOrdersInput = {
@@ -770,6 +803,7 @@ export type UserUpdateWithoutBookedOrdersInput = {
   orderHistory?: Prisma.OrderHistoryUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingUpdateManyWithoutUpdatedByNestedInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUpdateManyWithoutPaidByUserNestedInput | runtime.Types.Skip
 }
 
 export type UserUncheckedUpdateWithoutBookedOrdersInput = {
@@ -786,6 +820,7 @@ export type UserUncheckedUpdateWithoutBookedOrdersInput = {
   orderHistory?: Prisma.OrderHistoryUncheckedUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingUncheckedUpdateManyWithoutUpdatedByNestedInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryUncheckedUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutPaidByUserNestedInput | runtime.Types.Skip
 }
 
 export type UserCreateWithoutOrderHistoryInput = {
@@ -801,6 +836,7 @@ export type UserCreateWithoutOrderHistoryInput = {
   bookedOrders?: Prisma.OrderCreateNestedManyWithoutBookedByUserInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingCreateNestedManyWithoutUpdatedByInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseCreateNestedManyWithoutPaidByUserInput | runtime.Types.Skip
 }
 
 export type UserUncheckedCreateWithoutOrderHistoryInput = {
@@ -817,6 +853,7 @@ export type UserUncheckedCreateWithoutOrderHistoryInput = {
   bookedOrders?: Prisma.OrderUncheckedCreateNestedManyWithoutBookedByUserInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingUncheckedCreateNestedManyWithoutUpdatedByInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryUncheckedCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutPaidByUserInput | runtime.Types.Skip
 }
 
 export type UserCreateOrConnectWithoutOrderHistoryInput = {
@@ -848,6 +885,7 @@ export type UserUpdateWithoutOrderHistoryInput = {
   bookedOrders?: Prisma.OrderUpdateManyWithoutBookedByUserNestedInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingUpdateManyWithoutUpdatedByNestedInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUpdateManyWithoutPaidByUserNestedInput | runtime.Types.Skip
 }
 
 export type UserUncheckedUpdateWithoutOrderHistoryInput = {
@@ -864,6 +902,7 @@ export type UserUncheckedUpdateWithoutOrderHistoryInput = {
   bookedOrders?: Prisma.OrderUncheckedUpdateManyWithoutBookedByUserNestedInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingUncheckedUpdateManyWithoutUpdatedByNestedInput | runtime.Types.Skip
   dutyHistory?: Prisma.DutyHistoryUncheckedUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutPaidByUserNestedInput | runtime.Types.Skip
 }
 
 export type UserCreateWithoutDutyHistoryInput = {
@@ -879,6 +918,7 @@ export type UserCreateWithoutDutyHistoryInput = {
   bookedOrders?: Prisma.OrderCreateNestedManyWithoutBookedByUserInput | runtime.Types.Skip
   orderHistory?: Prisma.OrderHistoryCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingCreateNestedManyWithoutUpdatedByInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseCreateNestedManyWithoutPaidByUserInput | runtime.Types.Skip
 }
 
 export type UserUncheckedCreateWithoutDutyHistoryInput = {
@@ -895,6 +935,7 @@ export type UserUncheckedCreateWithoutDutyHistoryInput = {
   bookedOrders?: Prisma.OrderUncheckedCreateNestedManyWithoutBookedByUserInput | runtime.Types.Skip
   orderHistory?: Prisma.OrderHistoryUncheckedCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingUncheckedCreateNestedManyWithoutUpdatedByInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedCreateNestedManyWithoutPaidByUserInput | runtime.Types.Skip
 }
 
 export type UserCreateOrConnectWithoutDutyHistoryInput = {
@@ -926,6 +967,7 @@ export type UserUpdateWithoutDutyHistoryInput = {
   bookedOrders?: Prisma.OrderUpdateManyWithoutBookedByUserNestedInput | runtime.Types.Skip
   orderHistory?: Prisma.OrderHistoryUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingUpdateManyWithoutUpdatedByNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUpdateManyWithoutPaidByUserNestedInput | runtime.Types.Skip
 }
 
 export type UserUncheckedUpdateWithoutDutyHistoryInput = {
@@ -942,6 +984,89 @@ export type UserUncheckedUpdateWithoutDutyHistoryInput = {
   bookedOrders?: Prisma.OrderUncheckedUpdateManyWithoutBookedByUserNestedInput | runtime.Types.Skip
   orderHistory?: Prisma.OrderHistoryUncheckedUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
   settingsUpdated?: Prisma.SettingUncheckedUpdateManyWithoutUpdatedByNestedInput | runtime.Types.Skip
+  expenses?: Prisma.ExpenseUncheckedUpdateManyWithoutPaidByUserNestedInput | runtime.Types.Skip
+}
+
+export type UserCreateWithoutExpensesInput = {
+  email: string
+  phone?: string | null | runtime.Types.Skip
+  passwordHash: string
+  systemRoles?: string | runtime.Types.Skip
+  notificationChannels?: string | runtime.Types.Skip
+  appearance?: string | runtime.Types.Skip
+  createdAt?: Date | string | runtime.Types.Skip
+  updatedAt?: Date | string | runtime.Types.Skip
+  Inhabitant?: Prisma.InhabitantCreateNestedOneWithoutUserInput | runtime.Types.Skip
+  bookedOrders?: Prisma.OrderCreateNestedManyWithoutBookedByUserInput | runtime.Types.Skip
+  orderHistory?: Prisma.OrderHistoryCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
+  settingsUpdated?: Prisma.SettingCreateNestedManyWithoutUpdatedByInput | runtime.Types.Skip
+  dutyHistory?: Prisma.DutyHistoryCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
+}
+
+export type UserUncheckedCreateWithoutExpensesInput = {
+  id?: number | runtime.Types.Skip
+  email: string
+  phone?: string | null | runtime.Types.Skip
+  passwordHash: string
+  systemRoles?: string | runtime.Types.Skip
+  notificationChannels?: string | runtime.Types.Skip
+  appearance?: string | runtime.Types.Skip
+  createdAt?: Date | string | runtime.Types.Skip
+  updatedAt?: Date | string | runtime.Types.Skip
+  Inhabitant?: Prisma.InhabitantUncheckedCreateNestedOneWithoutUserInput | runtime.Types.Skip
+  bookedOrders?: Prisma.OrderUncheckedCreateNestedManyWithoutBookedByUserInput | runtime.Types.Skip
+  orderHistory?: Prisma.OrderHistoryUncheckedCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
+  settingsUpdated?: Prisma.SettingUncheckedCreateNestedManyWithoutUpdatedByInput | runtime.Types.Skip
+  dutyHistory?: Prisma.DutyHistoryUncheckedCreateNestedManyWithoutPerformedByUserInput | runtime.Types.Skip
+}
+
+export type UserCreateOrConnectWithoutExpensesInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutExpensesInput, Prisma.UserUncheckedCreateWithoutExpensesInput>
+}
+
+export type UserUpsertWithoutExpensesInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutExpensesInput, Prisma.UserUncheckedUpdateWithoutExpensesInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutExpensesInput, Prisma.UserUncheckedCreateWithoutExpensesInput>
+  where?: Prisma.UserWhereInput | runtime.Types.Skip
+}
+
+export type UserUpdateToOneWithWhereWithoutExpensesInput = {
+  where?: Prisma.UserWhereInput | runtime.Types.Skip
+  data: Prisma.XOR<Prisma.UserUpdateWithoutExpensesInput, Prisma.UserUncheckedUpdateWithoutExpensesInput>
+}
+
+export type UserUpdateWithoutExpensesInput = {
+  email?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
+  phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
+  systemRoles?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
+  notificationChannels?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
+  appearance?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  Inhabitant?: Prisma.InhabitantUpdateOneWithoutUserNestedInput | runtime.Types.Skip
+  bookedOrders?: Prisma.OrderUpdateManyWithoutBookedByUserNestedInput | runtime.Types.Skip
+  orderHistory?: Prisma.OrderHistoryUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
+  settingsUpdated?: Prisma.SettingUpdateManyWithoutUpdatedByNestedInput | runtime.Types.Skip
+  dutyHistory?: Prisma.DutyHistoryUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
+}
+
+export type UserUncheckedUpdateWithoutExpensesInput = {
+  id?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
+  email?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
+  phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
+  systemRoles?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
+  notificationChannels?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
+  appearance?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
+  Inhabitant?: Prisma.InhabitantUncheckedUpdateOneWithoutUserNestedInput | runtime.Types.Skip
+  bookedOrders?: Prisma.OrderUncheckedUpdateManyWithoutBookedByUserNestedInput | runtime.Types.Skip
+  orderHistory?: Prisma.OrderHistoryUncheckedUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
+  settingsUpdated?: Prisma.SettingUncheckedUpdateManyWithoutUpdatedByNestedInput | runtime.Types.Skip
+  dutyHistory?: Prisma.DutyHistoryUncheckedUpdateManyWithoutPerformedByUserNestedInput | runtime.Types.Skip
 }
 
 
@@ -954,6 +1079,7 @@ export type UserCountOutputType = {
   orderHistory: number
   settingsUpdated: number
   dutyHistory: number
+  expenses: number
 }
 
 export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -961,6 +1087,7 @@ export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.I
   orderHistory?: boolean | UserCountOutputTypeCountOrderHistoryArgs
   settingsUpdated?: boolean | UserCountOutputTypeCountSettingsUpdatedArgs
   dutyHistory?: boolean | UserCountOutputTypeCountDutyHistoryArgs
+  expenses?: boolean | UserCountOutputTypeCountExpensesArgs
 }
 
 /**
@@ -1001,6 +1128,13 @@ export type UserCountOutputTypeCountDutyHistoryArgs<ExtArgs extends runtime.Type
   where?: Prisma.DutyHistoryWhereInput | runtime.Types.Skip
 }
 
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountExpensesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.ExpenseWhereInput | runtime.Types.Skip
+}
+
 
 export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean | runtime.Types.Skip
@@ -1017,6 +1151,7 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   orderHistory?: boolean | Prisma.User$orderHistoryArgs<ExtArgs> | runtime.Types.Skip
   settingsUpdated?: boolean | Prisma.User$settingsUpdatedArgs<ExtArgs> | runtime.Types.Skip
   dutyHistory?: boolean | Prisma.User$dutyHistoryArgs<ExtArgs> | runtime.Types.Skip
+  expenses?: boolean | Prisma.User$expensesArgs<ExtArgs> | runtime.Types.Skip
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs> | runtime.Types.Skip
 }, ExtArgs["result"]["user"]>
 
@@ -1063,6 +1198,7 @@ export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   orderHistory?: boolean | Prisma.User$orderHistoryArgs<ExtArgs> | runtime.Types.Skip
   settingsUpdated?: boolean | Prisma.User$settingsUpdatedArgs<ExtArgs> | runtime.Types.Skip
   dutyHistory?: boolean | Prisma.User$dutyHistoryArgs<ExtArgs> | runtime.Types.Skip
+  expenses?: boolean | Prisma.User$expensesArgs<ExtArgs> | runtime.Types.Skip
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs> | runtime.Types.Skip
 }
 export type UserIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -1076,6 +1212,7 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     orderHistory: Prisma.$OrderHistoryPayload<ExtArgs>[]
     settingsUpdated: Prisma.$SettingPayload<ExtArgs>[]
     dutyHistory: Prisma.$DutyHistoryPayload<ExtArgs>[]
+    expenses: Prisma.$ExpensePayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: number
@@ -1486,6 +1623,7 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
   orderHistory<T extends Prisma.User$orderHistoryArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$orderHistoryArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$OrderHistoryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   settingsUpdated<T extends Prisma.User$settingsUpdatedArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$settingsUpdatedArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$SettingPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   dutyHistory<T extends Prisma.User$dutyHistoryArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$dutyHistoryArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$DutyHistoryPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  expenses<T extends Prisma.User$expensesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$expensesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$ExpensePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -2027,6 +2165,30 @@ export type User$dutyHistoryArgs<ExtArgs extends runtime.Types.Extensions.Intern
   take?: number | runtime.Types.Skip
   skip?: number | runtime.Types.Skip
   distinct?: Prisma.DutyHistoryScalarFieldEnum | Prisma.DutyHistoryScalarFieldEnum[] | runtime.Types.Skip
+}
+
+/**
+ * User.expenses
+ */
+export type User$expensesArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the Expense
+   */
+  select?: Prisma.ExpenseSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the Expense
+   */
+  omit?: Prisma.ExpenseOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.ExpenseInclude<ExtArgs> | null
+  where?: Prisma.ExpenseWhereInput | runtime.Types.Skip
+  orderBy?: Prisma.ExpenseOrderByWithRelationInput | Prisma.ExpenseOrderByWithRelationInput[] | runtime.Types.Skip
+  cursor?: Prisma.ExpenseWhereUniqueInput | runtime.Types.Skip
+  take?: number | runtime.Types.Skip
+  skip?: number | runtime.Types.Skip
+  distinct?: Prisma.ExpenseScalarFieldEnum | Prisma.ExpenseScalarFieldEnum[] | runtime.Types.Skip
 }
 
 /**

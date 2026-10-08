@@ -43,9 +43,11 @@ export type TransactionSumAggregateOutputType = {
 export type TransactionMinAggregateOutputType = {
   id: number | null
   orderId: number | null
+  type: $Enums.LedgerEntryType | null
   orderSnapshot: string | null
   userSnapshot: string | null
   amount: number | null
+  description: string | null
   userEmailHandle: string | null
   createdAt: Date | null
   invoiceId: number | null
@@ -54,9 +56,11 @@ export type TransactionMinAggregateOutputType = {
 export type TransactionMaxAggregateOutputType = {
   id: number | null
   orderId: number | null
+  type: $Enums.LedgerEntryType | null
   orderSnapshot: string | null
   userSnapshot: string | null
   amount: number | null
+  description: string | null
   userEmailHandle: string | null
   createdAt: Date | null
   invoiceId: number | null
@@ -65,9 +69,11 @@ export type TransactionMaxAggregateOutputType = {
 export type TransactionCountAggregateOutputType = {
   id: number
   orderId: number
+  type: number
   orderSnapshot: number
   userSnapshot: number
   amount: number
+  description: number
   userEmailHandle: number
   createdAt: number
   invoiceId: number
@@ -92,9 +98,11 @@ export type TransactionSumAggregateInputType = {
 export type TransactionMinAggregateInputType = {
   id?: true | runtime.Types.Skip
   orderId?: true | runtime.Types.Skip
+  type?: true | runtime.Types.Skip
   orderSnapshot?: true | runtime.Types.Skip
   userSnapshot?: true | runtime.Types.Skip
   amount?: true | runtime.Types.Skip
+  description?: true | runtime.Types.Skip
   userEmailHandle?: true | runtime.Types.Skip
   createdAt?: true | runtime.Types.Skip
   invoiceId?: true | runtime.Types.Skip
@@ -103,9 +111,11 @@ export type TransactionMinAggregateInputType = {
 export type TransactionMaxAggregateInputType = {
   id?: true | runtime.Types.Skip
   orderId?: true | runtime.Types.Skip
+  type?: true | runtime.Types.Skip
   orderSnapshot?: true | runtime.Types.Skip
   userSnapshot?: true | runtime.Types.Skip
   amount?: true | runtime.Types.Skip
+  description?: true | runtime.Types.Skip
   userEmailHandle?: true | runtime.Types.Skip
   createdAt?: true | runtime.Types.Skip
   invoiceId?: true | runtime.Types.Skip
@@ -114,9 +124,11 @@ export type TransactionMaxAggregateInputType = {
 export type TransactionCountAggregateInputType = {
   id?: true | runtime.Types.Skip
   orderId?: true | runtime.Types.Skip
+  type?: true | runtime.Types.Skip
   orderSnapshot?: true | runtime.Types.Skip
   userSnapshot?: true | runtime.Types.Skip
   amount?: true | runtime.Types.Skip
+  description?: true | runtime.Types.Skip
   userEmailHandle?: true | runtime.Types.Skip
   createdAt?: true | runtime.Types.Skip
   invoiceId?: true | runtime.Types.Skip
@@ -212,9 +224,11 @@ export type TransactionGroupByArgs<ExtArgs extends runtime.Types.Extensions.Inte
 export type TransactionGroupByOutputType = {
   id: number
   orderId: number | null
+  type: $Enums.LedgerEntryType
   orderSnapshot: string
   userSnapshot: string
   amount: number
+  description: string | null
   userEmailHandle: string
   createdAt: Date
   invoiceId: number | null
@@ -246,9 +260,11 @@ export type TransactionWhereInput = {
   NOT?: Prisma.TransactionWhereInput | Prisma.TransactionWhereInput[] | runtime.Types.Skip
   id?: Prisma.IntFilter<"Transaction"> | number | runtime.Types.Skip
   orderId?: Prisma.IntNullableFilter<"Transaction"> | number | null | runtime.Types.Skip
+  type?: Prisma.EnumLedgerEntryTypeFilter<"Transaction"> | $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot?: Prisma.StringFilter<"Transaction"> | string | runtime.Types.Skip
   userSnapshot?: Prisma.StringFilter<"Transaction"> | string | runtime.Types.Skip
   amount?: Prisma.IntFilter<"Transaction"> | number | runtime.Types.Skip
+  description?: Prisma.StringNullableFilter<"Transaction"> | string | null | runtime.Types.Skip
   userEmailHandle?: Prisma.StringFilter<"Transaction"> | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFilter<"Transaction"> | Date | string | runtime.Types.Skip
   invoiceId?: Prisma.IntNullableFilter<"Transaction"> | number | null | runtime.Types.Skip
@@ -259,9 +275,11 @@ export type TransactionWhereInput = {
 export type TransactionOrderByWithRelationInput = {
   id?: Prisma.SortOrder | runtime.Types.Skip
   orderId?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
+  type?: Prisma.SortOrder | runtime.Types.Skip
   orderSnapshot?: Prisma.SortOrder | runtime.Types.Skip
   userSnapshot?: Prisma.SortOrder | runtime.Types.Skip
   amount?: Prisma.SortOrder | runtime.Types.Skip
+  description?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
   userEmailHandle?: Prisma.SortOrder | runtime.Types.Skip
   createdAt?: Prisma.SortOrder | runtime.Types.Skip
   invoiceId?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
@@ -275,9 +293,11 @@ export type TransactionWhereUniqueInput = Prisma.AtLeast<{
   AND?: Prisma.TransactionWhereInput | Prisma.TransactionWhereInput[] | runtime.Types.Skip
   OR?: Prisma.TransactionWhereInput[] | runtime.Types.Skip
   NOT?: Prisma.TransactionWhereInput | Prisma.TransactionWhereInput[] | runtime.Types.Skip
+  type?: Prisma.EnumLedgerEntryTypeFilter<"Transaction"> | $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot?: Prisma.StringFilter<"Transaction"> | string | runtime.Types.Skip
   userSnapshot?: Prisma.StringFilter<"Transaction"> | string | runtime.Types.Skip
   amount?: Prisma.IntFilter<"Transaction"> | number | runtime.Types.Skip
+  description?: Prisma.StringNullableFilter<"Transaction"> | string | null | runtime.Types.Skip
   userEmailHandle?: Prisma.StringFilter<"Transaction"> | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFilter<"Transaction"> | Date | string | runtime.Types.Skip
   invoiceId?: Prisma.IntNullableFilter<"Transaction"> | number | null | runtime.Types.Skip
@@ -288,9 +308,11 @@ export type TransactionWhereUniqueInput = Prisma.AtLeast<{
 export type TransactionOrderByWithAggregationInput = {
   id?: Prisma.SortOrder | runtime.Types.Skip
   orderId?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
+  type?: Prisma.SortOrder | runtime.Types.Skip
   orderSnapshot?: Prisma.SortOrder | runtime.Types.Skip
   userSnapshot?: Prisma.SortOrder | runtime.Types.Skip
   amount?: Prisma.SortOrder | runtime.Types.Skip
+  description?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
   userEmailHandle?: Prisma.SortOrder | runtime.Types.Skip
   createdAt?: Prisma.SortOrder | runtime.Types.Skip
   invoiceId?: Prisma.SortOrderInput | Prisma.SortOrder | runtime.Types.Skip
@@ -307,18 +329,22 @@ export type TransactionScalarWhereWithAggregatesInput = {
   NOT?: Prisma.TransactionScalarWhereWithAggregatesInput | Prisma.TransactionScalarWhereWithAggregatesInput[] | runtime.Types.Skip
   id?: Prisma.IntWithAggregatesFilter<"Transaction"> | number | runtime.Types.Skip
   orderId?: Prisma.IntNullableWithAggregatesFilter<"Transaction"> | number | null | runtime.Types.Skip
+  type?: Prisma.EnumLedgerEntryTypeWithAggregatesFilter<"Transaction"> | $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot?: Prisma.StringWithAggregatesFilter<"Transaction"> | string | runtime.Types.Skip
   userSnapshot?: Prisma.StringWithAggregatesFilter<"Transaction"> | string | runtime.Types.Skip
   amount?: Prisma.IntWithAggregatesFilter<"Transaction"> | number | runtime.Types.Skip
+  description?: Prisma.StringNullableWithAggregatesFilter<"Transaction"> | string | null | runtime.Types.Skip
   userEmailHandle?: Prisma.StringWithAggregatesFilter<"Transaction"> | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Transaction"> | Date | string | runtime.Types.Skip
   invoiceId?: Prisma.IntNullableWithAggregatesFilter<"Transaction"> | number | null | runtime.Types.Skip
 }
 
 export type TransactionCreateInput = {
+  type?: $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot: string
   userSnapshot: string
   amount: number
+  description?: string | null | runtime.Types.Skip
   userEmailHandle: string
   createdAt?: Date | string | runtime.Types.Skip
   order?: Prisma.OrderCreateNestedOneWithoutTransactionInput | runtime.Types.Skip
@@ -328,18 +354,22 @@ export type TransactionCreateInput = {
 export type TransactionUncheckedCreateInput = {
   id?: number | runtime.Types.Skip
   orderId?: number | null | runtime.Types.Skip
+  type?: $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot: string
   userSnapshot: string
   amount: number
+  description?: string | null | runtime.Types.Skip
   userEmailHandle: string
   createdAt?: Date | string | runtime.Types.Skip
   invoiceId?: number | null | runtime.Types.Skip
 }
 
 export type TransactionUpdateInput = {
+  type?: Prisma.EnumLedgerEntryTypeFieldUpdateOperationsInput | $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   userSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   amount?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   userEmailHandle?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
   order?: Prisma.OrderUpdateOneWithoutTransactionNestedInput | runtime.Types.Skip
@@ -349,9 +379,11 @@ export type TransactionUpdateInput = {
 export type TransactionUncheckedUpdateInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   orderId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
+  type?: Prisma.EnumLedgerEntryTypeFieldUpdateOperationsInput | $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   userSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   amount?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   userEmailHandle?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
   invoiceId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
@@ -360,18 +392,22 @@ export type TransactionUncheckedUpdateInput = {
 export type TransactionCreateManyInput = {
   id?: number | runtime.Types.Skip
   orderId?: number | null | runtime.Types.Skip
+  type?: $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot: string
   userSnapshot: string
   amount: number
+  description?: string | null | runtime.Types.Skip
   userEmailHandle: string
   createdAt?: Date | string | runtime.Types.Skip
   invoiceId?: number | null | runtime.Types.Skip
 }
 
 export type TransactionUpdateManyMutationInput = {
+  type?: Prisma.EnumLedgerEntryTypeFieldUpdateOperationsInput | $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   userSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   amount?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   userEmailHandle?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
 }
@@ -379,9 +415,11 @@ export type TransactionUpdateManyMutationInput = {
 export type TransactionUncheckedUpdateManyInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   orderId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
+  type?: Prisma.EnumLedgerEntryTypeFieldUpdateOperationsInput | $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   userSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   amount?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   userEmailHandle?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
   invoiceId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
@@ -395,9 +433,11 @@ export type TransactionNullableScalarRelationFilter = {
 export type TransactionCountOrderByAggregateInput = {
   id?: Prisma.SortOrder | runtime.Types.Skip
   orderId?: Prisma.SortOrder | runtime.Types.Skip
+  type?: Prisma.SortOrder | runtime.Types.Skip
   orderSnapshot?: Prisma.SortOrder | runtime.Types.Skip
   userSnapshot?: Prisma.SortOrder | runtime.Types.Skip
   amount?: Prisma.SortOrder | runtime.Types.Skip
+  description?: Prisma.SortOrder | runtime.Types.Skip
   userEmailHandle?: Prisma.SortOrder | runtime.Types.Skip
   createdAt?: Prisma.SortOrder | runtime.Types.Skip
   invoiceId?: Prisma.SortOrder | runtime.Types.Skip
@@ -413,9 +453,11 @@ export type TransactionAvgOrderByAggregateInput = {
 export type TransactionMaxOrderByAggregateInput = {
   id?: Prisma.SortOrder | runtime.Types.Skip
   orderId?: Prisma.SortOrder | runtime.Types.Skip
+  type?: Prisma.SortOrder | runtime.Types.Skip
   orderSnapshot?: Prisma.SortOrder | runtime.Types.Skip
   userSnapshot?: Prisma.SortOrder | runtime.Types.Skip
   amount?: Prisma.SortOrder | runtime.Types.Skip
+  description?: Prisma.SortOrder | runtime.Types.Skip
   userEmailHandle?: Prisma.SortOrder | runtime.Types.Skip
   createdAt?: Prisma.SortOrder | runtime.Types.Skip
   invoiceId?: Prisma.SortOrder | runtime.Types.Skip
@@ -424,9 +466,11 @@ export type TransactionMaxOrderByAggregateInput = {
 export type TransactionMinOrderByAggregateInput = {
   id?: Prisma.SortOrder | runtime.Types.Skip
   orderId?: Prisma.SortOrder | runtime.Types.Skip
+  type?: Prisma.SortOrder | runtime.Types.Skip
   orderSnapshot?: Prisma.SortOrder | runtime.Types.Skip
   userSnapshot?: Prisma.SortOrder | runtime.Types.Skip
   amount?: Prisma.SortOrder | runtime.Types.Skip
+  description?: Prisma.SortOrder | runtime.Types.Skip
   userEmailHandle?: Prisma.SortOrder | runtime.Types.Skip
   createdAt?: Prisma.SortOrder | runtime.Types.Skip
   invoiceId?: Prisma.SortOrder | runtime.Types.Skip
@@ -481,6 +525,10 @@ export type TransactionUncheckedUpdateOneWithoutOrderNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.TransactionUpdateToOneWithWhereWithoutOrderInput, Prisma.TransactionUpdateWithoutOrderInput>, Prisma.TransactionUncheckedUpdateWithoutOrderInput> | runtime.Types.Skip
 }
 
+export type EnumLedgerEntryTypeFieldUpdateOperationsInput = {
+  set?: $Enums.LedgerEntryType | runtime.Types.Skip
+}
+
 export type TransactionCreateNestedManyWithoutInvoiceInput = {
   create?: Prisma.XOR<Prisma.TransactionCreateWithoutInvoiceInput, Prisma.TransactionUncheckedCreateWithoutInvoiceInput> | Prisma.TransactionCreateWithoutInvoiceInput[] | Prisma.TransactionUncheckedCreateWithoutInvoiceInput[] | runtime.Types.Skip
   connectOrCreate?: Prisma.TransactionCreateOrConnectWithoutInvoiceInput | Prisma.TransactionCreateOrConnectWithoutInvoiceInput[] | runtime.Types.Skip
@@ -524,9 +572,11 @@ export type TransactionUncheckedUpdateManyWithoutInvoiceNestedInput = {
 }
 
 export type TransactionCreateWithoutOrderInput = {
+  type?: $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot: string
   userSnapshot: string
   amount: number
+  description?: string | null | runtime.Types.Skip
   userEmailHandle: string
   createdAt?: Date | string | runtime.Types.Skip
   invoice?: Prisma.InvoiceCreateNestedOneWithoutTransactionsInput | runtime.Types.Skip
@@ -534,9 +584,11 @@ export type TransactionCreateWithoutOrderInput = {
 
 export type TransactionUncheckedCreateWithoutOrderInput = {
   id?: number | runtime.Types.Skip
+  type?: $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot: string
   userSnapshot: string
   amount: number
+  description?: string | null | runtime.Types.Skip
   userEmailHandle: string
   createdAt?: Date | string | runtime.Types.Skip
   invoiceId?: number | null | runtime.Types.Skip
@@ -559,9 +611,11 @@ export type TransactionUpdateToOneWithWhereWithoutOrderInput = {
 }
 
 export type TransactionUpdateWithoutOrderInput = {
+  type?: Prisma.EnumLedgerEntryTypeFieldUpdateOperationsInput | $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   userSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   amount?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   userEmailHandle?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
   invoice?: Prisma.InvoiceUpdateOneWithoutTransactionsNestedInput | runtime.Types.Skip
@@ -569,18 +623,22 @@ export type TransactionUpdateWithoutOrderInput = {
 
 export type TransactionUncheckedUpdateWithoutOrderInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
+  type?: Prisma.EnumLedgerEntryTypeFieldUpdateOperationsInput | $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   userSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   amount?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   userEmailHandle?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
   invoiceId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
 }
 
 export type TransactionCreateWithoutInvoiceInput = {
+  type?: $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot: string
   userSnapshot: string
   amount: number
+  description?: string | null | runtime.Types.Skip
   userEmailHandle: string
   createdAt?: Date | string | runtime.Types.Skip
   order?: Prisma.OrderCreateNestedOneWithoutTransactionInput | runtime.Types.Skip
@@ -589,9 +647,11 @@ export type TransactionCreateWithoutInvoiceInput = {
 export type TransactionUncheckedCreateWithoutInvoiceInput = {
   id?: number | runtime.Types.Skip
   orderId?: number | null | runtime.Types.Skip
+  type?: $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot: string
   userSnapshot: string
   amount: number
+  description?: string | null | runtime.Types.Skip
   userEmailHandle: string
   createdAt?: Date | string | runtime.Types.Skip
 }
@@ -627,9 +687,11 @@ export type TransactionScalarWhereInput = {
   NOT?: Prisma.TransactionScalarWhereInput | Prisma.TransactionScalarWhereInput[] | runtime.Types.Skip
   id?: Prisma.IntFilter<"Transaction"> | number | runtime.Types.Skip
   orderId?: Prisma.IntNullableFilter<"Transaction"> | number | null | runtime.Types.Skip
+  type?: Prisma.EnumLedgerEntryTypeFilter<"Transaction"> | $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot?: Prisma.StringFilter<"Transaction"> | string | runtime.Types.Skip
   userSnapshot?: Prisma.StringFilter<"Transaction"> | string | runtime.Types.Skip
   amount?: Prisma.IntFilter<"Transaction"> | number | runtime.Types.Skip
+  description?: Prisma.StringNullableFilter<"Transaction"> | string | null | runtime.Types.Skip
   userEmailHandle?: Prisma.StringFilter<"Transaction"> | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFilter<"Transaction"> | Date | string | runtime.Types.Skip
   invoiceId?: Prisma.IntNullableFilter<"Transaction"> | number | null | runtime.Types.Skip
@@ -638,17 +700,21 @@ export type TransactionScalarWhereInput = {
 export type TransactionCreateManyInvoiceInput = {
   id?: number | runtime.Types.Skip
   orderId?: number | null | runtime.Types.Skip
+  type?: $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot: string
   userSnapshot: string
   amount: number
+  description?: string | null | runtime.Types.Skip
   userEmailHandle: string
   createdAt?: Date | string | runtime.Types.Skip
 }
 
 export type TransactionUpdateWithoutInvoiceInput = {
+  type?: Prisma.EnumLedgerEntryTypeFieldUpdateOperationsInput | $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   userSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   amount?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   userEmailHandle?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
   order?: Prisma.OrderUpdateOneWithoutTransactionNestedInput | runtime.Types.Skip
@@ -657,9 +723,11 @@ export type TransactionUpdateWithoutInvoiceInput = {
 export type TransactionUncheckedUpdateWithoutInvoiceInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   orderId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
+  type?: Prisma.EnumLedgerEntryTypeFieldUpdateOperationsInput | $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   userSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   amount?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   userEmailHandle?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
 }
@@ -667,9 +735,11 @@ export type TransactionUncheckedUpdateWithoutInvoiceInput = {
 export type TransactionUncheckedUpdateManyWithoutInvoiceInput = {
   id?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
   orderId?: Prisma.NullableIntFieldUpdateOperationsInput | number | null | runtime.Types.Skip
+  type?: Prisma.EnumLedgerEntryTypeFieldUpdateOperationsInput | $Enums.LedgerEntryType | runtime.Types.Skip
   orderSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   userSnapshot?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   amount?: Prisma.IntFieldUpdateOperationsInput | number | runtime.Types.Skip
+  description?: Prisma.NullableStringFieldUpdateOperationsInput | string | null | runtime.Types.Skip
   userEmailHandle?: Prisma.StringFieldUpdateOperationsInput | string | runtime.Types.Skip
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string | runtime.Types.Skip
 }
@@ -679,9 +749,11 @@ export type TransactionUncheckedUpdateManyWithoutInvoiceInput = {
 export type TransactionSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean | runtime.Types.Skip
   orderId?: boolean | runtime.Types.Skip
+  type?: boolean | runtime.Types.Skip
   orderSnapshot?: boolean | runtime.Types.Skip
   userSnapshot?: boolean | runtime.Types.Skip
   amount?: boolean | runtime.Types.Skip
+  description?: boolean | runtime.Types.Skip
   userEmailHandle?: boolean | runtime.Types.Skip
   createdAt?: boolean | runtime.Types.Skip
   invoiceId?: boolean | runtime.Types.Skip
@@ -692,9 +764,11 @@ export type TransactionSelect<ExtArgs extends runtime.Types.Extensions.InternalA
 export type TransactionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean | runtime.Types.Skip
   orderId?: boolean | runtime.Types.Skip
+  type?: boolean | runtime.Types.Skip
   orderSnapshot?: boolean | runtime.Types.Skip
   userSnapshot?: boolean | runtime.Types.Skip
   amount?: boolean | runtime.Types.Skip
+  description?: boolean | runtime.Types.Skip
   userEmailHandle?: boolean | runtime.Types.Skip
   createdAt?: boolean | runtime.Types.Skip
   invoiceId?: boolean | runtime.Types.Skip
@@ -705,9 +779,11 @@ export type TransactionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.E
 export type TransactionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean | runtime.Types.Skip
   orderId?: boolean | runtime.Types.Skip
+  type?: boolean | runtime.Types.Skip
   orderSnapshot?: boolean | runtime.Types.Skip
   userSnapshot?: boolean | runtime.Types.Skip
   amount?: boolean | runtime.Types.Skip
+  description?: boolean | runtime.Types.Skip
   userEmailHandle?: boolean | runtime.Types.Skip
   createdAt?: boolean | runtime.Types.Skip
   invoiceId?: boolean | runtime.Types.Skip
@@ -718,15 +794,17 @@ export type TransactionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.E
 export type TransactionSelectScalar = {
   id?: boolean | runtime.Types.Skip
   orderId?: boolean | runtime.Types.Skip
+  type?: boolean | runtime.Types.Skip
   orderSnapshot?: boolean | runtime.Types.Skip
   userSnapshot?: boolean | runtime.Types.Skip
   amount?: boolean | runtime.Types.Skip
+  description?: boolean | runtime.Types.Skip
   userEmailHandle?: boolean | runtime.Types.Skip
   createdAt?: boolean | runtime.Types.Skip
   invoiceId?: boolean | runtime.Types.Skip
 }
 
-export type TransactionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "orderId" | "orderSnapshot" | "userSnapshot" | "amount" | "userEmailHandle" | "createdAt" | "invoiceId", ExtArgs["result"]["transaction"], runtime.Types.Skip>
+export type TransactionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "orderId" | "type" | "orderSnapshot" | "userSnapshot" | "amount" | "description" | "userEmailHandle" | "createdAt" | "invoiceId", ExtArgs["result"]["transaction"], runtime.Types.Skip>
 export type TransactionInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   order?: boolean | Prisma.Transaction$orderArgs<ExtArgs> | runtime.Types.Skip
   invoice?: boolean | Prisma.Transaction$invoiceArgs<ExtArgs> | runtime.Types.Skip
@@ -749,9 +827,11 @@ export type $TransactionPayload<ExtArgs extends runtime.Types.Extensions.Interna
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: number
     orderId: number | null
+    type: $Enums.LedgerEntryType
     orderSnapshot: string
     userSnapshot: string
     amount: number
+    description: string | null
     userEmailHandle: string
     createdAt: Date
     invoiceId: number | null
@@ -1182,9 +1262,11 @@ export interface Prisma__TransactionClient<T, Null = never, ExtArgs extends runt
 export interface TransactionFieldRefs {
   readonly id: Prisma.FieldRef<"Transaction", 'Int'>
   readonly orderId: Prisma.FieldRef<"Transaction", 'Int'>
+  readonly type: Prisma.FieldRef<"Transaction", 'LedgerEntryType'>
   readonly orderSnapshot: Prisma.FieldRef<"Transaction", 'String'>
   readonly userSnapshot: Prisma.FieldRef<"Transaction", 'String'>
   readonly amount: Prisma.FieldRef<"Transaction", 'Int'>
+  readonly description: Prisma.FieldRef<"Transaction", 'String'>
   readonly userEmailHandle: Prisma.FieldRef<"Transaction", 'String'>
   readonly createdAt: Prisma.FieldRef<"Transaction", 'DateTime'>
   readonly invoiceId: Prisma.FieldRef<"Transaction", 'Int'>

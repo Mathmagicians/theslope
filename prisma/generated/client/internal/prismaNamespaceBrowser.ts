@@ -74,7 +74,8 @@ export const ModelName = {
   JokerSlot: 'JokerSlot',
   DinnerDuty: 'DinnerDuty',
   DutyHistory: 'DutyHistory',
-  TicketWaitlist: 'TicketWaitlist'
+  TicketWaitlist: 'TicketWaitlist',
+  Expense: 'Expense'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -181,7 +182,6 @@ export const DinnerEventScalarFieldEnum = {
   menuDescription: 'menuDescription',
   menuPictureUrl: 'menuPictureUrl',
   state: 'state',
-  totalCost: 'totalCost',
   heynaboEventId: 'heynaboEventId',
   chefId: 'chefId',
   cookingTeamId: 'cookingTeamId',
@@ -215,9 +215,11 @@ export type OrderScalarFieldEnum = (typeof OrderScalarFieldEnum)[keyof typeof Or
 export const TransactionScalarFieldEnum = {
   id: 'id',
   orderId: 'orderId',
+  type: 'type',
   orderSnapshot: 'orderSnapshot',
   userSnapshot: 'userSnapshot',
   amount: 'amount',
+  description: 'description',
   userEmailHandle: 'userEmailHandle',
   createdAt: 'createdAt',
   invoiceId: 'invoiceId'
@@ -425,6 +427,21 @@ export const TicketWaitlistScalarFieldEnum = {
 } as const
 
 export type TicketWaitlistScalarFieldEnum = (typeof TicketWaitlistScalarFieldEnum)[keyof typeof TicketWaitlistScalarFieldEnum]
+
+
+export const ExpenseScalarFieldEnum = {
+  id: 'id',
+  type: 'type',
+  dinnerEventId: 'dinnerEventId',
+  paidByUserId: 'paidByUserId',
+  userSnapshot: 'userSnapshot',
+  amount: 'amount',
+  description: 'description',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type ExpenseScalarFieldEnum = (typeof ExpenseScalarFieldEnum)[keyof typeof ExpenseScalarFieldEnum]
 
 
 export const SortOrder = {

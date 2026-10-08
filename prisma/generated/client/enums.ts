@@ -141,3 +141,11 @@ export const DutyOrigin = {
 } as const
 
 export type DutyOrigin = (typeof DutyOrigin)[keyof typeof DutyOrigin]
+
+
+export const LedgerEntryType = {
+  REGULAR: 'REGULAR',
+  ADHOC: 'ADHOC'
+} as const
+
+export type LedgerEntryType = (typeof LedgerEntryType)[keyof typeof LedgerEntryType]

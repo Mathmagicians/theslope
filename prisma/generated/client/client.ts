@@ -158,3 +158,8 @@ export type DutyHistory = Prisma.DutyHistoryModel
  * 
  */
 export type TicketWaitlist = Prisma.TicketWaitlistModel
+/**
+ * Model Expense
+ * 
+ */
+export type Expense = Prisma.ExpenseModel
