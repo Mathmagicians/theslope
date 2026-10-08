@@ -47,7 +47,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, NOISE } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, NOISE, COMPONENTS, TYPOGRAPHY } = useTheSlopeDesignSystem()
 
 // Responsive mount point for the detail panel - provided by the default layout;
 // false during SSR, so first paint renders the mobile mount
@@ -282,13 +282,13 @@ const catalogEmptyState = {
 
     <UCard
         data-testid="admin-allergies"
-        class="w-full px-0"
+        :class="COMPONENTS.allergyCatalogPage.card"
     >
       <template #header>
-        <div class="flex flex-col gap-4">
-          <div class="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div class="text-lg font-semibold">Allergi Katalog</div>
-            <div class="flex items-center gap-2">
+        <div :class="COMPONENTS.allergyCatalogPage.header">
+          <div :class="COMPONENTS.allergyCatalogPage.titleRow">
+            <div :class="TYPOGRAPHY.cardTitle">Allergi Katalog</div>
+            <div :class="COMPONENTS.allergyCatalogPage.headerActions">
               <UButton
                   :color="COLOR.secondary"
                   :variant="NOISE.medium"
@@ -315,7 +315,7 @@ const catalogEmptyState = {
       <!-- Single root in the card body - a multi-root slot hydrates as a fragment -->
       <div>
       <!-- Toolbar - ONE instance, serves both compare and single-select modes -->
-      <div :class="[LAYOUTS.cardActionRow, 'mb-4']">
+      <div :class="[LAYOUTS.cardActionRow, COMPONENTS.allergyCatalogPage.toolbar]">
         <UButton
             v-bind="BUTTONS.secondaryAction"
             :class="LAYOUTS.cardActionButton"
@@ -356,7 +356,6 @@ const catalogEmptyState = {
           v-if="multiselectMode"
           v-model="selectedAllergyIds"
           :allergy-types="sortedAllergyTypes"
-          mode="edit"
           :show-statistics="true"
           :show-new-badge="true"
       />
@@ -365,12 +364,12 @@ const catalogEmptyState = {
            The detail panel docks in the expanded row on mobile, in the sticky pane on md+ -->
       <div v-else :class="LAYOUTS.masterDetailPage.root">
         <!-- CREATE (mobile) - docks under the toolbar, adjacent to the button that opened it -->
-        <div v-if="!isMd && panelMode === 'create'" class="mb-2">
+        <div v-if="!isMd && panelMode === 'create'" :class="COMPONENTS.allergyCatalogPage.createDock">
           <AllergyDetailPanel v-bind="panelProps" v-on="panelEvents"/>
         </div>
 
         <!-- MASTER -->
-        <div :class="[LAYOUTS.masterDetailPage.left, 'min-w-0']">
+        <div :class="[LAYOUTS.masterDetailPage.left, COMPONENTS.allergyCatalogPage.column]">
           <AllergyCatalogTable
               v-model:expanded="expanded"
               mode="single"
@@ -416,7 +415,7 @@ const catalogEmptyState = {
         <!-- DETAIL (md+) - sticky pane that follows the catalog as it scrolls -->
         <div
             v-if="isMd"
-            :class="[LAYOUTS.masterDetailPage.center, 'min-w-0 flex justify-center items-start md:sticky md:top-4 self-start']"
+            :class="[LAYOUTS.masterDetailPage.center, COMPONENTS.allergyCatalogPage.stickyDetail]"
         >
           <AllergyDetailPanel v-bind="panelProps" v-on="panelEvents"/>
         </div>

@@ -8,6 +8,9 @@ const playwrightStub = fileURLToPath(new URL('./tests/component/playwrightStub.t
 
 export default defineConfig({
     test: {
+        // Vitest writes its attachments, blob and json output under test-results, beside Playwright's
+        attachmentsDir: 'test-results/vitest/attachments',
+        outputFile: {json: 'test-results/vitest/results.json', blob: 'test-results/vitest/blob'},
         projects: [
             {
                 test: {

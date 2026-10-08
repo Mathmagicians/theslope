@@ -11,6 +11,8 @@ import testHelpers from '../testHelpers'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import { AllergyFactory } from '~~/tests/e2e/testDataFactories/allergyFactory'
+import type { AllergyTypeDisplay } from '~/composables/useAllergyValidation'
 
 const { headers, salt, temporaryAndRandom, getSessionUserInfo } = testHelpers
 
@@ -104,6 +106,32 @@ export class OrderFactory {
     },
     ...overrides
   })
+
+  /** An order whose inhabitant carries one allergy per given type, the diner the allergy overviews count */
+  static readonly defaultOrderDetailWithAllergies = (
+    inhabitantId: number,
+    name: string,
+    allergyTypes: AllergyTypeDisplay[] = [],
+    overrides?: Partial<OrderDetail>
+  ): OrderDetail => {
+    const base = OrderFactory.defaultOrderDetail(`allergy-${inhabitantId}`, {id: inhabitantId, inhabitantId, ...overrides})
+    const [allergyTemplate] = AllergyFactory.createMockAllergies()
+    return {
+      ...base,
+      inhabitant: {
+        ...base.inhabitant,
+        id: inhabitantId,
+        name,
+        allergies: allergyTypes.map(allergyType => ({
+          ...allergyTemplate!,
+          id: inhabitantId * 10 + allergyType.id,
+          inhabitantId,
+          allergyTypeId: allergyType.id,
+          allergyType
+        }))
+      }
+    }
+  }
 
   static readonly defaultCreateOrdersRequest = (overrides?: Partial<CreateOrdersRequest>): CreateOrdersRequest => {
     const defaults = {

@@ -1,7 +1,8 @@
 import {describe, it, expect, vi, beforeAll, beforeEach, expectTypeOf} from 'vitest'
-import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {clearNuxtData} from '#app'
-import {ref, type Ref} from 'vue'
+import {registerEndpoint, mockNuxtImport, mountSuspended} from '@nuxt/test-utils/runtime'
+import {clearNuxtData, useNuxtApp} from '#app'
+import {ref, h, defineComponent, type Ref} from 'vue'
+import {defineStore, type Pinia} from 'pinia'
 import {useApiHandler, resolveUncaughtApiError, type StoreAsyncDataOptions} from '~/composables/useApiHandler'
 import {useAllergyValidation, type AllergyTypeDetail} from '~/composables/useAllergyValidation'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
@@ -52,6 +53,8 @@ describe('useApiHandler', () => {
     })
 
     describe('storeAsyncData', () => {
+        // Long enough for a second, unwanted request to land before the counts are read
+        const settled = () => new Promise(resolve => setTimeout(resolve, 50))
         const readCatalog = (key: string, options: Pick<StoreAsyncDataOptions<AllergyTypeDetail[]>, 'immediate' | 'watch'> = {}) =>
             storeAsyncData(key, CATALOG, {schema: AllergyTypeDetailSchema.array(), default: () => [], errorMessage: ERROR_MESSAGE, ...options})
 
@@ -194,8 +197,6 @@ describe('useApiHandler', () => {
             const TOAST = 'Kan ikke finde allergitypen'
             const MESSAGE = 'Den findes ikke længere'
             const DEFAULT_TEXT = 'Kan ikke finde det, du leder efter'
-            // Long enough for a second, unwanted request to land before the counts are read
-            const settled = () => new Promise(resolve => setTimeout(resolve, 50))
             // The selection a store holds: the url derives from it, recover replaces it
             const readSelection = (key: string, path: Ref<string>, options: Pick<Options, 'notFound' | 'errorMessage'>) =>
                 storeAsyncData(key, () => path.value, {schema: AllergyTypeDetailSchema.array(), default: () => [], ...options})
@@ -303,6 +304,49 @@ describe('useApiHandler', () => {
                 expect(lastToast()?.description).toBe(expected)
                 expect(String(lastToast()?.title)).toContain('404')
                 expect(showErrorSpy).not.toHaveBeenCalled()
+            })
+        })
+
+        describe('hydrating a server render', () => {
+            // The server render left the selection in the pinia state; pinia hydrates it after the store's setup
+            const hydrate = async (id: string, served: AllergyTypeDetail[] | undefined) => {
+                const useSelectionStore = defineStore(id, () => {
+                    const selectedId = ref<number | null>(null)
+                    const {data} = storeAsyncData(id, () => `${CATALOG}/${selectedId.value}`, {
+                        schema: AllergyTypeDetailSchema.array(), default: () => [], enabled: () => !!selectedId.value
+                    })
+                    return {selectedId, data}
+                })
+                const nuxtApp = useNuxtApp()
+                ;(nuxtApp.$pinia as Pinia).state.value[id] = {selectedId: 2, data: served ?? []}
+                if (served) nuxtApp.payload.data[id] = served
+                nuxtApp.isHydrating = true
+                nuxtApp.payload.serverRendered = true
+                // Hydration ends when the app's suspense resolves, after the jobs the setup queued
+                try {
+                    const wrapper = await mountSuspended(defineComponent({
+                        setup: () => {
+                            const store = useSelectionStore()
+                            return () => h('span', store.data.length)
+                        }
+                    }))
+                    await settled()
+                    return wrapper
+                } finally {
+                    nuxtApp.isHydrating = false
+                    nuxtApp.payload.serverRendered = false
+                }
+            }
+
+            it.each([
+                {description: 'idle with its gate open fetches once', id: 'hydrated-idle', served: undefined, requests: 1},
+                {description: 'with data does not fetch', id: 'hydrated-data', served: AllergyFactory.createMockAllergyTypesWithInhabitants().slice(0, 1), requests: 0}
+            ])('a gated dataset that hydrates $description', async ({id, served, requests}) => {
+                const wrapper = await hydrate(id, served)
+
+                await settled()
+                expect(foundEndpoint).toHaveBeenCalledTimes(requests)
+                expect(wrapper.text()).toBe('1')
             })
         })
     })

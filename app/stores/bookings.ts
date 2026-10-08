@@ -2,6 +2,7 @@ import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, 
 import type {MonthlyBillingResponse} from '~/composables/useBillingValidation'
 import {type ReleasedTicketCounts, resolveDesiredOrdersToBuckets} from '~/composables/useBooking'
 import {useBilling} from '~/composables/useBilling'
+import {isSameDay} from 'date-fns'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
@@ -382,8 +383,13 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // DINNER EVENT ACTIONS
     type DinnerUpdate = Partial<DinnerEventUpdate> & { allergenIds?: number[], state?: typeof DinnerState[keyof typeof DinnerState] }
 
-    const selectedDinnerEventId = ref<number | null>(null)
-    const selectedDinnerEventKey = computed(() => `dinner-event-detail-${selectedDinnerEventId.value || 'null'}`)
+    // The page names the date it shows; the dinner on that date resolves from the selected season
+    const dinnerDate = shallowRef<() => Date | null>(() => null)
+    const selectedDinnerEventId = computed(() => {
+        const date = dinnerDate.value()
+        if (!date) return null
+        return planStore.selectedSeason?.dinnerEvents?.find(dinner => isSameDay(dinner.date, date))?.id ?? null
+    })
 
     const {
         data: selectedDinnerEventDetail,
@@ -391,16 +397,17 @@ export const useBookingsStore = defineStore("Bookings", () => {
         error: selectedDinnerEventError,
         refresh: refreshSelectedDinnerEventDetail
     } = storeAsyncData(
-        selectedDinnerEventKey,
+        'bookings-store-selected-dinner-event',
         () => `/api/admin/dinner-event/${selectedDinnerEventId.value}`,
         {
             schema: DinnerEventDetailSchema.nullable(),
             default: () => null,
             enabled: () => !!selectedDinnerEventId.value,
+            dependsOn: [planStore.selectedSeasonDataset],
             errorMessage: 'Kunne ikke hente fællesspisning',
             notFound: {
                 recover: () => {
-                    selectedDinnerEventId.value = null
+                    dinnerDate.value = () => null
                 },
                 retries: 0,
                 toast: 'Kan ikke finde middagen',
@@ -416,9 +423,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const isSelectedDinnerEventErrored = computed(() => selectedDinnerEventStatus.value === 'error')
     const isSelectedDinnerEventInitialized = computed(() => selectedDinnerEventStatus.value === 'success')
 
-    const loadDinnerEventDetail = (id: number | null) => {
-        selectedDinnerEventId.value = id
-        if (id) console.info(`${CTX} Loading dinner event detail: ${id}`)
+    const selectDinnerDate = (date: MaybeRefOrGetter<Date | null>) => {
+        dinnerDate.value = () => toValue(date)
     }
 
     const isDinnerUpdating = ref(false)
@@ -726,15 +732,14 @@ export const useBookingsStore = defineStore("Bookings", () => {
         processMultipleEventsBookings,
         processAdminCorrection,
 
-        // dinner event detail (reactive-key, store-owned per ADR-007)
-        // A getter, not state: Pinia hydrates state refs, and the selection is set only through loadDinnerEventDetail
-        selectedDinnerEventId: computed(() => selectedDinnerEventId.value),
+        // dinner event detail (store-owned per ADR-007)
+        selectedDinnerEventId,
         selectedDinnerEventDetail,
         selectedDinnerEventError,
         isSelectedDinnerEventLoading,
         isSelectedDinnerEventErrored,
         isSelectedDinnerEventInitialized,
-        loadDinnerEventDetail,
+        selectDinnerDate,
         refreshSelectedDinnerEventDetail,
 
         // dinner event actions

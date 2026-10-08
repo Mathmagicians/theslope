@@ -12,52 +12,59 @@ export interface AffectedDiner {
   matchingAllergens: AllergyTypeDisplay[]
 }
 
-// Statistics for affected diners
+// Statistics for affected diners; portions are kuverter in the kitchen panel's weights
 export interface AffectedDinersResult {
   totalAffected: number
+  totalPortions: number
   affectedList: AffectedDiner[]
   breakdownByAllergen: Array<{
+    id: number
     name: string
     icon: string | null
     count: number
+    portions: number
   }>
 }
 
-// Statistics for all inhabitants with allergies (used for UserListItem display)
-export interface AllergyStatisticsResult {
-  totalInhabitants: number
-  uniqueInhabitantsList: InhabitantDisplay[]
-  breakdownByAllergy: Array<{
+// The allergy overview of a set of allergens: every allergen in the given order, zero kuverter included
+export interface AllergenOverview {
+  totalPortions: number
+  affectedList: AffectedDiner[]
+  breakdownByAllergen: Array<{
+    id: number
     name: string
-    icon: string | null
-    count: number
+    portions: number
   }>
 }
 
 export const useAllergy = () => {
+  const {calculateTotalPortionsFromPrices} = useOrder()
 
   /**
-   * Computes which diners are affected by menu allergens.
-   * Uses orders' inhabitant allergies (already fetched in DinnerEventDetail).
+   * Computes which diners carry an allergy, from the orders' inhabitant allergies (already fetched in DinnerEventDetail).
+   * With menu allergen ids it counts only the allergies on the menu; without, every registered allergy.
    *
-   * Answers: "Who eating THIS dinner is affected by these menu allergens?"
+   * Answers: "Who eating THIS dinner is affected, and how many kuverter is that?"
    */
   const computeAffectedDiners = (
     orders: OrderDetail[],
-    menuAllergenIds: number[]
+    menuAllergenIds?: number[]
   ): AffectedDinersResult | null => {
-    if (menuAllergenIds.length === 0) return null
+    if (menuAllergenIds?.length === 0) return null
 
-    const menuAllergenIdSet = new Set(menuAllergenIds)
+    const menuAllergenIdSet = menuAllergenIds ? new Set(menuAllergenIds) : null
     const affectedInhabitants = new Map<number, AffectedDiner>()
-    const allergenCounts = new Map<string, { name: string; icon: string | null; count: number }>()
+    const affectedOrders: OrderDetail[] = []
+    const ordersByAllergen = new Map<number, { id: number; name: string; icon: string | null; orders: OrderDetail[] }>()
 
     orders.forEach(order => {
       const matchingAllergies = order.inhabitant.allergies?.filter(
-        (allergy: AllergyDisplay) => menuAllergenIdSet.has(allergy.allergyTypeId)
+        (allergy: AllergyDisplay) => !menuAllergenIdSet || menuAllergenIdSet.has(allergy.allergyTypeId)
       ) ?? []
 
       if (matchingAllergies.length > 0) {
+        affectedOrders.push(order)
+
         // Track unique affected inhabitants
         if (!affectedInhabitants.has(order.inhabitant.id)) {
           affectedInhabitants.set(order.inhabitant.id, {
@@ -66,17 +73,16 @@ export const useAllergy = () => {
           })
         }
 
-        // Count per allergen
         matchingAllergies.forEach((allergy: AllergyDisplay) => {
-          const key = allergy.allergyType.name
-          const existing = allergenCounts.get(key)
+          const existing = ordersByAllergen.get(allergy.allergyTypeId)
           if (existing) {
-            existing.count++
+            existing.orders.push(order)
           } else {
-            allergenCounts.set(key, {
+            ordersByAllergen.set(allergy.allergyTypeId, {
+              id: allergy.allergyTypeId,
               name: allergy.allergyType.name,
               icon: allergy.allergyType.icon ?? null,
-              count: 1
+              orders: [order]
             })
           }
         })
@@ -87,38 +93,27 @@ export const useAllergy = () => {
 
     return {
       totalAffected: affectedInhabitants.size,
+      totalPortions: calculateTotalPortionsFromPrices(affectedOrders),
       affectedList: Array.from(affectedInhabitants.values()),
-      breakdownByAllergen: Array.from(allergenCounts.values()).sort((a, b) => b.count - a.count)
+      breakdownByAllergen: Array.from(ordersByAllergen.values())
+        .map(({id, name, icon, orders}) => ({id, name, icon, count: orders.length, portions: calculateTotalPortionsFromPrices(orders)}))
+        .sort((a, b) => b.portions - a.portions || b.count - a.count)
     }
   }
 
   /**
-   * Computes allergy statistics from AllergyTypeDetail[] (all inhabitants).
-   * Extracted from AllergenMultiSelector for reuse.
+   * The allergy overview of the given allergens on these orders: the kuverter of the diners carrying any of them, and each
+   * allergen in the given order with its kuverter, zero when no diner carries it.
    *
-   * Answers: "Who in the entire community has these allergies?"
+   * Answers: "How many kuverter on THIS dinner does each allergen on the menu touch?"
    */
-  const computeAllergyStatistics = (allergies: AllergyTypeDetail[]): AllergyStatisticsResult | null => {
-    if (allergies.length === 0) return null
-
-    // Get unique inhabitants across all selected allergies (for UserListItem display)
-    const uniqueInhabitants = new Map<number, InhabitantDisplay>()
-    allergies.forEach(allergy => {
-      allergy.inhabitants?.forEach(inhabitant => {
-        if (!uniqueInhabitants.has(inhabitant.id)) {
-          uniqueInhabitants.set(inhabitant.id, inhabitant)
-        }
-      })
-    })
-
+  const computeAllergenOverview = (orders: OrderDetail[], allergens: AllergyTypeDisplay[]): AllergenOverview => {
+    const affected = computeAffectedDiners(orders, allergens.map(allergen => allergen.id))
+    const portionsById = new Map(affected?.breakdownByAllergen.map(({id, portions}) => [id, portions]))
     return {
-      totalInhabitants: uniqueInhabitants.size,
-      uniqueInhabitantsList: Array.from(uniqueInhabitants.values()),
-      breakdownByAllergy: allergies.map(allergy => ({
-        name: allergy.name,
-        icon: allergy.icon ?? null,
-        count: allergy.inhabitants?.length || 0
-      }))
+      totalPortions: affected?.totalPortions ?? 0,
+      affectedList: affected?.affectedList ?? [],
+      breakdownByAllergen: allergens.map(({id, name}) => ({id, name, portions: portionsById.get(id) ?? 0}))
     }
   }
 
@@ -131,8 +126,8 @@ export const useAllergy = () => {
   }
 
   return {
-    computeAffectedDiners,       // For KitchenPreparation (diners only)
-    computeAllergyStatistics,    // For AllergenMultiSelector (all inhabitants)
+    computeAffectedDiners,       // For KitchenPreparation (diners only, menu filter optional)
+    computeAllergenOverview,     // For ChefMenuCard and AllergenMultiSelector (the menu allergens on this dinner)
     hasNewAllergyInhabitants     // For "new" badge in allergy type lists
   }
 }

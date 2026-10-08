@@ -2,19 +2,23 @@ import {test, expect} from '@playwright/test'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
 const {validatedBrowserContext, getSessionUserInfo, headers} = testHelpers
-const {DinnerModeSchema} = useBookingValidation()
+const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
 
 const ORDER_ENDPOINT = '/api/order'
 
 // Variables to store for cleanup and test data
 let testSeasonId: number
 let testSeason: Season
+const testHouseholdIds: number[] = []
+const testAllergyTypeIds: number[] = []
 
 test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
 
@@ -185,6 +189,39 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(response.status()).toBe(400)
     })
 
+    test('GET detail answers each ticket inhabitant with its allergies and their allergy types', async ({browser}) => {
+        // GIVEN: A dinner booked for an inhabitant with an allergy
+        const context = await validatedBrowserContext(browser)
+        const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(context, {}, 1)
+        testHouseholdIds.push(household.id)
+        const inhabitant = inhabitants[0]!
+        const allergyType = await AllergyFactory.createAllergyType(context)
+        testAllergyTypeIds.push(allergyType.id)
+        await AllergyFactory.createAllergy(context, AllergyFactory.defaultAllergyData(inhabitant.id, allergyType.id))
+
+        const dinnerEvent = await DinnerEventFactory.createDinnerEvent(context, {
+            ...DinnerEventFactory.defaultDinnerEvent(),
+            seasonId: testSeasonId
+        })
+        const adultPrice = testSeason.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
+        // Admin session doesn't belong to the test household → adminBypass
+        await OrderFactory.createOrder(context, {
+            householdId: household.id,
+            dinnerEventId: dinnerEvent.id!,
+            orders: [OrderFactory.defaultOrderItem({inhabitantId: inhabitant.id, ticketPriceId: adultPrice.id!})]
+        }, 201, true)
+
+        // WHEN: Fetching the dinner detail
+        const detail = await DinnerEventFactory.getDinnerEvent(context, dinnerEvent.id!)
+
+        // THEN: The ticket inhabitant carries the allergy with its allergy type
+        const ticket = detail!.tickets!.find(t => t.inhabitantId === inhabitant.id)
+        expect(ticket?.inhabitant.allergies).toMatchObject([{
+            allergyTypeId: allergyType.id,
+            allergyType: {id: allergyType.id, name: allergyType.name}
+        }])
+    })
+
     test('DELETE can remove existing dinner event with status 200', async ({browser}) => {
         // GIVEN: An existing dinner event
         const context = await validatedBrowserContext(browser)
@@ -208,6 +245,10 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
     // Cleanup after all tests
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
+
+        // Household delete cascades its inhabitants' orders and allergies (ADR-005)
+        await HouseholdFactory.deleteHousehold(context, testHouseholdIds)
+        await AllergyFactory.cleanupAllergyTypes(context, testAllergyTypeIds)
 
         // Clean up the test season (CASCADE deletes all dinner events automatically per ADR-005)
         if (testSeasonId) {

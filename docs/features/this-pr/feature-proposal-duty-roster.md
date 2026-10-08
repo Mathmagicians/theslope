@@ -645,7 +645,7 @@ Byt — take a seat here, a seat of yours elsewhere is optional
 The master table and the region beside it stay as `AdminTeams.vue` draws them. Members sit in one box per role, the
 heading carrying the role's glyph once (✅ 2026-10-08); shift counts sit on the member row as glyph columns (chefkok,
 fast tjans, frivillig, i alt). A fourth box, Jokere, lists the team's joker slots, one line per slot with its period,
-weekday, role, note and the count of shifts it covers. Standardvagter is a flip-open collapsible with a count in the
+weekday, role, note and the count of shifts it covers in the team's calendar count badge. Standardvagter is a flip-open collapsible with a count in the
 view face; the Phase 3 editor and the joker slot form open in the edit face, where every change saves at once. Spilleplan is the team calendar's day select
 and renders the signed dinner face without its pencil and pane. Rows in Ledige tjanser carry the gap glyph and a
 Spilleplan link that opens the team with that day selected; teams with a missing chef sort first, then by first gap.
@@ -682,7 +682,7 @@ Team open, view face (md+)
 |   |                  |           | | (plant) Kokkespirer                              | |
 |   |                  |           | | |  (av) Emil  tir              0 ·  8 · 0 ·  8 | | |
 |   |                  |           | | (joker) Jokere                                   | |
-|   |                  |           | | |  07/10-01/12 · tir · (whisk) Kok · Anna barsel   8 vagter | | |
+|   |                  |           | | |  07/10-01/12 · tir · (whisk) Kok · Anna barsel [(calendar) 8] | | |
 |   |                  |           | |                                                  | |
 |   |                  |           | | [>] Standardvagter · 5 vagter                     | |
 |   |                  |           | |                                                  | |
@@ -736,7 +736,7 @@ Phone (375 px), team open, view face, the dock under the row
 |   |  ...                             | |
 |   | (joker) Jokere                   | |
 |   |  07/10-01/12 · tir · Kok         | |
-|   |  Anna barsel · 8 vagter          | |
+|   |  Anna barsel · [(calendar) 8]    | |
 |   | [>] Standardvagter · 5           | |
 |   | Ugedage [man][tir][ons]…         | |
 |   | [calendar, day cells]            | |

@@ -2,12 +2,12 @@
 import {describe, it, expect, beforeEach, vi} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {flushPromises, type VueWrapper} from '@vue/test-utils'
-import {nextTick, type ComponentPublicInstance} from 'vue'
+import {nextTick, ref, type ComponentPublicInstance} from 'vue'
 import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
 import CookingTeamCard from '~/components/cooking-team/CookingTeamCard.vue'
 import {usePlanStore} from '~/stores/plan'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
-import {COMPONENTS, ICONS, ROLE_ICONS} from '~/composables/useTheSlopeDesignSystem'
+import {COMPONENTS, ICONS, ROLE_ICONS, getCalendarCountBadge, createResponsiveSizes} from '~/composables/useTheSlopeDesignSystem'
 import {useCookingTeamValidation, type CookingTeamDetail} from '~/composables/useCookingTeamValidation'
 import type {JokerSlot} from '~/composables/useDutyValidation'
 import {createDefaultWeekdayMap} from '~/types/dateTypes'
@@ -27,6 +27,7 @@ const TEST_IDS = {
     jokerHeading: 'team-role-heading-JOKER',
     jokerBox: 'team-joker-box',
     jokerSlot: 'team-joker-slot',
+    jokerShifts: 'team-joker-slot-shifts',
     memberRow: 'team-member-row',
     memberRemove: (assignmentId: number) => `team-member-remove-${assignmentId}`
 } as const
@@ -134,17 +135,39 @@ describe('CookingTeamCard', () => {
             expect(glyphsInRows.filter(name => roleGlyphs.includes(name))).toEqual([])
         })
 
-        it('the Jokere box lists one line per slot with its period, role, note and shift count', async () => {
+        it('the Jokere box lists one line per slot with its period, role and note', async () => {
             const wrapper = await mountCard(mode)
             const lines = findAllByTestId(findByTestId(wrapper, TEST_IDS.jokerBox), TEST_IDS.jokerSlot)
             expect(lines).toHaveLength(slots.length)
-            slots.forEach(({slot, shifts}, index) => {
+            slots.forEach(({slot}, index) => {
                 const line = lines[index]!
                 expect(line.text()).toContain(`${formatDate(slot.startDate)}-${formatDate(slot.endDate)}`)
                 expect(line.text()).toContain(slot.note!)
-                expect(line.text()).toContain(`${shifts} vagter`)
                 const glyphs = iconsIn(wrapper).filter(icon => line.element.contains(icon.element)).map(icon => icon.props('name'))
                 expect(glyphs).toContain(ROLE_ICONS[slot.role])
+            })
+        })
+
+        // The default slots cover several shifts; a slot ending on its first tuesday covers one
+        it.each([
+            {lines: slots, labels: ['3 vagter', '5 vagter']},
+            {lines: [{slot: jokerSlot({endDate: new Date(2026, 9, 7)}), shifts: 1}], labels: ['1 vagt']}
+        ])('every joker line counts its shifts in the calendar count badge: $labels', async ({lines, labels}) => {
+            const wrapper = await mountCard(mode, {jokerSlots: lines.map(({slot}) => slot)})
+            const countBadge = getCalendarCountBadge(1)
+            const badges = wrapper.findAllComponents({name: 'UBadge'}) as VueWrapper<ComponentPublicInstance<{size?: string}>>[]
+            const rendered = findAllByTestId(findByTestId(wrapper, TEST_IDS.jokerBox), TEST_IDS.jokerSlot)
+            expect(rendered).toHaveLength(lines.length)
+            lines.forEach(({shifts}, index) => {
+                const line = rendered[index]!
+                const badge = findByTestId(line, TEST_IDS.jokerShifts)
+                expect(badge.text()).toBe(String(shifts))
+                expect(badge.attributes('aria-label')).toBe(labels[index])
+                expect(badge.classes()).toEqual(expect.arrayContaining(classesOf(countBadge.class)))
+                expect(badges.find(component => component.element === badge.element)!.props('size')).toBe(createResponsiveSizes(ref(true)).small)
+                const glyphs = iconsIn(wrapper).filter(icon => badge.element.contains(icon.element)).map(icon => icon.props('name'))
+                expect(glyphs).toEqual([countBadge.icon])
+                expect(line.text()).not.toContain('vagt')
             })
         })
 

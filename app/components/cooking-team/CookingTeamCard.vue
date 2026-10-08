@@ -24,7 +24,7 @@
  *   (plant) Kokkespire
  *   |  Ingen kokkespire
  *   (joker) Jokere
- *   |  07/10/2026-01/12/2026  tir  (whisk) Kok  Anna barsel  8 vagter   [(trash)]   <- edit face only
+ *   |  07/10/2026-01/12/2026  tir  (whisk) Kok  Anna barsel  [(calendar) 8]   [(trash)]   <- edit face only
  *   |  [ + Tilføj jokertjans v ]                                        <- edit face, opens JokerSlotForm below
  *
  * Already volunteered:
@@ -50,7 +50,7 @@ import { ROLE_LABELS } from '~/composables/useCookingTeamValidation'
 import type { JokerSlotCreate } from '~/composables/useDutyValidation'
 
 // Design system
-const { SIZES, ICONS, ALERTS, BUTTONS, COLOR, TYPOGRAPHY, COMPONENTS, ROLE_ICONS, getRainbowBand, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { SIZES, ICONS, ALERTS, BUTTONS, COLOR, TYPOGRAPHY, COMPONENTS, ROLE_ICONS, getRainbowBand, getCalendarCountBadge, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 type DisplayMode = 'monitor' | 'regular' | 'edit'
 
@@ -443,7 +443,14 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                   <UIcon :name="ROLE_ICONS[slot.role]" :class="COMPONENTS.roleBox.glyph" />
                   <span>{{ ROLE_LABELS[slot.role] }}</span>
                   <span v-if="slot.note">{{ slot.note }}</span>
-                  <span>{{ shifts }} {{ shifts === 1 ? 'vagt' : 'vagter' }}</span>
+                  <UBadge
+                    v-bind="getCalendarCountBadge(teamNumber)"
+                    :size="SIZES.small"
+                    :aria-label="`${shifts} ${shifts === 1 ? 'vagt' : 'vagter'}`"
+                    data-testid="team-joker-slot-shifts"
+                  >
+                    {{ shifts }}
+                  </UBadge>
                   <UButton
                     v-if="isEditable"
                     v-bind="BUTTONS.edit"

@@ -22,6 +22,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {formatDate} from '~/utils/date'
+import {addDays} from 'date-fns'
 import {flushPromises} from '@vue/test-utils'
 import {asyncDataStatus, resetStores} from '~~/tests/component/testHelpers'
 
@@ -365,8 +366,6 @@ describe('Bookings store — gated reads', () => {
             endpoint: ordersEndpoint, request: (store: Store) => store.loadOrdersForDinners({dinnerEventIds: [ID]})},
         {dataset: 'upcoming orders', idleKey: 'bookings-store-upcoming-orders', requestedKey: 'bookings-store-upcoming-orders',
             endpoint: ordersEndpoint, request: (store: Store) => store.loadUpcomingOrders(true)},
-        {dataset: 'selected dinner event', idleKey: 'dinner-event-detail-null', requestedKey: `dinner-event-detail-${ID}`,
-            endpoint: dinnerEventDetailEndpoint, request: (store: Store) => store.loadDinnerEventDetail(ID)},
         {dataset: 'household billing', idleKey: 'bookings-store-household-billing', requestedKey: 'bookings-store-household-billing',
             endpoint: householdBillingEndpoint, request: (store: Store) => store.loadHouseholdBilling()},
         {dataset: 'selected billing period', idleKey: 'billing-period-null', requestedKey: `billing-period-${ID}`,
@@ -418,16 +417,55 @@ describe('Bookings store — gated reads', () => {
     })
 })
 
-describe('Bookings store — a selected dinner that no longer exists', () => {
+describe('Bookings store — the dinner on the selected date', () => {
+    const DETAIL_KEY = 'bookings-store-selected-dinner-event'
+    const selectedDinner = {...DinnerEventFactory.defaultDinnerEventDisplay('selected-date'), id: 1}
+    const goneDinner = {...selectedDinner, id: GONE_DINNER_ID}
+    const dinnerDate = new Date(selectedDinner.date)
+
     beforeEach(() => {
         resetStores()
         showErrorSpy.mockImplementation((error: {statusCode: number, message: string}) => createError(error))
     })
 
-    it('drops the dinner selection and shows the error page with a dinnerGone line', async () => {
+    it('is idle and unrequested with no date selected', async () => {
+        selectSeason([selectedDinner])
+        useBookingsStore()
+
+        await vi.waitFor(() => expect(usePlanStore().isPlanStoreReady).toBe(true))
+        expect(asyncDataStatus(DETAIL_KEY)).toBe('idle')
+        expect(dinnerEventDetailEndpoint).not.toHaveBeenCalled()
+    })
+
+    it('loads the Detail of the season\'s dinner on the selected date once the season has loaded', async () => {
+        selectSeason([selectedDinner])
         const store = useBookingsStore()
 
-        store.loadDinnerEventDetail(GONE_DINNER_ID)
+        store.selectDinnerDate(() => dinnerDate)
+
+        await vi.waitFor(() => expect(asyncDataStatus(DETAIL_KEY)).toBe('success'))
+        expect(store.selectedDinnerEventId).toBe(selectedDinner.id)
+        expect(dinnerEventDetailEndpoint).toHaveBeenCalledTimes(1)
+    })
+
+    it('reads idle and unrequested when no dinner falls on the selected date', async () => {
+        selectSeason([selectedDinner])
+        const store = useBookingsStore()
+
+        store.selectDinnerDate(() => addDays(dinnerDate, 1))
+
+        await vi.waitFor(() => expect(usePlanStore().isSelectedSeasonInitialized).toBe(true))
+        await flushPromises()
+        expect(store.selectedDinnerEventId).toBeNull()
+        expect(asyncDataStatus(DETAIL_KEY)).toBe('idle')
+        expect(dinnerEventDetailEndpoint).not.toHaveBeenCalled()
+    })
+
+    it('drops the date selection and shows the error page with a dinnerGone line when the dinner no longer exists', async () => {
+        selectSeason([goneDinner])
+        const store = useBookingsStore()
+
+        store.selectDinnerDate(() => dinnerDate)
 
         await vi.waitFor(() => expect(showErrorSpy).toHaveBeenCalledTimes(1))
         const shownLines = EMPTY_STATE_MESSAGES.dinnerGone.map(({emoji, text}) => `${emoji} ${text}`)

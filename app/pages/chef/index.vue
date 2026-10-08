@@ -160,10 +160,8 @@ const selectedDinnerEvent = computed(() => {
 
 const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
 
-watchEffect(() => {
-  const id = selectedDinnerId.value
-  if (id !== null) bookingsStore.loadDinnerEventDetail(id)
-})
+// Only the team's own dinners: the store resolves the date against the selected season
+bookingsStore.selectDinnerDate(() => selectedDinnerEvent.value ? selectedDate.value : null)
 
 const handleDinnerSelect = (dinnerId: number) => {
   const dinner = teamDinnerEvents.value.find((e: DinnerEventDisplay) => e.id === dinnerId)

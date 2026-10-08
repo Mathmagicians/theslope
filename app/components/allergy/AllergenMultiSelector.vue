@@ -1,72 +1,47 @@
 <!--
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ AllergenMultiSelector - Reusable allergen multiselect component            │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│ EDIT MODE (table + statistics):                                            │
-│ ┌─────────────────────────────────────────────────────────────────────────┐│
-│ │ MASTER                        │  DETAIL                                 ││
-│ │ ┌──────────────────────────┐  │ ┌─────────────────────────────────────┐││
-│ │ │ ☑ Icon  Name     Count   │  │ │ 📊 Statistik                        │││
-│ │ ├──────────────────────────┤  │ │                                     │││
-│ │ │ ☑ 🥛  Mælk       2       │  │ │ Unikke beboere berørt: 3            │││
-│ │ │ ☐ 🥜  Jordnødder 2       │  │ │ 👤 Anna, Bob, Clara                 │││
-│ │ │ ☑ 🌾  Gluten     1       │  │ │                                     │││
-│ │ └──────────────────────────┘  │ │ Fordeling pr. allergen:             │││
-│ │                               │ │ 🥛 Mælk: 2                          │││
-│ │                               │ │ 🌾 Gluten: 1                        │││
-│ │                               │ └─────────────────────────────────────┘││
-│ └─────────────────────────────────────────────────────────────────────────┘│
-│                                                                             │
-│ VIEW MODE (compact):                                                        │
-│ ┌─────────────────────────────────────────────────────────────────────────┐│
-│ │ 🥛 Mælk   🌾 Gluten   +1                                                ││
-│ │ 👤 👤 👤   3 beboere berørt                                             ││
-│ └─────────────────────────────────────────────────────────────────────────┘│
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+AllergenMultiSelector - the allergy catalog as a multiselect beside the allergy panel of a dinner's diners
+
+| ☑ (milk)  Mælk & Smør     2,5  |  (allergy) Allergier blandt gæsterne                     |
+| ☑ (nuts)  Nødder           1   |  3,5 kuv. | Mælk · 2,5 | Nødder · 1                      |
+| ☐ (wheat) Gluten           0   |  [v] Hvem                                                |
+|                                |      Dorthe (milk), Skraaningen (milk), Martin (nuts)    |
+
+The count column and the panel read `tickets`: the kuverter of the diners carrying each allergen, and the
+overview of the selected allergens in the catalog's order, a zero included. Without tickets the count column
+and the panel render nothing. On a phone the panel lands below the catalog and a fixed bar summarises the
+selection and jumps to it.
 
 USAGE:
 
-Allergy Manager (AdminAllergies):
+Chef (ChefMenuCard - editing the menu's allergens):
+  <AllergenMultiSelector
+    v-model="draftAllergenIds"
+    :allergy-types="allergyTypes"
+    :tickets="dinnerEvent.tickets ?? []"
+  />
+
+Allergy Manager (AdminAllergies - compare):
   <AllergenMultiSelector
     v-model="selectedAllergyIds"
     :allergy-types="allergyTypes"
-    mode="edit"
-    :show-statistics="true"
     :show-new-badge="true"
-  />
-
-Chef (ChefMenuCard - readonly view):
-  <AllergenMultiSelector
-    :model-value="dinner.allergenIds"
-    :allergy-types="allergyTypes"
-    mode="view"
-    readonly
-  />
-
-Chef (ChefMenuCard - editing):
-  <AllergenMultiSelector
-    v-model="dinner.allergenIds"
-    :allergy-types="allergyTypes"
-    mode="edit"
-    :show-statistics="true"
   />
 -->
 <script setup lang="ts">
 import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
+import type {OrderDetail} from '~/composables/useBookingValidation'
 
 interface Props {
   modelValue: number[]               // Selected allergen IDs
-  allergyTypes: AllergyTypeDetail[]  // Full list with inhabitants
-  mode?: 'view' | 'edit'             // View (compact) vs Edit (table)
-  showStatistics?: boolean           // Show affected people panel (default: true)
+  allergyTypes: AllergyTypeDetail[]  // The catalog
+  tickets?: OrderDetail[]            // The dinner's diners the counts and the panel read
+  showStatistics?: boolean           // Show the allergy panel (default: true)
   showNewBadge?: boolean             // Show "new" column (default: false)
   readonly?: boolean                 // Prevent selection changes
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  mode: 'edit',
+  tickets: undefined,
   showStatistics: true,
   showNewBadge: false,
   readonly: false
@@ -77,175 +52,106 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { COLOR, SIZES, ALERTS, TYPOGRAPHY, ICONS, BG, NOISE } = useTheSlopeDesignSystem()
+const { COLOR, ALERTS, ICONS, BUTTONS, NOISE, COMPONENTS } = useTheSlopeDesignSystem()
 
-// Internal selection state (Set for efficient .has() lookup)
-const selectedAllergyIds = ref<Set<number>>(new Set(props.modelValue))
-
-// Sync internal Set with external Array prop
-watch(() => props.modelValue, (newVal) => {
-  selectedAllergyIds.value = new Set(newVal)
-}, { immediate: true })
+const {computeAllergenOverview} = useAllergy()
 
 // Forward the shared table's selection (readonly is enforced inside the table)
 const handleSelectionChange = (value: number | number[] | null) => {
   if (Array.isArray(value)) emit('update:modelValue', value)
 }
 
-// Scroll target for the mobile summary bar - the statistics panel below the list
-const statisticsPanel = ref<HTMLElement | null>(null)
-const scrollToStatistics = () => statisticsPanel.value?.scrollIntoView({behavior: 'smooth', block: 'start'})
+// Scroll target for the mobile summary bar - the allergy panel below the list
+const allergyPanel = ref<HTMLElement | null>(null)
+const scrollToAllergyPanel = () => allergyPanel.value?.scrollIntoView({behavior: 'smooth', block: 'start'})
 
-// Computed for selected allergies
-const selectedAllergies = computed(() =>
-    props.allergyTypes.filter(at => at.id && selectedAllergyIds.value.has(at.id))
-)
-
-// Statistics for selected allergies
-const allergyStatistics = computed(() => {
-  if (selectedAllergies.value.length === 0) return null
-
-  // Get unique inhabitants across all selected allergies
-  const uniqueInhabitants = new Map()
-  selectedAllergies.value.forEach(allergy => {
-    allergy.inhabitants?.forEach(inhabitant => {
-      if (!uniqueInhabitants.has(inhabitant.id)) {
-        uniqueInhabitants.set(inhabitant.id, inhabitant)
-      }
-    })
-  })
-
-  return {
-    totalInhabitants: uniqueInhabitants.size,
-    uniqueInhabitantsList: Array.from(uniqueInhabitants.values()),
-    breakdownByAllergy: selectedAllergies.value.map(allergy => ({
-      name: allergy.name,
-      icon: allergy.icon,
-      count: allergy.inhabitants?.length || 0
-    }))
-  }
+const selectedAllergies = computed(() => {
+  const selectedIds = new Set(props.modelValue)
+  return props.allergyTypes.filter(allergyType => selectedIds.has(allergyType.id))
 })
 
+const portionsById = computed(() => props.tickets
+  ? new Map(computeAllergenOverview(props.tickets, props.allergyTypes).breakdownByAllergen.map(({id, portions}) => [id, portions]))
+  : undefined
+)
+
+const guestAllergies = computed(() => props.tickets && selectedAllergies.value.length > 0
+  ? computeAllergenOverview(props.tickets, selectedAllergies.value)
+  : null
+)
+
+const isWhoOpen = ref(false)
+
+// The icon slot grows on top of the kind's ui, so the kind's wrap classes survive
+const panelUi = {...ALERTS.legend.ui, icon: COMPONENTS.allergenSelector.panelIcon}
 </script>
 
 <template>
-  <!-- VIEW MODE: Compact display -->
-  <div v-if="mode === 'view'" class="space-y-2">
-    <!-- Has allergens: show title + badges -->
-    <template v-if="selectedAllergies.length > 0">
-      <h4 :class="TYPOGRAPHY.sectionSubheading">Allergener i menuen</h4>
-      <div class="flex flex-wrap gap-2">
-        <UBadge
-            v-for="allergy in selectedAllergies"
-            :key="allergy.id"
-            :color="COLOR.error"
-            :variant="NOISE.subtle"
-            :size="SIZES.standard"
-        >
-          <span class="mr-1">{{ allergy.icon || '🏷️' }}</span>
-          {{ allergy.name }}
-        </UBadge>
-      </div>
-
-      <!-- Compact statistics -->
-      <div v-if="allergyStatistics && showStatistics" class="flex items-center gap-2" :class="TYPOGRAPHY.bodyTextMuted">
-        <UserListItem
-            :inhabitants="allergyStatistics.uniqueInhabitantsList"
-            compact
-            label="beboer"
-        />
-        <span>berørt af allergener</span>
-      </div>
-    </template>
-
-    <!-- Empty state - subtle, no title -->
-    <UAlert
-        v-else
-        v-bind="ALERTS.emptyStateCompact"
-        :icon="ICONS.allergy"
-        description="Ingen allergener i menuen"
-    />
-  </div>
-
-  <!-- EDIT MODE: Master-Detail Layout (responsive); bottom padding keeps the last
-       rows clear of the fixed summary bar on mobile -->
-  <div v-else class="flex flex-col md:flex-row gap-4 md:gap-6" :class="allergyStatistics ? 'pb-16 md:pb-0' : ''">
+  <div :class="[COMPONENTS.allergenSelector.root, guestAllergies && showStatistics && COMPONENTS.allergenSelector.withSummaryBar]">
     <!-- MASTER PANEL (shared catalog table) -->
-    <div class="md:w-1/3">
+    <div :class="COMPONENTS.allergenSelector.master">
       <AllergyCatalogTable
           mode="multi"
           :allergy-types="allergyTypes"
           :model-value="modelValue"
           :show-new-badge="showNewBadge"
+          :show-count="!!tickets"
+          :portions-by-id="portionsById"
           :readonly="readonly"
           @update:model-value="handleSelectionChange"
       />
     </div>
 
     <!-- Mobile summary - fixed to the viewport bottom (an overflow-clipping card
-         ancestor keeps position:sticky from ever pinning); taps jump down to 📊 -->
+         ancestor keeps position:sticky from ever pinning); taps jump down to the panel -->
     <UButton
-        v-if="showStatistics && allergyStatistics"
+        v-if="showStatistics && guestAllergies"
         data-testid="compare-summary-bar"
         :color="COLOR.neutral"
         :variant="NOISE.medium"
         block
         :trailing-icon="ICONS.chevronDown"
-        class="md:hidden fixed bottom-4 inset-x-4 z-50 bg-elevated shadow-lg"
-        @click="scrollToStatistics"
+        :class="COMPONENTS.allergenSelector.summaryBar"
+        @click="scrollToAllergyPanel"
     >
-      🧮 {{ selectedAllergies.length }} valgte · {{ allergyStatistics.totalInhabitants }} beboer{{ allergyStatistics.totalInhabitants === 1 ? '' : 'e' }} berørt
+      🧮 {{ selectedAllergies.length }} valgte · {{ formatPortions(guestAllergies.totalPortions) }} kuv.
     </UButton>
 
-    <!-- DETAIL PANEL (Statistics) -->
-    <div v-if="showStatistics" ref="statisticsPanel" class="flex-1 md:border-l md:pl-6">
-      <!-- Statistics panel (with selections) -->
-      <div v-if="allergyStatistics" class="space-y-4">
-        <h3 :class="TYPOGRAPHY.cardTitle">📊 Statistik</h3>
-
-        <UAlert
-            v-bind="ALERTS.info"
-            title="Unikke beboere berørt"
-            description="Disse bofæller kan ikke tåle denne kombination af allergener."
-            :avatar="{text: allergyStatistics.totalInhabitants.toString()}"
-        />
-
-        <!-- Show unique inhabitants -->
-        <div class="space-y-2">
-          <h4 :class="TYPOGRAPHY.sectionSubheading">Berørte beboere</h4>
-          <UserListItem
-              :inhabitants="allergyStatistics.uniqueInhabitantsList"
-              label="beboer"
-              label-plural="beboere"
-          />
-        </div>
-
-        <div class="space-y-2">
-          <h4 :class="TYPOGRAPHY.sectionSubheading">Fordeling pr. allergen</h4>
-          <div
-v-for="item in allergyStatistics.breakdownByAllergy" :key="item.name"
-               :class="['flex items-center justify-between p-2 rounded', BG.inset]">
-            <div class="flex items-center gap-2">
-              <span class="text-lg">{{ item.icon || '�️' }}</span>
-              <span :class="TYPOGRAPHY.bodyTextSmall">{{ item.name }}</span>
-            </div>
-            <span :class="TYPOGRAPHY.bodyTextMedium">{{ item.count }}</span>
-          </div>
-        </div>
-
-        <!-- Show compact selected allergy cards -->
-        <div class="space-y-2">
-          <h4 :class="TYPOGRAPHY.sectionSubheading">Valgte allergier</h4>
-          <div class="space-y-2">
-            <AllergyTypeCard
-                v-for="allergy in selectedAllergies"
-                :key="allergy.id"
-                :allergy-type="allergy"
-                compact
+    <!-- DETAIL PANEL (the allergies among this dinner's guests) -->
+    <div v-if="showStatistics && tickets" ref="allergyPanel" :class="COMPONENTS.allergenSelector.detail">
+      <UAlert
+          v-if="guestAllergies"
+          v-bind="ALERTS.legend"
+          :icon="ICONS.allergy"
+          :ui="panelUi"
+          title="Allergier blandt gæsterne"
+          data-testid="allergy-panel"
+      >
+        <template #description>
+          <div :class="COMPONENTS.allergenSelector.panelBody">
+            <AllergyOverviewLine
+                data-testid="allergy-panel-overview"
+                :total-portions="guestAllergies.totalPortions"
+                :allergens="guestAllergies.breakdownByAllergen"
             />
+            <UButton
+                v-bind="{...BUTTONS.secondaryAction, ...BUTTONS.flipOpen(isWhoOpen)}"
+                :color="COLOR.neutral"
+                data-testid="allergy-panel-who"
+                @click="isWhoOpen = !isWhoOpen"
+            >
+              Hvem
+            </UButton>
+            <div v-if="isWhoOpen" data-testid="allergy-panel-names" :class="COMPONENTS.allergenSelector.names">
+              <template v-for="(diner, index) in guestAllergies.affectedList" :key="diner.inhabitant.id">
+                <span>{{ diner.inhabitant.name }}</span>
+                <AllergyChips :allergy-types="diner.matchingAllergens" />
+                <span v-if="index < guestAllergies.affectedList.length - 1">, </span>
+              </template>
+            </div>
           </div>
-        </div>
-      </div>
+        </template>
+      </UAlert>
 
       <!-- No selection state -->
       <UAlert

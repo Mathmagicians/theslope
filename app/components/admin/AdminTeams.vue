@@ -306,7 +306,7 @@ const columns = [
       const isOpen = row.original.id === selectedTeamId.value
       return h(resolveComponent('UButton'), {
         color: COLOR.neutral,
-        variant: 'ghost',
+        variant: NOISE.quiet,
         icon: isOpen ? (isMd.value ? ICONS.chevronRight : ICONS.chevronUp) : ICONS.chevronDown,
         square: true,
         'aria-label': isOpen ? 'Luk' : 'Åbn detaljer',
@@ -317,11 +317,13 @@ const columns = [
   },
   {
     accessorKey: 'name',
-    header: 'Madhold'
+    header: 'Madhold',
+    meta: {class: COMPONENTS.masterDetail.primaryColumn}
   },
   {
     accessorKey: 'affinity',
-    header: 'Madlavningsdage'
+    header: 'Madlavningsdage',
+    meta: {class: COMPONENTS.masterDetail.compactColumn}
   }
 ]
 

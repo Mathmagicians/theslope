@@ -17,7 +17,7 @@
  * - CookingTeamCard headers (large; the edit row shows counts only via showName)
  */
 
-const { SIZES, ICONS, COMPONENTS, getRainbowBand } = useTheSlopeDesignSystem()
+const { SIZES, ICONS, COMPONENTS, getRainbowBand, getCalendarCountBadge } = useTheSlopeDesignSystem()
 
 type BadgeSize = 'small' | 'standard' | 'large'
 
@@ -84,9 +84,8 @@ const badgeSize = computed(() => ({small: SIZES.small, standard: SIZES.standard,
         {{ jokerSlotCount }}
       </UBadge>
       <UBadge
-        :class="teamBand"
+        v-bind="getCalendarCountBadge(teamNumber)"
         :size="badgeSize"
-        :icon="ICONS.calendar"
       >
         {{ cookingDaysCount }}
       </UBadge>

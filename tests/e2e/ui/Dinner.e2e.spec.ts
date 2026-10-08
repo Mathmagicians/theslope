@@ -5,7 +5,7 @@ import testHelpers from '../testHelpers'
 import {formatDate} from '~/utils/date'
 import {addDays} from 'date-fns/addDays'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, waitForHydration} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, waitForHydration, collectHydrationWarnings} = testHelpers
 
 /**
  * E2E UI Tests for Dinner Page URL-Based Navigation
@@ -168,6 +168,18 @@ test.describe('Dinner Page URL Navigation', () => {
         // Verify the panel contains the expected date (rendered via DinnerDetailHeader inside)
         const panelText = await panel.textContent()
         expect(panelText, `Panel should contain the date ${secondEventDate}`).toContain(secondEventDate)
+    })
+
+    test('GIVEN a dinner date in the URL WHEN the page loads THEN the client hydrates the server-rendered dinner without a mismatch', async ({browser}) => {
+        const context = await memberValidatedBrowserContext(browser)
+        const page = await context.newPage()
+        const hydrationWarnings = collectHydrationWarnings(page)
+
+        await page.goto(`${dinnerPageUrl}?date=${testData.dates.second}`)
+        await waitForHydration(page)
+
+        await expect(page.getByTestId('dinner-detail-panel')).toContainText(testData.dates.second)
+        expect(hydrationWarnings).toEqual([])
     })
 
     test('GIVEN date without dinner event WHEN page loads THEN auto-syncs to nearest dinner event', async ({browser}) => {

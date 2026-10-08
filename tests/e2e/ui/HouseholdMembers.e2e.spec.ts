@@ -1,4 +1,4 @@
-import {test, expect, type Response} from '@playwright/test'
+import {test, expect} from '@playwright/test'
 import {authFiles} from '../config'
 import testHelpers from '../testHelpers'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
@@ -84,15 +84,8 @@ test.describe('Household members display', () => {
     })
 
     test('GIVEN household with members of different ages WHEN viewing members tab THEN each member displays correct ticket type', async ({page}) => {
-        // Setup response wait BEFORE navigation to catch the API call
-        const responsePromise = page.waitForResponse(
-            (response: Response) => response.url().includes('/api/admin/household/'),
-            {timeout: 10000}
-        )
-
-        await page.goto(`/household/${encodeURIComponent(shortName)}/members?pbs=${pbsId}`)
-        const response = await responsePromise
-        expect(response.status()).toBe(200)
+        // The server renders the household into the page, so the browser issues no household request to wait for
+        await gotoHydrated(page, `/household/${encodeURIComponent(shortName)}/members?pbs=${pbsId}`)
 
         await pollUntil(
             async () => await page.locator('[data-testid="household-members"]').isVisible(),
@@ -116,15 +109,8 @@ test.describe('Household members display', () => {
     test('GIVEN household member WHEN editing weekday preference THEN change is persisted to database', async ({page, browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // Setup response wait BEFORE navigation to catch the API call
-        const responsePromise = page.waitForResponse(
-            (response: Response) => response.url().includes('/api/admin/household/'),
-            {timeout: 10000}
-        )
-
+        // The server renders the household into the page, so the browser issues no household request to wait for
         await gotoHydrated(page, `/household/${encodeURIComponent(shortName)}/members?pbs=${pbsId}`)
-        const response = await responsePromise
-        expect(response.status()).toBe(200)
 
         await pollUntil(
             async () => await page.locator('[data-testid="household-members"]').isVisible(),

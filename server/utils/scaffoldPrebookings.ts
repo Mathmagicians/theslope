@@ -3,6 +3,8 @@ import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/
 import {useSeason} from "~/composables/useSeason"
 import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
 import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets} from "~/composables/useBooking"
+import {assignReleasedTicket} from "~~/server/utils/waitlistAssignment"
+import {getNotificationConfig} from "~~/server/utils/sender/config"
 import {isHouseholdActiveOnDay} from "~/composables/useHousehold"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {getSystemUserId} from "~~/server/utils/systemUser"
@@ -330,6 +332,13 @@ export async function scaffoldPrebookings(
             // Execute batch updates (grouped by signature, chunked within groups)
             const executeBatchUpdates = updateOrdersBatch(90)
             await executeBatchUpdates(d1Client, batchUpdates)
+            // A ticket released after the deadline goes to the head of the dinner's waiting list when it fits
+            for (const released of batchUpdates.filter(update => update.isNewRelease)) {
+                const existing = orderById.get(released.orderId)
+                if (existing?.ticketPriceId) {
+                    await assignReleasedTicket(d1Client, existing.dinnerEventId, existing.ticketPriceId, household.id, {queue: undefined, config: getNotificationConfig()})
+                }
+            }
 
             // Batch delete orders - chunk to respect D1's 100 param limit (ADR-014)
             const deleteIds = result.delete

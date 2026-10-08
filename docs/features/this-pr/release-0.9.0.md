@@ -22,6 +22,8 @@ Sizing is informal t-shirt sizes.
 | Joker + vacancy overviews | `JokerSlot`, dinner "missing" face, CTC faces, shift counts, volunteering moves to duty level + data separation | `feature-proposal-duty-roster.md` § Joker + § Roster UX | L | ✅ UX signed (CTC 2026-10-05, big overview + calendar markers 2026-10-06) |
 | Roster sign-off + cross-team swap (F5b) | Derived auto-sign + godkend-alligevel, duty swap | `feature-proposal-duty-roster.md` Phases 4–5 | M | roster UX ✅ signed 2026-10-05 |
 | Waitlist | Queue, auto-assign sweep, extra portions, UI | `feature-proposal-waitlist.md` | L | ✅ UX signed (chef 2026-10-05, member faces 2026-10-06) |
+| Kitchen allergy line | the dining-mode panels show the allergy kuverter; the expanded list opens with the allergen breakdown and chips beside each diner | this doc § Kitchen allergy line | S | ✅ UX signed 2026-10-08 |
+| Chef allergen line | the chef's allergen section counts this dinner's diners in kuverter per menu allergen; the edit panel becomes the allergy panel | this doc § Chef allergen line | S | ✅ UX signed 2026-10-09 |
 | Notifications | Waitlist + duty-swap kinds, buildup threshold | `feature-proposal-notification-triggers.md` § Trigger catalog | M | catalog updated |
 | Adhoc billing + EXPENSE | Ad-hoc charges + chef spending as EXPENSE transactions; Mit forbrug + admin economy spending views | `feature-proposal-adhoc-admin-billing.md` | L | ⏳ EXPENSE design awaiting signoff; OPEN — in this push or next |
 | PRF spike | Passkey/PRF research + device protocol | `../feature-proposal-relogin-faceid.md` (parked proposal), `../archived/feature-mobile-native-feel.md` | S | ✅ done 2026-10-06; S5 re-login parked out of 0.9, no option chosen |
@@ -230,6 +232,75 @@ scopes pass `month` (month rows, drill-down to dinners). Madbudget scope: the gr
 basisvarer-spend and the month drill-down lists basisvarer purchases (dato, note, beløb). Basisvarer entry lives
 here, admin-only.
 
+## Kitchen allergy line
+
+**Problem.** A chef opening the kitchen stats sees the diners per dining mode and, in the panel head, the names
+whose allergies match tonight's menu. The chefs (meeting 2026-10-08) want the count of allergic diners per panel at a
+glance and, on opening a panel, which diners carry which allergies.
+
+**Solution.** The panel head carries the allergy glyph and the number of diners in that mode with a registered
+allergy counted in kuverter with the panel's portion weights, nothing else. The expanded list opens with the overview line, the same glyph and number followed by each
+allergen's name and its kuverter, most common first, as text; every diner with an allergy carries one compact
+`AllergyTypeDisplay` chip per allergy beside the name, the allergen's name in its tooltip and aria-label. The panel
+head's per-name flags go. `useAllergy().computeAffectedDiners` counts all registered allergies of the diners with
+the menu filter optional, so the chefs' existing menu-match reads keep their behaviour.
+
+**Mockup** ✅ signed 2026-10-08 (desktop; the phone wraps the overview line after the total)
+
+```
+Panel head, collapsed
+| SPISESAL - 33% (v)                                  |
+|  35 kuv. · Voksen: 25 | Barn: 8 | Baby: 2 # 35      |
+|  (allergy) 3,5 kuv.                                 |
+
+Expanded
+|  (allergy) 3,5 kuv. | Gluten · 1 | Mælk · 2,5             |   <- first line, the overview, kuverter, text only
+|  S_31 · 2 voksne, 1 barn · Anna (wheat)(milk), Bo, Emil |
+|  N_12 · 1 voksen · Maria (milk)                         |
+|  V_04 · 2 voksne · Per, Lise (wheat)                    |
+```
+
+A panel with no allergic diner shows no line and no chips.
+
+**TDD.** `useAllergy.unit.spec`: a `describe.each` over orders with and without the menu filter (total, breakdown
+order in kuverter, diners with their allergens). `KitchenPreparation.nuxt.spec`: a mode with an adult and a child allergic renders the head
+1,5 kuv., the overview line and two chips with their aria-labels; a mode without renders neither.
+
+**Affected.** `useAllergy.ts`, `KitchenPreparation.vue` (header mockup), `docs/adr-compliance-frontend.md`.
+
+## Chef allergen line
+
+**Problem.** Under the chef portrait the allergen section shows the menu's allergens as chips and counts everyone
+in the community with those allergies; the chef needs the diners of this dinner, in kuverter, split on the menu's
+allergens. In the edit face the detail panel is titled "Statistik" with a chart glyph.
+
+**Solution.** The view line is the kitchen's overview on this dinner's diners filtered by the menu's allergens:
+total kuverter, then every menu allergen with its kuverter, a zero included, so the selection reads without chips;
+"ingen" when the menu names no allergen. The edit face's allergen table counts this dinner's kuverter per allergen
+and its detail panel becomes the allergy panel: `ICONS.allergy` large, the title "Allergier blandt gæsterne", the
+overview line, and the names with their chips behind a flip-open "Hvem". The community-wide count and avatars go.
+`useAllergy().computeAffectedDiners` with the menu filter supplies both.
+
+**Mockup** ✅ signed 2026-10-09 (desktop; the phone wraps the line after the total)
+
+```
+View, under the chef portrait
+| ALLERGENER   (allergy) 3,5 kuv. | Mælk · 2,5 | Nødder · 1 | Gluten · 0     [Rediger allergener] |
+| ALLERGENER   ingen                                                        [Rediger allergener] |
+
+Edit, the allergen selector
+| ☑ (milk)  Mælk & Smør     2,5  |  (allergy) Allergier blandt gæsterne                     |
+| ☑ (nuts)  Nødder           1   |  3,5 kuv. | Mælk · 2,5 | Nødder · 1                      |
+| ☐ (wheat) Gluten           0   |  [v] Hvem                                                |
+|                                |      Dorthe (milk), Skraaningen (milk), Martin (nuts)    |
+```
+
+**TDD.** `ChefMenuCard.nuxt.spec`: the line shows the total and each menu allergen's kuverter, "ingen" with no
+allergens. `AllergenMultiSelector.nuxt.spec`: counts per allergen from the diners; the panel's title and glyph; the
+names behind the toggle.
+
+**Affected.** `ChefMenuCard.vue`, `AllergenMultiSelector.vue` (header mockups), `docs/adr-compliance-frontend.md`.
+
 ## Decisions
 
 **2026-10-05** (questions round 1)
@@ -369,11 +440,12 @@ here, admin-only.
   apply in priority order and land in one navigation; `useQueryParam`, `useEntityFormManager`, `useSeasonSelector` and
   `useTabNavigation` write through it, an explicit write outranks a parameter's auto-sync. The ui specs that interact
   navigate through `gotoHydrated` (docs/testing.md Rule 3a), since the server renders the controls 9 to 15 seconds
-  before the handlers attach on the local dev server. The targeted run before the writer went from 12 failures to 6;
-  the full-suite proof after the writer and the sweep is pending (the last attempt ran into a machine suspend).
-- Open: the season dropdown cases under load, the holiday list editor's double-matched locator, the Chef and Dinner
-  cases on the dev copy's 2028 active season, and the AdminTeams joker-slot and member-finder cases on the roster
-  package's surface.
+  before the handlers attach on the local dev server. Two e2e tests waited for a household response the server render
+  now answers; they wait for the rendered page instead. Targeted proof 2026-10-09 (AdminTeams, household, SeasonSelector,
+  HouseholdCard, HouseholdMembers, HouseholdAllergies, Dinner, Chef): every case outside AdminTeams passes; the three
+  AdminTeams cases (rename, member finder, joker slot) sit on the roster package's in-flight AdminTeams and store work.
+- Open: the season dropdown cases under load, the holiday list editor's double-matched locator, and the full-suite
+  run once the roster package has landed.
 
 ## Coverage
 

@@ -132,6 +132,11 @@ watch(seasonShortName, (shortName) => {
   }
 }, { immediate: true })
 
+// A deep link selects its team here, before the store's datasets resolve: AdminTeams sets up behind the ready gate,
+// after the server render's single fetch of the team Detail, and follows the selection from then on
+const deepLinkedTeamId = Number(useRoute().query.team)
+if (activeTab.value === 'teams' && Number.isInteger(deepLinkedTeamId) && deepLinkedTeamId > 0) store.selectTeam(deepLinkedTeamId)
+
 // UI - CONTINUED
 
 useHead({

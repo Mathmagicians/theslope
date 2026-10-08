@@ -78,7 +78,8 @@ test.describe('Chef Page', () => {
     test.afterAll(async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
         for (const teamId of createdTeamIds) {
-            await SeasonFactory.deleteCookingTeam(adminContext, teamId)
+            // Another spec's season cleanup can cascade the team away first; gone is the goal either way
+            await SeasonFactory.deleteCookingTeam(adminContext, teamId).catch(() => undefined)
         }
     })
 

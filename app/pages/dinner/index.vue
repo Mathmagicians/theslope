@@ -122,20 +122,9 @@ const {hasPrev, hasNext, navigate} = useBookingView({
     dinnerDates: () => dinnerDates.value
 })
 
-// Selected dinner event based on URL date
-const selectedDinnerEvent = computed(() => {
-    return dinnerEvents.value.find(e => {
-        const eventDate = new Date(e.date)
-        return eventDate.toDateString() === selectedDate.value.toDateString()
-    })
-})
-
-const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
-
-watchEffect(() => {
-  const id = selectedDinnerId.value
-  if (id !== null) bookingsStore.loadDinnerEventDetail(id)
-})
+// The store resolves the dinner on the URL date from the selected season, so the server renders its Detail
+bookingsStore.selectDinnerDate(selectedDate)
+const {selectedDinnerEventId: selectedDinnerId} = storeToRefs(bookingsStore)
 
 // Household-specific orders via the user-facing endpoint (security: session-filtered).
 // Separate from dinnerEventDetail.tickets, which includes ALL households for kitchen stats.

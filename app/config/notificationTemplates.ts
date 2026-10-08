@@ -30,4 +30,21 @@ export const NOTIFICATION_TEMPLATES = {
         subject: '{{senderName}}: PBS-opgørelse {{billingPeriod}} — opdatering v{{version}}',
         text: 'Hejsa,\n\nPBS-opgørelsen for perioden {{billingPeriod}} er opdateret (version {{version}}) og erstatter den tidligere fremsendte: {{householdCount}} husstande, i alt {{totalAmount}} kr.\n\nOversigt: {{summaryUrl}}'
     }
+,
+    WAITLIST_JOINED: {
+        subject: '{{senderName}}: Du står på ventelisten til {{dinner}}',
+        text: 'Hej {{name}},\n\nDu står som nr. {{position}} på ventelisten til fællesspisningen {{dinner}}. Du får besked, når der bliver en billet til dig.'
+    },
+    WAITLIST_TICKET_ASSIGNED: {
+        subject: '{{senderName}}: Du har fået billet til {{dinner}}',
+        text: 'Hej {{name}},\n\nDer blev en billet ledig, og den er nu din: {{dinner}}, {{ticket}}. Vi glæder os til at se dig.'
+    },
+    WAITLIST_BUILDUP: {
+        subject: '{{senderName}}: {{entries}} skrånere venter på billet til {{dinner}}',
+        text: 'Hej {{name}},\n\n{{entries}} skrånere mangler en billet til din middag {{dinner}}, i alt {{portions}} portioner. Kan du frigive flere portioner? Det gør du under Flere på middagen: {{dinnerUrl}}'
+    },
+    WAITLIST_TICKET_SOLD: {
+        subject: '{{senderName}}: Din billet til {{dinner}} er solgt',
+        text: 'Hej,\n\nDin frigivne billet til {{dinner}} er overtaget af en skråner fra ventelisten. I betaler ikke længere for den.'
+    }
 }

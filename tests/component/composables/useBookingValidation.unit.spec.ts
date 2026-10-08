@@ -550,6 +550,15 @@ describe('useBookingValidation', () => {
         const result = deserializeDinnerEventDetail(input())
         assertion(result)
       })
+
+      it('GIVEN a ticket inhabitant with allergies WHEN deserializing THEN keeps each allergy with its allergy type', () => {
+        const allergies = AllergyFactory.serializedAllergies(2)
+        const result = deserializeDinnerEventDetail(DinnerEventFactory.defaultSerializedDinnerEventDetail({
+          tickets: [{id: 1, inhabitant: {...DinnerEventFactory.serializedInhabitant(SERIALIZED_PREFERENCES), allergies}}]
+        }))
+        const tickets = result.tickets as Array<{inhabitant: {allergies: Array<{allergyType: unknown}>}}>
+        expect(tickets[0]!.inhabitant.allergies.map(a => a.allergyType)).toEqual(allergies.map(a => a.allergyType))
+      })
     })
   })
 

@@ -31,7 +31,7 @@ import {formatDate} from '~/utils/date'
  */
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo, waitForHydration} = testHelpers
+const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo, waitForHydration, collectHydrationWarnings} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -277,10 +277,7 @@ for (const view of ['day', 'week', 'month'] as const) {
             dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)
         })))
 
-        const hydrationWarnings: string[] = []
-        page.on('console', message => {
-            if (message.text().includes('Hydration')) hydrationWarnings.push(message.text())
-        })
+        const hydrationWarnings = collectHydrationWarnings(page)
         await page.setViewportSize({width: 1280, height: 900})
         await page.goto(`/household/${encodeURIComponent(household.shortName)}/bookings?pbs=${household.pbsId}&view=${view}`)
         await waitForHydration(page)

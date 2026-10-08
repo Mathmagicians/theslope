@@ -30,7 +30,7 @@ export const useBookingValidation = () => {
     const {CookingTeamDisplaySchema, deserializeCookingTeamDisplay} = useCookingTeamValidation()
     const {InhabitantDisplaySchema, deserializeInhabitantDisplay} = useCoreValidation()
     const {TicketPriceSchema: _TicketPriceSchema} = useTicketPriceValidation()
-    const {AllergyTypeDisplaySchema, InhabitantWithAllergiesSchema} = useAllergyValidation()
+    const {AllergyTypeDisplaySchema, InhabitantWithAllergiesSchema, deserializeInhabitantWithAllergies} = useAllergyValidation()
 
     // ============================================================================
     // DINNER EVENT (Base + Display schemas - defined first for Order to reference)
@@ -516,9 +516,8 @@ export const useBookingValidation = () => {
                     ticketType: ticketPrice?.ticketType ?? null,
                     // Add parent dinnerEvent reference
                     dinnerEvent: dinnerEventForTickets,
-                    // Deserialize inhabitant's dinnerPreferences JSON string
                     inhabitant: ticket.inhabitant
-                        ? deserializeInhabitantDisplay(ticket.inhabitant as Record<string, unknown>)
+                        ? deserializeInhabitantWithAllergies(ticket.inhabitant as Record<string, unknown>)
                         : ticket.inhabitant
                 }
             }) ?? []

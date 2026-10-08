@@ -11,6 +11,7 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {usePlanStore} from '~/stores/plan'
 import {useAuthStore} from '~/stores/auth'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
+import {COMPONENTS} from '~/composables/useTheSlopeDesignSystem'
 
 // The test environment has no router to navigate: useEntityFormManager and useQueryParam
 // write the URL state through navigateTo (ADR-006 / ADR-008)
@@ -116,6 +117,25 @@ describe('AdminTeams master table', () => {
 
         expect(wrapper.find(`[data-testid="team-row-${withJokers.id}"] [data-testid="team-badge-jokers"]`).exists()).toBe(true)
         expect(wrapper.find(`[data-testid="team-row-${withoutJokers.id}"] [data-testid="team-badge-jokers"]`).exists()).toBe(false)
+    })
+
+    // The Madhold column takes the row's slack, so the badges stay on one line while the weekdays fit their letters
+    it.each([
+        {header: 'Madhold', column: 'primaryColumn'},
+        {header: 'Madlavningsdage', column: 'compactColumn'}
+    ] as const)('the $header header and cells bind COMPONENTS.masterDetail.$column', async ({header, column}) => {
+        const team = SeasonFactory.defaultCookingTeamDisplay({id: 23, name: 'Hold 1'})
+        seasonByIdEndpoint.mockReturnValue({...season, CookingTeams: [team]})
+        const token = COMPONENTS.masterDetail[column]
+
+        const wrapper = await mountTeams()
+
+        const headers = wrapper.findAll('th')
+        const th = headers.find(cell => cell.text() === header)!
+        expect(th.classes()).toEqual(expect.arrayContaining(token.th.split(' ')))
+        const row = wrapper.find(`[data-testid="team-row-${team.id}"]`).element.closest('tr')!
+        const td = row.children[headers.indexOf(th)]!
+        expect([...td.classList]).toEqual(expect.arrayContaining(token.td.split(' ')))
     })
 })
 

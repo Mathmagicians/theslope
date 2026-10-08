@@ -255,6 +255,15 @@ const gotoHydrated = async (page: Page, url: string): Promise<void> => {
     await waitForHydration(page)
 }
 
+/** Collects the console messages Vue logs on a hydration mismatch; attach it before the navigation */
+const collectHydrationWarnings = (page: Page): string[] => {
+    const warnings: string[] = []
+    page.on('console', message => {
+        if (message.text().includes('Hydration')) warnings.push(message.text())
+    })
+    return warnings
+}
+
 /**
  * Types a dd/MM/yyyy date into a UInputDate field: clicks the field's day segment and
  * types the digits - the segments auto-advance through day, month and year.
@@ -300,6 +309,7 @@ const testHelpers = {
     daysFromNow,
     waitForHydration,
     gotoHydrated,
+    collectHydrationWarnings,
     fillDateField,
     readDateField
 }

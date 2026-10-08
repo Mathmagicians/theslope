@@ -644,6 +644,86 @@ export const COMPONENTS = {
         RELEASED: `${BG.gray[400]} ${TEXT.black} ${BORDER.gray[500]} ${KITCHEN_PANEL_BOX}`
     },
 
+    /**
+     * KitchenPreparation's layout on the kitchen surfaces: the totals in the stats bar, the panel
+     * row, a panel's head lines and allergy line, and the household list a selected panel opens
+     * below the row on that panel's surface (the list's padding and alignment win over the box's);
+     * `allergyOverview` sets the kitchen type size on the shared `allergyOverview` line
+     */
+    kitchen: {
+        totals: 'text-center',
+        totalsLabel: `${TYPOGRAPHY.kitchenLabel} ${TEXT.toned}`,
+        totalsMain: 'text-2xl md:text-3xl lg:text-4xl font-bold',
+        totalsBreakdown: `text-xs md:text-sm flex flex-wrap justify-center gap-x-2 ${TEXT.toned}`,
+        panels: 'flex flex-col md:flex-row overflow-hidden',
+        // Beside `kitchenPanel`: the phone stacks the panels, so a bottom edge divides them below md
+        panel: 'border-b md:border-b-0 md:border-r last:border-b-0 last:md:border-r-0 cursor-pointer',
+        label: `${TYPOGRAPHY.kitchenLabel} truncate flex items-center justify-center gap-1`,
+        glyph: 'size-4',
+        breakdown: `${TYPOGRAPHY.kitchenDetail} flex flex-wrap justify-center gap-x-1`,
+        figure: 'whitespace-nowrap',
+        figureTotal: 'whitespace-nowrap font-semibold',
+        allergyHead: `${TYPOGRAPHY.kitchenDetail} border-t pt-2 flex items-center justify-center gap-1`,
+        householdList: 'px-8 md:px-32 py-6 md:py-8 max-h-64 overflow-y-auto text-left',
+        household: `${TYPOGRAPHY.kitchenDetail} py-1`,
+        householdName: 'font-semibold',
+        allergyOverview: `${TYPOGRAPHY.kitchenDetail} py-1`
+    },
+
+    /**
+     * The allergy overview (`AllergyOverviewLine`): `ICONS.allergy` and the kuverter of the allergic diners in `total`,
+     * then each allergen with its kuverter; the site sets the type size on the line. `AllergyChips` spaces each chip
+     * from the name before it with `chip`.
+     */
+    allergyOverview: {
+        line: 'flex flex-wrap items-center gap-x-1',
+        total: 'inline-flex items-center gap-1 whitespace-nowrap font-semibold',
+        figure: 'whitespace-nowrap',
+        glyph: 'size-4',
+        chip: 'ms-1'
+    },
+
+    /**
+     * AllergenMultiSelector: the catalog beside the allergy panel from md, stacked below; `withSummaryBar` keeps the
+     * last rows clear of the phone's fixed `summaryBar`. The panel binds `ALERTS.legend` with `panelIcon` on its
+     * icon slot; its `panelBody` stacks the overview, the Hvem button and the `names`.
+     */
+    allergenSelector: {
+        root: 'flex flex-col md:flex-row gap-4 md:gap-6',
+        withSummaryBar: 'pb-16 md:pb-0',
+        master: 'md:w-1/3',
+        summaryBar: 'md:hidden fixed bottom-4 inset-x-4 z-50 bg-elevated shadow-lg',
+        detail: 'flex-1 md:border-l md:pl-6',
+        panelIcon: 'size-8',
+        panelBody: 'flex flex-col items-start gap-2',
+        names: TYPOGRAPHY.bodyTextSmall
+    },
+
+    /**
+     * AllergyCatalogTable's cells: the centred checkbox, the icon in its red ring, the name, and the centred count
+     * and new-badge columns (the table binds `COMPONENTS.table.catalogUi`)
+     */
+    allergyCatalog: {
+        checkboxCell: 'flex items-center justify-center',
+        iconCell: 'flex items-center justify-center p-1 rounded-lg transition-colors',
+        iconRing: `flex items-center justify-center w-8 h-8 rounded-full ring-1 shrink-0 ${RING.red[700]}`,
+        iconGlyph: 'text-base',
+        nameCell: 'font-medium',
+        centredCell: 'text-center'
+    },
+
+    /** AdminAllergies: the catalog card, its header with the title row and the poster action, the toolbar, and the docked and sticky detail panes */
+    allergyCatalogPage: {
+        card: 'w-full px-0',
+        header: 'flex flex-col gap-4',
+        titleRow: 'flex flex-col md:flex-row items-center justify-between gap-4',
+        headerActions: 'flex items-center gap-2',
+        toolbar: 'mb-4',
+        createDock: 'mb-2',
+        column: 'min-w-0',
+        stickyDetail: 'min-w-0 flex justify-center items-start md:sticky md:top-4 self-start'
+    },
+
     // Responsive row icon sizing (matches birthday cake pattern)
     rowIconClass: 'size-4 md:size-6',
 
@@ -698,7 +778,12 @@ export const COMPONENTS = {
         dockClamp: 'w-0 min-w-full',
         // Wide detail content scrolls inside its own box; the dock header above it stays
         // outside the scroll container, so its stickiness keeps tracking the page
-        dockBody: 'overflow-x-auto'
+        dockBody: 'overflow-x-auto',
+        // The master table has no fixed widths: the primary column takes the row's slack, so a
+        // wrapping cell beside a compact one keeps its line instead of ceding the spare width
+        primaryColumn: {th: 'w-full', td: 'w-full'},
+        // w-px shrinks the column to its content; nowrap overrides the table cell wrap
+        compactColumn: {th: 'w-px whitespace-nowrap', td: 'w-px whitespace-nowrap'}
     },
 
     /**
@@ -758,6 +843,8 @@ export const COMPONENTS = {
         ui: {th: 'px-2 md:px-4', td: `px-2 py-1 md:px-4 md:py-2 ${TABLE_CELL_WRAP}`},
         /** Compact tables with many narrow columns (booking form, household preferences, household allergies) */
         denseUi: {th: 'px-1 py-1 md:px-4 md:py-3', td: `px-1 md:px-4 ${TABLE_CELL_WRAP}`},
+        /** The allergy catalog in its narrow master column: tighter horizontal cell padding */
+        catalogUi: {th: 'px-1', td: `px-1 py-1 md:px-1 md:py-2 ${TABLE_CELL_WRAP}`},
         /** The booking grid: centred day cells, a sticky footer */
         gridUi: {
             th: 'px-1 py-1 md:px-2 md:py-2 text-center',
@@ -1014,6 +1101,39 @@ export const COMPONENTS = {
         nameStack: 'flex flex-col',
         lettering: `font-serif text-lg md:text-xl font-bold ${TEXT.mocha[50]} tracking-widest uppercase`,
         role: `${TEXT.mocha[50]} text-sm opacity-75`
+    },
+
+    /**
+     * ChefMenuCard below the hero: the compact face (a calendar list row: date, title, badges, budget), the stacked
+     * sections with a rule above each, the allergen row (label, overview line, Rediger allergener), the allergen editor
+     * head, and the menu form's fields with the cost row
+     */
+    chefMenuCard: {
+        compactUi: (selected: boolean) => ({
+            root: `${CALENDAR.selection.card.base} ${selected ? CHEF_CALENDAR.selection : ''}`,
+            body: 'p-3'
+        }),
+        compactRow: 'flex items-center gap-3',
+        compactDate: 'text-sm font-semibold text-primary w-12 shrink-0',
+        compactTitleColumn: 'flex-1 min-w-0',
+        compactTitle: 'text-sm truncate font-medium',
+        compactTitlePlaceholder: 'text-sm truncate italic',
+        compactBadge: 'shrink-0',
+        compactBudget: 'text-sm font-medium shrink-0',
+        stack: 'space-y-6',
+        section: 'pt-4 border-t',
+        allergenRow: 'flex flex-col md:flex-row md:items-center gap-2',
+        allergenLabel: `${TYPOGRAPHY.sectionSubheading} uppercase`,
+        allergenLine: `${TYPOGRAPHY.bodyTextSmall} md:flex-1`,
+        allergenEditor: 'space-y-4',
+        allergenEditorHead: 'flex flex-col gap-2 md:flex-row md:items-center',
+        allergenEditorTitle: `${TYPOGRAPHY.sectionSubheading} md:flex-1`,
+        form: 'space-y-4',
+        field: 'w-full',
+        costRow: 'flex gap-2 items-start',
+        costInput: 'flex-1',
+        costType: 'w-32',
+        costAlternative: `mt-1 ${TYPOGRAPHY.finePrint} opacity-60`
     }
 } as const
 
@@ -1198,6 +1318,9 @@ export const ROLE_ICONS = {
     COOK: 'i-hugeicons-whisk',
     JUNIORHELPER: 'i-hugeicons-plant-01'
 } as const
+
+/** The team's calendar count badge: CookingTeamBadges' cooking days, the team card's joker shifts; the site binds the size */
+export const getCalendarCountBadge = (teamNumber: number) => ({class: getRainbowBand(teamNumber - 1), icon: ICONS.calendar})
 
 /** Residency colours double as alert kinds, so a residency alert is `v-bind="ALERTS[residency.color]"` */
 export type ResidencyAlertKind = Extract<AlertKind, 'success' | 'error' | 'neutral'>
@@ -2156,6 +2279,7 @@ export const useTheSlopeDesignSystem = () => {
         getRainbowBand,
         getRainbowFamily,
         getRainbowAccent,
+        getCalendarCountBadge,
         ICONS,
         IMG,
 

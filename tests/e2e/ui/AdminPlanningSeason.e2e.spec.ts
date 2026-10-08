@@ -60,11 +60,12 @@ const generateUniqueSeasonDates = () => {
 
 /**
  * Start dates (as timestamps) of the holiday rows, in DOM order.
+ * The picker names both its wrapper and the field it injects into, so the locators pin the wrapper (`div[name=…]`).
  * Editable rows are CalendarDateRangePickers named `holidayRangeList-<index>`, each with
  * typed `start` / `end` date-segment fields.
  */
 const holidayRowStartDates = async (page: Page): Promise<number[]> => {
-    const rows = await page.locator('[name^="holidayRangeList-"]').all()
+    const rows = await page.locator('div[name^="holidayRangeList-"]').all()
     const rowDates = await Promise.all(rows.map(row => readDateField(row, 'start')))
     return rowDates.map(date => date.getTime())
 }
@@ -222,23 +223,23 @@ test.describe('AdminPlanningSeason Form UI', () => {
             )
 
             // WHEN: Add holiday period
-            await fillDateField(page.locator('[name="holidayRangeList"]'), 'start', holidayStart)
-            await fillDateField(page.locator('[name="holidayRangeList"]'), 'end', holidayEnd)
+            await fillDateField(page.locator('div[name="holidayRangeList"]'), 'start', holidayStart)
+            await fillDateField(page.locator('div[name="holidayRangeList"]'), 'end', holidayEnd)
             await page.getByTestId('holiday-range-add').click()
 
             // THEN: Holiday appears in list (use pollUntil for reliable visibility check)
             await pollUntil(
-                async () => await page.locator('[name^="holidayRangeList-0"]').isVisible(),
+                async () => await page.locator('div[name^="holidayRangeList-0"]').isVisible(),
                 (isVisible) => isVisible,
                 10
             )
-            await expect(page.locator('[name^="holidayRangeList-0"]')).toBeVisible()
+            await expect(page.locator('div[name^="holidayRangeList-0"]')).toBeVisible()
             await expect(page.getByTestId('holiday-range-remove-0')).toBeVisible()
 
             // WHEN: Add a second holiday period starting BEFORE the first one
             const rowCountBefore = (await holidayRowStartDates(page)).length
-            await fillDateField(page.locator('[name="holidayRangeList"]'), 'start', earlierHolidayStart)
-            await fillDateField(page.locator('[name="holidayRangeList"]'), 'end', earlierHolidayEnd)
+            await fillDateField(page.locator('div[name="holidayRangeList"]'), 'start', earlierHolidayStart)
+            await fillDateField(page.locator('div[name="holidayRangeList"]'), 'end', earlierHolidayEnd)
             await page.getByTestId('holiday-range-add').click()
 
             // THEN: The list is chronological (create mode may seed default holidays, so assert order, not indexes)
@@ -292,7 +293,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
             await expect(page).toHaveURL(/.*mode=edit/)
             await expect(page.locator('form#seasonForm')).toBeVisible()
 
-            const holidayItem = page.locator('[name^="holidayRangeList-0"]')
+            const holidayItem = page.locator('div[name^="holidayRangeList-0"]')
             await pollUntil(
                 async () => await holidayItem.isVisible(),
                 (isVisible) => isVisible,
@@ -347,7 +348,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
             // WHEN: Extending the holiday by one day in the row picker
             const newHolidayEnd = addDays(holidayPeriod.end, 1)
-            await fillDateField(page.locator('[name="holidayRangeList-0"]'), 'end', formatDate(newHolidayEnd))
+            await fillDateField(page.locator('div[name="holidayRangeList-0"]'), 'end', formatDate(newHolidayEnd))
             await page.getByTestId('submit-season').click()
 
             // THEN: The saved season carries the edited range

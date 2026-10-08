@@ -5,6 +5,9 @@ One table for both selection modes:
 - single: row click emits the id (AdminAllergies master column)
 - multi:  checkboxes emit id[]   (AllergenMultiSelector / compare, ChefMenuCard edit)
 
+The count column reads the community's inhabitants per allergen, or with `portionsById` the kuverter a dinner's
+diners carry (AllergenMultiSelector); `showCount` false drops the column.
+
 Forwards UTable's expanded model (keyed by row index, house convention) and the
 #expanded slot so a detail panel can dock under the selected row on mobile.
 -->
@@ -18,6 +21,9 @@ const props = withDefaults(defineProps<{
   /** single: selected id (or null) - multi: selected ids */
   modelValue?: number | number[] | null
   showNewBadge?: boolean
+  showCount?: boolean
+  /** Kuverter per allergy type id; without it the count is the inhabitants carrying the allergy */
+  portionsById?: Map<number, number>
   readonly?: boolean
   loading?: boolean
   /** UTable expansion record keyed by row index */
@@ -26,6 +32,8 @@ const props = withDefaults(defineProps<{
   mode: 'single',
   modelValue: null,
   showNewBadge: false,
+  showCount: true,
+  portionsById: undefined,
   readonly: false,
   loading: false,
   expanded: undefined
@@ -37,7 +45,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {COLOR, COMPONENTS, ICONS, RING} = useTheSlopeDesignSystem()
+const {COLOR, COMPONENTS, ICONS} = useTheSlopeDesignSystem()
 
 // Business logic
 const {hasNewAllergyInhabitants} = useAllergy()
@@ -74,16 +82,12 @@ const columns = computed(() => [
   ...(isMulti.value ? [{accessorKey: 'checkbox', header: ''}] : []),
   {accessorKey: 'icon', header: ''},
   {accessorKey: 'name', header: 'Allergen'},
-  {accessorKey: 'count', header: 'Antal'},
+  ...(props.showCount ? [{accessorKey: 'count', header: 'Antal'}] : []),
   ...(props.showNewBadge ? [{accessorKey: 'new', header: 'Nyt'}] : [])
 ])
 
-// Tighter horizontal cell padding - the catalog lives in the narrow master column
-const tableUi = {
-  ...COMPONENTS.table.ui,
-  td: `${COMPONENTS.table.ui.td} px-1 md:px-1`,
-  th: 'px-1'
-}
+const countOf = (allergyType: AllergyTypeDetail): string | number =>
+  props.portionsById ? formatPortions(props.portionsById.get(allergyType.id) ?? 0) : allergyType.inhabitants?.length || 0
 
 const clickableCellClass = computed(() => props.readonly ? '' : COMPONENTS.table.clickableCell)
 </script>
@@ -94,11 +98,11 @@ const clickableCellClass = computed(() => props.readonly ? '' : COMPONENTS.table
       :columns="columns"
       :data="allergyTypes"
       :loading="loading"
-      :ui="tableUi"
+      :ui="COMPONENTS.table.catalogUi"
   >
     <!-- Checkbox cell (multi mode only) -->
     <template #checkbox-cell="{ row }">
-      <div class="flex items-center justify-center">
+      <div :class="COMPONENTS.allergyCatalog.checkboxCell">
         <UCheckbox
             :model-value="selectedIds.has(row.original.id!)"
             :name="`select-allergen-${row.original.id}`"
@@ -113,19 +117,19 @@ const clickableCellClass = computed(() => props.readonly ? '' : COMPONENTS.table
     <template #icon-cell="{ row }">
       <div
           :class="[
-            'flex items-center justify-center p-1 rounded-lg transition-colors',
+            COMPONENTS.allergyCatalog.iconCell,
             clickableCellClass,
             isSelected(row.original.id!) && COMPONENTS.table.selectedRow
           ]"
           @click="handleRowClick(row.original.id!)"
       >
-        <div :class="['flex items-center justify-center w-8 h-8 rounded-full ring-1 shrink-0', RING.red[700]]">
+        <div :class="COMPONENTS.allergyCatalog.iconRing">
           <UIcon
               v-if="row.original.icon?.startsWith('i-')"
               :name="row.original.icon"
-              class="text-base"
+              :class="COMPONENTS.allergyCatalog.iconGlyph"
           />
-          <span v-else class="text-base">
+          <span v-else :class="COMPONENTS.allergyCatalog.iconGlyph">
             {{ row.original.icon || '🏷️' }}
           </span>
         </div>
@@ -136,7 +140,7 @@ const clickableCellClass = computed(() => props.readonly ? '' : COMPONENTS.table
     <template #name-cell="{ row }">
       <div
           :class="[
-            'font-medium',
+            COMPONENTS.allergyCatalog.nameCell,
             clickableCellClass,
             isSelected(row.original.id!) && COMPONENTS.table.selectedRow
           ]"
@@ -151,17 +155,18 @@ const clickableCellClass = computed(() => props.readonly ? '' : COMPONENTS.table
     <!-- Count cell -->
     <template #count-cell="{ row }">
       <div
-          :class="['text-center', clickableCellClass]"
+          :class="[COMPONENTS.allergyCatalog.centredCell, clickableCellClass]"
+          :data-testid="`allergy-count-${row.original.id}`"
           @click="handleRowClick(row.original.id!)"
       >
-        {{ row.original.inhabitants?.length || 0 }}
+        {{ countOf(row.original) }}
       </div>
     </template>
 
     <!-- New badge cell - shows if any allergy of this type was recently added -->
     <template #new-cell="{ row }">
       <div
-          :class="['text-center', clickableCellClass]"
+          :class="[COMPONENTS.allergyCatalog.centredCell, clickableCellClass]"
           @click="handleRowClick(row.original.id!)"
       >
         <UIcon
