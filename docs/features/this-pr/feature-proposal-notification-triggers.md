@@ -37,6 +37,7 @@ contract messages through `env.SENDER`.
 | Kind | Recipients | When |
 |---|---|---|
 | `CHEF_MENU_DEADLINE` / `CHEF_MENU_OVERDUE` | the dinner's chef | the menu deadline, dinner − `menuIsAnnouncedDaysBefore` (`useSeason().deadlinesForSeason`) |
+| `CHEF_ROSTER_DEADLINE` / `CHEF_ROSTER_OVERDUE` | the dinner's chef | the roster deadline, dinner − `rosterIsSignedOffHoursBefore` (`feature-proposal-duty-roster.md` § Roster UX) |
 | `DINNER_NO_CHEF` | `PLANNINGMANAGER` | a dinner without a chef |
 | `DUTY_SHIFT_REMINDER` | the team's members | 24 h and 1 h before the shift, from an hourly Nitro task; team → assignment → inhabitant → user is a new repository query (ADR-009 Display type) |
 | `JOB_FAILED` | admins | a system job run ends failed |

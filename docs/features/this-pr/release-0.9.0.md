@@ -125,7 +125,7 @@ table rebuild on D1):
 |---|---|---|
 | `Transaction.type` | `LedgerEntryType`, required, default `REGULAR` | — (the default covers every existing row) |
 | `Transaction.description` | nullable | — |
-| `DinnerEvent.totalCost` | dropped — the dinner's cost is `SUM(Expense.amount)` | — |
+| `DinnerEvent.totalCost` | kept, `/// @deprecated` — the dinner's cost becomes `SUM(Expense.amount)` in the chef-spending package; the column is dropped by `../chore-drop-total-cost.md` next release | one REGULAR `Expense` per dinner with `totalCost > 0`: `amount = totalCost`, `description = 'Indkøb'`, `paidByUserId` null, `userSnapshot` = the SYSTEM snapshot (`{"id":null,"email":"SYSTEM"}`, one constant in the validation layer, asserted equal to the migration's literal); `WHERE NOT EXISTS` a REGULAR row for the dinner |
 | `Order.orderSnapshot` | `String`, nullable | rows with `ticketPriceId` null: match `priceAtBooking` to the season's ticket prices → frozen `ticketType` |
 | `Order` partial unique `(inhabitantId, dinnerEventId) WHERE isGuestTicket = 0` | via `partialIndexes` (decision 2026-10-07, reverses the earlier drop) | none — zero duplicate regular orders verified in every environment; the index creation is the proof |
 
@@ -133,16 +133,29 @@ table rebuild on D1):
 source before the flattened copy is regenerated (`.claude/skills/prisma/SKILL.md`):
 - `Transaction.type` — Prisma emits a table rebuild for a required column; rewritten to
   `ALTER TABLE "Transaction" ADD COLUMN "type" TEXT NOT NULL DEFAULT 'REGULAR'`.
-- `DinnerEvent.totalCost` — Prisma emits a rebuild for the drop; `DinnerEvent` has children (`Order`, `DinnerDuty`,
-  `TicketWaitlist`, `DinnerEventAllergen`, `Expense`), so the rebuild's `DROP TABLE` would fire their cascades;
-  rewritten to `ALTER TABLE "DinnerEvent" DROP COLUMN "totalCost"` (SQLite ≥ 3.35, plain unindexed column).
 - New tables (`DinnerDutyTemplate`, `JokerSlot`, `DinnerDuty`, `DutyHistory`, `TicketWaitlist`, `Expense`), the
   nullable `Transaction.description` and `Order.orderSnapshot`, and the two partial unique indexes
   (`CREATE UNIQUE INDEX … WHERE "isGuestTicket" = false`) are taken as Prisma emits them.
-- Data lines: one — `Order.orderSnapshot` for rows with `ticketPriceId` null, matching `priceAtBooking` to the
-  season's ticket prices (`bug-fix-order-snapshot.md`), convergent. No snapshot rewrite on `Transaction`.
-- `tests/component/architecture/migrations.unit.spec.ts` keeps rejecting `DROP TABLE`; the migration is done when
-  `make d1-verify-local` shows unchanged child-without-parent counts, then dev, then prod.
+- Data lines, both convergent: `Order.orderSnapshot` for rows with `ticketPriceId` null, matching `priceAtBooking`
+  to the season's ticket prices (`bug-fix-order-snapshot.md`); the `totalCost` → `Expense` mapping (table above).
+  No snapshot rewrite on `Transaction`.
+- `tests/component/architecture/migrations.unit.spec.ts` keeps rejecting `DROP TABLE`.
+
+**Migration safety.** The migration is additive: new tables, columns with a default or nullable, indexes, inserts
+into a new table. The code deployed at the time of the apply keeps working on the migrated schema — it selects
+columns that still exist and never touches the new tables; the one new behaviour it can meet is the `Order` partial
+unique index refusing a duplicate regular order (zero exist; a race that used to create one now fails and the
+idempotent job retries, ADR-015). The new code needs the migrated schema (`Transaction.type`), so the order per
+environment is migrate, then deploy. Proof, in order:
+1. local: `make d1-copy-dev-to-local` → `make d1-verify-local` (baseline) → `make d1-migrate-local` (the target
+   fails on a changed child-without-parent count) → `make d1-verify-local` → `npm run dev` → api + ui e2e suites green
+   (one runner at a time) → the chef, bookings and admin economy pages by hand.
+2. dev, old code first: deploy `main` to dev again so dev runs the released code → D1 Time Travel bookmark
+   (`wrangler d1 time-travel info`; rollback = `make d1-time-travel-dev`) → `make d1-migrate-dev` → the released code
+   still serves dev (login, dinner page, bookings) → `make deploy-dev` with the branch → smoke suite against dev → logs.
+3. prod: bookmark → `make d1-migrate-prod` → `make deploy-prod` → smoke suite, outside the cron windows (01:00 and
+   02:00 UTC daily, 03:00 UTC on the 18th).
+4. next release: `../chore-drop-total-cost.md` drops the column once every environment runs the computed version.
 
 **Sequence.** schema ✅ + config ✅ + majors ✅ → `make d1-prisma` + `pre:all` + unit (gate) → user:
 `make d1-create-migration name=release-0-9` → the rewrites and the data line in the Prisma source, flattened copy

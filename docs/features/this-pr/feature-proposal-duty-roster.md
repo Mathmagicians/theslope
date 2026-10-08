@@ -339,7 +339,7 @@ DutyEntitySnapshotSchema = z.object({
 |---|---|---|
 | **`DinnerCard` / `ChefMenuCard`** — expandable section per dinner | Timeline of all events for dinner D + relevant team-level events for D's `cookingTeamId` since season start. Mirror of `OrderHistoryDisplay.vue` UTimeline. | `GET /api/dinner-event/[id]/duty-history` (NEW) |
 | **`CookingTeamCard`** — expandable per team member | Timeline of that member's assignment history. | `GET /api/team/cooking/[id]/member/[inhabitantId]/history` (NEW) |
-| **Member planning face** — my duties on `/chef` ✅ signed 2026-10-06 | The existing calendar/agenda carries it: my duty days marked on the calendar (+ the signed gap markers), the agenda row gains the duty line, vacancy rows render inline with [Tag tjansen]; day select opens the CTC dinner face where byt/afgiv/tag live. No new component. | Extends existing `GET /api/team/my` |
+| **Member planning face** — my duties on `/chef` ✅ signed 2026-10-06 | The existing calendar/agenda carries it: my duty days marked on the calendar (+ the signed gap markers), the agenda row gains the duty line, vacancy rows render inline with [Tag tjansen]; day select opens the CTC dinner face where the Rediger holdplan pane lives. No new component. | Extends existing `GET /api/team/my` |
 
 Reuse `OrderHistoryDisplay.vue`'s pattern — extract a generic `AuditTimeline.vue` (props: `entries: AuditEntryDisplay[]`, `actionConfig: Record<Action, {icon, color, labelDa}>`) so both order history and roster history render via the same component.
 
@@ -449,40 +449,175 @@ is. The endpoint's write target changes with Phase 4, and the shipped rows get a
 this feature ships: genuine season members keep their `CookingTeamAssignment`, one-off volunteers are re-expressed
 as duty history. The separation list is produced for the user to review; the user applies it.
 
-## Roster UX — CookingTeamCard drives it ✅ signed 2026-10-05
+## Roster UX — CookingTeamCard drives it ✅ signed 2026-10-05 · dinner face ✅ signed 2026-10-08
 
 A template duty is one row of the team's standard roster: three cooks 15–18 are three identical template duties.
 A dinner's roster has one roster duty per template duty, with role, time and task copied at creation; a vacancy is a
 roster duty without a person. Capacity is edited by adding/removing template duties; counts in the UI are derived by
-grouping identical (time, task, role) duties. A roster duty's copied time can be edited for a one-off deviation
-("Emil kommer 15-16 i dag"), shown inline.
+grouping identical (time, task, role) duties. A one-off deviation ("Emil kommer 15-16 i dag") is a Meld fra plus an
+Ekstra vagt with the new time.
 
-**Sign-off is derived.** Every duty filled → the roster auto-signs (`ROSTER_SIGNED_OFF`, system actor). Short → the
-status line reads "MANGLER n" and the chef's [Godkend alligevel] appears (`ROSTER_SIGNED_OFF`, chef actor — approved
-short-handed). Any later change re-evaluates. Duty-level admin bypass is parked as nice-to-have; the admin's lever is
-moving people between teams (existing membership UI).
+**One pane, three modes.** The dinner face has one edit affordance: the card-header pencil for a member,
+[Opdater holdplan] for the chef. It opens the Rediger holdplan pane with the modes Meld til, Meld fra and Byt. The
+"Denne middag" pane lists this dinner's seats; the "Anden middag" pane renders in Byt only. A member is preselected
+as Hvem; the chef's Hvem is a picker (the chef override). Meld til is always available: a vacant seat, the vacant
+Chefkok seat (commits through the shipped chef claim, so the hero poster and the seat are two doors to one action)
+or an Ekstra vagt (Kok or Kokkespire; creates the seat, row badge `ekstra`). Meld fra lists the viewer's seats, every
+seat for the chef. Byt takes a filled seat on this dinner; a seat of the viewer's on another dinner is optional (the
+half swap), and repayment is agreed between the two.
+
+**Sign-off is derived from the seats and Historik.**
+
+| State | Rule | Band |
+|---|---|---|
+| Klar | no vacant seat; the system writes `ROSTER_SIGNED_OFF` when the last seat fills | `ALERTS.success` |
+| Godkendt | the chef's `ROSTER_SIGNED_OFF` row is newer than the last row that opened a seat | `ALERTS.success`, "mangler stadig" + [Meld til] |
+| Åben | otherwise; a seat that goes vacant after either sign-off reopens the plan and the old row stays in Historik | `ALERTS.neutral` while the step is green; `ALERTS.warning` + [Meld til] from yellow on |
+
+**Holdplan is a chef step** in the workflow line after Madbestilling klar, with a user-action deadline (green /
+yellow / red / "mangler" from the cooking thresholds). The deadline is 24 hours before the dinner start:
+`rosterIsSignedOffHoursBefore: 24` in `app.config.ts` beside `menuIsAnnouncedDaysBefore`, read into `SeasonDeadlines`
+as the roster deadline getter. The band's voice follows the step's alarm level; the band's second line "Din tjans: …"
+renders for a viewer with a seat on the dinner. The gap line lists the vacancies by kind in the calendar-marker
+vocabulary, chef hat for the Chefkok seat, joker hat for a joker seat, dot for a regular seat, each with its task, in
+that order. [Godkend holdplan] renders for the chef while the plan is open.
+
+**Wanted avatars.** A vacant seat renders the hero poster's question-mark avatar, small, with the hat of its seat
+kind (chef hat, joker hat, none for a regular seat); clicking it opens the pane in Meld til with the seat picked.
+The seat-kind icons carry through into the pane's seat lists. The poster's classes become a design-system token
+shared by the hero and the roster card.
+
+**The hero poster carries the seats** ✅ signed 2026-10-08. The chef stays the headliner, rendered whenever the chef
+is missing as today. One small wanted avatar per vacant seat (joker hat or plain) sits in the poster with an
+aria-label and a tooltip (kind, task, time); clicking one scrolls to the roster card and opens the pane in Meld til
+with that seat picked. The small avatars render while the plan is Åben and the Holdplan step is yellow or later;
+Godkendt removes them.
+
+```
+Hero, chef missing, three seats open
+|  +-- dashed amber, mocha -----------------------------+                      |
+|  |  ( (?) )   WANTED                                  |                      |
+|  |    hat     Chefkok          (?)joker  (?)  (?)     |                      |
+|  +----------------------------------------------------+                      |
+
+Hero, chef present, two seats open
+|  ( (av) )  Bo Jensen        +-- dashed amber, mocha ---+                     |
+|    hat     Chefkok          |  WANTED   (?)joker  (?)  |                     |
+|                             +--------------------------+                     |
+
+Phone (375 px), chef present
+|  ( (av) )  Bo Jensen                   |
+|    hat     Chefkok                     |
+|  +-- dashed amber, mocha ------------+ |
+|  |  WANTED   (?)joker  (?)           | |
+|  +-----------------------------------+ |
+```
 
 | Role | Powers |
 |---|---|
-| Team member | take a vacant duty, give up / swap their own |
-| Chef | godkend-alligevel, ad-hoc extra duty (rare), release extra portions (`feature-proposal-waitlist.md`) |
+| Team member | Meld til (vacant seat, Chefkok seat, Ekstra vagt), Meld fra (own seats), Byt (take a seat here, optional return seat) |
+| Chef | the same pane through [Opdater holdplan] with the Hvem picker and every seat in Meld fra; [Godkend holdplan]; release extra portions (`feature-proposal-waitlist.md`) |
 | Admin | membership moves; game-plan drill-down is view-only |
-| System | auto-sign and re-evaluation |
+| System | auto-sign, reopening on a vacancy, the Holdplan step's countdown |
 
-**Mockup — CTC dinner face** (`/chef`, `/dinner`; members get the same table with self-service on own rows) ✅ signed 2026-10-05
+**Mockup — CTC dinner face** (`/chef`, `/dinner`) ✅ signed 2026-10-08
 
 ```
-CookingTeamCard — Hold 3 — tirsdag 15/04
-  Hvem kommer: 4 af 5 — MANGLER 1          [Godkend alligevel]   <- kun ved mangel
+Chef workflow line (DinnerStatusStepper)
+ Planlagt    Publiceret   Framelding   Madbestilling klar   Holdplan     Afholdt
+ (calendar)  (megaphone)  (ticket)     (cart)               (team)       (check)
+             [om 2d]      [åben 5d]    [om 9d]              [om 8d]
+                                                            green / yellow / red / "mangler"
 
-  08:00-11:00   Prep (1)        Anna                     [byt/afgiv på egne rækker]
-  15:00-18:00   Madlavning (3)  Maria (byt: Per) · Per · Ledig  [Tag tjansen]
-  15:00-16:00   Børnetjans (1)  Emil — hjælper med mad eller borddækning
-  18:30-21:30   Opvask (1)      Bo (joker)
+Card header
+chef    | [v] [(team) Hold 3] [(hat) 1] [(mem) 5]   [(pencil) Opdater holdplan] [Godkend holdplan] |
+member  | [v] [(team) Hold 3] [(hat) 1] [(mem) 5]                                        [(pencil)] |
+  the chevron expands the team card
 
-  ...sidste plads tages ->  Hvem kommer: 5 af 5 — GODKENDT (auto)
+Band, four voices
+Åben, step green                                                          ALERTS.neutral
+| (i) Holdplanen er åben · 2 af 5 besat                                          |
+|     Mangler: (chef hat) chefkok · (joker hat) joker til Madlavning · (dot) fast tjans til Opvask |
+|     Din tjans: Prep 08:00-11:00                                                |
+Åben, step yellow / red / mangler                            ALERTS.warning + withActions
+| (!) Vi mangler 3 · kan du hjælpe?                                   [Meld til] |
+|     (chef hat) chefkok · (joker hat) joker til Madlavning · (dot) fast tjans til Opvask |
+|     Din tjans: Prep 08:00-11:00                                                |
+Godkendt                                                     ALERTS.success + withActions
+| (check) Chefkokken har godkendt holdplanen · 4 af 5 besat           [Meld til] |
+|         Mangler stadig: (joker hat) joker til Madlavning                       |
+Klar                                                                      ALERTS.success
+| (check) Holdplanen er klar · 5 af 5 besat                                      |
+|         Din tjans: Prep 08:00-11:00                                            |
+  the chef's band carries no Meld til
 
-  Fast hold                                         [v]   <- collapsed footer
+Desktop (md+), member Anna, step yellow, chef missing
+Hvem laver maden?
++----------------------------------------------------------------------------------+
+| [v] [(team) Hold 3] [(hat) 0] [(mem) 5]                                [(pencil)] |
++----------------------------------------------------------------------------------+
+| +------------------------------------------------------------------------------+ |
+| | (!) Vi mangler 2 · kan du hjælpe?                                 [Meld til] | |
+| |     (chef hat) chefkok · (joker hat) joker til Madlavning                    | |
+| |     Din tjans: Prep 08:00-11:00                                              | |
+| +------------------------------------------------------------------------------+ |
+|  08:00-11:00  (pot) Prep          I (av) Anna · din tjans                        |
+|  15:00-18:00  (hat) Chefkok         [(?) chef hat  Ledig]                        |
+|  15:00-18:00  (pot) Madlavning      (av) Maria [bytter]  (av) Per  [(?) joker hat  Ledig] |
+|  16:30-18:00  (sprout) Børnetjans   (av) Emil                                    |
+|  18:30-21:30  (pot) Opvask          (av) Lise                                    |
+| [v] Historik                                                                     |
++----------------------------------------------------------------------------------+
+
+Phone (375 px), same state
++-- Hvem laver maden? -------------------+
+| [v] [Hold 3] [(hat) 0] [(mem) 5] [(pencil)] |
+| +------------------------------------+ |
+| | (!) Vi mangler 2 · kan du hjælpe?  | |
+| |     (chef hat) chefkok             | |
+| |     (joker hat) joker til Madlavning | |
+| |     Din tjans: Prep 08-11          | |
+| |                        [Meld til]  | |
+| +------------------------------------+ |
+| 08-11       Prep       (av) Anna · din |
+| 15-18       Chefkok    [(?) hat Ledig] |
+| 15-18       Madlavning (av) Maria      |
+|                        (av) Per        |
+|                        [(?) joker Ledig] |
+| 16:30-18    Børnetjans (av) Emil       |
+| 18:30-21:30 Opvask     (av) Lise       |
+| [v] Historik                           |
++----------------------------------------+
+
+Pane — opens from the pencil, Opdater holdplan, the band's Meld til or a wanted avatar
+Meld til
++-- Rediger holdplan --------------------------------------------------------------+
+|  [(x) Meld til]  [( ) Meld fra]  [( ) Byt]                                       |
+|  +-- Denne middag · ti 15/04 ---------------------------------------------------+|
+|  |  (x) (hat) Chefkok 15:00-18:00 · ledig                                       ||
+|  |  ( ) (pot) Madlavning 15:00-18:00 · ledig · joker (Anna barsel)              ||
+|  |  ( ) Ekstra vagt   rolle [KOK v]   fra [15:00]  til [18:00]                  ||
+|  |  Hvem: (av) Anna (dig)                                                       || <- chef: a picker
+|  +------------------------------------------------------------------------------+|
+|                                                        [Annuller]   [Meld til]   |
++----------------------------------------------------------------------------------+
+Meld fra — the viewer's seats, every seat for the chef
+|  +-- Denne middag · ti 15/04 ---------------------------------------------------+|
+|  |  (x) (pot) Prep 08:00-11:00 · din tjans                                      ||
+|  +------------------------------------------------------------------------------+|
+|                                                        [Annuller]   [Meld fra]   |
+Byt — take a seat here, a seat of yours elsewhere is optional
+|  [( ) Meld til]  [( ) Meld fra]  [(x) Byt]                                       |
+|  +-- Denne middag · ti 15/04 ------------------+ +-- Anden middag (valgfri) ----------+|
+|  |  (x) (pot) Madlavning 15:00-18:00 · Per     | |  Middag: [ ti 22/10 · Hold 3  v ]  ||
+|  |  ( ) (pot) Madlavning 15:00-18:00 · Maria   | |  (x) (pot) Madlavning 15-18 · din  ||
+|  |  ( ) (pot) Opvask 18:30-21:30 · Lise        | |  ( ) ingen · jeg skylder Per en    ||
+|  |  ( ) (sprout) Børnetjans 16:30-18:00 · Emil | |                                    ||
+|  +---------------------------------------------+ +------------------------------------+|
+|  [x] Per og jeg har aftalt det                                                   |
+|  Resultat: Du tager Pers Madlavning ti 15/04 · Per tager din Madlavning ti 22/10 |
+|                                                        [Annuller]   [Byt]        |
+  on the phone the two Byt panes stack and the result reads as two lines
 ```
 
 **Mockup — CTC season face** (admin teams) ✅ signed 2026-10-05
@@ -578,47 +713,44 @@ Standardvagter — Hold 3            (admin teams, holdets detalje — ✅ 2026-
 ### Phase 4 — Single-dinner roster + derived sign-off (UX in § Roster UX)
 
 - **Single-day scope**: one dinner's roster at a time, inside the CTC dinner face. No multi-day grid.
-- Members self-serve their own rows (take / give up / swap); the chef adds a rare ad-hoc duty;
-  slot times/tasks come from the templates and are edited there, not on the daily roster. All writes audited.
-- Sign-off is derived: every duty filled → the system writes one `ROSTER_SIGNED_OFF` row (system actor); short →
-  [Godkend alligevel] writes them with the chef as actor. No state column; "is this duty signed off?" is derived
-  from history (latest `ROSTER_SIGNED_OFF` for this duty AFTER any subsequent `DUTY_ASSIGNED`/`DUTY_UNASSIGNED`/`DUTY_SWAPPED`/`DUTY_UPDATED`).
-  Any change re-evaluates — a roster falls out of GODKENDT when a duty empties and re-signs when it fills.
-- E2E: fill the last duty → the auto-sign row is written; empty a duty → sign-off invalidated; chef godkend-alligevel on
-  a short roster → chef-actor rows; refill → auto re-sign.
+- One pane, three modes (Meld til / Meld fra / Byt) for members and chef; the chef's Hvem picker is the override;
+  Ekstra vagt is always offered in Meld til and creates a seat (origin VOLUNTEER); times and tasks come from the
+  templates. All writes audited.
+- Sign-off is derived (§ Roster UX table): Klar when every seat is filled (system `ROSTER_SIGNED_OFF`), Godkendt when
+  the chef's `ROSTER_SIGNED_OFF` row is newer than the last row that opened a seat, Åben otherwise. No state column.
+- Holdplan step after Madbestilling klar: `DinnerStepState` gains the step, `DINNER_STEP_MAP` and `DEADLINE_LABELS`
+  the entry, `SeasonDeadlines` the roster deadline getter from `rosterIsSignedOffHoursBefore`; the band reads the
+  step's alarm level; the chef's roster deadline kinds join the trigger catalog
+  (`feature-proposal-notification-triggers.md`).
+- E2E: fill the last seat → the auto-sign row is written; empty a seat → the plan reopens; chef [Godkend holdplan] on
+  a short roster → chef-actor row; refill → auto re-sign; Ekstra vagt → an `ekstra` seat with origin VOLUNTEER.
 
-### Phase 5 — Cross-team duty swap (the headline)
+### Phase 5 — Duty swap (the headline)
 
-- `POST /api/team/cooking/duty/swap` — pair swap of two `DinnerDuty` rows. Two `DutyHistory` rows with same `swapGroupId`. Body:
+- `POST /api/team/cooking/duty/swap` — take a seat, optionally give one. Body:
   ```ts
-  { aDutyId: number, bDutyId: number, agreementConfirmed: boolean }
+  { takeDutyId: number, giveDutyId?: number, agreementConfirmed: boolean }
   ```
-- **Cross-team supported**: A and B may belong to different `CookingTeam`s and on different `DinnerEvent`s. The swap exchanges `inhabitantId` between the two duty rows; everything else (role, time slot, task, dinner) stays put on each row. Both teams' chefs see the swap in their roster timelines.
-- **Authorization**: caller must own one of the two duties (or be admin). The other party's consent is via the `agreementConfirmed` flag — out-of-band negotiation, in-app one-sided commit, mirrors chef-swap pattern.
-- Member-facing UI ✅ signed 2026-10-06: [byt/afgiv] on own rows in the CTC dinner face opens the inline panel
-  (extends `RoleAssignment.vue` to all roles). Afgiv = release (duty goes vacant, `DUTY_UNASSIGNED`). Byt = pair swap
-  against a searchable cross-team list of ALL members' upcoming duties; one-sided commit with the
-  `agreementConfirmed` checkbox; the result line spells out both directions; plain commit (a swap reverses by
-  swapping back).
-
-```
-Min tjans: Madlavning, tirsdag 15/04 (Hold 3)
-  ( ) Afgiv tjansen
-  (x) Byt med en anden
-  Byt med:  [vælg tjans v]      <- alle medlemmers kommende tjanser, søgbar
-     to 17/10  Opvask      Per (Hold 2)
-     ti 22/10  Madlavning  Maria (Hold 3)
-  [x] Vi har aftalt byttet
-  Resultat: Du tager Pers Opvask to 17/10 — Per tager din Madlavning ti 15/04
-  [Byt tjanser]   [Fortryd]
-```
+  `takeDutyId` is a filled seat; the caller replaces its holder. `giveDutyId` is a seat the caller holds on another
+  dinner; the former holder of `takeDutyId` receives it. One `DutyHistory` row per touched duty (`DUTY_SWAPPED`); the
+  pair shares a `swapGroupId`, a half swap writes one row.
+- **Cross-team supported**: the two seats may belong to different `CookingTeam`s and `DinnerEvent`s; role, time, task
+  and dinner stay on each row. Both teams' chefs see the swap in their roster timelines.
+- **Authorization**: the caller holds `giveDutyId` when it is given (or is admin); the other party's consent is the
+  `agreementConfirmed` flag — out-of-band agreement, in-app one-sided commit, the chef-swap pattern. Repayment of a
+  half swap is between the two.
+- Member-facing UI ✅ signed 2026-10-08: the Byt mode of the Rediger holdplan pane (§ Roster UX mockup); the result
+  line spells out both directions, or "Per er fri" for a half swap. Meld fra releases a seat (`DUTY_UNASSIGNED`). A
+  swap reverses by swapping back.
 - Move-out cascade (carried from chef-swap Phase 4, unshipped): on a `moveOutDate` change,
   `server/utils/cleanupAssignmentsOnMoveOut.ts` deletes the inhabitant's future `CookingTeamAssignment` rows, fully
   resets future dinners where they are chef (`CHEF_LOSS_DINNER_UPDATES`), nulls `inhabitantId` on their future
   PLANNED duties and emits `DUTY_UNASSIGNED` per affected duty (`performedByUserId` = the admin who triggered the
   move-out); wired into `POST /api/household/[id]/update`. `CookingTeamCard.vue` shows a "Flytter {date}" badge for
   members with a future `moveOutDate`. Tests: `cleanupAssignmentsOnMoveOut.unit.spec.ts`, `moveout-cascade.e2e.spec.ts`.
-- E2E: Anna (team 7, Mon prep) ↔ Peter (team 2, Thu prep); both teams' rosters reflect the swap; both timelines show the paired audit rows with shared `swapGroupId`.
+- E2E: Anna takes Per's Madlavning ti 15/04 and gives her Madlavning to 17/10 (Hold 3 ↔ Hold 2); both rosters
+  reflect it; both timelines show the paired rows with a shared `swapGroupId`. A half swap writes one row and leaves
+  Per without a return seat.
 
 ## Reuse
 

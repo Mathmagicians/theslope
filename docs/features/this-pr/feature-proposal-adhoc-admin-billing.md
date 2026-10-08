@@ -205,7 +205,7 @@ model Expense {
 | REGULAR (grocery lines of a dinner) | set | the dinner's rådighedsbeløb | per chef across the season: a chef is responsible for all the dinners they chef and may overspend a single dinner as long as the season balances |
 | ADHOC (basisvarer) | null | the køkkenbidrag pool | pool balance per period/season: sum of køkkenbidrag vs ADHOC rows |
 
-- `DinnerEvent.totalCost` is dropped: a dinner's cost is `SUM(amount)` over its REGULAR rows; the dinner's
+- `DinnerEvent.totalCost` stays, `/// @deprecated`, until `../chore-drop-total-cost.md` drops it next release; a dinner's cost is `SUM(amount)` over its REGULAR rows; the dinner's
   GROCERIES_DONE step derives from them.
 - The chef enters a dinner's expense lines in `ChefMenuCard` under the budget (amount, description, payer);
   line-wise delete. Brugt = the sum, Balance = rådighedsbeløb (ex moms) − Brugt (`DinnerBudget.vue`).
@@ -312,7 +312,7 @@ No change to `createTransactions` nightly job (scoped to `Order.state: CLOSED`, 
 
 Part of the 0.9 Prisma bundle (`release-0.9.0.md` § Prisma bundle, Migration notes): `Transaction.type` as
 `ALTER TABLE … ADD COLUMN … NOT NULL DEFAULT 'REGULAR'`, `Transaction.description` nullable, the `Expense` table,
-`DinnerEvent.totalCost` dropped with `ALTER TABLE … DROP COLUMN`. No data line: the default covers every existing
+`DinnerEvent.totalCost` kept and deprecated (dropped by `../chore-drop-total-cost.md`). Data line: existing `totalCost` values map to REGULAR `Expense` rows (SYSTEM snapshot, no payer); the `type` default covers every existing
 row and the snapshots stay as written.
 
 ### ADR Compliance
