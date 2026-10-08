@@ -1,6 +1,6 @@
 import {describe, it, expect} from 'vitest'
 import {createDefaultWeekdayMap} from '~/types/dateTypes'
-import {DinnerMode} from '@prisma/client'
+import {DinnerMode} from '~~/prisma/generated/client/client'
 
 describe('dateTypes - WeekDayMap factory functions', () => {
     describe('createDefaultWeekdayMap - generic factory', () => {

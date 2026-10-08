@@ -68,7 +68,7 @@ palettes: ## Regenerate the palette presets from the design system (rerun after 
 	@npx jiti scripts/palettes/generate.ts
 
 # --- Schema → migration files → Prisma client + zod (prisma/generated, committed)
-.PHONY: d1-prisma-zod d1-prisma d1-create-migration d1-flatten-migrations
+.PHONY: d1-prisma-zod d1-prisma d1-prisma-check d1-create-migration d1-flatten-migrations
 
 d1-prisma-zod:
 	@npx prisma generate zod
@@ -77,6 +77,9 @@ d1-prisma: d1-prisma-zod ## Generate Prisma client and Zod types
 	@npx prisma format
 	@npx prisma validate
 	@npm run db:generate-client
+
+d1-prisma-check: d1-prisma ## Fail when the committed generated layer differs from the schema
+	@git diff --exit-code --stat prisma/generated prisma/schema.prisma
 
 d1-create-migration: ## Create migration (name=xxx)
 	@echo "📝 Creating new Prisma migration..."

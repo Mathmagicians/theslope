@@ -1,6 +1,6 @@
 import {PrismaD1} from "@prisma/adapter-d1"
-import {PrismaClient} from "@prisma/client"
-import type {Prisma} from "@prisma/client"
+import {PrismaClient} from "~~/prisma/generated/client/client"
+import type {Prisma} from "~~/prisma/generated/client/client"
 
 /**
  * Shared database connection utility

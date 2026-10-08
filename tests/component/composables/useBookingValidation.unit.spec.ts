@@ -6,9 +6,9 @@ import {DinnerStateSchema, DinnerModeSchema, OrderStateSchema, TicketTypeSchema,
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
-import type {SafeParseReturnType} from 'zod'
+import type {ZodSafeParseResult} from 'zod'
 
-const getValidationError = <T>(result: SafeParseReturnType<T, T>) =>
+const getValidationError = <T>(result: ZodSafeParseResult<T>) =>
   !result.success ? `Validation errors: ${JSON.stringify(result.error.format())}` : ''
 
 describe('useBookingValidation', () => {

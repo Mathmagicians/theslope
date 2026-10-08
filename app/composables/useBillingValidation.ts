@@ -37,7 +37,7 @@ export const useBillingValidation = () => {
      * Ticket counts by type - raw data from repository
      * Keys are TicketType enum values
      */
-    const TicketCountsByTypeSchema = z.record(TicketTypeSchema, z.number().int())
+    const TicketCountsByTypeSchema = z.partialRecord(TicketTypeSchema, z.number().int())
 
     /**
      * BillingPeriodSummary Display - for index endpoints (lightweight)

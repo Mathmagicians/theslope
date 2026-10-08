@@ -1,10 +1,10 @@
 import type {AsyncData, AsyncDataOptions, NuxtApp, NuxtError} from '#app'
 import type {NitroFetchOptions, NitroFetchRequest} from 'nitropack/types'
-import type {ZodType, ZodTypeDef} from 'zod'
+import type {ZodType} from 'zod'
 
 type ApiError = { message?: string; statusCode?: number; statusMessage?: string; data?: unknown }
 
-type ResponseSchema<T> = ZodType<T, ZodTypeDef, unknown>
+type ResponseSchema<T> = ZodType<T>
 
 export type StoreAsyncDataOptions<T> = Omit<AsyncDataOptions<unknown, T>, 'default' | 'transform' | 'pick'> & {
     schema: ResponseSchema<T>
@@ -35,7 +35,8 @@ const NOT_FOUND_TEXT = 'Kan ikke finde det, du leder efter'
 
 const resolveText = (text: Text | undefined) => typeof text === 'function' ? text() : text
 
-export type ApiRequestOptions<T> = NitroFetchOptions<NitroFetchRequest> & {
+// Internal API routes only: the typed fetch pins baseURL to '' for them, so the option is not offered
+export type ApiRequestOptions<T> = Omit<NitroFetchOptions<NitroFetchRequest>, 'baseURL'> & {
     action: string
     errorMessage?: string
     schema?: ResponseSchema<T>
@@ -222,7 +223,7 @@ export const useApiHandler = () => {
         {action, errorMessage, schema, ...fetchOptions}: ApiRequestOptions<T>
     ): Promise<T> => {
         try {
-            const response = await requestFetch<unknown>(url, fetchOptions)
+            const response: unknown = await requestFetch(url, fetchOptions)
             return schema ? schema.parse(response) : response as T
         } catch (error) {
             handleApiError(error, action, errorMessage)

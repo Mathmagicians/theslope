@@ -4,7 +4,6 @@ import {
     OrderStateSchema,
     DinnerStateSchema,
     DinnerModeSchema,
-    TicketPriceSchema as _TicketPriceSchema,
     RoleSchema,
     OrderAuditActionSchema
 } from '~~/prisma/generated/zod'
@@ -42,7 +41,7 @@ export const useBookingValidation = () => {
         date: z.coerce.date(),
         menuTitle: z.string().max(500, "Menu titel må ikke være længere end 500 tegn"),
         menuDescription: z.string().max(500).nullable(),
-        menuPictureUrl: z.string().url().nullable(),
+        menuPictureUrl: z.url().nullable(),
         state: DinnerStateSchema,
         totalCost: z.number().int().min(0),
         chefId: z.number().int().positive().nullable(),
@@ -715,11 +714,11 @@ export const useBookingValidation = () => {
      * Uses z.coerce for HTML input string → number conversion
      */
     const GuestBookingFormSchema = z.object({
-        count: z.coerce.number({invalid_type_error: 'Indtast antal gæster'})
+        count: z.coerce.number({error: 'Indtast antal gæster'})
             .int({message: 'Skal være et helt tal'})
             .min(1, {message: 'Minimum 1 gæst'})
             .max(10, {message: 'Maximum 10 gæster'}),
-        ticketPriceId: z.coerce.number({invalid_type_error: 'Vælg en billettype'})
+        ticketPriceId: z.coerce.number({error: 'Vælg en billettype'})
             .int()
             .positive({message: 'Vælg en billettype'}),
         allergyTypeIds: z.array(z.coerce.number().int().positive()).default([]),
@@ -801,7 +800,7 @@ export const useBookingValidation = () => {
         name: z.string().optional(),
         start: z.string().optional(), // ISO 8601 with timezone offset
         end: z.string().optional(),   // ISO 8601 with timezone offset
-        imageUrl: z.string().url().nullable().optional(),
+        imageUrl: z.url().nullable().optional(),
         createdAt: z.string().optional(),
         updatedAt: z.string().optional()
     })

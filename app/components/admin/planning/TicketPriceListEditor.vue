@@ -20,7 +20,7 @@ const props = withDefaults(defineProps<{
 const errors = ref<Map<string, string[]>>(new Map())
 // Single ref for new ticket - stores price in DKK for UI binding
 const newTicket = ref({
-  ticketType: TICKET_TYPES[0],
+  ticketType: TicketType.ADULT,
   priceDKK: 0,
   maximumAgeLimit: undefined as number | undefined,
   description: ''
@@ -51,7 +51,7 @@ const ticketTypeOptions = computed(() =>
 // ACTIONS
 const resetNewTicket = () => {
   newTicket.value = {
-    ticketType: TICKET_TYPES[0],
+    ticketType: TicketType.ADULT,
     priceDKK: 0,
     maximumAgeLimit: undefined,
     description: ''

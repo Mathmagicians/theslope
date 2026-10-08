@@ -257,7 +257,7 @@ export class SeasonFactory {
 
             // Validate API returns data conforming to SeasonSchema (converts ISO strings to Dates)
             const result = SeasonSchema.safeParse(responseBody)
-            expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+            expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.issues)}`).toBe(true)
 
             const season = result.data!
 
@@ -296,7 +296,7 @@ export class SeasonFactory {
         if (expectedStatus !== 200) return responseBody
 
         const result = SeasonUpdateResponseSchema.safeParse(responseBody)
-        expect(result.success, `API should return a valid SeasonUpdateResponse. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+        expect(result.success, `API should return a valid SeasonUpdateResponse. Errors: ${JSON.stringify(result.success ? [] : result.error.issues)}`).toBe(true)
         return result.data!
     }
 
@@ -595,7 +595,7 @@ export class SeasonFactory {
         // Validate API returns data conforming to SeasonSchema (converts ISO strings to Dates)
         const parsedSeasons = rawData.map((season: unknown) => {
             const result = SeasonSchema.safeParse(season)
-            expect(result.success, `API should return valid Season objects. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+            expect(result.success, `API should return valid Season objects. Errors: ${JSON.stringify(result.success ? [] : result.error.issues)}`).toBe(true)
             expect(result.data!.ticketPrices.length, `Season ${result.data!.shortName} must have ticket prices`).toBeGreaterThan(0)
             return result.data!
         })
@@ -615,7 +615,7 @@ export class SeasonFactory {
 
         // Validate API returns data conforming to SeasonSchema (converts ISO strings to Dates)
         const result = SeasonSchema.safeParse(rawData)
-        expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+        expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.issues)}`).toBe(true)
 
         return result.data!
     }
@@ -820,7 +820,7 @@ export class SeasonFactory {
 
         const {SeasonSchema} = useSeasonValidation()
         const result = SeasonSchema.safeParse(rawSeason)
-        expect(result.success, `API should return valid Season. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+        expect(result.success, `API should return valid Season. Errors: ${JSON.stringify(result.success ? [] : result.error.issues)}`).toBe(true)
 
         expect(result.data!.isActive, 'Season should be active').toBe(true)
         return result.data!

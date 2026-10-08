@@ -92,8 +92,9 @@ const prevOwnerConstraints = computed<Date[]>(() =>
 
 const formSchema = computed(() => HouseholdCreateFormSchema(prevOwnerConstraints.value))
 
-const validateForm = (state: Partial<HouseholdCreateFormData>) => {
-    if (state.pbsId === undefined) return []
+// The form state carries the schema's input: pbsId arrives as `unknown` until coercion
+const validateForm = (state: {pbsId?: unknown}) => {
+    if (typeof state.pbsId !== 'number') return []
     const conflict = props.existingHouseholds.find(h => h.pbsId === state.pbsId)
     return conflict
         ? [{name: 'pbsId', message: `PBS ${conflict.pbsId} bruges af ${conflict.shortName}`}]

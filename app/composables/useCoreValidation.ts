@@ -115,13 +115,13 @@ export const useCoreValidation = () => {
     // 1. Standard: user@domain.com
     // 2. RFC 5322 with display name: Display Name <user@domain.com>
     const emailSchema = z.union([
-        z.string().email(),
+        z.email(),
         z.string().regex(/^.+\s+<.+@.+\..+>$/)
     ]).transform((val) => {
         // Normalize to standard format by extracting email from angle brackets
         const match = val.match(/<(.+)>/)
         return match ? match[1] : val
-    }).pipe(z.string().email())
+    }).pipe(z.email())
 
     // Domain schema - systemRoles as array
     const BaseUserSchema = UserFragmentSchema.extend({
@@ -186,7 +186,7 @@ export const useCoreValidation = () => {
         // Override with more specific validation
         name: z.string().min(1, "Navn skal være mindst 1 karakter").max(100, "Navn må ikke være længere end 100 karakterer"),
         lastName: z.string().min(1, "Efternavn skal være mindst 1 karakter").max(100, "Efternavn må ikke være længere end 100 karakterer"),
-        pictureUrl: z.string().url().optional().nullable(),
+        pictureUrl: z.url().optional().nullable(),
         // Add domain-specific field
         dinnerPreferences: WeekDayMapSchemaOptional.optional().nullable()
     })
@@ -231,7 +231,7 @@ export const useCoreValidation = () => {
 
     // Login schema for authentication
     const LoginSchema = z.object({
-        email: z.string().email('Indtast den mail, du er registreret med i Heynabo'),
+        email: z.email('Indtast den mail, du er registreret med i Heynabo'),
         password: z.string().nonempty('Indtast din Heynabo adgangskode')
     })
 
@@ -272,10 +272,10 @@ export const useCoreValidation = () => {
         HouseholdCreateSchema
             .pick({pbsId: true, address: true, movedInDate: true})
             .extend({
-                pbsId: z.coerce.number({invalid_type_error: 'PBS skal være et tal'})
+                pbsId: z.coerce.number({error: 'PBS skal være et tal'})
                     .int({message: 'PBS skal være et helt tal'})
                     .positive({message: 'PBS skal være positivt'}),
-                movedInDate: z.date({invalid_type_error: 'Du skal sætte en indflytningsdato for den nye familie'})
+                movedInDate: z.date({error: 'Du skal sætte en indflytningsdato for den nye familie'})
             })
             .refine(
                 (data) => siblingMoveOutConstraints.every(c => !isBefore(data.movedInDate, c)),

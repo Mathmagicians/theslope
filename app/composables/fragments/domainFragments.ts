@@ -41,7 +41,7 @@ import {AppearanceSchema, DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} fro
  */
 export const UserFragmentSchema = z.object({
     id: z.number().int().positive(),
-    email: z.string().email(),
+    email: z.email(),
     phone: z.string().nullable().optional(),
     systemRoles: z.array(SystemRoleSchema).default([]),
     notificationChannels: z.array(NotificationChannelSchema).default(DEFAULT_NOTIFICATION_CHANNELS),

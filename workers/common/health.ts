@@ -6,7 +6,7 @@ import {z} from 'zod'
 
 export const HealthReportSchema = z.object({
     status: z.literal('ok'),
-    timestamp: z.string().datetime(),
+    timestamp: z.iso.datetime(),
     version: z.string().min(1),
     releaseDate: z.string().nullable(),
     sha: z.string().nullable(),

@@ -1,5 +1,5 @@
 import {PrismaD1} from "@prisma/adapter-d1"
-import {PrismaClient} from "@prisma/client"
+import {PrismaClient} from "~~/prisma/generated/client/client"
 import {SETTING_REGISTRY, SettingDetailSchema, type SettingDetail, type SettingKey} from '~/composables/useSettingValidation'
 
 const LOG = '⚙️ > SETTING'

@@ -13,7 +13,7 @@ Sizing is informal t-shirt sizes.
 | Package | What | Detail | Size | Status |
 |---|---|---|---|---|
 | Framework research spike | prisma 7/8-RC + zod 4 + `zod-prisma-types` compatibility; removable workarounds and adoptable features; Nuxt roadmap evidence that `useAsyncData`'s option surface (`enabled`, `createUseAsyncData`) and named layout slots survive coming releases | `feature-proposal-framework-adoption.md` § Dependency clusters | S | ✅ decided — spike first |
-| CI test reporting | Job summary: vitest stats line + per-suite Playwright sections with report links | below | S | ✅ approved 2026-10-05 |
+| CI test reporting | Job summary: vitest's built-in GitHub summary + per-suite Playwright sections with report links | below | S | ✅ approved 2026-10-05 |
 | Framework pair upgrade | pinia 4 + @pinia/nuxt 1, @vueuse/core 15, ical-generator 11 | `feature-proposal-framework-adoption.md` § Clusters and order | S | ✅ implemented 2026-10-05 — zero source changes, user commit pending |
 | Store fetcher factory + store alignment | `useStoreAsyncData`, schema-driven types; every store converges on it (the misaligned fetch handling across stores, release-plan I2) | `feature-proposal-framework-adoption.md` | M–L | ✅ approved 2026-10-05 |
 | Fetch gating | `enabled` carries the fetch condition; id-in-key gates need nothing extra, login gates clear on logout; folded in 2026-10-07: datasets key on the real selection (no copy refs, no component watches), `selectedSeasonId = userChoice ?? getDefaultSeasonId()`, `dependsOn` for SSR of dependent chains | `feature-proposal-framework-adoption.md` | M–L | ✅ implemented 2026-10-07 — both serial e2e specs green; user commit pending; fine-tuning OPEN (stale-selection 404) |
@@ -54,13 +54,13 @@ One e2e runner at a time; packages that run Playwright are sequenced.
 
 **Problem.** The pipeline summary reports counts without categories; the e2e api and ui suites appear in neither the
 summary nor as result links; `continue-on-error: true` hides ui failures.
-**Solution.** Per tool, no cross-format normalization. Vitest keeps its own reporter: the unit step tees the output
-and the summary prints the stats lines (`Test Files` / `Tests` / `Duration`). Each Playwright suite — api, ui,
+**Solution.** Per tool, no cross-format normalization. Vitest 5 reports itself: its `github-actions`
+reporter (auto-enabled under `GITHUB_ACTIONS`) writes the Test Files / Test Results summary. Each Playwright suite — api, ui,
 smoke — writes its JSON (`PLAYWRIGHT_JSON_OUTPUT_NAME`) and `make test-report` renders that suite's section: counts,
 ❌ heading on failures, the warning note (ui) and the report artifact link (`actions/upload-artifact` `artifact-url`).
 `continue-on-error` stays (decision 2026-10-05).
-**TDD.** `make test-report` rendered against sample reports (failing, green, missing file); the grep against a real
-vitest run; the summary layout verifies on a CI run of this branch.
+**TDD.** `make test-report` rendered against sample reports (failing, green, missing file); the summary layout
+verifies on a CI run of this branch.
 **Affected.** `.github/workflows/cicd.yml`, `Makefile` (`test-report`), `package.json` (playwright json reporters).
 
 ## Prisma bundle
@@ -77,30 +77,42 @@ One package, one migration, produced by the Make targets after the user signs of
 
 ### Signed model set (2026-10-07) — the contract for the implementing agent
 
-**Majors.** prisma + @prisma/client + @prisma/adapter-d1 7.10.0 (pinned; npm `latest` is the 8-RC), zod 4.6.5,
-zod-prisma-types 3.3.11. Work: `prisma.config.ts`; generator `provider = "prisma-client"` + `output` (import sweep at
-the three client sites + repositories); delete `previewFeatures = ["strictUndefinedChecks"]` (default in 7; the 27
-`Prisma.skip` sites stay); add `previewFeatures = ["partialIndexes"]` (Prisma 7.4+) for the two partial unique
-indexes below; the zod-4 sites: 6 `invalid_type_error`/`required_error` → `error`, 2 enum-keyed `z.record` →
-`z.partialRecord` (composables), plus the error utilities the spike's scan missed — `app/utils/validtation.ts:6` and
-`useDateRangeValidation.ts:94` (`.errors` → `.issues`, `TypeOf` → `z.infer`), `server/utils/eventHandlerHelper.ts`
-(`instanceof ZodError` — confirm the v4 class hierarchy on the branch), `server/utils/sender/emit.ts:21` and
-`workers/sender/utils/consumeBatch.ts:36` (`issue.path.join` — no symbol keys here, stays). Manual chunking and
-raw-SQL joins stay (ADR-014). Gate proof: `make d1-prisma` +
-`npm run pre:all` green on the branch.
+**Majors** ✅ applied 2026-10-08. prisma + @prisma/client + @prisma/adapter-d1 7.10.0 (pinned; npm `latest` is the
+8-RC), zod 4.6.5, zod-prisma-types 3.3.11.
 
-**New tables** (Prisma blocks in the linked docs; every other column required):
+- `prisma.config.ts` holds the CLI config (schema path, migrations path, the local sqlite url Migrate diffs against);
+  the schema's datasource carries the provider only.
+- Generator `prisma-client`, `output = "./generated/client"`, `runtime = "workerd"`, `previewFeatures =
+  ["partialIndexes"]`; the client is committed; `make d1-prisma-check` fails CI when the generated layer drifts from
+  the schema. `strictUndefinedChecks` stays a preview feature in 7 (the generated input types carry `Skip` only
+  with the flag), so the flag remains; the 38 `Prisma.skip` sites read `skip` from
+  `@prisma/client/runtime/wasm-compiler-edge` (the runtime module the generated client binds to — the same object the
+  client compares against), `Prisma.validator<T>()({…})` is `{…} satisfies T`, the seven `@prisma/client` import
+  sites point at `~~/prisma/generated/client/client`.
+- The zod generator emits enums only (`createInputTypes = false`, `createModelTypes = false`): the code consumes 12
+  enum schemas and nothing else; the file is 122 lines. The old 17,756-line file carried 1,846 `Prisma.*` input-type
+  references, and instantiating them in every project that includes the zod layer pushed the root `npm run ts` past
+  the 4 GB heap (prisma/orm#29011 reports +32 % tsc memory on 7 for the same reason); enums-only brings it back
+  under the default heap.
+- zod 4: `invalid_type_error`/`required_error` → `error` (6 sites), `.errors` → `.issues`, `z.number({coerce})` →
+  `z.coerce.number()`, `.default({})` → `.prefault({})`, `z.string().email()/url()/uuid()/datetime()` →
+  `z.email()/z.url()/z.uuid()/z.iso.datetime()` (15 sites), `.passthrough()` → `z.looseObject`, the sparse
+  `TicketCountsByTypeSchema` → `z.partialRecord`; `mapZodErrorsToFormErrors` is `z.flattenError`, the 400 message
+  and the sender logs use `z.prettifyError`; `useDateRangeValidation`'s own mapper is gone (one mapper).
+- Manual chunking and raw-SQL joins stay (ADR-014). Gate: `make d1-prisma` + `npm run pre:all`.
+
+**New tables** ✅ in the schema (group 1 signed 2026-10-07, group 2 2026-10-08; Prisma blocks in the linked docs; every
+other column required):
 
 | Table | Column | Decision |
 |---|---|---|
 | `DinnerDutyTemplate` | `role` | required, default `COOK` |
-| `DinnerDuty` | `inhabitantId` | nullable (vacant seat) |
-| | `minutesFromDinnerStart`, `durationMinutes`, `taskDescription` | nullable (slot TBD) |
-| | `sourceTemplateId`, `jokerSlotId` | nullable, SET NULL |
-| | `state` | required, default `PLANNED` |
+| `JokerSlot` | `role` / `allocationPercentage` / `affinity` / `startDate`, `endDate` / `note` | default `COOK` / default `100` / required (weekday map JSON) / required / nullable |
+| `DinnerDuty` | `inhabitantId` | nullable — vacant duty |
+| | `origin` | required, default `TEAM` (`DutyOrigin`: TEAM, JOKER, VOLUNTEER, SWAP) |
+| | `role`, `minutesFromDinnerStart`, `durationMinutes`, `taskDescription` | required — copied from the template duty at creation |
 | `DutyHistory` | `performedByUserId` | nullable (system actor), SET NULL |
-| | `dinnerDutyId` | nullable, SET NULL |
-| `JokerSlot` | `role` / `affinity` / `note` | default `COOK` / required (weekday map JSON) / nullable |
+| | `dinnerDutyId` | nullable, SET NULL — null on `ROSTER_SIGNED_OFF` |
 | `TicketWaitlist` | `isGuestTicket` / `order` | default `false` / required JSON (order-create shape) |
 | | unique | partial unique `(dinnerEventId, inhabitantId) WHERE isGuestTicket = 0` via `partialIndexes` |
 | enums | `DutyAuditAction`, `DutyOrigin`, `TransactionType` | as signed |
@@ -205,7 +217,7 @@ here, admin-only.
   basisvarer expenses are dinner-less and track against the køkkenbidrag pool; payment happens automatically in the
   bank — the feature is tracking only, excluded from invoicing, no PBS flow.
 - Framework corner first; research spike before any major upgrade. e2e ui keeps `continue-on-error`, failures red.
-- CI reporting is per-tool (correction 2026-10-05): vitest prints its own stats line; `make test-report` is
+- CI reporting is per-tool (correction 2026-10-05): vitest 5's built-in GitHub summary reports the unit run (2026-10-07); `make test-report` is
   Playwright-only, one call per suite (api, ui, smoke) — no cross-format normalization.
 
 **2026-10-05** (round 2, after the spike)

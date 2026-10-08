@@ -4,14 +4,14 @@ import {createDateRange, formatDate} from '~/utils/date'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
-import type {SafeParseReturnType} from 'zod'
+import type {ZodSafeParseResult} from 'zod'
 
 const {TicketTypeSchema} = useTicketPriceValidation()
 const TicketType = TicketTypeSchema.enum
 const testSeason = SeasonFactory.defaultSeasonData
 
 // Helper to format validation error messages for assertions
-const getValidationError = <T>(result: SafeParseReturnType<T, T>) =>
+const getValidationError = <T>(result: ZodSafeParseResult<T>) =>
   !result.success ? `Validation errors: ${JSON.stringify(result.error.format())}` : ''
 
 describe('useSeasonValidation', () => {
@@ -80,7 +80,7 @@ describe('useSeasonValidation', () => {
       const result = SeasonSchema.safeParse(seasonWithOverlappingHolidays)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.errors[0]?.message).toBe("Ferieperioder må ikke overlappe hinanden")
+        expect(result.error.issues[0]?.message).toBe("Ferieperioder må ikke overlappe hinanden")
       }
     })
 
@@ -97,7 +97,7 @@ describe('useSeasonValidation', () => {
       const result = SeasonSchema.safeParse(seasonWithOutsideHolidays)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.errors[0]?.message).toBe("Ferieperioder skal være inden for fællesspisningssæsonen")
+        expect(result.error.issues[0]?.message).toBe("Ferieperioder skal være inden for fællesspisningssæsonen")
       }
     })
   })

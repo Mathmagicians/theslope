@@ -23,7 +23,7 @@ export default defineEventHandler(async (event): Promise<AllergyDetail> => {
         const {id} = await getValidatedRouterParams(event, idSchema.parse)
         allergyId = id
 
-        const body = await readValidatedBody(event, z.object({}).passthrough().parse)
+        const body = await readValidatedBody(event, z.looseObject({}).parse)
         allergyData = AllergyUpdateSchema.parse({...body, id: allergyId})
     } catch (error) {
         return throwH3Error('🏥 > ALLERGY > [POST] Input validation error', error)

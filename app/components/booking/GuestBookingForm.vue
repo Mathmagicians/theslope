@@ -77,10 +77,11 @@ const isSaving = ref(false)
 
 // Contextual validation - business logic that needs props/computed access
 // Zod schema handles structural validation (type, min, max)
-const validateForm = (state: Partial<typeof formState>) => {
+// The form state carries the schema's input: count arrives as `unknown` until coercion
+const validateForm = (state: {count?: unknown}) => {
   const errors: {name: string, message: string}[] = []
   const {action} = bookingOptions.value
-  const count = state.count ?? 1
+  const count = typeof state.count === 'number' ? state.count : 1
 
   // No booking action available (deadlines passed, no released tickets, etc.)
   if (!action) {

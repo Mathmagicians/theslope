@@ -12,7 +12,7 @@ import {z} from "zod"
 const {throwH3Error, getSessionUserId} = eventHandlerHelper
 
 const idSchema = z.object({
-    id: z.number({coerce: true}).positive().int()
+    id: z.coerce.number().positive().int()
 })
 
 /**

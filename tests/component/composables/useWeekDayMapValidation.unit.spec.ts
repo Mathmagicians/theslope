@@ -46,7 +46,7 @@ describe('useWeekDayMapValidation - boolean (backward compatibility)', () => {
             const result = WeekDayMapSchemaRequired!.safeParse(allUnselected)
             expect(result.success).toBe(false)
             if (!result.success) {
-                expect(result.error.errors[0]?.message).toBe('Man skal lave mad mindst en dag om ugen')
+                expect(result.error.issues[0]?.message).toBe('Man skal lave mad mindst en dag om ugen')
             }
         })
     })
