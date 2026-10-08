@@ -10,6 +10,7 @@ import type {
 } from "~/composables/useCookingTeamValidation"
 import {useBookingValidation, type DinnerEventDisplay, type ScaffoldResult, type DailyMaintenanceResult} from "~/composables/useBookingValidation"
 import {useMaintenanceValidation, type JobRunDisplay} from "~/composables/useMaintenanceValidation"
+import {useDutyValidation, type JokerSlotCreate} from "~/composables/useDutyValidation"
 import {getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
@@ -23,7 +24,8 @@ type CookingTeamCreateAssignment = NonNullable<CookingTeamCreate['assignments']>
 // Serialization now handled internally by repository layer
 const {salt, temporaryAndRandom, headers} = testHelpers
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
-const {CookingTeamDetailSchema, CookingTeamAssignmentSchema, CreateTeamsResponseSchema} = useCookingTeamValidation()
+const {CookingTeamDetailSchema, CookingTeamDisplaySchema, CookingTeamAssignmentSchema, CreateTeamsResponseSchema} = useCookingTeamValidation()
+const {RoleSchema} = useDutyValidation()
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
@@ -128,6 +130,7 @@ export class SeasonFactory {
         seasonId: 1,
         name: "TestTeam",
         cookingDaysCount: 0,
+        jokerSlotCount: 0,
         assignments: [],
         ...overrides
     })
@@ -152,6 +155,7 @@ export class SeasonFactory {
                 updatedAt: new Date()
             } as DinnerEventDisplay
         ],
+        jokerSlots: [],
         ...overrides
     })
 
@@ -1010,19 +1014,62 @@ export class SeasonFactory {
         return null
     }
 
+    // === JOKER SLOT METHODS ===
+
+    static readonly defaultJokerSlot = (overrides: Partial<JokerSlotCreate> = {}): JokerSlotCreate => ({
+        role: RoleSchema.enum.COOK,
+        allocationPercentage: 100,
+        affinity: createDefaultWeekdayMap([true, false, true, false, false, false, false]),
+        startDate: this.tomorrow,
+        endDate: this.oneWeekFromTomorrow,
+        note: null,
+        ...overrides
+    })
+
+    static readonly createJokerSlot = async (
+        context: BrowserContext,
+        teamId: number,
+        slot: JokerSlotCreate = this.defaultJokerSlot(),
+        expectedStatus: number = 201
+    ): Promise<CookingTeamDetail | null> => {
+        const response = await context.request.put(`${ADMIN_TEAM_ENDPOINT}/${teamId}/joker-slot`, {
+            headers: headers,
+            data: slot
+        })
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+        return expectedStatus === 201 ? CookingTeamDetailSchema.parse(await response.json()) : null
+    }
+
+    static readonly deleteJokerSlot = async (
+        context: BrowserContext,
+        teamId: number,
+        slotId: number,
+        expectedStatus: number = 200
+    ): Promise<CookingTeamDetail | null> => {
+        const response = await context.request.delete(`${ADMIN_TEAM_ENDPOINT}/${teamId}/joker-slot/${slotId}`)
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+        return expectedStatus === 200 ? CookingTeamDetailSchema.parse(await response.json()) : null
+    }
+
     static readonly getCookingTeamsForSeason = async (
         context: BrowserContext,
         seasonId: number
-    ): Promise<CookingTeamDetail[]> => {
+    ): Promise<CookingTeamDisplay[]> => {
         const response = await context.request.get(`${ADMIN_TEAM_ENDPOINT}?seasonId=${seasonId}`)
         expect(response.status()).toBe(200)
 
         const responseBody = await response.json()
         expect(Array.isArray(responseBody)).toBe(true)
-        return CookingTeamDetailSchema.array().parse(responseBody)
+        return CookingTeamDisplaySchema.array().parse(responseBody)
     }
 
-    static readonly getAllCookingTeams = async (context: BrowserContext): Promise<CookingTeamDetail[]> => {
+    static readonly getAllCookingTeams = async (context: BrowserContext): Promise<CookingTeamDisplay[]> => {
         const response = await context.request.get(ADMIN_TEAM_ENDPOINT)
         const status = response.status()
         const errorBody = status !== 200 ? await response.text() : ''
@@ -1030,7 +1077,7 @@ export class SeasonFactory {
 
         const responseBody = await response.json()
         expect(Array.isArray(responseBody)).toBe(true)
-        return CookingTeamDetailSchema.array().parse(responseBody)
+        return CookingTeamDisplaySchema.array().parse(responseBody)
     }
 
     static readonly assignTeamAffinities = async (context: BrowserContext, seasonId: number): Promise<{seasonId: number, teamCount: number, teams: CookingTeamDetail[]}> => {

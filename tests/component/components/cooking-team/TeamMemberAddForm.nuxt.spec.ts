@@ -2,7 +2,10 @@
 import {describe, it, expect} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import TeamMemberAddForm from '~/components/cooking-team/TeamMemberAddForm.vue'
-import {nextTick, ref} from 'vue'
+import {nextTick, ref, type ComponentPublicInstance} from 'vue'
+import type {VueWrapper} from '@vue/test-utils'
+import {findByTestId} from '~~/tests/component/testHelpers'
+import {ROLE_ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {createDefaultWeekdayMap} from '~/types/dateTypes'
 
@@ -79,5 +82,33 @@ describe('TeamMemberAddForm', () => {
         const text = wrapper.text()
         expect(text).toContain('mandag')
         expect(text).not.toContain('tirsdag')
+    })
+
+    // ========== ROLE GLYPH ON THE TRIGGER ==========
+
+    describe('role select trigger', () => {
+        type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
+        const triggerGlyphs = (wrapper: VueWrapper) => {
+            const select = findByTestId(wrapper, 'team-member-role-select')
+            return (wrapper.findAllComponents({name: 'UIcon'}) as IconWrapper[])
+                .filter(icon => select.element.contains(icon.element))
+                .map(icon => icon.props('name'))
+        }
+
+        it.each([Role.CHEF, Role.COOK, Role.JUNIORHELPER])('shows the %s glyph when the role is selected', async (role) => {
+            const wrapper = await mount({initialRole: role})
+            expect(triggerGlyphs(wrapper)).toContain(ROLE_ICONS[role])
+        })
+
+        it('follows a change of selection', async () => {
+            const wrapper = await mount({initialRole: Role.COOK})
+            const select = wrapper.findAllComponents({name: 'USelectMenu'})
+                .find(menu => findByTestId(menu, 'team-member-role-select').exists())
+            select!.vm.$emit('update:modelValue', Role.CHEF)
+            await nextTick()
+            const glyphs = triggerGlyphs(wrapper)
+            expect(glyphs).toContain(ROLE_ICONS[Role.CHEF])
+            expect(glyphs).not.toContain(ROLE_ICONS[Role.COOK])
+        })
     })
 })

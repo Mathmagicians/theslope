@@ -1021,7 +1021,8 @@ export async function activateSeason(d1Client: D1Database, seasonId: number): Pr
                         },
                         _count: {
                             select: {
-                                dinners: true  // Aggregate count of dinners per team
+                                dinners: true,  // Aggregate counts per team
+                                jokerSlots: true
                             }
                         }
                     },
@@ -1054,7 +1055,8 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
                         },
                         _count: {
                             select: {
-                                dinners: true  // Aggregate count of dinners per team
+                                dinners: true,  // Aggregate counts per team
+                                jokerSlots: true
                             }
                         }
                     },
@@ -1071,7 +1073,8 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
                 ...season,
                 CookingTeams: season.CookingTeams?.map(team => ({
                     ...team,
-                    cookingDaysCount: team._count.dinners
+                    cookingDaysCount: team._count.dinners,
+                    jokerSlotCount: team._count.jokerSlots
                 }))
             }
             return deserializeSeason(seasonWithCounts)
@@ -1275,6 +1278,36 @@ const {
     deserializeCookingTeamAssignment
 } = useCookingTeamValidation()
 
+const cookingTeamDetailInclude = {
+    season: true,
+    assignments: {
+        include: {inhabitant: true}
+    },
+    dinners: {orderBy: {date: 'asc'}},  // Chronological for getNextDinnerDate
+    jokerSlots: true,
+    _count: {
+        select: {dinners: true, jokerSlots: true}
+    }
+} satisfies Prisma.CookingTeamInclude
+
+type CookingTeamDetailPayload = Prisma.CookingTeamGetPayload<{include: typeof cookingTeamDetailInclude}>
+
+// Maps Prisma 'dinners' to domain 'dinnerEvents' and _count to cookingDaysCount and jokerSlotCount; drops season and _count
+const toCookingTeamDetail = (team: CookingTeamDetailPayload): CookingTeamDetail => {
+    const {deserializeCookingTeamDetail} = useCookingTeamValidation()
+    return deserializeCookingTeamDetail({
+        id: team.id,
+        seasonId: team.seasonId,
+        name: team.name,
+        affinity: team.affinity,
+        assignments: team.assignments,
+        dinnerEvents: team.dinners,
+        jokerSlots: team.jokerSlots,
+        cookingDaysCount: team._count.dinners,
+        jokerSlotCount: team._count.jokerSlots
+    })
+}
+
 /**
  * Create team assignment (ADR-009)
  * Accepts: CookingTeamAssignment without id and inhabitant (inhabitant populated via Prisma include)
@@ -1438,7 +1471,7 @@ export async function deleteCookingTeamAssignments(d1Client: D1Database, assignm
 
 /**
  * Fetch cooking teams with Display data (ADR-009)
- * Includes: assignments (with inhabitants), cookingDaysCount aggregate
+ * Includes: assignments (with inhabitants), cookingDaysCount and jokerSlotCount aggregates
  * For list views - no dinnerEvents array
  */
 export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promise<CookingTeamDisplay[]> {
@@ -1456,7 +1489,7 @@ export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promi
                     }
                 },
                 _count: {
-                    select: {dinners: true}
+                    select: {dinners: true, jokerSlots: true}
                 }
             },
             orderBy: {
@@ -1464,14 +1497,15 @@ export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promi
             }
         })
 
-        // Transform to include cookingDaysCount aggregate (map Prisma _count.dinners → cookingDaysCount)
+        // Map Prisma _count to the aggregates (dinners → cookingDaysCount, jokerSlots → jokerSlotCount)
         const teamsWithCount = teams.map(team => ({
             id: team.id,
             seasonId: team.seasonId,
             name: team.name,
             affinity: team.affinity,
             assignments: team.assignments,
-            cookingDaysCount: team._count.dinners
+            cookingDaysCount: team._count.dinners,
+            jokerSlotCount: team._count.jokerSlots
         }))
 
         // Deserialize from database format
@@ -1486,44 +1520,21 @@ export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promi
 
 /**
  * Fetch single cooking team with Detail data (ADR-009)
- * Includes: assignments (with inhabitants), dinnerEvents array, jokerSlots, cookingDaysCount aggregate
+ * Includes: assignments (with inhabitants), dinnerEvents array, jokerSlots, cookingDaysCount and jokerSlotCount aggregates
  */
 export async function fetchTeam(id: number, d1Client: D1Database): Promise<CookingTeamDetail | null> {
     console.info(`👥 > TEAM > [GET] Fetching team with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeCookingTeamDetail} = useCookingTeamValidation()
 
     try {
         const team = await prisma.cookingTeam.findFirst({
             where: {id},
-            include: {
-                season: true,
-                assignments: {
-                    include: {inhabitant: true}
-                },
-                dinners: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
-                jokerSlots: true,
-                _count: {
-                    select: {dinners: true}
-                }
-            }
+            include: cookingTeamDetailInclude
         })
 
         if (team) {
             console.info(`👥 > TEAM > [GET] Found team ${team.name} (ID: ${team.id})`)
-            // Transform to include cookingDaysCount aggregate and map dinners → dinnerEvents
-            // Exclude Prisma-only fields (season object, _count)
-            const teamWithCount = {
-                id: team.id,
-                seasonId: team.seasonId,
-                name: team.name,
-                affinity: team.affinity,
-                assignments: team.assignments,
-                dinnerEvents: team.dinners,  // Map Prisma 'dinners' relation to domain 'dinnerEvents'
-                jokerSlots: team.jokerSlots,
-                cookingDaysCount: team._count.dinners
-            }
-            return deserializeCookingTeamDetail(teamWithCount)
+            return toCookingTeamDetail(team)
         } else {
             console.info(`👥 > TEAM > [GET] No team found with ID ${id}`)
             return null
@@ -1545,7 +1556,6 @@ export async function fetchTeam(id: number, d1Client: D1Database): Promise<Cooki
 export async function fetchMyTeams(d1Client: D1Database, seasonId: number, inhabitantId: number): Promise<CookingTeamDetail[]> {
     console.info(`👥 > TEAM > [GET MY] Fetching teams for inhabitant ${inhabitantId} in season ${seasonId}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {deserializeCookingTeamDetail} = useCookingTeamValidation()
 
     try {
         const teams = await prisma.cookingTeam.findMany({
@@ -1557,33 +1567,13 @@ export async function fetchMyTeams(d1Client: D1Database, seasonId: number, inhab
                     }
                 }
             },
-            include: {
-                season: true,
-                assignments: {
-                    include: {inhabitant: true}
-                },
-                dinners: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
-                _count: {
-                    select: {dinners: true}
-                }
-            },
+            include: cookingTeamDetailInclude,
             orderBy: {
                 name: 'asc'
             }
         })
 
-        // Transform and deserialize
-        const teamsWithDinners = teams.map(team => ({
-            id: team.id,
-            seasonId: team.seasonId,
-            name: team.name,
-            affinity: team.affinity,
-            assignments: team.assignments,
-            dinnerEvents: team.dinners,  // Map Prisma 'dinners' to domain 'dinnerEvents'
-            cookingDaysCount: team._count.dinners
-        }))
-
-        const deserializedTeams = teamsWithDinners.map(team => deserializeCookingTeamDetail(team))
+        const deserializedTeams = teams.map(toCookingTeamDetail)
 
         console.info(`👥 > TEAM > [GET MY] Found ${teams.length} teams for inhabitant ${inhabitantId}`)
         return deserializedTeams
@@ -1600,7 +1590,7 @@ export async function fetchMyTeams(d1Client: D1Database, seasonId: number, inhab
 export async function createTeam(d1Client: D1Database, teamData: CookingTeamCreate): Promise<CookingTeamDetail> {
     console.info(`👥 > TEAM > [CREATE] Creating team ${teamData.name}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {toPrismaCreateData, deserializeCookingTeamDetail} = useCookingTeamValidation()
+    const {toPrismaCreateData} = useCookingTeamValidation()
 
     // Transform domain object to Prisma create format (excludes computed fields, serializes WeekDayMap)
     const {assignments, affinity, ...createData} = toPrismaCreateData(teamData)
@@ -1613,35 +1603,11 @@ export async function createTeam(d1Client: D1Database, teamData: CookingTeamCrea
                 affinity: affinity ?? skip,
                 assignments: assignments?.length ? {create: assignments} : skip
             },
-            include: {
-                season: true,
-                assignments: {
-                    include: {
-                        inhabitant: true
-                    }
-                },
-                dinners: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
-                _count: {
-                    select: {dinners: true}
-                }
-            }
+            include: cookingTeamDetailInclude
         })
 
         console.info(`👥 > TEAM > [CREATE] Successfully created team ${newTeam.name} with ID ${newTeam.id}`)
-
-        // Transform to include cookingDaysCount and map dinners → dinnerEvents
-        const teamWithCount = {
-            id: newTeam.id,
-            seasonId: newTeam.seasonId,
-            name: newTeam.name,
-            affinity: newTeam.affinity,
-            assignments: newTeam.assignments,
-            dinnerEvents: newTeam.dinners,
-            cookingDaysCount: newTeam._count.dinners
-        }
-
-        // Deserialize before returning (ADR-010)
-        return deserializeCookingTeamDetail(teamWithCount)
+        return toCookingTeamDetail(newTeam)
     } catch (error) {
         return throwH3Error(`👥 > TEAM > [CREATE]: Error creating team ${teamData.name}: `, error)
     }
@@ -1655,7 +1621,7 @@ export async function createTeam(d1Client: D1Database, teamData: CookingTeamCrea
 export async function updateTeam(d1Client: D1Database, id: number, teamData: CookingTeamUpdate): Promise<CookingTeamDetail> {
     console.info(`👥 > TEAM > [UPDATE] Updating team with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {toPrismaUpdateData, deserializeCookingTeamDetail, serializeCookingTeamAssignment} = useCookingTeamValidation()
+    const {toPrismaUpdateData, serializeCookingTeamAssignment} = useCookingTeamValidation()
 
     // Transform domain object to Prisma update format (excludes computed fields, serializes WeekDayMap)
     const {assignments, affinity, ...updateData} = toPrismaUpdateData(teamData)
@@ -1675,34 +1641,10 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Coo
                     create: assignments.map((item: CookingTeamAssignment) => serializeCookingTeamAssignment(item))
                 } : skip
             },
-            include: {
-                season: true,
-                assignments: {
-                    include: {
-                        inhabitant: true
-                    }
-                },
-                dinners: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
-                _count: {
-                    select: {dinners: true}
-                }
-            }
+            include: cookingTeamDetailInclude
         })
         console.info(`👥 > TEAM > [UPDATE] Successfully updated team ${updatedTeam.name} (ID: ${updatedTeam.id})`)
-
-        // Transform to include cookingDaysCount and map dinners → dinnerEvents
-        const teamWithCount = {
-            id: updatedTeam.id,
-            seasonId: updatedTeam.seasonId,
-            name: updatedTeam.name,
-            affinity: updatedTeam.affinity,
-            assignments: updatedTeam.assignments,
-            dinnerEvents: updatedTeam.dinners,
-            cookingDaysCount: updatedTeam._count.dinners
-        }
-
-        // Deserialize before returning (ADR-010)
-        return deserializeCookingTeamDetail(teamWithCount)
+        return toCookingTeamDetail(updatedTeam)
     } catch (error) {
         return throwH3Error(`👥 > TEAM > [UPDATE] > Error updating team with ID ${id}`, error)
     }
@@ -1710,7 +1652,7 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Coo
 
 /**
  * Delete cooking team (ADR-009)
- * Returns: CookingTeamDetail (with empty dinnerEvents and assignments arrays)
+ * Returns: CookingTeamDetail (with the deleted joker slots, empty dinnerEvents and assignments arrays)
  */
 export async function deleteTeam(d1Client: D1Database, id: number): Promise<CookingTeamDetail> {
     console.info(`👥 > TEAM > [DELETE] Deleting team with ID ${id}`)
@@ -1719,8 +1661,10 @@ export async function deleteTeam(d1Client: D1Database, id: number): Promise<Cook
 
     try {
         // Delete team - cascade will handle strong associations (CookingTeamAssignments) automatically, and clear weak associations
+        // Prisma reads the included slots before the cascade removes them
         const deletedTeam = await prisma.cookingTeam.delete({
-            where: {id}
+            where: {id},
+            include: {jokerSlots: true}
         })
 
         console.info(`👥 > TEAM > [DELETE] Successfully deleted team ${deletedTeam.name}`)
@@ -1733,7 +1677,9 @@ export async function deleteTeam(d1Client: D1Database, id: number): Promise<Cook
             affinity: deletedTeam.affinity,
             assignments: [],
             dinnerEvents: [],
-            cookingDaysCount: 0
+            jokerSlots: deletedTeam.jokerSlots,
+            cookingDaysCount: 0,
+            jokerSlotCount: deletedTeam.jokerSlots.length
         }
 
         // ADR-010: Deserialize to domain type before returning

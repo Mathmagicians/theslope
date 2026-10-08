@@ -1091,7 +1091,7 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
                             }
                         },
                         _count: {
-                            select: {dinners: true}
+                            select: {dinners: true, jokerSlots: true}
                         }
                     }
                 },
@@ -1162,7 +1162,7 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
                             }
                         },
                         _count: {
-                            select: {dinners: true}
+                            select: {dinners: true, jokerSlots: true}
                         }
                     }
                 },

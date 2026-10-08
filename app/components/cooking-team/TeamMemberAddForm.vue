@@ -50,6 +50,8 @@ const handleSubmit = () => {
       <USelectMenu
           v-model="form.role"
           :items="roleOptions"
+          :icon="ROLE_ICONS[form.role]"
+          data-testid="team-member-role-select"
           value-key="value"
           placeholder="Vælg rolle..."
           class="w-full"

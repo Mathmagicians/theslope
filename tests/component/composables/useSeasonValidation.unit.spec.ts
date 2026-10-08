@@ -183,7 +183,7 @@ describe('useSeasonValidation', () => {
         ...testSeason,
         id: 1,
         dinnerEvents: [dinnerEvent1, dinnerEvent2],
-        CookingTeams: [{id: 1, name: 'Team A', seasonId: 1, assignments: [], cookingDaysCount: 3}],
+        CookingTeams: [{id: 1, name: 'Team A', seasonId: 1, assignments: [], cookingDaysCount: 3, jokerSlotCount: 2}],
         ticketPrices: [{id: 1, seasonId: testSeason.id!, ticketType: TicketType.ADULT, price: 4000}]
       }
 
@@ -216,6 +216,7 @@ describe('useSeasonValidation', () => {
       expect(deserializedWithRelations.dinnerEvents![1]?.date).toBeInstanceOf(Date)
       expect(deserializedWithRelations.dinnerEvents![1]?.menuTitle).toBe('Taco Tuesday')
       expect(deserializedWithRelations.CookingTeams).toHaveLength(1)
+      expect(deserializedWithRelations.CookingTeams![0]).toMatchObject({cookingDaysCount: 3, jokerSlotCount: 2})
       expect(deserializedWithRelations.ticketPrices).toHaveLength(1)
 
       // ticket prices

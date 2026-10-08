@@ -11,10 +11,20 @@
  * ┌──────────────────────────────────────────────────────────────────────────┐
  * │ CookingTeamBadges (large): [(team) Team A] [(members) 4] [(calendar) 12] │
  * ├──────────────────────────────────────────────────────────────────────────┤
- * │ (chef hat)    Chefkokke    [Anna H]                                      │
- * │ (cooking pot) Kokke        [Lars B] [Maria S]                            │
- * │ (sprout)      Kokkespirer  [Peter J]           (ROLE_ICONS glyphs)       │
+ * │ (chef hat) Chefkokke    [Anna H]                                         │
+ * │ (whisk)    Kokke        [Lars B] [Maria S]                               │
+ * │ (plant)    Kokkespirer  [Peter J]         (COMPONENTS.roleBox.heading)   │
  * └──────────────────────────────────────────────────────────────────────────┘
+ *
+ * MODE: 'regular' / 'edit' - Holdmedlemmer, one box per role, the glyph once on its heading
+ *   (chef hat) Chefkok
+ *   |  (av) Anna  100%  tir
+ *   (whisk) Kok
+ *   |  (av) Per    50%  tir
+ *   (plant) Kokkespire
+ *   |  Ingen kokkespire
+ *   (joker) Jokere
+ *   |  07/10/2026-01/12/2026  tir  (whisk) Kok  Anna barsel  8 vagter
  *
  * Already volunteered:
  * ┌──────────────────────────────────────────────────────────────────────────┐
@@ -97,7 +107,7 @@ const isErrored = computed(() => status.value === 'error')
 const isNoTeam = computed(() => status.value === 'success' && team.value === null)
 
 // All data from fetched team Detail entity
-const { getTeamShortName } = useCookingTeam()
+const { getTeamShortName, countJokerSlotShifts } = useCookingTeam()
 const teamName = computed(() => {
   const fullName = team.value?.name ?? `Madhold ${props.teamNumber}`
   return props.useShortName ? getTeamShortName(fullName) : fullName
@@ -106,6 +116,11 @@ const assignments = computed(() => team.value?.assignments ?? [])
 const affinity = computed(() => team.value?.affinity ?? null)
 const dinnerEvents = computed(() => team.value?.dinnerEvents ?? [])  // From Detail entity
 const cookingDaysCount = computed(() => team.value?.cookingDaysCount ?? 0)  // From aggregate
+const jokerSlots = computed(() => team.value?.jokerSlots ?? [])
+const jokerLines = computed(() => {
+  const cookingDates = dinnerEvents.value.map(event => event.date)
+  return jokerSlots.value.map(slot => ({slot, shifts: countJokerSlotShifts(slot, cookingDates)}))
+})
 
 const editedName = ref(teamName.value)
 
@@ -116,6 +131,13 @@ watch(teamName, (newName) => {
 // The team wears the rainbow stop of its number: fill and ink as classes, so a badge needs
 // no colour slot (ADR-018)
 const teamBand = computed(() => getRainbowBand(props.teamNumber - 1))
+
+// The monitor face names each group in the plural
+const MONITOR_HEADINGS: Record<TeamRole, string> = {
+  CHEF: 'Chefkokke',
+  COOK: 'Kokke',
+  JUNIORHELPER: 'Kokkespirer'
+}
 
 const roleGroups = computed(() => {
   const groups = {
@@ -245,48 +267,20 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
     </div>
 
     <!-- Members display OR empty state -->
-    <div v-if="!hasNoMembers" class="flex flex-col gap-3 md:gap-4 px-3 md:px-4">
-      <!-- Chefs group -->
-      <div v-if="roleGroups.CHEF.length > 0" class="flex items-start gap-3 md:gap-4">
-        <div class="flex flex-col items-center">
-          <UIcon :name="ROLE_ICONS.CHEF" class="text-2xl md:text-3xl" />
-          <span :class="[TYPOGRAPHY.finePrint, TEXT.muted]">Chefkokke</span>
+    <div v-if="!hasNoMembers" :class="COMPONENTS.roleBox.monitorGrid">
+      <template v-for="(members, role) in roleGroups" :key="role">
+        <div v-if="members.length > 0" :class="COMPONENTS.roleBox.monitorRow" :data-testid="`team-role-group-${role}`">
+          <div :class="COMPONENTS.roleBox.heading" :data-testid="`team-role-heading-${role}`">
+            <UIcon :name="ROLE_ICONS[role]" :class="COMPONENTS.roleBox.glyph" />
+            <span>{{ MONITOR_HEADINGS[role] }}</span>
+          </div>
+          <UserListItem
+            :inhabitants="members.map(m => m.inhabitant)"
+            :compact="false"
+            :size="SIZES.standard"
+          />
         </div>
-        <UserListItem
-          :inhabitants="roleGroups.CHEF.map(m => m.inhabitant)"
-          :compact="false"
-          :size="SIZES.standard"
-          class="mt-2"
-        />
-      </div>
-
-      <!-- Cooks group -->
-      <div v-if="roleGroups.COOK.length > 0" class="flex items-start gap-3 md:gap-4">
-        <div class="flex flex-col items-center">
-          <UIcon :name="ROLE_ICONS.COOK" class="text-2xl md:text-3xl" />
-          <span :class="[TYPOGRAPHY.finePrint, TEXT.muted]">Kokke</span>
-        </div>
-        <UserListItem
-          :inhabitants="roleGroups.COOK.map(m => m.inhabitant)"
-          :compact="false"
-          :size="SIZES.standard"
-          class="mt-2"
-        />
-      </div>
-
-      <!-- Junior helpers group -->
-      <div v-if="roleGroups.JUNIORHELPER.length > 0" class="flex items-start gap-3 md:gap-4">
-        <div class="flex flex-col items-center">
-          <UIcon :name="ROLE_ICONS.JUNIORHELPER" class="text-2xl md:text-3xl" />
-          <span :class="[TYPOGRAPHY.finePrint, TEXT.muted]">Kokkespirer</span>
-        </div>
-        <UserListItem
-          :inhabitants="roleGroups.JUNIORHELPER.map(m => m.inhabitant)"
-          :compact="false"
-          :size="SIZES.standard"
-          class="mt-2"
-        />
-      </div>
+      </template>
     </div>
     <UAlert
       v-else
@@ -385,14 +379,16 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             <div
               v-for="(members, role) in roleGroups"
               :key="role"
-              class="space-y-2"
+              :class="COMPONENTS.roleBox.box"
+              :data-testid="`team-role-group-${role}`"
             >
-              <h5 :class="[TYPOGRAPHY.caption, TEXT.toned]">
-                {{ ROLE_LABELS[role] }}
+              <h5 :class="COMPONENTS.roleBox.heading" :data-testid="`team-role-heading-${role}`">
+                <UIcon :name="ROLE_ICONS[role]" :class="COMPONENTS.roleBox.glyph" />
+                <span>{{ ROLE_LABELS[role] }}</span>
               </h5>
 
-              <div v-if="members.length > 0" :class="['flex flex-col gap-2 p-3', BG.inset]">
-                <div v-for="member in members" :key="member.id" class="flex items-center gap-2 flex-wrap">
+              <div v-if="members.length > 0" :class="COMPONENTS.roleBox.list">
+                <div v-for="member in members" :key="member.id" :class="COMPONENTS.roleBox.row" data-testid="team-member-row">
                   <UAvatar
                     :src="member.inhabitant?.pictureUrl ?? undefined"
                     :alt="`${member.inhabitant?.name} ${member.inhabitant?.lastName}`"
@@ -423,8 +419,30 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                 </div>
               </div>
 
-              <div v-else :class="[TYPOGRAPHY.bodyTextSmall, TEXT.gray[500], 'italic p-3']">
+              <div v-else :class="COMPONENTS.roleBox.empty">
                 Ingen {{ ROLE_LABELS[role].toLowerCase() }}
+              </div>
+            </div>
+
+            <div :class="COMPONENTS.roleBox.box" data-testid="team-joker-box">
+              <h5 :class="COMPONENTS.roleBox.heading" data-testid="team-role-heading-JOKER">
+                <UIcon :name="ICONS.joker" :class="COMPONENTS.roleBox.glyph" />
+                <span>Jokere</span>
+              </h5>
+
+              <div v-if="jokerSlots.length > 0" :class="COMPONENTS.roleBox.list">
+                <div v-for="{slot, shifts} in jokerLines" :key="slot.id" :class="COMPONENTS.roleBox.row" data-testid="team-joker-slot">
+                  <span>{{ formatDateRange({start: slot.startDate, end: slot.endDate}) }}</span>
+                  <WeekDayMapDisplay :model-value="slot.affinity" compact disabled />
+                  <UIcon :name="ROLE_ICONS[slot.role]" :class="COMPONENTS.roleBox.glyph" />
+                  <span>{{ ROLE_LABELS[slot.role] }}</span>
+                  <span v-if="slot.note">{{ slot.note }}</span>
+                  <span>{{ shifts }} {{ shifts === 1 ? 'vagt' : 'vagter' }}</span>
+                </div>
+              </div>
+
+              <div v-else :class="COMPONENTS.roleBox.empty">
+                Ingen jokere
               </div>
             </div>
           </div>

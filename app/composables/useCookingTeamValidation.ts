@@ -82,11 +82,12 @@ export const useCookingTeamValidation = () => {
     /**
      * CookingTeamDisplay - Lightweight for lists (ADR-009)
      * Used in: Season.CookingTeams for tables/tabs
-     * Includes: assignments (for member count) + cookingDaysCount (aggregate)
+     * Includes: assignments (for member count) + cookingDaysCount and jokerSlotCount (aggregates)
      */
     const CookingTeamDisplaySchema = CookingTeamSchema.extend({
         assignments: z.array(CookingTeamAssignmentSchema).default([]),
-        cookingDaysCount: z.number().int().min(0).default(0)  // Aggregate count from DB
+        cookingDaysCount: z.number().int().min(0).default(0),  // Aggregate counts from DB
+        jokerSlotCount: z.number().int().min(0).default(0)
     })
 
     /**
@@ -149,7 +150,7 @@ export const useCookingTeamValidation = () => {
      * Derived from CookingTeamDetailSchema, excludes computed fields, serializes affinity
      */
     const PrismaTeamUpdateDataSchema = CookingTeamDetailSchema
-        .omit({ id: true, cookingDaysCount: true, dinnerEvents: true, jokerSlots: true, affinity: true })
+        .omit({ id: true, cookingDaysCount: true, jokerSlotCount: true, dinnerEvents: true, jokerSlots: true, affinity: true })
         .extend({ affinity: z.string().nullable().optional() })
         .partial()
 
@@ -246,13 +247,14 @@ export const useCookingTeamValidation = () => {
     // Deserialize team Display (for season fetch with CookingTeams, DinnerEventDetail.cookingTeam)
     const deserializeCookingTeamDisplay = (serialized: Record<string, unknown>): CookingTeamDisplay => {
         const assignments = serialized.assignments as Record<string, unknown>[] | undefined
-        // Transform Prisma _count.dinners to cookingDaysCount (if present)
-        const _count = serialized._count as { dinners?: number } | undefined
+        // Transform Prisma _count to the aggregate fields (if present)
+        const _count = serialized._count as { dinners?: number, jokerSlots?: number } | undefined
         const deserialized = {
             ...serialized,
             affinity: serialized.affinity ? deserializeWeekDayMap(serialized.affinity as string) : undefined,
             assignments: assignments?.map(assignment => deserializeCookingTeamAssignment(assignment)) || [],
-            cookingDaysCount: _count?.dinners ?? serialized.cookingDaysCount ?? 0
+            cookingDaysCount: _count?.dinners ?? serialized.cookingDaysCount ?? 0,
+            jokerSlotCount: _count?.jokerSlots ?? serialized.jokerSlotCount ?? 0
         }
 
         return CookingTeamDisplaySchema.parse(deserialized)
@@ -300,7 +302,7 @@ export const useCookingTeamValidation = () => {
      * Handles partial updates - only serializes fields that are present
      */
     const toPrismaUpdateData = (team: z.infer<typeof CookingTeamUpdateSchema> | Partial<z.infer<typeof CookingTeamDetailSchema>>): z.infer<typeof PrismaTeamUpdateDataSchema> => {
-        const { id: _id, cookingDaysCount: _cookingDaysCount, dinnerEvents: _dinnerEvents, jokerSlots: _jokerSlots, affinity, assignments, ...rest } = team as Record<string, unknown>
+        const { id: _id, cookingDaysCount: _cookingDaysCount, jokerSlotCount: _jokerSlotCount, dinnerEvents: _dinnerEvents, jokerSlots: _jokerSlots, affinity, assignments, ...rest } = team as Record<string, unknown>
 
         const result = {
             ...rest,

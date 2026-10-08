@@ -7,6 +7,8 @@ const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInf
 
 // Variables to store IDs for cleanup
 const testHouseholdIds: number[] = []
+// Seeded households renamed by a test; the cleanup puts the original name back
+const renamedHouseholds: {id: number, name: string}[] = []
 
 /**
  * Helper: Verify household response structure
@@ -75,6 +77,10 @@ test.describe('Household /api/admin/household CRUD operations', () => {
             const householdId = ownHousehold
                 ? (await getSessionUserInfo(memberContext)).householdId
                 : (await HouseholdFactory.createHousehold(adminContext, HouseholdFactory.defaultHouseholdData(temporaryAndRandom())).then(h => { testHouseholdIds.push(h.id); return h })).id
+            if (ownHousehold) {
+                const current = await HouseholdFactory.getHouseholdById(adminContext, householdId)
+                renamedHouseholds.push({id: householdId, name: current!.name})
+            }
 
             const result = await HouseholdFactory.updateHousehold(actorContext, householdId, {name: `Updated-${desc}`}, expected, adminBypass)
 
@@ -336,6 +342,11 @@ test.describe('Household /api/admin/household CRUD operations', () => {
     // Cleanup after all tests
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
+
+        // Seeded households get their name back
+        await Promise.all(renamedHouseholds.map(({id, name}) => HouseholdFactory.updateHousehold(context, id, {name}, 200, true).catch(error => {
+            console.warn(`Failed to restore the name of household :`, error)
+        })))
 
         // Clean up all created households
         await Promise.all(testHouseholdIds.map(id => HouseholdFactory.deleteHousehold(context, id).catch(error => {

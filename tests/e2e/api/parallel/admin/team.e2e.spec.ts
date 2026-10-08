@@ -37,6 +37,7 @@ test.describe('Admin Teams API', () => {
             expect(testTeam.id).toBeGreaterThanOrEqual(0)
             expect(testTeam.seasonId).toEqual(testSeasonId)
             expect(() => validateCookingTeam(testTeam)).not.toThrow()
+            expect(testTeam.jokerSlots).toEqual([])
 
             expect(testTeam.id).toBeDefined()
             const retrievedTeam = await SeasonFactory.getCookingTeamById(context, testTeam.id!)
@@ -115,6 +116,8 @@ test.describe('Admin Teams API', () => {
             // Find our created team
             const foundTeam = teams.find(t => t.name.includes(testTeam.name) && t.id === testTeam.id)
             expect(foundTeam).toBeTruthy()
+            // The index carries the joker slot aggregate, not the slots
+            expect(foundTeam!.jokerSlotCount).toBe(0)
         })
 
         test('GET /api/admin/team?seasonId=X should filter teams by season', async ({browser}) => {
@@ -208,6 +211,8 @@ test.describe('Admin Teams API', () => {
 
             // THEN: The Detail carries an empty jokerSlots array
             expect(teamDetail!.jokerSlots).toEqual([])
+            // AND: The aggregate it inherits from the Display counts the same slots
+            expect(teamDetail!.jokerSlotCount).toBe(teamDetail!.jokerSlots.length)
         })
 
         test('GET /api/admin/team/[id] should return 404 for non-existent team', async ({browser}) => {
@@ -245,6 +250,7 @@ test.describe('Admin Teams API', () => {
             const updatedTeam = await updateResponse.json()
             expect(updatedTeam.name).toBe(updatedData.name)
             expect(updatedTeam.id).toBe(createdTeam.id)
+            expect(updatedTeam.jokerSlots).toEqual([])
         })
 
         test('POST /api/admin/team/[id] should update team with assignments (inhabitant populated)', async ({browser}) => {
@@ -343,7 +349,8 @@ test.describe('Admin Teams API', () => {
             expect(getTeamMemberCounts(createdTeam)).toBe(3)
             expect(createdTeam.assignments.length).toBe(3)
             // Delete the team
-            await SeasonFactory.deleteCookingTeam(context, createdTeam.id!)
+            const deletedTeam = await SeasonFactory.deleteCookingTeam(context, createdTeam.id!)
+            expect(deletedTeam!.jokerSlots).toEqual([])
 
             // Verify team is deleted
             await SeasonFactory.getCookingTeamById(context, createdTeam.id!, 404)

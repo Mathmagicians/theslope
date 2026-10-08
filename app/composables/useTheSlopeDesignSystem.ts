@@ -921,6 +921,23 @@ export const COMPONENTS = {
     },
 
     /**
+     * The team card's role groups (CookingTeamCard). Every face starts with the glyph column, 1rem
+     * wide as the glyph itself, so the glyphs share one axis; the heading is a subgrid row of its
+     * group, so the label, the list and the empty line start on the column after it. The monitor
+     * face adds an auto label column, so every avatar list starts on one line across the groups.
+     */
+    roleBox: {
+        box: 'grid grid-cols-[1rem_minmax(0,1fr)] gap-x-3 gap-y-2',
+        heading: `col-span-2 grid grid-cols-subgrid items-center ${TYPOGRAPHY.caption} ${TEXT.toned}`,
+        glyph: 'size-4',
+        list: `col-start-2 flex flex-col gap-2 p-3 ${BG.inset}`,
+        row: 'flex items-center gap-2 flex-wrap',
+        empty: `col-start-2 ${TYPOGRAPHY.bodyTextPlaceholder} italic p-3`,
+        monitorGrid: 'grid grid-cols-[1rem_auto_minmax(0,1fr)] gap-x-3 gap-y-3 md:gap-y-4 px-3 md:px-4',
+        monitorRow: 'col-span-3 grid grid-cols-subgrid items-center'
+    },
+
+    /**
      * The chef portrait on the dinner hero (ChefMenuCard): a trigger holding the ringed avatar
      * under a tilted chef hat beside the name. A dinner without a chef adds the dashed poster
      * frame to the trigger and shows a question-mark avatar under WANTED lettering.
@@ -1024,6 +1041,8 @@ export const ICONS = {
     // Header navigation
     dinner: 'i-hugeicons-dish-02',
     chef: 'i-hugeicons-chef-hat',
+    /** A joker slot: a seat the team holds open for a volunteer */
+    joker: 'i-hugeicons-joker',
     household: 'i-heroicons-home',
     preferences: 'i-heroicons-adjustments-horizontal',
     /** The cog that opens a user's own settings ("Mine indstillinger") - `preferences` is the sliders glyph */
@@ -1989,11 +2008,10 @@ export const EMPTY_STATE_MESSAGES = {
         { emoji: '🤔', text: 'Hvem laver maden? Det finder vi ud af!' },
         { emoji: '🎲', text: 'Madholdet er stadig i puljen' },
         { emoji: '🔮', text: 'Krystalkuglen ved ikke hvem der laver mad endnu' },
-        { emoji: '🎯', text: 'Administratoren sigter efter et madhold' },
+        { emoji: '🎯', text: 'Madholdet har gemt sig, måske i et regneark' },
         { emoji: '🧩', text: 'Puslespillet mangler et madhold' }
     ],
     jobHistory: [
-        { emoji: '😴', text: 'Bytenisserne sover endnu' },
         { emoji: '🐱', text: 'Katten har ædt kildekoden til systemjobbet' },
         { emoji: '📋', text: 'Servernes fagforening har indkaldt til årsmøde' },
         { emoji: '🌙', text: 'Systemet venter på fuldmåne før første kørsel' },
