@@ -13,7 +13,7 @@
 | Endpoint | Return Type | Validation | Repository | E2E Tests | Notes                                                                                            |
 |----------|-------------|------------|------------|-----------|--------------------------------------------------------------------------------------------------|
 | **Order Management** | | | | | **✅ FULLY COMPLIANT** (6/6 endpoints) + Authorization + Admin bypass for corrections            |
-| `/api/order/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createOrder() + `requireHouseholdAccess()`, `?adminBypass=true` for admin corrections            |
+| `/api/order/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createOrder() + `requireHouseholdAccess()`, `?adminBypass=true` for admin corrections; 409 on a second regular order for an inhabitant on a dinner |
 | `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrders() with state/sortBy/allHouseholds/upcomingForSeason/includeDinnerContext filters     |
 | `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrder() + `requireHouseholdAccess()` authorization                                          |
 | `/api/order/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateOrder() + `requireHouseholdAccess()`, `?adminBypass=true` skips deadline (always DELETE)   |

@@ -284,13 +284,12 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         const seed = await HouseholdFactory.createHousehold(context, HouseholdFactory.defaultHouseholdData(testSalt))
         testHouseholdIds.push(seed.id)
 
-        // Attempt to create another household reusing the same pbsId — server rejects.
-        // (Prisma unique constraint surfaces as 500 today; see proposal Phase 4: promote to 400.)
+        // A second household with the same pbsId conflicts with the unique constraint
         await HouseholdFactory.createAtExistingAddress(
             context,
             seed,
             {pbsId: seed.pbsId, movedInDate: new Date('2026-08-15')},
-            500
+            409
         )
     })
 

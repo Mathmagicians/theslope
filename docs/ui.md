@@ -38,7 +38,7 @@ Nuxt 4.3, Nuxt UI 4.3, Tailwind 4.1. Pages use Nuxt UI components; every shared 
 | `TYPOGRAPHY`, `LAYOUTS`, `SIZES`, `ICONS` | text styles, layout classes, responsive sizes, icon names |
 | `BUTTONS` | `edit`, `cancel`, `save`, `primaryAction`, `secondaryAction`, `settings` |
 | `ALERTS` | alert kinds and the `withActions` / `withCornerAction` modifiers |
-| `COMPONENTS` | `calendarGrid`, `dateField`, `installIcon`, `statBox`, `table.ui`, `teamTabs`, `teamChip` (the circular team icon beside the team-name input), `masterDetail` (framed `pane`/`dock`, sticky `dockHeader`, `dockClamp` keeps a wide dock out of the master table's sizing, `dockBody` scrolls it in its own box), `choiceGroup`, `kitchenPanel`, `segmentedActive`, `economyTable`, `powerMode`, `guestRow` |
+| `COMPONENTS` | `calendarGrid`, `legend` (inside an `ALERTS.legend` panel: `entries`, `entry`, `stackedEntry`, `badge`, `hint`), `dateField`, `installIcon`, `statBox`, `table.ui`, `teamTabs`, `teamChip` (the circular team icon beside the team-name input), `masterDetail` (framed `pane`/`dock`, sticky `dockHeader`, `dockClamp` keeps a wide dock out of the master table's sizing, `dockBody` scrolls it in its own box), `choiceGroup`, `kitchenPanel`, `segmentedActive`, `economyTable`, `powerMode`, `guestRow` |
 | `CALENDAR`, `PLANNING_CALENDAR`, `CHEF_CALENDAR`, `DINNER_CALENDAR`, `dayCircleClasses`, `calendarPickerProps` | calendar days, pickers, countdowns |
 | `BACKGROUNDS`, `RAINBOW`, `RAINBOW_FAMILIES`, `getRainbowBand`, `getRainbowFamily`, `getRainbowAccent` (selected team row's left tab), `PANTONE_CHIPS` | brand surfaces |
 | `TICKET_TYPE_COLORS`, `ORDER_STATE_COLORS`, `DINNER_STATE_BADGES`, `DEADLINE_BADGES`, `RESIDENCY_CONFIG`, `ROLE_ICONS` | domain colour and glyph maps |
@@ -66,7 +66,7 @@ through `BUTTONS.flipOpenTurn(isOpen)` in that slot's `ui` (`HouseholdAllergies`
 | `info` | prose, banners |
 | `neutral` | quiet system feedback: empty, read-only, last result |
 | `success`, `warning`, `error` | an outcome or a state to act on |
-| `legend` | "Forklaring" panels, the notes box |
+| `legend` | "Forklaring" panels (`CalendarLegend` under every calendar, `DinnerModeLegend` on the booking surfaces, entries in `COMPONENTS.legend.entries`), the notes box |
 | `emptyState`, `emptyStateCompact` | empty states, centred |
 
 Modifiers spread after a kind: `withActions` (buttons beside the text from md, below it on a phone), `withCornerAction` (one icon

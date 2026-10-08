@@ -786,7 +786,7 @@ export default defineEventHandler(async (event) => {
 
 **H3 validation:** `getValidatedRouterParams`, `readValidatedBody`, `getValidatedQuery`
 
-**Error codes:** 400 (validation), 404 (not found), 500 (server)
+**Error codes:** 400 (validation), 404 (not found), 409 (conflict), 500 (server)
 
 ---
 

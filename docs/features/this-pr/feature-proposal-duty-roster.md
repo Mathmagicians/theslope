@@ -416,28 +416,44 @@ The team card's joker slots and shift counts are part of the signed CTC season f
 The scaffolder expands the slot to one vacant duty per matching cooking day in the period. Deleting a slot removes
 its unclaimed future duties; claimed duties survive — the volunteer keeps their duty (audited).
 
-**Mockup — vacancy big overview (admin teams)** ✅ signed 2026-10-06
+**Mockup — vacancy big overview (admin teams)** ✅ signed 2026-10-06 · rows refined ✅ 2026-10-08
 
 Mounts in the admin teams overview region (no team selected), under the all-teams calendar. Per team,
 chronological; a vacant duty shows its origin — the joker slot's note, or who released a regular duty (audit).
-No person linkage beyond that: a joker slot covers no named member (no `coversInhabitantId`). Rows link into the
-day's game plan.
+No person linkage beyond that: a joker slot covers no named member (no `coversInhabitantId`). Rows carry the gap
+glyph and a Spilleplan link into the day's game plan. Chef and joker gaps list for the whole season, regular open
+seats within the planner's window; teams with a missing chef sort first, then by first gap. The drawing is part of
+the admin teams face mockup in § Roster UX.
+
+**Calendar day-cell language** ✅ signed 2026-10-06 (marker vocabulary) · ✅ signed 2026-10-08 (cell rules) —
+design-system tokens, ink-coloured, one glyph per gap kind: chef hat = missing chef, joker hat = open joker seat,
+empty circle = open regular seat, a number in a circle (the Ledige billetter look) from four open seats. Glyphs
+picked from the icon set at implementation; the token names are the contract.
+
+| Calendar | Chip corner | Gap row |
+|---|---|---|
+| Admin teams overview (aggregated per day over the teams) and team detail | the worst of the menu, groceries and Holdplan alarms | chef hat and joker hat all season; open regular seats within the planner's window, circles up to three, a number from four |
+| `/chef` | the chef's worst-of with Holdplan joined | the member's own teams' open seats within the window |
+
+The planner's window is the menu deadline's reach (`menuIsAnnouncedDaysBefore`, 10 days), so a missed menu deadline
+shows black from day 10 to the dinner. Klar or Godkendt takes Holdplan out of the worst-of. Chip and gap row carry an
+aria-label with counts and kinds.
 
 ```
-AdminTeams — overblik (intet hold valgt)
-  [all-teams kalender med mangler-markeringer]
+Day cell, admin teams calendars
+ beyond 10 days                            within 10 days
+ chef missing   joker open   full          3 open, on track   8 open, yellow   chef + 1 open, red   menu missed, black
+   +----+        +----+       +----+         +----+             +----+ y         +----+ r             +----+ k
+   | 14 |        | 14 |       | 14 |         | 14 |             | 14 |           | 14 |               | 14 |
+   +----+        +----+       +----+         +----+             +----+           +----+               +----+
+   (hat)         (joker)                     o o o               (8)            (hat) o
+ y = yellow chip (24-72 h), r = red (<24 h), k = black (past)
 
-  Ledige tjanser — sæson 2026/1   (pr. hold, kronologisk)
-    Hold 3 — 2 huller
-      ti 14/10   Madlavning   (joker: Anna barsel)     ledig
-      ti 21/10   Madlavning   (joker: Anna barsel)     ledig
-    Hold 6 — 1 hul
-      on 22/10   Opvask       (afgivet af Per)         ledig
+Legend rows (ALERTS.legend), admin calendars
+  (hat)   Chefkok mangler           (joker) Joker mangler
+  o       Ledig plads (10 dage)     (n)     Ledige pladser (10 dage)
+  y chip  Deadline snart (24-72t)   r chip  Deadline kritisk (<24t)   k chip  Deadline overskredet
 ```
-
-**Calendar marker vocabulary** ✅ signed 2026-10-06 — design-system tokens, ink-coloured ("black"), one glyph per
-gap kind on a calendar day: chef hat = missing chef, joker hat = unfilled joker duty, dot = unfilled regular duty.
-Glyphs picked from the icon set at implementation; the token names are the contract.
 
 The dinner-roster rendering of jokers lives in § Roster UX (the CookingTeamCard dinner face).
 
@@ -620,18 +636,104 @@ Byt — take a seat here, a seat of yours elsewhere is optional
   on the phone the two Byt panes stack and the result reads as two lines
 ```
 
-**Mockup — CTC season face** (admin teams) ✅ signed 2026-10-05
+**Mockup — admin teams face** ✅ signed 2026-10-08 (refines the season face of 2026-10-05)
+
+The master table and the region beside it stay as `AdminTeams.vue` draws them. Shift counts sit on the member row
+as glyph columns in the marker vocabulary (chefkok, fast tjans, joker, frivillig, i alt). Standardvagter and
+Jokertjanser are flip-open collapsibles with a count in the view face; their forms (the Phase 3 editor, the joker
+slot form) open in the edit face, where every change saves at once. Spilleplan is the team calendar's day select
+and renders the signed dinner face without its pencil and pane. Rows in Ledige tjanser carry the gap glyph and a
+Spilleplan link that opens the team with that day selected; teams with a missing chef sort first, then by first gap.
 
 ```
-CookingTeamCard — Hold 3
-  [holdbadges] + medlemsliste med roller/ugedage            (som i dag)
-  Jokertjanser:  07/10-01/12  tirsdag  KOK  "Anna barsel"  [slet]  [ + ]
-  Tjanser — [kokkehue] Chefkok · [gryde] Fast tjans · [jokerhue] Joker · [hjerte] Frivillig · I alt
-    Anna   2 · 8 · 0 · 0 · 10
-    Per    0 · 10 · 1 · 0 · 11
-    Bo*    0 · 0 · 3 · 2 · 5        (* ikke medlem af holdet)
+Overview, no team selected (md+)
++-- Madhold ------------------------------------------------------------------------------+
+| [Sæson: 2026/1 v]                                                  [(plus) Opret madhold] |
++----------------------------------+------------------------------------------------------+
+| v | Madhold          | Dage      |  ALLE HOLD · kalender (team colours; day cells per    |
+| v | [Madhold 3]...   | tir       |  the calendar day-cell language)                      |
+| v | [Madhold 4]...   | ons       |                                                      |
+| v | [Madhold 6]...   | ons       |  Ledige tjanser · sæson 2026/1                        |
+|   |                  |           |  Hold 4 · chefkok mangler                             |
+|   |                  |           |   to 16/10  (chef hat)  Chefkok 15-18          [Spilleplan] |
+|   |                  |           |  Hold 3 · 2 huller                                    |
+|   |                  |           |   ti 14/10  (joker hat) Madlavning 15-18 · Anna barsel [Spilleplan] |
+|   |                  |           |   ti 21/10  (joker hat) Madlavning 15-18 · Anna barsel [Spilleplan] |
+|   |                  |           |  Hold 6 · 1 hul                                       |
+|   |                  |           |   on 22/10  (dot)       Opvask 18:30-21:30 · afgivet af Per [Spilleplan] |
++----------------------------------+------------------------------------------------------+
 
-  Spilleplan:  [vælg maddag v]   -> den valgte dags vagtplan-tabel, view-only
+Team open, view face (md+)
++----------------------------------+------------------------------------------------------+
+| v | Madhold          | Dage      | +--------------------------------------------------+ |
+| > I [Madhold 3]...   | tir       | | Madhold 3  [(hat) 1] [(mem) 5]      [(pencil) Rediger] | |
+| v | [Madhold 4]...   | ons       | |                                                  | |
+|   |                  |           | | Holdmedlemmer           (hat) · (pot) · (joker) · (heart) · I alt |
+|   |                  |           | |  (av) Anna   Kok     tir 100%    2 ·  8 · 0 · 0 · 10 | |
+|   |                  |           | |  (av) Per    Kok     tir  50%    0 · 10 · 1 · 0 · 11 | |
+|   |                  |           | |  (av) Emil   Spire   tir         0 ·  8 · 0 · 0 ·  8 | |
+|   |                  |           | |  (av) Bo *   frivillig           0 ·  0 · 3 · 2 ·  5 | |
+|   |                  |           | |  * ikke medlem af holdet                         | |
+|   |                  |           | |                                                  | |
+|   |                  |           | | [>] Standardvagter · 5 vagter                     | |
+|   |                  |           | | [>] Jokertjanser · 1 · 07/10-01/12 tir Kok · Anna barsel | |
+|   |                  |           | |                                                  | |
+|   |                  |           | | Ugedage [man][tir][ons]…   Holdets kalender        | |
+|   |                  |           | |                            [calendar, day cells]   | |
+|   |                  |           | |                                                  | |
+|   |                  |           | | Spilleplan · ti 14/10                             | |
+|   |                  |           | |  | (i) Holdplanen er åben · 4 af 5 besat        | | |
+|   |                  |           | |  08:00-11:00 (pot) Prep        (av) Anna          | |
+|   |                  |           | |  15:00-18:00 (hat) Chefkok     (av) Bo            | |
+|   |                  |           | |  15:00-18:00 (pot) Madlavning  (av) Maria (av) Per [(?)joker Ledig] | |
+|   |                  |           | |  16:30-18:00 (sprout) Børnetjans (av) Emil        | |
+|   |                  |           | |  18:30-21:30 (pot) Opvask      (av) Lise          | |
+|   |                  |           | |  [>] Historik                                     | |
+|   |                  |           | +--------------------------------------------------+ |
++----------------------------------+------------------------------------------------------+
+
+Team open, edit face (md+), pencil pressed
+| | Madhold 3  [(hat) 1] [(mem) 5]                              [(arrow) Tilbage] | |
+| |                                                                               | |
+| | Holdmedlemmer (as today)         | Find beboer (InhabitantSelector, as today)  | |
+| |  (av) Anna  Kok  tir 100%  [(pencil)] |  (av) Lise  LEDIG            [Tilføj] | |
+| |  ...                             |  ...                                       | |
+| |                                                                               | |
+| | [v] Standardvagter · 5 vagter                                                 | |
+| |   Tid                            Opgave        Rolle                           | |
+| |   08:00-11:00 (10t før middag)   Prep          Kok      [slet]                 | |
+| |   15:00-18:00 (3t før)           Madlavning    Kok      [slet]                 | |
+| |   15:00-18:00 (3t før)           Madlavning    Kok      [slet]                 | |
+| |   16:30-18:00 (1,5t før)         Børnetjans    Spire    [slet]                 | |
+| |   18:30-21:30 (0,5t efter)       Opvask        Kok      [slet]                 | |
+| |   [ + Tilføj vagt ]                              [Indlæs standardvagter]        | |
+| |                                                                               | |
+| | [v] Jokertjanser · 1                                                          | |
+| |   07/10-01/12  tir  Kok  Anna barsel                     [slet]                | |
+| |   [ + Tilføj jokertjans ]                                                      | |
+| |                                                                               | |
+| | Ugedage [man][x tir][ons]…   Holdets kalender                                  | |
+
+Phone (375 px), team open, view face, the dock under the row
+| ^ I [Madhold 3][(hat)1][(mem)5]  | tir |
+|   +----------------------------------+ |
+|   | Madhold 3               [(pencil)] | |  <- sticky
+|   | Holdmedlemmer                    | |
+|   |  (av) Anna  Kok  tir             | |
+|   |       (hat)2 (pot)8 (joker)0 (heart)0 · 10 | |
+|   |  (av) Per   Kok  tir             | |
+|   |       (hat)0 (pot)10 (joker)1 (heart)0 · 11 | |
+|   |  ...                             | |
+|   | [>] Standardvagter · 5           | |
+|   | [>] Jokertjanser · 1             | |
+|   | Ugedage [man][tir][ons]…         | |
+|   | [calendar, day cells]            | |
+|   | Spilleplan · ti 14/10            | |
+|   |  | (i) Holdplanen er åben      | | |
+|   |  08-11  Prep        (av) Anna    | |
+|   |  15-18  Chefkok     (av) Bo      | |
+|   |  ...                             | |
+|   +----------------------------------+ |
 ```
 
 Which face leads is decided by whether CTC receives a dinner context. Deviation markers come from the audit trail

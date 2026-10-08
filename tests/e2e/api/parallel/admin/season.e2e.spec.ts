@@ -131,11 +131,10 @@ test.describe('Season API Tests', () => {
             const initialEventCount = created.dinnerEvents!.length
             const initialHolidayCount = newSeason.holidays?.length
 
-            // Create holiday dates within the season's date range (will exclude some cooking days)
-            const holidayStart = new Date(created.seasonDates.start)
-            holidayStart.setDate(holidayStart.getDate() + 1) // Day after season start
-            const holidayEnd = new Date(holidayStart)
-            holidayEnd.setDate(holidayEnd.getDate() + 1) // 2-day holiday
+            // One-day holiday on the season's first cooking date: removes exactly one cooking day on any weekday
+            const [firstDinner] = [...created.dinnerEvents!].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+            const holidayStart = new Date(firstDinner!.date)
+            const holidayEnd = new Date(firstDinner!.date)
 
             const updatedData = {
                 ...newSeason,
@@ -162,8 +161,8 @@ test.describe('Season API Tests', () => {
             const expectedEventCount = SeasonFactory.calculateExpectedEventCount(updatedSeason)
             expect(updatedSeason.dinnerEvents!.length).toBe(expectedEventCount)
 
-            // AND: Event count should be less than or equal to initial (holidays may have removed some)
-            expect(updatedSeason.dinnerEvents!.length).toBeLessThanOrEqual(initialEventCount)
+            // AND: The holiday removed exactly one cooking day
+            expect(updatedSeason.dinnerEvents!.length).toBe(initialEventCount - 1)
 
             // AND: The operation envelope reports what reconciliation did (ADR-009)
             expect(result.reconciliation.deleted).toBe(initialEventCount - expectedEventCount)

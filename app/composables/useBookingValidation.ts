@@ -281,7 +281,7 @@ export const useBookingValidation = () => {
      * Business rules:
      * - ONE user (bookedByUserId) books for entire family
      * - Can have different inhabitantIds (family members + guests)
-     * - Can have multiple orders for same inhabitantId (e.g., adult + child tickets)
+     * - One regular order per inhabitant per dinner (the Order unique index); guest tickets are unlimited
      * - All bookedByUserId must be the same (VALIDATED HERE, skipped if empty)
      * - All inhabitants must belong to householdId (VALIDATED IN ENDPOINT)
      */

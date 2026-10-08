@@ -826,6 +826,18 @@ export const COMPONENTS = {
         }
     },
 
+    // Entries inside an ALERTS.legend panel (CalendarLegend, DinnerModeLegend): the samples wrap
+    // in a row, each sample sits beside its name; a team badge sample is the calendar's size
+    legend: {
+        entries: 'flex flex-wrap gap-x-6 gap-y-2',
+        entry: 'flex items-center gap-2',
+        // A sample with its name under it (the booking grid's modified-cell marker)
+        stackedEntry: 'flex flex-col items-center gap-0.5',
+        badge: 'w-8 h-8 flex items-center justify-center shrink-0',
+        // The operating hint under the entries, in the design system's muted text (AA on every surface)
+        hint: `mt-2 ${TEXT.muted}`
+    },
+
     // Economy table hierarchy - ready-to-grab classes for each nesting level
     // Used by AdminEconomy and HouseholdEconomy for consistent stat headers
     economyTable: {
@@ -1685,7 +1697,9 @@ export const PLANNING_CALENDAR = {
 export const CALENDAR = {
     day: {
         shape: 'rounded-full flex items-center justify-center cursor-pointer hover:opacity-90',
-        past: `font-medium ${BG.mocha[100]} ${TEXT.mocha[900]}`
+        past: `font-medium ${BG.mocha[100]} ${TEXT.mocha[900]}`,
+        // A cancelled dinner: the past circle, struck through
+        cancelled: 'line-through'
     },
     countdown: {
         container: 'bg-amber-950 text-amber-50 py-6 md:py-8 border-b-2',

@@ -26,13 +26,13 @@ describe('TeamCalendarDisplay legend', () => {
 
     it(`renders one legend entry per team`, async () => {
         const wrapper = await mount(teams.length)
-        expect(findAllByTestId(wrapper, 'team-legend-entry')).toHaveLength(teams.length)
+        expect(findAllByTestId(wrapper, 'calendar-legend-entry')).toHaveLength(teams.length)
     })
 
     it.each(teams.map((team, index) => ({index, name: team.name})))(
         'team $index wears its own rainbow stop', async ({index}) => {
             const wrapper = await mount(teams.length)
-            const badge = findAllByTestId(wrapper, 'team-legend-badge')[index]!
+            const badge = findAllByTestId(wrapper, 'calendar-legend-badge')[index]!
             expect(badge.classes()).toEqual(expect.arrayContaining(getRainbowBand(index).split(' ')))
         })
 
@@ -40,7 +40,7 @@ describe('TeamCalendarDisplay legend', () => {
         const wrapper = await mount(teams.length)
         // What a badge renders of the rainbow: its own classes, kept to the ones a stop names
         const stopClasses = new Set(RAINBOW.flatMap(stop => stop.split(' ')))
-        const rendered = findAllByTestId(wrapper, 'team-legend-badge')
+        const rendered = findAllByTestId(wrapper, 'calendar-legend-badge')
             .map(badge => badge.classes().filter(name => stopClasses.has(name)).sort().join(' '))
 
         expect(new Set(rendered.slice(0, RAINBOW.length)).size).toBe(RAINBOW.length)

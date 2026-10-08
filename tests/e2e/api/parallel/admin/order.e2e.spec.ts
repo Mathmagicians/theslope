@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type BrowserContext } from '@playwright/test'
 import { OrderFactory } from '~~/tests/e2e/testDataFactories/orderFactory'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -49,14 +49,14 @@ test.describe('Order API', () => {
     testDinnerEventId = generatedEvents.events[0]!.id
   })
 
+  // One regular order per inhabitant per dinner: every test starts with no order for the test inhabitant on the test dinner
+  test.afterEach(async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+    await OrderFactory.cleanupOrders(context, testOrderIds.splice(0))
+  })
+
   test.afterAll(async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
-
-    await Promise.all(testOrderIds.map(id =>
-      OrderFactory.deleteOrder(context, id).catch(() => {
-        console.warn(`Failed to cleanup order ${id}`)
-      })
-    ))
 
     if (testSeasonId) {
       await SeasonFactory.deleteSeason(context, testSeasonId).catch(() => {
@@ -306,13 +306,13 @@ test.describe('Order API', () => {
         {
           inhabitantId: testInhabitantId,
           ticketPriceId: testAdultTicketPriceId,
-          dinnerMode: 'DINEIN',
+          dinnerMode: DinnerModeSchema.enum.DINEIN,
           bookedByUserId: 1
         },
         {
           inhabitantId: testInhabitantId,
           ticketPriceId: testChildTicketPriceId,
-          dinnerMode: 'DINEIN',
+          dinnerMode: DinnerModeSchema.enum.DINEIN,
           bookedByUserId: 999
         }
       ]
@@ -341,13 +341,13 @@ test.describe('Order API', () => {
         {
           inhabitantId: testInhabitantId,
           ticketPriceId: testAdultTicketPriceId,
-          dinnerMode: 'DINEIN',
+          dinnerMode: DinnerModeSchema.enum.DINEIN,
           bookedByUserId: 1
         },
         {
           inhabitantId: inhabitant2.id,
           ticketPriceId: testAdultTicketPriceId,
-          dinnerMode: 'DINEIN',
+          dinnerMode: DinnerModeSchema.enum.DINEIN,
           bookedByUserId: 1
         }
       ]
@@ -365,44 +365,66 @@ test.describe('Order API', () => {
     await HouseholdFactory.deleteHousehold(context, household2.id)
   })
 
-  test('GIVEN multiple orders for same inhabitant WHEN creating batch THEN succeeds', async ({ browser }) => {
+  // Orders the test inhabitant holds on the test dinner
+  const ordersForTestInhabitant = async (context: BrowserContext) =>
+    (await OrderFactory.getOrders(context, { dinnerEventIds: testDinnerEventId }))
+      .filter(o => o.inhabitantId === testInhabitantId)
+
+  test('GIVEN two regular orders for same inhabitant WHEN creating batch THEN fails with 409 and creates nothing', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
-    const validData = {
+    await OrderFactory.createOrder(context, {
       householdId: testHouseholdId,
       dinnerEventId: testDinnerEventId,
       orders: [
-        {
-          inhabitantId: testInhabitantId,
-          ticketPriceId: testAdultTicketPriceId,
-          dinnerMode: 'DINEIN',
-          bookedByUserId: 1
-        },
-        {
-          inhabitantId: testInhabitantId,
-          ticketPriceId: testChildTicketPriceId,
-          dinnerMode: 'DINEIN',
-          bookedByUserId: 1
-        }
+        OrderFactory.defaultOrderItem({ inhabitantId: testInhabitantId, ticketPriceId: testAdultTicketPriceId }),
+        OrderFactory.defaultOrderItem({ inhabitantId: testInhabitantId, ticketPriceId: testChildTicketPriceId })
       ]
-    }
+    }, 409)
 
-    const response = await context.request.put(ORDER_ENDPOINT, {
-      headers,
-      data: validData
+    // The whole batch is refused
+    expect(await ordersForTestInhabitant(context)).toHaveLength(0)
+  })
+
+  test('GIVEN one regular and one guest order for same inhabitant WHEN creating batch THEN succeeds', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    const result = await OrderFactory.createOrder(context, {
+      householdId: testHouseholdId,
+      dinnerEventId: testDinnerEventId,
+      orders: [
+        OrderFactory.defaultOrderItem({ inhabitantId: testInhabitantId, ticketPriceId: testAdultTicketPriceId }),
+        OrderFactory.defaultOrderItem({ inhabitantId: testInhabitantId, ticketPriceId: testAdultTicketPriceId, isGuestTicket: true })
+      ]
     })
-
-    const errorBody = response.status() !== 201 ? await response.json() : null
-    expect(response.status(), `Expected 201 but got ${response.status()}: ${JSON.stringify(errorBody)}`).toBe(201)
-    const result = await response.json()
+    testOrderIds.push(...result!.createdIds)
 
     // CreateOrdersResult: { householdId, createdIds }
-    expect(result.householdId).toBe(testHouseholdId)
-    expect(result.createdIds).toHaveLength(2)
+    expect(result!.householdId).toBe(testHouseholdId)
+    expect(result!.createdIds).toHaveLength(2)
+  })
 
-    for (const id of result.createdIds) {
-      testOrderIds.push(id)
+  test('GIVEN existing regular order WHEN booking same inhabitant again on same dinner THEN fails with 409', async ({ browser }) => {
+    const context = await validatedBrowserContext(browser)
+
+    const orderRequest = {
+      householdId: testHouseholdId,
+      dinnerEventId: testDinnerEventId,
+      orders: [OrderFactory.defaultOrderItem({
+        inhabitantId: testInhabitantId,
+        ticketPriceId: testAdultTicketPriceId
+      })]
     }
+
+    const result = await OrderFactory.createOrder(context, orderRequest)
+    const orderId = result!.createdIds[0]!
+    testOrderIds.push(orderId)
+
+    await OrderFactory.createOrder(context, orderRequest, 409)
+
+    // The dinner still holds exactly the first order for the inhabitant
+    const orders = await ordersForTestInhabitant(context)
+    expect(orders.map(o => o.id)).toEqual([orderId])
   })
 
   test('GIVEN released order WHEN claiming THEN state becomes BOOKED', async ({ browser }) => {

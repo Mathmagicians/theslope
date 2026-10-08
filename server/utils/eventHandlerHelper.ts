@@ -6,6 +6,7 @@ import type {NuxtError} from 'nuxt/app'
 import type {UserDetail} from '~/composables/useCoreValidation'
 
 const PRISMA_RECORD_NOT_FOUND = 'P2025'
+const PRISMA_UNIQUE_VIOLATION = 'P2002'
 
 /**
  * Check if error is Prisma "record not found" (P2025)
@@ -120,6 +121,13 @@ const nuxtErrorFromPrismaError = (prepend: string = 'uh oh, a prisma error', err
         statusCode: 404,
         statusMessage: 'Not Found',
         message: `${prepend}: Record not found in database: ${error.message} (Code: ${error.code})`,
+        cause: getSerializableCause(error)
+    })
+
+    if (error.code === PRISMA_UNIQUE_VIOLATION) return createError({
+        statusCode: 409,
+        statusMessage: 'Conflict',
+        message: `${prepend}: Record already exists: ${error.message} (Code: ${error.code})`,
         cause: getSerializableCause(error)
     })
 

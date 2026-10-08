@@ -1,6 +1,6 @@
 # Release 0.9.0 — work-roster push overview
 
-**Status:** Draft | **Date:** 2026-10-05 | **Updated:** 2026-10-05 (decisions round 1) | **Branch:** `feature/work-roster`
+**Status:** Draft | **Date:** 2026-10-05 | **Updated:** 2026-10-08 (decisions round 8) | **Branch:** `feature/work-roster`
 
 The umbrella spec for this push (the finished push earns v0.9). Each package is briefed and approved in chat before
 any agent starts; detail lives in the linked docs. All Prisma work lands as ONE migration package (model sign-off
@@ -17,7 +17,7 @@ Sizing is informal t-shirt sizes.
 | Framework pair upgrade | pinia 4 + @pinia/nuxt 1, @vueuse/core 15, ical-generator 11 | `feature-proposal-framework-adoption.md` § Clusters and order | S | ✅ implemented 2026-10-05 — zero source changes, user commit pending |
 | Store fetcher factory + store alignment | `useStoreAsyncData`, schema-driven types; every store converges on it (the misaligned fetch handling across stores, release-plan I2) | `feature-proposal-framework-adoption.md` | M–L | ✅ approved 2026-10-05 |
 | Fetch gating | `enabled` carries the fetch condition; id-in-key gates need nothing extra, login gates clear on logout; folded in 2026-10-07: datasets key on the real selection (no copy refs, no component watches), `selectedSeasonId = userChoice ?? getDefaultSeasonId()`, `dependsOn` for SSR of dependent chains | `feature-proposal-framework-adoption.md` | M–L | ✅ implemented 2026-10-07 — both serial e2e specs green; user commit pending; fine-tuning OPEN (stale-selection 404) |
-| Prisma bundle | ALL prisma/zod/migration work in one go: the prisma + zod majors the spike green-lights, `zod-prisma-types` regen, every new model of the push, one migration | below | L | 🔧 IN PROGRESS — model set signed 2026-10-07 (§ Prisma bundle is the contract) |
+| Prisma bundle | ALL prisma/zod/migration work in one go: the prisma + zod majors the spike green-lights, `zod-prisma-types` regen, every new model of the push, one migration | below | L | 🔧 IN PROGRESS — model set signed 2026-10-07 (§ Prisma bundle is the contract); migration `0017_roster` applied on local, dev and prod 2026-10-08 |
 | Duty roster (F5a) | Templates, duties, audit trail | `feature-proposal-duty-roster.md` | L | Draft |
 | Joker + vacancy overviews | `JokerSlot`, dinner "missing" face, CTC faces, shift counts, volunteering moves to duty level + data separation | `feature-proposal-duty-roster.md` § Joker + § Roster UX | L | ✅ UX signed (CTC 2026-10-05, big overview + calendar markers 2026-10-06) |
 | Roster sign-off + cross-team swap (F5b) | Derived auto-sign + godkend-alligevel, duty swap | `feature-proposal-duty-roster.md` Phases 4–5 | M | roster UX ✅ signed 2026-10-05 |
@@ -26,7 +26,7 @@ Sizing is informal t-shirt sizes.
 | Adhoc billing + EXPENSE | Ad-hoc charges + chef spending as EXPENSE transactions; Mit forbrug + admin economy spending views | `feature-proposal-adhoc-admin-billing.md` | L | ⏳ EXPENSE design awaiting signoff; OPEN — in this push or next |
 | PRF spike | Passkey/PRF research + device protocol | `../feature-proposal-relogin-faceid.md` (parked proposal), `../archived/feature-mobile-native-feel.md` | S | ✅ done 2026-10-06; S5 re-login parked out of 0.9, no option chosen |
 | Page composition | Master/detail + tab frames, `md` breakpoint | `feature-proposal-framework-adoption.md` | M | OPEN — decided from spike findings |
-| Order snapshot | Frozen `ticketType` on Order + backfill — the portion resolver reads it | `bug-fix-order-snapshot.md` | S | schema in the Prisma bundle |
+| Order snapshot | Frozen `ticketType` on Order + backfill — the portion resolver reads it | `../chores-0.9.1.md` § Order snapshot | S | parked for the release after 0.9 (2026-10-08) |
 | Booking one-path | One builder family for regular + guest orders across grid/preview/day; guest cells editable; power includes guests; honest toasts | `../archived/bug-fix-plan-v0.9.md` | M–L | ✅ approved 2026-10-06 — user commit pending |
 | Billing delivery report + interrupted runs | Repository fills delivery state on every read; stale RUNNING runs | `bug-fix-billing-delivery-report.md` | M | OPEN decisions |
 | Motion tokens | Raw motion classes into the design system | `bug-fix-motion-tokens.md` | S | parked for this release |
@@ -72,8 +72,7 @@ One package, one migration, produced by the Make targets after the user signs of
 | `DinnerDutyTemplate`, `DinnerDuty` (+ `jokerSlotId`), `DutyHistory`, `DutyState`, `DutyAuditAction` | `feature-proposal-duty-roster.md` § Schema additions |
 | `JokerSlot` | `feature-proposal-duty-roster.md` § Joker |
 | `TicketWaitlist` (an unplaced order in its create shape, as JSON) | `feature-proposal-waitlist.md` § Design |
-| `LedgerEntryType` (`REGULAR`, `ADHOC`), `Transaction.type` + `description`, `Expense` (list per dinner, payee user), `DinnerEvent.totalCost` dropped | `feature-proposal-adhoc-admin-billing.md` § Data model — ledger and expenses modelled symmetrically |
-| `Order.orderSnapshot` (frozen `ticketType`) + backfill | `bug-fix-order-snapshot.md` |
+| `LedgerEntryType` (`REGULAR`, `ADHOC`), `Transaction.type` + `description`, `Expense` (list per dinner, payee user), `DinnerEvent.totalCost` kept and deprecated | `feature-proposal-adhoc-admin-billing.md` § Data model — ledger and expenses modelled symmetrically |
 
 ### Signed model set (2026-10-07) — the contract for the implementing agent
 
@@ -125,20 +124,17 @@ table rebuild on D1):
 |---|---|---|
 | `Transaction.type` | `LedgerEntryType`, required, default `REGULAR` | — (the default covers every existing row) |
 | `Transaction.description` | nullable | — |
-| `DinnerEvent.totalCost` | kept, `/// @deprecated` — the dinner's cost becomes `SUM(Expense.amount)` in the chef-spending package; the column is dropped by `../chore-drop-total-cost.md` next release | one REGULAR `Expense` per dinner with `totalCost > 0`: `amount = totalCost`, `description = 'Indkøb'`, `paidByUserId` null, `userSnapshot` = the SYSTEM snapshot (`{"id":null,"email":"SYSTEM"}`, one constant in the validation layer, asserted equal to the migration's literal); `WHERE NOT EXISTS` a REGULAR row for the dinner |
-| `Order.orderSnapshot` | `String`, nullable | rows with `ticketPriceId` null: match `priceAtBooking` to the season's ticket prices → frozen `ticketType` |
+| `DinnerEvent.totalCost` | kept, `/// @deprecated` — the dinner's cost becomes `SUM(Expense.amount)` in the chef-spending package; the column is dropped by `../chores-0.9.1.md` next release | one REGULAR `Expense` per dinner with `totalCost > 0`: `amount = totalCost`, `description = 'Indkøb'`, `paidByUserId` null, `userSnapshot` = the SYSTEM snapshot (`{"id":null,"email":"SYSTEM"}`, one constant in the validation layer, asserted equal to the migration's literal); `WHERE NOT EXISTS` a REGULAR row for the dinner |
 | `Order` partial unique `(inhabitantId, dinnerEventId) WHERE isGuestTicket = 0` | via `partialIndexes` (decision 2026-10-07, reverses the earlier drop) | none — zero duplicate regular orders verified in every environment; the index creation is the proof |
 
-**Migration notes.** One migration, `make d1-create-migration name=release-0-9`, then these rewrites in the Prisma
+**Migration notes.** One migration, `0017_roster` (`make d1-create-migration name=roster`), with these rewrites in the Prisma
 source before the flattened copy is regenerated (`.claude/skills/prisma/SKILL.md`):
 - `Transaction.type` — Prisma emits a table rebuild for a required column; rewritten to
   `ALTER TABLE "Transaction" ADD COLUMN "type" TEXT NOT NULL DEFAULT 'REGULAR'`.
 - New tables (`DinnerDutyTemplate`, `JokerSlot`, `DinnerDuty`, `DutyHistory`, `TicketWaitlist`, `Expense`), the
-  nullable `Transaction.description` and `Order.orderSnapshot`, and the two partial unique indexes
+  nullable `Transaction.description` and the two partial unique indexes
   (`CREATE UNIQUE INDEX … WHERE "isGuestTicket" = false`) are taken as Prisma emits them.
-- Data lines, both convergent: `Order.orderSnapshot` for rows with `ticketPriceId` null, matching `priceAtBooking`
-  to the season's ticket prices (`bug-fix-order-snapshot.md`); the `totalCost` → `Expense` mapping (table above).
-  No snapshot rewrite on `Transaction`.
+- Data line, convergent: the `totalCost` → `Expense` mapping (table above). No snapshot rewrite on `Transaction`.
 - `tests/component/architecture/migrations.unit.spec.ts` keeps rejecting `DROP TABLE`.
 
 **Migration safety.** The migration is additive: new tables, columns with a default or nullable, indexes, inserts
@@ -149,16 +145,20 @@ idempotent job retries, ADR-015). The new code needs the migrated schema (`Trans
 environment is migrate, then deploy. Proof, in order:
 1. local: `make d1-copy-dev-to-local` → `make d1-verify-local` (baseline) → `make d1-migrate-local` (the target
    fails on a changed child-without-parent count) → `make d1-verify-local` → `npm run dev` → api + ui e2e suites green
-   (one runner at a time) → the chef, bookings and admin economy pages by hand.
+   (one runner at a time) → the chef, bookings and admin economy pages by hand. Database steps ✅ 2026-10-08 (one
+   `Expense` per dinner with a cost; parent-link counts unchanged); suites and the page walk follow.
 2. dev, old code first: deploy `main` to dev again so dev runs the released code → D1 Time Travel bookmark
    (`wrangler d1 time-travel info`; rollback = `make d1-time-travel-dev`) → `make d1-migrate-dev` → the released code
    still serves dev (login, dinner page, bookings) → `make deploy-dev` with the branch → smoke suite against dev → logs.
+   Database steps ✅ 2026-10-08 (dev ran the code of main; one `Expense` per dinner with a cost; parent-link counts
+   unchanged); the branch deploy and the smoke suite follow.
 3. prod: bookmark → `make d1-migrate-prod` → `make deploy-prod` → smoke suite, outside the cron windows (01:00 and
-   02:00 UTC daily, 03:00 UTC on the 18th).
-4. next release: `../chore-drop-total-cost.md` drops the column once every environment runs the computed version.
+   02:00 UTC daily, 03:00 UTC on the 18th). Database steps ✅ 2026-10-08 (one `Expense` per dinner with a cost, equal
+   to it; parent-link counts unchanged); the deploy and the smoke suite follow.
+4. next release: `../chores-0.9.1.md` drops the column once every environment runs the computed version.
 
 **Sequence.** schema ✅ + config ✅ + majors ✅ → `make d1-prisma` + `pre:all` + unit (gate) → user:
-`make d1-create-migration name=release-0-9` → the rewrites and the data line in the Prisma source, flattened copy
+`make d1-create-migration name=roster` → the rewrites and the data line in the Prisma source, flattened copy
 regenerated by the target → user: `make d1-migrate-local` → suites + `make d1-verify-local` clean. Fixtures and spec
 literals carry the new columns; validation composables re-export the new enums.
 
@@ -316,13 +316,37 @@ here, admin-only.
 - Expenses are their own table, a list per dinner (REGULAR) plus basisvarer rows (ADHOC); the payee is a `User`
   (`paidByUserId`, SET NULL) with a `userSnapshot`, null when the kitchen paid directly; the reimbursement stream
   reads `User.expenses`.
-- `DinnerEvent.totalCost` is dropped — the dinner's cost is the sum of its expense rows; GROCERIES_DONE derives from
-  them.
+- `DinnerEvent.totalCost` is kept and deprecated; the dinner's cost is the sum of its expense rows, GROCERIES_DONE
+  derives from them, and `../chores-0.9.1.md` drops the column in the release after 0.9.
 - An adhoc charge's household lives in `orderSnapshot`, as an order's does; no `householdId` column, no snapshot
   rewrite.
 - `strictUndefinedChecks` stays a preview feature in 7 (the generated types carry `Skip` only with the flag); the
   zod generator emits enums only (`createInputTypes`/`createModelTypes` false), which brought the root typecheck back
   under the default heap.
+
+**2026-10-08** (round 7, migration)
+- B6 `Order.orderSnapshot` is parked for the release after 0.9 (`../chores-0.9.1.md` § Order snapshot); the 0.9 schema set is
+  closed with the six new tables, the two `Transaction` columns and the two partial unique indexes.
+- Migration `0017_roster`: the `Transaction` rebuild Prisma emitted is rewritten to `ALTER TABLE … ADD COLUMN` (the
+  existing `orderId` and `invoiceId` indexes stay); the `totalCost` → `Expense` data line is appended; the flattened
+  copy is regenerated and identical; `migrations.unit.spec.ts` passes.
+- Local rehearsal on a dev copy: `make d1-copy-dev-to-local` → `make d1-check-order-duplicates-local` (`[]`) →
+  `make d1-migrate-local` (parent-link counts unchanged) → one `Expense` per dinner with a cost, equal to it.
+- dev and prod migrated 2026-10-08 with the old code serving: one `Expense` per dinner with a cost, equal to it;
+  parent-link counts unchanged in both. The temporary `d1-check-order-duplicates-*` targets leave
+  the Makefile.
+
+**2026-10-08** (round 8, order uniqueness in the tests)
+- A second regular order for an inhabitant on a dinner answers 409 Conflict: Prisma's unique violation is mapped in
+  `eventHandlerHelper` beside the not-found mapping, and ADR-002's code table carries 409. No upsert; the UI sends the
+  order id for updates (ADR-016).
+- Tests rewritten to the rule: `order.e2e.spec.ts` cleans up after each test and asserts 409 for a duplicate and for
+  two regular items in one batch, 201 for regular plus guest; `dinnerEvent.e2e.spec.ts` asserts one 201 and one 409
+  for two parallel creates; `household.e2e.spec.ts` asserts 409 for a duplicate pbsId; `season.e2e.spec.ts` puts its
+  holiday on the first cooking day (the holiday fell on a weekend on some weekdays, which failed main's pipeline the
+  same day).
+- Every schema change is followed by a review of the tests and the validation comments that encode the old rule,
+  before the suites run.
 
 ## Coverage
 

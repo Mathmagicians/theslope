@@ -7,8 +7,10 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
-const {validatedBrowserContext, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, getSessionUserInfo, headers} = testHelpers
 const {DinnerModeSchema} = useBookingValidation()
+
+const ORDER_ENDPOINT = '/api/order'
 
 // Variables to store for cleanup and test data
 let testSeasonId: number
@@ -73,23 +75,20 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
             isGuestTicket: false
         }
 
-        const [result1, result2] = await Promise.all([
-            OrderFactory.createOrder(context, {
-                householdId,
-                dinnerEventId: createdDinnerEvent.id!,
-                orders: [orderData]
-            }),
-            OrderFactory.createOrder(context, {
-                householdId,
-                dinnerEventId: createdDinnerEvent.id!,
-                orders: [orderData]
-            })
+        // WHEN: The same regular order is booked twice in parallel
+        const orderRequest = OrderFactory.defaultCreateOrdersRequest({
+            householdId,
+            dinnerEventId: createdDinnerEvent.id!,
+            orders: [orderData]
+        })
+        const responses = await Promise.all([
+            context.request.put(ORDER_ENDPOINT, {headers, data: orderRequest}),
+            context.request.put(ORDER_ENDPOINT, {headers, data: orderRequest})
         ])
 
-        expect(result1, 'First order creation should succeed').not.toBeNull()
-        expect(result2, 'Second order creation should succeed').not.toBeNull()
-        expect(result1?.createdIds).toHaveLength(1)
-        expect(result2?.createdIds).toHaveLength(1)
+        // THEN: One regular order per inhabitant per dinner - one create succeeds, the other conflicts
+        const statuses = responses.map(r => r.status()).sort()
+        expect(statuses, 'One create succeeds and one conflicts').toEqual([201, 409])
 
         // AND: Retrieve dinner event detail again with tickets
         const detailWithTickets = await DinnerEventFactory.getDinnerEvent(context, createdDinnerEvent.id!)
@@ -105,7 +104,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         // AND: Detail includes tickets with full relations (ADR-009: detail endpoint comprehensive)
         expect(detailWithTickets).not.toBeNull()
         expect(detailWithTickets!.tickets).toBeDefined()
-        expect(detailWithTickets!.tickets!.length).toBe(2)
+        expect(detailWithTickets!.tickets!.length).toBe(1)
         const ticket = detailWithTickets!.tickets![0]
         expect(ticket).toBeDefined()
         expect(ticket!.inhabitant.id).toBe(inhabitantId)

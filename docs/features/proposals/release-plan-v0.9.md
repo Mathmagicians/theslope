@@ -37,7 +37,7 @@ Analysis, root causes, and TDD steps live in the detail docs — this table is t
 | B3 | `/admin/allergies` intermittently shows no data | ✅ Root-caused (SSR-fragile store fetch) | [bug-fix-plan-v0.9.md](../archived/bug-fix-plan-v0.9.md) | S–M |
 | B4 | Errors editing allergies in `/admin/allergies` | 🔎 Repro first; likely same store as B3 | [bug-fix-plan-v0.9.md](../archived/bug-fix-plan-v0.9.md) | S |
 | B5 | Errors adding holidays to a new season | 🔎 Repro first; suspects ranked | [bug-fix-plan-v0.9.md](../archived/bug-fix-plan-v0.9.md) | S–M |
-| B6 | Kitchen stats show 0 portions when `ticketPriceId` is null | ✅ Root-caused | [bug-fix-order-snapshot.md](../bug-fix-order-snapshot.md) | S |
+| B6 | Kitchen stats show 0 portions when `ticketPriceId` is null | ✅ Root-caused | [chores-0.9.1.md](../chores-0.9.1.md) | S |
 
 **Approach:** see [bug-fix-plan-v0.9.md](../archived/bug-fix-plan-v0.9.md) — TDD per ADR-003, one branch, per-bug commits, and a DRY mandate: every fix removes the duplicated logic that caused it.
 
@@ -108,7 +108,7 @@ Rationale for the ordering: bugs and the consistency sweep de-risk everything af
 | `feature-proposal-adhoc-admin-billing.md` | Proposal | Review + sign-off (Phase 0) |
 | `feature-proposal-duty-roster.md` | Draft | Review, split into F5a/F5b |
 | `bug-fix-plan-v0.9.md` | Shipped, archived 2026-10-06 | B6 continues as the Order snapshot package; billing delivery report + interrupted runs in `this-pr/bug-fix-billing-delivery-report.md` |
-| `bug-fix-order-snapshot.md` | Done | Implement (B6) |
+| `chores-0.9.1.md` § Order snapshot | Done | Implement (B6) in 0.9.1 |
 | `bare-fetch-fix.md` | Folded into release-0.9.0's factory + gating packages, deleted 2026-10-07 | — |
 | `archived/feature-notifications.md` | ✅ Implemented (PR #166) | — |
 | `feature-proposal-notification-triggers.md` | Proposal | Review + sign-off (triggers, alarms, SMS) |
