@@ -25,6 +25,7 @@ export function useTabNavigation(config: TabNavigationConfig) {
     const isValidTab = (tab?: string): boolean => !!tab &&  tabs.includes(tab.toLowerCase())
 
     const route = useRoute()
+    const {write} = useUrlQueryWriter()
 
     const getSafeTab = (tab?: string): string => tab && isValidTab(tab) ? tab.toLowerCase() : defaultTabValue
 
@@ -42,10 +43,7 @@ export function useTabNavigation(config: TabNavigationConfig) {
     const updateRouteParamFromTab = async (tab: string) => {
         if (route.params.tab === tab) return
         const url = constructUrlForTab(tab, route.params)
-        await navigateTo({
-            path: url,
-            query: route.query
-        }, {replace: true})
+        await write((query) => query, {path: url})
         console.info(`🔗 > Navigated to tab ${url} for tab ${tab}`)
     }
 

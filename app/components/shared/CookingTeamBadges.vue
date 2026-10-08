@@ -1,12 +1,12 @@
 <script setup lang="ts">
 /**
- * CookingTeamBadges - THE team badge triple
+ * CookingTeamBadges - THE team badge row
  *
- * +-----------------------------------------------------------------------------------+
- * | [ (team icon) Madhold 2 ]  [ (chef hat) 1 ]  [ (members icon) 4 ]  [ (calendar) 12 ] |
- * +-----------------------------------------------------------------------------------+
+ * +---------------------------------------------------------------------------------------------------+
+ * | [ (team icon) Madhold 2 ]  [ (chef hat) 1 ]  [ (members icon) 4 ]  [ (joker) 1 ]  [ (calendar) 12 ] |
+ * +---------------------------------------------------------------------------------------------------+
  * (team icon) = ICONS.team, (chef hat) = ICONS.chef, (members icon) = ICONS.members,
- * (calendar) = ICONS.calendar
+ * (joker) = ICONS.joker, only while the team holds a joker slot, (calendar) = ICONS.calendar
  *
  * Every badge wears the team's rainbow stop - fill and ink as classes, so the
  * badge needs no colour slot (ADR-018). Icons lead, counts follow.
@@ -17,7 +17,7 @@
  * - CookingTeamCard headers (large; the edit row shows counts only via showName)
  */
 
-const { SIZES, ICONS, getRainbowBand } = useTheSlopeDesignSystem()
+const { SIZES, ICONS, COMPONENTS, getRainbowBand } = useTheSlopeDesignSystem()
 
 type BadgeSize = 'small' | 'standard' | 'large'
 
@@ -26,6 +26,7 @@ interface Props {
   teamName: string          // Team name to display
   chefCount?: number        // Number of CHEF-role members
   memberCount?: number      // Number of team members
+  jokerSlotCount?: number   // Number of joker slots the team holds
   cookingDaysCount?: number // Number of cooking days assigned
   size?: BadgeSize
   showCounts?: boolean      // Member and cooking-days badges
@@ -36,6 +37,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   chefCount: 0,
   memberCount: 0,
+  jokerSlotCount: 0,
   cookingDaysCount: 0,
   size: 'standard',
   showCounts: true,
@@ -48,7 +50,7 @@ const badgeSize = computed(() => ({small: SIZES.small, standard: SIZES.standard,
 </script>
 
 <template>
-  <div class="flex items-center gap-2 flex-wrap">
+  <div :class="COMPONENTS.teamBadgeRow">
     <UBadge
       v-if="showName"
       :class="teamBand"
@@ -71,6 +73,15 @@ const badgeSize = computed(() => ({small: SIZES.small, standard: SIZES.standard,
         :icon="ICONS.members"
       >
         {{ memberCount }}
+      </UBadge>
+      <UBadge
+        v-if="jokerSlotCount > 0"
+        :class="teamBand"
+        :size="badgeSize"
+        :icon="ICONS.joker"
+        data-testid="team-badge-jokers"
+      >
+        {{ jokerSlotCount }}
       </UBadge>
       <UBadge
         :class="teamBand"

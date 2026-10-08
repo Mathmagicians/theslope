@@ -4,7 +4,7 @@ import { SeasonFactory } from '../testDataFactories/seasonFactory'
 import testHelpers from '../testHelpers'
 
 const { adminUIFile } = authFiles
-const { validatedBrowserContext, doScreenshot, pollUntil, waitForHydration } = testHelpers
+const { validatedBrowserContext, doScreenshot, pollUntil, gotoHydrated } = testHelpers
 
 test.describe('AdminPlanning UI', () => {
   const adminPlanningUrl = '/admin/planning'
@@ -17,7 +17,7 @@ test.describe('AdminPlanning UI', () => {
    * up for seconds, so wait for the card AND for hydration before the first click.
    */
   const openPlanning = async (page: import('@playwright/test').Page, url: string) => {
-    await page.goto(url)
+    await gotoHydrated(page, url)
     await pollUntil(
       async () => await page.getByTestId('admin-planning').isVisible(),
       (isVisible) => isVisible,
@@ -28,7 +28,6 @@ test.describe('AdminPlanning UI', () => {
       (isVisible) => !isVisible,
       10
     )
-    await waitForHydration(page)
   }
 
   test.afterAll(async ({ browser }) => {

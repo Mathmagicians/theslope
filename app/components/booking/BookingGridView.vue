@@ -124,7 +124,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEmptyMessage, getOrderStateColor, getLockStatusConfig, getResidencyDisplay} = useTheSlopeDesignSystem()
+const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEmptyMessage, getOrderStateColor, getLockStatusConfig, getResidencyDisplay, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
 const emptyState = getRandomEmptyMessage('noDinners')
 
 // Ticket price formatting
@@ -642,7 +642,7 @@ const getEventSummary = (eventId: number) => {
         <!-- Power row -->
         <div v-if="row.original.rowType === 'power'" class="flex items-center gap-2">
           <UIcon :name="COMPONENTS.powerMode.buttonIcon" :class="COMPONENTS.powerMode.iconClass" />
-          <UBadge :color="COMPONENTS.powerMode.color" variant="subtle" :size="SIZES.sm">
+          <UBadge :color="COMPONENTS.powerMode.color" :variant="NOISE.subtle" :size="SIZES.sm">
             POWERMODE!
           </UBadge>
         </div>
@@ -657,7 +657,7 @@ const getEventSummary = (eventId: number) => {
               <UBadge
                 v-if="getTicketTypeConfig(row.original.inhabitant.birthDate ?? null, ticketPrices)"
                 :color="getTicketTypeConfig(row.original.inhabitant.birthDate ?? null, ticketPrices)!.color"
-                variant="subtle"
+                :variant="NOISE.subtle"
                 :size="SIZES.xs"
               >
                 {{ getTicketTypeConfig(row.original.inhabitant.birthDate ?? null, ticketPrices)!.label }}
@@ -669,7 +669,7 @@ const getEventSummary = (eventId: number) => {
             v-if="getOrderCountsForInhabitant(row.original.inhabitant.id).total > 0"
             :data-testid="`inhabitant-ticket-count-${row.original.inhabitant.id}`"
             :color="COLOR.neutral"
-            variant="soft"
+            :variant="NOISE.soft"
             :size="SIZES.xs"
           >
             <UIcon :name="ICONS.ticket" class="size-3" />
@@ -680,7 +680,7 @@ const getEventSummary = (eventId: number) => {
             v-if="getOrderCountsForInhabitant(row.original.inhabitant.id).released > 0"
             :data-testid="`inhabitant-released-count-${row.original.inhabitant.id}`"
             :color="getOrderStateColor(true, false)"
-            variant="soft"
+            :variant="NOISE.soft"
             :size="SIZES.xs"
           >
             <UIcon :name="ICONS.released" class="size-3" />
@@ -702,7 +702,7 @@ const getEventSummary = (eventId: number) => {
               <UBadge
                 v-if="row.original.ticketConfig"
                 :color="row.original.ticketConfig.color"
-                variant="subtle"
+                :variant="NOISE.subtle"
                 :size="SIZES.xs"
               >
                 {{ row.original.ticketConfig.label }}{{ row.original.guestCount && row.original.guestCount > 1 ? ` ×${row.original.guestCount}` : '' }}
@@ -761,7 +761,7 @@ const getEventSummary = (eventId: number) => {
           v-else-if="row.original.rowType === 'guest-add' && !isEventDisabled(event) && canBookEvent(event)"
           :icon="activeGuestEventId === event.id ? ICONS.chevronDown : ICONS.plusCircle"
           :color="COMPONENTS.guestRow.color"
-          variant="ghost"
+          :variant="NOISE.quiet"
           :size="SIZES.standard"
           :data-testid="`guest-add-${event.id}`"
           :class="activeGuestEventId === event.id ? 'rotate-45' : ''"
@@ -804,7 +804,7 @@ const getEventSummary = (eventId: number) => {
               <ActionPreview :items="actionPreviewItems" />
 
               <!-- Buttons row -->
-              <div class="flex flex-col-reverse md:flex-row md:justify-end gap-2">
+              <div :class="LAYOUTS.formButtonRow">
                 <UButton
                   v-bind="BUTTONS.cancel"
                   :disabled="props.isSaving"

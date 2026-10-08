@@ -14,9 +14,11 @@ export const JOKER_SLOT_IDS = {
     roleSelect: 'joker-slot-role-select'
 } as const
 
-/** Ticks the first weekday checkbox the form shows */
-export const tickFirstWeekday = async (wrapper: Searchable) => {
-    await findByTestId(wrapper, JOKER_SLOT_IDS.form).find('[role="checkbox"]').trigger('click')
+/** Toggles every weekday checkbox the form shows */
+export const toggleEveryWeekday = async (wrapper: Searchable) => {
+    for (const weekday of findByTestId(wrapper, JOKER_SLOT_IDS.form).findAll('[role="checkbox"]')) {
+        await weekday.trigger('click')
+    }
     await nextTick()
 }
 

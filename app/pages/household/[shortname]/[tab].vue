@@ -132,7 +132,7 @@ const ribbon = computed(() => {
 
 // Format household title: address + family name
 const { formatHouseholdFamilyName } = useHousehold()
-const { TYPOGRAPHY, ICONS, COMPONENTS, COLOR, ALERTS } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, ICONS, COMPONENTS, COLOR, ALERTS, NOISE } = useTheSlopeDesignSystem()
 const householdAddress = computed(() => selectedHousehold.value?.address ?? '')
 const householdFamilyName = computed(() =>
   selectedHousehold.value?.inhabitants
@@ -212,7 +212,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
               <UButton
                 data-testid="admin-override-exit"
                 :color="COLOR.neutral"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 :icon="ICONS.xMark"
                 @click="adminOverrideActive = false"
               >

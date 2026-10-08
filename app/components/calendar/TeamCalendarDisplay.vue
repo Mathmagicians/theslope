@@ -42,7 +42,7 @@ const emit = defineEmits<{
 
 const {createEventList} = useCalendarEvents()
 const {getHolidayDatesFromDateRangeList} = useSeason()
-const {CALENDAR, dayCircleClasses, getRainbowBand} = useTheSlopeDesignSystem()
+const {CALENDAR, dayCircleClasses, getRainbowBand, SIZES} = useTheSlopeDesignSystem()
 
 // Legend: team n wears rainbow stop n, then the holiday ring when the season has holidays
 const legendItems = computed((): CalendarLegendItem[] => [
@@ -128,7 +128,7 @@ const getCalendarDayClasses = (day: DateValue) => [
             :text="getTeamEventList(eventLists)!.events[0]?.label"
           >
             <UBadge
-              size="md"
+              :size="SIZES.md"
               :class="[getRainbowBand(getTeamEventList(eventLists)!.color as number), ...getCalendarDayClasses(day)]"
               @click="handleCalendarDayClick(day)"
             >

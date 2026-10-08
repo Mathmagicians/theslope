@@ -61,6 +61,9 @@ const {
   isSelectedDinnerEventErrored: isDinnerDetailError
 } = storeToRefs(bookingsStore)
 
+// The team card reads the dinner's cooking team from the plan store
+watch(() => dinnerEventDetail.value?.cookingTeamId ?? null, planStore.selectTeam, {immediate: true})
+
 // Page ready when both plan store and myTeams are initialized
 const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialized.value)
 

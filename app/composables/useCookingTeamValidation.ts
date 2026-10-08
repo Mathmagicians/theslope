@@ -145,8 +145,12 @@ export const useCookingTeamValidation = () => {
         eventsAssigned: z.number().int().min(0)
     })
 
-    // Response of a team aggregate delete whose entity no caller renders (ADR-009)
-    const DeletedCountSchema = z.number().int().min(0)
+    // Operation result of POST /api/admin/season/[id]/assign-team-affinities (ADR-009)
+    const AssignTeamAffinitiesResponseSchema = z.object({
+        seasonId: IdSchema,
+        teamCount: z.number().int().min(0),
+        teams: z.array(CookingTeamDetailSchema)
+    })
 
     /**
      * PrismaTeamUpdateData - Return type for toPrismaUpdateData
@@ -163,6 +167,16 @@ export const useCookingTeamValidation = () => {
      * Keeps cookingTeamId (sent in request body)
      */
     const CookingTeamAssignmentCreateSchema = CookingTeamAssignmentSchema.omit({ id: true, inhabitant: true })
+
+    /**
+     * CookingTeamAssignmentUpdate - Input schema for updating an assignment's seat (ADR-009)
+     * The seat fields only, each optional; the allocation drops its create default, so an omitted
+     * allocation leaves the stored one as it is
+     */
+    const CookingTeamAssignmentUpdateSchema = CookingTeamAssignmentSchema
+        .pick({ role: true, affinity: true })
+        .extend({ allocationPercentage: CookingTeamAssignmentSchema.shape.allocationPercentage.unwrap() })
+        .partial()
 
     /**
      * Plan describing the writes required to assign a role on a dinner.
@@ -329,9 +343,10 @@ export const useCookingTeamValidation = () => {
         CookingTeamCreateSchema,             // For PUT operations (ADR-009)
         CookingTeamUpdateSchema,             // For POST operations (ADR-009)
         CreateTeamsResponseSchema,           // Operation result for PUT /api/admin/team (ADR-009)
-        DeletedCountSchema,                  // Operation result for assignment and joker slot DELETE (ADR-009)
+        AssignTeamAffinitiesResponseSchema,  // Operation result for POST /api/admin/season/[id]/assign-team-affinities (ADR-009)
         CookingTeamAssignmentSchema,         // For nested assignments
         CookingTeamAssignmentCreateSchema,   // For creating assignments (ADR-009)
+        CookingTeamAssignmentUpdateSchema,   // For updating an assignment (ADR-009)
         RoleAssignmentPlanSchema,            // Plan output from decideRoleAssignmentWrites
         TeamRoleSchema,                      // For role enums
         CookingTeamSchema,                   // Base schema
@@ -366,5 +381,6 @@ export type CookingTeamUpdate = z.infer<ReturnType<typeof useCookingTeamValidati
 export type CreateTeamsResponse = z.infer<ReturnType<typeof useCookingTeamValidation>['CreateTeamsResponseSchema']>
 export type CookingTeamAssignment = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamAssignmentSchema']>
 export type CookingTeamAssignmentCreate = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamAssignmentCreateSchema']>
+export type CookingTeamAssignmentUpdate = z.infer<ReturnType<typeof useCookingTeamValidation>['CookingTeamAssignmentUpdateSchema']>
 export type RoleAssignmentPlan = z.infer<ReturnType<typeof useCookingTeamValidation>['RoleAssignmentPlanSchema']>
 export type TeamRole = z.infer<ReturnType<typeof useCookingTeamValidation>['TeamRoleSchema']>

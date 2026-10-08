@@ -90,7 +90,7 @@ const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Design system
-const { WEEKDAY, COMPONENTS, COLOR, ICONS, BUTTONS, SIZES, ALERTS } = useTheSlopeDesignSystem()
+const { WEEKDAY, COMPONENTS, COLOR, ICONS, BUTTONS, SIZES, ALERTS, NOISE } = useTheSlopeDesignSystem()
 const { powerMode } = COMPONENTS
 
 // Prepare table data with synthetic "all members" power row + individual inhabitants
@@ -247,8 +247,8 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
           <div class="hidden md:block">
             <UBadge
                 :color="row.original.ticketConfig?.color ?? 'neutral'"
-                variant="subtle"
-                size="sm"
+                :variant="NOISE.subtle"
+                :size="SIZES.sm"
                 :data-testid="`ticket-type-${row.original.id}`"
             >
               {{ row.original.ticketConfig?.label ?? 'Ukendt' }}
@@ -279,8 +279,8 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
             <UBadge
                 class="md:hidden w-fit"
                 :color="row.original.ticketConfig?.color ?? 'neutral'"
-                variant="subtle"
-                size="xs"
+                :variant="NOISE.subtle"
+                :size="SIZES.xs"
             >
               {{ row.original.ticketConfig?.label ?? 'Ukendt' }}
             </UBadge>
@@ -346,7 +346,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
                 <UFieldGroup :size="getIsMd ? 'md' : 'sm'">
                   <UButton
                       :color="COLOR.neutral"
-                      variant="ghost"
+                      :variant="NOISE.quiet"
                       :icon="ICONS.xMark"
                       data-testid="cancel-preferences"
                       @click="row.toggleExpanded()"
@@ -356,7 +356,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
                   <UButton
                       v-if="canEdit"
                       :color="row.original.isSynthetic ? COMPONENTS.powerMode.color : COLOR.primary"
-                      variant="solid"
+                      :variant="NOISE.loud"
                       :loading="isSaving"
                       :disabled="isSaving"
                       class="group"

@@ -5,7 +5,7 @@ import {AllergyFactory} from '../testDataFactories/allergyFactory'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 
 const {memberUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, temporaryAndRandom, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, temporaryAndRandom, getSessionUserInfo, gotoHydrated} = testHelpers
 
 /**
  * E2E UI Tests for HouseholdAllergies
@@ -45,7 +45,7 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
      * Helper to navigate to allergies tab and wait for content
      */
     const navigateToAllergiesTab = async (page: import('@playwright/test').Page) => {
-        await page.goto(`/household/${encodeURIComponent(shortName)}/allergies?pbs=${pbsId}`)
+        await gotoHydrated(page, `/household/${encodeURIComponent(shortName)}/allergies?pbs=${pbsId}`)
         await pollUntil(
             async () => page.locator('[data-testid="household-allergies"]').isVisible(),
             (isVisible) => isVisible,

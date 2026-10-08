@@ -60,6 +60,9 @@ passes domain props. Read `docs/ui.md` before the first edit; it names every tok
 - One component per pattern. The extraction rule: a one-liner is never a component; an alert plus a button is not a component;
   a template that owns behaviour, state or a multi-element layout is. Shared logic that is a single expression lives once in a
   util or a token.
+- A design-system deviation found in a file the package touches is fixed in the same package, on sight: a raw class, a
+  literal size, variant, colour or icon, a hand-rolled panel. It is a broken window, never a finding to report or a
+  decision to ask for. Only a deviation whose fix changes a rendered value is reported, with the token that replaces it.
 - Extracting a value or a pattern sweeps every occurrence in the same change - every `.vue` site and every design-system
   class string. A partial sweep is a violation, not progress. The `dry` skill's Step 3 is the procedure: derive the grep from
   the abstraction's own body and search the whole tree.
@@ -67,6 +70,30 @@ passes domain props. Read `docs/ui.md` before the first edit; it names every tok
   classes differ from the token's is stopped on and presented as a decision; the user's default for a meaningless delta is to
   converge on the token.
 - Test-ids are a contract. A rename ships with an old → new table and the specs that follow it.
+
+## Forms
+
+A form in this app has one shape; a form that departs from it is a broken window.
+
+- **`<UForm :schema :state>`** with the domain's create or update schema from the validation composable; no hand-rolled
+  validation, no casting. The draft is typed `z.input<typeof Schema>` so defaulted fields may start unset, and the
+  schema fills them on submit.
+- **Every field is a `<UFormField name="…">`** whose `name` is the schema path, so every schema message, cross-field
+  rules included, has a field to show in. A picker component that wraps a field passes the `name` through.
+- **Defaults come from the domain, never from "now"**: a period defaults to the season's dates, a percentage to its
+  schema default (100), a weekday map to the season's cooking days through the existing weekday picker with
+  `hide-restricted`.
+- **Shared field groups are shared components** (`TeamRoleFields` for role and allocation, `WeekDayMapDisplay` for
+  weekdays, `CalendarDateRangePicker` for a period); a second copy of a field group is an extraction, not a paste.
+- **Buttons bind `BUTTONS.save` and `BUTTONS.cancel`**, the footer binds `LAYOUTS.formButtonRow`, the stack binds its
+  form token; a literal `variant`, `size`, `color` or `icon` on a form button is a breach, and so is a class string.
+- **The form emits; the store acts.** The form emits its parsed draft and `cancel`; the page or card calls the store
+  action, which parses the response through its schema, refreshes and toasts once. A component never toasts a store
+  action's result and never calls the API.
+- **An inline form opens below its trigger** through `BUTTONS.flipOpen(isOpen)` with `aria-expanded`, and closes on
+  submit or cancel.
+- **The spec** mounts the real form: submit emits the schema's shape with its defaults, cancel emits nothing else, an
+  invalid draft blocks the emit and shows the field message, and a shared field group's glyphs follow the selection.
 
 ## Gates before "done"
 

@@ -59,6 +59,12 @@ describe('CalendarDateRangePicker', () => {
     expect(allErrors.some((msg: string) => msg.includes('Tidsmaskinen'))).toBe(true)
   })
 
+  it('names its field after the name it is given, so a form message for that path shows on it', async () => {
+    const wrapper = await mountPicker({ start: JAN_1, end: JAN_5 }, { name: 'endDate' })
+    const names = wrapper.findAllComponents({ name: 'UFormField' }).map(field => field.props('name'))
+    expect(names).toEqual(['endDate'])
+  })
+
   it('configures its calendar from the shared design-system grid token', async () => {
     const wrapper = await mountPicker({ start: JAN_1, end: JAN_5 })
     await openPopover(wrapper)

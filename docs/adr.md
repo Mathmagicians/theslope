@@ -92,6 +92,7 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 | `app/composables/useUserRolesUi.ts` | Role labels/icons/visibility (auth store) |
 | `app/composables/useUserRoles.ts` | Server-safe role reconciliation |
 | `shared/types/cloudflare.d.ts` | `H3EventContext.cloudflare`, Nitro `TaskContext.cloudflare` |
+| `shared/types/nuxt-app.d.ts`, `shared/types/url-writes.d.ts` | `NuxtApp._urlWrites`, the batch type shared with `useUrlQueryWriter` |
 | `server/tsconfig.json` | Extends `.nuxt/tsconfig.server.json`; target of `ts:server` |
 
 ### Related ADRs
@@ -532,11 +533,12 @@ Create lightweight repository functions for bulk updates (>10 entities).
 ### Compliance
 
 1. Index = display-ready, Detail = operation-ready
-2. Mutations MUST return Detail schema
+2. Mutations MUST return Detail schema, or the entity itself where it has no Display and Detail split
 3. **ONLY 2 types per entity** - NO EntityResponse, Entity, etc.
 4. Batch operations MUST use Display types
 5. Prisma types MUST NOT leave repository layer (ADR-010)
 6. Operation result types are NOT entity types - they MAY be added as needed for side-effect operations
+7. A delete returns the deleted entity's Detail when a caller renders it, otherwise the deleted count
 
 ---
 
@@ -576,7 +578,7 @@ const createDraft = ref<CookingTeam[]>([])
 
 ## ADR-007: SSR-Friendly Store Pattern with useAsyncData
 
-**Status:** Accepted | **Date:** 2025-01-28 | **Updated:** 2026-10-07
+**Status:** Accepted | **Date:** 2025-01-28 | **Updated:** 2026-10-08
 
 ### Decision
 
@@ -654,12 +656,13 @@ Components MAY use `useAsyncData` directly when:
 7. `tests/component/architecture/fetchUsage.unit.spec.ts` fails a `$fetch(` or `useRequestFetch(` under `app/` outside `app/composables/useApiHandler.ts`
 8. A gated read puts its condition on `enabled`; the dataset reads `idle` while the condition is false, and the store's ready flag counts the datasets the store requests
 9. A dataset reads its selection through getters (`planStore.selectedSeasonId`, `householdsStore.selectedHouseholdId`, the store's own selected ids) and declares the datasets that selection resolves from in `dependsOn`; its key stays constant. A page calls a setter for a scope no store holds (`loadOrdersForDinners`, `loadUpcomingOrders`, `loadHouseholdBilling`)
+10. A component renders server-resolved state through computeds; an edit draft starts on an edit action (focus, an edit button), never from a ref seeded at setup. The seed renders the setup-time value on the server, the client hydrates the resolved one, and the repair replaces the element under the user's input
 
 ---
 
 ## ADR-006: URL-Based Navigation and Client-Side State
 
-**Status:** Accepted | **Date:** 2025-01-27 | **Updated:** 2026-03-04
+**Status:** Accepted | **Date:** 2025-01-27 | **Updated:** 2026-10-08
 
 ### Decision
 
@@ -677,12 +680,44 @@ Draft state: In-memory Vue ref in component (no persistence).
 
 **Resolution priority:** `pbsId` → match by `pbsId`. No `pbsId`, one `shortName` match → use it. No `pbsId`, multiple `shortName` matches → user's own household, else first match. No match → current selection or user's household.
 
+### URL Parameters
+
+**The URL is the state.** A page or component owns a query parameter through `useQueryParam(key, options)`: the value reads
+from `route.query` on every access and a write navigates. `deserialize` turns the string into the domain value (null when it
+cannot), `validate` checks it against the data it names (a season in the list, a household by `pbsId`), `normalize` maps
+an invalid value to a replacement or to null, which removes the key, and `defaultValue` fills a missing or invalid one.
+`syncWhen` names the readiness the validation needs (the store that holds the list); until it holds, the raw value passes
+through. When it holds, the parameter syncs the URL once (`needsSync`), so a page lands with its parameters spelled out.
+
+### URL Writes
+
+**One writer of the current page's URL: `useUrlQueryWriter`.** Every query parameter (`useQueryParam`), the form mode
+(`useEntityFormManager`), the season (`useSeasonSelector`) and the tab path (`useTabNavigation`) call
+`write(apply, {priority, replace, path})`. The writes of a tick batch per Nuxt app instance, apply in priority order onto
+the committed query and land in one navigation; a path change rides the same navigation. Higher priority applies later
+and wins a key conflict; a parameter's explicit write outranks its one-shot auto-sync, and a `useQueryParam` client
+passes `priority` through its options. Several writers navigating from private snapshots of `route.query` in one tick
+kept only the last writer's key; the batch is the remedy.
+
 ### Compliance
 
 1. Path-based routing for tabs
 2. Query param `?mode=edit|create|view` for form mode
 3. Draft data in component refs, not store
 4. Household URLs MUST use `getHouseholdUrl()` to include `?pbs=X`
+5. A query or path change on the current page goes through `useUrlQueryWriter`; no component or composable calls `navigateTo` for it
+6. A composable that needs an order among the writes of a tick states a `priority`; the order is never implied by call order
+7. A parameter that depends on loaded data names that readiness in `syncWhen`; a test that reads the URL after a page load waits for the sync (`expect.poll`)
+
+### Key Files
+
+| File | Role |
+|------|------|
+| `app/composables/useQueryParam.ts` | A parameter: read, validate, normalize, default, one-shot sync |
+| `app/composables/useUrlQueryWriter.ts` | The page's one URL writer: batch per tick, priority, one navigation |
+| `app/composables/useEntityFormManager.ts`, `useSeasonSelector.ts`, `useTabNavigation.ts` | `?mode=`, `?season=` and the tab path through the writer |
+| `shared/types/url-writes.d.ts`, `shared/types/nuxt-app.d.ts` | The batch type and `NuxtApp._urlWrites` |
+| `app/utils/household.ts` (`getHouseholdUrl`) | Household URLs with `?pbs=` |
 
 ---
 

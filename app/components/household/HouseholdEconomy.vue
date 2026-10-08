@@ -25,7 +25,7 @@ const props = defineProps<Props>()
 // Composables
 const {formatPrice} = useTicket()
 const {groupByCostEntry, calculateCurrentBillingPeriod, formatTicketCounts} = useBilling()
-const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG, NOISE} = useTheSlopeDesignSystem()
 const {OrderStateSchema} = useBookingValidation()
 
 // Accessor functions for CostEntry (reusable lambdas)
@@ -235,7 +235,7 @@ const upcomingPeriodStart = computed(() => {
             <UButton
                 v-if="row.original.items.length > 0"
                 :color="COLOR.neutral"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                 square
                 :size="SIZES.small"
@@ -295,7 +295,7 @@ const upcomingPeriodStart = computed(() => {
             <UButton
                 v-if="row.original.groups.length > 0"
                 :color="COLOR.neutral"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                 square
                 :size="SIZES.small"
@@ -304,11 +304,11 @@ const upcomingPeriodStart = computed(() => {
             />
           </template>
           <template #status-cell="{ row }">
-            <UBadge v-if="!row.original.isClosed" :color="COLOR.success" variant="subtle" :size="SIZES.small">
+            <UBadge v-if="!row.original.isClosed" :color="COLOR.success" :variant="NOISE.subtle" :size="SIZES.small">
               <UIcon :name="ICONS.ellipsisCircle" :class="SIZES.smallBadgeIcon"/>
               Igangværende
             </UBadge>
-            <UBadge v-else :color="COLOR.neutral" variant="subtle" :size="SIZES.small">
+            <UBadge v-else :color="COLOR.neutral" :variant="NOISE.subtle" :size="SIZES.small">
               <UIcon :name="ICONS.check" :class="SIZES.smallBadgeIcon"/>
               Afsluttet
             </UBadge>
@@ -340,7 +340,7 @@ const upcomingPeriodStart = computed(() => {
                     <UButton
                         v-if="dinnerRow.original.items.length > 0"
                         :color="COLOR.neutral"
-                        variant="ghost"
+                        :variant="NOISE.quiet"
                         :icon="dinnerRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                         square
                         :size="SIZES.small"

@@ -123,7 +123,7 @@ const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Design system
-const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, getResidencyDisplay} = useTheSlopeDesignSystem()
+const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, getResidencyDisplay, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
 const emptyStateMessage = getRandomEmptyMessage('household')
 
 // Ticket business logic
@@ -621,7 +621,7 @@ const actionPreviewItems = computed(() => {
               compact
             >
               <template #badge>
-                <UBadge v-if="hasReleasedTickets" :color="COLOR.info" :icon="ICONS.claim" variant="subtle" :size="SIZES.small">
+                <UBadge v-if="hasReleasedTickets" :color="COLOR.info" :icon="ICONS.claim" :variant="NOISE.subtle" :size="SIZES.small">
                   {{ props.releasedTicketCounts.formatted }} Ledig{{ props.releasedTicketCounts.total === 1 ? '' : 'e' }}
                 </UBadge>
               </template>
@@ -640,7 +640,7 @@ const actionPreviewItems = computed(() => {
                 <UBadge
                   v-if="isOrderReleased(row.original.orderState)"
                   :color="COLOR.error"
-                  variant="soft"
+                  :variant="NOISE.soft"
                   :size="SIZES.small"
                   :icon="ICONS.released"
                 >
@@ -648,10 +648,10 @@ const actionPreviewItems = computed(() => {
                 </UBadge>
                 <!-- Provenance badges -->
                 <div v-else-if="row.original.provenanceHousehold" class="flex flex-wrap items-center gap-1">
-                  <UBadge :color="COLOR.info" variant="soft" size="sm" :icon="ICONS.claim">
+                  <UBadge :color="COLOR.info" :variant="NOISE.soft" :size="SIZES.sm" :icon="ICONS.claim">
                     fra {{ row.original.provenanceHousehold }}
                   </UBadge>
-                  <UBadge v-if="row.original.provenanceAllergies?.length" :color="COLOR.warning" variant="soft" size="sm">
+                  <UBadge v-if="row.original.provenanceAllergies?.length" :color="COLOR.warning" :variant="NOISE.soft" :size="SIZES.sm">
                     🥜 {{ row.original.provenanceAllergies.join(', ') }}
                   </UBadge>
                 </div>
@@ -675,10 +675,10 @@ const actionPreviewItems = computed(() => {
             </div>
             <!-- Provenance badges -->
             <div v-if="row.original.provenanceHousehold" class="flex flex-wrap items-center gap-1 mt-1 ml-6">
-              <UBadge :color="COLOR.info" variant="soft" size="sm" :icon="ICONS.claim">
+              <UBadge :color="COLOR.info" :variant="NOISE.soft" :size="SIZES.sm" :icon="ICONS.claim">
                 fra {{ row.original.provenanceHousehold }}
               </UBadge>
-              <UBadge v-if="row.original.provenanceAllergies?.length" :color="COLOR.warning" variant="soft" size="sm">
+              <UBadge v-if="row.original.provenanceAllergies?.length" :color="COLOR.warning" :variant="NOISE.soft" :size="SIZES.sm">
                 🥜 {{ row.original.provenanceAllergies.join(', ') }}
               </UBadge>
             </div>
@@ -778,7 +778,7 @@ const actionPreviewItems = computed(() => {
 
           <!-- Provenance allergies (read-only for existing guest) -->
           <div v-if="row.original.rowType === 'guest-order' && row.original.provenanceAllergies?.length" class="flex flex-wrap gap-2">
-            <UBadge v-for="allergy in row.original.provenanceAllergies" :key="allergy" :color="COLOR.warning" variant="soft">
+            <UBadge v-for="allergy in row.original.provenanceAllergies" :key="allergy" :color="COLOR.warning" :variant="NOISE.soft">
               🥜 {{ allergy }}
             </UBadge>
           </div>
@@ -805,7 +805,7 @@ const actionPreviewItems = computed(() => {
           <div v-if="row.original.order?.id">
             <UButton
                 :color="COLOR.neutral"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 :icon="historyOrderId === row.original.order.id ? ICONS.chevronUp : ICONS.clipboard"
                 square
                 :size="SIZES.small"
@@ -820,7 +820,7 @@ const actionPreviewItems = computed(() => {
             <div class="flex flex-col gap-2">
               <ActionPreview :items="actionPreviewItems" />
 
-              <div class="flex flex-col-reverse md:flex-row md:justify-end gap-2">
+              <div :class="LAYOUTS.formButtonRow">
                 <UButton
                   v-bind="BUTTONS.cancel"
                   :data-testid="`${row.original.rowType}-${row.original.id}-cancel`"

@@ -74,7 +74,7 @@ const viewInput = computed(() => ({
   name: props.name,
   icon: props.icon,
   disabled: true,
-  ui: {base: 'w-fit min-w-full'}
+  ui: COMPONENTS.dateRangeField.viewUi
 }))
 
 // Expose for testing
@@ -87,13 +87,14 @@ defineExpose({
 
 <template>
   <!-- A host with its own UFormField passes label="": nested UFormFields recurse Nuxt UI's props forwarding -->
-  <UFormField v-if="props.disabled && props.label" class="p-2" :label="props.label">
+  <UFormField v-if="props.disabled && props.label" :class="COMPONENTS.dateRangeField.field" :label="props.label">
     <UInput v-bind="viewInput" />
   </UFormField>
   <UInput v-else-if="props.disabled" v-bind="viewInput" />
   <div v-else :name="props.name">
     <UFormField
-        class="p-2"
+        :class="COMPONENTS.dateRangeField.field"
+        :name="props.name"
         :label="props.label"
         :error="getErrorMessage(errors, ['_', 'start', 'end'])">
       <UInputDate

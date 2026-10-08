@@ -50,7 +50,7 @@ interface Props {
   labelPlural?: string  // Plural form of label
 }
 
-const {ICONS, COLOR, TYPOGRAPHY, TEXT, COMPONENTS} = useTheSlopeDesignSystem()
+const {ICONS, COLOR, TYPOGRAPHY, TEXT, COMPONENTS, SIZES} = useTheSlopeDesignSystem()
 
 const props = withDefaults(defineProps<Props>(), {
   compact: false,
@@ -183,7 +183,7 @@ const {getUserUrl} = useHeynabo()
       </span>
 
       <!-- Count badge (when showNames=false) -->
-      <UBadge v-if="!showNames" size="sm" :color="COLOR.primary">
+      <UBadge v-if="!showNames" :size="SIZES.sm" :color="COLOR.primary">
         {{ count }}
       </UBadge>
     </div>

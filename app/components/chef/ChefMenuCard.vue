@@ -127,7 +127,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { TYPOGRAPHY, SIZES, ICONS, ALERTS, BUTTONS, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS, TEXT, RING } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, SIZES, ICONS, ALERTS, BUTTONS, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS, TEXT, RING, NOISE } = useTheSlopeDesignSystem()
 
 // Hero panel button colors (ChefMenuCard sits on hero background with food image)
 const HERO_BUTTON = COMPONENTS.heroPanel.light
@@ -385,7 +385,7 @@ const handleCardClick = () => {
       <!-- State badge -->
       <UBadge
         :color="stateBadge.color"
-        variant="subtle"
+        :variant="NOISE.subtle"
         :size="SIZES.small"
         class="shrink-0"
       >
@@ -395,7 +395,7 @@ const handleCardClick = () => {
       <!-- Menu status -->
       <UBadge
         :color="menuStatusBadge.color"
-        variant="soft"
+        :variant="NOISE.soft"
         :size="SIZES.small"
         class="shrink-0"
       >

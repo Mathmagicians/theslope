@@ -21,7 +21,8 @@ Nuxt 4.3, Nuxt UI 4.3, Tailwind 4.1. Pages use Nuxt UI components; every shared 
 - A component binds a design-system token and passes domain props only. `tests/component/architecture/designSystemUsage.unit.spec.ts`
   fails on a Tailwind palette shade, a literal colour prop, a `<UAlert>` without an `ALERTS` kind, a `<UCalendar>` without
   `COMPONENTS.calendarGrid`, a `<UTable>` without a `COMPONENTS.table` token, a team `<UTabs>` without `COMPONENTS.teamTabs`,
-  and the slot name `#empty-state`; it reports `file:line`.
+  a literal `size`, `variant` or `icon` on a `<UButton>`, `<UBadge>` or `<UAvatar>` (bind `SIZES`, `NOISE`, `BUTTONS` or `ICONS`),
+  the form button row spelled out instead of `LAYOUTS.formButtonRow`, and the slot name `#empty-state`; it reports `file:line`.
 - A token holds one rendered value, light and dark together. Two values are two tokens, named by where they are used.
 - A Nuxt UI component family gets a token, and an architecture rule, before its first use.
 - Layout responds with `md:` classes; `isMd` (provided by `app/layouts/default.vue`) sets prop values.
@@ -32,13 +33,14 @@ Nuxt 4.3, Nuxt UI 4.3, Tailwind 4.1. Pages use Nuxt UI components; every shared 
 | Token | For |
 |---|---|
 | `COLOR` | a Nuxt UI `color` prop |
+| `NOISE` | a Nuxt UI `variant` prop: the emphasis ladder `loud` (solid), `medium` (outline), `soft`, `quiet` (ghost), and `subtle` (status badges), `link` |
 | `TEXT` | ink volume `ink` → `strong` → `toned` → `muted` → `dimmed`, single-owner lines, family rungs |
 | `BG` | surfaces `panel`, `panelNested`, `panelHover`, `inset`, single-owner surfaces, family rungs |
 | `BORDER`, `RING` | edges and rings, family rungs |
 | `TYPOGRAPHY`, `LAYOUTS`, `SIZES`, `ICONS` | text styles, layout classes, responsive sizes, icon names |
-| `BUTTONS` | `edit`, `cancel`, `save`, `primaryAction`, `secondaryAction`, `settings` |
+| `BUTTONS` | `edit`, `cancel`, `save`, `primaryAction`, `secondaryAction`, `settings`, `memberFinder` (the team finder's row action: Tilføj, Rediger, Luk) |
 | `ALERTS` | alert kinds and the `withActions` / `withCornerAction` modifiers |
-| `COMPONENTS` | `calendarGrid`, `legend` (inside an `ALERTS.legend` panel: `entries`, `entry`, `stackedEntry`, `badge`, `hint`), `dateField`, `installIcon`, `statBox`, `table.ui`, `teamTabs`, `teamChip` (the circular team icon beside the team-name input), `masterDetail` (framed `pane`/`dock`, sticky `dockHeader`, `dockClamp` keeps a wide dock out of the master table's sizing, `dockBody` scrolls it in its own box), `choiceGroup`, `kitchenPanel`, `segmentedActive`, `economyTable`, `powerMode`, `guestRow`, `roleBox` (the team card's role groups on one glyph column: `box`, `heading` with its `glyph`, `list`, `row`, `empty`, the edit face's `add` button and joker slot `form` panel, and the monitor face's `monitorGrid` and `monitorRow`), `teamForm` (the team card's inline forms: the field `stack`, a select or input `control` filling its field), `wantedPoster` (the chef portrait: `trigger`, `frame`, `portrait`, `ring`, `avatar`, `hat` with its ink `hatOnFrame` or `hatOnPage`, `nameStack`, `lettering`, `role`) |
+| `COMPONENTS` | `calendarGrid`, `dateRangeField` (the period field's padding and its read-only input), `legend` (inside an `ALERTS.legend` panel: `entries`, `entry`, `stackedEntry`, `badge`, `hint`), `dateField`, `installIcon`, `statBox`, `table.ui`, `teamTabs`, `teamChip` (the circular team icon beside the team-name input), `masterDetail` (framed `pane`/`dock`, sticky `dockHeader`, `dockClamp` keeps a wide dock out of the master table's sizing, `dockBody` scrolls it in its own box), `choiceGroup`, `kitchenPanel`, `segmentedActive`, `economyTable`, `powerMode`, `guestRow`, `roleBox` (the team card's role groups on one glyph column: `box`, `heading` with its `glyph`, `list`, `row`, `empty`, the edit face's `add` button and joker slot `form` panel, and the monitor face's `monitorGrid` and `monitorRow`), `teamForm` (the team card's inline forms: the field `stack`, a select or input `control` filling its field), `teamBadgeRow` (`CookingTeamBadges`' wrapping row), `teamCard` (the team card's faces: `monitor` and `monitorHeader`, the `stack` of sections, `viewHeader`, the dashed `editHeader` with `editHeaderMain`, `nameField`, `nameInput` (class and `ui`; the pencil binds `ICONS.edit`), `memberSummary` and `deleteButton`, the two-column `row` with `fullColumn`, `halfColumn`, `affinityColumn`, `calendarColumn`, the role `boxes`, a member row's `memberLink` avatar, `nameBadge` and `allocationBadge`, and the finder's `freeBadge` (LEDIG), `statusList`, `statusEntry`, `statusBadge` and expanded `memberForm`), `wantedPoster` (the chef portrait: `trigger`, `frame`, `portrait`, `ring`, `avatar`, `hat` with its ink `hatOnFrame` or `hatOnPage`, `nameStack`, `lettering`, `role`) |
 | `CALENDAR`, `PLANNING_CALENDAR`, `CHEF_CALENDAR`, `DINNER_CALENDAR`, `dayCircleClasses`, `calendarPickerProps` | calendar days, pickers, countdowns |
 | `BACKGROUNDS`, `RAINBOW`, `RAINBOW_FAMILIES`, `getRainbowBand`, `getRainbowFamily`, `getRainbowAccent` (selected team row's left tab), `PANTONE_CHIPS` | brand surfaces |
 | `TICKET_TYPE_COLORS`, `ORDER_STATE_COLORS`, `DINNER_STATE_BADGES`, `DEADLINE_BADGES`, `RESIDENCY_CONFIG`, `ROLE_ICONS` | domain colour and glyph maps; the role and dinner glyphs are one set, Hugeicons: `ICONS.chef` (chef hat, Chefkok), `ROLE_ICONS.COOK` (whisk, Kok), `ROLE_ICONS.JUNIORHELPER` (plant, Kokkespire), `ICONS.joker` (joker, Jokere), `ICONS.dinner` (dish, Middag and Spisesal) |
@@ -112,9 +114,11 @@ heading carries its glyph once (`ROLE_ICONS[role]`, `ICONS.joker`) beside the la
 rows inside a box carry no role glyph. A joker line reads period, weekdays (`WeekDayMapDisplay` compact), the role's glyph and
 label, the note and the shifts the slot covers (`countJokerSlotShifts` in `useCookingTeam`). An empty box shows the muted
 `empty` line. The monitor face sets the same heading in `monitorGrid`, a heading column beside the avatars. The role and allocation fields are `TeamRoleFields`, shared by
-`TeamMemberAddForm` and `JokerSlotForm`; the role select shows the selected role's glyph on its trigger. In the edit face each joker
+`TeamMemberAddForm` and `JokerSlotForm`; the role select shows the selected role's glyph on its trigger. In the edit face each member row and each joker
 line ends in a slet (`BUTTONS.edit` with `ICONS.trash` and an `aria-label`), and the `add` button (`BUTTONS.secondaryAction` +
-`BUTTONS.flipOpen`) opens `JokerSlotForm` in the `form` panel under the box; Opret and Fortryd close it. Every face starts with the 1rem glyph column: a box is the
+`BUTTONS.flipOpen`) opens `JokerSlotForm` in the `form` panel under the box; Opret and Fortryd close it. The joker form's period defaults to the
+season's dates, its weekdays are the season's cooking days (`hide-restricted`), and its allocation starts at 100. A team that
+is not saved yet, and a team without dinners, show an `ALERTS.emptyStateCompact` in place of the finder and the calendar. Every face starts with the 1rem glyph column: a box is the
 `box` grid with the heading as a subgrid row, so the label, the list and the empty line start on one line; the monitor face is
 `monitorGrid` (glyph, label, list) with one `monitorRow` subgrid per group, so the glyphs share one axis and every avatar list
 starts on one line. The visual check is `/admin/teams` with a team open in view

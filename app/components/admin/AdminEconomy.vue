@@ -27,7 +27,7 @@ const props = withDefaults(defineProps<{
 
 const {formatPrice} = useTicket()
 const {groupByCostEntry, groupByHouseholdEntry, calculateCurrentBillingPeriod, controlInvoices, formatTicketCounts} = useBilling()
-const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG, NOISE} = useTheSlopeDesignSystem()
 
 // Plan store for future dinners
 const planStore = usePlanStore()
@@ -458,7 +458,7 @@ const dinnerBreakdownStats = computed(() => {
             <UButton
                 v-if="row.original.items.length > 0"
                 :color="COLOR.neutral"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                 square
                 :size="SIZES.small"
@@ -508,7 +508,7 @@ const dinnerBreakdownStats = computed(() => {
                       />
                       <UButton
                           :color="COLOR.neutral"
-                          variant="ghost"
+                          :variant="NOISE.quiet"
                           :icon="ICONS.xMark"
                           :size="SIZES.small"
                           aria-label="Annuller"
@@ -556,7 +556,7 @@ const dinnerBreakdownStats = computed(() => {
                       <UButton
                           v-if="householdRow.original.items.length > 0"
                           :color="COLOR.neutral"
-                          variant="ghost"
+                          :variant="NOISE.quiet"
                           :icon="householdRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                           square
                           :size="SIZES.small"
@@ -623,7 +623,7 @@ const dinnerBreakdownStats = computed(() => {
           <template #expand-cell="{ row }">
             <UButton
                 :color="COLOR.neutral"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                 square
                 :size="SIZES.small"
@@ -632,11 +632,11 @@ const dinnerBreakdownStats = computed(() => {
             />
           </template>
           <template #status-cell="{ row }">
-            <UBadge v-if="row.original.isVirtual" :color="COLOR.success" variant="subtle" :size="SIZES.small">
+            <UBadge v-if="row.original.isVirtual" :color="COLOR.success" :variant="NOISE.subtle" :size="SIZES.small">
               <UIcon :name="ICONS.ellipsisCircle" :class="SIZES.smallBadgeIcon"/>
               Igangværende
             </UBadge>
-            <UBadge v-else :color="COLOR.neutral" variant="subtle" :size="SIZES.small">
+            <UBadge v-else :color="COLOR.neutral" :variant="NOISE.subtle" :size="SIZES.small">
               <UIcon :name="ICONS.check" :class="SIZES.smallBadgeIcon"/>
               Afsluttet
             </UBadge>
@@ -687,7 +687,7 @@ const dinnerBreakdownStats = computed(() => {
                         <UButton
                             v-if="householdRow.original.items.length > 0"
                             :color="COLOR.neutral"
-                            variant="ghost"
+                            :variant="NOISE.quiet"
                             :icon="householdRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                             square
                             :size="SIZES.small"
@@ -752,7 +752,7 @@ const dinnerBreakdownStats = computed(() => {
                     <template #expand-cell="{ row: invoiceRow }">
                       <UButton
                           :color="COLOR.neutral"
-                          variant="ghost"
+                          :variant="NOISE.quiet"
                           :icon="invoiceRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                           square
                           :size="SIZES.small"
@@ -823,7 +823,7 @@ const dinnerBreakdownStats = computed(() => {
                             <UButton
                                 v-if="dinnerRow.original.items.length > 0"
                                 :color="COLOR.neutral"
-                                variant="ghost"
+                                :variant="NOISE.quiet"
                                 :icon="dinnerRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                                 square
                                 :size="SIZES.small"

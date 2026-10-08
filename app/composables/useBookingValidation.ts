@@ -8,7 +8,7 @@ import {
     OrderAuditActionSchema
 } from '~~/prisma/generated/zod'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
-import {useCoreValidation} from '~/composables/useCoreValidation'
+import {useCoreValidation, IdSchema} from '~/composables/useCoreValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
 import {chunkArray} from '~/utils/batchUtils'
@@ -653,6 +653,13 @@ export const useBookingValidation = () => {
         scaffoldResult: ScaffoldResultSchema
     })
 
+    // Operation result of POST /api/admin/season/[id]/assign-cooking-teams (ADR-009)
+    const AssignCookingTeamsResponseSchema = z.object({
+        seasonId: IdSchema,
+        eventCount: z.number().int().min(0),
+        events: z.array(DinnerEventDisplaySchema)
+    })
+
     // ============================================================================
     // UNIFIED BOOKING SCAFFOLD (ADR-016)
     // All booking mutations go through scaffolder except atomic claim
@@ -909,6 +916,7 @@ export const useBookingValidation = () => {
         ScaffoldResultSchema,
         InhabitantUpdateResponseSchema,
         HouseholdUpdateResponseSchema,
+        AssignCookingTeamsResponseSchema,
 
         // Unified Booking Scaffold (ADR-016)
         DesiredOrderSchema,

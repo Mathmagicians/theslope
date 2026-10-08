@@ -89,13 +89,19 @@ export type NuxtUIColor = typeof COLOR[keyof typeof COLOR]
  *   medium → outline  secondary - important, not primary
  *   soft   → soft     supplementary - tinted, gentle
  *   quiet  → ghost    tertiary - overflow triggers, inline icons, rare actions
+ *
+ * Off the ladder: `subtle` (a soft tint inside a ring, the status badges) and `link` (text only,
+ * a button that reads as a link). Each value is a literal type, so the badge variants
+ * (`solid`, `outline`, `soft`, `subtle`) bind on a UBadge.
  */
 export const NOISE = {
-    loud:   'solid'   as NuxtUIButtonVariant,
-    medium: 'outline' as NuxtUIButtonVariant,
-    soft:   'soft'    as NuxtUIButtonVariant,
-    quiet:  'ghost'   as NuxtUIButtonVariant
-} as const
+    loud:   'solid',
+    medium: 'outline',
+    soft:   'soft',
+    quiet:  'ghost',
+    subtle: 'subtle',
+    link:   'link'
+} as const satisfies Record<string, NuxtUIButtonVariant>
 
 /** Noise level type - derived from NOISE constant */
 export type NoiseLevel = keyof typeof NOISE
@@ -811,6 +817,13 @@ export const COMPONENTS = {
         }
     },
 
+    // The period field (CalendarDateRangePicker): its padded form field, and the read-only face's input,
+    // as wide as the range text and never narrower than the field
+    dateRangeField: {
+        field: 'p-2',
+        viewUi: {base: 'w-fit min-w-full'}
+    },
+
     // Shared UCalendar root: Monday-first, no padding weeks, and other-month days both disabled
     // (reka data-outside-view) and hidden, so a day number never appears twice across
     // neighbouring month grids. Spread with v-bind at every UCalendar call site.
@@ -944,6 +957,43 @@ export const COMPONENTS = {
     teamForm: {
         stack: 'flex flex-col gap-3 py-2',
         control: 'w-full'
+    },
+
+    /** CookingTeamBadges: the badges on one wrapping row */
+    teamBadgeRow: 'flex items-center gap-2 flex-wrap',
+
+    /**
+     * The team card's faces around the role boxes (CookingTeamCard): the monitor face and its badge
+     * header, the stacked sections of the view and edit faces, the dashed edit header with the
+     * team-name input, the two-column rows (members beside the finder, weekdays beside the calendar),
+     * a member row's links, and the finder's status column and expanded member form
+     */
+    teamCard: {
+        monitor: 'py-4 md:py-6',
+        monitorHeader: 'mb-3 md:mb-4 px-3 md:px-4',
+        stack: 'space-y-4',
+        viewHeader: 'p-4 border',
+        editHeader: 'flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 py-2 px-0 md:px-4 border-y-2 md:border-2 border-dashed',
+        editHeaderMain: 'flex flex-col md:flex-row md:items-center gap-3 flex-1',
+        nameField: 'flex-1 min-w-fit',
+        // The end padding holds the trailing pencil (ICONS.edit, bound at the site)
+        nameInput: {class: 'w-1/2', ui: {base: 'pe-11', trailing: 'me-3'}},
+        memberSummary: 'flex items-center gap-2',
+        deleteButton: 'w-full md:w-auto',
+        row: 'flex flex-col md:flex-row gap-2 md:gap-4',
+        fullColumn: 'w-full space-y-4',
+        halfColumn: 'w-full md:w-1/2 space-y-4',
+        affinityColumn: 'w-full md:w-1/4',
+        calendarColumn: 'w-full md:w-3/4',
+        boxes: 'flex flex-col gap-4',
+        memberLink: 'cursor-pointer',
+        nameBadge: 'cursor-pointer hover:opacity-80 transition-opacity',
+        allocationBadge: {color: COLOR.neutral, variant: NOISE.medium, class: 'w-fit'},
+        freeBadge: {color: COLOR.success, variant: NOISE.medium},
+        statusList: 'flex flex-col gap-1',
+        statusEntry: 'flex flex-col gap-0.5',
+        statusBadge: 'w-fit',
+        memberForm: `p-4 ${BG.panel}`
     },
 
     /**
@@ -1385,6 +1435,15 @@ const createResponsiveButtons = (isMd: Ref<boolean>) => {
                 color: 'neutral' as const,
                 variant: NOISE.quiet,
                 size: sizes.standard
+            }
+        },
+
+        // The team finder's row action (Tilføj, Rediger, Luk): tinted and small, one per inhabitant row
+        get memberFinder() {
+            return {
+                color: COLOR.primary,
+                variant: NOISE.soft,
+                size: sizes.small
             }
         },
 

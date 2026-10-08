@@ -30,7 +30,7 @@ withDefaults(defineProps<Props>(), {
   color: 'neutral'
 })
 
-const {ICONS, SIZES, COLOR} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, COLOR, NOISE} = useTheSlopeDesignSystem()
 
 const emit = defineEmits<{
   prev: []
@@ -45,7 +45,7 @@ const emit = defineEmits<{
       v-if="hasPrev"
       :icon="ICONS.arrowLeft"
       :color="color"
-      variant="ghost"
+      :variant="NOISE.quiet"
       :size="SIZES.md"
       :disabled="disabled"
       aria-label="Forrige"
@@ -69,7 +69,7 @@ const emit = defineEmits<{
       v-if="hasNext"
       :icon="ICONS.arrowRight"
       :color="color"
-      variant="ghost"
+      :variant="NOISE.quiet"
       :size="SIZES.md"
       :disabled="disabled"
       aria-label="Næste"

@@ -7,6 +7,8 @@ export interface UseQueryParamOptions<T> {
   defaultValue: T | (() => T)
   preserveOtherParams?: boolean
   replaceHistory?: boolean
+  // Order among the URL writes of one tick; higher applies later and wins a key conflict
+  priority?: number
 
   /**
    * Condition function that must return true before auto-sync occurs.
@@ -49,7 +51,7 @@ export function useQueryParam<T>(
   options: UseQueryParamOptions<T>
 ) {
   const route = useRoute()
-  const nuxtApp = useNuxtApp()
+  const {write} = useUrlQueryWriter()
 
   const serialize = options.serialize ?? ((v: T) => String(v))
   const deserialize = options.deserialize ?? ((s: string) => s as T)
@@ -115,37 +117,22 @@ export function useQueryParam<T>(
     return deserialized
   }
 
-  // URL writes land one after another, each on the route the previous write produced: instances syncing in the same
-  // flush would otherwise navigate from one stale query and keep only the last key
-  const updateURL = async (newValue: T) => {
-    const write = (nuxtApp._urlWrites ?? Promise.resolve()).then(async () => {
-      const serialized = serialize(newValue)
-      const currentQueryValue = route.query[key] as string | undefined
+  // The write goes through the page's one URL writer, so instances syncing in the same tick land in one navigation
+  // An explicit write outranks the one-shot auto-sync of the same tick, so a value set by the page is never
+  // overwritten by the default the sync would have written
+  const AUTO_SYNC_PRIORITY_OFFSET = -1
+  const updateURL = (newValue: T, priority = options.priority ?? 0): Promise<void> => {
+    const serialized = serialize(newValue)
+    const currentQueryValue = route.query[key] as string | undefined
 
-      if (currentQueryValue === serialized) return
+    if (currentQueryValue === serialized) return Promise.resolve()
 
-      const query = preserveOtherParams ? {...route.query} : {}
-
-      // If normalize returns null, remove the query param
-      if (options.normalize) {
-        const normalized = options.normalize(newValue)
-        if (normalized === null) {
-          query[key] = undefined as unknown as string
-        } else {
-          query[key] = serialized
-        }
-      } else {
-        query[key] = serialized
-      }
-
-      await navigateTo(
-        {path: route.path, query},
-        {replace: replaceHistory}
-      )
-    })
-    // A failed navigation does not block the writes behind it
-    nuxtApp._urlWrites = write.catch(() => undefined)
-    await write
+    // A normalize that answers null removes the query param
+    const removed = options.normalize !== undefined && options.normalize(newValue) === null
+    return write((query) => {
+      const kept = preserveOtherParams ? Object.fromEntries(Object.entries(query).filter(([name]) => name !== key)) : {}
+      return removed ? kept : {...kept, [key]: serialized}
+    }, {replace: replaceHistory, priority})
   }
 
   const value = computed<T>({
@@ -172,7 +159,7 @@ export function useQueryParam<T>(
   watchPostEffect(() => {
     if (isSyncReady.value && needsSync.value && !hasSyncedSinceReady.value) {
       hasSyncedSinceReady.value = true
-      setValue(value.value)
+      updateURL(value.value, (options.priority ?? 0) + AUTO_SYNC_PRIORITY_OFFSET)
       console.info(`🔗 > Auto-synced query param '${key}' to:`, value.value)
     }
   })

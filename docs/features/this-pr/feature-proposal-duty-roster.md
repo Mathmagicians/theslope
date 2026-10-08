@@ -407,13 +407,13 @@ The team card's joker slots and shift counts are part of the signed CTC season f
 [ + Tilføj jokertjans ]
    +- form:
       Periode   [07/10/2026] - [01/12/2026]      <- CalendarDateRangePicker
-      Ugedage   [man][tir][ons][tor][fre][lør][søn]   <- affinity-checkboxes fra TeamMemberAddForm
+      Ugedage   [man][ons][fre]                       <- the weekday picker restricted to the team's affinity days (parent override), defaulting to them
       Rolle     [KOK v]                               <- ROLE_ICONS select
       Note      [Anna barsel            ]             <- fri tekst, valgfri
       [Opret]  [Fortryd]
 ```
 
-The scaffolder expands the slot to one vacant duty per matching cooking day in the period. Deleting a slot removes
+A slot holds only days the team cooks: the form restricts the weekday picker to the team's affinity (✅ 2026-10-08) and the period defaults to the season's dates. The scaffolder expands the slot to one vacant duty per matching cooking day in the period. Deleting a slot removes
 its unclaimed future duties; claimed duties survive — the volunteer keeps their duty (audited).
 
 **Mockup — vacancy big overview (admin teams)** ✅ signed 2026-10-06 · rows refined ✅ 2026-10-08

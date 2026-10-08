@@ -1,10 +1,12 @@
 import {useSeasonValidation, type Season, type SeasonUpdateResponse} from "~/composables/useSeasonValidation"
 import {useWeekDayMapValidation} from "~/composables/useWeekDayMapValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
+import {DeletedCountSchema} from "~/composables/useCoreValidation"
 import type {
     CookingTeamDisplay,
     CookingTeamDetail,
     CookingTeamAssignment,
+    CookingTeamAssignmentUpdate,
     CookingTeamCreate,
     TeamRole
 } from "~/composables/useCookingTeamValidation"
@@ -24,7 +26,7 @@ type CookingTeamCreateAssignment = NonNullable<CookingTeamCreate['assignments']>
 // Serialization now handled internally by repository layer
 const {salt, temporaryAndRandom, headers} = testHelpers
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
-const {CookingTeamDetailSchema, CookingTeamDisplaySchema, CookingTeamAssignmentSchema, CreateTeamsResponseSchema, DeletedCountSchema} = useCookingTeamValidation()
+const {CookingTeamDetailSchema, CookingTeamDisplaySchema, CookingTeamAssignmentSchema, CreateTeamsResponseSchema} = useCookingTeamValidation()
 const {RoleSchema, JokerSlotSchema} = useDutyValidation()
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
@@ -979,6 +981,27 @@ export class SeasonFactory {
         return null
     }
 
+    static readonly updateTeamMember = async (
+        context: BrowserContext,
+        assignmentId: number,
+        data: CookingTeamAssignmentUpdate,
+        expectedStatus: number = 200
+    ): Promise<CookingTeamAssignment | null> => {
+        const response = await context.request.post(`${ADMIN_TEAM_ENDPOINT}/assignment/${assignmentId}`, {
+            headers: headers,
+            data
+        })
+
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            return CookingTeamAssignmentSchema.parse(await response.json())
+        }
+        return null
+    }
+
     static readonly removeMemberFromTeam = async (
         context: BrowserContext,
         _teamId: number,
@@ -991,7 +1014,7 @@ export class SeasonFactory {
         expect(status, 'Unexpected status').toBe(expectedStatus)
 
         if (expectedStatus === 200) {
-            return await response.json() as number
+            return DeletedCountSchema.parse(await response.json())
         }
         return null
     }

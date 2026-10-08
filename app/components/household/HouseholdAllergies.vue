@@ -34,7 +34,7 @@ import type {AllergyDisplay, AllergyTypeDisplay} from '~/composables/useAllergyV
 import type {TicketTypeConfig} from '~/composables/useTicket'
 
 // Design system
-const {SIZES, COLOR, COMPONENTS, BUTTONS} = useTheSlopeDesignSystem()
+const {SIZES, COLOR, COMPONENTS, BUTTONS, NOISE} = useTheSlopeDesignSystem()
 
 // Ticket type config for display (label, color, icon); active season prices carry the age limits
 const {getTicketTypeConfig} = useTicket()
@@ -233,7 +233,7 @@ const columns = computed(() => [
           <template #expand-cell="{ row }">
             <UButton
                 :color="COLOR.neutral"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 :icon="row.getIsExpanded() ? 'i-heroicons-chevron-down' : 'i-heroicons-pencil'"
                 square
                 :aria-label="row.getIsExpanded() ? 'Luk' : 'Rediger allergier'"
@@ -257,7 +257,7 @@ const columns = computed(() => [
               <template #badge>
                 <UBadge
                     :color="row.original.ticketConfig.color"
-                    variant="subtle"
+                    :variant="NOISE.subtle"
                     :size="SIZES.xs"
                 >
                   {{ row.original.ticketConfig.label }}

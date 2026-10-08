@@ -46,7 +46,7 @@ const emit = defineEmits<{
 
 const {formatPrice, ticketTypeConfig} = useTicket()
 const {formatOrder} = useOrder()
-const {TYPOGRAPHY, ICONS, SIZES, COMPONENTS, COLOR} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, ICONS, SIZES, COMPONENTS, COLOR, NOISE} = useTheSlopeDesignSystem()
 const {OrderStateSchema} = useBookingValidation()
 const OrderState = OrderStateSchema.enum
 
@@ -89,7 +89,7 @@ const formatted = computed(() => {
         <UButton
             v-if="orderId"
             :color="COLOR.neutral"
-            variant="ghost"
+            :variant="NOISE.quiet"
             :icon="isHistoryExpanded ? ICONS.chevronUp : ICONS.clipboard"
             square
             :size="SIZES.small"
@@ -101,7 +101,7 @@ const formatted = computed(() => {
       <span :class="['truncate', COMPONENTS.costLine.nameSlot]">{{ item.inhabitant.name }}</span>
       <!-- Ticket type -->
       <div>
-        <UBadge :color="ticketColor" variant="soft" :size="SIZES.small">
+        <UBadge :color="ticketColor" :variant="NOISE.soft" :size="SIZES.small">
           {{ ticketLabel }}
         </UBadge>
       </div>
@@ -111,13 +111,13 @@ const formatted = computed(() => {
       </div>
       <!-- Guest badge -->
       <div>
-        <UBadge v-if="formatted.guest" :color="formatted.guest.color" variant="soft" :size="SIZES.small" :icon="formatted.guest.icon">
+        <UBadge v-if="formatted.guest" :color="formatted.guest.color" :variant="NOISE.soft" :size="SIZES.small" :icon="formatted.guest.icon">
           {{ formatted.guest.label }}
         </UBadge>
       </div>
       <!-- Order state -->
       <div>
-        <UBadge :color="formatted.stateColor" variant="soft" :size="SIZES.small" :icon="formatted.stateIcon">
+        <UBadge :color="formatted.stateColor" :variant="NOISE.soft" :size="SIZES.small" :icon="formatted.stateIcon">
           {{ formatted.stateText }}
         </UBadge>
       </div>

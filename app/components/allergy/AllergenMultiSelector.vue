@@ -77,7 +77,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { COLOR, SIZES, ALERTS, TYPOGRAPHY, ICONS, BG } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, ALERTS, TYPOGRAPHY, ICONS, BG, NOISE } = useTheSlopeDesignSystem()
 
 // Internal selection state (Set for efficient .has() lookup)
 const selectedAllergyIds = ref<Set<number>>(new Set(props.modelValue))
@@ -139,7 +139,7 @@ const allergyStatistics = computed(() => {
             v-for="allergy in selectedAllergies"
             :key="allergy.id"
             :color="COLOR.error"
-            variant="subtle"
+            :variant="NOISE.subtle"
             :size="SIZES.standard"
         >
           <span class="mr-1">{{ allergy.icon || '🏷️' }}</span>
@@ -188,7 +188,7 @@ const allergyStatistics = computed(() => {
         v-if="showStatistics && allergyStatistics"
         data-testid="compare-summary-bar"
         :color="COLOR.neutral"
-        variant="outline"
+        :variant="NOISE.medium"
         block
         :trailing-icon="ICONS.chevronDown"
         class="md:hidden fixed bottom-4 inset-x-4 z-50 bg-elevated shadow-lg"

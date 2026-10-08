@@ -249,6 +249,12 @@ async function waitForHydration(page: Page): Promise<void> {
     )
 }
 
+/** Navigates and waits for hydration: the entry point for a test that interacts with the page */
+const gotoHydrated = async (page: Page, url: string): Promise<void> => {
+    await page.goto(url)
+    await waitForHydration(page)
+}
+
 /**
  * Types a dd/MM/yyyy date into a UInputDate field: clicks the field's day segment and
  * types the digits - the segments auto-advance through day, month and year.
@@ -293,6 +299,7 @@ const testHelpers = {
     assertNoOrdersWithOrphanPrices,
     daysFromNow,
     waitForHydration,
+    gotoHydrated,
     fillDateField,
     readDateField
 }

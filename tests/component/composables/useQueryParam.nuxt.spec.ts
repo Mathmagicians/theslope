@@ -690,9 +690,9 @@ describe('useQueryParam.ts', () => {
     // The mocked navigation lands on the mocked route, as the router does
     const landNavigation = async ({query}: {query: Record<string, string>}) => setupQuery(query)
 
-    it('keeps every key when two instances write in the same tick', async () => {
+    it('lands every key of two instances writing in the same tick in one navigation', async () => {
       setupQuery({other: 'value'})
-      mockNavigateTo.mockImplementationOnce(landNavigation).mockImplementationOnce(landNavigation)
+      mockNavigateTo.mockImplementationOnce(landNavigation)
       const mode = createStringParam('mode')
       const season = createStringParam('season')
 
@@ -700,7 +700,7 @@ describe('useQueryParam.ts', () => {
       season.value.value = '2026'
       await flushPromises()
 
-      expect(mockNavigateTo).toHaveBeenCalledTimes(2)
+      expect(mockNavigateTo).toHaveBeenCalledTimes(1)
       expect(mockNavigateTo.mock.lastCall![0].query).toEqual({other: 'value', mode: 'edit', season: '2026'})
     })
   })

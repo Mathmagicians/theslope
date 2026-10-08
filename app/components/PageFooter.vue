@@ -16,7 +16,7 @@ const getIsMd = computed((): boolean => isMd?.value ?? false)
 const screenIcon = computed(() => getIsMd.value ? 'i-heroicons-computer-desktop' : 'i-heroicons-device-phone-mobile')
 
 // Use design system for consistent styling
-const { TYPOGRAPHY, ICONS } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, ICONS, NOISE } = useTheSlopeDesignSystem()
 
 </script>
 
@@ -35,7 +35,7 @@ const { TYPOGRAPHY, ICONS } = useTheSlopeDesignSystem()
 
     <template #right>
       <UButton
-          variant="ghost"
+          :variant="NOISE.quiet"
           :icon="screenIcon"
           aria-label="Screen size indicator"
           disabled
@@ -46,7 +46,7 @@ const { TYPOGRAPHY, ICONS } = useTheSlopeDesignSystem()
 
       <UTooltip text="Open source project on Github">
         <UButton
-            variant="ghost"
+            :variant="NOISE.quiet"
             to="https://github.com/Mathmagicians/theslope"
             target="_blank"
             :icon="ICONS.github"

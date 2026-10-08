@@ -20,12 +20,12 @@ withDefaults(defineProps<Props>(), {
   compact: false
 })
 
-const {SIZES, TYPOGRAPHY, TEXT} = useTheSlopeDesignSystem()
+const {SIZES, TYPOGRAPHY, TEXT, NOISE} = useTheSlopeDesignSystem()
 </script>
 
 <template>
   <div data-testid="deadline-badge" class="flex flex-col items-start">
-    <UBadge :color="badge.color" :icon="badge.icon" variant="soft" :size="SIZES.small">
+    <UBadge :color="badge.color" :icon="badge.icon" :variant="NOISE.soft" :size="SIZES.small">
       <template v-if="!compact">{{ badge.label }}: </template>
       {{ badge.value }}
     </UBadge>

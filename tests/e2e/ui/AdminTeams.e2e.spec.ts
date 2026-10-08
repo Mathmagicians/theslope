@@ -7,7 +7,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, doScreenshot} = testHelpers
+const {validatedBrowserContext, pollUntil, doScreenshot, gotoHydrated} = testHelpers
 
 test.describe('AdminTeams Form UI', () => {
     const adminTeamsUrl = '/admin/teams'
@@ -89,7 +89,7 @@ test.describe('AdminTeams Form UI', () => {
                 const initialTeams = await SeasonFactory.getCookingTeamsForSeason(context, season.id!)
                 expect(initialTeams.length).toBe(0)
 
-                await page.goto(`${adminTeamsUrl}?mode=create&season=${season.shortName}`)
+                await gotoHydrated(page, `${adminTeamsUrl}?mode=create&season=${season.shortName}`)
                 // Wait on UI state, not on a season API response: with SSR payload transfer
                 // the client may legitimately never re-fetch /api/admin/season (CI-flaky otherwise)
                 await expect(page.locator('input#team-count')).toBeVisible({timeout: 10000})
@@ -117,7 +117,7 @@ test.describe('AdminTeams Form UI', () => {
                 const season = await SeasonFactory.createSeason(context)
                 createdSeasonIds.push(season.id!)
 
-                await page.goto(`${adminTeamsUrl}?mode=create&season=${season.shortName}`)
+                await gotoHydrated(page, `${adminTeamsUrl}?mode=create&season=${season.shortName}`)
                 await expect(page.locator('input#team-count')).toBeVisible({timeout: 10000})
 
                 // WHEN: the session dies before the save
@@ -187,7 +187,7 @@ test.describe('AdminTeams Form UI', () => {
             const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Name')
 
             // Navigate with the team open in the edit face
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
+            await gotoHydrated(page, `${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
             await pollUntil(
                 async () => await page.getByTestId('admin-teams').isVisible(),
                 (isVisible) => isVisible,
@@ -224,7 +224,7 @@ test.describe('AdminTeams Form UI', () => {
             const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team to Delete')
 
             // Navigate with the team open in the edit face
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
+            await gotoHydrated(page, `${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
             await pollUntil(
                 async () => await page.getByTestId('admin-teams').isVisible(),
                 (isVisible) => isVisible,
@@ -266,7 +266,7 @@ test.describe('AdminTeams Form UI', () => {
             const gamma = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Gamma')
 
             // Navigate to see the teams
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
+            await gotoHydrated(page, `${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
             await pollUntil(
                 async () => await page.getByTestId('admin-teams').isVisible(),
                 (isVisible) => isVisible,
@@ -277,7 +277,6 @@ test.describe('AdminTeams Form UI', () => {
             const teamRows = page.locator('[data-testid^="team-row-"]')
             await expect(teamRows.first()).toBeVisible()
             await expect(teamRows).toHaveCount(3)
-            await testHelpers.waitForHydration(page)
 
             // WHEN/THEN: clicking a row shows that team in the detail panel
             const teamInput = page.getByTestId('team-name-input')
@@ -304,7 +303,7 @@ test.describe('AdminTeams Form UI', () => {
             createdHouseholdIds.push(household.id)
             await HouseholdFactory.createInhabitantForHousehold(context, household.id, `Medlem-${testSalt} Testesen`)
 
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
+            await gotoHydrated(page, `${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
             await pollUntil(
                 async () => await page.getByTestId('admin-teams').isVisible(),
                 (isVisible) => isVisible,
@@ -341,9 +340,8 @@ test.describe('AdminTeams Form UI', () => {
         test('GIVEN a team in edit mode WHEN adding a joker slot through the form THEN the Jokere box lists it', async () => {
             // GIVEN: a team open in the edit face
             const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Joker')
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
+            await gotoHydrated(page, `${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
             await expect(page.getByTestId('joker-slot-add')).toBeVisible({timeout: 10000})
-            await testHelpers.waitForHydration(page)
 
             // WHEN: opening the form, ticking a weekday and creating the slot
             await page.getByTestId('joker-slot-add').click()

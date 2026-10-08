@@ -379,6 +379,32 @@ test.describe('Admin Teams API', () => {
             expect(teamDetails!.assignments[0]!.allocationPercentage).toBe(100)
         })
 
+        test('POST /api/admin/team/assignment/[id] updates role and allocation, and the team Detail reflects it', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const {TeamRoleSchema} = useCookingTeamValidation()
+
+            // GIVEN: a team with one member at full time
+            const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-for-update", 1)
+            testHouseholdIds.push(createdTeam.householdId)
+            const member = createdTeam.assignments[0]!
+            const role = member.role === TeamRoleSchema.enum.COOK ? TeamRoleSchema.enum.JUNIORHELPER : TeamRoleSchema.enum.COOK
+
+            // WHEN: the seat changes role and drops to half time
+            const updated = await SeasonFactory.updateTeamMember(context, member.id!, {role, allocationPercentage: 50})
+
+            // THEN: the response and the team Detail carry the new seat on the same assignment
+            expect(updated).toMatchObject({id: member.id, inhabitantId: member.inhabitantId, role, allocationPercentage: 50})
+            const teamDetail = await SeasonFactory.getCookingTeamById(context, createdTeam.id!)
+            expect(teamDetail!.assignments).toEqual([expect.objectContaining({id: member.id, role, allocationPercentage: 50})])
+        })
+
+        test('POST /api/admin/team/assignment/[id] rejects an allocation outside 1-100', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-for-invalid-update", 1)
+            testHouseholdIds.push(createdTeam.householdId)
+            await SeasonFactory.updateTeamMember(context, createdTeam.assignments[0]!.id!, {allocationPercentage: 0}, 400)
+        })
+
         test('DELETE /api/admin/team/[id]/members/[memberId] should remove team assignments', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
 

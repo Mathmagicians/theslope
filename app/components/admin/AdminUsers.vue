@@ -36,7 +36,7 @@ const {users, isUsersLoading, isUsersErrored, usersError} = storeToRefs(store)
 
 // Use existing role badge definitions
 const {roleLabels} = useUserRolesUi()
-const {COMPONENTS, ICONS, ALERTS, COLOR, TEXT, BG, columnVisibility} = useTheSlopeDesignSystem()
+const {COMPONENTS, ICONS, ALERTS, COLOR, TEXT, BG, columnVisibility, NOISE, SIZES} = useTheSlopeDesignSystem()
 
 // Search/filter state
 const searchQuery = ref('')
@@ -220,8 +220,8 @@ const pagination = ref({
             v-for="role in row.original.systemRoles"
             :key="role"
             :color="roleLabels[role]?.color || COLOR.neutral"
-            variant="soft"
-            size="md"
+            :variant="NOISE.soft"
+            :size="SIZES.md"
           >
             <UIcon v-if="roleLabels[role]?.icon" :name="roleLabels[role].icon" class="mr-1" />
             {{ roleLabels[role]?.label || role }}

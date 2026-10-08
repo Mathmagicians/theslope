@@ -2,8 +2,8 @@
 /**
  * JokerSlotForm - a time-bound team seat without a person, opened under the Jokere box (CookingTeamCard, edit face).
  *
- *   Periode     [07/10/2026] - [01/12/2026]           <- CalendarDateRangePicker
- *   Ugedage     [man][tir][ons][tor][fre][lør][søn]   <- WeekDayMapDisplay, the team's days
+ *   Periode     [07/10/2026] - [01/12/2026]           <- CalendarDateRangePicker, the season's dates
+ *   Ugedage     [tir][tor]                            <- WeekDayMapDisplay, the team's cooking days, all ticked
  *   Rolle       [(whisk) Kok  v]                      <- TeamRoleFields
  *   Arbejdstid  [100%         v]
  *   Note        [Anna barsel            ]             <- optional
@@ -17,7 +17,8 @@ import type {JokerSlotCreate} from '~/composables/useDutyValidation'
 
 type JokerSlotDraft = z.input<ReturnType<typeof useDutyValidation>['JokerSlotCreateSchema']>
 
-withDefaults(defineProps<{
+const props = withDefaults(defineProps<{
+  seasonDates: DateRange
   teamAffinity?: WeekDayMap | null
 }>(), {
   teamAffinity: null
@@ -32,14 +33,12 @@ const {SIZES, BUTTONS, LAYOUTS, COMPONENTS} = useTheSlopeDesignSystem()
 const {JokerSlotCreateSchema} = useDutyValidation()
 const {TeamRoleSchema} = useCookingTeamValidation()
 
-const today = new Date()
-const period = ref<DateRange>({start: today, end: today})
+const period = ref<DateRange>({...props.seasonDates})
 
-// The allocation stays unset until submit, where the schema defaults it
 const draft = reactive<Pick<JokerSlotDraft, 'role' | 'allocationPercentage'> & {affinity: WeekDayMap, note?: string}>({
   role: TeamRoleSchema.enum.COOK,
-  affinity: createDefaultWeekdayMap(false),
-  allocationPercentage: undefined,
+  affinity: props.teamAffinity ? {...props.teamAffinity} : createDefaultWeekdayMap(false),
+  allocationPercentage: JokerSlotCreateSchema.shape.allocationPercentage.parse(undefined),
   note: undefined
 })
 
@@ -61,7 +60,7 @@ const handleSubmit = ({data: {note, ...slot}}: FormSubmitEvent<JokerSlotCreate>)
       data-testid="joker-slot-form"
       @submit="handleSubmit"
   >
-    <CalendarDateRangePicker v-model="period" name="period" label="Periode" />
+    <CalendarDateRangePicker v-model="period" name="endDate" label="Periode" />
 
     <WeekDayMapDisplay
         v-model="draft.affinity"

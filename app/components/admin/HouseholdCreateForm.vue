@@ -30,7 +30,7 @@ const emit = defineEmits<{
     cancel: []
 }>()
 
-const {BUTTONS, SIZES, COLOR, ICONS, ALERTS, TYPOGRAPHY} = useTheSlopeDesignSystem()
+const {BUTTONS, SIZES, COLOR, ICONS, ALERTS, TYPOGRAPHY, LAYOUTS} = useTheSlopeDesignSystem()
 const {HouseholdCreateFormSchema} = useCoreValidation()
 
 const formRef = useTemplateRef<Form<HouseholdCreateFormData>>('formRef')
@@ -223,7 +223,7 @@ const handleCancel = () => emit('cancel')
 
             <!-- Footer: action buttons -->
             <template #footer>
-                <div class="flex flex-col-reverse md:flex-row md:justify-end gap-2">
+                <div :class="LAYOUTS.formButtonRow">
                     <UButton
                         v-bind="BUTTONS.cancel"
                         :size="SIZES.standard"

@@ -38,7 +38,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, TEXT} = useTheSlopeDesignSystem()
+const {COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, TEXT, NOISE} = useTheSlopeDesignSystem()
 
 // Deleting the type cascades to every Allergy row referencing it (ADR-005)
 const affectedInhabitantCount = computed(() => props.allergyType?.inhabitants?.length ?? 0)
@@ -59,13 +59,13 @@ const affectedInhabitantCount = computed(() => props.allergyType?.inhabitants?.l
       <template #description>
         <ul class="mt-2 space-y-1">
           <li class="flex items-center gap-2">
-            <UBadge :color="COLOR.error" variant="subtle" :size="SIZES.small">
+            <UBadge :color="COLOR.error" :variant="NOISE.subtle" :size="SIZES.small">
               <UIcon :name="ICONS.trash" class="mr-1"/>
               Allergien fjernes fra kataloget
             </UBadge>
           </li>
           <li v-if="affectedInhabitantCount > 0" class="flex items-center gap-2">
-            <UBadge :color="COLOR.error" variant="subtle" :size="SIZES.small">
+            <UBadge :color="COLOR.error" :variant="NOISE.subtle" :size="SIZES.small">
               <UIcon :name="ICONS.users" class="mr-1"/>
               {{ affectedInhabitantCount }} beboer{{ affectedInhabitantCount === 1 ? '' : 'e' }} mister registreringen
             </UBadge>

@@ -37,7 +37,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
+const {SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
 
 // Ticket type config for styled badges
 const {getTicketPriceSelectItems} = useTicket()
@@ -214,7 +214,7 @@ const handleCancel = () => emit('cancel')
         <div class="flex items-center gap-2">
           <UIcon :name="ICONS.userPlus" class="size-5 text-info" />
           <h4 class="text-md font-semibold">Tilføj gæst</h4>
-          <UBadge v-if="props.releasedTicketCounts.total > 0" :color="COLOR.info" :icon="ICONS.claim" variant="subtle" :size="SIZES.small">
+          <UBadge v-if="props.releasedTicketCounts.total > 0" :color="COLOR.info" :icon="ICONS.claim" :variant="NOISE.subtle" :size="SIZES.small">
             {{ props.releasedTicketCounts.formatted }} Ledig{{ props.releasedTicketCounts.total === 1 ? '' : 'e' }}
           </UBadge>
         </div>
@@ -262,7 +262,7 @@ const handleCancel = () => emit('cancel')
             >
               <template #item="{ item }">
                 <div class="flex flex-col gap-0.5">
-                  <UBadge :color="(item as TicketPriceSelectItem).config.color" variant="solid" size="sm" class="uppercase w-fit">
+                  <UBadge :color="(item as TicketPriceSelectItem).config.color" :variant="NOISE.loud" :size="SIZES.sm" class="uppercase w-fit">
                     {{ (item as TicketPriceSelectItem).label }}
                   </UBadge>
                   <span v-if="(item as TicketPriceSelectItem).description" class="text-xs text-muted">{{ (item as TicketPriceSelectItem).description }}</span>
@@ -299,7 +299,7 @@ const handleCancel = () => emit('cancel')
           </div>
 
           <!-- Action buttons - stacked on mobile (primary on top), horizontal on desktop -->
-          <div class="flex flex-col-reverse md:flex-row md:justify-end gap-2">
+          <div :class="LAYOUTS.formButtonRow">
             <UButton
               v-bind="BUTTONS.cancel"
               data-testid="guest-form-cancel"

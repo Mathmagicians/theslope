@@ -51,7 +51,7 @@ import {useDinnerDateParam, useBookingView} from '~/composables/useBookingView'
 import {useQueryParam} from '~/composables/useQueryParam'
 
 // Design system
-const { COLOR, BACKGROUNDS, ICONS, ALERTS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { COLOR, BACKGROUNDS, ICONS, ALERTS, getRandomEmptyMessage, NOISE, SIZES } = useTheSlopeDesignSystem()
 
 // Fun empty state for no team assigned
 const noTeamMessage = getRandomEmptyMessage('noTeamAssigned')
@@ -94,6 +94,9 @@ const {
   isSelectedDinnerEventLoading: isDinnerDetailLoading,
   isSelectedDinnerEventErrored: isDinnerDetailError
 } = storeToRefs(bookingsStore)
+
+// The team card reads the dinner's cooking team from the plan store
+watch(() => dinnerEventDetail.value?.cookingTeamId ?? null, planStore.selectTeam, {immediate: true})
 
 // Derive needed data from store
 const seasonDates = computed(() => selectedSeason.value?.seasonDates)
@@ -203,10 +206,10 @@ useHead({
         <template #actions>
           <UButton
             :color="COLOR.secondary"
-            variant="solid"
+            :variant="NOISE.loud"
             to="/admin/planning"
             :icon="ICONS.plusCircle"
-            size="lg"
+            :size="SIZES.lg"
           >
             Værsgo, opret en ny sæson
           </UButton>

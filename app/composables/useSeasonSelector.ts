@@ -12,6 +12,7 @@ export function useSeasonSelector(options: SeasonSelectorOptions) {
     const {seasons, selectedSeasonId, activeSeason, onSeasonSelect} = options
 
     const route = useRoute()
+    const {write} = useUrlQueryWriter()
     const seasonQuery = computed(() => route.query.season as string | undefined)
 
     const isValidSeason = (shortName?: string) => shortName && seasons.value.some(s => s.shortName === shortName)
@@ -30,13 +31,15 @@ export function useSeasonSelector(options: SeasonSelectorOptions) {
 
     const updateURLQueryFromSeason = async (shortName: string | undefined) => {
         if (seasonQuery.value === shortName) return
-        const query = {...route.query}
-        if (shortName) {
-            query.season = shortName
-        } else {
-            delete query.season
-        }
-        await navigateTo({path: route.path, query}, {replace: true})
+        await write((query) => {
+            const next = {...query}
+            if (shortName) {
+                next.season = shortName
+            } else {
+                delete next.season
+            }
+            return next
+        })
         console.info(`${LOG_CTX} 🔗 > Navigated to URL with query season=${shortName} `)
     }
 

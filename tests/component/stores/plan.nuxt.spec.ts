@@ -2,10 +2,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerEndpoint } from '@nuxt/test-utils/runtime'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
+import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { asyncDataStatus, resetStores } from '~~/tests/component/testHelpers'
 
 import { usePlanStore } from '~/stores/plan'
-import { ROLE_LABELS } from '~/composables/useCookingTeamValidation'
+import { useAuthStore } from '~/stores/auth'
+import { ROLE_LABELS, useCookingTeamValidation } from '~/composables/useCookingTeamValidation'
+import { useCoreValidation } from '~/composables/useCoreValidation'
 
 // IMPORTANT: Register endpoints BEFORE importing the store
 // The store's module-level useFetch executes on import
@@ -54,17 +58,52 @@ const JOKER_SLOT_ID = 5
 const assignment = SeasonFactory.defaultCookingTeamAssignment({id: ASSIGNMENT_ID, cookingTeamId: TEAM_ID})
 const jokerSlot = SeasonFactory.defaultJokerSlot()
 const createdJokerSlot = {...jokerSlot, id: JOKER_SLOT_ID, cookingTeamId: TEAM_ID, note: null, createdAt: new Date(), updatedAt: new Date()}
-const addTeamMemberEndpoint = vi.fn(() => assignment)
+// The response leaves the allocation to the schema default, so the result shows the parse
+const {allocationPercentage: _allocation, ...assignmentResponse} = assignment
+const addTeamMemberEndpoint = vi.fn(() => assignmentResponse)
 const removeTeamMemberEndpoint = vi.fn(() => 1)
+const updatedAssignment = {...assignment, role: useCookingTeamValidation().TeamRoleSchema.enum.COOK, allocationPercentage: 50}
+const updateTeamMemberEndpoint = vi.fn(() => updatedAssignment)
 const createJokerSlotEndpoint = vi.fn(() => createdJokerSlot)
 const deleteJokerSlotEndpoint = vi.fn(() => 1)
 registerEndpoint(`/api/admin/team/assignment/${ASSIGNMENT_ID}`, { method: 'DELETE', handler: removeTeamMemberEndpoint })
+registerEndpoint(`/api/admin/team/assignment/${ASSIGNMENT_ID}`, { method: 'POST', handler: updateTeamMemberEndpoint })
 registerEndpoint('/api/admin/team/assignment', { method: 'PUT', handler: addTeamMemberEndpoint })
 registerEndpoint(`/api/admin/team/${TEAM_ID}/joker-slot/${JOKER_SLOT_ID}`, { method: 'DELETE', handler: deleteJokerSlotEndpoint })
 registerEndpoint(`/api/admin/team/${TEAM_ID}/joker-slot`, { method: 'PUT', handler: createJokerSlotEndpoint })
 
+// Season, team and dinner writes answer with entities carrying dates: only a schema parse turns
+// the JSON date strings back into the Date objects the fixtures hold
+const { id: _newSeasonId, ...newSeason } = season2
+const deactivateSeasonEndpoint = vi.fn(() => season1)
+const teamDetail = SeasonFactory.defaultCookingTeamDetail({ id: TEAM_ID })
+const updateTeamEndpoint = vi.fn(() => teamDetail)
+const deleteTeamEndpoint = vi.fn(() => teamDetail)
+const assignAffinitiesEndpoint = vi.fn(() => ({ seasonId: season1.id, teamCount: 1, teams: [teamDetail] }))
+const assignCookingTeamsEndpoint = vi.fn(() => ({ seasonId: season1.id, eventCount: 1, events: [DinnerEventFactory.defaultDinnerEventDisplay()] }))
+const dinner = { ...DinnerEventFactory.defaultDinnerEventDetail(), id: 21 }
+const assignRoleEndpoint = vi.fn(() => dinner)
+const removeRoleEndpoint = vi.fn(() => dinner)
+const me = { ...HouseholdFactory.defaultInhabitantData('plan'), id: 31 }
+registerEndpoint('/api/_auth/session', () => ({ user: { id: 1, email: 'me@example.com', systemRoles: [], Inhabitant: me } }))
+const { SystemRoleSchema } = useCoreValidation()
+// The role actions refresh through the users and bookings stores, whose reads start with them
+const emptyReads = ['/api/team/my', `/api/admin/users/by-role/${SystemRoleSchema.enum.ALLERGYMANAGER}`, '/api/admin/users', '/api/admin/household',
+    '/api/admin/billing/periods', '/api/admin/billing/current-period']
+emptyReads.forEach(url => registerEndpoint(url, () => []))
+registerEndpoint('/api/admin/season/deactivate', { method: 'POST', handler: deactivateSeasonEndpoint })
+registerEndpoint(`/api/admin/season/${season1.id}/assign-team-affinities`, { method: 'POST', handler: assignAffinitiesEndpoint })
+registerEndpoint(`/api/admin/season/${season1.id}/assign-cooking-teams`, { method: 'POST', handler: assignCookingTeamsEndpoint })
+registerEndpoint(`/api/admin/team/${TEAM_ID}`, { method: 'POST', handler: updateTeamEndpoint })
+registerEndpoint(`/api/admin/team/${TEAM_ID}`, { method: 'DELETE', handler: deleteTeamEndpoint })
+const teamByIdEndpoint = vi.fn(() => teamDetail)
+registerEndpoint(`/api/admin/team/${TEAM_ID}`, { method: 'GET', handler: teamByIdEndpoint })
+registerEndpoint(`/api/team/cooking/${dinner.id}/assign-role`, { method: 'POST', handler: assignRoleEndpoint })
+registerEndpoint(`/api/team/cooking/${dinner.id}/remove-role`, { method: 'POST', handler: removeRoleEndpoint })
+
 // Test helpers
 const SELECTED_SEASON_KEY = 'plan-store-selected-season'
+const SELECTED_TEAM_KEY = 'plan-store-selected-team'
 
 const setupStore = async () => {
     const store = usePlanStore()
@@ -368,7 +407,211 @@ describe('Plan Store - a selected season that no longer exists', () => {
     })
 })
 
-describe('Plan Store - Team members and joker slots', () => {
+describe('Plan Store - write actions', () => {
+    const {TeamRoleSchema} = useCookingTeamValidation()
+    type PlanStore = ReturnType<typeof usePlanStore>
+    const asMe = async () => { await useAuthStore().fetch() }
+
+    beforeEach(() => {
+        resetStores()
+        vi.clearAllMocks()
+        seasonIndexEndpoint.mockReturnValue(mockSeasons)
+        seasonByIdEndpoint.mockReturnValue(season1)
+        activeSeasonIdEndpoint.mockReturnValue(season1.id)
+        createSeasonEndpoint.mockImplementation(() => season2)
+    })
+
+    // `parsed` holds Date objects and schema defaults: only a schema parse of the JSON response yields it
+    const writeActions = [
+        {
+            action: 'createSeason',
+            endpoint: createSeasonEndpoint,
+            write: (store: PlanStore) => store.createSeason(newSeason),
+            parsed: season2,
+            refreshes: 'the seasons',
+            refreshed: seasonIndexEndpoint,
+            toast: {title: 'Sæson oprettet'}
+        },
+        {
+            action: 'activateSeason',
+            endpoint: activateSeasonEndpoint,
+            write: (store: PlanStore) => store.activateSeason(season2.id),
+            parsed: season2,
+            refreshes: 'the active season id',
+            refreshed: activeSeasonIdEndpoint,
+            toast: null
+        },
+        {
+            action: 'deactivateSeason',
+            endpoint: deactivateSeasonEndpoint,
+            write: (store: PlanStore) => store.deactivateSeason(),
+            parsed: season1,
+            refreshes: 'the active season id',
+            refreshed: activeSeasonIdEndpoint,
+            toast: null
+        },
+        {
+            action: 'assignTeamAffinitiesAndEvents',
+            endpoint: assignCookingTeamsEndpoint,
+            write: (store: PlanStore) => store.assignTeamAffinitiesAndEvents(season1.id),
+            parsed: {teamCount: 1, eventCount: 1},
+            refreshes: 'the selected season',
+            refreshed: seasonByIdEndpoint,
+            toast: null
+        },
+        {
+            action: 'updateTeam (affinity)',
+            endpoint: updateTeamEndpoint,
+            write: (store: PlanStore) => store.updateTeam({id: TEAM_ID, affinity: jokerSlot.affinity}),
+            parsed: teamDetail,
+            refreshes: 'the selected season',
+            refreshed: seasonByIdEndpoint,
+            toast: {title: 'Madlavningsdage for teams opdateret'}
+        },
+        {
+            action: 'updateTeam (name)',
+            endpoint: updateTeamEndpoint,
+            write: (store: PlanStore) => store.updateTeam({id: TEAM_ID, name: teamDetail.name}),
+            parsed: teamDetail,
+            refreshes: 'the selected season',
+            refreshed: seasonByIdEndpoint,
+            toast: null
+        },
+        {
+            action: 'deleteTeam',
+            endpoint: deleteTeamEndpoint,
+            write: (store: PlanStore) => store.deleteTeam(TEAM_ID),
+            parsed: teamDetail,
+            refreshes: 'the selected season',
+            refreshed: seasonByIdEndpoint,
+            toast: {title: 'Madhold slettet'}
+        },
+        {
+            action: 'addTeamMember',
+            endpoint: addTeamMemberEndpoint,
+            write: (store: PlanStore) => store.addTeamMember({
+                cookingTeamId: TEAM_ID, inhabitantId: assignment.inhabitantId, role: assignment.role, allocationPercentage: 100
+            }),
+            parsed: assignment,
+            refreshes: 'the selected season',
+            refreshed: seasonByIdEndpoint,
+            toast: {title: 'Medlem tilføjet til hold', description: `${assignment.inhabitant.name} ${assignment.inhabitant.lastName}`}
+        },
+        {
+            action: 'updateTeamMember',
+            endpoint: updateTeamMemberEndpoint,
+            write: (store: PlanStore) => store.updateTeamMember(ASSIGNMENT_ID, {role: updatedAssignment.role, allocationPercentage: 50}),
+            parsed: updatedAssignment,
+            refreshes: 'the selected season',
+            refreshed: seasonByIdEndpoint,
+            toast: {title: 'Medlem opdateret', description: `${assignment.inhabitant.name} ${assignment.inhabitant.lastName}`}
+        },
+        {
+            action: 'removeTeamMember',
+            endpoint: removeTeamMemberEndpoint,
+            write: (store: PlanStore) => store.removeTeamMember(ASSIGNMENT_ID),
+            parsed: 1,
+            refreshes: 'the selected season',
+            refreshed: seasonByIdEndpoint,
+            toast: {title: 'Medlem fjernet fra hold'}
+        },
+        {
+            action: 'createJokerSlot',
+            endpoint: createJokerSlotEndpoint,
+            write: (store: PlanStore) => store.createJokerSlot(TEAM_ID, jokerSlot),
+            parsed: createdJokerSlot,
+            refreshes: 'the selected season',
+            refreshed: seasonByIdEndpoint,
+            toast: {title: 'Joker tilføjet', description: ROLE_LABELS[jokerSlot.role]}
+        },
+        {
+            action: 'deleteJokerSlot',
+            endpoint: deleteJokerSlotEndpoint,
+            write: (store: PlanStore) => store.deleteJokerSlot(TEAM_ID, JOKER_SLOT_ID),
+            parsed: 1,
+            refreshes: 'the selected season',
+            refreshed: seasonByIdEndpoint,
+            toast: {title: 'Joker fjernet'}
+        },
+        {
+            action: 'assignRoleToDinner',
+            endpoint: assignRoleEndpoint,
+            write: (store: PlanStore) => store.assignRoleToDinner(dinner.id, me.id, TeamRoleSchema.enum.CHEF),
+            parsed: dinner,
+            refreshes: 'the selected season',
+            refreshed: seasonByIdEndpoint,
+            toast: null
+        },
+        {
+            action: 'claimRoleForMe',
+            endpoint: assignRoleEndpoint,
+            write: async (store: PlanStore) => { await asMe(); return store.claimRoleForMe(dinner, TeamRoleSchema.enum.CHEF) },
+            parsed: dinner,
+            refreshes: 'the selected season',
+            refreshed: seasonByIdEndpoint,
+            toast: {title: useCookingTeam().formatRoleClaimedTitle(dinner, TeamRoleSchema.enum.CHEF)}
+        },
+        {
+            action: 'resignRoleForMe',
+            endpoint: removeRoleEndpoint,
+            write: async (store: PlanStore) => { await asMe(); return store.resignRoleForMe(dinner, TeamRoleSchema.enum.CHEF) },
+            parsed: dinner,
+            refreshes: 'the selected season',
+            refreshed: seasonByIdEndpoint,
+            toast: {title: 'Du har meldt afbud. Tjansen som chefkok er nu ledig.'}
+        }
+    ]
+
+    it.each(writeActions)('$action returns the parsed response, refreshes $refreshes and reports its result in at most one success toast', async ({endpoint, write, parsed, refreshed, toast}) => {
+        const store = await setupStore()
+        await vi.waitFor(() => expect(store.selectedSeason?.id).toBe(season1.id))
+        const refreshesBefore = refreshed.mock.calls.length
+        useToast().clear()
+
+        const result = await write(store)
+
+        expect(endpoint).toHaveBeenCalledTimes(1)
+        expect(result).toEqual(parsed)
+        expect(refreshed.mock.calls.length).toBeGreaterThan(refreshesBefore)
+        expect(useToast().toasts.value).toEqual(toast ? [expect.objectContaining({...toast, icon: ICONS.checkCircle, color: COLOR.success})] : [])
+    })
+
+    it('assignTeamAffinitiesAndEvents rejects an envelope its schema refuses', async () => {
+        assignAffinitiesEndpoint.mockReturnValueOnce({seasonId: season1.id, teamCount: 1, teams: [{id: TEAM_ID}]} as never)
+        const store = await setupStore()
+
+        await expect(store.assignTeamAffinitiesAndEvents(season1.id)).rejects.toThrow()
+    })
+
+    const TEAM_WRITES = ['updateTeam (affinity)', 'updateTeam (name)', 'addTeamMember', 'updateTeamMember', 'removeTeamMember', 'createJokerSlot', 'deleteJokerSlot']
+
+    it.each(writeActions.filter(({action}) => TEAM_WRITES.includes(action)))('$action refreshes the selected team', async ({write}) => {
+        const store = await setupStore()
+        store.selectTeam(TEAM_ID)
+        await vi.waitFor(() => expect(store.selectedTeam?.id).toBe(TEAM_ID))
+        const refreshesBefore = teamByIdEndpoint.mock.calls.length
+
+        await write(store)
+
+        expect(teamByIdEndpoint.mock.calls.length).toBeGreaterThan(refreshesBefore)
+    })
+
+    it('deleteTeam deselects the deleted team, so its dataset reads idle without a request', async () => {
+        const store = await setupStore()
+        store.selectTeam(TEAM_ID)
+        await vi.waitFor(() => expect(store.selectedTeam?.id).toBe(TEAM_ID))
+        const refreshesBefore = teamByIdEndpoint.mock.calls.length
+
+        await store.deleteTeam(TEAM_ID)
+
+        expect(store.selectedTeamId).toBeNull()
+        expect(store.selectedTeam).toBeNull()
+        expect(asyncDataStatus(SELECTED_TEAM_KEY)).toBe('idle')
+        expect(teamByIdEndpoint.mock.calls.length).toBe(refreshesBefore)
+    })
+})
+
+describe('Plan Store - selected team', () => {
     beforeEach(() => {
         resetStores()
         vi.clearAllMocks()
@@ -377,50 +620,41 @@ describe('Plan Store - Team members and joker slots', () => {
         activeSeasonIdEndpoint.mockReturnValue(season1.id)
     })
 
-    // Dates in `parsed` are Date objects: only a schema parse turns the JSON strings back into dates
-    it.each([
-        {
-            action: 'addTeamMember',
-            endpoint: addTeamMemberEndpoint,
-            write: (store: ReturnType<typeof usePlanStore>) => store.addTeamMember({
-                cookingTeamId: TEAM_ID, inhabitantId: assignment.inhabitantId, role: assignment.role, allocationPercentage: 100
-            }),
-            parsed: assignment,
-            toast: {title: 'Medlem tilføjet til hold', description: `${assignment.inhabitant.name} ${assignment.inhabitant.lastName}`}
-        },
-        {
-            action: 'removeTeamMember',
-            endpoint: removeTeamMemberEndpoint,
-            write: (store: ReturnType<typeof usePlanStore>) => store.removeTeamMember(ASSIGNMENT_ID),
-            parsed: 1,
-            toast: {title: 'Medlem fjernet fra hold'}
-        },
-        {
-            action: 'createJokerSlot',
-            endpoint: createJokerSlotEndpoint,
-            write: (store: ReturnType<typeof usePlanStore>) => store.createJokerSlot(TEAM_ID, jokerSlot),
-            parsed: createdJokerSlot,
-            toast: {title: 'Joker tilføjet', description: ROLE_LABELS[jokerSlot.role]}
-        },
-        {
-            action: 'deleteJokerSlot',
-            endpoint: deleteJokerSlotEndpoint,
-            write: (store: ReturnType<typeof usePlanStore>) => store.deleteJokerSlot(TEAM_ID, JOKER_SLOT_ID),
-            parsed: 1,
-            toast: {title: 'Joker fjernet'}
-        }
-    ])('$action returns the parsed response, refreshes the selected season and toasts once', async ({endpoint, write, parsed, toast}) => {
-        useToast().clear()
+    const idleTeam = (store: ReturnType<typeof usePlanStore>) => ({
+        status: asyncDataStatus(SELECTED_TEAM_KEY),
+        selectedTeam: store.selectedTeam,
+        isSelectedTeamLoading: store.isSelectedTeamLoading,
+        isSelectedTeamErrored: store.isSelectedTeamErrored
+    })
+    const IDLE = {status: 'idle', selectedTeam: null, isSelectedTeamLoading: false, isSelectedTeamErrored: false}
+
+    it('stays idle and unrequested with no team selected, and the store is ready', async () => {
         const store = await setupStore()
-        await vi.waitFor(() => expect(store.selectedSeason?.id).toBe(season1.id))
-        const seasonFetchesBefore = seasonByIdEndpoint.mock.calls.length
+        await vi.waitFor(() => expect(store.isPlanStoreReady).toBe(true))
 
-        const result = await write(store)
+        expect(teamByIdEndpoint).not.toHaveBeenCalled()
+        expect(idleTeam(store)).toEqual(IDLE)
+    })
 
-        expect(endpoint).toHaveBeenCalledTimes(1)
-        expect(result).toEqual(parsed)
-        expect(seasonByIdEndpoint.mock.calls.length).toBeGreaterThan(seasonFetchesBefore)
-        expect(useToast().toasts.value).toHaveLength(1)
-        expect(useToast().toasts.value[0]).toMatchObject(toast)
+    it('selecting a team loads its Detail', async () => {
+        const store = await setupStore()
+
+        store.selectTeam(TEAM_ID)
+
+        await vi.waitFor(() => expect(asyncDataStatus(SELECTED_TEAM_KEY)).toBe('success'))
+        expect(store.selectedTeamId).toBe(TEAM_ID)
+        expect(store.selectedTeam).toEqual(teamDetail)
+        expect(store.isSelectedTeamLoading).toBe(false)
+    })
+
+    it('selectTeam(null) reads idle with the default', async () => {
+        const store = await setupStore()
+        store.selectTeam(TEAM_ID)
+        await vi.waitFor(() => expect(store.selectedTeam?.id).toBe(TEAM_ID))
+
+        store.selectTeam(null)
+
+        await vi.waitFor(() => expect(idleTeam(store)).toEqual(IDLE))
+        expect(teamByIdEndpoint).toHaveBeenCalledTimes(1)
     })
 })

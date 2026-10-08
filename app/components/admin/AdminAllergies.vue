@@ -47,7 +47,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, NOISE } = useTheSlopeDesignSystem()
 
 // Responsive mount point for the detail panel - provided by the default layout;
 // false during SSR, so first paint renders the mobile mount
@@ -291,7 +291,7 @@ const catalogEmptyState = {
             <div class="flex items-center gap-2">
               <UButton
                   :color="COLOR.secondary"
-                  variant="outline"
+                  :variant="NOISE.medium"
                   :icon="ICONS.document"
                   to="/admin/allergies/pdf"
                   target="_blank"

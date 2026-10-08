@@ -74,6 +74,7 @@ const {
   updateTeam,
   deleteTeam,
   addTeamMember,
+  updateTeamMember,
   removeTeamMember,
   createJokerSlot,
   deleteJokerSlot
@@ -153,6 +154,7 @@ const {value: selectedTeamId, setValue: setSelectedTeamParam} = useQueryParam<nu
 // (full-width table + the all-teams calendar); the toggle deselects like a chevron folds
 const selectedTeamIndex = computed(() => displayedTeams.value.findIndex(t => t.id === selectedTeamId.value))
 const selectedTeam = computed(() => displayedTeams.value[selectedTeamIndex.value] ?? null)
+watch(() => selectedTeam.value?.id ?? null, store.selectTeam, {immediate: true})
 
 const handleToggleTeam = async (id: number) => {
   if (selectedTeamId.value === id) {
@@ -210,17 +212,6 @@ const showAdminTeams = computed(() => !!selectedSeason.value)
 // Action button loading state - used for both :loading and :disabled (NuxtUI pattern)
 const isActionLoading = computed(() => isSeasonsLoading.value || isSelectedSeasonLoading.value || isCreatingTeams.value)
 
-// UTILITY
-const showSuccessToast = (title: string, description?: string) => {
-  const toast = useToast()
-  toast.add({
-    title,
-    description,
-    icon: 'i-heroicons-check-circle',
-    color: 'success'
-  })
-}
-
 // BUSINESS LOGIC
 
 // CREATE MODE: Batch create teams (server auto-assigns affinities + events)
@@ -243,7 +234,6 @@ const handleUpdateTeamName = async (teamId: number, newName: string) => {
   if (!team) return
 
   await updateTeam({id: teamId, name: newName}) // Immediate save to DB
-  // No toast for individual name updates (too noisy)
   // teams reactively updates from store refresh - no manual update needed
 }
 
@@ -253,7 +243,6 @@ const handleUpdateTeamAffinity = async (teamId: number, affinity: WeekDayMap<boo
   if (!team || !affinity) return
 
   await updateTeam({id: teamId, affinity}) // Immediate save to DB
-  showSuccessToast('Madlavningsdage for teams opdateret')
   // teams reactively updates from store refresh - no manual update needed
 }
 
@@ -261,7 +250,6 @@ const handleUpdateTeamAffinity = async (teamId: number, affinity: WeekDayMap<boo
 const handleDeleteTeam = async (teamId: number | undefined) => {
   if (!teamId) return
   await deleteTeam(teamId) // Immediate delete from DB
-  showSuccessToast('Madhold slettet')
   // teams reactively updates from store refresh - no manual update needed
 }
 
@@ -278,17 +266,8 @@ const handleAddMember = async (inhabitantId: number, role: TeamRole, allocationP
   })
 }
 
-// EDIT MODE: Update member (delete old + create new)
-const handleUpdateMember = async (assignmentId: number, inhabitantId: number, role: TeamRole, allocationPercentage: number = 100, affinity: WeekDayMap | null = null) => {
-  if (!selectedTeam.value?.id) return
-  await removeTeamMember(assignmentId)
-  await addTeamMember({
-    cookingTeamId: selectedTeam.value.id,
-    inhabitantId,
-    role,
-    allocationPercentage,
-    ...(affinity ? {affinity} : {})
-  })
+const handleUpdateMember = async (assignmentId: number, _inhabitantId: number, role: TeamRole, allocationPercentage: number = 100, affinity: WeekDayMap | null = null) => {
+  await updateTeamMember(assignmentId, {role, allocationPercentage, affinity})
 }
 
 const handleRemoveMember = async (assignmentId: number) => {
@@ -316,7 +295,7 @@ interface TableRow {
   original: CookingTeamDisplay
 }
 
-const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, COMPONENTS, LAYOUTS, getRainbowAccent} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, COMPONENTS, LAYOUTS, getRainbowAccent, NOISE} = useTheSlopeDesignSystem()
 
 const columns = [
   {
@@ -429,6 +408,7 @@ const columns = [
                     :team-name="getTeamShortName(row.original.name)"
                     :chef-count="countChefs(row.original.assignments ?? [])"
                     :member-count="row.original.assignments?.length ?? 0"
+                    :joker-slot-count="row.original.jokerSlotCount ?? 0"
                     :cooking-days-count="row.original.cookingDaysCount ?? 0"
                     size="small"
                 />
@@ -559,7 +539,7 @@ const columns = [
         <UButton data-testid="submit-create-teams" :color="COLOR.secondary" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
           {{ isActionLoading ? 'Arbejder...' : 'Opret madhold' }}
         </UButton>
-        <UButton :color="COLOR.neutral" variant="ghost" @click="handleCancel">
+        <UButton :color="COLOR.neutral" :variant="NOISE.quiet" @click="handleCancel">
           Annuller
         </UButton>
       </div>

@@ -1,17 +1,18 @@
 // @vitest-environment nuxt
-import {describe, it, expect, beforeEach} from 'vitest'
+import {describe, it, expect, beforeEach, vi} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {flushPromises, type VueWrapper} from '@vue/test-utils'
 import {nextTick, type ComponentPublicInstance} from 'vue'
 import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
 import CookingTeamCard from '~/components/cooking-team/CookingTeamCard.vue'
+import {usePlanStore} from '~/stores/plan'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {COMPONENTS, ICONS, ROLE_ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {useCookingTeamValidation, type CookingTeamDetail} from '~/composables/useCookingTeamValidation'
 import type {JokerSlot} from '~/composables/useDutyValidation'
 import {createDefaultWeekdayMap} from '~/types/dateTypes'
 import {formatDate} from '~/utils/date'
-import {JOKER_SLOT_IDS, tickFirstWeekday, submitJokerSlotForm} from '~~/tests/component/components/cooking-team/jokerSlotForm'
+import {JOKER_SLOT_IDS, submitJokerSlotForm} from '~~/tests/component/components/cooking-team/jokerSlotForm'
 
 const {TeamRoleSchema} = useCookingTeamValidation()
 const Role = TeamRoleSchema.enum
@@ -26,8 +27,12 @@ const TEST_IDS = {
     jokerHeading: 'team-role-heading-JOKER',
     jokerBox: 'team-joker-box',
     jokerSlot: 'team-joker-slot',
-    memberRow: 'team-member-row'
+    memberRow: 'team-member-row',
+    memberRemove: (assignmentId: number) => `team-member-remove-${assignmentId}`
 } as const
+
+// The season the edit face plans in: Mon/Wed/Fri cooking days
+const season = SeasonFactory.defaultSeason()
 
 // The team cooks tuesdays and thursdays, from monday 5 October 2026
 const dinnerTemplate = SeasonFactory.defaultCookingTeamDetail().dinnerEvents[0]!
@@ -60,14 +65,25 @@ const assignments = ROLES.map((role, index) =>
 
 let team: CookingTeamDetail = SeasonFactory.defaultCookingTeamDetail()
 
-// Only HTTP is faked (testing.md Rule 6) - specific routes first, generic last
+// Only HTTP is faked (testing.md Rule 6) - specific routes first, generic last; the plan store reads the team
+registerEndpoint(`/api/admin/team/1/joker-slot/${slots[1]!.slot.id}`, {method: 'DELETE', handler: () => 1})
 registerEndpoint('/api/admin/team/1', () => team)
 registerEndpoint('/api/admin/season/active', () => null)
 registerEndpoint('/api/admin/season', () => [])
 
-const mountCard = async (mode: 'monitor' | 'regular' | 'edit', detail: Partial<CookingTeamDetail> = {}) => {
-    team = SeasonFactory.defaultCookingTeamDetail({assignments, dinnerEvents, jokerSlots: slots.map(({slot}) => slot), ...detail})
-    const wrapper = await mountWithTooltipProvider(CookingTeamCard, {props: {teamId: 1, teamNumber: 1, mode}, isMd: true})
+const TEAM_ID = 1
+
+// The mounting page selects the team in the store the mounted card reads; a store created before the mount
+// registers the dataset key first and would serve the card through its own selection
+const mountCard = async (mode: 'monitor' | 'regular' | 'edit', detail: Partial<CookingTeamDetail> = {}, teamId = TEAM_ID) => {
+    team = SeasonFactory.defaultCookingTeamDetail({id: TEAM_ID, assignments, dinnerEvents, jokerSlots: slots.map(({slot}) => slot), ...detail})
+    const wrapper = await mountWithTooltipProvider(CookingTeamCard, {
+        props: {teamId, teamNumber: 1, mode, seasonDates: season.seasonDates, seasonCookingDays: season.cookingDays},
+        isMd: true
+    })
+    const store = usePlanStore()
+    store.selectTeam(TEAM_ID)
+    await vi.waitFor(() => expect(store.selectedTeam?.id).toBe(TEAM_ID))
     await flushPromises()
     await nextTick()
     return wrapper
@@ -151,8 +167,9 @@ describe('CookingTeamCard', () => {
             expect(wrapper.emitted('remove:jokerSlot')).toEqual([[slots[1]!.slot.id]])
         })
 
-        it('the add button opens the form, and Opret emits add:jokerSlot and closes it', async () => {
-            const wrapper = await mountCard('edit')
+        it('the add button opens the form, and Opret emits add:jokerSlot on the team days and closes it', async () => {
+            const teamDays = createDefaultWeekdayMap([false, true, false, true, false, false, false])
+            const wrapper = await mountCard('edit', {affinity: teamDays})
             expect(findByTestId(wrapper, JOKER_SLOT_IDS.form).exists()).toBe(false)
 
             await clickByTestId(wrapper, JOKER_SLOT_IDS.add)
@@ -160,12 +177,59 @@ describe('CookingTeamCard', () => {
             expect(findByTestId(wrapper, JOKER_SLOT_IDS.add).attributes('aria-expanded')).toBe('true')
             expect(findByTestId(wrapper, JOKER_SLOT_IDS.form).exists()).toBe(true)
 
-            await tickFirstWeekday(wrapper)
             await submitJokerSlotForm(wrapper)
             const emitted = wrapper.emitted('add:jokerSlot')
             expect(emitted).toHaveLength(1)
-            expect(emitted![0]![0]).toMatchObject({role: Role.COOK, allocationPercentage: 100})
+            expect(emitted![0]![0]).toMatchObject({
+                role: Role.COOK,
+                allocationPercentage: 100,
+                startDate: season.seasonDates.start,
+                endDate: season.seasonDates.end,
+                affinity: teamDays
+            })
             expect(findByTestId(wrapper, JOKER_SLOT_IDS.add).attributes('aria-expanded')).toBe('false')
+        })
+    })
+
+    describe('the team the store holds', () => {
+        it('the Jokere box and member rows follow the store team after a write refreshes it', async () => {
+            const wrapper = await mountCard('edit')
+            const store = usePlanStore()
+            const [removedSlot, keptSlot] = [slots[1]!.slot, slots[0]!.slot]
+            team = {...team, assignments: assignments.slice(1), jokerSlots: [keptSlot]}
+
+            await store.deleteJokerSlot(TEAM_ID, removedSlot.id)
+            await flushPromises()
+
+            expect(findAllByTestId(wrapper, TEST_IDS.jokerSlot)).toHaveLength(1)
+            expect(findByTestId(wrapper, JOKER_SLOT_IDS.delete(removedSlot.id)).exists()).toBe(false)
+            expect(findAllByTestId(wrapper, TEST_IDS.memberRow)).toHaveLength(assignments.length - 1)
+        })
+
+        it('shows the loader, not the held team, while the store holds another team', async () => {
+            const wrapper = await mountCard('regular', {}, TEAM_ID + 1)
+
+            expect(wrapper.text()).toContain('Henter madhold')
+            expect(findAllByTestId(wrapper, TEST_IDS.memberRow)).toHaveLength(0)
+        })
+    })
+
+    describe('edit face, Holdmedlemmer', () => {
+        it('every member row carries a labelled trash button that emits remove:member with its assignment id', async () => {
+            const wrapper = await mountCard('edit')
+            const buttons = (wrapper.findAllComponents({name: 'UButton'}) as VueWrapper<ComponentPublicInstance<{icon?: string}>>[])
+            assignments.forEach(({id}) => {
+                const remove = findByTestId(wrapper, TEST_IDS.memberRemove(id!))
+                expect(remove.attributes('aria-label')).toBeTruthy()
+                expect(buttons.find(button => button.element === remove.element)!.props('icon')).toBe(ICONS.trash)
+            })
+            await clickByTestId(wrapper, TEST_IDS.memberRemove(assignments[1]!.id!))
+            expect(wrapper.emitted('remove:member')).toEqual([[assignments[1]!.id]])
+        })
+
+        it('the view face shows no remove buttons', async () => {
+            const wrapper = await mountCard('regular')
+            assignments.forEach(({id}) => expect(findByTestId(wrapper, TEST_IDS.memberRemove(id!)).exists()).toBe(false))
         })
     })
 
@@ -189,6 +253,36 @@ describe('CookingTeamCard', () => {
         it.each(ROLES)('the %s group heading binds the role heading', async (role) => {
             const wrapper = await mountCard('monitor')
             expectHeadingWithGlyph(wrapper, TEST_IDS.roleHeading(role), ROLE_ICONS[role])
+        })
+    })
+
+    describe('edit face, Holdnavn', () => {
+        const nameInput = (wrapper: VueWrapper) => wrapper.find('[data-testid="team-name-input"]')
+
+        it('shows the resolved team name', async () => {
+            const wrapper = await mountCard('edit', {name: 'Team Alpha'})
+            expect((nameInput(wrapper).element as HTMLInputElement).value).toBe('Team Alpha')
+        })
+
+        it('emits the trimmed draft once on blur after a focus seeds it', async () => {
+            const wrapper = await mountCard('edit', {name: 'Team Alpha'})
+            const input = nameInput(wrapper)
+            await input.trigger('focus')
+            await input.setValue(' Team Alpha Q ')
+            await input.trigger('blur')
+            expect(wrapper.emitted('update:teamName')).toEqual([['Team Alpha Q']])
+        })
+
+        it('emits nothing for an unchanged or empty draft and shows the live name again', async () => {
+            const wrapper = await mountCard('edit', {name: 'Team Alpha'})
+            const input = nameInput(wrapper)
+            await input.trigger('focus')
+            await input.trigger('blur')
+            await input.trigger('focus')
+            await input.setValue('   ')
+            await input.trigger('blur')
+            expect(wrapper.emitted('update:teamName')).toBeUndefined()
+            expect((nameInput(wrapper).element as HTMLInputElement).value).toBe('Team Alpha')
         })
     })
 })

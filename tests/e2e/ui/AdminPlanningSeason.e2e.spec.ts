@@ -8,7 +8,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import {addDays} from 'date-fns/addDays'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, waitForHydration, fillDateField, readDateField} = testHelpers
+const {validatedBrowserContext, pollUntil, gotoHydrated, fillDateField, readDateField} = testHelpers
 
 /**
  * Calculate expected dinner event count for a season
@@ -115,7 +115,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
             const context = await validatedBrowserContext(browser)
 
             // GIVEN: Navigate to create mode
-            await page.goto(`${adminPlanningUrl}?mode=create`)
+            await gotoHydrated(page, `${adminPlanningUrl}?mode=create`)
             await pollUntil(
                 async () => await page.locator('form#seasonForm').isVisible(),
                 (isVisible) => isVisible,
@@ -184,15 +184,13 @@ test.describe('AdminPlanningSeason Form UI', () => {
             const context = await validatedBrowserContext(browser)
 
             // GIVEN: Navigate to create mode
-            await page.goto(`${adminPlanningUrl}?mode=create`)
+            await gotoHydrated(page, `${adminPlanningUrl}?mode=create`)
             await pollUntil(
                 async () => await page.locator('form#seasonForm').isVisible(),
                 (isVisible) => isVisible,
                 10
             )
             await expect(page.locator('form#seasonForm')).toBeVisible()
-            // The picker popover only opens once Vue has attached its trigger listener
-            await waitForHydration(page)
 
             const {
                 startDate, endDate, holidayStart, holidayEnd,
@@ -283,7 +281,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
             createdSeasonIds.push(season.id!)
 
             // Navigate directly to season in edit mode (no need to test dropdown here)
-            await page.goto(`${adminPlanningUrl}?season=${encodeURIComponent(season.shortName)}&mode=edit`)
+            await gotoHydrated(page, `${adminPlanningUrl}?season=${encodeURIComponent(season.shortName)}&mode=edit`)
 
             // WHEN: Wait for form and remove holiday
             await pollUntil(
@@ -340,13 +338,12 @@ test.describe('AdminPlanningSeason Form UI', () => {
             })
             createdSeasonIds.push(season.id!)
 
-            await page.goto(`${adminPlanningUrl}?season=${encodeURIComponent(season.shortName)}&mode=edit`)
+            await gotoHydrated(page, `${adminPlanningUrl}?season=${encodeURIComponent(season.shortName)}&mode=edit`)
             await pollUntil(
                 async () => await page.locator('form#seasonForm').isVisible(),
                 (isVisible) => isVisible,
                 10
             )
-            await waitForHydration(page)
 
             // WHEN: Extending the holiday by one day in the row picker
             const newHolidayEnd = addDays(holidayPeriod.end, 1)

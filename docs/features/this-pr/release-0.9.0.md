@@ -1,6 +1,6 @@
 # Release 0.9.0 — work-roster push overview
 
-**Status:** Draft | **Date:** 2026-10-05 | **Updated:** 2026-10-08 (decisions round 8) | **Branch:** `feature/work-roster`
+**Status:** Draft | **Date:** 2026-10-05 | **Updated:** 2026-10-08 (decisions round 9) | **Branch:** `feature/work-roster`
 
 The umbrella spec for this push (the finished push earns v0.9). Each package is briefed and approved in chat before
 any agent starts; detail lives in the linked docs. All Prisma work lands as ONE migration package (model sign-off
@@ -353,6 +353,27 @@ here, admin-only.
   and the import in the export format is the third chore in `../chores-0.9.1.md`.
 - Local Playwright runs use three workers (CI runs one): at the default of half the cores the local D1 proxy drops
   requests, seen as `fetch failed` 500s and a data-mapper error on the dev copy; both vanish at one worker and in CI.
+
+**2026-10-08** (round 9, ui suite on the local dev copy)
+- Dependency policy: `.npmrc` saves tilde ranges and every `package.json` range is `~<locked version>`; a minor or
+  major moves only through an explicit install. Nuxt stays on 4.6.0 (an unasked move from 4.5.2 that a regenerated
+  lockfile let through); local Playwright runs use three workers.
+- Two causes behind the stable ui failures, both proven in the browser against the running app:
+  `useQueryParam` instances on one page navigated from private snapshots of the query and the last writer dropped
+  the others' keys (URL writes now queue on the Nuxt app, `_urlWrites`); and `CookingTeamCard` seeded its edit
+  field from a computed at setup, which the server rendered before the team resolved while the client hydrated the
+  real name, so hydration replaced the field under the user's typing (the draft now starts on focus). The same
+  server-rendered-but-unhydrated window is why interacting e2e tests wait for hydration before typing, and URL
+  assertions poll instead of reading once.
+- One URL writer for the app (`useUrlQueryWriter`, ADR-006 § URL Writes): the writes of a tick batch per app instance,
+  apply in priority order and land in one navigation; `useQueryParam`, `useEntityFormManager`, `useSeasonSelector` and
+  `useTabNavigation` write through it, an explicit write outranks a parameter's auto-sync. The ui specs that interact
+  navigate through `gotoHydrated` (docs/testing.md Rule 3a), since the server renders the controls 9 to 15 seconds
+  before the handlers attach on the local dev server. The targeted run before the writer went from 12 failures to 6;
+  the full-suite proof after the writer and the sweep is pending (the last attempt ran into a machine suspend).
+- Open: the season dropdown cases under load, the holiday list editor's double-matched locator, the Chef and Dinner
+  cases on the dev copy's 2028 active season, and the AdminTeams joker-slot and member-finder cases on the roster
+  package's surface.
 
 ## Coverage
 
