@@ -38,10 +38,10 @@ Nuxt 4.3, Nuxt UI 4.3, Tailwind 4.1. Pages use Nuxt UI components; every shared 
 | `TYPOGRAPHY`, `LAYOUTS`, `SIZES`, `ICONS` | text styles, layout classes, responsive sizes, icon names |
 | `BUTTONS` | `edit`, `cancel`, `save`, `primaryAction`, `secondaryAction`, `settings` |
 | `ALERTS` | alert kinds and the `withActions` / `withCornerAction` modifiers |
-| `COMPONENTS` | `calendarGrid`, `legend` (inside an `ALERTS.legend` panel: `entries`, `entry`, `stackedEntry`, `badge`, `hint`), `dateField`, `installIcon`, `statBox`, `table.ui`, `teamTabs`, `teamChip` (the circular team icon beside the team-name input), `masterDetail` (framed `pane`/`dock`, sticky `dockHeader`, `dockClamp` keeps a wide dock out of the master table's sizing, `dockBody` scrolls it in its own box), `choiceGroup`, `kitchenPanel`, `segmentedActive`, `economyTable`, `powerMode`, `guestRow` |
+| `COMPONENTS` | `calendarGrid`, `legend` (inside an `ALERTS.legend` panel: `entries`, `entry`, `stackedEntry`, `badge`, `hint`), `dateField`, `installIcon`, `statBox`, `table.ui`, `teamTabs`, `teamChip` (the circular team icon beside the team-name input), `masterDetail` (framed `pane`/`dock`, sticky `dockHeader`, `dockClamp` keeps a wide dock out of the master table's sizing, `dockBody` scrolls it in its own box), `choiceGroup`, `kitchenPanel`, `segmentedActive`, `economyTable`, `powerMode`, `guestRow`, `wantedPoster` (the chef portrait: `trigger`, `frame`, `portrait`, `ring`, `avatar`, `hat`, `nameStack`, `lettering`, `role`) |
 | `CALENDAR`, `PLANNING_CALENDAR`, `CHEF_CALENDAR`, `DINNER_CALENDAR`, `dayCircleClasses`, `calendarPickerProps` | calendar days, pickers, countdowns |
 | `BACKGROUNDS`, `RAINBOW`, `RAINBOW_FAMILIES`, `getRainbowBand`, `getRainbowFamily`, `getRainbowAccent` (selected team row's left tab), `PANTONE_CHIPS` | brand surfaces |
-| `TICKET_TYPE_COLORS`, `ORDER_STATE_COLORS`, `DINNER_STATE_BADGES`, `DEADLINE_BADGES`, `RESIDENCY_CONFIG`, `ROLE_ICONS` | domain colour and glyph maps |
+| `TICKET_TYPE_COLORS`, `ORDER_STATE_COLORS`, `DINNER_STATE_BADGES`, `DEADLINE_BADGES`, `RESIDENCY_CONFIG`, `ROLE_ICONS` | domain colour and glyph maps; the role and dinner glyphs are one set, Hugeicons: `ICONS.chef` (chef hat, Chefkok), `ROLE_ICONS.COOK` (whisk, Kok), `ROLE_ICONS.JUNIORHELPER` (plant, Kokkespire), `ICONS.dinner` (dish, Middag and Spisesal) |
 
 ## Patterns
 
@@ -96,6 +96,14 @@ over the compact badge (`MyTeamSelector`); the visual check is `/chef` at 375px 
 0.6 s of a 3.6 s period. `motion-reduce:animate-none` holds the icon still. The visual check is `/login` (dashboard) on a phone at
 375px with the install card showing: the icon taps twice, then rests; with reduced motion on (macOS Accessibility → Display →
 Reduce motion, or DevTools Rendering → `prefers-reduced-motion: reduce`) it stands still.
+
+### Wanted poster
+
+The chef portrait in `ChefMenuCard` binds `COMPONENTS.wantedPoster`: a `trigger` that opens the role assignment, the
+avatar inside the amber `ring`, the `hat` (`ICONS.chef`) tilted on top, and the name over "Chefkok" in `nameStack`. A dinner
+without a chef adds `frame` (dashed amber border on mocha 950, a slight skew) to the trigger, renders a question-mark `UAvatar`
+through `avatar` (fill and icon ink) and sets WANTED in `lettering` over the `role` line. The visual check is `/chef` and
+`/dinner` at 375px and on desktop, on a dinner with and without a chef, in light and dark mode.
 
 ### QR codes
 

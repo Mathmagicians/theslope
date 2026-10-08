@@ -25,7 +25,7 @@
 |-------|----------------|---------------|---------------------|-----------------|-----------|-----------------|--------|
 | **Admin Routes** |
 | `/admin/planning` | `admin/[tab].vue` → `AdminPlanning.vue` | ✅ `usePlanStore()` | ✅ Full usage | ✅ `?mode=` | ✅ | ✅ | **✅ COMPLIANT** |
-| `/admin/teams` | `admin/[tab].vue` → `AdminTeams.vue` | ✅ `usePlanStore()` | ✅ Partial usage | ✅ `?mode=` | ✅ | ❌ | **⚠️ MISSING TESTS** |
+| `/admin/teams` | `admin/[tab].vue` → `AdminTeams.vue` | ✅ `usePlanStore()` | ✅ Partial usage | ✅ `?mode=` | ✅ | ❌ | **⚠️ MISSING TESTS** — the Madhold tab icon is `ICONS.chef` |
 | `/admin/households` | `admin/[tab].vue` → `AdminHouseholds.vue` | ✅ `useHouseholdsStore()` | ❓ | ✅ `?mode=` | ✅ | ⚠️ | **⚠️ AUDIT NEEDED** |
 | `/admin/allergies` | `admin/[tab].vue` → `AdminAllergies.vue` | ✅ `useAllergiesStore()` | N/A | ✅ tabs | ✅ | ✅ | **✅ COMPLIANT** |
 | `/admin/users` | `admin/[tab].vue` → `AdminUsers.vue` | ✅ `useUsersStore()` | N/A | ✅ tabs | ✅ | ❌ | **⚠️ E2E ONLY** |
@@ -73,7 +73,7 @@
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
 | `AdminHouseholds.vue` | `/admin/households` | `useHouseholdsStore()` | - | ✅ | ✅ | ⚠️ Store tested | ✅ Full | **⚠️ COMPONENT TESTS** — Row expansion with HouseholdEditPanel, move/delete via store; empty state uses the `#empty` table slot (e2e: search without matches) — colour via DS tokens |
 | `HouseholdEditPanel.vue` | `/admin/households` (via expand) | None (prop-driven) | - | ✅ | ✅ | ✅ 11 tests | ✅ Indirect | **✅ COMPLIANT** — colour via DS tokens |
-| `HouseholdCard.vue` | `/admin/households`, `/household/[shortname]` | Parent props | `useHouseholdValidation()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** — colour via DS tokens |
+| `HouseholdCard.vue` | `/admin/households`, `/household/[shortname]` | Parent props | `useHouseholdValidation()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** — colour via DS tokens; the preference hint names Fællesspisning with `ICONS.dinner` |
 | `InhabitantCard.vue` | `/admin/households`, `/household/[shortname]` | Parent props | `useInhabitantValidation()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
 | `HouseholdListItem.vue` | `/admin/households` | Parent props | - | ✅ | ✅ | ❌ | N/A | **N/A DISPLAY** — colour via DS tokens |
 | `HouseholdSettings.vue` | `/household/[shortname]/settings` | `useHouseholdsStore()` | `useBooking()`, `useHousehold()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ | **⚠️ E2E ONLY** - Move-out date management with pencil-gate edit flow; the calendar feed button calls `householdsStore.fetchCalendarFeed()` — colour via DS tokens |
@@ -136,6 +136,7 @@
 | `GuestBookingForm.vue` | `/household/[shortname]/bookings`, `/admin/economy` | Parent props | `useBooking()`, `useBookingUi()`, `useBookingValidation()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** - Guest ticket form — colour via DS tokens |
 | `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | `useBookingsStore()`, `useAuthStore()` | `useBooking()`, `useBookingUi()`, `useBookingValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 14 tests | ✅ Serial | **✅ COMPLIANT** - ADR-016 booking form, admin override support; inhabitant rows build orders through `buildDesiredOrders`, guest-order rows through `buildGuestDesiredOrders`, the power row through `buildBookingChanges(getPowerChanges(...))` (the family and every guest group on the dinner); the power-row consensus is `getPowerConsensus`, the same function the grid reads; legend delegated to `DinnerModeLegend` — colour via DS tokens |
 | `DinnerModeLegend.vue` | `/household/[shortname]/bookings` (day + grid), `/dinner` | Parent props | `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 4 tests | ✅ Indirect | **✅ COMPLIANT** — THE dinner-mode "Forklaring" panel (`ALERTS.legend`, entries in `COMPONENTS.legend.entries`), shared by `BookingGridView` and `DinnerBookingForm`; `modes`/`showNoConsensus`/`showModified`/`hint` props |
+| `DinnerModeSelector.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/households`, `/admin/economy` | Parent props | `useBookingValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** — the Spisesal glyph is `ICONS.dinner` |
 | `DinnerEvent.vue` | `/household/[shortname]/bookings`, `/dinner` | Parent props | `useDinnerEvent()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** |
 | `DinnerTicket.vue` | `/household/[shortname]/bookings` | Parent props | `useTicket()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ❌ | ✅ Indirect | **⚠️ MISSING UNIT** — colour via DS tokens |
 | `OrderHistoryDisplay.vue` | `/admin/economy`, `/household/[shortname]/economy` (via `CostLine`), `/dinner` (via `DinnerBookingForm`) | `useBookingsStore()` (`fetchOrderDetail`) | `useBookingValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ✅ 2 tests | ✅ Indirect | **✅ COMPLIANT** — component-local `useAsyncData` (ADR-007 exception) keyed `order-history-<id>`, `enabled` on `orderId`: a deleted order reads idle and shows "Ordre slettet" |
@@ -145,7 +146,7 @@
 
 | Component | Used By Routes | Stores Used | Composables | ADR-001 Types | ADR-010 Domain | Component Tests | E2E Tests | Status |
 |-----------|----------------|-------------|-------------|---------------|----------------|-----------------|-----------|--------|
-| `ChefMenuCard.vue` | `/chef` | `useAllergiesStore()` | `useSeason()`, `useBooking()`, `useOrder()`, `useHousehold()`, `useBookingValidation()`, `useCookingTeamValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ⚠️ 10 tests (mocks stores and child components — testing.md Rule 6 debt) | ❌ | **⚠️ MISSING E2E** — Action row: `edit-menu` (`BUTTONS.primaryAction`), `announce-dinner` (`BUTTONS.secondaryAction`), `dinner-more-actions` (`BUTTONS.settings` + `ICONS.chevronDown`, `aria-label="Flere handlinger"`) opening the `COMPONENTS.dangerZone` panel |
+| `ChefMenuCard.vue` | `/chef`, `/dinner` | `useAllergiesStore()` | `useSeason()`, `useBooking()`, `useOrder()`, `useHousehold()`, `useBookingValidation()`, `useCookingTeamValidation()`, `useTheSlopeDesignSystem()` | ✅ | ✅ | ⚠️ 13 tests (mocks stores and child components — testing.md Rule 6 debt) | ❌ | **⚠️ MISSING E2E** — Action row: `edit-menu` (`BUTTONS.primaryAction`), `announce-dinner` (`BUTTONS.secondaryAction`), `dinner-more-actions` (`BUTTONS.settings` + `ICONS.chevronDown`, `aria-label="Flere handlinger"`) opening the `COMPONENTS.dangerZone` panel; chef portrait binds `COMPONENTS.wantedPoster` (`chef-display`, and `chef-wanted` with the poster frame), hat `ICONS.chef` |
 
 ### Layout Components
 

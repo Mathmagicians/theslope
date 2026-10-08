@@ -408,7 +408,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
             <span>Ændringer gemmes når du trykker på GEM, og påvirker fremtidige bookinger</span>
             <span class="flex items-center gap-1 mt-1">
               <strong>Valg for fællesspisning:</strong>
-              <UIcon name="i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining" class="size-4" /> Fællesspisning
+              <UIcon :name="ICONS.dinner" class="size-4" /> Fællesspisning
               <UIcon name="i-heroicons-clock" class="size-4" /> Sen spisning
               <UIcon name="i-heroicons-shopping-bag" class="size-4" /> Takeaway
               <UIcon name="i-heroicons-x-circle" class="size-4" /> Ingen spisning

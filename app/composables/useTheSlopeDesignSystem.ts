@@ -917,6 +917,23 @@ export const COMPONENTS = {
                    'bg-error-50 dark:bg-error-950/40 p-4 space-y-3',
         heading: 'text-xs font-bold uppercase tracking-wide ' +
                  'text-error-700 dark:text-error-400 flex items-center gap-1.5'
+    },
+
+    /**
+     * The chef portrait on the dinner hero (ChefMenuCard): a trigger holding the ringed avatar
+     * under a tilted chef hat beside the name. A dinner without a chef adds the dashed poster
+     * frame to the trigger and shows a question-mark avatar under WANTED lettering.
+     */
+    wantedPoster: {
+        trigger: 'flex items-center gap-3 cursor-pointer',
+        frame: `${BG.mocha[950]} border-2 border-dashed ${BORDER.amber[600]} rounded-lg p-3 -skew-x-1 w-fit`,
+        portrait: 'relative',
+        ring: `rounded-full ring-2 md:ring-4 ${RING.amber[500]}`,
+        avatar: {class: BG.mocha[800], ui: {icon: TEXT.mocha[50]}},
+        hat: `absolute -top-5 md:-top-7 left-1/2 -translate-x-1/2 ${TEXT.mocha[500]} text-xl md:text-3xl -rotate-9 drop-shadow-md`,
+        nameStack: 'flex flex-col',
+        lettering: `font-serif text-lg md:text-xl font-bold ${TEXT.mocha[50]} tracking-widest uppercase`,
+        role: `${TEXT.mocha[50]} text-sm opacity-75`
     }
 } as const
 
@@ -1001,8 +1018,8 @@ export const ICONS = {
     ticket: 'i-heroicons-ticket',
 
     // Header navigation
-    dinner: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining',
-    chef: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
+    dinner: 'i-hugeicons-dish-02',
+    chef: 'i-hugeicons-chef-hat',
     household: 'i-heroicons-home',
     preferences: 'i-heroicons-adjustments-horizontal',
     /** The cog that opens a user's own settings ("Mine indstillinger") - `preferences` is the sliders glyph */
@@ -1091,13 +1108,13 @@ export const ICONS = {
 } as const
 
 /**
- * Team role glyphs: the chef hat is the chef's symbol, the cook stands at the pot,
- * a kokkespire sprouts
+ * Team role glyphs, one icon set with ICONS.chef and ICONS.dinner: the chef hat is the chef's
+ * symbol, the cook's whisk is a tool rather than a rank, a kokkespire sprouts
  */
 export const ROLE_ICONS = {
     CHEF: ICONS.chef,
-    COOK: 'i-lucide-cooking-pot',
-    JUNIORHELPER: 'i-lucide-sprout'
+    COOK: 'i-hugeicons-whisk',
+    JUNIORHELPER: 'i-hugeicons-plant-01'
 } as const
 
 /** Residency colours double as alert kinds, so a residency alert is `v-bind="ALERTS[residency.color]"` */

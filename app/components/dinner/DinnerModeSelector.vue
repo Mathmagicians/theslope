@@ -136,7 +136,7 @@ type ModeDisplayConfig = {
 const dinnerModeConfig: Record<DinnerMode, ModeDisplayConfig> = {
   [DinnerMode.DINEIN]: {
     label: 'Spisesal',
-    icon: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining',
+    icon: ICONS.dinner,
     activeColor: 'success',
     viewVariant: 'solid',
     editActiveVariant: 'solid',

@@ -503,6 +503,10 @@ kind (chef hat, joker hat, none for a regular seat); clicking it opens the pane 
 The seat-kind icons carry through into the pane's seat lists. The poster's classes become a design-system token
 shared by the hero and the roster card.
 
+**Role and marker glyphs** ✅ signed 2026-10-08, one set (Hugeicons): Chefkok `i-hugeicons-chef-hat`, Kok `i-hugeicons-whisk` (a tool, not a rank), Kokkespire `i-hugeicons-plant-01`, Joker `i-hugeicons-joker`, Frivillig `i-hugeicons-hand-heart`; Middag `i-hugeicons-dish-02`. In the drawings `(hat)` is the chef hat, `(pot)` the whisk, `(sprout)` the plant, `(joker hat)` the joker, `(heart)` the hand with a heart. The calendar-marker vocabulary and the wanted avatars render these glyphs.
+
+**Role glyphs** ✅ signed 2026-10-08: the chef hat (`ICONS.chef`), the whisk (`i-hugeicons-whisk`, a tool, not a rank) for Kok, the sprout for Kokkespire; every `(pot)` in the drawings reads as the whisk.
+
 **The hero poster carries the seats** ✅ signed 2026-10-08. The chef stays the headliner, rendered whenever the chef
 is missing as today. One small wanted avatar per vacant seat (joker hat or plain) sits in the poster with an
 aria-label and a tooltip (kind, task, time); clicking one scrolls to the roster card and opens the pane in Meld til

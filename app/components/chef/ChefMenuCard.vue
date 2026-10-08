@@ -127,7 +127,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { TYPOGRAPHY, SIZES, ICONS, ALERTS, BUTTONS, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS, BG, TEXT, BORDER, RING } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, SIZES, ICONS, ALERTS, BUTTONS, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS, TEXT, RING } = useTheSlopeDesignSystem()
 
 // Hero panel button colors (ChefMenuCard sits on hero background with food image)
 const HERO_BUTTON = COMPONENTS.heroPanel.light
@@ -557,14 +557,13 @@ const handleCardClick = () => {
         <!-- Chef portrait + RoleAssignment trigger -->
         <div class="pt-4 mt-4 flex items-center gap-3 flex-wrap">
           <div
-            class="flex items-center gap-3 cursor-pointer"
-            :class="{ [`${BG.mocha[950]} border-2 border-dashed ${BORDER.amber[600]} rounded-lg p-3 -skew-x-1 w-fit`]: !dinnerEvent.chef }"
+            :class="dinnerEvent.chef ? COMPONENTS.wantedPoster.trigger : [COMPONENTS.wantedPoster.trigger, COMPONENTS.wantedPoster.frame]"
             :data-testid="dinnerEvent.chef ? 'chef-display' : 'chef-wanted'"
             @click="roleAssignmentRef?.open()"
           >
             <!-- Portrait frame around avatar -->
-            <div class="relative">
-              <div :class="`rounded-full ring-2 md:ring-4 ${RING.amber[500]}`">
+            <div :class="COMPONENTS.wantedPoster.portrait">
+              <div :class="COMPONENTS.wantedPoster.ring">
                 <UserListItem
                   v-if="dinnerEvent.chef"
                   :inhabitants="dinnerEvent.chef"
@@ -572,16 +571,16 @@ const handleCardClick = () => {
                   :link-to-profile="false"
                   :size="SIZES.standard"
                 />
-                <UAvatar v-else :icon="ICONS.help" :size="SIZES.standard" :ui="{ icon: TEXT.mocha[50] }" :class="BG.mocha[800]" />
+                <UAvatar v-else v-bind="COMPONENTS.wantedPoster.avatar" :icon="ICONS.help" :size="SIZES.standard" />
               </div>
               <!-- Chef hat on top -->
-              <UIcon :name="ICONS.chef" :class="`absolute -top-5 md:-top-7 left-1/2 -translate-x-1/2 ${TEXT.mocha[500]} text-xl md:text-3xl -rotate-9 drop-shadow-md`" />
+              <UIcon :name="ICONS.chef" :class="COMPONENTS.wantedPoster.hat" />
             </div>
             <!-- Name or WANTED -->
-            <div class="flex flex-col">
+            <div :class="COMPONENTS.wantedPoster.nameStack">
               <span v-if="dinnerEvent.chef" :class="TYPOGRAPHY.cardTitle">{{ formatNameWithInitials(dinnerEvent.chef) }}</span>
-              <span v-else :class="`font-serif text-lg md:text-xl font-bold ${TEXT.mocha[50]} tracking-widest uppercase`">WANTED</span>
-              <span :class="dinnerEvent.chef ? TYPOGRAPHY.bodyTextMuted : `${TEXT.mocha[50]} text-sm opacity-75`">Chefkok</span>
+              <span v-else :class="COMPONENTS.wantedPoster.lettering">WANTED</span>
+              <span :class="dinnerEvent.chef ? TYPOGRAPHY.bodyTextMuted : COMPONENTS.wantedPoster.role">Chefkok</span>
             </div>
           </div>
 

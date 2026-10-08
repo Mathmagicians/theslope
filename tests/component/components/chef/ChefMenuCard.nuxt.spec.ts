@@ -3,12 +3,13 @@ import {describe, it, expect, vi, beforeAll} from 'vitest'
 import {mountSuspended, mockNuxtImport, mockComponent} from '@nuxt/test-utils/runtime'
 import {findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
 import ChefMenuCard from '~/components/chef/ChefMenuCard.vue'
-import {ref, h} from 'vue'
-import {flushPromises} from '@vue/test-utils'
+import {ref, h, type ComponentPublicInstance} from 'vue'
+import {flushPromises, type VueWrapper} from '@vue/test-utils'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {FORM_MODES} from '~/types/form'
+import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
 
 /**
  * ChefMenuCard Unit Tests
@@ -200,6 +201,34 @@ describe('ChefMenuCard', () => {
 
             const selector = findByTestId(wrapper, 'allergen-selector')
             expect(selector.exists()).toBe(shouldShowAllergenSelector)
+        })
+    })
+
+    describe('Chef portrait', () => {
+        type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
+        const chef = {id: 7, heynaboId: 7, householdId: 1, name: 'Anna', lastName: 'Kok', pictureUrl: null, birthDate: null}
+        const classesOf = (token: string) => token.split(' ')
+
+        it.each([
+            {name: 'a wanted poster without a chef', chef: null, testId: 'chef-wanted', framed: true},
+            {name: 'the chef without a poster frame', chef, testId: 'chef-display', framed: false}
+        ])('renders $name', async ({chef: dinnerChef, testId, framed}) => {
+            const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), chef: dinnerChef}
+            const wrapper = await createWrapper({dinnerEvent, formMode: FORM_MODES.VIEW})
+
+            const portrait = findByTestId(wrapper, testId)
+            expect(portrait.classes()).toEqual(expect.arrayContaining(classesOf(COMPONENTS.wantedPoster.trigger)))
+            const frameClasses = classesOf(COMPONENTS.wantedPoster.frame)
+            expect(frameClasses.every(name => portrait.classes().includes(name))).toBe(framed)
+        })
+
+        it('renders the chef glyph as the hat on the wanted poster', async () => {
+            const wrapper = await createWrapper({formMode: FORM_MODES.VIEW})
+
+            const icons = findByTestId(wrapper, 'chef-wanted').findAllComponents({name: 'UIcon'})
+            const hat = icons.find((icon: IconWrapper) => icon.props('name') === ICONS.chef)
+            expect(hat).toBeDefined()
+            expect(hat!.classes()).toEqual(expect.arrayContaining(classesOf(COMPONENTS.wantedPoster.hat)))
         })
     })
 })
