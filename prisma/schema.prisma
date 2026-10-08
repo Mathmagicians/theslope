@@ -204,6 +204,8 @@ model DinnerEvent {
   menuPictureUrl  String?
   state           DinnerState           @default(SCHEDULED)
   heynaboEventId  Int?                  @unique
+  /// @deprecated Replaced by the dinner's Expense rows
+  totalCost       Int                   @default(0) // Price in DKK øre, total grocery costs
   chefId          Int?
   chef            Inhabitant?           @relation(fields: [chefId], references: [id], onDelete: SetNull)
   cookingTeamId   Int?

@@ -2424,6 +2424,7 @@ export const DinnerEventScalarFieldEnum = {
   menuPictureUrl: 'menuPictureUrl',
   state: 'state',
   heynaboEventId: 'heynaboEventId',
+  totalCost: 'totalCost',
   chefId: 'chefId',
   cookingTeamId: 'cookingTeamId',
   createdAt: 'createdAt',

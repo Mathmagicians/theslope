@@ -26,7 +26,7 @@ export const InhabitantScalarFieldEnumSchema = z.enum(['id','heynaboId','userId'
 
 export const HouseholdScalarFieldEnumSchema = z.enum(['id','heynaboId','pbsId','movedInDate','moveOutDate','name','address']);
 
-export const DinnerEventScalarFieldEnumSchema = z.enum(['id','date','menuTitle','menuDescription','menuPictureUrl','state','heynaboEventId','chefId','cookingTeamId','createdAt','updatedAt','seasonId']);
+export const DinnerEventScalarFieldEnumSchema = z.enum(['id','date','menuTitle','menuDescription','menuPictureUrl','state','heynaboEventId','totalCost','chefId','cookingTeamId','createdAt','updatedAt','seasonId']);
 
 export const OrderScalarFieldEnumSchema = z.enum(['id','dinnerEventId','inhabitantId','bookedByUserId','ticketPriceId','priceAtBooking','dinnerMode','state','isGuestTicket','releasedAt','closedAt','createdAt','updatedAt']);
 
