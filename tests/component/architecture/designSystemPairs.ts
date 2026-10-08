@@ -240,7 +240,9 @@ const isTextRung = (path: string) => /^TEXT\.[a-z]+\.\d+$/.test(path)
 const FILL_INK = [
     'TEXT.white', 'TEXT.black', 'TYPOGRAPHY.sectionSubheadingLight', 'TYPOGRAPHY.sectionIconLight',
     'TYPOGRAPHY.footerText', 'CALENDAR.countdown', 'CHEF_CALENDAR.countdown',
-    'DINNER_CALENDAR.countdown', 'COMPONENTS.heroPanel', 'COMPONENTS.kitchenPanel', 'COMPONENTS.ribbon'
+    'DINNER_CALENDAR.countdown', 'COMPONENTS.heroPanel', 'COMPONENTS.kitchenPanel', 'COMPONENTS.ribbon',
+    'COMPONENTS.wantedPoster.lettering', 'COMPONENTS.wantedPoster.role', 'COMPONENTS.wantedPoster.avatar.ui.icon',
+    'COMPONENTS.wantedPoster.hatOnFrame'
 ]
 
 const isFillInk = (path: string) => FILL_INK.some(prefix => path === prefix || path.startsWith(`${prefix}.`))
@@ -257,7 +259,11 @@ const PAIRED_INK = [
     {ink: 'CHEF_CALENDAR.countdown.accentMedium', fill: 'CALENDAR.countdown.container'},
     {ink: 'DINNER_CALENDAR.countdown.accent', fill: 'CALENDAR.countdown.container'},
     {ink: 'DINNER_CALENDAR.countdown.accentLight', fill: 'CALENDAR.countdown.container'},
-    {ink: 'DINNER_CALENDAR.countdown.accentMedium', fill: 'CALENDAR.countdown.container'}
+    {ink: 'DINNER_CALENDAR.countdown.accentMedium', fill: 'CALENDAR.countdown.container'},
+    {ink: 'COMPONENTS.wantedPoster.lettering', fill: 'COMPONENTS.wantedPoster.frame'},
+    {ink: 'COMPONENTS.wantedPoster.role', fill: 'COMPONENTS.wantedPoster.frame'},
+    {ink: 'COMPONENTS.wantedPoster.avatar.ui.icon', fill: 'COMPONENTS.wantedPoster.avatar.class'},
+    {ink: 'COMPONENTS.wantedPoster.hatOnFrame', fill: 'COMPONENTS.wantedPoster.frame'}
 ] as const
 
 /** The Nuxt UI semantic slots the app maps in `app.config.ts` */

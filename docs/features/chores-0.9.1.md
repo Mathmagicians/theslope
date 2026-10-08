@@ -2,7 +2,7 @@
 
 **Status:** Next release | **Date:** 2026-10-08 | **Builds on:** release 0.9 (`this-pr/release-0.9.0.md` § Prisma bundle)
 
-One migration carries both chores: `make d1-create-migration name=chores-0-9-1`, the rewrites below in the Prisma
+The two schema chores share one migration: `make d1-create-migration name=chores-0-9-1`, the rewrites below in the Prisma
 source, then `rm migrations/NNNN_*.sql && make d1-flatten-migrations`. `make d1-verify-<env>` runs before and after
 the apply on local (a copy of dev), dev and prod; `tests/component/architecture/migrations.unit.spec.ts` keeps the
 file free of `DROP TABLE`.
@@ -70,3 +70,33 @@ affected order sits CLOSED on a past dinner and matches exactly one ticket price
 `KitchenPreparation.vue`, `useOrder.ts`, `useBookingValidation.ts`, `financesRepository.ts`,
 `scaffoldPrebookings.ts`, `prisma/schema.prisma`, `prisma/generated/*`, `migrations/`,
 `docs/adr-compliance-backend.md` (order rows).
+
+## Billing import in the export format
+
+### Problem
+
+`POST /api/admin/billing/import` reads the framelding pivot table and books every ticket of a household on its first
+inhabitant as a regular order. A household with two tickets on one dinner gives two regular orders for one inhabitant,
+which the Order unique index refuses. The e2e test is skipped; the endpoint stays until this chore lands.
+
+### Solution
+
+1. The import reads a CSV as `generateBillingCsv` writes it (`useBillingValidation.ts`), from an upload or from the R2
+   billing archive for a period (`server/utils/billingArchive.ts`), so the archive round-trips.
+2. One regular order per inhabitant per dinner; tickets beyond the household's inhabitants are guest tickets.
+3. Idempotent on re-import: an existing order for the key is left as is (ADR-015).
+4. The framelding endpoint, its schemas (`ImportedOrderSchema`, `BillingImportRequestSchema`,
+   `BillingImportResponseSchema`) and the `generateCSV` / `importOrders` factory helpers leave with it; ADR-009 names
+   another operation result type in its example.
+
+### TDD
+
+- Unit: the CSV parser accepts the export's own output; the order mapping yields one regular order per inhabitant and
+  guest tickets for the rest.
+- E2E: a period's archived CSV imports into a fresh season and a second import creates nothing.
+
+### Affected
+
+`server/routes/api/admin/billing/import.post.ts`, `app/composables/useBillingValidation.ts`,
+`tests/e2e/testDataFactories/billingFactory.ts`, `tests/e2e/api/serial/local-theslope/billingImport.e2e.spec.ts`,
+`docs/adr-compliance-backend.md` (billing rows), `docs/adr.md` (ADR-009 example).

@@ -198,6 +198,18 @@ test.describe('Admin Teams API', () => {
             expect(teamDetail.cookingDaysCount).toBe(teamDinnerIds.length)
         })
 
+        test('GET /api/admin/team/[id] returns the team joker slots in its Detail (ADR-009)', async ({browser}) => {
+            // GIVEN: A team with no joker slots
+            const context = await validatedBrowserContext(browser)
+            const createdTeam = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, "team-jokers")
+
+            // WHEN: GET team detail by ID
+            const teamDetail = await SeasonFactory.getCookingTeamById(context, createdTeam.id!)
+
+            // THEN: The Detail carries an empty jokerSlots array
+            expect(teamDetail!.jokerSlots).toEqual([])
+        })
+
         test('GET /api/admin/team/[id] should return 404 for non-existent team', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const nonExistentId = 999999

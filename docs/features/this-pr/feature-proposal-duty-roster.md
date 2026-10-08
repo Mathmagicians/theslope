@@ -642,10 +642,11 @@ Byt — take a seat here, a seat of yours elsewhere is optional
 
 **Mockup — admin teams face** ✅ signed 2026-10-08 (refines the season face of 2026-10-05)
 
-The master table and the region beside it stay as `AdminTeams.vue` draws them. Shift counts sit on the member row
-as glyph columns in the marker vocabulary (chefkok, fast tjans, joker, frivillig, i alt). Standardvagter and
-Jokertjanser are flip-open collapsibles with a count in the view face; their forms (the Phase 3 editor, the joker
-slot form) open in the edit face, where every change saves at once. Spilleplan is the team calendar's day select
+The master table and the region beside it stay as `AdminTeams.vue` draws them. Members sit in one box per role, the
+heading carrying the role's glyph once (✅ 2026-10-08); shift counts sit on the member row as glyph columns (chefkok,
+fast tjans, frivillig, i alt). A fourth box, Jokere, lists the team's joker slots, one line per slot with its period,
+weekday, role, note and the count of shifts it covers. Standardvagter is a flip-open collapsible with a count in the
+view face; the Phase 3 editor and the joker slot form open in the edit face, where every change saves at once. Spilleplan is the team calendar's day select
 and renders the signed dinner face without its pencil and pane. Rows in Ledige tjanser carry the gap glyph and a
 Spilleplan link that opens the team with that day selected; teams with a missing chef sort first, then by first gap.
 
@@ -672,15 +673,18 @@ Team open, view face (md+)
 | v | Madhold          | Dage      | +--------------------------------------------------+ |
 | > I [Madhold 3]...   | tir       | | Madhold 3  [(hat) 1] [(mem) 5]      [(pencil) Rediger] | |
 | v | [Madhold 4]...   | ons       | |                                                  | |
-|   |                  |           | | Holdmedlemmer           (hat) · (pot) · (joker) · (heart) · I alt |
-|   |                  |           | |  (av) Anna   Kok     tir 100%    2 ·  8 · 0 · 0 · 10 | |
-|   |                  |           | |  (av) Per    Kok     tir  50%    0 · 10 · 1 · 0 · 11 | |
-|   |                  |           | |  (av) Emil   Spire   tir         0 ·  8 · 0 · 0 ·  8 | |
-|   |                  |           | |  (av) Bo *   frivillig           0 ·  0 · 3 · 2 ·  5 | |
-|   |                  |           | |  * ikke medlem af holdet                         | |
+|   |                  |           | | Holdmedlemmer              (hat) · (whisk) · (heart) · I alt |
+|   |                  |           | | (chef hat) Chefkok                               | |
+|   |                  |           | | |  (av) Anna  tir 100%         2 ·  8 · 0 · 10 | | |
+|   |                  |           | | (whisk) Kokke                                    | |
+|   |                  |           | | |  (av) Per   tir  50%         0 · 10 · 0 · 10 | | |
+|   |                  |           | | |  (av) Maria tir 100%         0 ·  9 · 0 ·  9 | | |
+|   |                  |           | | (plant) Kokkespirer                              | |
+|   |                  |           | | |  (av) Emil  tir              0 ·  8 · 0 ·  8 | | |
+|   |                  |           | | (joker) Jokere                                   | |
+|   |                  |           | | |  07/10-01/12 · tir · (whisk) Kok · Anna barsel   8 vagter | | |
 |   |                  |           | |                                                  | |
 |   |                  |           | | [>] Standardvagter · 5 vagter                     | |
-|   |                  |           | | [>] Jokertjanser · 1 · 07/10-01/12 tir Kok · Anna barsel | |
 |   |                  |           | |                                                  | |
 |   |                  |           | | Ugedage [man][tir][ons]…   Holdets kalender        | |
 |   |                  |           | |                            [calendar, day cells]   | |
@@ -723,13 +727,17 @@ Phone (375 px), team open, view face, the dock under the row
 |   +----------------------------------+ |
 |   | Madhold 3               [(pencil)] | |  <- sticky
 |   | Holdmedlemmer                    | |
-|   |  (av) Anna  Kok  tir             | |
-|   |       (hat)2 (pot)8 (joker)0 (heart)0 · 10 | |
-|   |  (av) Per   Kok  tir             | |
-|   |       (hat)0 (pot)10 (joker)1 (heart)0 · 11 | |
+|   | (chef hat) Chefkok               | |
+|   |  (av) Anna  tir 100%             | |
+|   |       (hat)2 (whisk)8 (heart)0 · 10 | |
+|   | (whisk) Kokke                    | |
+|   |  (av) Per   tir 50%              | |
+|   |       (hat)0 (whisk)10 (heart)0 · 10 | |
 |   |  ...                             | |
+|   | (joker) Jokere                   | |
+|   |  07/10-01/12 · tir · Kok         | |
+|   |  Anna barsel · 8 vagter          | |
 |   | [>] Standardvagter · 5           | |
-|   | [>] Jokertjanser · 1             | |
 |   | Ugedage [man][tir][ons]…         | |
 |   | [calendar, day cells]            | |
 |   | Spilleplan · ti 14/10            | |

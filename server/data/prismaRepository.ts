@@ -1486,7 +1486,7 @@ export async function fetchTeams(d1Client: D1Database, seasonId?: number): Promi
 
 /**
  * Fetch single cooking team with Detail data (ADR-009)
- * Includes: assignments (with inhabitants), dinnerEvents array, cookingDaysCount aggregate
+ * Includes: assignments (with inhabitants), dinnerEvents array, jokerSlots, cookingDaysCount aggregate
  */
 export async function fetchTeam(id: number, d1Client: D1Database): Promise<CookingTeamDetail | null> {
     console.info(`👥 > TEAM > [GET] Fetching team with ID ${id}`)
@@ -1502,6 +1502,7 @@ export async function fetchTeam(id: number, d1Client: D1Database): Promise<Cooki
                     include: {inhabitant: true}
                 },
                 dinners: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
+                jokerSlots: true,
                 _count: {
                     select: {dinners: true}
                 }
@@ -1519,6 +1520,7 @@ export async function fetchTeam(id: number, d1Client: D1Database): Promise<Cooki
                 affinity: team.affinity,
                 assignments: team.assignments,
                 dinnerEvents: team.dinners,  // Map Prisma 'dinners' relation to domain 'dinnerEvents'
+                jokerSlots: team.jokerSlots,
                 cookingDaysCount: team._count.dinners
             }
             return deserializeCookingTeamDetail(teamWithCount)

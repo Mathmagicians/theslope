@@ -574,7 +574,7 @@ const handleCardClick = () => {
                 <UAvatar v-else v-bind="COMPONENTS.wantedPoster.avatar" :icon="ICONS.help" :size="SIZES.standard" />
               </div>
               <!-- Chef hat on top -->
-              <UIcon :name="ICONS.chef" :class="COMPONENTS.wantedPoster.hat" />
+              <UIcon :name="ICONS.chef" :class="[COMPONENTS.wantedPoster.hat, dinnerEvent.chef ? COMPONENTS.wantedPoster.hatOnPage : COMPONENTS.wantedPoster.hatOnFrame]" />
             </div>
             <!-- Name or WANTED -->
             <div :class="COMPONENTS.wantedPoster.nameStack">

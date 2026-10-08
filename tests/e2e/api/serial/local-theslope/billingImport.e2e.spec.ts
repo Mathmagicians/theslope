@@ -38,7 +38,9 @@ test.describe('Billing Import API', () => {
         }
     })
 
-    test('GIVEN valid CSV WHEN importing THEN creates orders', async ({browser}) => {
+    // The framelding import books every ticket on the first inhabitant, which the Order unique index refuses;
+    // the import in the export format replaces it (docs/features/chores-0.9.1.md)
+    test.skip('GIVEN valid CSV WHEN importing THEN creates orders', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
 

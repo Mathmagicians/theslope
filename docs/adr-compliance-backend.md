@@ -106,7 +106,7 @@
 | `/api/calendar/feed.ts` | ❌ | ✅ | |
 | `/api/auth/login.post.ts` | ❌ | ✅ | |
 | **Admin - Billing** | | | | | **✅ FULLY COMPLIANT (2026-01-17)** - Added admin economy tree view endpoints                    |
-| `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ✅ | CSV import with ADR-002 separate try-catch, uses useBillingValidation composable                 |
+| `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ⚠️ | Framelding CSV import; books every ticket on the first inhabitant, refused by the Order unique index; e2e skipped; replaced by the import in the export format (`features/chores-0.9.1.md`) |
 | `/api/admin/billing/current-period.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchUnbilledTransactions() → TransactionDisplay[], "virtual" billing period for admin economy   |
 | `/api/admin/billing/invoices/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTransactionsForInvoice() → TransactionDisplay[], lazy loading for tree view                 |
 | **Admin - Heynabo** | | | | | **✅ COMPLIANT (2026-08-19)** - Inhabitant DELETE reconciles globally (all existing vs all incoming) per ADR-013 lifecycle, so members of the old household at a shared address are deleted when removed from HN. User UPDATE bucket re-keyed by `Inhabitant.heynaboId` (stable identity); HN email/phone changes update existing row, never email-keyed upsert. |

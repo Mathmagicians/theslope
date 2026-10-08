@@ -219,7 +219,8 @@ export const BG = {
 export const TEXT = {
     mocha: {
         50: 'text-amber-50',
-        500: 'text-amber-500',    // Chef hat accent
+        200: 'text-amber-200',
+        600: 'text-amber-600',
         900: 'text-amber-900',
         950: 'text-amber-950'
     },
@@ -930,7 +931,10 @@ export const COMPONENTS = {
         portrait: 'relative',
         ring: `rounded-full ring-2 md:ring-4 ${RING.amber[500]}`,
         avatar: {class: BG.mocha[800], ui: {icon: TEXT.mocha[50]}},
-        hat: `absolute -top-5 md:-top-7 left-1/2 -translate-x-1/2 ${TEXT.mocha[500]} text-xl md:text-3xl -rotate-9 drop-shadow-md`,
+        hat: 'absolute -top-5 md:-top-7 left-1/2 -translate-x-1/2 text-xl md:text-3xl -rotate-9 drop-shadow-md',
+        // The hat's ink follows the ground under it: pale gold on the dark frame; deep gold on the page, cream in dark mode
+        hatOnFrame: TEXT.mocha[200],
+        hatOnPage: `${TEXT.mocha[600]} dark:${TEXT.mocha[50]}`,
         nameStack: 'flex flex-col',
         lettering: `font-serif text-lg md:text-xl font-bold ${TEXT.mocha[50]} tracking-widest uppercase`,
         role: `${TEXT.mocha[50]} text-sm opacity-75`
