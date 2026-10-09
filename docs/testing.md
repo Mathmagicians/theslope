@@ -83,6 +83,20 @@ const season = SeasonFactory.defaultSeason(testSalt)  // Season-2025-17336500000
 
 **ALWAYS verify:** `npx playwright test path/to/test.e2e.spec.ts --workers=4`
 
+### Rule 3a: E2E Interactions Wait for Hydration
+
+The server renders a page's controls before Vue attaches their handlers, so a click or fill that lands first is lost. A test that interacts with a page waits for hydration after every navigation, through `gotoHydrated`; `page.goto` alone is for tests that only read.
+
+```typescript
+// ❌ REJECTED: the fill lands on a dead control
+await page.goto('/admin/teams?mode=create')
+await page.locator('input#team-count').fill('2')
+
+// ✅ REQUIRED: navigate, then wait for hydration
+await testHelpers.gotoHydrated(page, '/admin/teams?mode=create')
+await page.locator('input#team-count').fill('2')
+```
+
 ### Rule 4: Extract Repeated Patterns
 
 **Locations:** `/tests/e2e/testHelpers.ts` (Playwright) and `/tests/component/testHelpers.ts` (Vitest)
@@ -381,8 +395,11 @@ how a design-system sweep stays swept: once every `<UAlert>` binds an `ALERTS` k
 from being written with a raw `:color` (ADR-018). `designSystemUsage.unit.spec.ts` guards the ADR-018 rules — every `<UAlert`
 binds `ALERTS.` and none passes a raw `color`/`variant`/`type`, every `<UCalendar` binds `COMPONENTS.calendarGrid`, every
 `<UTable` binds a `COMPONENTS.table` token, every team `<UTabs` (one whose file renders `CookingTeamBadges`) binds
-`COMPONENTS.teamTabs`, no `.vue` names a Tailwind palette shade or passes a literal colour prop, and no template uses the
-dead Nuxt UI v2 slot name `#empty-state`. Violations are reported as `file:line`, so a failure names the sites to fix.
+`COMPONENTS.teamTabs`, no `.vue` names a Tailwind palette shade or passes a literal colour prop, no `<UButton`, `<UBadge`
+or `<UAvatar` passes a literal `size`, `variant` or `icon`, no `.vue` spells out `LAYOUTS.formButtonRow`'s class string, and no
+template uses the dead Nuxt UI v2 slot name `#empty-state`. `fetchUsage.unit.spec.ts` guards ADR-007: a `$fetch(` or `useRequestFetch(` anywhere
+under `app/` outside `app/composables/useApiHandler.ts` fails — stores read through `storeAsyncData` and write through
+`apiRequest`. Violations are reported as `file:line`, so a failure names the sites to fix.
 
 Add one whenever a fix to a Nuxt UI component family becomes a token: add the token, sweep all instances, add the rule.
 
@@ -497,7 +514,7 @@ test('GIVEN create mode WHEN submit THEN created', async ({ page, browser }) => 
 
   // GIVEN: Setup via factory (fast)
   // WHEN: Interact via UI
-  await page.goto('/admin/planning?mode=create')
+  await testHelpers.gotoHydrated(page, '/admin/planning?mode=create')
   await testHelpers.fillDateField(page.locator('[name="seasonDates"]'), 'start', '01/01/2025')
   await page.getByTestId('submit-season').click()
 
@@ -541,11 +558,9 @@ await pollUntil(
     (isVisible) => !isVisible
 )
 
-// ✅ Wait for hydration before the first click/fill after page.goto
-// SSR markup is visible (isVisible passes) seconds before Vue attaches listeners in dev mode;
-// an early click is silently lost. Polls `useNuxtApp().isHydrating === false`.
-await page.goto('/admin/households')
-await waitForHydration(page)
+// ✅ Navigate and wait for hydration before the first click or fill (Rule 3a): the server-rendered markup is
+// visible seconds before Vue attaches the handlers, and an early click is lost
+await gotoHydrated(page, '/admin/households')
 
 // ❌ AVOID
 await page.waitForLoadState('networkidle')  // Flaky

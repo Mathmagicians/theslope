@@ -30,6 +30,7 @@ const emit = defineEmits<{
 }>()
 
 const { createDefaultWeekdayMap } = useWeekDayMapValidation()
+const { NOISE } = useTheSlopeDesignSystem()
 
 // Compute selected days for compact view
 const selectedDays = computed(() => {
@@ -77,7 +78,7 @@ const updateDay = (day: WeekDay, value: boolean | 'indeterminate') => {
       :key="day"
       :color="color"
       class="capitalize"
-      variant="soft"
+      :variant="NOISE.soft"
     >
       {{ formatDayCompact(day) }}
     </UBadge>

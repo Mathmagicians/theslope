@@ -2,6 +2,7 @@ import {describe, it, expect} from 'vitest'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useTicket} from '~/composables/useTicket'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
+import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 
 describe('useBillingValidation', () => {
     const {
@@ -360,6 +361,55 @@ describe('useBillingValidation', () => {
             const result = deserializeBillingPeriodDetail(raw, mockTicketPrices)
 
             expect(result?.invoices[0]?.transactionSum).toBe(8000)
+        })
+    })
+
+    describe('ExpenseCreateSchema', () => {
+        const {ExpenseCreateSchema} = useBillingValidation()
+        const valid = ExpenseFactory.defaultExpenseCreate()
+
+        it.each([
+            {desc: 'the chef as default payer', body: valid},
+            {desc: 'the kitchen as payer', body: {...valid, paidByUserId: null}},
+            {desc: 'another user as payer', body: {...valid, paidByUserId: 7}}
+        ])('GIVEN $desc WHEN parsing THEN succeeds', ({body}) => {
+            expect(ExpenseCreateSchema.parse(body)).toEqual(body)
+        })
+
+        it.each([
+            {desc: 'an amount of zero', body: {...valid, amount: 0}},
+            {desc: 'a negative amount', body: {...valid, amount: -1}},
+            {desc: 'a fractional amount', body: {...valid, amount: 10.5}},
+            {desc: 'an empty description', body: {...valid, description: ''}},
+            {desc: 'a blank description', body: {...valid, description: '  '}},
+            {desc: 'a stray totalCost key', body: {...valid, totalCost: 100}},
+            {desc: 'a payer id of zero', body: {...valid, paidByUserId: 0}}
+        ])('GIVEN $desc WHEN parsing THEN throws', ({body}) => {
+            expect(() => ExpenseCreateSchema.parse(body)).toThrow()
+        })
+    })
+
+    describe('serializeExpense / deserializeExpense', () => {
+        const {serializeExpense, deserializeExpense, ExpenseCreateDataSchema} = useBillingValidation()
+
+        it('GIVEN a row WHEN serializing THEN the payer becomes a JSON column', () => {
+            const expense = ExpenseFactory.defaultExpense()
+            const row = serializeExpense(expense)
+            expect(row).not.toHaveProperty('paidBy')
+            expect(JSON.parse(row.userSnapshot)).toEqual(expense.paidBy)
+        })
+
+        it.each([
+            {desc: 'a user as payer', expense: ExpenseFactory.defaultExpense()},
+            {desc: 'the kitchen as payer', expense: ExpenseFactory.defaultExpense({paidByUserId: null, paidBy: {id: null, email: ''}})}
+        ])('GIVEN $desc WHEN round-tripping THEN the row comes back equal', ({expense}) => {
+            expect(deserializeExpense(serializeExpense(expense))).toEqual(expense)
+        })
+
+        it('GIVEN create data WHEN serializing THEN the shape is the database row without its assigned fields', () => {
+            const {id: _id, createdAt: _createdAt, updatedAt: _updatedAt, ...data} = ExpenseFactory.defaultExpense()
+            const row = serializeExpense(ExpenseCreateDataSchema.parse(data))
+            expect(Object.keys(row).sort()).toEqual(['amount', 'description', 'dinnerEventId', 'paidByUserId', 'type', 'userSnapshot'])
         })
     })
 })

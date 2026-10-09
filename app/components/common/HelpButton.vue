@@ -43,7 +43,7 @@ const requestUrl = useRequestURL()
 const isOpen = ref(false)
 const doClose = () => isOpen.value = false
 
-const { NAVIGATION, ICONS, SIZES, COLOR, TYPOGRAPHY, BUTTONS } = useTheSlopeDesignSystem()
+const { NAVIGATION, ICONS, SIZES, COLOR, TYPOGRAPHY, BUTTONS, NOISE } = useTheSlopeDesignSystem()
 
 // Feedback form
 type FeedbackType = FeedbackPayload['type']
@@ -57,22 +57,34 @@ const feedbackOptions: Array<{ label: string, value: FeedbackType }> = [
     { label: '❓ Spørgsmål', value: 'question' }
 ]
 
-const { execute: submitFeedback, status, data: feedbackResult, error: feedbackError } = useAsyncData<GitHubIssueResponse>(
-    'feedback-submit',
-    () => $fetch<GitHubIssueResponse>('/api/feedback', {
-        method: 'POST',
-        body: {
-            type: feedbackType.value,
-            description: feedbackDescription.value,
-            currentUrl: requestUrl.href
-        }
-    }),
-    { immediate: false }
-)
+const { apiRequest } = useApiHandler()
+const feedbackResult = ref<GitHubIssueResponse | null>(null)
+const feedbackError = ref<Error | null>(null)
+const isSubmitting = ref(false)
 
-const isSubmitting = computed(() => status.value === 'pending')
-const isSuccess = computed(() => status.value === 'success' && feedbackResult.value !== null)
-const isError = computed(() => status.value === 'error')
+const submitFeedback = async () => {
+    isSubmitting.value = true
+    feedbackResult.value = null
+    feedbackError.value = null
+    try {
+        feedbackResult.value = await apiRequest<GitHubIssueResponse>('/api/feedback', {
+            method: 'POST',
+            body: {
+                type: feedbackType.value,
+                description: feedbackDescription.value,
+                currentUrl: requestUrl.href
+            },
+            action: 'submitFeedback'
+        })
+    } catch (error) {
+        feedbackError.value = error as Error
+    } finally {
+        isSubmitting.value = false
+    }
+}
+
+const isSuccess = computed(() => feedbackResult.value !== null)
+const isError = computed(() => feedbackError.value !== null)
 
 const cancelFeedback = () => {
     showFeedbackForm.value = false
@@ -133,7 +145,7 @@ watch(() => route.path, () => {
             <span :class="TYPOGRAPHY.cardTitle">{{ helpContent.title }}</span>
             <UButton
                 :icon="ICONS.xMark"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 :size="SIZES.small"
                 class="flex-shrink-0"
                 @click="doClose()"
@@ -151,13 +163,13 @@ watch(() => route.path, () => {
                 :icon="ICONS.book"
                 label="Læs manualen"
                 :size="SIZES.small"
-                variant="ghost"
+                :variant="NOISE.quiet"
             />
             <UButton
                 :icon="ICONS.github"
                 label="Rapporter fejl"
                 :size="SIZES.small"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 v-bind="BUTTONS.flipOpen(showFeedbackForm)"
                 @click="showFeedbackForm = !showFeedbackForm"
             />
@@ -167,7 +179,7 @@ watch(() => route.path, () => {
               <template #content>
                 <div class="pt-2 md:pt-3 space-y-2 md:space-y-3">
                   <div v-if="isSuccess" class="text-center py-3 md:py-4 space-y-3">
-                    <UBadge :color="COLOR.success" variant="soft">✅ Tak for din feedback!</UBadge>
+                    <UBadge :color="COLOR.success" :variant="NOISE.soft">✅ Tak for din feedback!</UBadge>
                     <UButton
                         v-if="feedbackResult?.html_url"
                         :to="feedbackResult.html_url"
@@ -175,12 +187,12 @@ watch(() => route.path, () => {
                         :icon="ICONS.github"
                         :label="`Se issue #${feedbackResult.number}`"
                         :size="SIZES.small"
-                        variant="link"
+                        :variant="NOISE.link"
                         class="block mx-auto underline decoration-dashed underline-offset-4"
                     />
                   </div>
                   <div v-else-if="isError" class="text-center py-2 md:py-3 space-y-1">
-                    <UBadge :color="COLOR.error" variant="soft">❌ Kunne ikke sende feedback</UBadge>
+                    <UBadge :color="COLOR.error" :variant="NOISE.soft">❌ Kunne ikke sende feedback</UBadge>
                     <p :class="[TYPOGRAPHY.finePrint, 'text-muted']">{{ feedbackError?.message || 'Ukendt fejl' }}</p>
                   </div>
                   <template v-else>
@@ -200,7 +212,7 @@ watch(() => route.path, () => {
                     <UFieldGroup orientation="horizontal" class="gap-2 md:gap-3">
                       <UButton
                           :color="COLOR.neutral"
-                          variant="ghost"
+                          :variant="NOISE.quiet"
                           :icon="ICONS.xMark"
                           :size="SIZES.small"
                           @click="cancelFeedback"
@@ -209,7 +221,7 @@ watch(() => route.path, () => {
                       </UButton>
                       <UButton
                           :color="COLOR.primary"
-                          variant="solid"
+                          :variant="NOISE.loud"
                           :icon="ICONS.github"
                           :trailing-icon="ICONS.arrowRight"
                           :size="SIZES.small"

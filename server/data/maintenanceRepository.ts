@@ -1,4 +1,4 @@
-import {Prisma as _PrismaSkip, Prisma} from '@prisma/client'
+import {skip} from '@prisma/client/runtime/wasm-compiler-edge'
 import {getPrismaClientConnection} from './allergyRepository'
 import type {
     JobRunDisplay,
@@ -34,7 +34,7 @@ export async function fetchJobRuns(
     const {JobRunDisplaySchema} = useMaintenanceValidation()
 
     const jobRuns = await prisma.jobRun.findMany({
-        where: jobType ? {jobType} : Prisma.skip,
+        where: jobType ? {jobType} : {},
         orderBy: {startedAt: 'desc'},
         take: limit
     })
@@ -135,10 +135,10 @@ export async function updateJobRun(
         where: {id},
         data: {
             status: data.status,
-            completedAt: data.completedAt ?? Prisma.skip,
-            durationMs: data.durationMs ?? Prisma.skip,
-            resultSummary: data.resultSummary ?? Prisma.skip,
-            errorMessage: data.errorMessage ?? Prisma.skip
+            completedAt: data.completedAt ?? skip,
+            durationMs: data.durationMs ?? skip,
+            resultSummary: data.resultSummary ?? skip,
+            errorMessage: data.errorMessage ?? skip
         }
     })
 
@@ -170,7 +170,7 @@ export async function completeJobRun(
 
     const completedAt = new Date()
     const durationMs = existing ? completedAt.getTime() - existing.startedAt.getTime() : null
-    const resultSummary = result ? serializeResultSummary(result) : Prisma.skip
+    const resultSummary = result ? serializeResultSummary(result) : skip
 
     console.info(`${LOG} > [COMPLETE] Completing job run ${id} with status=${status}, duration=${durationMs}ms`)
 
@@ -181,7 +181,7 @@ export async function completeJobRun(
             completedAt,
             durationMs,
             resultSummary,
-            errorMessage: errorMessage ?? Prisma.skip
+            errorMessage: errorMessage ?? skip
         }
     })
 

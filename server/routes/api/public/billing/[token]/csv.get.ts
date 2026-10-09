@@ -9,7 +9,7 @@ const {throwH3Error} = eventHandlerHelper
 const {generateBillingCsv, generateCsvFilename} = useBillingValidation()
 const LOG = '💰 > BILLING > [CSV]'
 
-const tokenSchema = z.object({token: z.string().uuid()})
+const tokenSchema = z.object({token: z.uuid()})
 
 /**
  * GET /api/public/billing/[token]/csv

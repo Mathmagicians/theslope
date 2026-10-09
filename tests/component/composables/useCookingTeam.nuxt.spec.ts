@@ -3,6 +3,7 @@ import { useCookingTeam } from '~/composables/useCookingTeam'
 import { useCookingTeamValidation, type CookingTeamAssignment, type TeamRole } from '~/composables/useCookingTeamValidation'
 import type { InhabitantDisplay } from '~/composables/useCoreValidation'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
+import { createDefaultWeekdayMap } from '~/types/dateTypes'
 
 describe('useCookingTeam', () => {
 
@@ -90,7 +91,8 @@ describe('useCookingTeam', () => {
         seasonId: 1,
         name: 'Madhold 2 - Winter 2025',
         assignments: [],
-        cookingDaysCount: 0
+        cookingDaysCount: 0,
+        jokerSlotCount: 0
       })
     })
 
@@ -116,7 +118,7 @@ describe('useCookingTeam', () => {
     })
 
     const makeTeam = (id: number, name: string, assignments: CookingTeamAssignment[]) => ({
-      id, name, seasonId: 1, affinity: null, cookingDaysCount: 0,
+      id, name, seasonId: 1, affinity: null, cookingDaysCount: 0, jokerSlotCount: 0,
       assignments: assignments.map(a => ({...a, cookingTeamId: id}))
     })
 
@@ -224,6 +226,26 @@ describe('useCookingTeam', () => {
       {desc: 'someone else holds, I am unauthenticated',holder: someoneElse,  myInhabitantId: null, expected: false}
     ])('$desc → $expected', ({holder, myInhabitantId, expected}) => {
       expect(isNotAssignedToMe(holder, myInhabitantId)).toBe(expected)
+    })
+  })
+
+  describe('countJokerSlotShifts', () => {
+    const {countJokerSlotShifts} = useCookingTeam()
+    // The team cooks tuesdays and thursdays, from monday 5 October 2026
+    const cookingDates = [6, 8, 13, 15, 20, 22].map(day => new Date(2026, 9, day))
+    const tuesday = createDefaultWeekdayMap([false, true, false, false, false, false, false])
+    const tuesdayAndThursday = createDefaultWeekdayMap([false, true, false, true, false, false, false])
+
+    describe.each([
+      {desc: 'period inside one week', start: new Date(2026, 9, 5), end: new Date(2026, 9, 11), affinity: tuesday, expected: 1},
+      {desc: 'period across weeks', start: new Date(2026, 9, 5), end: new Date(2026, 9, 21), affinity: tuesday, expected: 3},
+      {desc: 'period bounded by cooking days', start: new Date(2026, 9, 6), end: new Date(2026, 9, 20), affinity: tuesday, expected: 3},
+      {desc: 'affinity with two weekdays', start: new Date(2026, 9, 5), end: new Date(2026, 9, 21), affinity: tuesdayAndThursday, expected: 5},
+      {desc: 'period with no cooking day', start: new Date(2026, 9, 23), end: new Date(2026, 9, 31), affinity: tuesdayAndThursday, expected: 0}
+    ])('$desc', ({start, end, affinity, expected}) => {
+      it(`counts ${expected} shifts`, () => {
+        expect(countJokerSlotShifts({startDate: start, endDate: end, affinity}, cookingDates)).toBe(expected)
+      })
     })
   })
 })

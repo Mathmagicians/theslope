@@ -7,7 +7,8 @@
  * - Detail (Booking panel): 2/3 width, shows selected day details
  */
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
-import type {DesiredOrder, DinnerMode} from '~/composables/useBookingValidation'
+import type {DesiredOrder} from '~/composables/useBookingValidation'
+import type {BookingChanges} from '~/composables/useBooking'
 import {useQueryParam} from '~/composables/useQueryParam'
 import {useDinnerDateParam, BookingViewSchema, type BookingView} from '~/composables/useBookingView'
 
@@ -24,14 +25,12 @@ const props = withDefaults(defineProps<Props>(), {
 const {household} = toRefs(props)
 
 const {deadlinesForSeason} = useSeason()
-const {formatScaffoldResult, BOOKING_TOAST_TITLES} = useBooking()
+const {BOOKING_TOAST_TITLES, buildBookingChanges} = useBooking()
 const {handleApiError} = useApiHandler()
 const {ICONS, ALERTS} = useTheSlopeDesignSystem()
-const toast = useToast()
 
 const planStore = usePlanStore()
 const {selectedSeason, isSelectedSeasonInitialized, isSelectedSeasonLoading, isSelectedSeasonErrored} = storeToRefs(planStore)
-planStore.initPlanStore()
 
 const bookingsStore = useBookingsStore()
 const {orders, isProcessingBookings, lockStatus} = storeToRefs(bookingsStore)
@@ -104,11 +103,11 @@ const visibleDinnerEventIds = computed(() =>
 
 // Load orders for visible dinner events (grid view doesn't need provenance)
 // Pass household.id to fetch orders for the viewed household (not session user's)
-watchEffect(() => {
-  if (visibleDinnerEventIds.value.length > 0 && household.value?.id) {
-    bookingsStore.loadOrdersForDinners(visibleDinnerEventIds.value, !isGridView.value, household.value.id)
-  }
-})
+bookingsStore.loadOrdersForDinners(() => ({
+  dinnerEventIds: household.value?.id ? visibleDinnerEventIds.value : [],
+  householdId: household.value?.id,
+  includeProvenance: !isGridView.value
+}))
 
 // Season data for view components
 const ticketPrices = computed(() => selectedSeason.value?.ticketPrices ?? [])
@@ -117,51 +116,20 @@ const deadlines = computed(() => selectedSeason.value ? deadlinesForSeason(selec
 // Grid view form mode
 const gridFormMode = ref<'view' | 'edit'>('view')
 
-// Handle grid save - build DesiredOrders and call scaffold endpoint
-const {getTicketPriceForInhabitant} = useTicket()
-const {OrderStateSchema} = useBookingValidation()
-const OrderState = OrderStateSchema.enum
-
-const handleGridSave = async (changes: { inhabitantId: number, dinnerEventId: number, dinnerMode: DinnerMode }[]) => {
-  if (!selectedSeason.value || changes.length === 0) return
+const handleGridSave = async (changes: BookingChanges) => {
+  const desiredOrders = buildBookingChanges(changes, orders.value, household.value.inhabitants, dinnerEvents.value, ticketPrices.value)
+  if (!selectedSeason.value || desiredOrders.length === 0) return
 
   // Only process dinner events that have changes (not all visible events!)
-  const changedEventIds = [...new Set(changes.map(c => c.dinnerEventId))]
+  const changedEventIds = [...new Set(desiredOrders.map(o => o.dinnerEventId))]
 
-  const desiredOrders = changes.map(change => {
-    const inhabitant = household.value.inhabitants.find(i => i.id === change.inhabitantId)
-    const event = dinnerEvents.value.find(e => e.id === change.dinnerEventId)
-    const ticketPrice = getTicketPriceForInhabitant(inhabitant?.birthDate ?? null, ticketPrices.value, event?.date ?? new Date())
-    const existingOrder = orders.value.find(o => o.inhabitantId === change.inhabitantId && o.dinnerEventId === change.dinnerEventId)
-
-    // Existing order: preserve ticketPriceId. New booking: compute from age.
-    const resolvedTicketPriceId = existingOrder?.ticketPriceId ?? ticketPrice?.id
-    if (!resolvedTicketPriceId) {
-      throw new Error(`Cannot resolve ticketPriceId for inhabitant ${change.inhabitantId}`)
-    }
-
-    return {
-      inhabitantId: change.inhabitantId,
-      dinnerEventId: change.dinnerEventId,
-      dinnerMode: change.dinnerMode,
-      ticketPriceId: resolvedTicketPriceId,
-      isGuestTicket: false,
-      orderId: existingOrder?.id,
-      state: OrderState.BOOKED
-    }
-  })
-
-  const result = await bookingsStore.processMultipleEventsBookings(
+  await bookingsStore.processMultipleEventsBookings(
     household.value.id,
     changedEventIds,
     desiredOrders,
-    props.adminBypass
+    props.adminBypass,
+    {title: BOOKING_TOAST_TITLES.grid}
   )
-  toast.add({
-    title: BOOKING_TOAST_TITLES.grid,
-    description: formatScaffoldResult(result.scaffoldResult, 'past'),
-    color: 'success'
-  })
 }
 
 // Day view save handler - DinnerBookingForm emits DesiredOrder[]
@@ -169,17 +137,13 @@ const handleDayViewSave = async (desiredOrders: DesiredOrder[]) => {
   const dinnerEventId = selectedDinnerEvent.value?.id
   if (!dinnerEventId || desiredOrders.length === 0) return
 
-  const result = await bookingsStore.processSingleEventBookings(
+  await bookingsStore.processSingleEventBookings(
     household.value.id,
     dinnerEventId,
     desiredOrders,
-    props.adminBypass
+    props.adminBypass,
+    {title: BOOKING_TOAST_TITLES.day}
   )
-  toast.add({
-    title: BOOKING_TOAST_TITLES.day,
-    description: formatScaffoldResult(result.scaffoldResult, 'past'),
-    color: 'success'
-  })
 }
 
 // Grid view guest booking - receives DesiredOrder[] from GuestBookingForm (all goes through scaffolder)
@@ -193,17 +157,13 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
   const dateStr = event ? formatDate(new Date(event.date)) : ''
 
   try {
-    const result = await bookingsStore.processSingleEventBookings(
+    await bookingsStore.processSingleEventBookings(
       household.value.id,
       eventId,
       guestOrders,
-      props.adminBypass
+      props.adminBypass,
+      {title: BOOKING_TOAST_TITLES.guest, suffix: ` d. ${dateStr}`}
     )
-    toast.add({
-      title: BOOKING_TOAST_TITLES.guest,
-      description: `${formatScaffoldResult(result.scaffoldResult, 'past')} d. ${dateStr}`,
-      color: 'success'
-    })
   } catch (e) {
     handleApiError(e, 'handleAddGuest', 'Kunne ikke tilføje gæst')
   }

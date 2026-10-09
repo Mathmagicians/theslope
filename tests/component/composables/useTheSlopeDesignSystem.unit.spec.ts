@@ -20,6 +20,10 @@ describe('getRandomEmptyMessage', () => {
         expect(getRandomEmptyMessage(context, sameUtcDayMorning))
             .toBe(getRandomEmptyMessage(context, danishEveningInstant))
     })
+
+    it.each(['dinnerGone', 'seasonGone', 'household'] as const)('%s: picks one of its lines', (context) => {
+        expect(EMPTY_STATE_MESSAGES[context]).toContain(getRandomEmptyMessage(context))
+    })
 })
 
 describe('createResponsiveAlerts', () => {

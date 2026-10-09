@@ -107,11 +107,7 @@ const emit = defineEmits<{
 // Self-initialize household store
 const householdsStore = useHouseholdsStore()
 const {selectedHousehold} = storeToRefs(householdsStore)
-householdsStore.initHouseholdsStore()
 const household = computed(() => props.household ?? selectedHousehold.value)
-
-// Household business logic for consensus
-const {computeConsensus} = useHousehold()
 
 // Permission-based form mode - EDIT if user is member of household (session predicate on the auth store, ADR-017)
 // Admin can override via canEditAdminOverride prop
@@ -127,7 +123,7 @@ const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Design system
-const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, getResidencyDisplay} = useTheSlopeDesignSystem()
+const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, getResidencyDisplay, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
 const emptyStateMessage = getRandomEmptyMessage('household')
 
 // Ticket business logic
@@ -337,9 +333,7 @@ const tableData = computed((): TableRow[] => {
       }
     })
 
-  // Compute consensus from inhabitant dinnerModes
-  const inhabitantModes = inhabitantRows.map(r => r.dinnerMode)
-  const {value: consensusMode, consensus: hasConsensus} = computeConsensus(inhabitantModes, DinnerModeEnum.DINEIN)
+  const {value: consensusMode, consensus: hasConsensus} = getPowerConsensus(allInhabitants.map(i => i.id), eventOrders.value, props.dinnerEvent.id)
 
   // Default synthetic row template
   const defaultSyntheticRow = {
@@ -400,45 +394,32 @@ const tableData = computed((): TableRow[] => {
 // Build desired orders for a row (DRY: used by handleSave and actionPreviewItems)
 const buildDesiredOrdersForRow = (row: TableRow): DesiredOrder[] => {
   const dinnerEventId = props.dinnerEvent.id
+  const buildForInhabitants = (inhabitantIds: number[]) => buildDesiredOrders(
+    inhabitantIds.map(inhabitantId => ({inhabitantId, dinnerEventId, dinnerMode: draftMode.value})),
+    eventOrders.value,
+    household.value?.inhabitants ?? [],
+    [props.dinnerEvent],
+    props.ticketPrices
+  )
 
   if (row.rowType === 'power') {
-    const inhabitantRows = tableData.value.filter((r: TableRow) => r.rowType === 'inhabitant')
-    return inhabitantRows
-      .filter(r => r.ticketPriceId !== null)
-      .map((r: TableRow) => ({
-        inhabitantId: r.id as number,
-        dinnerEventId,
-        dinnerMode: draftMode.value,
-        ticketPriceId: r.ticketPriceId!,
-        isGuestTicket: false,
-        orderId: r.order?.id,
-        state: OrderStateEnum.BOOKED
-      }))
+    const inhabitantIds = (household.value?.inhabitants ?? []).map(i => i.id)
+    return buildBookingChanges(
+      getPowerChanges(inhabitantIds, eventOrders.value, dinnerEventId, draftMode.value),
+      eventOrders.value,
+      household.value?.inhabitants ?? [],
+      [props.dinnerEvent],
+      props.ticketPrices
+    )
   }
 
-  if (row.rowType === 'guest-order' && row.ticketPriceId) {
+  if (row.rowType === 'guest-order') {
     const guestOrders = row.orders ?? (row.order ? [row.order] : [])
-    return guestOrders.map((guestOrder: OrderDisplay) => ({
-      inhabitantId: guestOrder.inhabitantId,
-      dinnerEventId,
-      dinnerMode: draftMode.value,
-      ticketPriceId: row.ticketPriceId!,
-      isGuestTicket: true,
-      orderId: guestOrder.id,
-      state: OrderStateEnum.BOOKED
-    }))
+    return buildGuestDesiredOrders([{guestOrders, dinnerMode: draftMode.value}], props.ticketPrices)
   }
 
-  if (row.rowType === 'inhabitant' && typeof row.id === 'number' && row.ticketPriceId) {
-    return [{
-      inhabitantId: row.id,
-      dinnerEventId,
-      dinnerMode: draftMode.value,
-      ticketPriceId: row.ticketPriceId,
-      isGuestTicket: false,
-      orderId: row.order?.id,
-      state: OrderStateEnum.BOOKED
-    }]
+  if (row.rowType === 'inhabitant' && typeof row.id === 'number') {
+    return buildForInhabitants([row.id])
   }
 
   return []
@@ -494,7 +475,7 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
 // HELPER TEXT
 // ============================================================================
 
-const {partitionGuestOrders, groupGuestOrders, getBookingOptions, getDayBillSummary, resolveUserBookingBuckets} = useBooking()
+const {partitionGuestOrders, groupGuestOrders, getBookingOptions, getDayBillSummary, resolveUserBookingBuckets, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
 const {createBookingBadges, formatActionPreview} = useBookingUi()
 
 // Deadline badges
@@ -640,7 +621,7 @@ const actionPreviewItems = computed(() => {
               compact
             >
               <template #badge>
-                <UBadge v-if="hasReleasedTickets" :color="COLOR.info" :icon="ICONS.claim" variant="subtle" :size="SIZES.small">
+                <UBadge v-if="hasReleasedTickets" :color="COLOR.info" :icon="ICONS.claim" :variant="NOISE.subtle" :size="SIZES.small">
                   {{ props.releasedTicketCounts.formatted }} Ledig{{ props.releasedTicketCounts.total === 1 ? '' : 'e' }}
                 </UBadge>
               </template>
@@ -659,7 +640,7 @@ const actionPreviewItems = computed(() => {
                 <UBadge
                   v-if="isOrderReleased(row.original.orderState)"
                   :color="COLOR.error"
-                  variant="soft"
+                  :variant="NOISE.soft"
                   :size="SIZES.small"
                   :icon="ICONS.released"
                 >
@@ -667,10 +648,10 @@ const actionPreviewItems = computed(() => {
                 </UBadge>
                 <!-- Provenance badges -->
                 <div v-else-if="row.original.provenanceHousehold" class="flex flex-wrap items-center gap-1">
-                  <UBadge :color="COLOR.info" variant="soft" size="sm" :icon="ICONS.claim">
+                  <UBadge :color="COLOR.info" :variant="NOISE.soft" :size="SIZES.sm" :icon="ICONS.claim">
                     fra {{ row.original.provenanceHousehold }}
                   </UBadge>
-                  <UBadge v-if="row.original.provenanceAllergies?.length" :color="COLOR.warning" variant="soft" size="sm">
+                  <UBadge v-if="row.original.provenanceAllergies?.length" :color="COLOR.warning" :variant="NOISE.soft" :size="SIZES.sm">
                     🥜 {{ row.original.provenanceAllergies.join(', ') }}
                   </UBadge>
                 </div>
@@ -694,10 +675,10 @@ const actionPreviewItems = computed(() => {
             </div>
             <!-- Provenance badges -->
             <div v-if="row.original.provenanceHousehold" class="flex flex-wrap items-center gap-1 mt-1 ml-6">
-              <UBadge :color="COLOR.info" variant="soft" size="sm" :icon="ICONS.claim">
+              <UBadge :color="COLOR.info" :variant="NOISE.soft" :size="SIZES.sm" :icon="ICONS.claim">
                 fra {{ row.original.provenanceHousehold }}
               </UBadge>
-              <UBadge v-if="row.original.provenanceAllergies?.length" :color="COLOR.warning" variant="soft" size="sm">
+              <UBadge v-if="row.original.provenanceAllergies?.length" :color="COLOR.warning" :variant="NOISE.soft" :size="SIZES.sm">
                 🥜 {{ row.original.provenanceAllergies.join(', ') }}
               </UBadge>
             </div>
@@ -797,7 +778,7 @@ const actionPreviewItems = computed(() => {
 
           <!-- Provenance allergies (read-only for existing guest) -->
           <div v-if="row.original.rowType === 'guest-order' && row.original.provenanceAllergies?.length" class="flex flex-wrap gap-2">
-            <UBadge v-for="allergy in row.original.provenanceAllergies" :key="allergy" :color="COLOR.warning" variant="soft">
+            <UBadge v-for="allergy in row.original.provenanceAllergies" :key="allergy" :color="COLOR.warning" :variant="NOISE.soft">
               🥜 {{ allergy }}
             </UBadge>
           </div>
@@ -824,7 +805,7 @@ const actionPreviewItems = computed(() => {
           <div v-if="row.original.order?.id">
             <UButton
                 :color="COLOR.neutral"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 :icon="historyOrderId === row.original.order.id ? ICONS.chevronUp : ICONS.clipboard"
                 square
                 :size="SIZES.small"
@@ -839,7 +820,7 @@ const actionPreviewItems = computed(() => {
             <div class="flex flex-col gap-2">
               <ActionPreview :items="actionPreviewItems" />
 
-              <div class="flex flex-col-reverse md:flex-row md:justify-end gap-2">
+              <div :class="LAYOUTS.formButtonRow">
                 <UButton
                   v-bind="BUTTONS.cancel"
                   :data-testid="`${row.original.rowType}-${row.original.id}-cancel`"

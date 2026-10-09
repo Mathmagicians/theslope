@@ -5,17 +5,21 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["strictUndefinedChecks"]
+  provider        = "prisma-client"
+  output          = "./generated/client"
+  runtime         = "workerd"
+  previewFeatures = ["strictUndefinedChecks", "partialIndexes"]
 }
 
 generator zod {
-  provider = "zod-prisma-types"
+  provider         = "zod-prisma-types"
+  prismaClientPath = "../client"
+  createInputTypes = false
+  createModelTypes = false
 }
 
 datasource db {
   provider = "sqlite"
-  url      = "file:./dev.db"
 }
 
 enum SystemRole {
@@ -133,6 +137,8 @@ model User {
   bookedOrders         Order[]        @relation("BookedByUser")
   orderHistory         OrderHistory[]
   settingsUpdated      Setting[]      @relation("SettingUpdatedBy")
+  dutyHistory          DutyHistory[]
+  expenses             Expense[]
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 }
@@ -169,6 +175,8 @@ model Inhabitant {
   DinnerEvent           DinnerEvent[]
   Order                 Order[]
   CookingTeamAssignment CookingTeamAssignment[]
+  dinnerDuties          DinnerDuty[]
+  waitlistEntries       TicketWaitlist[]
 
   @@index([householdId])
   @@index([userId]) // For user lookups
@@ -195,8 +203,9 @@ model DinnerEvent {
   menuDescription String?
   menuPictureUrl  String?
   state           DinnerState           @default(SCHEDULED)
-  totalCost       Int                   @default(0) // Price in DKK øre, total grocery costs
   heynaboEventId  Int?                  @unique
+  /// @deprecated Replaced by the dinner's Expense rows
+  totalCost       Int                   @default(0) // Price in DKK øre, total grocery costs
   chefId          Int?
   chef            Inhabitant?           @relation(fields: [chefId], references: [id], onDelete: SetNull)
   cookingTeamId   Int?
@@ -207,6 +216,9 @@ model DinnerEvent {
   Season          Season?               @relation(fields: [seasonId], references: [id], onDelete: Cascade)
   seasonId        Int?
   allergens       DinnerEventAllergen[] // Many-to-many with AllergyType via join table
+  dinnerDuties    DinnerDuty[]
+  waitlist        TicketWaitlist[]
+  expenses        Expense[]
 
   @@index([seasonId])
   @@index([chefId])
@@ -235,25 +247,29 @@ model Order {
   Transaction    Transaction?
   orderHistory   OrderHistory[]
 
+  @@unique([inhabitantId, dinnerEventId], where: { isGuestTicket: false }) // one regular order per person and dinner
   @@index([bookedByUserId])
   @@index([inhabitantId])
   @@index([dinnerEventId, state]) // Composite for "orders by dinner and state"
 }
 
 model Transaction {
-  id              Int      @id @default(autoincrement())
-  orderId         Int?     @unique
-  order           Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  id              Int             @id @default(autoincrement())
+  orderId         Int?            @unique
+  order           Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  type            LedgerEntryType @default(REGULAR) // REGULAR: orderId set; ADHOC: the household in orderSnapshot
   orderSnapshot   String // JSON stringified snapshot of the order at the time of transaction
   userSnapshot    String // JSON stringified snapshot of the user at the time of transaction
   amount          Int // price in DKK øre
+  description     String? // ADHOC
   userEmailHandle String
-  createdAt       DateTime @default(now())
+  createdAt       DateTime        @default(now())
   invoiceId       Int? // Many transactions per invoice (1 invoice aggregates all household orders in billing period)
-  invoice         Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  invoice         Invoice?        @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
 
   @@index([orderId])
   @@index([invoiceId])
+  @@index([type])
 }
 
 model Invoice {
@@ -321,13 +337,15 @@ enum DeliveryKind {
 
 // Cooking teams are seasonal, and created by the system administrator
 model CookingTeam {
-  id          Int                     @id @default(autoincrement())
-  seasonId    Int
-  season      Season                  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
-  name        String
-  dinners     DinnerEvent[]
-  assignments CookingTeamAssignment[]
-  affinity    String? // JSON stringified map of Weekday to boolean
+  id            Int                     @id @default(autoincrement())
+  seasonId      Int
+  season        Season                  @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  name          String
+  dinners       DinnerEvent[]
+  assignments   CookingTeamAssignment[]
+  dutyTemplates DinnerDutyTemplate[]
+  jokerSlots    JokerSlot[]
+  affinity      String? // JSON stringified map of Weekday to boolean
 }
 
 model CookingTeamAssignment {
@@ -406,4 +424,137 @@ model JobRun {
   deliveries    Delivery[]
 
   @@index([jobType, startedAt])
+}
+
+enum DutyAuditAction {
+  DUTY_ASSIGNED
+  DUTY_UNASSIGNED
+  DUTY_SWAPPED
+  DUTY_UPDATED
+  ROSTER_SIGNED_OFF
+}
+
+enum DutyOrigin {
+  TEAM
+  JOKER
+  VOLUNTEER
+  SWAP
+}
+
+// A team's standard duties for a cooking day: one row per person needed
+model DinnerDutyTemplate {
+  id                     Int         @id @default(autoincrement())
+  cookingTeamId          Int
+  cookingTeam            CookingTeam @relation(fields: [cookingTeamId], references: [id], onDelete: Cascade)
+  role                   Role        @default(COOK)
+  minutesFromDinnerStart Int // signed offset from the dinner's start time
+  durationMinutes        Int
+  taskDescription        String
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+
+  @@index([cookingTeamId])
+}
+
+// A time-bound team assignment without a person: one more of a role, open to any volunteer per dinner
+model JokerSlot {
+  id                   Int         @id @default(autoincrement())
+  cookingTeamId        Int
+  cookingTeam          CookingTeam @relation(fields: [cookingTeamId], references: [id], onDelete: Cascade)
+  role                 Role        @default(COOK)
+  allocationPercentage Int         @default(100)
+  affinity             String // JSON stringified map of Weekday to boolean
+  startDate            DateTime
+  endDate              DateTime
+  note                 String?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  @@index([cookingTeamId])
+}
+
+// A roster duty on one dinner; role, time and task are copied from the template at creation
+model DinnerDuty {
+  id                     Int           @id @default(autoincrement())
+  dinnerEventId          Int
+  dinnerEvent            DinnerEvent   @relation(fields: [dinnerEventId], references: [id], onDelete: Cascade)
+  inhabitantId           Int? // null = vacant
+  inhabitant             Inhabitant?   @relation(fields: [inhabitantId], references: [id], onDelete: SetNull)
+  origin                 DutyOrigin    @default(TEAM)
+  role                   Role
+  minutesFromDinnerStart Int // signed offset from the dinner's start time
+  durationMinutes        Int
+  taskDescription        String
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
+  history                DutyHistory[]
+
+  @@index([dinnerEventId])
+  @@index([inhabitantId])
+}
+
+// Audit timeline of duties and roster sign-offs; the denormalized keys outlive the duty
+model DutyHistory {
+  id                Int             @id @default(autoincrement())
+  dinnerDutyId      Int? // null for ROSTER_SIGNED_OFF
+  dinnerDuty        DinnerDuty?     @relation(fields: [dinnerDutyId], references: [id], onDelete: SetNull)
+  action            DutyAuditAction
+  performedByUserId Int? // null = system
+  performedByUser   User?           @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
+  auditData         String // JSON
+  timestamp         DateTime        @default(now())
+  swapGroupId       String? // shared by the two rows of one swap
+  inhabitantId      Int?
+  dinnerEventId     Int?
+  seasonId          Int?
+
+  @@index([dinnerDutyId])
+  @@index([performedByUserId])
+  @@index([inhabitantId])
+  @@index([dinnerEventId, action])
+  @@index([seasonId])
+  @@index([timestamp])
+  @@index([swapGroupId])
+}
+
+// An unplaced order waiting for a ticket; `order` holds it in the order-create shape
+model TicketWaitlist {
+  id            Int         @id @default(autoincrement())
+  dinnerEventId Int
+  dinnerEvent   DinnerEvent @relation(fields: [dinnerEventId], references: [id], onDelete: Cascade)
+  inhabitantId  Int
+  inhabitant    Inhabitant  @relation(fields: [inhabitantId], references: [id], onDelete: Cascade)
+  isGuestTicket Boolean     @default(false)
+  order         String // JSON typed by the order-create schema
+  createdAt     DateTime    @default(now())
+
+  @@unique([dinnerEventId, inhabitantId], where: { isGuestTicket: false }) // one regular entry per person and dinner
+  @@index([dinnerEventId, createdAt])
+  @@index([inhabitantId])
+}
+
+// Shared by Transaction and Expense: REGULAR hangs off its source (an order, a dinner), ADHOC stands alone
+enum LedgerEntryType {
+  REGULAR
+  ADHOC
+}
+
+// A cost paid from the kitchen's money: REGULAR rows belong to a dinner, ADHOC rows are basisvarer
+model Expense {
+  id            Int             @id @default(autoincrement())
+  type          LedgerEntryType @default(REGULAR)
+  dinnerEventId Int? // REGULAR: set; ADHOC: null
+  dinnerEvent   DinnerEvent?    @relation(fields: [dinnerEventId], references: [id], onDelete: SetNull)
+  paidByUserId  Int? // the user to reimburse; null = paid by the kitchen directly
+  paidByUser    User?           @relation(fields: [paidByUserId], references: [id], onDelete: SetNull)
+  userSnapshot  String // JSON snapshot of the payer at the time of the expense
+  amount        Int // DKK øre
+  description   String
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  @@index([dinnerEventId])
+  @@index([paidByUserId])
+  @@index([type])
+  @@index([createdAt])
 }

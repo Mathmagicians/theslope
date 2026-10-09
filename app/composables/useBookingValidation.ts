@@ -4,15 +4,22 @@ import {
     OrderStateSchema,
     DinnerStateSchema,
     DinnerModeSchema,
-    TicketPriceSchema as _TicketPriceSchema,
     RoleSchema,
     OrderAuditActionSchema
 } from '~~/prisma/generated/zod'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
-import {useCoreValidation} from '~/composables/useCoreValidation'
+import {useCoreValidation, IdSchema} from '~/composables/useCoreValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
 import {chunkArray} from '~/utils/batchUtils'
+import {sumAmounts} from '~/utils/ledger'
+import {ExpenseFragmentSchema, deserializeExpense} from '~/composables/fragments/domainFragments'
+
+// A dinner row as Prisma hands it out: the relations a read includes, the expense amounts behind the computed cost
+type DinnerEventRow = Record<string, unknown> & {
+    allergens?: Array<{allergyType: unknown}> | null
+    expenses?: Array<Record<string, unknown> & {amount: number}> | null
+}
 
 export const DinnerMode = DinnerModeSchema.enum
 export const DinnerState = DinnerStateSchema.enum
@@ -31,7 +38,7 @@ export const useBookingValidation = () => {
     const {CookingTeamDisplaySchema, deserializeCookingTeamDisplay} = useCookingTeamValidation()
     const {InhabitantDisplaySchema, deserializeInhabitantDisplay} = useCoreValidation()
     const {TicketPriceSchema: _TicketPriceSchema} = useTicketPriceValidation()
-    const {AllergyTypeDisplaySchema, InhabitantWithAllergiesSchema} = useAllergyValidation()
+    const {AllergyTypeDisplaySchema, InhabitantWithAllergiesSchema, deserializeInhabitantWithAllergies} = useAllergyValidation()
 
     // ============================================================================
     // DINNER EVENT (Base + Display schemas - defined first for Order to reference)
@@ -42,7 +49,7 @@ export const useBookingValidation = () => {
         date: z.coerce.date(),
         menuTitle: z.string().max(500, "Menu titel må ikke være længere end 500 tegn"),
         menuDescription: z.string().max(500).nullable(),
-        menuPictureUrl: z.string().url().nullable(),
+        menuPictureUrl: z.url().nullable(),
         state: DinnerStateSchema,
         totalCost: z.number().int().min(0),
         chefId: z.number().int().positive().nullable(),
@@ -75,13 +82,14 @@ export const useBookingValidation = () => {
     /**
      * DinnerEvent Create - For API input validation (PUT /api/admin/dinner-event)
      */
-    const DinnerEventCreateSchema = DinnerEventBaseSchema
+    // The cost is computed from the dinner's expense rows: no body writes it, and a body carrying it is a 400
+    const DinnerEventCreateSchema = DinnerEventBaseSchema.omit({totalCost: true}).strict()
 
     /**
      * DinnerEvent Update - For API input validation (POST /api/chef/dinner/[id]).
      * Note: id is optional in body since it comes from URL path.
      */
-    const DinnerEventUpdateSchema = DinnerEventBaseSchema.partial()
+    const DinnerEventUpdateSchema = DinnerEventBaseSchema.omit({totalCost: true}).partial().strict()
 
     /**
      * Chef Menu Form - For chef UI form validation
@@ -91,8 +99,7 @@ export const useBookingValidation = () => {
         menuTitle: z.string()
             .min(1, 'Menu titel er påkrævet')
             .max(500, 'Menu titel må maks være 500 tegn'),
-        menuDescription: z.string().max(500, 'Beskrivelse må maks være 500 tegn'),
-        totalCost: z.number().int().min(0, 'Indkøbsomkostninger kan ikke være negative')
+        menuDescription: z.string().max(500, 'Beskrivelse må maks være 500 tegn')
     })
 
     // ============================================================================
@@ -187,7 +194,9 @@ export const useBookingValidation = () => {
     const DinnerEventDetailSchema = DinnerEventDisplaySchema.extend({
         chef: InhabitantDisplaySchema.nullable(),
         cookingTeam: CookingTeamDisplaySchema.nullable(),
-        tickets: z.array(OrderDetailSchema).optional()
+        tickets: z.array(OrderDetailSchema).optional(),
+        // The lines behind the cost (ADR-009: Detail carries them, Display the sum)
+        expenses: z.array(ExpenseFragmentSchema).default([])
     })
 
     /**
@@ -282,7 +291,7 @@ export const useBookingValidation = () => {
      * Business rules:
      * - ONE user (bookedByUserId) books for entire family
      * - Can have different inhabitantIds (family members + guests)
-     * - Can have multiple orders for same inhabitantId (e.g., adult + child tickets)
+     * - One regular order per inhabitant per dinner (the Order unique index); guest tickets are unlimited
      * - All bookedByUserId must be the same (VALIDATED HERE, skipped if empty)
      * - All inhabitants must belong to householdId (VALIDATED IN ENDPOINT)
      */
@@ -466,9 +475,11 @@ export const useBookingValidation = () => {
      * Handles join table flattening for allergens only (for Display schema)
      */
     function deserializeDinnerEvent(prismaEvent: Record<string, unknown>): z.infer<typeof DinnerEventDisplaySchema> {
-        const allergens = prismaEvent.allergens as Array<{ allergyType: unknown }> | undefined
+        const {allergens, expenses, ...event} = prismaEvent as DinnerEventRow
         return DinnerEventDisplaySchema.parse({
-            ...prismaEvent,
+            ...event,
+            // The cost is the sum of the expense rows; the stored column is deprecated and its value never leaves the repository
+            totalCost: sumAmounts(expenses),
             allergens: allergens ? allergens.map((a) => a.allergyType) : []
         })
     }
@@ -482,7 +493,8 @@ export const useBookingValidation = () => {
      * - tickets: Transform to include ticketType (flattened from ticketPrice) and dinnerEvent reference
      */
     function deserializeDinnerEventDetail(prismaEvent: Record<string, unknown>): Record<string, unknown> {
-        const allergens = prismaEvent.allergens as Array<{ allergyType: unknown }> | undefined
+        const {allergens, expenses: expenseRows, ...event} = prismaEvent as DinnerEventRow
+        const totalCost = sumAmounts(expenseRows)
         const chef = prismaEvent.chef as Record<string, unknown> | null | undefined
         const cookingTeam = prismaEvent.cookingTeam as Record<string, unknown> | null | undefined
         const tickets = prismaEvent.tickets as Array<Record<string, unknown>> | undefined
@@ -495,7 +507,7 @@ export const useBookingValidation = () => {
             menuDescription: prismaEvent.menuDescription,
             menuPictureUrl: prismaEvent.menuPictureUrl,
             state: prismaEvent.state,
-            totalCost: prismaEvent.totalCost,
+            totalCost,
             chefId: prismaEvent.chefId,
             cookingTeamId: prismaEvent.cookingTeamId,
             heynaboEventId: prismaEvent.heynaboEventId,
@@ -505,7 +517,9 @@ export const useBookingValidation = () => {
         }
 
         return {
-            ...prismaEvent,
+            ...event,
+            totalCost,
+            expenses: (expenseRows ?? []).map(deserializeExpense),
             allergens: allergens ? allergens.map((a) => a.allergyType) : [],
             chef: chef ? deserializeInhabitantDisplay(chef) : null,
             cookingTeam: cookingTeam ? deserializeCookingTeamDisplay(cookingTeam) : null,
@@ -517,9 +531,8 @@ export const useBookingValidation = () => {
                     ticketType: ticketPrice?.ticketType ?? null,
                     // Add parent dinnerEvent reference
                     dinnerEvent: dinnerEventForTickets,
-                    // Deserialize inhabitant's dinnerPreferences JSON string
                     inhabitant: ticket.inhabitant
-                        ? deserializeInhabitantDisplay(ticket.inhabitant as Record<string, unknown>)
+                        ? deserializeInhabitantWithAllergies(ticket.inhabitant as Record<string, unknown>)
                         : ticket.inhabitant
                 }
             }) ?? []
@@ -654,6 +667,13 @@ export const useBookingValidation = () => {
         scaffoldResult: ScaffoldResultSchema
     })
 
+    // Operation result of POST /api/admin/season/[id]/assign-cooking-teams (ADR-009)
+    const AssignCookingTeamsResponseSchema = z.object({
+        seasonId: IdSchema,
+        eventCount: z.number().int().min(0),
+        events: z.array(DinnerEventDisplaySchema)
+    })
+
     // ============================================================================
     // UNIFIED BOOKING SCAFFOLD (ADR-016)
     // All booking mutations go through scaffolder except atomic claim
@@ -715,11 +735,11 @@ export const useBookingValidation = () => {
      * Uses z.coerce for HTML input string → number conversion
      */
     const GuestBookingFormSchema = z.object({
-        count: z.coerce.number({invalid_type_error: 'Indtast antal gæster'})
+        count: z.coerce.number({error: 'Indtast antal gæster'})
             .int({message: 'Skal være et helt tal'})
             .min(1, {message: 'Minimum 1 gæst'})
             .max(10, {message: 'Maximum 10 gæster'}),
-        ticketPriceId: z.coerce.number({invalid_type_error: 'Vælg en billettype'})
+        ticketPriceId: z.coerce.number({error: 'Vælg en billettype'})
             .int()
             .positive({message: 'Vælg en billettype'}),
         allergyTypeIds: z.array(z.coerce.number().int().positive()).default([]),
@@ -801,7 +821,7 @@ export const useBookingValidation = () => {
         name: z.string().optional(),
         start: z.string().optional(), // ISO 8601 with timezone offset
         end: z.string().optional(),   // ISO 8601 with timezone offset
-        imageUrl: z.string().url().nullable().optional(),
+        imageUrl: z.url().nullable().optional(),
         createdAt: z.string().optional(),
         updatedAt: z.string().optional()
     })
@@ -910,6 +930,7 @@ export const useBookingValidation = () => {
         ScaffoldResultSchema,
         InhabitantUpdateResponseSchema,
         HouseholdUpdateResponseSchema,
+        AssignCookingTeamsResponseSchema,
 
         // Unified Booking Scaffold (ADR-016)
         DesiredOrderSchema,

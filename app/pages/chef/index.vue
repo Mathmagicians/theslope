@@ -45,7 +45,6 @@ const {COLOR, ICONS, LAYOUTS, ALERTS} = useTheSlopeDesignSystem()
 // Initialize stores
 const planStore = usePlanStore()
 const {isPlanStoreReady, isPlanStoreErrored, planStoreError, selectedSeason} = storeToRefs(planStore)
-planStore.initPlanStore()
 
 const usersStore = useUsersStore()
 const {myTeams, isMyTeamsLoading, isMyTeamsErrored, isMyTeamsInitialized, myTeamsError} = storeToRefs(usersStore)
@@ -61,6 +60,9 @@ const {
   isSelectedDinnerEventLoading: isDinnerDetailLoading,
   isSelectedDinnerEventErrored: isDinnerDetailError
 } = storeToRefs(bookingsStore)
+
+// The team card reads the dinner's cooking team from the plan store
+planStore.selectTeam(() => dinnerEventDetail.value?.cookingTeamId ?? null)
 
 // Page ready when both plan store and myTeams are initialized
 const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialized.value)
@@ -158,10 +160,8 @@ const selectedDinnerEvent = computed(() => {
 
 const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
 
-watchEffect(() => {
-  const id = selectedDinnerId.value
-  if (id !== null) bookingsStore.loadDinnerEventDetail(id)
-})
+// Only the team's own dinners: the store resolves the date against the selected season
+bookingsStore.selectDinnerDate(() => selectedDinnerEvent.value ? selectedDate.value : null)
 
 const handleDinnerSelect = (dinnerId: number) => {
   const dinner = teamDinnerEvents.value.find((e: DinnerEventDisplay) => e.id === dinnerId)
@@ -405,7 +405,7 @@ useHead({
 
         <!-- #stats: Kitchen statistics -->
         <template #stats>
-          <KitchenPreparation v-if="dinnerEventDetail" :orders="dinnerEventDetail.tickets ?? []"/>
+          <KitchenPreparation v-if="dinnerEventDetail" :orders="dinnerEventDetail.tickets ?? []" :allergens="dinnerEventDetail.allergens"/>
         </template>
       </DinnerDetailPanel>
   </UPage>

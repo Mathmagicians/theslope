@@ -46,12 +46,12 @@
  */
 
 import {FORM_MODES} from '~/types/form'
-import type {OrderDisplay, DesiredOrder} from '~/composables/useBookingValidation'
+import type {DesiredOrder} from '~/composables/useBookingValidation'
 import {useDinnerDateParam, useBookingView} from '~/composables/useBookingView'
 import {useQueryParam} from '~/composables/useQueryParam'
 
 // Design system
-const { COLOR, BACKGROUNDS, ICONS, ALERTS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { COLOR, BACKGROUNDS, ICONS, ALERTS, getRandomEmptyMessage, NOISE, SIZES } = useTheSlopeDesignSystem()
 
 // Fun empty state for no team assigned
 const noTeamMessage = getRandomEmptyMessage('noTeamAssigned')
@@ -80,8 +80,6 @@ const {value: calendarOpen, setValue: setCalendarOpen} = useQueryParam<boolean>(
   defaultValue: () => isMd?.value ?? false,
   syncWhen: () => isPlanStoreReady.value
 })
-// Initialize without await for SSR hydration consistency
-planStore.initPlanStore()
 
 // Initialize allergies store for allergen data
 const allergiesStore = useAllergiesStore()
@@ -96,6 +94,9 @@ const {
   isSelectedDinnerEventLoading: isDinnerDetailLoading,
   isSelectedDinnerEventErrored: isDinnerDetailError
 } = storeToRefs(bookingsStore)
+
+// The team card reads the dinner's cooking team from the plan store
+planStore.selectTeam(() => dinnerEventDetail.value?.cookingTeamId ?? null)
 
 // Derive needed data from store
 const seasonDates = computed(() => selectedSeason.value?.seasonDates)
@@ -121,46 +122,20 @@ const {hasPrev, hasNext, navigate} = useBookingView({
     dinnerDates: () => dinnerDates.value
 })
 
-// Selected dinner event based on URL date
-const selectedDinnerEvent = computed(() => {
-    return dinnerEvents.value.find(e => {
-        const eventDate = new Date(e.date)
-        return eventDate.toDateString() === selectedDate.value.toDateString()
-    })
-})
+// The store resolves the dinner on the URL date from the selected season, so the server renders its Detail
+bookingsStore.selectDinnerDate(selectedDate)
+const {selectedDinnerEventId: selectedDinnerId} = storeToRefs(bookingsStore)
 
-const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
-
-watchEffect(() => {
-  const id = selectedDinnerId.value
-  if (id !== null) bookingsStore.loadDinnerEventDetail(id)
-})
-
-const { OrderDisplaySchema } = useBookingValidation()
-
-// Fetch household-specific orders via user-facing endpoint (security: session-filtered)
-// This is separate from dinnerEventDetail.tickets which includes ALL households for kitchen stats
-const {
-  data: householdOrders,
-  refresh: _refreshHouseholdOrders
-} = useAsyncData(
-  computed(() => `household-orders-${selectedDinnerId.value || 'null'}`),
-  () => selectedDinnerId.value
-    ? $fetch<OrderDisplay[]>(`/api/order?dinnerEventIds=${selectedDinnerId.value}&includeProvenance=true`)
-    : Promise.resolve([]),
-  {
-    default: () => [],
-    watch: [selectedDinnerId],
-    immediate: true,
-    transform: (data: unknown) => {
-      if (!Array.isArray(data)) return []
-      return data.map(order => OrderDisplaySchema.parse(order))
-    }
-  }
-)
+// Household-specific orders via the user-facing endpoint (security: session-filtered).
+// Separate from dinnerEventDetail.tickets, which includes ALL households for kitchen stats.
+const {orders: householdOrders} = storeToRefs(bookingsStore)
+bookingsStore.loadOrdersForDinners(() => ({
+  dinnerEventIds: selectedDinnerId.value === null ? [] : [selectedDinnerId.value],
+  includeProvenance: true
+}))
 
 const refreshBookingData = () =>
-  Promise.all([bookingsStore.refreshSelectedDinnerEventDetail(), _refreshHouseholdOrders()])
+  Promise.all([bookingsStore.refreshSelectedDinnerEventDetail(), bookingsStore.refreshOrders()])
 
 // ADR-016: Unified booking handler via scaffold endpoint
 const handleSaveBookings = async (orders: DesiredOrder[]) => {
@@ -220,10 +195,10 @@ useHead({
         <template #actions>
           <UButton
             :color="COLOR.secondary"
-            variant="solid"
+            :variant="NOISE.loud"
             to="/admin/planning"
             :icon="ICONS.plusCircle"
-            size="lg"
+            :size="SIZES.lg"
           >
             Værsgo, opret en ny sæson
           </UButton>

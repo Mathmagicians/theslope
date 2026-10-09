@@ -18,6 +18,7 @@ import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type{DayEventList} from '~/composables/useCalendarEvents'
 import type {DateValue} from '@internationalized/date'
+import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
 import { isSameDay } from 'date-fns'
 
 interface Props {
@@ -41,7 +42,15 @@ const emit = defineEmits<{
 
 const {createEventList} = useCalendarEvents()
 const {getHolidayDatesFromDateRangeList} = useSeason()
-const {CALENDAR, dayCircleClasses, getRainbowBand} = useTheSlopeDesignSystem()
+const {CALENDAR, dayCircleClasses, getRainbowBand, SIZES} = useTheSlopeDesignSystem()
+
+// Legend: team n wears rainbow stop n, then the holiday ring when the season has holidays
+const legendItems = computed((): CalendarLegendItem[] => [
+  ...props.teams.map((team, index) => ({label: team.name, kind: 'badge' as const, badgeClass: getRainbowBand(index)})),
+  ...(props.holidays && props.holidays.length > 0
+    ? [{label: 'Ferie', kind: 'circle' as const, circleClass: dayCircleClasses(CALENDAR.holiday)}]
+    : [])
+])
 
 // Expand holiday ranges into individual dates
 const holidayDates = computed(() => {
@@ -119,7 +128,7 @@ const getCalendarDayClasses = (day: DateValue) => [
             :text="getTeamEventList(eventLists)!.events[0]?.label"
           >
             <UBadge
-              size="md"
+              :size="SIZES.md"
               :class="[getRainbowBand(getTeamEventList(eventLists)!.color as number), ...getCalendarDayClasses(day)]"
               @click="handleCalendarDayClick(day)"
             >
@@ -131,29 +140,9 @@ const getCalendarDayClasses = (day: DateValue) => [
           <span v-else class="text-sm">{{ day.day }}</span>
         </template>
 
-        <!-- Legend: Responsive layout matching calendar months (1 col mobile, 3 cols desktop) -->
+        <!-- Legend -->
         <template #legend>
-          <div class="px-4 py-6 md:px-6 md:py-8 border-t mt-auto text-sm grid grid-cols-1 gap-3 md:grid-cols-3 md:gap-4">
-            <!-- Teams -->
-            <div v-for="(team, index) in teams" :key="team.id" class="flex items-center gap-3" data-testid="team-legend-entry">
-              <UBadge
-                size="md"
-                :class="[getRainbowBand(index), 'w-8 h-8 flex items-center justify-center shrink-0']"
-                data-testid="team-legend-badge"
-              >
-                1
-              </UBadge>
-              <span class="truncate">{{ team.name }}</span>
-            </div>
-
-            <!-- Holidays -->
-            <div v-if="holidays && holidays.length > 0" class="flex items-center gap-3">
-              <div :class="dayCircleClasses(CALENDAR.holiday, 'shrink-0')">
-                1
-              </div>
-              <span>Ferie</span>
-            </div>
-          </div>
-    </template>
+          <CalendarLegend :items="legendItems" />
+        </template>
   </BaseCalendar>
 </template>

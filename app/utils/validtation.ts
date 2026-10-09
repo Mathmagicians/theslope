@@ -1,21 +1,23 @@
-import type {ZodError, ZodSchema, TypeOf} from 'zod'
+import {z, type ZodError, type ZodType} from 'zod'
 import type {Ref} from 'vue'
 
+// Top-level field → its messages; issues on the root land under '_'
 export const mapZodErrorsToFormErrors = (error: ZodError): Map<string, string[]> => {
-    return new Map(
-        error.errors.map(err => [err.path[0]?.toString() || '_', [err.message]])
-    )
+    const {formErrors, fieldErrors} = z.flattenError(error)
+    const fields = Object.entries(fieldErrors)
+        .filter((entry): entry is [string, string[]] => Array.isArray(entry[1]))
+    return new Map(formErrors.length ? [['_', formErrors], ...fields] : fields)
 }
 
 /**
  * Parses `value` with `schema` into a form's error map: a success clears the map and
  * returns the parsed data, a failure fills the map and returns undefined.
  */
-export const applyValidation = <S extends ZodSchema>(
+export const applyValidation = <S extends ZodType>(
     schema: S,
     value: unknown,
     errors: Ref<Map<string, string[]>>
-): TypeOf<S> | undefined => {
+): z.output<S> | undefined => {
     const validation = schema.safeParse(value)
     if (validation.success) {
         errors.value.clear()

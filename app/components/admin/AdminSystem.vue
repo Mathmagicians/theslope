@@ -52,7 +52,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, ALERTS, BUTTONS, COMPONENTS, columnVisibility, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, ALERTS, BUTTONS, COMPONENTS, columnVisibility, getRandomEmptyMessage, NOISE } = useTheSlopeDesignSystem()
 const isMd = inject<Ref<boolean>>('isMd', ref(false))
 
 // Maintenance helpers
@@ -484,7 +484,7 @@ const jobDefinitions = computed(() => {
 
         <!-- Custom status cell with color and icon -->
         <template #status-cell="{ row }">
-          <UBadge :color="row.original.statusColor" variant="subtle" class="gap-1">
+          <UBadge :color="row.original.statusColor" :variant="NOISE.subtle" class="gap-1">
             <UIcon :name="row.original.statusIcon" class="text-xs" />
             {{ row.original.statusLabel }}
           </UBadge>

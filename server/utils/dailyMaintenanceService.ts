@@ -17,6 +17,7 @@ import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import type {DailyMaintenanceResult} from '~/composables/useBookingValidation'
 
+import {deleteWaitlistForConsumedDinners} from '~~/server/data/waitlistRepository'
 const LOG = '🔧 > DAILY > [MAINTENANCE]'
 
 export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: string): Promise<DailyMaintenanceResult> {
@@ -42,6 +43,10 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
         // 3. Create transactions for closed orders
         const transactResult = await createTransactions(d1Client)
         console.info(`${LOG} Step 3 complete: created ${transactResult.created} transactions`)
+
+        // 4. A consumed dinner has no queue
+        const waitlistCleared = await deleteWaitlistForConsumedDinners(d1Client)
+        console.info(`${LOG} Step 4 complete: cleared ${waitlistCleared} waiting-list entries`)
 
         // Initialize NULL preferences + scaffold pre-bookings (requires active season)
         const activeSeasonId = await fetchActiveSeasonId(d1Client)

@@ -18,7 +18,7 @@ thing, the app uses it and the hand-written version leaves. The user runs instal
 | Tailwind | `tailwindcss` 4.3.3; declared floors follow installed versions | ⏳ awaiting signoff |
 | Native-feel fruits | login returns to the original URL; the PWA manifest installs the app; the session cookie lives 24h | ✅ done |
 
-The store, page and dependency work lives in feature-proposal-framework-adoption.md; the native-feel investigation in feature-proposal-mobile-native-feel.md.
+The store, page and dependency work lives in feature-proposal-framework-adoption.md; the native-feel investigation in feature-mobile-native-feel.md (S5 parked in ../feature-proposal-relogin-faceid.md).
 
 ## Decisions (2026-09-19)
 
@@ -104,7 +104,7 @@ The store, page and dependency work lives in feature-proposal-framework-adoption
 - `RoleOwnerSchema` lives in `useCoreValidation`; `useUserRoles` derives `RoleOwner` and `RoleOwnerValue` from it.
 - `JobRun.triggeredBy` is documented as `"CRON" | "ADMIN" | "ADMIN:<email>"` (`prisma/schema.prisma`, the three job endpoints).
 - Session cookie: `runtimeConfig.session.maxAge` 24h (`nuxt.config.ts`); Heynabo tokens carry no expiry, longevity comes from
-  re-login (feature-proposal-mobile-native-feel.md, C9).
+  re-login (feature-mobile-native-feel.md, C9).
 - Login return path: the guard redirects to `/login?redirect=<original URL>`; `Login.vue` follows an internal `?redirect`
   after sign-in (`hasProtocol` from `ufo` rejects external targets); a 401 in `useApiHandler` navigates to
   `/login?redirect=<current page>`. `tests/e2e/ui/Login.e2e.spec.ts` covers the deep link and the cookie lifetime.

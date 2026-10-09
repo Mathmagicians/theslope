@@ -1,4 +1,4 @@
-import {test, expect, type BrowserContext} from '@playwright/test'
+import {test, expect, type BrowserContext, type Page} from '@playwright/test'
 import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -7,9 +7,10 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {formatDate} from '~/utils/date'
+import {EMPTY_STATE_MESSAGES} from '~/composables/useTheSlopeDesignSystem'
 
-const {memberUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, getSessionUserInfo} = testHelpers
+const {memberUIFile, adminUIFile} = authFiles
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, getSessionUserInfo, waitForHydration, selectDropdownOption} = testHelpers
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -90,6 +91,7 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
     const goToBookingsPage = async (page: import('@playwright/test').Page, date: Date) => {
         const dateParam = formatDate(date)
         await page.goto(`/household/${householdShortname}/bookings?pbs=${householdPbsId}&date=${dateParam}`)
+        await waitForHydration(page)
 
         // Wait for booking table - ignore transient "no season" state during store init
         await pollUntil(
@@ -242,4 +244,74 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
             await doScreenshot(page, `dinner/booking-grid-${view}`, true)
         })
     }
+
+    // Deletes dinners of the test season, so it runs after every test that indexes them
+    test.describe('a selection that no longer exists on the server', () => {
+        const dinnerResponse = (page: Page, id: number) =>
+            page.waitForResponse(r => r.url().endsWith(`/api/admin/dinner-event/${id}`))
+        const goneLines = (context: keyof typeof EMPTY_STATE_MESSAGES) =>
+            EMPTY_STATE_MESSAGES[context].map(({emoji, text}) => `${emoji} ${text}`)
+        const expectNoApiErrorToast = async (page: Page) => {
+            await expect(page.getByText('No message')).toHaveCount(0)
+            await expect(page.getByText(/^\d{3}: Uh, åh, fejl kan ske/)).toHaveCount(0)
+        }
+
+        test('GIVEN /dinner on a dinner WHEN that dinner is deleted and the page navigates THEN the next dinner shows without a reload, and returning to it shows the error page', async ({page}) => {
+            const gone = await getFutureDinnerEvent(3)
+            const next = await getFutureDinnerEvent(4)
+            const dateParam = () => new URL(page.url()).searchParams.get('date')
+            await page.goto(`/dinner?date=${formatDate(gone.date)}`)
+            await waitForHydration(page)
+            await expect(page.getByTestId('dinner-detail-header')).toBeVisible()
+            await page.evaluate(() => Object.assign(window, {sameDocument: true}))
+
+            await DinnerEventFactory.deleteDinnerEvent(adminContext, gone.id)
+            const nextShown = dinnerResponse(page, next.id)
+            await page.getByTestId('date-nav-next').click()
+
+            expect((await nextShown).status()).toBe(200)
+            await expect.poll(dateParam).toBe(formatDate(next.date))
+            await expect(page.getByTestId('dinner-detail-header')).toBeVisible()
+            expect(await page.evaluate(() => 'sameDocument' in window)).toBe(true)
+            await expectNoApiErrorToast(page)
+
+            const goneRequested = dinnerResponse(page, gone.id)
+            await page.getByTestId('date-nav-prev').click()
+
+            expect((await goneRequested).status()).toBe(404)
+            await expect(page.getByText('FEJL 404')).toBeVisible()
+            const pageText = await page.locator('body').innerText()
+            expect(goneLines('dinnerGone').some(line => pageText.includes(line))).toBe(true)
+            await doScreenshot(page, 'dinner/dinner-gone-error-page')
+
+            await page.getByRole('link', {name: /starte forfra/}).click()
+            await expect(page.getByText('FEJL 404')).toHaveCount(0)
+            await expect(page).toHaveURL(/\/($|\?)/)
+        })
+
+        test.describe('as admin', () => {
+            test.use({storageState: adminUIFile})
+
+            test('GIVEN /admin/planning WHEN a listed season is deleted and then chosen THEN a toast names it and the default season loads', async ({page}) => {
+                const goneSeason = await SeasonFactory.createSeason(adminContext, SeasonFactory.defaultSeason(`${testSalt}-gone`))
+                await page.goto('/admin/planning')
+                await waitForHydration(page)
+                await expect(page.getByTestId('season-selector')).toContainText(testSeason.season.shortName)
+
+                await SeasonFactory.deleteSeason(adminContext, goneSeason.id!)
+                const goneRequested = page.waitForResponse(r => r.url().endsWith(`/api/admin/season/${goneSeason.id}`))
+                await selectDropdownOption(page, 'season-selector', goneSeason.shortName)
+
+                expect((await goneRequested).status()).toBe(404)
+                // exact: the toaster's screen-reader announcement prefixes the same text
+                const goneToast = page.getByText(`Kan ikke finde sæsonen ${goneSeason.shortName}`, {exact: true})
+                await expect(goneToast).toHaveCount(1)
+                await expect(goneToast).toBeVisible()
+                await expect(page.getByTestId('season-selector')).toContainText(testSeason.season.shortName)
+                await expect(page.getByText('FEJL 404')).toHaveCount(0)
+                await expectNoApiErrorToast(page)
+                await doScreenshot(page, 'admin/season-gone-toast')
+            })
+        })
+    })
 })

@@ -182,11 +182,12 @@ async function selectDropdownOption(
  * @example
  * const { householdId, inhabitantId } = await getSessionUserInfo(context)
  */
-async function getSessionUserInfo(context: BrowserContext): Promise<{ userId: number, householdId: number, inhabitantId: number, householdShortname: string, householdPbsId: number }> {
+async function getSessionUserInfo(context: BrowserContext): Promise<{ userId: number, userEmail: string, householdId: number, inhabitantId: number, householdShortname: string, householdPbsId: number }> {
     const response = await context.request.get('/api/_auth/session', { headers })
     expect(response.status()).toBe(200)
     const session = await response.json()
     const userId = session.user?.id
+    const userEmail = session.user?.email
     const householdId = session.user?.Inhabitant?.householdId
     const inhabitantId = session.user?.Inhabitant?.id
     const householdShortname = session.user?.Inhabitant?.household?.shortName
@@ -196,7 +197,7 @@ async function getSessionUserInfo(context: BrowserContext): Promise<{ userId: nu
     expect(inhabitantId, 'Session user must have inhabitantId').toBeDefined()
     expect(householdShortname, 'Session user must have householdShortname').toBeDefined()
     expect(householdPbsId, 'Session user must have householdPbsId').toBeDefined()
-    return { userId, householdId, inhabitantId, householdShortname, householdPbsId }
+    return { userId, userEmail, householdId, inhabitantId, householdShortname, householdPbsId }
 }
 
 /**
@@ -249,6 +250,21 @@ async function waitForHydration(page: Page): Promise<void> {
     )
 }
 
+/** Navigates and waits for hydration: the entry point for a test that interacts with the page */
+const gotoHydrated = async (page: Page, url: string): Promise<void> => {
+    await page.goto(url)
+    await waitForHydration(page)
+}
+
+/** Collects the console messages Vue logs on a hydration mismatch; attach it before the navigation */
+const collectHydrationWarnings = (page: Page): string[] => {
+    const warnings: string[] = []
+    page.on('console', message => {
+        if (message.text().includes('Hydration')) warnings.push(message.text())
+    })
+    return warnings
+}
+
 /**
  * Types a dd/MM/yyyy date into a UInputDate field: clicks the field's day segment and
  * types the digits - the segments auto-advance through day, month and year.
@@ -293,6 +309,8 @@ const testHelpers = {
     assertNoOrdersWithOrphanPrices,
     daysFromNow,
     waitForHydration,
+    gotoHydrated,
+    collectHydrationWarnings,
     fillDateField,
     readDateField
 }

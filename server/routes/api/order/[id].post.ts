@@ -1,6 +1,8 @@
 import {createError, defineEventHandler, getValidatedRouterParams, getValidatedQuery, readValidatedBody, setResponseStatus} from "h3"
 import {fetchOrder, updateOrder, deleteOrder} from "~~/server/data/financesRepository"
 import {fetchSeason} from "~~/server/data/prismaRepository"
+import {assignReleasedTicket} from "~~/server/utils/waitlistAssignment"
+import {getNotificationConfig} from "~~/server/utils/sender/config"
 import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import {isAdmin} from '~/composables/usePermissions'
 import type {OrderDetail} from "~/composables/useBookingValidation"
@@ -12,7 +14,7 @@ import {z} from "zod"
 const {throwH3Error, getSessionUserId} = eventHandlerHelper
 
 const idSchema = z.object({
-    id: z.number({coerce: true}).positive().int()
+    id: z.coerce.number().positive().int()
 })
 
 /**
@@ -104,6 +106,13 @@ export default defineEventHandler(async (event): Promise<OrderDetail> => {
                     action: releaseAction.auditAction,
                     performedByUserId
                 })
+                // A released ticket goes to the head of the waiting list when the head waits for its type
+                if (existingOrder.ticketPriceId) {
+                    await assignReleasedTicket(d1Client, existingOrder.dinnerEventId, existingOrder.ticketPriceId, existingOrder.inhabitant.householdId, {
+                        queue: event.context.cloudflare.env.SENDER,
+                        config: getNotificationConfig(event)
+                    })
+                }
                 setResponseStatus(event, 200)
                 return updatedOrder
             }

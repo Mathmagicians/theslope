@@ -4,7 +4,7 @@ import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import testHelpers from '../testHelpers'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, temporaryAndRandom, salt, saltedId, doScreenshot, waitForHydration, fillDateField, readDateField} = testHelpers
+const {validatedBrowserContext, pollUntil, temporaryAndRandom, salt, saltedId, doScreenshot, gotoHydrated, fillDateField, readDateField} = testHelpers
 
 /**
  * UI TEST STRATEGY:
@@ -24,7 +24,7 @@ test.describe('AdminHouseholds View', () => {
      * Uses pollUntil with exponential backoff for robustness under load
      */
     const navigateToHouseholds = async (page: Page) => {
-        await page.goto(adminHouseholdsUrl)
+        await gotoHydrated(page, adminHouseholdsUrl)
 
         // Wait for container to be visible
         await pollUntil(
@@ -43,8 +43,6 @@ test.describe('AdminHouseholds View', () => {
             (ready) => ready,
             10
         )
-        // Rows above are SSR markup; clicks and fills only register once Vue has hydrated
-        await waitForHydration(page)
     }
 
     /**

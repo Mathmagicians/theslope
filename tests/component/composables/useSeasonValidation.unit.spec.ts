@@ -4,14 +4,14 @@ import {createDateRange, formatDate} from '~/utils/date'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
-import type {SafeParseReturnType} from 'zod'
+import type {ZodSafeParseResult} from 'zod'
 
 const {TicketTypeSchema} = useTicketPriceValidation()
 const TicketType = TicketTypeSchema.enum
 const testSeason = SeasonFactory.defaultSeasonData
 
 // Helper to format validation error messages for assertions
-const getValidationError = <T>(result: SafeParseReturnType<T, T>) =>
+const getValidationError = <T>(result: ZodSafeParseResult<T>) =>
   !result.success ? `Validation errors: ${JSON.stringify(result.error.format())}` : ''
 
 describe('useSeasonValidation', () => {
@@ -80,7 +80,7 @@ describe('useSeasonValidation', () => {
       const result = SeasonSchema.safeParse(seasonWithOverlappingHolidays)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.errors[0]?.message).toBe("Ferieperioder må ikke overlappe hinanden")
+        expect(result.error.issues[0]?.message).toBe("Ferieperioder må ikke overlappe hinanden")
       }
     })
 
@@ -97,7 +97,7 @@ describe('useSeasonValidation', () => {
       const result = SeasonSchema.safeParse(seasonWithOutsideHolidays)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.errors[0]?.message).toBe("Ferieperioder skal være inden for fællesspisningssæsonen")
+        expect(result.error.issues[0]?.message).toBe("Ferieperioder skal være inden for fællesspisningssæsonen")
       }
     })
   })
@@ -160,7 +160,7 @@ describe('useSeasonValidation', () => {
 
     it('should correctly serialize and deserialize a Season with relations', () => {
       const dinnerEvent1 = {
-        ...DinnerEventFactory.defaultDinnerEventData,
+        ...DinnerEventFactory.defaultDinnerEventDisplay(),
         id: 1,
         date: new Date(2025, 0, 6),
         menuTitle: 'Pasta Night',
@@ -170,7 +170,7 @@ describe('useSeasonValidation', () => {
       }
 
       const dinnerEvent2 = {
-        ...DinnerEventFactory.defaultDinnerEventData,
+        ...DinnerEventFactory.defaultDinnerEventDisplay(),
         id: 2,
         date: new Date(2025, 0, 13),
         menuTitle: 'Taco Tuesday',
@@ -183,7 +183,7 @@ describe('useSeasonValidation', () => {
         ...testSeason,
         id: 1,
         dinnerEvents: [dinnerEvent1, dinnerEvent2],
-        CookingTeams: [{id: 1, name: 'Team A', seasonId: 1, assignments: [], cookingDaysCount: 3}],
+        CookingTeams: [{id: 1, name: 'Team A', seasonId: 1, assignments: [], cookingDaysCount: 3, jokerSlotCount: 2}],
         ticketPrices: [{id: 1, seasonId: testSeason.id!, ticketType: TicketType.ADULT, price: 4000}]
       }
 
@@ -216,6 +216,7 @@ describe('useSeasonValidation', () => {
       expect(deserializedWithRelations.dinnerEvents![1]?.date).toBeInstanceOf(Date)
       expect(deserializedWithRelations.dinnerEvents![1]?.menuTitle).toBe('Taco Tuesday')
       expect(deserializedWithRelations.CookingTeams).toHaveLength(1)
+      expect(deserializedWithRelations.CookingTeams![0]).toMatchObject({cookingDaysCount: 3, jokerSlotCount: 2})
       expect(deserializedWithRelations.ticketPrices).toHaveLength(1)
 
       // ticket prices

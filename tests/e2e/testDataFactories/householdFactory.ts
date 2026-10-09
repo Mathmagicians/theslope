@@ -37,6 +37,18 @@ export class HouseholdFactory {
         }
     }
 
+    /** HeynaboImportResponse data for component tests (no API call) */
+    static readonly defaultHeynaboImportResponse = (overrides: Partial<HeynaboImportResponse> = {}): HeynaboImportResponse =>
+        HeynaboImportResponseSchema.parse({
+            jobRunId: 1,
+            householdsCreated: 0,
+            householdsDeleted: 0,
+            inhabitantsCreated: 0,
+            inhabitantsDeleted: 0,
+            usersCreated: 0,
+            ...overrides
+        })
+
     /** Mock HouseholdDetail for component tests (no API calls) */
     static readonly defaultHouseholdDetail = (testSalt: string = temporaryAndRandom()): HouseholdDetail => {
         const householdId = saltedId(TEST_DATA_ID_BASE, testSalt)

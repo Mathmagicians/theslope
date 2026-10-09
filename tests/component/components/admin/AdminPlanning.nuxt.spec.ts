@@ -35,7 +35,6 @@ const mountPlanning = async (props: Record<string, unknown> = {}) => {
     await useAuthStore().fetch()
     const store = usePlanStore()
     await store.loadSeasons()
-    store.initPlanStore()
     await pollFor(() => store.isPlanStoreReady, 40, false)
 
     const wrapper = await mountWithTooltipProvider(AdminPlanning, {props: {canEdit: true, ...props}, isMd: true})

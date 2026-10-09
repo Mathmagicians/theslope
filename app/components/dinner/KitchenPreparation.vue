@@ -17,12 +17,22 @@
  * │  Voksen: 30              │  Voksen: 25         │  Voksen: 15  │  Voksen: 4 │
  * │  Barn: 6 | Baby: 4       │  Barn: 8 | Baby: 2  │  Barn: 4     │  Barn: 1   │
  * │  # 40                    │  # 35               │  Baby: 1 # 20│  # 5       │
- * │    🌾 Maria (2)          │   🥛 Anna (3)       │  🌾 Peter    │            │
+ * │  (allergy) 2 kuv.        │  (allergy) 3,5 kuv. │              │            │
  * └──────────────────────────┴─────────────────────┴──────────────┴────────────┘
  *    pink + black              orange + black        ocean + black  gray + black
  *    RAINBOW[0]                RAINBOW[1]            RAINBOW[2]     neutral
  *
- * Each panel: % + kuverter + ticket breakdown (Voksen/Barn/Baby + total) + allergy flags.
+ * Expanded (SPISESAL selected), on the panel's surface below the row:
+ * │  (allergy) 3,5 kuv. | (milk) Mælk · 2,5 | (wheat) Gluten · 1                │
+ * │  S_31 · 2V 1B · Anna (wheat) Gluten (milk) Mælk, Bo, Emil                   │
+ * │  N_12 · 1V · Maria (milk) Mælk                                              │
+ *
+ * Each panel: % + kuverter + ticket breakdown (Voksen/Barn/Baby + total) + the kuverter of its
+ * diners carrying an allergen on the menu. The expanded list opens with the allergy overview, each
+ * menu allergen by kuverter in the menu's order; every such diner carries one compact
+ * AllergyTypeDisplay per menu allergen, its own icon and name. A household row centres every segment
+ * on one line. A panel without such a diner, and a menu without allergens, show no allergy line and
+ * no allergy types; the panel heads add up to the chef's allergen line.
  *
  * The three dining modes walk the brand rainbow in its order; TIL SALG stays grey, because a
  * released ticket on offer is not a dining mode. Fill, ink and divider come from
@@ -30,7 +40,7 @@
  */
 import type {OrderDetail} from '~/composables/useBookingValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
-import type {AffectedDiner} from '~/composables/useAllergy'
+import type {AllergenOverview} from '~/composables/useAllergy'
 import type {DiningModeStats} from '~/composables/useOrder'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 
@@ -44,12 +54,12 @@ interface TicketBreakdown {
 // Extended stats with component-specific fields
 interface ExtendedDiningModeStats extends DiningModeStats {
   ticketBreakdown: TicketBreakdown | null
-  affectedDiners: AffectedDiner[]
+  allergies: AllergenOverview
 }
 
 interface Props {
   orders: OrderDetail[]
-  allergens?: AllergyTypeDisplay[]  // Menu allergens to check against
+  allergens?: AllergyTypeDisplay[]  // The menu's allergens, the only allergies the panels count
 }
 
 const props = defineProps<Props>()
@@ -64,7 +74,7 @@ const {
 } = useOrder()
 const {TicketTypeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
-const {computeAffectedDiners} = useAllergy()
+const {computeAllergenOverview} = useAllergy()
 const {formatTicketCounts} = useBilling()
 const {getHouseholdForInhabitant} = useHouseholdsStore()
 
@@ -98,9 +108,6 @@ const selectedPanelBreakdown = computed((): HouseholdBreakdownEntry[] => {
     orders
   }))
 })
-
-// Menu allergen IDs for affected diner calculation
-const menuAllergenIds = computed(() => props.allergens?.map(a => a.id) ?? [])
 
 // Separate active orders (cooking for) from released orders (for sale)
 const activeOrders = computed(() => getActiveOrders(props.orders))
@@ -148,20 +155,24 @@ const diningModeStats = computed((): ExtendedDiningModeStats[] => {
       ? calculateTicketBreakdown(modeOrders)
       : null
 
-    // Calculate affected diners for this mode (who has allergies matching menu allergens)
-    const affectedResult = computeAffectedDiners(modeOrders, menuAllergenIds.value)
-    const affectedDiners = affectedResult?.affectedList ?? []
-
     return {
       ...stat,
       ticketBreakdown,
-      affectedDiners
+      allergies: computeAllergenOverview(modeOrders, props.allergens ?? [])
     }
   })
 })
 
+const selectedPanelAllergies = computed(() =>
+  diningModeStats.value.find(mode => mode.key === selectedPanel.value)?.allergies ?? null
+)
+
+const allergensByOrder = computed(() => new Map(
+  selectedPanelAllergies.value?.affectedList.flatMap(diner => diner.orderIds.map(orderId => [orderId, diner.matchingAllergens] as const)) ?? []
+))
+
 // Use design system for kitchen panel colors
-const { getKitchenPanelClasses, COMPONENTS, ICONS, TYPOGRAPHY, TEXT } = useTheSlopeDesignSystem()
+const { getKitchenPanelClasses, COMPONENTS, ICONS, TYPOGRAPHY } = useTheSlopeDesignSystem()
 
 // Get background color classes for each dining mode
 const getModeClasses = (key: string) => {
@@ -176,36 +187,36 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
   <div>
     <!-- Top bar: LAV MAD - 100% -->
     <div :class="COMPONENTS.kitchenStatsBar">
-      <div class="text-center">
-        <div :class="['text-xs md:text-sm font-semibold', TEXT.toned]">
+      <div :class="COMPONENTS.kitchen.totals">
+        <div :class="COMPONENTS.kitchen.totalsLabel">
           FÆLLES MAD - 100% ØKOLOGI OG 💚
         </div>
-        <div class="text-2xl md:text-3xl lg:text-4xl font-bold">
+        <div :class="COMPONENTS.kitchen.totalsMain">
           {{ Math.round(totalPortions) }} KUVERTER
         </div>
-        <div :class="['text-xs md:text-sm flex flex-wrap justify-center gap-x-2', TEXT.toned]">
-          <span class="whitespace-nowrap">Voksen: {{ ticketTypeBreakdown.adult }}</span>
-          <span class="whitespace-nowrap">| Barn: {{ ticketTypeBreakdown.child }}</span>
-          <span class="whitespace-nowrap">| Baby: {{ ticketTypeBreakdown.baby }}</span>
-          <span class="whitespace-nowrap font-semibold">| # {{ ticketTypeBreakdown.adult + ticketTypeBreakdown.child + ticketTypeBreakdown.baby }}</span>
+        <div :class="COMPONENTS.kitchen.totalsBreakdown">
+          <span :class="COMPONENTS.kitchen.figure">Voksen: {{ ticketTypeBreakdown.adult }}</span>
+          <span :class="COMPONENTS.kitchen.figure">| Barn: {{ ticketTypeBreakdown.child }}</span>
+          <span :class="COMPONENTS.kitchen.figure">| Baby: {{ ticketTypeBreakdown.baby }}</span>
+          <span :class="COMPONENTS.kitchen.figureTotal">| # {{ ticketTypeBreakdown.adult + ticketTypeBreakdown.child + ticketTypeBreakdown.baby }}</span>
         </div>
       </div>
     </div>
 
     <!-- Bottom bar: Dining mode distribution - Proportional heights on mobile, widths on desktop -->
-    <div class="flex flex-col md:flex-row overflow-hidden">
+    <div :class="COMPONENTS.kitchen.panels">
       <div
         v-for="mode in diningModeStats"
         :key="mode.key"
+        :data-testid="`kitchen-panel-${mode.key}`"
         :style="{ flex: `${normalizedWidths[mode.key]} 0 0` }"
-        class="border-b md:border-b-0 md:border-r last:border-b-0 last:md:border-r-0 p-3 md:p-4 text-center min-w-0 box-border cursor-pointer"
-        :class="getModeClasses(mode.key)"
+        :class="[COMPONENTS.kitchen.panel, getModeClasses(mode.key)]"
         @click="togglePanel(mode.key)"
       >
         <!-- Header with label, percentage, and chevron (only if content exists) -->
-        <div :class="TYPOGRAPHY.kitchenLabel" class="truncate flex items-center justify-center gap-1">
+        <div :class="COMPONENTS.kitchen.label">
           {{ mode.label }}
-          <UIcon v-if="getOrdersForMode(mode.key).length > 0" :name="selectedPanel === mode.key ? ICONS.chevronUp : ICONS.chevronDown" class="size-4" />
+          <UIcon v-if="getOrdersForMode(mode.key).length > 0" :name="selectedPanel === mode.key ? ICONS.chevronUp : ICONS.chevronDown" :class="COMPONENTS.kitchen.glyph" />
         </div>
         <div :class="TYPOGRAPHY.kitchenSecondary">
           {{ mode.percentage }}%
@@ -217,33 +228,50 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
         </div>
 
         <!-- Ticket breakdown -->
-        <div v-if="mode.ticketBreakdown" :class="TYPOGRAPHY.kitchenDetail" class="flex flex-wrap justify-center gap-x-1">
-          <span class="whitespace-nowrap">Voksen: {{ mode.ticketBreakdown.adult }}</span>
-          <span class="whitespace-nowrap">| Barn: {{ mode.ticketBreakdown.child }}</span>
-          <span class="whitespace-nowrap">| Baby: {{ mode.ticketBreakdown.baby }}</span>
-          <span class="whitespace-nowrap font-semibold"># {{ mode.ticketBreakdown.total }}</span>
+        <div v-if="mode.ticketBreakdown" :class="COMPONENTS.kitchen.breakdown">
+          <span :class="COMPONENTS.kitchen.figure">Voksen: {{ mode.ticketBreakdown.adult }}</span>
+          <span :class="COMPONENTS.kitchen.figure">| Barn: {{ mode.ticketBreakdown.child }}</span>
+          <span :class="COMPONENTS.kitchen.figure">| Baby: {{ mode.ticketBreakdown.baby }}</span>
+          <span :class="COMPONENTS.kitchen.figureTotal"># {{ mode.ticketBreakdown.total }}</span>
         </div>
 
-
-        <!-- Affected Diners (allergies matching menu) -->
-        <div v-if="mode.affectedDiners && mode.affectedDiners.length > 0" :class="TYPOGRAPHY.kitchenDetail" class="border-t pt-2">
-          <div
-            v-for="diner in mode.affectedDiners"
-            :key="diner.inhabitant.id"
-            class="flex items-center justify-center gap-1 truncate"
-          >
-            <span v-if="diner.matchingAllergens[0]?.icon">{{ diner.matchingAllergens[0].icon }}</span>
-            <span class="truncate">{{ diner.inhabitant.name }}</span>
-            <span v-if="diner.matchingAllergens.length > 1">({{ diner.matchingAllergens.length }})</span>
-          </div>
+        <div v-if="mode.allergies.affectedList.length > 0" data-testid="kitchen-allergy-head" :class="COMPONENTS.kitchen.allergyHead">
+          <UIcon :name="ICONS.allergy" :class="COMPONENTS.kitchen.glyph" />
+          {{ formatPortions(mode.allergies.totalPortions) }} kuv.
         </div>
       </div>
     </div>
 
     <!-- Household breakdown (shown when panel selected) -->
-    <div v-if="selectedPanel && selectedPanelBreakdown.length > 0" :class="getModeClasses(selectedPanel)" class="px-8 md:px-32 py-6 md:py-8 max-h-64 overflow-y-auto text-left">
-      <div v-for="entry in selectedPanelBreakdown" :key="entry.shortName" :class="TYPOGRAPHY.kitchenDetail" class="py-1">
-        <span class="font-semibold">{{ entry.shortName }}</span> · {{ formatTicketCounts(entry.orders) }} · {{ entry.orders.map(o => o.inhabitant.name).join(', ') }}
+    <div
+      v-if="selectedPanel && selectedPanelBreakdown.length > 0"
+      data-testid="kitchen-household-list"
+      :class="[getModeClasses(selectedPanel), COMPONENTS.kitchen.householdList]"
+    >
+      <AllergyOverviewLine
+        v-if="selectedPanelAllergies?.affectedList.length"
+        data-testid="kitchen-allergy-overview"
+        :class="COMPONENTS.kitchen.allergyOverview"
+        :total-portions="selectedPanelAllergies.totalPortions"
+        :allergens="selectedPanelAllergies.breakdownByAllergen"
+      />
+      <div v-for="entry in selectedPanelBreakdown" :key="entry.shortName" :class="COMPONENTS.kitchen.household">
+        <span :class="COMPONENTS.kitchen.householdName">{{ entry.shortName }}</span>
+        <span>·</span>
+        <span>{{ formatTicketCounts(entry.orders) }}</span>
+        <span>·</span>
+        <span v-for="(order, index) in entry.orders" :key="order.id" :class="COMPONENTS.kitchen.diner">
+          <span>{{ order.inhabitant.name }}</span>
+          <AllergyTypeDisplay
+            v-for="allergyType in allergensByOrder.get(order.id) ?? []"
+            :key="allergyType.id"
+            :allergy-type="allergyType"
+            compact
+            show-name
+            :class="COMPONENTS.allergyOverview.besideName"
+          />
+          <span v-if="index < entry.orders.length - 1">,</span>
+        </span>
       </div>
     </div>
   </div>

@@ -23,7 +23,7 @@ const props = withDefaults(defineProps<Props>(), {
   title: 'Du er ved at ændre familiens booking'
 })
 
-const {ICONS, SIZES, ALERTS} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, ALERTS, NOISE} = useTheSlopeDesignSystem()
 </script>
 
 <template>
@@ -42,7 +42,7 @@ const {ICONS, SIZES, ALERTS} = useTheSlopeDesignSystem()
         >
           <UBadge
             :color="item.color"
-            variant="subtle"
+            :variant="NOISE.subtle"
             :size="SIZES.small"
           >
             <UIcon :name="item.icon" class="mr-1" />

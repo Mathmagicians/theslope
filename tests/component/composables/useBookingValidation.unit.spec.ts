@@ -6,9 +6,11 @@ import {DinnerStateSchema, DinnerModeSchema, OrderStateSchema, TicketTypeSchema,
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
-import type {SafeParseReturnType} from 'zod'
+import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
+import {useBillingValidation} from '~/composables/useBillingValidation'
+import type {ZodSafeParseResult} from 'zod'
 
-const getValidationError = <T>(result: SafeParseReturnType<T, T>) =>
+const getValidationError = <T>(result: ZodSafeParseResult<T>) =>
   !result.success ? `Validation errors: ${JSON.stringify(result.error.format())}` : ''
 
 describe('useBookingValidation', () => {
@@ -118,7 +120,8 @@ describe('useBookingValidation', () => {
 
       it.each([
         {desc: 'menuTitle too long (>500)', override: {menuTitle: 'a'.repeat(501)}},
-        {desc: 'negative totalCost', override: {totalCost: -50}}
+        {desc: 'a totalCost key (the cost is computed from the expense rows)', override: {totalCost: 50}},
+        {desc: 'an unknown key', override: {foo: 1}}
       ])('GIVEN $desc WHEN parsing THEN throws', ({override}) => {
         expect(() => DinnerEventCreateSchema.parse({...baseCreate, ...override})).toThrow()
       })
@@ -141,9 +144,16 @@ describe('useBookingValidation', () => {
       })
 
       it.each([
+        {desc: 'a totalCost key (the cost is computed from the expense rows)', body: {totalCost: 50000}},
+        {desc: 'an unknown key', body: {menuTitle: 'Ret', foo: 1}}
+      ])('GIVEN $desc WHEN parsing THEN throws', ({body}) => {
+        expect(() => DinnerEventUpdateSchema.parse(body)).toThrow()
+      })
+
+      it.each([
         {field: 'menuTitle', value: 'Updated Title'},
         {field: 'state', value: DinnerState.CANCELLED},
-        {field: 'totalCost', value: 50000}
+        {field: 'menuDescription', value: 'Ny beskrivelse'}
       ])('GIVEN partial update with $field WHEN parsing THEN succeeds', ({field, value}) => {
         const result = DinnerEventUpdateSchema.parse({[field]: value})
         expect(result[field as keyof typeof result]).toBe(value)
@@ -485,9 +495,37 @@ describe('useBookingValidation', () => {
         const result = deserializeDinnerEvent(prismaEvent)
         expect(result.allergens).toEqual([])
       })
+
+      it.each([
+        {desc: 'expense amounts', expenses: [{amount: 101200}, {amount: 29800}], expected: 131000},
+        {desc: 'no expense rows', expenses: [], expected: 0},
+        {desc: 'no expenses relation', expenses: undefined, expected: 0}
+      ])('GIVEN $desc WHEN deserializing THEN the cost is their sum and the stored column is discarded', ({expenses, expected}) => {
+        const prismaEvent = {...DinnerEventFactory.defaultDinnerEventDisplay(), totalCost: 99, expenses}
+        const result = deserializeDinnerEvent(prismaEvent)
+        expect(result.totalCost).toBe(expected)
+        expect(result).not.toHaveProperty('expenses')
+      })
     })
 
     describe('deserializeDinnerEventDetail', () => {
+      it('GIVEN expense rows WHEN deserializing THEN the lines are domain rows, the cost is their sum and the ticket reference carries it', () => {
+        const {serializeExpense} = useBillingValidation()
+        const rows = [
+          ExpenseFactory.defaultExpense({id: 1, amount: 101200}),
+          ExpenseFactory.defaultExpense({id: 2, amount: 29800, paidByUserId: null, paidBy: {id: null, email: ''}})
+        ]
+        const ticket = {...OrderFactory.defaultOrderDetail(), ticketPrice: {ticketType: TicketTypeSchema.enum.ADULT}, inhabitant: null}
+        const result = deserializeDinnerEventDetail({
+          ...DinnerEventFactory.defaultSerializedDinnerEventDetail({tickets: [ticket]}),
+          totalCost: 99,
+          expenses: rows.map(serializeExpense)
+        })
+        expect(result.totalCost).toBe(131000)
+        expect(result.expenses).toEqual(rows)
+        expect((result.tickets as Array<{dinnerEvent: {totalCost: number}}>)[0]!.dinnerEvent.totalCost).toBe(131000)
+      })
+
       // Use real serialize methods to generate test data (ADR-010)
       const {serializeWeekDayMap, createDefaultWeekdayMap} = useCoreValidation()
       const {serializeWeekDayMap: serializeAffinity, createDefaultWeekdayMap: createDefaultAffinity} = useWeekDayMapValidation()
@@ -549,6 +587,15 @@ describe('useBookingValidation', () => {
       ])('GIVEN $desc WHEN deserializing THEN converts JSON strings to objects', ({input, assertion}) => {
         const result = deserializeDinnerEventDetail(input())
         assertion(result)
+      })
+
+      it('GIVEN a ticket inhabitant with allergies WHEN deserializing THEN keeps each allergy with its allergy type', () => {
+        const allergies = AllergyFactory.serializedAllergies(2)
+        const result = deserializeDinnerEventDetail(DinnerEventFactory.defaultSerializedDinnerEventDetail({
+          tickets: [{id: 1, inhabitant: {...DinnerEventFactory.serializedInhabitant(SERIALIZED_PREFERENCES), allergies}}]
+        }))
+        const tickets = result.tickets as Array<{inhabitant: {allergies: Array<{allergyType: unknown}>}}>
+        expect(tickets[0]!.inhabitant.allergies.map(a => a.allergyType)).toEqual(allergies.map(a => a.allergyType))
       })
     })
   })

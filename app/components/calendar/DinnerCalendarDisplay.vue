@@ -35,7 +35,7 @@ import type {DateRange} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
-import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
 import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import {isCalendarDateInDateList, toDate} from '~/utils/date'
 
@@ -119,25 +119,21 @@ const getDayColorClass = (type: DayType): string => {
   return type === 'past' ? CALENDAR.day.past : DINNER_CALENDAR.day[type]
 }
 
-// Legend item types
-type LegendItem =
-  | { label: string; type: 'circle'; circleClass: string[] }
-  | { label: string; type: 'chip'; chipColor: NuxtUIColor; showCount: boolean }
-
-// Legend items using design system classes
-const legendItems = computed((): LegendItem[] => {
-  const items: LegendItem[] = [
-    { label: 'Næste fællesspisning', type: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.next) },
-    { label: 'Valgt dato', type: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.next, DINNER_CALENDAR.selection) },
-    { label: 'Planlagt fællesspisning', type: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.future) },
-    { label: 'Tidligere fællesspisning', type: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past) },
-    { label: 'Ferie', type: 'circle', circleClass: dayCircleClasses(CALENDAR.holiday) }
+// Legend items: the lock chips wrap a planned-day circle at the lock chip's size, as the day cells do
+const legendItems = computed((): CalendarLegendItem[] => {
+  const items: CalendarLegendItem[] = [
+    { label: 'Næste fællesspisning', kind: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.next) },
+    { label: 'Valgt dato', kind: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.next, DINNER_CALENDAR.selection) },
+    { label: 'Planlagt fællesspisning', kind: 'circle', circleClass: dayCircleClasses(DINNER_CALENDAR.day.future) },
+    { label: 'Tidligere fællesspisning', kind: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past) },
+    { label: 'Ferie', kind: 'circle', circleClass: dayCircleClasses(CALENDAR.holiday) }
   ]
 
   if (props.lockStatus) {
+    const chipCircle = dayCircleClasses(DINNER_CALENDAR.day.future)
     items.push(
-      { label: 'Lukket for framelding', type: 'chip', chipColor: BOOKING_LOCK_STATUS.locked.color, showCount: false },
-      { label: 'Ledige billetter', type: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithTickets.color, showCount: true }
+      { label: 'Lukket for framelding', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.locked.color, circleClass: chipCircle, chipSize: SIZES.lockChip },
+      { label: 'Ledige billetter', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithTickets.color, circleClass: chipCircle, chipSize: SIZES.lockChip, showCount: true }
     )
   }
 
@@ -243,21 +239,8 @@ const isSelected = (day: DateValue): boolean => {
               <span v-else class="text-sm">{{ day.day }}</span>
             </template>
 
-            <!-- Legend -->
             <template #legend>
-              <div class="px-4 py-6 md:px-6 md:py-8 space-y-3 border-t mt-auto" :class="TYPOGRAPHY.bodyTextSmall">
-                <div v-for="legendItem in legendItems" :key="legendItem.label" class="flex items-center gap-4">
-                  <!-- Chip for lock indicators (text shows released count badge only for "ledige billetter") -->
-                  <UChip v-if="legendItem.type === 'chip'" show :size="SIZES.lockChip" :color="legendItem.chipColor" :text="legendItem.showCount ? '1' : undefined">
-                    <div :class="dayCircleClasses(DINNER_CALENDAR.day.future)">1</div>
-                  </UChip>
-                  <!-- Circle for other indicators -->
-                  <div v-else :class="legendItem.circleClass">
-                    1
-                  </div>
-                  <span>{{ legendItem.label }}</span>
-                </div>
-              </div>
+              <CalendarLegend :items="legendItems" />
             </template>
           </BaseCalendar>
         </div>

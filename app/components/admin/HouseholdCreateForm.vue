@@ -30,7 +30,7 @@ const emit = defineEmits<{
     cancel: []
 }>()
 
-const {BUTTONS, SIZES, COLOR, ICONS, ALERTS, TYPOGRAPHY} = useTheSlopeDesignSystem()
+const {BUTTONS, SIZES, COLOR, ICONS, ALERTS, TYPOGRAPHY, LAYOUTS} = useTheSlopeDesignSystem()
 const {HouseholdCreateFormSchema} = useCoreValidation()
 
 const formRef = useTemplateRef<Form<HouseholdCreateFormData>>('formRef')
@@ -92,8 +92,9 @@ const prevOwnerConstraints = computed<Date[]>(() =>
 
 const formSchema = computed(() => HouseholdCreateFormSchema(prevOwnerConstraints.value))
 
-const validateForm = (state: Partial<HouseholdCreateFormData>) => {
-    if (state.pbsId === undefined) return []
+// The form state carries the schema's input: pbsId arrives as `unknown` until coercion
+const validateForm = (state: {pbsId?: unknown}) => {
+    if (typeof state.pbsId !== 'number') return []
     const conflict = props.existingHouseholds.find(h => h.pbsId === state.pbsId)
     return conflict
         ? [{name: 'pbsId', message: `PBS ${conflict.pbsId} bruges af ${conflict.shortName}`}]
@@ -222,7 +223,7 @@ const handleCancel = () => emit('cancel')
 
             <!-- Footer: action buttons -->
             <template #footer>
-                <div class="flex flex-col-reverse md:flex-row md:justify-end gap-2">
+                <div :class="LAYOUTS.formButtonRow">
                     <UButton
                         v-bind="BUTTONS.cancel"
                         :size="SIZES.standard"

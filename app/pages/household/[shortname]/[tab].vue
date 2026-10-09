@@ -77,32 +77,34 @@ const tabItems = tabs.map(tab => ({
 // Initialize stores
 const householdStore = useHouseholdsStore()
 const {
-  selectedHousehold, selectedHouseholdId, isSelectedHouseholdErrored, selectedHouseholdError,
+  selectedHousehold, isSelectedHouseholdErrored, selectedHouseholdError,
   householdsError, isHouseholdsErrored, isHouseholdsStoreReady,
   households, isHouseholdsInitialized, myHousehold
 } = storeToRefs(householdStore)
 
-const {loadHousehold} = householdStore
+// PageHeader creates the store, so its datasets prefetch under PageHeader; the server render of a
+// sibling waits only for its own prefetch
+onServerPrefetch(() => householdStore.selectedHouseholdDataset)
 
-// URL-driven household resolution (ADR-006)
-// Valid ?pbs= → load that household. Invalid/missing ?pbs= → fall back to myHousehold.
-const {value: pbsId} = useQueryParam<number | null>('pbs', {
-  deserialize: (s) => {
-    const n = parseInt(s, 10)
-    return Number.isNaN(n) ? null : n
-  },
+// The store resolves the household the route names (ADR-006); the getter reads the raw route, since the
+// ?pbs= sync below defaults to the household the store resolves
+const parsePbs = (s: string) => {
+  const n = parseInt(s, 10)
+  return Number.isNaN(n) ? null : n
+}
+householdStore.selectHousehold(() => ({
+  shortName: shortname.value,
+  pbsId: typeof route.query.pbs === 'string' ? parsePbs(route.query.pbs) ?? undefined : undefined
+}))
+
+// The URL carries the resolved household's pbs
+useQueryParam<number | null>('pbs', {
+  deserialize: parsePbs,
   serialize: (v) => v ? String(v) : '',
   validate: (v) => v !== null && households.value.some(h => h.pbsId === v),
-  defaultValue: () => myHousehold.value?.pbsId ?? null,
+  defaultValue: () => households.value.find(h => h.id === householdStore.selectedHouseholdId)?.pbsId ?? myHousehold.value?.pbsId ?? null,
   syncWhen: () => isHouseholdsInitialized.value
 })
-
-// Watch pbsId to load the corresponding household
-watch(pbsId, (pbs) => {
-  if (!pbs) return
-  const hh = households.value.find(h => h.pbsId === pbs)
-  if (hh && hh.id !== selectedHouseholdId.value) loadHousehold(hh.id)
-}, {immediate: true})
 
 // Access control: check if current user is member of this household
 const authStore = useAuthStore()
@@ -130,7 +132,7 @@ const ribbon = computed(() => {
 
 // Format household title: address + family name
 const { formatHouseholdFamilyName } = useHousehold()
-const { TYPOGRAPHY, ICONS, COMPONENTS, COLOR, ALERTS } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, ICONS, COMPONENTS, COLOR, ALERTS, NOISE } = useTheSlopeDesignSystem()
 const householdAddress = computed(() => selectedHousehold.value?.address ?? '')
 const householdFamilyName = computed(() =>
   selectedHousehold.value?.inhabitants
@@ -210,7 +212,7 @@ v-else-if="isSelectedHouseholdErrored" :error="selectedHouseholdError?.statusCod
               <UButton
                 data-testid="admin-override-exit"
                 :color="COLOR.neutral"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 :icon="ICONS.xMark"
                 @click="adminOverrideActive = false"
               >

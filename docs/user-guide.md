@@ -54,7 +54,7 @@ I appen bruges følgende symboler til at vise spisningsform og status:
 
 | Symbol | Navn | Betydning |
 |:------:|------|-----------|
-| ![Spisesal](https://api.iconify.design/streamline:food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining.svg?height=20&color=%2322c55e) | **Spisesal** | Spis i fællessalen til normal tid |
+| ![Spisesal](https://api.iconify.design/hugeicons:dish-02.svg?height=20&color=%2322c55e) | **Spisesal** | Spis i fællessalen til normal tid |
 | ![Sen](https://api.iconify.design/heroicons:moon.svg?height=20&color=%2322c55e) | **Sen spisning** | Spis i fællessalen til sen spisning |
 | ![Takeaway](https://api.iconify.design/heroicons:shopping-bag.svg?height=20&color=%2322c55e) | **Takeaway** | Hent mad og spis hjemme |
 | ![Ingen](https://api.iconify.design/heroicons:x-circle.svg?height=20&color=%23ef4444) | **Ingen** | Ikke tilmeldt denne dag |

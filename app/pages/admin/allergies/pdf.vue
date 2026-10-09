@@ -19,7 +19,6 @@ const {activeSeason} = storeToRefs(planStore)
 
 // Initialize stores
 store.initAllergiesStore()
-planStore.initPlanStore()
 
 // Current date for header (formatted in Danish)
 const currentDate = computed(() => formatDate(new Date(), 'd. MMMM yyyy'))

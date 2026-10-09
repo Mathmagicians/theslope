@@ -22,6 +22,7 @@ export function useEntityFormManager<T>(options: {
   selectedEntity: ComputedRef<T | null>
 }) {
   const route = useRoute()
+  const {write} = useUrlQueryWriter()
 
   // Initialize form mode from URL synchronously (SSR-safe, like parent page's activeTab)
   const getInitialMode = (): FormMode => {
@@ -57,13 +58,7 @@ export function useEntityFormManager<T>(options: {
    * Uses navigateTo (Nuxt-native) instead of router.replace (vue-router)
    */
   const updateURLQueryFromMode = async (mode: FormMode) => {
-    await navigateTo(
-      {
-        path: route.path,
-        query: { ...route.query, mode }
-      },
-      { replace: true }
-    )
+    await write((query) => ({...query, mode}))
   }
 
   /**

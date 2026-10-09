@@ -71,6 +71,7 @@ test.describe('Team API - My Teams', () => {
             expect(myTeam.seasonId).toBe(activeSeason.id!)
             expect(Array.isArray(myTeam.dinnerEvents)).toBe(true)
             expect(Array.isArray(myTeam.assignments)).toBe(true)
+            expect(myTeam.jokerSlots).toEqual([])
             expect(myTeam.assignments.length).toBe(1)
             expect(myTeam.assignments[0].inhabitantId).toBe(testInhabitantId)
         })

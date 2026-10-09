@@ -1,6 +1,6 @@
 <script setup lang="ts">
 
-const {ALERTS, COLOR} = useTheSlopeDesignSystem()
+const {ALERTS, COLOR, ICONS} = useTheSlopeDesignSystem()
 
 // AUTHORIZATION - Admin role check for edit actions (ADR pattern from household page)
 const authStore = useAuthStore()
@@ -13,7 +13,6 @@ const canMutateAllergies = computed(() => isAdmin.value || isAllergyManager.valu
 
 // COMPONENT DEPENDENCIES
 const store = usePlanStore()
-const {initPlanStore} = store
 const {
   isPlanStoreReady,
   isPlanStoreErrored,
@@ -53,7 +52,7 @@ const tabs = [
   {
     key: 'teams',
     label: 'Madhold',
-    icon: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
+    icon: ICONS.chef,
     content: 'Oprette madhold i given sæson og administrere madhold. Tildele madhold til madlavningsdage. Tildele medlemmer til madhold',
     component: 'AdminTeams'
   },
@@ -114,26 +113,26 @@ const {activeTab} = useTabNavigation({
   basePath: '/admin'
 })
 
-// INITIALIZATION - Initialize store to load seasons list
-initPlanStore()
-
 // SEASON QUERY PARAMETER - Auto-validates and corrects invalid season URLs
 const {seasons, selectedSeason} = storeToRefs(store)
-const {value: seasonShortName} = useQueryParam<string | undefined>('season', {
+const {value: seasonShortName} = useQueryParam<string | null>('season', {
   serialize: (name) => name ?? '',
-  deserialize: (s) => s || undefined,
+  deserialize: (s) => s || null,
   validate: (name) => !name || seasons.value.some(s => s.shortName === name),
-  defaultValue: () => selectedSeason.value?.shortName,  // Use store's selected season
+  defaultValue: () => selectedSeason.value?.shortName ?? null,  // Use store's selected season
   syncWhen: () => isPlanStoreReady.value  // Wait for seasons to load before auto-correcting
 })
 
-// Watch season query and initialize store with the selected season
-watch(seasonShortName, (shortName) => {
-  if (shortName && shortName !== selectedSeason.value?.shortName) {
-    initPlanStore(shortName)
-    console.info(LOG_CTX, '🔗 > Admin > Loading season from URL:', shortName)
-  }
-}, { immediate: true })
+// The store follows ?season= through the ref, on the server render and the client alike (ADR-007 rule 9)
+store.selectSeason(seasonShortName)
+
+// The team follows ?team= from setup on, so a deep link's team Detail loads in the server render, before AdminTeams
+// sets up behind the ready gate; AdminTeams writes the param only
+const route = useRoute()
+store.selectTeam(() => {
+  const teamId = Number(route.query.team)
+  return activeTab.value === 'teams' && Number.isInteger(teamId) && teamId > 0 ? teamId : null
+})
 
 // UI - CONTINUED
 

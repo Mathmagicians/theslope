@@ -35,7 +35,9 @@ import {
     type InvoiceCreate,
     type InvoiceCreated,
     type BillingPeriodSummaryCreate,
-    type BillingPeriodSummaryId
+    type BillingPeriodSummaryId,
+    type Expense,
+    type ExpenseCreateData
 } from '~/composables/useBillingValidation'
 
 /**
@@ -52,6 +54,9 @@ import {
  */
 
 const {throwH3Error, isPrismaNotFound} = eventHandlerHelper
+
+// The dinner embedded in an order read: its cost is the sum of the selected expense amounts, never the stored column
+const embeddedDinnerEvent = (dinnerEvent: Record<string, unknown>) => useBookingValidation().deserializeDinnerEvent(dinnerEvent)
 
 /*** ORDER AUDIT ***/
 
@@ -320,7 +325,7 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
                         menuDescription: true,
                         menuPictureUrl: true,
                         state: true,
-                        totalCost: true,
+                        expenses: {select: {amount: true}},
                         heynaboEventId: true,
                         chefId: true,
                         cookingTeamId: true,
@@ -387,6 +392,7 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
         // Transform: flatten ticketType (ADR-009)
         return OrderDetailSchema.parse({
             ...order,
+            dinnerEvent: embeddedDinnerEvent(order.dinnerEvent),
             ticketType: order.ticketPrice?.ticketType ?? null,
             history: order.orderHistory
         })
@@ -472,7 +478,7 @@ export async function updateOrder(
                 dinnerEvent: {
                     select: {
                         id: true, date: true, menuTitle: true, menuDescription: true,
-                        menuPictureUrl: true, state: true, totalCost: true,
+                        menuPictureUrl: true, state: true, expenses: {select: {amount: true}},
                         heynaboEventId: true, chefId: true, cookingTeamId: true,
                         seasonId: true, createdAt: true, updatedAt: true
                     }
@@ -518,6 +524,7 @@ export async function updateOrder(
 
         return OrderDetailSchema.parse({
             ...order,
+            dinnerEvent: embeddedDinnerEvent(order.dinnerEvent),
             ticketType: order.ticketPrice?.ticketType ?? null
         })
     } catch (error) {
@@ -605,7 +612,7 @@ export async function claimOrder(
                     dinnerEvent: {
                         select: {
                             id: true, date: true, menuTitle: true, menuDescription: true,
-                            menuPictureUrl: true, state: true, totalCost: true,
+                            menuPictureUrl: true, state: true, expenses: {select: {amount: true}},
                             heynaboEventId: true, chefId: true, cookingTeamId: true,
                             seasonId: true, createdAt: true, updatedAt: true
                         }
@@ -650,6 +657,7 @@ export async function claimOrder(
 
             return OrderDetailSchema.parse({
                 ...claimedOrder,
+                dinnerEvent: embeddedDinnerEvent(claimedOrder.dinnerEvent),
                 ticketType: claimedOrder.ticketPrice?.ticketType ?? null
             })
         } catch (error) {
@@ -1011,7 +1019,7 @@ export async function saveDinnerEvents(
 
     console.info(`🍽️ > DINNER_EVENT > [SAVE] Saving ${dinnerEvents.length} dinner event(s)`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {DinnerEventDisplaySchema} = useBookingValidation()
+    const {deserializeDinnerEvent} = useBookingValidation()
 
     try {
         // Strip relation fields, keep only create data
@@ -1022,7 +1030,7 @@ export async function saveDinnerEvents(
         })
 
         console.info(`🍽️ > DINNER_EVENT > [SAVE] Successfully saved ${created.length} dinner event(s)`)
-        return created.map(de => DinnerEventDisplaySchema.parse(de))
+        return created.map(de => deserializeDinnerEvent(de))
     } catch (error) {
         return throwH3Error(`🍽️ > DINNER_EVENT > [SAVE]: Error saving ${dinnerEvents.length} dinner event(s)`, error)
     }
@@ -1038,7 +1046,7 @@ export async function fetchDinnerEvents(d1Client: D1Database, filter: DinnerEven
     const {seasonId, chefIds, excludeStates} = filter
     console.info(`🍽️ > DINNER_EVENT > [GET] Fetching dinner events (filter: ${JSON.stringify(filter)})`)
     const prisma = await getPrismaClientConnection(d1Client)
-    const {DinnerEventDisplaySchema} = useBookingValidation()
+    const {deserializeDinnerEvent} = useBookingValidation()
 
     try {
         // ADR-012: spread pattern for conditional WHERE (Prisma.skip is data-only)
@@ -1057,7 +1065,8 @@ export async function fetchDinnerEvents(d1Client: D1Database, filter: DinnerEven
                     include: {
                         season: true
                     }
-                }
+                },
+                expenses: {select: {amount: true}}
             },
             orderBy: {
                 date: 'asc'
@@ -1065,7 +1074,7 @@ export async function fetchDinnerEvents(d1Client: D1Database, filter: DinnerEven
         })
 
         console.info(`🍽️ > DINNER_EVENT > [GET] Successfully fetched ${dinnerEvents.length} dinner events`)
-        return dinnerEvents.map(de => DinnerEventDisplaySchema.parse(de))
+        return dinnerEvents.map(de => deserializeDinnerEvent(de))
     } catch (error) {
         return throwH3Error(`🍽️ > DINNER_EVENT > [GET]: Error fetching dinner events`, error)
     }
@@ -1091,7 +1100,7 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
                             }
                         },
                         _count: {
-                            select: {dinners: true}
+                            select: {dinners: true, jokerSlots: true}
                         }
                     }
                 },
@@ -1114,7 +1123,8 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
                     include: {
                         allergyType: true
                     }
-                }
+                },
+                expenses: {orderBy: [{createdAt: 'asc'}, {id: 'asc'}]}
             }
         })
 
@@ -1162,7 +1172,7 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
                             }
                         },
                         _count: {
-                            select: {dinners: true}
+                            select: {dinners: true, jokerSlots: true}
                         }
                     }
                 },
@@ -1185,7 +1195,8 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
                     include: {
                         allergyType: true
                     }
-                }
+                },
+                expenses: {orderBy: [{createdAt: 'asc'}, {id: 'asc'}]}
             }
         })
 
@@ -1201,14 +1212,15 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
 
 export async function assignCookingTeamToDinnerEvent(d1Client: D1Database, dinnerEventId: number, cookingTeamId: number): Promise<DinnerEventDisplay> {
     const prisma = await getPrismaClientConnection(d1Client)
-    const {DinnerEventDisplaySchema} = useBookingValidation()
+    const {deserializeDinnerEvent} = useBookingValidation()
 
     const updated = await prisma.dinnerEvent.update({
         where: {id: dinnerEventId},
-        data: {cookingTeamId}
+        data: {cookingTeamId},
+        include: {expenses: {select: {amount: true}}}
     })
 
-    return DinnerEventDisplaySchema.parse(updated)
+    return deserializeDinnerEvent(updated)
 }
 
 /**
@@ -1875,4 +1887,56 @@ export async function fetchHouseholdBilling(
             transactions: invoice.transactions.map(deserializeTransaction)
         }))
     })
+}
+
+/*** EXPENSES: the ledger of costs; a dinner's cost is the sum of its REGULAR rows, computed on every read ***/
+
+const EXPENSE_LOG = '🧾 > EXPENSE'
+
+export async function createExpense(d1Client: D1Database, data: ExpenseCreateData): Promise<Expense> {
+    const {serializeExpense, deserializeExpense} = useBillingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+    try {
+        const created = await prisma.expense.create({data: serializeExpense(data)})
+        console.info(`${EXPENSE_LOG} > [CREATE] Expense ${created.id} (${data.type}) on dinner ${data.dinnerEventId}: ${data.amount} øre`)
+        return deserializeExpense(created)
+    } catch (error) {
+        return throwH3Error(`${EXPENSE_LOG} > [CREATE] Error creating an expense on dinner ${data.dinnerEventId}`, error)
+    }
+}
+
+export async function fetchExpense(d1Client: D1Database, id: number): Promise<Expense | null> {
+    const {deserializeExpense} = useBillingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+    try {
+        const expense = await prisma.expense.findUnique({where: {id}})
+        return expense ? deserializeExpense(expense) : null
+    } catch (error) {
+        return throwH3Error(`${EXPENSE_LOG} > [GET] Error fetching expense ${id}`, error)
+    }
+}
+
+// The lines in the order they were entered
+export async function fetchExpensesForDinner(d1Client: D1Database, dinnerEventId: number): Promise<Expense[]> {
+    const {deserializeExpense} = useBillingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+    try {
+        const expenses = await prisma.expense.findMany({where: {dinnerEventId}, orderBy: [{createdAt: 'asc'}, {id: 'asc'}]})
+        return expenses.map(expense => deserializeExpense(expense))
+    } catch (error) {
+        return throwH3Error(`${EXPENSE_LOG} > [GET] Error fetching the expenses of dinner ${dinnerEventId}`, error)
+    }
+}
+
+// Returns the removed row (ADR-009: the chef's list renders it)
+export async function deleteExpense(d1Client: D1Database, id: number): Promise<Expense> {
+    const {deserializeExpense} = useBillingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+    try {
+        const removed = await prisma.expense.delete({where: {id}})
+        console.info(`${EXPENSE_LOG} > [DELETE] Expense ${id} removed`)
+        return deserializeExpense(removed)
+    } catch (error) {
+        return throwH3Error(`${EXPENSE_LOG} > [DELETE] Error removing expense ${id}`, error)
+    }
 }

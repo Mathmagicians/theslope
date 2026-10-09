@@ -6,7 +6,8 @@ import {
     DinnerModeSchema,
     DinnerStateSchema,
     OrderStateSchema,
-    NotificationChannelSchema
+    NotificationChannelSchema,
+    LedgerEntryTypeSchema
 } from '~~/prisma/generated/zod'
 import {AppearanceSchema, DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} from '~/composables/useUserPreferenceValidation'
 
@@ -41,7 +42,7 @@ import {AppearanceSchema, DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} fro
  */
 export const UserFragmentSchema = z.object({
     id: z.number().int().positive(),
-    email: z.string().email(),
+    email: z.email(),
     phone: z.string().nullable().optional(),
     systemRoles: z.array(SystemRoleSchema).default([]),
     notificationChannels: z.array(NotificationChannelSchema).default(DEFAULT_NOTIFICATION_CHANNELS),
@@ -161,6 +162,49 @@ export const TicketPriceFragmentSchema = z.object({
 })
 
 // ============================================================================
+// LEDGER DOMAIN FRAGMENTS
+// ============================================================================
+
+/**
+ * Payer Snapshot - the user behind a ledger row at the time it was written; outlives the user row
+ * Used by: useBillingValidation (Expense)
+ */
+export const PayerSnapshotSchema = z.object({
+    id: z.number().int().nullable(),
+    email: z.string()
+})
+
+/**
+ * Expense Fragment - a cost paid from the kitchen's money; a REGULAR row belongs to a dinner, an ADHOC row to the pool
+ * Used by: useBillingValidation (the ledger home), useBookingValidation (DinnerEventDetail.expenses)
+ * The two transforms live beside the fragment so both composables share them without importing each other (ADR-010)
+ */
+export const ExpenseFragmentSchema = z.object({
+    id: z.number().int().positive(),
+    type: LedgerEntryTypeSchema,
+    dinnerEventId: z.number().int().positive().nullable(),
+    paidByUserId: z.number().int().positive().nullable(),
+    paidBy: PayerSnapshotSchema,
+    amount: z.number().int(),
+    description: z.string(),
+    createdAt: z.coerce.date(),
+    updatedAt: z.coerce.date()
+})
+
+export const SerializedExpenseFragmentSchema = ExpenseFragmentSchema.omit({paidBy: true}).extend({
+    userSnapshot: z.string()
+})
+
+// The payer snapshot is a JSON column; a create shape serializes the same way as a full row
+export const serializeExpense = <T extends {paidBy: z.infer<typeof PayerSnapshotSchema>}>({paidBy, ...row}: T): Omit<T, 'paidBy'> & {userSnapshot: string} =>
+    ({...row, userSnapshot: JSON.stringify(paidBy)})
+
+export const deserializeExpense = (row: Record<string, unknown>): z.infer<typeof ExpenseFragmentSchema> => {
+    const {userSnapshot, ...rest} = row
+    return ExpenseFragmentSchema.parse({...rest, paidBy: PayerSnapshotSchema.parse(JSON.parse(String(userSnapshot)))})
+}
+
+// ============================================================================
 // HEALTH DOMAIN FRAGMENTS
 // ============================================================================
 
@@ -188,3 +232,6 @@ export type DinnerEventFragment = z.infer<typeof DinnerEventFragmentSchema>
 export type OrderFragment = z.infer<typeof OrderFragmentSchema>
 export type TicketPriceFragment = z.infer<typeof TicketPriceFragmentSchema>
 export type AllergyTypeFragment = z.infer<typeof AllergyTypeFragmentSchema>
+export type PayerSnapshot = z.infer<typeof PayerSnapshotSchema>
+export type ExpenseFragment = z.infer<typeof ExpenseFragmentSchema>
+export type SerializedExpenseFragment = z.infer<typeof SerializedExpenseFragmentSchema>

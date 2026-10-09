@@ -144,11 +144,11 @@ describe('useOrder', () => {
       [TicketType.ADULT, null, 1],
       [TicketType.CHILD, null, 0.5],
       [TicketType.BABY, null, 0],
-      [TicketType.BABY, 'Sulten baby', 0.25],
-      [TicketType.BABY, 'hungry baby', 0.25],
-      [TicketType.CHILD, 'Hungry child', 0.75],
-      [TicketType.CHILD, 'sulten barn', 0.75]
-    ])('GIVEN %s with description "%s" WHEN getting portions THEN returns %s',
+      [TicketType.BABY, 'Sulten baby', 0],
+      [TicketType.BABY, 'hungry baby', 0],
+      [TicketType.CHILD, 'Hungry child', 0.5],
+      [TicketType.CHILD, 'sulten barn', 0.5]
+    ])('GIVEN %s with description "%s" WHEN getting portions THEN the type decides: %s',
       (ticketType, description, expectedPortions) => {
         const ticketPrice = { ticketType, description }
 

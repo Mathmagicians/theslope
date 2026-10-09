@@ -4,7 +4,7 @@ import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import testHelpers from '../testHelpers'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, getSessionUserInfo, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, getSessionUserInfo, temporaryAndRandom, gotoHydrated} = testHelpers
 const {TeamRoleSchema} = useCookingTeamValidation()
 const TeamRole = TeamRoleSchema.enum
 
@@ -78,7 +78,8 @@ test.describe('Chef Page', () => {
     test.afterAll(async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
         for (const teamId of createdTeamIds) {
-            await SeasonFactory.deleteCookingTeam(adminContext, teamId)
+            // Another spec's season cleanup can cascade the team away first; gone is the goal either way
+            await SeasonFactory.deleteCookingTeam(adminContext, teamId).catch(() => undefined)
         }
     })
 
@@ -109,7 +110,7 @@ test.describe('Chef Page', () => {
         const page = await memberContext.newPage()
 
         // Navigate with Team 1 selected
-        await page.goto(`${chefPageUrl}?team=${team1Id}`)
+        await gotoHydrated(page, `${chefPageUrl}?team=${team1Id}`)
 
         // Wait for countdown to load
         await pollUntil(

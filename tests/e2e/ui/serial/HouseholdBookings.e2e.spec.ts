@@ -3,7 +3,10 @@ import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+import {useBookingValidation, type DinnerEventDisplay, type ScaffoldOrdersResponse} from '~/composables/useBookingValidation'
+import {formatDate} from '~/utils/date'
 
 /**
  * HouseholdBookings — tests for the `/household/[shortname]/bookings` tab.
@@ -13,8 +16,8 @@ import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
  * Each Playwright project that depends on the parallel suite guarantees the singleton
  * is restored by global teardown after this file runs.
  *
- * Scope: behaviours of the bookings-tab shell itself — currently arrow navigation
- * across week/month views. Day-view booking form lives in
+ * Scope: behaviours of the bookings-tab shell itself — arrow navigation across
+ * week/month views and the week-grid save. Day-view booking form lives in
  * `DinnerBookingForm.e2e.spec.ts`; visitor/cross-household flow in
  * `HouseholdBookingsCrossHousehold.e2e.spec.ts`.
  *
@@ -28,14 +31,23 @@ import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
  */
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo, waitForHydration, collectHydrationWarnings} = testHelpers
+const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
+const DinnerMode = DinnerModeSchema.enum
+const OrderState = OrderStateSchema.enum
 const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
+const {createDefaultWeekdayMap: createDinnerModeWeekdayMap} = useWeekDayMapValidation({
+    valueSchema: DinnerModeSchema,
+    defaultValue: DinnerMode.NONE
+})
 
 const testSalt = temporaryAndRandom()
 const createdSeasonIds: number[] = []
+let testSeason: Awaited<ReturnType<typeof SeasonFactory.createSeasonWithDinnerEvents>>
 let householdId: number
 let shortName: string
 let pbsId: number
+const hydrationHouseholdIds: number[] = []
 
 test.use({storageState: adminUIFile})
 
@@ -52,14 +64,14 @@ test.beforeAll(async ({browser}) => {
     const fiftyDaysLater = new Date(tomorrow)
     fiftyDaysLater.setDate(fiftyDaysLater.getDate() + 50)
 
-    const {season} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+    testSeason = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
         cookingDays: weekdaysCooking,
         seasonDates: {start: tomorrow, end: fiftyDaysLater},
         holidays: []
     })
-    createdSeasonIds.push(season.id!)
+    createdSeasonIds.push(testSeason.season.id!)
 
-    await SeasonFactory.activateSeason(context, season.id!)
+    await SeasonFactory.activateSeason(context, testSeason.season.id!)
 
     const household = await HouseholdFactory.createHousehold(context, {name: salt('HouseholdBookings', testSalt)})
     householdId = household.id
@@ -72,6 +84,7 @@ test.afterAll(async ({browser}) => {
     if (householdId) {
         await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
     }
+    await Promise.all(hydrationHouseholdIds.map(id => HouseholdFactory.deleteHousehold(context, id).catch(() => {})))
     await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
 })
 
@@ -79,8 +92,8 @@ test.afterAll(async ({browser}) => {
 
 type BookingView = 'day' | 'week' | 'month'
 
-const buildBookingsUrl = (view: BookingView): string =>
-    `/household/${encodeURIComponent(shortName)}/bookings?pbs=${pbsId}&view=${view}`
+const buildBookingsUrl = (view: BookingView, date?: Date): string =>
+    `/household/${encodeURIComponent(shortName)}/bookings?pbs=${pbsId}&view=${view}${date ? `&date=${formatDate(date)}` : ''}`
 
 /**
  * Parse `?date=DD/MM/YYYY` from a URL to a local-midnight Date.
@@ -156,3 +169,120 @@ test('week forward arrow hides at last dinner of season', async ({page}) => {
 
     await expect(nextBtn).toBeHidden()
 })
+
+test('GIVEN an inhabitant holding only a guest ticket on a dinner WHEN the week grid power mode books the family THEN a regular order is booked and the guest ticket carries the family\'s mode', async ({page, browser}) => {
+    const context = await validatedBrowserContext(browser)
+    const {userId} = await getSessionUserInfo(context)
+
+    // GIVEN: NONE preferences, so the only order on the dinner is the guest ticket
+    const inhabitant = await HouseholdFactory.createInhabitantWithConfig(context, householdId, {
+        name: salt('GuestHost', testSalt),
+        dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)
+    })
+    // The season's last dinner lies ~50 days out, before its cancellation deadline
+    const dinnerEvent: DinnerEventDisplay = [...testSeason.dinnerEvents].sort((a, b) => a.date.getTime() - b.date.getTime()).at(-1)!
+    const adultPrice = testSeason.season.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
+    const guest = await OrderFactory.createOrder(context, {
+        householdId,
+        dinnerEventId: dinnerEvent.id,
+        orders: [{inhabitantId: inhabitant.id, bookedByUserId: userId, ticketPriceId: adultPrice.id!, dinnerMode: DinnerMode.DINEIN, isGuestTicket: true}]
+    }, 201, true)
+    const guestOrderId = guest!.createdIds[0]!
+
+    // WHEN: admin unlocks the household, toggles the power cell for the dinner and saves
+    await page.goto(buildBookingsUrl('week', dinnerEvent.date))
+    await waitForHydration(page)
+    const adminOverride = page.getByTestId('admin-override-btn')
+    await adminOverride.click()
+    await adminOverride.click()
+    await page.getByTestId('grid-edit').click()
+    await page.getByTestId(`power-${dinnerEvent.id}`).click()
+
+    const scaffoldResponse = page.waitForResponse(r =>
+        r.url().includes('/api/household/order/scaffold') && r.request().method() === 'POST'
+    )
+    await page.getByTestId('grid-save').click()
+    const response = await scaffoldResponse
+    expect(response.status()).toBe(200)
+    const {scaffoldResult} = await response.json() as ScaffoldOrdersResponse
+    expect(scaffoldResult.errored).toBe(0)
+
+    // THEN
+    const orders = (await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id))
+        .filter(o => o.inhabitantId === inhabitant.id)
+    const regularOrders = orders.filter(o => !o.isGuestTicket)
+    expect(regularOrders).toEqual([expect.objectContaining({state: OrderState.BOOKED})])
+    // The guest was booked DINEIN: a power mode other than DINEIN proves the guest moved with the family
+    expect(regularOrders[0]!.dinnerMode).not.toBe(DinnerMode.DINEIN)
+    expect(orders.find(o => o.id === guestOrderId)).toMatchObject({isGuestTicket: true, dinnerMode: regularOrders[0]!.dinnerMode, state: OrderState.BOOKED})
+})
+
+test('GIVEN a member holding a regular order and a guest ticket on a dinner WHEN the week grid changes the guest cell\'s mode and saves THEN the guest order carries the new mode and the regular order is untouched', async ({page, browser}) => {
+    const context = await validatedBrowserContext(browser)
+    const {userId} = await getSessionUserInfo(context)
+
+    // GIVEN: NONE preferences, so the member's orders on the dinner are exactly the two created here
+    const inhabitant = await HouseholdFactory.createInhabitantWithConfig(context, householdId, {
+        name: salt('GuestEditor', testSalt),
+        dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)
+    })
+    // The season's second-to-last dinner: before its cancellation deadline, apart from the power-mode test's dinner
+    const dinnerEvent: DinnerEventDisplay = [...testSeason.dinnerEvents].sort((a, b) => a.date.getTime() - b.date.getTime()).at(-2)!
+    const adultPrice = testSeason.season.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
+    const created = await OrderFactory.createOrder(context, {
+        householdId,
+        dinnerEventId: dinnerEvent.id,
+        orders: [
+            {inhabitantId: inhabitant.id, bookedByUserId: userId, ticketPriceId: adultPrice.id!, dinnerMode: DinnerMode.DINEIN, isGuestTicket: false},
+            {inhabitantId: inhabitant.id, bookedByUserId: userId, ticketPriceId: adultPrice.id!, dinnerMode: DinnerMode.DINEIN, isGuestTicket: true}
+        ]
+    }, 201, true)
+    const before = (await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id))
+        .filter(o => created!.createdIds.includes(o.id))
+    const regularOrder = before.find(o => !o.isGuestTicket)!
+    const guestOrder = before.find(o => o.isGuestTicket)!
+
+    // WHEN: admin unlocks the household, toggles the guest cell once (DINEIN → DINEINLATE) and saves
+    await page.goto(buildBookingsUrl('week', dinnerEvent.date))
+    await waitForHydration(page)
+    const adminOverride = page.getByTestId('admin-override-btn')
+    await adminOverride.click()
+    await adminOverride.click()
+    await page.getByTestId('grid-edit').click()
+    await page.locator(`[data-testid^="guest-guest-group-${inhabitant.id}-"][data-testid$="-${dinnerEvent.id}"]`).click()
+
+    const scaffoldResponse = page.waitForResponse(r =>
+        r.url().includes('/api/household/order/scaffold') && r.request().method() === 'POST'
+    )
+    await page.getByTestId('grid-save').click()
+    const response = await scaffoldResponse
+    expect(response.status()).toBe(200)
+    const {scaffoldResult} = await response.json() as ScaffoldOrdersResponse
+    expect(scaffoldResult.errored).toBe(0)
+
+    // THEN
+    const after = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id)
+    expect(after.find(o => o.id === guestOrder.id)).toMatchObject({isGuestTicket: true, dinnerMode: DinnerMode.DINEINLATE, state: OrderState.BOOKED})
+    expect(after.find(o => o.id === regularOrder.id)).toMatchObject({isGuestTicket: false, dinnerMode: DinnerMode.DINEIN, state: OrderState.BOOKED})
+})
+
+for (const view of ['day', 'week', 'month'] as const) {
+    test(`GIVEN a household of more inhabitants than the avatar row shows WHEN the ${view} view loads at desktop width THEN the client hydrates the server markup without a mismatch`, async ({page, browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const household = await HouseholdFactory.createHousehold(context, {name: salt(`Hydration-${view}`, testSalt)})
+        hydrationHouseholdIds.push(household.id)
+        await Promise.all(Array.from({length: 6}, (_, i) => HouseholdFactory.createInhabitantWithConfig(context, household.id, {
+            name: salt(`Avatar${i}`, testSalt),
+            pictureUrl: `https://theslope.example/avatar-${i}.png`,
+            dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)
+        })))
+
+        const hydrationWarnings = collectHydrationWarnings(page)
+        await page.setViewportSize({width: 1280, height: 900})
+        await page.goto(`/household/${encodeURIComponent(household.shortName)}/bookings?pbs=${household.pbsId}&view=${view}`)
+        await waitForHydration(page)
+        await expect(page.getByTestId('household-bookings')).toBeVisible()
+
+        expect(hydrationWarnings).toEqual([])
+    })
+}

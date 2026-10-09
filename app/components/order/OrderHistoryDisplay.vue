@@ -2,12 +2,11 @@
 /**
  * OrderHistoryDisplay - Vertical timeline of order audit history
  *
- * Lazy-loads order history via GET /api/order/:id
+ * Lazy-loads the order's history through the bookings store's fetchOrderDetail
  * Uses UTimeline with action-specific icons and colors
  *
- * ADR-007: component-local useAsyncData exception
+ * ADR-007: component-local useAsyncData exception - each expanded row holds its own order's history
  */
-import type {OrderDetail} from '~/composables/useBookingValidation'
 import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
 
 interface Props {
@@ -16,18 +15,17 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const {OrderDetailSchema, OrderAuditActionSchema} = useBookingValidation()
+const {OrderAuditActionSchema} = useBookingValidation()
 const {ICONS, TYPOGRAPHY, SIZES, COLOR, ALERTS} = useTheSlopeDesignSystem()
+const bookingsStore = useBookingsStore()
 
 // Lazy-load order detail with history
-const {data: orderDetail, status, error} = useAsyncData<OrderDetail | null>(
+const {data: orderDetail, status, error} = useAsyncData(
     computed(() => `order-history-${props.orderId ?? 'null'}`),
-    () => props.orderId
-        ? $fetch<OrderDetail>(`/api/order/${props.orderId}`)
-        : Promise.resolve(null),
+    () => bookingsStore.fetchOrderDetail(props.orderId!),
     {
         default: () => null,
-        transform: (data) => data ? OrderDetailSchema.parse(data) : null
+        enabled: () => !!props.orderId
     }
 )
 

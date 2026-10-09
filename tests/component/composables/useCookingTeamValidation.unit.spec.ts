@@ -532,6 +532,17 @@ describe('useCookingTeamValidation', () => {
         })
       })
     })
+
+    describe('CookingTeamDisplay aggregates from Prisma _count', () => {
+      it.each([
+        { name: 'counted dinners and joker slots', _count: { dinners: 4, jokerSlots: 2 }, expected: { cookingDaysCount: 4, jokerSlotCount: 2 } },
+        { name: 'no _count', _count: undefined, expected: { cookingDaysCount: 0, jokerSlotCount: 0 } }
+      ])('should map $name onto the aggregates', ({ _count, expected }) => {
+        const deserialized = deserializeCookingTeamDisplay({ ...serializeCookingTeam(SeasonFactory.defaultCookingTeamDisplay()), _count })
+
+        expect(deserialized).toMatchObject(expected)
+      })
+    })
   })
 
   describe('Prisma transformation functions', () => {
@@ -551,6 +562,11 @@ describe('useCookingTeamValidation', () => {
           name: 'excludes computed field: cookingDaysCount',
           team: SeasonFactory.defaultCookingTeamDetail({ cookingDaysCount: 5 }),
           excludedField: 'cookingDaysCount'
+        },
+        {
+          name: 'excludes computed field: jokerSlotCount',
+          team: SeasonFactory.defaultCookingTeamDetail({ jokerSlotCount: 3 }),
+          excludedField: 'jokerSlotCount'
         },
         {
           name: 'excludes read-only relation: dinnerEvents',

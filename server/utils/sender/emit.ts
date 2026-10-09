@@ -4,6 +4,7 @@
  * Never throws: notification is a side effect of a business operation, and a missing or failing
  * queue must not fail that operation. The caller gets a result to log or return.
  */
+import {z} from 'zod'
 import {useNotificationValidation, type SenderEmitResult} from '~/composables/useNotificationValidation'
 
 const {NotificationMessageSchema} = useNotificationValidation()
@@ -18,7 +19,7 @@ export const emit = async (queue: Queue | undefined, message: unknown): Promise<
     if (!parsed.success) {
         console.error(`${LOG} message rejected by the contract`, {
             dedupeKey,
-            issues: parsed.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`)
+            issues: z.prettifyError(parsed.error)
         })
         return {queued: false, dedupeKey, degraded: false}
     }

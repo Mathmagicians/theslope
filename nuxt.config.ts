@@ -24,6 +24,7 @@ export default defineNuxtConfig({
             ],
             meta: [
                 {name: 'theme-color', content: '#66a28f'},
+                {name: 'mobile-web-app-capable', content: 'yes'},
                 // iOS reads these for the standalone (installed) face
                 {name: 'apple-mobile-web-app-capable', content: 'yes'},
                 {name: 'apple-mobile-web-app-status-bar-style', content: 'default'},
@@ -42,6 +43,10 @@ export default defineNuxtConfig({
 
     nitro: {
         preset: nitroBase.preset,
+        // The generated client lazy-loads its query compiler; bundled, the dev build never writes an external path for it
+        externals: {
+            inline: [/prisma\/generated\/client/]
+        },
         experimental: {
             wasm: true,
             tasks: true  // Enable Nitro scheduled tasks (still experimental)

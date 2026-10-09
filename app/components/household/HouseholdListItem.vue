@@ -10,7 +10,7 @@ const props = withDefaults(defineProps<Props>(), {
     compact: false
 })
 
-const {COLOR, TEXT, BG} = useTheSlopeDesignSystem()
+const {COLOR, TEXT, BG, SIZES, NOISE, ICONS} = useTheSlopeDesignSystem()
 
 const hasInhabitants = computed(() => props.household.inhabitants?.length > 0)
 </script>
@@ -22,7 +22,7 @@ const hasInhabitants = computed(() => props.household.inhabitants?.length > 0)
                 <UAvatar
                     :src="inhabitant.pictureUrl ?? undefined"
                     :alt="inhabitant.name"
-                    icon="i-heroicons-user"
+                    :icon="ICONS.user"
                 />
             </UTooltip>
         </UAvatarGroup>
@@ -31,8 +31,8 @@ const hasInhabitants = computed(() => props.household.inhabitants?.length > 0)
             <UBadge
                 v-for="inhabitant in household.inhabitants"
                 :key="inhabitant.id"
-                size="md"
-                variant="subtle"
+                :size="SIZES.md"
+                :variant="NOISE.subtle"
                 :color="COLOR.secondary"
             >
                 {{ inhabitant.name }}

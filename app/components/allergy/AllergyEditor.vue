@@ -46,7 +46,7 @@ const emit = defineEmits<{
   'update:comment': [allergyTypeId: number, comment: string]
 }>()
 
-const {SIZES, COLOR, ICONS} = useTheSlopeDesignSystem()
+const {SIZES, COLOR, ICONS, NOISE} = useTheSlopeDesignSystem()
 
 // Key to force dropdown reset after selection
 const dropdownKey = ref(0)
@@ -159,7 +159,7 @@ const handleCommentSave = (typeId: number) => {
             <template #trailing>
               <UButton
                 :color="COLOR.success"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 :icon="ICONS.check"
                 :size="SIZES.small"
                 :padded="false"
@@ -171,9 +171,9 @@ const handleCommentSave = (typeId: number) => {
           </UInput>
           <UButton
             :color="COLOR.error"
-            variant="soft"
-            icon="i-heroicons-trash"
-            size="sm"
+            :variant="NOISE.soft"
+            :icon="ICONS.trash"
+            :size="SIZES.sm"
             square
             aria-label="Fjern allergi"
             :data-testid="`allergy-${type.id}-remove`"
@@ -189,7 +189,7 @@ const handleCommentSave = (typeId: number) => {
         v-for="type in selectedTypes"
         :key="type.id"
         :color="COLOR.warning"
-        variant="soft"
+        :variant="NOISE.soft"
         :size="SIZES.small"
         class="pr-1"
       >
@@ -198,7 +198,7 @@ const handleCommentSave = (typeId: number) => {
           <span>{{ type.name }}</span>
           <UButton
             :color="COLOR.neutral"
-            variant="link"
+            :variant="NOISE.link"
             :icon="ICONS.xMark"
             :size="SIZES.small"
             :padded="false"

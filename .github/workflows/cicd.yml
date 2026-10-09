@@ -71,9 +71,10 @@ jobs:
             RELEASE_VERSION="" make version-info >> $GITHUB_OUTPUT
           fi
           cat $GITHUB_OUTPUT
+      - name: Generated Prisma layer matches the schema
+        run: make d1-prisma-check
       - name: Lint and typecheck
         run: npm run pre:all
-      - run: npx prisma validate
       - name: Run unit tests
         run: npm run test:unit
       - name: Install Playwright and browser friends
@@ -84,22 +85,36 @@ jobs:
           npm run db:seed:local
           npx wrangler d1 execute theslope --command="SELECT * FROM User" --local
       - name: Run e2e api tests
+        id: e2e_api_tests
         run: npm run test:e2e:api
       - uses: actions/upload-artifact@v7
+        id: upload_api_report
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-api
           path: playwright-report/
           retention-days: 30
+      - name: E2E api test summary
+        if: ${{ !cancelled() && steps.e2e_api_tests.outcome != 'skipped' }}
+        env:
+          ARTIFACT_URL: ${{ steps.upload_api_report.outputs.artifact-url }}
+        run: make test-report report=test-results/e2e-api-results.json title="E2E api tests" link="$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
       - name: Run e2e ui tests
+        id: e2e_ui_tests
         run: npm run test:e2e:ui
         continue-on-error: true
       - uses: actions/upload-artifact@v7
+        id: upload_ui_report
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-ui
           path: playwright-report/
           retention-days: 30
+      - name: E2E ui test summary
+        if: ${{ !cancelled() && steps.e2e_ui_tests.outcome != 'skipped' }}
+        env:
+          ARTIFACT_URL: ${{ steps.upload_ui_report.outputs.artifact-url }}
+        run: make test-report report=test-results/e2e-ui-results.json title="E2E ui tests" link="$ARTIFACT_URL" note="UI test failures do not fail the pipeline (continue-on-error) — review before shipping" >> "$GITHUB_STEP_SUMMARY"
       - name: Determine deployment target
         id: target
         run: |
@@ -226,6 +241,7 @@ jobs:
       - name: Install Playwright
         run: npx playwright install chromium
       - name: Run smoke tests
+        id: smoke_tests
         env:
           BASE_URL: ${{ needs.CICD.outputs.deployed_url }}
           HEY_NABO_USERNAME: ${{ secrets.HEY_NABO_USERNAME }}
@@ -236,13 +252,17 @@ jobs:
           EXPECTED_VERSION: ${{ needs.CICD.outputs.release_version }}
         run: npm run test:e2e:smoke
       - uses: actions/upload-artifact@v7
+        id: upload_smoke_report
         if: ${{ !cancelled() }}
         with:
           name: playwright-report-smoke
           path: playwright-report/
           retention-days: 30
       - name: Summary
+        if: ${{ !cancelled() && steps.smoke_tests.outcome != 'skipped' }}
+        env:
+          ARTIFACT_URL: ${{ steps.upload_smoke_report.outputs.artifact-url }}
         run: |
-          echo "## ✅ Smoke Tests" >> $GITHUB_STEP_SUMMARY
-          echo "Verified: ${{ needs.CICD.outputs.deployed_url }}" >> $GITHUB_STEP_SUMMARY
-          echo "Version: \`${{ needs.CICD.outputs.release_version }}\`" >> $GITHUB_STEP_SUMMARY
+          make test-report report=test-results/e2e-smoke-results.json title="Smoke tests" link="$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo "Verified: ${{ needs.CICD.outputs.deployed_url }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Version: \`${{ needs.CICD.outputs.release_version }}\`" >> "$GITHUB_STEP_SUMMARY"

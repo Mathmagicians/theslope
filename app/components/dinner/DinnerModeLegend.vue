@@ -30,13 +30,13 @@ withDefaults(defineProps<{
   hint: undefined
 })
 
-const {ALERTS, ICONS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
+const {ALERTS, ICONS, SIZES, TYPOGRAPHY, COMPONENTS} = useTheSlopeDesignSystem()
 </script>
 
 <template>
   <UAlert v-bind="ALERTS.legend" :icon="ICONS.info" title="Forklaring" data-testid="dinner-mode-legend">
     <template #description>
-      <div class="flex flex-wrap gap-x-6 gap-y-2">
+      <div :class="COMPONENTS.legend.entries">
         <DinnerModeSelector
             v-for="mode in modes"
             :key="mode"
@@ -53,7 +53,7 @@ const {ALERTS, ICONS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
             :size="SIZES.xs"
             :consensus="false"
         />
-        <div v-if="showModified" class="flex flex-col items-center gap-0.5" data-testid="dinner-mode-legend-modified">
+        <div v-if="showModified" :class="COMPONENTS.legend.stackedEntry" data-testid="dinner-mode-legend-modified">
           <DinnerModeSelector
               :model-value="DinnerMode.DINEIN"
               :form-mode="FORM_MODES.VIEW"
@@ -63,7 +63,7 @@ const {ALERTS, ICONS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
           <span :class="TYPOGRAPHY.finePrint">Ændret</span>
         </div>
       </div>
-      <p v-if="hint" :class="[TYPOGRAPHY.finePrint, 'mt-2 text-muted']">{{ hint }}</p>
+      <p v-if="hint" :class="[TYPOGRAPHY.finePrint, COMPONENTS.legend.hint]">{{ hint }}</p>
     </template>
   </UAlert>
 </template>

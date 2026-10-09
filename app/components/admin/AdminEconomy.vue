@@ -27,18 +27,15 @@ const props = withDefaults(defineProps<{
 
 const {formatPrice} = useTicket()
 const {groupByCostEntry, groupByHouseholdEntry, calculateCurrentBillingPeriod, controlInvoices, formatTicketCounts} = useBilling()
-const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG} = useTheSlopeDesignSystem()
-const {OrderDisplaySchema} = useBookingValidation()
+const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG, NOISE} = useTheSlopeDesignSystem()
 
 // Plan store for future dinners
 const planStore = usePlanStore()
 const {selectedSeason, isPlanStoreReady} = storeToRefs(planStore)
-planStore.initPlanStore()
 
 // Households store for inhabitant name lookup and admin correction
 const householdsStore = useHouseholdsStore()
 const {households} = storeToRefs(householdsStore)
-householdsStore.initHouseholdsStore()
 
 // Derive all inhabitants from all households
 const allInhabitants = computed(() =>
@@ -59,7 +56,29 @@ const {
     selectedInvoiceTransactions,
     isInvoiceTransactionsLoading
 } = storeToRefs(bookingsStore)
-const {loadBillingPeriodDetail, loadInvoiceTransactions} = bookingsStore
+
+// ?period= and ?invoice= carry the expanded billing period and invoice (ADR-006)
+const useIdParam = (key: string) => useQueryParam<number | null>(key, {
+    serialize: (id) => id === null ? '' : String(id),
+    deserialize: (s) => {
+        const parsed = parseInt(s, 10)
+        return Number.isNaN(parsed) ? null : parsed
+    },
+    normalize: (id) => id,
+    defaultValue: null
+})
+const {value: periodParam, setValue: setPeriodParam} = useIdParam('period')
+const {value: invoiceParam, setValue: setInvoiceParam} = useIdParam('invoice')
+bookingsStore.selectBillingPeriod(periodParam)
+bookingsStore.selectInvoice(invoiceParam)
+
+// Opening a row selects it; closing the selected row clears the param
+const toggleSelection = (row: {getIsExpanded: () => boolean, toggleExpanded: () => void}, id: number, selected: number | null, select: (id: number | null) => Promise<void>) => {
+    const isOpening = !row.getIsExpanded()
+    row.toggleExpanded()
+    if (isOpening) select(id)
+    else if (selected === id) select(null)
+}
 
 // ========== SECTION 1: FREMTIDIGE BESTILLINGER ==========
 
@@ -73,28 +92,11 @@ const getInhabitantName = (id: number) => inhabitantsMap.value.get(id) ?? `#${id
 // Household lookup from store (reused in KitchenPreparation)
 const {getHouseholdForInhabitant} = householdsStore
 
-const selectedSeasonId = computed(() => selectedSeason.value?.id)
-const upcomingOrdersKey = computed(() =>
-    `admin-economy-upcoming-orders-season-${selectedSeasonId.value ?? 'none'}`
-)
-const {data: upcomingOrders, status: upcomingOrdersStatus, refresh: refreshUpcomingOrders} = useAsyncData<OrderDisplay[]>(
-    upcomingOrdersKey,
-    () => {
-        if (!selectedSeasonId.value) return Promise.resolve([])
-        const params = new URLSearchParams()
-        params.append('upcomingForSeason', String(selectedSeasonId.value))
-        params.append('allHouseholds', 'true')
-        params.append('includeDinnerContext', 'true')
-        return $fetch<OrderDisplay[]>(`/api/order?${params.toString()}`)
-    },
-    {
-        default: () => [],
-        transform: (data: unknown[]) => (data as Record<string, unknown>[]).map(o => OrderDisplaySchema.parse(o)),
-        watch: [selectedSeasonId]
-    }
-)
+const {upcomingOrders, isUpcomingOrdersLoading: isUpcomingOrdersFetching} = storeToRefs(bookingsStore)
+const {refreshUpcomingOrders} = bookingsStore
+bookingsStore.loadUpcomingOrders(true)
 const isUpcomingOrdersLoading = computed(() =>
-    !isPlanStoreReady.value || upcomingOrdersStatus.value === 'pending'
+    !isPlanStoreReady.value || isUpcomingOrdersFetching.value
 )
 
 type OrderWithInhabitant = OrderDisplay & { inhabitant: InhabitantInfo, dinnerEvent: DinnerEventInfo }
@@ -478,7 +480,7 @@ const dinnerBreakdownStats = computed(() => {
             <UButton
                 v-if="row.original.items.length > 0"
                 :color="COLOR.neutral"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                 square
                 :size="SIZES.small"
@@ -528,7 +530,7 @@ const dinnerBreakdownStats = computed(() => {
                       />
                       <UButton
                           :color="COLOR.neutral"
-                          variant="ghost"
+                          :variant="NOISE.quiet"
                           :icon="ICONS.xMark"
                           :size="SIZES.small"
                           aria-label="Annuller"
@@ -576,7 +578,7 @@ const dinnerBreakdownStats = computed(() => {
                       <UButton
                           v-if="householdRow.original.items.length > 0"
                           :color="COLOR.neutral"
-                          variant="ghost"
+                          :variant="NOISE.quiet"
                           :icon="householdRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                           square
                           :size="SIZES.small"
@@ -643,20 +645,20 @@ const dinnerBreakdownStats = computed(() => {
           <template #expand-cell="{ row }">
             <UButton
                 :color="COLOR.neutral"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                 square
                 :size="SIZES.small"
                 aria-label="Vis detaljer"
-                @click="row.toggleExpanded(); !row.original.isVirtual && loadBillingPeriodDetail(row.original.id as number)"
+                @click="row.original.isVirtual ? row.toggleExpanded() : toggleSelection(row, row.original.id as number, periodParam, setPeriodParam)"
             />
           </template>
           <template #status-cell="{ row }">
-            <UBadge v-if="row.original.isVirtual" :color="COLOR.success" variant="subtle" :size="SIZES.small">
+            <UBadge v-if="row.original.isVirtual" :color="COLOR.success" :variant="NOISE.subtle" :size="SIZES.small">
               <UIcon :name="ICONS.ellipsisCircle" :class="SIZES.smallBadgeIcon"/>
               Igangværende
             </UBadge>
-            <UBadge v-else :color="COLOR.neutral" variant="subtle" :size="SIZES.small">
+            <UBadge v-else :color="COLOR.neutral" :variant="NOISE.subtle" :size="SIZES.small">
               <UIcon :name="ICONS.check" :class="SIZES.smallBadgeIcon"/>
               Afsluttet
             </UBadge>
@@ -707,7 +709,7 @@ const dinnerBreakdownStats = computed(() => {
                         <UButton
                             v-if="householdRow.original.items.length > 0"
                             :color="COLOR.neutral"
-                            variant="ghost"
+                            :variant="NOISE.quiet"
                             :icon="householdRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                             square
                             :size="SIZES.small"
@@ -772,12 +774,12 @@ const dinnerBreakdownStats = computed(() => {
                     <template #expand-cell="{ row: invoiceRow }">
                       <UButton
                           :color="COLOR.neutral"
-                          variant="ghost"
+                          :variant="NOISE.quiet"
                           :icon="invoiceRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                           square
                           :size="SIZES.small"
                           aria-label="Vis transaktioner"
-                          @click="invoiceRow.toggleExpanded(); loadInvoiceTransactions(invoiceRow.original.id)"
+                          @click="toggleSelection(invoiceRow, invoiceRow.original.id, invoiceParam, setInvoiceParam)"
                       />
                     </template>
                     <template #pbsId-cell="{ row: invoiceRow }">{{ invoiceRow.original.pbsId }}</template>
@@ -843,7 +845,7 @@ const dinnerBreakdownStats = computed(() => {
                             <UButton
                                 v-if="dinnerRow.original.items.length > 0"
                                 :color="COLOR.neutral"
-                                variant="ghost"
+                                :variant="NOISE.quiet"
                                 :icon="dinnerRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                                 square
                                 :size="SIZES.small"

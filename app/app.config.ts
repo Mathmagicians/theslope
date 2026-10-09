@@ -43,6 +43,7 @@ export default defineAppConfig({
             monthlyBilling: { cron: '0 3 18 * *', description: 'D. 18. hver måned kl. 04:00 (dagen efter cutoff)' }
         },
         prebookingWindowDays: 60,  // Rolling window: scaffold pre-bookings for dinners within next N days
+        waitlistBuildupThreshold: 3,  // Queue size at which the dinner's chef is asked to release portions
         notifications: {
             signature: NOTIFICATION_SIGNATURE,
             templates: NOTIFICATION_TEMPLATES  // per kind, {{placeholders}} filled by server/utils/sender/compose.ts

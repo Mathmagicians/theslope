@@ -66,7 +66,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const isGuest = computed(() => props.guestCount !== undefined)
 
-const {TYPOGRAPHY, ICONS, SIZES, COLOR, TEXT, BG, getOrderStateColor} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, ICONS, SIZES, COLOR, TEXT, BG, getOrderStateColor, NOISE} = useTheSlopeDesignSystem()
 const {formatPrice} = useTicket()
 
 // Accent color from design system
@@ -139,7 +139,7 @@ const badgeText = computed(() => {
           <UBadge
             v-if="ticketConfig"
             :color="ticketConfig.color"
-            variant="solid"
+            :variant="NOISE.loud"
             :size="SIZES.small"
             class="uppercase whitespace-nowrap"
           >
@@ -176,7 +176,7 @@ const badgeText = computed(() => {
         <UBadge
           v-if="hasAllergies"
           :color="COLOR.warning"
-          variant="soft"
+          :variant="NOISE.soft"
           :size="SIZES.small"
         >
           🥜 {{ allergies.join(', ') }}

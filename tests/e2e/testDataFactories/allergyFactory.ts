@@ -91,6 +91,16 @@ export class AllergyFactory {
         }
     ]
 
+    /** Allergy rows as the repository include loads them (with allergyType), one per mock allergy type */
+    static readonly serializedAllergies = (count: number, inhabitantId: number = 1) =>
+        this.createMockAllergyTypes().slice(0, count).map((allergyType, i) => ({
+            ...this.createValidAllergyData({inhabitantId, allergyTypeId: allergyType.id}),
+            id: i + 1,
+            createdAt: new Date('2024-01-01'),
+            updatedAt: new Date('2024-01-01'),
+            allergyType
+        }))
+
     /**
      * Create mock AllergyTypeDetail data with inhabitants for component tests (no API call)
      * Returns array of AllergyTypeDetail objects (includes inhabitants with allergyUpdatedAt)

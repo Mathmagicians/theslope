@@ -5,7 +5,7 @@ import testHelpers from '../testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, selectDropdownOption, doScreenshot, salt, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, pollUntil, selectDropdownOption, doScreenshot, salt, temporaryAndRandom, gotoHydrated} = testHelpers
 
 test.describe('SeasonSelector UI - Status Indicators', () => {
     const adminPlanningUrl = '/admin/planning'
@@ -69,7 +69,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         if (mode) params.set('mode', mode)
         const url = params.toString() ? `${adminPlanningUrl}?${params}` : adminPlanningUrl
 
-        await page.goto(url)
+        await gotoHydrated(page, url)
         await doScreenshot(page, 'season-selector-after-goto')
 
         // Wait for Loader to disappear
@@ -97,7 +97,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         await expect(seasonSelector).toContainText('🟢')
 
         // Verify URL was updated with active season
-        expect(page.url()).toContain(`season=${encodeURIComponent(activeSeason.shortName)}`)
+        await expect.poll(() => page.url(), {timeout: 15000}).toContain(`season=${encodeURIComponent(activeSeason.shortName)}`)
 
         // Take screenshot showing auto-selection
         await doScreenshot(page, 'admin/season-selector-auto-select-active', true)
@@ -160,7 +160,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         await doScreenshot(page, 'admin/season-selector-future-season-selected', true)
 
         // Verify URL updated
-        expect(page.url()).toContain(`season=${encodeURIComponent(futureSeason.shortName)}`)
+        await expect.poll(() => page.url(), {timeout: 15000}).toContain(`season=${encodeURIComponent(futureSeason.shortName)}`)
     })
 
     test('GIVEN future season WHEN viewing status display THEN shows activation controls', async ({page}) => {

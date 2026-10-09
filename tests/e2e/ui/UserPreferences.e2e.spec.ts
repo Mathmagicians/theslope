@@ -6,7 +6,7 @@ import {PREF_TEST_IDS} from '~~/tests/component/components/user/userPreferencesT
 import type {Appearance, NotificationChannel} from '~/composables/useUserPreferenceValidation'
 
 const {memberUIFile} = authFiles
-const {waitForHydration, memberValidatedBrowserContext} = testHelpers
+const {waitForHydration, gotoHydrated, memberValidatedBrowserContext} = testHelpers
 
 /**
  * "Mine indstillinger" on the dashboard: the appearance a member picks reaches <html> on every page,
@@ -61,8 +61,7 @@ test.describe('My preferences', () => {
     })
 
     test('GIVEN a logged-in member on the dashboard WHEN picking Høj kontrast and Stor THEN html carries the appearance, also after reload', async ({page}) => {
-        await page.goto('/login')
-        await waitForHydration(page)
+        await gotoHydrated(page, '/login')
         await openPreferences(page)
 
         await saveAppearance(page, 'high-contrast', 'large')
@@ -78,8 +77,7 @@ test.describe('My preferences', () => {
     })
 
     test('GIVEN a member on Høj kontrast WHEN picking Glade farver and Normal THEN html carries neither attribute', async ({page}) => {
-        await page.goto('/login')
-        await waitForHydration(page)
+        await gotoHydrated(page, '/login')
         await openPreferences(page)
         await saveAppearance(page, 'high-contrast', 'large')
 

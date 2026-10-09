@@ -1,6 +1,6 @@
 ---
 name: plan-and-supervise
-description: Use when writing or updating a feature / bug-fix plan doc in docs/features, when asked to "assess and plan the work left", or when supervising subagents that implement such a plan. Encodes the user's working preferences - named packages (no codes), ASCII mockups signed off in the doc and moved to the component header on implementation, implemented fixes trimmed to pointers, per-package approval before any agent starts, endpoint→API spec and component→BDD spec coverage, design-system tokens over raw Nuxt UI props, code traced before claims.
+description: Use when writing or updating a feature / bug-fix plan doc in docs/features, when asked to "assess and plan the work left", when iterating a design (schema group, model, UX surface, package decision) with the user round by round, or when supervising subagents that implement such a plan. Encodes the user's working preferences - named packages (no codes), ASCII mockups signed off in the doc and moved to the component header on implementation, implemented fixes trimmed to pointers, per-package approval before any agent starts, endpoint→API spec and component→BDD spec coverage, design-system tokens over raw Nuxt UI props, code traced before claims.
 ---
 
 # Plan and Supervise
@@ -163,3 +163,34 @@ matrix and the design-system rule → 5. compliance rows (`docs/adr-compliance-*
 
 - A plan or proposal refers to a future ADR by title only ("the settings ADR"). The number is the next free one in
   `docs/adr.md` at the moment the ADR is written; numbers grow by one per decision and are never reserved or hardcoded.
+
+## Iterating a design round by round
+
+A schema group, a model, a UX surface or a package decision is settled in chat one round at a time; the document and the
+file follow the sign-off.
+
+- **One item per round.** One package, entity group or decision per message; a decision the answer raises goes into the
+  next round. Several decisions in one message are rejected unread.
+- **Re-present the full change every round**, as the user will read it in the file: a schema change as a diff against the
+  live block (`+` on the added lines, untouched columns kept for context — a full model without markers hides the change);
+  a UX change as the mockup; a decision as `a) … b) … c) …` with one line of pro and con each, the drafted choice marked
+  "as drawn", never applied silently. A mid-round correction is applied to the block and the whole block shown again. The
+  round ends with "Decisions in this round:" and nothing else.
+- **"I don't understand" asks for facts**: where the item comes from, why it is a problem, a concrete example ("Anna books
+  Tuesday twice"), and a suggested solution — not the question rephrased. A comparison request gets the comparison, no
+  steering. A claim is verified against the generated output or the current docs before it is presented, never carried
+  from a spike or a memory (`strictUndefinedChecks` was presented as default in Prisma 7; the generated types said
+  preview). A decision the user may have taken in another session or document is checked there first.
+- **Sign-off semantics.** A file changes only after an explicit yes on the exact block presented; "y" signs the last
+  presented block. "prepare", "don't wait", "go on", "continue" mean bring the next draft. A model change that alters a
+  signed mockup shows the revised mockup in the same round for its own sign-off. After the yes: the feature document
+  (the signed block, dated), then the file, then a sweep of the document for the vocabulary the round replaced.
+- **Language.** The user's domain terms, precisely (a roster duty on a dinner, a template duty, a vacant duty — never a
+  word the user did not use); comments per `code-comments` (no process knowledge such as "the scaffolder expands it", no
+  colloquialisms); terse chat without glyphs.
+- **Modelling rules from the rounds.** Symmetric siblings share a shape (`LedgerEntryType { REGULAR, ADHOC }` on both
+  ledgers); an enum value never repeats its type's name; a denormalized copy carries no provenance FK; a fact that follows
+  from other rows is derived, not stored (completed, roster signed, a dinner's cost); an either-or is structure (a 1:1
+  extension, a nullable column with a partial unique index), not a flag explained in a comment; a sibling table beats a
+  column rebuild on D1, the user deciding; a back-relation exists because a read needs it, and attribution names the party
+  the read serves (the inhabitant to reimburse, not the account that typed the row).

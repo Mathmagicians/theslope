@@ -27,7 +27,6 @@ export class DinnerEventFactory {
         menuDescription: 'A delicious test menu',
         menuPictureUrl: null,
         state: DinnerStateSchema.enum.SCHEDULED,
-        totalCost: 0,
         chefId: null,
         cookingTeamId: null,
         heynaboEventId: null,
@@ -85,7 +84,8 @@ export class DinnerEventFactory {
         updatedAt: this.today,
         chef: null,
         cookingTeam: null,
-        tickets: []
+        tickets: [],
+        expenses: []
     })
 
     /**
@@ -114,7 +114,8 @@ export class DinnerEventFactory {
         chef: overrides.chef ?? null,
         cookingTeam: overrides.cookingTeam ?? null,
         tickets: overrides.tickets ?? [],
-        allergens: overrides.allergens ?? []
+        allergens: overrides.allergens ?? [],
+        expenses: []
     })
 
     /**

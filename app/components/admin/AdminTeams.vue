@@ -44,6 +44,7 @@ import {h, resolveComponent} from 'vue'
 import {FORM_MODES} from "~/types/form"
 import type {TeamRole, CookingTeamDisplay} from "~/composables/useCookingTeamValidation"
 import type {WeekDayMap} from "~/types/dateTypes"
+import type {JokerSlotCreate} from "~/composables/useDutyValidation"
 
 // Props - canEdit from parent for authorization
 interface Props {
@@ -73,7 +74,10 @@ const {
   updateTeam,
   deleteTeam,
   addTeamMember,
-  removeTeamMember
+  updateTeamMember,
+  removeTeamMember,
+  createJokerSlot,
+  deleteJokerSlot
 } = store
 
 // Get teams from selected season - ALWAYS show live data
@@ -92,8 +96,7 @@ const selectedSeasonId = computed(() => selectedSeason.value?.id ?? null)
 const {season} = useSeasonSelector({
   seasons: computed(() => seasons.value),
   selectedSeasonId,
-  activeSeason: computed(() => activeSeason.value),
-  onSeasonSelect: store.onSeasonSelect
+  activeSeason: computed(() => activeSeason.value)
 })
 
 const handleSeasonChange = (id: number) => {
@@ -195,7 +198,9 @@ const detailEvents = computed(() => ({
   'delete': handleDeleteTeam,
   'add:member': handleAddMember,
   'update:member': handleUpdateMember,
-  'remove:member': handleRemoveMember
+  'remove:member': handleRemoveMember,
+  'add:jokerSlot': handleAddJokerSlot,
+  'remove:jokerSlot': handleRemoveJokerSlot
 }))
 
 // Gated on data presence, not on the fetch state: a background season refresh (every
@@ -205,17 +210,6 @@ const showAdminTeams = computed(() => !!selectedSeason.value)
 // Action button loading state - used for both :loading and :disabled (NuxtUI pattern)
 const isActionLoading = computed(() => isSeasonsLoading.value || isSelectedSeasonLoading.value || isCreatingTeams.value)
 
-// UTILITY
-const showSuccessToast = (title: string, description?: string) => {
-  const toast = useToast()
-  toast.add({
-    title,
-    description,
-    icon: 'i-heroicons-check-circle',
-    color: 'success'
-  })
-}
-
 // BUSINESS LOGIC
 
 // CREATE MODE: Batch create teams (server auto-assigns affinities + events)
@@ -223,9 +217,8 @@ const handleBatchCreateTeams = async () => {
   if (!createDraft.value.length || !selectedSeason.value?.id) return
 
   try {
-    // The toast reports the operation result (ADR-009), not the draft
-    const {teams: createdTeams, eventsAssigned} = await createTeam(createDraft.value)
-    showSuccessToast('Madhold oprettet', `${createdTeams.length} madhold oprettet · ${eventsAssigned} madlavninger tildelt`)
+    // The store's toast reports the operation result (ADR-009), not the draft
+    await createTeam(createDraft.value)
     await onModeChange(FORM_MODES.VIEW)
   } catch (error) {
     console.error('👥 > ADMIN_TEAMS > [CREATE] Error creating teams:', error)
@@ -239,7 +232,6 @@ const handleUpdateTeamName = async (teamId: number, newName: string) => {
   if (!team) return
 
   await updateTeam({id: teamId, name: newName}) // Immediate save to DB
-  // No toast for individual name updates (too noisy)
   // teams reactively updates from store refresh - no manual update needed
 }
 
@@ -249,7 +241,6 @@ const handleUpdateTeamAffinity = async (teamId: number, affinity: WeekDayMap<boo
   if (!team || !affinity) return
 
   await updateTeam({id: teamId, affinity}) // Immediate save to DB
-  showSuccessToast('Madlavningsdage for teams opdateret')
   // teams reactively updates from store refresh - no manual update needed
 }
 
@@ -257,11 +248,10 @@ const handleUpdateTeamAffinity = async (teamId: number, affinity: WeekDayMap<boo
 const handleDeleteTeam = async (teamId: number | undefined) => {
   if (!teamId) return
   await deleteTeam(teamId) // Immediate delete from DB
-  showSuccessToast('Madhold slettet')
   // teams reactively updates from store refresh - no manual update needed
 }
 
-// EDIT MODE: Add member to team (IMMEDIATE SAVE)
+// EDIT MODE: Members and joker slots (IMMEDIATE SAVE) - the store toasts each action
 const handleAddMember = async (inhabitantId: number, role: TeamRole, allocationPercentage: number = 100, affinity: WeekDayMap | null = null) => {
   if (!selectedTeam.value?.id) return
 
@@ -272,27 +262,24 @@ const handleAddMember = async (inhabitantId: number, role: TeamRole, allocationP
     allocationPercentage,
     ...(affinity ? {affinity} : {})
   })
-  showSuccessToast('Medlem tilføjet til hold')
 }
 
-// EDIT MODE: Update member (delete old + create new, single refresh)
-const handleUpdateMember = async (assignmentId: number, inhabitantId: number, role: TeamRole, allocationPercentage: number = 100, affinity: WeekDayMap | null = null) => {
-  if (!selectedTeam.value?.id) return
-  await removeTeamMember(assignmentId)
-  await addTeamMember({
-    cookingTeamId: selectedTeam.value.id,
-    inhabitantId,
-    role,
-    allocationPercentage,
-    ...(affinity ? {affinity} : {})
-  })
-  showSuccessToast('Medlem opdateret')
+const handleUpdateMember = async (assignmentId: number, _inhabitantId: number, role: TeamRole, allocationPercentage: number = 100, affinity: WeekDayMap | null = null) => {
+  await updateTeamMember(assignmentId, {role, allocationPercentage, affinity})
 }
 
-// EDIT MODE: Remove member from team (IMMEDIATE DELETE)
 const handleRemoveMember = async (assignmentId: number) => {
   await removeTeamMember(assignmentId)
-  showSuccessToast('Medlem fjernet fra hold')
+}
+
+const handleAddJokerSlot = async (slot: JokerSlotCreate) => {
+  if (!selectedTeam.value?.id) return
+  await createJokerSlot(selectedTeam.value.id, slot)
+}
+
+const handleRemoveJokerSlot = async (slotId: number) => {
+  if (!selectedTeam.value?.id) return
+  await deleteJokerSlot(selectedTeam.value.id, slotId)
 }
 
 const handleCancel = async () => {
@@ -306,7 +293,7 @@ interface TableRow {
   original: CookingTeamDisplay
 }
 
-const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, COMPONENTS, LAYOUTS, getRainbowAccent} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, COMPONENTS, LAYOUTS, getRainbowAccent, NOISE} = useTheSlopeDesignSystem()
 
 const columns = [
   {
@@ -317,7 +304,7 @@ const columns = [
       const isOpen = row.original.id === selectedTeamId.value
       return h(resolveComponent('UButton'), {
         color: COLOR.neutral,
-        variant: 'ghost',
+        variant: NOISE.quiet,
         icon: isOpen ? (isMd.value ? ICONS.chevronRight : ICONS.chevronUp) : ICONS.chevronDown,
         square: true,
         'aria-label': isOpen ? 'Luk' : 'Åbn detaljer',
@@ -328,11 +315,13 @@ const columns = [
   },
   {
     accessorKey: 'name',
-    header: 'Madhold'
+    header: 'Madhold',
+    meta: {class: COMPONENTS.masterDetail.primaryColumn}
   },
   {
     accessorKey: 'affinity',
-    header: 'Madlavningsdage'
+    header: 'Madlavningsdage',
+    meta: {class: COMPONENTS.masterDetail.compactColumn}
   }
 ]
 
@@ -419,6 +408,7 @@ const columns = [
                     :team-name="getTeamShortName(row.original.name)"
                     :chef-count="countChefs(row.original.assignments ?? [])"
                     :member-count="row.original.assignments?.length ?? 0"
+                    :joker-slot-count="row.original.jokerSlotCount ?? 0"
                     :cooking-days-count="row.original.cookingDaysCount ?? 0"
                     size="small"
                 />
@@ -549,7 +539,7 @@ const columns = [
         <UButton data-testid="submit-create-teams" :color="COLOR.secondary" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
           {{ isActionLoading ? 'Arbejder...' : 'Opret madhold' }}
         </UButton>
-        <UButton :color="COLOR.neutral" variant="ghost" @click="handleCancel">
+        <UButton :color="COLOR.neutral" :variant="NOISE.quiet" @click="handleCancel">
           Annuller
         </UButton>
       </div>

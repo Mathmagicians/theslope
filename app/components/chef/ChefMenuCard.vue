@@ -42,7 +42,8 @@
  * │ 🍝 Spaghetti Carbonara                                                   │
  * │ Cremet pasta med bacon                                                   │
  * ├──────────────────────────────────────────────────────────────────────────┤
- * │ ALLERGENER: [🥛 Mælk] [🌾 Gluten]                                        │
+ * │ (allergy) ALLERGENER   3,5 kuv. | (milk) Mælk · 2,5 | (wheat) Gluten · 0 │
+ * │ (allergy) ALLERGENER   🥗 Menuen er fri for allergener...  (no allergen) │
  * ├──────────────────────────────────────────────────────────────────────────┤
  * │ <slot> - DinnerBookingForm (household booking)                          │
  * └──────────────────────────────────────────────────────────────────────────┘
@@ -54,7 +55,8 @@
  * │ Menu titel: [Spaghetti Carbonara___________]  [✏️]                       │
  * │ Beskrivelse: [Cremet pasta med bacon_______]                             │
  * ├──────────────────────────────────────────────────────────────────────────┤
- * │ ALLERGENER: [🥛 Mælk] [🌾 Gluten]              [REDIGER ALLERGENER]     │
+ * │ (allergy) ALLERGENER 3,5 kuv. | (milk) Mælk · 2,5  [Rediger allergener]  │
+ * │   the editor: AllergenMultiSelector on this dinner's tickets             │
  * ├──────────────────────────────────────────────────────────────────────────┤
  * │ ●━━━━━━━━○━━━━━━━━○━━━━━━━━○━━━━━━━━○                                    │
  * │ PLANLAGT  ANNONCERET  BOOKING   INDKØB    AFHOLDT                        │
@@ -127,7 +129,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { TYPOGRAPHY, SIZES, ICONS, ALERTS, BUTTONS, DINNER_STATE_BADGES, COMPONENTS, CHEF_CALENDAR, CALENDAR, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS, BG, TEXT, BORDER, RING } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, SIZES, ICONS, ALERTS, BUTTONS, DINNER_STATE_BADGES, COMPONENTS, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS, TEXT, RING, NOISE, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 // Hero panel button colors (ChefMenuCard sits on hero background with food image)
 const HERO_BUTTON = COMPONENTS.heroPanel.light
@@ -145,9 +147,6 @@ const { getStepConfig, canCancelDinner } = useBooking()
 // Name formatting from useHousehold (ADR-001)
 const { formatNameWithInitials } = useHousehold()
 
-// Budget/VAT logic from useOrder (ADR-001)
-const { convertVat } = useOrder()
-
 // Time logic from useSeason (ADR-001: business logic in composables)
 const { getDefaultDinnerStartTime, getDinnerTimeRange, getDeadlineUrgency } = useSeason()
 const dinnerStartHour = getDefaultDinnerStartTime()
@@ -155,6 +154,9 @@ const dinnerStartHour = getDefaultDinnerStartTime()
 // Allergies store for allergen data
 const allergiesStore = useAllergiesStore()
 const { allergyTypes } = storeToRefs(allergiesStore)
+
+// The menu's allergens on this dinner's diners (ADR-001)
+const { computeAllergenOverview } = useAllergy()
 
 // ========== COMPUTED: Mode helpers ==========
 
@@ -219,6 +221,13 @@ const selectedAllergenIds = computed(() => {
   return props.dinnerEvent.allergens.map((a: AllergyTypeDisplay) => a.id)
 })
 
+// The allergen line: the menu's allergens in their order, each with the kuverter of the diners carrying it
+const menuAllergenOverview = computed(() =>
+  computeAllergenOverview(props.dinnerEvent.tickets ?? [], props.dinnerEvent.allergens ?? [])
+)
+
+const noAllergensMessage = getRandomEmptyMessage('noAllergens')
+
 // Draft allergen selection for editing
 const draftAllergenIds = ref<number[]>([])
 const isEditingAllergens = ref(false)
@@ -232,8 +241,7 @@ watch(selectedAllergenIds, (newIds) => {
 
 const toFormState = (event: DinnerEventDetail): ChefMenuForm => ({
   menuTitle: event.menuTitle || '',
-  menuDescription: event.menuDescription || '',
-  totalCost: event.totalCost || 0
+  menuDescription: event.menuDescription || ''
 })
 
 const formState = ref<ChefMenuForm>(toFormState(props.dinnerEvent))
@@ -241,50 +249,6 @@ const formState = ref<ChefMenuForm>(toFormState(props.dinnerEvent))
 watch(() => props.dinnerEvent, (newEvent) => {
   if (newEvent) formState.value = toFormState(newEvent)
 }, { immediate: true })
-
-// VAT config from app.config
-const appConfig = useAppConfig()
-const vatPercent = appConfig.theslope?.kitchen?.vatPercent ?? 25
-
-// Cost input type: chef can enter either inkl. or ex moms
-// Default to 'ex' (excl. moms) since that's what appears on grocery receipts
-type CostInputType = 'inkl' | 'ex'
-const costInputType = ref<CostInputType>('ex')
-const costTypeOptions = [
-  { value: 'inkl' as CostInputType, label: 'Inkl. moms' },
-  { value: 'ex' as CostInputType, label: 'Ex moms' }
-]
-
-// Computed for totalCost input (øre to kr conversion + VAT handling)
-// totalCost is stored as gross (inkl. moms) in øre
-const totalCostKr = computed({
-  get: () => {
-    const grossOre = formState.value.totalCost
-    if (costInputType.value === 'ex') {
-      return Math.round(convertVat(grossOre, vatPercent, true) / 100)
-    }
-    return Math.round(grossOre / 100)
-  },
-  set: (inputKr: number) => {
-    const inputOre = inputKr * 100
-    if (costInputType.value === 'ex') {
-      formState.value.totalCost = convertVat(inputOre, vatPercent, false)
-    } else {
-      formState.value.totalCost = inputOre
-    }
-  }
-})
-
-// Display the alternative value for reference
-const costAlternativeDisplay = computed(() => {
-  if (!formState.value.totalCost) return null
-  const grossOre = formState.value.totalCost
-  const netOre = convertVat(grossOre, vatPercent, true)
-  if (costInputType.value === 'inkl') {
-    return `${Math.round(netOre / 100)} kr ex moms`
-  }
-  return `${Math.round(grossOre / 100)} kr inkl. moms`
-})
 
 const isEditingMenu = ref(false)
 
@@ -363,21 +327,18 @@ const handleCardClick = () => {
   <UCard
     v-if="isCompact"
     :name="`chef-menu-card-${dinnerEvent.id}`"
-    :ui="{
-      root: `${CALENDAR.selection.card.base} ${selected ? CHEF_CALENDAR.selection : ''}`,
-      body: 'p-3'
-    }"
+    :ui="COMPONENTS.chefMenuCard.compactUi(selected)"
     @click="handleCardClick"
   >
-    <div class="flex items-center gap-3">
+    <div :class="COMPONENTS.chefMenuCard.compactRow">
       <!-- Date -->
-      <div class="text-sm font-semibold text-primary w-12 shrink-0">
+      <div :class="COMPONENTS.chefMenuCard.compactDate">
         {{ formattedShortDate }}
       </div>
 
       <!-- Menu title -->
-      <div class="flex-1 min-w-0">
-        <div :class="['text-sm truncate', hasMenuTitle ? 'font-medium' : `italic ${TEXT.neutral[500]}`]">
+      <div :class="COMPONENTS.chefMenuCard.compactTitleColumn">
+        <div :class="hasMenuTitle ? COMPONENTS.chefMenuCard.compactTitle : [COMPONENTS.chefMenuCard.compactTitlePlaceholder, TEXT.neutral[500]]">
           {{ menuTitle }}
         </div>
       </div>
@@ -385,9 +346,9 @@ const handleCardClick = () => {
       <!-- State badge -->
       <UBadge
         :color="stateBadge.color"
-        variant="subtle"
+        :variant="NOISE.subtle"
         :size="SIZES.small"
-        class="shrink-0"
+        :class="COMPONENTS.chefMenuCard.compactBadge"
       >
         {{ stateBadge.label }}
       </UBadge>
@@ -395,15 +356,15 @@ const handleCardClick = () => {
       <!-- Menu status -->
       <UBadge
         :color="menuStatusBadge.color"
-        variant="soft"
+        :variant="NOISE.soft"
         :size="SIZES.small"
-        class="shrink-0"
+        :class="COMPONENTS.chefMenuCard.compactBadge"
       >
         {{ menuStatusBadge.label }}
       </UBadge>
 
       <!-- Budget -->
-      <div v-if="formattedBudget" class="text-sm font-medium shrink-0">
+      <div v-if="formattedBudget" :class="COMPONENTS.chefMenuCard.compactBudget">
         💰 {{ formattedBudget }}
       </div>
     </div>
@@ -438,7 +399,7 @@ const handleCardClick = () => {
       />
     </template>
 
-    <div class="space-y-6">
+    <div :class="COMPONENTS.chefMenuCard.stack">
       <!-- ========== MENU SECTION ========== -->
       <!-- Menu display with action row: edit (primary) - publish (secondary) - more (overflow) -->
       <div v-if="!isEditingMenu">
@@ -557,14 +518,13 @@ const handleCardClick = () => {
         <!-- Chef portrait + RoleAssignment trigger -->
         <div class="pt-4 mt-4 flex items-center gap-3 flex-wrap">
           <div
-            class="flex items-center gap-3 cursor-pointer"
-            :class="{ [`${BG.mocha[950]} border-2 border-dashed ${BORDER.amber[600]} rounded-lg p-3 -skew-x-1 w-fit`]: !dinnerEvent.chef }"
+            :class="dinnerEvent.chef ? COMPONENTS.wantedPoster.trigger : [COMPONENTS.wantedPoster.trigger, COMPONENTS.wantedPoster.frame]"
             :data-testid="dinnerEvent.chef ? 'chef-display' : 'chef-wanted'"
             @click="roleAssignmentRef?.open()"
           >
             <!-- Portrait frame around avatar -->
-            <div class="relative">
-              <div :class="`rounded-full ring-2 md:ring-4 ${RING.amber[500]}`">
+            <div :class="COMPONENTS.wantedPoster.portrait">
+              <div :class="COMPONENTS.wantedPoster.ring">
                 <UserListItem
                   v-if="dinnerEvent.chef"
                   :inhabitants="dinnerEvent.chef"
@@ -572,16 +532,16 @@ const handleCardClick = () => {
                   :link-to-profile="false"
                   :size="SIZES.standard"
                 />
-                <UAvatar v-else :icon="ICONS.help" :size="SIZES.standard" :ui="{ icon: TEXT.mocha[50] }" :class="BG.mocha[800]" />
+                <UAvatar v-else v-bind="COMPONENTS.wantedPoster.avatar" :icon="ICONS.help" :size="SIZES.standard" />
               </div>
               <!-- Chef hat on top -->
-              <UIcon :name="ICONS.chef" :class="`absolute -top-5 md:-top-7 left-1/2 -translate-x-1/2 ${TEXT.mocha[500]} text-xl md:text-3xl -rotate-9 drop-shadow-md`" />
+              <UIcon :name="ICONS.chef" :class="[COMPONENTS.wantedPoster.hat, dinnerEvent.chef ? COMPONENTS.wantedPoster.hatOnPage : COMPONENTS.wantedPoster.hatOnFrame]" />
             </div>
             <!-- Name or WANTED -->
-            <div class="flex flex-col">
+            <div :class="COMPONENTS.wantedPoster.nameStack">
               <span v-if="dinnerEvent.chef" :class="TYPOGRAPHY.cardTitle">{{ formatNameWithInitials(dinnerEvent.chef) }}</span>
-              <span v-else :class="`font-serif text-lg md:text-xl font-bold ${TEXT.mocha[50]} tracking-widest uppercase`">WANTED</span>
-              <span :class="dinnerEvent.chef ? TYPOGRAPHY.bodyTextMuted : `${TEXT.mocha[50]} text-sm opacity-75`">Chefkok</span>
+              <span v-else :class="COMPONENTS.wantedPoster.lettering">WANTED</span>
+              <span :class="dinnerEvent.chef ? TYPOGRAPHY.bodyTextMuted : COMPONENTS.wantedPoster.role">Chefkok</span>
             </div>
           </div>
 
@@ -610,23 +570,14 @@ const handleCardClick = () => {
         v-if="isEditing && isEditingMenu"
         :schema="ChefMenuFormSchema"
         :state="formState"
-        class="space-y-4"
+        :class="COMPONENTS.chefMenuCard.form"
         @submit="handleFormSubmit"
       >
-        <UFormField label="Menu titel" name="menuTitle" required class="w-full" hint="Hvad er aftenens ret?">
-          <UInput v-model="formState.menuTitle" placeholder="Aftenens ret, f.eks. Spaghetti Carbonara" :size="SIZES.standard" name="chef-menu-title-input" class="w-full" />
+        <UFormField label="Menu titel" name="menuTitle" required :class="COMPONENTS.chefMenuCard.field" hint="Hvad er aftenens ret?">
+          <UInput v-model="formState.menuTitle" placeholder="Aftenens ret, f.eks. Spaghetti Carbonara" :size="SIZES.standard" name="chef-menu-title-input" :class="COMPONENTS.chefMenuCard.field" />
         </UFormField>
-        <UFormField label="Beskrivelse" name="menuDescription" class="w-full" hint="Beskriv menuen kort">
-          <UTextarea v-model="formState.menuDescription" placeholder="Kort beskrivelse af retten og evt. tilbehør" :rows="3" :size="SIZES.standard" name="chef-menu-description-input" class="w-full" />
-        </UFormField>
-        <UFormField label="Indkøbsomkostninger" name="totalCost" class="w-full" hint="Hvad kostede indkøbene?">
-          <div class="flex gap-2 items-start">
-            <UInput v-model="totalCostKr" type="number" min="0" placeholder="Total fra kvitteringer" :size="SIZES.standard" name="chef-total-cost-input" class="flex-1" />
-            <USelect v-model="costInputType" :items="costTypeOptions" value-key="value" :size="SIZES.standard" name="chef-cost-type-select" class="w-32" />
-          </div>
-          <div v-if="costAlternativeDisplay" :class="`mt-1 ${TYPOGRAPHY.finePrint} opacity-60`">
-            = {{ costAlternativeDisplay }}
-          </div>
+        <UFormField label="Beskrivelse" name="menuDescription" :class="COMPONENTS.chefMenuCard.field" hint="Beskriv menuen kort">
+          <UTextarea v-model="formState.menuDescription" placeholder="Kort beskrivelse af retten og evt. tilbehør" :rows="3" :size="SIZES.standard" name="chef-menu-description-input" :class="COMPONENTS.chefMenuCard.field" />
         </UFormField>
         <div :class="LAYOUTS.formButtonRow">
           <UButton v-bind="BUTTONS.cancel" data-testid="cancel-menu-edit" @click="handleMenuCancel">Annuller</UButton>
@@ -635,38 +586,42 @@ const handleCardClick = () => {
       </UForm>
 
       <!-- ========== ALLERGEN SECTION ========== -->
-      <!-- AllergenMultiSelector handles its own title/empty state in view mode -->
-      <div v-if="showAllergens && allergyTypes.length > 0" class="pt-4 border-t">
-        <!-- VIEW allergens (not editing allergens) -->
-        <div v-if="!isEditingAllergens">
-          <!-- Edit button row (only when form is in EDIT mode) - labelled secondary action (NOISE.medium) -->
-          <div v-if="isEditing" :class="[LAYOUTS.cardActionRow, 'md:justify-end mb-2']">
-            <UButton
-              v-bind="BUTTONS.secondaryAction"
-              :class="LAYOUTS.cardActionButton"
-              :color="HERO_BUTTON.primaryButton"
-              :icon="ICONS.edit"
-              :disabled="isUpdating"
-              name="edit-allergens"
-              data-testid="edit-allergens"
-              @click="isEditingAllergens = true"
-            >
-              Rediger allergener
-            </UButton>
+      <div v-if="showAllergens && allergyTypes.length > 0" :class="COMPONENTS.chefMenuCard.section">
+        <!-- The allergen line: the menu's allergens on this dinner's diners, Rediger allergener in EDIT mode -->
+        <div v-if="!isEditingAllergens" data-testid="chef-allergen-line" :class="COMPONENTS.chefMenuCard.allergenRow">
+          <span data-testid="chef-allergen-label" :class="COMPONENTS.chefMenuCard.allergenLabel">
+            <UIcon :name="ICONS.allergy" :class="COMPONENTS.chefMenuCard.allergenGlyph" />
+            Allergener
+          </span>
+          <div :class="COMPONENTS.chefMenuCard.allergenLine">
+            <AllergyOverviewLine
+              v-if="menuAllergenOverview.breakdownByAllergen.length > 0"
+              data-testid="chef-allergen-overview"
+              :total-portions="menuAllergenOverview.totalPortions"
+              :allergens="menuAllergenOverview.breakdownByAllergen"
+              :with-glyph="false"
+            />
+            <span v-else :class="TEXT.muted">{{ noAllergensMessage.emoji }} {{ noAllergensMessage.text }}</span>
           </div>
-          <!-- AllergenMultiSelector shows title when has allergens, subtle empty state when none -->
-          <AllergenMultiSelector
-            :model-value="selectedAllergenIds"
-            :allergy-types="allergyTypes"
-            mode="view"
-            readonly
-          />
+          <UButton
+            v-if="isEditing"
+            v-bind="BUTTONS.secondaryAction"
+            :class="LAYOUTS.cardActionButton"
+            :color="HERO_BUTTON.primaryButton"
+            :icon="ICONS.edit"
+            :disabled="isUpdating"
+            name="edit-allergens"
+            data-testid="edit-allergens"
+            @click="isEditingAllergens = true"
+          >
+            Rediger allergener
+          </UButton>
         </div>
 
         <!-- EDIT allergens: title + form-footer buttons (DS configs, mobile-stacked), then selector -->
-        <div v-else class="space-y-4">
-          <div class="flex flex-col gap-2 md:flex-row md:items-center">
-            <h4 :class="`${TYPOGRAPHY.sectionSubheading} md:flex-1`">Allergener i menuen</h4>
+        <div v-else :class="COMPONENTS.chefMenuCard.allergenEditor">
+          <div :class="COMPONENTS.chefMenuCard.allergenEditorHead">
+            <h4 :class="COMPONENTS.chefMenuCard.allergenEditorTitle">Allergener i menuen</h4>
             <div :class="LAYOUTS.formButtonRow">
               <UButton v-bind="BUTTONS.cancel" data-testid="cancel-allergens-edit" @click="handleAllergenCancel">Annuller</UButton>
               <UButton v-bind="BUTTONS.save" :color="HERO_BUTTON.primaryButton" data-testid="save-allergens-edit" @click="handleAllergenSave">Gem</UButton>
@@ -675,21 +630,20 @@ const handleCardClick = () => {
           <AllergenMultiSelector
             v-model="draftAllergenIds"
             :allergy-types="allergyTypes"
-            mode="edit"
-            :show-statistics="true"
+            :tickets="dinnerEvent.tickets ?? []"
           />
         </div>
       </div>
 
       <!-- ========== PAGE-SPECIFIC CONTENT (slot) ========== -->
-      <div v-if="$slots.default" class="pt-4 border-t">
+      <div v-if="$slots.default" :class="COMPONENTS.chefMenuCard.section">
         <slot />
       </div>
 
       <!-- ========== STATE CONTROLS (showStateControls only) ========== -->
       <template v-if="showStateControls">
         <!-- Status stepper (includes deadline badges) -->
-        <div class="pt-4 border-t">
+        <div :class="COMPONENTS.chefMenuCard.section">
           <DinnerStatusStepper
             :dinner-event="dinnerEvent"
             :deadlines="deadlines"
@@ -699,7 +653,7 @@ const handleCardClick = () => {
         </div>
 
         <!-- Budget section (chef's financial overview) -->
-        <div class="pt-4 border-t">
+        <div :class="COMPONENTS.chefMenuCard.section">
           <DinnerBudget :orders="dinnerEvent.tickets ?? []" mode="full" />
         </div>
       </template>

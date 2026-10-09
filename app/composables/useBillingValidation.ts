@@ -1,6 +1,13 @@
 import {z} from 'zod'
-import {TicketTypeSchema, DinnerModeSchema, OrderStateSchema} from '~~/prisma/generated/zod'
+import {TicketTypeSchema, DinnerModeSchema, OrderStateSchema, LedgerEntryTypeSchema} from '~~/prisma/generated/zod'
 import {parse as parseDate} from 'date-fns'
+import {
+    ExpenseFragmentSchema,
+    SerializedExpenseFragmentSchema,
+    PayerSnapshotSchema,
+    serializeExpense,
+    deserializeExpense
+} from '~/composables/fragments/domainFragments'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {DinnerEventInfo} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
@@ -37,7 +44,7 @@ export const useBillingValidation = () => {
      * Ticket counts by type - raw data from repository
      * Keys are TicketType enum values
      */
-    const TicketCountsByTypeSchema = z.record(TicketTypeSchema, z.number().int())
+    const TicketCountsByTypeSchema = z.partialRecord(TicketTypeSchema, z.number().int())
 
     /**
      * BillingPeriodSummary Display - for index endpoints (lightweight)
@@ -300,6 +307,21 @@ export const useBillingValidation = () => {
     // ============================================================================
     // Household Billing Schemas (ADR-009)
     // ============================================================================
+
+    // Expense - the ledger twin of Transaction: a cost paid from the kitchen's money (ADR-009: one shape, no Display/Detail split)
+    const LedgerEntryType = LedgerEntryTypeSchema.enum
+    const ExpenseSchema = ExpenseFragmentSchema
+    const SerializedExpenseSchema = SerializedExpenseFragmentSchema
+
+    // API body of a grocery line; the route resolves the payer and the ledger type. Strict: a stray key is a 400
+    const ExpenseCreateSchema = z.object({
+        amount: z.number().int().positive('Beløbet skal være større end nul'),
+        description: z.string().trim().min(1, 'Beskrivelse er påkrævet'),
+        paidByUserId: z.number().int().positive().nullable().optional()
+    }).strict()
+
+    // Repository input: the row without its database-assigned fields
+    const ExpenseCreateDataSchema = ExpenseSchema.omit({id: true, createdAt: true, updatedAt: true})
 
     /**
      * Transaction create data - batch input for createTransactionsBatch (repository)
@@ -786,7 +808,18 @@ export const useBillingValidation = () => {
         computeStatsFromSnapshots,
         deserializeBillingPeriodDisplay,
         deserializeBillingPeriodDetail,
-        deserializeInvoice
+        deserializeInvoice,
+
+        // Expense (ledger)
+        LedgerEntryTypeSchema,
+        LedgerEntryType,
+        ExpenseSchema,
+        SerializedExpenseSchema,
+        ExpenseCreateSchema,
+        ExpenseCreateDataSchema,
+        PayerSnapshotSchema,
+        serializeExpense,
+        deserializeExpense
     }
 }
 
@@ -823,6 +856,13 @@ export type MonthlyBillingResponse = z.infer<ReturnType<typeof useBillingValidat
 export type HouseholdBillingResponse = z.infer<ReturnType<typeof useBillingValidation>['HouseholdBillingResponseSchema']>
 export type TransactionDisplay = z.infer<ReturnType<typeof useBillingValidation>['TransactionDisplaySchema']>
 export type TransactionCreateData = z.infer<ReturnType<typeof useBillingValidation>['TransactionCreateDataSchema']>
+
+// Expense types (ledger)
+export type Expense = z.infer<ReturnType<typeof useBillingValidation>['ExpenseSchema']>
+export type SerializedExpense = z.infer<ReturnType<typeof useBillingValidation>['SerializedExpenseSchema']>
+export type ExpenseCreate = z.infer<ReturnType<typeof useBillingValidation>['ExpenseCreateSchema']>
+export type ExpenseCreateData = z.infer<ReturnType<typeof useBillingValidation>['ExpenseCreateDataSchema']>
+export type PayerSnapshot = z.infer<ReturnType<typeof useBillingValidation>['PayerSnapshotSchema']>
 export type HouseholdInvoice = z.infer<ReturnType<typeof useBillingValidation>['HouseholdInvoiceSchema']>
 export type CurrentPeriodBilling = z.infer<ReturnType<typeof useBillingValidation>['CurrentPeriodBillingSchema']>
 

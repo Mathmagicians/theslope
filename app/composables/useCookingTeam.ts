@@ -3,6 +3,9 @@ import type {InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {DinnerEventDetail} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
 import {formatDate} from '~/utils/date'
+import {dateToWeekDay} from '~/utils/season'
+import type {JokerSlot} from '~/composables/useDutyValidation'
+import {startOfDay, endOfDay, isWithinInterval} from 'date-fns'
 
 /**
  * Predicate: the role's current holder is not the given inhabitant.
@@ -87,6 +90,7 @@ export const useCookingTeam = () => {
             name: createDefaultTeamName(seasonShortName, teamNumber),
             assignments: [],
             cookingDaysCount: 0,
+            jokerSlotCount: 0,
             ...overrides
         }
     }
@@ -145,6 +149,18 @@ export const useCookingTeam = () => {
         }
     }
 
+    /**
+     * The shifts a joker slot covers: the team's cooking dates inside the slot's period (both ends
+     * inclusive) that fall on one of the slot's weekdays
+     */
+    const countJokerSlotShifts = (
+        slot: Pick<JokerSlot, 'startDate' | 'endDate' | 'affinity'>,
+        cookingDates: Date[]
+    ): number => {
+        const period = {start: startOfDay(slot.startDate), end: endOfDay(slot.endDate)}
+        return cookingDates.filter(date => isWithinInterval(date, period) && slot.affinity[dateToWeekDay(date)]).length
+    }
+
     return {
         CookingTeamSchema,
         createDefaultTeamName,
@@ -156,6 +172,7 @@ export const useCookingTeam = () => {
         mergeInhabitantsWithAssignments,
         chunkTeamAffinities,
         decideRoleAssignmentWrites,
+        countJokerSlotShifts,
         isNotAssignedToMe,
         tryAutoClaim
     }

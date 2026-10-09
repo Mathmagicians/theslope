@@ -15,7 +15,7 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-const {ICONS, SIZES, COMPONENTS, BUTTONS} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, COMPONENTS, BUTTONS, NOISE} = useTheSlopeDesignSystem()
 const heroPrimary = COMPONENTS.heroPanel.light.primaryButton
 const planStore = usePlanStore()
 const authStore = useAuthStore()
@@ -66,7 +66,7 @@ defineExpose({open: () => { if (isActionable.value) isOpen.value = true }})
             :icon="ICONS.chef"
             :size="SIZES.standard"
             :color="heroPrimary"
-            variant="outline"
+            :variant="NOISE.medium"
             data-testid="role-assignment-trigger"
             @click="isOpen = !isOpen"
         >

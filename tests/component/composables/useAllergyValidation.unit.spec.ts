@@ -1,6 +1,8 @@
 import {describe, it, expect} from 'vitest'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
 import {AllergyFactory} from '../../e2e/testDataFactories/allergyFactory'
+import {DinnerEventFactory} from '../../e2e/testDataFactories/dinnerEventFactory'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 
 describe('useAllergyValidation', () => {
     const {
@@ -12,7 +14,8 @@ describe('useAllergyValidation', () => {
         AllergyDisplaySchema,
         AllergyDetailSchema,
         AllergyTypeDetailSchema,
-        InhabitantWithAllergiesSchema
+        InhabitantWithAllergiesSchema,
+        deserializeInhabitantWithAllergies
     } = useAllergyValidation()
 
     // Use factory helper functions
@@ -569,6 +572,28 @@ describe('useAllergyValidation', () => {
             if (result.success) {
                 expect(result.data.allergies).toHaveLength(0)
             }
+        })
+    })
+
+    describe('deserializeInhabitantWithAllergies', () => {
+        const {serializeWeekDayMap, createDefaultWeekdayMap} = useCoreValidation()
+        const serializedInhabitant = DinnerEventFactory.serializedInhabitant(serializeWeekDayMap(createDefaultWeekdayMap()))
+
+        describe.each([
+            {desc: 'no allergies', count: 0},
+            {desc: 'one allergy', count: 1},
+            {desc: 'two allergies', count: 2}
+        ])('GIVEN an inhabitant row with $desc', ({count}) => {
+            const allergies = AllergyFactory.serializedAllergies(count, serializedInhabitant.id)
+            const result = deserializeInhabitantWithAllergies({...serializedInhabitant, allergies})
+
+            it('WHEN deserializing THEN keeps each allergy with its allergy type', () => {
+                expect(result.allergies.map(a => a.allergyType)).toEqual(allergies.map(a => a.allergyType))
+            })
+
+            it('WHEN deserializing THEN converts the dinner preferences JSON to a weekday map', () => {
+                expect(result.dinnerPreferences).toHaveProperty('mandag')
+            })
         })
     })
 

@@ -681,4 +681,27 @@ describe('useQueryParam.ts', () => {
       expect(value.value).toBe('invalid')
     })
   })
+
+  describe('Writes from several instances', () => {
+    const createStringParam = (key: string) => useQueryParam<string>(key, {
+      defaultValue: '',
+      syncWhen: () => false
+    })
+    // The mocked navigation lands on the mocked route, as the router does
+    const landNavigation = async ({query}: {query: Record<string, string>}) => setupQuery(query)
+
+    it('lands every key of two instances writing in the same tick in one navigation', async () => {
+      setupQuery({other: 'value'})
+      mockNavigateTo.mockImplementationOnce(landNavigation)
+      const mode = createStringParam('mode')
+      const season = createStringParam('season')
+
+      mode.value.value = 'edit'
+      season.value.value = '2026'
+      await flushPromises()
+
+      expect(mockNavigateTo).toHaveBeenCalledTimes(1)
+      expect(mockNavigateTo.mock.lastCall![0].query).toEqual({other: 'value', mode: 'edit', season: '2026'})
+    })
+  })
 })

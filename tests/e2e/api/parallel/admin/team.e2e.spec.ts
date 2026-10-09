@@ -37,6 +37,7 @@ test.describe('Admin Teams API', () => {
             expect(testTeam.id).toBeGreaterThanOrEqual(0)
             expect(testTeam.seasonId).toEqual(testSeasonId)
             expect(() => validateCookingTeam(testTeam)).not.toThrow()
+            expect(testTeam.jokerSlots).toEqual([])
 
             expect(testTeam.id).toBeDefined()
             const retrievedTeam = await SeasonFactory.getCookingTeamById(context, testTeam.id!)
@@ -115,6 +116,8 @@ test.describe('Admin Teams API', () => {
             // Find our created team
             const foundTeam = teams.find(t => t.name.includes(testTeam.name) && t.id === testTeam.id)
             expect(foundTeam).toBeTruthy()
+            // The index carries the joker slot aggregate, not the slots
+            expect(foundTeam!.jokerSlotCount).toBe(0)
         })
 
         test('GET /api/admin/team?seasonId=X should filter teams by season', async ({browser}) => {
@@ -198,6 +201,20 @@ test.describe('Admin Teams API', () => {
             expect(teamDetail.cookingDaysCount).toBe(teamDinnerIds.length)
         })
 
+        test('GET /api/admin/team/[id] returns the team joker slots in its Detail (ADR-009)', async ({browser}) => {
+            // GIVEN: A team with no joker slots
+            const context = await validatedBrowserContext(browser)
+            const createdTeam = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, "team-jokers")
+
+            // WHEN: GET team detail by ID
+            const teamDetail = await SeasonFactory.getCookingTeamById(context, createdTeam.id!)
+
+            // THEN: The Detail carries an empty jokerSlots array
+            expect(teamDetail!.jokerSlots).toEqual([])
+            // AND: The aggregate it inherits from the Display counts the same slots
+            expect(teamDetail!.jokerSlotCount).toBe(teamDetail!.jokerSlots.length)
+        })
+
         test('GET /api/admin/team/[id] should return 404 for non-existent team', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const nonExistentId = 999999
@@ -233,6 +250,7 @@ test.describe('Admin Teams API', () => {
             const updatedTeam = await updateResponse.json()
             expect(updatedTeam.name).toBe(updatedData.name)
             expect(updatedTeam.id).toBe(createdTeam.id)
+            expect(updatedTeam.jokerSlots).toEqual([])
         })
 
         test('POST /api/admin/team/[id] should update team with assignments (inhabitant populated)', async ({browser}) => {
@@ -331,7 +349,8 @@ test.describe('Admin Teams API', () => {
             expect(getTeamMemberCounts(createdTeam)).toBe(3)
             expect(createdTeam.assignments.length).toBe(3)
             // Delete the team
-            await SeasonFactory.deleteCookingTeam(context, createdTeam.id!)
+            const deletedTeam = await SeasonFactory.deleteCookingTeam(context, createdTeam.id!)
+            expect(deletedTeam!.jokerSlots).toEqual([])
 
             // Verify team is deleted
             await SeasonFactory.getCookingTeamById(context, createdTeam.id!, 404)
@@ -358,6 +377,32 @@ test.describe('Admin Teams API', () => {
 
             // Verify allocationPercentage is set (defaults to 100)
             expect(teamDetails!.assignments[0]!.allocationPercentage).toBe(100)
+        })
+
+        test('POST /api/admin/team/assignment/[id] updates role and allocation, and the team Detail reflects it', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const {TeamRoleSchema} = useCookingTeamValidation()
+
+            // GIVEN: a team with one member at full time
+            const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-for-update", 1)
+            testHouseholdIds.push(createdTeam.householdId)
+            const member = createdTeam.assignments[0]!
+            const role = member.role === TeamRoleSchema.enum.COOK ? TeamRoleSchema.enum.JUNIORHELPER : TeamRoleSchema.enum.COOK
+
+            // WHEN: the seat changes role and drops to half time
+            const updated = await SeasonFactory.updateTeamMember(context, member.id!, {role, allocationPercentage: 50})
+
+            // THEN: the response and the team Detail carry the new seat on the same assignment
+            expect(updated).toMatchObject({id: member.id, inhabitantId: member.inhabitantId, role, allocationPercentage: 50})
+            const teamDetail = await SeasonFactory.getCookingTeamById(context, createdTeam.id!)
+            expect(teamDetail!.assignments).toEqual([expect.objectContaining({id: member.id, role, allocationPercentage: 50})])
+        })
+
+        test('POST /api/admin/team/assignment/[id] rejects an allocation outside 1-100', async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-for-invalid-update", 1)
+            testHouseholdIds.push(createdTeam.householdId)
+            await SeasonFactory.updateTeamMember(context, createdTeam.assignments[0]!.id!, {allocationPercentage: 0}, 400)
         })
 
         test('DELETE /api/admin/team/[id]/members/[memberId] should remove team assignments', async ({browser}) => {

@@ -1,20 +1,13 @@
 <!--
-Utility component for displaying allergy types consistently
+AllergyTypeDisplay - an allergy type's own icon or emoji on a white avatar, optionally with its name
 
 Props:
-- allergyType: { name: string, icon?: string, description?: string } | null/undefined
-  - If null/undefined: Shows "no allergies" state (☀️ Ingen)
-- compact: boolean (default: false)
-  - true: avatar only (inline display for tables, lists)
-  - false: avatar + name (regular display)
-- showName: boolean (default: false)
-  - true: show name next to avatar
-  - false: avatar only
+- allergyType: { name, icon?, description? } | null - without a type it shows the no-allergy state, "Ingen"
+- compact: the small inline face for table cells and diner lines; otherwise the regular face
+- showName: the name beside the avatar
 
-Examples:
-<AllergyTypeDisplay :allergy-type="allergyType" compact /> Avatar only, inline
-<AllergyTypeDisplay :allergy-type="allergyType" show-name /> Avatar + name
-<AllergyTypeDisplay />  No allergies: ☀️ (+ Ingen if showName)
+  compact show-name:  (milk) Mælk
+  no type, show-name: (sun) Ingen
 -->
 
 <script setup lang="ts">
@@ -36,76 +29,53 @@ const props = withDefaults(defineProps<Props>(), {
   showName: false
 })
 
-// Responsive breakpoint injection
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
+const {COMPONENTS, ICONS, SIZES} = useTheSlopeDesignSystem()
+const display = COMPONENTS.allergyTypeDisplay
 
-// Normalize allergyType - treat null/undefined as "no allergies" object
-const normalizedAllergyType = computed(() => {
-  if (!props.allergyType) {
-    return { name: 'Ingen', icon: 'i-heroicons-sun', description: 'Ingen allergier' }
-  }
-  return props.allergyType
-})
+const normalizedAllergyType = computed(() =>
+  props.allergyType ?? {name: 'Ingen', icon: ICONS.noAllergy, description: 'Ingen allergier'}
+)
 
-// Responsive avatar size
-const avatarSize = computed(() => {
-  if (props.compact) {
-    return getIsMd.value ? 'xs' : '2xs'
-  }
-  return getIsMd.value ? 'sm' : 'xs'
-})
+const avatarSize = computed(() => props.compact ? SIZES.allergyAvatarCompact : SIZES.allergyAvatar)
 
-// Determine if icon is an iconify class or emoji/text
+// An allergy type's icon is either an iconify name or an emoji; the avatar takes the first as icon, the second as text
 const isIconClass = computed(() => normalizedAllergyType.value.icon?.startsWith('i-') || normalizedAllergyType.value.icon?.includes(':'))
 
-// For UAvatar icon property (iconify classes only)
 const avatarIcon = computed(() => {
-  if (!normalizedAllergyType.value.icon) {
-    return 'i-heroicons-sun' // Fallback if icon is missing
-  }
-  if (isIconClass.value) {
-    return normalizedAllergyType.value.icon
-  }
-  return undefined // Use text instead
+  if (!normalizedAllergyType.value.icon) return ICONS.noAllergy
+  return isIconClass.value ? normalizedAllergyType.value.icon : undefined
 })
 
-// For UAvatar text property (emojis only)
-const avatarText = computed(() => {
-  if (!isIconClass.value && normalizedAllergyType.value.icon) {
-    return normalizedAllergyType.value.icon // Emoji
-  }
-  return undefined // Use icon instead
-})
+const avatarText = computed(() =>
+  !isIconClass.value && normalizedAllergyType.value.icon ? normalizedAllergyType.value.icon : undefined
+)
 
-// Display name
-const displayName = computed(() => normalizedAllergyType.value.name)
+const stateClass = computed(() => props.allergyType ? undefined : display.none)
+const nameWeight = computed(() => props.allergyType ? display.named : undefined)
 </script>
 
 <template>
-  <!-- Compact: Inline display (avatar only or avatar + name) -->
-  <div v-if="compact" class="inline-flex items-center gap-1 md:gap-2" :class="!allergyType ? 'text-muted' : ''">
+  <div v-if="compact" :class="[display.compactRoot, stateClass]">
     <UAvatar
       :icon="avatarIcon"
       :text="avatarText"
       :size="avatarSize"
-      class="flex-shrink-0 bg-white p-0.5"
+      :class="display.compactAvatar"
     />
-    <span v-if="showName" class="text-xs md:text-sm whitespace-nowrap" :class="allergyType ? 'font-medium' : ''">
-      {{ displayName }}
+    <span v-if="showName" :class="[display.compactName, nameWeight]">
+      {{ normalizedAllergyType.name }}
     </span>
   </div>
 
-  <!-- Regular: Avatar + Name (responsive sizing) -->
-  <div v-else class="flex items-center gap-2" :class="!allergyType ? 'text-muted' : ''">
+  <div v-else :class="[display.root, stateClass]">
     <UAvatar
       :icon="avatarIcon"
       :text="avatarText"
       :size="avatarSize"
-      class="flex-shrink-0 bg-white p-1"
+      :class="display.avatar"
     />
-    <span v-if="showName" class="text-sm md:text-base" :class="allergyType ? 'font-medium' : ''">
-      {{ displayName }}
+    <span v-if="showName" :class="[display.name, nameWeight]">
+      {{ normalizedAllergyType.name }}
     </span>
   </div>
 </template>

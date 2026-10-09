@@ -18,11 +18,12 @@ const idSchema = z.object({
     id: z.coerce.number().int().positive('ID must be a positive integer')
 })
 
-// Consolidated schema: menu fields + state + allergens (all optional, at least one required)
+// Consolidated schema: menu fields + state + allergens (all optional, at least one required). Strict: the cost is
+// computed from the dinner's expense lines, so a body carrying totalCost is a 400
 const ChefDinnerUpdateSchema = DinnerEventUpdateSchema.extend({
     state: DinnerStateSchema.optional(),
     allergenIds: z.array(z.number().int().positive()).optional()
-}).refine(
+}).strict().refine(
     data => Object.keys(data).some(k => data[k as keyof typeof data] !== undefined),
     {message: 'At least one field must be provided'}
 )

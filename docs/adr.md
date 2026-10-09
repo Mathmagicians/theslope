@@ -92,6 +92,7 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 | `app/composables/useUserRolesUi.ts` | Role labels/icons/visibility (auth store) |
 | `app/composables/useUserRoles.ts` | Server-safe role reconciliation |
 | `shared/types/cloudflare.d.ts` | `H3EventContext.cloudflare`, Nitro `TaskContext.cloudflare` |
+| `shared/types/nuxt-app.d.ts`, `shared/types/url-writes.d.ts` | `NuxtApp._urlWrites`, the batch type shared with `useUrlQueryWriter` |
 | `server/tsconfig.json` | Extends `.nuxt/tsconfig.server.json`; target of `ts:server` |
 
 ### Related ADRs
@@ -488,6 +489,7 @@ export const deserializeSeason = (s: SerializedSeason) => ({ ...s, holidays: JSO
 3. Composables MUST export: domain schema, serialized schema, transform functions
 4. Tests MUST use domain types (no manual serialization)
 5. Repository WHERE clauses MUST use unique fields (`id` or `@unique` constraints). Non-unique lookups MUST be resolved by caller before reaching the repository.
+6. A deprecated column's value never leaves the repository: the deserializer replaces it with the value computed from the rows that own it (`DinnerEvent.totalCost` from the dinner's `expenses` amounts); the write schemas omit the column and reject a body carrying it, and clients receive the computed value without deriving it
 
 ---
 
@@ -532,11 +534,12 @@ Create lightweight repository functions for bulk updates (>10 entities).
 ### Compliance
 
 1. Index = display-ready, Detail = operation-ready
-2. Mutations MUST return Detail schema
+2. Mutations MUST return Detail schema, or the entity itself where it has no Display and Detail split
 3. **ONLY 2 types per entity** - NO EntityResponse, Entity, etc.
 4. Batch operations MUST use Display types
 5. Prisma types MUST NOT leave repository layer (ADR-010)
 6. Operation result types are NOT entity types - they MAY be added as needed for side-effect operations
+7. A delete returns the deleted entity's Detail when a caller renders it, otherwise the deleted count
 
 ---
 
@@ -576,23 +579,55 @@ const createDraft = ref<CookingTeam[]>([])
 
 ## ADR-007: SSR-Friendly Store Pattern with useAsyncData
 
-**Status:** Accepted | **Date:** 2025-01-28 | **Updated:** 2025-11-11
+**Status:** Accepted | **Date:** 2025-01-28 | **Updated:** 2026-10-08
 
 ### Decision
 
-**Stores use `useAsyncData` with status-derived state. NO AWAITS anywhere.**
+**Stores read through `storeAsyncData` and write through `apiRequest`, both from `useApiHandler`. State is status-derived. NO AWAITS anywhere.**
 
-**Why `useAsyncData`:** Explicit `refresh()`, comprehensive status refs, works for static and reactive URLs.
+| Call | Shape | What it owns |
+|------|-------|--------------|
+| `storeAsyncData(key, url, {schema, default, errorMessage?, enabled?, dependsOn?, notFound?, ...options})` | `useAsyncData` over the request fetch (`useRequestFetch`, captured once) | The dataset's type is the schema's output (`schema: ZodType<T>` → `data: Ref<T>`); `transform` parses with the schema; a failed request or parse goes through `handleApiError` with `errorMessage`; `key` and `url` take a value or a getter, and the dataset refetches when its url changes or its gate opens; a gated dataset that hydrates idle fetches on the client once its gate is open; `enabled` gates the request: while it is false the dataset reads `idle` with its default; `dependsOn: [dataset, …]` resolves the url and the gate once those datasets have loaded, so the server render awaits the chain; `notFound: {recover?, retries? = 1, toast?, message?}` handles a 404 on a url derived from a selection, and a retry never re-requests the dead url: recover → re-derive → one fresh request, the toast on each attempt, the error page with `message` after `retries` consecutive 404s; `watch`, `immediate`, `lazy`, `deep` pass through |
+| `apiRequest(url, {action, errorMessage?, schema?, ...fetchOptions})` | The request fetch for a write or a one-shot read | Parses the response with `schema` when given; a failure goes through `handleApiError` and rethrows |
 
 ### Store Pattern (Reference: `app/stores/plan.ts`)
 
 ```typescript
-// List endpoint
-const { data: seasons, status, error, refresh } = useAsyncData<Season[]>(
-    'plan-store-seasons',
-    () => $fetch('/api/admin/season'),
-    { default: () => [], transform: data => data.map(s => SeasonSchema.parse(s)) }
+const {storeAsyncData, apiRequest} = useApiHandler()
+
+// List endpoint: typed Ref<Season[]> by the schema
+const {data: seasons, status, error, refresh} = storeAsyncData('plan-store-seasons', '/api/admin/season', {
+    schema: SeasonSchema.array(),
+    default: () => []
+})
+
+// Selection-driven detail: the url reads the selection, `enabled` gates it, `dependsOn` awaits the
+// datasets the selection resolves from; the key stays constant because the id resolves mid-render.
+// The page hands a getter over its URL once at setup; the store keeps it outside the pinia state
+const seasonChoice = shallowRef<() => string | number | null>(() => null)
+const selectSeason = (choice: MaybeRefOrGetter<string | number | null>) => {
+    seasonChoice.value = () => toValue(choice)
+}
+const selectedSeasonId = computed(() => resolveSeasonChoice(seasonChoice.value()) ?? getDefaultSeasonId())
+const {data: selectedSeason} = storeAsyncData(
+    'plan-store-selected-season',
+    () => `/api/admin/season/${selectedSeasonId.value}`,
+    {
+        schema: SeasonSchema.nullable(), default: () => null, errorMessage: 'Kunne ikke hente sæson',
+        enabled: () => !!selectedSeasonId.value,
+        dependsOn: [seasonsDataset, activeSeasonIdDataset]
+    }
 )
+
+// Write: the store action owns the request, the refresh and the success toast
+const updateSeason = async (season: Season) => {
+    const result = await apiRequest(`/api/admin/season/${season.id}`, {
+        method: 'POST', body: season, schema: SeasonUpdateResponseSchema, action: 'updateSeason'
+    })
+    await refresh()
+    toast.add({title: 'Sæson opdateret', description: formatSeasonUpdate(result), color: COLOR.success})
+    return result
+}
 
 // Status computeds (4-state UI)
 const isLoading = computed(() => status.value === 'pending')
@@ -605,7 +640,7 @@ const isStoreReady = computed(() => /* combine all checks */)
 
 | Layer | Owns |
 |-------|------|
-| **Store** | Server data, CRUD, business logic, initialization timing |
+| **Store** | Server data, CRUD, business logic, initialization timing, the toast that reports a store action's result |
 | **Component** | UI state (formMode, draft), URL sync, reactive loaders |
 | **Page** | Call `initStore()` (synchronous, no await) |
 
@@ -614,22 +649,26 @@ const isStoreReady = computed(() => /* combine all checks */)
 Components MAY use `useAsyncData` directly when:
 - Data is component-specific (not shared)
 - Multiple instances need separate data
-- Fetch calls **store methods** (NEVER direct `$fetch`)
+- Fetch calls **store methods** built on `apiRequest` (`planStore.fetchTeamDetail`, `bookingsStore.fetchOrderDetail`)
 
 ### Compliance
 
-1. MUST prefer `useAsyncData` over `useFetch`
+1. Store reads MUST use `storeAsyncData`; writes and one-shot reads MUST use `apiRequest`
 2. MUST expose: `isLoading`, `isErrored`, `isInitialized`, `isEmpty`, `isStoreReady`
 3. `isInitialized` MUST check data exists (not just status='success')
 4. Init methods MUST be synchronous
 5. Components MUST NOT contain server data (exception: component-local)
 6. Components MUST show loaders based on `isStoreReady`
+7. `tests/component/architecture/fetchUsage.unit.spec.ts` fails a `$fetch(` or `useRequestFetch(` under `app/` outside `app/composables/useApiHandler.ts`
+8. A gated read puts its condition on `enabled`; the dataset reads `idle` while the condition is false, and the store's ready flag counts the datasets the store requests
+9. A dataset reads its selection through getters (`planStore.selectedSeasonId`, `householdsStore.selectedHouseholdId`, the store's own selected ids) and declares the datasets that selection resolves from in `dependsOn`; its key stays constant. A page hands the store a getter over the selection it shows through `selectSeason`, `selectTeam`, `selectDinnerDate`, `selectHousehold`, `selectAllergyType`, `selectBillingPeriod` and `selectInvoice`, set once at setup; `notFound.recover` masks the gone id out of that getter. A page calls a setter for a scope no store holds (`loadOrdersForDinners`, `loadUpcomingOrders`, `loadHouseholdBilling`)
+10. A component renders server-resolved state through computeds; an edit draft starts on an edit action (focus, an edit button), never from a ref seeded at setup. The seed renders the setup-time value on the server, the client hydrates the resolved one, and the repair replaces the element under the user's input
 
 ---
 
 ## ADR-006: URL-Based Navigation and Client-Side State
 
-**Status:** Accepted | **Date:** 2025-01-27 | **Updated:** 2026-03-04
+**Status:** Accepted | **Date:** 2025-01-27 | **Updated:** 2026-10-08
 
 ### Decision
 
@@ -643,9 +682,28 @@ Draft state: In-memory Vue ref in component (no persistence).
 
 ### Household URL Disambiguation
 
-`?pbs=X` query param on household routes. `pbsId` is always unique. `getHouseholdUrl(shortName, pbsId, tab?)` utility builds all household URLs. Store persists init args in refs so watchers can re-invoke after async data loads.
+`?pbs=X` query param on household routes. `pbsId` is always unique. `getHouseholdUrl(shortName, pbsId, tab?)` utility builds all household URLs. The page hands `selectHousehold` a getter over `shortname` and `?pbs=`; the store resolves it once the households load.
 
 **Resolution priority:** `pbsId` → match by `pbsId`. No `pbsId`, one `shortName` match → use it. No `pbsId`, multiple `shortName` matches → user's own household, else first match. No match → current selection or user's household.
+
+### URL Parameters
+
+**The URL is the state.** A page or component owns a query parameter through `useQueryParam(key, options)`: the value reads
+from `route.query` on every access and a write navigates. `deserialize` turns the string into the domain value (null when it
+cannot), `validate` checks it against the data it names (a season in the list, a household by `pbsId`), `normalize` maps
+an invalid value to a replacement or to null, which removes the key, and `defaultValue` fills a missing or invalid one.
+`syncWhen` names the readiness the validation needs (the store that holds the list); until it holds, the raw value passes
+through. When it holds, the parameter syncs the URL once (`needsSync`), so a page lands with its parameters spelled out.
+
+### URL Writes
+
+**One writer of the current page's URL: `useUrlQueryWriter`.** Every query parameter (`useQueryParam`), the form mode
+(`useEntityFormManager`), the season (`useSeasonSelector`) and the tab path (`useTabNavigation`) call
+`write(apply, {priority, replace, path})`. The writes of a tick batch per Nuxt app instance, apply in priority order onto
+the committed query and land in one navigation; a path change rides the same navigation. Higher priority applies later
+and wins a key conflict; a parameter's explicit write outranks its one-shot auto-sync, and a `useQueryParam` client
+passes `priority` through its options. Several writers navigating from private snapshots of `route.query` in one tick
+kept only the last writer's key; the batch is the remedy.
 
 ### Compliance
 
@@ -653,6 +711,19 @@ Draft state: In-memory Vue ref in component (no persistence).
 2. Query param `?mode=edit|create|view` for form mode
 3. Draft data in component refs, not store
 4. Household URLs MUST use `getHouseholdUrl()` to include `?pbs=X`
+5. A query or path change on the current page goes through `useUrlQueryWriter`; no component or composable calls `navigateTo` for it
+6. A composable that needs an order among the writes of a tick states a `priority`; the order is never implied by call order
+7. A parameter that depends on loaded data names that readiness in `syncWhen`; a test that reads the URL after a page load waits for the sync (`expect.poll`)
+
+### Key Files
+
+| File | Role |
+|------|------|
+| `app/composables/useQueryParam.ts` | A parameter: read, validate, normalize, default, one-shot sync |
+| `app/composables/useUrlQueryWriter.ts` | The page's one URL writer: batch per tick, priority, one navigation |
+| `app/composables/useEntityFormManager.ts`, `useSeasonSelector.ts`, `useTabNavigation.ts` | `?mode=`, `?season=` and the tab path through the writer |
+| `shared/types/url-writes.d.ts`, `shared/types/nuxt-app.d.ts` | The batch type and `NuxtApp._urlWrites` |
+| `app/utils/household.ts` (`getHouseholdUrl`) | Household URLs with `?pbs=` |
 
 ---
 
@@ -756,7 +827,7 @@ export default defineEventHandler(async (event) => {
 
 **H3 validation:** `getValidatedRouterParams`, `readValidatedBody`, `getValidatedQuery`
 
-**Error codes:** 400 (validation), 404 (not found), 500 (server)
+**Error codes:** 400 (validation), 404 (not found), 409 (conflict), 500 (server)
 
 ---
 

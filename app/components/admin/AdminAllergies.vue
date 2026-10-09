@@ -47,7 +47,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS } = useTheSlopeDesignSystem()
+const { COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, NOISE, COMPONENTS, TYPOGRAPHY } = useTheSlopeDesignSystem()
 
 // Responsive mount point for the detail panel - provided by the default layout;
 // false during SSR, so first paint renders the mobile mount
@@ -56,7 +56,6 @@ const isMd = inject<Ref<boolean>>('isMd', ref(false))
 // Household shortnames for the detail card - owned here, passed down as a plain map
 const householdsStore = useHouseholdsStore()
 const {households} = storeToRefs(householdsStore)
-householdsStore.initHouseholdsStore()
 
 const householdShortNames = computed(() =>
     Object.fromEntries(households.value.map(h => [h.id, h.shortName]))
@@ -67,8 +66,10 @@ const store = useAllergiesStore()
 const {
   allergyTypes,
   isAllergyTypesLoading,
+  isAllergyTypesInitialized,
   isAllergyTypesErrored,
   allergyTypesError,
+  selectedAllergyTypeId,
   posterNotes
 } = storeToRefs(store)
 const {createAllergyType, updateAllergyType, deleteAllergyType, savePosterNotes} = store
@@ -76,8 +77,20 @@ const {createAllergyType, updateAllergyType, deleteAllergyType, savePosterNotes}
 // Initialize store
 store.initAllergiesStore()
 
-// SELECTION STATE
-const selectedAllergyTypeId = ref<number | null>(null)
+// SELECTION STATE - ?allergy= carries the selection (ADR-006)
+const isKnownAllergyType = (id: number | null) => id !== null && allergyTypes.value.some(at => at.id === id)
+const {value: allergyParam, setValue: setAllergyParam} = useQueryParam<number | null>('allergy', {
+  serialize: (id) => id === null ? '' : String(id),
+  deserialize: (s) => {
+    const parsed = parseInt(s, 10)
+    return Number.isNaN(parsed) ? null : parsed
+  },
+  validate: isKnownAllergyType,
+  normalize: (id) => isKnownAllergyType(id) ? id : null,
+  defaultValue: null,
+  syncWhen: () => isAllergyTypesInitialized.value
+})
+store.selectAllergyType(allergyParam)
 // Falls back to the first entry, so a selection always exists once data is loaded.
 // Derived rather than assigned, so server and client resolve it identically.
 const selectedAllergyType = computed(() =>
@@ -202,10 +215,10 @@ const handleSelect = (id: number | number[] | null) => {
   if (typeof id !== 'number') return
   // Mobile: tapping the selected row again folds its docked detail away
   if (!isMd.value && selectedAllergyTypeId.value === id) {
-    selectedAllergyTypeId.value = null
+    setAllergyParam(null)
     return
   }
-  selectedAllergyTypeId.value = id
+  setAllergyParam(id)
   // In CREATE mode, switch back to VIEW
   if (formMode.value === FORM_MODES.CREATE) {
     onModeChange(FORM_MODES.VIEW)
@@ -224,9 +237,9 @@ const expanded = computed({
   set: (value: Record<number, boolean>) => {
     // UTable-initiated collapse deselects; expansion goes through handleSelect
     const openIndex = Object.keys(value).find(key => value[Number(key)])
-    selectedAllergyTypeId.value = openIndex !== undefined
+    setAllergyParam(openIndex !== undefined
         ? sortedAllergyTypes.value[Number(openIndex)]?.id ?? null
-        : null
+        : null)
   }
 })
 
@@ -283,16 +296,16 @@ const catalogEmptyState = {
 
     <UCard
         data-testid="admin-allergies"
-        class="w-full px-0"
+        :class="COMPONENTS.allergyCatalogPage.card"
     >
       <template #header>
-        <div class="flex flex-col gap-4">
-          <div class="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div class="text-lg font-semibold">Allergi Katalog</div>
-            <div class="flex items-center gap-2">
+        <div :class="COMPONENTS.allergyCatalogPage.header">
+          <div :class="COMPONENTS.allergyCatalogPage.titleRow">
+            <div :class="TYPOGRAPHY.cardTitle">Allergi Katalog</div>
+            <div :class="COMPONENTS.allergyCatalogPage.headerActions">
               <UButton
                   :color="COLOR.secondary"
-                  variant="outline"
+                  :variant="NOISE.medium"
                   :icon="ICONS.document"
                   to="/admin/allergies/pdf"
                   target="_blank"
@@ -316,7 +329,7 @@ const catalogEmptyState = {
       <!-- Single root in the card body - a multi-root slot hydrates as a fragment -->
       <div>
       <!-- Toolbar - ONE instance, serves both compare and single-select modes -->
-      <div :class="[LAYOUTS.cardActionRow, 'mb-4']">
+      <div :class="[LAYOUTS.cardActionRow, COMPONENTS.allergyCatalogPage.toolbar]">
         <UButton
             v-bind="BUTTONS.secondaryAction"
             :class="LAYOUTS.cardActionButton"
@@ -357,7 +370,6 @@ const catalogEmptyState = {
           v-if="multiselectMode"
           v-model="selectedAllergyIds"
           :allergy-types="sortedAllergyTypes"
-          mode="edit"
           :show-statistics="true"
           :show-new-badge="true"
       />
@@ -366,12 +378,12 @@ const catalogEmptyState = {
            The detail panel docks in the expanded row on mobile, in the sticky pane on md+ -->
       <div v-else :class="LAYOUTS.masterDetailPage.root">
         <!-- CREATE (mobile) - docks under the toolbar, adjacent to the button that opened it -->
-        <div v-if="!isMd && panelMode === 'create'" class="mb-2">
+        <div v-if="!isMd && panelMode === 'create'" :class="COMPONENTS.allergyCatalogPage.createDock">
           <AllergyDetailPanel v-bind="panelProps" v-on="panelEvents"/>
         </div>
 
         <!-- MASTER -->
-        <div :class="[LAYOUTS.masterDetailPage.left, 'min-w-0']">
+        <div :class="[LAYOUTS.masterDetailPage.left, COMPONENTS.allergyCatalogPage.column]">
           <AllergyCatalogTable
               v-model:expanded="expanded"
               mode="single"
@@ -417,7 +429,7 @@ const catalogEmptyState = {
         <!-- DETAIL (md+) - sticky pane that follows the catalog as it scrolls -->
         <div
             v-if="isMd"
-            :class="[LAYOUTS.masterDetailPage.center, 'min-w-0 flex justify-center items-start md:sticky md:top-4 self-start']"
+            :class="[LAYOUTS.masterDetailPage.center, COMPONENTS.allergyCatalogPage.stickyDetail]"
         >
           <AllergyDetailPanel v-bind="panelProps" v-on="panelEvents"/>
         </div>

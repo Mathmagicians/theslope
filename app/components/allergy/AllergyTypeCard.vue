@@ -2,7 +2,7 @@
 import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
 
 // Design system
-const { COLOR, COMPONENTS, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, TYPOGRAPHY, TEXT, RING, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { COLOR, COMPONENTS, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, TYPOGRAPHY, TEXT, RING, getRandomEmptyMessage, NOISE } = useTheSlopeDesignSystem()
 
 // PROPS - allergyType absent in edit mode means CREATE.
 // householdShortNames is supplied by the parent (ADR-007: no server data in this card).
@@ -191,7 +191,7 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
                 <UBadge
                     v-if="getHouseholdShortName(listed.householdId)"
                     :color="COLOR.neutral"
-                    variant="subtle"
+                    :variant="NOISE.subtle"
                     :size="SIZES.small"
                     :icon="ICONS.household"
                 >
@@ -199,7 +199,7 @@ const emptyStateMessage = getRandomEmptyMessage('allergy')
                 </UBadge>
                 <UBadge
                     :color="ageBadge(listed.birthDate).color"
-                    variant="subtle"
+                    :variant="NOISE.subtle"
                     :size="SIZES.small"
                     data-testid="inhabitant-age-badge"
                 >

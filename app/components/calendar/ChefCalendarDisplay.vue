@@ -63,7 +63,7 @@ import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import type {DayEventList} from '~/composables/useCalendarEvents'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
-import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
 import {toDate} from '~/utils/date'
 import {getPaginationRowModel} from '@tanstack/vue-table'
 
@@ -205,49 +205,20 @@ const getAlarmForDay = (day: DateValue): -1 | 0 | 1 | 2 | 3 => {
   return getChefDeadlineAlarm(dinner, props.deadlines)
 }
 
-// Legend items using design system classes
-const legendItems = computed(() => [
-  {
-    label: 'Næste madlavning',
-    type: 'circle' as const,
-    circleClass: dayCircleClasses(CHEF_CALENDAR.day.next)
-  },
-  {
-    label: 'Valgt dato',
-    type: 'circle' as const,
-    circleClass: dayCircleClasses(CHEF_CALENDAR.day.next, CHEF_CALENDAR.selection)
-  },
-  {
-    label: 'Planlagt madlavning',
-    type: 'circle' as const,
-    circleClass: dayCircleClasses(CHEF_CALENDAR.day.future)
-  },
-  {
-    label: 'Tidligere madlavning',
-    type: 'circle' as const,
-    circleClass: dayCircleClasses(CALENDAR.day.past)
-  },
-  {
-    label: 'Deadline overskredet',
-    type: 'chip' as const,
-    chipColor: 'neutral'
-  },
-  {
-    label: 'Deadline kritisk (<24t)',
-    type: 'chip' as const,
-    chipColor: URGENCY_TO_CHIP_COLOR[2]
-  },
-  {
-    label: 'Deadline snart (24-72t)',
-    type: 'chip' as const,
-    chipColor: URGENCY_TO_CHIP_COLOR[1]
-  },
-  {
-    label: 'Aflyst madlavning',
-    type: 'circle' as const,
-    circleClass: dayCircleClasses(CALENDAR.day.past, 'line-through')
-  }
-])
+// Legend items: the deadline chips wrap a planned-day circle, as the day cells do
+const legendItems = computed((): CalendarLegendItem[] => {
+  const chipCircle = dayCircleClasses(CHEF_CALENDAR.day.future)
+  return [
+    {label: 'Næste madlavning', kind: 'circle', circleClass: dayCircleClasses(CHEF_CALENDAR.day.next)},
+    {label: 'Valgt dato', kind: 'circle', circleClass: dayCircleClasses(CHEF_CALENDAR.day.next, CHEF_CALENDAR.selection)},
+    {label: 'Planlagt madlavning', kind: 'circle', circleClass: dayCircleClasses(CHEF_CALENDAR.day.future)},
+    {label: 'Tidligere madlavning', kind: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past)},
+    {label: 'Deadline overskredet', kind: 'chip', chipColor: URGENCY_TO_CHIP_COLOR[3], circleClass: chipCircle, chipSize: SIZES.md},
+    {label: 'Deadline kritisk (<24t)', kind: 'chip', chipColor: URGENCY_TO_CHIP_COLOR[2], circleClass: chipCircle, chipSize: SIZES.md},
+    {label: 'Deadline snart (24-72t)', kind: 'chip', chipColor: URGENCY_TO_CHIP_COLOR[1], circleClass: chipCircle, chipSize: SIZES.md},
+    {label: 'Aflyst madlavning', kind: 'circle', circleClass: dayCircleClasses(CALENDAR.day.past, CALENDAR.day.cancelled)}
+  ]
+})
 
 // Accordion bridge: convert boolean prop to UAccordion's string value model
 // UAccordion uses '0' = first item open, undefined = all closed
@@ -377,7 +348,7 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => {
                 v-else-if="getDayType(eventLists)"
                 :data-testid="`calendar-dinner-date-${day.day}`"
                 :class="dayCircleClasses(
-                  isCancelledDay(day) ? `${CALENDAR.day.past} line-through` : getDayColorClass(getDayType(eventLists)!),
+                  isCancelledDay(day) ? `${CALENDAR.day.past} ${CALENDAR.day.cancelled}` : getDayColorClass(getDayType(eventLists)!),
                   isSelected(day) && CHEF_CALENDAR.selection
                 )"
                 @click="handleDateClick(day)"
@@ -389,21 +360,8 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => {
               <span v-else class="text-sm">{{ day.day }}</span>
             </template>
 
-            <!-- Legend -->
             <template #legend>
-              <div class="px-4 py-6 md:px-6 md:py-8 space-y-3 border-t mt-auto" :class="TYPOGRAPHY.bodyTextSmall">
-                <div v-for="legendItem in legendItems" :key="legendItem.label" class="flex items-center gap-4">
-                  <!-- Chip for deadline indicators (wraps styled circle like calendar) -->
-                  <UChip v-if="legendItem.type === 'chip'" show size="md" :color="legendItem.chipColor as NuxtUIColor">
-                    <div :class="dayCircleClasses(CHEF_CALENDAR.day.future)">1</div>
-                  </UChip>
-                  <!-- Circle for other indicators -->
-                  <div v-else :class="legendItem.circleClass">
-                    1
-                  </div>
-                  <span>{{ legendItem.label }}</span>
-                </div>
-              </div>
+              <CalendarLegend :items="legendItems" />
             </template>
           </BaseCalendar>
         </div>

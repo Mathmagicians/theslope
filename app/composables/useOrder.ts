@@ -4,6 +4,7 @@
  * Following ADR-001: Import enums from validation composables (NOT from generated layer)
  */
 import type {OrderDisplay, OrderDetail} from '~/composables/useBookingValidation'
+import {getPortionsForTicketType as portionsForTicketType, getPortionsForTicketPrice as portionsForTicketPrice} from '~/utils/portions'
 
 /**
  * Statistics for one dining mode in kitchen display
@@ -122,36 +123,9 @@ export const useOrder = () => {
     return orders.filter(o => isReleasedOrder(o))
   }
 
-  /**
-   * Get portions for a ticket type (simple mapping)
-   * ADULT=1, CHILD=0.5, BABY=0
-   */
-  const getPortionsForTicketType = (ticketType: typeof TicketType[keyof typeof TicketType]): number => {
-    if (ticketType === TicketType.ADULT) return 1
-    if (ticketType === TicketType.CHILD) return 0.5
-    return 0 // BABY
-  }
-
-  /**
-   * Calculate portion count from ticket price
-   * TODO: When portionSize field is added to TicketPrice model, use that instead
-   * For now: Uses getPortionsForTicketType with description overrides for special cases
-   */
-  const getPortionsForTicketPrice = (ticketPrice: { ticketType: typeof TicketType[keyof typeof TicketType], description: string | null }): number => {
-    // Future: return ticketPrice.portionSize ?? 0
-
-    // For now: Use ticket type as base, with description overrides
-    const description = ticketPrice.description?.toLowerCase() || ''
-
-    // Special cases based on description
-    if (description.includes('sulten') || description.includes('hungry')) {
-      if (ticketPrice.ticketType === TicketType.BABY) return 0.25
-      if (ticketPrice.ticketType === TicketType.CHILD) return 0.75
-    }
-
-    // Default: delegate to simple ticket type mapping
-    return getPortionsForTicketType(ticketPrice.ticketType)
-  }
+  // The portion weights (ADULT=1, CHILD=0.5, BABY=0) live in ~/utils/portions, shared with the server (ADR-017)
+  const getPortionsForTicketType = portionsForTicketType
+  const getPortionsForTicketPrice = portionsForTicketPrice
 
   /**
    * Calculate total portions from orders

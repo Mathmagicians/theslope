@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay } from '~/composables/useBookingValidation'
+import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
@@ -11,6 +11,8 @@ import testHelpers from '../testHelpers'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import { AllergyFactory } from '~~/tests/e2e/testDataFactories/allergyFactory'
+import type { AllergyTypeDisplay } from '~/composables/useAllergyValidation'
 
 const { headers, salt, temporaryAndRandom, getSessionUserInfo } = testHelpers
 
@@ -104,6 +106,32 @@ export class OrderFactory {
     },
     ...overrides
   })
+
+  /** An order whose inhabitant carries one allergy per given type, the diner the allergy overviews count */
+  static readonly defaultOrderDetailWithAllergies = (
+    inhabitantId: number,
+    name: string,
+    allergyTypes: AllergyTypeDisplay[] = [],
+    overrides?: Partial<OrderDetail>
+  ): OrderDetail => {
+    const base = OrderFactory.defaultOrderDetail(`allergy-${inhabitantId}`, {id: inhabitantId, inhabitantId, ...overrides})
+    const [allergyTemplate] = AllergyFactory.createMockAllergies()
+    return {
+      ...base,
+      inhabitant: {
+        ...base.inhabitant,
+        id: inhabitantId,
+        name,
+        allergies: allergyTypes.map(allergyType => ({
+          ...allergyTemplate!,
+          id: inhabitantId * 10 + allergyType.id,
+          inhabitantId,
+          allergyTypeId: allergyType.id,
+          allergyType
+        }))
+      }
+    }
+  }
 
   static readonly defaultCreateOrdersRequest = (overrides?: Partial<CreateOrdersRequest>): CreateOrdersRequest => {
     const defaults = {
@@ -586,6 +614,30 @@ export class OrderFactory {
     householdId: 1,
     dinnerEventIds: [1],
     orders: [OrderFactory.defaultDesiredOrder()],
+    ...overrides
+  })
+
+  /** ScaffoldResult data for component tests (no API call) */
+  static readonly defaultScaffoldResult = (overrides?: Partial<ScaffoldResult>): ScaffoldResult => ({
+    seasonId: 1, created: 0, deleted: 0, released: 0, claimed: 0, claimRejected: 0,
+    priceUpdated: 0, modeUpdated: 0, unchanged: 0, households: 1, errored: 0,
+    ...overrides
+  })
+
+  /** ScaffoldOrdersResponse data for component tests (no API call) */
+  static readonly defaultScaffoldOrdersResponse = (scaffoldResult: Partial<ScaffoldResult> = {}, householdId: number = 1): ScaffoldOrdersResponse => ({
+    householdId,
+    scaffoldResult: OrderFactory.defaultScaffoldResult(scaffoldResult)
+  })
+
+  /** DailyMaintenanceResult data for component tests (no API call) */
+  static readonly defaultDailyMaintenanceResult = (overrides?: Partial<DailyMaintenanceResult>): DailyMaintenanceResult => ({
+    jobRunId: 1,
+    consume: {consumed: 0},
+    close: {closed: 0},
+    transact: {created: 0},
+    initPrefs: {initialized: 0},
+    scaffold: null,
     ...overrides
   })
 

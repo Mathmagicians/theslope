@@ -36,7 +36,7 @@ export const useSeasonValidation = () => {
         isRequired: (map: WeekDayMap<boolean>) => Object.values(map).some(Boolean),
         requiredMessage: "Man skal lave mad mindst en dag om ugen"
     })
-    const {DinnerEventDisplaySchema, ScaffoldResultSchema} = useBookingValidation()
+    const {DinnerEventDisplaySchema, deserializeDinnerEvent, ScaffoldResultSchema} = useBookingValidation()
     const {TicketPricesArraySchema} = useTicketPriceValidation()
     const {deserializeCookingTeamDisplay, CookingTeamDisplaySchema} = useCookingTeamValidation()
 
@@ -104,6 +104,9 @@ export const useSeasonValidation = () => {
         scaffold: ScaffoldResultSchema.nullable()
     })
 
+    // GET /api/admin/season/active: a null id arrives as an empty body
+    const ActiveSeasonIdSchema = z.preprocess(id => id || null, z.number().int().positive().nullable())
+
     // Serialization and deserialization functions
     const serializeSeason = (season: Season): SerializedSeason => SerializedSeasonSchema.parse(season)
 
@@ -134,8 +137,8 @@ export const useSeasonValidation = () => {
         if (dinnerEvents || CookingTeams || serialized.ticketPrices) {
             return {
                 ...baseSeason,
-                // Parse dinner events to ensure dates are Date objects (not strings from JSON)
-                dinnerEvents: dinnerEvents?.map((event) => DinnerEventDisplaySchema.parse(event)),
+                // Dinner rows from the repository: dates become Date objects, the cost becomes the sum of the expense rows
+                dinnerEvents: dinnerEvents?.map((event) => deserializeDinnerEvent(event as Record<string, unknown>)),
                 // Deserialize nested CookingTeams (including affinity fields)
                 CookingTeams: CookingTeams?.map((team) => deserializeCookingTeamDisplay(team)),
                 ticketPrices: serialized.ticketPrices as Season['ticketPrices']
@@ -153,6 +156,7 @@ export const useSeasonValidation = () => {
         SerializedSeasonSchema,
         ReconciliationResultSchema,
         SeasonUpdateResponseSchema,
+        ActiveSeasonIdSchema,
         serializeSeason,
         deserializeSeason,
         createWeekDayMapFromSelection,

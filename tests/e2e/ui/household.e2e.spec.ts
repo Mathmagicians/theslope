@@ -210,7 +210,7 @@ test.describe('Household PBS query param resolution', () => {
             10
         )
 
-        expect(page.url()).toContain(`pbs=${myPbsId}`)
+        await expect.poll(() => page.url(), {timeout: 15000}).toContain(`pbs=${myPbsId}`)
     })
 
     const invalidPbsCases = [
@@ -228,7 +228,7 @@ test.describe('Household PBS query param resolution', () => {
                 10
             )
 
-            expect(page.url()).toContain(`pbs=${myPbsId}`)
+            await expect.poll(() => page.url(), {timeout: 15000}).toContain(`pbs=${myPbsId}`)
         })
     }
 })

@@ -1,6 +1,7 @@
 import {describe, it, expect} from 'vitest'
 import {readdirSync, readFileSync} from 'node:fs'
 import {fileURLToPath} from 'node:url'
+import {LAYOUTS} from '../../../app/composables/useTheSlopeDesignSystem'
 
 /**
  * Architecture test - ADR-018 [Design system owns shared UI patterns]
@@ -102,6 +103,12 @@ const COLOUR_NAMES = ['primary', 'secondary', 'success', 'error', 'warning', 'in
 /** `color="error"` and `:color="'error'"`. `:color="COLOR.error"`, `:color="cfg.color"` and `v-bind` pass */
 const LITERAL_COLOUR_PROP = new RegExp(`\\bcolor="'?(?:${COLOUR_NAMES})'?"`, 'g')
 
+/** The Nuxt UI families whose size, variant and icon come from SIZES, NOISE, BUTTONS and ICONS */
+const SIZED_FAMILIES = ['UButton', 'UBadge', 'UAvatar']
+
+/** ` size="sm"`, ` variant="ghost"`, ` icon="i-…"`, ` :size="'md'"` - a design value spelled out in the tag */
+const LITERAL_DESIGN_PROP = /(?:^|\s)(?:(?:size|variant|icon|leading-icon|trailing-icon)="[^"]*"|:(?:size|variant|icon|leading-icon|trailing-icon)="'[^"]*'")/g
+
 /** `file:line - <match>` for every hit of `pattern`, so the failure names the site */
 const scan = (files: string[], pattern: RegExp, hint: string) =>
     files.flatMap(file =>
@@ -168,6 +175,26 @@ describe('ADR-018: components bind design-system tokens, never raw Nuxt UI props
 
     it('no .vue passes a literal colour to a component', () => {
         const violations = scan(colourFiles, LITERAL_COLOUR_PROP, 'literal colour - use :color="COLOR.<name>" or a domain token')
+        expect(report(violations)).toBe('')
+    })
+
+    it('no <UButton>, <UBadge> or <UAvatar> passes a literal size, variant or icon', () => {
+        const violations = vueFiles.flatMap(file => {
+            const source = readVue(file)
+            return SIZED_FAMILIES.flatMap(family => openingTags(source, family).flatMap(tag =>
+                [...tag.text.matchAll(LITERAL_DESIGN_PROP)].map(match =>
+                    `app/${file}:${tag.line} - <${family}${match[0]} (bind SIZES, NOISE, BUTTONS or ICONS)`)
+            ))
+        })
+        expect(report(violations)).toBe('')
+    })
+
+    it('no .vue spells out the form button row instead of binding LAYOUTS.formButtonRow', () => {
+        const violations = vueFiles.flatMap(file =>
+            readVue(file).split('\n').flatMap((line, index) =>
+                line.includes(LAYOUTS.formButtonRow) ? [`app/${file}:${index + 1} - raw form button row (bind :class="LAYOUTS.formButtonRow")`] : []
+            )
+        )
         expect(report(violations)).toBe('')
     })
 

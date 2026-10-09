@@ -13,7 +13,7 @@
 | Endpoint | Return Type | Validation | Repository | E2E Tests | Notes                                                                                            |
 |----------|-------------|------------|------------|-----------|--------------------------------------------------------------------------------------------------|
 | **Order Management** | | | | | **✅ FULLY COMPLIANT** (6/6 endpoints) + Authorization + Admin bypass for corrections            |
-| `/api/order/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createOrder() + `requireHouseholdAccess()`, `?adminBypass=true` for admin corrections            |
+| `/api/order/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createOrder() + `requireHouseholdAccess()`, `?adminBypass=true` for admin corrections; 409 on a second regular order for an inhabitant on a dinner |
 | `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrders() with state/sortBy/allHouseholds/upcomingForSeason/includeDinnerContext filters     |
 | `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchOrder() + `requireHouseholdAccess()` authorization                                          |
 | `/api/order/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateOrder() + `requireHouseholdAccess()`, `?adminBypass=true` skips deadline (always DELETE)   |
@@ -21,19 +21,22 @@
 | `/api/order/claim.post.ts` | ✅ | ✅ | ✅ | ✅ | claimOrder(dinnerEventId, ticketPriceId) - FIFO by releasedAt, retry logic, USER_CLAIMED audit   |
 | **Admin - Dinner Events** | | | | | **✅ FULLY COMPLIANT**                                                                            |
 | `/api/admin/dinner-event/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteDinnerEvent() validates with DinnerEventResponseSchema                                     |
-| `/api/admin/dinner-event/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchDinnerEvent() validates with DinnerEventResponseSchema                                      |
+| `/api/admin/dinner-event/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchDinnerEvent() validates with DinnerEventDetailSchema; `tickets[].inhabitant.allergies` carry each `allergyType` |
 | `/api/admin/dinner-event/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchDinnerEvents() validates with DinnerEventResponseSchema                                     |
 | `/api/admin/dinner-event/index.put.ts` | ✅ | ✅ | ✅ | ✅ | saveDinnerEvent() validates with DinnerEventResponseSchema                                       |
 | **Admin - Teams** | | | | | **✅ FULLY COMPLIANT (2025-12-15)** - Uses teamService for auto-assignment                       |
-| `/api/admin/team/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteTeam() → CookingTeamWithMembers                                                            |
-| `/api/admin/team/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeams() → CookingTeamWithMembers[]                                                          |
-| `/api/admin/team/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateTeamWithAssignments() auto-assigns affinities + events                                     |
-| `/api/admin/team/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeam() → CookingTeamWithMembers                                                             |
-| `/api/admin/team/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createTeamsWithAssignments() auto-assigns affinities + events → `CreateTeamsResponse` `{teams, eventsAssigned}` (ADR-009 operation result, 201); `team.e2e.spec.ts` asserts `eventsAssigned` equals the season's dinners carrying a `cookingTeamId` |
-| `/api/admin/team/assignment/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteCookingTeamAssignments() → number                                                          |
+| `/api/admin/team/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteTeam() → `CookingTeamDetail` carrying the deleted team's `jokerSlots` (read before the cascade), empty assignments and dinnerEvents; `team.e2e.spec.ts` asserts `jokerSlots: []` |
+| `/api/admin/team/index.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeams() → `CookingTeamDisplay[]` (ADR-009 index: assignments and the aggregates `cookingDaysCount`, `jokerSlotCount`; no dinnerEvents or jokerSlots); `team.e2e.spec.ts` asserts `jokerSlotCount: 0` on a fresh team |
+| `/api/admin/team/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | updateTeamWithAssignments() auto-assigns affinities + events → `CookingTeamDetail` with `jokerSlots`; `team.e2e.spec.ts` asserts `jokerSlots: []` |
+| `/api/admin/team/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeam() → `CookingTeamDetail` with assignments, dinnerEvents and `jokerSlots` (ADR-009 Detail); `team.e2e.spec.ts` asserts a team without slots carries `jokerSlots: []` and a `jokerSlotCount` equal to its length |
+| `/api/admin/team/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createTeamsWithAssignments() auto-assigns affinities + events → `CreateTeamsResponse` `{teams, eventsAssigned}` (ADR-009 operation result, 201), each team a `CookingTeamDetail` with `jokerSlots`; `team.e2e.spec.ts` asserts `eventsAssigned` equals the season's dinners carrying a `cookingTeamId` and the created team carries `jokerSlots: []` |
+| `/api/admin/team/[id]/joker-slot/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createJokerSlot() → the created `JokerSlot` (201); body `JokerSlotCreateSchema` (at least one weekday, end on or after start, allocation 1-100 default 100); a missing team answers 404; `jokerSlot.e2e.spec.ts` asserts the slot and the `GET /api/admin/team/[id]` read-back (`jokerSlotCount: 1`), and 400 per invalid slot |
+| `/api/admin/team/[id]/joker-slot/[slotId].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteJokerSlot() → deleted count; the WHERE carries the team id, so a slot of another team answers 404; `jokerSlot.e2e.spec.ts` asserts count 1, the `GET /api/admin/team/[id]` read-back (`jokerSlotCount: 0`) and 404 across teams |
+| `/api/admin/team/assignment/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteCookingTeamAssignments() → deleted count (`DeletedCountSchema`)                            |
 | `/api/admin/team/assignment/index.get.ts` | ❌ | ✅ | N/A | N/A | Stub endpoint (returns static message)                                                           |
 | `/api/admin/team/assignment/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTeamAssignment() → CookingTeamAssignment                                                    |
 | `/api/admin/team/assignment/index.put.ts` | ✅ | ✅ | ✅ | ✅ | createTeamAssignment() → CookingTeamAssignment                                                   |
+| `/api/admin/team/assignment/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | `CookingTeamAssignmentUpdateSchema` body → updateTeamAssignment() → CookingTeamAssignment (200); API spec in `team.e2e.spec.ts` (written, not run) |
 | **Admin - Users** | | | | | **✅ FULLY COMPLIANT (2026-04-28)** - Partial update + id-keyed write for HN email-change resilience |
 | `/api/admin/users/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | deleteUser() validates with UserResponseSchema                                                   |
 | `/api/admin/users/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | Partial update accepting any subset of {systemRoles, email, phone}; writes via `saveUser(payload, id)` (id-keyed update). Roles still reconciled with TS ownership. |
@@ -85,6 +88,17 @@
 | `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | updateInhabitantPreferences() for non-admin users, triggers scaffoldPrebookings                  |
 | **Household - Bookings** | | | | | **✅ FULLY COMPLIANT (2026-01-13)** - ADR-016 unified booking through scaffold                   |
 | `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ✅ | ADR-016 unified booking endpoint, `requireHouseholdAccess()`, returns ScaffoldOrdersResponse     |
+| **Household - Waitlist** | | | | | **✅ FULLY COMPLIANT (2026-10-09)** - `feature-proposal-waitlist.md`: `TicketWaitlist` holds the unplaced order as JSON (ADR-010 `serializeWaitlistOrder` / `deserializeTicketWaitlist`), strict FIFO by `createdAt`, one regular entry per inhabitant and dinner (partial unique index). A ticket released after the deadline goes to the head of the queue when it waits for that ticket type (`assignReleasedTicket` from `/api/order/[id].post.ts` and the scaffold); daily maintenance clears the queues of consumed dinners |
+| `/api/household/waitlist/index.put.ts` | ✅ | ✅ | ✅ | ✅ | Join: `createWaitlistEntry()` with the price frozen from the season's ticket price; `requireHouseholdAccess()` + `?adminBypass=true`; 404 unknown dinner or ticket price, 400 CONSUMED/CANCELLED dinner, 409 from the unique index; emits `WAITLIST_JOINED`, and `WAITLIST_BUILDUP` to the chef over `waitlistBuildupThreshold` (app.config); returns WaitlistJoinResult (entry + position) |
+| `/api/household/waitlist/index.get.ts` | ✅ | ✅ | ✅ | ✅ | `?householdId&dinnerEventIds`: `fetchWaitlistForHousehold()` + each entry's position in its dinner's whole queue (`positionOf`); `requireHouseholdAccess()` + `?adminBypass=true` |
+| `/api/household/waitlist/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | Leave: `deleteWaitlistEntry()`, 404 unknown entry, `requireHouseholdAccess()` on the entry's household + `?adminBypass=true`; returns the removed entry (ADR-009 item 7) |
+| **Chef - Waitlist** | | | | | **✅ FULLY COMPLIANT (2026-10-09)** - `requireChefForDinner()` (a CHEF assignment on the dinner's team) |
+| `/api/chef/dinner/[id]/waitlist.get.ts` | ✅ | ✅ | ✅ | ✅ | `summarizeWaitlist()`: entries and portion need (`getPortionsForTicketType`, ADULT 1 / CHILD 0.5 / BABY 0) → WaitlistQueueSummary |
+| `/api/chef/dinner/[id]/release-portions.post.ts` | ✅ | ✅ | ✅ | ✅ | Body `{portions}`; `assignWaitlistPortions()`: the pure FIFO resolver `useWaitlist().resolveWaitlistAssignment` picks the entries that fit, the executor runs `createOrders()` per entry, deletes the entry and emits `WAITLIST_TICKET_ASSIGNED`; idempotent (ADR-015), 409 when the inhabitant already holds a regular order → WaitlistAssignmentResult |
+| **Chef - Expenses** | | | | | **✅ FULLY COMPLIANT (2026-10-09)** - `feature-proposal-adhoc-admin-billing.md` § Expenses: the dinner's grocery lines behind `requireChefForDinner()`. The dinner's cost is the sum of its REGULAR rows on every repository read (ADR-010 item 6): Display carries the sum, Detail the sum and `expenses`; the dinner write schemas are strict and omit `totalCost` |
+| `/api/chef/dinner/[id]/expenses/index.get.ts` | ✅ | ✅ | ✅ | ✅ | `fetchExpensesForDinner()` in entry order → Expense[] |
+| `/api/chef/dinner/[id]/expenses/index.put.ts` | ✅ | ✅ | ✅ | ✅ | Body ExpenseCreate (strict: amount in øre above zero, trimmed description, optional payer); the payer defaults to the chef, null = the kitchen paid; `fetchUser()` 404 unknown payer; `createExpense()` writes the payer snapshot (ADR-010) → 201 Expense |
+| `/api/chef/dinner/[id]/expenses/[expenseId].delete.ts` | ✅ | ✅ | ✅ | ✅ | `fetchExpense()` 404 unless the line sits on the dinner; `deleteExpense()` → the removed Expense (ADR-009 item 7) |
 | **Admin - Sender events** | | | | | **✅ FULLY COMPLIANT (2026-09-16)** - HTTP twins of notification triggers; message contract from `useNotificationValidation` (re-export of `workers/sender/contract.ts`) |
 | `/api/admin/sender/event/test.post.ts` | ✅ | N/A (no body) | N/A | ✅ | `emitTestEmail(queue, config)` → `composeEmail` (TEST template) to `config.adminEmail` → `emit()` (returns a result in every case; degraded without admin mailbox or `SENDER`) → `SenderEmitResult`; admin via route table; `tests/e2e/api/parallel/admin/sender-event-test.e2e.spec.ts` |
 | `/api/admin/sender/event/monthly-billing.post.ts` | ✅ | ✅ | ✅ | ✅ | Body `{billingPeriodSummaryId}`; `fetchBillingPeriodSummary()` → 404 when missing → `emitBillingPeriodClosed(queue, config, summary)` (CSV attached, cc admin; degraded without accountant mailbox) → `SenderEmitResult`; serial `tests/e2e/api/serial/admin/sender-event-monthly-billing.e2e.spec.ts` |
@@ -97,7 +111,7 @@
 | **Teams (Public)** |
 | `/api/team/index.get.ts` | ❌ | ✅ | |
 | `/api/team/[id].get.ts` | ❌ | ✅ | |
-| `/api/team/my.get.ts` | ❌ | ✅ | |
+| `/api/team/my.get.ts` | ❌ | ✅ | | | fetchMyTeams() → `CookingTeamDetail[]` with assignments, dinnerEvents and `jokerSlots`; `tests/e2e/api/parallel/team.e2e.spec.ts` asserts `jokerSlots: []` |
 | `/api/team/cooking/[id]/assign-role.post.ts` | ✅ | ✅ | ✅ | ❌ | **FULLY COMPLIANT** - Uses repository functions only (ADR-001, ADR-010) |
 | `/api/team/cooking/[id]/remove-role.post.ts` | ✅ | ✅ | ✅ | ✅ | Delegates chef-loss to shared `removeChefRole` util (HN event delete best-effort, CHEF_LOSS_DINNER_UPDATES, allergen clear); 207 on degraded HN sync |
 | **Other** |
@@ -106,7 +120,7 @@
 | `/api/calendar/feed.ts` | ❌ | ✅ | |
 | `/api/auth/login.post.ts` | ❌ | ✅ | |
 | **Admin - Billing** | | | | | **✅ FULLY COMPLIANT (2026-01-17)** - Added admin economy tree view endpoints                    |
-| `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ✅ | CSV import with ADR-002 separate try-catch, uses useBillingValidation composable                 |
+| `/api/admin/billing/import.post.ts` | ✅ | ✅ | ✅ | ⚠️ | Framelding CSV import; books every ticket on the first inhabitant, refused by the Order unique index; e2e skipped; replaced by the import in the export format (`features/chores-0.9.1.md`) |
 | `/api/admin/billing/current-period.get.ts` | ✅ | ✅ | ✅ | ✅ | fetchUnbilledTransactions() → TransactionDisplay[], "virtual" billing period for admin economy   |
 | `/api/admin/billing/invoices/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | fetchTransactionsForInvoice() → TransactionDisplay[], lazy loading for tree view                 |
 | **Admin - Heynabo** | | | | | **✅ COMPLIANT (2026-08-19)** - Inhabitant DELETE reconciles globally (all existing vs all incoming) per ADR-013 lifecycle, so members of the old household at a shared address are deleted when removed from HN. User UPDATE bucket re-keyed by `Inhabitant.heynaboId` (stable identity); HN email/phone changes update existing row, never email-keyed upsert. |

@@ -7,7 +7,6 @@
  * When initialRole/initialPercentage/initialAffinity are provided, acts as edit form.
  */
 import type {TeamRole} from '~/composables/useCookingTeamValidation'
-import {ROLE_OPTIONS, ALLOCATION_PERCENTAGE_OPTIONS} from '~/composables/useCookingTeamValidation'
 import type {WeekDayMap} from '~/types/dateTypes'
 
 interface Props {
@@ -24,10 +23,7 @@ const emit = defineEmits<{
   cancel: []
 }>()
 
-const {SIZES, BUTTONS, ICONS, ROLE_ICONS} = useTheSlopeDesignSystem()
-
-// Role choices carry their glyphs as item icons
-const roleOptions = ROLE_OPTIONS.map(option => ({...option, icon: ROLE_ICONS[option.value]}))
+const {SIZES, BUTTONS, ICONS, LAYOUTS, COMPONENTS} = useTheSlopeDesignSystem()
 const {TeamRoleSchema} = useCookingTeamValidation()
 const Role = TeamRoleSchema.enum
 
@@ -45,28 +41,13 @@ const handleSubmit = () => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-3 py-2">
-    <UFormField label="Vælg rolle på hold" :size="SIZES.small">
-      <USelectMenu
-          v-model="form.role"
-          :items="roleOptions"
-          value-key="value"
-          placeholder="Vælg rolle..."
-          class="w-full"
-          :size="SIZES.small"
-      />
-    </UFormField>
-
-    <UFormField label="Arbejdstid" :size="SIZES.small">
-      <USelectMenu
-          v-model="form.allocationPercentage"
-          :items="ALLOCATION_PERCENTAGE_OPTIONS"
-          value-key="value"
-          placeholder="Vælg procent..."
-          class="w-full"
-          :size="SIZES.small"
-      />
-    </UFormField>
+  <div :class="COMPONENTS.teamForm.stack">
+    <TeamRoleFields
+        v-model:role="form.role"
+        v-model:allocation-percentage="form.allocationPercentage"
+        role-label="Vælg rolle på hold"
+        role-select-test-id="team-member-role-select"
+    />
 
     <WeekDayMapDisplay
         v-model="form.affinity"
@@ -75,7 +56,7 @@ const handleSubmit = () => {
         label="Kan kun følgende ugedage"
     />
 
-    <div class="flex flex-col-reverse md:flex-row md:justify-end gap-2">
+    <div :class="LAYOUTS.formButtonRow">
       <UButton v-bind="BUTTONS.cancel" :size="SIZES.small" @click="emit('cancel')">
         Annuller
       </UButton>

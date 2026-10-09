@@ -5,13 +5,13 @@ export interface SeasonSelectorOptions {
     seasons: ComputedRef<Season[]>
     selectedSeasonId: ComputedRef<number | null>
     activeSeason: ComputedRef<Season | null>
-    onSeasonSelect: (id: number) => void
 }
 
 export function useSeasonSelector(options: SeasonSelectorOptions) {
-    const {seasons, selectedSeasonId, activeSeason, onSeasonSelect} = options
+    const {seasons, selectedSeasonId, activeSeason} = options
 
     const route = useRoute()
+    const {write} = useUrlQueryWriter()
     const seasonQuery = computed(() => route.query.season as string | undefined)
 
     const isValidSeason = (shortName?: string) => shortName && seasons.value.some(s => s.shortName === shortName)
@@ -30,25 +30,21 @@ export function useSeasonSelector(options: SeasonSelectorOptions) {
 
     const updateURLQueryFromSeason = async (shortName: string | undefined) => {
         if (seasonQuery.value === shortName) return
-        const query = {...route.query}
-        if (shortName) {
-            query.season = shortName
-        } else {
-            delete query.season
-        }
-        await navigateTo({path: route.path, query}, {replace: true})
+        await write((query) => {
+            const next = {...query}
+            if (shortName) {
+                next.season = shortName
+            } else {
+                delete next.season
+            }
+            return next
+        })
         console.info(`${LOG_CTX} 🔗 > Navigated to URL with query season=${shortName} `)
     }
 
-    // exposed to handle season selection from dropdown
+    // The dropdown writes the URL only; the plan store follows ?season= through the getter the page hands it
     const onSeasonChange = async (shortName: string) => {
         const safeSeasonName = safeSeason(shortName)
-        const seasonObject = seasons.value.find(s => s.shortName === shortName)
-
-        if (seasonObject?.id && seasonObject.id !== selectedSeasonId.value) {
-            onSeasonSelect(seasonObject.id)
-        }
-
         await updateURLQueryFromSeason(safeSeasonName)
         console.info(`${LOG_CTX} 🌱 > SEASON_SELECTOR > Season changed to ${safeSeasonName}, requested was ${shortName}`)
     }

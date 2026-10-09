@@ -34,15 +34,13 @@ const createTestDinner = async (
     seasonId: number,
     testSalt: string,
     state: typeof DinnerState[keyof typeof DinnerState],
-    daysOffset: number,
-    extras: {totalCost?: number} = {}
+    daysOffset: number
 ) => {
     return await DinnerEventFactory.createDinnerEvent(context, {
         seasonId,
         date: daysFromToday(daysOffset),
         menuTitle: `${state} ${testSalt}`,
-        state,
-        ...extras
+        state
     })
 }
 
@@ -148,7 +146,7 @@ test.describe('Daily Maintenance API', () => {
         const { householdId, inhabitantId } = await getSessionUserInfo(context)
 
         // Setup: Create CONSUMED dinner with order in PREVIOUS billing period (must be closed for billing)
-        const dinner = await createTestDinner(context, activeSeason.id!, testSalt, DinnerState.CONSUMED, -35, {totalCost: 50000})
+        const dinner = await createTestDinner(context, activeSeason.id!, testSalt, DinnerState.CONSUMED, -35)
         createdDinnerEventIds.push(dinner.id)
         const {orderId} = await createTestOrder(context, fullSeason, dinner.id, householdId, inhabitantId)
 

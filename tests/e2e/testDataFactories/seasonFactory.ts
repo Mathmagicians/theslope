@@ -1,15 +1,18 @@
 import {useSeasonValidation, type Season, type SeasonUpdateResponse} from "~/composables/useSeasonValidation"
 import {useWeekDayMapValidation} from "~/composables/useWeekDayMapValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
+import {DeletedCountSchema} from "~/composables/useCoreValidation"
 import type {
     CookingTeamDisplay,
     CookingTeamDetail,
     CookingTeamAssignment,
+    CookingTeamAssignmentUpdate,
     CookingTeamCreate,
     TeamRole
 } from "~/composables/useCookingTeamValidation"
 import {useBookingValidation, type DinnerEventDisplay, type ScaffoldResult, type DailyMaintenanceResult} from "~/composables/useBookingValidation"
 import {useMaintenanceValidation, type JobRunDisplay} from "~/composables/useMaintenanceValidation"
+import {useDutyValidation, type JokerSlot, type JokerSlotCreate} from "~/composables/useDutyValidation"
 import {getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
@@ -23,7 +26,8 @@ type CookingTeamCreateAssignment = NonNullable<CookingTeamCreate['assignments']>
 // Serialization now handled internally by repository layer
 const {salt, temporaryAndRandom, headers} = testHelpers
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
-const {CookingTeamDetailSchema, CookingTeamAssignmentSchema, CreateTeamsResponseSchema} = useCookingTeamValidation()
+const {CookingTeamDetailSchema, CookingTeamDisplaySchema, CookingTeamAssignmentSchema, CreateTeamsResponseSchema} = useCookingTeamValidation()
+const {RoleSchema, JokerSlotSchema} = useDutyValidation()
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
@@ -128,6 +132,7 @@ export class SeasonFactory {
         seasonId: 1,
         name: "TestTeam",
         cookingDaysCount: 0,
+        jokerSlotCount: 0,
         assignments: [],
         ...overrides
     })
@@ -152,6 +157,7 @@ export class SeasonFactory {
                 updatedAt: new Date()
             } as DinnerEventDisplay
         ],
+        jokerSlots: [],
         ...overrides
     })
 
@@ -211,6 +217,17 @@ export class SeasonFactory {
         }
     }
 
+    /** SeasonUpdateResponse data for component tests (no API call): the saved season and what the save set in motion */
+    static readonly defaultSeasonUpdateResponse = (
+        season: Season,
+        overrides: Partial<Omit<SeasonUpdateResponse, 'season'>> = {}
+    ): SeasonUpdateResponse => ({
+        season,
+        reconciliation: {created: 0, idempotent: 0, deleted: 0},
+        scaffold: null,
+        ...overrides
+    })
+
     static readonly createSeason = async (
         context: BrowserContext,
         aSeason: Partial<Season> = {},
@@ -246,7 +263,7 @@ export class SeasonFactory {
 
             // Validate API returns data conforming to SeasonSchema (converts ISO strings to Dates)
             const result = SeasonSchema.safeParse(responseBody)
-            expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+            expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.issues)}`).toBe(true)
 
             const season = result.data!
 
@@ -285,7 +302,7 @@ export class SeasonFactory {
         if (expectedStatus !== 200) return responseBody
 
         const result = SeasonUpdateResponseSchema.safeParse(responseBody)
-        expect(result.success, `API should return a valid SeasonUpdateResponse. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+        expect(result.success, `API should return a valid SeasonUpdateResponse. Errors: ${JSON.stringify(result.success ? [] : result.error.issues)}`).toBe(true)
         return result.data!
     }
 
@@ -584,7 +601,7 @@ export class SeasonFactory {
         // Validate API returns data conforming to SeasonSchema (converts ISO strings to Dates)
         const parsedSeasons = rawData.map((season: unknown) => {
             const result = SeasonSchema.safeParse(season)
-            expect(result.success, `API should return valid Season objects. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+            expect(result.success, `API should return valid Season objects. Errors: ${JSON.stringify(result.success ? [] : result.error.issues)}`).toBe(true)
             expect(result.data!.ticketPrices.length, `Season ${result.data!.shortName} must have ticket prices`).toBeGreaterThan(0)
             return result.data!
         })
@@ -604,7 +621,7 @@ export class SeasonFactory {
 
         // Validate API returns data conforming to SeasonSchema (converts ISO strings to Dates)
         const result = SeasonSchema.safeParse(rawData)
-        expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+        expect(result.success, `API should return valid Season object. Errors: ${JSON.stringify(result.success ? [] : result.error.issues)}`).toBe(true)
 
         return result.data!
     }
@@ -809,7 +826,7 @@ export class SeasonFactory {
 
         const {SeasonSchema} = useSeasonValidation()
         const result = SeasonSchema.safeParse(rawSeason)
-        expect(result.success, `API should return valid Season. Errors: ${JSON.stringify(result.success ? [] : result.error.errors)}`).toBe(true)
+        expect(result.success, `API should return valid Season. Errors: ${JSON.stringify(result.success ? [] : result.error.issues)}`).toBe(true)
 
         expect(result.data!.isActive, 'Season should be active').toBe(true)
         return result.data!
@@ -964,6 +981,27 @@ export class SeasonFactory {
         return null
     }
 
+    static readonly updateTeamMember = async (
+        context: BrowserContext,
+        assignmentId: number,
+        data: CookingTeamAssignmentUpdate,
+        expectedStatus: number = 200
+    ): Promise<CookingTeamAssignment | null> => {
+        const response = await context.request.post(`${ADMIN_TEAM_ENDPOINT}/assignment/${assignmentId}`, {
+            headers: headers,
+            data
+        })
+
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+        if (expectedStatus === 200) {
+            return CookingTeamAssignmentSchema.parse(await response.json())
+        }
+        return null
+    }
+
     static readonly removeMemberFromTeam = async (
         context: BrowserContext,
         _teamId: number,
@@ -976,7 +1014,7 @@ export class SeasonFactory {
         expect(status, 'Unexpected status').toBe(expectedStatus)
 
         if (expectedStatus === 200) {
-            return await response.json() as number
+            return DeletedCountSchema.parse(await response.json())
         }
         return null
     }
@@ -999,19 +1037,62 @@ export class SeasonFactory {
         return null
     }
 
+    // === JOKER SLOT METHODS ===
+
+    static readonly defaultJokerSlot = (overrides: Partial<JokerSlotCreate> = {}): JokerSlotCreate => ({
+        role: RoleSchema.enum.COOK,
+        allocationPercentage: 100,
+        affinity: createDefaultWeekdayMap([true, false, true, false, false, false, false]),
+        startDate: this.tomorrow,
+        endDate: this.oneWeekFromTomorrow,
+        note: null,
+        ...overrides
+    })
+
+    static readonly createJokerSlot = async (
+        context: BrowserContext,
+        teamId: number,
+        slot: JokerSlotCreate = this.defaultJokerSlot(),
+        expectedStatus: number = 201
+    ): Promise<JokerSlot | null> => {
+        const response = await context.request.put(`${ADMIN_TEAM_ENDPOINT}/${teamId}/joker-slot`, {
+            headers: headers,
+            data: slot
+        })
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+        return expectedStatus === 201 ? JokerSlotSchema.parse(await response.json()) : null
+    }
+
+    static readonly deleteJokerSlot = async (
+        context: BrowserContext,
+        teamId: number,
+        slotId: number,
+        expectedStatus: number = 200
+    ): Promise<number | null> => {
+        const response = await context.request.delete(`${ADMIN_TEAM_ENDPOINT}/${teamId}/joker-slot/${slotId}`)
+        const status = response.status()
+        const errorBody = status !== expectedStatus ? await response.text() : ''
+        expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+        return expectedStatus === 200 ? DeletedCountSchema.parse(await response.json()) : null
+    }
+
     static readonly getCookingTeamsForSeason = async (
         context: BrowserContext,
         seasonId: number
-    ): Promise<CookingTeamDetail[]> => {
+    ): Promise<CookingTeamDisplay[]> => {
         const response = await context.request.get(`${ADMIN_TEAM_ENDPOINT}?seasonId=${seasonId}`)
         expect(response.status()).toBe(200)
 
         const responseBody = await response.json()
         expect(Array.isArray(responseBody)).toBe(true)
-        return CookingTeamDetailSchema.array().parse(responseBody)
+        return CookingTeamDisplaySchema.array().parse(responseBody)
     }
 
-    static readonly getAllCookingTeams = async (context: BrowserContext): Promise<CookingTeamDetail[]> => {
+    static readonly getAllCookingTeams = async (context: BrowserContext): Promise<CookingTeamDisplay[]> => {
         const response = await context.request.get(ADMIN_TEAM_ENDPOINT)
         const status = response.status()
         const errorBody = status !== 200 ? await response.text() : ''
@@ -1019,7 +1100,7 @@ export class SeasonFactory {
 
         const responseBody = await response.json()
         expect(Array.isArray(responseBody)).toBe(true)
-        return CookingTeamDetailSchema.array().parse(responseBody)
+        return CookingTeamDisplaySchema.array().parse(responseBody)
     }
 
     static readonly assignTeamAffinities = async (context: BrowserContext, seasonId: number): Promise<{seasonId: number, teamCount: number, teams: CookingTeamDetail[]}> => {

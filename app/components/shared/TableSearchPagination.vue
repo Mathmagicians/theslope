@@ -43,7 +43,7 @@ const props = withDefaults(defineProps<Props>(), {
 const searchQuery = defineModel<string>('searchQuery', { default: '' })
 const sortDescending = defineModel<boolean>('sortDescending', { default: false })
 
-const { SIZES, PAGINATION, ICONS, COLOR } = useTheSlopeDesignSystem()
+const { SIZES, PAGINATION, ICONS, COLOR, NOISE } = useTheSlopeDesignSystem()
 
 // Toggle sort direction
 const toggleSort = () => {
@@ -89,7 +89,7 @@ const handlePageChange = (page: number) => {
       <!-- Sort toggle -->
       <UButton
           v-if="sortLabel"
-          variant="outline"
+          :variant="NOISE.medium"
           :color="COLOR.neutral"
           :size="SIZES.standard"
           data-testid="sort-toggle"

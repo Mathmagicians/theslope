@@ -61,7 +61,7 @@ const props = withDefaults(defineProps<Props>(), {
     defaultSortDesc: false
 })
 
-const {COMPONENTS, ICONS, SIZES, PAGINATION, COLOR} = useTheSlopeDesignSystem()
+const {COMPONENTS, ICONS, SIZES, PAGINATION, COLOR, NOISE} = useTheSlopeDesignSystem()
 
 // Table ref for accessing TanStack table API
 const tableRef = ref<{ tableApi?: { setPageIndex: (index: number) => void; getState: () => { pagination: { pageIndex: number; pageSize: number } }; getFilteredRowModel: () => { rows: unknown[] } } } | null>(null)
@@ -126,7 +126,7 @@ const toggleSort = () => {
             class="w-28 md:w-36"
         />
         <UButton
-            variant="ghost"
+            :variant="NOISE.quiet"
             :color="COLOR.neutral"
             :size="SIZES.standard"
             square

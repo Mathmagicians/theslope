@@ -89,13 +89,19 @@ export type NuxtUIColor = typeof COLOR[keyof typeof COLOR]
  *   medium → outline  secondary - important, not primary
  *   soft   → soft     supplementary - tinted, gentle
  *   quiet  → ghost    tertiary - overflow triggers, inline icons, rare actions
+ *
+ * Off the ladder: `subtle` (a soft tint inside a ring, the status badges) and `link` (text only,
+ * a button that reads as a link). Each value is a literal type, so the badge variants
+ * (`solid`, `outline`, `soft`, `subtle`) bind on a UBadge.
  */
 export const NOISE = {
-    loud:   'solid'   as NuxtUIButtonVariant,
-    medium: 'outline' as NuxtUIButtonVariant,
-    soft:   'soft'    as NuxtUIButtonVariant,
-    quiet:  'ghost'   as NuxtUIButtonVariant
-} as const
+    loud:   'solid',
+    medium: 'outline',
+    soft:   'soft',
+    quiet:  'ghost',
+    subtle: 'subtle',
+    link:   'link'
+} as const satisfies Record<string, NuxtUIButtonVariant>
 
 /** Noise level type - derived from NOISE constant */
 export type NoiseLevel = keyof typeof NOISE
@@ -203,7 +209,9 @@ export const BG = {
     /** A stat box on the public invoice page */
     invoiceStat: 'bg-neutral-100 dark:bg-neutral-900',
     /** The head row of the chef's budget table */
-    budgetHead: 'bg-neutral-50 dark:bg-neutral-800'
+    budgetHead: 'bg-neutral-50 dark:bg-neutral-800',
+    /** The disc behind an allergy type's icon or emoji, white in both modes */
+    allergyAvatar: 'bg-white'
 } as const
 
 /**
@@ -219,7 +227,8 @@ export const BG = {
 export const TEXT = {
     mocha: {
         50: 'text-amber-50',
-        500: 'text-amber-500',    // Chef hat accent
+        200: 'text-amber-200',
+        600: 'text-amber-600',
         900: 'text-amber-900',
         950: 'text-amber-950'
     },
@@ -637,8 +646,116 @@ export const COMPONENTS = {
         RELEASED: `${BG.gray[400]} ${TEXT.black} ${BORDER.gray[500]} ${KITCHEN_PANEL_BOX}`
     },
 
+    /**
+     * KitchenPreparation's layout on the kitchen surfaces: the totals in the stats bar, the panel
+     * row, a panel's head lines and allergy line, and the household list a selected panel opens
+     * below the row on that panel's surface (the list's padding and alignment win over the box's);
+     * `allergyOverview` sets the kitchen type size on the shared `allergyOverview` line
+     */
+    kitchen: {
+        totals: 'text-center',
+        totalsLabel: `${TYPOGRAPHY.kitchenLabel} ${TEXT.toned}`,
+        totalsMain: 'text-2xl md:text-3xl lg:text-4xl font-bold',
+        totalsBreakdown: `text-xs md:text-sm flex flex-wrap justify-center gap-x-2 ${TEXT.toned}`,
+        panels: 'flex flex-col md:flex-row overflow-hidden',
+        // Beside `kitchenPanel`: the phone stacks the panels, so a bottom edge divides them below md
+        panel: 'border-b md:border-b-0 md:border-r last:border-b-0 last:md:border-r-0 cursor-pointer',
+        label: `${TYPOGRAPHY.kitchenLabel} truncate flex items-center justify-center gap-1`,
+        glyph: 'size-4',
+        breakdown: `${TYPOGRAPHY.kitchenDetail} flex flex-wrap justify-center gap-x-1`,
+        figure: 'whitespace-nowrap',
+        figureTotal: 'whitespace-nowrap font-semibold',
+        allergyHead: `${TYPOGRAPHY.kitchenDetail} pt-2 flex items-center justify-center gap-1`,
+        householdList: 'px-8 md:px-32 py-6 md:py-8 max-h-64 overflow-y-auto text-left',
+        // One wrapping row on one vertical centre: the segments, and a diner with the allergy types beside the name
+        household: `${TYPOGRAPHY.kitchenDetail} py-1 flex flex-wrap items-center gap-x-1`,
+        householdName: 'font-semibold',
+        diner: 'inline-flex items-center',
+        allergyOverview: `${TYPOGRAPHY.kitchenDetail} py-1`
+    },
+
+    /**
+     * The allergy overview (`AllergyOverviewLine`): `ICONS.allergy` and the kuverter of the allergic diners in `total`,
+     * then a `figure` per allergen centring its compact `AllergyTypeDisplay` between the separator and its kuverter; the
+     * site sets the type size on the line. `besideName` spaces an `AllergyTypeDisplay` from the diner's name before it.
+     */
+    allergyOverview: {
+        line: 'flex flex-wrap items-center gap-x-1',
+        total: 'inline-flex items-center gap-1 whitespace-nowrap font-semibold',
+        figure: 'inline-flex items-center gap-1 whitespace-nowrap',
+        glyph: 'size-4',
+        besideName: 'ms-1'
+    },
+
+    /**
+     * AllergyTypeDisplay: the `compact` face for table cells and diner lines, the regular face for the editor;
+     * `named` weights a type's name, `none` mutes the no-allergy state
+     */
+    allergyTypeDisplay: {
+        compactRoot: 'inline-flex items-center gap-1 md:gap-2',
+        compactAvatar: `flex-shrink-0 ${BG.allergyAvatar} p-0.5`,
+        compactName: 'text-xs md:text-sm whitespace-nowrap',
+        root: 'flex items-center gap-2',
+        avatar: `flex-shrink-0 ${BG.allergyAvatar} p-1`,
+        name: 'text-sm md:text-base',
+        named: 'font-medium',
+        none: TEXT.muted
+    },
+
+    /**
+     * AllergenMultiSelector: the catalog beside the allergy panel from md, stacked below; `withSummaryBar` keeps the
+     * last rows clear of the phone's fixed `summaryBar`. The panel binds `ALERTS.legend` with `panelIcon` on its
+     * icon slot; its `panelBody` stacks the overview, the Hvem button and the `names`.
+     */
+    allergenSelector: {
+        root: 'flex flex-col md:flex-row gap-4 md:gap-6',
+        withSummaryBar: 'pb-16 md:pb-0',
+        master: 'md:w-1/3',
+        summaryBar: 'md:hidden fixed bottom-4 inset-x-4 z-50 bg-elevated shadow-lg',
+        detail: 'flex-1 md:border-l md:pl-6',
+        panelIcon: 'size-8',
+        panelBody: 'flex flex-col items-start gap-2',
+        names: TYPOGRAPHY.bodyTextSmall
+    },
+
+    /**
+     * AllergyCatalogTable's cells: the centred checkbox, the icon in its red ring, the name, and the centred count
+     * and new-badge columns (the table binds `COMPONENTS.table.catalogUi`)
+     */
+    allergyCatalog: {
+        checkboxCell: 'flex items-center justify-center',
+        iconCell: 'flex items-center justify-center p-1 rounded-lg transition-colors',
+        iconRing: `flex items-center justify-center w-8 h-8 rounded-full ring-1 shrink-0 ${RING.red[700]}`,
+        iconGlyph: 'text-base',
+        nameCell: 'font-medium',
+        centredCell: 'text-center'
+    },
+
+    /** AdminAllergies: the catalog card, its header with the title row and the poster action, the toolbar, and the docked and sticky detail panes */
+    allergyCatalogPage: {
+        card: 'w-full px-0',
+        header: 'flex flex-col gap-4',
+        titleRow: 'flex flex-col md:flex-row items-center justify-between gap-4',
+        headerActions: 'flex items-center gap-2',
+        toolbar: 'mb-4',
+        createDock: 'mb-2',
+        column: 'min-w-0',
+        stickyDetail: 'min-w-0 flex justify-center items-start md:sticky md:top-4 self-start'
+    },
+
     // Responsive row icon sizing (matches birthday cake pattern)
     rowIconClass: 'size-4 md:size-6',
+
+    /**
+     * Inhabitant avatars (`UserListItem`): the server renders before the breakpoint is known, so
+     * `max` and `size` are one value everywhere and `fit` steps the avatar up a size from md.
+     * `fit` goes on each `UAvatar` and on the group's `ui.base`, which reaches the overflow count.
+     */
+    avatar: {
+        max: 5,
+        regular: {size: 'md' as const, fit: 'md:size-9 md:text-lg'},
+        compact: {size: 'sm' as const, fit: 'md:size-8 md:text-base'}
+    },
 
     // The selected item in a segmented control (form mode, booking view) - a ring, not a fill,
     // so the item's own colour still reads through
@@ -680,7 +797,12 @@ export const COMPONENTS = {
         dockClamp: 'w-0 min-w-full',
         // Wide detail content scrolls inside its own box; the dock header above it stays
         // outside the scroll container, so its stickiness keeps tracking the page
-        dockBody: 'overflow-x-auto'
+        dockBody: 'overflow-x-auto',
+        // The master table has no fixed widths: the primary column takes the row's slack, so a
+        // wrapping cell beside a compact one keeps its line instead of ceding the spare width
+        primaryColumn: {th: 'w-full', td: 'w-full'},
+        // w-px shrinks the column to its content; nowrap overrides the table cell wrap
+        compactColumn: {th: 'w-px whitespace-nowrap', td: 'w-px whitespace-nowrap'}
     },
 
     /**
@@ -740,6 +862,8 @@ export const COMPONENTS = {
         ui: {th: 'px-2 md:px-4', td: `px-2 py-1 md:px-4 md:py-2 ${TABLE_CELL_WRAP}`},
         /** Compact tables with many narrow columns (booking form, household preferences, household allergies) */
         denseUi: {th: 'px-1 py-1 md:px-4 md:py-3', td: `px-1 md:px-4 ${TABLE_CELL_WRAP}`},
+        /** The allergy catalog in its narrow master column: tighter horizontal cell padding */
+        catalogUi: {th: 'px-1', td: `px-1 py-1 md:px-1 md:py-2 ${TABLE_CELL_WRAP}`},
         /** The booking grid: centred day cells, a sticky footer */
         gridUi: {
             th: 'px-1 py-1 md:px-2 md:py-2 text-center',
@@ -799,6 +923,13 @@ export const COMPONENTS = {
         }
     },
 
+    // The period field (CalendarDateRangePicker): its padded form field, and the read-only face's input,
+    // as wide as the range text and never narrower than the field
+    dateRangeField: {
+        field: 'p-2',
+        viewUi: {base: 'w-fit min-w-full'}
+    },
+
     // Shared UCalendar root: Monday-first, no padding weeks, and other-month days both disabled
     // (reka data-outside-view) and hidden, so a day number never appears twice across
     // neighbouring month grids. Spread with v-bind at every UCalendar call site.
@@ -813,6 +944,18 @@ export const COMPONENTS = {
             // The head letters are body-size text: their ink measures at the 4.5:1 rung
             headCell: `text-sm uppercase ${TEXT.toned}`
         }
+    },
+
+    // Entries inside an ALERTS.legend panel (CalendarLegend, DinnerModeLegend): the samples wrap
+    // in a row, each sample sits beside its name; a team badge sample is the calendar's size
+    legend: {
+        entries: 'flex flex-wrap gap-x-6 gap-y-2',
+        entry: 'flex items-center gap-2',
+        // A sample with its name under it (the booking grid's modified-cell marker)
+        stackedEntry: 'flex flex-col items-center gap-0.5',
+        badge: 'w-8 h-8 flex items-center justify-center shrink-0',
+        // The operating hint under the entries, in the design system's muted text (AA on every surface)
+        hint: `mt-2 ${TEXT.muted}`
     },
 
     // Economy table hierarchy - ready-to-grab classes for each nesting level
@@ -894,6 +1037,124 @@ export const COMPONENTS = {
                    'bg-error-50 dark:bg-error-950/40 p-4 space-y-3',
         heading: 'text-xs font-bold uppercase tracking-wide ' +
                  'text-error-700 dark:text-error-400 flex items-center gap-1.5'
+    },
+
+    /**
+     * The team card's role groups (CookingTeamCard). Every face starts with the glyph column, 1rem
+     * wide as the glyph itself, so the glyphs share one axis; the heading is a subgrid row of its
+     * group, so the label, the list and the empty line start on the column after it. The monitor
+     * face adds an auto label column, so every avatar list starts on one line across the groups.
+     */
+    roleBox: {
+        box: 'grid grid-cols-[1rem_minmax(0,1fr)] gap-x-3 gap-y-2',
+        heading: `col-span-2 grid grid-cols-subgrid items-center ${TYPOGRAPHY.caption} ${TEXT.toned}`,
+        glyph: 'size-4',
+        list: `col-start-2 flex flex-col gap-2 p-3 ${BG.inset}`,
+        row: 'flex items-center gap-2 flex-wrap',
+        // A member row's cells (avatar, name, allocation, weekdays, slet) share the list's columns, so every column starts on one line
+        memberList: `col-start-2 grid grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] gap-2 p-3 ${BG.inset}`,
+        memberRow: 'col-span-full grid grid-cols-subgrid items-center justify-items-start *:min-w-0 *:max-w-full',
+        empty: `col-start-2 ${TYPOGRAPHY.bodyTextPlaceholder} italic p-3`,
+        monitorGrid: 'grid grid-cols-[1rem_auto_minmax(0,1fr)] gap-x-3 gap-y-3 md:gap-y-4 px-3 md:px-4',
+        monitorRow: 'col-span-3 grid grid-cols-subgrid items-center'
+    },
+
+    /** The team card's inline forms (TeamMemberAddForm, JokerSlotForm): the field stack, and a select or input filling its field */
+    teamForm: {
+        stack: 'flex flex-col gap-3 py-2',
+        control: 'w-full'
+    },
+
+    /** CookingTeamBadges: the badges on one wrapping row */
+    teamBadgeRow: 'flex items-center gap-2 flex-wrap',
+
+    /**
+     * The team card's faces around the role boxes (CookingTeamCard): the monitor face and its badge
+     * header, the stacked sections of the view and edit faces, the dashed edit header with the
+     * team-name input, the two-column rows (members beside the finder, weekdays beside the calendar),
+     * a member row's links, the finder's status column and expanded member form, and the joker add row under the
+     * finder: the finder row's padding, the avatar-place glyph beside its label in the finder's name ink
+     */
+    teamCard: {
+        monitor: 'py-4 md:py-6',
+        monitorHeader: 'mb-3 md:mb-4 px-3 md:px-4',
+        stack: 'space-y-4',
+        viewHeader: 'p-4 border',
+        editHeader: 'flex flex-col md:flex-row md:items-center md:justify-between gap-2 md:gap-4 py-2 px-0 md:px-4 border-y-2 md:border-2 border-dashed',
+        editHeaderMain: 'flex flex-col md:flex-row md:items-center gap-3 flex-1',
+        nameField: 'flex-1 min-w-fit',
+        // The end padding holds the trailing pencil (ICONS.edit, bound at the site)
+        nameInput: {class: 'w-1/2', ui: {base: 'pe-11', trailing: 'me-3'}},
+        memberSummary: 'flex items-center gap-2',
+        deleteButton: 'w-full md:w-auto',
+        row: 'flex flex-col md:flex-row gap-2 md:gap-4',
+        fullColumn: 'w-full space-y-4',
+        halfColumn: 'w-full md:w-1/2 space-y-4',
+        affinityColumn: 'w-full md:w-1/4',
+        calendarColumn: 'w-full md:w-3/4',
+        boxes: 'flex flex-col gap-4',
+        memberLink: 'cursor-pointer',
+        nameBadge: 'cursor-pointer hover:opacity-80 transition-opacity',
+        allocationBadge: {color: COLOR.neutral, variant: NOISE.medium, class: 'w-fit'},
+        freeBadge: {color: COLOR.success, variant: NOISE.medium},
+        statusList: 'flex flex-col gap-1',
+        statusEntry: 'flex flex-col gap-0.5',
+        statusBadge: 'w-fit',
+        memberForm: `p-4 ${BG.panel}`,
+        jokerAddRow: 'flex items-center justify-between gap-3 px-2 py-1 md:px-4 md:py-2',
+        jokerAddName: 'flex items-center gap-3',
+        jokerAddLabel: `${TYPOGRAPHY.bodyTextMedium} ${TEXT.muted}`
+    },
+
+    /**
+     * The chef portrait on the dinner hero (ChefMenuCard): a trigger holding the ringed avatar
+     * under a tilted chef hat beside the name. A dinner without a chef adds the dashed poster
+     * frame to the trigger and shows a question-mark avatar under WANTED lettering.
+     */
+    wantedPoster: {
+        trigger: 'flex items-center gap-3 cursor-pointer',
+        frame: `${BG.mocha[950]} border-2 border-dashed ${BORDER.amber[600]} rounded-lg p-3 -skew-x-1 w-fit`,
+        portrait: 'relative',
+        ring: `rounded-full ring-2 md:ring-4 ${RING.amber[500]}`,
+        avatar: {class: BG.mocha[800], ui: {icon: TEXT.mocha[50]}},
+        hat: 'absolute -top-5 md:-top-7 left-1/2 -translate-x-1/2 text-xl md:text-3xl -rotate-9 drop-shadow-md',
+        // The hat's ink follows the ground under it: pale gold on the dark frame; deep gold on the page, cream in dark mode
+        hatOnFrame: TEXT.mocha[200],
+        hatOnPage: `${TEXT.mocha[600]} dark:${TEXT.mocha[50]}`,
+        nameStack: 'flex flex-col',
+        lettering: `font-serif text-lg md:text-xl font-bold ${TEXT.mocha[50]} tracking-widest uppercase`,
+        role: `${TEXT.mocha[50]} text-sm opacity-75`
+    },
+
+    /**
+     * ChefMenuCard below the hero: the compact face (a calendar list row: date, title, badges, budget), the stacked
+     * sections with a rule above each, the allergen row (label, overview line, Rediger allergener), the allergen editor
+     * head, and the menu form's fields with the cost row
+     */
+    chefMenuCard: {
+        compactUi: (selected: boolean) => ({
+            root: `${CALENDAR.selection.card.base} ${selected ? CHEF_CALENDAR.selection : ''}`,
+            body: 'p-3'
+        }),
+        compactRow: 'flex items-center gap-3',
+        compactDate: 'text-sm font-semibold text-primary w-12 shrink-0',
+        compactTitleColumn: 'flex-1 min-w-0',
+        compactTitle: 'text-sm truncate font-medium',
+        compactTitlePlaceholder: 'text-sm truncate italic',
+        compactBadge: 'shrink-0',
+        compactBudget: 'text-sm font-medium shrink-0',
+        stack: 'space-y-6',
+        section: 'pt-4 border-t',
+        allergenRow: 'flex flex-col md:flex-row md:items-center gap-2',
+        allergenLabel: `${TYPOGRAPHY.sectionSubheading} uppercase inline-flex items-center gap-1`,
+        // The leading glyph takes the title's ink and its font size
+        allergenGlyph: 'size-[1em]',
+        allergenLine: `${TYPOGRAPHY.bodyTextSmall} md:flex-1`,
+        allergenEditor: 'space-y-4',
+        allergenEditorHead: 'flex flex-col gap-2 md:flex-row md:items-center',
+        allergenEditorTitle: `${TYPOGRAPHY.sectionSubheading} md:flex-1`,
+        form: 'space-y-4',
+        field: 'w-full'
     }
 } as const
 
@@ -978,8 +1239,10 @@ export const ICONS = {
     ticket: 'i-heroicons-ticket',
 
     // Header navigation
-    dinner: 'i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining',
-    chef: 'i-streamline-food-kitchenware-chef-toque-hat-cook-gear-chef-cooking-nutrition-tools-clothes-hat-clothing-food',
+    dinner: 'i-hugeicons-dish-02',
+    chef: 'i-hugeicons-chef-hat',
+    /** A joker slot: a seat the team holds open for a volunteer */
+    joker: 'i-hugeicons-joker',
     household: 'i-heroicons-home',
     preferences: 'i-heroicons-adjustments-horizontal',
     /** The cog that opens a user's own settings ("Mine indstillinger") - `preferences` is the sliders glyph */
@@ -1028,6 +1291,8 @@ export const ICONS = {
     claim: 'i-heroicons-arrows-right-left',
     archive: 'i-heroicons-archive-box',
     holiday: 'i-heroicons-sun',
+    /** A household member without allergies */
+    noAllergy: 'i-heroicons-sun',
     printer: 'i-heroicons-printer',
 
     // Empty states & system feedback
@@ -1068,14 +1333,17 @@ export const ICONS = {
 } as const
 
 /**
- * Team role glyphs: the chef hat is the chef's symbol, the cook stands at the pot,
- * a kokkespire sprouts
+ * Team role glyphs, one icon set with ICONS.chef and ICONS.dinner: the chef hat is the chef's
+ * symbol, the cook's whisk is a tool rather than a rank, a kokkespire sprouts
  */
 export const ROLE_ICONS = {
     CHEF: ICONS.chef,
-    COOK: 'i-lucide-cooking-pot',
-    JUNIORHELPER: 'i-lucide-sprout'
+    COOK: 'i-hugeicons-whisk',
+    JUNIORHELPER: 'i-hugeicons-plant-01'
 } as const
+
+/** The team's calendar count badge: CookingTeamBadges' cooking days, the team card's joker shifts; the site binds the size */
+export const getCalendarCountBadge = (teamNumber: number) => ({class: getRainbowBand(teamNumber - 1), icon: ICONS.calendar})
 
 /** Residency colours double as alert kinds, so a residency alert is `v-bind="ALERTS[residency.color]"` */
 export type ResidencyAlertKind = Extract<AlertKind, 'success' | 'error' | 'neutral'>
@@ -1206,6 +1474,14 @@ export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
         return isMd.value ? '3xl' : '2xl'
     },
 
+    // Allergy type avatar: the compact face in table cells and diner lines, the regular face in the editor
+    get allergyAvatarCompact(): NuxtUIAvatarSize {
+        return isMd.value ? 'xs' : '2xs'
+    },
+    get allergyAvatar(): NuxtUIAvatarSize {
+        return isMd.value ? 'sm' : 'xs'
+    },
+
     // Lock chip: lg on mobile, 3xl on desktop (for booking calendar lock indicators)
     get lockChip(): NuxtUIChipSize {
         return isMd.value ? '3xl' : 'lg'
@@ -1313,6 +1589,15 @@ const createResponsiveButtons = (isMd: Ref<boolean>) => {
                 color: 'neutral' as const,
                 variant: NOISE.quiet,
                 size: sizes.standard
+            }
+        },
+
+        // The team finder's row action (Tilføj, Rediger, Luk): tinted and small, one per inhabitant row
+        get memberFinder() {
+            return {
+                color: COLOR.primary,
+                variant: NOISE.soft,
+                size: sizes.small
             }
         },
 
@@ -1674,7 +1959,9 @@ export const PLANNING_CALENDAR = {
 export const CALENDAR = {
     day: {
         shape: 'rounded-full flex items-center justify-center cursor-pointer hover:opacity-90',
-        past: `font-medium ${BG.mocha[100]} ${TEXT.mocha[900]}`
+        past: `font-medium ${BG.mocha[100]} ${TEXT.mocha[900]}`,
+        // A cancelled dinner: the past circle, struck through
+        cancelled: 'line-through'
     },
     countdown: {
         container: 'bg-amber-950 text-amber-50 py-6 md:py-8 border-b-2',
@@ -1919,7 +2206,7 @@ export const getLockStatusConfig = (releasedCount: number | null) => {
  */
 export const EMPTY_STATE_MESSAGES = {
     cookingTeam: [
-        { emoji: '🌱', text: 'Køkkenholdet lytter til græs der gror' },
+        { emoji: '🌱', text: 'Køkkenholdet er her ikke, de lytter til græs der gror' },
         { emoji: '☁️', text: 'Køkkenholdet kigger på skyer' },
         { emoji: '💨', text: 'Køkkenholdet øver sig på luftfrikadeller' },
         { emoji: '🎨', text: 'Køkkenholdet ser maling tørre' },
@@ -1943,11 +2230,10 @@ export const EMPTY_STATE_MESSAGES = {
         { emoji: '🤔', text: 'Hvem laver maden? Det finder vi ud af!' },
         { emoji: '🎲', text: 'Madholdet er stadig i puljen' },
         { emoji: '🔮', text: 'Krystalkuglen ved ikke hvem der laver mad endnu' },
-        { emoji: '🎯', text: 'Administratoren sigter efter et madhold' },
+        { emoji: '🎯', text: 'Madholdet har gemt sig, måske i et regneark' },
         { emoji: '🧩', text: 'Puslespillet mangler et madhold' }
     ],
     jobHistory: [
-        { emoji: '😴', text: 'Bytenisserne sover endnu' },
         { emoji: '🐱', text: 'Katten har ædt kildekoden til systemjobbet' },
         { emoji: '📋', text: 'Servernes fagforening har indkaldt til årsmøde' },
         { emoji: '🌙', text: 'Systemet venter på fuldmåne før første kørsel' },
@@ -1965,6 +2251,23 @@ export const EMPTY_STATE_MESSAGES = {
         { emoji: '🍕', text: 'Du kan desværre ikke være med, men der er en dejlig pizzeria i Lejre Downtown' },
         { emoji: '🎫', text: 'Du kan få en fribillet til Store Bededag i stedet for' },
         { emoji: '🦆', text: 'Ænderne i Lejre Å har også travlt i dag - prøv igen i morgen!' }
+    ],
+    dinnerGone: [
+        { emoji: '🚪', text: 'Skulle du til middag? Den er gået' },
+        { emoji: '🍽️', text: 'Tallerkenen er vasket op, middagen findes ikke mere' },
+        { emoji: '🏃', text: 'Middag? Spisning er vild overvurderet' },
+        { emoji: '🌫️', text: 'Den middag er vist gået op i damp og røg' }
+    ],
+    noAllergens: [
+        { emoji: '🥗', text: 'Menuen er fri for allergener - alle kan spise med' },
+        { emoji: '🍀', text: 'Allergenerne fik ikke plads på menuen i dag' },
+        { emoji: '😋', text: 'Ingen allergener på menuen - spis løs!' },
+        { emoji: '🧑‍🍳', text: 'Kokken har holdt allergenerne uden for køkkenet' }
+    ],
+    seasonGone: [
+        { emoji: '📅', text: 'Sæsonen er pakket sammen og sat op på loftet' },
+        { emoji: '🍂', text: 'Denne sæson er måske blæst væk med bladene' },
+        { emoji: '🗓️', text: 'Kalenderen har vendt bladet, sæsonen er væk' }
     ]
 } as const
 
@@ -2013,6 +2316,7 @@ export const useTheSlopeDesignSystem = () => {
         getRainbowBand,
         getRainbowFamily,
         getRainbowAccent,
+        getCalendarCountBadge,
         ICONS,
         IMG,
 

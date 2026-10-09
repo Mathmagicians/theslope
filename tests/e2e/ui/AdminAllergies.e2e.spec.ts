@@ -13,6 +13,7 @@ const {
     freshMemberContext,
     getSessionUserInfo,
     pollUntil,
+    gotoHydrated,
     salt,
     temporaryAndRandom
 } = testHelpers
@@ -25,7 +26,7 @@ const NOTES_KEY = 'allergy-poster-notes'
  * that the page is hydrated and interactive.
  */
 const gotoCatalog = async (page: Page) => {
-    await page.goto('/admin/allergies')
+    await gotoHydrated(page, '/admin/allergies')
     await pollUntil(
         async () => page.locator('[data-testid="admin-allergies"]').isVisible(),
         (isVisible) => isVisible,
