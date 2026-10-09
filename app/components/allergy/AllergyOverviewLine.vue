@@ -1,16 +1,20 @@
 <!--
-AllergyOverviewLine - the kuverter of the allergic diners, then each allergen with its kuverter
+AllergyOverviewLine - the kuverter of the allergic diners, then each allergen as its compact AllergyTypeDisplay with its kuverter
 
-| (allergy) 3,5 kuv. | Mælk · 2,5 | Nødder · 1 | Gluten · 0 |
+| (allergy) 3 kuv. | (milk) Mælk · 2 | (nuts) Nødder · 1 | (wheat) Gluten · 0 |
 
-The site orders the allergens and sets the type size on the line: the kitchen list (most kuverter first), the chef's
-allergen row and the allergen selector's panel (the menu's allergens in their order, a zero included).
+The site orders the allergens and sets the type size on the line: the kitchen list, the chef's allergen row and the
+allergen selector's panel (the menu's or the selection's allergens in their order, a zero included). The chef's row
+leads with the glyph on its title and sets the line without one (`withGlyph` false).
 -->
 <script setup lang="ts">
-defineProps<{
+import type {AllergenOverview} from '~/composables/useAllergy'
+
+withDefaults(defineProps<{
   totalPortions: number
-  allergens: Array<{name: string, portions: number}>
-}>()
+  allergens: AllergenOverview['breakdownByAllergen']
+  withGlyph?: boolean
+}>(), {withGlyph: true})
 
 const {COMPONENTS, ICONS} = useTheSlopeDesignSystem()
 </script>
@@ -18,11 +22,11 @@ const {COMPONENTS, ICONS} = useTheSlopeDesignSystem()
 <template>
   <div :class="COMPONENTS.allergyOverview.line">
     <span :class="COMPONENTS.allergyOverview.total">
-      <UIcon :name="ICONS.allergy" :class="COMPONENTS.allergyOverview.glyph" />
+      <UIcon v-if="withGlyph" :name="ICONS.allergy" :class="COMPONENTS.allergyOverview.glyph" />
       {{ formatPortions(totalPortions) }} kuv.
     </span>
-    <span v-for="allergen in allergens" :key="allergen.name" :class="COMPONENTS.allergyOverview.figure">
-      | {{ allergen.name }} · {{ formatPortions(allergen.portions) }}
+    <span v-for="allergen in allergens" :key="allergen.id" :class="COMPONENTS.allergyOverview.figure">
+      | <AllergyTypeDisplay :allergy-type="allergen" compact show-name /> · {{ formatPortions(allergen.portions) }}
     </span>
   </div>
 </template>

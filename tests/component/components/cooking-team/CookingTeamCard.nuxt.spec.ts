@@ -83,7 +83,7 @@ const mountCard = async (mode: 'monitor' | 'regular' | 'edit', detail: Partial<C
         isMd: true
     })
     const store = usePlanStore()
-    store.selectTeam(TEAM_ID)
+    store.selectTeam(() => TEAM_ID)
     await vi.waitFor(() => expect(store.selectedTeam?.id).toBe(TEAM_ID))
     await flushPromises()
     await nextTick()
@@ -122,6 +122,17 @@ describe('CookingTeamCard', () => {
         it('the Jokere box heading carries the joker glyph', async () => {
             const wrapper = await mountCard(mode)
             expectHeadingWithGlyph(wrapper, TEST_IDS.jokerHeading, ICONS.joker)
+        })
+
+        it('member rows bind the member grid, one cell per element on every row', async () => {
+            const wrapper = await mountCard(mode)
+            const rows = findAllByTestId(wrapper, TEST_IDS.memberRow)
+            expect(rows).toHaveLength(assignments.length)
+            rows.forEach(row => {
+                expect(row.classes()).toEqual(expect.arrayContaining(classesOf(COMPONENTS.roleBox.memberRow)))
+                expect([...row.element.parentElement!.classList]).toEqual(expect.arrayContaining(classesOf(COMPONENTS.roleBox.memberList)))
+            })
+            expect(new Set(rows.map(row => row.element.children.length)).size).toBe(1)
         })
 
         it('member rows carry no role glyph', async () => {
@@ -307,5 +318,98 @@ describe('CookingTeamCard', () => {
             expect(wrapper.emitted('update:teamName')).toBeUndefined()
             expect((nameInput(wrapper).element as HTMLInputElement).value).toBe('Team Alpha')
         })
+    })
+})
+
+describe('CookingTeamCard edit face, Tilføj jokere', () => {
+    const JOKER_ADD_ROW = 'joker-add-row'
+    type AvatarWrapper = VueWrapper<ComponentPublicInstance<{icon?: string}>>
+
+    const headingNamed = (wrapper: VueWrapper, text: string) => wrapper.findAll('h4').find(heading => heading.text() === text)!
+    const addButton = (wrapper: VueWrapper) => findByTestId(findByTestId(wrapper, JOKER_ADD_ROW), JOKER_SLOT_IDS.add)
+    const addButtonIcon = (wrapper: VueWrapper) => (wrapper.findAllComponents({name: 'UButton'}) as VueWrapper<ComponentPublicInstance<{icon?: string, trailingIcon?: string}>>[])
+        .find(button => button.element === addButton(wrapper).element)!
+    const follows = (earlier: Element, later: Element) =>
+        (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+
+    beforeEach(() => {
+        resetStores()
+    })
+
+    it('the Jokere box keeps its slot lines and holds no add button or form', async () => {
+        const wrapper = await mountCard('edit')
+        const box = findByTestId(wrapper, TEST_IDS.jokerBox)
+        expect(findAllByTestId(box, TEST_IDS.jokerSlot)).toHaveLength(slots.length)
+        expect(findByTestId(box, JOKER_SLOT_IDS.add).exists()).toBe(false)
+        expect(box.find('button[aria-expanded]').exists()).toBe(false)
+    })
+
+    it('the "Tilføj jokere" row sits under the finder with the joker glyph in the avatar place and a Tilføj button', async () => {
+        const wrapper = await mountCard('edit')
+        const row = findByTestId(wrapper, JOKER_ADD_ROW)
+        const finderHeading = headingNamed(wrapper, 'Tilføj medlemmer')
+        const jokerHeading = headingNamed(wrapper, 'Tilføj jokere')
+
+        expect(row.exists()).toBe(true)
+        expect(finderHeading.element.parentElement!.contains(row.element)).toBe(true)
+        expect(follows(finderHeading.element, jokerHeading.element)).toBe(true)
+        expect(follows(jokerHeading.element, row.element)).toBe(true)
+
+        const avatar = (wrapper.findAllComponents({name: 'UAvatar'}) as AvatarWrapper[]).find(component => row.element.contains(component.element))
+        expect(avatar!.props('icon')).toBe(ICONS.joker)
+        expect(row.text()).toContain('Joker · en plads uden navn')
+        expect(addButton(wrapper).text()).toBe('Tilføj')
+        expect(addButton(wrapper).attributes('aria-expanded')).toBe('false')
+        expect(addButtonIcon(wrapper).props('icon')).toBe(ICONS.plusCircle)
+        expect(addButtonIcon(wrapper).props('trailingIcon')).toBeUndefined()
+    })
+
+    it('Tilføj opens the form in the member form panel and reads Luk while open', async () => {
+        const wrapper = await mountCard('edit')
+        expect(findByTestId(wrapper, JOKER_SLOT_IDS.form).exists()).toBe(false)
+
+        await clickByTestId(wrapper, JOKER_SLOT_IDS.add)
+        await flushPromises()
+
+        expect(addButton(wrapper).attributes('aria-expanded')).toBe('true')
+        expect(addButton(wrapper).text()).toBe('Luk')
+        expect(addButtonIcon(wrapper).props('icon')).toBe(ICONS.chevronDown)
+        const form = findByTestId(wrapper, JOKER_SLOT_IDS.form)
+        expect(form.exists()).toBe(true)
+        expect([...form.element.parentElement!.classList]).toEqual(expect.arrayContaining(classesOf(COMPONENTS.teamCard.memberForm)))
+        expect(findByTestId(form, JOKER_SLOT_IDS.submit).text()).toBe('Tilføj')
+        expect(findByTestId(form, JOKER_SLOT_IDS.cancel).text()).toBe('Annuller')
+    })
+
+    it('the form\'s Tilføj emits add:jokerSlot and closes the row', async () => {
+        const wrapper = await mountCard('edit', {affinity: createDefaultWeekdayMap([false, true, false, true, false, false, false])})
+        await clickByTestId(wrapper, JOKER_SLOT_IDS.add)
+        await flushPromises()
+
+        await submitJokerSlotForm(wrapper)
+
+        expect(wrapper.emitted('add:jokerSlot')).toHaveLength(1)
+        expect(findByTestId(wrapper, JOKER_SLOT_IDS.form).exists()).toBe(false)
+        expect(addButton(wrapper).attributes('aria-expanded')).toBe('false')
+        expect(addButton(wrapper).text()).toBe('Tilføj')
+        expect(addButtonIcon(wrapper).props('icon')).toBe(ICONS.plusCircle)
+    })
+
+    it('Annuller closes the row and emits nothing', async () => {
+        const wrapper = await mountCard('edit')
+        await clickByTestId(wrapper, JOKER_SLOT_IDS.add)
+        await flushPromises()
+
+        await clickByTestId(wrapper, JOKER_SLOT_IDS.cancel)
+
+        expect(wrapper.emitted('add:jokerSlot')).toBeUndefined()
+        expect(findByTestId(wrapper, JOKER_SLOT_IDS.form).exists()).toBe(false)
+        expect(addButton(wrapper).attributes('aria-expanded')).toBe('false')
+    })
+
+    it('the view face shows no "Tilføj jokere" row', async () => {
+        const wrapper = await mountCard('regular')
+        expect(findByTestId(wrapper, JOKER_ADD_ROW).exists()).toBe(false)
+        expect(wrapper.findAll('h4').some(heading => heading.text() === 'Tilføj jokere')).toBe(false)
     })
 })

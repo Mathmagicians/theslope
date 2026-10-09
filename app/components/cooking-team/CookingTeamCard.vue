@@ -16,16 +16,25 @@
  * │ (plant)    Kokkespirer  [Peter J]         (COMPONENTS.roleBox.heading)   │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
- * MODE: 'regular' / 'edit' - Holdmedlemmer, one box per role, the glyph once on its heading
+ * MODE: 'regular' / 'edit' - Holdmedlemmer, one box per role, the glyph once on its heading; a member row's
+ * avatar, name, allocation, weekdays and slet sit in the box's columns, the slet column at the right edge
  *   (chef hat) Chefkok
- *   |  (av) Anna  100%  tir
+ *   |  (av) Anna Hansen   100%  tir        [(trash)]
+ *   |  (av) Bo            50%   man tor    [(trash)]
  *   (whisk) Kok
- *   |  (av) Per    50%  tir
+ *   |  (av) Per           50%   tir        [(trash)]
  *   (plant) Kokkespire
  *   |  Ingen kokkespire
  *   (joker) Jokere
- *   |  07/10/2026-01/12/2026  tir  (whisk) Kok  Anna barsel  [(calendar) 8]   [(trash)]   <- edit face only
- *   |  [ + Tilføj jokertjans v ]                                        <- edit face, opens JokerSlotForm below
+ *   |  07/10/2026-01/12/2026  tir  (whisk) Kok  Anna barsel  [(calendar) 8]   [(trash)]   <- trash on the edit face only
+ *
+ * MODE: 'edit' - the right column, the finder and the joker add row under it (stacks under the members on a phone)
+ *   Tilføj medlemmer
+ *   [Søg efter navn...]
+ *   (av) Anna Hansen   LEDIG                              [Tilføj]
+ *   Tilføj jokere
+ *   (joker)  Joker · en plads uden navn                [Tilføj]   <- flips to Luk, opens JokerSlotForm below
+ *   |  Periode, Ugedage, Rolle, Arbejdstid, Note     [Annuller] [Tilføj]
  *
  * Already volunteered:
  * ┌──────────────────────────────────────────────────────────────────────────┐
@@ -50,7 +59,7 @@ import { ROLE_LABELS } from '~/composables/useCookingTeamValidation'
 import type { JokerSlotCreate } from '~/composables/useDutyValidation'
 
 // Design system
-const { SIZES, ICONS, ALERTS, BUTTONS, COLOR, TYPOGRAPHY, COMPONENTS, ROLE_ICONS, getRainbowBand, getCalendarCountBadge, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { SIZES, ICONS, ALERTS, BUTTONS, TYPOGRAPHY, COMPONENTS, ROLE_ICONS, getRainbowBand, getCalendarCountBadge, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 type DisplayMode = 'monitor' | 'regular' | 'edit'
 
@@ -393,8 +402,8 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                 <span>{{ ROLE_LABELS[role] }}</span>
               </h5>
 
-              <div v-if="members.length > 0" :class="COMPONENTS.roleBox.list">
-                <div v-for="member in members" :key="member.id" :class="COMPONENTS.roleBox.row" data-testid="team-member-row">
+              <div v-if="members.length > 0" :class="COMPONENTS.roleBox.memberList">
+                <div v-for="member in members" :key="member.id" :class="COMPONENTS.roleBox.memberRow" data-testid="team-member-row">
                   <UAvatar
                     :src="member.inhabitant?.pictureUrl ?? undefined"
                     :alt="`${member.inhabitant?.name} ${member.inhabitant?.lastName}`"
@@ -414,6 +423,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                     {{ member.allocationPercentage }}%
                   </UBadge>
                   <WeekDayMapDisplay v-if="member.affinity" :model-value="member.affinity" compact disabled />
+                  <span v-else />
                   <UButton
                     v-if="isEditable && member.id"
                     v-bind="BUTTONS.edit"
@@ -466,26 +476,6 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                 Ingen jokere
               </div>
 
-              <template v-if="isEditable && seasonDates">
-                <UButton
-                  v-bind="{...BUTTONS.secondaryAction, ...BUTTONS.flipOpen(isJokerFormOpen)}"
-                  :color="COLOR.primary"
-                  :icon="ICONS.plusCircle"
-                  :class="COMPONENTS.roleBox.add"
-                  data-testid="joker-slot-add"
-                  @click="isJokerFormOpen = !isJokerFormOpen"
-                >
-                  Tilføj jokertjans
-                </UButton>
-                <div v-if="isJokerFormOpen" :class="COMPONENTS.roleBox.form">
-                  <JokerSlotForm
-                    :season-dates="seasonDates"
-                    :team-affinity="affinity"
-                    @submit="handleJokerSlotSubmit"
-                    @cancel="isJokerFormOpen = false"
-                  />
-                </div>
-              </template>
             </div>
           </div>
         </div>
@@ -550,6 +540,35 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             :icon="ICONS.users"
             title="Hold skal gemmes før medlemmer kan tilføjes"
           />
+
+          <template v-if="seasonDates">
+            <h4 :class="TYPOGRAPHY.sectionSubheading">Tilføj jokere</h4>
+            <div>
+              <div :class="COMPONENTS.teamCard.jokerAddRow" data-testid="joker-add-row">
+                <div :class="COMPONENTS.teamCard.jokerAddName">
+                  <UAvatar :icon="ICONS.joker" :size="SIZES.sm" />
+                  <span :class="COMPONENTS.teamCard.jokerAddLabel">Joker · en plads uden navn</span>
+                </div>
+                <UButton
+                  v-bind="BUTTONS.memberFinder"
+                  :icon="isJokerFormOpen ? ICONS.chevronDown : ICONS.plusCircle"
+                  :aria-expanded="isJokerFormOpen"
+                  data-testid="joker-slot-add"
+                  @click="isJokerFormOpen = !isJokerFormOpen"
+                >
+                  {{ isJokerFormOpen ? 'Luk' : 'Tilføj' }}
+                </UButton>
+              </div>
+              <div v-if="isJokerFormOpen" :class="COMPONENTS.teamCard.memberForm">
+                <JokerSlotForm
+                  :season-dates="seasonDates"
+                  :team-affinity="affinity"
+                  @submit="handleJokerSlotSubmit"
+                  @cancel="isJokerFormOpen = false"
+                />
+              </div>
+            </div>
+          </template>
         </div>
       </div>
 

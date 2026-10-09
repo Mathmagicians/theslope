@@ -44,7 +44,7 @@ const fieldNamed = (wrapper: VueWrapper, name: string) =>
 const fullTimeLabel = ALLOCATION_PERCENTAGE_OPTIONS.find(option => option.value === 100)!.label
 
 describe('JokerSlotForm', () => {
-    it('Opret emits the slot over the season period with a full-time allocation on the team days and no note by default', async () => {
+    it('Tilføj emits the slot over the season period with a full-time allocation on the team days and no note by default', async () => {
         const wrapper = await mountForm()
         await submitJokerSlotForm(wrapper)
 
@@ -78,7 +78,7 @@ describe('JokerSlotForm', () => {
         expect(fieldNamed(wrapper, path)).toBeDefined()
     })
 
-    it('an end before the start blocks Opret and shows the message on the period field', async () => {
+    it('an end before the start blocks Tilføj and shows the message on the period field', async () => {
         const wrapper = await mountForm()
         wrapper.findComponent(CalendarDateRangePicker).vm.$emit('update:modelValue', {
             start: season.seasonDates.end,
@@ -100,7 +100,7 @@ describe('JokerSlotForm', () => {
         expect(roleTriggerGlyphs(wrapper)).toEqual([ROLE_ICONS[role]])
     })
 
-    it('Fortryd emits cancel and nothing else', async () => {
+    it('Annuller emits cancel and nothing else', async () => {
         const wrapper = await mountForm()
         await clickByTestId(wrapper, JOKER_SLOT_IDS.cancel)
         expect(wrapper.emitted('cancel')).toHaveLength(1)

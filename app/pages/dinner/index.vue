@@ -96,7 +96,7 @@ const {
 } = storeToRefs(bookingsStore)
 
 // The team card reads the dinner's cooking team from the plan store
-watch(() => dinnerEventDetail.value?.cookingTeamId ?? null, planStore.selectTeam, {immediate: true})
+planStore.selectTeam(() => dinnerEventDetail.value?.cookingTeamId ?? null)
 
 // Derive needed data from store
 const seasonDates = computed(() => selectedSeason.value?.seasonDates)

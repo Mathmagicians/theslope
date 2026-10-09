@@ -1,10 +1,10 @@
 <!--
 AllergenMultiSelector - the allergy catalog as a multiselect beside the allergy panel of a dinner's diners
 
-| ☑ (milk)  Mælk & Smør     2,5  |  (allergy) Allergier blandt gæsterne                     |
-| ☑ (nuts)  Nødder           1   |  3,5 kuv. | Mælk · 2,5 | Nødder · 1                      |
-| ☐ (wheat) Gluten           0   |  [v] Hvem                                                |
-|                                |      Dorthe (milk), Skraaningen (milk), Martin (nuts)    |
+| ☑ (milk)  Mælk & Smør     2,5  |  (allergy) Allergier blandt gæsterne                       |
+| ☑ (nuts)  Nødder           1   |  (allergy) 3,5 kuv. | (milk) Mælk · 2,5 | (nuts) Nødder · 1 |
+| ☐ (wheat) Gluten           0   |  [v] Hvem                                                  |
+|                                |      Dorthe (milk) Mælk, Martin (nuts) Nødder              |
 
 The count column and the panel read `tickets`: the kuverter of the diners carrying each allergen, and the
 overview of the selected allergens in the catalog's order, a zero included. Without tickets the count column
@@ -143,9 +143,16 @@ const panelUi = {...ALERTS.legend.ui, icon: COMPONENTS.allergenSelector.panelIco
               Hvem
             </UButton>
             <div v-if="isWhoOpen" data-testid="allergy-panel-names" :class="COMPONENTS.allergenSelector.names">
-              <template v-for="(diner, index) in guestAllergies.affectedList" :key="diner.inhabitant.id">
+              <template v-for="(diner, index) in guestAllergies.affectedList" :key="diner.key">
                 <span>{{ diner.inhabitant.name }}</span>
-                <AllergyChips :allergy-types="diner.matchingAllergens" />
+                <AllergyTypeDisplay
+                    v-for="allergyType in diner.matchingAllergens"
+                    :key="allergyType.id"
+                    :allergy-type="allergyType"
+                    compact
+                    show-name
+                    :class="COMPONENTS.allergyOverview.besideName"
+                />
                 <span v-if="index < guestAllergies.affectedList.length - 1">, </span>
               </template>
             </div>

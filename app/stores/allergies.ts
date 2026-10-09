@@ -30,33 +30,45 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     // AllergyTypes - Global catalog (admin managed)
     // Only reached on protected routes (server/middleware/1.guard.ts redirects without a
     // session), so no auth gate is needed - one fetch, identical on server and client.
+    const allergyTypesDataset = storeAsyncData('allergy-store-types', '/api/admin/allergy-type', {
+        schema: AllergyTypeDetailSchema.array(),
+        default: () => [],
+        errorMessage: 'Kunne ikke hente allergi katalog'
+    })
     const {
         data: allergyTypes,
         status: allergyTypesStatus,
         error: allergyTypesError,
         refresh: refreshAllergyTypes
-    } = storeAsyncData('allergy-store-types', '/api/admin/allergy-type', {
-        schema: AllergyTypeDetailSchema.array(),
-        default: () => [],
-        errorMessage: 'Kunne ikke hente allergi katalog'
-    })
+    } = allergyTypesDataset
 
-    // Selected AllergyType - For detail view/editing
-    const selectedAllergyTypeId = ref<number | null>(null)
-    const selectedAllergyTypeKey = computed(() => `/api/admin/allergy-type/${selectedAllergyTypeId.value || 'null'}`)
+    // The page names the allergy type its URL carries; an id outside the catalog selects none
+    const allergyTypeChoice = shallowRef<() => number | null>(() => null)
+    const selectedAllergyTypeId = computed(() => {
+        const id = allergyTypeChoice.value()
+        return allergyTypes.value.find(at => at.id === id)?.id ?? null
+    })
 
     const {
         data: selectedAllergyType,
         status: selectedAllergyTypeStatus,
         error: selectedAllergyTypeError
     } = storeAsyncData(
-        selectedAllergyTypeKey,
+        'allergy-store-selected-allergy-type',
         () => `/api/admin/allergy-type/${selectedAllergyTypeId.value}`,
         {
             schema: AllergyTypeDisplaySchema.nullable(),
             default: () => null,
             enabled: () => !!selectedAllergyTypeId.value,
-            errorMessage: 'Kan ikke finde allergitypen'
+            dependsOn: [allergyTypesDataset],
+            errorMessage: 'Kan ikke finde allergitypen',
+            notFound: {
+                recover: async () => {
+                    skipGoneId(allergyTypeChoice, selectedAllergyTypeId.value)
+                    await refreshAllergyTypes()
+                },
+                toast: 'Kan ikke finde allergitypen'
+            }
         }
     )
 
@@ -155,9 +167,8 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         console.info(`🥜 > ALLERGY_STORE > Loaded ${allergyTypes.value.length} allergy types`)
     }
 
-    const loadAllergyType = (id: number) => {
-        selectedAllergyTypeId.value = id
-        console.info(`🥜 > ALLERGY_STORE > Loading allergy type ID: ${id}`)
+    const selectAllergyType = (choice: MaybeRefOrGetter<number | null>) => {
+        allergyTypeChoice.value = () => toValue(choice)
     }
 
     const createAllergyType = async (allergyTypeData: AllergyTypeCreate): Promise<AllergyTypeDisplay> => {
@@ -280,6 +291,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         // State - AllergyTypes
         allergyTypes,
         selectedAllergyType,
+        selectedAllergyTypeId,
         // State - Allergies
         allergies,
         // State - Poster notes
@@ -309,7 +321,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         isAllergyStoreReady,
         // Actions - AllergyTypes
         loadAllergyTypes,
-        loadAllergyType,
+        selectAllergyType,
         createAllergyType,
         updateAllergyType,
         deleteAllergyType,

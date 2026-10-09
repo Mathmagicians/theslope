@@ -209,7 +209,9 @@ export const BG = {
     /** A stat box on the public invoice page */
     invoiceStat: 'bg-neutral-100 dark:bg-neutral-900',
     /** The head row of the chef's budget table */
-    budgetHead: 'bg-neutral-50 dark:bg-neutral-800'
+    budgetHead: 'bg-neutral-50 dark:bg-neutral-800',
+    /** The disc behind an allergy type's icon or emoji, white in both modes */
+    allergyAvatar: 'bg-white'
 } as const
 
 /**
@@ -663,24 +665,41 @@ export const COMPONENTS = {
         breakdown: `${TYPOGRAPHY.kitchenDetail} flex flex-wrap justify-center gap-x-1`,
         figure: 'whitespace-nowrap',
         figureTotal: 'whitespace-nowrap font-semibold',
-        allergyHead: `${TYPOGRAPHY.kitchenDetail} border-t pt-2 flex items-center justify-center gap-1`,
+        allergyHead: `${TYPOGRAPHY.kitchenDetail} pt-2 flex items-center justify-center gap-1`,
         householdList: 'px-8 md:px-32 py-6 md:py-8 max-h-64 overflow-y-auto text-left',
-        household: `${TYPOGRAPHY.kitchenDetail} py-1`,
+        // One wrapping row on one vertical centre: the segments, and a diner with the allergy types beside the name
+        household: `${TYPOGRAPHY.kitchenDetail} py-1 flex flex-wrap items-center gap-x-1`,
         householdName: 'font-semibold',
+        diner: 'inline-flex items-center',
         allergyOverview: `${TYPOGRAPHY.kitchenDetail} py-1`
     },
 
     /**
      * The allergy overview (`AllergyOverviewLine`): `ICONS.allergy` and the kuverter of the allergic diners in `total`,
-     * then each allergen with its kuverter; the site sets the type size on the line. `AllergyChips` spaces each chip
-     * from the name before it with `chip`.
+     * then a `figure` per allergen centring its compact `AllergyTypeDisplay` between the separator and its kuverter; the
+     * site sets the type size on the line. `besideName` spaces an `AllergyTypeDisplay` from the diner's name before it.
      */
     allergyOverview: {
         line: 'flex flex-wrap items-center gap-x-1',
         total: 'inline-flex items-center gap-1 whitespace-nowrap font-semibold',
-        figure: 'whitespace-nowrap',
+        figure: 'inline-flex items-center gap-1 whitespace-nowrap',
         glyph: 'size-4',
-        chip: 'ms-1'
+        besideName: 'ms-1'
+    },
+
+    /**
+     * AllergyTypeDisplay: the `compact` face for table cells and diner lines, the regular face for the editor;
+     * `named` weights a type's name, `none` mutes the no-allergy state
+     */
+    allergyTypeDisplay: {
+        compactRoot: 'inline-flex items-center gap-1 md:gap-2',
+        compactAvatar: `flex-shrink-0 ${BG.allergyAvatar} p-0.5`,
+        compactName: 'text-xs md:text-sm whitespace-nowrap',
+        root: 'flex items-center gap-2',
+        avatar: `flex-shrink-0 ${BG.allergyAvatar} p-1`,
+        name: 'text-sm md:text-base',
+        named: 'font-medium',
+        none: TEXT.muted
     },
 
     /**
@@ -1032,10 +1051,10 @@ export const COMPONENTS = {
         glyph: 'size-4',
         list: `col-start-2 flex flex-col gap-2 p-3 ${BG.inset}`,
         row: 'flex items-center gap-2 flex-wrap',
+        // A member row's cells (avatar, name, allocation, weekdays, slet) share the list's columns, so every column starts on one line
+        memberList: `col-start-2 grid grid-cols-[auto_minmax(0,1fr)_auto_auto_auto] gap-2 p-3 ${BG.inset}`,
+        memberRow: 'col-span-full grid grid-cols-subgrid items-center justify-items-start *:min-w-0 *:max-w-full',
         empty: `col-start-2 ${TYPOGRAPHY.bodyTextPlaceholder} italic p-3`,
-        // The edit face: the Jokere box add button and the joker slot form it opens, in the content column
-        add: 'col-start-2 justify-self-start',
-        form: `col-start-2 p-4 ${BG.panel}`,
         monitorGrid: 'grid grid-cols-[1rem_auto_minmax(0,1fr)] gap-x-3 gap-y-3 md:gap-y-4 px-3 md:px-4',
         monitorRow: 'col-span-3 grid grid-cols-subgrid items-center'
     },
@@ -1053,7 +1072,8 @@ export const COMPONENTS = {
      * The team card's faces around the role boxes (CookingTeamCard): the monitor face and its badge
      * header, the stacked sections of the view and edit faces, the dashed edit header with the
      * team-name input, the two-column rows (members beside the finder, weekdays beside the calendar),
-     * a member row's links, and the finder's status column and expanded member form
+     * a member row's links, the finder's status column and expanded member form, and the joker add row under the
+     * finder: the finder row's padding, the avatar-place glyph beside its label in the finder's name ink
      */
     teamCard: {
         monitor: 'py-4 md:py-6',
@@ -1080,7 +1100,10 @@ export const COMPONENTS = {
         statusList: 'flex flex-col gap-1',
         statusEntry: 'flex flex-col gap-0.5',
         statusBadge: 'w-fit',
-        memberForm: `p-4 ${BG.panel}`
+        memberForm: `p-4 ${BG.panel}`,
+        jokerAddRow: 'flex items-center justify-between gap-3 px-2 py-1 md:px-4 md:py-2',
+        jokerAddName: 'flex items-center gap-3',
+        jokerAddLabel: `${TYPOGRAPHY.bodyTextMedium} ${TEXT.muted}`
     },
 
     /**
@@ -1123,17 +1146,15 @@ export const COMPONENTS = {
         stack: 'space-y-6',
         section: 'pt-4 border-t',
         allergenRow: 'flex flex-col md:flex-row md:items-center gap-2',
-        allergenLabel: `${TYPOGRAPHY.sectionSubheading} uppercase`,
+        allergenLabel: `${TYPOGRAPHY.sectionSubheading} uppercase inline-flex items-center gap-1`,
+        // The leading glyph takes the title's ink and its font size
+        allergenGlyph: 'size-[1em]',
         allergenLine: `${TYPOGRAPHY.bodyTextSmall} md:flex-1`,
         allergenEditor: 'space-y-4',
         allergenEditorHead: 'flex flex-col gap-2 md:flex-row md:items-center',
         allergenEditorTitle: `${TYPOGRAPHY.sectionSubheading} md:flex-1`,
         form: 'space-y-4',
-        field: 'w-full',
-        costRow: 'flex gap-2 items-start',
-        costInput: 'flex-1',
-        costType: 'w-32',
-        costAlternative: `mt-1 ${TYPOGRAPHY.finePrint} opacity-60`
+        field: 'w-full'
     }
 } as const
 
@@ -1270,6 +1291,8 @@ export const ICONS = {
     claim: 'i-heroicons-arrows-right-left',
     archive: 'i-heroicons-archive-box',
     holiday: 'i-heroicons-sun',
+    /** A household member without allergies */
+    noAllergy: 'i-heroicons-sun',
     printer: 'i-heroicons-printer',
 
     // Empty states & system feedback
@@ -1449,6 +1472,14 @@ export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
     // Empty state avatar: 2xl on mobile, 3xl on desktop
     get emptyStateAvatar(): NuxtUIAvatarSize {
         return isMd.value ? '3xl' : '2xl'
+    },
+
+    // Allergy type avatar: the compact face in table cells and diner lines, the regular face in the editor
+    get allergyAvatarCompact(): NuxtUIAvatarSize {
+        return isMd.value ? 'xs' : '2xs'
+    },
+    get allergyAvatar(): NuxtUIAvatarSize {
+        return isMd.value ? 'sm' : 'xs'
     },
 
     // Lock chip: lg on mobile, 3xl on desktop (for booking calendar lock indicators)
@@ -2226,6 +2257,12 @@ export const EMPTY_STATE_MESSAGES = {
         { emoji: '🍽️', text: 'Tallerkenen er vasket op, middagen findes ikke mere' },
         { emoji: '🏃', text: 'Middag? Spisning er vild overvurderet' },
         { emoji: '🌫️', text: 'Den middag er vist gået op i damp og røg' }
+    ],
+    noAllergens: [
+        { emoji: '🥗', text: 'Menuen er fri for allergener - alle kan spise med' },
+        { emoji: '🍀', text: 'Allergenerne fik ikke plads på menuen i dag' },
+        { emoji: '😋', text: 'Ingen allergener på menuen - spis løs!' },
+        { emoji: '🧑‍🍳', text: 'Kokken har holdt allergenerne uden for køkkenet' }
     ],
     seasonGone: [
         { emoji: '📅', text: 'Sæsonen er pakket sammen og sat op på loftet' },

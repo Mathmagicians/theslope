@@ -42,10 +42,10 @@ contract messages through `env.SENDER`.
 | `DUTY_SHIFT_REMINDER` | the team's members | 24 h and 1 h before the shift, from an hourly Nitro task; team → assignment → inhabitant → user is a new repository query (ADR-009 Display type) |
 | `JOB_FAILED` | admins | a system job run ends failed |
 | `DINNER_CANCELLED` | the dinner's diners | a dinner is cancelled |
-| `WAITLIST_TICKET_ASSIGNED` | the assigned inhabitant's user | the waitlist sweep assigns a ticket (`feature-proposal-waitlist.md`) |
+| `WAITLIST_TICKET_ASSIGNED` | the assigned inhabitant's user | the chef's released portions or a released ticket reach the entry (`feature-proposal-waitlist.md` § Assignment) |
 | `WAITLIST_JOINED` | the joining user | a waitlist entry is created; carries the position |
 | `WAITLIST_BUILDUP` | the dinner's chef | the dinner's queue crosses the threshold (app.config) |
-| `WAITLIST_TICKET_SOLD` | the releasing household's users | a released ticket is claimed or assigned |
+| `WAITLIST_TICKET_SOLD` | the releasing household's users | a released ticket goes to the head of the queue |
 | `DUTY_SWAPPED` | both swap parties | a duty swap commits (`feature-proposal-duty-roster.md` Phase 5; the chef-swap flow joins the same kind) |
 
 The reminder crons join the schedule that "Job schedule labels" in `bug-fix-dinner-page-and-dates.md` single-sources.

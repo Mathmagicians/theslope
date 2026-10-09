@@ -3,7 +3,7 @@ import {expect} from 'vitest'
 import {TooltipProvider} from 'reka-ui'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {useNuxtApp, clearNuxtData} from '#app'
-import {createPinia, getActivePinia, setActivePinia} from 'pinia'
+import {createPinia, getActivePinia, setActivePinia, type Pinia} from 'pinia'
 import {flushPromises, type BaseWrapper, type VueWrapper} from '@vue/test-utils'
 import {toCalendarDate} from '~/utils/date'
 
@@ -48,6 +48,9 @@ export const resetStores = () => {
     clearNuxtData()
     Object.keys(nuxtApp._asyncData).forEach(key => Reflect.deleteProperty(nuxtApp._asyncData, key))
 }
+
+/** The store instance a mounted component uses: components inject the Nuxt app's pinia, not the spec's active one */
+export const mountedStore = <S>(useStore: (pinia: Pinia) => S): S => useStore(useNuxtApp().$pinia as Pinia)
 
 // Anything with find/findAll: a mountSuspended root, a findComponent() result or a DOMWrapper
 type Searchable = Pick<BaseWrapper<Node>, 'find' | 'findAll'>

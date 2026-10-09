@@ -62,7 +62,7 @@ const {
 } = storeToRefs(bookingsStore)
 
 // The team card reads the dinner's cooking team from the plan store
-watch(() => dinnerEventDetail.value?.cookingTeamId ?? null, planStore.selectTeam, {immediate: true})
+planStore.selectTeam(() => dinnerEventDetail.value?.cookingTeamId ?? null)
 
 // Page ready when both plan store and myTeams are initialized
 const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialized.value)
@@ -405,7 +405,7 @@ useHead({
 
         <!-- #stats: Kitchen statistics -->
         <template #stats>
-          <KitchenPreparation v-if="dinnerEventDetail" :orders="dinnerEventDetail.tickets ?? []"/>
+          <KitchenPreparation v-if="dinnerEventDetail" :orders="dinnerEventDetail.tickets ?? []" :allergens="dinnerEventDetail.allergens"/>
         </template>
       </DinnerDetailPanel>
   </UPage>

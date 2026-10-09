@@ -56,7 +56,29 @@ const {
     selectedInvoiceTransactions,
     isInvoiceTransactionsLoading
 } = storeToRefs(bookingsStore)
-const {loadBillingPeriodDetail, loadInvoiceTransactions} = bookingsStore
+
+// ?period= and ?invoice= carry the expanded billing period and invoice (ADR-006)
+const useIdParam = (key: string) => useQueryParam<number | null>(key, {
+    serialize: (id) => id === null ? '' : String(id),
+    deserialize: (s) => {
+        const parsed = parseInt(s, 10)
+        return Number.isNaN(parsed) ? null : parsed
+    },
+    normalize: (id) => id,
+    defaultValue: null
+})
+const {value: periodParam, setValue: setPeriodParam} = useIdParam('period')
+const {value: invoiceParam, setValue: setInvoiceParam} = useIdParam('invoice')
+bookingsStore.selectBillingPeriod(periodParam)
+bookingsStore.selectInvoice(invoiceParam)
+
+// Opening a row selects it; closing the selected row clears the param
+const toggleSelection = (row: {getIsExpanded: () => boolean, toggleExpanded: () => void}, id: number, selected: number | null, select: (id: number | null) => Promise<void>) => {
+    const isOpening = !row.getIsExpanded()
+    row.toggleExpanded()
+    if (isOpening) select(id)
+    else if (selected === id) select(null)
+}
 
 // ========== SECTION 1: FREMTIDIGE BESTILLINGER ==========
 
@@ -628,7 +650,7 @@ const dinnerBreakdownStats = computed(() => {
                 square
                 :size="SIZES.small"
                 aria-label="Vis detaljer"
-                @click="row.toggleExpanded(); !row.original.isVirtual && loadBillingPeriodDetail(row.original.id as number)"
+                @click="row.original.isVirtual ? row.toggleExpanded() : toggleSelection(row, row.original.id as number, periodParam, setPeriodParam)"
             />
           </template>
           <template #status-cell="{ row }">
@@ -757,7 +779,7 @@ const dinnerBreakdownStats = computed(() => {
                           square
                           :size="SIZES.small"
                           aria-label="Vis transaktioner"
-                          @click="invoiceRow.toggleExpanded(); loadInvoiceTransactions(invoiceRow.original.id)"
+                          @click="toggleSelection(invoiceRow, invoiceRow.original.id, invoiceParam, setInvoiceParam)"
                       />
                     </template>
                     <template #pbsId-cell="{ row: invoiceRow }">{{ invoiceRow.original.pbsId }}</template>

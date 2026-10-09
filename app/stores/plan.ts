@@ -49,15 +49,15 @@ export const usePlanStore = defineStore("Plan", () => {
             return null
         }
 
-        // A shortName resolves once the seasons have loaded; an unknown one falls back to the default
-        const userChoice = ref<{id: number} | {shortName: string} | null>(null)
-        const chosenSeasonId = computed(() => {
-            const choice = userChoice.value
-            if (!choice) return null
-            if ('id' in choice) return choice.id
-            return seasons.value.find(s => s.shortName === choice.shortName)?.id ?? null
-        })
-        const selectedSeasonId = computed(() => chosenSeasonId.value ?? getDefaultSeasonId())
+        // The page names the season it shows (ADR-007 rule 9); a shortName resolves once the seasons have loaded,
+        // and a choice that resolves to no season falls back to the default
+        const seasonChoice = shallowRef<() => string | number | null>(() => null)
+        const selectSeason = (choice: MaybeRefOrGetter<string | number | null>) => {
+            seasonChoice.value = () => toValue(choice)
+        }
+        const resolveSeasonChoice = (choice: string | number | null) =>
+            typeof choice === 'string' ? seasons.value.find(s => s.shortName === choice)?.id ?? null : choice
+        const selectedSeasonId = computed(() => resolveSeasonChoice(seasonChoice.value()) ?? getDefaultSeasonId())
 
         // The key stays constant: the id resolves after the seasons load, mid-render on the server
         const selectedSeasonDataset = storeAsyncData(
@@ -69,10 +69,15 @@ export const usePlanStore = defineStore("Plan", () => {
                 enabled: () => !!selectedSeasonId.value,
                 dependsOn: [seasonsDataset, activeSeasonIdDataset],
                 errorMessage: 'Kunne ikke hente sæson',
-                // The choice re-derives through getDefaultSeasonId from the refreshed lists
+                // The page's getter keeps driving the choice; the gone season re-derives through getDefaultSeasonId
                 notFound: {
                     recover: async () => {
-                        userChoice.value = null
+                        const goneId = selectedSeasonId.value
+                        const choice = seasonChoice.value
+                        seasonChoice.value = () => {
+                            const chosen = choice()
+                            return resolveSeasonChoice(chosen) === goneId ? null : chosen
+                        }
                         await Promise.all([refreshSeasons(), refreshActiveSeasonId()])
                     },
                     retries: 1,
@@ -95,10 +100,11 @@ export const usePlanStore = defineStore("Plan", () => {
         const {JokerSlotSchema} = useDutyValidation()
 
         // The mounting page selects the team (ADR-007 rule 9); GET under /api/admin/ is open to every member
-        const selectedTeamId = ref<number | null>(null)
-        const selectTeam = (id: number | null) => {
-            selectedTeamId.value = id
+        const teamChoice = shallowRef<() => number | null>(() => null)
+        const selectTeam = (choice: MaybeRefOrGetter<number | null>) => {
+            teamChoice.value = () => toValue(choice)
         }
+        const selectedTeamId = computed(() => teamChoice.value())
         const selectedTeamDataset = storeAsyncData(
             'plan-store-selected-team',
             () => `/api/admin/team/${selectedTeamId.value}`,
@@ -221,25 +227,11 @@ export const usePlanStore = defineStore("Plan", () => {
             console.info(`🗓️ > PLAN_STORE > Loaded ${seasons.value.length} seasons`)
         }
 
-        const loadSeason = (id: number) => {
-            userChoice.value = {id}
-            console.info(`🗓️ > PLAN_STORE > Loading season ID: ${id}`)
-        }
-
     const loadActiveSeason = async () => {
         await refreshActiveSeasonId()
         if (activeSeasonIdError.value) throw activeSeasonIdError.value
         console.info('🗓️ > PLAN_STORE > Loaded active season ID:', activeSeasonId.value)
     }
-
-        const loadSeasonByShortName = (shortName: string) => {
-            userChoice.value = {shortName}
-            console.info(`${LOG_CTX} 🗓️ > PLAN_STORE > Loading season by shortName: ${shortName}`)
-        }
-
-        const onSeasonSelect = (id: number) => {
-            loadSeason(id)
-        }
 
         // Resolves null when the save fails; apiRequest has already toasted the error
         const saveSeason = async <T>(request: () => Promise<T>): Promise<T | null> => {
@@ -322,7 +314,6 @@ export const usePlanStore = defineStore("Plan", () => {
         const activateSeason = async (seasonId: number): Promise<Season | null> => {
             console.info(`🌞 > PLAN_STORE > Activating season ${seasonId}`)
             const activated = await executeSeasonActivation(seasonId)
-            loadSeason(seasonId)
             console.info(`🌞 > PLAN_STORE > Successfully activated season ${seasonId}`)
             return activated
         }
@@ -383,8 +374,12 @@ export const usePlanStore = defineStore("Plan", () => {
                 action: 'deleteTeam'
             })
             console.info(`👥 > PLAN_STORE > Deleted team ${teamId}`)
-            // A deleted team has no Detail to refresh: its selection closes the dataset's gate instead
-            if (selectedTeamId.value === teamId) selectTeam(null)
+            // A deleted team has no Detail to refresh: the choice skips it and keeps following the page's getter
+            const choice = teamChoice.value
+            teamChoice.value = () => {
+                const id = choice()
+                return id === teamId ? null : id
+            }
             await refreshTeamAggregates()
             toastSaved('Madhold slettet')
             return deleted
@@ -572,9 +567,8 @@ export const usePlanStore = defineStore("Plan", () => {
             disabledModes,
             isCreatingTeams,
             // actions
-            loadSeasonByShortName,
             loadSeasons,
-            onSeasonSelect,
+            selectSeason,
             selectTeam,
             createSeason,
             updateSeason,

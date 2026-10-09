@@ -3,6 +3,7 @@ import {describe, it, expect, vi, beforeAll} from 'vitest'
 import {mountSuspended, mockNuxtImport, mockComponent} from '@nuxt/test-utils/runtime'
 import {findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
 import ChefMenuCard from '~/components/chef/ChefMenuCard.vue'
+import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
 import {ref, h, type ComponentPublicInstance} from 'vue'
 import {flushPromises, type VueWrapper} from '@vue/test-utils'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -11,7 +12,7 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {formatPortions} from '~/utils/utils'
 import {FORM_MODES} from '~/types/form'
-import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
+import {COMPONENTS, ICONS, getRandomEmptyMessage} from '~/composables/useTheSlopeDesignSystem'
 
 /**
  * ChefMenuCard Unit Tests
@@ -99,6 +100,7 @@ describe('ChefMenuCard', () => {
 
     const ALLERGEN_LINE = 'chef-allergen-line'
     const ALLERGEN_OVERVIEW = 'chef-allergen-overview'
+    const ALLERGEN_LABEL = 'chef-allergen-label'
     const ALLERGEN_SELECTOR = 'allergen-selector'
 
     // The selector opens behind "Rediger allergener"
@@ -169,7 +171,7 @@ describe('ChefMenuCard', () => {
             }
 
             const wrapper = await createWrapper({dinnerEvent})
-            expect(findByTestId(wrapper, ALLERGEN_LINE).text()).toContain('ingen')
+            expect(findByTestId(wrapper, ALLERGEN_LINE).text()).toContain(getRandomEmptyMessage('noAllergens').text)
 
             // Should show empty selection, not crash
             const selector = await openAllergenEditor(wrapper)
@@ -188,23 +190,38 @@ describe('ChefMenuCard', () => {
             OrderFactory.defaultOrderDetailWithAllergies(3, 'Cy', [NUTS!], {ticketType: TicketType.ADULT})
         ]
 
-        it.each([FORM_MODES.VIEW, FORM_MODES.EDIT])('GIVEN a menu with milk and gluten in %s mode THEN shows the total and each menu allergen by kuverter, a zero included', async (formMode) => {
+        it.each([FORM_MODES.VIEW, FORM_MODES.EDIT])('GIVEN a menu with milk and gluten in %s mode THEN shows the total and each menu allergen as its compact allergy type with its kuverter, a zero included', async (formMode) => {
             const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), allergens: [MILK!, GLUTEN!], tickets}
             const wrapper = await createWrapper({dinnerEvent, formMode})
 
-            const parts = findByTestId(wrapper, ALLERGEN_OVERVIEW).findAll(':scope > span').map(part => part.text())
-            expect(parts).toEqual([
+            const overview = findByTestId(wrapper, ALLERGEN_OVERVIEW)
+            expect(overview.findAll(':scope > span').map(part => part.text())).toEqual([
                 `${formatPortions(1.5)} kuv.`,
-                `| ${MILK!.name} · ${formatPortions(1.5)}`,
-                `| ${GLUTEN!.name} · ${formatPortions(0)}`
+                `| ${MILK!.icon}${MILK!.name} · ${formatPortions(1.5)}`,
+                `| ${GLUTEN!.icon}${GLUTEN!.name} · ${formatPortions(0)}`
             ])
+            const allergens = overview.findAllComponents(AllergyTypeDisplay) as VueWrapper<ComponentPublicInstance<{allergyType: unknown, compact: boolean, showName: boolean}>>[]
+            expect(allergens.map(allergen => allergen.props('allergyType'))).toEqual([expect.objectContaining(MILK!), expect.objectContaining(GLUTEN!)])
+            expect(allergens.every(allergen => allergen.props('compact') && allergen.props('showName'))).toBe(true)
         })
 
-        it('GIVEN a menu without allergens THEN reads ingen', async () => {
+        it.each([FORM_MODES.VIEW, FORM_MODES.EDIT])('GIVEN a menu with milk in %s mode THEN the allergy glyph leads the Allergener title and the overview carries none', async (formMode) => {
+            const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), allergens: [MILK!], tickets}
+            const wrapper = await createWrapper({dinnerEvent, formMode})
+
+            const label = findByTestId(wrapper, ALLERGEN_LABEL)
+            expect(label.text()).toBe('Allergener')
+            expect(label.element.firstElementChild).toBe(label.findComponent({name: 'UIcon'}).element)
+            expect(label.findComponent({name: 'UIcon'}).props('name')).toBe(ICONS.allergy)
+            const icons = findByTestId(wrapper, ALLERGEN_OVERVIEW).findAllComponents({name: 'UIcon'}) as VueWrapper<ComponentPublicInstance<{name: string}>>[]
+            expect(icons.filter(icon => icon.props('name') === ICONS.allergy)).toHaveLength(0)
+        })
+
+        it('GIVEN a menu without allergens THEN reads the no-allergens message', async () => {
             const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), allergens: [], tickets}
             const wrapper = await createWrapper({dinnerEvent, formMode: FORM_MODES.VIEW})
 
-            expect(findByTestId(wrapper, ALLERGEN_LINE).text()).toContain('ingen')
+            expect(findByTestId(wrapper, ALLERGEN_LINE).text()).toContain(getRandomEmptyMessage('noAllergens').text)
             expect(findByTestId(wrapper, ALLERGEN_OVERVIEW).exists()).toBe(false)
         })
 

@@ -582,41 +582,53 @@ export const useBookingsStore = defineStore("Bookings", () => {
         isHouseholdBillingRequested.value = true
     }
 
-    const {
-        data: billingPeriods, status: billingPeriodsStatus,
-        error: billingPeriodsError, refresh: refreshBillingPeriods
-    } = storeAsyncData('bookings-store-billing-periods', '/api/admin/billing/periods', {
+    const billingPeriodsDataset = storeAsyncData('bookings-store-billing-periods', '/api/admin/billing/periods', {
         schema: BillingPeriodSummaryDisplaySchema.array(),
         default: () => []
     })
+    const {
+        data: billingPeriods, status: billingPeriodsStatus,
+        error: billingPeriodsError, refresh: refreshBillingPeriods
+    } = billingPeriodsDataset
 
     const isBillingPeriodsLoading = computed(() => billingPeriodsStatus.value === 'pending')
     const isBillingPeriodsErrored = computed(() => billingPeriodsStatus.value === 'error')
     const isBillingPeriodsInitialized = computed(() => billingPeriodsStatus.value === 'success')
 
-    // Fetch billing period detail (on-demand for expanded view)
-    const selectedBillingPeriodId = ref<number | null>(null)
-    const selectedBillingPeriodKey = computed(() => `billing-period-${selectedBillingPeriodId.value || 'null'}`)
+    // The page names the billing period its URL carries; an id outside the list selects none
+    const billingPeriodChoice = shallowRef<() => number | null>(() => null)
+    const selectedBillingPeriodId = computed(() => {
+        const id = billingPeriodChoice.value()
+        return billingPeriods.value.find(period => period.id === id)?.id ?? null
+    })
 
-    const {
-        data: selectedBillingPeriodDetail, status: selectedBillingPeriodStatus,
-        error: selectedBillingPeriodError
-    } = storeAsyncData(
-        selectedBillingPeriodKey,
+    const selectedBillingPeriodDataset = storeAsyncData(
+        'bookings-store-selected-billing-period',
         () => `/api/admin/billing/periods/${selectedBillingPeriodId.value}`,
         {
             schema: BillingPeriodSummaryDetailSchema.nullable(),
             default: () => null,
             enabled: () => !!selectedBillingPeriodId.value,
-            errorMessage: 'Kan ikke finde faktureringsperioden'
+            dependsOn: [billingPeriodsDataset],
+            errorMessage: 'Kan ikke finde faktureringsperioden',
+            notFound: {
+                recover: async () => {
+                    skipGoneId(billingPeriodChoice, selectedBillingPeriodId.value)
+                    await refreshBillingPeriods()
+                },
+                toast: 'Kan ikke finde faktureringsperioden'
+            }
         }
     )
+    const {
+        data: selectedBillingPeriodDetail, status: selectedBillingPeriodStatus,
+        error: selectedBillingPeriodError, refresh: refreshSelectedBillingPeriod
+    } = selectedBillingPeriodDataset
 
     const isBillingPeriodDetailLoading = computed(() => selectedBillingPeriodStatus.value === 'pending')
 
-    const loadBillingPeriodDetail = (periodId: number) => {
-        selectedBillingPeriodId.value = periodId
-        console.info(CTX, `Loading billing period detail: ${periodId}`)
+    const selectBillingPeriod = (choice: MaybeRefOrGetter<number | null>) => {
+        billingPeriodChoice.value = () => toValue(choice)
     }
 
     // Current period transactions (for "virtual" billing period in admin economy)
@@ -631,28 +643,38 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const isCurrentPeriodLoading = computed(() => currentPeriodStatus.value === 'pending')
     const isCurrentPeriodErrored = computed(() => currentPeriodStatus.value === 'error')
 
-    // Invoice transactions (lazy load on invoice expand)
-    const selectedInvoiceId = ref<number | null>(null)
-    const selectedInvoiceKey = computed(() => `invoice-transactions-${selectedInvoiceId.value || 'null'}`)
+    // The page names the invoice its URL carries; it resolves against the selected period's invoices
+    const invoiceChoice = shallowRef<() => number | null>(() => null)
+    const selectedInvoiceId = computed(() => {
+        const id = invoiceChoice.value()
+        return selectedBillingPeriodDetail.value?.invoices.find(invoice => invoice.id === id)?.id ?? null
+    })
 
     const {
         data: selectedInvoiceTransactions, status: selectedInvoiceStatus
     } = storeAsyncData(
-        selectedInvoiceKey,
+        'bookings-store-selected-invoice',
         () => `/api/admin/billing/invoices/${selectedInvoiceId.value}`,
         {
             schema: TransactionDisplaySchema.array(),
             default: () => [],
             enabled: () => !!selectedInvoiceId.value,
-            errorMessage: 'Kan ikke finde fakturaen'
+            dependsOn: [selectedBillingPeriodDataset],
+            errorMessage: 'Kan ikke finde fakturaen',
+            notFound: {
+                recover: async () => {
+                    skipGoneId(invoiceChoice, selectedInvoiceId.value)
+                    await refreshSelectedBillingPeriod()
+                },
+                toast: 'Kan ikke finde fakturaen'
+            }
         }
     )
 
     const isInvoiceTransactionsLoading = computed(() => selectedInvoiceStatus.value === 'pending')
 
-    const loadInvoiceTransactions = (invoiceId: number) => {
-        selectedInvoiceId.value = invoiceId
-        console.info(CTX, `Loading invoice transactions: ${invoiceId}`)
+    const selectInvoice = (choice: MaybeRefOrGetter<number | null>) => {
+        invoiceChoice.value = () => toValue(choice)
     }
 
     // ========================================
@@ -783,7 +805,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
         selectedBillingPeriodDetail,
         selectedBillingPeriodError,
         isBillingPeriodDetailLoading,
-        loadBillingPeriodDetail,
+        selectedBillingPeriodId,
+        selectBillingPeriod,
 
         // current period (virtual billing period)
         currentPeriodTransactions,
@@ -795,6 +818,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         // invoice transactions (lazy load)
         selectedInvoiceTransactions,
         isInvoiceTransactionsLoading,
-        loadInvoiceTransactions
+        selectedInvoiceId,
+        selectInvoice
     }
 })

@@ -156,14 +156,14 @@ describe('AdminTeams team selection', () => {
         mockRoute.query = {}
     })
 
-    it('opening a row selects its team in the store, and closing it deselects', async () => {
+    // The page hands the store a getter over ?team=; the component writes the URL only
+    it('opening a row writes its team to ?team=, and closing it clears the param', async () => {
         const wrapper = await mountTeams()
-        const store = usePlanStore()
 
         await clickByTestId(wrapper, `team-row-${team.id}`)
-        await vi.waitFor(() => expect(store.selectedTeamId).toBe(team.id))
+        await vi.waitFor(() => expect(mockRoute.query.team).toBe(String(team.id)))
 
         await clickByTestId(wrapper, `team-row-${team.id}`)
-        await vi.waitFor(() => expect(store.selectedTeamId).toBeNull())
+        await vi.waitFor(() => expect(mockRoute.query.team).toBeUndefined())
     })
 })

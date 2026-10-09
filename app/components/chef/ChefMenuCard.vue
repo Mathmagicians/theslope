@@ -42,8 +42,8 @@
  * │ 🍝 Spaghetti Carbonara                                                   │
  * │ Cremet pasta med bacon                                                   │
  * ├──────────────────────────────────────────────────────────────────────────┤
- * │ ALLERGENER   (allergy) 3,5 kuv. | Mælk · 2,5 | Nødder · 1 | Gluten · 0   │
- * │ ALLERGENER   ingen                       (the menu names no allergen)    │
+ * │ (allergy) ALLERGENER   3,5 kuv. | (milk) Mælk · 2,5 | (wheat) Gluten · 0 │
+ * │ (allergy) ALLERGENER   🥗 Menuen er fri for allergener...  (no allergen) │
  * ├──────────────────────────────────────────────────────────────────────────┤
  * │ <slot> - DinnerBookingForm (household booking)                          │
  * └──────────────────────────────────────────────────────────────────────────┘
@@ -55,7 +55,7 @@
  * │ Menu titel: [Spaghetti Carbonara___________]  [✏️]                       │
  * │ Beskrivelse: [Cremet pasta med bacon_______]                             │
  * ├──────────────────────────────────────────────────────────────────────────┤
- * │ ALLERGENER (allergy) 3,5 kuv. | Mælk · 2,5 | Gluten · 0 [Rediger allergener]│
+ * │ (allergy) ALLERGENER 3,5 kuv. | (milk) Mælk · 2,5  [Rediger allergener]  │
  * │   the editor: AllergenMultiSelector on this dinner's tickets             │
  * ├──────────────────────────────────────────────────────────────────────────┤
  * │ ●━━━━━━━━○━━━━━━━━○━━━━━━━━○━━━━━━━━○                                    │
@@ -129,7 +129,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { TYPOGRAPHY, SIZES, ICONS, ALERTS, BUTTONS, DINNER_STATE_BADGES, COMPONENTS, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS, TEXT, RING, NOISE } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, SIZES, ICONS, ALERTS, BUTTONS, DINNER_STATE_BADGES, COMPONENTS, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS, TEXT, RING, NOISE, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 // Hero panel button colors (ChefMenuCard sits on hero background with food image)
 const HERO_BUTTON = COMPONENTS.heroPanel.light
@@ -146,9 +146,6 @@ const { getStepConfig, canCancelDinner } = useBooking()
 
 // Name formatting from useHousehold (ADR-001)
 const { formatNameWithInitials } = useHousehold()
-
-// Budget/VAT logic from useOrder (ADR-001)
-const { convertVat } = useOrder()
 
 // Time logic from useSeason (ADR-001: business logic in composables)
 const { getDefaultDinnerStartTime, getDinnerTimeRange, getDeadlineUrgency } = useSeason()
@@ -229,6 +226,8 @@ const menuAllergenOverview = computed(() =>
   computeAllergenOverview(props.dinnerEvent.tickets ?? [], props.dinnerEvent.allergens ?? [])
 )
 
+const noAllergensMessage = getRandomEmptyMessage('noAllergens')
+
 // Draft allergen selection for editing
 const draftAllergenIds = ref<number[]>([])
 const isEditingAllergens = ref(false)
@@ -242,8 +241,7 @@ watch(selectedAllergenIds, (newIds) => {
 
 const toFormState = (event: DinnerEventDetail): ChefMenuForm => ({
   menuTitle: event.menuTitle || '',
-  menuDescription: event.menuDescription || '',
-  totalCost: event.totalCost || 0
+  menuDescription: event.menuDescription || ''
 })
 
 const formState = ref<ChefMenuForm>(toFormState(props.dinnerEvent))
@@ -251,50 +249,6 @@ const formState = ref<ChefMenuForm>(toFormState(props.dinnerEvent))
 watch(() => props.dinnerEvent, (newEvent) => {
   if (newEvent) formState.value = toFormState(newEvent)
 }, { immediate: true })
-
-// VAT config from app.config
-const appConfig = useAppConfig()
-const vatPercent = appConfig.theslope?.kitchen?.vatPercent ?? 25
-
-// Cost input type: chef can enter either inkl. or ex moms
-// Default to 'ex' (excl. moms) since that's what appears on grocery receipts
-type CostInputType = 'inkl' | 'ex'
-const costInputType = ref<CostInputType>('ex')
-const costTypeOptions = [
-  { value: 'inkl' as CostInputType, label: 'Inkl. moms' },
-  { value: 'ex' as CostInputType, label: 'Ex moms' }
-]
-
-// Computed for totalCost input (øre to kr conversion + VAT handling)
-// totalCost is stored as gross (inkl. moms) in øre
-const totalCostKr = computed({
-  get: () => {
-    const grossOre = formState.value.totalCost
-    if (costInputType.value === 'ex') {
-      return Math.round(convertVat(grossOre, vatPercent, true) / 100)
-    }
-    return Math.round(grossOre / 100)
-  },
-  set: (inputKr: number) => {
-    const inputOre = inputKr * 100
-    if (costInputType.value === 'ex') {
-      formState.value.totalCost = convertVat(inputOre, vatPercent, false)
-    } else {
-      formState.value.totalCost = inputOre
-    }
-  }
-})
-
-// Display the alternative value for reference
-const costAlternativeDisplay = computed(() => {
-  if (!formState.value.totalCost) return null
-  const grossOre = formState.value.totalCost
-  const netOre = convertVat(grossOre, vatPercent, true)
-  if (costInputType.value === 'inkl') {
-    return `${Math.round(netOre / 100)} kr ex moms`
-  }
-  return `${Math.round(grossOre / 100)} kr inkl. moms`
-})
 
 const isEditingMenu = ref(false)
 
@@ -625,15 +579,6 @@ const handleCardClick = () => {
         <UFormField label="Beskrivelse" name="menuDescription" :class="COMPONENTS.chefMenuCard.field" hint="Beskriv menuen kort">
           <UTextarea v-model="formState.menuDescription" placeholder="Kort beskrivelse af retten og evt. tilbehør" :rows="3" :size="SIZES.standard" name="chef-menu-description-input" :class="COMPONENTS.chefMenuCard.field" />
         </UFormField>
-        <UFormField label="Indkøbsomkostninger" name="totalCost" :class="COMPONENTS.chefMenuCard.field" hint="Hvad kostede indkøbene?">
-          <div :class="COMPONENTS.chefMenuCard.costRow">
-            <UInput v-model="totalCostKr" type="number" min="0" placeholder="Total fra kvitteringer" :size="SIZES.standard" name="chef-total-cost-input" :class="COMPONENTS.chefMenuCard.costInput" />
-            <USelect v-model="costInputType" :items="costTypeOptions" value-key="value" :size="SIZES.standard" name="chef-cost-type-select" :class="COMPONENTS.chefMenuCard.costType" />
-          </div>
-          <div v-if="costAlternativeDisplay" :class="COMPONENTS.chefMenuCard.costAlternative">
-            = {{ costAlternativeDisplay }}
-          </div>
-        </UFormField>
         <div :class="LAYOUTS.formButtonRow">
           <UButton v-bind="BUTTONS.cancel" data-testid="cancel-menu-edit" @click="handleMenuCancel">Annuller</UButton>
           <UButton v-bind="BUTTONS.save" :color="HERO_BUTTON.primaryButton" type="submit" data-testid="save-menu-edit">Gem</UButton>
@@ -644,15 +589,19 @@ const handleCardClick = () => {
       <div v-if="showAllergens && allergyTypes.length > 0" :class="COMPONENTS.chefMenuCard.section">
         <!-- The allergen line: the menu's allergens on this dinner's diners, Rediger allergener in EDIT mode -->
         <div v-if="!isEditingAllergens" data-testid="chef-allergen-line" :class="COMPONENTS.chefMenuCard.allergenRow">
-          <span :class="COMPONENTS.chefMenuCard.allergenLabel">Allergener</span>
+          <span data-testid="chef-allergen-label" :class="COMPONENTS.chefMenuCard.allergenLabel">
+            <UIcon :name="ICONS.allergy" :class="COMPONENTS.chefMenuCard.allergenGlyph" />
+            Allergener
+          </span>
           <div :class="COMPONENTS.chefMenuCard.allergenLine">
             <AllergyOverviewLine
               v-if="menuAllergenOverview.breakdownByAllergen.length > 0"
               data-testid="chef-allergen-overview"
               :total-portions="menuAllergenOverview.totalPortions"
               :allergens="menuAllergenOverview.breakdownByAllergen"
+              :with-glyph="false"
             />
-            <span v-else :class="TEXT.muted">ingen</span>
+            <span v-else :class="TEXT.muted">{{ noAllergensMessage.emoji }} {{ noAllergensMessage.text }}</span>
           </div>
           <UButton
             v-if="isEditing"

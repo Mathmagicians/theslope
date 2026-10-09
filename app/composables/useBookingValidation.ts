@@ -12,6 +12,14 @@ import {useCoreValidation, IdSchema} from '~/composables/useCoreValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
 import {chunkArray} from '~/utils/batchUtils'
+import {sumAmounts} from '~/utils/ledger'
+import {ExpenseFragmentSchema, deserializeExpense} from '~/composables/fragments/domainFragments'
+
+// A dinner row as Prisma hands it out: the relations a read includes, the expense amounts behind the computed cost
+type DinnerEventRow = Record<string, unknown> & {
+    allergens?: Array<{allergyType: unknown}> | null
+    expenses?: Array<Record<string, unknown> & {amount: number}> | null
+}
 
 export const DinnerMode = DinnerModeSchema.enum
 export const DinnerState = DinnerStateSchema.enum
@@ -74,13 +82,14 @@ export const useBookingValidation = () => {
     /**
      * DinnerEvent Create - For API input validation (PUT /api/admin/dinner-event)
      */
-    const DinnerEventCreateSchema = DinnerEventBaseSchema
+    // The cost is computed from the dinner's expense rows: no body writes it, and a body carrying it is a 400
+    const DinnerEventCreateSchema = DinnerEventBaseSchema.omit({totalCost: true}).strict()
 
     /**
      * DinnerEvent Update - For API input validation (POST /api/chef/dinner/[id]).
      * Note: id is optional in body since it comes from URL path.
      */
-    const DinnerEventUpdateSchema = DinnerEventBaseSchema.partial()
+    const DinnerEventUpdateSchema = DinnerEventBaseSchema.omit({totalCost: true}).partial().strict()
 
     /**
      * Chef Menu Form - For chef UI form validation
@@ -90,8 +99,7 @@ export const useBookingValidation = () => {
         menuTitle: z.string()
             .min(1, 'Menu titel er påkrævet')
             .max(500, 'Menu titel må maks være 500 tegn'),
-        menuDescription: z.string().max(500, 'Beskrivelse må maks være 500 tegn'),
-        totalCost: z.number().int().min(0, 'Indkøbsomkostninger kan ikke være negative')
+        menuDescription: z.string().max(500, 'Beskrivelse må maks være 500 tegn')
     })
 
     // ============================================================================
@@ -186,7 +194,9 @@ export const useBookingValidation = () => {
     const DinnerEventDetailSchema = DinnerEventDisplaySchema.extend({
         chef: InhabitantDisplaySchema.nullable(),
         cookingTeam: CookingTeamDisplaySchema.nullable(),
-        tickets: z.array(OrderDetailSchema).optional()
+        tickets: z.array(OrderDetailSchema).optional(),
+        // The lines behind the cost (ADR-009: Detail carries them, Display the sum)
+        expenses: z.array(ExpenseFragmentSchema).default([])
     })
 
     /**
@@ -465,9 +475,11 @@ export const useBookingValidation = () => {
      * Handles join table flattening for allergens only (for Display schema)
      */
     function deserializeDinnerEvent(prismaEvent: Record<string, unknown>): z.infer<typeof DinnerEventDisplaySchema> {
-        const allergens = prismaEvent.allergens as Array<{ allergyType: unknown }> | undefined
+        const {allergens, expenses, ...event} = prismaEvent as DinnerEventRow
         return DinnerEventDisplaySchema.parse({
-            ...prismaEvent,
+            ...event,
+            // The cost is the sum of the expense rows; the stored column is deprecated and its value never leaves the repository
+            totalCost: sumAmounts(expenses),
             allergens: allergens ? allergens.map((a) => a.allergyType) : []
         })
     }
@@ -481,7 +493,8 @@ export const useBookingValidation = () => {
      * - tickets: Transform to include ticketType (flattened from ticketPrice) and dinnerEvent reference
      */
     function deserializeDinnerEventDetail(prismaEvent: Record<string, unknown>): Record<string, unknown> {
-        const allergens = prismaEvent.allergens as Array<{ allergyType: unknown }> | undefined
+        const {allergens, expenses: expenseRows, ...event} = prismaEvent as DinnerEventRow
+        const totalCost = sumAmounts(expenseRows)
         const chef = prismaEvent.chef as Record<string, unknown> | null | undefined
         const cookingTeam = prismaEvent.cookingTeam as Record<string, unknown> | null | undefined
         const tickets = prismaEvent.tickets as Array<Record<string, unknown>> | undefined
@@ -494,7 +507,7 @@ export const useBookingValidation = () => {
             menuDescription: prismaEvent.menuDescription,
             menuPictureUrl: prismaEvent.menuPictureUrl,
             state: prismaEvent.state,
-            totalCost: prismaEvent.totalCost,
+            totalCost,
             chefId: prismaEvent.chefId,
             cookingTeamId: prismaEvent.cookingTeamId,
             heynaboEventId: prismaEvent.heynaboEventId,
@@ -504,7 +517,9 @@ export const useBookingValidation = () => {
         }
 
         return {
-            ...prismaEvent,
+            ...event,
+            totalCost,
+            expenses: (expenseRows ?? []).map(deserializeExpense),
             allergens: allergens ? allergens.map((a) => a.allergyType) : [],
             chef: chef ? deserializeInhabitantDisplay(chef) : null,
             cookingTeam: cookingTeam ? deserializeCookingTeamDisplay(cookingTeam) : null,

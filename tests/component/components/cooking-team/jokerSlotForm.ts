@@ -22,7 +22,7 @@ export const toggleEveryWeekday = async (wrapper: Searchable) => {
     await nextTick()
 }
 
-/** Opret validates through the form schema before it emits */
+/** Tilføj validates through the form schema before it emits */
 export const submitJokerSlotForm = async (wrapper: Searchable) => {
     await findByTestId(wrapper, JOKER_SLOT_IDS.submit).trigger('click')
     await flushPromises()

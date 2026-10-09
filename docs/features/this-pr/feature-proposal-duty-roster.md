@@ -703,9 +703,17 @@ Team open, view face (md+)
 Team open, edit face (md+), pencil pressed
 | | Madhold 3  [(hat) 1] [(mem) 5]                              [(arrow) Tilbage] | |
 | |                                                                               | |
-| | Holdmedlemmer (as today)         | Find beboer (InhabitantSelector, as today)  | |
+| | Holdmedlemmer (as today)         | Tilføj medlemmer (finder, as today)        | |
 | |  (av) Anna  Kok  tir 100%  [(pencil)] |  (av) Lise  LEDIG            [Tilføj] | |
 | |  ...                             |  ...                                       | |
+| |  (joker) Jokere                  | Tilføj jokere                              | |
+| |   07/10-01/12 tir Kok Anna barsel| (joker) Joker · en plads uden navn [Tilføj]| |
+| |   [slet]                         |   <- open: the button reads Luk            | |
+| |                                  |   Periode  [07/10/2026] - [01/12/2026]     | |
+| |                                  |   Ugedage  [x man] [x ons] [ ] fre         | |
+| |                                  |   Rolle [(whisk) Kok v] Arbejdstid [100% v]| |
+| |                                  |   Note     [Anna barsel     ]  Valgfri     | |
+| |                                  |                  [Annuller]  [Tilføj]      | |
 | |                                                                               | |
 | | [v] Standardvagter · 5 vagter                                                 | |
 | |   Tid                            Opgave        Rolle                           | |
@@ -715,10 +723,6 @@ Team open, edit face (md+), pencil pressed
 | |   16:30-18:00 (1,5t før)         Børnetjans    Spire    [slet]                 | |
 | |   18:30-21:30 (0,5t efter)       Opvask        Kok      [slet]                 | |
 | |   [ + Tilføj vagt ]                              [Indlæs standardvagter]        | |
-| |                                                                               | |
-| | [v] Jokertjanser · 1                                                          | |
-| |   07/10-01/12  tir  Kok  Anna barsel                     [slet]                | |
-| |   [ + Tilføj jokertjans ]                                                      | |
 | |                                                                               | |
 | | Ugedage [man][x tir][ons]…   Holdets kalender                                  | |
 

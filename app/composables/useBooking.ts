@@ -22,7 +22,6 @@ export const CHEF_LOSS_DINNER_UPDATES = {
     menuTitle: '',
     menuDescription: '',
     menuPictureUrl: null,
-    totalCost: 0,
     heynaboEventId: null,
     state: useBookingValidation().DinnerStateSchema.enum.SCHEDULED
 } satisfies Partial<DinnerEventUpdate>

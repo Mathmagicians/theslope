@@ -1,7 +1,9 @@
 // @vitest-environment nuxt
 import { describe, it, expect } from 'vitest'
-import type { DOMWrapper } from '@vue/test-utils'
+import type { DOMWrapper, VueWrapper } from '@vue/test-utils'
+import type { ComponentPublicInstance } from 'vue'
 import AllergenMultiSelector from '~/components/allergy/AllergenMultiSelector.vue'
+import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
 import { AllergyFactory } from '../../../e2e/testDataFactories/allergyFactory'
 import { OrderFactory } from '~~/tests/e2e/testDataFactories/orderFactory'
 import { useBookingValidation } from '~/composables/useBookingValidation'
@@ -25,7 +27,7 @@ describe('AllergenMultiSelector', () => {
         OrderFactory.defaultOrderDetailWithAllergies(3, 'Cy', [NUTS], {ticketType: TicketType.ADULT})
     ]
 
-    // DRY helper - the chips in the names carry tooltips, which need the provider
+    // DRY helper - mounts on the desktop breakpoint
     const createWrapper = (props: Record<string, unknown> = {}) =>
         mountWithTooltipProvider(AllergenMultiSelector, {
             props: {
@@ -103,7 +105,7 @@ describe('AllergenMultiSelector', () => {
         // Milk and gluten selected: Anna and Bo carry milk, nobody carries gluten
         const selection = [MILK.id, GLUTEN.id]
 
-        it('carries the allergy glyph, the title and the overview of the selected allergens', async () => {
+        it('carries the allergy glyph, the title and the overview of the selected allergens, each its compact allergy type', async () => {
             const wrapper = await createWrapper({ modelValue: selection })
 
             const panel = wrapper.findAllComponents({ name: 'UAlert' })
@@ -112,12 +114,15 @@ describe('AllergenMultiSelector', () => {
             expect(panel?.text()).toContain('Allergier blandt gæsterne')
             expect(partsOf(findByTestId(wrapper, ALLERGY_TEST_IDS.allergyPanelOverview))).toEqual([
                 `${formatPortions(1)} kuv.`,
-                `| ${MILK.name} · ${formatPortions(1)}`,
-                `| ${GLUTEN.name} · ${formatPortions(0)}`
+                `| ${MILK.icon}${MILK.name} · ${formatPortions(1)}`,
+                `| ${GLUTEN.icon}${GLUTEN.name} · ${formatPortions(0)}`
             ])
+            const allergens = findByTestId(wrapper, ALLERGY_TEST_IDS.allergyPanelOverview).findAllComponents(AllergyTypeDisplay) as VueWrapper<ComponentPublicInstance<{allergyType: unknown, compact: boolean, showName: boolean}>>[]
+            expect(allergens.map(allergen => allergen.props('allergyType'))).toEqual([expect.objectContaining(MILK), expect.objectContaining(GLUTEN)])
+            expect(allergens.every(allergen => allergen.props('compact') && allergen.props('showName'))).toBe(true)
         })
 
-        it('opens the names with one chip per matching allergy behind Hvem', async () => {
+        it('opens the names with one compact allergy type and its name per matching allergy behind Hvem', async () => {
             const wrapper = await createWrapper({ modelValue: selection })
             const who = () => findByTestId(wrapper, ALLERGY_TEST_IDS.allergyPanelWho)
 
@@ -131,7 +136,12 @@ describe('AllergenMultiSelector', () => {
             expect(names.text()).toContain('Anna')
             expect(names.text()).toContain('Bo')
             expect(names.text()).not.toContain('Cy')
-            expect(names.findAll('[aria-label]').map(chip => chip.attributes('aria-label'))).toEqual([MILK.name, MILK.name])
+            const allergies = names.findAllComponents(AllergyTypeDisplay) as VueWrapper<ComponentPublicInstance<{allergyType: {name: string}, compact: boolean, showName: boolean}>>[]
+            expect(allergies.map(allergy => allergy.props('allergyType').name)).toEqual([MILK.name, MILK.name])
+            expect(allergies.map(allergy => allergy.text())).toEqual([MILK, MILK].map(({icon, name}) => `${icon}${name}`))
+            expect(allergies.every(allergy => allergy.props('compact') && allergy.props('showName'))).toBe(true)
+            expect(names.findAllComponents({ name: 'UBadge' })).toHaveLength(0)
+            expect(names.findAllComponents({ name: 'UTooltip' })).toHaveLength(0)
 
             await clickByTestId(wrapper, ALLERGY_TEST_IDS.allergyPanelWho)
 

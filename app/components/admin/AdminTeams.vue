@@ -96,8 +96,7 @@ const selectedSeasonId = computed(() => selectedSeason.value?.id ?? null)
 const {season} = useSeasonSelector({
   seasons: computed(() => seasons.value),
   selectedSeasonId,
-  activeSeason: computed(() => activeSeason.value),
-  onSeasonSelect: store.onSeasonSelect
+  activeSeason: computed(() => activeSeason.value)
 })
 
 const handleSeasonChange = (id: number) => {
@@ -154,7 +153,6 @@ const {value: selectedTeamId, setValue: setSelectedTeamParam} = useQueryParam<nu
 // (full-width table + the all-teams calendar); the toggle deselects like a chevron folds
 const selectedTeamIndex = computed(() => displayedTeams.value.findIndex(t => t.id === selectedTeamId.value))
 const selectedTeam = computed(() => displayedTeams.value[selectedTeamIndex.value] ?? null)
-watch(() => selectedTeam.value?.id ?? null, store.selectTeam, {immediate: true})
 
 const handleToggleTeam = async (id: number) => {
   if (selectedTeamId.value === id) {

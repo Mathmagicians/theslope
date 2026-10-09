@@ -58,8 +58,7 @@ const selectedSeasonId = computed(() => selectedSeason.value?.id ?? null)
 const {season} = useSeasonSelector({
   seasons: computed(() => seasons.value),
   selectedSeasonId,
-  activeSeason: computed(() => activeSeason.value),
-  onSeasonSelect: store.onSeasonSelect
+  activeSeason: computed(() => activeSeason.value)
 })
 
 const handleSeasonChange = (id: number) => {

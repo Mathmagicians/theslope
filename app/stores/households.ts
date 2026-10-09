@@ -54,15 +54,26 @@ export const useHouseholdsStore = defineStore("Households", () => {
         return authStore.user?.Inhabitant?.household ?? null
     })
 
-    // A pbs resolves once the households have loaded; an unknown one falls back to my household
-    const userChoice = ref<{id: number} | {pbsId: number} | null>(null)
-    const chosenHouseholdId = computed(() => {
-        const choice = userChoice.value
-        if (!choice) return null
-        if ('id' in choice) return choice.id
-        return households.value.find(h => h.pbsId === choice.pbsId)?.id ?? null
-    })
-    const selectedHouseholdId = computed(() => chosenHouseholdId.value ?? myHousehold.value?.id ?? null)
+    // The page names the household its URL carries; the choice resolves once the households have loaded (ADR-006)
+    type HouseholdChoice = {shortName?: string, pbsId?: number} | number | null
+    const householdChoice = shallowRef<() => HouseholdChoice>(() => null)
+    const resolveHouseholdId = (choice: HouseholdChoice): number | null => {
+        if (choice === null) return null
+        if (typeof choice === 'number') return households.value.find(h => h.id === choice)?.id ?? null
+        const byPbs = households.value.find(h => choice.pbsId !== undefined && h.pbsId === choice.pbsId)
+        if (byPbs) return byPbs.id
+        const byShortName = households.value.filter(h => h.shortName === choice.shortName)
+        return (byShortName.find(h => h.id === myHousehold.value?.id) ?? byShortName[0])?.id ?? null
+    }
+    const selectedHouseholdId = computed(() => resolveHouseholdId(householdChoice.value()) ?? myHousehold.value?.id ?? null)
+    // A gone household is masked out of the page's getter, which keeps carrying every later URL to the store
+    const skipHousehold = (goneId: number | null) => {
+        const choice = householdChoice.value
+        householdChoice.value = () => {
+            const chosen = choice()
+            return resolveHouseholdId(chosen) === goneId ? null : chosen
+        }
+    }
 
     // The key stays constant: a pbs resolves after the households load, mid-render on the server
     const selectedHouseholdDataset = storeAsyncData(
@@ -74,10 +85,10 @@ export const useHouseholdsStore = defineStore("Households", () => {
             enabled: () => !!selectedHouseholdId.value,
             dependsOn: [householdsDataset],
             errorMessage: 'Kunne ikke hente husstand',
-            // The choice re-derives to my household
+            // The page's getter keeps driving the choice; the gone household re-derives to my household
             notFound: {
                 recover: async () => {
-                    userChoice.value = null
+                    skipHousehold(selectedHouseholdId.value)
                     await refreshHouseholds()
                 },
                 retries: 1,
@@ -131,14 +142,8 @@ export const useHouseholdsStore = defineStore("Households", () => {
         console.info(`🏠 > HOUSEHOLDS_STORE > Loaded ${households.value.length} households`)
     }
 
-    const loadHousehold = (id: number) => {
-        userChoice.value = {id}
-        console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Loading household ID: ${id}`)
-    }
-
-    const selectHouseholdByPbs = (pbsId: number) => {
-        userChoice.value = {pbsId}
-        console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Loading household PBS: ${pbsId}`)
+    const selectHousehold = (choice: MaybeRefOrGetter<HouseholdChoice>) => {
+        householdChoice.value = () => toValue(choice)
     }
 
     /**
@@ -336,9 +341,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         if (!isDeleted) return
         console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Household ${householdId} deleted`)
 
-        if (selectedHouseholdId.value === householdId) {
-            userChoice.value = null
-        }
+        skipHousehold(householdId)
         await refreshHouseholds()
 
         toast.add({
@@ -408,11 +411,10 @@ export const useHouseholdsStore = defineStore("Households", () => {
         selectedHouseholdError,
         // Actions
         loadHouseholds,
-        loadHousehold,
+        selectHousehold,
         fetchHouseholdDetail,
         fetchCalendarFeed,
         refreshSelectedHousehold,
-        selectHouseholdByPbs,
         updateInhabitantPreferences,
         updateAllInhabitantPreferences,
         setMoveOutDate,

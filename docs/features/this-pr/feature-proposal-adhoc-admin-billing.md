@@ -213,6 +213,7 @@ model Expense {
   user row is gone (the Heynabo import deletes users first).
 - "Mit forbrug" on `/chef` and the admin economy spending section read the same rows — mockups in
   `release-0.9.0.md` § Chef spending. Billing reads `Transaction` only; `Expense` never reaches an invoice.
+- Implemented 2026-10-09 (E1): `useBillingValidation` Expense schemas and transforms (fragment in `domainFragments.ts`), `financesRepository` expense functions, the computed dinner cost on every dinner read (Display the sum, Detail the sum and `expenses`), the strict dinner write schemas, `/api/chef/dinner/[id]/expenses` GET, PUT and DELETE. Open: the `ChefMenuCard` entry, Mit forbrug, the admin Forbrug view, ADHOC basisvarer.
 
 ### Query ergonomics
 

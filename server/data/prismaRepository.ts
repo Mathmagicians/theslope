@@ -1015,7 +1015,7 @@ export async function activateSeason(d1Client: D1Database, seasonId: number): Pr
             where: {id: seasonId},
             data: {isActive: true},
             include: {
-                dinnerEvents: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
+                dinnerEvents: { orderBy: { date: 'asc' }, include: {expenses: {select: {amount: true}}} },  // Chronological for getNextDinnerDate
                 CookingTeams: {
                     include: {
                         assignments: {
@@ -1049,7 +1049,7 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
         const season = await prisma.season.findFirst({
             where: {id},
             include: {
-                dinnerEvents: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
+                dinnerEvents: { orderBy: { date: 'asc' }, include: {expenses: {select: {amount: true}}} },  // Chronological for getNextDinnerDate
                 CookingTeams: {
                     include: {
                         assignments: {
@@ -1192,7 +1192,7 @@ export async function createSeason(d1Client: D1Database, seasonData: Season): Pr
             },
             include: {
                 ticketPrices: { orderBy: { price: 'asc' } },
-                dinnerEvents: { orderBy: { date: 'asc' } },  // Chronological for getNextDinnerDate
+                dinnerEvents: { orderBy: { date: 'asc' }, include: {expenses: {select: {amount: true}}} },  // Chronological for getNextDinnerDate
                 CookingTeams: true
             }
         })

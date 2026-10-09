@@ -489,6 +489,7 @@ export const deserializeSeason = (s: SerializedSeason) => ({ ...s, holidays: JSO
 3. Composables MUST export: domain schema, serialized schema, transform functions
 4. Tests MUST use domain types (no manual serialization)
 5. Repository WHERE clauses MUST use unique fields (`id` or `@unique` constraints). Non-unique lookups MUST be resolved by caller before reaching the repository.
+6. A deprecated column's value never leaves the repository: the deserializer replaces it with the value computed from the rows that own it (`DinnerEvent.totalCost` from the dinner's `expenses` amounts); the write schemas omit the column and reject a body carrying it, and clients receive the computed value without deriving it
 
 ---
 
@@ -601,8 +602,13 @@ const {data: seasons, status, error, refresh} = storeAsyncData('plan-store-seaso
 })
 
 // Selection-driven detail: the url reads the selection, `enabled` gates it, `dependsOn` awaits the
-// datasets the selection resolves from; the key stays constant because the id resolves mid-render
-const selectedSeasonId = computed(() => chosenSeasonId.value ?? getDefaultSeasonId())
+// datasets the selection resolves from; the key stays constant because the id resolves mid-render.
+// The page hands a getter over its URL once at setup; the store keeps it outside the pinia state
+const seasonChoice = shallowRef<() => string | number | null>(() => null)
+const selectSeason = (choice: MaybeRefOrGetter<string | number | null>) => {
+    seasonChoice.value = () => toValue(choice)
+}
+const selectedSeasonId = computed(() => resolveSeasonChoice(seasonChoice.value()) ?? getDefaultSeasonId())
 const {data: selectedSeason} = storeAsyncData(
     'plan-store-selected-season',
     () => `/api/admin/season/${selectedSeasonId.value}`,
@@ -655,7 +661,7 @@ Components MAY use `useAsyncData` directly when:
 6. Components MUST show loaders based on `isStoreReady`
 7. `tests/component/architecture/fetchUsage.unit.spec.ts` fails a `$fetch(` or `useRequestFetch(` under `app/` outside `app/composables/useApiHandler.ts`
 8. A gated read puts its condition on `enabled`; the dataset reads `idle` while the condition is false, and the store's ready flag counts the datasets the store requests
-9. A dataset reads its selection through getters (`planStore.selectedSeasonId`, `householdsStore.selectedHouseholdId`, the store's own selected ids) and declares the datasets that selection resolves from in `dependsOn`; its key stays constant. A page calls a setter for a scope no store holds (`loadOrdersForDinners`, `loadUpcomingOrders`, `loadHouseholdBilling`)
+9. A dataset reads its selection through getters (`planStore.selectedSeasonId`, `householdsStore.selectedHouseholdId`, the store's own selected ids) and declares the datasets that selection resolves from in `dependsOn`; its key stays constant. A page hands the store a getter over the selection it shows through `selectSeason`, `selectTeam`, `selectDinnerDate`, `selectHousehold`, `selectAllergyType`, `selectBillingPeriod` and `selectInvoice`, set once at setup; `notFound.recover` masks the gone id out of that getter. A page calls a setter for a scope no store holds (`loadOrdersForDinners`, `loadUpcomingOrders`, `loadHouseholdBilling`)
 10. A component renders server-resolved state through computeds; an edit draft starts on an edit action (focus, an edit button), never from a ref seeded at setup. The seed renders the setup-time value on the server, the client hydrates the resolved one, and the repair replaces the element under the user's input
 
 ---
@@ -676,7 +682,7 @@ Draft state: In-memory Vue ref in component (no persistence).
 
 ### Household URL Disambiguation
 
-`?pbs=X` query param on household routes. `pbsId` is always unique. `getHouseholdUrl(shortName, pbsId, tab?)` utility builds all household URLs. Store persists init args in refs so watchers can re-invoke after async data loads.
+`?pbs=X` query param on household routes. `pbsId` is always unique. `getHouseholdUrl(shortName, pbsId, tab?)` utility builds all household URLs. The page hands `selectHousehold` a getter over `shortname` and `?pbs=`; the store resolves it once the households load.
 
 **Resolution priority:** `pbsId` → match by `pbsId`. No `pbsId`, one `shortName` match → use it. No `pbsId`, multiple `shortName` matches → user's own household, else first match. No match → current selection or user's household.
 

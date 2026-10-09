@@ -160,7 +160,7 @@ describe('useSeasonValidation', () => {
 
     it('should correctly serialize and deserialize a Season with relations', () => {
       const dinnerEvent1 = {
-        ...DinnerEventFactory.defaultDinnerEventData,
+        ...DinnerEventFactory.defaultDinnerEventDisplay(),
         id: 1,
         date: new Date(2025, 0, 6),
         menuTitle: 'Pasta Night',
@@ -170,7 +170,7 @@ describe('useSeasonValidation', () => {
       }
 
       const dinnerEvent2 = {
-        ...DinnerEventFactory.defaultDinnerEventData,
+        ...DinnerEventFactory.defaultDinnerEventDisplay(),
         id: 2,
         date: new Date(2025, 0, 13),
         menuTitle: 'Taco Tuesday',

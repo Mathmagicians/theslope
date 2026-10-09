@@ -1,6 +1,7 @@
 // @vitest-environment nuxt
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
+import { ref } from 'vue'
 import { setActivePinia, createPinia } from 'pinia'
 import { registerEndpoint, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import type {
@@ -247,7 +248,7 @@ describe('Households Store', () => {
       const store = await setupStore()
 
       // Load household detail to set selectedHouseholdId
-      store.loadHousehold(1)
+      store.selectHousehold(1)
       await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
 
       // Clear previous calls
@@ -279,7 +280,7 @@ describe('Households Store', () => {
       const store = await setupStore()
 
       // Load household detail with 2 inhabitants
-      store.loadHousehold(1)
+      store.selectHousehold(1)
       await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
 
       const preferences = { MONDAY: 'DINEIN', TUESDAY: 'TAKEAWAY' }
@@ -294,7 +295,7 @@ describe('Households Store', () => {
       const store = await setupStore()
 
       // Setup household with 2 inhabitants
-      store.loadHousehold(1)
+      store.selectHousehold(1)
       await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
 
       // Mock different results for each inhabitant - use factory + schema validation
@@ -328,7 +329,7 @@ describe('Households Store', () => {
     it('updates inhabitants sequentially to avoid race conditions', async () => {
       const store = await setupStore()
 
-      store.loadHousehold(1)
+      store.selectHousehold(1)
       await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
 
       const callOrder: number[] = []
@@ -351,7 +352,7 @@ describe('Households Store', () => {
     it('refreshes selected household once after all updates', async () => {
       const store = await setupStore()
 
-      store.loadHousehold(1)
+      store.selectHousehold(1)
       await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
 
       // Clear previous calls from loadHousehold
@@ -374,7 +375,7 @@ describe('Households Store', () => {
     it('handles API errors during batch update', async () => {
       const store = await setupStore()
 
-      store.loadHousehold(1)
+      store.selectHousehold(1)
       await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
 
       // First inhabitant succeeds, second fails
@@ -426,7 +427,7 @@ describe('Households Store', () => {
     it('refreshes selected household after move when one is selected', async () => {
       const store = await setupStore()
 
-      store.loadHousehold(1)
+      store.selectHousehold(1)
       await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
       householdByIdEndpoint.mockClear()
 
@@ -494,7 +495,7 @@ describe('Households Store', () => {
     ])('clears selectedHouseholdId when $description', async ({ selectedId, expectedAfter }) => {
       const store = await setupStore()
 
-      store.loadHousehold(selectedId)
+      store.selectHousehold(selectedId)
       await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(selectedId))
 
       await store.deleteHousehold(1)
@@ -663,7 +664,7 @@ describe('Households Store - gated reads', () => {
     it('fetches once a household is selected, and the store is ready', async () => {
       const store = await setupStore()
 
-      store.loadHousehold(1)
+      store.selectHousehold(1)
 
       await vi.waitFor(() => expect(store.isHouseholdsStoreReady).toBe(true))
       expect(asyncDataStatus(SELECTED_KEY)).toBe('success')
@@ -672,7 +673,7 @@ describe('Households Store - gated reads', () => {
 
     it('lands on the empty default when the selected household is deleted', async () => {
       const store = await setupStore()
-      store.loadHousehold(1)
+      store.selectHousehold(1)
       await vi.waitFor(() => expect(store.isSelectedHouseholdInitialized).toBe(true))
 
       await store.deleteHousehold(1)
@@ -706,17 +707,74 @@ describe('Households Store - household selection', () => {
     expect(store.selectedHouseholdId).toBe(mine!.id)
   })
 
-  it('a user choice wins over the default', async () => {
+  type Choice = {shortName?: string, pbsId?: number} | number | null
+
+  it.each([
+    {by: 'its id', choice: other!.id as Choice},
+    {by: 'its pbs', choice: {pbsId: other!.pbsId}},
+    {by: 'its short name', choice: {shortName: other!.shortName}},
+    {by: 'its pbs, over another household\'s short name', choice: {pbsId: other!.pbsId, shortName: mine!.shortName}}
+  ])('a getter naming a household by $by loads that household', async ({choice}) => {
     const store = await setupStore()
 
-    store.loadHousehold(other!.id)
+    store.selectHousehold(() => choice)
 
     await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(other!.id))
+    await vi.waitFor(() => expect(asyncDataStatus('households-store-selected-household')).toBe('success'))
+    expect(householdByIdEndpoint).toHaveBeenCalled()
+  })
+
+  it.each([
+    {by: 'an unknown id', choice: 999 as Choice},
+    {by: 'an unknown pbs', choice: {pbsId: -1}},
+    {by: 'an unknown short name', choice: {shortName: 'nowhere'}},
+    {by: 'nothing', choice: null}
+  ])('a getter naming $by selects my household', async ({choice}) => {
+    const store = await setupStore()
+
+    store.selectHousehold(() => choice)
+
+    await vi.waitFor(() => expect(store.isHouseholdsStoreReady).toBe(true))
+    expect(store.selectedHouseholdId).toBe(mine!.id)
+  })
+
+  it.each([
+    {description: 'my household among them selects mine', sharing: () => [mine!, {...other!, shortName: mine!.shortName}], shortName: mine!.shortName, expected: mine!.id},
+    {description: 'my household not among them selects the first', sharing: () => [mine!, other!, {...other!, id: 4, pbsId: other!.pbsId + 1}], shortName: other!.shortName, expected: other!.id}
+  ])('a short name several households carry: $description', async ({sharing, shortName, expected}) => {
+    householdIndexEndpoint.mockReturnValue(sharing())
+    const store = await setupStore()
+
+    store.selectHousehold(() => ({shortName}))
+
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(expected))
+  })
+
+  it('follows its getter with no further setter call, and a cleared choice returns to my household', async () => {
+    const store = await setupStore()
+    const choice = ref<Choice>({pbsId: other!.pbsId})
+
+    store.selectHousehold(choice)
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(other!.id))
+
+    choice.value = null
+
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(mine!.id))
+  })
+
+  it('keeps the choice out of the store state', async () => {
+    const store = await setupStore()
+    const choice = {pbsId: other!.pbsId}
+
+    store.selectHousehold(() => choice)
+
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(other!.id))
+    expect(Object.values(store.$state)).not.toContainEqual(choice)
   })
 
   it('deleting the selected household returns to my household', async () => {
     const store = await setupStore()
-    store.loadHousehold(other!.id)
+    store.selectHousehold(other!.id)
     await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(other!.id))
 
     await store.deleteHousehold(other!.id)
@@ -731,7 +789,7 @@ describe('Households Store - household selection', () => {
     const store = useHouseholdsStore()
     if (awaitHouseholds) await store.loadHouseholds()
 
-    store.selectHouseholdByPbs(other!.pbsId)
+    store.selectHousehold(() => ({pbsId: other!.pbsId}))
 
     await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(other!.id))
     await vi.waitFor(() => expect(store.isHouseholdsStoreReady).toBe(true))
@@ -744,7 +802,7 @@ describe('Households Store - household selection', () => {
     householdIndexEndpoint.mockReturnValue(createMockHouseholds())
     const householdListRequests = householdIndexEndpoint.mock.calls.length
 
-    store.loadHousehold(GONE_HOUSEHOLD_ID)
+    store.selectHousehold(GONE_HOUSEHOLD_ID)
 
     await vi.waitFor(() => expect(householdIndexEndpoint.mock.calls.length).toBeGreaterThan(householdListRequests))
     await vi.waitFor(() => expect(store.selectedHousehold?.id).toBe(mine!.id))
@@ -752,12 +810,16 @@ describe('Households Store - household selection', () => {
     expect(useToast().toasts.value.at(-1)?.title).toBe(`Kan ikke finde husstanden ${gone.shortName}`)
   })
 
-  it('falls back to my household for a pbs no household carries', async () => {
+  it('after a 404 the page\'s getter still drives the selection', async () => {
+    householdIndexEndpoint.mockReturnValue([...createMockHouseholds(), {...other!, id: GONE_HOUSEHOLD_ID, shortName: 'gone'}])
     const store = await setupStore()
+    householdIndexEndpoint.mockReturnValue(createMockHouseholds())
+    const choice = ref<Choice>(GONE_HOUSEHOLD_ID)
+    store.selectHousehold(choice)
+    await vi.waitFor(() => expect(store.selectedHousehold?.id).toBe(mine!.id))
 
-    store.selectHouseholdByPbs(-1)
+    choice.value = {pbsId: other!.pbsId}
 
-    await vi.waitFor(() => expect(store.isHouseholdsStoreReady).toBe(true))
-    expect(store.selectedHouseholdId).toBe(mine!.id)
+    await vi.waitFor(() => expect(store.selectedHouseholdId).toBe(other!.id))
   })
 })

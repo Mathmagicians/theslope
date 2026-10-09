@@ -6,10 +6,11 @@
  * session are faked. The households store resolves each order's household for the expanded list.
  */
 import {describe, it, expect, vi, beforeEach} from 'vitest'
-import {nextTick} from 'vue'
-import {flushPromises} from '@vue/test-utils'
+import {nextTick, type ComponentPublicInstance} from 'vue'
+import {flushPromises, type VueWrapper} from '@vue/test-utils'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import KitchenPreparation from '~/components/dinner/KitchenPreparation.vue'
+import AllergyTypeDisplayComponent from '~/components/allergy/AllergyTypeDisplay.vue'
 import {mountWithTooltipProvider, findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -54,8 +55,8 @@ const ALLERGY_HEAD = 'kitchen-allergy-head'
 const ALLERGY_OVERVIEW = 'kitchen-allergy-overview'
 const HOUSEHOLD_LIST = 'kitchen-household-list'
 
-const mountKitchen = async () => {
-    const wrapper = await mountWithTooltipProvider(KitchenPreparation, {props: {orders: ORDERS}, isMd: true})
+const mountKitchen = async (allergens: AllergyTypeDisplay[] = [GLUTEN, MILK]) => {
+    const wrapper = await mountWithTooltipProvider(KitchenPreparation, {props: {orders: ORDERS, allergens}, isMd: true})
     await flushPromises()
     await nextTick()
     return wrapper
@@ -68,6 +69,15 @@ describe('KitchenPreparation allergy line', () => {
         wrapper = await mountKitchen()
     })
 
+    const allergiesIn = (element: ReturnType<typeof findByTestId>) =>
+        element.findAllComponents(AllergyTypeDisplayComponent) as VueWrapper<ComponentPublicInstance<{allergyType: AllergyTypeDisplay, compact: boolean, showName: boolean}>>[]
+    // The list opens with the overview line; a diner's allergy types are the ones outside it
+    const allergiesInDinersOf = (list: ReturnType<typeof findByTestId>) => {
+        const overview = findByTestId(list, ALLERGY_OVERVIEW)
+        return allergiesIn(list).filter(allergy => !overview.exists() || !overview.element.contains(allergy.element))
+    }
+    const allergenNamesIn = (list: ReturnType<typeof findByTestId>) => allergiesInDinersOf(list).map(allergy => allergy.props('allergyType').name)
+
     describe('GIVEN SPISESAL with an allergic adult and an allergic child', () => {
         it('THEN the panel head shows the allergy kuverter and no diner names', () => {
             const panel = findByTestId(wrapper, PANEL(DinnerMode.DINEIN))
@@ -75,16 +85,24 @@ describe('KitchenPreparation allergy line', () => {
             expect(panel.text()).not.toContain('Anna')
         })
 
-        it('WHEN the panel opens THEN the overview lists the total and each allergen by kuverter, most first', async () => {
+        it('WHEN the panel opens THEN the overview lists the total and each menu allergen as its compact allergy type with its kuverter, in menu order', async () => {
             await clickByTestId(wrapper, PANEL(DinnerMode.DINEIN))
-            const parts = findByTestId(wrapper, ALLERGY_OVERVIEW).findAll(':scope > span').map(part => part.text())
-            expect(parts).toEqual(['1,5 kuv.', '| Gluten · 1', '| Mælk · 0,5'])
+            const overview = findByTestId(wrapper, ALLERGY_OVERVIEW)
+            expect(overview.findAll(':scope > span').map(part => part.text())).toEqual(['1,5 kuv.', `| ${GLUTEN.icon}Gluten · 1`, `| ${MILK.icon}Mælk · 0,5`])
+            const allergies = allergiesIn(overview)
+            expect(allergies.map(allergy => allergy.props('allergyType'))).toEqual([expect.objectContaining(GLUTEN), expect.objectContaining(MILK)])
+            expect(allergies.every(allergy => allergy.props('compact') && allergy.props('showName'))).toBe(true)
         })
 
-        it('WHEN the panel opens THEN each allergic diner carries a chip per allergy, named by its aria-label', async () => {
+        it('WHEN the panel opens THEN each allergic diner carries one compact allergy type with its name per allergy, no badge, no tooltip', async () => {
             await clickByTestId(wrapper, PANEL(DinnerMode.DINEIN))
             const list = findByTestId(wrapper, HOUSEHOLD_LIST)
-            expect(list.findAll('[aria-label]').map(chip => chip.attributes('aria-label'))).toEqual([GLUTEN.name, MILK.name])
+            const allergies = allergiesInDinersOf(list)
+            expect(allergenNamesIn(list)).toEqual([GLUTEN.name, MILK.name])
+            expect(allergies.map(allergy => allergy.text())).toEqual([GLUTEN, MILK].map(({icon, name}) => `${icon}${name}`))
+            expect(allergies.every(allergy => allergy.props('compact') && allergy.props('showName'))).toBe(true)
+            expect(list.findAllComponents({name: 'UBadge'})).toHaveLength(0)
+            expect(list.findAllComponents({name: 'UTooltip'})).toHaveLength(0)
         })
     })
 
@@ -93,12 +111,40 @@ describe('KitchenPreparation allergy line', () => {
             expect(findByTestId(findByTestId(wrapper, PANEL(DinnerMode.TAKEAWAY)), ALLERGY_HEAD).exists()).toBe(false)
         })
 
-        it('WHEN the panel opens THEN the list has no overview and no chips', async () => {
+        it('WHEN the panel opens THEN the list has no overview and no allergy types', async () => {
             await clickByTestId(wrapper, PANEL(DinnerMode.TAKEAWAY))
             const list = findByTestId(wrapper, HOUSEHOLD_LIST)
             expect(list.text()).toContain('Per')
             expect(findByTestId(wrapper, ALLERGY_OVERVIEW).exists()).toBe(false)
-            expect(list.findAll('[aria-label]')).toHaveLength(0)
+            expect(allergiesIn(list)).toHaveLength(0)
         })
+    })
+
+    describe.each([
+        {menu: 'a menu without allergens', allergens: []},
+        {menu: 'a menu whose allergen nobody carries', allergens: [{...GLUTEN, id: 99, name: 'Sesam'}]}
+    ])('GIVEN SPISESAL with allergic diners and $menu', ({allergens}) => {
+        beforeEach(async () => {
+            wrapper = await mountKitchen(allergens)
+        })
+
+        it('THEN the panel head has no allergy line', () => {
+            expect(findByTestId(findByTestId(wrapper, PANEL(DinnerMode.DINEIN)), ALLERGY_HEAD).exists()).toBe(false)
+        })
+
+        it('WHEN the panel opens THEN the list has no overview and no allergy types', async () => {
+            await clickByTestId(wrapper, PANEL(DinnerMode.DINEIN))
+            const list = findByTestId(wrapper, HOUSEHOLD_LIST)
+            expect(list.text()).toContain('Anna')
+            expect(findByTestId(wrapper, ALLERGY_OVERVIEW).exists()).toBe(false)
+            expect(allergiesIn(list)).toHaveLength(0)
+        })
+    })
+
+    it('GIVEN a menu with milk only WHEN SPISESAL opens THEN only the milk diner carries an allergy type and the head counts milk', async () => {
+        wrapper = await mountKitchen([MILK])
+        expect(findByTestId(findByTestId(wrapper, PANEL(DinnerMode.DINEIN)), ALLERGY_HEAD).text()).toBe('0,5 kuv.')
+        await clickByTestId(wrapper, PANEL(DinnerMode.DINEIN))
+        expect(allergenNamesIn(findByTestId(wrapper, HOUSEHOLD_LIST))).toEqual([MILK.name])
     })
 })

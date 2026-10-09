@@ -1,5 +1,6 @@
 // @vitest-environment nuxt
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ref } from 'vue'
 import { registerEndpoint } from '@nuxt/test-utils/runtime'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -98,6 +99,8 @@ registerEndpoint(`/api/admin/team/${TEAM_ID}`, { method: 'POST', handler: update
 registerEndpoint(`/api/admin/team/${TEAM_ID}`, { method: 'DELETE', handler: deleteTeamEndpoint })
 const teamByIdEndpoint = vi.fn(() => teamDetail)
 registerEndpoint(`/api/admin/team/${TEAM_ID}`, { method: 'GET', handler: teamByIdEndpoint })
+const OTHER_TEAM_ID = 12
+registerEndpoint(`/api/admin/team/${OTHER_TEAM_ID}`, { method: 'GET', handler: () => SeasonFactory.defaultCookingTeamDetail({ id: OTHER_TEAM_ID }) })
 registerEndpoint(`/api/team/cooking/${dinner.id}/assign-role`, { method: 'POST', handler: assignRoleEndpoint })
 registerEndpoint(`/api/team/cooking/${dinner.id}/remove-role`, { method: 'POST', handler: removeRoleEndpoint })
 
@@ -348,34 +351,46 @@ describe('Plan Store - season selection', () => {
         expect(await selectedSeasonOnceReady(store)).toBe(expected)
     })
 
-    it('a user choice wins over the default', async () => {
+    it.each([
+        {choice: 'a shortName', value: season2.shortName, awaitSeasons: true},
+        {choice: 'a shortName handed before the seasons load', value: season2.shortName, awaitSeasons: false},
+        {choice: 'an id', value: season2.id, awaitSeasons: true}
+    ])('loads the season $choice names', async ({value, awaitSeasons}) => {
         const store = usePlanStore()
-        await selectedSeasonOnceReady(store)
+        if (awaitSeasons) await store.loadSeasons()
 
-        store.onSeasonSelect(season2.id)
+        store.selectSeason(() => value)
 
         await vi.waitFor(() => expect(store.selectedSeason?.id).toBe(season2.id))
     })
 
-    it.each([
-        {when: 'after the seasons have loaded', awaitSeasons: true},
-        {when: 'before the seasons have loaded', awaitSeasons: false}
-    ])('selects the season a shortName names, requested $when', async ({awaitSeasons}) => {
+    it('follows the getter: the season changes when the value it reads changes', async () => {
         const store = usePlanStore()
-        if (awaitSeasons) await store.loadSeasons()
-
-        store.loadSeasonByShortName(season2.shortName)
-
+        const shortName = ref<string | null>(season2.shortName)
+        store.selectSeason(shortName)
         await vi.waitFor(() => expect(store.selectedSeason?.id).toBe(season2.id))
+
+        shortName.value = null
+
+        await vi.waitFor(() => expect(store.selectedSeason?.id).toBe(season1.id))
     })
 
     it('falls back to the default for a shortName no season carries', async () => {
         const store = usePlanStore()
         await store.loadSeasons()
 
-        store.loadSeasonByShortName('no-such-season')
+        store.selectSeason(() => 'no-such-season')
 
         expect(await selectedSeasonOnceReady(store)).toBe(season1.id)
+    })
+
+    it('keeps the choice out of the pinia state: the page hands it to the server render and the client alike', () => {
+        const store = usePlanStore()
+        const marker = 'season-choice-marker'
+
+        store.selectSeason(() => marker)
+
+        expect(JSON.stringify(store.$state)).not.toContain(marker)
     })
 })
 
@@ -397,13 +412,26 @@ describe('Plan Store - a selected season that no longer exists', () => {
         seasonIndexEndpoint.mockReturnValue(mockSeasons)
         const before = {seasons: seasonIndexEndpoint.mock.calls.length, active: activeSeasonIdEndpoint.mock.calls.length}
 
-        store.onSeasonSelect(GONE_SEASON_ID)
+        store.selectSeason(GONE_SEASON_ID)
 
         await vi.waitFor(() => expect(activeSeasonIdEndpoint.mock.calls.length).toBeGreaterThan(before.active))
         await vi.waitFor(() => expect(store.selectedSeason?.id).toBe(season1.id))
         expect(store.selectedSeasonId).toBe(season1.id)
         expect(seasonIndexEndpoint.mock.calls.length).toBeGreaterThan(before.seasons)
         expect(useToast().toasts.value.at(-1)?.title).toBe(`Kan ikke finde sæsonen ${goneSeason.shortName}`)
+    })
+
+    it('after a 404 the page\'s getter still drives the selection', async () => {
+        seasonIndexEndpoint.mockReturnValue([...mockSeasons, goneSeason])
+        const store = await setupStore()
+        seasonIndexEndpoint.mockReturnValue(mockSeasons)
+        const choice = ref<number | null>(GONE_SEASON_ID)
+        store.selectSeason(choice)
+        await vi.waitFor(() => expect(store.selectedSeason?.id).toBe(season1.id))
+
+        choice.value = season2.id
+
+        await vi.waitFor(() => expect(store.selectedSeason?.id).toBe(season2.id))
     })
 })
 
@@ -596,9 +624,10 @@ describe('Plan Store - write actions', () => {
         expect(teamByIdEndpoint.mock.calls.length).toBeGreaterThan(refreshesBefore)
     })
 
-    it('deleteTeam deselects the deleted team, so its dataset reads idle without a request', async () => {
+    it('deleteTeam deselects the deleted team, so its dataset reads idle without a request, and keeps following the page\'s choice', async () => {
         const store = await setupStore()
-        store.selectTeam(TEAM_ID)
+        const teamId = ref<number | null>(TEAM_ID)
+        store.selectTeam(teamId)
         await vi.waitFor(() => expect(store.selectedTeam?.id).toBe(TEAM_ID))
         const refreshesBefore = teamByIdEndpoint.mock.calls.length
 
@@ -608,6 +637,10 @@ describe('Plan Store - write actions', () => {
         expect(store.selectedTeam).toBeNull()
         expect(asyncDataStatus(SELECTED_TEAM_KEY)).toBe('idle')
         expect(teamByIdEndpoint.mock.calls.length).toBe(refreshesBefore)
+
+        teamId.value = OTHER_TEAM_ID
+
+        await vi.waitFor(() => expect(store.selectedTeamId).toBe(OTHER_TEAM_ID))
     })
 })
 
@@ -647,12 +680,13 @@ describe('Plan Store - selected team', () => {
         expect(store.isSelectedTeamLoading).toBe(false)
     })
 
-    it('selectTeam(null) reads idle with the default', async () => {
+    it('follows the getter: a cleared value reads idle with the default', async () => {
         const store = await setupStore()
-        store.selectTeam(TEAM_ID)
+        const teamId = ref<number | null>(TEAM_ID)
+        store.selectTeam(teamId)
         await vi.waitFor(() => expect(store.selectedTeam?.id).toBe(TEAM_ID))
 
-        store.selectTeam(null)
+        teamId.value = null
 
         await vi.waitFor(() => expect(idleTeam(store)).toEqual(IDLE))
         expect(teamByIdEndpoint).toHaveBeenCalledTimes(1)

@@ -66,8 +66,10 @@ const store = useAllergiesStore()
 const {
   allergyTypes,
   isAllergyTypesLoading,
+  isAllergyTypesInitialized,
   isAllergyTypesErrored,
   allergyTypesError,
+  selectedAllergyTypeId,
   posterNotes
 } = storeToRefs(store)
 const {createAllergyType, updateAllergyType, deleteAllergyType, savePosterNotes} = store
@@ -75,8 +77,20 @@ const {createAllergyType, updateAllergyType, deleteAllergyType, savePosterNotes}
 // Initialize store
 store.initAllergiesStore()
 
-// SELECTION STATE
-const selectedAllergyTypeId = ref<number | null>(null)
+// SELECTION STATE - ?allergy= carries the selection (ADR-006)
+const isKnownAllergyType = (id: number | null) => id !== null && allergyTypes.value.some(at => at.id === id)
+const {value: allergyParam, setValue: setAllergyParam} = useQueryParam<number | null>('allergy', {
+  serialize: (id) => id === null ? '' : String(id),
+  deserialize: (s) => {
+    const parsed = parseInt(s, 10)
+    return Number.isNaN(parsed) ? null : parsed
+  },
+  validate: isKnownAllergyType,
+  normalize: (id) => isKnownAllergyType(id) ? id : null,
+  defaultValue: null,
+  syncWhen: () => isAllergyTypesInitialized.value
+})
+store.selectAllergyType(allergyParam)
 // Falls back to the first entry, so a selection always exists once data is loaded.
 // Derived rather than assigned, so server and client resolve it identically.
 const selectedAllergyType = computed(() =>
@@ -201,10 +215,10 @@ const handleSelect = (id: number | number[] | null) => {
   if (typeof id !== 'number') return
   // Mobile: tapping the selected row again folds its docked detail away
   if (!isMd.value && selectedAllergyTypeId.value === id) {
-    selectedAllergyTypeId.value = null
+    setAllergyParam(null)
     return
   }
-  selectedAllergyTypeId.value = id
+  setAllergyParam(id)
   // In CREATE mode, switch back to VIEW
   if (formMode.value === FORM_MODES.CREATE) {
     onModeChange(FORM_MODES.VIEW)
@@ -223,9 +237,9 @@ const expanded = computed({
   set: (value: Record<number, boolean>) => {
     // UTable-initiated collapse deselects; expansion goes through handleSelect
     const openIndex = Object.keys(value).find(key => value[Number(key)])
-    selectedAllergyTypeId.value = openIndex !== undefined
+    setAllergyParam(openIndex !== undefined
         ? sortedAllergyTypes.value[Number(openIndex)]?.id ?? null
-        : null
+        : null)
   }
 })
 

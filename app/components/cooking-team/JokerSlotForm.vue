@@ -1,13 +1,13 @@
 <script setup lang="ts">
 /**
- * JokerSlotForm - a time-bound team seat without a person, opened under the Jokere box (CookingTeamCard, edit face).
+ * JokerSlotForm - a time-bound team seat without a person, opened under the joker add row (CookingTeamCard, edit face).
  *
  *   Periode     [07/10/2026] - [01/12/2026]           <- CalendarDateRangePicker, the season's dates
  *   Ugedage     [tir][tor]                            <- WeekDayMapDisplay, the team's cooking days, all ticked
  *   Rolle       [(whisk) Kok  v]                      <- TeamRoleFields
  *   Arbejdstid  [100%         v]
  *   Note        [Anna barsel            ]             <- optional
- *   [Opret]  [Fortryd]
+ *   [Annuller]  [Tilføj]
  */
 import type {z} from 'zod'
 import type {Form, FormSubmitEvent} from '@nuxt/ui'
@@ -83,10 +83,10 @@ const handleSubmit = ({data: {note, ...slot}}: FormSubmitEvent<JokerSlotCreate>)
 
     <div :class="LAYOUTS.formButtonRow">
       <UButton v-bind="BUTTONS.cancel" :size="SIZES.small" data-testid="joker-slot-cancel" @click="emit('cancel')">
-        Fortryd
+        Annuller
       </UButton>
       <UButton v-bind="BUTTONS.save" :size="SIZES.small" data-testid="joker-slot-submit" @click="formRef?.submit()">
-        Opret
+        Tilføj
       </UButton>
     </div>
   </UForm>

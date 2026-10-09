@@ -1,15 +1,25 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach} from 'vitest'
-import {registerEndpoint} from '@nuxt/test-utils/runtime'
+import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {setActivePinia, createPinia} from 'pinia'
 import {flushPromises} from '@vue/test-utils'
 import {clearNuxtData} from '#app'
-import {nextTick} from 'vue'
+import {nextTick, toValue} from 'vue'
 import AdminAllergies from '~/components/admin/AdminAllergies.vue'
 import {useAllergiesStore} from '~/stores/allergies'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ALLERGY_TEST_IDS} from '../allergy/allergyTestIds'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, mountedStore, findByTestId, findAllByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+
+// The test environment has no router: navigateTo lands the written query on the route the component reads
+const {mockRoute} = await vi.hoisted(async () => {
+    const {reactive} = await import('vue')
+    return {mockRoute: reactive({path: '/admin/allergies', params: {tab: 'allergies'}, query: {} as Record<string, string>, hash: ''})}
+})
+mockNuxtImport('useRoute', () => () => mockRoute)
+mockNuxtImport('navigateTo', () => vi.fn((to: {query: Record<string, string>}) => {
+    mockRoute.query = to.query
+}))
 
 // The one Setting row the catalog footer and the poster read
 const POSTER_NOTES_ENDPOINT = '/api/admin/setting/allergy-poster-notes'
@@ -18,6 +28,8 @@ const POSTER_NOTES_ENDPOINT = '/api/admin/setting/allergy-poster-notes'
 const allergyTypesEndpoint = vi.fn()
 const posterNotesGetEndpoint = vi.fn()
 const posterNotesPostEndpoint = vi.fn()
+AllergyFactory.createMockAllergyTypesWithInhabitants().forEach(allergyType =>
+    registerEndpoint(`/api/admin/allergy-type/${allergyType.id}`, () => allergyType))
 registerEndpoint('/api/admin/allergy-type', allergyTypesEndpoint)
 // Generic (GET) registered BEFORE method-specific so POST wins (reverse-order lookup)
 registerEndpoint(POSTER_NOTES_ENDPOINT, posterNotesGetEndpoint)
@@ -72,6 +84,7 @@ const VIEWPORTS = [
 describe('AdminAllergies', () => {
     beforeEach(() => {
         setActivePinia(createPinia())
+        mockRoute.query = {}
         clearNuxtData()
         vi.clearAllMocks()
         allergyTypesEndpoint.mockReturnValue(mockAllergyTypes)
@@ -248,6 +261,50 @@ describe('AdminAllergies', () => {
 
     // The mobile master/detail contract: the detail docks under the tapped row -
     // nothing renders below the list, and tapping again folds it away.
+    describe('the allergy type in ?allergy=', () => {
+        const [, secondType] = mockAllergyTypes
+
+        it('hands the store the URL\'s allergy type once at setup, and the store follows the URL with no further setter call', async () => {
+            mockRoute.query = {allergy: String(secondType!.id)}
+            const selectAllergyType = vi.spyOn(mountedStore(useAllergiesStore), 'selectAllergyType')
+
+            const mounted = await mountAdmin({}, false)
+
+            expect(selectAllergyType).toHaveBeenCalledTimes(1)
+            const choice = selectAllergyType.mock.calls[0]![0]
+            expect(toValue(choice)).toBe(secondType!.id)
+            expect(useAllergiesStore().selectedAllergyTypeId).toBe(secondType!.id)
+            expect(findByTestId(mounted, ALLERGY_TEST_IDS.edit).exists()).toBe(true)
+
+            mockRoute.query = {allergy: String(firstType!.id)}
+
+            expect(toValue(choice)).toBe(firstType!.id)
+            expect(selectAllergyType).toHaveBeenCalledTimes(1)
+            selectAllergyType.mockRestore()
+        })
+
+        it('a cleared ?allergy= deselects and folds the mobile detail away', async () => {
+            mockRoute.query = {allergy: String(secondType!.id)}
+            const mounted = await mountAdmin({}, false)
+            expect(findByTestId(mounted, ALLERGY_TEST_IDS.edit).exists()).toBe(true)
+
+            mockRoute.query = {}
+            await nextTick()
+
+            expect(useAllergiesStore().selectedAllergyTypeId).toBeNull()
+            expect(findByTestId(mounted, ALLERGY_TEST_IDS.edit).exists()).toBe(false)
+        })
+
+        it('tapping a row writes its id to ?allergy=', async () => {
+            const mounted = await mountAdmin({}, false)
+
+            await clickByTestId(mounted, ALLERGY_TEST_IDS.row(secondType!.id!))
+            await flushPromises()
+
+            expect(mockRoute.query.allergy).toBe(String(secondType!.id))
+        })
+    })
+
     describe('mobile detail docking', () => {
         it('shows no detail panel before a row is tapped', async () => {
             const wrapper = await mountAdmin({}, false)

@@ -173,7 +173,6 @@ export const useSeason = () => {
             menuDescription: null,
             menuPictureUrl: null,
             state: DinnerState.SCHEDULED,
-            totalCost: 0,
             heynaboEventId: null,
             chefId: null,
             cookingTeamId: null,

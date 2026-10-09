@@ -23,14 +23,16 @@
  *    RAINBOW[0]                RAINBOW[1]            RAINBOW[2]     neutral
  *
  * Expanded (SPISESAL selected), on the panel's surface below the row:
- * │  (allergy) 3,5 kuv. | Gluten · 1 | Mælk · 2,5                               │
- * │  S_31 · 2V 1B · Anna (wheat)(milk), Bo, Emil                                │
- * │  N_12 · 1V · Maria (milk)                                                   │
+ * │  (allergy) 3,5 kuv. | (milk) Mælk · 2,5 | (wheat) Gluten · 1                │
+ * │  S_31 · 2V 1B · Anna (wheat) Gluten (milk) Mælk, Bo, Emil                   │
+ * │  N_12 · 1V · Maria (milk) Mælk                                              │
  *
  * Each panel: % + kuverter + ticket breakdown (Voksen/Barn/Baby + total) + the kuverter of its
- * diners with a registered allergy. The expanded list opens with the allergy overview, each
- * allergen by kuverter, most first; every allergic diner carries one chip per allergy.
- * A panel without an allergic diner shows no allergy line and no chips.
+ * diners carrying an allergen on the menu. The expanded list opens with the allergy overview, each
+ * menu allergen by kuverter in the menu's order; every such diner carries one compact
+ * AllergyTypeDisplay per menu allergen, its own icon and name. A household row centres every segment
+ * on one line. A panel without such a diner, and a menu without allergens, show no allergy line and
+ * no allergy types; the panel heads add up to the chef's allergen line.
  *
  * The three dining modes walk the brand rainbow in its order; TIL SALG stays grey, because a
  * released ticket on offer is not a dining mode. Fill, ink and divider come from
@@ -38,7 +40,7 @@
  */
 import type {OrderDetail} from '~/composables/useBookingValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
-import type {AffectedDinersResult} from '~/composables/useAllergy'
+import type {AllergenOverview} from '~/composables/useAllergy'
 import type {DiningModeStats} from '~/composables/useOrder'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 
@@ -52,12 +54,12 @@ interface TicketBreakdown {
 // Extended stats with component-specific fields
 interface ExtendedDiningModeStats extends DiningModeStats {
   ticketBreakdown: TicketBreakdown | null
-  allergies: AffectedDinersResult | null
+  allergies: AllergenOverview
 }
 
 interface Props {
   orders: OrderDetail[]
-  allergens?: AllergyTypeDisplay[]  // Menu allergens to check against
+  allergens?: AllergyTypeDisplay[]  // The menu's allergens, the only allergies the panels count
 }
 
 const props = defineProps<Props>()
@@ -72,7 +74,7 @@ const {
 } = useOrder()
 const {TicketTypeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
-const {computeAffectedDiners} = useAllergy()
+const {computeAllergenOverview} = useAllergy()
 const {formatTicketCounts} = useBilling()
 const {getHouseholdForInhabitant} = useHouseholdsStore()
 
@@ -156,7 +158,7 @@ const diningModeStats = computed((): ExtendedDiningModeStats[] => {
     return {
       ...stat,
       ticketBreakdown,
-      allergies: computeAffectedDiners(modeOrders)
+      allergies: computeAllergenOverview(modeOrders, props.allergens ?? [])
     }
   })
 })
@@ -165,8 +167,8 @@ const selectedPanelAllergies = computed(() =>
   diningModeStats.value.find(mode => mode.key === selectedPanel.value)?.allergies ?? null
 )
 
-const allergensByInhabitant = computed(() => new Map(
-  selectedPanelAllergies.value?.affectedList.map(diner => [diner.inhabitant.id, diner.matchingAllergens]) ?? []
+const allergensByOrder = computed(() => new Map(
+  selectedPanelAllergies.value?.affectedList.flatMap(diner => diner.orderIds.map(orderId => [orderId, diner.matchingAllergens] as const)) ?? []
 ))
 
 // Use design system for kitchen panel colors
@@ -233,7 +235,7 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
           <span :class="COMPONENTS.kitchen.figureTotal"># {{ mode.ticketBreakdown.total }}</span>
         </div>
 
-        <div v-if="mode.allergies" data-testid="kitchen-allergy-head" :class="COMPONENTS.kitchen.allergyHead">
+        <div v-if="mode.allergies.affectedList.length > 0" data-testid="kitchen-allergy-head" :class="COMPONENTS.kitchen.allergyHead">
           <UIcon :name="ICONS.allergy" :class="COMPONENTS.kitchen.glyph" />
           {{ formatPortions(mode.allergies.totalPortions) }} kuv.
         </div>
@@ -247,19 +249,29 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
       :class="[getModeClasses(selectedPanel), COMPONENTS.kitchen.householdList]"
     >
       <AllergyOverviewLine
-        v-if="selectedPanelAllergies"
+        v-if="selectedPanelAllergies?.affectedList.length"
         data-testid="kitchen-allergy-overview"
         :class="COMPONENTS.kitchen.allergyOverview"
         :total-portions="selectedPanelAllergies.totalPortions"
         :allergens="selectedPanelAllergies.breakdownByAllergen"
       />
       <div v-for="entry in selectedPanelBreakdown" :key="entry.shortName" :class="COMPONENTS.kitchen.household">
-        <span :class="COMPONENTS.kitchen.householdName">{{ entry.shortName }}</span> · {{ formatTicketCounts(entry.orders) }} ·
-        <template v-for="(order, index) in entry.orders" :key="order.id">
+        <span :class="COMPONENTS.kitchen.householdName">{{ entry.shortName }}</span>
+        <span>·</span>
+        <span>{{ formatTicketCounts(entry.orders) }}</span>
+        <span>·</span>
+        <span v-for="(order, index) in entry.orders" :key="order.id" :class="COMPONENTS.kitchen.diner">
           <span>{{ order.inhabitant.name }}</span>
-          <AllergyChips :allergy-types="allergensByInhabitant.get(order.inhabitant.id) ?? []" />
-          <span v-if="index < entry.orders.length - 1">, </span>
-        </template>
+          <AllergyTypeDisplay
+            v-for="allergyType in allergensByOrder.get(order.id) ?? []"
+            :key="allergyType.id"
+            :allergy-type="allergyType"
+            compact
+            show-name
+            :class="COMPONENTS.allergyOverview.besideName"
+          />
+          <span v-if="index < entry.orders.length - 1">,</span>
+        </span>
       </div>
     </div>
   </div>

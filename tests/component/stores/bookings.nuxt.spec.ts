@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {setActivePinia, createPinia} from 'pinia'
 import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest'
-import {ref, computed} from 'vue'
+import {ref, computed, type MaybeRefOrGetter} from 'vue'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {clearNuxtData} from '#app'
 import {getQuery, type H3Event} from 'h3'
@@ -66,6 +66,17 @@ const invoiceTransactionsEndpoint = vi.fn(() => [])
 registerEndpoint('/api/admin/dinner-event/1', dinnerEventDetailEndpoint)
 registerEndpoint('/api/admin/billing/periods/1', billingPeriodDetailEndpoint)
 registerEndpoint('/api/admin/billing/invoices/1', invoiceTransactionsEndpoint)
+const GONE_ID = 404
+const notFound = () => {
+    throw createError({statusCode: 404})
+}
+const goneBillingPeriodEndpoint = vi.fn(notFound)
+const goneInvoiceEndpoint = vi.fn(notFound)
+registerEndpoint(`/api/admin/billing/periods/${GONE_ID}`, goneBillingPeriodEndpoint)
+registerEndpoint(`/api/admin/billing/invoices/${GONE_ID}`, goneInvoiceEndpoint)
+const billingPeriodsEndpoint = vi.fn(() => [BillingFactory.defaultSummaryData('gated')])
+const BILLING_PERIOD_KEY = 'bookings-store-selected-billing-period'
+const INVOICE_KEY = 'bookings-store-selected-invoice'
 const SEASON_ID = 9
 const seasonsEndpoint = vi.fn((): Season[] => [])
 const activeSeasonIdEndpoint = vi.fn((): number | null => null)
@@ -86,7 +97,7 @@ registerEndpoint('/api/admin/household', () => [])
 registerEndpoint('/api/team/my', () => [])
 registerEndpoint('/api/admin/users/by-role/ALLERGYMANAGER', () => [])
 registerEndpoint('/api/admin/users', () => [])
-registerEndpoint('/api/admin/billing/periods', () => [])
+registerEndpoint('/api/admin/billing/periods', billingPeriodsEndpoint)
 registerEndpoint('/api/admin/billing/current-period', () => [])
 registerEndpoint('/api/order', ordersEndpoint)
 registerEndpoint(`/api/team/cooking/${DINNER_ID}/assign-role`, {method: 'POST', handler: assignRoleEndpoint})
@@ -368,10 +379,13 @@ describe('Bookings store — gated reads', () => {
             endpoint: ordersEndpoint, request: (store: Store) => store.loadUpcomingOrders(true)},
         {dataset: 'household billing', idleKey: 'bookings-store-household-billing', requestedKey: 'bookings-store-household-billing',
             endpoint: householdBillingEndpoint, request: (store: Store) => store.loadHouseholdBilling()},
-        {dataset: 'selected billing period', idleKey: 'billing-period-null', requestedKey: `billing-period-${ID}`,
-            endpoint: billingPeriodDetailEndpoint, request: (store: Store) => store.loadBillingPeriodDetail(ID)},
-        {dataset: 'selected invoice', idleKey: 'invoice-transactions-null', requestedKey: `invoice-transactions-${ID}`,
-            endpoint: invoiceTransactionsEndpoint, request: (store: Store) => store.loadInvoiceTransactions(ID)}
+        {dataset: 'selected billing period', idleKey: BILLING_PERIOD_KEY, requestedKey: BILLING_PERIOD_KEY,
+            endpoint: billingPeriodDetailEndpoint, request: (store: Store) => store.selectBillingPeriod(() => ID)},
+        {dataset: 'selected invoice', idleKey: INVOICE_KEY, requestedKey: INVOICE_KEY,
+            endpoint: invoiceTransactionsEndpoint, request: (store: Store) => {
+                store.selectBillingPeriod(() => ID)
+                store.selectInvoice(() => ID)
+            }}
     ]
 
     it.each([
@@ -472,6 +486,111 @@ describe('Bookings store — the dinner on the selected date', () => {
         expect(shownLines).toContain(showErrorSpy.mock.calls[0]![0].message)
         expect(store.selectedDinnerEventId).toBeNull()
         expect(goneDinnerEndpoint).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe('Bookings store — the billing selection a getter names', () => {
+    type Store = ReturnType<typeof useBookingsStore>
+    type Choice = MaybeRefOrGetter<number | null>
+    const ID = 1
+    const SUMMARY = BillingFactory.defaultSummaryData('selection')
+
+    describe.each([
+        {
+            dataset: 'billing period', key: BILLING_PERIOD_KEY, toast: 'Kan ikke finde faktureringsperioden',
+            detailEndpoint: billingPeriodDetailEndpoint, goneEndpoint: goneBillingPeriodEndpoint, listEndpoint: billingPeriodsEndpoint,
+            listWith: (ids: number[]) => billingPeriodsEndpoint.mockReturnValue(ids.map(id => ({...SUMMARY, id}))),
+            select: (store: Store, choice: Choice) => store.selectBillingPeriod(choice),
+            selectedId: (store: Store) => store.selectedBillingPeriodId
+        },
+        {
+            dataset: 'invoice', key: INVOICE_KEY, toast: 'Kan ikke finde fakturaen',
+            detailEndpoint: invoiceTransactionsEndpoint, goneEndpoint: goneInvoiceEndpoint, listEndpoint: billingPeriodDetailEndpoint,
+            listWith: (ids: number[]) => billingPeriodDetailEndpoint.mockReturnValue({...SUMMARY, invoices: ids.map(id => ({...SUMMARY.invoices[0]!, id}))}),
+            select: (store: Store, choice: Choice) => {
+                store.selectBillingPeriod(() => ID)
+                store.selectInvoice(choice)
+            },
+            selectedId: (store: Store) => store.selectedInvoiceId
+        }
+    ])('$dataset', ({key, toast, detailEndpoint, goneEndpoint, listEndpoint, listWith, select, selectedId}) => {
+        beforeEach(() => {
+            resetStores()
+            listWith([ID])
+        })
+
+        it('a getter naming it loads it', async () => {
+            const store = useBookingsStore()
+
+            select(store, () => ID)
+
+            await vi.waitFor(() => expect(asyncDataStatus(key)).toBe('success'))
+            expect(selectedId(store)).toBe(ID)
+            expect(detailEndpoint).toHaveBeenCalled()
+        })
+
+        it.each([
+            {by: 'a getter naming nothing', choice: null},
+            {by: 'a getter naming an unknown id', choice: 999}
+        ])('$by selects nothing and leaves the dataset idle and unrequested', async ({choice}) => {
+            const store = useBookingsStore()
+
+            select(store, () => choice)
+
+            await flushPromises()
+            await flushPromises()
+            expect(selectedId(store)).toBeNull()
+            expect(asyncDataStatus(key)).toBe('idle')
+            expect(detailEndpoint).not.toHaveBeenCalled()
+        })
+
+        it('follows its getter with no further setter call, and a cleared choice deselects', async () => {
+            const store = useBookingsStore()
+            const choice = ref<number | null>(ID)
+
+            select(store, choice)
+            await vi.waitFor(() => expect(asyncDataStatus(key)).toBe('success'))
+
+            choice.value = null
+
+            await vi.waitFor(() => expect(asyncDataStatus(key)).toBe('idle'))
+            expect(selectedId(store)).toBeNull()
+        })
+
+        it('one that no longer exists: toasts it, drops the choice and refreshes what it resolves against', async () => {
+            listWith([ID, GONE_ID])
+            const store = useBookingsStore()
+            select(store, () => GONE_ID)
+
+            await vi.waitFor(() => expect(goneEndpoint).toHaveBeenCalledTimes(1))
+            await vi.waitFor(() => expect(selectedId(store)).toBeNull())
+            await vi.waitFor(() => expect(listEndpoint.mock.calls.length).toBeGreaterThan(1))
+            expect(goneEndpoint).toHaveBeenCalledTimes(1)
+            expect(toastTitles()).toContain(toast)
+        })
+
+        it('after a 404 the page\'s getter still drives the selection', async () => {
+            listWith([ID, GONE_ID])
+            const store = useBookingsStore()
+            const choice = ref<number | null>(GONE_ID)
+            select(store, choice)
+            await vi.waitFor(() => expect(goneEndpoint).toHaveBeenCalledTimes(1))
+            await vi.waitFor(() => expect(selectedId(store)).toBeNull())
+
+            choice.value = ID
+
+            await vi.waitFor(() => expect(asyncDataStatus(key)).toBe('success'))
+            expect(selectedId(store)).toBe(ID)
+        })
+
+        it('keeps the choice out of the store state', async () => {
+            const store = useBookingsStore()
+
+            select(store, () => ID)
+
+            await vi.waitFor(() => expect(selectedId(store)).toBe(ID))
+            expect(Object.values(store.$state)).not.toContain(ID)
+        })
     })
 })
 

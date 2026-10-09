@@ -314,14 +314,17 @@ test.describe('AdminTeams Form UI', () => {
             const search = page.getByPlaceholder('Søg efter navn...')
             await expect(search).toBeVisible()
             await search.fill(`Medlem-${testSalt}`)
-            // The row action expands the add form (its label flips to 'Luk'), so the
-            // remaining 'Tilføj' button is the form's submit
-            await page.getByRole('button', {name: 'Tilføj'}).first().click()
+            // The finder filters on the typed name; the row action then expands the add form (its label
+            // flips to Luk), which leaves the form's submit as the only Tilføj button
+            await expect(page.getByText(`Medlem-${testSalt}`)).toBeVisible()
+            await page.getByRole('button', {name: 'Tilføj', exact: true}).first().click()
+            await expect(page.getByRole('button', {name: 'Luk', exact: true}).first()).toBeVisible()
             const responsePromise = page.waitForResponse(
                 (response: Response) => response.url().includes('/api/admin/team/assignment') && response.request().method() === 'PUT',
                 {timeout: 15000}
             )
-            await page.getByRole('button', {name: 'Tilføj', exact: true}).click()
+            // The expanded member form's submit comes first in the column; the joker row's Tilføj follows it
+            await page.getByRole('button', {name: 'Tilføj', exact: true}).first().click()
             const response = await responsePromise
             expect(response.status()).toBe(201)
 
