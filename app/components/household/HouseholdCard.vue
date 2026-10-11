@@ -86,7 +86,7 @@ const {computeAggregatedPreferences} = useHousehold()
 const {formatScaffoldResult} = useBooking()
 
 // Inject responsive breakpoint
-const isMd = inject<Ref<boolean>>('isMd')
+const isMd = inject<Ref<boolean | null>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Design system

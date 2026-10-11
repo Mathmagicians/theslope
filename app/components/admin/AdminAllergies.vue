@@ -51,7 +51,7 @@ const { COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, NOISE, COMPONENTS, TYPOGR
 
 // Responsive mount point for the detail panel - provided by the default layout;
 // false during SSR, so first paint renders the mobile mount
-const isMd = inject<Ref<boolean>>('isMd', ref(false))
+const isMd = inject<Ref<boolean | null>>('isMd', ref(false))
 
 // Household shortnames for the detail card - owned here, passed down as a plain map
 const householdsStore = useHouseholdsStore()

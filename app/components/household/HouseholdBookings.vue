@@ -79,7 +79,7 @@ const {dateRange, hasPrev, hasNext, navigate} = useBookingView({
 })
 
 // Calendar collapsed by default on mobile
-const isMd = inject<Ref<boolean>>('isMd')
+const isMd = inject<Ref<boolean | null>>('isMd')
 const calendarOpen = ref(isMd?.value ?? false)
 
 const handleDateSelected = (date: Date) => setDate(date)

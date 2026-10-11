@@ -57,7 +57,7 @@ const props = withDefaults(defineProps<Props>(), {
 const {getDefaultCookingTeam, countChefs, getTeamShortName, getTeamNumber} = useCookingTeam()
 
 // Layout breakpoint from the default layout - drives the detail's mount point
-const isMd = inject<Ref<boolean>>('isMd', ref(false))
+const isMd = inject<Ref<boolean | null>>('isMd', ref(false))
 const store = usePlanStore()
 const {
   isSeasonsLoading,
@@ -427,8 +427,8 @@ const columns = [
             <!-- Docked detail (phone): the same card as the pane, its header pinned while the body scrolls -->
             <template #expanded>
               <div v-if="selectedTeam?.id" :class="COMPONENTS.masterDetail.dockClamp">
-              <div :class="[COMPONENTS.masterDetail.dock, 'space-y-2']">
-                <div :class="[COMPONENTS.masterDetail.dockHeader, 'flex items-center justify-between gap-2']">
+              <div :class="[COMPONENTS.masterDetail.dock, COMPONENTS.adminTeams.dockStack]">
+                <div :class="[COMPONENTS.masterDetail.dockHeader, COMPONENTS.adminTeams.detailHeaderRow]">
                   <CookingTeamBadges
                       :team-number="selectedTeamNumber"
                       :team-name="getTeamShortName(selectedTeam.name)"
@@ -491,8 +491,8 @@ const columns = [
 
           <!-- Detail pane (md+): the same card as the dock, framed so the team's own
                calendar reads apart from the all-teams calendar of the overview -->
-          <div v-if="isMd && selectedTeam?.id" :class="['md:w-2/3 space-y-4 self-start', COMPONENTS.masterDetail.pane]">
-            <div class="flex items-center justify-between gap-2">
+          <div v-if="isMd && selectedTeam?.id" :class="[COMPONENTS.adminTeams.pane, COMPONENTS.masterDetail.pane]">
+            <div :class="COMPONENTS.adminTeams.detailHeaderRow">
               <CookingTeamBadges
                   :team-number="selectedTeamNumber"
                   :team-name="getTeamShortName(selectedTeam.name)"
@@ -523,7 +523,7 @@ const columns = [
           </div>
 
           <!-- No selection: the all-teams calendar fills the detail region, at a glance -->
-          <div v-else-if="selectedSeason && displayedTeams.length > 0" class="w-full md:w-2/3 self-start">
+          <div v-else-if="selectedSeason && displayedTeams.length > 0" :class="COMPONENTS.adminTeams.overviewCalendar">
             <TeamCalendarDisplay
                 :season-dates="selectedSeason.seasonDates"
                 :teams="displayedTeams"
