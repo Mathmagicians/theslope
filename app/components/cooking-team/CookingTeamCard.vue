@@ -108,7 +108,7 @@ const isErrored = computed(() => planStore.isSelectedTeamErrored)
 const isNoTeam = computed(() => !isLoading.value && !isErrored.value && team.value === null)
 
 // All data from fetched team Detail entity
-const { getTeamShortName, countJokerSlotShifts } = useCookingTeam()
+const { getTeamShortName, countJokerSlotShifts, getTeamNumber } = useCookingTeam()
 const teamName = computed(() => {
   const fullName = team.value?.name ?? `Madhold ${props.teamNumber}`
   return props.useShortName ? getTeamShortName(fullName) : fullName
@@ -216,8 +216,8 @@ const getTeamName = (cookingTeamId: number) =>
 
 /** The band of another team in the season - empty when the season does not list it */
 const getTeamBandForId = (cookingTeamId: number) => {
-  const idx = props.teams?.findIndex(t => t.id === cookingTeamId) ?? -1
-  return idx >= 0 ? getRainbowBand(idx) : ''
+  const other = props.teams?.find(t => t.id === cookingTeamId)
+  return other ? getRainbowBand(getTeamNumber(other, props.teams ?? []) - 1) : ''
 }
 
 const sortByStatusThenName = (rowA: {original: InhabitantDisplay}, rowB: {original: InhabitantDisplay}): number => {
@@ -593,6 +593,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
             v-if="seasonDates && dinnerEvents.length > 0 && team"
             :season-dates="seasonDates"
             :teams="[team]"
+            :season-teams="planStore.selectedSeason?.CookingTeams ?? []"
             :dinner-events="dinnerEvents"
             :holidays="holidays"
           />

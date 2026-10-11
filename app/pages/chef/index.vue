@@ -206,7 +206,7 @@ const handleRemoveExpense = (expenseId: number) => {
 
 // The team's cooking round around the dinner on view: the round's orders give each dinner its allowance
 const {consecutiveDinnerRun} = useBooking()
-const {getTeamShortName} = useCookingTeam()
+const {getTeamShortName, getTeamNumber} = useCookingTeam()
 const {calculateBudget} = useOrder()
 const kitchenConfig = useAppConfig().theslope?.kitchen
 const roundDinners = computed(() => selectedDinnerId.value
@@ -309,6 +309,7 @@ useHead({
               <MyTeamSelector
                   :model-value="selectedTeamId"
                   :teams="myTeams"
+                  :season-teams="selectedSeason?.CookingTeams ?? []"
                   @update:model-value="setSelectedTeamId"
               />
 
@@ -410,9 +411,9 @@ useHead({
         <template #team>
           <template v-if="dinnerEventDetail">
             <CookingTeamCard
-                v-if="dinnerEventDetail.cookingTeamId"
+                v-if="dinnerEventDetail.cookingTeamId && dinnerEventDetail.cookingTeam"
                 :team-id="dinnerEventDetail.cookingTeamId"
-                :team-number="dinnerEventDetail.cookingTeamId"
+                :team-number="getTeamNumber(dinnerEventDetail.cookingTeam, selectedSeason?.CookingTeams ?? [])"
                 mode="monitor"
                 use-short-name
             />

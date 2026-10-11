@@ -1,5 +1,5 @@
 // @vitest-environment nuxt
-import {describe, it, expect, beforeEach, vi} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach, vi} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {flushPromises, type VueWrapper} from '@vue/test-utils'
 import {nextTick, ref, type ComponentPublicInstance} from 'vue'
@@ -7,7 +7,7 @@ import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, 
 import CookingTeamCard from '~/components/cooking-team/CookingTeamCard.vue'
 import {usePlanStore} from '~/stores/plan'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
-import {COMPONENTS, ICONS, ROLE_ICONS, getCalendarCountBadge, createResponsiveSizes} from '~/composables/useTheSlopeDesignSystem'
+import {COMPONENTS, ICONS, ROLE_ICONS, getCalendarCountBadge, getRainbowBand, createResponsiveSizes} from '~/composables/useTheSlopeDesignSystem'
 import {useCookingTeamValidation, type CookingTeamDetail} from '~/composables/useCookingTeamValidation'
 import type {JokerSlot} from '~/composables/useDutyValidation'
 import {createDefaultWeekdayMap} from '~/types/dateTypes'
@@ -69,8 +69,12 @@ let team: CookingTeamDetail = SeasonFactory.defaultCookingTeamDetail()
 // Only HTTP is faked (testing.md Rule 6) - specific routes first, generic last; the plan store reads the team
 registerEndpoint(`/api/admin/team/1/joker-slot/${slots[1]!.slot.id}`, {method: 'DELETE', handler: () => 1})
 registerEndpoint('/api/admin/team/1', () => team)
-registerEndpoint('/api/admin/season/active', () => null)
-registerEndpoint('/api/admin/season', () => [])
+// No active season by default; a case that needs the season's teams sets one
+const SEASON_ID = 9
+let seasonWithTeams: (typeof season & {id: number, CookingTeams: ReturnType<typeof SeasonFactory.defaultCookingTeamDisplay>[]}) | null = null
+registerEndpoint(`/api/admin/season/${SEASON_ID}`, () => seasonWithTeams)
+registerEndpoint('/api/admin/season/active', () => seasonWithTeams?.id ?? null)
+registerEndpoint('/api/admin/season', () => seasonWithTeams ? [seasonWithTeams] : [])
 
 const TEAM_ID = 1
 
@@ -411,5 +415,30 @@ describe('CookingTeamCard edit face, Tilføj jokere', () => {
         const wrapper = await mountCard('regular')
         expect(findByTestId(wrapper, JOKER_ADD_ROW).exists()).toBe(false)
         expect(wrapper.findAll('h4').some(heading => heading.text() === 'Tilføj jokere')).toBe(false)
+    })
+})
+
+// The team calendar names its team by number: the one in the name, else the team's position in the season
+describe('CookingTeamCard team calendar', () => {
+    beforeEach(() => {
+        resetStores()
+    })
+
+    afterEach(() => {
+        seasonWithTeams = null
+    })
+
+    it('a renamed team with no number in its name wears the stop of its season position', async () => {
+        const renamed = SeasonFactory.defaultCookingTeamDisplay({id: TEAM_ID, name: 'Holdet uden tal'})
+        seasonWithTeams = {...season, id: SEASON_ID, CookingTeams: [
+            SeasonFactory.defaultCookingTeamDisplay({id: 5, name: 'Madhold 1 - S1'}),
+            renamed,
+            SeasonFactory.defaultCookingTeamDisplay({id: 7, name: 'Madhold 3 - S1'})
+        ]}
+        const wrapper = await mountCard('regular', {name: renamed.name})
+        await usePlanStore().loadSeasons()
+
+        await vi.waitFor(() => expect(findAllByTestId(wrapper, 'calendar-legend-badge')[0]?.classes())
+            .toEqual(expect.arrayContaining(classesOf(getRainbowBand(1)))))
     })
 })

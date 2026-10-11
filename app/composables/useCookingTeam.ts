@@ -36,7 +36,7 @@ export const tryAutoClaim = async <T>(
 /**
  * Business logic for working with cooking teams
  *
- * A team's colour is not here: it is the brand rainbow stop of the team's number, which a
+ * A team's colour is not here: it is the brand rainbow stop of the team's number (`getTeamNumber`), which a
  * consumer takes from `getRainbowBand` in the design system (ADR-017, ADR-018).
  */
 export const useCookingTeam = () => {
@@ -54,6 +54,13 @@ export const useCookingTeam = () => {
         const match = teamName.match(/(\d+)/)
         return match ? parseInt(match[1]!, 10) : null
     }
+
+    /**
+     * A team's number: the one in its name, else its position in the season's full team list + 1, else 1.
+     * Names are free text, so every site passes the same season list to agree on the fallback.
+     */
+    const getTeamNumber = (team: Pick<CookingTeamDisplay, 'id' | 'name'>, seasonTeams: Array<Pick<CookingTeamDisplay, 'id'>>): number =>
+        extractTeamNumber(team.name) ?? (seasonTeams.findIndex(seasonTeam => seasonTeam.id === team.id) + 1 || 1)
 
     /**
      * Get a compact short name for display in badges and tight UI spaces
@@ -165,6 +172,7 @@ export const useCookingTeam = () => {
         CookingTeamSchema,
         createDefaultTeamName,
         extractTeamNumber,
+        getTeamNumber,
         countChefs,
         getTeamShortName,
         formatRoleClaimedTitle,

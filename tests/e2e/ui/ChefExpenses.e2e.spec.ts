@@ -12,8 +12,9 @@ const {TeamRoleSchema} = useCookingTeamValidation()
 const {formatPrice} = useTicket()
 
 /**
- * The chef enters grocery lines in the budget pane: the line appears with the ex moms amount typed, Brugt follows,
- * slet removes it, and the API holds the same lines. The member is the team's CHEF; the admin sets the data up.
+ * The chef opens the Madbestilling row, enters a grocery line: it appears with the ex moms amount typed, Brugt in the
+ * hint follows, slet removes it, Tilbage folds the row, and the API holds the same lines. The member is the team's CHEF;
+ * the admin sets the data up.
  */
 test.describe('Chef expense lines', () => {
     let teamId: number
@@ -57,20 +58,20 @@ test.describe('Chef expense lines', () => {
         await gotoHydrated(page, `/chef?team=${teamId}&date=${formatDate(dinnerDate)}`)
         await expect(page.getByTestId('chef-menu-title'), `dinner ${dinnerEventId} on view`).toHaveText(menuTitle)
 
-        // The lines sit beside the menu and allergen edits, outside the Budget chevron
+        // The row sits beside the menu and allergen edits, folded to its total; the editor opens behind its button
         const pane = page.getByTestId('expense-lines')
-        await expect(pane).toBeVisible()
-        await expect(pane.getByTestId('expense-spent')).toContainText(`/ ${formatPrice(0)} kr`)
+        await expect(pane.getByTestId('expense-empty')).toHaveText('Madbestilling mangler')
+        await pane.getByTestId('expense-edit').click()
 
         await page.locator('input[name="expense-amount-input"]').fill('1012')
         await page.getByTestId('expense-add').click()
 
         const line = pane.getByTestId('expense-line')
         await expect(line).toHaveCount(1)
-        // Typed ex moms, stored gross, read in both units
+        // Typed ex moms, stored gross, read in both units; Brugt in the hint follows
         await expect(line.first().getByTestId('vat-amount-ex')).toHaveText(formatPrice(101200))
         await expect(line.first().getByTestId('vat-amount-incl')).toHaveText(`/ ${formatPrice(126500)} kr`)
-        await expect(pane.getByTestId('expense-spent')).toContainText(`/ ${formatPrice(126500)} kr`)
+        await expect(pane.getByTestId('expense-hint')).toContainText(`/ ${formatPrice(126500)} kr`)
 
         const stored = await ExpenseFactory.list(memberContext, dinnerEventId)
         expenseIds.push(...stored.map(expense => expense.id))
@@ -78,7 +79,8 @@ test.describe('Chef expense lines', () => {
 
         await line.first().getByTestId('expense-remove').click()
         await expect(pane.getByTestId('expense-line')).toHaveCount(0)
-        await expect(pane.getByTestId('expense-spent')).toContainText(`/ ${formatPrice(0)} kr`)
+        await pane.getByTestId('expense-back').click()
+        await expect(pane.getByTestId('expense-empty')).toHaveText('Madbestilling mangler')
         expect(await ExpenseFactory.list(memberContext, dinnerEventId)).toEqual([])
     })
 })

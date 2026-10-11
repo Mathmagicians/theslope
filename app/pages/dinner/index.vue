@@ -94,6 +94,7 @@ const {
   isSelectedDinnerEventLoading: isDinnerDetailLoading,
   isSelectedDinnerEventErrored: isDinnerDetailError
 } = storeToRefs(bookingsStore)
+const {getTeamNumber} = useCookingTeam()
 
 // The team card reads the dinner's cooking team from the plan store
 planStore.selectTeam(() => dinnerEventDetail.value?.cookingTeamId ?? null)
@@ -268,9 +269,9 @@ useHead({
       <template #team>
         <template v-if="dinnerEventDetail">
           <CookingTeamCard
-            v-if="dinnerEventDetail.cookingTeamId"
+            v-if="dinnerEventDetail.cookingTeamId && dinnerEventDetail.cookingTeam"
             :team-id="dinnerEventDetail.cookingTeamId"
-            :team-number="dinnerEventDetail.cookingTeamId"
+            :team-number="getTeamNumber(dinnerEventDetail.cookingTeam, selectedSeason?.CookingTeams ?? [])"
             mode="monitor"
             use-short-name
           />

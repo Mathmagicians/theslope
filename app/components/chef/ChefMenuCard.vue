@@ -58,6 +58,9 @@
  * │ (allergy) ALLERGENER 3,5 kuv. | (milk) Mælk · 2,5  [Rediger allergener]  │
  * │   the editor: AllergenMultiSelector on this dinner's tickets             │
  * ├──────────────────────────────────────────────────────────────────────────┤
+ * │ (cart) MADBESTILLING  1.310 / 1.638 kr        [Rediger madbestilling]    │
+ * │   the editor: ExpenseLines with the helping numbers and the lines        │
+ * ├──────────────────────────────────────────────────────────────────────────┤
  * │ ●━━━━━━━━○━━━━━━━━○━━━━━━━━○━━━━━━━━○                                    │
  * │ PLANLAGT  ANNONCERET  BOOKING   INDKØB    AFHOLDT                        │
  * ├──────────────────────────────────────────────────────────────────────────┤
@@ -160,7 +163,6 @@ const { formatNameWithInitials } = useHousehold()
 const { calculateBudget } = useOrder()
 const kitchenConfig = useAppConfig().theslope?.kitchen
 const budget = computed(() => calculateBudget(props.dinnerEvent.tickets ?? [], kitchenConfig?.baseRatePercent ?? 5, kitchenConfig?.vatPercent ?? 25))
-const leftThisDinner = computed(() => budget.value.availableBudget - sumAmounts(props.dinnerEvent.expenses))
 // The round's figure matters when the team cooks several days in a row
 const leftRound = computed(() => props.roundRows.length > 1
   ? {label: props.roundLabel, gross: props.roundRows.reduce((sum, row) => sum + row.budgetGross - row.spentGross, 0)}
@@ -608,12 +610,12 @@ const handleCardClick = () => {
       <!-- ========== ALLERGEN SECTION ========== -->
       <div v-if="showAllergens && allergyTypes.length > 0" :class="COMPONENTS.chefMenuCard.section">
         <!-- The allergen line: the menu's allergens on this dinner's diners, Rediger allergener in EDIT mode -->
-        <div v-if="!isEditingAllergens" data-testid="chef-allergen-line" :class="COMPONENTS.chefMenuCard.allergenRow">
-          <span data-testid="chef-allergen-label" :class="COMPONENTS.chefMenuCard.allergenLabel">
-            <UIcon :name="ICONS.allergy" :class="COMPONENTS.chefMenuCard.allergenGlyph" />
+        <div v-if="!isEditingAllergens" data-testid="chef-allergen-line" :class="COMPONENTS.cardSection.row">
+          <span data-testid="chef-allergen-label" :class="COMPONENTS.cardSection.label">
+            <UIcon :name="ICONS.allergy" :class="COMPONENTS.cardSection.glyph" />
             Allergener
           </span>
-          <div :class="COMPONENTS.chefMenuCard.allergenLine">
+          <div :class="COMPONENTS.cardSection.line">
             <AllergyOverviewLine
               v-if="menuAllergenOverview.breakdownByAllergen.length > 0"
               data-testid="chef-allergen-overview"
@@ -639,9 +641,9 @@ const handleCardClick = () => {
         </div>
 
         <!-- EDIT allergens: title + form-footer buttons (DS configs, mobile-stacked), then selector -->
-        <div v-else :class="COMPONENTS.chefMenuCard.allergenEditor">
-          <div :class="COMPONENTS.chefMenuCard.allergenEditorHead">
-            <h4 :class="COMPONENTS.chefMenuCard.allergenEditorTitle">Allergener i menuen</h4>
+        <div v-else :class="COMPONENTS.cardSection.editor">
+          <div :class="COMPONENTS.cardSection.editorHead">
+            <h4 :class="COMPONENTS.cardSection.editorTitle">Allergener i menuen</h4>
             <div :class="LAYOUTS.formButtonRow">
               <UButton v-bind="BUTTONS.cancel" data-testid="cancel-allergens-edit" @click="handleAllergenCancel">Annuller</UButton>
               <UButton v-bind="BUTTONS.save" :color="HERO_BUTTON.primaryButton" data-testid="save-allergens-edit" @click="handleAllergenSave">Gem</UButton>
@@ -655,15 +657,19 @@ const handleCardClick = () => {
         </div>
       </div>
 
-      <!-- ========== INDKØBSOMKOSTNINGER (showStateControls only): the chef's grocery lines, beside the other edits ========== -->
+      <!-- ========== MADBESTILLING (showStateControls only): the chef's grocery lines as a section row, beside the other edits ========== -->
       <div v-if="showStateControls" :class="COMPONENTS.chefMenuCard.section" data-testid="chef-expenses-section">
         <ExpenseLines
           :expenses="dinnerEvent.expenses"
-          title="Indkøbsomkostninger"
+          title="Madbestilling"
           hint="Hvad kostede indkøbene?"
+          empty-text="Madbestilling mangler"
+          edit-label="Rediger madbestilling"
+          :glyph="ICONS.shoppingCart"
+          :color="HERO_BUTTON.primaryButton"
           :editable="isEditing"
           :pending="isUpdating"
-          :left-this-dinner="leftThisDinner"
+          :budget-gross="budget.availableBudget"
           :left-round="leftRound"
           @add="emit('add-expense', $event)"
           @remove="emit('remove-expense', $event)"

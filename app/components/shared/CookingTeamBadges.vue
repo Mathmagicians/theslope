@@ -54,6 +54,7 @@ const badgeSize = computed(() => ({small: SIZES.small, standard: SIZES.standard,
     <UBadge
       v-if="showName"
       :class="teamBand"
+      data-testid="team-badge-name"
       :size="badgeSize"
       :icon="showTeamIcon ? ICONS.team : undefined"
     >

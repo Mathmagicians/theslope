@@ -5,6 +5,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
+import {getRainbowBand} from '~/composables/useTheSlopeDesignSystem'
 
 const {adminUIFile} = authFiles
 const {validatedBrowserContext, pollUntil, doScreenshot, gotoHydrated} = testHelpers
@@ -293,6 +294,24 @@ test.describe('AdminTeams Form UI', () => {
             await page.getByTestId(`team-row-${alpha.id}`).click()
             await expect(teamInput).toBeHidden()
             await expect(page).not.toHaveURL(/team=/)
+        })
+
+        test('GIVEN a season whose teams were created out of order WHEN viewing the teams THEN each row wears the stop of the number in its name', async () => {
+            // GIVEN: "Madhold 3" created before "Madhold 1", so list position and number differ
+            const created: Array<{number: number, team: Awaited<ReturnType<typeof SeasonFactory.createCookingTeamForSeason>>}> = []
+            for (const number of [3, 1]) {
+                created.push({number, team: await SeasonFactory.createCookingTeamForSeason(context, season.id!, `Madhold ${number}`)})
+            }
+
+            await gotoHydrated(page, `${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
+            await expect(page.locator('[data-testid^="team-row-"]')).toHaveCount(created.length)
+
+            // THEN: each row's name badge wears the rainbow stop of its number
+            for (const {number, team} of created) {
+                const nameBadge = page.getByTestId(`team-row-${team.id}`).getByTestId('team-badge-name')
+                await expect(nameBadge).toContainText(`Madhold ${number}`)
+                await expect(nameBadge).toContainClass(getRainbowBand(number - 1))
+            }
         })
 
         test('GIVEN user in edit mode WHEN adding a member to a team THEN the assignment is saved', async ({browser: _browser}) => {

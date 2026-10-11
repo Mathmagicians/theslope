@@ -32,6 +32,7 @@ import type { CookingTeamDisplay } from '~/composables/useCookingTeamValidation'
 interface Props {
   modelValue?: number | null
   teams: CookingTeamDisplay[]
+  seasonTeams: CookingTeamDisplay[] // The season's full team list: the number fallback for a team whose name carries none
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -44,7 +45,7 @@ const emit = defineEmits<{
 
 // Design system
 const { SIZES, ORIENTATIONS, ICONS, ALERTS, COMPONENTS } = useTheSlopeDesignSystem()
-const { getTeamShortName } = useCookingTeam()
+const { getTeamShortName, getTeamNumber } = useCookingTeam()
 
 // Tab orientation using design system helper:
 // - Fewer than 3 teams: always horizontal (fits nicely in a row)
@@ -72,7 +73,8 @@ const selectedTeamIndex = computed({
 const teamTabs = computed(() => {
   return props.teams.map((team, index) => ({
     label: getTeamShortName(team.name),
-    value: index
+    value: index,
+    teamNumber: getTeamNumber(team, props.seasonTeams)
   }))
 })
 </script>
@@ -103,10 +105,10 @@ const teamTabs = computed(() => {
       :size="SIZES.large"
     >
       <template #default="{ item }">
-        <span class="flex flex-col items-center gap-1 md:flex-row md:gap-2">
-          <UIcon :name="ICONS.team" class="shrink-0" />
+        <span :class="COMPONENTS.myTeamSelector.tab">
+          <UIcon :name="ICONS.team" :class="COMPONENTS.myTeamSelector.icon" />
           <CookingTeamBadges
-            :team-number="item.value + 1"
+            :team-number="item.teamNumber"
             :team-name="item.label"
             :show-counts="false"
             :show-team-icon="false"

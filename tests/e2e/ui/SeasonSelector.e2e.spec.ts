@@ -98,9 +98,6 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
 
         // Verify URL was updated with active season
         await expect.poll(() => page.url(), {timeout: 15000}).toContain(`season=${encodeURIComponent(activeSeason.shortName)}`)
-
-        // Take screenshot showing auto-selection
-        await doScreenshot(page, 'admin/season-selector-auto-select-active', true)
     })
 
     test('GIVEN active season selected WHEN opening dropdown THEN shows all seasons with status indicators', async ({page}) => {
@@ -109,9 +106,6 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
 
         const seasonSelector = page.getByTestId('season-selector')
         await expect(seasonSelector).toContainText('🟢')
-
-        // Take screenshot showing season selector with active season
-        await doScreenshot(page, 'admin/season-selector-with-active-season', true)
 
         // Click to open dropdown
         await seasonSelector.click()
@@ -155,9 +149,6 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         // THEN: Future season should be selected
         await expect(seasonSelector).toContainText(futureSeason.shortName)
         await expect(seasonSelector).toContainText('🌱')
-
-        // Take screenshot showing future season selected
-        await doScreenshot(page, 'admin/season-selector-future-season-selected', true)
 
         // Verify URL updated
         await expect.poll(() => page.url(), {timeout: 15000}).toContain(`season=${encodeURIComponent(futureSeason.shortName)}`)
@@ -209,8 +200,5 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
 
         // Verify status text
         await expect(page.getByText('Aktiv sæson 🟢')).toBeVisible()
-
-        // Take screenshot
-        await doScreenshot(page, 'admin/season-status-display-active-season', true)
     })
 })

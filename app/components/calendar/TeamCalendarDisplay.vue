@@ -5,7 +5,7 @@
  * Features:
  * - Calendar view: Shows team assignments on calendar with colored badges
  * - Selection support: Click to select dinner event (optional via emit)
- * - Multi-team support: team n wears rainbow stop n (`getRainbowBand`); team 9 repeats team 1
+ * - Multi-team support: a team wears the rainbow stop of its number (`getTeamNumber` over the season's teams, `getRainbowBand`); the stops repeat after the last
  * - Holiday awareness: Displays holidays as green rings
  *
  * Uses BaseCalendar for consistent calendar structure.
@@ -24,6 +24,7 @@ import { isSameDay } from 'date-fns'
 interface Props {
   seasonDates: DateRange
   teams: CookingTeamDisplay[]
+  seasonTeams: CookingTeamDisplay[] // The season's full team list: the number fallback for a team whose name carries none
   dinnerEvents: DinnerEventDisplay[]
   holidays?: DateRange[]
   selectedDinnerId?: number | null // For chef page selection
@@ -43,10 +44,12 @@ const emit = defineEmits<{
 const {createEventList} = useCalendarEvents()
 const {getHolidayDatesFromDateRangeList} = useSeason()
 const {CALENDAR, dayCircleClasses, getRainbowBand, SIZES} = useTheSlopeDesignSystem()
+const {getTeamNumber} = useCookingTeam()
+const teamBandIndex = (team: CookingTeamDisplay) => getTeamNumber(team, props.seasonTeams) - 1
 
-// Legend: team n wears rainbow stop n, then the holiday ring when the season has holidays
+// Legend: each team wears the rainbow stop of its number, then the holiday ring when the season has holidays
 const legendItems = computed((): CalendarLegendItem[] => [
-  ...props.teams.map((team, index) => ({label: team.name, kind: 'badge' as const, badgeClass: getRainbowBand(index)})),
+  ...props.teams.map(team => ({label: team.name, kind: 'badge' as const, badgeClass: getRainbowBand(teamBandIndex(team))})),
   ...(props.holidays && props.holidays.length > 0
     ? [{label: 'Ferie', kind: 'circle' as const, circleClass: dayCircleClasses(CALENDAR.holiday)}]
     : [])
@@ -60,7 +63,7 @@ const holidayDates = computed(() => {
 
 // Transform team assignments into event lists (one per team for color coding)
 const teamEventLists = computed(() => {
-  return props.teams.map((team, teamIndex) => {
+  return props.teams.map(team => {
     // Filter events for this team
     const teamEvents = props.dinnerEvents
       .filter(event => event.cookingTeamId === team.id)
@@ -68,7 +71,7 @@ const teamEventLists = computed(() => {
 
     return createEventList(teamEvents, `team-${team.id}`, 'badge', {
       label: team.name,
-      color: teamIndex,
+      color: teamBandIndex(team),
       metadata: { teamId: team.id, teamName: team.name }
     })
   })
@@ -129,6 +132,7 @@ const getCalendarDayClasses = (day: DateValue) => [
           >
             <UBadge
               :size="SIZES.md"
+              data-testid="team-calendar-day"
               :class="[getRainbowBand(getTeamEventList(eventLists)!.color as number), ...getCalendarDayClasses(day)]"
               @click="handleCalendarDayClick(day)"
             >

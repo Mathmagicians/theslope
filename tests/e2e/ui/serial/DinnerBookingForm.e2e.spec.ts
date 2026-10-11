@@ -180,8 +180,6 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
             expect(o.dinnerMode).toBe(DinnerMode.DINEIN)
             expect(o.state).toBe(OrderState.BOOKED)
         })
-
-        await doScreenshot(page, 'dinner/booking-form-power-mode', true)
     })
 
     test('GIVEN guest row WHEN user adds guest ticket THEN guest order is created', async ({page}) => {

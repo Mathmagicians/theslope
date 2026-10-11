@@ -11,7 +11,7 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {usePlanStore} from '~/stores/plan'
 import {useAuthStore} from '~/stores/auth'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
-import {COMPONENTS} from '~/composables/useTheSlopeDesignSystem'
+import {COMPONENTS, getRainbowBand, getRainbowAccent} from '~/composables/useTheSlopeDesignSystem'
 
 // The test environment has no router to navigate: useEntityFormManager and useQueryParam
 // write the URL state through navigateTo (ADR-006 / ADR-008)
@@ -165,5 +165,44 @@ describe('AdminTeams team selection', () => {
 
         await clickByTestId(wrapper, `team-row-${team.id}`)
         await vi.waitFor(() => expect(mockRoute.query.team).toBeUndefined())
+    })
+})
+
+// A team's number is the one in its name, else its position in the season's teams; a row's badges and its
+// selection accent wear the rainbow stop of that number, whatever order the season lists the teams in
+describe('AdminTeams team colours', () => {
+    const seasonTeams = [
+        SeasonFactory.defaultCookingTeamDisplay({id: 41, name: 'Madhold 3 - S1'}),
+        SeasonFactory.defaultCookingTeamDisplay({id: 42, name: 'Holdet uden tal'}),
+        SeasonFactory.defaultCookingTeamDisplay({id: 43, name: 'Madhold 1 - S1'})
+    ]
+    const numbered = seasonTeams.map((team, position) => ({id: team.id!, name: team.name, number: [3, 2, 1][position]!}))
+    seasonTeams.forEach(team =>
+        registerEndpoint(`/api/admin/team/${team.id}`, () => SeasonFactory.defaultCookingTeamDetail({id: team.id, name: team.name})))
+
+    beforeEach(() => {
+        setActivePinia(createPinia())
+        clearNuxtData()
+        vi.clearAllMocks()
+        seasonByIdEndpoint.mockReturnValue({...season, CookingTeams: seasonTeams})
+        mockNavigateTo.mockImplementation(landNavigation)
+    })
+
+    afterEach(() => {
+        mockNavigateTo.mockReset()
+        mockRoute.query = {}
+    })
+
+    it.each(numbered)('the row of "$name" wears the stop of number $number', async ({id, number}) => {
+        const wrapper = await mountTeams()
+        const badge = wrapper.find(`[data-testid="team-row-${id}"] [data-testid="team-badge-name"]`)
+        expect(badge.classes()).toEqual(expect.arrayContaining(getRainbowBand(number - 1).split(' ')))
+    })
+
+    it.each(numbered)('selecting "$name" accents its row with the stop of number $number', async ({id, number}) => {
+        const wrapper = await mountTeams()
+        await clickByTestId(wrapper, `team-row-${id}`)
+        await vi.waitFor(() => expect(wrapper.find(`[data-testid="team-row-${id}"]`).classes())
+            .toEqual(expect.arrayContaining(getRainbowAccent(number - 1).split(' '))))
     })
 })

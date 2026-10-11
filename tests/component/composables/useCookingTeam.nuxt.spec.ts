@@ -41,6 +41,22 @@ describe('useCookingTeam', () => {
     })
   })
 
+  describe('getTeamNumber', () => {
+    const { getTeamNumber, getDefaultCookingTeam } = useCookingTeam()
+    // Listed out of number order, so a position-derived number differs from the named one
+    const seasonTeams = [3, 1, 2].map(n => getDefaultCookingTeam(1, 'S1', n, { id: 10 + n }))
+    const unnumbered = (id: number) => getDefaultCookingTeam(1, 'S1', 1, { id, name: 'Holdet uden tal' })
+
+    it.each([
+      { team: seasonTeams[0]!, teams: seasonTeams, expected: 3, description: 'number in the name, listed first' },
+      { team: seasonTeams[1]!, teams: seasonTeams, expected: 1, description: 'number in the name, listed second' },
+      { team: unnumbered(20), teams: [...seasonTeams, unnumbered(20)], expected: 4, description: 'no number: position in the season list + 1' },
+      { team: unnumbered(30), teams: seasonTeams, expected: 1, description: 'no number and outside the season list' }
+    ])('gives $expected ($description)', ({ team, teams, expected }) => {
+      expect(getTeamNumber(team, teams)).toBe(expected)
+    })
+  })
+
   describe('countChefs', () => {
     const { countChefs } = useCookingTeam()
     const { TeamRoleSchema } = useCookingTeamValidation()

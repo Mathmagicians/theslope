@@ -885,6 +885,12 @@ export const COMPONENTS = {
         }
     },
 
+    /** MyTeamSelector tab body: the team icon above the badge on phone, beside it on desktop */
+    myTeamSelector: {
+        tab: 'flex flex-col items-center gap-1 md:flex-row md:gap-2',
+        icon: 'shrink-0'
+    },
+
     /**
      * `UCollapsible` - the panel a separate toggle opens and closes; the toggle binds `BUTTONS.flipOpen(isOpen)`.
      * The trigger stays outside the collapsible, so the panel's header may hold its own controls.
@@ -985,7 +991,7 @@ export const COMPONENTS = {
         guestProvenance: 'flex flex-wrap items-center gap-1 mt-1 ml-10 md:ml-11',
         // A guest order's name cell: the add-guest row's disc, label and gap, so both rows share their x
         guestOf: 'flex items-center gap-3',
-        guestOfLabel: TYPOGRAPHY.bodyTextMedium,
+        guestOfLabel: `${TYPOGRAPHY.bodyTextMedium} uppercase`,
         allergyLine: 'flex flex-wrap items-center gap-2'
     },
 
@@ -1314,39 +1320,38 @@ export const COMPONENTS = {
         summaryTotalRow: `flex justify-between pt-2 border-t ${TYPOGRAPHY.bodyTextMedium} font-semibold`,
         summaryTotal: 'text-success-700 dark:text-success-400',
         boxUnit: `${TYPOGRAPHY.finePrint} opacity-60`,
-        boxLine: `flex items-center justify-between gap-2 ${TYPOGRAPHY.bodyTextSmall}`,
+        boxLine: `flex items-center justify-between gap-2 whitespace-nowrap ${TYPOGRAPHY.bodyTextSmall}`,
         section: 'border-t p-4 space-y-2',
         sectionTitle: TYPOGRAPHY.sectionSubheading,
         unitHeader: `flex justify-end ${TYPOGRAPHY.finePrint} opacity-60`
     },
 
     /**
-     * The grocery lines behind a cost (ExpenseLines): the entry row on top, then one grid per line (date, note,
-     * amount, remove) so every amount and every remove button share a column
-     */
-    /**
      * One amount in both units (VatAmount): the ex moms figure in the row's weight, the slash and the inkl. moms half
      * in fine print; a balance adds its sign, reads red below zero, and carries the check or the exclamation icon
      */
     vatAmount: {
-        root: 'inline-flex items-baseline gap-1 whitespace-nowrap tabular-nums',
-        incl: `${TYPOGRAPHY.finePrint} opacity-60`,
+        // Fixed columns for the ex figure, the inkl. half and the icon slot, so kr lines up down a column of amounts
+        root: 'inline-grid grid-cols-[minmax(3.75rem,max-content)_minmax(4.5rem,max-content)_1rem] items-baseline gap-x-1 whitespace-nowrap tabular-nums',
+        ex: 'text-right',
+        incl: `${TYPOGRAPHY.finePrint} opacity-60 text-right`,
         over: 'text-error-700 dark:text-error-400',
-        icon: 'size-4 self-center',
+        iconSlot: 'inline-flex justify-center self-center',
+        icon: 'size-4',
         iconOk: 'text-success-700 dark:text-success-400',
         iconOver: 'text-error-700 dark:text-error-400',
         unitHeader: `${TYPOGRAPHY.finePrint} opacity-60`
     },
 
     /**
-     * The grocery lines behind a cost (ExpenseLines): the helping numbers, the entry row, then one grid per line
-     * (date, bestiller, amount in both units, remove) so every amount and every remove button share a column
+     * The grocery lines behind a cost (ExpenseLines), open: the helping numbers one row each with the amount at the
+     * right, the entry row, then one grid per line (date, bestiller, amount in both units, remove) so every amount
+     * and every remove button share a column. Folded, the row binds cardSection
      */
     expenseLines: {
-        title: `${TYPOGRAPHY.sectionSubheading} uppercase`,
-        stack: 'space-y-3',
-        helpers: `flex flex-col md:flex-row md:items-center gap-1 md:gap-6 ${TYPOGRAPHY.bodyTextSmall}`,
-        helper: 'inline-flex items-center gap-2',
+        // The hint rows share the lines' grid, the label over the date and bestiller columns, so kr lines up with the lines
+        hint: 'space-y-0.5',
+        hintLabel: `col-span-2 ${TYPOGRAPHY.bodyTextSmall}`,
         form: 'space-y-1',
         formRow: 'flex flex-col md:flex-row md:items-start gap-2',
         amountField: 'w-full md:w-32',
@@ -1354,14 +1359,15 @@ export const COMPONENTS = {
         control: 'w-full',
         alternative: `${TYPOGRAPHY.finePrint} opacity-60`,
         list: 'divide-y',
-        row: 'grid grid-cols-[3rem_1fr_11rem_2.25rem] items-center gap-2 py-1',
+        row: 'grid grid-cols-[3rem_1fr_auto_2.25rem] items-center gap-2 py-1',
         head: `${TYPOGRAPHY.caption} opacity-60`,
         headRight: `${TYPOGRAPHY.caption} opacity-60 text-right`,
         date: `${TYPOGRAPHY.finePrint} opacity-60`,
-        payer: `${TYPOGRAPHY.bodyTextSmall} truncate`,
+        // The name wraps on a phone, where the amount columns leave it little room, and truncates beside them on a desktop
+        payer: `${TYPOGRAPHY.bodyTextSmall} break-words md:truncate`,
         amount: 'justify-self-end',
         removeSlot: 'w-9',
-        total: `${TYPOGRAPHY.bodyTextMedium}`
+        empty: TEXT.muted
     },
 
     /**
@@ -1399,6 +1405,21 @@ export const COMPONENTS = {
         moreRow: 'flex justify-center py-2'
     },
 
+    /**
+     * A section of the chef card (Allergener, Madbestilling): one row with the glyph inside the title, the content
+     * line and the edit button at the right; the editor it opens heads with its title and the footer buttons
+     */
+    cardSection: {
+        row: 'flex flex-col md:flex-row md:items-center gap-2',
+        label: `${TYPOGRAPHY.sectionSubheading} uppercase inline-flex items-center gap-1`,
+        // The leading glyph takes the title's ink and its font size
+        glyph: 'size-[1em]',
+        line: `${TYPOGRAPHY.bodyTextSmall} md:flex-1`,
+        editor: 'space-y-4',
+        editorHead: 'flex flex-col gap-2 md:flex-row md:items-center',
+        editorTitle: `${TYPOGRAPHY.sectionSubheading} md:flex-1`
+    },
+
     chefMenuCard: {
         compactUi: (selected: boolean) => ({
             root: `${CALENDAR.selection.card.base} ${selected ? CHEF_CALENDAR.selection : ''}`,
@@ -1413,14 +1434,6 @@ export const COMPONENTS = {
         compactBudget: 'text-sm font-medium shrink-0',
         stack: 'space-y-6',
         section: 'pt-4 border-t',
-        allergenRow: 'flex flex-col md:flex-row md:items-center gap-2',
-        allergenLabel: `${TYPOGRAPHY.sectionSubheading} uppercase inline-flex items-center gap-1`,
-        // The leading glyph takes the title's ink and its font size
-        allergenGlyph: 'size-[1em]',
-        allergenLine: `${TYPOGRAPHY.bodyTextSmall} md:flex-1`,
-        allergenEditor: 'space-y-4',
-        allergenEditorHead: 'flex flex-col gap-2 md:flex-row md:items-center',
-        allergenEditorTitle: `${TYPOGRAPHY.sectionSubheading} md:flex-1`,
         form: 'space-y-4',
         field: 'w-full'
     }
@@ -1828,6 +1841,16 @@ const createResponsiveButtons = (isMd: Ref<boolean>) => {
                 color: 'neutral' as const,
                 variant: 'ghost' as const,
                 icon: ICONS.xMark,
+                size: sizes.large
+            }
+        },
+
+        // Back - closes an editor whose lines save as they are added (ExpenseLines): nothing to keep or discard
+        get back() {
+            return {
+                color: 'neutral' as const,
+                variant: 'ghost' as const,
+                icon: ICONS.arrowLeft,
                 size: sizes.large
             }
         },
@@ -2537,10 +2560,9 @@ export const EMPTY_STATE_MESSAGES = {
         { emoji: '🌫️', text: 'Den middag er vist gået op i damp og røg' }
     ],
     noAllergens: [
-        { emoji: '🥗', text: 'Menuen er fri for allergener - alle kan spise med' },
         { emoji: '🍀', text: 'Allergenerne fik ikke plads på menuen i dag' },
         { emoji: '😋', text: 'Ingen allergener på menuen - spis løs!' },
-        { emoji: '🧑‍🍳', text: 'Kokken har holdt allergenerne uden for køkkenet' }
+        { emoji: '🧑‍🍳', text: 'Kokken har ikke købt noget med allergener i' }
     ],
     seasonGone: [
         { emoji: '📅', text: 'Sæsonen er pakket sammen og sat op på loftet' },

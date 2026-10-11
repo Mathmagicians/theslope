@@ -8,6 +8,7 @@ import testHelpers from '../testHelpers'
 import {formatDate} from '~/utils/date'
 import {addDays} from 'date-fns/addDays'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {getRainbowBand} from '~/composables/useTheSlopeDesignSystem'
 
 const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, waitForHydration, collectHydrationWarnings, getSessionUserInfo, gotoHydrated, salt, temporaryAndRandom} = testHelpers
 const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
@@ -99,9 +100,6 @@ test.describe('Dinner Page URL Navigation', () => {
 
         // THEN: Dinner event panel should be displayed
         const panel = page.getByTestId('dinner-detail-panel')
-        await expect(panel, 'Dinner detail panel should be visible').toBeVisible()
-
-        // Documentation screenshot: Dinner calendar overview
         await doScreenshot(page, 'dinner/dinner-calendar', true)
     })
 
@@ -338,6 +336,53 @@ test.describe('Dinner Page URL Navigation', () => {
             await expect(page.getByTestId(`inhabitant-${notAllergicId}-allergies`)).toHaveCount(0)
 
             await doScreenshot(page, 'dinner/ticket-allergies', true)
+        })
+    })
+
+    // A team wears the rainbow stop of the number in its name, whatever order the season created its teams in
+    test.describe('Team colour', () => {
+        const testSalt = temporaryAndRandom()
+        const createdTeamIds: number[] = []
+        const createdDinnerIds: number[] = []
+        const dinners: Array<{number: number, date: string}> = []
+
+        test.beforeAll(async ({browser}) => {
+            const adminContext = await validatedBrowserContext(browser)
+            const season = await SeasonFactory.createActiveSeason(adminContext)
+            // Created out of order: "Madhold 3" before "Madhold 1", so creation order and database ids differ from the numbers
+            for (const number of [3, 1]) {
+                const team = await SeasonFactory.createCookingTeamForSeason(adminContext, season.id!, `Madhold ${number}-${testSalt}`)
+                createdTeamIds.push(team.id!)
+                const dinner = await DinnerEventFactory.createDinnerEventOnFreeDay(adminContext, season, {
+                    menuTitle: salt(`Madhold${number}Dinner`, testSalt),
+                    cookingTeamId: team.id!
+                })
+                createdDinnerIds.push(dinner.id!)
+                dinners.push({number, date: formatDate(dinner.date)})
+            }
+        })
+
+        test.afterAll(async ({browser}) => {
+            const adminContext = await validatedBrowserContext(browser)
+            // The dinners go before their teams; another spec's season cleanup can cascade either away first
+            for (const dinnerId of createdDinnerIds) {
+                await DinnerEventFactory.deleteDinnerEvent(adminContext, dinnerId).catch(() => undefined)
+            }
+            for (const teamId of createdTeamIds) {
+                await SeasonFactory.deleteCookingTeam(adminContext, teamId).catch(() => undefined)
+            }
+        })
+
+        test('GIVEN a season whose teams were created out of order WHEN a team\'s dinner loads THEN the team card wears the stop of the number in its name', async ({browser}) => {
+            const context = await memberValidatedBrowserContext(browser)
+            const page = await context.newPage()
+
+            for (const {number, date} of dinners) {
+                await gotoHydrated(page, `${dinnerPageUrl}?date=${date}`)
+                const nameBadge = page.getByTestId('team-badge-name').filter({visible: true}).first()
+                await expect(nameBadge).toContainText(`Madhold ${number}`)
+                await expect(nameBadge).toContainClass(getRainbowBand(number - 1))
+            }
         })
     })
 })

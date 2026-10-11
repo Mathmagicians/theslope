@@ -54,7 +54,7 @@ const props = withDefaults(defineProps<Props>(), {
   canEdit: false
 })
 
-const {getDefaultCookingTeam, countChefs, getTeamShortName} = useCookingTeam()
+const {getDefaultCookingTeam, countChefs, getTeamShortName, getTeamNumber} = useCookingTeam()
 
 // Layout breakpoint from the default layout - drives the detail's mount point
 const isMd = inject<Ref<boolean>>('isMd', ref(false))
@@ -153,6 +153,8 @@ const {value: selectedTeamId, setValue: setSelectedTeamParam} = useQueryParam<nu
 // (full-width table + the all-teams calendar); the toggle deselects like a chevron folds
 const selectedTeamIndex = computed(() => displayedTeams.value.findIndex(t => t.id === selectedTeamId.value))
 const selectedTeam = computed(() => displayedTeams.value[selectedTeamIndex.value] ?? null)
+const teamNumberOf = (team: CookingTeamDisplay) => getTeamNumber(team, displayedTeams.value)
+const selectedTeamNumber = computed(() => selectedTeam.value ? teamNumberOf(selectedTeam.value) : 1)
 
 const handleToggleTeam = async (id: number) => {
   if (selectedTeamId.value === id) {
@@ -182,7 +184,7 @@ const expanded = computed({
 // ONE detail, two mount points (desktop pane / mobile expanded row) - shared bindings
 const detailProps = computed(() => ({
   teamId: selectedTeam.value?.id ?? 0,
-  teamNumber: selectedTeamIndex.value + 1,
+  teamNumber: selectedTeamNumber.value,
   seasonId: selectedSeason.value?.id,
   seasonCookingDays: selectedSeason.value?.cookingDays,
   seasonDates: selectedSeason.value?.seasonDates,
@@ -399,12 +401,12 @@ const columns = [
           >
             <template #name-cell="{ row }">
               <div
-                  :class="[COMPONENTS.table.clickableCell, row.original.id === selectedTeamId && getRainbowAccent(displayedTeams.findIndex(t => t.id === row.original.id))]"
+                  :class="[COMPONENTS.table.clickableCell, row.original.id === selectedTeamId && getRainbowAccent(teamNumberOf(row.original) - 1)]"
                   :data-testid="`team-row-${row.original.id}`"
                   @click="handleToggleTeam(row.original.id!)"
               >
                 <CookingTeamBadges
-                    :team-number="displayedTeams.findIndex(t => t.id === row.original.id) + 1"
+                    :team-number="teamNumberOf(row.original)"
                     :team-name="getTeamShortName(row.original.name)"
                     :chef-count="countChefs(row.original.assignments ?? [])"
                     :member-count="row.original.assignments?.length ?? 0"
@@ -428,7 +430,7 @@ const columns = [
               <div :class="[COMPONENTS.masterDetail.dock, 'space-y-2']">
                 <div :class="[COMPONENTS.masterDetail.dockHeader, 'flex items-center justify-between gap-2']">
                   <CookingTeamBadges
-                      :team-number="selectedTeamIndex + 1"
+                      :team-number="selectedTeamNumber"
                       :team-name="getTeamShortName(selectedTeam.name)"
                       :show-counts="false"
                       size="small"
@@ -492,7 +494,7 @@ const columns = [
           <div v-if="isMd && selectedTeam?.id" :class="['md:w-2/3 space-y-4 self-start', COMPONENTS.masterDetail.pane]">
             <div class="flex items-center justify-between gap-2">
               <CookingTeamBadges
-                  :team-number="selectedTeamIndex + 1"
+                  :team-number="selectedTeamNumber"
                   :team-name="getTeamShortName(selectedTeam.name)"
                   :show-counts="false"
               />
@@ -525,6 +527,7 @@ const columns = [
             <TeamCalendarDisplay
                 :season-dates="selectedSeason.seasonDates"
                 :teams="displayedTeams"
+                :season-teams="displayedTeams"
                 :dinner-events="selectedSeason.dinnerEvents ?? []"
                 :holidays="selectedSeason.holidays"
             />

@@ -76,6 +76,12 @@ describe('DinnerBudget', () => {
         expect(findByTestId(wrapper, 'budget-left').find('[data-testid="vat-amount-ok"]').exists()).toBe(true)
     })
 
+    it('GIVEN the box rows WHEN rendering THEN Brugt and Til rådighed both carry the icon slot, so their kr line up', async () => {
+        const wrapper = await mount()
+        expect(findByTestId(wrapper, 'budget-spent').find('[data-testid="vat-amount-slot"]').exists()).toBe(true)
+        expect(findByTestId(wrapper, 'budget-left').find('[data-testid="vat-amount-slot"]').exists()).toBe(true)
+    })
+
     it('GIVEN the chevron closed WHEN rendering THEN no details show', async () => {
         const wrapper = await mount()
         expect(findByTestId(wrapper, 'budget-details').exists()).toBe(false)

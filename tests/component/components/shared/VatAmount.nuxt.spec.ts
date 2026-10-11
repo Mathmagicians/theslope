@@ -40,6 +40,19 @@ describe('VatAmount', () => {
         expect(findByTestId(wrapper, other).exists()).toBe(false)
     })
 
+    it('GIVEN a plain amount WHEN rendering THEN the icon slot is there and empty, so kr lines up with a balance row', async () => {
+        const wrapper = await mount({gross: 178100})
+        const slot = findByTestId(wrapper, 'vat-amount-slot')
+        expect(slot.exists()).toBe(true)
+        expect(slot.text()).toBe('')
+        expect(slot.find('span, svg').exists()).toBe(false)
+    })
+
+    it('GIVEN a balance WHEN rendering THEN the icon sits inside the slot', async () => {
+        const wrapper = await mount({gross: 14300, balance: true})
+        expect(findByTestId(wrapper, 'vat-amount-slot').find('[data-testid="vat-amount-ok"]').exists()).toBe(true)
+    })
+
     it('GIVEN a balance of zero WHEN rendering THEN it reads as in balance', async () => {
         const wrapper = await mount({gross: 0, balance: true})
         expect(findByTestId(wrapper, 'vat-amount-ex').text()).toBe(`+${formatPrice(0)}`)

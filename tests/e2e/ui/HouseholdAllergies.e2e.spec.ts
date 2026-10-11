@@ -5,7 +5,7 @@ import {AllergyFactory} from '../testDataFactories/allergyFactory'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 
 const {memberUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, temporaryAndRandom, getSessionUserInfo, gotoHydrated} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, temporaryAndRandom, getSessionUserInfo, gotoHydrated} = testHelpers
 
 /**
  * E2E UI Tests for HouseholdAllergies
@@ -98,9 +98,6 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
                 (allergies) => allergies.some(a => a.allergyTypeId === allergyType.id),
                 10
             )
-
-            // Documentation screenshot
-            await doScreenshot(page, 'household/household-allergies-add', true)
         } finally {
             // Cleanup: delete allergy type (CASCADE deletes allergies)
             await AllergyFactory.cleanupAllergyTypes(adminContext, [allergyType.id])
@@ -138,9 +135,6 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
                 (allergies) => !allergies.some(a => a.allergyTypeId === allergyType.id),
                 10
             )
-
-            // Documentation screenshot
-            await doScreenshot(page, 'household/household-allergies-remove', true)
         } finally {
             // Cleanup: delete allergy type (CASCADE deletes any remaining allergies)
             await AllergyFactory.cleanupAllergyTypes(adminContext, [allergyType.id])
@@ -189,9 +183,6 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
             )
             const updatedAllergy = allergies.find(a => a.allergyTypeId === allergyType.id)
             expect(updatedAllergy?.inhabitantComment).toBe(testComment)
-
-            // Documentation screenshot
-            await doScreenshot(page, 'household/household-allergies-comment', true)
         } finally {
             // Cleanup: delete allergy type (CASCADE deletes allergies)
             await AllergyFactory.cleanupAllergyTypes(adminContext, [allergyType.id])

@@ -303,9 +303,9 @@ describe('ChefMenuCard', () => {
     })
 })
 
-// ---- Indkøbsomkostninger: the chef's grocery lines sit with the other edits, the Budget pane below ----
+// ---- Madbestilling: the chef's grocery lines sit with the other edits as one row, the editor behind its button ----
 
-describe('ChefMenuCard — Indkøbsomkostninger', () => {
+describe('ChefMenuCard — Madbestilling', () => {
     let deadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
     beforeAll(() => {
         deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason())
@@ -322,16 +322,25 @@ describe('ChefMenuCard — Indkøbsomkostninger', () => {
         global: {provide: {isMd: ref(true)}}
     })
 
-    it('GIVEN the chef\'s card WHEN rendering THEN the lines section sits above the Budget pane and the stepper', async () => {
+    it('GIVEN the chef\'s card WHEN rendering THEN the Madbestilling row sits above the Budget pane and the stepper', async () => {
         const wrapper = await mountChefCard()
         const html = wrapper.html()
         const lines = html.indexOf('data-testid="chef-expenses-section"')
         const budget = html.indexOf('name="toggle-budget-details"')
         expect(lines).toBeGreaterThan(-1)
         expect(budget).toBeGreaterThan(lines)
+        expect(findByTestId(wrapper, 'expense-row').text()).toContain('Madbestilling')
+        expect(findByTestId(wrapper, 'expense-empty').text()).toBe('Madbestilling mangler')
+        expect(findByTestId(wrapper, 'expense-edit').text()).toContain('Rediger madbestilling')
     })
 
-    it('GIVEN a card without state controls WHEN rendering THEN no lines section shows', async () => {
+    it('GIVEN a team member in view mode WHEN rendering THEN the row shows without its button', async () => {
+        const wrapper = await mountChefCard({formMode: FORM_MODES.VIEW})
+        expect(findByTestId(wrapper, 'expense-row').exists()).toBe(true)
+        expect(findByTestId(wrapper, 'expense-edit').exists()).toBe(false)
+    })
+
+    it('GIVEN a card without state controls WHEN rendering THEN no Madbestilling section shows', async () => {
         const wrapper = await mountChefCard({showStateControls: false})
         expect(findByTestId(wrapper, 'chef-expenses-section').exists()).toBe(false)
     })
@@ -345,7 +354,7 @@ describe('ChefMenuCard — Indkøbsomkostninger', () => {
         expect(wrapper.emitted('remove-expense')).toEqual([[9]])
     })
 
-    it('GIVEN a round of several dinners WHEN rendering THEN the lines read the round\'s helping number with its label', async () => {
+    it('GIVEN a round of several dinners WHEN the editor opens THEN the hint reads Rådighedsbeløb and the round with its label', async () => {
         const wrapper = await mountChefCard({
             roundLabel: 'Madhold 2, 12/04–13/04',
             roundRows: [
@@ -353,7 +362,9 @@ describe('ChefMenuCard — Indkøbsomkostninger', () => {
                 {dinnerEventId: 2, date: new Date('2026-04-13T18:00:00'), menuTitle: 'Risotto', isCurrent: false, budgetGross: 10000, spentGross: 0}
             ]
         })
-        expect(findByTestId(wrapper, 'expense-left-round').text()).toContain('Madhold 2, 12/04–13/04')
-        expect(findByTestId(wrapper, 'expense-left-dinner').exists()).toBe(true)
+        await clickByTestId(wrapper, 'expense-edit')
+        const hint = findByTestId(wrapper, 'expense-hint')
+        expect(hint.text()).toContain('Rådighedsbeløb')
+        expect(hint.text()).toContain('Madhold 2, 12/04–13/04')
     })
 })
