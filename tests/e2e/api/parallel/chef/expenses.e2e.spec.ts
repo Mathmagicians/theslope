@@ -88,6 +88,16 @@ test.describe('Chef dinner expenses', () => {
         expect(typeof first!.paidBy.name).toBe('string')
     })
 
+    test('GIVEN two lines WHEN reading the team THEN its dinner carries the sum as its cost', async ({browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
+        const memberContext = await memberValidatedBrowserContext(browser)
+        const dinner = await createDinner(adminContext)
+        await addTwoLines(memberContext, dinner)
+
+        const team = await SeasonFactory.getCookingTeam(adminContext, teamId)
+        expect(team.dinnerEvents.find(event => event.id === dinner.dinnerEventId)?.totalCost).toBe(131000)
+    })
+
     test('GIVEN two lines WHEN reading the dinner THEN Display carries the sum alone and Detail the sum with the lines', async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
         const memberContext = await memberValidatedBrowserContext(browser)

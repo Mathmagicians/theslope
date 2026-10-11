@@ -21,14 +21,14 @@ const rows: CookingRoundRow[] = [
 ]
 
 const mount = (props: Record<string, unknown> = {}) => mountSuspended(CookingRoundSpending, {
-    props: {label: 'Madhold 2, 12/04–14/04', rows, ...props},
+    props: {words: {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, for perioden 12/04–14/04'}, rows, ...props},
     global: {provide: {isMd: ref(true)}}
 })
 
 describe('CookingRoundSpending', () => {
     it('renders the label, one row per dinner in order with date and menu, and marks the current one', async () => {
         const wrapper = await mount()
-        expect(findByTestId(wrapper, 'cooking-round-label').text()).toBe('Madhold 2, 12/04–14/04')
+        expect(findByTestId(wrapper, 'cooking-round-heading').text()).toBe('Hele Madhold 2, for perioden 12/04–14/04')
         const rendered = findAllByTestId(wrapper, 'cooking-round-row')
         expect(rendered).toHaveLength(3)
         rows.forEach((row, index) => {
@@ -53,7 +53,7 @@ describe('CookingRoundSpending', () => {
     it('sums the round into the team\'s total row', async () => {
         const wrapper = await mount()
         const total = findByTestId(wrapper, 'cooking-round-total')
-        expect(total.text()).toContain('Madhold 2')
+        expect(total.text()).toContain('Hele Madhold 2')
         expect(total.text()).toContain(`/ ${formatPrice(178100 + 189000 + 187300)} kr`)
         expect(total.text()).toContain(`/ ${formatPrice(192500 + 174400 + 163800)} kr`)
         expect(total.text()).toContain(`/ +${formatPrice(178100 + 189000 + 187300 - 192500 - 174400 - 163800)} kr`)

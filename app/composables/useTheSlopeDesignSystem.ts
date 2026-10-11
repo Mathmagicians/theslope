@@ -891,6 +891,24 @@ export const COMPONENTS = {
         icon: 'shrink-0'
     },
 
+    /** TeamCalendarDisplay days: a selectable day rings on hover, the selected dinner's day rings in primary */
+    teamCalendar: {
+        selectableDay: 'cursor-pointer hover:ring-2 hover:ring-offset-1',
+        selectedDay: 'ring-2 ring-primary ring-offset-1',
+        plainDay: 'text-sm'
+    },
+
+    /** AdminTeams around `masterDetail`: the dock's stack, the detail header row, the md pane and the overview calendar */
+    adminTeams: {
+        dockStack: 'space-y-2',
+        detailHeaderRow: 'flex items-center justify-between gap-2',
+        pane: 'md:w-2/3 space-y-4 self-start',
+        overviewCalendar: 'w-full md:w-2/3 self-start'
+    },
+
+    /** /chef master header: the team selector above the team's role status */
+    chefTeamStatus: 'space-y-1 md:space-y-4',
+
     /**
      * `UCollapsible` - the panel a separate toggle opens and closes; the toggle binds `BUTTONS.flipOpen(isOpen)`.
      * The trigger stays outside the collapsible, so the panel's header may hold its own controls.
@@ -1707,7 +1725,7 @@ export const IMG = {
  * Creates responsive size getters that work with Vue's reactivity and TypeScript templates.
  * Uses getters to return plain values while maintaining reactivity through isMd dependency.
  */
-export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
+export const createResponsiveSizes = (isMd: Ref<boolean | null>) => ({
     // Standard responsive: md on mobile, lg on desktop
     get standard(): NuxtUISize {
         return isMd.value ? 'lg' : 'md'
@@ -1792,7 +1810,7 @@ export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
  * @param isMd - Responsive breakpoint ref
  * @returns Icon helpers
  */
-const createResponsiveIcons = (isMd: Ref<boolean>) => ({
+const createResponsiveIcons = (isMd: Ref<boolean | null>) => ({
     // Arrow pointing to master panel: up on mobile (stacked), left on desktop (side-by-side)
     get arrowToMaster(): string {
         return isMd.value ? ICONS.arrowLeft : ICONS.arrowUp
@@ -1808,7 +1826,7 @@ const createResponsiveIcons = (isMd: Ref<boolean>) => ({
  * @param isMd - Responsive breakpoint ref
  * @returns Button configuration objects with responsive sizes
  */
-const createResponsiveButtons = (isMd: Ref<boolean>) => {
+const createResponsiveButtons = (isMd: Ref<boolean | null>) => {
     const sizes = createResponsiveSizes(isMd)
     return {
         // Edit/pencil button - for row expand/edit actions
@@ -1841,16 +1859,6 @@ const createResponsiveButtons = (isMd: Ref<boolean>) => {
                 color: 'neutral' as const,
                 variant: 'ghost' as const,
                 icon: ICONS.xMark,
-                size: sizes.large
-            }
-        },
-
-        // Back - closes an editor whose lines save as they are added (ExpenseLines): nothing to keep or discard
-        get back() {
-            return {
-                color: 'neutral' as const,
-                variant: 'ghost' as const,
-                icon: ICONS.arrowLeft,
                 size: sizes.large
             }
         },
@@ -1919,6 +1927,16 @@ const createResponsiveButtons = (isMd: Ref<boolean>) => {
             }
         },
 
+        // History toggle - a quiet square icon beside the thing it reveals (order history, ticket changes):
+        // the clipboard while closed, the chevron up while open. The site names it with an `aria-label`
+        history: (isOpen: boolean) => ({
+            icon: isOpen ? ICONS.chevronUp : ICONS.clipboard,
+            color: COLOR.neutral,
+            variant: NOISE.quiet,
+            square: true,
+            size: sizes.small
+        }),
+
         /**
          * Modifier for a button that opens a panel below it: a chevron that turns while the panel is open, and
          * `aria-expanded` for screen readers. Spread after a kind: `v-bind="{...BUTTONS.settings, ...BUTTONS.flipOpen(isOpen)}"`
@@ -1968,7 +1986,7 @@ const alertUi = (extra: Partial<AlertUi> = {}): AlertUi => ({
  *
  * @param isMd - Responsive breakpoint ref
  */
-export const createResponsiveAlerts = (isMd: Ref<boolean>) => ({
+export const createResponsiveAlerts = (isMd: Ref<boolean | null>) => ({
     /** Prose, banners, "how this works" */
     info: {color: 'info', variant: 'subtle', icon: ICONS.info, ui: alertUi()} satisfies AlertKindConfig,
 
@@ -2043,7 +2061,7 @@ export type AlertKind = Exclude<keyof ResponsiveAlerts, 'withActions' | 'withCor
  * @param isMd - Responsive breakpoint ref
  * @returns Orientation helpers
  */
-const createOrientations = (isMd: Ref<boolean>) => ({
+const createOrientations = (isMd: Ref<boolean | null>) => ({
     /**
      * Responsive orientation: vertical on mobile, horizontal on desktop
      * Common for button groups, weekday selectors showing multiple items
@@ -2086,7 +2104,7 @@ const createOrientations = (isMd: Ref<boolean>) => ({
  * @param isMd - Responsive breakpoint ref
  * @returns Weekday display helpers
  */
-const createWeekdayDisplay = (isMd: Ref<boolean>) => ({
+const createWeekdayDisplay = (isMd: Ref<boolean | null>) => ({
     /**
      * Get formatted weekday label (responsive)
      * Desktop: 3 letters (e.g., "Man")
@@ -2135,7 +2153,7 @@ const createWeekdayDisplay = (isMd: Ref<boolean>) => ({
  * />
  * ```
  */
-const createPagination = (isMd: Ref<boolean>) => ({
+const createPagination = (isMd: Ref<boolean | null>) => ({
     /**
      * Responsive sibling count:
      * - Desktop (isMd): 1 sibling (shows 3 pages: prev, current, next)
@@ -2153,7 +2171,7 @@ const createPagination = (isMd: Ref<boolean>) => ({
  * @param isMd - Responsive breakpoint ref
  * @returns Navigation configuration
  */
-const createNavigation = (isMd: Ref<boolean>) => ({
+const createNavigation = (isMd: Ref<boolean | null>) => ({
     // Link styling - matches UNavigationMenu: neutral (sky/blue) default, primary (amber/brown) soft when active
     link: {
         color: 'neutral' as const,
@@ -2167,7 +2185,7 @@ const createNavigation = (isMd: Ref<boolean>) => ({
      * - Mobile (!isMd): false - drawer links stay in drawer
      */
     get shouldSwapDrawerWithMain(): boolean {
-        return isMd.value
+        return isMd.value === true
     }
 })
 
@@ -2316,7 +2334,7 @@ export type CalendarPickerSelection = keyof typeof CALENDAR.picker
  * @example <UTable :column-visibility="columnVisibility(['id', 'phone'])" />
  * @example <UTable :column-visibility="columnVisibility(['durationMs'], ['expand'])" />
  */
-export const createColumnVisibility = (isMd: Ref<boolean>) =>
+export const createColumnVisibility = (isMd: Ref<boolean | null>) =>
     (hiddenOnPhone: readonly string[], hiddenFromMd: readonly string[] = []): Record<string, boolean> =>
         Object.fromEntries((isMd.value ? hiddenFromMd : hiddenOnPhone).map(column => [column, false]))
 
@@ -2325,7 +2343,7 @@ export const createColumnVisibility = (isMd: Ref<boolean>) =>
  * (CALENDAR.holiday, PLANNING_CALENDAR.day.generated, CHEF_CALENDAR.day.next, …).
  * Exposed from the composable because the size depends on `isMd`.
  */
-export const createDayCircleClasses = (isMd: Ref<boolean>) =>
+export const createDayCircleClasses = (isMd: Ref<boolean | null>) =>
     (...variants: (string | false | null | undefined)[]): string[] =>
         [createResponsiveSizes(isMd).calendarCircle, CALENDAR.day.shape, ...variants.filter((variant): variant is string => Boolean(variant))]
 
@@ -2583,7 +2601,7 @@ export const getRandomEmptyMessage = (context: keyof typeof EMPTY_STATE_MESSAGES
 
 export const useTheSlopeDesignSystem = () => {
     // Inject responsive breakpoint from layout
-    const isMd = inject<Ref<boolean>>('isMd', ref(false))
+    const isMd = inject<Ref<boolean | null>>('isMd', ref(null))
     const dayCircleClasses = createDayCircleClasses(isMd)
     const columnVisibility = createColumnVisibility(isMd)
 

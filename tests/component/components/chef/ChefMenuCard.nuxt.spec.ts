@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeAll} from 'vitest'
 import {mountSuspended, mockNuxtImport, mockComponent} from '@nuxt/test-utils/runtime'
-import {findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {findByTestId, findAllByTestId, clickByTestId} from '~~/tests/component/testHelpers'
 import ChefMenuCard from '~/components/chef/ChefMenuCard.vue'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
 import {ref, h, type ComponentPublicInstance} from 'vue'
@@ -354,9 +354,10 @@ describe('ChefMenuCard — Madbestilling', () => {
         expect(wrapper.emitted('remove-expense')).toEqual([[9]])
     })
 
-    it('GIVEN a round of several dinners WHEN the editor opens THEN the hint reads Rådighedsbeløb and the round with its label', async () => {
+    it('GIVEN a round of several dinners WHEN the editor opens THEN the hint reads Rådighedsbeløb and the round as a sentence', async () => {
+        const team = SeasonFactory.defaultCookingTeamDisplay({name: 'Madhold 2'})
         const wrapper = await mountChefCard({
-            roundLabel: 'Madhold 2, 12/04–13/04',
+            dinnerEvent: {...DinnerEventFactory.defaultDinnerEventDetail(), cookingTeam: team, cookingTeamId: team.id},
             roundRows: [
                 {dinnerEventId: 1, date: new Date('2026-04-12T18:00:00'), menuTitle: 'Lasagne', isCurrent: true, budgetGross: 10000, spentGross: 4000},
                 {dinnerEventId: 2, date: new Date('2026-04-13T18:00:00'), menuTitle: 'Risotto', isCurrent: false, budgetGross: 10000, spentGross: 0}
@@ -365,6 +366,7 @@ describe('ChefMenuCard — Madbestilling', () => {
         await clickByTestId(wrapper, 'expense-edit')
         const hint = findByTestId(wrapper, 'expense-hint')
         expect(hint.text()).toContain('Rådighedsbeløb')
-        expect(hint.text()).toContain('Madhold 2, 12/04–13/04')
+        expect(findByTestId(wrapper, 'expense-hint-heading').text()).toBe(`Hele ${useCookingTeam().getTeamShortName('Madhold 2')}, for perioden 12/04–13/04`)
+        expect(findAllByTestId(wrapper, 'expense-hint-row')).toHaveLength(6)
     })
 })

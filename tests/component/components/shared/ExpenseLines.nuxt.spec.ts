@@ -13,7 +13,7 @@ import {findByTestId, findAllByTestId, clickByTestId} from '~~/tests/component/t
 
 /**
  * ExpenseLines: folded it is one row, the glyph, the title and the total in both units (or the empty text), with the
- * edit button for an editor. Open, it heads with the hint and Tilbage, shows Rådighedsbeløb, Brugt and Til rådighed
+ * edit button for an editor. Open, it heads with the hint and Luk, shows Rådighedsbeløb, Brugt and Tilbage
  * with the round as the live helping numbers, the entry form that turns the typed unit into gross øre, and the lines
  * with slet. The reporting user is the payer and the server writes the note.
  */
@@ -91,12 +91,12 @@ describe('ExpenseLines', () => {
     })
 
     describe('open', () => {
-        it('GIVEN the edit button WHEN clicked THEN the editor heads with the hint and Tilbage, and Tilbage folds it back', async () => {
+        it('GIVEN the edit button WHEN clicked THEN the editor heads with the hint and Luk, and Luk folds it back', async () => {
             const wrapper = await mount({editable: true})
             await open(wrapper)
             expect(findByTestId(wrapper, 'expense-row').exists()).toBe(false)
             expect(wrapper.text()).toContain('Hvad kostede indkøbene?')
-            expect(findByTestId(wrapper, 'expense-back').text()).toContain('Tilbage')
+            expect(findByTestId(wrapper, 'expense-back').text()).toContain('Luk')
 
             await clickByTestId(wrapper, 'expense-back')
             await nextTick()
@@ -104,35 +104,43 @@ describe('ExpenseLines', () => {
             expect(findByTestId(wrapper, 'expense-form').exists()).toBe(false)
         })
 
-        it('GIVEN a budget WHEN open THEN the hint reads Rådighedsbeløb, Brugt and Til rådighed as the difference with its icon', async () => {
+        it('GIVEN a budget WHEN open THEN the hint reads Rådighedsbeløb, Brugt and Tilbage as the difference with its icon', async () => {
             const wrapper = await mount({editable: true})
             await open(wrapper)
             const spent = spentOf(lines())
             expect(hintRow(wrapper, 'Rådighedsbeløb')!.text()).toContain(`/ ${formatPrice(BUDGET)} kr`)
             expect(hintRow(wrapper, 'Brugt')!.text()).toContain(`/ ${formatPrice(spent)} kr`)
-            const left = hintRow(wrapper, 'Til rådighed')!
+            const left = hintRow(wrapper, 'Tilbage')!
             expect(left.text()).toContain(`/ +${formatPrice(BUDGET - spent)} kr`)
             expect(left.find('[data-testid="vat-amount-ok"]').exists()).toBe(true)
             expect(findByTestId(wrapper, 'expense-spent').exists()).toBe(false)
         })
 
-        it('GIVEN spending over the budget WHEN open THEN Til rådighed reads red with its minus and the overdraft icon', async () => {
+        it('GIVEN spending over the budget WHEN open THEN Tilbage reads red with its minus and the overdraft icon', async () => {
             const wrapper = await mount({editable: true, budgetGross: 1000})
             await open(wrapper)
-            const left = hintRow(wrapper, 'Til rådighed')!
+            const left = hintRow(wrapper, 'Tilbage')!
             expect(left.text()).toContain(`/ -${formatPrice(spentOf(lines()) - 1000)} kr`)
             expect(left.find('[data-testid="vat-amount-over"]').exists()).toBe(true)
         })
 
-        it('GIVEN the round WHEN open THEN it follows the three numbers with its label; without one no round row shows', async () => {
-            const withRound = await mount({editable: true, leftRound: {label: 'Madhold 2, 12/04–14/04', gross: -23800}})
+        it('GIVEN the round WHEN open THEN the whole team gets its heading and the same three rows; without one no round block shows', async () => {
+            const withRound = await mount({editable: true, round: {label: 'Hele Madhold 2, for perioden 12/04–14/04', budgetGross: 400000, spentGross: 423800}})
             await open(withRound)
-            const round = hintRow(withRound, 'Madhold 2, 12/04–14/04')!
-            expect(round.find('[data-testid="vat-amount-over"]').exists()).toBe(true)
-            expect(findAllByTestId(withRound, 'expense-hint-row')).toHaveLength(4)
+            expect(findByTestId(withRound, 'expense-hint-heading').text()).toBe('Hele Madhold 2, for perioden 12/04–14/04')
+            const rows = findAllByTestId(withRound, 'expense-hint-row')
+            expect(rows).toHaveLength(6)
+            expect(rows[3]!.text()).toContain('Rådighedsbeløb')
+            expect(rows[3]!.text()).toContain(`/ ${formatPrice(400000)} kr`)
+            expect(rows[4]!.text()).toContain('Brugt')
+            expect(rows[4]!.text()).toContain(`/ ${formatPrice(423800)} kr`)
+            expect(rows[5]!.text()).toContain('Tilbage')
+            expect(rows[5]!.text()).toContain(`/ -${formatPrice(23800)} kr`)
+            expect(rows[5]!.find('[data-testid="vat-amount-over"]').exists()).toBe(true)
 
             const without = await mount({editable: true})
             await open(without)
+            expect(findByTestId(without, 'expense-hint-heading').exists()).toBe(false)
             expect(findAllByTestId(without, 'expense-hint-row')).toHaveLength(3)
         })
 

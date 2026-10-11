@@ -13,7 +13,7 @@ const {formatPrice} = useTicket()
 
 /**
  * The chef opens the Madbestilling row, enters a grocery line: it appears with the ex moms amount typed, Brugt in the
- * hint follows, slet removes it, Tilbage folds the row, and the API holds the same lines. The member is the team's CHEF;
+ * hint follows, slet removes it, Luk folds the row, and the API holds the same lines. The member is the team's CHEF;
  * the admin sets the data up.
  */
 test.describe('Chef expense lines', () => {

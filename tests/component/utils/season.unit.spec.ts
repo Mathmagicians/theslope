@@ -1043,7 +1043,7 @@ describe('Active Season Management utilities', () => {
     })
 
     describe('sortSeasonsByActivePriority', () => {
-        it('should sort: active → future (closest) → current → past (recent)', () => {
+        it('should sort: active → current → future (closest) → past (recent)', () => {
             const ref = new Date(2025, 0, 15)
             const seasons = [
                 { ...SeasonFactory.defaultSeason(), id: 1, shortName: 'Past Far', isActive: false, seasonDates: { start: new Date(2023, 0, 1), end: new Date(2023, 11, 31) } },
@@ -1055,7 +1055,7 @@ describe('Active Season Management utilities', () => {
             ]
 
             expect(sortSeasonsByActivePriority(seasons, ref).map(s => s.shortName)).toEqual([
-                'Active', 'Future Close', 'Future Far', 'Current', 'Past Recent', 'Past Far'
+                'Active', 'Current', 'Future Close', 'Future Far', 'Past Recent', 'Past Far'
             ])
         })
 
@@ -1068,6 +1068,9 @@ describe('Active Season Management utilities', () => {
     })
 
     describe('selectMostAppropriateActiveSeason', () => {
+        const seasonAt = (id: number, shortName: string, isActive: boolean, start: Date, end: Date) =>
+            ({ ...SeasonFactory.defaultSeason(), id, shortName, isActive, seasonDates: { start, end } })
+
         it.each([
             {
                 desc: 'future season closest to today',
@@ -1085,6 +1088,34 @@ describe('Active Season Management utilities', () => {
                 seasons: [
                     { ...SeasonFactory.defaultSeason(), id: 1, shortName: 'Past', isActive: false, seasonDates: { start: new Date(2024, 0, 1), end: new Date(2024, 11, 31) } },
                     { ...SeasonFactory.defaultSeason(), id: 2, shortName: 'Current', isActive: false, seasonDates: { start: new Date(2025, 0, 1), end: new Date(2025, 5, 30) } }
+                ],
+                expected: 'Current'
+            },
+            {
+                desc: 'active season in progress stays the pick',
+                ref: new Date(2025, 2, 15),
+                seasons: [
+                    seasonAt(1, 'Active Current', true, new Date(2025, 0, 1), new Date(2025, 5, 30)),
+                    seasonAt(2, 'Future', false, new Date(2025, 6, 1), new Date(2025, 11, 31))
+                ],
+                expected: 'Active Current'
+            },
+            {
+                desc: 'current season beats future season',
+                ref: new Date(2025, 2, 15),
+                seasons: [
+                    seasonAt(1, 'Future', false, new Date(2025, 6, 1), new Date(2025, 11, 31)),
+                    seasonAt(2, 'Current', false, new Date(2025, 0, 1), new Date(2025, 5, 30))
+                ],
+                expected: 'Current'
+            },
+            {
+                desc: 'ended active season yields the current season',
+                ref: new Date(2025, 2, 15),
+                seasons: [
+                    seasonAt(1, 'Active Ended', true, new Date(2024, 0, 1), new Date(2024, 11, 31)),
+                    seasonAt(2, 'Future', false, new Date(2025, 6, 1), new Date(2025, 11, 31)),
+                    seasonAt(3, 'Current', false, new Date(2025, 0, 1), new Date(2025, 5, 30))
                 ],
                 expected: 'Current'
             }

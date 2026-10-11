@@ -138,8 +138,8 @@ test.describe('Household tab navigation', () => {
             expect(page.url()).toContain(buildUrl(tab.path))
             await waitForTabVisible(page, tab)
 
-            // Documentation screenshot for each household tab
-            await doScreenshot(page, `household/household-${tab.path}`, true)
+            // Documentation screenshot per tab; the members tab is pictured by HouseholdMembers.e2e.spec.ts
+            if (tab.path !== 'members') await doScreenshot(page, `household/household-${tab.path}`, true)
         })
     }
 

@@ -4,6 +4,7 @@ import { useCookingTeamValidation, type CookingTeamAssignment, type TeamRole } f
 import type { InhabitantDisplay } from '~/composables/useCoreValidation'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { createDefaultWeekdayMap } from '~/types/dateTypes'
+import { RAINBOW, getRainbowBand } from '~/composables/useTheSlopeDesignSystem'
 
 describe('useCookingTeam', () => {
 
@@ -46,14 +47,22 @@ describe('useCookingTeam', () => {
     // Listed out of number order, so a position-derived number differs from the named one
     const seasonTeams = [3, 1, 2].map(n => getDefaultCookingTeam(1, 'S1', n, { id: 10 + n }))
     const unnumbered = (id: number) => getDefaultCookingTeam(1, 'S1', 1, { id, name: 'Holdet uden tal' })
+    const named = (id: number, name: string) => getDefaultCookingTeam(1, 'S1', 1, { id, name })
 
     it.each([
       { team: seasonTeams[0]!, teams: seasonTeams, expected: 3, description: 'number in the name, listed first' },
       { team: seasonTeams[1]!, teams: seasonTeams, expected: 1, description: 'number in the name, listed second' },
       { team: unnumbered(20), teams: [...seasonTeams, unnumbered(20)], expected: 4, description: 'no number: position in the season list + 1' },
-      { team: unnumbered(30), teams: seasonTeams, expected: 1, description: 'no number and outside the season list' }
+      { team: unnumbered(30), teams: seasonTeams, expected: 1, description: 'no number and outside the season list' },
+      { team: named(40, 'Madhold 0'), teams: [...seasonTeams, named(40, 'Madhold 0')], expected: 4, description: 'a zero in the name: position in the season list + 1' },
+      { team: named(50, 'Hold 2025'), teams: seasonTeams, expected: 2025, description: 'a year-like number in the name counts' }
     ])('gives $expected ($description)', ({ team, teams, expected }) => {
       expect(getTeamNumber(team, teams)).toBe(expected)
+    })
+
+    it('a number past the rainbow wraps to the stop of its remainder', () => {
+      const number = getTeamNumber(named(50, 'Hold 2025'), seasonTeams)
+      expect(getRainbowBand(number - 1)).toBe(getRainbowBand((number - 1) % RAINBOW.length))
     })
   })
 

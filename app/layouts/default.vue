@@ -23,7 +23,8 @@ useHead({
 
 const {BACKGROUNDS} = useTheSlopeDesignSystem()
 
-const isMd: Ref<boolean> = ref(false)
+// null until measured after mount: the server cannot know the viewport, and a default that reads it waits for the measure
+const isMd: Ref<boolean | null> = ref(null)
 const checkMdBreakpoint = () => {
   if (import.meta.client) {
     isMd.value = !!document.getElementById('breakpoint-md')?.offsetParent

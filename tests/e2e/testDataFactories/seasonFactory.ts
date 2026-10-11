@@ -566,8 +566,11 @@ export class SeasonFactory {
         // Use selectMostAppropriateActiveSeason to find the best candidate
         const {selectMostAppropriateActiveSeason} = await import('~/utils/season')
         const seasonToActivate = selectMostAppropriateActiveSeason(nonTestSeasons)
+        const activeSeasonId = await this.getActiveSeasonId(context)
 
-        if (seasonToActivate) {
+        if (seasonToActivate && seasonToActivate.id === activeSeasonId) {
+            console.info('🌞 > SEASON_FACTORY > Most appropriate season already active:', seasonToActivate.shortName)
+        } else if (seasonToActivate) {
             console.info('🌞 > SEASON_FACTORY > Activating most appropriate season:', seasonToActivate.shortName)
             const response = await context.request.post('/api/admin/season/active', {
                 headers: headers,

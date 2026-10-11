@@ -351,10 +351,10 @@ const KITCHEN_INK: PlacedInk[] = [
  * A cooking team wears the stop of its number on `UBadge`s, and the label is Nuxt UI's badge face:
  * `text-[10px]` at `sm`, `text-xs` at `md`, `text-sm` at `lg`. Every one of them is body text, and
  * `TYPOGRAPHY.bodyTextSmall` (`text-sm`) is the design-system face that grades it: 1.4.3 has one
- * bar below large scale. Drawn by CookingTeamBadges.vue:43, CookingTeamCard.vue:235,
- * AdminTeams.vue:572 and TeamCalendarDisplay.vue:121
+ * bar below large scale. Drawn by CookingTeamBadges.vue:54, CookingTeamCard.vue:321 and :502
+ * and TeamCalendarDisplay.vue:134
  */
-const TEAM_BADGE: PlacedInk[] = [{ink: 'TYPOGRAPHY.bodyTextSmall', at: 'CookingTeamBadges.vue:43'}]
+const TEAM_BADGE: PlacedInk[] = [{ink: 'TYPOGRAPHY.bodyTextSmall', at: 'CookingTeamBadges.vue:54'}]
 
 /**
  * The typography a component actually places on a fill. 1.4.3 grades a pair by the size of the

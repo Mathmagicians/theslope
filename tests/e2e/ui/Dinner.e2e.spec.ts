@@ -8,7 +8,6 @@ import testHelpers from '../testHelpers'
 import {formatDate} from '~/utils/date'
 import {addDays} from 'date-fns/addDays'
 import {useBookingValidation} from '~/composables/useBookingValidation'
-import {getRainbowBand} from '~/composables/useTheSlopeDesignSystem'
 
 const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, waitForHydration, collectHydrationWarnings, getSessionUserInfo, gotoHydrated, salt, temporaryAndRandom} = testHelpers
 const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
@@ -100,7 +99,7 @@ test.describe('Dinner Page URL Navigation', () => {
 
         // THEN: Dinner event panel should be displayed
         const panel = page.getByTestId('dinner-detail-panel')
-        await doScreenshot(page, 'dinner/dinner-calendar', true)
+        await expect(panel, 'Dinner detail panel should be visible').toBeVisible()
     })
 
     test('GIVEN invalid date in URL WHEN page loads THEN auto-syncs and displays valid dinner event', async ({browser}) => {
@@ -339,50 +338,44 @@ test.describe('Dinner Page URL Navigation', () => {
         })
     })
 
-    // A team wears the rainbow stop of the number in its name, whatever order the season created its teams in
-    test.describe('Team colour', () => {
-        const testSalt = temporaryAndRandom()
-        const createdTeamIds: number[] = []
-        const createdDinnerIds: number[] = []
-        const dinners: Array<{number: number, date: string}> = []
+    // The calendar's open default follows the viewport the layout measures after mount; a URL that names it keeps it
+    test.describe('Calendar default', () => {
+        const DESKTOP = {width: 1280, height: 900}
+        const PHONE = {width: 375, height: 812}
+        const calendarDays = (page: Page) => page.locator('[data-testid^="calendar-dinner-date-"]').first()
 
-        test.beforeAll(async ({browser}) => {
-            const adminContext = await validatedBrowserContext(browser)
-            const season = await SeasonFactory.createActiveSeason(adminContext)
-            // Created out of order: "Madhold 3" before "Madhold 1", so creation order and database ids differ from the numbers
-            for (const number of [3, 1]) {
-                const team = await SeasonFactory.createCookingTeamForSeason(adminContext, season.id!, `Madhold ${number}-${testSalt}`)
-                createdTeamIds.push(team.id!)
-                const dinner = await DinnerEventFactory.createDinnerEventOnFreeDay(adminContext, season, {
-                    menuTitle: salt(`Madhold${number}Dinner`, testSalt),
-                    cookingTeamId: team.id!
-                })
-                createdDinnerIds.push(dinner.id!)
-                dinners.push({number, date: formatDate(dinner.date)})
-            }
-        })
+        for (const {face, viewport, expected} of [
+            {face: 'desktop', viewport: DESKTOP, expected: 'open'},
+            {face: 'phone', viewport: PHONE, expected: 'closed'}
+        ]) {
+            test(`GIVEN ${face} WHEN /dinner loads without parameters THEN the URL settles on cal=${expected}`, async ({browser}) => {
+                const context = await memberValidatedBrowserContext(browser)
+                const page = await context.newPage()
+                await page.setViewportSize(viewport)
 
-        test.afterAll(async ({browser}) => {
-            const adminContext = await validatedBrowserContext(browser)
-            // The dinners go before their teams; another spec's season cleanup can cascade either away first
-            for (const dinnerId of createdDinnerIds) {
-                await DinnerEventFactory.deleteDinnerEvent(adminContext, dinnerId).catch(() => undefined)
-            }
-            for (const teamId of createdTeamIds) {
-                await SeasonFactory.deleteCookingTeam(adminContext, teamId).catch(() => undefined)
-            }
-        })
+                await page.goto(dinnerPageUrl)
 
-        test('GIVEN a season whose teams were created out of order WHEN a team\'s dinner loads THEN the team card wears the stop of the number in its name', async ({browser}) => {
-            const context = await memberValidatedBrowserContext(browser)
-            const page = await context.newPage()
+                await expect.poll(() => new URL(page.url()).searchParams.get('cal')).toBe(expected)
+                if (expected === 'open') await expect(calendarDays(page)).toBeVisible()
+                else await expect(calendarDays(page)).toBeHidden()
+            })
+        }
 
-            for (const {number, date} of dinners) {
-                await gotoHydrated(page, `${dinnerPageUrl}?date=${date}`)
-                const nameBadge = page.getByTestId('team-badge-name').filter({visible: true}).first()
-                await expect(nameBadge).toContainText(`Madhold ${number}`)
-                await expect(nameBadge).toContainClass(getRainbowBand(number - 1))
-            }
-        })
+        for (const {face, viewport, given} of [
+            {face: 'desktop', viewport: DESKTOP, given: 'closed'},
+            {face: 'phone', viewport: PHONE, given: 'open'}
+        ]) {
+            test(`GIVEN ${face} WHEN /dinner loads with cal=${given} THEN the URL keeps cal=${given}`, async ({browser}) => {
+                const context = await memberValidatedBrowserContext(browser)
+                const page = await context.newPage()
+                await page.setViewportSize(viewport)
+
+                await gotoHydrated(page, `${dinnerPageUrl}?date=${testData.dates.first}&cal=${given}`)
+
+                if (given === 'open') await expect(calendarDays(page)).toBeVisible()
+                else await expect(calendarDays(page)).toBeHidden()
+                expect(new URL(page.url()).searchParams.get('cal')).toBe(given)
+            })
+        }
     })
 })

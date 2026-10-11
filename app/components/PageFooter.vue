@@ -11,7 +11,7 @@
  */
 import {type Ref, inject} from 'vue'
 
-const isMd = inject<Ref<boolean>>('isMd')
+const isMd = inject<Ref<boolean | null>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 const screenIcon = computed(() => getIsMd.value ? 'i-heroicons-computer-desktop' : 'i-heroicons-device-phone-mobile')
 
