@@ -34,7 +34,8 @@ import type {AllergyDisplay, AllergyTypeDisplay} from '~/composables/useAllergyV
 import type {TicketTypeConfig} from '~/composables/useTicket'
 
 // Design system
-const {SIZES, COLOR, COMPONENTS, BUTTONS, NOISE} = useTheSlopeDesignSystem()
+const {SIZES, COLOR, COMPONENTS, NOISE, TYPOGRAPHY} = useTheSlopeDesignSystem()
+const display = COMPONENTS.householdAllergies
 
 // Ticket type config for display (label, color, icon); active season prices carry the age limits
 const {getTicketTypeConfig} = useTicket()
@@ -66,7 +67,7 @@ const expanded = ref<Record<number, boolean>>({})
 // Toast notifications
 const toast = useToast()
 const showSuccessToast = (title: string, description?: string) => {
-  toast.add({ title, description, color: 'success' })
+  toast.add({ title, description, color: COLOR.success })
 }
 
 // Track which inhabitant's allergies are being edited
@@ -213,37 +214,28 @@ const columns = computed(() => [
 </script>
 
 <template>
-  <UCard data-testid="household-allergies" class="rounded-none md:rounded-lg border-t-0 md:border-t" :ui="{ body: 'px-0 mb-0 md:px-4' }">
+  <UCard data-testid="household-allergies" v-bind="display.card">
     <!-- HEADER -->
     <template #header>
-      <h3 class="text-lg font-semibold">Familiens allergier og diætkrav</h3>
+      <h3 :class="TYPOGRAPHY.cardTitle">Familiens allergier og diætkrav</h3>
     </template>
 
     <!-- BODY -->
-    <div class="space-y-2 md:space-y-4">
+    <div :class="display.body">
       <template v-if="household">
         <!-- Inhabitants table with expandable allergy editing -->
         <UTable
             v-model:expanded="expanded"
             :data="tableData"
             :columns="columns"
-            :ui="{ ...COMPONENTS.table.denseUi, tr: 'data-[expanded=true]:bg-elevated/50' }"
+            :ui="COMPONENTS.table.householdAllergiesUi"
         >
           <!-- Expand/Edit column (pencil icon) -->
           <template #expand-cell="{ row }">
             <UButton
-                :color="COLOR.neutral"
-                :variant="NOISE.quiet"
-                :icon="row.getIsExpanded() ? 'i-heroicons-chevron-down' : 'i-heroicons-pencil'"
-                square
+                v-bind="display.rowToggle(row.getIsExpanded())"
                 :aria-label="row.getIsExpanded() ? 'Luk' : 'Rediger allergier'"
                 :data-testid="`inhabitant-${row.original.id}-allergy-toggle`"
-                :ui="{
-                  leadingIcon: [
-                    'text-sm md:text-base',
-                    BUTTONS.flipOpenTurn(row.getIsExpanded())
-                  ]
-                }"
                 @click="row.toggleExpanded()"
             />
           </template>
@@ -269,14 +261,14 @@ const columns = computed(() => [
           <!-- Allergies column (collapsed state) -->
           <template #allergies-cell="{ row }">
             <AllergyTypeDisplay v-if="row.original.allergies.length === 0" compact show-name />
-            <div v-else class="flex flex-wrap gap-1 md:gap-2">
+            <div v-else :class="display.allergies">
               <div
                   v-for="allergy in row.original.allergies"
                   :key="allergy.id"
-                  class="flex items-center gap-1"
+                  :class="display.allergy"
               >
                 <AllergyTypeDisplay :allergy-type="allergy.allergyType" compact show-name />
-                <span v-if="allergy.inhabitantComment" class="text-xs text-muted">
+                <span v-if="allergy.inhabitantComment" :class="display.comment">
                   ({{ allergy.inhabitantComment }})
                 </span>
               </div>
@@ -286,7 +278,7 @@ const columns = computed(() => [
           <!-- Expanded row: Allergy edit form (double precaution: only when canEdit) -->
           <template v-if="canEdit" #expanded>
             <Loader v-if="isAllergyTypesLoading" text="Indlæser allergi typer..."/>
-            <div v-else class="p-4">
+            <div v-else :class="display.editor">
               <AllergyEditor
                 :allergy-types="allergyTypes"
                 :allergies="currentAllergiesForEditor"

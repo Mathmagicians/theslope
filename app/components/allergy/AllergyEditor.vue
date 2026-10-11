@@ -46,7 +46,8 @@ const emit = defineEmits<{
   'update:comment': [allergyTypeId: number, comment: string]
 }>()
 
-const {SIZES, COLOR, ICONS, NOISE} = useTheSlopeDesignSystem()
+const {SIZES, COLOR, ICONS, NOISE, COMPONENTS} = useTheSlopeDesignSystem()
+const editor = COMPONENTS.allergyEditor
 
 // Key to force dropdown reset after selection
 const dropdownKey = ref(0)
@@ -103,9 +104,9 @@ const handleCommentSave = (typeId: number) => {
 </script>
 
 <template>
-  <div class="space-y-3">
+  <div :class="editor.root">
     <!-- Label -->
-    <label v-if="label" class="block text-sm font-medium">{{ label }}</label>
+    <label v-if="label" :class="editor.label">{{ label }}</label>
 
     <!-- Add dropdown (key forces reset after selection) -->
     <USelectMenu
@@ -115,45 +116,45 @@ const handleCommentSave = (typeId: number) => {
       :items="availableTypes.map(t => ({ ...t, icon: t.icon ?? undefined, label: t.name }))"
       :placeholder="placeholder"
       value-key="id"
-      class="w-full"
+      :class="editor.select"
       data-testid="allergy-editor-select"
       @update:model-value="handleAdd"
     >
       <template #item="{ item }">
-        <span class="flex items-center gap-2">
+        <span :class="editor.item">
           <span>{{ (item as AllergyTypeDisplay).icon }}</span>
           <span>{{ (item as AllergyTypeDisplay).name }}</span>
         </span>
       </template>
       <template #empty>
-        <span class="text-muted">Ingen allergier tilgængelige</span>
+        <span :class="editor.empty">Ingen allergier tilgængelige</span>
       </template>
     </USelectMenu>
 
     <!-- All selected message -->
-    <p v-else-if="selectedTypes.length > 0" class="text-xs text-muted">
+    <p v-else-if="selectedTypes.length > 0" :class="editor.allSelected">
       Alle allergityper er valgt
     </p>
 
     <!-- Selected allergies: Comments mode (cards with inputs) -->
-    <div v-if="showComments && selectedTypes.length > 0" class="space-y-2">
+    <div v-if="showComments && selectedTypes.length > 0" :class="editor.commentList">
       <div
         v-for="type in selectedTypes"
         :key="type.id"
-        class="flex flex-col md:flex-row md:items-center gap-2 p-3 rounded-lg border border-default bg-elevated"
+        :class="editor.commentCard"
       >
         <!-- Allergy type display -->
-        <div class="flex items-center gap-2 md:flex-shrink-0">
+        <div :class="editor.commentType">
           <AllergyTypeDisplay :allergy-type="type" show-name />
         </div>
 
         <!-- Comment input + actions -->
-        <div class="flex items-center gap-2 flex-1">
+        <div :class="editor.commentRow">
           <UInput
             v-model="editingComments[type.id]"
             :placeholder="`Kommentar til ${type.name}...`"
-            size="sm"
-            class="flex-1"
+            :size="SIZES.sm"
+            :class="editor.commentInput"
             @keyup.enter="handleCommentSave(type.id)"
           >
             <template #trailing>
@@ -162,7 +163,6 @@ const handleCommentSave = (typeId: number) => {
                 :variant="NOISE.quiet"
                 :icon="ICONS.check"
                 :size="SIZES.small"
-                :padded="false"
                 aria-label="Gem kommentar"
                 :data-testid="`allergy-${type.id}-save-comment`"
                 @click="handleCommentSave(type.id)"
@@ -184,16 +184,16 @@ const handleCommentSave = (typeId: number) => {
     </div>
 
     <!-- Selected allergies: Simple mode (badges with remove buttons) -->
-    <div v-else-if="!showComments && selectedTypes.length > 0" class="flex flex-wrap gap-2">
+    <div v-else-if="!showComments && selectedTypes.length > 0" :class="editor.badges">
       <UBadge
         v-for="type in selectedTypes"
         :key="type.id"
         :color="COLOR.warning"
         :variant="NOISE.soft"
         :size="SIZES.small"
-        class="pr-1"
+        :class="editor.badge"
       >
-        <span class="flex items-center gap-1">
+        <span :class="editor.badgeBody">
           <span v-if="type.icon">{{ type.icon }}</span>
           <span>{{ type.name }}</span>
           <UButton
@@ -201,8 +201,7 @@ const handleCommentSave = (typeId: number) => {
             :variant="NOISE.link"
             :icon="ICONS.xMark"
             :size="SIZES.small"
-            :padded="false"
-            class="ml-1"
+            :class="editor.badgeRemove"
             aria-label="Fjern allergi"
             @click="handleRemove(type.id)"
           />

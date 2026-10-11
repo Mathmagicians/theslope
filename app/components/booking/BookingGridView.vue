@@ -124,7 +124,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEmptyMessage, getOrderStateColor, getLockStatusConfig, getResidencyDisplay, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
+const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEmptyMessage, getOrderStateColor, getLockStatusConfig, getResidencyDisplay, LAYOUTS, NOISE, BG} = useTheSlopeDesignSystem()
 const emptyState = getRandomEmptyMessage('noDinners')
 
 // Ticket price formatting
@@ -599,7 +599,7 @@ const getEventSummary = (eventId: number) => {
       :ui="{
         ...COMPONENTS.table.gridUi,
         tbody: '[&_tr:first-child]:bg-warning/10',
-        tr: 'data-[expanded=true]:bg-elevated/50'
+        tr: BG.expandedRow
       }"
     >
       <!-- Empty state -->

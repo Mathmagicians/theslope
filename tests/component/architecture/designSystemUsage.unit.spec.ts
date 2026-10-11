@@ -80,6 +80,10 @@ const BINDS_CALENDAR_GRID = /v-bind="(COMPONENTS\.calendarGrid|calendarProps)"/
 /** The team tab strip (a UTabs whose file renders CookingTeamBadges triggers) binds its token in the tag */
 const BINDS_TEAM_TABS = /v-bind="COMPONENTS\.teamTabs"/
 
+/** A class or ui on a `<UCollapsible>` comes from a `COMPONENTS.collapsible` token; a bare collapsible carries neither */
+const STYLES_COLLAPSIBLE = /(?:^|\s)(?::|v-bind:)?(?:class|ui)=/
+const BINDS_COLLAPSIBLE_TOKEN = /v-bind="COMPONENTS\.collapsible\./
+
 /** Every palette family a Tailwind colour utility can name here: defaults plus our custom ones */
 const COLOUR_FAMILIES = [
     'amber', 'blue', 'pink', 'orange', 'sky', 'red', 'violet', 'winery', 'party', 'peach',
@@ -165,6 +169,15 @@ describe('ADR-018: components bind design-system tokens, never raw Nuxt UI props
                 .filter(tag => !BINDS_TEAM_TABS.test(tag.text))
                 .map(tag => `app/${file}:${tag.line} - no team tabs token (use v-bind="COMPONENTS.teamTabs")`)
         })
+        expect(report(violations)).toBe('')
+    })
+
+    it('no <UCollapsible> styles itself outside a COMPONENTS.collapsible token', () => {
+        const violations = vueFiles.flatMap(file =>
+            openingTags(readVue(file), 'UCollapsible')
+                .filter(tag => STYLES_COLLAPSIBLE.test(tag.text) && !BINDS_COLLAPSIBLE_TOKEN.test(tag.text))
+                .map(tag => `app/${file}:${tag.line} - raw class or ui (use v-bind="COMPONENTS.collapsible.<kind>")`)
+        )
         expect(report(violations)).toBe('')
     })
 

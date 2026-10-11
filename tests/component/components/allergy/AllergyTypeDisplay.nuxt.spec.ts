@@ -7,10 +7,10 @@ import {describe, it, expect} from 'vitest'
 import {ref, type ComponentPublicInstance} from 'vue'
 import type {VueWrapper} from '@vue/test-utils'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
-import {ICONS, createResponsiveSizes} from '~/composables/useTheSlopeDesignSystem'
+import {COMPONENTS, ICONS, createResponsiveSizes} from '~/composables/useTheSlopeDesignSystem'
 import {mountWithTooltipProvider} from '~~/tests/component/testHelpers'
 
-type AvatarProps = {icon?: string, text?: string, size?: string}
+type AvatarProps = {icon?: string, text?: string, size?: string, ui?: Record<string, string>}
 
 const MILK = {name: 'Mælk', icon: '🥛'}
 const NUTS = {name: 'Nødder', icon: 'i-mdi-peanut'}
@@ -50,6 +50,18 @@ describe('AllergyTypeDisplay', () => {
             const {wrapper, avatar} = await mountDisplay({compact, showName: true})
             expect(wrapper.text()).toBe('Ingen')
             expect(avatar.props('icon')).toBe(ICONS.noAllergy)
+        })
+
+        it('GIVEN no type THEN the avatar binds the no-allergy ink, and its icon renders it', async () => {
+            const {avatar} = await mountDisplay({compact})
+            const noneUi = COMPONENTS.allergyTypeDisplay.noneAvatarUi
+            expect(avatar.props('ui')).toEqual(noneUi)
+            expect(avatar.find('[data-slot="icon"]').classes()).toEqual(expect.arrayContaining(noneUi.icon.split(' ')))
+        })
+
+        it.each([MILK, NUTS])('GIVEN the type $name THEN its avatar keeps its own icon ink', async allergyType => {
+            const {avatar} = await mountDisplay({allergyType, compact})
+            expect(avatar.props('ui')).toBeUndefined()
         })
 
         it.each([true, false])('GIVEN isMd=%s THEN the avatar takes the size of its face', async isMd => {

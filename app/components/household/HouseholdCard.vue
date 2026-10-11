@@ -90,7 +90,7 @@ const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Design system
-const { WEEKDAY, COMPONENTS, COLOR, ICONS, BUTTONS, SIZES, ALERTS, NOISE } = useTheSlopeDesignSystem()
+const { WEEKDAY, COMPONENTS, COLOR, ICONS, BUTTONS, SIZES, ALERTS, NOISE, BG } = useTheSlopeDesignSystem()
 const { powerMode } = COMPONENTS
 
 // Prepare table data with synthetic "all members" power row + individual inhabitants
@@ -210,8 +210,7 @@ const columns = computed(() => [
 <template>
   <!-- Weekly Preferences Section -->
   <UCard
-data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:border-t"
-         :ui="{ body: 'px-0 mb-0 md:px-4' }">
+data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
     <template #header>
       <h3 class="text-lg font-semibold">Husstandens ugentlige booking præferencer</h3>
     </template>
@@ -223,7 +222,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
           :data="tableData"
           :columns="columns"
           row-key="id"
-          :ui="{ ...COMPONENTS.table.denseUi, tbody: '[&_tr:first-child]:bg-info/10', tr: 'data-[expanded=true]:bg-elevated/50' }"
+          :ui="{ ...COMPONENTS.table.denseUi, tbody: '[&_tr:first-child]:bg-info/10', tr: BG.expandedRow }"
       >
         <!-- Expand button column - only shown when canEdit -->
         <template #expand-cell="{ row }">

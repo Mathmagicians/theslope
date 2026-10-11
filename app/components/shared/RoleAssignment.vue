@@ -73,7 +73,7 @@ defineExpose({open: () => { if (isActionable.value) isOpen.value = true }})
             {{ triggerLabel }}
         </UButton>
 
-        <UCollapsible v-model:open="isOpen" class="mt-3">
+        <UCollapsible v-model:open="isOpen" v-bind="COMPONENTS.collapsible.belowTrigger">
             <template #content>
                 <RoleAssignmentForm
                     :dinner-event="dinnerEvent"

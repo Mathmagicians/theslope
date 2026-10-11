@@ -11,6 +11,7 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
+import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useBookingsStore} from '~/stores/bookings'
 import {usePlanStore} from '~/stores/plan'
 import {useCookingTeam} from '~/composables/useCookingTeam'
@@ -611,5 +612,79 @@ describe('Bookings store — released tickets on locked dinners', () => {
 
         await vi.waitFor(() => expect(store.lockStatus.get(lockedDinner.id)?.total).toBe(1))
         expect(lastQuery(ordersEndpoint)).toMatchObject({dinnerEventIds: String(lockedDinner.id), allHouseholds: 'true'})
+    })
+})
+
+// ---- Expense lines (the chef's grocery lines on a dinner) ----
+
+const EXPENSE_LINE = ExpenseFactory.defaultExpense({id: 9, dinnerEventId: DINNER_ID, amount: 101200, description: 'Grønt + kolonial'})
+const addExpenseEndpoint = vi.fn(() => EXPENSE_LINE)
+const removeExpenseEndpoint = vi.fn(() => EXPENSE_LINE)
+registerEndpoint(`/api/chef/dinner/${DINNER_ID}/expenses`, {method: 'PUT', handler: addExpenseEndpoint})
+registerEndpoint(`/api/chef/dinner/${DINNER_ID}/expenses/${EXPENSE_LINE.id}`, {method: 'DELETE', handler: removeExpenseEndpoint})
+
+describe('Bookings store — expense lines', () => {
+    beforeEach(() => {
+        addExpenseEndpoint.mockImplementation(() => EXPENSE_LINE)
+        removeExpenseEndpoint.mockImplementation(() => EXPENSE_LINE)
+    })
+
+    it('adds a line: the parsed line comes back and the toast names it', async () => {
+        const store = useBookingsStore()
+        const line = await store.addExpense(DINNER_ID, ExpenseFactory.defaultExpenseCreate())
+        expect(line).toEqual(EXPENSE_LINE)
+        expect(addExpenseEndpoint).toHaveBeenCalledTimes(1)
+        expect(toastTitles().at(-1)).toBe('Indkøb gemt')
+        expect(store.isDinnerUpdating).toBe(false)
+    })
+
+    it('removes a line: the removed line comes back and the toast names it', async () => {
+        const store = useBookingsStore()
+        const removed = await store.removeExpense(DINNER_ID, EXPENSE_LINE.id)
+        expect(removed).toEqual(EXPENSE_LINE)
+        expect(removeExpenseEndpoint).toHaveBeenCalledTimes(1)
+        expect(toastTitles().at(-1)).toBe('Indkøb slettet')
+    })
+
+    it.each([
+        {desc: 'add', act: (store: ReturnType<typeof useBookingsStore>) => store.addExpense(DINNER_ID, ExpenseFactory.defaultExpenseCreate()), endpoint: addExpenseEndpoint, title: 'Indkøb gemt'},
+        {desc: 'remove', act: (store: ReturnType<typeof useBookingsStore>) => store.removeExpense(DINNER_ID, EXPENSE_LINE.id), endpoint: removeExpenseEndpoint, title: 'Indkøb slettet'}
+    ])('resolves null without a success toast when the $desc fails', async ({act, endpoint, title}) => {
+        endpoint.mockImplementation(failure)
+        const store = useBookingsStore()
+        expect(await act(store)).toBeNull()
+        expect(toastTitles()).not.toContain(title)
+        expect(store.isDinnerUpdating).toBe(false)
+    })
+})
+
+// ---- Ticket changes (the chef's Billetændringer) ----
+
+const ticketChangesEndpoint = vi.fn((event: H3Event) => ({
+    dinnerEventId: DINNER_ID,
+    since: getQuery(event).since ?? null,
+    changes: [{
+        id: 1, timestamp: new Date('2026-04-05T08:02:00Z'), action: 'USER_BOOKED', householdShortname: 'S_31', ticketType: 'ADULT',
+        delta: {ADULT: 1, CHILD: 0, BABY: 0}, counts: {ADULT: 1, CHILD: 0, BABY: 0}, portions: 1, revenue: 5000
+    }],
+    olderCount: 3
+}))
+registerEndpoint(`/api/chef/dinner/${DINNER_ID}/order-history`, ticketChangesEndpoint)
+
+describe('Bookings store — ticket changes', () => {
+    it('reads the changes from a moment and hands back the parsed response', async () => {
+        const store = useBookingsStore()
+        const since = new Date('2026-04-03T18:00:00Z')
+        const response = await store.fetchTicketChanges(DINNER_ID, since)
+        expect(response.changes[0]!.timestamp).toBeInstanceOf(Date)
+        expect(response.changes[0]).toMatchObject({householdShortname: 'S_31', revenue: 5000})
+        expect(response.olderCount).toBe(3)
+        expect(lastQuery(ticketChangesEndpoint)).toMatchObject({since: since.toISOString()})
+    })
+
+    it('reads the whole history without a since', async () => {
+        const store = useBookingsStore()
+        await store.fetchTicketChanges(DINNER_ID)
+        expect(lastQuery(ticketChangesEndpoint)).not.toHaveProperty('since')
     })
 })

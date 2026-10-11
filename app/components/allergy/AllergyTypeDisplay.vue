@@ -51,6 +51,7 @@ const avatarText = computed(() =>
 )
 
 const stateClass = computed(() => props.allergyType ? undefined : display.none)
+const avatarUi = computed(() => props.allergyType ? undefined : display.noneAvatarUi)
 const nameWeight = computed(() => props.allergyType ? display.named : undefined)
 </script>
 
@@ -60,6 +61,7 @@ const nameWeight = computed(() => props.allergyType ? display.named : undefined)
       :icon="avatarIcon"
       :text="avatarText"
       :size="avatarSize"
+      :ui="avatarUi"
       :class="display.compactAvatar"
     />
     <span v-if="showName" :class="[display.compactName, nameWeight]">
@@ -72,6 +74,7 @@ const nameWeight = computed(() => props.allergyType ? display.named : undefined)
       :icon="avatarIcon"
       :text="avatarText"
       :size="avatarSize"
+      :ui="avatarUi"
       :class="display.avatar"
     />
     <span v-if="showName" :class="[display.name, nameWeight]">

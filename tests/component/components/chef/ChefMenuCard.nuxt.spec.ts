@@ -302,3 +302,58 @@ describe('ChefMenuCard', () => {
         })
     })
 })
+
+// ---- Indkøbsomkostninger: the chef's grocery lines sit with the other edits, the Budget pane below ----
+
+describe('ChefMenuCard — Indkøbsomkostninger', () => {
+    let deadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
+    beforeAll(() => {
+        deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason())
+    })
+
+    const mountChefCard = (props: Record<string, unknown> = {}) => mountSuspended(ChefMenuCard, {
+        props: {
+            dinnerEvent: DinnerEventFactory.defaultDinnerEventDetail(),
+            deadlines,
+            formMode: FORM_MODES.EDIT,
+            showStateControls: true,
+            ...props
+        },
+        global: {provide: {isMd: ref(true)}}
+    })
+
+    it('GIVEN the chef\'s card WHEN rendering THEN the lines section sits above the Budget pane and the stepper', async () => {
+        const wrapper = await mountChefCard()
+        const html = wrapper.html()
+        const lines = html.indexOf('data-testid="chef-expenses-section"')
+        const budget = html.indexOf('name="toggle-budget-details"')
+        expect(lines).toBeGreaterThan(-1)
+        expect(budget).toBeGreaterThan(lines)
+    })
+
+    it('GIVEN a card without state controls WHEN rendering THEN no lines section shows', async () => {
+        const wrapper = await mountChefCard({showStateControls: false})
+        expect(findByTestId(wrapper, 'chef-expenses-section').exists()).toBe(false)
+    })
+
+    it('GIVEN the lines WHEN they emit add and remove THEN the card bubbles add-expense and remove-expense', async () => {
+        const wrapper = await mountChefCard()
+        const lines = wrapper.findComponent({name: 'ExpenseLines'})
+        lines.vm.$emit('add', {amount: 126500})
+        lines.vm.$emit('remove', 9)
+        expect(wrapper.emitted('add-expense')).toEqual([[{amount: 126500}]])
+        expect(wrapper.emitted('remove-expense')).toEqual([[9]])
+    })
+
+    it('GIVEN a round of several dinners WHEN rendering THEN the lines read the round\'s helping number with its label', async () => {
+        const wrapper = await mountChefCard({
+            roundLabel: 'Madhold 2, 12/04–13/04',
+            roundRows: [
+                {dinnerEventId: 1, date: new Date('2026-04-12T18:00:00'), menuTitle: 'Lasagne', isCurrent: true, budgetGross: 10000, spentGross: 4000},
+                {dinnerEventId: 2, date: new Date('2026-04-13T18:00:00'), menuTitle: 'Risotto', isCurrent: false, budgetGross: 10000, spentGross: 0}
+            ]
+        })
+        expect(findByTestId(wrapper, 'expense-left-round').text()).toContain('Madhold 2, 12/04–13/04')
+        expect(findByTestId(wrapper, 'expense-left-dinner').exists()).toBe(true)
+    })
+})

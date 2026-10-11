@@ -11,8 +11,10 @@
  * │  │              18:00  ●                                  │  │
  * │  └────────────────────────────────────────────────────────┘  │
  * ├──────────────────────────────────────────────────────────────┤
- * │           [AGENDA] [KALENDER] ← View Toggle                  │
- * ├──────────────────────────────────────────────────────────────┤
+ * │ [Agenda] [Kalender]                                      [v] │  ← UTabs left, chevron right
+ * ├──────────────────────────────────────────────────────────────┤     (BUTTONS.flipOpen, aria-expanded)
+ * │  calendar or agenda content                                  │  ← UCollapsible body: opens and
+ * ├──────────────────────────────────────────────────────────────┤     closes with the chevron
  * │  CALENDAR VIEW                                               │
  * │  ┌────────────────────────────────────────┐                  │
  * │  │  M   T   O   T   F   L   S             │                  │
@@ -49,6 +51,7 @@
  * - Deadline rings (red critical, yellow warning, green ok)
  * - Deadline badges in agenda (specific deadline types with time)
  * - Calendar + Agenda views with identical visual language
+ * - The header row is no button: the tabs and the chevron are siblings, since a button may not hold a button
  * - NO holidays (chef cares about cooking schedule, not vacation)
  *
  * Uses:
@@ -92,7 +95,7 @@ const emit = defineEmits<{
 const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
 const {sortDinnerEventsByTemporal} = useSeason()
 const {getChefDeadlineAlarm} = useBooking()
-const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS, TEXT, URGENCY_TO_CHIP_COLOR, dayCircleClasses} = useTheSlopeDesignSystem()
+const {CALENDAR, CHEF_CALENDAR, TYPOGRAPHY, SIZES, PAGINATION, COMPONENTS, TEXT, BUTTONS, COLOR, NOISE, ICONS, URGENCY_TO_CHIP_COLOR, dayCircleClasses} = useTheSlopeDesignSystem()
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
@@ -103,8 +106,8 @@ const selectedDinner = computed(() => props.dinnerEvents.find(e => e.id === prop
 // Both viewMode and accordionOpen are one-way props to prevent race conditions
 // Changes emit via events for atomic updates in parent
 const viewTabs = [
-  { label: 'Agenda', value: 'agenda', icon: 'i-heroicons-list-bullet' },
-  { label: 'Kalender', value: 'calendar', icon: 'i-heroicons-calendar' }
+  { label: 'Agenda', value: 'agenda', icon: ICONS.agenda },
+  { label: 'Kalender', value: 'calendar', icon: ICONS.calendar }
 ]
 const viewMode = toRef(props, 'viewMode')
 const accordionOpen = toRef(props, 'accordionOpen')
@@ -220,26 +223,14 @@ const legendItems = computed((): CalendarLegendItem[] => {
   ]
 })
 
-// Accordion bridge: convert boolean prop to UAccordion's string value model
-// UAccordion uses '0' = first item open, undefined = all closed
-const accordionItems = [{ slot: 'calendar-content', value: '0' }]
-const accordionValue = computed({
-  get: () => accordionOpen.value ? '0' : undefined,
-  set: (v) => {
-    // When UAccordion changes, emit event to parent
-    emit('update:accordion-open', v === '0')
-  }
-})
-
-// Handle tab click - emit to parent which will set mode AND open accordion
-const handleTabClick = (mode: 'agenda' | 'calendar') => {
-  emit('tab-click', mode)
-}
+// The parent owns the open state: the chevron asks for the toggled value, a tab click asks for its mode
+const toggleOpen = () => emit('update:accordion-open', !accordionOpen.value)
+const handleTabClick = (mode: 'agenda' | 'calendar') => emit('tab-click', mode)
 
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div :class="COMPONENTS.chefCalendar.root">
     <!-- Countdown Timer (Train Station Style) -->
     <CountdownTimer
       data-testid="chef-next-cooking-countdown"
@@ -253,42 +244,41 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => {
       @select="emit('select', $event)"
     />
 
-    <!-- Accordion wraps both view toggle and content (collapsed on mobile, open on desktop) -->
-    <UAccordion v-model="accordionValue" :items="accordionItems" class="flex-1">
-      <!-- Custom leading slot: tabs instead of label -->
-      <template #leading>
-        <!-- Tab click always emits to parent for atomic state update -->
-        <UTabs
-          :model-value="viewMode"
-          :items="viewTabs"
-          orientation="horizontal"
-          variant="link"
-          @update:model-value="(m) => handleTabClick(m as 'agenda' | 'calendar')"
-        />
-      </template>
+    <div :class="COMPONENTS.chefCalendar.header" data-testid="chef-calendar-header">
+      <UTabs
+        v-bind="COMPONENTS.chefCalendar.viewTabs"
+        :model-value="viewMode"
+        :items="viewTabs"
+        @update:model-value="(m) => handleTabClick(m as 'agenda' | 'calendar')"
+      />
+      <UButton
+        v-bind="BUTTONS.flipOpen(accordionOpen)"
+        :color="COLOR.neutral"
+        :variant="NOISE.quiet"
+        :size="SIZES.standard"
+        :aria-label="accordionOpen ? 'Skjul kalender' : 'Vis kalender'"
+        data-testid="chef-calendar-toggle"
+        @click="toggleOpen"
+      />
+    </div>
 
-      <template #calendar-content>
-
+    <UCollapsible v-bind="COMPONENTS.collapsible.chefCalendar" :open="accordionOpen">
+      <template #content>
         <!-- Agenda View (UTable + UPagination) -->
-        <div v-if="viewMode === 'agenda'" class="flex-1 flex flex-col overflow-x-hidden">
+        <div v-if="viewMode === 'agenda'" :class="COMPONENTS.chefCalendar.agenda" data-testid="chef-calendar-content">
           <UTable
             ref="agendaTable"
             v-model:pagination="agendaPagination"
             :columns="agendaColumns"
             :data="sortedDinnerEvents"
-            :ui="{
-              ...COMPONENTS.table.ui,
-              th: 'border-b-0',
-              td: 'py-1 md:py-2 max-w-0 w-full',
-              base: 'table-fixed w-full'
-            }"
+            :ui="COMPONENTS.table.agendaUi"
             :pagination-options="{
               getPaginationRowModel: getPaginationRowModel()
             }"
           >
             <!-- Custom header: title + pagination -->
             <template #dinner-header>
-              <div class="flex items-center justify-between w-full">
+              <div :class="COMPONENTS.chefCalendar.agendaHeader">
                 <span :class="TYPOGRAPHY.bodyTextSmall">Maddage</span>
                 <UPagination
                   v-if="(agendaTable?.tableApi?.getFilteredRowModel().rows.length || 0) > agendaPagination.pageSize"
@@ -314,8 +304,8 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => {
             </template>
 
             <template #empty>
-              <div class="flex flex-col items-center justify-center py-6 gap-3">
-                <UIcon name="i-heroicons-calendar" :class="['w-8 h-8', TEXT.gray[400]]"/>
+              <div :class="COMPONENTS.chefCalendar.empty">
+                <UIcon :name="ICONS.calendar" :class="[COMPONENTS.chefCalendar.emptyIcon, TEXT.gray[400]]"/>
                 <p :class="[TYPOGRAPHY.bodyTextSmall, TEXT.gray[500]]">Ingen fællesspisninger planlagt for dette hold</p>
               </div>
             </template>
@@ -323,7 +313,7 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => {
         </div>
 
         <!-- Calendar View -->
-        <div v-else class="flex-1">
+        <div v-else :class="COMPONENTS.chefCalendar.calendar" data-testid="chef-calendar-content">
           <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists" :number-of-months="1" :focus-date="focusDate">
             <template #day="{ day, eventLists }">
               <!-- Deadline chip for warning/critical (alarm 1, 2, 3) - only for non-past, non-cancelled -->
@@ -331,7 +321,7 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => {
               <UChip
                 v-if="getDayType(eventLists) && getDayType(eventLists) !== 'past' && !isCancelledDay(day) && URGENCY_TO_CHIP_COLOR[getAlarmForDay(day)]"
                 show
-                size="md"
+                :size="SIZES.md"
                 :color="URGENCY_TO_CHIP_COLOR[getAlarmForDay(day)]!"
               >
                 <div
@@ -357,7 +347,7 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => {
               </div>
 
               <!-- Non-dinner day -->
-              <span v-else class="text-sm">{{ day.day }}</span>
+              <span v-else :class="COMPONENTS.chefCalendar.plainDay">{{ day.day }}</span>
             </template>
 
             <template #legend>
@@ -366,6 +356,6 @@ const handleTabClick = (mode: 'agenda' | 'calendar') => {
           </BaseCalendar>
         </div>
       </template>
-    </UAccordion>
+    </UCollapsible>
   </div>
 </template>

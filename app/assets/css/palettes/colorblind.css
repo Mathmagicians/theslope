@@ -42,7 +42,7 @@ html[data-palette="colorblind"] {
     --color-green-400: #5ad5a7;
     --color-green-500: #009e73;
     --color-green-600: #007a58;
-    --color-green-700: #007f5c;
+    --color-green-700: #007756;
     --color-green-800: #006448;
     --color-green-900: #00533b;
     --color-green-950: #002e1f;
@@ -162,6 +162,7 @@ html.dark[data-palette="colorblind"] {
     --color-green-300: #b9ffe0;
     --color-green-500: #11a377;
     --color-green-600: #0fa277;
+    --color-green-700: #007f5c;
     --color-orange-200: #ffcf87;
     --color-orange-300: #ffd79d;
     --color-orange-400: #f4b03a;
