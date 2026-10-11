@@ -7,6 +7,7 @@ import {
     useBookingValidation
 } from "~/composables/useBookingValidation"
 import type { TeamRole } from "~/composables/useCookingTeamValidation"
+import type {Season} from "~/composables/useSeasonValidation"
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
 
@@ -170,6 +171,44 @@ export class DinnerEventFactory {
         }
 
         return await response.json()
+    }
+
+    /**
+     * A browser spec's dinner stands alone on its day: the dinner and chef pages select a dinner by date, so a second
+     * dinner on a day hides one of them. Picks a free day of the season at random, after the season's last dinner where
+     * one is free, creates the dinner there and lists the season again; a day that turned double in the meantime gives
+     * the dinner up and another day is tried.
+     */
+    static readonly createDinnerEventOnFreeDay = async (
+        context: BrowserContext,
+        season: Season,
+        dinnerEventData: Partial<Omit<DinnerEventCreate, 'date'>> = {},
+        attempts: number = 4
+    ): Promise<DinnerEventDisplay> => {
+        const sameDay = (a: Date, b: Date) => startOfDay(a).getTime() === startOfDay(b).getTime()
+        const first = startOfDay(new Date(Math.max(new Date(season.seasonDates.start).getTime(), this.tomorrow.getTime())))
+        const last = startOfDay(new Date(season.seasonDates.end))
+        const givenUp: Date[] = []
+        for (let attempt = 0; attempt < attempts; attempt++) {
+            const dinners = await this.getDinnerEventsForSeason(context, season.id!)
+            const occupied = [...dinners.map(dinner => new Date(dinner.date)), ...givenUp]
+            const freeDays: Date[] = []
+            for (let day = first; day <= last; day = addDays(day, 1)) {
+                if (!occupied.some(date => sameDay(date, day))) freeDays.push(day)
+            }
+            const lastDinner = occupied.length > 0 ? startOfDay(new Date(Math.max(...occupied.map(date => date.getTime())))) : null
+            const afterLast = lastDinner ? freeDays.filter(day => day > lastDinner) : freeDays
+            const candidates = afterLast.length > 0 ? afterLast : freeDays
+            expect(candidates.length, `season ${season.shortName} has a free day for the spec's dinner`).toBeGreaterThan(0)
+            const day = candidates[Math.floor(Math.random() * candidates.length)]!
+
+            const dinner = await this.createDinnerEvent(context, {...dinnerEventData, date: day, seasonId: season.id!})
+            const onThatDay = (await this.getDinnerEventsForSeason(context, season.id!)).filter(other => sameDay(new Date(other.date), day))
+            if (onThatDay.length === 1) return dinner
+            await this.deleteDinnerEvent(context, dinner.id!)
+            givenUp.push(day)
+        }
+        throw new Error(`No day of season ${season.shortName} stayed free for the spec's dinner in ${attempts} attempts`)
     }
 
     static readonly getDinnerEvent = async (

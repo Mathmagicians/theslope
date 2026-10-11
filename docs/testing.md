@@ -83,6 +83,8 @@ const season = SeasonFactory.defaultSeason(testSalt)  // Season-2025-17336500000
 
 **ALWAYS verify:** `npx playwright test path/to/test.e2e.spec.ts --workers=4`
 
+**One dinner per day in browser specs:** the dinner and chef pages select a dinner by date, and a new team receives the season's generated dinners. A browser spec creates its dinner with `DinnerEventFactory.createDinnerEventOnFreeDay(context, season, data)`, which puts it alone on a free day of the season, opens the page with `?date=` on that day, and deletes the dinner in `afterAll`.
+
 ### Rule 3a: E2E Interactions Wait for Hydration
 
 The server renders a page's controls before Vue attaches their handlers, so a click or fill that lands first is lost. A test that interacts with a page waits for hydration after every navigation, through `gotoHydrated`; `page.goto` alone is for tests that only read.

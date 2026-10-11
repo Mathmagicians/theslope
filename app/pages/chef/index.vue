@@ -38,6 +38,8 @@ import {useQueryParam} from '~/composables/useQueryParam'
 import {useDinnerDateParam, useBookingView} from '~/composables/useBookingView'
 import {FORM_MODES, type FormMode} from '~/types/form'
 import type {DinnerEventDisplay, ChefMenuForm} from '~/composables/useBookingValidation'
+import type {ExpenseCreate} from '~/composables/useBillingValidation'
+import type {CookingRoundRow} from '~/composables/useBookingUi'
 
 // Design system
 const {COLOR, ICONS, LAYOUTS, ALERTS} = useTheSlopeDesignSystem()
@@ -119,23 +121,9 @@ const {value: viewState, setValue: setViewState} = useQueryParam<ViewState>('vie
 const calendarViewMode = computed(() => viewState.value.mode)
 const calendarAccordionOpen = computed(() => viewState.value.open)
 
-// Guard to prevent accordion updates immediately after tab click
-// (UAccordion may emit close when content changes during view switch)
-let ignoreAccordionUpdates = false
-
-// Handle tab click - always sets mode AND opens accordion
-const handleTabClick = (mode: 'agenda' | 'calendar') => {
-  ignoreAccordionUpdates = true
-  setViewState({ mode, open: true })
-  // Reset guard after navigateTo completes
-  setTimeout(() => { ignoreAccordionUpdates = false }, 100)
-}
-
-// Handle accordion toggle - keeps current mode, toggles open state
-const handleAccordionToggle = (open: boolean) => {
-  if (ignoreAccordionUpdates) return
-  setViewState({ mode: viewState.value.mode, open })
-}
+// A tab click sets the mode and opens the calendar; the chevron toggles the open state in the current mode
+const handleTabClick = (mode: 'agenda' | 'calendar') => setViewState({ mode, open: true })
+const handleAccordionToggle = (open: boolean) => setViewState({ mode: viewState.value.mode, open })
 const teamDinnerDates = computed(() => teamDinnerEvents.value.map((e: DinnerEventDisplay) => new Date(e.date)))
 
 // Date selection via URL query parameter using curried pattern
@@ -208,6 +196,38 @@ const handleFormUpdate = async (data: ChefMenuForm) => {
   await usersStore.loadMyTeams()
 }
 
+// The chef's grocery lines go to the dinner whose detail is on view; the store re-reads it for its computed cost
+const handleAddExpense = (line: ExpenseCreate) => {
+  if (dinnerEventDetail.value) bookingsStore.addExpense(dinnerEventDetail.value.id, line)
+}
+const handleRemoveExpense = (expenseId: number) => {
+  if (dinnerEventDetail.value) bookingsStore.removeExpense(dinnerEventDetail.value.id, expenseId)
+}
+
+// The team's cooking round around the dinner on view: the round's orders give each dinner its allowance
+const {consecutiveDinnerRun} = useBooking()
+const {getTeamShortName} = useCookingTeam()
+const {calculateBudget} = useOrder()
+const kitchenConfig = useAppConfig().theslope?.kitchen
+const roundDinners = computed(() => selectedDinnerId.value
+  ? consecutiveDinnerRun(teamDinnerEvents.value.map((e: DinnerEventDisplay) => ({...e, date: new Date(e.date)})), selectedDinnerId.value)
+  : [])
+bookingsStore.loadOrdersForDinners(() => ({dinnerEventIds: roundDinners.value.map(dinner => dinner.id), allHouseholds: true}))
+const roundRows = computed<CookingRoundRow[]>(() => roundDinners.value.map(dinner => ({
+  dinnerEventId: dinner.id,
+  date: dinner.date,
+  menuTitle: dinner.menuTitle,
+  isCurrent: dinner.id === selectedDinnerId.value,
+  budgetGross: calculateBudget(bookingsStore.orders.filter(order => order.dinnerEventId === dinner.id), kitchenConfig?.baseRatePercent ?? 5, kitchenConfig?.vatPercent ?? 25).availableBudget,
+  spentGross: dinner.totalCost
+})))
+const roundLabel = computed(() => {
+  const first = roundDinners.value[0]
+  const last = roundDinners.value.at(-1)
+  return selectedTeam.value && first && last
+    ? `${getTeamShortName(selectedTeam.value.name)}, ${formatDate(first.date, 'dd/MM')}–${formatDate(last.date, 'dd/MM')}`
+    : ''
+})
 
 const handleAdvanceState = async (newState: string) => {
   if (!selectedDinnerId.value) return
@@ -366,12 +386,16 @@ useHead({
               :deadlines="deadlinesForSeason(selectedSeason)"
               :form-mode="chefFormMode"
               :show-state-controls="true"
+              :round-rows="roundRows"
+              :round-label="roundLabel"
               :show-allergens="true"
               :is-updating="isDinnerUpdating"
               :has-prev="hasPrev"
               :has-next="hasNext"
               :calendar-open="calendarAccordionOpen"
               @update:form="handleFormUpdate"
+              @add-expense="handleAddExpense"
+              @remove-expense="handleRemoveExpense"
               @update:allergens="handleAllergenUpdate"
               @advance-state="handleAdvanceState"
               @cancel-dinner="handleCancelDinner"

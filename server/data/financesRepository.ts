@@ -14,6 +14,7 @@ import type {
     DinnerEventDetail,
     DinnerState,
     OrderHistoryDetail,
+    OrderHistoryDisplay,
     OrderHistoryCreate,
     OrderForTransaction,
     DinnerMode,
@@ -1938,5 +1939,23 @@ export async function deleteExpense(d1Client: D1Database, id: number): Promise<E
         return deserializeExpense(removed)
     } catch (error) {
         return throwH3Error(`${EXPENSE_LOG} > [DELETE] Error removing expense ${id}`, error)
+    }
+}
+
+/*** ORDER HISTORY OF A DINNER: the rows the chef's Billetændringer replay ***/
+
+// Every history row of the dinner in time order; a deleted order's rows stay through the denormalized dinnerEventId
+export async function fetchOrderHistoryForDinner(d1Client: D1Database, dinnerEventId: number): Promise<OrderHistoryDisplay[]> {
+    const {OrderHistoryDisplaySchema} = useBookingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+    try {
+        const rows = await prisma.orderHistory.findMany({
+            where: {dinnerEventId},
+            include: {performedByUser: {select: {id: true, email: true}}},
+            orderBy: [{timestamp: 'asc'}, {id: 'asc'}]
+        })
+        return rows.map(row => OrderHistoryDisplaySchema.parse(row))
+    } catch (error) {
+        return throwH3Error(`🎟️ > ORDER_HISTORY > [GET] Error fetching the order history of dinner ${dinnerEventId}`, error)
     }
 }

@@ -1,4 +1,4 @@
-import {useBookingValidation, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState, type ScaffoldResult} from '~/composables/useBookingValidation'
+import {useBookingValidation, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketCounts, type AuditTicket, type OrderAuditAction} from '~/composables/useBookingValidation'
 import {useBillingValidation, type TransactionCreateData} from '~/composables/useBillingValidation'
 import {useBilling} from '~/composables/useBilling'
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
@@ -11,6 +11,8 @@ import type {PruneAndCreateResult} from '~/utils/batchUtils'
 import {calculateCountdown} from '~/utils/date'
 import {dateToWeekDay} from '~/utils/season'
 import {chunkArray} from '~/utils/batchUtils'
+import {getPortionsForTicketType, type TicketType} from '~/utils/portions'
+import {differenceInCalendarDays} from 'date-fns'
 
 /**
  * Field set that reverts a dinner to a clean chef-less SCHEDULED state.
@@ -1393,6 +1395,123 @@ export const useBooking = () => {
         return result
     }
 
+    // ============================================================================
+    // Ticket changes (Billetændringer) and the cooking round
+    // ============================================================================
+
+    const emptyCounts = (): TicketCounts => ({ADULT: 0, CHILD: 0, BABY: 0})
+    const SYSTEM_RUN_WINDOW_MS = 60_000
+
+    // The tickets a dinner holds after a history row; counts, kuverter and revenue are read off this set
+    type HeldTicket = Readonly<{key: number, inhabitantId: number | null, type: TicketType | null, price: number, eating: boolean}>
+    type HeldTickets = ReadonlyMap<number, HeldTicket>
+
+    const sumOver = (held: HeldTickets, weigh: (ticket: HeldTicket) => number): number =>
+        [...held.values()].reduce((sum, ticket) => sum + weigh(ticket), 0)
+    const countsOf = (held: HeldTickets): TicketCounts =>
+        [...held.values()].reduce((counts, ticket) => ticket.type ? {...counts, [ticket.type]: counts[ticket.type] + 1} : counts, emptyCounts())
+    // A ticket released after the booking deadline stays paid and leaves the table: revenue keeps it, kuverter drop it
+    const portionsOf = (held: HeldTickets): number =>
+        sumOver(held, ticket => ticket.eating && ticket.type ? getPortionsForTicketType(ticket.type) : 0)
+    const revenueOf = (held: HeldTickets): number => sumOver(held, ticket => ticket.price)
+    const countsPlus = (a: TicketCounts, b: TicketCounts): TicketCounts => ({ADULT: a.ADULT + b.ADULT, CHILD: a.CHILD + b.CHILD, BABY: a.BABY + b.BABY})
+    const countsMinus = (a: TicketCounts, b: TicketCounts): TicketCounts => ({ADULT: a.ADULT - b.ADULT, CHILD: a.CHILD - b.CHILD, BABY: a.BABY - b.BABY})
+
+    const withTicket = (held: HeldTickets, ticket: HeldTicket): HeldTickets => new Map(held).set(ticket.key, ticket)
+    const withoutTicket = (held: HeldTickets, key: number): HeldTickets => new Map([...held].filter(([heldKey]) => heldKey !== key))
+    const withEating = (held: HeldTickets, ticket: HeldTicket, eating: boolean): HeldTickets => withTicket(held, {...ticket, eating})
+    // A creation row whose order is gone keys by its own negative row id and is found by inhabitant
+    const findHeld = (held: HeldTickets, orderId: number | null, inhabitantId: number | null): HeldTicket | undefined =>
+        (orderId !== null ? held.get(orderId) : undefined)
+        ?? [...held.values()].find(ticket => ticket.key < 0 && ticket.inhabitantId === inhabitantId)
+
+    const byTime = (a: OrderHistoryDisplay, b: OrderHistoryDisplay): number => a.timestamp.getTime() - b.timestamp.getTime() || a.id - b.id
+
+    /**
+     * Replays a dinner's order history in time order into one change per event: the tickets moved by type, the
+     * composition after it, the kuverter and the revenue. A change is the difference between the tickets held before
+     * and after its row. A ticket price the season no longer names leaves the change without a type. Consecutive
+     * system rows within a minute are one run and collapse into one change.
+     */
+    const replayTicketChanges = (
+        history: OrderHistoryDisplay[],
+        ticketTypeOf: (ticketPriceId: number) => TicketType | null,
+        householdShortnameOf: (householdId: number) => string | null = () => null
+    ): TicketChange[] => {
+        const {readAuditTicket, OrderAuditActionSchema, OrderStateSchema} = useBookingValidation()
+        const Action = OrderAuditActionSchema.enum
+        const typeOf = (ticket: AuditTicket): TicketType | null => ticket.ticketPriceId === null ? null : ticketTypeOf(ticket.ticketPriceId)
+
+        const step = (held: HeldTickets, action: OrderAuditAction, rowId: number, ticket: AuditTicket): HeldTickets => {
+            const current = findHeld(held, ticket.orderId, ticket.inhabitantId)
+            switch (action) {
+                case Action.USER_BOOKED:
+                case Action.SYSTEM_CREATED:
+                    return current
+                        ? withEating(held, current, true)
+                        : withTicket(held, {key: ticket.orderId ?? -rowId, inhabitantId: ticket.inhabitantId, type: typeOf(ticket), price: ticket.priceAtBooking, eating: true})
+                case Action.USER_CANCELLED:
+                    if (!current) return held
+                    return ticket.state === OrderStateSchema.enum.RELEASED ? withEating(held, current, false) : withoutTicket(held, current.key)
+                case Action.SYSTEM_DELETED:
+                    return current ? withoutTicket(held, current.key) : held
+                case Action.USER_CLAIMED:
+                    return current ? withEating(held, current, true) : held
+                default:
+                    return held
+            }
+        }
+
+        const toChange = (row: OrderHistoryDisplay, ticket: AuditTicket, before: HeldTickets, after: HeldTickets): TicketChange & {system: boolean} => ({
+            id: row.id,
+            timestamp: row.timestamp,
+            action: row.action,
+            householdShortname: ticket.householdShortname ?? (ticket.householdId === null ? null : householdShortnameOf(ticket.householdId)),
+            ticketType: typeOf(ticket),
+            delta: countsMinus(countsOf(after), countsOf(before)),
+            counts: countsOf(after),
+            portions: portionsOf(after),
+            revenue: revenueOf(after),
+            system: row.performedByUserId === null
+        })
+
+        const {changes} = [...history].sort(byTime)
+            .map(row => ({row, ticket: readAuditTicket(row)}))
+            .filter((entry): entry is {row: OrderHistoryDisplay, ticket: AuditTicket} => entry.ticket !== null && entry.row.action !== Action.SYSTEM_UPDATED)
+            .reduce(({held, changes}, {row, ticket}) => {
+                const after = step(held, row.action, row.id, ticket)
+                return {held: after, changes: [...changes, toChange(row, ticket, held, after)]}
+            }, {held: new Map() as HeldTickets, changes: [] as Array<TicketChange & {system: boolean}>})
+        return collapseSystemRuns(changes)
+    }
+
+    // Consecutive system rows of one action within the run window are one change carrying the summed delta
+    const continuesRun = (previous: TicketChange | undefined, change: TicketChange & {system: boolean}): previous is TicketChange =>
+        previous !== undefined && change.system && previous.householdShortname === null && previous.action === change.action
+        && change.timestamp.getTime() - previous.timestamp.getTime() <= SYSTEM_RUN_WINDOW_MS
+    const collapseSystemRuns = (changes: Array<TicketChange & {system: boolean}>): TicketChange[] =>
+        changes.reduce<TicketChange[]>((collapsed, change) => {
+            const {system, ...plain} = change
+            const previous = collapsed.at(-1)
+            const shown: TicketChange = system ? {...plain, householdShortname: null, ticketType: null} : plain
+            return continuesRun(previous, change)
+                ? [...collapsed.slice(0, -1), {...shown, delta: countsPlus(previous.delta, change.delta)}]
+                : [...collapsed, shown]
+        }, [])
+
+    // The team's dinners on consecutive calendar days around one dinner; a day without a team dinner ends the run
+    const consecutiveDinnerRun = <T extends {id: number, date: Date}>(dinners: T[], aroundId: number): T[] => {
+        const sorted = [...dinners].sort((a, b) => a.date.getTime() - b.date.getTime())
+        const index = sorted.findIndex(dinner => dinner.id === aroundId)
+        if (index < 0) return []
+        const adjacent = (earlier: Date, later: Date) => differenceInCalendarDays(later, earlier) <= 1
+        let start = index
+        while (start > 0 && adjacent(sorted[start - 1]!.date, sorted[start]!.date)) start--
+        let end = index
+        while (end < sorted.length - 1 && adjacent(sorted[end]!.date, sorted[end + 1]!.date)) end++
+        return sorted.slice(start, end + 1)
+    }
+
     return {
         // Order Snapshot
         buildOrderSnapshot,
@@ -1437,6 +1556,9 @@ export const useBooking = () => {
         getPowerChanges,
         getPowerConsensus,
         hasChanges,
-        countChanges
+        countChanges,
+        // Ticket changes and the cooking round
+        replayTicketChanges,
+        consecutiveDinnerRun
     }
 }

@@ -1080,6 +1080,15 @@ export class SeasonFactory {
         return expectedStatus === 200 ? DeletedCountSchema.parse(await response.json()) : null
     }
 
+    static readonly getCookingTeam = async (
+        context: BrowserContext,
+        teamId: number
+    ): Promise<CookingTeamDetail> => {
+        const response = await context.request.get(`${ADMIN_TEAM_ENDPOINT}/${teamId}`)
+        expect(response.status(), `team ${teamId} exists`).toBe(200)
+        return await response.json()
+    }
+
     static readonly getCookingTeamsForSeason = async (
         context: BrowserContext,
         seasonId: number

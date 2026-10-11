@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
+import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, TicketChangesResponse, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
@@ -832,5 +832,23 @@ export class OrderFactory {
       ticketPriceId,
       isTestHousehold
     }
+  }
+
+  // GET /api/chef/dinner/[id]/order-history: the dinner's ticket changes newest first, from `since` when given
+  static readonly getTicketChanges = async (
+    context: BrowserContext,
+    dinnerEventId: number,
+    since?: Date,
+    expectedStatus: number = 200
+  ): Promise<TicketChangesResponse | null> => {
+    const { TicketChangesResponseSchema } = useBookingValidation()
+    const query = since ? `?since=${encodeURIComponent(since.toISOString())}` : ''
+    const response = await context.request.get(`/api/chef/dinner/${dinnerEventId}/order-history${query}`, { headers })
+
+    const status = response.status()
+    const errorBody = status !== expectedStatus ? await response.text() : ''
+    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+    return expectedStatus === 200 ? TicketChangesResponseSchema.parse(await response.json()) : null
   }
 }

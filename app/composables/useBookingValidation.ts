@@ -421,6 +421,71 @@ export const useBookingValidation = () => {
     const flexibleDateNullableSchema = z.union([z.string(), z.date()]).nullable().transform(val => val ? new Date(val) : null)
 
     // Schema for deserializing - accepts strings or Dates, outputs Dates
+    /**
+     * The ticket an OrderHistory row speaks of, read from the three shapes auditData takes: the creation's `orderData`,
+     * the snapshot of an update, claim or deletion, and the scalars of a bulk close. The order id comes from the
+     * snapshot or the row; a row whose order is gone and whose data holds no id reads null and is matched by inhabitant.
+     */
+    const AuditTicketSchema = z.object({
+        orderId: z.number().int().positive().nullable(),
+        inhabitantId: z.number().int().positive().nullable(),
+        householdId: z.number().int().positive().nullable(),
+        householdShortname: z.string().nullable(),
+        ticketPriceId: z.number().int().positive().nullable(),
+        priceAtBooking: z.number().int(),
+        state: OrderStateSchema
+    })
+
+    const readAuditTicket = (row: {orderId: number | null, inhabitantId: number | null, auditData: string}): z.infer<typeof AuditTicketSchema> | null => {
+        const parsed = JSON.parse(row.auditData) as Record<string, unknown>
+        const snapshot = parsed.orderSnapshot as Record<string, unknown> | undefined
+        const source = snapshot ?? (parsed.orderData as Record<string, unknown> | undefined) ?? parsed
+        const result = AuditTicketSchema.safeParse({
+            orderId: (snapshot?.id as number | undefined) ?? row.orderId,
+            inhabitantId: (source.inhabitantId as number | undefined) ?? row.inhabitantId,
+            householdId: source.householdId ?? null,
+            householdShortname: snapshot?.householdShortname ?? null,
+            ticketPriceId: source.ticketPriceId ?? null,
+            priceAtBooking: source.priceAtBooking ?? 0,
+            state: source.state ?? OrderStateSchema.enum.BOOKED
+        })
+        return result.success ? result.data : null
+    }
+
+    // ============================================================================
+    // TICKET CHANGES - the dinner's order history replayed for the chef (ADR-009 operation result)
+    // ============================================================================
+
+    const TicketCountsSchema = z.object({
+        [TicketTypeSchema.enum.ADULT]: z.number().int(),
+        [TicketTypeSchema.enum.CHILD]: z.number().int(),
+        [TicketTypeSchema.enum.BABY]: z.number().int()
+    })
+
+    /**
+     * One change of the dinner's tickets: the tickets moved by type, the composition after it, the kuverter and the
+     * revenue in øre. A system run collapses into one change without a household or a single ticket type.
+     */
+    const TicketChangeSchema = z.object({
+        id: z.number().int().positive(),
+        timestamp: z.coerce.date(),
+        action: OrderAuditActionSchema,
+        householdShortname: z.string().nullable(),
+        ticketType: TicketTypeSchema.nullable(),
+        delta: TicketCountsSchema,
+        counts: TicketCountsSchema,
+        portions: z.number(),
+        revenue: z.number().int()
+    })
+
+    // GET /api/chef/dinner/[id]/order-history: newest first; `olderCount` counts the changes before `since`
+    const TicketChangesResponseSchema = z.object({
+        dinnerEventId: z.number().int().positive(),
+        since: z.coerce.date().nullable(),
+        changes: z.array(TicketChangeSchema),
+        olderCount: z.number().int().min(0)
+    })
+
     const SerializedOrderSchema = OrderDisplaySchema.omit({
         releasedAt: true, closedAt: true, createdAt: true, updatedAt: true
     }).extend({
@@ -871,6 +936,11 @@ export const useBookingValidation = () => {
         DinnerEventDisplaySchema,
         DinnerEventInfoSchema,
         DinnerEventDetailSchema,
+        TicketCountsSchema,
+        TicketChangeSchema,
+        TicketChangesResponseSchema,
+        AuditTicketSchema,
+        readAuditTicket,
         DinnerEventCreateSchema,
         DinnerEventUpdateSchema,
         ChefMenuFormSchema,
@@ -971,6 +1041,10 @@ export type DinnerEventInfo = z.infer<ReturnType<typeof useBookingValidation>['D
 export type DinnerEventDetail = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventDetailSchema']>
 export type DinnerEventCreate = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventCreateSchema']>
 export type DinnerEventUpdate = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventUpdateSchema']>
+export type TicketCounts = z.infer<ReturnType<typeof useBookingValidation>['TicketCountsSchema']>
+export type TicketChange = z.infer<ReturnType<typeof useBookingValidation>['TicketChangeSchema']>
+export type TicketChangesResponse = z.infer<ReturnType<typeof useBookingValidation>['TicketChangesResponseSchema']>
+export type AuditTicket = z.infer<ReturnType<typeof useBookingValidation>['AuditTicketSchema']>
 export type ChefMenuForm = z.infer<ReturnType<typeof useBookingValidation>['ChefMenuFormSchema']>
 
 // Order

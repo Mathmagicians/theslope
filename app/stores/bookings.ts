@@ -1,5 +1,5 @@
-import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder, DinnerState, DinnerMode} from '~/composables/useBookingValidation'
-import type {MonthlyBillingResponse} from '~/composables/useBillingValidation'
+import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder, DinnerState, DinnerMode, TicketChangesResponse} from '~/composables/useBookingValidation'
+import type {MonthlyBillingResponse, Expense, ExpenseCreate} from '~/composables/useBillingValidation'
 import {type ReleasedTicketCounts, resolveDesiredOrdersToBuckets} from '~/composables/useBooking'
 import {useBilling} from '~/composables/useBilling'
 import {isSameDay} from 'date-fns'
@@ -7,7 +7,7 @@ import {isSameDay} from 'date-fns'
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
     const {storeAsyncData, apiRequest, handleApiError} = useApiHandler()
-    const {OrderDisplaySchema, OrderDetailSchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema} = useBookingValidation()
+    const {OrderDisplaySchema, OrderDetailSchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema, TicketChangesResponseSchema} = useBookingValidation()
     const {formatScaffoldResult} = useBooking()
     const {formatDailyMaintenanceStats} = useMaintenance()
     const DinnerState = DinnerStateSchema.enum
@@ -25,15 +25,16 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // resolves after its upstream loads, mid-render on the server
 
     // The page names the orders it shows; a getter keeps them in step with its selection
-    type OrdersFilter = {dinnerEventIds: number[], householdId?: number | null, includeProvenance?: boolean}
+    type OrdersFilter = {dinnerEventIds: number[], householdId?: number | null, includeProvenance?: boolean, allHouseholds?: boolean}
     const ordersFilter = shallowRef<() => OrdersFilter>(() => ({dinnerEventIds: []}))
 
     const ordersQuery = computed(() => {
-        const {dinnerEventIds, householdId, includeProvenance} = ordersFilter.value()
+        const {dinnerEventIds, householdId, includeProvenance, allHouseholds} = ordersFilter.value()
         const params = new URLSearchParams()
         dinnerEventIds.forEach(id => params.append('dinnerEventIds', String(id)))
         if (householdId) params.append('householdId', String(householdId))
         if (includeProvenance) params.append('includeProvenance', 'true')
+        if (allHouseholds) params.append('allHouseholds', 'true')
         return params.toString()
     })
 
@@ -166,6 +167,15 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // Order detail with its audit history - no store state, a component keeps one per expanded row
     const fetchOrderDetail = (orderId: number): Promise<OrderDetail> =>
         apiRequest(`/api/order/${orderId}`, {schema: OrderDetailSchema, action: 'fetchOrderDetail'})
+
+    // The chef's Billetændringer: the dinner's ticket changes newest first, from `since` when given
+    const fetchTicketChanges = (dinnerEventId: number, since?: Date): Promise<TicketChangesResponse> =>
+        apiRequest(`/api/chef/dinner/${dinnerEventId}/order-history`, {
+            query: since ? {since: since.toISOString()} : {},
+            schema: TicketChangesResponseSchema,
+            action: 'fetchTicketChanges',
+            errorMessage: 'Kunne ikke hente billetændringer'
+        })
 
     const fetchReleasedOrders = async (dinnerEventId: number): Promise<OrderDisplay[]> => {
         const released = await apiRequest('/api/order', {
@@ -429,6 +439,11 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
     const isDinnerUpdating = ref(false)
 
+    // A mutation of the dinner on view re-reads its detail; another dinner's mutation leaves the view alone
+    const refreshDinnerIfSelected = async (dinnerEventId: number) => {
+        if (selectedDinnerEventId.value === dinnerEventId) await refreshSelectedDinnerEventDetail()
+    }
+
     const updateDinner = async (id: number, updates: DinnerUpdate, action: string): Promise<DinnerEventDetail> => {
         const parsed = await apiRequest(`/api/chef/dinner/${id}`, {
             method: 'POST',
@@ -450,7 +465,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             action
         })
         console.info(`${CTX} Updated dinner ${id}: ${Object.keys(updates).join(', ')} → state: ${parsed.state}`)
-        if (selectedDinnerEventId.value === id) await refreshSelectedDinnerEventDetail()
+        await refreshDinnerIfSelected(id)
         return parsed
     }
 
@@ -464,6 +479,27 @@ export const useBookingsStore = defineStore("Bookings", () => {
         }
 
     const updateDinnerEventAllergens = withLoading((id: number, allergenIds: number[]) => updateDinner(id, {allergenIds}, 'Kunne ikke gemme allergeninformation'))
+    // The chef's grocery lines: the API answers the line, the dinner detail re-reads for its computed cost
+    const {ExpenseSchema} = useBillingValidation()
+    const {formatPrice} = useTicket()
+    const expensesUrl = (dinnerEventId: number) => `/api/chef/dinner/${dinnerEventId}/expenses`
+    const addExpense = withLoading(async (dinnerEventId: number, line: ExpenseCreate): Promise<Expense> => {
+        const expense = await apiRequest(expensesUrl(dinnerEventId), {
+            method: 'PUT', body: line, schema: ExpenseSchema, action: 'addExpense', errorMessage: 'Kunne ikke gemme indkøbet'
+        })
+        await refreshDinnerIfSelected(dinnerEventId)
+        toast.add({title: 'Indkøb gemt', description: `${expense.description}: ${formatPrice(expense.amount)} kr`, color: COLOR.success})
+        return expense
+    })
+    const removeExpense = withLoading(async (dinnerEventId: number, expenseId: number): Promise<Expense> => {
+        const removed = await apiRequest(`${expensesUrl(dinnerEventId)}/${expenseId}`, {
+            method: 'DELETE', schema: ExpenseSchema, action: 'removeExpense', errorMessage: 'Kunne ikke slette indkøbet'
+        })
+        await refreshDinnerIfSelected(dinnerEventId)
+        toast.add({title: 'Indkøb slettet', description: removed.description, color: COLOR.success})
+        return removed
+    })
+
     const announceDinner = withLoading((id: number) => updateDinner(id, {state: DinnerState.ANNOUNCED}, 'Kunne ikke annoncere fællesspisningen'))
     const cancelDinner = withLoading((id: number) => updateDinner(id, {state: DinnerState.CANCELLED}, 'Kunne ikke aflyse fællesspisningen'))
     const undoCancelDinner = withLoading((id: number, targetState: DinnerState = DinnerState.SCHEDULED) => updateDinner(id, {state: targetState}, 'Kunne ikke annullere aflysningen'))
@@ -745,6 +781,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         refreshUpcomingOrders,
         claimOrder,
         fetchOrderDetail,
+        fetchTicketChanges,
         fetchReleasedOrders,
         // Lock status (calendar display)
         lockStatus,
@@ -771,6 +808,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
         announceDinner,
         cancelDinner,
         undoCancelDinner,
+        addExpense,
+        removeExpense,
 
         // daily maintenance
         dailyMaintenanceResult,

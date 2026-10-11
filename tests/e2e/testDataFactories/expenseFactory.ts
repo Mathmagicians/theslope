@@ -10,7 +10,6 @@ const expensesEndpoint = (dinnerEventId: number) => `/api/chef/dinner/${dinnerEv
 export class ExpenseFactory {
     static readonly defaultExpenseCreate = (overrides: Partial<ExpenseCreate> = {}): ExpenseCreate => ({
         amount: 101200,
-        description: 'Grønt og kolonial',
         ...overrides
     })
 

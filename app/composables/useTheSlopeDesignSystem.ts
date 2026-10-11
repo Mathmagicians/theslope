@@ -211,7 +211,10 @@ export const BG = {
     /** The head row of the chef's budget table */
     budgetHead: 'bg-neutral-50 dark:bg-neutral-800',
     /** The disc behind an allergy type's icon or emoji, white in both modes */
-    allergyAvatar: 'bg-white'
+    allergyAvatar: 'bg-white',
+    /** The tint of an expanded table row (the household allergies row). A variant prefix cannot be
+     *  composed onto a token, so the pair lives here rather than at the site */
+    expandedRow: 'data-[expanded=true]:bg-neutral-100/50 dark:data-[expanded=true]:bg-neutral-800/50'
 } as const
 
 /**
@@ -229,6 +232,7 @@ export const TEXT = {
         50: 'text-amber-50',
         200: 'text-amber-200',
         600: 'text-amber-600',
+        800: 'text-amber-800',    // Kitchen stats bar - secondary lines
         900: 'text-amber-900',
         950: 'text-amber-950'
     },
@@ -611,6 +615,9 @@ export const PANTONE_CHIPS = PANTONE_FAMILIES.map(family => CHIPS[family])
 /** The Pantone chip for a position in a list, wrapping at the end of the palette */
 export const getPantoneChip = (index: number): string => PANTONE_CHIPS[index % PANTONE_CHIPS.length]!
 
+/** The stats bar's secondary lines: the bar's fill, so the ink is measured on the surface it sits on */
+const KITCHEN_STATS_BAR_SECONDARY = `${BG.mocha[50]} ${TEXT.mocha[800]}`
+
 /** The box every kitchen panel draws: a right divider, padding, a centred column that may shrink */
 const KITCHEN_PANEL_BOX = 'border-r last:border-r-0 p-3 md:p-4 text-center min-w-0 box-border'
 
@@ -628,6 +635,12 @@ const CHOICE_LABEL_UI = {
 
 /** Table cells wrap between words; a word stays whole */
 const TABLE_CELL_WRAP = 'whitespace-normal'
+
+/** Compact tables with many narrow columns */
+const TABLE_DENSE_UI = {th: 'px-1 py-1 md:px-4 md:py-3', td: `px-1 md:px-4 ${TABLE_CELL_WRAP}`} as const
+
+// The turn of an open-panel chevron; the classes go on whichever icon slot carries the chevron
+const flipOpenTurn = (isOpen: boolean): string => `${isOpen ? 'rotate-180 ' : ''}transition-transform duration-200`
 
 export const COMPONENTS = {
     // Kitchen panels (functional data) - Vibrant Pantone colors
@@ -654,9 +667,10 @@ export const COMPONENTS = {
      */
     kitchen: {
         totals: 'text-center',
-        totalsLabel: `${TYPOGRAPHY.kitchenLabel} ${TEXT.toned}`,
+        totalsSecondary: KITCHEN_STATS_BAR_SECONDARY,
+        totalsLabel: `${TYPOGRAPHY.kitchenLabel} ${KITCHEN_STATS_BAR_SECONDARY}`,
         totalsMain: 'text-2xl md:text-3xl lg:text-4xl font-bold',
-        totalsBreakdown: `text-xs md:text-sm flex flex-wrap justify-center gap-x-2 ${TEXT.toned}`,
+        totalsBreakdown: `text-xs md:text-sm flex flex-wrap justify-center gap-x-2 ${KITCHEN_STATS_BAR_SECONDARY}`,
         panels: 'flex flex-col md:flex-row overflow-hidden',
         // Beside `kitchenPanel`: the phone stacks the panels, so a bottom edge divides them below md
         panel: 'border-b md:border-b-0 md:border-r last:border-b-0 last:md:border-r-0 cursor-pointer',
@@ -699,7 +713,10 @@ export const COMPONENTS = {
         avatar: `flex-shrink-0 ${BG.allergyAvatar} p-1`,
         name: 'text-sm md:text-base',
         named: 'font-medium',
-        none: TEXT.muted
+        none: TEXT.muted,
+        // The no-allergy sun: the disc carries its fill and ink as one pair, and the icon slot inherits the ink. The
+        // disc stays white in the dark, where the palettes lighten gray-500 for dark surfaces; gray-800 stays dark
+        noneAvatarUi: {root: `${BG.allergyAvatar} ${TEXT.gray[500]} dark:text-gray-800`, icon: 'text-inherit'}
     },
 
     /**
@@ -711,11 +728,54 @@ export const COMPONENTS = {
         root: 'flex flex-col md:flex-row gap-4 md:gap-6',
         withSummaryBar: 'pb-16 md:pb-0',
         master: 'md:w-1/3',
-        summaryBar: 'md:hidden fixed bottom-4 inset-x-4 z-50 bg-elevated shadow-lg',
+        summaryBar: `md:hidden fixed bottom-4 inset-x-4 z-50 ${BG.panelNested} shadow-lg`,
         detail: 'flex-1 md:border-l md:pl-6',
         panelIcon: 'size-8',
         panelBody: 'flex flex-col items-start gap-2',
         names: TYPOGRAPHY.bodyTextSmall
+    },
+
+    /**
+     * HouseholdAllergies: the full-bleed `card` on a phone, the `body` stack, the row toggle (pencil closed, a turned
+     * chevron open), the collapsed row's `allergies` with each `allergy` and its `comment`, and the `editor` padding
+     */
+    householdAllergies: {
+        card: {class: `${LAYOUTS.cardResponsive} border-t-0 md:border-t`, ui: {body: 'px-0 mb-0 md:px-4'}},
+        body: 'space-y-2 md:space-y-4',
+        rowToggle: (isOpen: boolean) => ({
+            color: COLOR.neutral,
+            variant: NOISE.quiet,
+            square: true,
+            icon: isOpen ? ICONS.chevronDown : ICONS.edit,
+            ui: {leadingIcon: `text-sm md:text-base ${flipOpenTurn(isOpen)}`}
+        }),
+        allergies: 'flex flex-wrap gap-1 md:gap-2',
+        allergy: 'flex items-center gap-1',
+        comment: `${TYPOGRAPHY.finePrint} ${TEXT.muted}`,
+        editor: 'p-4'
+    },
+
+    /**
+     * AllergyEditor: the `label` over the add `select` with its `item` rows, the `allSelected` line; the comments mode's
+     * `commentCard` per type with the `commentType` and the `commentRow` (`commentInput` and the remove button); the
+     * simple mode's `badges`, a `badge` with its `badgeBody` and `badgeRemove`
+     */
+    allergyEditor: {
+        root: 'space-y-3',
+        label: `block ${TYPOGRAPHY.bodyTextMedium}`,
+        select: 'w-full',
+        item: 'flex items-center gap-2',
+        empty: TEXT.muted,
+        allSelected: `${TYPOGRAPHY.finePrint} ${TEXT.muted}`,
+        commentList: 'space-y-2',
+        commentCard: `flex flex-col md:flex-row md:items-center gap-2 p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 ${BG.panelNested}`,
+        commentType: 'flex items-center gap-2 md:flex-shrink-0',
+        commentRow: 'flex items-center gap-2 flex-1',
+        commentInput: 'flex-1',
+        badges: 'flex flex-wrap gap-2',
+        badge: 'pr-1',
+        badgeBody: 'flex items-center gap-1',
+        badgeRemove: 'ml-1'
     },
 
     /**
@@ -825,6 +885,33 @@ export const COMPONENTS = {
         }
     },
 
+    /**
+     * `UCollapsible` - the panel a separate toggle opens and closes; the toggle binds `BUTTONS.flipOpen(isOpen)`.
+     * The trigger stays outside the collapsible, so the panel's header may hold its own controls.
+     */
+    collapsible: {
+        // A panel that opens below the button that toggles it (ChefMenuCard danger zone, RoleAssignment form)
+        belowTrigger: {class: 'mt-3'},
+        // The chef calendar's agenda or calendar below its header row, taking the column's remaining height
+        chefCalendar: {class: 'flex-1'}
+    },
+
+    /**
+     * ChefCalendarDisplay: the column under the countdown, the `header` row with the view tabs left and the
+     * collapse chevron right, the agenda table's header row and empty state, and the calendar view
+     */
+    chefCalendar: {
+        root: 'flex flex-col h-full',
+        header: 'flex items-center justify-between gap-2',
+        viewTabs: {variant: NOISE.link, orientation: 'horizontal' as const},
+        agenda: 'flex-1 flex flex-col overflow-x-hidden',
+        agendaHeader: 'flex items-center justify-between w-full',
+        empty: 'flex flex-col items-center justify-center py-6 gap-3',
+        emptyIcon: 'w-8 h-8',
+        calendar: 'flex-1',
+        plainDay: 'text-sm'
+    },
+
     // Power mode - family-wide bulk editing pattern
     powerMode: {
         color: 'warning' as const,
@@ -848,6 +935,60 @@ export const COMPONENTS = {
         iconClass: 'size-4 md:size-6 text-info-600'
     },
 
+    /**
+     * DinnerTicket: the card `face` per order state (the ticket fill and its accent edge left and right), the
+     * `watermark` layer and its `watermarkIcon`, the `content` stack, and row 1 in three slots: the `special` slot of
+     * three fixed `cell`s (state | guest | allergy) whose state glyph takes the state colour (`stateIcon`) and whose
+     * guest and allergy glyphs take the type badge's colour (`infoIcon`), the type `badge`, and `modeSlot` (how you
+     * eat, right-aligned); `subRow` starts row 2 under the badge with its `provenance` line
+     */
+    ticket: {
+        face: {
+            normal: `relative overflow-hidden rounded-lg ${BG.ticket} p-2 md:p-3 w-full border-x-4 md:border-x-8 border-primary`,
+            released: `relative overflow-hidden rounded-lg ${BG.ticket} p-2 md:p-3 w-full border-x-4 md:border-x-8 border-error`,
+            claimed: `relative overflow-hidden rounded-lg ${BG.ticket} p-2 md:p-3 w-full border-x-4 md:border-x-8 border-info`
+        },
+        watermark: 'absolute inset-0 flex items-center justify-center pointer-events-none',
+        watermarkIcon: `w-full h-[140%] opacity-[0.12] ${TEXT.dimmed}`,
+        content: 'relative z-10 space-y-1',
+        row: 'flex items-center gap-2',
+        special: 'flex items-center gap-1 flex-shrink-0',
+        // 20px, the badge's height; an empty cell keeps the width so the badges share one left edge
+        cell: 'size-5 flex-shrink-0 flex items-center justify-center',
+        stateIcon: {
+            released: 'size-5 text-error-700 dark:text-error-400',
+            claimed: 'size-5 text-info'
+        },
+        // Keyed by the ticket type colours (TICKET_TYPE_COLORS)
+        infoIcon: {
+            [COLOR.primary]: 'size-5 text-primary-800 dark:text-primary-300',
+            [COLOR.success]: 'size-5 text-success-700 dark:text-success-400',
+            [COLOR.neutral]: 'size-5 text-neutral-700 dark:text-neutral-400'
+        } satisfies Record<TicketTypeColor, string>,
+        badge: 'uppercase whitespace-nowrap',
+        modeSlot: 'ms-auto flex items-center',
+        // The special slot (three 20px cells, two gap-1) and the row's gap-2: 4.75rem
+        subRow: 'flex items-center gap-2 pl-19',
+        provenance: `${TYPOGRAPHY.finePrint} ${TEXT.gray[500]}`
+    },
+
+    /**
+     * DinnerBookingForm: the ticket under the name on a phone (`ticketPhone`) and in its own column from md
+     * (`ticketDesktop`), the `provenance` badge row in an inhabitant's name cell and `guestProvenance` under a guest
+     * order's booker, the `guestOf` row with its `guestOfLabel`, and the expanded row's `allergyLine` (`ICONS.allergy`, then the allergy types)
+     */
+    bookingForm: {
+        ticketPhone: 'mt-2 md:hidden',
+        ticketDesktop: 'hidden md:block',
+        provenance: 'flex flex-wrap items-center gap-1',
+        // Indent = the guestOf disc (avatar.compact: sm, size-7, md:size-8) plus guestOf's gap-3, so "fra X" starts under "Gæst af"
+        guestProvenance: 'flex flex-wrap items-center gap-1 mt-1 ml-10 md:ml-11',
+        // A guest order's name cell: the add-guest row's disc, label and gap, so both rows share their x
+        guestOf: 'flex items-center gap-3',
+        guestOfLabel: TYPOGRAPHY.bodyTextMedium,
+        allergyLine: 'flex flex-wrap items-center gap-2'
+    },
+
     // Table interactions - row selection and click patterns
     table: {
         selectedRow: 'bg-secondary-100 dark:bg-secondary-900',
@@ -860,8 +1001,14 @@ export const COMPONENTS = {
          * A data table wider than a phone scrolls inside its own box, the page never does (MobileViewport.e2e).
          */
         ui: {th: 'px-2 md:px-4', td: `px-2 py-1 md:px-4 md:py-2 ${TABLE_CELL_WRAP}`},
-        /** Compact tables with many narrow columns (booking form, household preferences, household allergies) */
-        denseUi: {th: 'px-1 py-1 md:px-4 md:py-3', td: `px-1 md:px-4 ${TABLE_CELL_WRAP}`},
+        /** Compact tables with many narrow columns (booking form, household preferences) */
+        denseUi: TABLE_DENSE_UI,
+        /** The household allergies: the dense cells, an expanded inhabitant row tinted */
+        householdAllergiesUi: {...TABLE_DENSE_UI, tr: BG.expandedRow},
+        /** The booking form: the dense cells, the power row first in the warning tint, an expanded row tinted */
+        bookingUi: {...TABLE_DENSE_UI, tbody: '[&_tr:first-child]:bg-warning/10', tr: BG.expandedRow},
+        /** The chef agenda: one full-width card column in a fixed layout, no header rule */
+        agendaUi: {th: 'border-b-0', td: 'py-1 md:py-2 max-w-0 w-full', base: 'table-fixed w-full'},
         /** The allergy catalog in its narrow master column: tighter horizontal cell padding */
         catalogUi: {th: 'px-1', td: `px-1 py-1 md:px-1 md:py-2 ${TABLE_CELL_WRAP}`},
         /** The booking grid: centred day cells, a sticky footer */
@@ -1131,6 +1278,127 @@ export const COMPONENTS = {
      * sections with a rule above each, the allergen row (label, overview line, Rediger allergener), the allergen editor
      * head, and the menu form's fields with the cost row
      */
+    /**
+     * The dinner budget pane (DinnerBudget): the compact amount, the three boxes, the expandable breakdown table and
+     * summary lines, then the grocery lines (ExpenseLines) under them
+     */
+    dinnerBudget: {
+        compact: `inline-flex items-center gap-1 ${TYPOGRAPHY.bodyTextSmall}`,
+        compactAmount: 'font-medium',
+        stack: 'space-y-3',
+        toggle: 'flex items-center gap-2 hover:opacity-80 transition-opacity',
+        toggleIcon: 'w-4 h-4 opacity-50',
+        boxes: 'grid grid-cols-1 md:grid-cols-3 gap-3',
+        boxUi: {body: 'p-3'},
+        box: 'text-center',
+        boxLabel: `flex items-center justify-center gap-1 ${TYPOGRAPHY.caption} opacity-60 mb-1`,
+        boxAmount: `${TYPOGRAPHY.cardTitle} font-bold text-success-700 dark:text-success-400`,
+        boxAmountLarge: `${TYPOGRAPHY.cardTitle} font-bold text-xl text-success-700 dark:text-success-400`,
+        boxSecondary: 'mt-1',
+        boxSecondaryAmount: `${TYPOGRAPHY.bodyTextSmall} text-success-700 dark:text-success-400`,
+        unit: `${TYPOGRAPHY.finePrint} opacity-60`,
+        details: 'border rounded-lg overflow-hidden',
+        tableScroll: 'overflow-x-auto',
+        table: 'w-full',
+        tableHead: `border-b ${BG.budgetHead}`,
+        th: `px-4 py-2 text-left ${TYPOGRAPHY.caption} opacity-60`,
+        thRight: `px-4 py-2 text-right ${TYPOGRAPHY.caption} opacity-60`,
+        tr: 'border-b last:border-b-0',
+        td: `px-4 py-2 ${TYPOGRAPHY.bodyTextSmall}`,
+        tdRight: `px-4 py-2 text-right ${TYPOGRAPHY.bodyTextSmall}`,
+        tdTotal: `px-4 py-2 text-right ${TYPOGRAPHY.bodyTextMedium}`,
+        tdEmpty: `px-4 py-4 text-center italic ${TYPOGRAPHY.bodyTextMuted}`,
+        summary: 'border-t p-4 space-y-2',
+        summaryRow: 'flex justify-between',
+        summaryDeduction: `${TYPOGRAPHY.bodyTextMedium} opacity-60`,
+        summaryTotalRow: `flex justify-between pt-2 border-t ${TYPOGRAPHY.bodyTextMedium} font-semibold`,
+        summaryTotal: 'text-success-700 dark:text-success-400',
+        boxUnit: `${TYPOGRAPHY.finePrint} opacity-60`,
+        boxLine: `flex items-center justify-between gap-2 ${TYPOGRAPHY.bodyTextSmall}`,
+        section: 'border-t p-4 space-y-2',
+        sectionTitle: TYPOGRAPHY.sectionSubheading,
+        unitHeader: `flex justify-end ${TYPOGRAPHY.finePrint} opacity-60`
+    },
+
+    /**
+     * The grocery lines behind a cost (ExpenseLines): the entry row on top, then one grid per line (date, note,
+     * amount, remove) so every amount and every remove button share a column
+     */
+    /**
+     * One amount in both units (VatAmount): the ex moms figure in the row's weight, the slash and the inkl. moms half
+     * in fine print; a balance adds its sign, reads red below zero, and carries the check or the exclamation icon
+     */
+    vatAmount: {
+        root: 'inline-flex items-baseline gap-1 whitespace-nowrap tabular-nums',
+        incl: `${TYPOGRAPHY.finePrint} opacity-60`,
+        over: 'text-error-700 dark:text-error-400',
+        icon: 'size-4 self-center',
+        iconOk: 'text-success-700 dark:text-success-400',
+        iconOver: 'text-error-700 dark:text-error-400',
+        unitHeader: `${TYPOGRAPHY.finePrint} opacity-60`
+    },
+
+    /**
+     * The grocery lines behind a cost (ExpenseLines): the helping numbers, the entry row, then one grid per line
+     * (date, bestiller, amount in both units, remove) so every amount and every remove button share a column
+     */
+    expenseLines: {
+        title: `${TYPOGRAPHY.sectionSubheading} uppercase`,
+        stack: 'space-y-3',
+        helpers: `flex flex-col md:flex-row md:items-center gap-1 md:gap-6 ${TYPOGRAPHY.bodyTextSmall}`,
+        helper: 'inline-flex items-center gap-2',
+        form: 'space-y-1',
+        formRow: 'flex flex-col md:flex-row md:items-start gap-2',
+        amountField: 'w-full md:w-32',
+        vatField: 'w-full md:w-36',
+        control: 'w-full',
+        alternative: `${TYPOGRAPHY.finePrint} opacity-60`,
+        list: 'divide-y',
+        row: 'grid grid-cols-[3rem_1fr_11rem_2.25rem] items-center gap-2 py-1',
+        head: `${TYPOGRAPHY.caption} opacity-60`,
+        headRight: `${TYPOGRAPHY.caption} opacity-60 text-right`,
+        date: `${TYPOGRAPHY.finePrint} opacity-60`,
+        payer: `${TYPOGRAPHY.bodyTextSmall} truncate`,
+        amount: 'justify-self-end',
+        removeSlot: 'w-9',
+        total: `${TYPOGRAPHY.bodyTextMedium}`
+    },
+
+    /**
+     * The team's cooking round (CookingRoundSpending): one row per consecutive dinner with its allowance, spending and
+     * what is left, the current dinner marked, a total row
+     */
+    cookingRound: {
+        table: 'w-full',
+        th: `px-2 py-1 text-left ${TYPOGRAPHY.caption} opacity-60`,
+        thRight: `px-2 py-1 text-right ${TYPOGRAPHY.caption} opacity-60`,
+        tr: 'border-b last:border-b-0',
+        td: `px-2 py-1 ${TYPOGRAPHY.bodyTextSmall}`,
+        tdRight: `px-2 py-1 text-right ${TYPOGRAPHY.bodyTextSmall}`,
+        current: 'font-semibold',
+        total: `border-t ${TYPOGRAPHY.bodyTextMedium}`
+    },
+
+    /**
+     * Billetændringer (TicketChanges): a toggle row that opens the dinner's ticket changes, newest first, the stretch
+     * from the menu deadline first and the rest behind one button
+     */
+    ticketChanges: {
+        toggleRow: 'flex items-center justify-between gap-2 py-1',
+        table: 'w-full',
+        th: `px-2 py-1 text-left ${TYPOGRAPHY.caption} opacity-60`,
+        thRight: `px-2 py-1 text-right ${TYPOGRAPHY.caption} opacity-60`,
+        tr: 'border-b last:border-b-0 align-top',
+        td: `px-2 py-1 ${TYPOGRAPHY.bodyTextSmall}`,
+        tdRight: `px-2 py-1 text-right ${TYPOGRAPHY.bodyTextSmall} whitespace-nowrap`,
+        chips: 'inline-flex flex-wrap items-center gap-1',
+        divider: `flex items-center gap-2 py-2 ${TYPOGRAPHY.finePrint} opacity-60`,
+        dividerLine: 'flex-1 border-t',
+        loading: `flex items-center gap-2 py-2 ${TYPOGRAPHY.finePrint}`,
+        spinner: 'animate-spin motion-reduce:animate-none',
+        moreRow: 'flex justify-center py-2'
+    },
+
     chefMenuCard: {
         compactUi: (selected: boolean) => ({
             root: `${CALENDAR.selection.card.base} ${selected ? CHEF_CALENDAR.selection : ''}`,
@@ -1140,7 +1408,7 @@ export const COMPONENTS = {
         compactDate: 'text-sm font-semibold text-primary w-12 shrink-0',
         compactTitleColumn: 'flex-1 min-w-0',
         compactTitle: 'text-sm truncate font-medium',
-        compactTitlePlaceholder: 'text-sm truncate italic',
+        compactTitlePlaceholder: `text-sm truncate italic ${TEXT.muted}`,
         compactBadge: 'shrink-0',
         compactBudget: 'text-sm font-medium shrink-0',
         stack: 'space-y-6',
@@ -1196,23 +1464,32 @@ export const TICKET_TYPE_COLORS = {
     BABY: COLOR.neutral
 } as const
 
+/** The colours a ticket type badge takes; `COMPONENTS.ticket.infoIcon` is keyed by them */
+export type TicketTypeColor = typeof TICKET_TYPE_COLORS[keyof typeof TICKET_TYPE_COLORS]
+
 // ============================================================================
 // PART 5: Order State Display (for DinnerTicket accent colors)
 // ============================================================================
 
+export type TicketState = 'normal' | 'released' | 'claimed'
+
 /** Order state to accent color mapping for ticket display */
-export const ORDER_STATE_COLORS: Record<'normal' | 'released' | 'claimed', NuxtUIBadgeColor> = {
+export const ORDER_STATE_COLORS: Record<TicketState, NuxtUIBadgeColor> = {
     normal: 'primary',
     released: 'error',
     claimed: 'info'
 }
 
-/** Get order state accent color from isReleased/isClaimed flags */
-export const getOrderStateColor = (isReleased: boolean, isClaimed: boolean): NuxtUIBadgeColor => {
-    if (isReleased) return ORDER_STATE_COLORS.released
-    if (isClaimed) return ORDER_STATE_COLORS.claimed
-    return ORDER_STATE_COLORS.normal
+/** The ticket state from isReleased/isClaimed flags; a released ticket reads released even when claimed */
+export const getTicketState = (isReleased: boolean, isClaimed: boolean): TicketState => {
+    if (isReleased) return 'released'
+    if (isClaimed) return 'claimed'
+    return 'normal'
 }
+
+/** Get order state accent color from isReleased/isClaimed flags */
+export const getOrderStateColor = (isReleased: boolean, isClaimed: boolean): NuxtUIBadgeColor =>
+    ORDER_STATE_COLORS[getTicketState(isReleased, isClaimed)]
 
 /**
  * ICONS - Standard icon names for common UI elements
@@ -1229,6 +1506,7 @@ export const ICONS = {
     // Navigation & entities
     team: 'i-fluent-mdl2-team-favorite',
     calendar: 'i-heroicons-calendar',
+    agenda: 'i-heroicons-list-bullet',
     calendarDays: 'i-heroicons-calendar-days',
     user: 'i-heroicons-user',
     userPlus: 'i-heroicons-user-plus',
@@ -1237,6 +1515,7 @@ export const ICONS = {
     /** Filled person silhouettes for member counts - the outline glyphs blur at badge size */
     members: 'i-heroicons-users-solid',
     ticket: 'i-heroicons-ticket',
+    ticketSolid: 'i-heroicons-ticket-solid',  // DinnerTicket's watermark
 
     // Header navigation
     dinner: 'i-hugeicons-dish-02',
@@ -1459,11 +1738,6 @@ export const createResponsiveSizes = (isMd: Ref<boolean>) => ({
         return isMd.value ? 'w-8 h-8 text-sm' : 'w-6 h-6 text-xs'
     },
 
-    // Calendar accordion default: '0' (expanded) on desktop, undefined (collapsed) on mobile
-    get calendarAccordionDefault(): string | undefined {
-        return isMd.value ? '0' : undefined
-    },
-
     // Agenda page size: 3 on mobile, 5 on desktop
     get agendaPageSize(): number {
         return isMd.value ? 5 : 3
@@ -1512,9 +1786,6 @@ const createResponsiveIcons = (isMd: Ref<boolean>) => ({
     }
 })
 
-// The turn of an open-panel chevron; the classes go on whichever icon slot carries the chevron
-const flipOpenTurn = (isOpen: boolean): string => `${isOpen ? 'rotate-180 ' : ''}transition-transform duration-200`
-
 /**
  * createResponsiveButtons - Standardized button configurations with responsive sizing
  *
@@ -1536,6 +1807,17 @@ const createResponsiveButtons = (isMd: Ref<boolean>) => {
                 variant: 'ghost' as const,
                 square: true,
                 size: sizes.standard
+            }
+        },
+
+        // Remove a line (ExpenseLines): square ghost trash in the row's last column, with an aria-label
+        get remove() {
+            return {
+                icon: ICONS.trash,
+                color: 'error' as const,
+                variant: 'ghost' as const,
+                square: true,
+                size: sizes.small
             }
         },
 
@@ -1624,11 +1906,7 @@ const createResponsiveButtons = (isMd: Ref<boolean>) => {
                 'aria-expanded': isOpen,
                 ui: {trailingIcon: flipOpenTurn(isOpen)}
             }
-        },
-
-        // `flipOpen`'s turn classes alone, for a site whose chevron is not the trailing icon:
-        // `:ui="{leadingIcon: [size, BUTTONS.flipOpenTurn(isOpen)]}"`
-        flipOpenTurn
+        }
     }
 }
 
@@ -2309,6 +2587,7 @@ export const useTheSlopeDesignSystem = () => {
         getLockStatusConfig,
         ORDER_STATE_COLORS,
         getOrderStateColor,
+        getTicketState,
         PANTONE_CHIPS,
         getPantoneChip,
         RAINBOW,

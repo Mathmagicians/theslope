@@ -4,7 +4,7 @@ import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import testHelpers from '../testHelpers'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, getSessionUserInfo, temporaryAndRandom, gotoHydrated} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, getSessionUserInfo, temporaryAndRandom, gotoHydrated, waitForHydration, collectHydrationWarnings} = testHelpers
 const {TeamRoleSchema} = useCookingTeamValidation()
 const TeamRole = TeamRoleSchema.enum
 
@@ -20,10 +20,9 @@ test.describe('Chef Page', () => {
     let team2Id: number
     let team1Name: string
     let team2Name: string
-    let team1DinnerDate: Date
-    let team2DinnerDate: Date
     let memberInhabitantId: number
     const createdTeamIds: number[] = []
+    const createdDinnerIds: number[] = []
 
     test.beforeAll(async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
@@ -37,46 +36,39 @@ test.describe('Chef Page', () => {
         const {inhabitantId} = await getSessionUserInfo(memberContext)
         memberInhabitantId = inhabitantId
 
-        // Get future dinner events to find valid cooking dates
-        const dinnerEvents = await DinnerEventFactory.getDinnerEventsForSeason(adminContext, activeSeason.id!)
-        expect(dinnerEvents.length, 'Singleton season should have dinner events').toBeGreaterThan(1)
-        const now = new Date()
-        const futureDinners = dinnerEvents.filter(e => new Date(e.date) > now)
-        expect(futureDinners.length, 'Should have at least 2 future dinner events').toBeGreaterThanOrEqual(2)
-
-        // Create Team 1 with dinner on first future date
+        // Two teams; each receives the season's generated dinners by affinity and one dinner of its own, alone on a free
+        // day, so the team cooks at least once (the page selects a dinner by date)
         team1Name = `ChefTeam1-${testSalt}`
         const team1 = await SeasonFactory.createCookingTeamForSeason(adminContext, activeSeason.id!, team1Name)
         team1Id = team1.id!
         createdTeamIds.push(team1Id)
         await SeasonFactory.assignMemberToTeam(adminContext, team1Id, memberInhabitantId, TeamRole.CHEF)
-        team1DinnerDate = new Date(futureDinners[0]!.date)
-        await DinnerEventFactory.createDinnerEvent(adminContext, {
-            date: team1DinnerDate,
+        const team1Dinner = await DinnerEventFactory.createDinnerEventOnFreeDay(adminContext, activeSeason, {
             menuTitle: `Team1Dinner-${testSalt}`,
-            seasonId: activeSeason.id!,
             cookingTeamId: team1Id,
             chefId: memberInhabitantId
         })
+        createdDinnerIds.push(team1Dinner.id!)
 
-        // Create Team 2 with dinner on second future date
         team2Name = `ChefTeam2-${testSalt}`
         const team2 = await SeasonFactory.createCookingTeamForSeason(adminContext, activeSeason.id!, team2Name)
         team2Id = team2.id!
         createdTeamIds.push(team2Id)
         await SeasonFactory.assignMemberToTeam(adminContext, team2Id, memberInhabitantId, TeamRole.CHEF)
-        team2DinnerDate = new Date(futureDinners[1]!.date)
-        await DinnerEventFactory.createDinnerEvent(adminContext, {
-            date: team2DinnerDate,
+        const team2Dinner = await DinnerEventFactory.createDinnerEventOnFreeDay(adminContext, activeSeason, {
             menuTitle: `Team2Dinner-${testSalt}`,
-            seasonId: activeSeason.id!,
             cookingTeamId: team2Id,
             chefId: memberInhabitantId
         })
+        createdDinnerIds.push(team2Dinner.id!)
     })
 
     test.afterAll(async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
+        // The dinners go before their teams; another spec's season cleanup can cascade either away first
+        for (const dinnerId of createdDinnerIds) {
+            await DinnerEventFactory.deleteDinnerEvent(adminContext, dinnerId).catch(() => undefined)
+        }
         for (const teamId of createdTeamIds) {
             // Another spec's season cleanup can cascade the team away first; gone is the goal either way
             await SeasonFactory.deleteCookingTeam(adminContext, teamId).catch(() => undefined)
@@ -105,9 +97,29 @@ test.describe('Chef Page', () => {
         await expect(page.locator('[data-testid="chef-next-cooking-countdown"]').first()).toBeVisible()
     })
 
-    test('GIVEN member on 2 teams WHEN switching team tabs THEN calendar updates to show correct team dinners', async ({browser}) => {
+    test('GIVEN member chef with assigned team WHEN the chef page loads THEN the client hydrates the server render without a mismatch and one footer', async ({browser}) => {
         const memberContext = await memberValidatedBrowserContext(browser)
         const page = await memberContext.newPage()
+        const hydrationWarnings = collectHydrationWarnings(page)
+
+        await page.goto(`${chefPageUrl}?team=${team1Id}`)
+        await waitForHydration(page)
+
+        await expect(page.getByTestId('chef-calendar-header')).toBeVisible()
+        expect(hydrationWarnings).toEqual([])
+        await expect(page.locator('footer')).toHaveCount(1)
+    })
+
+    test('GIVEN member on 2 teams WHEN switching team tabs THEN calendar updates to show correct team dinners', async ({browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
+        const memberContext = await memberValidatedBrowserContext(browser)
+        const page = await memberContext.newPage()
+        // The countdown reads the team's next cooking day; the affinity assignment can give both teams the same one
+        const nextCookingDay = async (teamId: number) => {
+            const team = await SeasonFactory.getCookingTeam(adminContext, teamId)
+            const upcoming = team.dinnerEvents.map(dinner => new Date(dinner.date).getTime()).filter(time => time > Date.now()).sort((a, b) => a - b)
+            return upcoming[0] === undefined ? null : new Date(upcoming[0]).toDateString()
+        }
 
         // Navigate with Team 1 selected
         await gotoHydrated(page, `${chefPageUrl}?team=${team1Id}`)
@@ -131,7 +143,7 @@ test.describe('Chef Page', () => {
         // Verify countdown changed
         const team2CountdownText = await page.locator('[data-testid="chef-next-cooking-countdown"]').first().textContent()
         expect(team2CountdownText).toBeTruthy()
-        if (team1DinnerDate.toDateString() !== team2DinnerDate.toDateString()) {
+        if (await nextCookingDay(team1Id) !== await nextCookingDay(team2Id)) {
             expect(team2CountdownText).not.toBe(team1CountdownText)
         }
 

@@ -68,10 +68,10 @@ test.describe('Chef dinner expenses', () => {
 
     const addTwoLines = async (memberContext: Context, dinner: DinnerLines) => [
         await addLine(memberContext, dinner, ExpenseFactory.defaultExpenseCreate()),
-        await addLine(memberContext, dinner, ExpenseFactory.defaultExpenseCreate({amount: 29800, description: 'Mejeri', paidByUserId: null}))
+        await addLine(memberContext, dinner, ExpenseFactory.defaultExpenseCreate({amount: 29800}))
     ]
 
-    test('GIVEN a chef WHEN adding two lines THEN the list carries both in entry order, the chef as payer unless told otherwise', async ({browser}) => {
+    test('GIVEN a chef WHEN adding two lines THEN the list carries both in entry order with the chef as payer', async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
         const memberContext = await memberValidatedBrowserContext(browser)
         const dinner = await createDinner(adminContext)
@@ -80,11 +80,12 @@ test.describe('Chef dinner expenses', () => {
 
         const lines = await ExpenseFactory.list(memberContext, dinner.dinnerEventId)
         expect(lines.map(line => line.id)).toEqual([first!.id, second!.id])
-        expect(first).toMatchObject({
-            type: LedgerEntryTypeSchema.enum.REGULAR, dinnerEventId: dinner.dinnerEventId,
-            paidByUserId: chef.userId, paidBy: {id: chef.userId, email: chef.userEmail}
-        })
-        expect(second).toMatchObject({paidByUserId: null, paidBy: {id: null, email: ''}, amount: 29800})
+        const payer = {paidByUserId: chef.userId, paidBy: {id: chef.userId, email: chef.userEmail}}
+        expect(first).toMatchObject({type: LedgerEntryTypeSchema.enum.REGULAR, dinnerEventId: dinner.dinnerEventId, ...payer})
+        expect(second).toMatchObject({amount: 29800, ...payer})
+        // The note is the dinner's date and menu title, written by the server
+        expect(first!.description).toMatch(/^\d{2}\/\d{2} Test Menu/)
+        expect(typeof first!.paidBy.name).toBe('string')
     })
 
     test('GIVEN two lines WHEN reading the dinner THEN Display carries the sum alone and Detail the sum with the lines', async ({browser}) => {
@@ -130,10 +131,9 @@ test.describe('Chef dinner expenses', () => {
         {desc: 'an amount of zero', body: {amount: 0}},
         {desc: 'a negative amount', body: {amount: -100}},
         {desc: 'a fractional amount', body: {amount: 10.5}},
-        {desc: 'an empty description', body: {description: ''}},
-        {desc: 'a blank description', body: {description: '   '}},
+        {desc: 'a description key', body: {description: 'Mejeri'}},
         {desc: 'a totalCost key', body: {totalCost: 100}},
-        {desc: 'a payer id of zero', body: {paidByUserId: 0}}
+        {desc: 'a payer key', body: {paidByUserId: 7}}
     ]) {
         test(`GIVEN ${desc} WHEN adding THEN 400`, async ({browser}) => {
             const memberContext = await memberValidatedBrowserContext(browser)
@@ -150,10 +150,5 @@ test.describe('Chef dinner expenses', () => {
     test('GIVEN an unknown dinner WHEN listing THEN 404', async ({browser}) => {
         const memberContext = await memberValidatedBrowserContext(browser)
         await ExpenseFactory.list(memberContext, UNKNOWN_ID, 404)
-    })
-
-    test('GIVEN a payer who is not a user WHEN adding THEN 404', async ({browser}) => {
-        const memberContext = await memberValidatedBrowserContext(browser)
-        await ExpenseFactory.add(memberContext, sharedDinnerId, ExpenseFactory.defaultExpenseCreate({paidByUserId: UNKNOWN_ID}), 404)
     })
 })

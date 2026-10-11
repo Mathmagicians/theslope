@@ -18,8 +18,8 @@ import {
 } from '~/composables/useBooking'
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
 import {useOrder} from '~/composables/useOrder'
-import {useBookingValidation, type DinnerEventDisplay, type OrderDisplay, type DesiredOrder, type OrderState} from '~/composables/useBookingValidation'
-import {ICONS, ALARM_TO_BADGE} from '~/composables/useTheSlopeDesignSystem'
+import {useBookingValidation, type DinnerEventDisplay, type OrderDisplay, type DesiredOrder, type OrderState, type OrderAuditAction} from '~/composables/useBookingValidation'
+import {ICONS, COLOR, ALARM_TO_BADGE, type NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
 import {calculateCountdown} from '~/utils/date'
 
 // ============================================================================
@@ -37,6 +37,27 @@ export interface DeadlineBadgeData {
 }
 
 /** Icon per chef workflow step (DINNER_STEP_MAP is icon-free so the server can import it) */
+// One label, icon and colour per order history action (OrderHistoryDisplay, TicketChanges)
+export interface OrderActionLabel { icon: string; color: NuxtUIColor; label: string }
+export const ORDER_ACTION_LABELS: Record<OrderAuditAction, OrderActionLabel> = {
+    USER_BOOKED: {icon: ICONS.check, color: COLOR.success, label: 'Bestilt'},
+    USER_CANCELLED: {icon: ICONS.xMark, color: COLOR.warning, label: 'Afmeldt'},
+    USER_CLAIMED: {icon: ICONS.claim, color: COLOR.info, label: 'Købt fra anden'},
+    SYSTEM_CREATED: {icon: ICONS.calendar, color: COLOR.neutral, label: 'Automatisk bestilling'},
+    SYSTEM_DELETED: {icon: ICONS.xMark, color: COLOR.error, label: 'Slettet'},
+    SYSTEM_UPDATED: {icon: ICONS.edit, color: COLOR.neutral, label: 'Opdateret'}
+}
+
+// One dinner of the team's cooking round (CookingRoundSpending): its allowance and spending in gross øre
+export interface CookingRoundRow {
+    dinnerEventId: number
+    date: Date
+    menuTitle: string
+    isCurrent: boolean
+    budgetGross: number
+    spentGross: number
+}
+
 export const STEP_ICONS: Record<DinnerStepState, string> = {
     [DinnerStepState.SCHEDULED]: ICONS.calendar,
     [DinnerStepState.ANNOUNCED]: ICONS.megaphone,

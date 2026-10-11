@@ -24,8 +24,10 @@ Sizing is informal t-shirt sizes.
 | Waitlist | Queue, auto-assign sweep, extra portions, UI | `feature-proposal-waitlist.md` | L | ✅ UX signed (chef 2026-10-05, member faces 2026-10-06); backend ✅ 2026-10-09 (queue, assignment, release-portions, maintenance sweep, four notification kinds; unit + API specs green); UI open |
 | Kitchen allergy line | the dining-mode panels show the allergy kuverter; the expanded list opens with the allergen breakdown and chips beside each diner | this doc § Kitchen allergy line | S | ✅ UX signed 2026-10-08 |
 | Chef allergen line | the chef's allergen section counts this dinner's diners in kuverter per menu allergen; the edit panel becomes the allergy panel | this doc § Chef allergen line | S | ✅ UX signed 2026-10-09 |
+| Chef calendar header | the Agenda/Kalender tabs and the collapse chevron share one header row above a `UCollapsible`; `/chef` hydrates with one footer | this doc § Chef calendar header | S | ✅ option B signed 2026-10-10; implemented, user commit pending |
+| Ticket allergies | the booking form shows a booked inhabitant's live allergies on the ticket card (glyph) and in the expanded row (compact elements); guest ids and swapped tickets: `../chores-0.9.1.md` § Ticket allergies on the order | this doc § Ticket allergies | S | ✅ UX signed 2026-10-11 |
 | Notifications | Waitlist + duty-swap kinds, buildup threshold | `feature-proposal-notification-triggers.md` § Trigger catalog | M | catalog updated |
-| Adhoc billing + EXPENSE | Ad-hoc charges + chef spending as EXPENSE transactions; Mit forbrug + admin economy spending views | `feature-proposal-adhoc-admin-billing.md` | L | EXPENSE design ✅ signed 2026-10-08; E1 backend ✅ 2026-10-09 (Expense ledger, computed dinner cost, chef expense endpoints; unit + API specs green); OPEN — chef entry UI, spending views, adhoc charges |
+| Adhoc billing + EXPENSE | Ad-hoc charges + chef spending as EXPENSE transactions; Mit forbrug + admin economy spending views | `feature-proposal-adhoc-admin-billing.md` | L | EXPENSE design ✅ signed 2026-10-08; E1 backend ✅ 2026-10-09 (Expense ledger, computed dinner cost, chef expense endpoints; unit + API specs green); E1b chef entry ✅ 2026-10-10 (`ExpenseLines` in the budget pane, store actions, component + ui e2e specs); Indkøbsomkostninger and the Budget pane ✅ 2026-10-11 (lines beside the edits, two-unit amounts, RÅDIGHEDSBELØB start/Brugt/Til rådighed, named ticket table, Billetændringer, the team's round; paid tickets count released ones); chef browser specs on free days ✅ 2026-10-11 (`DinnerEventFactory.createDinnerEventOnFreeDay`: one dinner per day, as the chef and dinner pages select by date; `Chef.e2e` + `ChefExpenses.e2e`); OPEN — admin spending views, adhoc charges |
 | PRF spike | Passkey/PRF research + device protocol | `../feature-proposal-relogin-faceid.md` (parked proposal), `../archived/feature-mobile-native-feel.md` | S | ✅ done 2026-10-06; S5 re-login parked out of 0.9, no option chosen |
 | Page composition | Master/detail + tab frames, `md` breakpoint | `feature-proposal-framework-adoption.md` | M | OPEN — decided from spike findings |
 | Order snapshot | Frozen `ticketType` on Order + backfill — the portion resolver reads it | `../chores-0.9.1.md` § Order snapshot | S | parked for the release after 0.9 (2026-10-08) |
@@ -171,21 +173,77 @@ literals carry the new columns; validation composables re-export the new enums.
 Expenses are EXPENSE rows in the transaction ledger, excluded from invoicing (decision 2026-10-05) —
 `feature-proposal-adhoc-admin-billing.md` § Expense type. Surfaces:
 
-**Mockup — ChefMenuCard budget expand** ✅ signed 2026-10-05 (the dinner economy lives in one collapsed pane)
+**Mockup — Indkøbsomkostninger and the Budget pane on the chef card** ✅ signed 2026-10-11 (the three things the chef edits sit together; status and money read-only below; one chevron on Budget)
+
+Folded (default):
 
 ```
-Budget: 1.425 kr til rådighed                                [v]
- +- udfoldet:
-    INDTÆGTER / RÅDIGHEDSBELØB / KØKKENBIDRAG   (3 bokse, exists)
-    Billettype-tabel: Voksen / Barn / Baby      <- FIX: dansk navn via useTicket;
-                                                   i dag rå enum (DinnerBudget.vue:171)
-    Forbrug
-      12/04  Grønt + kolonial         1.012 kr   [slet]
-      14/04  Mejeri                     298 kr   [slet]
-      [ beløb ] [ note          ]  [Tilføj]
-      Brugt: 1.310 kr   Balance denne middag: +115 kr
-    [Se sæsontrend]                             <- knap, udfolder sæsonvisningen
+┌ ChefMenuCard (edit) ──────────────────────────────────────────────────┐
+│ MENU        Spaghetti Carbonara        [Rediger menu] [Publicer]      │
+│ ALLERGENER  (allergy) 12 kuverter · gluten 3     [Rediger allergener]   │
+│ INDKØBSOMKOSTNINGER                                   ex / inkl. moms │
+│  Hvad kostede indkøbene?                                              │
+│  Til rådighed denne middag  +115 / +143 kr (check)   Madhold 2  +190 / +238 kr (check) │
+│  [ beløb       ] [ Ex moms v ] [Tilføj]                               │
+│  Dato   Bestiller                                                     │
+│  12/04  Anna H.                            1.012 / 1.265 kr   [slet]   │
+│  14/04  Bo K.                                298 /   373 kr   [slet]   │
+│  Brugt                                     1.310 / 1.638 kr           │
+├───────────────────────────────────────────────────────────────────────┤
+│ PLANLAGT  ANNONCERET  BOOKING  INDKØB  AFHOLDT   (stepper, deadlines)   │
+│                                                                       │
+│ Budget                                                            [>] │
+│ ┌ (money) INDTÆGTER ──┐ ┌ (cart) RÅDIGHEDSBELØB ─────────┐ ┌ (house) KØKKENBIDRAG ─┐ │
+│ │ 1.500 / 1.875 kr    │ │ 1.425 / 1.781 kr                │ │ 75 / 94 kr            │ │
+│ │ ex     inkl. moms   │ │ ex     inkl. moms               │ │ ex   inkl. moms       │ │
+│ │ 45 kuverter         │ │ Brugt 1.310 / 1.638 kr          │ │ 5% af indtægter       │ │
+│ │                     │ │ Til rådighed +115 / +143 kr (check) │ │                   │ │
+│ └─────────────────────┘ └─────────────────────────────────┘ └───────────────────────┘ │
+└───────────────────────────────────────────────────────────────────────┘
 ```
+
+Unfolded Budget (the chevron turns; the boxes stay, this opens under them):
+
+```
+│  Billetter                                            ex / inkl. moms │
+│  Billettype   Antal          Stk pris              Total              │
+│  Voksen          30         40 / 50 kr    1.200 / 1.500 kr            │
+│  Barn            15         20 / 25 kr      300 /   375 kr            │
+│  Baby             3          0 /  0 kr        0 /     0 kr            │
+│  Indtægter                                1.500 / 1.875 kr            │
+│  Køkkenbidrag (5%)                          -75 /   -94 kr            │
+│  Rådighedsbeløb                           1.425 / 1.781 kr            │
+│  Brugt                                    1.310 / 1.638 kr            │
+│  Til rådighed                              +115 /  +143 kr  (check)   │
+│  Billetændringer                                                 [>]  │
+│                                                                       │
+│  Madhold 2, 12/04–14/04                               ex / inkl. moms │
+│  Dato   Middag            Rådighedsbeløb         Brugt    Til rådighed│
+│  12/04  Lasagne          1.425 / 1.781 kr  1.540 / 1.925 kr   -115 / -144 kr (red overdraft icon) │
+│  13/04  Boller i karry   1.512 / 1.890 kr  1.395 / 1.744 kr   +117 / +146 kr │
+│  14/04  Risotto · denne  1.498 / 1.873 kr  1.310 / 1.638 kr   +188 / +235 kr │
+│  Madhold 2               4.435 / 5.544 kr  4.245 / 5.307 kr   +190 / +237 kr (check) │
+```
+
+Billetændringer opened (loads the changes from the menu deadline onward; the button loads the rest once):
+
+```
+│  Billetændringer                                                              [v] │
+│  Dato         Husstand  Ændring                          Billetter · kuverter        Indtægter │
+│  09/04 19:10  S_14      Købt fra anden  +1 (child) Barn   29 (adult) 11 (child) 3 (baby) · 34,5   1.725 kr │
+│  09/04 17:30  S_22      Afmeldt         -1 (child) Barn   29 (adult) 11 (child) 3 (baby) · 34     1.725 kr │
+│  05/04 08:02  S_31      Bestilt         +1 (adult) Voksen 29 (adult) 11 (child) 3 (baby) · 34,5   1.725 kr │
+│  ── 03/04 18:00 · the menu deadline, as the stepper names it ──────────────────────────────── │
+│  [Vis fuld historik]                                                                        │
+```
+
+- Units: every money cell the chef reads shows the ex moms figure in the row's weight and the inkl. moms half in fine print after a slash; the unit words appear once per block, in the boxes as a fine-print line under the figure. Lines are stored gross; the select sets the unit of the typed amount.
+- Bestiller is the reporting user, named with `formatNameWithInitials`; the note is written by the server as the dinner's date and menu title; the body is `{amount}`.
+- Til rådighed is what is left. At or above zero it reads in the card's ink with its plus and a check icon in the success colour; below zero in red with its minus and an exclamation circle in the error colour. The helping numbers above the entry row give this dinner's and the team round's figure.
+- The round is the team's dinners on consecutive calendar days around this dinner, headed by the team's short name and the first and last date. The page computes it from the team's dinners, the bookings store loads their orders and `calculateBudget` gives each rådighedsbeløb.
+- Billettype names the ticket (`useTicket`), not the enum.
+- Billetændringer: one row per order event of the dinner from `OrderHistory`, newest first: the household's short name (System for the scaffold), the event word the order history uses, the ticket moved as the ticket chip with its sign, the composition after the change as chips with counts and the kuverter, and Indtægter after the change in kr. After the booking deadline a released ticket stays paid, so Afmeldt and Købt fra anden move kuverter and the payer, not Indtægter. `GET /api/chef/dinner/[id]/order-history?since=` hands the rows from the menu deadline with the composition replayed server-side; the button fetches the rest.
+- View mode shows the tables without the entry row and the slet column.
 
 **Mockup — season view (opens from [Se sæsontrend]; same component serves admin economy)** ✅ signed 2026-10-05
 
@@ -273,6 +331,14 @@ its name per diner allergy; a mode without renders neither.
 
 **Affected.** `useAllergy.ts`, `KitchenPreparation.vue` (header mockup), `docs/adr-compliance-frontend.md`.
 
+**Stats bar ink** (option C signed 2026-10-10). The stats bar's label and ticket breakdown bind
+`COMPONENTS.kitchen.totalsSecondary`: `TEXT.mocha[800]` (`text-amber-800`) on the bar's `BG.mocha[50]`, 8.37:1 in light and
+dark mode. The contrast gate measures the pair on its own fill.
+
+**No-allergy ink.** The sun of the no-allergy state binds `COMPONENTS.allergyTypeDisplay.noneAvatarUi`: the white disc
+carries `TEXT.gray[500]` in light and gray-800 in dark, and the icon inherits it. 5.59:1 light and 14.67:1 dark in Glade
+farver and Til farveblinde, 8.52:1 and 14.67:1 in Høj kontrast. A type's own icon or emoji keeps its ink.
+
 ## Chef allergen line
 
 **Problem.** Under the chef portrait the allergen section shows the menu's allergens as chips and counts everyone
@@ -309,6 +375,57 @@ with its kuverter, "ingen" with no allergens. `AllergenMultiSelector.nuxt.spec`:
 names behind the toggle.
 
 **Affected.** `ChefMenuCard.vue`, `AllergenMultiSelector.vue` (header mockups), `docs/adr-compliance-frontend.md`.
+
+**Compact title placeholder ink.** A dinner without a menu title reads in `COMPONENTS.chefMenuCard.compactTitlePlaceholder`,
+which carries `TEXT.muted` on the compact face (the page surface, selected or not): 5.59:1 light and 5.45:1 dark in Glade
+farver, 5.59:1 and 5.51:1 in Til farveblinde, 8.52:1 and 8.43:1 in Høj kontrast.
+
+## Chef calendar header
+
+**Problem.** `/chef` renders two footers and logs 18 hydration warnings.
+
+**Root cause.** `ChefCalendarDisplay` rendered the Agenda/Kalender `UTabs` in the `UAccordion` `#leading` slot, inside the
+accordion trigger `<button>`. The HTML parser closes the outer button at the first tab button, the hydrated DOM differs
+from the Vue tree, and the repair inserts a second footer outside the Nuxt root.
+
+**Solution.** The header is one row (`COMPONENTS.chefCalendar.header`): the tabs on the left, a chevron `UButton` bound
+to `BUTTONS.flipOpen(accordionOpen)` with `aria-expanded` on the right. The agenda or calendar sits in a `UCollapsible`
+(`COMPONENTS.collapsible.chefCalendar`). The component keeps its contract: `accordionOpen` in, `update:accordion-open`
+from the chevron, `tab-click` from a tab; `/chef` keeps the `view` query parameter (`mode:open`).
+
+**Mockup** ✅ signed 2026-10-10 (option B): `ChefCalendarDisplay.vue` header.
+
+**TDD.** `ChefCalendarDisplay.nuxt.spec`: a tab click emits `tab-click` with its mode, the chevron emits the toggled open
+state and carries `aria-expanded`, the content renders when open and is absent when closed, the header holds three buttons
+with no button inside another. `Chef.e2e.spec`: the chef page hydrates without a warning and renders one `footer`.
+
+**Affected.** `ChefCalendarDisplay.vue` (header mockup), `useTheSlopeDesignSystem.ts` (`COMPONENTS.collapsible`,
+`COMPONENTS.chefCalendar`, `COMPONENTS.table.agendaUi`, `ICONS.agenda`), `ChefMenuCard.vue` and `RoleAssignment.vue`
+(`COMPONENTS.collapsible.belowTrigger`), `designSystemUsage.unit.spec.ts`, `docs/ui.md`, `docs/adr-compliance-frontend.md`.
+
+## Ticket allergies
+
+**Problem.** A booked inhabitant's allergies are on their profile and on the chef's allergen line, and the booking
+form shows nothing on the ticket: the household detail loads each inhabitant's allergies (`fetchHousehold`) and
+`HouseholdDetailSchema` parses the inhabitants without them; the ticket card and the form read `provenanceAllergies`,
+a field no path writes (`../chores-0.9.1.md` § Ticket allergies on the order holds the guest and swap report).
+
+**Solution.** The household detail's inhabitants carry `allergies` with their `allergyType`, through the deserializer
+and the schema. A booked inhabitant's ticket card shows `ICONS.allergy` in row 1 when the profile has an allergy; the
+expanded row opens with the same glyph followed by one compact `AllergyTypeDisplay` per allergy. The names badge on
+the card and the badge in the name cell go. Guest and swapped tickets read the stored list in 0.9.1 through the same
+prop.
+
+**Mockup** ✅ signed 2026-10-11: `DinnerTicket.vue` header.
+
+**TDD.** `Dinner.e2e.spec`: GIVEN an inhabitant with an allergy WHEN their ticket is booked THEN the card shows the
+glyph and the expanded row names the type. `DinnerTicket.nuxt.spec` (new): glyph with allergies, none without, no
+names on the card. `DinnerBookingForm.nuxt.spec`: one `AllergyTypeDisplay` per allergy in the expanded row, no badge
+in the name cell. `useCoreValidation.unit.spec`: the household detail keeps the inhabitants' allergies.
+
+**Affected.** `useCoreValidation.ts` (household detail inhabitants and their deserializer), `DinnerTicket.vue`
+(header mockup, tokens), `DinnerBookingForm.vue` (expanded row, name cell, touched classes),
+`useTheSlopeDesignSystem.ts` (ticket allergy tokens), `docs/ui.md`, `docs/adr-compliance-frontend.md`.
 
 ## Decisions
 
@@ -396,7 +513,7 @@ names behind the toggle.
 - Ledger and expenses are modelled symmetrically: one `LedgerEntryType { REGULAR, ADHOC }` on `Transaction` and
   `Expense`; a REGULAR entry hangs off its source (order, dinner), an ADHOC entry stands alone with a description.
 - Expenses are their own table, a list per dinner (REGULAR) plus basisvarer rows (ADHOC); the payee is a `User`
-  (`paidByUserId`, SET NULL) with a `userSnapshot`, null when the kitchen paid directly; the reimbursement stream
+  (`paidByUserId`, SET NULL) with a `userSnapshot`, the reporting user is the payer; the reimbursement stream
   reads `User.expenses`.
 - `DinnerEvent.totalCost` is kept and deprecated; the dinner's cost is the sum of its expense rows, GROCERIES_DONE
   derives from them, and `../chores-0.9.1.md` drops the column in the release after 0.9.
@@ -455,6 +572,17 @@ names behind the toggle.
   AdminTeams cases (rename, member finder, joker slot) sit on the roster package's in-flight AdminTeams and store work.
 - Open: the season dropdown cases under load, the holiday list editor's double-matched locator, and the full-suite
   run once the roster package has landed.
+**2026-10-11** (ticket allergies)
+- A ticket carries a stored allergy list or follows its holder's live profile: own tickets live, guest tickets the ids
+  chosen at booking, swapped tickets the releasing owner's profile ids frozen at the claim (after the deadline; a
+  second swap keeps the first list). Ids, never names. The stored list and the guest allergy report move to
+  `../chores-0.9.1.md` § Ticket allergies on the order (in the `Order.orderSnapshot` column of its § Order snapshot); 0.9 shows the live profile on the
+  ticket.
+- The ticket signals allergies with `ICONS.allergy` on the card and the compact `AllergyTypeDisplay` line in the
+  expanded row; the names badge on the card and the name-cell badge go.
+- The card's row 1 is three fixed slots: special (state | guest | allergy cells), type, how you eat. The state colour
+  paints the edge and the state glyph; the type colour paints the badge and the guest and allergy glyphs. One 20px
+  glyph size.
 
 ## Coverage
 

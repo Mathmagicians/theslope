@@ -282,15 +282,18 @@ export const useOrder = () => {
   /**
    * Calculate budget breakdown from orders
    * Returns all financial figures for kitchen/chef planning
+   *
+   * Revenue counts every ticket that is paid: a ticket released after the booking deadline stays paid by its household
+   * or by the one who claims it, so it stays in the budget; kuverter are the kitchen's own count (isActiveOrder)
    */
   const calculateBudget = (
     orders: OrderDisplay[],
     kitchenBaseRatePercent = DEFAULT_KITCHEN_BASE_RATE_PERCENT,
     vatPercent = DEFAULT_VAT_PERCENT
   ) => {
-    const activeOrders = orders.filter(isActiveOrder)
-    const ticketCount = activeOrders.length
-    const totalRevenue = activeOrders.reduce((sum, o) => sum + o.priceAtBooking, 0)
+    const paidOrders = orders.filter(order => order.state !== OrderState.CANCELLED)
+    const ticketCount = paidOrders.length
+    const totalRevenue = paidOrders.reduce((sum, o) => sum + o.priceAtBooking, 0)
     const kitchenContribution = Math.round(totalRevenue * kitchenBaseRatePercent / 100)
     const kitchenContributionExVat = convertVat(kitchenContribution, vatPercent, true)
     const availableBudget = totalRevenue - kitchenContribution

@@ -2,7 +2,7 @@
 
 **Status:** Parked — next release | **Date:** 2026-10-04 | **Branch:** none
 
-Animation, transition and transform classes written raw in `.vue` files instead of design-system tokens (ADR-018 [Design System Owns Shared UI Patterns]). Inventory from the 2026-10-04 sweep of `app/components/` and `app/pages/`. `HouseholdAllergies.vue` binds `BUTTONS.flipOpenTurn`, `BUTTONS.flipOpen`'s turn classes, on its leading chevron (`chore/npm-dependencies`); its closed state carries `duration-200` by the user's decision of 2026-10-05. Everything below needs a new token.
+Animation, transition and transform classes written raw in `.vue` files instead of design-system tokens (ADR-018 [Design System Owns Shared UI Patterns]). Inventory from the 2026-10-04 sweep of `app/components/` and `app/pages/`. `HouseholdAllergies.vue` binds `COMPONENTS.householdAllergies.rowToggle(isOpen)`, which carries `BUTTONS.flipOpen`'s turn classes on its leading chevron (`chore/npm-dependencies`); its closed state carries `duration-200` by the user's decision of 2026-10-05. Everything below needs a new token.
 
 ## Fix inventory
 

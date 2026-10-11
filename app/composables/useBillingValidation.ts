@@ -313,12 +313,18 @@ export const useBillingValidation = () => {
     const ExpenseSchema = ExpenseFragmentSchema
     const SerializedExpenseSchema = SerializedExpenseFragmentSchema
 
-    // API body of a grocery line; the route resolves the payer and the ledger type. Strict: a stray key is a 400
+    // API body of a grocery line in gross øre; the caller is the payer, the route writes the note (dinner date and menu
+    // title) and the ledger type. Strict: a stray key is a 400
     const ExpenseCreateSchema = z.object({
-        amount: z.number().int().positive('Beløbet skal være større end nul'),
-        description: z.string().trim().min(1, 'Beskrivelse er påkrævet'),
-        paidByUserId: z.number().int().positive().nullable().optional()
+        amount: z.number().int().positive('Beløbet skal være større end nul')
     }).strict()
+
+    // The entry form: a kr amount in the unit the receipt states; the component turns it into gross øre
+    const VatModeSchema = z.enum(['inkl', 'ex'])
+    const ExpenseLineFormSchema = z.object({
+        amountKr: z.coerce.number().positive('Beløbet skal være større end nul'),
+        vatMode: VatModeSchema
+    })
 
     // Repository input: the row without its database-assigned fields
     const ExpenseCreateDataSchema = ExpenseSchema.omit({id: true, createdAt: true, updatedAt: true})
@@ -817,6 +823,8 @@ export const useBillingValidation = () => {
         SerializedExpenseSchema,
         ExpenseCreateSchema,
         ExpenseCreateDataSchema,
+        VatModeSchema,
+        ExpenseLineFormSchema,
         PayerSnapshotSchema,
         serializeExpense,
         deserializeExpense
@@ -862,6 +870,8 @@ export type Expense = z.infer<ReturnType<typeof useBillingValidation>['ExpenseSc
 export type SerializedExpense = z.infer<ReturnType<typeof useBillingValidation>['SerializedExpenseSchema']>
 export type ExpenseCreate = z.infer<ReturnType<typeof useBillingValidation>['ExpenseCreateSchema']>
 export type ExpenseCreateData = z.infer<ReturnType<typeof useBillingValidation>['ExpenseCreateDataSchema']>
+export type VatMode = z.infer<ReturnType<typeof useBillingValidation>['VatModeSchema']>
+export type ExpenseLineForm = z.infer<ReturnType<typeof useBillingValidation>['ExpenseLineFormSchema']>
 export type PayerSnapshot = z.infer<ReturnType<typeof useBillingValidation>['PayerSnapshotSchema']>
 export type HouseholdInvoice = z.infer<ReturnType<typeof useBillingValidation>['HouseholdInvoiceSchema']>
 export type CurrentPeriodBilling = z.infer<ReturnType<typeof useBillingValidation>['CurrentPeriodBillingSchema']>

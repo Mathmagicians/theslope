@@ -71,3 +71,12 @@ history for the dinner.
 
 `app/composables/useOrder.ts` (`calculateBudget`, `isActiveOrder`), `server/utils/scaffoldPrebookings.ts`,
 `server/integration/heynabo/*` (inhabitant deletion), `app/components/chef/ChefMenuCard.vue`.
+
+## Finding
+
+`useOrder().calculateBudget` counted only orders that were not RELEASED, so every ticket released after the booking
+deadline left the rådighedsbeløb although its household, or the one who claimed it, still paid for it. The chef saw
+the budget fall in the days between the booking deadline and the dinner. Since 2026-10-11 revenue counts every paid
+ticket (BOOKED, RELEASED, CLOSED); the kuverter count stays the kitchen's count of eaters. The chef card's
+Billetændringer (`TicketChanges`, `GET /api/chef/dinner/[id]/order-history`) lists every ticket change of a dinner
+with the tickets, kuverter and Indtægter after it, which is the instrument for checking a dinner's budget on prod.

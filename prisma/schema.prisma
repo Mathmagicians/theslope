@@ -545,7 +545,7 @@ model Expense {
   type          LedgerEntryType @default(REGULAR)
   dinnerEventId Int? // REGULAR: set; ADHOC: null
   dinnerEvent   DinnerEvent?    @relation(fields: [dinnerEventId], references: [id], onDelete: SetNull)
-  paidByUserId  Int? // the user to reimburse; null = paid by the kitchen directly
+  paidByUserId  Int? // the user who reported the expense 
   paidByUser    User?           @relation(fields: [paidByUserId], references: [id], onDelete: SetNull)
   userSnapshot  String // JSON snapshot of the payer at the time of the expense
   amount        Int // DKK øre

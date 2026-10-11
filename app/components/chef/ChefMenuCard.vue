@@ -77,6 +77,8 @@
  * - Uses design system (useTheSlopeDesignSystem)
  */
 import type { DinnerEventDetail, ChefMenuForm } from '~/composables/useBookingValidation'
+import type { ExpenseCreate } from '~/composables/useBillingValidation'
+import type { CookingRoundRow } from '~/composables/useBookingUi'
 import type { AllergyTypeDisplay } from '~/composables/useAllergyValidation'
 import type { SeasonDeadlines } from '~/composables/useSeason'
 import type { NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
@@ -97,6 +99,8 @@ interface Props {
   hasNext?: boolean             // Navigation: has next dinner
   calendarOpen?: boolean        // Calendar accordion state
   navColor?: NuxtUIColor        // Navigation button color
+  roundRows?: CookingRoundRow[] // The team's cooking round around this dinner (chef page)
+  roundLabel?: string           // "Madhold 2, 12/04–14/04"
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -110,13 +114,18 @@ const props = withDefaults(defineProps<Props>(), {
   hasPrev: false,
   hasNext: false,
   calendarOpen: false,
-  navColor: undefined
+  navColor: undefined,
+  roundRows: () => [],
+  roundLabel: ''
 })
 
 const emit = defineEmits<{
   'update:form': [data: ChefMenuForm]
   'update:allergens': [allergenIds: number[]]
   'advance-state': [newState: string]
+  /** The chef's grocery lines (DinnerBudget → ExpenseLines); the page calls the bookings store */
+  'add-expense': [line: ExpenseCreate]
+  'remove-expense': [expenseId: number]
   'cancel-dinner': []
   'undo-cancel-dinner': []
   'toggle-calendar': []
@@ -146,6 +155,17 @@ const { getStepConfig, canCancelDinner } = useBooking()
 
 // Name formatting from useHousehold (ADR-001)
 const { formatNameWithInitials } = useHousehold()
+
+// The dinner's money: the expense lines' helping numbers read it, the Budget pane shows it
+const { calculateBudget } = useOrder()
+const kitchenConfig = useAppConfig().theslope?.kitchen
+const budget = computed(() => calculateBudget(props.dinnerEvent.tickets ?? [], kitchenConfig?.baseRatePercent ?? 5, kitchenConfig?.vatPercent ?? 25))
+const leftThisDinner = computed(() => budget.value.availableBudget - sumAmounts(props.dinnerEvent.expenses))
+// The round's figure matters when the team cooks several days in a row
+const leftRound = computed(() => props.roundRows.length > 1
+  ? {label: props.roundLabel, gross: props.roundRows.reduce((sum, row) => sum + row.budgetGross - row.spentGross, 0)}
+  : null)
+const menuDeadline = computed(() => props.deadlines.getMenuDeadlineTime(props.dinnerEvent.date))
 
 // Time logic from useSeason (ADR-001: business logic in composables)
 const { getDefaultDinnerStartTime, getDinnerTimeRange, getDeadlineUrgency } = useSeason()
@@ -338,7 +358,7 @@ const handleCardClick = () => {
 
       <!-- Menu title -->
       <div :class="COMPONENTS.chefMenuCard.compactTitleColumn">
-        <div :class="hasMenuTitle ? COMPONENTS.chefMenuCard.compactTitle : [COMPONENTS.chefMenuCard.compactTitlePlaceholder, TEXT.neutral[500]]">
+        <div :class="hasMenuTitle ? COMPONENTS.chefMenuCard.compactTitle : COMPONENTS.chefMenuCard.compactTitlePlaceholder">
           {{ menuTitle }}
         </div>
       </div>
@@ -479,7 +499,7 @@ const handleCardClick = () => {
         <UCollapsible
           v-if="isEditing && canCancelDinner(dinnerEvent)"
           v-model:open="isMoreOpen"
-          class="mt-3"
+          v-bind="COMPONENTS.collapsible.belowTrigger"
         >
           <template #content>
             <div :class="COMPONENTS.dangerZone.container" data-testid="dinner-danger-zone">
@@ -635,6 +655,21 @@ const handleCardClick = () => {
         </div>
       </div>
 
+      <!-- ========== INDKØBSOMKOSTNINGER (showStateControls only): the chef's grocery lines, beside the other edits ========== -->
+      <div v-if="showStateControls" :class="COMPONENTS.chefMenuCard.section" data-testid="chef-expenses-section">
+        <ExpenseLines
+          :expenses="dinnerEvent.expenses"
+          title="Indkøbsomkostninger"
+          hint="Hvad kostede indkøbene?"
+          :editable="isEditing"
+          :pending="isUpdating"
+          :left-this-dinner="leftThisDinner"
+          :left-round="leftRound"
+          @add="emit('add-expense', $event)"
+          @remove="emit('remove-expense', $event)"
+        />
+      </div>
+
       <!-- ========== PAGE-SPECIFIC CONTENT (slot) ========== -->
       <div v-if="$slots.default" :class="COMPONENTS.chefMenuCard.section">
         <slot />
@@ -652,9 +687,17 @@ const handleCardClick = () => {
           />
         </div>
 
-        <!-- Budget section (chef's financial overview) -->
+        <!-- Budget section (chef's financial overview): boxes, ticket table, ticket changes, the team's round -->
         <div :class="COMPONENTS.chefMenuCard.section">
-          <DinnerBudget :orders="dinnerEvent.tickets ?? []" mode="full" />
+          <DinnerBudget
+            :orders="dinnerEvent.tickets ?? []"
+            :expenses="dinnerEvent.expenses"
+            :dinner-event-id="dinnerEvent.id"
+            :menu-deadline="menuDeadline"
+            :round-rows="roundRows"
+            :round-label="roundLabel"
+            mode="full"
+          />
         </div>
       </template>
     </div>

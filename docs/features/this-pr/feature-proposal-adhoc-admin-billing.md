@@ -190,7 +190,7 @@ model Expense {
   type          LedgerEntryType @default(REGULAR)
   dinnerEventId Int? // REGULAR: set; ADHOC: null
   dinnerEvent   DinnerEvent?    @relation(fields: [dinnerEventId], references: [id], onDelete: SetNull)
-  paidByUserId  Int? // the user to reimburse; null = paid by the kitchen directly
+  paidByUserId  Int? // the user who reported the line and is reimbursed; SetNull once the user row is gone, the snapshot keeps them
   paidByUser    User?           @relation(fields: [paidByUserId], references: [id], onDelete: SetNull)
   userSnapshot  String // JSON snapshot of the payer at the time of the expense
   amount        Int // DKK øre
@@ -207,13 +207,13 @@ model Expense {
 
 - `DinnerEvent.totalCost` stays, `/// @deprecated`, until `../chores-0.9.1.md` drops it next release; a dinner's cost is `SUM(amount)` over its REGULAR rows; the dinner's
   GROCERIES_DONE step derives from them.
-- The chef enters a dinner's expense lines in `ChefMenuCard` under the budget (amount, description, payer);
+- The chef enters a dinner's expense lines in `ChefMenuCard` under the budget (amount, description; the reporting user is the payer);
   line-wise delete. Brugt = the sum, Balance = rådighedsbeløb (ex moms) − Brugt (`DinnerBudget.vue`).
 - The payee is a user; the reimbursement stream reads `User.expenses`; `userSnapshot` keeps the payee after the
   user row is gone (the Heynabo import deletes users first).
 - "Mit forbrug" on `/chef` and the admin economy spending section read the same rows — mockups in
   `release-0.9.0.md` § Chef spending. Billing reads `Transaction` only; `Expense` never reaches an invoice.
-- Implemented 2026-10-09 (E1): `useBillingValidation` Expense schemas and transforms (fragment in `domainFragments.ts`), `financesRepository` expense functions, the computed dinner cost on every dinner read (Display the sum, Detail the sum and `expenses`), the strict dinner write schemas, `/api/chef/dinner/[id]/expenses` GET, PUT and DELETE. Open: the `ChefMenuCard` entry, Mit forbrug, the admin Forbrug view, ADHOC basisvarer.
+- Implemented 2026-10-09 (E1): `useBillingValidation` Expense schemas and transforms (fragment in `domainFragments.ts`), `financesRepository` expense functions, the computed dinner cost on every dinner read (Display the sum, Detail the sum and `expenses`), the strict dinner write schemas, `/api/chef/dinner/[id]/expenses` GET, PUT and DELETE. Implemented 2026-10-11: `ExpenseLines` between Allergener and the stepper on `ChefMenuCard` (helping numbers for the dinner and the team's round), `VatAmount` for every money cell, `DinnerBudget` with start / Brugt / Til rådighed, the ticket table named by type, `TicketChanges` on `GET /api/chef/dinner/[id]/order-history` and `CookingRoundSpending`; `bookings` store `addExpense` / `removeExpense` / `fetchTicketChanges`. Open: Mit forbrug, the admin Forbrug view, ADHOC basisvarer.
 
 ### Query ergonomics
 

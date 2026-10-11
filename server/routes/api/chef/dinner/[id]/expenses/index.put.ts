@@ -1,10 +1,11 @@
-import {createError, defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus} from 'h3'
+import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus} from 'h3'
 import {z} from 'zod'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {requireChefForDinner} from '~~/server/utils/authorizationHelper'
-import {fetchUser} from '~~/server/data/prismaRepository'
-import {createExpense} from '~~/server/data/financesRepository'
+import {createExpense, fetchDinnerEvent} from '~~/server/data/financesRepository'
 import {useBillingValidation, type Expense, type ExpenseCreate} from '~/composables/useBillingValidation'
+import {useHousehold} from '~/composables/useHousehold'
+import {formatDate} from '~/utils/date'
 
 const {throwH3Error} = eventHandlerHelper
 const LOG = '🧾 > CHEF > EXPENSES > [PUT]'
@@ -13,8 +14,9 @@ const paramsSchema = z.object({id: z.coerce.number().int().positive()})
 /**
  * PUT /api/chef/dinner/[id]/expenses - a grocery line on the dinner
  *
- * The payer defaults to the chef entering the line; null means the kitchen paid directly. The payer's snapshot
- * outlives the user row (the Heynabo import deletes users first).
+ * The chef entering the line is its payer, named as the card names people; the snapshot outlives the user row (the
+ * Heynabo import deletes users first). The note is the dinner's date and menu title, so the line reads in the ledgers
+ * where lines of many dinners meet.
  */
 export default defineEventHandler(async (event): Promise<Expense> => {
     const d1Client = event.context.cloudflare.env.DB
@@ -32,17 +34,15 @@ export default defineEventHandler(async (event): Promise<Expense> => {
     const chef = await requireChefForDinner(event, id)
 
     try {
-        const paidByUserId = body.paidByUserId === undefined ? chef.id : body.paidByUserId
-        const payer = paidByUserId === null ? null : paidByUserId === chef.id ? chef : await fetchUser(d1Client, {id: paidByUserId})
-        if (paidByUserId !== null && !payer) throw createError({statusCode: 404, message: `User ${paidByUserId} not found`})
-
+        const dinner = await fetchDinnerEvent(d1Client, id)
+        const {formatNameWithInitials} = useHousehold()
         const expense = await createExpense(d1Client, {
             type: LedgerEntryTypeSchema.enum.REGULAR,
             dinnerEventId: id,
-            paidByUserId,
-            paidBy: {id: payer?.id ?? null, email: payer?.email ?? ''},
+            paidByUserId: chef.id,
+            paidBy: {id: chef.id, email: chef.email, name: chef.Inhabitant ? formatNameWithInitials(chef.Inhabitant) : chef.email},
             amount: body.amount,
-            description: body.description
+            description: dinner ? `${formatDate(dinner.date, 'dd/MM')} ${dinner.menuTitle}`.trim() : formatDate(new Date(), 'dd/MM')
         })
         setResponseStatus(event, 201)
         return expense
