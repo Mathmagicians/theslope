@@ -136,6 +136,7 @@ it holds on init, and every page that opens the store pays for all of them. The 
 
 ## Ticket allergies on the order
 
+### Note - provenance allergies was removed, and live allergies are shown, should be verified and discussed
 ### Problem
 
 A guest's allergy type ids are chosen in `GuestBookingForm` and leave the client as `allergyTypeIds` on the desired

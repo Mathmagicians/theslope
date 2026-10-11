@@ -26,8 +26,9 @@ Sizing is informal t-shirt sizes.
 | Chef allergen line | the chef's allergen section counts this dinner's diners in kuverter per menu allergen; the edit panel becomes the allergy panel | this doc § Chef allergen line | S | ✅ UX signed 2026-10-09 |
 | Chef calendar header | the Agenda/Kalender tabs and the collapse chevron share one header row above a `UCollapsible`; `/chef` hydrates with one footer | this doc § Chef calendar header | S | ✅ option B signed 2026-10-10; implemented, user commit pending |
 | Ticket allergies | the booking form shows a booked inhabitant's live allergies on the ticket card (glyph) and in the expanded row (compact elements); guest ids and swapped tickets: `../chores-0.9.1.md` § Ticket allergies on the order | this doc § Ticket allergies | S | ✅ UX signed 2026-10-11 |
+| One team number | a team's number comes from its name, else its season position; every team band derives from it (`/admin/teams`, `/chef`, `/dinner`) | this doc § Decisions 2026-10-11 (one team number) | S | ordered 2026-10-11; implemented, user commit pending |
 | Notifications | Waitlist + duty-swap kinds, buildup threshold | `feature-proposal-notification-triggers.md` § Trigger catalog | M | catalog updated |
-| Adhoc billing + EXPENSE | Ad-hoc charges + chef spending as EXPENSE transactions; Mit forbrug + admin economy spending views | `feature-proposal-adhoc-admin-billing.md` | L | EXPENSE design ✅ signed 2026-10-08; E1 backend ✅ 2026-10-09 (Expense ledger, computed dinner cost, chef expense endpoints; unit + API specs green); E1b chef entry ✅ 2026-10-10 (`ExpenseLines` in the budget pane, store actions, component + ui e2e specs); Indkøbsomkostninger and the Budget pane ✅ 2026-10-11 (lines beside the edits, two-unit amounts, RÅDIGHEDSBELØB start/Brugt/Til rådighed, named ticket table, Billetændringer, the team's round; paid tickets count released ones); chef browser specs on free days ✅ 2026-10-11 (`DinnerEventFactory.createDinnerEventOnFreeDay`: one dinner per day, as the chef and dinner pages select by date; `Chef.e2e` + `ChefExpenses.e2e`); OPEN — admin spending views, adhoc charges |
+| Adhoc billing + EXPENSE | Ad-hoc charges + chef spending as EXPENSE transactions; Mit forbrug + admin economy spending views | `feature-proposal-adhoc-admin-billing.md` | L | EXPENSE design ✅ signed 2026-10-08; E1 backend ✅ 2026-10-09 (Expense ledger, computed dinner cost, chef expense endpoints; unit + API specs green); E1b chef entry ✅ 2026-10-10 (`ExpenseLines` in the budget pane, store actions, component + ui e2e specs); Indkøbsomkostninger and the Budget pane ✅ 2026-10-11 (lines beside the edits, two-unit amounts, RÅDIGHEDSBELØB start/Brugt/Tilbage, named ticket table, Billetændringer, the team's round; paid tickets count released ones); chef browser specs on free days ✅ 2026-10-11 (`DinnerEventFactory.createDinnerEventOnFreeDay`: one dinner per day, as the chef and dinner pages select by date; `Chef.e2e` + `ChefExpenses.e2e`); OPEN — admin spending views, adhoc charges |
 | PRF spike | Passkey/PRF research + device protocol | `../feature-proposal-relogin-faceid.md` (parked proposal), `../archived/feature-mobile-native-feel.md` | S | ✅ done 2026-10-06; S5 re-login parked out of 0.9, no option chosen |
 | Page composition | Master/detail + tab frames, `md` breakpoint | `feature-proposal-framework-adoption.md` | M | OPEN — decided from spike findings |
 | Order snapshot | Frozen `ticketType` on Order + backfill — the portion resolver reads it | `../chores-0.9.1.md` § Order snapshot | S | parked for the release after 0.9 (2026-10-08) |
@@ -173,22 +174,15 @@ literals carry the new columns; validation composables re-export the new enums.
 Expenses are EXPENSE rows in the transaction ledger, excluded from invoicing (decision 2026-10-05) —
 `feature-proposal-adhoc-admin-billing.md` § Expense type. Surfaces:
 
-**Mockup — Indkøbsomkostninger and the Budget pane on the chef card** ✅ signed 2026-10-11 (the three things the chef edits sit together; status and money read-only below; one chevron on Budget)
+**Mockup — Madbestilling and the Budget pane on the chef card** ✅ signed 2026-10-11, revised and re-signed the same day (the three things the chef edits sit together as section rows; the lines editor behind Rediger madbestilling; status and money read-only below; one chevron on Budget)
 
 Folded (default):
 
 ```
 ┌ ChefMenuCard (edit) ──────────────────────────────────────────────────┐
 │ MENU        Spaghetti Carbonara        [Rediger menu] [Publicer]      │
-│ ALLERGENER  (allergy) 12 kuverter · gluten 3     [Rediger allergener]   │
-│ INDKØBSOMKOSTNINGER                                   ex / inkl. moms │
-│  Hvad kostede indkøbene?                                              │
-│  Til rådighed denne middag  +115 / +143 kr (check)   Madhold 2  +190 / +238 kr (check) │
-│  [ beløb       ] [ Ex moms v ] [Tilføj]                               │
-│  Dato   Bestiller                                                     │
-│  12/04  Anna H.                            1.012 / 1.265 kr   [slet]   │
-│  14/04  Bo K.                                298 /   373 kr   [slet]   │
-│  Brugt                                     1.310 / 1.638 kr           │
+│ (allergy) ALLERGENER  12 kuverter · gluten 3     [Rediger allergener]  │
+│ (cart) MADBESTILLING  1.310 / 1.638 kr        [Rediger madbestilling]  │  <- "Madbestilling mangler" without lines
 ├───────────────────────────────────────────────────────────────────────┤
 │ PLANLAGT  ANNONCERET  BOOKING  INDKØB  AFHOLDT   (stepper, deadlines)   │
 │                                                                       │
@@ -196,10 +190,27 @@ Folded (default):
 │ ┌ (money) INDTÆGTER ──┐ ┌ (cart) RÅDIGHEDSBELØB ─────────┐ ┌ (house) KØKKENBIDRAG ─┐ │
 │ │ 1.500 / 1.875 kr    │ │ 1.425 / 1.781 kr                │ │ 75 / 94 kr            │ │
 │ │ ex     inkl. moms   │ │ ex     inkl. moms               │ │ ex   inkl. moms       │ │
-│ │ 45 kuverter         │ │ Brugt 1.310 / 1.638 kr          │ │ 5% af indtægter       │ │
-│ │                     │ │ Til rådighed +115 / +143 kr (check) │ │                   │ │
+│ │ 45 kuverter         │ │ Brugt        1.310 / 1.638 kr   │ │ 5% af indtægter       │ │
+│ │                     │ │ Tilbage  +115 /  +143 kr (check) │ │                 │ │
 │ └─────────────────────┘ └─────────────────────────────────┘ └───────────────────────┘ │
 └───────────────────────────────────────────────────────────────────────┘
+```
+
+Madbestilling open (Rediger madbestilling opens it in place; Luk folds it; lines save on Tilføj and go on slet):
+
+```
+│ Hvad kostede indkøbene?                                     [Luk] │
+│   Rådighedsbeløb                          1.425 / 1.781 kr            │
+│   Brugt                                   1.310 / 1.638 kr            │
+│   Tilbage                             +115 /  +143 kr (check)    │
+│   Hele Madhold 2, for perioden 12/04–14/04                            │
+│   Rådighedsbeløb                          4.435 / 5.544 kr            │
+│   Brugt                                   4.245 / 5.307 kr            │
+│   Tilbage                                  +190 /  +237 kr (check)    │
+│  [ beløb       ] [ Ex moms v ] [Tilføj]                               │
+│  Dato   Bestiller                                   ex / inkl. moms   │
+│  12/04  Anna H.                            1.012 / 1.265 kr   [slet]  │
+│  14/04  Bo K.                                298 /   373 kr   [slet]  │
 ```
 
 Unfolded Budget (the chevron turns; the boxes stay, this opens under them):
@@ -214,15 +225,15 @@ Unfolded Budget (the chevron turns; the boxes stay, this opens under them):
 │  Køkkenbidrag (5%)                          -75 /   -94 kr            │
 │  Rådighedsbeløb                           1.425 / 1.781 kr            │
 │  Brugt                                    1.310 / 1.638 kr            │
-│  Til rådighed                              +115 /  +143 kr  (check)   │
+│  Tilbage                              +115 /  +143 kr  (check)   │
 │  Billetændringer                                                 [>]  │
 │                                                                       │
-│  Madhold 2, 12/04–14/04                               ex / inkl. moms │
-│  Dato   Middag            Rådighedsbeløb         Brugt    Til rådighed│
+│  Hele Madhold 2, for perioden 12/04–14/04             ex / inkl. moms │
+│  Dato   Middag            Rådighedsbeløb         Brugt    Tilbage│
 │  12/04  Lasagne          1.425 / 1.781 kr  1.540 / 1.925 kr   -115 / -144 kr (red overdraft icon) │
 │  13/04  Boller i karry   1.512 / 1.890 kr  1.395 / 1.744 kr   +117 / +146 kr │
 │  14/04  Risotto · denne  1.498 / 1.873 kr  1.310 / 1.638 kr   +188 / +235 kr │
-│  Madhold 2               4.435 / 5.544 kr  4.245 / 5.307 kr   +190 / +237 kr (check) │
+│  Hele Madhold 2          4.435 / 5.544 kr  4.245 / 5.307 kr   +190 / +237 kr (check) │
 ```
 
 Billetændringer opened (loads the changes from the menu deadline onward; the button loads the rest once):
@@ -239,11 +250,13 @@ Billetændringer opened (loads the changes from the menu deadline onward; the bu
 
 - Units: every money cell the chef reads shows the ex moms figure in the row's weight and the inkl. moms half in fine print after a slash; the unit words appear once per block, in the boxes as a fine-print line under the figure. Lines are stored gross; the select sets the unit of the typed amount.
 - Bestiller is the reporting user, named with `formatNameWithInitials`; the note is written by the server as the dinner's date and menu title; the body is `{amount}`.
-- Til rådighed is what is left. At or above zero it reads in the card's ink with its plus and a check icon in the success colour; below zero in red with its minus and an exclamation circle in the error colour. The helping numbers above the entry row give this dinner's and the team round's figure.
-- The round is the team's dinners on consecutive calendar days around this dinner, headed by the team's short name and the first and last date. The page computes it from the team's dinners, the bookings store loads their orders and `calculateBudget` gives each rådighedsbeløb.
+- Tilbage is what is left. At or above zero it reads in the card's ink with its plus and a check icon in the success colour; below zero in red with its minus and an exclamation circle in the error colour. The helping numbers above the entry row give this dinner's and the team round's figure.
+- The round is the team's dinners on consecutive calendar days around this dinner, headed by "Hele <madhold>, for perioden <first>–<last>" from `cookingRoundWords`, the one source for the hint block and the round table. The page computes it from the team's dinners, the bookings store loads their orders and `calculateBudget` gives each rådighedsbeløb.
 - Billettype names the ticket (`useTicket`), not the enum.
 - Billetændringer: one row per order event of the dinner from `OrderHistory`, newest first: the household's short name (System for the scaffold), the event word the order history uses, the ticket moved as the ticket chip with its sign, the composition after the change as chips with counts and the kuverter, and Indtægter after the change in kr. After the booking deadline a released ticket stays paid, so Afmeldt and Købt fra anden move kuverter and the payer, not Indtægter. `GET /api/chef/dinner/[id]/order-history?since=` hands the rows from the menu deadline with the composition replayed server-side; the button fetches the rest.
-- View mode shows the tables without the entry row and the slet column.
+- Madbestilling is the timeline's word; the row leads with the cart glyph like Allergener leads with its glyph. Folded, chef and team members read the total alone, or "Madbestilling mangler"; the budget math lives in the RÅDIGHEDSBELØB box. The chef's Rediger madbestilling opens the editor in place, headed "Hvad kostede indkøbene?" with Luk; the helping numbers Rådighedsbeløb, Brugt, Tilbage and the round sit above the entry row and follow the lines. A line saves on Tilføj and goes on slet; there is no draft, so no Gem and no Annuller.
+- Every amount sits in fixed columns with an icon slot that is always there, so kr lines up down a column with and without the check or exclamation icon, in the hint, the lines, the box and the round table.
+- View mode shows the folded row without its button.
 
 **Mockup — season view (opens from [Se sæsontrend]; same component serves admin economy)** ✅ signed 2026-10-05
 
@@ -583,6 +596,10 @@ in the name cell. `useCoreValidation.unit.spec`: the household detail keeps the 
 - The card's row 1 is three fixed slots: special (state | guest | allergy cells), type, how you eat. The state colour
   paints the edge and the state glyph; the type colour paints the badge and the guest and allergy glyphs. One 20px
   glyph size.
+**2026-10-11** (one team number)
+- A cooking team's number has one source: the number in its name, else its position in the season's full team list plus
+  one (`getTeamNumber`). Every site that shows a team passes the season's list, so a renamed team without a number
+  wears the same rainbow stop on `/admin/teams`, `/chef` and `/dinner`.
 
 ## Coverage
 

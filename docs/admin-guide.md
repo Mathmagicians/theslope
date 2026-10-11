@@ -2,7 +2,7 @@
 
 Denne guide dækker alle administrative opgaver i TheSlope. Du skal have **ADMIN**-rollen for at redigere.
 
-> **Se også:** [Brugerguide](user-guide.md) | [Chefkokguide](chef-guide.md) | [Systemoversigt](features/features.md)
+> **Se også:** [Brugerguide](user-guide.md) | [Chefkokguide](chef-guide.md) | [Systemoversigt](features/features.md) | [Driftshåndbog](ops-runbook.md)
 
 ---
 
@@ -16,9 +16,7 @@ Admin-siden er tilgængelig for alle brugere, men **kun admin kan redigere**:
 | Allergi-ansvarlig | ✅ Alle faner | ✅ Kun Allergier |
 | Almindelig bruger | ✅ Alle faner | ❌ Ingen |
 
-Ikke-admin ser en **"Se, men ikke røre"**-besked og kan ikke ændre data:
-
-![Ikke-admin advarsel](screenshots/admin/admin-readonly-banner.png)
+Ikke-admin ser en **"Se, men ikke røre"**-besked øverst og kan ikke ændre data.
 
 ---
 
@@ -27,11 +25,11 @@ Ikke-admin ser en **"Se, men ikke røre"**-besked og kan ikke ændre data:
 | Fane | Formål | Kræver rolle |
 |------|--------|--------------|
 | **Planlægning** | Opret og administrer sæsoner, ferier, priser | Admin |
-| **Madhold** | Opret hold, tildel medlemmer og madlavningsdage | Admin |
-| **Husstande** | Se husstande, flyt beboere ved flere husstande på samme adresse, slet husstande | Admin |
-| **Allergier** | Administrer allergi-katalog | Admin eller Allergi-ansvarlig |
+| **Madhold** | Opret hold, tildel medlemmer, jokere og madlavningsdage | Admin |
+| **Husstande** | Opret og redigér husstande, flyt beboere ved flere husstande på samme adresse | Admin |
+| **Allergier** | Administrer allergi-katalog, bemærkninger og plakat | Admin eller Allergi-ansvarlig |
 | **Brugere** | Se brugere, tildel systemroller | Admin |
-| **Økonomi** | Se fakturaer og økonomioversigt | (kun visning) |
+| **Økonomi** | Se fakturaer og økonomioversigt, del med bogholder | (kun visning) |
 | **System** | Kør systemjobs, se jobhistorik | Admin |
 
 ---
@@ -40,13 +38,13 @@ Ikke-admin ser en **"Se, men ikke røre"**-besked og kan ikke ændre data:
 
 | Opgave | Hvor |
 |--------|------|
-| Opret ny sæson | [Planlægning → Opret](https://www.skraaningen.dk/admin/planning?mode=create) |
-| Aktivér sæson | [Planlægning](https://www.skraaningen.dk/admin/planning) → Sæsonvælger |
+| Opret ny sæson | [Planlægning](https://www.skraaningen.dk/admin/planning) → **Opret sæson** |
+| Aktivér eller redigér sæson | [Planlægning](https://www.skraaningen.dk/admin/planning) → Sæsonvælger |
 | Administrer madhold | [Madhold](https://www.skraaningen.dk/admin/teams) |
-| Redigér husstande / flyt beboere | [Husstande](https://www.skraaningen.dk/admin/households) |
-| Administrer allergityper | [Allergier](https://www.skraaningen.dk/admin/allergies) |
+| Opret og redigér husstande / flyt beboere | [Husstande](https://www.skraaningen.dk/admin/households) |
+| Administrer allergityper, print plakat | [Allergier](https://www.skraaningen.dk/admin/allergies) |
 | Se brugere og roller | [Brugere](https://www.skraaningen.dk/admin/users) |
-| Se økonomioversigt | [Økonomi](https://www.skraaningen.dk/admin/economy) |
+| Se økonomioversigt, del med bogholder | [Økonomi](https://www.skraaningen.dk/admin/economy) |
 | **Ret bookinger (admin)** | [Økonomi](https://www.skraaningen.dk/admin/economy) → Fremtidige bestillinger |
 | Kør systemjobs | [System](https://www.skraaningen.dk/admin/system) |
 | Importér sæson fra CSV | `make theslope-import-season-*` |
@@ -60,7 +58,7 @@ Ikke-admin ser en **"Se, men ikke røre"**-besked og kan ikke ændre data:
 ### Sådan opretter du en ny sæson
 
 1. Gå til [Planlægning](https://www.skraaningen.dk/admin/planning)
-2. Klik på **Opret**-knappen
+2. Klik **Opret sæson**
 3. Udfyld:
    - **Sæsondatoer** - Start- og slutdato
    - **Madlavningsdage** - Hvilke ugedage der er fællesspisning (typisk man-tors)
@@ -79,7 +77,7 @@ Når du aktiverer en sæson, bliver den synlig for alle brugere, og automatiske 
 1. Gå til [Planlægning](https://www.skraaningen.dk/admin/planning)
 2. Brug sæsonvælgeren til at finde sæsonen
 3. Find sæsoner med 🌱 (fremtidig) status
-4. Klik **Aktivér sæson**
+4. Klik **Aktiver Sæson**
 
 ![Fremtidig sæson](screenshots/admin/season-status-display-future-season.png)
 
@@ -88,6 +86,17 @@ Når du aktiverer en sæson, bliver den synlig for alle brugere, og automatiske 
 - Tilmeldinger oprettes ud fra beboernes præferencer
 - Kun middage inden for 60 dage bliver booket
 - Afmeldinger respekteres (systemet genskaber ikke afmeldte billetter)
+
+### Sådan redigerer du en sæson
+
+Datoer, madlavningsdage, ferier og priser kan rettes - også på den aktive sæson:
+
+1. Vælg sæsonen i sæsonvælgeren og klik på **blyanten**
+2. Ret datoer, ugedage eller ferier
+3. Klik **Gem** - kvitteringen fortæller hvad der skete, f.eks. *"Sæson opdateret — 3 datoer tilføjet, 1 fjernet. Forudbestillinger er opdateret. Husk at tildele madhold til nye datoer."*
+4. Gå til [Madhold](https://www.skraaningen.dk/admin/teams) og giv de nye datoer et hold
+
+Skal sæsonen af igen, finder du **Deaktiver Sæson** i samme redigeringsvisning.
 
 ### Sæsonstatusikoner
 
@@ -103,31 +112,40 @@ Når du aktiverer en sæson, bliver den synlig for alle brugere, og automatiske 
 
 ## Madhold
 
+Fanen viser sæsonens hold i en tabel med deres madlavningsdage. Uden valg står alle holds kalender ved siden af; klik på en række, og holdets detaljer tager pladsen.
+
 ### Sådan opretter du madhold
 
-1. Gå til [Madhold → Opret](https://www.skraaningen.dk/admin/teams?mode=create)
-2. Vælg sæsonen i dropdown-menuen
-3. Indtast antal hold du vil oprette
-4. Klik **Opret madhold**
+1. Gå til [Madhold](https://www.skraaningen.dk/admin/teams) og vælg sæsonen i dropdown-menuen
+2. Klik **Opret madhold** øverst til højre
+3. Vælg antal hold - de nye hold nummereres i forlængelse af de eksisterende
+4. Klik **Opret N madhold**
 
-### Sådan redigerer du madhold
+### Sådan redigerer du et madhold
 
-1. Gå til [Madhold → Redigér](https://www.skraaningen.dk/admin/teams?mode=edit)
-2. Vælg et hold i venstre panel
-3. Redigér holdnavn, madlavningsdage eller medlemmer
-4. Ændringer gemmes automatisk
+1. Klik på holdets række i tabellen
+2. Klik på **blyanten** (Rediger) i holdets hoved
+3. Ret holdnavn, madlavningsdage eller medlemmer - alt gemmes med det samme
+4. Klik **Tilbage**, når du er færdig
 
 ![Admin Madhold](screenshots/admin/admin-teams-edit.png)
 
 ### Sådan tilføjer du holdmedlemmer
 
-1. I redigeringstilstand, vælg et hold
-2. Brug søgefeltet til at finde beboere
-3. Klik **Tilføj** — formularen åbner under rækken
-4. Vælg rolle, arbejdstid og eventuelle ugedage
-5. Klik **Tilføj**
+1. I redigeringsvisningen, skriv navnet under **Tilføj medlemmer**
+2. Klik **Tilføj** ud for beboeren — formularen åbner under rækken
+3. Vælg rolle, arbejdstid og eventuelle ugedage
+4. Klik **Tilføj**
 
 Beboere kan være medlem af flere hold. Klik **Rediger** for at ændre rolle, arbejdstid eller ugedage for et eksisterende medlem.
+
+### Sådan tilføjer du en joker
+
+En joker er en plads uden navn - f.eks. en vikar for en kok på barsel, eller en ekstra hånd i en travl periode.
+
+1. I redigeringsvisningen, klik **Tilføj** på rækken **Joker · en plads uden navn**
+2. Udfyld **Periode**, **Ugedage**, **Rolle**, **Arbejdstid** og en **Note** (f.eks. "Anna barsel")
+3. Klik **Tilføj** - jokeren står i sin egen boks på holdkortet med antal madlavningsdage
 
 ---
 
@@ -139,6 +157,16 @@ Beboere kan være medlem af flere hold. Klik **Rediger** for at ændre rolle, ar
 2. Brug søgefeltet til at filtrere på adresse eller navn
 
 ![Admin Husstande](screenshots/admin/admin-households-list.png)
+
+### Sådan opretter du en husstand
+
+Bruges når en ny familie flytter ind - også mens den gamle stadig bor på adressen:
+
+1. Klik **Ny husstand** over tabellen
+2. Vælg **Adresse** fra listen og skriv husstandens **PBS**-nummer
+3. Vælg indflytningsdato
+4. Bor der allerede en husstand på adressen, sætter du dens fraflytningsdato i samme formular
+5. Klik **Opret husstand**
 
 ### Sådan redigerer du en husstand
 
@@ -162,7 +190,7 @@ Beboere kan flyttes mellem husstande på **samme adresse** (samme Heynabo-ID). D
 Admin kan besøge enhver husstands side og aktivere admin-tilgang:
 
 1. Gå til en husstand via linket i husstandstabellen
-2. Klik **Aktivér admin-adgang** på banneret "Du besøger en anden husstand"
+2. Klik **Admin røre alligevel** på banneret "Du besøger nu en anden husstand end din egen"
 3. Nu kan du ændre på vegne af beboerne:
    - **Præferencer** — ændre madpræferencer (genberegner bookinger)
    - **Fraflytningsdato** — sætte eller fjerne fraflytningsdato (genberegner bookinger)
@@ -172,7 +200,7 @@ Admin kan besøge enhver husstands side og aktivere admin-tilgang:
 
 1. Åbn redigeringspanelet for husstanden
 2. Flyt eventuelle beboere til en anden husstand først
-3. Klik **Slet** nederst (to-klik bekræftelse)
+3. Klik **Slet** nederst og bekræft med endnu et klik - knappen fortæller hvor mange beboere der følger med
 
 ---
 
@@ -193,12 +221,20 @@ Admin og allergi-ansvarlige kan redigere allergi-kataloget.
 2. Klik på en allergitype i listen
 3. Se alle beboere med denne allergi og deres kommentarer
 
-### Multiselekt-tilstand
+### Kombiner allergener
 
-1. Slå "Vælg flere allergier" til
+1. Klik **Kombiner allergener**
 2. Marker de allergityper du vil se
 3. Se samlet antal påvirkede beboere
-4. Brug til menuoverblik (f.eks. "Ingen nødder i dag")
+4. Brug til menuoverblik (f.eks. "Ingen nødder i dag") - **Afslut kombinering** lukker visningen igen
+
+### Plakat til køkkenet
+
+1. Klik **Plakat** i katalogets hoved - plakaten åbner som en printvenlig side
+2. Plakaten viser alle beboere med allergier, fordelt på aldersgrupper efter den aktive sæsons billettyper, og en QR-kode til den opdaterede liste
+3. Print den og hæng den op i køkkenet
+
+**Vigtige bemærkninger** i katalogets hoved printes med på plakaten. Klik på **blyanten** i boksen, skriv én bemærkning per linje (f.eks. "Glutenfri boller findes i fryseren") og klik **Gem**.
 
 > **Bemærk:** Sletning af en allergitype fjerner automatisk alle registreringer for den type (CASCADE).
 
@@ -319,16 +355,20 @@ make theslope-login-local && make theslope-admin-import   # GET /api/admin/heyna
 
 ### Faktureringsperioder
 
-Fakturering kører automatisk den 17. hver måned:
+Perioden lukker den 17., og faktureringen kører automatisk den 18. hver måned:
 - **Forbrugsperiode**: 18. forrige måned → 17. denne måned
 - **PBS-opkrævning**: 1. i efterfølgende måned
 
-### Sådan deler du fakturaoplysninger med revisor
+### Sådan kommer fakturaoplysningerne til bogholderen
+
+Hver kørsel sender periodens PBS-fil (CSV) med mail til bogholderen (`<bogholder-mailbox>`) med admin-postkassen (`<admin-mailbox>`) i kopi, og lægger filen i arkivet. Kører perioden igen, går der en ny mail med "opdatering v2", "v3" osv., som erstatter den forrige. Postkasserne sættes op som beskrevet i [driftshåndbogen](ops-runbook.md).
+
+Vil du dele manuelt:
 
 1. Gå til [Økonomi](https://www.skraaningen.dk/admin/economy)
-2. Vælg en faktureringsperiode
-3. Klik **Del** for at generere et magic link
-4. Send linket til revisor (kræver ikke login)
+2. Vælg en lukket faktureringsperiode
+3. Ved **Del med bogholder** åbner du den offentlige side eller kopierer links til siden og til CSV-filen
+4. Send linket - det virker uden login
 
 ### Sådan retter du bookinger (Admin-korrektioner)
 
@@ -353,12 +393,10 @@ Som admin kan du rette bookinger for alle husstande - også efter deadline er pa
 7. Klik **Gem ændringer**
 
 **Admin-rettelser omgår:**
-- Tilmeldingsdeadline (10 dage)
+- Frameldingsfristen (sæsonens, som regel 8 dage)
 - Afmeldingsregler (slet i stedet for frigiv)
 
 > **Bemærk:** Admin-rettelser logges med dit bruger-ID i systemets audit trail.
-
-> **Vigtigt:** Rettelser til lukkede ordrer (efter middagen er afholdt) understøttes ikke endnu.
 
 ---
 
@@ -368,9 +406,9 @@ Som admin kan du rette bookinger for alle husstande - også efter deadline er pa
 
 | Job | Kørsel | Beskrivelse |
 |-----|--------|-------------|
-| Daglig vedligeholdelse | Kl. 02:00 | Afslut middage, luk ordrer, opret transaktioner, tilmeldinger (rolling window 60 dage) |
-| Månedlig fakturering | 17. kl. 04:00 | Generer fakturaer for perioden |
-| Heynabo import | Kl. 03:00 | Synkroniser husstande fra Heynabo |
+| Heynabo import | Dagligt kl. 02:00 | Synkroniser husstande og beboere fra Heynabo |
+| Daglig vedligeholdelse | Dagligt kl. 03:00 | Afslut middage, luk ordrer, opret transaktioner, tilmeldinger (rolling window 60 dage) |
+| Månedlig fakturering | D. 18. hver måned kl. 04:00 | Luk perioden, send CSV til bogholderen, arkivér |
 
 ### Sådan kører du et job manuelt
 
@@ -389,4 +427,4 @@ Alle jobs er idempotente og kan køres igen uden problemer.
 
 ---
 
-*Sidst opdateret: April 2026 (tilføjet husstandsredigering, beboerflytning, holdmedlemsformular)*
+*Sidst opdateret: Oktober 2026 (madhold-fanen og jokere, sæsonredigering, allergiplakat, mail til bogholder, ny husstand)*

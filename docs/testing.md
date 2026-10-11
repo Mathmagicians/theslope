@@ -27,6 +27,18 @@ npm run test:e2e:smoke
 
 ## NON-NEGOTIABLE RULES
 
+### Rule 0: One Level per Behaviour, the Lowest That Proves It
+
+| Level | Proves |
+|---|---|
+| Unit | a pure function: parsing, a calculation, a schema, a token getter |
+| Component | one component with its real children and stores: what it renders for its props and store state, which token it binds, what it emits |
+| E2E | interaction and integration: a user's flow across pages, the URL, the server and the database (a booking lands as an order, a landing syncs its parameters, a claim moves a ticket) |
+
+A behaviour a unit or component spec proves gets no e2e case. A glyph, a colour, an alignment or a label is a component
+spec plus the browser check; the e2e case asserts the flow around it, in GIVEN/WHEN/THEN, as what the system does for
+the user.
+
 ### Rule 1: Tests MUST Be DRY
 
 **STOP** before writing ANY test code and ask:
@@ -163,6 +175,7 @@ const wrapper = await mountWithTooltipProvider(AdminAllergies, {props: {canEdit:
 | Repeated setup code | `beforeEach` or helper |
 | Direct `$fetch` in E2E tests | Factory methods |
 | `console.log()` | `expect()` assertions |
+| An e2e case asserting a class, a colour, a glyph or a label | Component spec plus the browser check (Rule 0) |
 | `page.waitForTimeout()` | `pollUntil()` or `waitForResponse()` |
 | `name` or `data-test-id` on buttons | `data-testid` + `getByTestId()` |
 | `<button type="submit">` in `UForm` tests | `formRef?.submit()` + `flushPromises()` (see [Testing UForm Submission](#testing-uform-submission)) |
