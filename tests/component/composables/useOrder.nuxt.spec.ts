@@ -76,21 +76,21 @@ describe('useOrder', () => {
         expected: { ticketCount: 1, totalRevenue: 5000, kitchenContribution: 250, availableBudget: 4750, availableBudgetExVat: 3800 }
       },
       {
-        scenario: 'mixed states (BOOKED + CLOSED count, RELEASED excluded)',
+        scenario: 'mixed states (BOOKED, CLOSED and RELEASED all paid)',
         orders: [
           createTestOrder({ state: OrderState.BOOKED, priceAtBooking: 5000 }),
           createTestOrder({ state: OrderState.CLOSED, priceAtBooking: 5000 }),
           createTestOrder({ state: OrderState.RELEASED, priceAtBooking: 5000 })
         ],
-        expected: { ticketCount: 2, totalRevenue: 10000, kitchenContribution: 500, availableBudget: 9500, availableBudgetExVat: 7600 }
+        expected: { ticketCount: 3, totalRevenue: 15000, kitchenContribution: 750, availableBudget: 14250, availableBudgetExVat: 11400 }
       },
       {
-        scenario: 'only RELEASED orders',
+        scenario: 'released tickets after the deadline stay paid',
         orders: [
-          createTestOrder({ state: OrderState.RELEASED }),
-          createTestOrder({ state: OrderState.RELEASED })
+          createTestOrder({ state: OrderState.RELEASED, priceAtBooking: 5000 }),
+          createTestOrder({ state: OrderState.RELEASED, priceAtBooking: 5000 })
         ],
-        expected: { ticketCount: 0, totalRevenue: 0, kitchenContribution: 0, availableBudget: 0, availableBudgetExVat: 0 }
+        expected: { ticketCount: 2, totalRevenue: 10000, kitchenContribution: 500, availableBudget: 9500, availableBudgetExVat: 7600 }
       }
     ])('GIVEN $scenario', ({ orders, expected }) => {
       it('WHEN calculating budget THEN returns correct values', () => {

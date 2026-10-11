@@ -1,11 +1,16 @@
-import {test, expect} from '@playwright/test'
+import {test, expect, type Page} from '@playwright/test'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
+import {HouseholdFactory} from '../testDataFactories/householdFactory'
+import {AllergyFactory} from '../testDataFactories/allergyFactory'
+import {OrderFactory} from '../testDataFactories/orderFactory'
 import testHelpers from '../testHelpers'
 import {formatDate} from '~/utils/date'
 import {addDays} from 'date-fns/addDays'
+import {useBookingValidation} from '~/composables/useBookingValidation'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, waitForHydration, collectHydrationWarnings} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, waitForHydration, collectHydrationWarnings, getSessionUserInfo, gotoHydrated, salt, temporaryAndRandom} = testHelpers
+const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
 
 /**
  * E2E UI Tests for Dinner Page URL-Based Navigation
@@ -264,5 +269,75 @@ test.describe('Dinner Page URL Navigation', () => {
 
         const panelText = await panel.textContent()
         expect(panelText, "Panel should now show second event date").toContain(testData.dates.second)
+    })
+
+    test.describe('Ticket allergies', () => {
+        const testSalt = temporaryAndRandom()
+        let allergicId: number
+        let notAllergicId: number
+        let allergyType: Awaited<ReturnType<typeof AllergyFactory.createAllergyType>>
+        let dinnerDate: string
+
+        test.beforeAll(async ({browser}) => {
+            const adminContext = await validatedBrowserContext(browser)
+            const memberContext = await memberValidatedBrowserContext(browser)
+            const {householdId, userId} = await getSessionUserInfo(memberContext)
+            const season = await SeasonFactory.createActiveSeason(adminContext)
+            const adultPrice = season.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
+            // The second future dinner: the first may be today and already past its serving time
+            const dinnerEvent = testData.events[1]!
+            dinnerDate = testData.dates.second
+
+            const adultBirthDate = addDays(new Date(), -30 * 365)
+            const [allergic, notAllergic] = await Promise.all(['Anders', 'Anders2'].map(name =>
+                HouseholdFactory.createInhabitantForHousehold(adminContext, householdId, salt(name, testSalt), adultBirthDate)))
+            allergicId = allergic!.id
+            notAllergicId = notAllergic!.id
+
+            allergyType = await AllergyFactory.createAllergyType(adminContext, AllergyFactory.defaultAllergyTypeData(testSalt))
+            await AllergyFactory.createAllergy(adminContext, {inhabitantId: allergicId, allergyTypeId: allergyType.id, inhabitantComment: null})
+
+            await OrderFactory.createOrder(adminContext, {
+                householdId,
+                dinnerEventId: dinnerEvent.id,
+                orders: [allergicId, notAllergicId].map(inhabitantId => ({
+                    inhabitantId, bookedByUserId: userId, ticketPriceId: adultPrice.id!, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: false
+                }))
+            }, 201, true)
+        })
+
+        test.afterAll(async ({browser}) => {
+            const adminContext = await validatedBrowserContext(browser)
+            // Deleting an inhabitant cascades its orders and allergies
+            await Promise.all([allergicId, notAllergicId].filter(Boolean)
+                .map(id => HouseholdFactory.deleteInhabitant(adminContext, id).catch(() => {})))
+            if (allergyType?.id) await AllergyFactory.deleteAllergyType(adminContext, allergyType.id).catch(() => {})
+        })
+
+        const bookingRow = (page: Page, inhabitantId: number) =>
+            page.getByTestId('booking-table').locator('tr').filter({has: page.getByTestId(`inhabitant-${inhabitantId}-toggle`)})
+
+        test('GIVEN a booked inhabitant with an allergy WHEN the dinner loads THEN the ticket shows the allergy glyph and the expanded row names the type', async ({browser}) => {
+            const context = await memberValidatedBrowserContext(browser)
+            const page = await context.newPage()
+
+            await gotoHydrated(page, `${dinnerPageUrl}?date=${dinnerDate}`)
+            await expect(page.getByTestId('booking-table')).toBeVisible()
+
+            // THEN: the allergic inhabitant's ticket carries the glyph, the other's does not
+            await expect(bookingRow(page, allergicId).getByTestId('ticket-allergy-icon').filter({visible: true})).toBeVisible()
+            await expect(bookingRow(page, notAllergicId).getByTestId('ticket-allergy-icon')).toHaveCount(0)
+
+            // WHEN: the allergic inhabitant's row expands THEN the allergies line names the type
+            await page.getByTestId(`inhabitant-${allergicId}-toggle`).click()
+            await expect(page.getByTestId(`inhabitant-${allergicId}-allergies`)).toContainText(allergyType.name)
+
+            // WHEN: the other inhabitant's row expands THEN no allergies line shows
+            await page.getByTestId(`inhabitant-${notAllergicId}-toggle`).click()
+            await expect(page.getByTestId(`inhabitant-${notAllergicId}-mode-edit-${DinnerModeSchema.enum.DINEIN}`)).toBeVisible()
+            await expect(page.getByTestId(`inhabitant-${notAllergicId}-allergies`)).toHaveCount(0)
+
+            await doScreenshot(page, 'dinner/ticket-allergies', true)
+        })
     })
 })

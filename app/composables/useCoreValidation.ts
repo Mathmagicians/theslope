@@ -1,7 +1,7 @@
 import {z} from 'zod'
 import {isBefore} from 'date-fns'
 import {SystemRoleSchema, DinnerModeSchema} from '~~/prisma/generated/zod'
-import {UserFragmentSchema, InhabitantFragmentSchema, HouseholdFragmentSchema} from '~/composables/fragments/domainFragments'
+import {UserFragmentSchema, InhabitantFragmentSchema, HouseholdFragmentSchema, AllergyFragmentSchema} from '~/composables/fragments/domainFragments'
 import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} from '~/composables/useUserPreferenceValidation'
 import {useWeekDayMapValidation} from './useWeekDayMapValidation'
 
@@ -309,7 +309,7 @@ export const useCoreValidation = () => {
         inhabitants: z.array(InhabitantDisplaySchema) // Lightweight relation
     })
 
-    // ADR-009: Detail endpoint - full household with complete inhabitant data
+    // ADR-009: Detail endpoint - full household with complete inhabitant data and each inhabitant's allergies
     const HouseholdDetailSchema = BaseHouseholdSchema.required({
         id: true,
         heynaboId: true,
@@ -320,7 +320,9 @@ export const useCoreValidation = () => {
         moveOutDate: true,
         shortName: true
     }).extend({
-        inhabitants: z.array(InhabitantDetailSchema)
+        inhabitants: z.array(InhabitantDetailSchema.extend({
+            allergies: z.array(AllergyFragmentSchema).optional()
+        }))
     })
 
     // ADR-009: User detail with nested Inhabitant and Household (essential context for auth)
@@ -500,7 +502,7 @@ export const useCoreValidation = () => {
             movedInDate: new Date(serialized.movedInDate as string),
             moveOutDate: serialized.moveOutDate ? new Date(serialized.moveOutDate as string) : null,
             shortName: getHouseholdShortName(serialized.address as string),
-            inhabitants: inhabitants?.map((inhabitant) => deserializeInhabitantDisplay(inhabitant))
+            inhabitants: inhabitants?.map((inhabitant) => ({...deserializeInhabitantDisplay(inhabitant), allergies: inhabitant.allergies}))
         }
         return HouseholdDetailSchema.parse(deserialized)
     }

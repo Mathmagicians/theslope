@@ -49,7 +49,7 @@ affected order sits CLOSED on a past dinner and matches exactly one ticket price
 
 ### Solution
 
-1. `ticketType` joins `OrderSnapshotSchema`; the first round of the package settles the backfill shape — the schema
+1. `ticketType` and `allergyTypeIds` (§ Ticket allergies on the order) join `OrderSnapshotSchema`; the first round of the package settles the backfill shape — the schema
    has ten required fields, two of them formatted in TypeScript (`inhabitantNameWithInitials`, `householdShortname`),
    so the backfill is either a slimmer snapshot with optional provenance fields or a TypeScript job.
 2. `Order.orderSnapshot String?` — `ALTER TABLE "Order" ADD COLUMN "orderSnapshot" TEXT`, taken as Prisma emits it.
@@ -133,3 +133,54 @@ it holds on init, and every page that opens the store pays for all of them. The 
 `app/stores/bookings.ts`, `app/stores/households.ts`, `app/stores/users.ts`, `app/components/admin/AdminEconomy.vue`,
 `app/pages/chef/index.vue`, `tests/component/stores/*.nuxt.spec.ts`, `docs/adr.md` (ADR-007 rule 9),
 `docs/adr-compliance-frontend.md` (store rows).
+
+## Ticket allergies on the order
+
+### Problem
+
+A guest's allergy type ids are chosen in `GuestBookingForm` and leave the client as `allergyTypeIds` on the desired
+order (ADR-016), and every creation path drops them before `createOrders`: the scaffold's create transform
+(`scaffoldPrebookings.ts`), the waitlist assignment (`waitlistAssignment.ts`), `PUT /api/order` and the billing
+import. The orders list reads `provenanceAllergies` from the latest `USER_CLAIMED` audit row (`fetchOrders`), and the
+claim snapshot carries no allergies, so the field is empty on every order. The dinner detail resolves a ticket's
+allergies from its current inhabitant's profile, so a swapped ticket counts the claimer's allergies; the groceries
+were bought for the releasing owner's.
+
+### Solution
+
+Rule signed 2026-10-11. A ticket carries a stored list or follows its holder's live profile:
+
+| Ticket | Allergies | Frozen when |
+|---|---|---|
+| Own | holder's live profile | never |
+| Guest | ids chosen in the form | at booking |
+| Swapped | releasing owner's profile ids | at the claim, after the booking deadline; a second swap keeps the first list |
+
+1. The stored list is `allergyTypeIds` in `OrderSnapshotSchema`, kept in the `Order.orderSnapshot` column of § Order
+   snapshot (B6): one column, one migration for both (signed 2026-10-11). The names field goes.
+2. Creation (`createOrders`) stores a guest ticket's ids; the create schemas and the four callers carry
+   `allergyTypeIds` through. The claim (`claimOrder`) selects the releasing inhabitant's allergy rows and stores their
+   type ids when the ticket holds none; the claim snapshot records the same ids.
+3. The ticket mapper shared by the orders list and the dinner detail emits `allergyTypeIds` on every ticket: the stored
+   list when present, the holder's `Allergy` rows otherwise (a subselect in the orders list's raw SQL, the included
+   relation on the dinner detail). `provenanceAllergies` goes.
+4. `getTicketAllergens` (`useAllergy.ts`) resolves ids in the catalogue; `DinnerTicket` and `DinnerBookingForm` read
+   `allergyTypeIds` from the ticket in place of the household profile (release 0.9 § Ticket allergies).
+
+### TDD
+
+- API: `household/scaffold` — a guest order with ids comes back with them, an own ticket with the holder's live ids, a
+  profile edit shows on the next read; `admin/order` — a claimed ticket carries the releasing owner's ids, a second
+  claim keeps them, the claim snapshot holds them; `household/waitlist` — an assigned entry keeps its ids;
+  `chef/dinner` — the dinner detail's tickets carry `allergyTypeIds`.
+- Unit: `getTicketAllergens` by id; `computeAffectedDiners` counts a guest and a swapped ticket; the stored list's
+  round trip.
+- E2E ui: a guest booked with an allergy on the menu shows the glyph and the type on reopening the form; the chef
+  page's allergen line and kitchen stats count one more kuvert.
+
+### Affected
+
+`useBookingValidation.ts`, `useBooking.ts` (snapshot builder, guest grouping), `useAllergy.ts`,
+`financesRepository.ts` (create, claim, orders list, dinner detail), `scaffoldPrebookings.ts`,
+`waitlistAssignment.ts`, `api/order/index.put.ts`, `DinnerTicket.vue`, `DinnerBookingForm.vue`,
+`prisma/schema.prisma`, `migrations/`, `docs/adr-compliance-backend.md` (order rows).

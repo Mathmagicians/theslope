@@ -5,11 +5,14 @@ import {findByTestId, clickByTestId, withTooltipProvider} from '~~/tests/compone
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
+import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
 import type {DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
+import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
 
 // Mock stores
 const mockHouseholdsStore = {
@@ -142,6 +145,84 @@ describe('DinnerBookingForm', () => {
         expect(await saveRow(wrapper, rowId, newMode)).toEqual([[expectedGuestOrders(newMode)]])
       }
     )
+
+    it('GIVEN a guest order THEN its name cell leads with the user-plus disc of the add-guest row and the "Gæst af" label on the guestOf tokens', async () => {
+      const wrapper = await mountMember(guestOrders)
+
+      const label = wrapper.findAll('span').find(span => span.text() === 'Gæst af')!
+      const row = label.element.parentElement!
+      expect(label.classes()).toEqual(expect.arrayContaining(COMPONENTS.bookingForm.guestOfLabel.split(' ')))
+      expect([...row.classList]).toEqual(expect.arrayContaining(COMPONENTS.bookingForm.guestOf.split(' ')))
+      const disc = wrapper.findAllComponents({name: 'UAvatar'}).find(avatar => row.contains(avatar.element) && avatar.props('icon') === ICONS.userPlus)
+      expect(disc).toBeDefined()
+      expect(disc!.props('size')).toBe(COMPONENTS.avatar.compact.size)
+      expect(disc!.classes()).toEqual(expect.arrayContaining(COMPONENTS.avatar.compact.fit.split(' ')))
+    })
+
+    it('GIVEN a claimed guest order THEN "fra X" sits in the guestProvenance row under the label', async () => {
+      const wrapper = await mountMember(guestOrders.map(order => ({...order, provenanceHousehold: 'Hansen'})))
+
+      // The name cell's provenance badge; the ticket's own "fra" line is plain text
+      const badge = wrapper.findAllComponents({name: 'UBadge'}).find(candidate => candidate.text().includes('fra Hansen'))
+      expect(badge).toBeDefined()
+      expect([...badge!.element.parentElement!.classList]).toEqual(expect.arrayContaining(COMPONENTS.bookingForm.guestProvenance.split(' ')))
+    })
+
+    describe('ticket allergies', () => {
+      const [allergic, notAllergic] = householdWithInhabitants.inhabitants
+      const allergyTypes = AllergyFactory.createMockAllergyTypes()
+      const householdWithAllergies = {
+        ...householdWithInhabitants,
+        inhabitants: householdWithInhabitants.inhabitants.map(inhabitant => ({
+          ...inhabitant,
+          allergies: inhabitant.id === allergic!.id ? AllergyFactory.serializedAllergies(allergyTypes.length, inhabitant.id) : []
+        }))
+      }
+
+      const mountBooked = () => {
+        mockIsHouseholdMember.mockReturnValue(true)
+        const deadlines = {...baseDeadlines, canModifyOrders: () => true, canEditDiningMode: () => true}
+        const orders = [...familyOrders(DinnerMode.DINEIN), ...guestOrders]
+        return mountSuspended(withTooltipProvider(DinnerBookingForm, {...baseProps, household: householdWithAllergies, orders, deadlines}))
+      }
+
+      const ticketAllergies = (wrapper: Awaited<ReturnType<typeof mountBooked>>) =>
+        wrapper.findAllComponents(DinnerTicket).map(ticket => ticket.props('allergies') as {name: string}[] | undefined)
+
+      it('GIVEN a booked inhabitant with allergies THEN the ticket carries the allergy types and no row names them', async () => {
+        const wrapper = await mountBooked()
+
+        expect(ticketAllergies(wrapper)).toContainEqual(allergyTypes)
+        allergyTypes.forEach(type => expect(findByTestId(wrapper, 'booking-table').text()).not.toContain(type.name))
+      })
+
+      it('GIVEN a booked inhabitant with allergies WHEN the row expands THEN the line shows one AllergyTypeDisplay per allergy', async () => {
+        const wrapper = await mountBooked()
+        await clickByTestId(wrapper, `inhabitant-${allergic!.id}-toggle`)
+
+        const line = findByTestId(wrapper, `inhabitant-${allergic!.id}-allergies`)
+        expect(line.exists()).toBe(true)
+        const displays = wrapper.findAllComponents(AllergyTypeDisplay).filter(display => line.element.contains(display.element))
+        expect(displays.map(display => display.props('allergyType'))).toEqual(allergyTypes)
+        displays.forEach(display => expect(display.props()).toMatchObject({compact: true, showName: true}))
+      })
+
+      it('GIVEN a booked inhabitant without allergies WHEN the row expands THEN no allergy line shows', async () => {
+        const wrapper = await mountBooked()
+        await clickByTestId(wrapper, `inhabitant-${notAllergic!.id}-toggle`)
+
+        expect(findByTestId(wrapper, `inhabitant-${notAllergic!.id}-allergies`).exists()).toBe(false)
+        expect(wrapper.findAllComponents(AllergyTypeDisplay)).toHaveLength(0)
+      })
+
+      it('GIVEN guest tickets THEN their ticket carries no allergy types', async () => {
+        const wrapper = await mountBooked()
+
+        const guestTickets = wrapper.findAllComponents(DinnerTicket).filter(ticket => ticket.props('guestCount') !== undefined)
+        expect(guestTickets.length).toBeGreaterThan(0)
+        guestTickets.forEach(ticket => expect(ticket.props('allergies')).toEqual([]))
+      })
+    })
 
     describe('power mode', () => {
       const powerConsensus = (wrapper: Awaited<ReturnType<typeof mountMember>>) =>

@@ -12,6 +12,7 @@ import {DinnerModeSchema} from '~~/prisma/generated/zod'
 import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} from '~/composables/useUserPreferenceValidation'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import type {WeekDayMap} from '~/types/dateTypes'
 
 const DinnerMode = DinnerModeSchema.enum
@@ -249,6 +250,7 @@ describe('useCoreValidation - Household Schemas', () => {
     const {
         BaseHouseholdSchema,
         HouseholdCreateSchema,
+        HouseholdDetailSchema,
         deserializeHouseholdDisplay,
         deserializeHouseholdDetail
     } = useCoreValidation()
@@ -318,6 +320,28 @@ describe('useCoreValidation - Household Schemas', () => {
             expect(deserialized.inhabitants).toHaveLength(1)
             expect(deserialized.inhabitants![0]!.birthDate).toBeInstanceOf(Date)
             expect(deserialized.inhabitants![0]!.name).toBe(serialized.inhabitants[0]!.name)
+        })
+
+        const householdRowWithAllergies = () => ({
+            ...HouseholdFactory.defaultHouseholdData(),
+            id: 1,
+            movedInDate: '2020-01-01',
+            moveOutDate: null,
+            inhabitants: [
+                {...HouseholdFactory.defaultInhabitantData(), id: 1, householdId: 1, birthDate: null, dinnerPreferences: null, allergies: AllergyFactory.serializedAllergies(2, 1)},
+                {...HouseholdFactory.defaultInhabitantData(), id: 2, householdId: 1, birthDate: null, dinnerPreferences: null, allergies: []}
+            ]
+        })
+
+        it.each([
+            {through: 'the deserializer', read: () => deserializeHouseholdDetail(householdRowWithAllergies())},
+            {through: 'the schema', read: () => HouseholdDetailSchema.parse(JSON.parse(JSON.stringify(deserializeHouseholdDetail(householdRowWithAllergies()))))}
+        ])('keeps each inhabitant\'s allergies with their allergy type through $through', ({read}) => {
+            const [withAllergies, withoutAllergies] = read().inhabitants
+
+            expect(withAllergies!.allergies?.map(allergy => allergy.allergyType)).toEqual(AllergyFactory.createMockAllergyTypes())
+            expect(withAllergies!.allergies?.every(allergy => allergy.inhabitantId === withAllergies!.id)).toBe(true)
+            expect(withoutAllergies!.allergies).toEqual([])
         })
     })
 })

@@ -4,36 +4,31 @@
  *
  * Edit controls are in the expanded row (DinnerBookingForm)
  *
- * STATES: normal (no icon), released (📤), claimed (🎟️)
- * PROPS: isGuest adds "Gæst" to badge, NOT a state
+ * Row 1 is three slots of fixed width, so every card in a table aligns:
  *
- * ┃                                                    ░░░░░░░░┃
- * ┃  [VOKSEN · 55kr]              [🍽️] Spisesal       ░░🎟️░░░┃  NORMAL
- * ┃                                                    ░░░░░░░░┃
- * ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
- *  ↑ primary accent                              watermark ↗
+ *           special            type                        how you eat
+ * ┃  [  ][  ][  ]  [VOKSEN · 55kr]                [mode] Spisesal   ░░[tk]░░┃  normal
+ * ┃  [rl][  ][  ]  [VOKSEN · 55kr]                [mode] Ingen      ░░[tk]░░┃  released        rl red, edge red
+ * ┃  [cl][  ][al]  [VOKSEN · 55kr]                [mode] Spisesal   ░░[tk]░░┃  claimed, allergic   cl violet, al amber
+ * ┃                fra Hansen                                        ░░░░░░░░┃
+ * ┃  [cl][gu][al]  [BARN · 35kr · 2 Gæster]       [mode] Spisesal   ░░[tk]░░┃  claimed guest, allergic   gu + al green
+ * ┃  [wl][  ][  ]  [VOKSEN · 55kr]                [mode] Ingen      ░░[tk]░░┃  waitlisted (waitlist UI package)
  *
- * ┃                                                    ░░░░░░░░┃
- * ┃  📤 [VOKSEN · 55kr]           [❌] Ingen          ░░🎟️░░░┃  RELEASED
- * ┃                                                    ░░░░░░░░┃
- * ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
- *  ↑ error accent
+ * special = ticket.special: three ticket.cell (state | guest | allergy), an empty cell keeps its width
+ *   [rl] ICONS.released, [cl] ICONS.claim at ticket.stateIcon[state]; [wl] the waitlist glyph (waitlist UI package)
+ *   [gu] ICONS.userPlus, [al] ICONS.allergy at ticket.infoIcon[ticketConfig.color]
+ * type = the badge (ticket.badge) in the ticket type's colour
+ * how you eat = ticket.modeSlot: DinnerModeSelector in view mode, right-aligned
+ * row 2 = ticket.subRow, starting under the badge
+ * [tk] = ICONS.ticketSolid at ticket.watermarkIcon
  *
- * ┃                                                    ░░░░░░░░┃
- * ┃  🎟️ [VOKSEN · 55kr]           [🍽️] Spisesal      ░░🎟️░░░┃  CLAIMED
- * ┃     fra Hansen                🥜 Gluten, Nødder   ░░░░░░░░┃  (row 2)
- * ┃                                                    ░░░░░░░░┃
- * ┣━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┫
- *  ↑ info accent
- *
- * ROW 1: [StateIcon?] [Type·Price·Gæst?]  ...  [ModeIcon] ModeLabel
- * ROW 2: (optional) "fra Household"  [🥜 Allergies badge]
- *
- * Accent border color: normal=primary, released=error, claimed=info
+ * Two hues per card: the state colour paints the edge (ticket.face[state]) and the state glyph, the type colour
+ * paints the badge and the guest and allergy glyphs
  * Mode labels: Spisesal | Sen | Takeaway | Ingen
  */
 import type {DinnerMode} from '~/composables/useBookingValidation'
-import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
+import type {NuxtUIColor, TicketTypeColor} from '~/composables/useTheSlopeDesignSystem'
 
 interface TicketConfig {
   label: string
@@ -50,7 +45,7 @@ interface Props {
   guestCount?: number // undefined = not guest, 1+ = guest ticket(s)
   ticketCount?: number // DEBUG: total orders for inhabitant (shown if > 1)
   consensus?: boolean // Power mode: true=all agree, false=mixed, undefined=not power mode
-  allergies?: string[] // Inhabitant's own allergies (shown on ticket)
+  allergies?: AllergyTypeDisplay[] // The eater's allergy types; the card shows the glyph only
   provenanceHousehold?: string // Source household if claimed
 }
 
@@ -66,23 +61,26 @@ const props = withDefaults(defineProps<Props>(), {
 
 const isGuest = computed(() => props.guestCount !== undefined)
 
-const {TYPOGRAPHY, ICONS, SIZES, COLOR, TEXT, BG, getOrderStateColor, NOISE} = useTheSlopeDesignSystem()
+const {COMPONENTS, ICONS, SIZES, NOISE, getTicketState} = useTheSlopeDesignSystem()
 const {formatPrice} = useTicket()
+const ticket = COMPONENTS.ticket
 
-// Accent color from design system
-const accentColor = computed(() => getOrderStateColor(props.isReleased, props.isClaimed))
+const ticketState = computed(() => getTicketState(props.isReleased, props.isClaimed))
 
-// Both-side accent line class
-const accentClass = computed(() => `border-x-4 md:border-x-8 border-${accentColor.value}`)
+const STATE_GLYPHS = {released: ICONS.released, claimed: ICONS.claim} as const
+const stateGlyph = computed(() => ticketState.value === 'normal' ? null : {
+  name: STATE_GLYPHS[ticketState.value],
+  class: ticket.stateIcon[ticketState.value]
+})
 
-// State icon color (matches accent)
-const stateIconColor = computed(() => `text-${accentColor.value}`)
+const hasAllergies = computed(() => props.allergies.length > 0)
 
-// Has allergies to show
-const hasAllergies = computed(() => props.allergies && props.allergies.length > 0)
-
-// Has extra info row (provenance or allergy names)
-const hasExtraRow = computed(() => props.provenanceHousehold || hasAllergies.value)
+// The guest and allergy glyphs take the type badge's colour; power mode's badge colour has no info glyph
+const isTicketTypeColor = (color: NuxtUIColor): color is TicketTypeColor => color in ticket.infoIcon
+const infoIconClass = computed(() => {
+  const color = props.ticketConfig?.color
+  return color && isTicketTypeColor(color) ? ticket.infoIcon[color] : undefined
+})
 
 // Combined badge text: "VOKSEN · 55kr" or "BARN · 35kr · 2 Gæster" or "Powermode!" (no price for power mode)
 // DEBUG: Shows "#3" if ticketCount > 1 (duplicate orders)
@@ -100,63 +98,46 @@ const badgeText = computed(() => {
 </script>
 
 <template>
-  <div
-    :class="[`relative overflow-hidden rounded-lg ${BG.ticket} p-2 md:p-3 w-full`, accentClass]"
-  >
-    <!-- 🎟️ Watermark - sized to look like the ticket border -->
-    <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
-      <UIcon name="i-heroicons-ticket-solid" :class="`w-full h-[140%] opacity-[0.12] ${TEXT.dimmed}`" />
+  <div :class="ticket.face[ticketState]">
+    <!-- Watermark - sized to look like the ticket border -->
+    <div :class="ticket.watermark">
+      <UIcon :name="ICONS.ticketSolid" :class="ticket.watermarkIcon" />
     </div>
 
     <!-- Ticket content -->
-    <div class="relative z-10 space-y-1">
-      <!-- ROW 1: [State] [Badge] ... [Allergy icon] [Mode] [Label] -->
-      <div class="flex items-center justify-between gap-2">
-        <!-- Left: Fixed icon slot + Combined badge -->
-        <div class="flex items-center gap-2">
-          <!-- Fixed-width icon slot (reserves space even when empty for alignment) -->
-          <div class="w-5 md:w-6 flex-shrink-0 flex items-center justify-center">
+    <div :class="ticket.content">
+      <!-- ROW 1: [special: state | guest | allergy] [type badge] ... [how you eat] -->
+      <div :class="ticket.row">
+        <div :class="ticket.special">
+          <div :class="ticket.cell" data-testid="ticket-state-cell">
+            <UIcon v-if="stateGlyph" :name="stateGlyph.name" :class="stateGlyph.class" />
+          </div>
+          <div :class="ticket.cell" data-testid="ticket-guest-cell">
+            <UIcon v-if="isGuest" :name="ICONS.userPlus" :class="infoIconClass" />
+          </div>
+          <div :class="ticket.cell" data-testid="ticket-allergy-cell">
             <UIcon
-              v-if="isReleased"
-              :name="ICONS.released"
-              class="size-5 md:size-6"
-              :class="stateIconColor"
-            />
-            <UIcon
-              v-else-if="isClaimed"
-              :name="ICONS.claim"
-              class="size-5 md:size-6"
-              :class="stateIconColor"
-            />
-            <UIcon
-              v-else-if="isGuest"
-              :name="ICONS.userPlus"
-              class="size-5 md:size-6 text-info"
+              v-if="hasAllergies"
+              :name="ICONS.allergy"
+              :class="infoIconClass"
+              data-testid="ticket-allergy-icon"
             />
           </div>
-
-          <!-- Combined badge: Type · Price · Gæst(er) -->
-          <UBadge
-            v-if="ticketConfig"
-            :color="ticketConfig.color"
-            :variant="NOISE.loud"
-            :size="SIZES.small"
-            class="uppercase whitespace-nowrap"
-          >
-            {{ badgeText }}
-          </UBadge>
         </div>
 
-        <!-- Right: Allergy icon + Mode icon + fineprint label -->
-        <div class="flex items-center gap-1">
-          <!-- Allergy indicator icon -->
-          <UIcon
-            v-if="hasAllergies"
-            name="i-heroicons-exclamation-triangle"
-            class="size-4 md:size-5 text-warning"
-          />
+        <!-- Combined badge: Type · Price · Gæst(er) -->
+        <UBadge
+          v-if="ticketConfig"
+          :color="ticketConfig.color"
+          :variant="NOISE.loud"
+          :size="SIZES.small"
+          :class="ticket.badge"
+        >
+          {{ badgeText }}
+        </UBadge>
 
-          <!-- Mode badge (uses DinnerModeSelector in VIEW mode) -->
+        <!-- How you eat: DinnerModeSelector in VIEW mode -->
+        <div :class="ticket.modeSlot" data-testid="ticket-mode-slot">
           <DinnerModeSelector
             :model-value="dinnerMode"
             :consensus="consensus"
@@ -165,22 +146,11 @@ const badgeText = computed(() => {
         </div>
       </div>
 
-      <!-- ROW 2 (optional): [Provenance] [Allergy names] -->
-      <div v-if="hasExtraRow" class="flex items-center gap-2 pl-7 md:pl-8">
-        <!-- Provenance household -->
-        <span v-if="provenanceHousehold" :class="[TYPOGRAPHY.finePrint, TEXT.gray[500]]">
+      <!-- ROW 2 (optional): provenance household, under the badge -->
+      <div v-if="provenanceHousehold" :class="ticket.subRow">
+        <span :class="ticket.provenance">
           fra {{ provenanceHousehold }}
         </span>
-
-        <!-- Allergy names badge -->
-        <UBadge
-          v-if="hasAllergies"
-          :color="COLOR.warning"
-          :variant="NOISE.soft"
-          :size="SIZES.small"
-        >
-          🥜 {{ allergies.join(', ') }}
-        </UBadge>
       </div>
     </div>
   </div>

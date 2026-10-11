@@ -1,5 +1,5 @@
 import {z} from 'zod'
-import {InhabitantFragmentSchema} from '~/composables/fragments/domainFragments'
+import {InhabitantFragmentSchema, AllergyTypeFragmentSchema, AllergyFragmentSchema} from '~/composables/fragments/domainFragments'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 
 /**
@@ -24,9 +24,8 @@ export const useAllergyValidation = () => {
         id: z.number().int().positive()
     })
 
-    const AllergyTypeDisplaySchema = BaseAllergyTypeSchema.extend({
-        id: z.number().int().positive()
-    })
+    // The catalog fragment with the field rules of the editor
+    const AllergyTypeDisplaySchema = AllergyTypeFragmentSchema.extend(BaseAllergyTypeSchema.shape)
 
     // AllergyType with nested Inhabitants (for admin allergies master-detail view)
     // Note: inhabitantComment and allergyUpdatedAt are from Allergy join table, not Inhabitant
@@ -38,13 +37,8 @@ export const useAllergyValidation = () => {
     })
 
     // Base Allergy schema for Display (includes allergyType - ADR-09 lightweight relation)
-    const BaseAllergySchema = z.object({
-        id: z.number().int().positive(),
-        inhabitantId: z.number().int().positive(),
-        allergyTypeId: z.number().int().positive(),
+    const BaseAllergySchema = AllergyFragmentSchema.extend({
         inhabitantComment: z.string().max(500, "Kommentar må ikke være længere end 500 karakterer").optional().nullable(),
-        createdAt: z.coerce.date(),
-        updatedAt: z.coerce.date(),
         allergyType: AllergyTypeDisplaySchema // ADR-09: Essential lightweight relation
     })
 

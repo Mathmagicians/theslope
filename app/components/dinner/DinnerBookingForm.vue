@@ -3,47 +3,62 @@
  * DinnerBookingForm - Reusable booking form for a single dinner event
  *
  * Expandable row pattern (like HouseholdCard):
- * - Collapsed: Pure info display (ticket VIEW mode)
+ * - Collapsed: Pure info display (DinnerTicket draws the ticket's own layout)
  * - Expanded: UCard with edit controls + Cancel/Save footer
  *
- * MOBILE - Collapsed:
+ * [edit] = BUTTONS.edit, [close] = the turned chevron, [DinnerTicket] = the ticket card,
+ * [allergy] = ICONS.allergy, (Gluten) = AllergyTypeDisplay compact show-name
+ *
+ * PHONE - Collapsed (the ticket under the name):
  * ┌─────────────────────────────────┐
- * │ [✏️] Anna Hansen                │
+ * │ [edit] Anna B.H.                │
+ * │        [claim fra Hansen]       │
  * │ ┌─────────────────────────────┐ │
- * │ │ 🎟️ Voksen · 55kr · 🍽️      │ │
+ * │ │ [DinnerTicket]              │ │
  * │ └─────────────────────────────┘ │
  * └─────────────────────────────────┘
  *
- * MOBILE - Expanded:
+ * PHONE - Expanded:
  * ┌─────────────────────────────────┐
- * │ [▼] Anna Hansen                 │
+ * │ [close] Anna B.H.               │
  * │ ┌─────────────────────────────┐ │
- * │ │ Vælg spisning:              │ │
- * │ │ [🍽️ Fællesspisning     ]   │ │
- * │ │ [🕐 Sen spisning       ]   │ │
- * │ │ [🛍️ Takeaway           ]   │ │
- * │ │ [❌ Ingen              ]   │ │
+ * │ │ Vælg spisning for Anna      │ │
  * │ ├─────────────────────────────┤ │
- * │ │ [Annuller]        [Gem]     │ │
+ * │ │ [allergy] (Gluten) (Nødder) │ │  booked inhabitant with allergies only
+ * │ │ [booking deadline badge]    │ │
+ * │ │ [dining mode deadline badge]│ │
+ * │ │ [mode] [mode] [mode] [mode] │ │
+ * │ │ [history]                   │ │
+ * │ ├─────────────────────────────┤ │
+ * │ │ [Annuller]        [Opdater] │ │
  * │ └─────────────────────────────┘ │
  * └─────────────────────────────────┘
  *
- * DESKTOP - Collapsed:
- * ┌──────────────────────────────────────────────────────┐
- * │ [✏️] Anna Hansen              │ 🎟️ Voksen 55kr 🍽️  │
- * └──────────────────────────────────────────────────────┘
+ * DESKTOP - Collapsed (the ticket in its own column):
+ * ┌───────────────────────────┬──────────────────────────────┐
+ * │ [edit] Anna B.H.          │ ┌──────────────────────────┐ │
+ * │        [claim fra Hansen] │ │ [DinnerTicket]           │ │
+ * │                           │ └──────────────────────────┘ │
+ * └───────────────────────────┴──────────────────────────────┘
  *
  * DESKTOP - Expanded:
  * ┌──────────────────────────────────────────────────────────┐
- * │ [▼] Anna Hansen                                         │
  * │ ┌──────────────────────────────────────────────────────┐ │
- * │ │ Vælg: [🍽️][🕐][🛍️][❌]           [Annuller] [Gem]  │ │
+ * │ │ Vælg spisning for Anna                               │ │
+ * │ ├──────────────────────────────────────────────────────┤ │
+ * │ │ [allergy] (Gluten) (Nødder)                          │ │
+ * │ │ [booking deadline badge] [dining mode deadline badge]│ │
+ * │ │ [mode] [mode] [mode] [mode]                          │ │
+ * │ │ [history]                                            │ │
+ * │ ├──────────────────────────────────────────────────────┤ │
+ * │ │ [Annuller]                                 [Opdater] │ │
  * │ └──────────────────────────────────────────────────────┘ │
  * └──────────────────────────────────────────────────────────┘
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {DinnerEventDisplay, OrderDisplay, DinnerMode, OrderState, DesiredOrder} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
 import type {ReleasedTicketCounts} from '~/composables/useBooking'
@@ -76,7 +91,7 @@ interface TableRow {
   guestCount?: number // undefined = not guest, 1+ = guest ticket(s)
   ticketCount?: number // DEBUG: total orders for this inhabitant (should be 1)
   provenanceHousehold?: string
-  provenanceAllergies?: string[]
+  allergyTypes: AllergyTypeDisplay[] // The booked inhabitant's live allergy profile; empty for every other row
 }
 
 interface Props {
@@ -123,7 +138,7 @@ const isMd = inject<Ref<boolean>>('isMd')
 const getIsMd = computed((): boolean => isMd?.value ?? false)
 
 // Design system
-const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, getResidencyDisplay, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
+const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, getResidencyDisplay, LAYOUTS, NOISE, TYPOGRAPHY} = useTheSlopeDesignSystem()
 const emptyStateMessage = getRandomEmptyMessage('household')
 
 // Ticket business logic
@@ -264,7 +279,7 @@ const getInhabitantName = (id: number) =>
 const tableData = computed((): TableRow[] => {
   if (!household.value?.inhabitants) return []
 
-  const allInhabitants = household.value.inhabitants as InhabitantDisplay[]
+  const allInhabitants = household.value.inhabitants
 
   const inhabitantRows: TableRow[] = allInhabitants.map(inhabitant => {
     // Find ALL orders for this inhabitant (to detect duplicates)
@@ -296,7 +311,7 @@ const tableData = computed((): TableRow[] => {
       ticketPriceId: order?.ticketPriceId ?? ticketPrice?.id ?? null,
       ticketCount: ticketCount > 1 ? ticketCount : undefined, // Only set if duplicates
       provenanceHousehold: order?.provenanceHousehold,
-      provenanceAllergies: order?.provenanceAllergies
+      allergyTypes: order ? (inhabitant.allergies ?? []).map(allergy => allergy.allergyType) : []
     }
   })
 
@@ -329,7 +344,7 @@ const tableData = computed((): TableRow[] => {
         ticketPriceId: firstOrder.ticketPriceId ?? resolvedTicketPrice?.id ?? null,
         guestCount: orders.length,
         provenanceHousehold: firstOrder.provenanceHousehold,
-        provenanceAllergies: firstOrder.provenanceAllergies
+        allergyTypes: []
       }
     })
 
@@ -344,7 +359,8 @@ const tableData = computed((): TableRow[] => {
     price: 0,
     ticketPriceId: 0,
     disabledModes: [] as DinnerMode[],
-    bookingAction: null as 'process' | 'claim' | null
+    bookingAction: null as 'process' | 'claim' | null,
+    allergyTypes: [] as AllergyTypeDisplay[]
   }
 
   // Power row with consensus (shown in both VIEW and EDIT modes)
@@ -573,7 +589,7 @@ const actionPreviewItems = computed(() => {
       :columns="columns"
       row-key="id"
       data-testid="booking-table"
-      :ui="{...COMPONENTS.table.denseUi, tbody: '[&_tr:first-child]:bg-warning/10', tr: 'data-[expanded=true]:bg-elevated/50'}"
+      :ui="COMPONENTS.table.bookingUi"
     >
       <!-- Expand button column - uses BUTTONS.edit for standardized sizing -->
       <template #expand-cell="{row}">
@@ -602,7 +618,7 @@ const actionPreviewItems = computed(() => {
               label="beboere"
             />
             <!-- DinnerTicket for power row (mobile only - desktop in ticket-cell) -->
-            <div class="md:hidden mt-2">
+            <div :class="COMPONENTS.bookingForm.ticketPhone">
               <DinnerTicket
                 :ticket-config="row.original.ticketConfig"
                 :price="row.original.price"
@@ -647,12 +663,9 @@ const actionPreviewItems = computed(() => {
                   FRIGIVET
                 </UBadge>
                 <!-- Provenance badges -->
-                <div v-else-if="row.original.provenanceHousehold" class="flex flex-wrap items-center gap-1">
+                <div v-else-if="row.original.provenanceHousehold" :class="COMPONENTS.bookingForm.provenance">
                   <UBadge :color="COLOR.info" :variant="NOISE.soft" :size="SIZES.sm" :icon="ICONS.claim">
                     fra {{ row.original.provenanceHousehold }}
-                  </UBadge>
-                  <UBadge v-if="row.original.provenanceAllergies?.length" :color="COLOR.warning" :variant="NOISE.soft" :size="SIZES.sm">
-                    🥜 {{ row.original.provenanceAllergies.join(', ') }}
                   </UBadge>
                 </div>
               </template>
@@ -661,9 +674,9 @@ const actionPreviewItems = computed(() => {
 
           <!-- Guest Order Row - show who invited using UserListItem -->
           <div v-else-if="row.original.rowType === 'guest-order'">
-            <div class="flex items-center gap-2">
-              <UIcon :name="ICONS.userPlus" class="size-4 text-info flex-shrink-0" />
-              <span class="text-sm text-muted">Gæst af</span>
+            <div :class="COMPONENTS.bookingForm.guestOf">
+              <UAvatar :icon="ICONS.userPlus" :size="COMPONENTS.avatar.compact.size" :class="COMPONENTS.avatar.compact.fit" />
+              <span :class="COMPONENTS.bookingForm.guestOfLabel">Gæst af</span>
               <UserListItem
                 v-if="row.original.inhabitant"
                 :inhabitants="row.original.inhabitant"
@@ -671,21 +684,18 @@ const actionPreviewItems = computed(() => {
                 compact
                 :show-names="true"
               />
-              <span v-else class="text-sm">ukendt</span>
+              <span v-else :class="TYPOGRAPHY.bodyTextSmall">ukendt</span>
             </div>
             <!-- Provenance badges -->
-            <div v-if="row.original.provenanceHousehold" class="flex flex-wrap items-center gap-1 mt-1 ml-6">
+            <div v-if="row.original.provenanceHousehold" :class="COMPONENTS.bookingForm.guestProvenance">
               <UBadge :color="COLOR.info" :variant="NOISE.soft" :size="SIZES.sm" :icon="ICONS.claim">
                 fra {{ row.original.provenanceHousehold }}
-              </UBadge>
-              <UBadge v-if="row.original.provenanceAllergies?.length" :color="COLOR.warning" :variant="NOISE.soft" :size="SIZES.sm">
-                🥜 {{ row.original.provenanceAllergies.join(', ') }}
               </UBadge>
             </div>
           </div>
 
           <!-- Mobile: Ticket inline (for inhabitant/guest-order rows only) -->
-          <div v-if="row.original.rowType === 'inhabitant' || row.original.rowType === 'guest-order'" class="mt-2 md:hidden">
+          <div v-if="row.original.rowType === 'inhabitant' || row.original.rowType === 'guest-order'" :class="COMPONENTS.bookingForm.ticketPhone">
             <DinnerTicket
               :ticket-config="row.original.ticketConfig"
               :price="row.original.price"
@@ -694,7 +704,7 @@ const actionPreviewItems = computed(() => {
               :is-claimed="isTicketClaimed(row.original)"
               :guest-count="row.original.guestCount"
               :ticket-count="row.original.ticketCount"
-              :allergies="row.original.provenanceAllergies"
+              :allergies="row.original.allergyTypes"
               :provenance-household="row.original.provenanceHousehold"
             />
           </div>
@@ -704,7 +714,7 @@ const actionPreviewItems = computed(() => {
       <!-- Ticket Column (desktop only) -->
       <template #ticket-cell="{row}">
         <!-- Power row: show DinnerTicket with consensus (desktop) -->
-        <div v-if="row.original.rowType === 'power'" class="hidden md:block">
+        <div v-if="row.original.rowType === 'power'" :class="COMPONENTS.bookingForm.ticketDesktop">
           <DinnerTicket
             :ticket-config="row.original.ticketConfig"
             :price="row.original.price"
@@ -713,7 +723,7 @@ const actionPreviewItems = computed(() => {
           />
         </div>
         <!-- Inhabitant/Guest rows: show ticket -->
-        <div v-else-if="row.original.rowType === 'inhabitant' || row.original.rowType === 'guest-order'" class="hidden md:block">
+        <div v-else-if="row.original.rowType === 'inhabitant' || row.original.rowType === 'guest-order'" :class="COMPONENTS.bookingForm.ticketDesktop">
           <DinnerTicket
             :ticket-config="row.original.ticketConfig"
             :price="row.original.price"
@@ -722,7 +732,7 @@ const actionPreviewItems = computed(() => {
             :is-claimed="isTicketClaimed(row.original)"
             :guest-count="row.original.guestCount"
             :ticket-count="row.original.ticketCount"
-            :allergies="row.original.provenanceAllergies"
+            :allergies="row.original.allergyTypes"
             :provenance-household="row.original.provenanceHousehold"
           />
         </div>
@@ -776,11 +786,20 @@ const actionPreviewItems = computed(() => {
             :description="`Ændringer påvirker alle ${household?.inhabitants?.length ?? 0} medlemmer.`"
           />
 
-          <!-- Provenance allergies (read-only for existing guest) -->
-          <div v-if="row.original.rowType === 'guest-order' && row.original.provenanceAllergies?.length" class="flex flex-wrap gap-2">
-            <UBadge v-for="allergy in row.original.provenanceAllergies" :key="allergy" :color="COLOR.warning" :variant="NOISE.soft">
-              🥜 {{ allergy }}
-            </UBadge>
+          <!-- The booked inhabitant's allergies, from the household's live profile -->
+          <div
+            v-if="row.original.rowType === 'inhabitant' && row.original.allergyTypes.length"
+            :class="COMPONENTS.bookingForm.allergyLine"
+            :data-testid="`${row.original.rowType}-${row.original.id}-allergies`"
+          >
+            <UIcon :name="ICONS.allergy" :class="COMPONENTS.allergyOverview.glyph" />
+            <AllergyTypeDisplay
+              v-for="allergyType in row.original.allergyTypes"
+              :key="allergyType.id"
+              :allergy-type="allergyType"
+              compact
+              show-name
+            />
           </div>
 
           <!-- Deadline badges (contextual: booking + dining mode) -->

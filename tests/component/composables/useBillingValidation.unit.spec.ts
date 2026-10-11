@@ -368,24 +368,41 @@ describe('useBillingValidation', () => {
         const {ExpenseCreateSchema} = useBillingValidation()
         const valid = ExpenseFactory.defaultExpenseCreate()
 
-        it.each([
-            {desc: 'the chef as default payer', body: valid},
-            {desc: 'the kitchen as payer', body: {...valid, paidByUserId: null}},
-            {desc: 'another user as payer', body: {...valid, paidByUserId: 7}}
-        ])('GIVEN $desc WHEN parsing THEN succeeds', ({body}) => {
-            expect(ExpenseCreateSchema.parse(body)).toEqual(body)
+        it('GIVEN a gross amount and a note WHEN parsing THEN succeeds', () => {
+            expect(ExpenseCreateSchema.parse(valid)).toEqual(valid)
         })
 
         it.each([
             {desc: 'an amount of zero', body: {...valid, amount: 0}},
             {desc: 'a negative amount', body: {...valid, amount: -1}},
             {desc: 'a fractional amount', body: {...valid, amount: 10.5}},
-            {desc: 'an empty description', body: {...valid, description: ''}},
-            {desc: 'a blank description', body: {...valid, description: '  '}},
+            {desc: 'a description key (the route writes the note)', body: {...valid, description: 'Mejeri'}},
             {desc: 'a stray totalCost key', body: {...valid, totalCost: 100}},
-            {desc: 'a payer id of zero', body: {...valid, paidByUserId: 0}}
+            {desc: 'a payer key (the caller is the payer)', body: {...valid, paidByUserId: 7}}
         ])('GIVEN $desc WHEN parsing THEN throws', ({body}) => {
             expect(() => ExpenseCreateSchema.parse(body)).toThrow()
+        })
+    })
+
+    describe('ExpenseLineFormSchema', () => {
+        const {ExpenseLineFormSchema, VatModeSchema} = useBillingValidation()
+        const valid = {amountKr: 1012, vatMode: VatModeSchema.enum.ex}
+
+        it.each([
+            {desc: 'a kr amount ex moms', form: valid},
+            {desc: 'a kr amount inkl. moms', form: {...valid, vatMode: VatModeSchema.enum.inkl}},
+            {desc: 'a kr amount typed as text', form: {...valid, amountKr: '1012'}, expected: valid}
+        ])('GIVEN $desc WHEN parsing THEN succeeds', ({form, expected}) => {
+            expect(ExpenseLineFormSchema.parse(form)).toEqual(expected ?? form)
+        })
+
+        it.each([
+            {desc: 'an amount of zero', form: {...valid, amountKr: 0}},
+            {desc: 'an empty amount', form: {...valid, amountKr: ''}},
+            {desc: 'a negative amount', form: {...valid, amountKr: -5}},
+            {desc: 'an unknown vat mode', form: {...valid, vatMode: 'brutto'}}
+        ])('GIVEN $desc WHEN parsing THEN throws', ({form}) => {
+            expect(() => ExpenseLineFormSchema.parse(form)).toThrow()
         })
     })
 
@@ -401,7 +418,7 @@ describe('useBillingValidation', () => {
 
         it.each([
             {desc: 'a user as payer', expense: ExpenseFactory.defaultExpense()},
-            {desc: 'the kitchen as payer', expense: ExpenseFactory.defaultExpense({paidByUserId: null, paidBy: {id: null, email: ''}})}
+            {desc: 'a legacy row the migration mapped from the old column', expense: ExpenseFactory.defaultExpense({paidByUserId: null, paidBy: {id: null, email: 'SYSTEM'}})}
         ])('GIVEN $desc WHEN round-tripping THEN the row comes back equal', ({expense}) => {
             expect(deserializeExpense(serializeExpense(expense))).toEqual(expense)
         })

@@ -166,12 +166,15 @@ export const TicketPriceFragmentSchema = z.object({
 // ============================================================================
 
 /**
- * Payer Snapshot - the user behind a ledger row at the time it was written; outlives the user row
+ * Payer Snapshot - the user who reported a ledger row, as they were when it was written; outlives the user row.
+ * The id is null only on the rows the roster migration mapped from the legacy dinner cost column (email SYSTEM).
  * Used by: useBillingValidation (Expense)
  */
 export const PayerSnapshotSchema = z.object({
     id: z.number().int().nullable(),
-    email: z.string()
+    email: z.string(),
+    // The name the card writes for people (formatNameWithInitials); absent on the rows the migration mapped
+    name: z.string().optional()
 })
 
 /**
@@ -183,6 +186,7 @@ export const ExpenseFragmentSchema = z.object({
     id: z.number().int().positive(),
     type: LedgerEntryTypeSchema,
     dinnerEventId: z.number().int().positive().nullable(),
+    // The reporting user; SetNull once their user row is gone, the snapshot keeps them
     paidByUserId: z.number().int().positive().nullable(),
     paidBy: PayerSnapshotSchema,
     amount: z.number().int(),
@@ -210,13 +214,27 @@ export const deserializeExpense = (row: Record<string, unknown>): z.infer<typeof
 
 /**
  * AllergyType Fragment - Catalog of allergens
- * Used by: useHealthValidation, useBookingValidation
+ * Used by: useAllergyValidation (AllergyTypeDisplay), useCoreValidation (via the Allergy fragment)
  */
 export const AllergyTypeFragmentSchema = z.object({
     id: z.number().int().positive(),
     name: z.string(),
     description: z.string(),
     icon: z.string().nullable().optional()
+})
+
+/**
+ * Allergy Fragment - An inhabitant's allergy with its type, as an `allergies.include.allergyType` read loads it
+ * Used by: useAllergyValidation (AllergyDisplay), useCoreValidation (HouseholdDetail inhabitants)
+ */
+export const AllergyFragmentSchema = z.object({
+    id: z.number().int().positive(),
+    inhabitantId: z.number().int().positive(),
+    allergyTypeId: z.number().int().positive(),
+    inhabitantComment: z.string().nullable().optional(),
+    createdAt: z.coerce.date(),
+    updatedAt: z.coerce.date(),
+    allergyType: AllergyTypeFragmentSchema
 })
 
 // ============================================================================
@@ -232,6 +250,7 @@ export type DinnerEventFragment = z.infer<typeof DinnerEventFragmentSchema>
 export type OrderFragment = z.infer<typeof OrderFragmentSchema>
 export type TicketPriceFragment = z.infer<typeof TicketPriceFragmentSchema>
 export type AllergyTypeFragment = z.infer<typeof AllergyTypeFragmentSchema>
+export type AllergyFragment = z.infer<typeof AllergyFragmentSchema>
 export type PayerSnapshot = z.infer<typeof PayerSnapshotSchema>
 export type ExpenseFragment = z.infer<typeof ExpenseFragmentSchema>
 export type SerializedExpenseFragment = z.infer<typeof SerializedExpenseFragmentSchema>

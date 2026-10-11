@@ -1963,3 +1963,144 @@ describe('Action Preview', () => {
         })
     })
 })
+
+// ---- Ticket changes (Billetændringer) and the cooking round ----
+
+describe('replayTicketChanges', () => {
+    const {OrderAuditActionSchema, OrderStateSchema, TicketTypeSchema, DinnerModeSchema, createOrderAuditData} = useBookingValidation()
+    const Action = OrderAuditActionSchema.enum
+    const TicketType = TicketTypeSchema.enum
+    // Ticket price ids: 1 adult, 2 child, 3 baby; 9 is a price the season no longer names
+    const typeOf = (ticketPriceId: number) => ({1: TicketType.ADULT, 2: TicketType.CHILD, 3: TicketType.BABY} as Record<number, typeof TicketType[keyof typeof TicketType]>)[ticketPriceId] ?? null
+    const prices: Record<number, number> = {1: 5000, 2: 2500, 3: 0, 9: 4000}
+    const at = (minutes: number) => new Date(2026, 3, 2, 20, minutes)
+
+    let seq = 0
+    const row = (action: typeof Action[keyof typeof Action], orderId: number, ticketPriceId: number, household: string, timestamp: Date,
+                 state: typeof OrderStateSchema.enum[keyof typeof OrderStateSchema.enum] = OrderStateSchema.enum.BOOKED, system = false) =>
+        OrderFactory.defaultOrderHistoryDisplay(undefined, {
+            id: ++seq, orderId, action, timestamp,
+            performedByUserId: system ? null : 1,
+            performedByUser: system ? null : {id: 1, email: 'chef@example.com'},
+            auditData: createOrderAuditData({
+                id: orderId, inhabitantId: orderId, dinnerEventId: 1, ticketPriceId, priceAtBooking: prices[ticketPriceId]!,
+                dinnerMode: DinnerModeSchema.enum.DINEIN, state, inhabitantNameWithInitials: 'A. B.', householdShortname: household, householdId: 1
+            })
+        })
+
+    it('GIVEN bookings, a release after the deadline and a claim WHEN replaying THEN tickets and revenue stand still while kuverter follow the eaters', () => {
+        const {replayTicketChanges} = useBooking()
+        const history = [
+            row(Action.USER_BOOKED, 1, 1, 'S_31', at(0)),
+            row(Action.USER_BOOKED, 2, 2, 'S_22', at(1)),
+            row(Action.USER_CANCELLED, 2, 2, 'S_22', at(2), OrderStateSchema.enum.RELEASED),
+            row(Action.USER_CLAIMED, 2, 2, 'S_22', at(3))
+        ]
+        const changes = replayTicketChanges(history, typeOf)
+        expect(changes.map(change => [change.action, change.counts.ADULT, change.counts.CHILD, change.portions, change.revenue])).toEqual([
+            [Action.USER_BOOKED, 1, 0, 1, 5000],
+            [Action.USER_BOOKED, 1, 1, 1.5, 7500],
+            [Action.USER_CANCELLED, 1, 1, 1, 7500],
+            [Action.USER_CLAIMED, 1, 1, 1.5, 7500]
+        ])
+        expect(changes[1]!.delta).toEqual({ADULT: 0, CHILD: 1, BABY: 0})
+        expect(changes[2]!.delta).toEqual({ADULT: 0, CHILD: 0, BABY: 0})
+        expect(changes[2]!.householdShortname).toBe('S_22')
+        expect(changes[2]!.ticketType).toBe(TicketType.CHILD)
+    })
+
+    it.each([
+        {desc: 'a cancellation before the deadline', action: Action.USER_CANCELLED},
+        {desc: 'a system deletion', action: Action.SYSTEM_DELETED}
+    ])('GIVEN a booked ticket and $desc WHEN replaying THEN the ticket, its kuverter and its revenue leave', ({action}) => {
+        const {replayTicketChanges} = useBooking()
+        const changes = replayTicketChanges([row(Action.USER_BOOKED, 1, 1, 'S_31', at(0)), row(action, 1, 1, 'S_31', at(5))], typeOf)
+        expect(changes.at(-1)).toMatchObject({action, delta: {ADULT: -1, CHILD: 0, BABY: 0}, counts: {ADULT: 0, CHILD: 0, BABY: 0}, portions: 0, revenue: 0})
+    })
+
+    it('GIVEN a scaffold run of three rows within a minute WHEN replaying THEN they are one system change with the summed delta', () => {
+        const {replayTicketChanges} = useBooking()
+        const history = [
+            row(Action.SYSTEM_CREATED, 1, 1, 'S_31', at(0), OrderStateSchema.enum.BOOKED, true),
+            row(Action.SYSTEM_CREATED, 2, 2, 'S_22', at(0), OrderStateSchema.enum.BOOKED, true),
+            row(Action.SYSTEM_CREATED, 3, 3, 'S_14', at(0), OrderStateSchema.enum.BOOKED, true),
+            row(Action.USER_BOOKED, 4, 1, 'S_07', at(30))
+        ]
+        const changes = replayTicketChanges(history, typeOf)
+        expect(changes).toHaveLength(2)
+        expect(changes[0]).toMatchObject({action: Action.SYSTEM_CREATED, householdShortname: null, ticketType: null, delta: {ADULT: 1, CHILD: 1, BABY: 1}, counts: {ADULT: 1, CHILD: 1, BABY: 1}, portions: 1.5, revenue: 7500})
+        expect(changes[1]).toMatchObject({action: Action.USER_BOOKED, householdShortname: 'S_07', counts: {ADULT: 2, CHILD: 1, BABY: 1}, revenue: 12500})
+    })
+
+    it('GIVEN rows out of order and a dining mode update WHEN replaying THEN time order rules and the update is no change', () => {
+        const {replayTicketChanges} = useBooking()
+        const history = [
+            row(Action.SYSTEM_UPDATED, 1, 1, 'S_31', at(2)),
+            row(Action.USER_BOOKED, 1, 1, 'S_31', at(0))
+        ]
+        const changes = replayTicketChanges(history, typeOf)
+        expect(changes.map(change => change.action)).toEqual([Action.USER_BOOKED])
+    })
+
+    it('GIVEN a ticket price the season no longer names WHEN replaying THEN the change carries revenue but no type or kuverter', () => {
+        const {replayTicketChanges} = useBooking()
+        const changes = replayTicketChanges([row(Action.USER_BOOKED, 1, 9, 'S_31', at(0))], typeOf)
+        expect(changes[0]).toMatchObject({ticketType: null, counts: {ADULT: 0, CHILD: 0, BABY: 0}, portions: 0, revenue: 4000})
+    })
+})
+
+describe('consecutiveDinnerRun', () => {
+    const dinner = (id: number, day: number) => ({id, date: new Date(2026, 3, day, 18)})
+
+    it.each([
+        {desc: 'three days in a row around the middle one', dinners: [dinner(1, 12), dinner(2, 13), dinner(3, 14)], around: 2, expected: [1, 2, 3]},
+        {desc: 'a gap before the run', dinners: [dinner(1, 9), dinner(2, 13), dinner(3, 14)], around: 3, expected: [2, 3]},
+        {desc: 'a gap after the run', dinners: [dinner(1, 12), dinner(2, 13), dinner(3, 20)], around: 1, expected: [1, 2]},
+        {desc: 'a single dinner', dinners: [dinner(1, 12), dinner(2, 20)], around: 1, expected: [1]},
+        {desc: 'unsorted input', dinners: [dinner(3, 14), dinner(1, 12), dinner(2, 13)], around: 1, expected: [1, 2, 3]},
+        {desc: 'a dinner the team does not have', dinners: [dinner(1, 12)], around: 99, expected: []}
+    ])('GIVEN $desc WHEN taking the run THEN the consecutive days come in date order', ({dinners, around, expected}) => {
+        const {consecutiveDinnerRun} = useBooking()
+        expect(consecutiveDinnerRun(dinners, around).map(dinner => dinner.id)).toEqual(expected)
+    })
+})
+
+describe('replayTicketChanges reads every audit shape', () => {
+    const {OrderAuditActionSchema, OrderStateSchema, TicketTypeSchema, DinnerModeSchema, createOrderAuditData} = useBookingValidation()
+    const Action = OrderAuditActionSchema.enum
+    const typeOf = (ticketPriceId: number) => ticketPriceId === 1 ? TicketTypeSchema.enum.ADULT : null
+    const at = (minutes: number) => new Date(2026, 3, 2, 20, minutes)
+    const shortNameOf = (householdId: number) => householdId === 7 ? 'S_07' : null
+
+    // The creation writes orderData without an order id; once the order is deleted the row's orderId is set to null
+    const creationRow = (id: number, orderId: number | null, inhabitantId: number) => OrderFactory.defaultOrderHistoryDisplay(undefined, {
+        id, orderId, inhabitantId, dinnerEventId: 1, action: Action.USER_BOOKED, timestamp: at(id),
+        auditData: JSON.stringify({source: 'test', orderData: {dinnerEventId: 1, inhabitantId, bookedByUserId: 1, ticketPriceId: 1, priceAtBooking: 5000, householdId: 7, dinnerMode: DinnerModeSchema.enum.DINEIN, state: OrderStateSchema.enum.BOOKED, isGuestTicket: false}})
+    })
+    const deletionRow = (id: number, orderId: number, inhabitantId: number) => OrderFactory.defaultOrderHistoryDisplay(undefined, {
+        id, orderId: null, inhabitantId, dinnerEventId: 1, action: Action.USER_CANCELLED, timestamp: at(id),
+        auditData: createOrderAuditData({id: orderId, inhabitantId, dinnerEventId: 1, ticketPriceId: 1, priceAtBooking: 5000, dinnerMode: DinnerModeSchema.enum.DINEIN, state: OrderStateSchema.enum.BOOKED, inhabitantNameWithInitials: 'A. B.', householdShortname: 'S_07', householdId: 7})
+    })
+
+    it('GIVEN a creation row WHEN replaying THEN the household comes from the id and the ticket counts', () => {
+        const {replayTicketChanges} = useBooking()
+        const changes = replayTicketChanges([creationRow(1, 10, 100)], typeOf, shortNameOf)
+        expect(changes[0]).toMatchObject({householdShortname: 'S_07', ticketType: TicketTypeSchema.enum.ADULT, counts: {ADULT: 1, CHILD: 0, BABY: 0}, revenue: 5000})
+    })
+
+    it('GIVEN an order deleted later, its creation row without an order id WHEN replaying THEN the deletion finds it by inhabitant', () => {
+        const {replayTicketChanges} = useBooking()
+        const changes = replayTicketChanges([creationRow(1, null, 100), deletionRow(2, 10, 100)], typeOf, shortNameOf)
+        expect(changes.map(change => [change.action, change.counts.ADULT, change.revenue])).toEqual([[Action.USER_BOOKED, 1, 5000], [Action.USER_CANCELLED, 0, 0]])
+    })
+
+    it('GIVEN a bulk close row with scalars only WHEN replaying THEN it is read and changes nothing', () => {
+        const {replayTicketChanges} = useBooking()
+        const close = OrderFactory.defaultOrderHistoryDisplay(undefined, {
+            id: 2, orderId: 10, inhabitantId: 100, action: Action.SYSTEM_UPDATED, timestamp: at(2),
+            auditData: JSON.stringify({state: OrderStateSchema.enum.CLOSED, dinnerMode: DinnerModeSchema.enum.DINEIN, ticketPriceId: 1, priceAtBooking: 5000})
+        })
+        const changes = replayTicketChanges([creationRow(1, 10, 100), close], typeOf, shortNameOf)
+        expect(changes).toHaveLength(1)
+    })
+})
