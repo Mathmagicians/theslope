@@ -176,7 +176,7 @@ literals carry the new columns; validation composables re-export the new enums.
 Expenses are EXPENSE rows in the transaction ledger, excluded from invoicing (decision 2026-10-05) —
 `feature-proposal-adhoc-admin-billing.md` § Expense type. Surfaces:
 
-**Mockup — Madbestilling and the Budget pane on the chef card** ✅ signed 2026-10-11, revised and re-signed the same day (the three things the chef edits sit together as section rows; the lines editor behind Rediger madbestilling; status and money read-only below; one chevron on Budget)
+**Mockup — Madbestilling and the Budget pane on the chef card** ✅ signed 2026-10-11, revised and re-signed the same day; the unfolded pane, the editor table and Billetændringer revised and ✅ signed 2026-10-12 (the three things the chef edits sit together as section rows; the lines editor behind Rediger madbestilling; status and money read-only below; one chevron on Budget)
 
 Folded (default):
 
@@ -198,74 +198,96 @@ Folded (default):
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
-Madbestilling open (Rediger madbestilling opens it in place; Luk folds it; lines save on Tilføj and go on slet):
+Unfolded Budget (the chevron turns; the boxes stay, this opens under them). The ticket table carries its sums as its own bottom rows and ends at Rådighedsbeløb; this dinner is one spending fragment in the team table's shape, with its receipts as sub-rows; the team's round follows in the same shape:
 
 ```
-│ Hvad kostede indkøbene?                                     [Luk] │
-│  [ beløb       ] [ Ex moms v ] [Tilføj]                               │
-│  Dato   Bestiller                                   ex / inkl. moms   │
-│  12/04  Anna H.                            1.012 / 1.265 kr   [slet]  │
-│  14/04  Bo K.                                298 /   373 kr   [slet]  │
+│  Billettype   Antal     Stk pris     Total                            │
+│  Voksen          30        50 kr   1.500 kr                           │
+│  Barn            15        25 kr     375 kr                           │
 │  ───────────────────────────────────────────────────────────────────  │
-│   Rådighedsbeløb                          1.425 / 1.781 kr            │
-│   Brugt                                   1.310 / 1.638 kr            │
+│  Indtægter                         1.875 kr                           │
+│  Køkkenbidrag (5%)            -75 /   -94 kr                          │
 │  ───────────────────────────────────────────────────────────────────  │
-│   Tilbage                                  +115 /  +143 kr (check)    │
+│  Rådighedsbeløb             1.425 / 1.781 kr                          │
 │                                                                       │
-│  ───────────────────────────────────────────────────────────────────  │
-│   Hele Madhold 2, for perioden 12/04–14/04                            │
-│   Rådighedsbeløb                          4.435 / 5.544 kr            │
-│   Brugt                                   4.245 / 5.307 kr            │
-│  ───────────────────────────────────────────────────────────────────  │
-│   Tilbage                                  +190 /  +237 kr (check)    │
-```
-
-Unfolded Budget (the chevron turns; the boxes stay, this opens under them):
-
-```
-│  Billetter                                            ex / inkl. moms │
-│  Billettype   Antal          Stk pris              Total              │
-│  Voksen          30            50 kr            1.500 kr              │
-│  Barn            15            25 kr              375 kr              │
-│  Baby             3             0 kr                0 kr              │
-│  Indtægter                                        1.875 kr            │
-│  Køkkenbidrag (5%)                          -75 /   -94 kr            │
-│  Rådighedsbeløb                           1.425 / 1.781 kr            │
-│  Brugt                                    1.310 / 1.638 kr            │
-│  Tilbage                              +115 /  +143 kr  (check)   │
-│  Hele Madhold 2, for perioden 12/04–14/04             ex / inkl. moms │
-│  Dato   Middag            Rådighedsbeløb         Brugt    Tilbage│
-│  12/04  Lasagne          1.425 / 1.781 kr  1.540 / 1.925 kr   -115 / -144 kr (red overdraft icon) │
-│  13/04  Boller i karry   1.512 / 1.890 kr  1.395 / 1.744 kr   +117 / +146 kr │
-│  14/04  Risotto · denne  1.498 / 1.873 kr  1.310 / 1.638 kr   +188 / +235 kr │
-│  Hele Madhold 2          4.435 / 5.544 kr  4.245 / 5.307 kr   +190 / +237 kr (check) │
+│                                                       ex / inkl. moms │
+│  Dato   Middag            Rådighedsbeløb      Brugt         Tilbage   │
+│  14/04  🟢 Risotto       1.498 / 1.873 kr  1.310 / 1.638 kr  +188 / +235 kr (check) │
+│  12/04     Anna H.                         1.012 / 1.265 kr           │
+│  14/04     Bo K.                             298 /   373 kr           │
 │                                                                       │
-│  Se billetændringer                                              [>]  │
+│  Hele Madhold 2, for perioden 12/04–15/04             ex / inkl. moms │
+│  Dato   Middag            Rådighedsbeløb      Brugt         Tilbage   │
+│  12/04  Lasagne          1.425 / 1.781 kr  1.540 / 1.925 kr  -115 / -144 kr (overdraft) │
+│  14/04  🟢 Risotto       1.498 / 1.873 kr  1.310 / 1.638 kr  +188 / +235 kr (check)     │
+│  15/04  Pasta                0 /     0 kr      0 /     0 kr      0 /     0 kr (waiting)   │
+│  Hele Madhold 2          2.923 / 3.654 kr  2.850 / 3.563 kr   +73 /  +91 kr (check)     │
+│                                                                       │
+│  (history) Se billetændringer                                    [>]  │
 ```
 
-Se billetændringer opened (the same chevron as Budget; folded by default; loads the changes from the menu deadline onward, the button loads the rest once). Before the deadline the line shows the tickets as they stand, and the button shows the booking changes:
+The marker before the menu title is the dinner's status, the set the seasons wear: 🟢 the active dinner (the one on view), 🟡 a dinner of today that is not on view, 🌱 a future dinner, and the archive box icon for a past dinner. The RÅDIGHEDSBELØB box wears the same 🟢. A receipt sub-row carries its date, the bestiller in the Middag column in the muted ink, and its amount under Brugt. Without receipts the dinner row is followed by one sub-row reading "Madbestilling mangler". A dinner without tickets shows the timeline's waiting glyph (the "om n dage" badge's) in Tilbage instead of a check. A lone dinner shows the first fragment only; the Hele Madhold table appears when the team cooks consecutive days.
+
+Madbestilling open, the editor: the same one table component with the entry row above it and slet in its last column; its sums are the table's bottom rows:
 
 ```
-│  Se billetændringer                                                           [v] │
-│  Dato         Husstand  Ændring                          Billetter · kuverter        Indtægter │
-│  09/04 19:10  S_14      Købt fra anden  +1 (child) Barn   29 (adult) 11 (child) 3 (baby) · 34,5   1.725 kr │
-│  09/04 17:30  S_22      Afmeldt         -1 (child) Barn   29 (adult) 11 (child) 3 (baby) · 34     1.725 kr │
-│  05/04 08:02  S_31      Bestilt         +1 (adult) Voksen 29 (adult) 11 (child) 3 (baby) · 34,5   1.725 kr │
-│  ── 03/04 18:00 · the menu deadline, as the stepper names it ──────────────────────────────── │
-│  [Vis fuld historik]                                                                        │
+│ Hvad kostede indkøbene?                                         [Luk]    │
+│ [ beløb        ] [ Ex moms v ] [Tilføj]                                  │
+│  Dato   Bestiller                                   ex / inkl. moms      │
+│  12/04  Anna H.                                   1.012 / 1.265 kr [slet]│
+│  14/04  Bo K.                                       298 /   373 kr [slet]│
+│  ──────────────────────────────────────────────────────────────────────  │
+│         Rådighedsbeløb                            1.425 / 1.781 kr       │
+│         Brugt                                     1.310 / 1.638 kr       │
+│  ──────────────────────────────────────────────────────────────────────  │
+│         Tilbage                                    +115 /  +143 kr (check) │
+│                                                                          │
+│  ──────────────────────────────────────────────────────────────────────  │
+│         Hele Madhold 2, for perioden 12/04–14/04                         │
+│         Rådighedsbeløb                            4.435 / 5.544 kr       │
+│         Brugt                                     4.245 / 5.307 kr       │
+│  ──────────────────────────────────────────────────────────────────────  │
+│         Tilbage                                    +190 /  +237 kr (check) │
 ```
+
+Se billetændringer opened after Framelding closed (the same chevron as Budget with the history glyph in its title, folded by default; the changes since the booking deadline, newest first; the button loads the rest once):
+
+```
+│  (history) Se billetændringer                                                 [v] │
+│  Dato         Husstand  Ændring              Billetter · kuverter   Indtægter │
+│  09/04 19:10  S_14      Købt fra anden  +1 B   29 V 11 B 3 b · 34,5   1.725 kr │
+│  09/04 17:30  S_22      Afmeldt         -1 B   29 V 11 B 3 b · 34     1.725 kr │
+│  ── Framelding lukker · 09/04 12:00 ───────────────────────────────────────── │
+│  [Vis fuld historik]                                                          │
+```
+
+Opened before Framelding closes: the newest change, in the same columns and words, and the rest behind the button:
+
+```
+│  Dato         Husstand  Ændring                          Billetter · kuverter   Indtægter │
+│  05/04 02:00  System    Automatisk bestilling  +28 V +11 B +3 b   28 V 11 B 3 b · 33,5   1.675 kr │
+│  ── Framelding lukker · 09/04 12:00 ───────────────────────────────────────────────── │
+│  [Vis fuld historik]                                                                  │
+```
+
+Vis fuld historik shows every row newest first, no line, no button.
 
 - Indtægter and the ticket prices are what the households pay: plain kr, no VAT split; Billetændringer the same.
 - Units: every money cell the chef reads shows the ex moms figure in the row's weight and the inkl. moms half in fine print after a slash; the unit words appear once per block, in the boxes as a fine-print line under the figure. Lines are stored gross; the select sets the unit of the typed amount.
 - Bestiller is the reporting user, named with `formatNameWithInitials`; the note is written by the server as the dinner's date and menu title; the body is `{amount}`.
-- Tilbage is what is left. At or above zero it reads in the card's ink with its plus and a check icon in the success colour; below zero in red with its minus and an exclamation circle in the error colour. The helping numbers above the entry row give this dinner's and the team round's figure.
-- The round is the team's dinners on consecutive calendar days around this dinner, headed by "Hele <madhold>, for perioden <first>–<last>" from `cookingRoundWords`, the one source for the hint block and the round table. The page computes it from the team's dinners, the bookings store loads their orders and `calculateBudget` gives each rådighedsbeløb.
+- Tilbage is what is left. With no Rådighedsbeløb yet, a dinner without tickets, it carries the timeline's waiting glyph (the "om n dage" badge's) and no check. At or above zero it reads in the card's ink with its plus and a check icon in the success colour; below zero in red with its minus and an exclamation circle in the error colour. The helping numbers above the entry row give this dinner's and the team round's figure.
+- One spending table component, Dato, Middag, Rådighedsbeløb, Brugt, Tilbage, renders two fragments: this dinner as one row with its receipts as sub-rows, and, when the team cooks consecutive calendar days around it, the round headed by "Hele <madhold>, for perioden <first>–<last>" from `cookingRoundWords` with the team's total row. The ticket table ends at Rådighedsbeløb in its own bottom rows. The page computes it from the team's dinners, the bookings store loads their orders and `calculateBudget` gives each rådighedsbeløb.
 - Billettype names the ticket (`useTicket`), not the enum.
-- Se billetændringer sits last in the pane, behind the Budget pane's own chevron kind, folded by default, and only while the dinner has tickets; before the deadline it shows the tickets as they stand on one line with the booking changes behind "Vis fuld historik".
+- Se billetændringer sits last in the pane, behind the Budget pane's own chevron kind with the history glyph in its title, folded by default, and only while the dinner has tickets. Its window starts when Framelding closes, the booking deadline from the season's deadlines, and the line reads "Framelding lukker · <moment>". Before that moment it shows the newest change row, in the same columns and words as the full history, with the rest behind "Vis fuld historik". Moments compare through the date utilities, never by hand.
+- Tickets read as count and letter, V, B, b, never icons; a change as its signed count and letter.
+- Consecutive scaffold rows with no user change between them are one "Automatisk bestilling" line with the summed tickets, however many nights wrote them.
 - Billetændringer: one row per order event of the dinner from `OrderHistory`, newest first: the household's short name (System for the scaffold), the event word the order history uses, the ticket moved as the ticket chip with its sign, the composition after the change as chips with counts and the kuverter, and Indtægter after the change in kr. After the booking deadline a released ticket stays paid, so Afmeldt and Købt fra anden move kuverter and the payer, not Indtægter. `GET /api/chef/dinner/[id]/order-history?since=` hands the rows from the menu deadline with the composition replayed server-side; the button fetches the rest.
 - Madbestilling is the timeline's word; the row leads with the cart glyph like Allergener leads with its glyph. Folded, chef and team members read the total alone, or "Madbestilling mangler"; the budget math lives in the RÅDIGHEDSBELØB box. The chef's Rediger madbestilling opens the editor in place, headed "Hvad kostede indkøbene?" with Luk; the helping numbers Rådighedsbeløb, Brugt, Tilbage and the round sit above the entry row and follow the lines. A line saves on Tilføj and goes on slet; there is no draft, so no Gem and no Annuller.
-- The editor leads with the action: the entry row, then the lines, then the sums; a rule sits above every result row (Rådighedsbeløb under the lines, Tilbage, the summary's Tilbage; the box keeps its rows bare) and a gap with a rule sets the whole team's block apart; the folded total carries the unit words.
+- The editor leads with the action: the entry row, then the lines table, then the sums as the table's bottom rows; a rule sits above every result row (Rådighedsbeløb under the lines, Tilbage, the ticket table's Indtægter and Rådighedsbeløb; the box keeps its rows bare) and a gap with a rule sets the whole team's block apart; the folded total carries the unit words.
 - Every amount sits in fixed columns with an icon slot that is always there, so kr lines up down a column with and without the check or exclamation icon, in the hint, the lines, the box and the round table.
+- Every table is a UTable on the table token, the lines table of the editor included; a header row over rows is a table even when drawn with divs.
+- The status glyphs are one set, `STATUS_GLYPHS`, bound by the season status, the season selector and the spending rows.
+- No figure is computed in a component: sums, what is left, the waiting state and the receipt sub-rows come from the composables (`useOrder` spending helpers, `useBookingUi` for the table rows), components bind them.
 - View mode shows the folded row without its button.
 
 **Mockup — season view (opens from [Se sæsontrend]; same component serves admin economy)** ✅ signed 2026-10-05

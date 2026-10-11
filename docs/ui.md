@@ -30,9 +30,9 @@ which patterns are shared. A component's own layout lives in its header mockup a
 - A `.vue` carries no `<style>` block and no raw utility class (the one exemption is the print CSS in
   `app/pages/admin/allergies/pdf.vue`). An animation is a `--animate-*` keyframe in `main.css`, reached through a token
   that also carries `motion-reduce:animate-none`.
-- Layout responds with `md:` classes; `isMd` (provided by `app/layouts/default.vue` as `Ref<boolean | null>`) sets prop
-  values. It is null until the layout measures the viewport after mount; a query parameter whose default depends on the
-  viewport gates its one-shot sync on the measurement in `syncWhen` (the dinner page's `cal`, the chef page's `view`).
+- The design system is the one reader of the layout's breakpoint: a value that follows the breakpoint is a responsive
+  token, and behaviour reads `breakpoint` (`isMd`, `measured`) from the composable; the usage spec fails any other inject
+  of it.
 - Specs assert usage and behaviour; a token's value is checked by eye in the package's visual check.
 
 ## Tokens
