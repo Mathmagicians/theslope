@@ -10,7 +10,7 @@ import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import type {DesiredOrder} from '~/composables/useBookingValidation'
 import type {BookingChanges} from '~/composables/useBooking'
 import {useQueryParam} from '~/composables/useQueryParam'
-import {useDinnerDateParam, BookingViewSchema, type BookingView} from '~/composables/useBookingView'
+import {useDinnerDateParam, useCalendarOpenParam, BookingViewSchema, type BookingView} from '~/composables/useBookingView'
 
 interface Props {
   household: HouseholdDetail
@@ -27,7 +27,7 @@ const {household} = toRefs(props)
 const {deadlinesForSeason} = useSeason()
 const {BOOKING_TOAST_TITLES, buildBookingChanges} = useBooking()
 const {handleApiError} = useApiHandler()
-const {ICONS, ALERTS} = useTheSlopeDesignSystem()
+const {ICONS, ALERTS, COMPONENTS} = useTheSlopeDesignSystem()
 
 const planStore = usePlanStore()
 const {selectedSeason, isSelectedSeasonInitialized, isSelectedSeasonLoading, isSelectedSeasonErrored} = storeToRefs(planStore)
@@ -78,9 +78,7 @@ const {dateRange, hasPrev, hasNext, navigate} = useBookingView({
   dinnerDates: () => dinnerDates.value
 })
 
-// Calendar collapsed by default on mobile
-const isMd = inject<Ref<boolean | null>>('isMd')
-const calendarOpen = ref(isMd?.value ?? false)
+const {value: calendarOpen} = useCalendarOpenParam(syncWhen)
 
 const handleDateSelected = (date: Date) => setDate(date)
 const handleNavigate = (direction: 'prev' | 'next') => navigate(direction === 'next' ? 1 : -1)
@@ -175,9 +173,9 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
   <ViewError v-else-if="isSelectedSeasonErrored" text="Kan ikke hente sæsondata" />
   <div v-else-if="isSelectedSeasonInitialized && selectedSeason" data-testid="household-bookings">
     <!-- Layout: Flex row on desktop, stack on mobile -->
-    <div class="flex flex-col md:flex-row gap-6">
+    <div :class="COMPONENTS.householdBookings.layout">
       <!-- Calendar sidebar (day/week views only, collapsible) -->
-      <div v-if="view !== 'month' && calendarOpen" class="md:basis-1/3">
+      <div v-if="view !== 'month' && calendarOpen" :class="COMPONENTS.householdBookings.calendar">
         <DinnerCalendarDisplay
           :season-dates="seasonDates"
           :holidays="holidays"
@@ -190,9 +188,9 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
       </div>
 
       <!-- Booking panel (grows to fill) -->
-      <div class="flex-1">
-        <div class="flex items-center justify-between mb-4">
-          <h3 class="text-sm font-semibold">Familiens bookinger</h3>
+      <div :class="COMPONENTS.householdBookings.panel">
+        <div :class="COMPONENTS.householdBookings.panelHeader">
+          <h3 :class="COMPONENTS.householdBookings.panelTitle">Familiens bookinger</h3>
           <BookingViewSwitcher v-model="view" />
         </div>
         <BookingGridView

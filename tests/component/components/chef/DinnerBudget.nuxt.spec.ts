@@ -9,7 +9,7 @@ import {useOrder} from '~/composables/useOrder'
 import {useTicket} from '~/composables/useTicket'
 import {useBookingValidation, type OrderDetail, type OrderState, type TicketType} from '~/composables/useBookingValidation'
 import type {CookingRoundRow} from '~/composables/useBookingUi'
-import {findByTestId, findAllByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
 
 /**
  * DinnerBudget: the three boxes in both units, the RÅDIGHEDSBELØB box with start, Brugt and Tilbage, and under the
@@ -54,7 +54,7 @@ registerEndpoint('/api/admin/billing/current-period', () => [])
 registerEndpoint('/api/order', () => [])
 
 const mount = (props: Record<string, unknown> = {}) => mountSuspended(DinnerBudget, {
-    props: {orders, mode: 'full', expenses, dinnerEventId: 7, menuDeadline: new Date('2026-04-03T18:00:00'), roundRows: round, roundWords: {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, for perioden 12/04–13/04'}, ...props},
+    props: {orders, mode: 'full', expenses, dinnerEventId: 7, bookingDeadline: new Date('2026-04-03T18:00:00'), roundRows: round, roundWords: {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, for perioden 12/04–13/04'}, ...props},
     global: {provide: {isMd: ref(true)}}
 })
 
@@ -62,7 +62,8 @@ describe('DinnerBudget', () => {
     it('GIVEN paid tickets, a released one included WHEN rendering THEN the boxes read revenue, allowance and contribution in both units', async () => {
         const wrapper = await mount()
         const budget = calculateBudget(orders, baseRate, vatPercent)
-        expect(findByTestId(wrapper, 'budget-box-revenue').text()).toContain(`/ ${formatPrice(budget.totalRevenue)} kr`)
+        expect(findByTestId(wrapper, 'budget-box-revenue').text()).toContain(`${formatPrice(budget.totalRevenue)} kr`)
+        expect(findByTestId(wrapper, 'budget-box-revenue').text()).not.toContain('/')
         expect(findByTestId(wrapper, 'budget-box-available').text()).toContain(`/ ${formatPrice(budget.availableBudget)} kr`)
         expect(findByTestId(wrapper, 'budget-box-contribution').text()).toContain(`/ ${formatPrice(budget.kitchenContribution)} kr`)
         expect(budget.totalRevenue).toBe(12500)
@@ -87,17 +88,37 @@ describe('DinnerBudget', () => {
         expect(findByTestId(wrapper, 'budget-details').exists()).toBe(false)
     })
 
-    it('GIVEN the chevron opened WHEN rendering THEN the ticket table names the types, the summary ends in Tilbage and the ticket changes and the round follow', async () => {
+    it('GIVEN the chevron opened WHEN rendering THEN the ticket table names the types, the summary ends at Rådighedsbeløb, the spending table holds the dinner and the ticket changes come last', async () => {
         const wrapper = await mount()
         await wrapper.find('button[name="toggle-budget-details"]').trigger('click')
         await wrapper.vm.$nextTick()
 
-        const rows = findAllByTestId(wrapper, 'budget-ticket-row')
+        const rows = findByTestId(wrapper, 'budget-ticket-table').findAll('tbody tr')
         expect(rows.map(row => row.find('td').text())).toEqual([ticketTypeConfig.ADULT.label, ticketTypeConfig.CHILD.label])
-        expect(findByTestId(wrapper, 'budget-summary-left').exists()).toBe(true)
+        expect(findByTestId(wrapper, 'budget-summary-left').exists()).toBe(false)
+        expect(findByTestId(wrapper, 'budget-summary-available').exists()).toBe(true)
+        expect(findByTestId(wrapper, 'cooking-round').text()).toContain('denne')
         expect(findByTestId(wrapper, 'ticket-changes').exists()).toBe(true)
         expect(findByTestId(wrapper, 'cooking-round').exists()).toBe(true)
+        // The dinner's figures, then the team's, then the ticket changes last
+        expect(wrapper.html().indexOf('data-testid="ticket-changes"')).toBeGreaterThan(wrapper.html().indexOf('data-testid="cooking-round"'))
         expect(findByTestId(wrapper, 'cooking-round-heading').text()).toBe('Hele Madhold 2, for perioden 12/04–13/04')
+    })
+
+    it('GIVEN no tickets WHEN opened THEN there are no ticket changes to see', async () => {
+        const wrapper = await mount({orders: []})
+        await wrapper.find('button[name="toggle-budget-details"]').trigger('click')
+        await wrapper.vm.$nextTick()
+        expect(findByTestId(wrapper, 'ticket-changes').exists()).toBe(false)
+    })
+
+    it('GIVEN a lone dinner WHEN opened THEN the spending table shows its one row without the team heading', async () => {
+        const wrapper = await mount({roundRows: [round[0]!], roundWords: null})
+        await wrapper.find('button[name="toggle-budget-details"]').trigger('click')
+        await wrapper.vm.$nextTick()
+        expect(findByTestId(wrapper, 'cooking-round').exists()).toBe(true)
+        expect(findByTestId(wrapper, 'cooking-round-heading').exists()).toBe(false)
+        expect(findByTestId(wrapper, 'cooking-round-total').exists()).toBe(false)
     })
 
     it('GIVEN no round WHEN opened THEN the round section is absent', async () => {

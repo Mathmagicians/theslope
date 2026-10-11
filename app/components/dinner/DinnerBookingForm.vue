@@ -133,12 +133,8 @@ const formMode = computed(() => {
   return canEdit ? FORM_MODES.EDIT : FORM_MODES.VIEW
 })
 
-// Inject responsive breakpoint
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
-
 // Design system
-const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, getResidencyDisplay, LAYOUTS, NOISE, TYPOGRAPHY} = useTheSlopeDesignSystem()
+const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, getResidencyDisplay, LAYOUTS, NOISE, TYPOGRAPHY, TABLE_COLUMNS, ORIENTATIONS} = useTheSlopeDesignSystem()
 const emptyStateMessage = getRandomEmptyMessage('household')
 
 // Ticket business logic
@@ -265,8 +261,8 @@ const regularOrders = computed(() => partitionedOrders.value.regularOrders)
 
 const columns = computed(() => [
   {id: 'expand'},
-  {id: 'name', header: getIsMd.value ? 'Beboer' : 'Billetter'},
-  {id: 'ticket', class: 'hidden md:table-cell'}  // No header - ticket inline on mobile
+  {id: 'name', ...TABLE_COLUMNS.bookingFormName},
+  {id: 'ticket', ...TABLE_COLUMNS.bookingFormTicket}  // No header - the ticket sits under the name on a phone
 ])
 
 // Booker for guest tickets: current user's inhabitant (for regular booking flow)
@@ -551,21 +547,21 @@ const actionPreviewItems = computed(() => {
   </UAlert>
 
   <!-- Booking form -->
-  <div v-else class="space-y-4">
+  <div v-else :class="COMPONENTS.bookingForm.root">
     <!-- Deadline Status Badges + Day Bill Summary -->
     <!-- Mobile: badges stacked left, day bill right | Desktop: all in row with gaps -->
-    <div class="flex justify-between items-start gap-4 md:gap-8">
-      <div class="flex flex-col md:flex-row gap-2 md:gap-8">
+    <div :class="COMPONENTS.bookingForm.statusRow">
+      <div :class="COMPONENTS.bookingForm.deadlineBadges">
         <DeadlineBadge :badge="badges.booking" />
         <DeadlineBadge :badge="badges.diningMode" />
       </div>
-      <div class="border-b-2 border-default px-2 pb-1">
+      <div :class="COMPONENTS.bookingForm.dayBill">
         <span :class="TYPOGRAPHY.cardTitle">{{ dayBillSummary.ticketCounts }} · {{ formatPrice(dayBillSummary.totalPrice) }} kr</span>
       </div>
     </div>
 
     <!-- Released Ticket Warnings -->
-    <div v-if="!canBook" class="space-y-2">
+    <div v-if="!canBook" :class="COMPONENTS.bookingForm.releasedAlerts">
       <UAlert
         v-if="householdReleasedTickets.length > 0"
         v-bind="ALERTS.warning"
@@ -599,17 +595,16 @@ const actionPreviewItems = computed(() => {
           :icon="row.getIsExpanded() ? ICONS.chevronDown : (row.original.rowType === 'power' ? COMPONENTS.powerMode.buttonIcon : (row.original.rowType === 'guest' ? ICONS.plusCircle : BUTTONS.edit.icon))"
           :aria-label="row.getIsExpanded() ? 'Luk' : 'Rediger'"
           :data-testid="`${row.original.rowType}-${row.original.id}-toggle`"
-          :class="[row.getIsExpanded() ? 'rotate-180' : '', row.original.rowType === 'power' && !row.getIsExpanded() ? 'hover:animate-pulse hover:text-warning' : '']"
-          class="transition-all duration-300"
+          :class="[COMPONENTS.bookingForm.expandToggle, row.getIsExpanded() && COMPONENTS.bookingForm.expandToggleOpen, row.original.rowType === 'power' && !row.getIsExpanded() && COMPONENTS.bookingForm.powerToggleIdle]"
           @click="row.toggleExpanded()"
         />
       </template>
 
       <!-- Name Column -->
       <template #name-cell="{row}">
-        <div class="py-1">
+        <div :class="COMPONENTS.bookingForm.nameCell">
           <!-- Power Mode Row - UserListItem in GROUP mode with ticket below -->
-          <div v-if="row.original.rowType === 'power' && row.original.inhabitants" class="flex flex-col gap-0.5">
+          <div v-if="row.original.rowType === 'power' && row.original.inhabitants" :class="COMPONENTS.bookingForm.powerName">
             <UserListItem
               :inhabitants="row.original.inhabitants"
               :show-names="false"
@@ -758,13 +753,12 @@ const actionPreviewItems = computed(() => {
         <!-- Other row types: UCard with form -->
         <UCard
           v-else
-          :color="row.original.rowType === 'power' ? COMPONENTS.powerMode.card.color : 'primary'"
+          :color="row.original.rowType === 'power' ? COMPONENTS.powerMode.card.color : COLOR.primary"
           :variant="COMPONENTS.powerMode.card.variant"
-          class="max-w-full overflow-x-auto"
-          :ui="{body: 'p-4 flex flex-col gap-4', footer: 'p-4', header: 'p-4'}"
+          v-bind="COMPONENTS.bookingForm.editCard"
         >
           <template #header>
-            <h4 class="text-md font-semibold text-balance">
+            <h4 :class="COMPONENTS.bookingForm.editTitle">
               <template v-if="row.original.rowType === 'power'">
                 Vælg for hele familien
               </template>
@@ -803,7 +797,7 @@ const actionPreviewItems = computed(() => {
           </div>
 
           <!-- Deadline badges (contextual: booking + dining mode) -->
-          <div class="flex flex-col md:flex-row md:justify-between gap-2">
+          <div :class="COMPONENTS.bookingForm.editDeadlines">
             <DeadlineBadge :badge="badges.booking" />
             <DeadlineBadge :badge="badges.diningMode" />
           </div>
@@ -816,27 +810,23 @@ const actionPreviewItems = computed(() => {
             :consensus="row.original.consensus"
             :size="SIZES.standard"
             :name="`${row.original.rowType}-${row.original.id}-mode-edit`"
-            orientation="horizontal"
+            :orientation="ORIENTATIONS.horizontal"
             show-label
           />
 
           <!-- Order history toggle + display (in body, near the content it reveals) -->
           <div v-if="row.original.order?.id">
             <UButton
-                :color="COLOR.neutral"
-                :variant="NOISE.quiet"
-                :icon="historyOrderId === row.original.order.id ? ICONS.chevronUp : ICONS.clipboard"
-                square
-                :size="SIZES.small"
+                v-bind="BUTTONS.history(historyOrderId === row.original.order.id)"
                 aria-label="Vis ordrehistorik"
                 @click="toggleHistory(row.original.order.id)"
             />
-            <OrderHistoryDisplay v-if="historyOrderId === row.original.order.id" :order-id="row.original.order.id" class="mt-2"/>
+            <OrderHistoryDisplay v-if="historyOrderId === row.original.order.id" :order-id="row.original.order.id" :class="COMPONENTS.bookingForm.history"/>
           </div>
 
           <!-- Footer: action preview + buttons (stacked on mobile, horizontal on desktop) -->
           <template #footer>
-            <div class="flex flex-col gap-2">
+            <div :class="COMPONENTS.bookingForm.editFooter">
               <ActionPreview :items="actionPreviewItems" />
 
               <div :class="LAYOUTS.formButtonRow">
@@ -868,6 +858,6 @@ const actionPreviewItems = computed(() => {
     </UTable>
 
     <!-- Legend: shared with the week/month grid -->
-    <DinnerModeLegend v-if="isEditModeAllowed" class="mt-4"/>
+    <DinnerModeLegend v-if="isEditModeAllowed" :class="COMPONENTS.bookingForm.legend"/>
   </div>
 </template>

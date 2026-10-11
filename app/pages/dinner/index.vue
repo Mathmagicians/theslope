@@ -47,11 +47,10 @@
 
 import {FORM_MODES} from '~/types/form'
 import type {DesiredOrder} from '~/composables/useBookingValidation'
-import {useDinnerDateParam, useBookingView} from '~/composables/useBookingView'
-import {useQueryParam} from '~/composables/useQueryParam'
+import {useDinnerDateParam, useBookingView, useCalendarOpenParam} from '~/composables/useBookingView'
 
 // Design system
-const { COLOR, BACKGROUNDS, ICONS, ALERTS, getRandomEmptyMessage, NOISE, SIZES } = useTheSlopeDesignSystem()
+const { COLOR, COMPONENTS, ICONS, ALERTS, getRandomEmptyMessage, NOISE, SIZES } = useTheSlopeDesignSystem()
 
 // Fun empty state for no team assigned
 const noTeamMessage = getRandomEmptyMessage('noTeamAssigned')
@@ -70,16 +69,7 @@ const {formatScaffoldResult, BOOKING_TOAST_TITLES} = useBooking()
 const planStore = usePlanStore()
 const {selectedSeason, isPlanStoreReady, isSelectedSeasonInitialized, isSelectedSeasonErrored} = storeToRefs(planStore)
 
-// Responsive breakpoint for calendar default state
-const isMd = inject<Ref<boolean>>('isMd')
-
-// Calendar accordion state via URL param + responsive default (ADR-006)
-const {value: calendarOpen, setValue: setCalendarOpen} = useQueryParam<boolean>('cal', {
-  serialize: (v) => v ? 'open' : 'closed',
-  deserialize: (s) => s === 'open' ? true : s === 'closed' ? false : null,
-  defaultValue: () => isMd?.value ?? false,
-  syncWhen: () => isPlanStoreReady.value
-})
+const {value: calendarOpen, setValue: setCalendarOpen} = useCalendarOpenParam(() => isPlanStoreReady.value)
 
 // Initialize allergies store for allergen data
 const allergiesStore = useAllergiesStore()
@@ -158,12 +148,12 @@ const handleSaveBookings = async (orders: DesiredOrder[]) => {
     toast.add({
       title: toastTitle,
       description: formatScaffoldResult(response.scaffoldResult, 'past'),
-      color: 'success',
+      color: COLOR.success,
       icon: ICONS.checkCircle
     })
   } catch (e) {
     console.error('Failed to process bookings:', e)
-    toast.add({title: 'Kunne ikke gemme bookinger', color: 'error', icon: ICONS.exclamationCircle})
+    toast.add({title: 'Kunne ikke gemme bookinger', color: COLOR.error, icon: ICONS.exclamationCircle})
   }
 }
 
@@ -182,7 +172,7 @@ useHead({
   <Loader v-if="!isPlanStoreReady" text="Henter sæsondata..." />
   <ViewError v-else-if="isSelectedSeasonErrored" text="Kan ikke hente sæsondata" />
   <UPage v-else-if="isSelectedSeasonInitialized && !selectedSeason">
-    <div :class="`p-4 md:p-8 ${BACKGROUNDS.card}`">
+    <div :class="COMPONENTS.dinnerPage.emptyFrame">
       <UAlert
         v-bind="ALERTS.emptyState"
         :icon="ICONS.robotDead"

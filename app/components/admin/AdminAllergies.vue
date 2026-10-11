@@ -49,10 +49,6 @@ const props = withDefaults(defineProps<Props>(), {
 // Design system
 const { COLOR, SIZES, LAYOUTS, BUTTONS, ICONS, ALERTS, NOISE, COMPONENTS, TYPOGRAPHY } = useTheSlopeDesignSystem()
 
-// Responsive mount point for the detail panel - provided by the default layout;
-// false during SSR, so first paint renders the mobile mount
-const isMd = inject<Ref<boolean | null>>('isMd', ref(false))
-
 // Household shortnames for the detail card - owned here, passed down as a plain map
 const householdsStore = useHouseholdsStore()
 const {households} = storeToRefs(householdsStore)
@@ -205,8 +201,8 @@ const showSuccessToast = (title: string, description?: string) => {
   toast.add({
     title,
     description,
-    icon: 'i-heroicons-check-circle',
-    color: 'success'
+    icon: ICONS.checkCircle,
+    color: COLOR.success
   })
 }
 
@@ -214,7 +210,7 @@ const showSuccessToast = (title: string, description?: string) => {
 const handleSelect = (id: number | number[] | null) => {
   if (typeof id !== 'number') return
   // Mobile: tapping the selected row again folds its docked detail away
-  if (!isMd.value && selectedAllergyTypeId.value === id) {
+  if (!COMPONENTS.masterDetail.detailAsPane && selectedAllergyTypeId.value === id) {
     setAllergyParam(null)
     return
   }
@@ -230,7 +226,7 @@ const handleSelect = (id: number | number[] | null) => {
 // panel under the toolbar is the single live mount.
 const expanded = computed({
   get: (): Record<number, boolean> => {
-    if (isMd.value || panelMode.value === 'create' || selectedAllergyTypeId.value === null) return {}
+    if (COMPONENTS.masterDetail.detailAsPane || panelMode.value === 'create' || selectedAllergyTypeId.value === null) return {}
     const index = sortedAllergyTypes.value.findIndex(at => at.id === selectedAllergyTypeId.value)
     return index === -1 ? {} : {[index]: true}
   },
@@ -378,7 +374,7 @@ const catalogEmptyState = {
            The detail panel docks in the expanded row on mobile, in the sticky pane on md+ -->
       <div v-else :class="LAYOUTS.masterDetailPage.root">
         <!-- CREATE (mobile) - docks under the toolbar, adjacent to the button that opened it -->
-        <div v-if="!isMd && panelMode === 'create'" :class="COMPONENTS.allergyCatalogPage.createDock">
+        <div v-if="!COMPONENTS.masterDetail.detailAsPane && panelMode === 'create'" :class="COMPONENTS.allergyCatalogPage.createDock">
           <AllergyDetailPanel v-bind="panelProps" v-on="panelEvents"/>
         </div>
 
@@ -428,7 +424,7 @@ const catalogEmptyState = {
 
         <!-- DETAIL (md+) - sticky pane that follows the catalog as it scrolls -->
         <div
-            v-if="isMd"
+            v-if="COMPONENTS.masterDetail.detailAsPane"
             :class="[LAYOUTS.masterDetailPage.center, COMPONENTS.allergyCatalogPage.stickyDetail]"
         >
           <AllergyDetailPanel v-bind="panelProps" v-on="panelEvents"/>

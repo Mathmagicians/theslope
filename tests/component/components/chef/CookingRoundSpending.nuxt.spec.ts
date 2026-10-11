@@ -6,7 +6,7 @@ import CookingRoundSpending from '~/components/chef/CookingRoundSpending.vue'
 import type {CookingRoundRow} from '~/composables/useBookingUi'
 import {useTicket} from '~/composables/useTicket'
 import {formatDate} from '~/utils/date'
-import {findByTestId, findAllByTestId} from '~~/tests/component/testHelpers'
+import {findByTestId} from '~~/tests/component/testHelpers'
 
 /**
  * CookingRoundSpending: one row per dinner of the round with allowance, spending and what is left, the current dinner
@@ -25,11 +25,14 @@ const mount = (props: Record<string, unknown> = {}) => mountSuspended(CookingRou
     global: {provide: {isMd: ref(true)}}
 })
 
+// The table's body rows without the total row the body-bottom slot adds
+const dataRows = (wrapper: Awaited<ReturnType<typeof mount>>) => wrapper.findAll('tbody tr').filter(tr => tr.attributes('data-testid') !== 'cooking-round-total')
+
 describe('CookingRoundSpending', () => {
     it('renders the label, one row per dinner in order with date and menu, and marks the current one', async () => {
         const wrapper = await mount()
         expect(findByTestId(wrapper, 'cooking-round-heading').text()).toBe('Hele Madhold 2, for perioden 12/04–14/04')
-        const rendered = findAllByTestId(wrapper, 'cooking-round-row')
+        const rendered = dataRows(wrapper)
         expect(rendered).toHaveLength(3)
         rows.forEach((row, index) => {
             expect(rendered[index]!.text()).toContain(formatDate(row.date, 'dd/MM'))
@@ -41,13 +44,30 @@ describe('CookingRoundSpending', () => {
 
     it('reads each row\'s allowance, spending and what is left in both units, red with the exclamation icon when over', async () => {
         const wrapper = await mount()
-        const over = findAllByTestId(wrapper, 'cooking-round-row')[0]!
+        const over = dataRows(wrapper)[0]!
         expect(over.text()).toContain(`/ ${formatPrice(178100)} kr`)
         expect(over.text()).toContain(`/ ${formatPrice(192500)} kr`)
         expect(over.text()).toContain(`/ -${formatPrice(14400)} kr`)
         expect(over.find('[data-testid="vat-amount-over"]').exists()).toBe(true)
-        const under = findAllByTestId(wrapper, 'cooking-round-row')[1]!
+        const under = dataRows(wrapper)[1]!
         expect(under.find('[data-testid="vat-amount-ok"]').exists()).toBe(true)
+    })
+
+    it('GIVEN a lone dinner WHEN rendering THEN its one row shows without heading or total row', async () => {
+        const wrapper = await mount({words: null, rows: [rows[2]]})
+        expect(findByTestId(wrapper, 'cooking-round-heading').exists()).toBe(false)
+        expect(findByTestId(wrapper, 'cooking-round-total').exists()).toBe(false)
+        const rendered = dataRows(wrapper)
+        expect(rendered).toHaveLength(1)
+        expect(rendered[0]!.text()).toContain('denne')
+    })
+
+    it('GIVEN a dinner without tickets yet WHEN rendering THEN its Tilbage carries the waiting glyph, not the check', async () => {
+        const empty: CookingRoundRow = {dinnerEventId: 4, date: new Date('2026-04-15T18:00:00'), menuTitle: 'Pasta', isCurrent: false, budgetGross: 0, spentGross: 0}
+        const wrapper = await mount({rows: [...rows, empty]})
+        const last = dataRows(wrapper)[3]!
+        expect(last.find('[data-testid="vat-amount-pending"]').exists()).toBe(true)
+        expect(last.find('[data-testid="vat-amount-ok"]').exists()).toBe(false)
     })
 
     it('sums the round into the team\'s total row', async () => {

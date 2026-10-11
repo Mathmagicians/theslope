@@ -4,14 +4,14 @@ import {setActivePinia, createPinia} from 'pinia'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {flushPromises} from '@vue/test-utils'
 import {clearNuxtData} from '#app'
-import {nextTick} from 'vue'
-import {mountWithTooltipProvider, clickByTestId, pollFor} from '~~/tests/component/testHelpers'
+import {nextTick, ref} from 'vue'
+import {mountWithTooltipProvider, clickByTestId, findAllByTestId, pollFor, VIEWPORTS} from '~~/tests/component/testHelpers'
 import AdminTeams from '~/components/admin/AdminTeams.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {usePlanStore} from '~/stores/plan'
 import {useAuthStore} from '~/stores/auth'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
-import {COMPONENTS, getRainbowBand, getRainbowAccent} from '~/composables/useTheSlopeDesignSystem'
+import {COMPONENTS, getRainbowBand, getRainbowAccent, createResponsiveIcons} from '~/composables/useTheSlopeDesignSystem'
 
 // The test environment has no router to navigate: useEntityFormManager and useQueryParam
 // write the URL state through navigateTo (ADR-006 / ADR-008)
@@ -46,13 +46,13 @@ registerEndpoint('/api/admin/team', {method: 'PUT', handler: createTeamsEndpoint
 
 vi.setConfig({testTimeout: 20_000})
 
-const mountTeams = async () => {
+const mountTeams = async (isMd = true) => {
     await useAuthStore().fetch()
     const store = usePlanStore()
     await store.loadSeasons()
     await pollFor(() => store.isPlanStoreReady, 40, false)
 
-    const wrapper = await mountWithTooltipProvider(AdminTeams, {props: {canEdit: true}, isMd: true})
+    const wrapper = await mountWithTooltipProvider(AdminTeams, {props: {canEdit: true}, isMd})
     await flushPromises()
     await nextTick()
     return wrapper
@@ -165,6 +165,29 @@ describe('AdminTeams team selection', () => {
 
         await clickByTestId(wrapper, `team-row-${team.id}`)
         await vi.waitFor(() => expect(mockRoute.query.team).toBeUndefined())
+    })
+
+    describe.each(VIEWPORTS)('$viewport: an open row', ({isMd}) => {
+        const openTeam = async () => {
+            const wrapper = await mountTeams(isMd)
+            await clickByTestId(wrapper, `team-row-${team.id}`)
+            await vi.waitFor(() => expect(mockRoute.query.team).toBe(String(team.id)))
+            await flushPromises()
+            return wrapper
+        }
+
+        it('turns its toggle to the open-detail chevron of its viewport', async () => {
+            const wrapper = await openTeam()
+            const toggle = wrapper.findAllComponents({name: 'UButton'})
+                .find(button => button.attributes('data-testid') === `team-toggle-${team.id}`)
+            expect(toggle?.props('icon')).toBe(createResponsiveIcons(ref(isMd)).detailOpen)
+        })
+
+        it(`renders its detail once, ${isMd ? 'in the pane beside the table' : 'docked in the table row'}`, async () => {
+            const wrapper = await openTeam()
+            await vi.waitFor(() => expect(findAllByTestId(wrapper, 'edit-team')).toHaveLength(1))
+            expect(wrapper.find('tbody [data-testid="edit-team"]').exists()).toBe(!isMd)
+        })
     })
 })
 

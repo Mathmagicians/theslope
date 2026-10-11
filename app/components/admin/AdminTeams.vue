@@ -56,8 +56,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const {getDefaultCookingTeam, countChefs, getTeamShortName, getTeamNumber} = useCookingTeam()
 
-// Layout breakpoint from the default layout - drives the detail's mount point
-const isMd = inject<Ref<boolean | null>>('isMd', ref(false))
+const {ICONS, RESPONSIVE_ICONS, SIZES, BUTTONS, ALERTS, COLOR, COMPONENTS, LAYOUTS, getRainbowAccent, NOISE} = useTheSlopeDesignSystem()
 const store = usePlanStore()
 const {
   isSeasonsLoading,
@@ -170,7 +169,7 @@ const handleToggleTeam = async (id: number) => {
 // MOBILE EXPANSION - derived from the selection: the dock under the row IS the open detail
 const expanded = computed({
   get: (): Record<number, boolean> => {
-    if (isMd.value || formMode.value === FORM_MODES.CREATE || selectedTeamIndex.value < 0) return {}
+    if (COMPONENTS.masterDetail.detailAsPane || formMode.value === FORM_MODES.CREATE || selectedTeamIndex.value < 0) return {}
     return {[selectedTeamIndex.value]: true}
   },
   set: (value: Record<number, boolean>) => {
@@ -295,8 +294,6 @@ interface TableRow {
   original: CookingTeamDisplay
 }
 
-const {ICONS, SIZES, BUTTONS, ALERTS, COLOR, COMPONENTS, LAYOUTS, getRainbowAccent, NOISE} = useTheSlopeDesignSystem()
-
 const columns = [
   {
     id: 'expand',
@@ -307,7 +304,7 @@ const columns = [
       return h(resolveComponent('UButton'), {
         color: COLOR.neutral,
         variant: NOISE.quiet,
-        icon: isOpen ? (isMd.value ? ICONS.chevronRight : ICONS.chevronUp) : ICONS.chevronDown,
+        icon: isOpen ? RESPONSIVE_ICONS.detailOpen : ICONS.chevronDown,
         square: true,
         'aria-label': isOpen ? 'Luk' : 'Åbn detaljer',
         'data-testid': `team-toggle-${row.original.id}`,
@@ -332,7 +329,7 @@ const columns = [
 <template>
   <UCard
       data-testid="admin-teams"
-      class="w-full px-0"
+      :class="COMPONENTS.adminTeams.card"
   >
     <template #header>
       <div :class="LAYOUTS.cardHeaderRow">
@@ -340,7 +337,7 @@ const columns = [
             :model-value="selectedSeasonId"
             :seasons="seasons"
             :loading="isSeasonsLoading"
-            class="w-full md:w-auto"
+            :class="COMPONENTS.adminTeams.seasonSelector"
             :disabled="disabledModes.includes(FORM_MODES.CREATE)"
             @update:model-value="handleSeasonChange"
         />
@@ -364,9 +361,9 @@ const columns = [
       <AdminToCreateSeason v-else-if="isNoSeasons" :can-edit="props.canEdit"/>
       <div v-if="showAdminTeams">
         <!-- CREATE MODE: Team count input + preview -->
-        <div v-if="formMode === FORM_MODES.CREATE" class="px-4 pb-4 space-y-4">
-          <div class="flex items-center gap-4">
-            <label for="team-count" class="text-lg font-bold">
+        <div v-if="formMode === FORM_MODES.CREATE" :class="COMPONENTS.adminTeams.createFace">
+          <div :class="COMPONENTS.adminTeams.countRow">
+            <label for="team-count" :class="COMPONENTS.adminTeams.countLabel">
               <span v-if="teams.length > 0">Vi har allerede {{
                   teams.length
                 }} madhold. Hvor mange nye vil du lave?</span>
@@ -378,20 +375,20 @@ const columns = [
                 type="number"
                 min="1"
                 max="20"
-                class="w-20 px-3 py-2 border rounded"
+                :class="COMPONENTS.adminTeams.countInput"
             >
           </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div v-for="(team, index) in displayedTeams" :key="index" class="p-4 border rounded">
-              <h3 class="font-semibold">{{ team.name }}</h3>
+          <div :class="LAYOUTS.gridTwoCol">
+            <div v-for="(team, index) in displayedTeams" :key="index" :class="COMPONENTS.adminTeams.previewTeam">
+              <h3 :class="COMPONENTS.adminTeams.previewName">{{ team.name }}</h3>
             </div>
           </div>
         </div>
 
         <!-- VIEW + EDIT: one master table; the detail mounts in the md+ pane or docks under the selected row -->
-        <div v-else class="px-4 pb-4 space-y-6">
-          <div class="flex flex-col md:flex-row gap-6 md:gap-3">
-          <div class="w-full md:w-1/3">
+        <div v-else :class="COMPONENTS.adminTeams.viewFace">
+          <div :class="COMPONENTS.adminTeams.masterDetailRow">
+          <div :class="COMPONENTS.adminTeams.master">
           <UTable
               v-model:expanded="expanded"
               :columns="columns"
@@ -491,7 +488,7 @@ const columns = [
 
           <!-- Detail pane (md+): the same card as the dock, framed so the team's own
                calendar reads apart from the all-teams calendar of the overview -->
-          <div v-if="isMd && selectedTeam?.id" :class="[COMPONENTS.adminTeams.pane, COMPONENTS.masterDetail.pane]">
+          <div v-if="COMPONENTS.masterDetail.detailAsPane && selectedTeam?.id" :class="[COMPONENTS.adminTeams.pane, COMPONENTS.masterDetail.pane]">
             <div :class="COMPONENTS.adminTeams.detailHeaderRow">
               <CookingTeamBadges
                   :team-number="selectedTeamNumber"
@@ -538,7 +535,7 @@ const columns = [
     </template>
 
     <template #footer>
-      <div v-if="formMode === FORM_MODES.CREATE" class="flex gap-2">
+      <div v-if="formMode === FORM_MODES.CREATE" :class="COMPONENTS.adminTeams.createFooter">
         <UButton data-testid="submit-create-teams" :color="COLOR.secondary" :loading="isActionLoading" :disabled="isActionLoading" @click="handleBatchCreateTeams">
           {{ isActionLoading ? 'Arbejder...' : 'Opret madhold' }}
         </UButton>

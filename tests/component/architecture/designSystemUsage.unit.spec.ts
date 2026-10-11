@@ -161,6 +161,16 @@ describe('ADR-018: components bind design-system tokens, never raw Nuxt UI props
         expect(report(violations)).toBe('')
     })
 
+    it('no raw <table> under app/: a table is a UTable on a table token', () => {
+        // The print page keeps its own markup for the PDF
+        const exempt = new Set(['pages/admin/allergies/pdf.vue'])
+        const violations = vueFiles
+            .filter(file => !exempt.has(String(file).replace(/\\/g, '/')))
+            .filter(file => /<table\b/.test(readVue(file)))
+            .map(file => `app/${file} - raw <table>; render it with <UTable :ui="COMPONENTS.table.ui">`)
+        expect(report(violations)).toBe('')
+    })
+
     it('every team <UTabs> binds COMPONENTS.teamTabs', () => {
         const violations = vueFiles.flatMap(file => {
             const source = readVue(file)
@@ -207,6 +217,17 @@ describe('ADR-018: components bind design-system tokens, never raw Nuxt UI props
             readVue(file).split('\n').flatMap((line, index) =>
                 line.includes(LAYOUTS.formButtonRow) ? [`app/${file}:${index + 1} - raw form button row (bind :class="LAYOUTS.formButtonRow")`] : []
             )
+        )
+        expect(report(violations)).toBe('')
+    })
+
+    it('no .vue injects the breakpoint: the layout provides it, the design system reads it', () => {
+        // The layout measures and provides the breakpoint
+        const exempt = new Set(['layouts/default.vue'])
+        const violations = scan(
+            vueFiles.filter(file => !exempt.has(String(file).replace(/\\/g, '/'))),
+            /\binject\b[^(\n]*\(\s*['"]isMd['"]/g,
+            'bind a responsive token, or read breakpoint from useTheSlopeDesignSystem()'
         )
         expect(report(violations)).toBe('')
     })

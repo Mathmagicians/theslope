@@ -11,7 +11,8 @@
  * Uses BaseCalendar for consistent calendar structure.
  *
  * Used in:
- * - /admin/teams (admin overview - no selection)
+ * - /admin/teams (all-teams overview - no selection)
+ * - CookingTeamCard (the team's own calendar, on /admin/teams)
  */
 import type {DateRange} from '~/types/dateTypes'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
@@ -43,7 +44,7 @@ const emit = defineEmits<{
 
 const {createEventList} = useCalendarEvents()
 const {getHolidayDatesFromDateRangeList} = useSeason()
-const {CALENDAR, dayCircleClasses, getRainbowBand, SIZES} = useTheSlopeDesignSystem()
+const {CALENDAR, COMPONENTS, dayCircleClasses, getRainbowBand, SIZES} = useTheSlopeDesignSystem()
 const {getTeamNumber} = useCookingTeam()
 const teamBandIndex = (team: CookingTeamDisplay) => getTeamNumber(team, props.seasonTeams) - 1
 
@@ -109,8 +110,8 @@ const isCalendarDaySelected = (day: DateValue): boolean => {
 }
 
 const getCalendarDayClasses = (day: DateValue) => [
-  props.showSelection ? 'cursor-pointer hover:ring-2 hover:ring-offset-1' : '',
-  isCalendarDaySelected(day) ? 'ring-2 ring-primary ring-offset-1' : ''
+  props.showSelection ? COMPONENTS.teamCalendar.selectableDay : '',
+  isCalendarDaySelected(day) ? COMPONENTS.teamCalendar.selectedDay : ''
 ]
 </script>
 
@@ -141,7 +142,7 @@ const getCalendarDayClasses = (day: DateValue) => [
           </UTooltip>
 
           <!-- Regular day -->
-          <span v-else class="text-sm">{{ day.day }}</span>
+          <span v-else :class="COMPONENTS.teamCalendar.plainDay">{{ day.day }}</span>
         </template>
 
         <!-- Legend -->

@@ -1,8 +1,9 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, vi} from 'vitest'
 import {flushPromises} from '@vue/test-utils'
-import {mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {useBookingView, useDinnerDateParam, BookingViewSchema, type BookingView} from '~/composables/useBookingView'
+import {mockNuxtImport, mountSuspended} from '@nuxt/test-utils/runtime'
+import {useBookingView, useDinnerDateParam, useCalendarOpenParam, BookingViewSchema, type BookingView} from '~/composables/useBookingView'
+import {defineComponent, h, type Ref} from 'vue'
 
 /**
  * Unit tests for useBookingView composable (curried pattern)
@@ -227,5 +228,61 @@ describe('useDinnerDateParam', () => {
       expect.objectContaining({query: expect.objectContaining({date: '17/01/2025'})}),
       {replace: true}
     )
+  })
+})
+
+describe('useCalendarOpenParam', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setupQuery({})
+  })
+
+  // The design system reads the layout's breakpoint through inject, so the composable runs in a component's setup
+  const mountParam = async (isMd: Ref<boolean | null>, syncWhen: () => boolean = () => true) => {
+    let param: ReturnType<typeof useCalendarOpenParam> | undefined
+    await mountSuspended(defineComponent({
+      setup() {
+        param = useCalendarOpenParam(syncWhen)
+        return () => h('div')
+      }
+    }), {global: {provide: {isMd}}})
+    await flushPromises()
+    return param!
+  }
+
+  const calWrites = () => mockNavigateTo.mock.calls.map(([target]) => target.query?.cal).filter(Boolean)
+
+  it.each([
+    {isMd: true, open: true, cal: 'open'},
+    {isMd: false, open: false, cal: 'closed'}
+  ])('measured isMd=$isMd: defaults to open=$open and spells it out as cal=$cal', async ({isMd, open, cal}) => {
+    const {value} = await mountParam(ref(isMd))
+    expect(value.value).toBe(open)
+    expect(calWrites()).toEqual([cal])
+  })
+
+  it('waits for the layout to measure the viewport before it writes ?cal=', async () => {
+    const isMd = ref<boolean | null>(null)
+    await mountParam(isMd)
+    expect(calWrites()).toEqual([])
+
+    isMd.value = true
+    await flushPromises()
+
+    expect(calWrites()).toEqual(['open'])
+  })
+
+  it('waits for the caller\'s readiness as well', async () => {
+    await mountParam(ref(true), () => false)
+    expect(calWrites()).toEqual([])
+  })
+
+  it.each([
+    {query: 'open', open: true},
+    {query: 'closed', open: false}
+  ])('follows cal=$query from the URL over the viewport default', async ({query, open}) => {
+    setupQuery({cal: query})
+    const {value} = await mountParam(ref(!open))
+    expect(value.value).toBe(open)
   })
 })

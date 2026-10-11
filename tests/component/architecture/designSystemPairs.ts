@@ -239,7 +239,7 @@ const isTextRung = (path: string) => /^TEXT\.[a-z]+\.\d+$/.test(path)
  */
 const FILL_INK = [
     'TEXT.white', 'TEXT.black', 'TYPOGRAPHY.sectionSubheadingLight', 'TYPOGRAPHY.sectionIconLight',
-    'TYPOGRAPHY.footerText', 'CALENDAR.countdown', 'CHEF_CALENDAR.countdown',
+    'TYPOGRAPHY.footerText', 'COMPONENTS.pageFooter.iconButtonUi', 'CALENDAR.countdown', 'CHEF_CALENDAR.countdown',
     'DINNER_CALENDAR.countdown', 'COMPONENTS.heroPanel', 'COMPONENTS.kitchenPanel', 'COMPONENTS.ribbon',
     'COMPONENTS.wantedPoster.lettering', 'COMPONENTS.wantedPoster.role', 'COMPONENTS.wantedPoster.avatar.ui.icon',
     'COMPONENTS.wantedPoster.hatOnFrame'
@@ -250,6 +250,7 @@ const isFillInk = (path: string) => FILL_INK.some(prefix => path === prefix || p
 /** Ink with one owner: the fill the design system draws it on */
 const PAIRED_INK = [
     {ink: 'TYPOGRAPHY.footerText', fill: 'BACKGROUNDS.appShell'},
+    {ink: 'COMPONENTS.pageFooter.iconButtonUi.leadingIcon', fill: 'BACKGROUNDS.appShell'},
     {ink: 'TYPOGRAPHY.sectionSubheadingLight', fill: 'BACKGROUNDS.hero.mocha'},
     {ink: 'TYPOGRAPHY.sectionIconLight', fill: 'BACKGROUNDS.hero.mocha'},
     {ink: 'CALENDAR.countdown.title', fill: 'CALENDAR.countdown.container'},

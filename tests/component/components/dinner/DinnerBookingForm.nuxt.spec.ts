@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach, beforeAll} from 'vitest'
 import {mountSuspended, mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {findByTestId, clickByTestId, withTooltipProvider} from '~~/tests/component/testHelpers'
+import {findByTestId, clickByTestId, withTooltipProvider, VIEWPORTS} from '~~/tests/component/testHelpers'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
@@ -12,7 +12,7 @@ import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFact
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
-import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
+import {COMPONENTS, ICONS, createTableColumns} from '~/composables/useTheSlopeDesignSystem'
 
 // Mock stores
 const mockHouseholdsStore = {
@@ -254,6 +254,25 @@ describe('DinnerBookingForm', () => {
           ...expectedGuestOrders(DinnerMode.TAKEAWAY)
         ]]])
       })
+    })
+  })
+
+  describe('name column header', () => {
+    it.each(VIEWPORTS)('$viewport: the name column carries the header of its viewport', async ({isMd}) => {
+      const props = {...baseProps, household: householdWithInhabitants}
+      const wrapper = await mountSuspended(withTooltipProvider(DinnerBookingForm, props), {global: {provide: {isMd: ref(isMd)}}})
+      const headers = wrapper.findAll('thead th').map(th => th.text())
+      expect(headers).toContain(createTableColumns(ref(isMd)).bookingFormName.header)
+    })
+
+    it.each(VIEWPORTS)('$viewport: the ticket column renders its header and cells from md through its column meta', async ({isMd}) => {
+      const props = {...baseProps, household: householdWithInhabitants}
+      const wrapper = await mountSuspended(withTooltipProvider(DinnerBookingForm, props), {global: {provide: {isMd: ref(isMd)}}})
+      const {meta} = createTableColumns(ref(isMd)).bookingFormTicket
+      const columns = wrapper.findComponent({name: 'UTable'}).props('columns') as Array<{id: string}>
+      const ticketIndex = columns.findIndex(column => column.id === 'ticket')
+      expect(wrapper.findAll('thead th')[ticketIndex]!.classes()).toEqual(expect.arrayContaining(meta.class.th.split(' ')))
+      expect(wrapper.findAll('tbody tr')[0]!.findAll('td')[ticketIndex]!.classes()).toEqual(expect.arrayContaining(meta.class.td.split(' ')))
     })
   })
 })

@@ -71,27 +71,27 @@ describe('TicketChanges', () => {
 
     it('GIVEN the pane WHEN closed THEN nothing is read and no table shows', async () => {
         const wrapper = await mount()
-        expect(wrapper.text()).toContain('Billetændringer')
-        expect(findAllByTestId(wrapper, 'ticket-change')).toHaveLength(0)
+        expect(wrapper.text()).toContain('Se billetændringer')
+        expect(wrapper.findAll('tbody tr')).toHaveLength(0)
         expect(historyEndpoint).not.toHaveBeenCalled()
     })
 
-    it('GIVEN the toggle WHEN opened THEN the changes from the menu deadline come newest first with household, event, ticket, composition and Indtægter', async () => {
+    it('GIVEN the toggle WHEN opened THEN the changes since Framelding closed come newest first with household, event, ticket, composition and Indtægter', async () => {
         const wrapper = await mount()
         await open(wrapper)
 
         expect(historyEndpoint).toHaveBeenCalledTimes(1)
         expect(getQuery(historyEndpoint.mock.calls[0]![0] as H3Event)).toMatchObject({since: SINCE.toISOString()})
-        const rows = findAllByTestId(wrapper, 'ticket-change')
+        const rows = wrapper.findAll('tbody tr')
         expect(rows).toHaveLength(2)
         expect(rows[0]!.text()).toContain('09/04 19:10')
         expect(rows[0]!.text()).toContain('S_14')
         expect(rows[0]!.text()).toContain('Købt fra anden')
         expect(rows[1]!.text()).toContain('Bestilt')
-        expect(rows[1]!.text()).toContain('+1 Voksen')
+        expect(rows[1]!.text()).toContain('+1 V')
         expect(rows[1]!.text()).toContain(`${formatPortions(34.5)} kuverter`)
         expect(findAllByTestId(wrapper, 'ticket-change-revenue')[1]!.text()).toBe(`${formatPrice(172500)} kr`)
-        expect(findByTestId(wrapper, 'ticket-changes-deadline').text()).toContain('03/04 18:00')
+        expect(findByTestId(wrapper, 'ticket-changes-deadline').text()).toContain('Framelding lukker · 03/04 18:00')
     })
 
     it('GIVEN older changes WHEN "Vis fuld historik" is clicked THEN the whole history is read and the deadline line goes', async () => {
@@ -104,13 +104,42 @@ describe('TicketChanges', () => {
         await nextTick()
 
         expect(getQuery(historyEndpoint.mock.calls.at(-1)![0] as H3Event)).not.toHaveProperty('since')
-        const rows = findAllByTestId(wrapper, 'ticket-change')
+        const rows = wrapper.findAll('tbody tr')
         expect(rows).toHaveLength(3)
         expect(rows[2]!.text()).toContain('System')
         expect(rows[2]!.text()).toContain('Automatisk bestilling')
-        expect(rows[2]!.text()).toContain('+28 Voksen')
+        expect(rows[2]!.text()).toContain('+28 V')
         expect(findByTestId(wrapper, 'ticket-changes-deadline').exists()).toBe(false)
         expect(findByTestId(wrapper, 'ticket-changes-more').exists()).toBe(false)
+    })
+
+    it('GIVEN Framelding still ahead WHEN opened THEN the newest change shows alone, in the full history's columns, with the rest behind the button', async () => {
+        const ahead = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+        const wrapper = await mount({since: ahead})
+        await open(wrapper)
+        // The history is read whole, since nothing has moved since a moment still ahead
+        expect(getQuery(historyEndpoint.mock.calls[0]![0] as H3Event)).not.toHaveProperty('since')
+        const rows = wrapper.findAll('tbody tr')
+        expect(rows).toHaveLength(1)
+        expect(rows[0]!.text()).toContain('09/04 19:10')
+        expect(rows[0]!.text()).toContain('S_14')
+        expect(rows[0]!.text()).toContain('Købt fra anden')
+        expect(findByTestId(wrapper, 'ticket-changes-deadline').text()).toContain('Framelding lukker')
+        expect(findByTestId(wrapper, 'ticket-changes-more').exists()).toBe(true)
+
+        await clickByTestId(wrapper, 'ticket-changes-more')
+        await flushPromises()
+        await nextTick()
+        expect(wrapper.findAll('tbody tr')).toHaveLength(3)
+        expect(findByTestId(wrapper, 'ticket-changes-deadline').exists()).toBe(false)
+    })
+
+    it('GIVEN no change since the deadline but older ones WHEN opened THEN the table says so and the full history stays a click away', async () => {
+        historyEndpoint.mockImplementationOnce(() => ({dinnerEventId: DINNER_ID, since: SINCE.toISOString(), changes: [], olderCount: 2}))
+        const wrapper = await mount()
+        await open(wrapper)
+        expect(findByTestId(wrapper, 'ticket-changes-none-since').text()).toBe('Ingen ændringer')
+        expect(findByTestId(wrapper, 'ticket-changes-more').exists()).toBe(true)
     })
 
     it('GIVEN no history at all WHEN opened THEN it says so', async () => {

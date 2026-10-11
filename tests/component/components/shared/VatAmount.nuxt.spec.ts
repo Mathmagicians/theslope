@@ -18,7 +18,7 @@ beforeAll(() => {
     vatPercent = useAppConfig().theslope?.kitchen?.vatPercent ?? 25
 })
 
-const mount = (props: {gross: number, balance?: boolean}) => mountSuspended(VatAmount, {props, global: {provide: {isMd: ref(true)}}})
+const mount = (props: {gross: number, balance?: boolean, pending?: boolean}) => mountSuspended(VatAmount, {props, global: {provide: {isMd: ref(true)}}})
 
 describe('VatAmount', () => {
     it('GIVEN a gross amount WHEN rendering THEN the ex moms figure comes first and the inkl. moms half after the slash', async () => {
@@ -51,6 +51,13 @@ describe('VatAmount', () => {
     it('GIVEN a balance WHEN rendering THEN the icon sits inside the slot', async () => {
         const wrapper = await mount({gross: 14300, balance: true})
         expect(findByTestId(wrapper, 'vat-amount-slot').find('[data-testid="vat-amount-ok"]').exists()).toBe(true)
+    })
+
+    it('GIVEN nothing to balance yet WHEN rendering THEN the waiting glyph fills the slot, with no sign and no check', async () => {
+        const wrapper = await mount({gross: 0, balance: true, pending: true})
+        expect(findByTestId(wrapper, 'vat-amount-ex').text()).toBe(formatPrice(0))
+        expect(findByTestId(wrapper, 'vat-amount-pending').exists()).toBe(true)
+        expect(findByTestId(wrapper, 'vat-amount-ok').exists()).toBe(false)
     })
 
     it('GIVEN a balance of zero WHEN rendering THEN it reads as in balance', async () => {

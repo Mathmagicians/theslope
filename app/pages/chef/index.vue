@@ -42,7 +42,7 @@ import type {ExpenseCreate} from '~/composables/useBillingValidation'
 import type {CookingRoundRow} from '~/composables/useBookingUi'
 
 // Design system
-const {COLOR, ICONS, LAYOUTS, ALERTS} = useTheSlopeDesignSystem()
+const {COLOR, ICONS, LAYOUTS, ALERTS, COMPONENTS, breakpoint} = useTheSlopeDesignSystem()
 
 // Initialize stores
 const planStore = usePlanStore()
@@ -72,9 +72,6 @@ const isPageReady = computed(() => isPlanStoreReady.value && isMyTeamsInitialize
 // Permission helpers and date utilities
 const {isChefFor, deadlinesForSeason} = useSeason()
 const authStore = useAuthStore()
-
-// Responsive breakpoint for mobile-collapsed calendar
-const isMd = inject<Ref<boolean>>('isMd')
 
 // Season-specific deadline functions
 
@@ -113,8 +110,9 @@ const {value: viewState, setValue: setViewState} = useQueryParam<ViewState>('vie
     }
     return null
   },
-  defaultValue: () => ({ mode: 'calendar', open: isMd?.value ?? false }),
-  syncWhen: () => isPageReady.value
+  defaultValue: () => ({ mode: 'calendar', open: breakpoint.isMd.value ?? false }),
+  // The default reads the viewport, so the one-shot sync waits for the layout to measure it
+  syncWhen: () => isPageReady.value && breakpoint.measured.value
 })
 
 // Computed getters for component bindings (one-way to prevent race conditions)
@@ -206,7 +204,7 @@ const handleRemoveExpense = (expenseId: number) => {
 
 // The team's cooking round around the dinner on view: the round's orders give each dinner its allowance
 const {consecutiveDinnerRun} = useBooking()
-const {getTeamShortName, getTeamNumber} = useCookingTeam()
+const {getTeamNumber} = useCookingTeam()
 const {calculateBudget} = useOrder()
 const kitchenConfig = useAppConfig().theslope?.kitchen
 const roundDinners = computed(() => selectedDinnerId.value
@@ -221,13 +219,6 @@ const roundRows = computed<CookingRoundRow[]>(() => roundDinners.value.map(dinne
   budgetGross: calculateBudget(bookingsStore.orders.filter(order => order.dinnerEventId === dinner.id), kitchenConfig?.baseRatePercent ?? 5, kitchenConfig?.vatPercent ?? 25).availableBudget,
   spentGross: dinner.totalCost
 })))
-const roundLabel = computed(() => {
-  const first = roundDinners.value[0]
-  const last = roundDinners.value.at(-1)
-  return selectedTeam.value && first && last
-    ? `${getTeamShortName(selectedTeam.value.name)}, ${formatDate(first.date, 'dd/MM')}–${formatDate(last.date, 'dd/MM')}`
-    : ''
-})
 
 const handleAdvanceState = async (newState: string) => {
   if (!selectedDinnerId.value) return
@@ -304,7 +295,7 @@ useHead({
             />
 
             <!-- Team selector and status -->
-            <div v-else class="space-y-1 md:space-y-4">
+            <div v-else :class="COMPONENTS.chefTeamStatus">
               <!-- Team selector (always visible, handles own empty state) -->
               <MyTeamSelector
                   :model-value="selectedTeamId"
@@ -388,7 +379,6 @@ useHead({
               :form-mode="chefFormMode"
               :show-state-controls="true"
               :round-rows="roundRows"
-              :round-label="roundLabel"
               :show-allergens="true"
               :is-updating="isDinnerUpdating"
               :has-prev="hasPrev"

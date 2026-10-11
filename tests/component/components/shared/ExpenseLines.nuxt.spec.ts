@@ -68,6 +68,7 @@ describe('ExpenseLines', () => {
             expect(findByTestId(wrapper, 'expense-row').text()).toContain('Madbestilling')
             expect(findByTestId(wrapper, 'expense-total').text()).toContain(formatPrice(exOf(spent)))
             expect(findByTestId(wrapper, 'expense-total').text()).toContain(`/ ${formatPrice(spent)} kr`)
+            expect(findByTestId(wrapper, 'expense-row').text()).toContain('ex / inkl. moms')
             expect(findAllByTestId(wrapper, 'expense-line')).toHaveLength(0)
             expect(findByTestId(wrapper, 'expense-form').exists()).toBe(false)
             expect(findByTestId(wrapper, 'expense-hint').exists()).toBe(false)
@@ -102,6 +103,18 @@ describe('ExpenseLines', () => {
             await nextTick()
             expect(findByTestId(wrapper, 'expense-row').exists()).toBe(true)
             expect(findByTestId(wrapper, 'expense-form').exists()).toBe(false)
+        })
+
+        it('GIVEN the editor WHEN open THEN the entry row comes first, the lines next and the sums last', async () => {
+            const wrapper = await mount({editable: true})
+            await open(wrapper)
+            const html = wrapper.html()
+            const form = html.indexOf('data-testid="expense-form"')
+            const line = html.indexOf('data-testid="expense-line"')
+            const hint = html.indexOf('data-testid="expense-hint"')
+            expect(form).toBeGreaterThan(-1)
+            expect(line).toBeGreaterThan(form)
+            expect(hint).toBeGreaterThan(line)
         })
 
         it('GIVEN a budget WHEN open THEN the hint reads Rådighedsbeløb, Brugt and Tilbage as the difference with its icon', async () => {
@@ -142,6 +155,12 @@ describe('ExpenseLines', () => {
             await open(without)
             expect(findByTestId(without, 'expense-hint-heading').exists()).toBe(false)
             expect(findAllByTestId(without, 'expense-hint-row')).toHaveLength(3)
+        })
+
+        it('GIVEN a budget of nothing yet WHEN open THEN Tilbage carries the waiting glyph', async () => {
+            const wrapper = await mount({editable: true, budgetGross: 0, expenses: []})
+            await open(wrapper)
+            expect(hintRow(wrapper, 'Tilbage')!.find('[data-testid="vat-amount-pending"]').exists()).toBe(true)
         })
 
         it('GIVEN no budget WHEN open THEN the hint carries Brugt alone', async () => {

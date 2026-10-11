@@ -1,7 +1,8 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
 import {mountSuspended} from "@nuxt/test-utils/runtime"
-import {findByTestId} from '~~/tests/component/testHelpers'
+import {findByTestId, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {createResponsiveSizes} from '~/composables/useTheSlopeDesignSystem'
 import SeasonSelector from '~/components/form/SeasonSelector.vue'
 import {nextTick, ref} from 'vue'
 import {SeasonFactory} from '../../../e2e/testDataFactories/seasonFactory'
@@ -169,5 +170,13 @@ describe('SeasonSelector', () => {
 
         dropdown = getDropdown(wrapper)
         expect(dropdown.text()).toContain('spring-2026')
+    })
+
+    it.each(VIEWPORTS)('$viewport: binds the season select size of its viewport', async ({isMd}) => {
+        const wrapper = await mountSuspended(SeasonSelector, {
+            props: {modelValue: 1, seasons: mockSeasons},
+            global: {provide: {isMd: ref(isMd)}}
+        })
+        expect(wrapper.findComponent({name: 'USelect'}).props('size')).toBe(createResponsiveSizes(ref(isMd)).seasonSelect)
     })
 })

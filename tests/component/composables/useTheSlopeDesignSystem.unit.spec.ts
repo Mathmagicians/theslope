@@ -1,6 +1,6 @@
 import {describe, it, expect, afterEach} from 'vitest'
 import {ref} from 'vue'
-import {getRandomEmptyMessage, EMPTY_STATE_MESSAGES, createResponsiveAlerts, createColumnVisibility} from '~/composables/useTheSlopeDesignSystem'
+import {getRandomEmptyMessage, EMPTY_STATE_MESSAGES, createResponsiveAlerts, createColumnVisibility, createBreakpoint, createMasterDetail} from '~/composables/useTheSlopeDesignSystem'
 
 const contexts = Object.keys(EMPTY_STATE_MESSAGES) as Array<keyof typeof EMPTY_STATE_MESSAGES>
 
@@ -63,5 +63,26 @@ describe('createColumnVisibility', () => {
     ] as const)('isMd=%s with an expand column hidden from md → %j', (md, visibility) => {
         isMd.value = md
         expect(columnVisibility(['durationMs'], ['expand'])).toEqual(visibility)
+    })
+})
+
+describe('createBreakpoint', () => {
+    it.each([
+        [null, false],
+        [false, true],
+        [true, true]
+    ] as const)('isMd=%s → measured %s', (md, measured) => {
+        expect(createBreakpoint(ref(md)).measured.value).toBe(measured)
+    })
+})
+
+describe('createMasterDetail', () => {
+    // An unmeasured viewport renders the phone's dock, as the server render does
+    it.each([
+        [null, false],
+        [false, false],
+        [true, true]
+    ] as const)('isMd=%s → detail renders as a pane: %s', (md, asPane) => {
+        expect(createMasterDetail(ref(md)).detailAsPane).toBe(asPane)
     })
 })

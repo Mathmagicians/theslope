@@ -81,14 +81,20 @@ export const withTooltipProvider = (component: Component, props: Record<string, 
         render: () => h(TooltipProvider, {}, () => h(component, props))
     })
 
+/** The two layouts a responsive token answers for: the phone, and md and up */
+export const VIEWPORTS = [
+    {viewport: 'phone', isMd: false},
+    {viewport: 'md', isMd: true}
+] as const
+
 /**
  * mountSuspended under a TooltipProvider and return the wrapper of the component itself,
  * so find/text/emitted/props read the component rather than the provider shell.
- * `isMd` provides the layout's responsive breakpoint ref when given; pass a ref to change the breakpoint after mount.
+ * `isMd` provides the layout's responsive breakpoint ref when given (null: not measured yet); pass a ref to change the breakpoint after mount.
  */
 export const mountWithTooltipProvider = async <T extends MountableComponent>(
     component: T,
-    {props = {}, isMd}: {props?: Record<string, unknown>, isMd?: boolean | Ref<boolean>} = {}
+    {props = {}, isMd}: {props?: Record<string, unknown>, isMd?: boolean | null | Ref<boolean | null>} = {}
 ) => {
     const root = await mountSuspended(
         withTooltipProvider(component, props),

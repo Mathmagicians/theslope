@@ -9,7 +9,7 @@ import AdminAllergies from '~/components/admin/AdminAllergies.vue'
 import {useAllergiesStore} from '~/stores/allergies'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ALLERGY_TEST_IDS} from '../allergy/allergyTestIds'
-import {mountWithTooltipProvider, mountedStore, findByTestId, findAllByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, mountedStore, findByTestId, findAllByTestId, clickByTestId, VIEWPORTS} from '~~/tests/component/testHelpers'
 
 // The test environment has no router: navigateTo lands the written query on the route the component reads
 const {mockRoute} = await vi.hoisted(async () => {
@@ -75,11 +75,7 @@ type Wrapper = Awaited<ReturnType<typeof mountAdmin>>
 
 // Master/detail with a responsive mount point: the desktop pane
 // always shows the (fallback) selection; on mobile the detail docks under the
-// tapped row, so it must be opened first.
-const VIEWPORTS = [
-    {viewport: 'desktop', isMd: true},
-    {viewport: 'mobile', isMd: false}
-] as const
+// tapped row, so it must be opened first (VIEWPORTS from the test helpers).
 
 describe('AdminAllergies', () => {
     beforeEach(() => {
@@ -109,6 +105,13 @@ describe('AdminAllergies', () => {
                 await openDetail(wrapper)
 
                 expect(findAllByTestId(wrapper, ALLERGY_TEST_IDS.edit)).toHaveLength(1)
+            })
+
+            it(`mounts the open detail ${isMd ? 'in the pane beside the catalog' : 'docked in the catalog row'}`, async () => {
+                const wrapper = await mount()
+                await openDetail(wrapper)
+
+                expect(wrapper.find(`tbody [data-testid="${ALLERGY_TEST_IDS.edit}"]`).exists()).toBe(!isMd)
             })
 
             it('renders exactly one compare control', async () => {

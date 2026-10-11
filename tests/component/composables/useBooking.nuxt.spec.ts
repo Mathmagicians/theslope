@@ -2018,6 +2018,22 @@ describe('replayTicketChanges', () => {
         expect(changes.at(-1)).toMatchObject({action, delta: {ADULT: -1, CHILD: 0, BABY: 0}, counts: {ADULT: 0, CHILD: 0, BABY: 0}, portions: 0, revenue: 0})
     })
 
+    it('GIVEN scaffold rows written on different nights with no user row between WHEN replaying THEN they are still one system change', () => {
+        const {replayTicketChanges} = useBooking()
+        const history = [
+            row(Action.SYSTEM_CREATED, 1, 1, 'S_31', at(0), OrderStateSchema.enum.BOOKED, true),
+            row(Action.SYSTEM_CREATED, 2, 1, 'S_22', new Date(2026, 3, 9, 2, 0), OrderStateSchema.enum.BOOKED, true),
+            row(Action.USER_BOOKED, 3, 2, 'S_07', new Date(2026, 3, 10, 9, 0)),
+            row(Action.SYSTEM_CREATED, 4, 1, 'S_14', new Date(2026, 3, 11, 2, 0), OrderStateSchema.enum.BOOKED, true)
+        ]
+        const changes = replayTicketChanges(history, typeOf)
+        expect(changes.map(change => [change.action, change.delta.ADULT, change.timestamp.getDate()])).toEqual([
+            [Action.SYSTEM_CREATED, 2, 9],
+            [Action.USER_BOOKED, 0, 10],
+            [Action.SYSTEM_CREATED, 1, 11]
+        ])
+    })
+
     it('GIVEN a scaffold run of three rows within a minute WHEN replaying THEN they are one system change with the summed delta', () => {
         const {replayTicketChanges} = useBooking()
         const history = [
