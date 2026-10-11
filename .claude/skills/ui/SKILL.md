@@ -17,7 +17,7 @@ passes domain props. Read `docs/ui.md` before the first edit; it names every tok
   `v-bind="ALERTS.warning"`, `v-bind="BUTTONS.edit"`, `:icon="ICONS.edit"`. A literal `color="neutral"` or `size="md"` is a breach.
 - **A token holds one rendered value**, light and dark together. Two values are two tokens, named by where they are used
   (`SIZES.lockChip` beside `SIZES.md`). Merging two values is a design decision the user takes from a visual proposal.
-- **Layout responds inside tokens** with `md:` classes; `isMd` (provided by `app/layouts/default.vue`) sets prop values.
+- **Layout responds inside tokens** with `md:` classes. The design system is the one reader of the layout's breakpoint: a value that follows the breakpoint is a responsive token, and behaviour reads `breakpoint` (`isMd`, `measured`) from the composable; the usage spec fails any other inject of it.
 - A Nuxt UI component family gets a token, and an architecture rule under `tests/component/architecture/`, before its first use.
 
 ## True to Nuxt UI
@@ -31,6 +31,10 @@ passes domain props. Read `docs/ui.md` before the first edit; it names every tok
   `grep -rn "ALERTS\.\|BUTTONS\.\|COMPONENTS\." app/components`.
 - The `ui` prop is set only through a token (`COMPONENTS.table.ui`, `COMPONENTS.calendarGrid.ui`), never inline.
 - Nuxt UI v4 slot names (`#empty`, `#description`, `#day`, `#legend`); `#empty-state` is the v2 name and fails the rule.
+- A table is `<UTable>` on `COMPONENTS.table.ui` with column definitions, cell slots and `#empty`; a hand-written
+  `<table>` fails the architecture rule.
+- Dates and moments go through `date-fns` and the season's deadline helpers (`deadlinesForSeason`): no `getTime()`
+  arithmetic, no hand comparison, no `new Date()` in a component.
 - Attributes fall through where the component sends them: `UChip` passes `data-testid` to its slot content, not to the
   indicator. Put a test-id where it will land, and reach a part the component owns through its `data-slot` name in the spec.
 

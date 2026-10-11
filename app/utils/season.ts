@@ -365,7 +365,7 @@ export const getSeasonStatus = (season: Season, referenceDate: Date = new Date()
 }
 
 /**
- * Sort seasons by active priority: aktiv → kommende (closest) → i gang → afsluttet (recent)
+ * Sort seasons by active priority: aktiv → i gang → kommende (closest) → afsluttet (recent)
  * @param seasons - Seasons to sort
  * @param referenceDate - Date to compare against (defaults to now)
  * @returns Sorted seasons array (does not mutate input)
@@ -375,11 +375,11 @@ export const sortSeasonsByActivePriority = (seasons: Season[], referenceDate: Da
         const statusA = getSeasonStatus(a, referenceDate)
         const statusB = getSeasonStatus(b, referenceDate)
 
-        // Priority order: aktiv > kommende > i gang > afsluttet
+        // Priority order: aktiv > i gang > kommende > afsluttet
         const statusPriority: Record<SeasonStatus, number> = {
             [SEASON_STATUS.ACTIVE]: 0,
-            [SEASON_STATUS.FUTURE]: 1,
-            [SEASON_STATUS.CURRENT]: 2,
+            [SEASON_STATUS.CURRENT]: 1,
+            [SEASON_STATUS.FUTURE]: 2,
             [SEASON_STATUS.PAST]: 3
         }
 
@@ -398,7 +398,7 @@ export const sortSeasonsByActivePriority = (seasons: Season[], referenceDate: Da
 
 /**
  * Select the most appropriate season to activate
- * Priority: 1) Future closest to today, 2) Current
+ * Priority: 1) Active, 2) Current, 3) Future closest to today
  * IMPORTANT: Past seasons cannot be activated (business rule)
  * @param seasons - Seasons to choose from
  * @param referenceDate - Date to compare against (defaults to now)
@@ -407,12 +407,12 @@ export const sortSeasonsByActivePriority = (seasons: Season[], referenceDate: Da
 export const selectMostAppropriateActiveSeason = (seasons: Season[], referenceDate: Date = new Date()): Season | null => {
     if (seasons.length === 0) return null
 
-    // Filter to only eligible (non-past, non-active) seasons
-    const eligible = seasons.filter(s => !s.isActive && canSeasonBeActive(s, referenceDate))
+    // An active season that has ended is not eligible, so the pick moves on
+    const eligible = seasons.filter(s => canSeasonBeActive(s, referenceDate))
 
     if (eligible.length === 0) return null
 
-    // Sort and return first (future closest, or current if no future)
+    // Sort and return first (active, else current, else future closest)
     const sorted = sortSeasonsByActivePriority(eligible, referenceDate)
     return sorted[0]!
 }

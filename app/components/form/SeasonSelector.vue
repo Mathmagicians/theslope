@@ -44,11 +44,7 @@ const emit = defineEmits<{
 }>()
 
 const {getSeasonStatus, sortSeasonsByActivePriority} = useSeason()
-const {COLOR} = useTheSlopeDesignSystem()
-
-// Inject responsive breakpoint
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
+const {COLOR, SIZES, ICONS, COMPONENTS} = useTheSlopeDesignSystem()
 
 // Get status icon for a season
 const getStatusIcon = (season: Season): string => {
@@ -56,15 +52,15 @@ const getStatusIcon = (season: Season): string => {
 
   switch (status) {
     case SEASON_STATUS.ACTIVE:
-      return 'i-heroicons-calendar'
+      return ICONS.calendar
     case SEASON_STATUS.FUTURE:
-      return 'i-heroicons-calendar'
+      return ICONS.calendar
     case SEASON_STATUS.CURRENT:
-      return 'i-heroicons-calendar'
+      return ICONS.calendar
     case SEASON_STATUS.PAST:
-      return 'i-heroicons-archive-box-solid'
+      return ICONS.seasonPast
     default:
-      return 'i-question-mark-circle'
+      return ICONS.seasonUnknown
   }
 }
 
@@ -118,9 +114,8 @@ const selectedSeasonId = computed({
       leading
       trailing
       :disabled="props.disabled || props.seasons.length === 0"
-      :class="props.class"
-      :size="getIsMd ? 'lg' : 'sm'"
-      class="min-w-48"
+      :class="[COMPONENTS.seasonSelector.select, props.class]"
+      :size="SIZES.seasonSelect"
   >
     <template #leading>
       <UIcon

@@ -36,6 +36,14 @@ at a time behind an explicit approval. The plan document is the deliverable; the
   (each child as a labelled box, no internals); each child's header mockup draws its own internals. No drawing line appears
   in two files.
 - No implementation of a UX package before its mockup is ✅.
+- A mockup carries the agreed words and formats literally; a decision taken in an earlier round on wording or format
+  outranks any shorthand the mockup draws. A glyph is drawn only where a glyph was agreed, and named by its icon.
+- A moment in a mockup names the domain event it comes from and the helper that yields it; a deadline is never chosen by
+  the drawer.
+- Anything not in the mockup is presented to the architect for approval first, and the mockup is updated with it. UX
+  improvements are welcome as suggestions; the architect signs them off before they are built.
+- When a design round changes a signed mockup, the spec is updated before the first line of code, and each changed block
+  is signed on its own.
 
 ## Cleaning up the doc once a fix is implemented
 
