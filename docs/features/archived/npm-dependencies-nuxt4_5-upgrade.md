@@ -123,7 +123,7 @@ The store, page and dependency work lives in feature-proposal-framework-adoption
   `useInstallPrompt.unit`, `InstallPrompt.nuxt`, `InstallPrompt.e2e`; rows in `docs/adr-compliance-frontend.md`.
 - `BUTTONS.disclosure` renamed `BUTTONS.flipOpen`; its turn classes are single-sourced as `BUTTONS.flipOpenTurn`, and
   `HouseholdAllergies`'s hand-rolled copy binds them (its closing flip gains `duration-200`). The remaining raw motion
-  classes are inventoried in bug-fix-motion-tokens.md for the next release.
+  classes are inventoried in `chores-0.9.1.md` § Raw utility classes.
 
 ---
 

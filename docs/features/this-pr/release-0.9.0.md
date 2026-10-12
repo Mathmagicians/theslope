@@ -38,7 +38,7 @@ Sizing is informal t-shirt sizes.
 | Order snapshot | Frozen `ticketType` on Order + backfill — the portion resolver reads it | `../chores-0.9.1.md` § Order snapshot | S | planned for 0.9.1 |
 | Booking one-path | One builder family for regular + guest orders across grid/preview/day; guest cells editable; power includes guests; honest toasts | `../archived/bug-fix-plan-v0.9.md` | M–L | committed |
 | Billing delivery report + interrupted runs | Repository fills delivery state on every read; stale RUNNING runs | `bug-fix-billing-delivery-report.md` | M | planned (decisions open) |
-| Motion tokens | Raw motion classes into the design system | `bug-fix-motion-tokens.md` | S | planned for 0.9.1 |
+| Motion tokens | Raw motion classes into the design system | `chores-0.9.1.md` § Raw utility classes | S | planned for 0.9.1 |
 | Dinner-page follow-ups | PR #166 leftovers on `/dinner` | `bug-fix-dinner-page-and-dates.md` | S | planned for 0.9.1 |
 
 ## Build order
@@ -558,6 +558,9 @@ All implemented and committed; the rules are in § Decisions.
 
 **2026-10-12** (waitlist UI)
 - The queued row shows the wish as a ghost of a booking (`COMPONENTS.waitlist`, no fill, muted ink) through `DinnerModeSelector` on the ticket card, the booking form and the grid cell; the ticket's edge keeps the normal face and the hourglass takes the state cell. The save carries the chosen mode and its label previews the outcome (Book, Køb billet, Skriv på venteliste); guests queue through the guest form's save. The notice for a member left without a seat goes to 0.9.1.
+
+**2026-10-13** (server payload)
+- The billing periods and the current period load on request: the bookings store gates both datasets on a getter the admin page hands it at setup (`loadBillingOverview(() => activeTab === 'economy')`, ADR-007 rule 9), so the member pages carry neither. The order snapshot on a transaction stays: a transaction outlives its order. The users store, the dinner Detail's tickets and `HouseholdDisplay` are chores (`chores-0.9.1.md` § Server payload of the shared stores).
 
 ## Coverage
 

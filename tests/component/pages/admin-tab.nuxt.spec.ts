@@ -4,8 +4,9 @@ import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {toValue} from 'vue'
 import AdminPage from '~/pages/admin/[tab].vue'
 import {usePlanStore} from '~/stores/plan'
+import {useBookingsStore} from '~/stores/bookings'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
-import {mountWithTooltipProvider} from '~~/tests/component/testHelpers'
+import {asyncDataStatus, mountedStore, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
 
 // The test environment has no router to land a deep link on
 const {mockRoute, mockNavigateTo, useRoute} = await vi.hoisted(async () =>
@@ -22,6 +23,8 @@ registerEndpoint('/api/_auth/session', () => ({user: {id: 1, email: 'admin@skraa
 registerEndpoint('/api/admin/season/active', () => season.id)
 registerEndpoint(`/api/admin/season/${season.id}`, () => season)
 registerEndpoint(`/api/admin/team/${TEAM_ID}`, () => SeasonFactory.defaultCookingTeamDetail({id: TEAM_ID}))
+registerEndpoint('/api/admin/billing/periods', () => [])
+registerEndpoint('/api/admin/billing/current-period', () => [])
 
 describe('admin/[tab] - a deep link to a team', () => {
     it.each([
@@ -71,5 +74,43 @@ describe('admin/[tab] - the season in ?season=', () => {
 
         expect(toValue(choice)).toBe(otherSeason.shortName)
         expect(selectSeason).toHaveBeenCalledTimes(1)
+    })
+})
+
+describe('admin/[tab] - the billing overview on the economy tab', () => {
+    let loadBillingOverview: MockInstance<ReturnType<typeof useBookingsStore>['loadBillingOverview']>
+
+    beforeEach(() => {
+        resetStores()
+        loadBillingOverview = vi.spyOn(mountedStore(useBookingsStore), 'loadBillingOverview')
+    })
+
+    afterEach(() => {
+        loadBillingOverview.mockRestore()
+    })
+
+    it.each([
+        {tab: 'economy', requested: true},
+        {tab: 'planning', requested: false}
+    ])('hands the store a getter at setup that reads $requested on the $tab tab', async ({tab, requested}) => {
+        mockRoute.path = `/admin/${tab}`
+        mockRoute.params = {tab}
+        mockRoute.query = {season: season.shortName}
+
+        await mountWithTooltipProvider(AdminPage)
+
+        expect(loadBillingOverview).toHaveBeenCalledTimes(1)
+        expect(toValue(loadBillingOverview.mock.calls[0]![0])).toBe(requested)
+    })
+
+    it('leaves both billing datasets idle on another tab', async () => {
+        mockRoute.path = '/admin/planning'
+        mockRoute.params = {tab: 'planning'}
+        mockRoute.query = {season: season.shortName}
+
+        await mountWithTooltipProvider(AdminPage)
+
+        expect(asyncDataStatus('bookings-store-billing-periods')).toBe('idle')
+        expect(asyncDataStatus('bookings-store-current-period')).toBe('idle')
     })
 })

@@ -57,8 +57,8 @@ const props = withDefaults(defineProps<Props>(), {
   teamFragment: null
 })
 
-const { TYPOGRAPHY, COMPONENTS, ICONS, BUTTONS, COLOR, NOISE, SIZES, ALERTS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
-const noTicketsSold = getRandomEmptyMessage('noTicketsSold')
+const { TYPOGRAPHY, COMPONENTS, ICONS, BUTTONS, COLOR, NOISE, SIZES, ALERTS, getRandomEmptyMessageText } = useTheSlopeDesignSystem()
+const noTicketsSold = getRandomEmptyMessageText('noTicketsSold')
 
 // Kitchen config from app.config.ts
 const appConfig = useAppConfig()

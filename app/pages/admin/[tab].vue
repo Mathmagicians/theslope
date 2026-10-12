@@ -134,6 +134,9 @@ store.selectTeam(() => {
   return activeTab.value === 'teams' && Number.isInteger(teamId) && teamId > 0 ? teamId : null
 })
 
+// The billing periods and the current period load while the economy tab is on the page
+useBookingsStore().loadBillingOverview(() => activeTab.value === 'economy')
+
 // UI - CONTINUED
 
 useHead({

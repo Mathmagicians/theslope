@@ -90,6 +90,7 @@ export const usePlanStore = defineStore("Plan", () => {
         const {DeletedCountSchema} = useCoreValidation()
         const {DinnerEventDetailSchema, AssignCookingTeamsResponseSchema} = useBookingValidation()
         const {JokerSlotSchema} = useDutyValidation()
+        const {formatRoleClaimedTitle} = useCookingTeam()
 
         // The mounting page selects the team (ADR-007 rule 9); GET under /api/admin/ is open to every member
         const teamChoice = shallowRef<() => number | null>(() => null)
@@ -449,7 +450,6 @@ export const usePlanStore = defineStore("Plan", () => {
             if (inhabitantId === null) return null
             try {
                 const updated = await assignRoleToDinner(dinnerEvent.id, inhabitantId, role, menuStrategy)
-                const {formatRoleClaimedTitle} = useCookingTeam()
                 toastSaved(formatRoleClaimedTitle(dinnerEvent, role))
                 return updated
             } catch { return null }

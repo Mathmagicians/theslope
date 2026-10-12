@@ -36,6 +36,7 @@ describe('AdminEconomy - the billing selection in the URL', () => {
         resetStores()
         session.user.value = UserFactory.defaultUserWithInhabitant('admin-economy')
         mockRoute.query = {}
+        mountedStore(useBookingsStore).loadBillingOverview(() => true)
     })
 
     describe.each([

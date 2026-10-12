@@ -235,3 +235,152 @@ stay.
 ### Affected
 
 `docs/adr.md` ADR-013 rule 7, `app/utils/batchUtils.ts` (`groupBy`), its call sites in `server/` and `app/stores/`.
+
+## DRY improvements
+
+### Spread row primitive
+
+#### Problem
+
+Fourteen design-system tokens spell a "something left, something right" row (`flex items-center justify-between …`). Six of
+them are the same base with nothing or a trifle added: `collapsible.headerRow` and `chefCalendar.header` (one constant,
+`COLLAPSIBLE_HEADER_ROW`), `adminTeams.detailHeaderRow`, `chefCalendar.agendaHeader`, `householdBookings.panelHeader`,
+`teamCard.jokerAddRow` and `dinnerBudget.boxLine`. The spending tables (`CookingRoundSpending.vue`) head themselves with a
+row bound to the budget box's `boxLine` and the amount's `vatAmount.unitHeader`, an alias of `TYPOGRAPHY.finePrintMuted`;
+the editor's folded row (`ExpenseLines.vue`) binds the same alias. The design system holds one-off variants where it
+holds a layout.
+
+#### Solution
+
+A spread row is a layout, so `LAYOUTS` gets the primitive beside its responsive cousin:
+
+```ts
+cardHeaderRow: 'flex flex-col md:flex-row md:items-center md:justify-between gap-2',   // as today
+spreadRow: 'flex items-center justify-between gap-2'
+```
+
+Tokens that add a value compose it and keep their names: `boxLine` (nowrap, small text), `jokerAddRow` (gap, padding),
+`panelHeader` (margin). Tokens that add nothing go, and their sites bind `LAYOUTS.spreadRow`: `collapsible.headerRow`
+(the Budget pane, Se billetændringer), `chefCalendar.header` and `agendaHeader` (the chef calendar), `adminTeams.detailHeaderRow`.
+
+A spending table's heading is the table's caption: the `UTable` `#caption` slot holds the spread row with the heading
+and the unit words, `table.ui` gains `caption: 'text-left pb-2'` so the caption shows (Nuxt UI hides it by default), and
+every table on `table.ui` can carry one. The unit words bind `TYPOGRAPHY.finePrintMuted`; `vatAmount.unitHeader` goes.
+
+Value-preserving: every site renders the classes it rendered before; the spending tables' heading sits in a `<caption>`
+element, read with its table by a screen reader.
+
+#### TDD
+
+The architecture suite (`designSystemUsage`, contrast) stays green; the component specs of the chef tables, the editor,
+the chef calendar and the admin teams assert the heading test ids and behaviour as today. No e2e slot: a rendering-only
+package.
+
+#### Affected
+
+`app/composables/useTheSlopeDesignSystem.ts` (`LAYOUTS.spreadRow`, `table.ui.caption`, the composed and deleted tokens),
+`app/components/chef/DinnerBudget.vue`, `TicketChanges.vue`, `CookingRoundSpending.vue`, `app/components/shared/ExpenseLines.vue`,
+`app/components/calendar/ChefCalendarDisplay.vue`, `app/components/admin/AdminTeams.vue`, `docs/ui.md` (the spread row
+under Component layouts, the caption under Tables).
+
+### Chef card atoms
+
+#### Problem
+
+`ChefMenuCard.vue` and `ExpenseLines.vue` each render the card section shell (`cardSection.row/label/glyph/line`, the
+secondary edit action, `cardSection.editor/editorHead/editorTitle`, `LAYOUTS.formButtonRow`). The total rows of
+`ExpenseLines.vue`, `CookingRoundSpending.vue` and `DinnerBudget.vue` spell the same `<tr>` with a label cell and a
+`VatAmount` cell twelve times. The unit words "ex / inkl. moms" sit on four tokens of one value (`dinnerBudget.unit`,
+`boxUnit`, `vatAmount.unitHeader`, `expenseLines.alternative`). `TicketChanges.vue` repeats its chip loop twice, and the
+design system spells `ticket.face.normal/released/claimed` and `stateIcon` as triplets that differ in one accent.
+
+#### Solution
+
+A `CardSection` atom (props: glyph, title, edit label, editing; slots: line, editor, actions) renders the shell for both
+cards. An `AmountTotalRow` atom (label, gross, balance, pending, colspan) renders every total row; `ExpenseLines`
+iterates `[{label, figures}]`. One unit-word token under `TYPOGRAPHY`, the other three go. One `#chips` fragment in
+`TicketChanges`. The ticket face is a base plus an accent map keyed by ticket state.
+
+#### Affected
+
+`app/components/chef/ChefMenuCard.vue`, `DinnerBudget.vue`, `TicketChanges.vue`, `CookingRoundSpending.vue`,
+`app/components/shared/ExpenseLines.vue`, `app/composables/useTheSlopeDesignSystem.ts`, their component specs.
+
+### Unit formatting
+
+#### Problem
+
+Seven sites append `kuv.` or `kuverter` to `formatPortions(x)` by hand (`KitchenPreparation.vue`, `AllergenMultiSelector.vue`,
+`AllergyOverviewLine.vue`, `DinnerBudget.vue`, `TicketChanges.vue`); thirty sites in ten files append ` kr` to
+`formatPrice(x)`, and `VatAmount.vue` spells its own.
+
+#### Solution
+
+`formatKuverter(portions, long?)` in `app/utils/utils.ts` and `formatKr(ore)` in `useTicket`, swept at every site in one
+change.
+
+#### Affected
+
+The ten components with a ` kr` site (`AdminEconomy.vue` 11, `DinnerBudget.vue` 5, `HouseholdEconomy.vue` 4, the public
+billing page 3, `ControlBadge.vue` 2, `CostLine.vue`, `DinnerBookingForm.vue`, `TicketChanges.vue`, `BookingGridView.vue`,
+`VatAmount.vue`), the five with a portions site, `app/utils/utils.ts`, `app/composables/useTicket.ts`, the utils unit spec.
+
+### Raw utility classes
+
+#### Problem
+
+The architecture rule fails a raw palette shade only, so about four hundred raw layout and typography utilities sit in
+sixty-one `.vue` files (`AdminEconomy.vue` 35, `AllergyTypeCard.vue` 27, `HouseholdSettings.vue` 25,
+`UserProfileCard.vue` 22, `UserPreferencesCard.vue` 20, `TicketPriceListEditor.vue` 14, `AllergyDetailPanel.vue` 13,
+`HouseholdEditPanel.vue` 11, `HelpButton.vue` 10, …). Per-site `:ui` patches and literal props sit beside them:
+`TicketPriceListEditor.vue` (three), `HelpButton.vue` (`variant="outline"` on a `UCard`), the page tabs of
+`pages/admin/[tab].vue`, `pages/household/[shortname]/[tab].vue` and `PageHeader.vue` (`label: 'hidden md:inline'`),
+`HouseholdListItem.vue:19`, `UserListItem.vue:152`, `CookingTeamCard.vue:339` (`:ui="{base: avatar.compact.fit}"`).
+
+Motion utilities are the same class, 21 hits in 8 files: `animate-spin` beside `MOTION_SPIN` in `OrderHistoryDisplay.vue:59` and
+`AdminEconomy.vue:541`; hover interactions in `UserListItem.vue:158,199` (`hover:scale-110 hover:rotate-3 transition-transform duration-200`),
+`CountdownTimer.vue:122` (`hover:ring-2 … transition-all`), `ChefDinnerCard.vue:96` (`transition-shadow duration-200 hover:shadow-lg`),
+`UserProfileCard.vue:253` (`transition-colors` with a hover colour inside); the six `rotate-*` tilts by error code in
+`ViewError.vue:20-35`; `Ticker.vue:19` returning `animate-marquee` from a function. Inside the design system, `pulse`, `dot`
+and the power-mode fireworks carry `animate-pulse` without `motion-reduce`.
+
+#### Solution
+
+A `COMPONENTS.<surface>` token per file, swept file by file, the touched files first (the `ds-deviations-fixed-on-sight`
+rule); `COMPONENTS.pageTabs` and `COMPONENTS.pageCard` for the pages; `COMPONENTS.avatar.regular/compact` carry their
+`ui` so a group spreads the token. A `MOTION` group holds the primitives (spin, the two hover kinds, the colour fade,
+the marquee) and `COMPONENTS.viewError.tilt` maps the error code to its turn; one token per distinct original value,
+named by its site, proof a before/after class-set comparison per template. The architecture spec gains a rule that
+fails any raw utility class in a `.vue` template, motion utilities included, with the print CSS of
+`pages/admin/allergies/pdf.vue` exempt, so the sweep cannot regress.
+
+**OPEN** — `motion-reduce:animate-none` on the infinite animations the design system still runs without it (pulse,
+marquee, fireworks): a rendered-class change, decided with the sweep.
+
+#### Affected
+
+The sixty-one components, `app/composables/useTheSlopeDesignSystem.ts`,
+`tests/component/architecture/designSystemUsage.unit.spec.ts`, `docs/ui.md` (one line under Rules).
+
+### Route and composable leftovers
+
+#### Problem
+
+Six routes still spell a coerced id in a query schema (`order/index.get.ts`, `admin/dinner-event/index.get.ts`,
+`admin/team/index.get.ts`, `household/allergy/index.get.ts`, `billing/index.get.ts`, `admin/household/inhabitants/[id].post.ts`
+`seasonId`) beside `RouteIdSchema`. Three routes build the sender's queue and config pair as positional arguments
+(`admin/sender/event/test.post.ts`, `admin/sender/event/monthly-billing.post.ts`, `user/notifications/test.post.ts`) beside
+`senderFromEvent`. `useQueryParam.ts` repeats the normalize-or-default block three times. The order-history route
+reads the households its creation rows name because the creation audit row carries no `householdShortname`.
+
+#### Solution
+
+`RouteIdSchema` / `RouteIdSchema.optional()` in the six query schemas; `senderFromEvent(event)` destructured in the three
+routes; one `fallback(invalid)` in `useQueryParam`; `createOrders` writes `householdShortname` into the creation audit
+row, `readAuditTicket` reads it from both shapes, and a convergent backfill fills the existing rows, after which the
+households read in `chef/dinner/[id]/order-history.get.ts` goes.
+
+#### Affected
+
+The nine routes, `app/composables/useQueryParam.ts`, `server/data/financesRepository.ts`,
+`app/composables/useBookingValidation.ts`, a D1 migration for the backfill, `docs/adr-compliance-backend.md` rows.

@@ -23,8 +23,8 @@ const props = defineProps<{
   since: Date | null
 }>()
 
-const {COMPONENTS, BUTTONS, SIZES, ICONS, NOISE, COLOR, TYPOGRAPHY, ALERTS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
-const noTicketChanges = getRandomEmptyMessage('noTicketChanges')
+const {COMPONENTS, BUTTONS, SIZES, ICONS, NOISE, COLOR, TYPOGRAPHY, ALERTS, getRandomEmptyMessageText} = useTheSlopeDesignSystem()
+const noTicketChanges = getRandomEmptyMessageText('noTicketChanges')
 const changeColumns: TableColumn<TicketChange>[] = [
   {accessorKey: 'timestamp', header: 'Dato'},
   {accessorKey: 'householdShortname', header: 'Husstand'},

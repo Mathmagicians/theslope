@@ -27,8 +27,8 @@ defineProps<{
   fragment: SpendingFragment
 }>()
 
-const {COMPONENTS, ICONS, TYPOGRAPHY, ALERTS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
-const noReceipts = getRandomEmptyMessage('noReceipts')
+const {COMPONENTS, ICONS, TYPOGRAPHY, ALERTS, getRandomEmptyMessageText} = useTheSlopeDesignSystem()
+const noReceipts = getRandomEmptyMessageText('noReceipts')
 const {spendingLeft, spendingAwaitsTickets} = useOrder()
 
 const columns: TableColumn<SpendingTableRow>[] = [

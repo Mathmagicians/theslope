@@ -530,9 +530,16 @@ export const useBookingsStore = defineStore("Bookings", () => {
         isHouseholdBillingRequested.value = true
     }
 
+    // The admin economy page asks for the billing periods and the current period; nothing is requested until it does
+    const billingOverviewRequest = shallowRef<() => boolean>(() => false)
+    const loadBillingOverview = (requested: MaybeRefOrGetter<boolean>) => {
+        billingOverviewRequest.value = () => toValue(requested)
+    }
+
     const billingPeriodsDataset = storeAsyncData('bookings-store-billing-periods', '/api/admin/billing/periods', {
         schema: BillingPeriodSummaryDisplaySchema.array(),
-        default: () => []
+        default: () => [],
+        enabled: () => billingOverviewRequest.value()
     })
     const {
         data: billingPeriods, isLoading: isBillingPeriodsLoading, isErrored: isBillingPeriodsErrored, isInitialized: isBillingPeriodsInitialized,
@@ -581,7 +588,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
         error: currentPeriodError, refresh: refreshCurrentPeriodTransactions
     } = storeAsyncData('bookings-store-current-period', '/api/admin/billing/current-period', {
         schema: TransactionDisplaySchema.array(),
-        default: () => []
+        default: () => [],
+        enabled: () => billingOverviewRequest.value()
     })
 
 
@@ -729,6 +737,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         isHouseholdBillingLoading,
         isHouseholdBillingErrored,
         loadHouseholdBilling,
+        loadBillingOverview,
 
         // billing periods
         billingPeriods,

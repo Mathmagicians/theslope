@@ -408,9 +408,13 @@ describe('Bookings store — gated reads', () => {
         {dataset: 'current period', idleKey: 'bookings-store-current-period', requestedKey: 'bookings-store-current-period',
             endpoint: currentPeriodEndpoint, request: (store: Store) => store.loadBillingOverview(() => true)},
         {dataset: 'selected billing period', idleKey: BILLING_PERIOD_KEY, requestedKey: BILLING_PERIOD_KEY,
-            endpoint: billingPeriodDetailEndpoint, request: (store: Store) => store.selectBillingPeriod(() => ID)},
+            endpoint: billingPeriodDetailEndpoint, request: (store: Store) => {
+                store.loadBillingOverview(() => true)
+                store.selectBillingPeriod(() => ID)
+            }},
         {dataset: 'selected invoice', idleKey: INVOICE_KEY, requestedKey: INVOICE_KEY,
             endpoint: invoiceTransactionsEndpoint, request: (store: Store) => {
+                store.loadBillingOverview(() => true)
                 store.selectBillingPeriod(() => ID)
                 store.selectInvoice(() => ID)
             }}
@@ -528,7 +532,10 @@ describe('Bookings store — the billing selection a getter names', () => {
             dataset: 'billing period', key: BILLING_PERIOD_KEY, toast: 'Kan ikke finde faktureringsperioden',
             detailEndpoint: billingPeriodDetailEndpoint, goneEndpoint: goneBillingPeriodEndpoint, listEndpoint: billingPeriodsEndpoint,
             listWith: (ids: number[]) => billingPeriodsEndpoint.mockReturnValue(ids.map(id => ({...SUMMARY, id}))),
-            select: (store: Store, choice: Choice) => store.selectBillingPeriod(choice),
+            select: (store: Store, choice: Choice) => {
+                store.loadBillingOverview(() => true)
+                store.selectBillingPeriod(choice)
+            },
             selectedId: (store: Store) => store.selectedBillingPeriodId
         },
         {
@@ -536,6 +543,7 @@ describe('Bookings store — the billing selection a getter names', () => {
             detailEndpoint: invoiceTransactionsEndpoint, goneEndpoint: goneInvoiceEndpoint, listEndpoint: billingPeriodDetailEndpoint,
             listWith: (ids: number[]) => billingPeriodDetailEndpoint.mockReturnValue({...SUMMARY, invoices: ids.map(id => ({...SUMMARY.invoices[0]!, id}))}),
             select: (store: Store, choice: Choice) => {
+                store.loadBillingOverview(() => true)
                 store.selectBillingPeriod(() => ID)
                 store.selectInvoice(choice)
             },

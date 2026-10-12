@@ -43,7 +43,7 @@ export const useMaintenance = () => {
      */
     const jobScheduleLabels: Record<JobType, string> = {
         [JobType.DAILY_MAINTENANCE]: 'Dagligt kl. 02:00',
-        [JobType.MONTHLY_BILLING]: 'D. 17. hver måned kl. 04:00',
+        [JobType.MONTHLY_BILLING]: 'D. 18. hver måned kl. 04:00',
         [JobType.HEYNABO_IMPORT]: 'Dagligt kl. 03:00',
         [JobType.MAINTENANCE_IMPORT]: 'Manuel',
         [JobType.MAINTENANCE_EXPORT]: 'Manuel'
