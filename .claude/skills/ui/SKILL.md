@@ -30,6 +30,10 @@ passes domain props. Read `docs/ui.md` before the first edit; it names every tok
   the same `ALERTS.legend` and the same `COMPONENTS.legend.entries`). Look for the pattern before drawing a new one:
   `grep -rn "ALERTS\.\|BUTTONS\.\|COMPONENTS\." app/components`.
 - The `ui` prop is set only through a token (`COMPONENTS.table.ui`, `COMPONENTS.calendarGrid.ui`), never inline.
+- Two kinds of table. A data-heavy table (lines, ledgers, history, the admin economy) binds `COMPONENTS.table.ui` and, wider
+  than a phone, scrolls sideways inside its own box; the design system owns that, so a new column there is no layout
+  question. A table designed to fit the phone (the booking form, household preferences, allergies: the dense `table.*Ui`
+  kinds) keeps its width; a column there is a mockup for the architect.
 - Nuxt UI v4 slot names (`#empty`, `#description`, `#day`, `#legend`); `#empty-state` is the v2 name and fails the rule.
 - A table is `<UTable>` on `COMPONENTS.table.ui` with column definitions, cell slots and `#empty`; a hand-written
   `<table>` fails the architecture rule.

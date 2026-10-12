@@ -21,7 +21,7 @@ Sizing is informal t-shirt sizes.
 | Duty roster (F5a) | Templates, duties, audit trail | `feature-proposal-duty-roster.md` | L | signed off (schema 2026-10-07, roster UX 2026-10-05, admin template UI 2026-10-06) |
 | Joker + vacancy overviews | `JokerSlot`, dinner "missing" face, CTC faces, shift counts, volunteering moves to duty level + data separation | `feature-proposal-duty-roster.md` § Joker + § Roster UX | L | signed off (CTC 2026-10-05, overviews 2026-10-06); the team-card slot committed (3cdb77c, 427a625, c62dd6b) |
 | Roster sign-off + cross-team swap (F5b) | Derived auto-sign + godkend-alligevel, duty swap | `feature-proposal-duty-roster.md` Phases 4–5 | M | signed off (2026-10-05, swap mode 2026-10-08) |
-| Waitlist | Queue, auto-assign sweep, extra portions, UI | `feature-proposal-waitlist.md` | L | signed off (chef 2026-10-05, member faces 2026-10-06); backend committed 2026-10-09, UI planned |
+| Waitlist | Queue, auto-assign sweep, extra portions, UI | `feature-proposal-waitlist.md` | L | signed off (chef 2026-10-05, member faces 2026-10-06, one booking path 2026-10-12); backend committed 2026-10-09, one-path backend and UI in progress |
 | Kitchen allergy line | the dining-mode panels show the allergy kuverter; the expanded list opens with the allergen breakdown and chips beside each diner | this doc § Kitchen allergy line | S | committed (5eedd34, 49ece5e) |
 | Chef allergen line | the chef's allergen section counts this dinner's diners in kuverter per menu allergen; the edit panel becomes the allergy panel | this doc § Chef allergen line | S | committed (49ece5e); selector population planned |
 | Chef calendar header | the Agenda/Kalender tabs and the collapse chevron share one header row above a `UCollapsible`; `/chef` hydrates with one footer | this doc § Chef calendar header | S | committed (42b380f) |
@@ -553,6 +553,9 @@ All implemented and committed; the rules are in § Decisions.
 **2026-10-12** (season status marks)
 - The season status is one icon beside the name, `SEASON_STATUS_GLYPHS` keyed by the four statuses: a green dot active, the team band's yellow dot in progress, the sprout in the calendar's holiday green upcoming, a grey dot ended; the season selector and the season status display render it as a `UBadge` whose settings come from the set, no component. The emoji set `STATUS_GLYPHS` is gone; dinner rows and the budget carry no season status.
 
+**2026-10-12** (one booking path)
+- The waitlist is not a second write: a member always sends a desired order through the scaffold; the generator decides create or claim by the deadline, the executor claims a released ticket or queues, and a queue entry rides the same matrix (leave, requeue, idempotent). Reads are open to every member; one read returns a dinner's entries in queue order and the client derives positions, sizes and portion need with `useWaitlist`. The join, leave, claim and single-order update endpoints go (`feature-proposal-waitlist.md` § One booking path).
+
 ## Coverage
 
 | Package | Tests |
@@ -562,7 +565,7 @@ All implemented and committed; the rules are in § Decisions.
 | Factory + gating | per `feature-proposal-framework-adoption.md` § Coverage |
 | Prisma bundle | committed (migration `0017_roster` on local, dev and prod 2026-10-08; later schema changes ride their packages) |
 | Duty roster + joker | per `feature-proposal-duty-roster.md` (API spec per endpoint, BDD e2e + component spec per surface, unit per util) |
-| Waitlist | signed off (chef 2026-10-05, member faces 2026-10-06); backend committed 2026-10-09, UI planned |
+| Waitlist | per `feature-proposal-waitlist.md` § TDD and § One booking path |
 | Notifications | planned |
 | Adhoc + EXPENSE | per `feature-proposal-adhoc-admin-billing.md` phases |
 

@@ -1,6 +1,6 @@
 # Feature Proposal: Waitlist — queue, auto-assign, extra portions
 
-**Status:** Draft | **Date:** 2026-10-05 | **Branch:** `feature/work-roster` (umbrella: `release-0.9.0.md`)
+**Status:** backend committed 2026-10-09; UI in progress 2026-10-12 | **Date:** 2026-10-05 | **Branch:** `feature/work-roster` (umbrella: `release-0.9.0.md`)
 
 ## Problem
 
@@ -66,6 +66,35 @@ All through the shipped sender pipe (`feature-proposal-notification-triggers.md`
 
 The chef also sees the live queue size on the dinner (`ChefMenuCard`).
 
+## One booking path ✅ signed 2026-10-12
+
+A member always sends a desired order through `POST /api/household/order/scaffold`. The generator decides the bucket
+from the deadline; the executor settles the supply at that instant (ADR-016, amended rows):
+
+| Desired order | Dinner | Bucket | The executor |
+|---|---|---|---|
+| no order, a mode | open | create | books |
+| no order, a mode | closed | claim | claims a released ticket at that price, FIFO; none, or the race lost: creates the queue entry at the frozen price with the wish, reports the position |
+| a queue entry, NONE | closed | leave | deletes the entry |
+| a queue entry, another mode or price | closed | requeue | rewrites the entry's order, position kept |
+| a queue entry, unchanged | closed | idempotent | nothing |
+
+System mode never reaches the claim bucket. `DesiredOrder` carries `waitlistEntryId`; `ScaffoldResult` reports
+`claimed`, `queued` with positions, `left` and `requeued`; a lost claim race queues.
+
+### Endpoints
+
+| Endpoint | Does | Guard |
+|---|---|---|
+| `POST /api/household/order/scaffold` | the one booking write: book, claim or queue, leave, requeue, mode change, cancel, release with the hand-over to the queue head, rebook | household member, admin bypass |
+| `POST /api/chef/dinner/[id]/release-portions` | the chef's supply | a chef of the dinner's team |
+| `GET /api/order/waitlist?dinnerEventIds=…` | every entry of those dinners in queue order: inhabitant, household, guest flag, the wish, the frozen price, created at | any member |
+
+The client derives a household's rows, the position (the index in the dinner's queue), the queue size and the
+portion need per dinner with the isomorphic `useWaitlist`, the same rule the server's assignment uses. Removed:
+`PUT`/`DELETE /api/household/waitlist`, `GET /api/household/waitlist`, `GET /api/chef/dinner/[id]/waitlist`,
+`POST /api/order/claim`, `POST /api/order/[id]`.
+
 ## Mockups
 
 **Member faces — queued is a badge on Ingen, never a mode** ✅ signed 2026-10-06
@@ -75,15 +104,16 @@ the same `useBookingUi` badge path as the swap/deadline markers, shared by day a
 lands as Spiser med (DINEIN), changeable afterwards like any order within the rules.
 
 ```
-DinnerBookingForm — efter deadline, udsolgt
-  Anna    Ingen                                  [Skriv på venteliste]
-  Bo      Ingen  [sandglas #2 i køen]            [Forlad ventelisten]
-  Emil    Spiser med                             (har billet)
-  ...billet tildelt -> Bo: Spiser med (badge væk, normal ordre)
+DinnerBookingForm — efter deadline, udsolgt (revised ✅ signed 2026-10-12: the queued row shows the ghost of the wish)
+  Anna    [  ][  ][  ] [VOKSEN · 55kr]   [mode] Spisesal   [Skriv på venteliste]   picks the mode, then joins
+  Bo      [wl][  ][  ] [VOKSEN · 55kr]   (mode) Spisesal   [hourglass #2 i køen]    the wish, ghosted, disabled
+                                                           [Forlad ventelisten]
+  Emil    [  ][  ][  ] [VOKSEN · 55kr]   [mode] Spisesal   (har billet)
+  ...billet tildelt -> Bo: Spisesal for real (badge gone, a normal order)
 
-BookingGridView — celle for en person i kø: Ingen-tilstanden med
-sandglas-badge i hjørnet; legenden får "sandglas = på venteliste (#n)".
-Ledige billetter efter deadline viser [Tag billet] som i dag (claim).
+BookingGridView — the cell of a queued person: the wished mode ghosted with the hourglass badge in the corner;
+the legend gains "hourglass = på venteliste (#n)". A ticket for sale after the deadline keeps [Tag billet] (claim).
+DinnerTicket — the hourglass in the state cell, the edge unchanged, the wished mode ghosted in the mode slot.
 ```
 
 **Chef side — demand-driven release** ✅ signed 2026-10-05

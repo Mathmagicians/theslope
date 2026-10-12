@@ -185,3 +185,27 @@ Rule signed 2026-10-11. A ticket carries a stored list or follows its holder's l
 `financesRepository.ts` (create, claim, orders list, dinner detail), `scaffoldPrebookings.ts`,
 `waitlistAssignment.ts`, `api/order/index.put.ts`, `DinnerTicket.vue`, `DinnerBookingForm.vue`,
 `prisma/schema.prisma`, `migrations/`, `docs/adr-compliance-backend.md` (order rows).
+
+## Waitlist: no-seat notice at dinner start
+
+### Problem
+
+A member still in a dinner's queue when the dinner starts hears nothing; the entry is deleted by daily maintenance when
+the dinner reaches CONSUMED (`deleteWaitlistForConsumedDinners`).
+
+### Solution
+
+A kind `WAITLIST_NO_SEAT` beside the four waitlist kinds in `server/utils/sender/events/waitlist.ts`, emitted by a
+Nitro task `waitlist-close` on an hourly cron for each dinner whose start time has passed and that is not CONSUMED, to
+each remaining entry's user; idempotent through the delivery reference (the `Delivery` table has no unique key, so the
+service skips an entry whose reference exists). Deletion stays in daily maintenance.
+
+### TDD
+
+- Unit: the sweep's selection (started and not consumed with entries; a consumed dinner skipped; a second run emits nothing).
+- Serial API: a dinner past its start with two entries, the task run twice, two deliveries.
+
+### Affected
+
+`server/utils/sender/events/waitlist.ts`, `server/tasks/waitlist-close.ts`, `nuxt.config.ts` (scheduled tasks),
+`feature-proposal-notification-triggers.md` (catalog row), `docs/adr-compliance-backend.md`.
