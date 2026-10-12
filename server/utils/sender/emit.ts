@@ -13,6 +13,10 @@ const LOG = '📮 > SENDER > [EMIT]'
 const dedupeKeyOf = (message: unknown): string =>
     (message as {meta?: {dedupeKey?: unknown}} | null)?.meta?.dedupeKey?.toString() ?? 'unknown'
 
+// The result for a mail that is never composed (no recipient address, or a mailbox missing from the config); the operation goes on
+export const notSent = (kind: string, reason: 'unaddressed' | 'unconfigured', subject?: string): Promise<SenderEmitResult> =>
+    Promise.resolve({queued: false, dedupeKey: [kind, 'EMAIL', reason, subject].filter(part => part !== undefined).join(':'), degraded: true})
+
 export const emit = async (queue: Queue | undefined, message: unknown): Promise<SenderEmitResult> => {
     const dedupeKey = dedupeKeyOf(message)
     const parsed = NotificationMessageSchema.safeParse(message)

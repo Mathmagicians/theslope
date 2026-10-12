@@ -185,7 +185,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         const released = await apiRequest('/api/order', {
             query: {dinnerEventIds: dinnerEventId, state: 'RELEASED', allHouseholds: true, sortBy: 'releasedAt'},
             schema: OrderDisplaySchema.array(),
-            action: 'Kunne ikke hente ledige billetter'
+            action: 'fetchReleasedOrders', errorMessage: 'Kunne ikke hente ledige billetter'
         })
         console.info(CTX, `Fetched ${released.length} released orders for dinner ${dinnerEventId}`)
         return released
@@ -217,7 +217,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         {
             // Group orders by dinnerEventId
             schema: OrderDisplaySchema.array().transform(released => {
-                const grouped = Map.groupBy(released, o => o.dinnerEventId)
+                const grouped = groupBy<OrderDisplay, number>(o => o.dinnerEventId)(released)
                 const counts = new Map<number, ReleasedTicketCounts>()
                 for (const [dinnerEventId, orders] of grouped) {
                     counts.set(dinnerEventId, { total: orders.length, formatted: formatTicketCounts(orders) })
@@ -263,7 +263,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 body: request,
                 query: {adminBypass},
                 schema: ScaffoldOrdersResponseSchema,
-                action: 'Kunne ikke gemme bookinger'
+                action: 'processBookings', errorMessage: 'Kunne ikke gemme bookinger'
             })
             await Promise.all([refreshOrders(), refreshReleasedCounts(), refreshWaitlistEntries()])
             console.info(CTX, `${label}: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
@@ -519,7 +519,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 method: 'POST',
                 query: { triggeredBy: `ADMIN:${authStore.email}` },
                 schema: DailyMaintenanceResultSchema,
-                action: 'Daglig vedligeholdelse fejlede'
+                action: 'runDailyMaintenance', errorMessage: 'Daglig vedligeholdelse fejlede'
             })
         } catch (error) {
             dailyMaintenanceResult.value = null
@@ -687,7 +687,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 method: 'POST',
                 query: { triggeredBy: `ADMIN:${authStore.email}` },
                 schema: MonthlyBillingResponseSchema,
-                action: 'Månedlig fakturering fejlede'
+                action: 'runMonthlyBilling', errorMessage: 'Månedlig fakturering fejlede'
             })
         } catch (error) {
             monthlyBillingResult.value = null

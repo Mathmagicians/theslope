@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { useOrder } from '~/composables/useOrder'
+import { getPortionsForTicketPrice } from '~/utils/portions'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { OrderFactory } from '../../e2e/testDataFactories/orderFactory'
 
@@ -53,7 +54,7 @@ describe('useOrder spending figures', () => {
 })
 
 describe('useOrder', () => {
-  const { calculateBudget, getActiveOrders, getReleasedOrders, getPortionsForTicketPrice, requiresChair, convertVat, formatGuestLabel } = useOrder()
+  const { calculateBudget, getActiveOrders, getReleasedOrders, requiresChair, convertVat, formatGuestLabel } = useOrder()
 
   describe('formatGuestLabel', () => {
     it.each([

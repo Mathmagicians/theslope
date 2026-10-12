@@ -81,6 +81,23 @@ export type OrderDecisionInput = {
 export const getNewOrderAction = (canModifyOrders: boolean): 'process' | 'claim' =>
     canModifyOrders ? 'process' : 'claim'
 
+/** What executing a bucket does: book, buy a released ticket, queue, leave or requeue the entry, or nothing */
+export type BookingOutcome = 'book' | 'buy' | 'queue' | 'leave' | 'requeue' | 'none'
+
+/**
+ * The outcome of a bucket at the instant it executes. The claim bucket settles by supply: a released ticket at the
+ * price is bought, none queues the wish. Buckets that change no supply (update, delete, idempotent, skip) are none.
+ */
+export const bookingOutcome = (bucket: OrderBucket | null, supply: {ticketsForSale: number}): BookingOutcome => {
+    switch (bucket) {
+        case 'create': return 'book'
+        case 'claim': return supply.ticketsForSale > 0 ? 'buy' : 'queue'
+        case 'leave': return 'leave'
+        case 'requeue': return 'requeue'
+        default: return 'none'
+    }
+}
+
 /**
  * Pure decision function for categorizing user booking intent into buckets.
  * Generator decides bucket AND sets state. Scaffolder just executes.

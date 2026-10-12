@@ -657,6 +657,8 @@ const TABLE_DENSE_UI = {th: 'px-1 py-1 md:px-4 md:py-3', td: `px-1 md:px-4 ${TAB
 
 // The turn of an open-panel chevron; the classes go on whichever icon slot carries the chevron
 const flipOpenTurn = (isOpen: boolean): string => `${isOpen ? 'rotate-180 ' : ''}transition-transform duration-200`
+// The quarter turn of a chevron whose children open one level in
+const openInTurn = (isOpen: boolean): string => `${isOpen ? 'rotate-90 ' : ''}transition-transform duration-200`
 
 // A spinning icon while something runs: saving, a job, a fetch
 const MOTION_SPIN = 'animate-spin motion-reduce:animate-none'
@@ -1543,10 +1545,7 @@ export const COMPONENTS = {
         role: `${TEXT.mocha[50]} text-sm opacity-75`
     },
 
-    /**
-     * The dinner budget pane (DinnerBudget): the compact amount, the three boxes, the expandable breakdown table and
-     * summary lines, then the grocery lines (ExpenseLines) under them
-     */
+    /** The dinner budget pane (DinnerBudget): the compact amount, the three boxes, and the sections of the unfolded details */
     dinnerBudget: {
         compact: `inline-flex items-center gap-1 ${TYPOGRAPHY.bodyTextSmall}`,
         compactAmount: 'font-medium',
@@ -1780,7 +1779,6 @@ export const ICONS = {
     settings: 'i-heroicons-cog-6-tooth',
     allergy: 'i-mdi-food-allergy-off-outline',
     economy: 'i-heroicons-currency-dollar',
-    home: 'i-heroicons-home',
     login: 'i-guidance-entry',
     logout: 'i-tdesign-wave-bye',
     moveIn: 'i-guidance-entry',
@@ -2204,6 +2202,18 @@ const createResponsiveButtons = (isMd: Ref<boolean | null>) => {
                 trailingIcon: ICONS.chevronDown,
                 'aria-expanded': isOpen,
                 ui: {trailingIcon: flipOpenTurn(isOpen)}
+            }
+        },
+
+        /**
+         * Sibling of `flipOpen` for children that open one level in: a right chevron that turns down while open, and
+         * `aria-expanded`. Spread after a kind like `flipOpen`
+         */
+        turnOpen(isOpen: boolean) {
+            return {
+                trailingIcon: ICONS.chevronRight,
+                'aria-expanded': isOpen,
+                ui: {trailingIcon: openInTurn(isOpen)}
             }
         }
     }

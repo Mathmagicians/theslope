@@ -10,9 +10,9 @@
  * Full mode, folded (title + 3 boxes, one chevron):
  * Budget                                                                    [>]
  * ┌ (money) INDTÆGTER ─┐ ┌ (cart) RÅDIGHEDSBELØB ─────────────┐ ┌ (house) KØKKENBIDRAG ┐
- * │ 1.500 / 1.875 kr   │ │ 1.425 / 1.781 kr                    │ │ 75 / 94 kr        │
- * │ ex / inkl. moms    │ │ ex / inkl. moms                     │ │ ex / inkl. moms   │
- * │ 45 kuverter        │ │ Brugt          1.310 / 1.638 kr     │ │ 5% af indtægter   │
+ * │ 1.875 kr           │ │ 1.425 / 1.781 kr                    │ │ 75 / 94 kr        │
+ * │ 45 kuverter        │ │ ex / inkl. moms                     │ │ ex / inkl. moms   │
+ * │                    │ │ Brugt          1.310 / 1.638 kr     │ │ 5% af indtægter   │
  * │                    │ │ Tilbage    +115 / +143 kr (check) │ │                │
  * └────────────────────┘ └─────────────────────────────────────┘ └───────────────────┘
  *
@@ -22,8 +22,8 @@
  * Billetændringer (TicketChanges, folded behind its chevron, its window from the booking deadline), shown only while
  * the dinner has tickets.
  *
- * Every amount renders both units through VatAmount, the ex moms figure loud. Revenue counts every paid ticket, a
- * released one included (useOrder.calculateBudget).
+ * Ticket money is what the households pay and reads in plain kr; every other amount renders both units through
+ * VatAmount, the ex moms figure loud. Revenue counts every paid ticket, a released one included (useOrder.calculateBudget).
  * Config:  app.config.ts → theslope.kitchen.baseRatePercent=5, vatPercent=25
  *
  * Used in:
@@ -165,7 +165,7 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
       <UCard :ui="COMPONENTS.dinnerBudget.boxUi" data-testid="budget-box-contribution">
         <div :class="COMPONENTS.dinnerBudget.box">
           <div :class="COMPONENTS.dinnerBudget.boxLabel">
-            <UIcon :name="ICONS.home" :class="COMPONENTS.dinnerBudget.boxGlyph" />
+            <UIcon :name="ICONS.household" :class="COMPONENTS.dinnerBudget.boxGlyph" />
             <span :class="COMPONENTS.dinnerBudget.boxLabelText">KØKKENBIDRAG</span>
           </div>
           <div :class="COMPONENTS.dinnerBudget.boxAmountLarge"><VatAmount :gross="budget.kitchenContribution" /></div>

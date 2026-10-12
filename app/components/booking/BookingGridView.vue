@@ -189,7 +189,8 @@ const actionPreviewItems = computed(() => {
     props.deadlines
   )
 
-  return formatActionPreview(buckets, props.orders, getInhabitantName)
+  // Each dinner settles a claim against its own tickets for sale (the lock status)
+  return formatActionPreview(buckets, props.orders, getInhabitantName, order => ({ticketsForSale: props.lockStatus.get(order.dinnerEventId)?.total ?? 0}))
 })
 
 // Effective form mode - VIEW when saving to prevent cell edits

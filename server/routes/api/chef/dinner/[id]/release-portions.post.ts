@@ -28,7 +28,7 @@ export default defineEventHandler(async (event): Promise<WaitlistAssignmentResul
         return throwH3Error(`${LOG} Input validation error`, error, 400)
     }
 
-    const chef = await requireChefForDinner(event, id)
+    const {user: chef} = await requireChefForDinner(event, id)
 
     try {
         const result = await assignWaitlistPortions(d1Client, id, body.portions, chef.id, {

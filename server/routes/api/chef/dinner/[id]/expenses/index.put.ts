@@ -2,7 +2,7 @@ import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResp
 import {z} from 'zod'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {requireChefForDinner} from '~~/server/utils/authorizationHelper'
-import {createExpense, fetchDinnerEvent} from '~~/server/data/financesRepository'
+import {createExpense} from '~~/server/data/financesRepository'
 import {useBillingValidation, type Expense, type ExpenseCreate} from '~/composables/useBillingValidation'
 import {useBilling} from '~/composables/useBilling'
 import {useHousehold} from '~/composables/useHousehold'
@@ -31,11 +31,9 @@ export default defineEventHandler(async (event): Promise<Expense> => {
         return throwH3Error(`${LOG} Input validation error`, error, 400)
     }
 
-    const chef = await requireChefForDinner(event, id)
+    const {user: chef, dinner} = await requireChefForDinner(event, id)
 
     try {
-        // The chef guard has answered 404 for a missing dinner, so the detail is here
-        const dinner = (await fetchDinnerEvent(d1Client, id))!
         const {formatNameWithInitials} = useHousehold()
         const {expenseNoteWords} = useBilling()
         const paidBy = {id: chef.id, email: chef.email, name: chef.Inhabitant ? formatNameWithInitials(chef.Inhabitant) : chef.email}

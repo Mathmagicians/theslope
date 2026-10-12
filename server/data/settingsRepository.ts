@@ -1,5 +1,4 @@
-import {PrismaD1} from "@prisma/adapter-d1"
-import {PrismaClient} from "~~/prisma/generated/client/client"
+import {getPrismaClientConnection} from '~~/server/utils/database'
 import {SETTING_REGISTRY, SettingDetailSchema, type SettingDetail, type SettingKey} from '~/composables/useSettingValidation'
 
 const LOG = '⚙️ > SETTING'
@@ -13,12 +12,6 @@ const LOG = '⚙️ > SETTING'
  * schema. Serialization is the repository's business (ADR-010) - the endpoints, the store and
  * the components all work with the domain value.
  */
-const getPrismaClientConnection = async (d1Client: D1Database) => {
-    const adapter = new PrismaD1(d1Client)
-    const prisma = new PrismaClient({adapter})
-    await prisma.$connect()
-    return prisma
-}
 
 const toDomain = (row: {key: string, value: string, updatedAt: Date, updatedByUserId: number | null}): SettingDetail =>
     SettingDetailSchema.parse({
@@ -28,7 +21,7 @@ const toDomain = (row: {key: string, value: string, updatedAt: Date, updatedByUs
 
 /** The stored row, or null while the key has never been written (the caller answers with the registry default) */
 export async function fetchSetting(d1Client: D1Database, key: SettingKey): Promise<SettingDetail | null> {
-    const prisma = await getPrismaClientConnection(d1Client)
+    const prisma = await getPrismaClientConnection(d1Client, [])
     const row = await prisma.setting.findUnique({where: {key}})
 
     if (!row) {
@@ -45,7 +38,7 @@ export async function upsertSetting(
     value: string,
     updatedByUserId: number
 ): Promise<SettingDetail> {
-    const prisma = await getPrismaClientConnection(d1Client)
+    const prisma = await getPrismaClientConnection(d1Client, [])
     const serialized = JSON.stringify(value)
 
     const row = await prisma.setting.upsert({

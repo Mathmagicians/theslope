@@ -11,6 +11,7 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
+import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {addDays, startOfDay} from 'date-fns'
 
 const ticketPrices = TicketFactory.defaultTicketPrices()
@@ -343,5 +344,29 @@ describe('BookingGridView', () => {
 
       expect(findByTestId(wrapper, 'dinner-mode-legend-waitlist').exists()).toBe(true)
     })
+  })
+})
+
+describe('BookingGridView add-guest button', () => {
+  const future = DinnerEventFactory.dinnerEventAt(2, 60)
+  const mountEdit = () => mount({
+    view: 'week',
+    dateRange: {start: addDays(future.date, -3), end: addDays(future.date, 3)},
+    dinnerEvents: [future],
+    formMode: FORM_MODES.EDIT,
+    bookerId: mockHousehold.inhabitants[0]!.id
+  })
+  const addButton = (wrapper: Awaited<ReturnType<typeof mount>>) =>
+    wrapper.findAllComponents({name: 'UButton'}).find(button => button.attributes('data-testid') === `guest-add-${future.id}`)!
+
+  it.each([
+    {state: 'closed', open: false},
+    {state: 'open', open: true}
+  ])('binds the chevron and the open turn while $state', async ({open}) => {
+    const wrapper = await mountEdit()
+    if (open) await clickByTestId(wrapper, `guest-add-${future.id}`)
+
+    expect(addButton(wrapper).props('icon')).toBe(ICONS.chevronDown)
+    expect(addButton(wrapper).classes()).toEqual(expect.arrayContaining(COMPONENTS.openTurn(open).split(' ')))
   })
 })

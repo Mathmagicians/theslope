@@ -53,10 +53,6 @@ export function useEntityFormManager<T>(options: {
     }
   })
 
-  /**
-   * Update URL query parameter to reflect current form mode
-   * Uses navigateTo (Nuxt-native) instead of router.replace (vue-router)
-   */
   const updateURLQueryFromMode = async (mode: FormMode) => {
     await write((query) => ({...query, mode}))
   }

@@ -22,7 +22,7 @@ type Text = string | (() => string)
  * A 404 on a url derived from a selection: `recover` drops the selection so the url re-derives, and the
  * re-derived url is requested once; after `retries` consecutive 404s the error page shows `message`
  */
-export type NotFound = {
+type NotFound = {
     recover?: () => void | Promise<void>
     /** Default 1; 0 shows the error page on the first 404 */
     retries?: number
@@ -37,7 +37,7 @@ const NOT_FOUND_TEXT = 'Kan ikke finde det, du leder efter'
 const resolveText = (text: Text | undefined) => typeof text === 'function' ? text() : text
 
 // Internal API routes only: the typed fetch pins baseURL to '' for them, so the option is not offered
-export type ApiRequestOptions<T> = Omit<NitroFetchOptions<NitroFetchRequest>, 'baseURL'> & {
+type ApiRequestOptions<T> = Omit<NitroFetchOptions<NitroFetchRequest>, 'baseURL'> & {
     action: string
     errorMessage?: string
     schema?: ResponseSchema<T>
@@ -55,9 +55,9 @@ const statusCodeOf = (error: unknown): number | undefined => isApiError(error)
     ? error.statusCode ?? (error as Record<string, unknown>).status as number | undefined
     : undefined
 
-export type ApiErrorHandler = () => void
+type ApiErrorHandler = () => void
 
-export interface ApiErrorActions {
+interface ApiErrorActions {
     login: (redirect: string) => void
     toast: (error: ApiError) => void
 }

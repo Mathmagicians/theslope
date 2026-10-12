@@ -1,6 +1,6 @@
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, addYears, differenceInDays, nextDay, type Day} from 'date-fns'
-import {useBooking, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
+import {useBooking, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcome, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useBookingValidation, type OrderDisplay, type DinnerMode, type DesiredOrder} from '~/composables/useBookingValidation'
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
@@ -487,6 +487,24 @@ describe('getNewOrderAction', () => {
         { canModify: false, expected: 'claim' }  // the executor settles the supply: a released ticket, else the queue
     ])('canModify=$canModify → $expected', ({ canModify, expected }) => {
         expect(getNewOrderAction(canModify)).toBe(expected)
+    })
+})
+
+// =============================================================================
+// bookingOutcome - what a bucket does to the supply at the instant it executes
+// =============================================================================
+
+describe('bookingOutcome', () => {
+    it.each([
+        {bucket: 'create', ticketsForSale: 0, expected: 'book'},
+        {bucket: 'claim', ticketsForSale: 2, expected: 'buy'},
+        {bucket: 'claim', ticketsForSale: 0, expected: 'queue'},
+        {bucket: 'leave', ticketsForSale: 0, expected: 'leave'},
+        {bucket: 'requeue', ticketsForSale: 1, expected: 'requeue'},
+        {bucket: 'idempotent', ticketsForSale: 1, expected: 'none'},
+        {bucket: null, ticketsForSale: 1, expected: 'none'}
+    ] as const)('$bucket with $ticketsForSale for sale → $expected', ({bucket, ticketsForSale, expected}) => {
+        expect(bookingOutcome(bucket, {ticketsForSale})).toBe(expected)
     })
 })
 
@@ -1762,11 +1780,14 @@ describe('Action Preview', () => {
 
     // Action → OrderState mapping (mirrors useBookingUi.ts ACTION_TO_STATE)
     const ACTION_TO_STATE = {
-        create:     OS.BOOKED,
+        book:       OS.BOOKED,
+        buy:        'claimed' as const,
+        queue:      'claimed' as const,
+        leave:      OS.CANCELLED,
+        requeue:    'claimed' as const,
         delete:     OS.CANCELLED,
         release:    OS.RELEASED,
         reclaim:    OS.BOOKED,
-        claim:      'claimed' as const,
         updateMode: OS.CLOSED
     } as const
 
@@ -1813,11 +1834,14 @@ describe('Action Preview', () => {
 
     describe('ACTION_PREVIEW config', () => {
         it.each([
-            {action: 'create', expectedText: 'Anna tilmeldes'},
+            {action: 'book', expectedText: 'Anna tilmeldes'},
+            {action: 'buy', expectedText: 'Anna køber en ledig billet'},
+            {action: 'queue', expectedText: 'Anna skrives på ventelisten'},
+            {action: 'leave', expectedText: 'Anna forlader ventelisten'},
+            {action: 'requeue', expectedText: 'Anna skrives på ventelisten igen'},
             {action: 'delete', expectedText: 'Anna frameldes'},
             {action: 'release', expectedText: 'Annas billet frigives'},
             {action: 'reclaim', expectedText: 'Anna tilmeldes igen'},
-            {action: 'claim', expectedText: 'Anna køber fra andre'},
             {action: 'updateMode', expectedText: 'Anna opdaterer spisning'}
         ])('$action template produces "$expectedText"', ({action, expectedText}) => {
             const config = ACTION_PREVIEW[action as keyof typeof ACTION_PREVIEW]
@@ -1834,12 +1858,15 @@ describe('Action Preview', () => {
         })
 
         it.each([
-            {bucket: 'create', action: 'create' as const, textContains: 'tilmeldes'},
-            {bucket: 'delete', action: 'delete' as const, textContains: 'frameldes'},
-            {bucket: 'claim', action: 'claim' as const, textContains: 'køber fra andre'}
-        ])('$bucket bucket → $action action', ({bucket, action, textContains}) => {
+            {bucket: 'create', ticketsForSale: 0, action: 'book' as const, textContains: 'tilmeldes'},
+            {bucket: 'delete', ticketsForSale: 0, action: 'delete' as const, textContains: 'frameldes'},
+            {bucket: 'claim', ticketsForSale: 1, action: 'buy' as const, textContains: 'køber en ledig billet'},
+            {bucket: 'claim', ticketsForSale: 0, action: 'queue' as const, textContains: 'skrives på ventelisten'},
+            {bucket: 'leave', ticketsForSale: 0, action: 'leave' as const, textContains: 'forlader ventelisten'},
+            {bucket: 'requeue', ticketsForSale: 0, action: 'requeue' as const, textContains: 'skrives på ventelisten igen'}
+        ])('$bucket bucket with $ticketsForSale for sale → $action action', ({bucket, ticketsForSale, action, textContains}) => {
             const buckets = {...emptyBuckets(), [bucket]: [desired({inhabitantId: 1})]}
-            const result = formatActionPreview(buckets, [], getName)
+            const result = formatActionPreview(buckets, [], getName, () => ({ticketsForSale}))
 
             expect(result).toHaveLength(1)
             expect(result[0]).toMatchObject({
@@ -1922,7 +1949,7 @@ describe('Action Preview', () => {
 
             expect(result).toHaveLength(4)
             const actions = result.map(r => r.action).sort()
-            expect(actions).toEqual(['claim', 'create', 'delete', 'release'])
+            expect(actions).toEqual(['book', 'delete', 'queue', 'release'])
         })
     })
 

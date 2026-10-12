@@ -2,14 +2,14 @@ import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {getPortionsForTicketType} from '~/utils/portions'
 
-export type PortionsOf = (entry: TicketWaitlistDisplay) => number
+type PortionsOf = (entry: TicketWaitlistDisplay) => number
 
-export interface WaitlistTake {
+interface WaitlistTake {
     entry: TicketWaitlistDisplay
     portions: number
 }
 
-export interface WaitlistAssignmentPlan {
+interface WaitlistAssignmentPlan {
     take: WaitlistTake[]
     portionsUsed: number
     waiting: TicketWaitlistDisplay[]

@@ -4,7 +4,7 @@
  * replaces the earlier mail) for every later one. Raised by runMonthlyBilling and re-sent by its HTTP twin
  * (POST /api/admin/sender/event/monthly-billing).
  */
-import {emit} from '~~/server/utils/sender/emit'
+import {emit, notSent} from '~~/server/utils/sender/emit'
 import {composeEmail, missingAddress} from '~~/server/utils/sender/compose'
 import {useBillingValidation, type BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
 import type {EmailMessage, NotificationConfig, SenderEmitResult} from '~/composables/useNotificationValidation'
@@ -41,7 +41,7 @@ export const emitBillingPeriodClosed = (queue: Queue | undefined, config: Notifi
     const missing = missingAddress(config, 'accountantEmail')
     if (missing) {
         console.warn(`${LOG} ${missing} not set — mail not sent`, {billingPeriod: summary.billingPeriod, version: summary.version})
-        return Promise.resolve({queued: false, dedupeKey: `${billingMailKind(summary.version)}:EMAIL:unconfigured:${summary.billingPeriod}`, degraded: true})
+        return notSent(billingMailKind(summary.version), 'unconfigured', summary.billingPeriod)
     }
     return emit(queue, buildBillingPeriodClosedEmail(config, summary))
 }

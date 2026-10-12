@@ -369,14 +369,14 @@ const columns = [
                 }} madhold. Hvor mange nye vil du lave?</span>
               <span v-else>Hvor mange madhold skal vi have?</span>
             </label>
-            <input
+            <UInput
                 id="team-count"
                 v-model.number="teamCount"
                 type="number"
                 min="1"
                 max="20"
-                :class="COMPONENTS.adminTeams.countInput"
-            >
+                :size="SIZES.standard"
+            />
           </div>
           <div :class="LAYOUTS.gridTwoCol">
             <div v-for="(team, index) in displayedTeams" :key="index" :class="COMPONENTS.adminTeams.previewTeam">

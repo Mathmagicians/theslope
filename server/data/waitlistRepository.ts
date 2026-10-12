@@ -52,9 +52,6 @@ export async function fetchWaitlistForDinners(d1Client: D1Database, dinnerEventI
     }
 }
 
-export const fetchWaitlistForDinner = (d1Client: D1Database, dinnerEventId: number): Promise<TicketWaitlistDisplay[]> =>
-    fetchWaitlistForDinners(d1Client, [dinnerEventId])
-
 // A household's entries, across the given dinners or all of them
 export async function fetchWaitlistForHousehold(d1Client: D1Database, householdId: number, dinnerEventIds?: number[]): Promise<TicketWaitlistDisplay[]> {
     const {deserializeTicketWaitlist} = useWaitlistValidation()

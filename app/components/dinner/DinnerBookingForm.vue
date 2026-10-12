@@ -67,10 +67,10 @@
  * [wl] the hourglass in the ticket's state cell, [gu] the guest glyph in its guest cell, (mode) the wish ghosted.
  * Placed guest groups and queued guests come from one guest row builder; a queued guest row carries its entry.
  *
- * The collapsed row: DinnerTicket queued (the hourglass, the wish ghosted) and the position badge beside the name
- * (createWaitlistBadge through DeadlineBadge). One booking path: the save sends the desired order through the scaffold,
- * which books, buys a ticket for sale or queues by supply; the save label previews it (bookingSaveLabel: Book, Køb
- * billet, Skriv på venteliste). A queued row edits its wish (requeued) or picks Ingen to leave; Tilføj gæst saves the
+ * The collapsed row: DinnerTicket queued (the hourglass, the wish ghosted) and the position badge on the line under
+ * the name (createWaitlistBadge through DeadlineBadge). One booking path: the save sends the desired order through the scaffold,
+ * which books, buys a ticket for sale or queues by supply; the save label previews the outcome (bookingSaveLabel over
+ * previewOutcome: Book, Køb billet, Skriv på venteliste, Forlad ventelisten, Opdater ønsket, Opdater). A queued row edits its wish (requeued) or picks Ingen to leave; Tilføj gæst saves the
  * same way.
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
@@ -538,7 +538,7 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
 // ============================================================================
 
 const {partitionGuestOrders, groupGuestOrders, getBookingOptions, getDayBillSummary, resolveUserBookingBuckets, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
-const {createBookingBadges, createWaitlistBadge, bookingSaveLabel, formatActionPreview} = useBookingUi()
+const {createBookingBadges, createWaitlistBadge, bookingSaveLabel, previewOutcome, formatActionPreview} = useBookingUi()
 
 // Deadline badges
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))
@@ -546,27 +546,30 @@ const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadl
 // Day bill summary (ticket counts + total price)
 const dayBillSummary = computed(() => getDayBillSummary(eventOrders.value))
 
-// Action preview for expanded row - shows what will happen when saving
-const actionPreviewItems = computed(() => {
-  if (!editingRowId.value) return []
+// The client settles a claim against the tickets for sale on this dinner (the lock status)
+const supply = () => ({ticketsForSale: props.releasedTicketCounts.total})
 
+// What saving the expanded row does: its buckets feed the preview lines and the save label
+const editingBuckets = computed(() => {
   const row = tableData.value.find(r => r.id === editingRowId.value)
-  if (!row || row.rowType === 'guest') return [] // guest-add uses GuestBookingForm
+  if (!row || row.rowType === 'guest') return null // guest-add uses GuestBookingForm
 
   const desiredOrders = buildDesiredOrdersForRow(row)
-  if (desiredOrders.length === 0) return []
+  if (desiredOrders.length === 0) return null
 
   // The household's queue entries tell a requeue or a leave from a new claim
-  const buckets = resolveUserBookingBuckets(
+  return resolveUserBookingBuckets(
     desiredOrders,
     eventOrders.value,
     [props.dinnerEvent],
     props.deadlines,
     eventWaitlistEntries.value
   )
-
-  return formatActionPreview(buckets, eventOrders.value, getInhabitantName)
 })
+
+const actionPreviewItems = computed(() =>
+  editingBuckets.value ? formatActionPreview(editingBuckets.value, eventOrders.value, getInhabitantName, supply) : [])
+const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? previewOutcome(editingBuckets.value, supply) : 'none'))
 </script>
 
 <template>
@@ -705,10 +708,6 @@ const actionPreviewItems = computed(() => {
                     fra {{ row.original.provenanceHousehold }}
                   </UBadge>
                 </div>
-                <!-- Queue position: the deadline badges' path -->
-                <span v-else-if="row.original.waitlistEntry" :data-testid="`waitlist-position-${row.original.id}`">
-                  <DeadlineBadge :badge="createWaitlistBadge(row.original.waitlistEntry.position)" compact />
-                </span>
               </template>
             </UserListItem>
           </div>
@@ -727,16 +726,17 @@ const actionPreviewItems = computed(() => {
               />
               <span v-else :class="TYPOGRAPHY.bodyTextSmall">ukendt</span>
             </div>
-            <!-- Queue position: under the booker, where a placed guest shows its provenance -->
-            <div v-if="row.original.waitlistEntry" :class="COMPONENTS.bookingForm.guestProvenance" :data-testid="`waitlist-position-${row.original.id}`">
-              <DeadlineBadge :badge="createWaitlistBadge(row.original.waitlistEntry.position)" compact />
-            </div>
             <!-- Provenance badges -->
-            <div v-else-if="row.original.provenanceHousehold" :class="COMPONENTS.bookingForm.guestProvenance">
+            <div v-if="row.original.provenanceHousehold" :class="COMPONENTS.bookingForm.guestProvenance">
               <UBadge :color="COLOR.info" :variant="NOISE.soft" :size="SIZES.sm" :icon="ICONS.claim">
                 fra {{ row.original.provenanceHousehold }}
               </UBadge>
             </div>
+          </div>
+
+          <!-- Queue position of an inhabitant or a guest: the deadline badges' path, on the line under the name -->
+          <div v-if="row.original.waitlistEntry" :class="COMPONENTS.bookingForm.guestProvenance" :data-testid="`waitlist-position-${row.original.id}`">
+            <DeadlineBadge :badge="createWaitlistBadge(row.original.waitlistEntry.position)" compact />
           </div>
 
           <!-- Mobile: Ticket inline (for inhabitant/guest-order rows only) -->
@@ -900,7 +900,7 @@ const actionPreviewItems = computed(() => {
                   <template #leading>
                     <UIcon :name="row.original.rowType === 'power' ? COMPONENTS.powerMode.buttonIcon : ICONS.check" />
                   </template>
-                  {{ row.original.rowType === 'power' ? 'Gem for alle' : bookingSaveLabel(row.original.bookingAction, !!row.original.order, hasReleasedTickets) }}
+                  {{ row.original.rowType === 'power' ? 'Gem for alle' : saveLabel }}
                 </UButton>
               </div>
             </div>

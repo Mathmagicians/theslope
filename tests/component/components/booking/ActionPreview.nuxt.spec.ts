@@ -6,7 +6,7 @@ import type {ActionPreviewItem} from '~/composables/useBookingUi'
 describe('ActionPreview', () => {
     const createItem = (overrides: Partial<ActionPreviewItem> = {}): ActionPreviewItem => ({
         name: 'Anna',
-        action: 'create',
+        action: 'book',
         icon: 'i-heroicons-plus-circle',
         color: 'primary',
         text: 'Anna tilmeldes',
@@ -62,9 +62,10 @@ describe('ActionPreview', () => {
 
     describe('colors', () => {
         it.each([
-            {color: 'primary' as const, action: 'create' as const},
+            {color: 'primary' as const, action: 'book' as const},
             {color: 'error' as const, action: 'delete' as const},
-            {color: 'info' as const, action: 'claim' as const},
+            {color: 'info' as const, action: 'buy' as const},
+            {color: 'info' as const, action: 'queue' as const},
             {color: 'neutral' as const, action: 'updateMode' as const}
         ])('renders $action with $color badge', async ({color, action}) => {
             const item = createItem({action, color, text: `Test ${action}`})

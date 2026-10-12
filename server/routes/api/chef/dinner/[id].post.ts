@@ -1,6 +1,6 @@
 import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus, getRequestURL} from 'h3'
 import type {H3Error} from 'h3'
-import {fetchDinnerEvent, updateDinnerEvent, updateDinnerEventAllergens} from '~~/server/data/financesRepository'
+import {updateDinnerEvent, updateDinnerEventAllergens} from '~~/server/data/financesRepository'
 import {createHeynaboEvent, updateHeynaboEvent, cancelHeynaboEvent, uploadDefaultDinnerPictureToEvent, updateHeynaboEventWithFallback} from '~~/server/integration/heynabo/heynaboClient'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
@@ -60,7 +60,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
 
     // Authorization: caller must be in this dinner's team chef pool.
     // Throws 401/403/404.
-    await requireChefForDinner(event, id)
+    const {dinner} = await requireChefForDinner(event, id)
 
     // Get user session and Heynabo token
     const session = await getUserSession(event)
@@ -69,11 +69,6 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
 
     // Business logic
     try {
-        const dinner = await fetchDinnerEvent(d1Client, id)
-        if (!dinner) {
-            throw createError({statusCode: 404, message: PREFIX + `Dinner event ${id} not found`})
-        }
-
         const {createHeynaboEventPayload, canCancelDinner} = useBooking()
         const baseUrl = getRequestURL(event).origin
         let updatedDinner = dinner

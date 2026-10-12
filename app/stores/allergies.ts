@@ -97,7 +97,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         if (filterHouseholdId.value) {
             return `/api/household/allergy?householdId=${filterHouseholdId.value}`
         }
-        return '/api/household/allergy-null' // Invalid key - will not fetch
+        return '/api/household/allergy'
     })
 
     const {
@@ -110,7 +110,6 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         allergiesQueryKey,
         {
             schema: AllergyDetailSchema.array(),
-            immediate: true,
             default: () => [],
             enabled: () => !!filterInhabitantId.value || !!filterHouseholdId.value,
             errorMessage: 'Kunne ikke hente allergier'

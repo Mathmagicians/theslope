@@ -5,7 +5,7 @@ const {TicketTypeSchema} = useTicketPriceValidation()
 const TICKET = TicketTypeSchema.enum
 export type TicketType = z.infer<typeof TicketTypeSchema>
 
-export type PortionTicketPrice = {ticketType: TicketType}
+type PortionTicketPrice = {ticketType: TicketType}
 
 // The kitchen counts an adult as one portion and a child as half; a baby eats from the parents' plates
 export const getPortionsForTicketType = (ticketType: TicketType): number => {

@@ -3,7 +3,7 @@
  * to the recipient the caller names otherwise (a member testing their own notifications).
  * Called by its HTTP twins (POST /api/admin/sender/event/test, POST /api/user/notifications/test).
  */
-import {emit} from '~~/server/utils/sender/emit'
+import {emit, notSent} from '~~/server/utils/sender/emit'
 import {composeEmail, missingAddress} from '~~/server/utils/sender/compose'
 import type {EmailMessage, NotificationConfig, SenderEmitResult} from '~/composables/useNotificationValidation'
 
@@ -20,7 +20,7 @@ export const emitTestEmail = (
 ): Promise<SenderEmitResult> => {
     if (!to) {
         console.warn(`${LOG} ${missingAddress(config, 'adminEmail')} not set — mail not sent`)
-        return Promise.resolve({queued: false, dedupeKey: `${KIND}:EMAIL:unconfigured`, degraded: true})
+        return notSent(KIND, 'unconfigured')
     }
     return emit(queue, buildTestEmail(config, to))
 }

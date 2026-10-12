@@ -229,8 +229,7 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
               :aria-label="row.getIsExpanded() ? 'Luk' : (row.original.isSynthetic ? 'Power mode' : 'Rediger præferencer')"
               :data-testid="row.original.isSynthetic ? 'power-mode-toggle' : `inhabitant-${row.original.id}-edit-preferences`"
               :class="[
-                COMPONENTS.householdCard.expandToggle,
-                row.getIsExpanded() && COMPONENTS.householdCard.expandToggleOpen,
+                COMPONENTS.openTurn(row.getIsExpanded()),
                 row.original.isSynthetic && !row.getIsExpanded() && COMPONENTS.householdCard.powerToggleIdle
               ]"
               @click="row.toggleExpanded()"

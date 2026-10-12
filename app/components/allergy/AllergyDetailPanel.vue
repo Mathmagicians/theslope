@@ -117,8 +117,7 @@ const affectedInhabitantCount = computed(() => props.allergyType?.inhabitants?.l
             @click="emit('edit')"
         />
         <UButton
-            v-bind="BUTTONS.edit"
-            :icon="ICONS.trash"
+            v-bind="BUTTONS.remove"
             aria-label="Slet"
             data-testid="delete-allergy-type"
             @click="emit('delete')"

@@ -46,7 +46,7 @@ const emit = defineEmits<{
   'update:comment': [allergyTypeId: number, comment: string]
 }>()
 
-const {SIZES, COLOR, ICONS, NOISE, COMPONENTS} = useTheSlopeDesignSystem()
+const {SIZES, COLOR, ICONS, NOISE, COMPONENTS, BUTTONS} = useTheSlopeDesignSystem()
 const editor = COMPONENTS.allergyEditor
 
 // Key to force dropdown reset after selection
@@ -170,11 +170,7 @@ const handleCommentSave = (typeId: number) => {
             </template>
           </UInput>
           <UButton
-            :color="COLOR.error"
-            :variant="NOISE.soft"
-            :icon="ICONS.trash"
-            :size="SIZES.sm"
-            square
+            v-bind="BUTTONS.remove"
             aria-label="Fjern allergi"
             :data-testid="`allergy-${type.id}-remove`"
             @click="handleRemove(type.id)"

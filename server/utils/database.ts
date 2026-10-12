@@ -7,14 +7,15 @@ import type {Prisma} from "~~/prisma/generated/client/client"
  * Creates and connects a Prisma client for D1 database
  *
  * @param d1Client - Cloudflare D1 database instance
+ * @param log - Prisma log levels; [] logs nothing
  * @returns Connected Prisma client
  */
 
-const log: Prisma.LogLevel[] = process.env.NODE_ENV === 'production'
+const defaultLog: Prisma.LogLevel[] = process.env.NODE_ENV === 'production'
     ? ['error']
     : ['warn', 'error']
 
-export async function getPrismaClientConnection(d1Client: D1Database) {
+export async function getPrismaClientConnection(d1Client: D1Database, log: Prisma.LogLevel[] = defaultLog) {
     const adapter = new PrismaD1(d1Client)
     const prisma = new PrismaClient({adapter, log})
     await prisma.$connect()

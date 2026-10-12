@@ -1,8 +1,9 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, bookingSaveLabel, dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, bookingSaveLabel, guestSaveLabel, OUTCOME_WORDS, previewOutcome, dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, type ReleasedTicketCounts} from '~/composables/useBooking'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
@@ -84,14 +85,18 @@ describe('useBookingUi', () => {
         })
     })
 
-    describe('bookingSaveLabel', () => {
+    describe('outcome words', () => {
         it.each([
-            {desc: 'a held ticket', action: 'process' as const, hasTicket: true, hasReleased: false, label: 'Opdater'},
-            {desc: 'a new ticket before the deadline', action: 'process' as const, hasTicket: false, hasReleased: false, label: 'Book'},
-            {desc: 'a ticket for sale after the deadline', action: 'claim' as const, hasTicket: false, hasReleased: true, label: 'Køb billet'},
-            {desc: 'nothing for sale after the deadline', action: 'claim' as const, hasTicket: false, hasReleased: false, label: 'Skriv på venteliste'}
-        ])('$desc → $label', ({action, hasTicket, hasReleased, label}) => {
-            expect(bookingSaveLabel(action, hasTicket, hasReleased)).toBe(label)
+            {outcome: 'book' as const, save: 'Book', guestSave: 'Tilføj gæst', preview: 'Anna tilmeldes'},
+            {outcome: 'buy' as const, save: 'Køb billet', guestSave: 'Køb billet til gæst', preview: 'Anna køber en ledig billet'},
+            {outcome: 'queue' as const, save: 'Skriv på venteliste', guestSave: 'Skriv gæst på venteliste', preview: 'Anna skrives på ventelisten'},
+            {outcome: 'leave' as const, save: 'Forlad ventelisten', guestSave: 'Forlad ventelisten', preview: 'Anna forlader ventelisten'},
+            {outcome: 'requeue' as const, save: 'Opdater ønsket', guestSave: 'Opdater ønsket', preview: 'Anna skrives på ventelisten igen'},
+            {outcome: 'none' as const, save: 'Opdater', guestSave: 'Tilføj gæst', preview: 'Anna opdaterer spisning'}
+        ])('$outcome → save "$save", guest "$guestSave", preview "$preview"', ({outcome, save, guestSave, preview}) => {
+            expect(bookingSaveLabel(outcome)).toBe(save)
+            expect(guestSaveLabel(outcome)).toBe(guestSave)
+            expect(OUTCOME_WORDS[outcome].template('Anna')).toBe(preview)
         })
     })
 
@@ -134,5 +139,23 @@ describe('useBookingUi', () => {
             expect(badge.alarm).toBe(-1)
             expect(badge.value).toBe('2V ledige')
         })
+    })
+})
+
+describe('previewOutcome', () => {
+    const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+    const desired = OrderFactory.defaultDesiredOrder({dinnerMode: DinnerModeSchema.enum.DINEIN, state: OrderStateSchema.enum.BOOKED})
+    const buckets = (filled: Partial<Record<'create' | 'claim' | 'leave' | 'requeue' | 'update', typeof desired[]>>) =>
+        ({create: [], update: [], delete: [], idempotent: [], claim: [], leave: [], requeue: [], ...filled})
+
+    it.each([
+        {desc: 'a new ticket before the deadline', filled: {create: [desired]}, ticketsForSale: 0, outcome: 'book'},
+        {desc: 'a claim with a ticket for sale', filled: {claim: [desired]}, ticketsForSale: 1, outcome: 'buy'},
+        {desc: 'a claim with nothing for sale', filled: {claim: [desired]}, ticketsForSale: 0, outcome: 'queue'},
+        {desc: 'Ingen on a queued row', filled: {leave: [desired]}, ticketsForSale: 0, outcome: 'leave'},
+        {desc: 'a new wish on a queued row', filled: {requeue: [desired]}, ticketsForSale: 0, outcome: 'requeue'},
+        {desc: 'a mode change on a held ticket', filled: {update: [desired]}, ticketsForSale: 0, outcome: 'none'}
+    ])('$desc → $outcome', ({filled, ticketsForSale, outcome}) => {
+        expect(previewOutcome(buckets(filled), () => ({ticketsForSale}))).toBe(outcome)
     })
 })

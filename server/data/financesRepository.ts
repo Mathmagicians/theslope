@@ -2,6 +2,7 @@ import eventHandlerHelper from "../utils/eventHandlerHelper"
 import {getPrismaClientConnection} from "../utils/database"
 import {useDeliveryValidation, type Delivery, type DeliveryCreate} from '~/composables/useDeliveryValidation'
 import {chunkArray, groupBy} from '~/utils/batchUtils'
+import {sumAmounts} from '~/utils/ledger'
 
 import type {
     OrderDisplay,
@@ -399,6 +400,17 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
         })
     } catch (error) {
         return throwH3Error(`🎟️ > ORDER > [GET]: Error fetching order with ID ${id}`, error)
+    }
+}
+
+// The released tickets for sale at a price on a dinner, at this instant
+export async function countReleasedTickets(d1Client: D1Database, dinnerEventId: number, ticketPriceId: number): Promise<number> {
+    const {OrderStateSchema} = useBookingValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+    try {
+        return await prisma.order.count({where: {dinnerEventId, ticketPriceId, state: OrderStateSchema.enum.RELEASED}})
+    } catch (error) {
+        return throwH3Error(`🎟️ > ORDER > [SUPPLY] Error counting released tickets of dinner ${dinnerEventId} at price ${ticketPriceId}`, error)
     }
 }
 
@@ -1745,7 +1757,7 @@ export async function fetchHouseholdBilling(
         currentPeriod: {
             periodStart: currentPeriod.start,
             periodEnd: currentPeriod.end,
-            totalAmount: unbilledTransactions.reduce((sum, tx) => sum + tx.amount, 0),
+            totalAmount: sumAmounts(unbilledTransactions),
             transactions: unbilledTransactions.map(deserializeTransaction)
         },
         pastInvoices: pastInvoices.map(invoice => HouseholdInvoiceSchema.parse({
@@ -1775,17 +1787,6 @@ export async function createExpense(d1Client: D1Database, data: ExpenseCreateDat
     }
 }
 
-export async function fetchExpense(d1Client: D1Database, id: number): Promise<Expense | null> {
-    const {deserializeExpense} = useBillingValidation()
-    const prisma = await getPrismaClientConnection(d1Client)
-    try {
-        const expense = await prisma.expense.findUnique({where: {id}})
-        return expense ? deserializeExpense(expense) : null
-    } catch (error) {
-        return throwH3Error(`${EXPENSE_LOG} > [GET] Error fetching expense ${id}`, error)
-    }
-}
-
 // The lines in the order they were entered
 export async function fetchExpensesForDinner(d1Client: D1Database, dinnerEventId: number): Promise<Expense[]> {
     const {deserializeExpense} = useBillingValidation()
@@ -1798,16 +1799,16 @@ export async function fetchExpensesForDinner(d1Client: D1Database, dinnerEventId
     }
 }
 
-// Returns the removed row (ADR-009: the chef's list renders it)
-export async function deleteExpense(d1Client: D1Database, id: number): Promise<Expense> {
+// Returns the removed row (ADR-009: the chef's list renders it); a row on another dinner is a miss, 404 through P2025
+export async function deleteExpense(d1Client: D1Database, dinnerEventId: number, id: number): Promise<Expense> {
     const {deserializeExpense} = useBillingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
     try {
-        const removed = await prisma.expense.delete({where: {id}})
-        console.info(`${EXPENSE_LOG} > [DELETE] Expense ${id} removed`)
+        const removed = await prisma.expense.delete({where: {id, dinnerEventId}})
+        console.info(`${EXPENSE_LOG} > [DELETE] Expense ${id} removed from dinner ${dinnerEventId}`)
         return deserializeExpense(removed)
     } catch (error) {
-        return throwH3Error(`${EXPENSE_LOG} > [DELETE] Error removing expense ${id}`, error)
+        return throwH3Error(`${EXPENSE_LOG} > [DELETE] Error removing expense ${id} from dinner ${dinnerEventId}`, error)
     }
 }
 

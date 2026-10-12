@@ -336,7 +336,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
 
         <!-- Compact team members view in header -->
         <div :class="COMPONENTS.teamCard.memberSummary">
-          <UAvatarGroup :size="SIZES.sm" :max="5">
+          <UAvatarGroup :size="COMPONENTS.avatar.compact.size" :max="COMPONENTS.avatar.max">
             <UTooltip
               v-for="assignment in assignments"
               :key="assignment.id"
@@ -426,8 +426,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                   <span v-else />
                   <UButton
                     v-if="isEditable && member.id"
-                    v-bind="BUTTONS.edit"
-                    :icon="ICONS.trash"
+                    v-bind="BUTTONS.remove"
                     :aria-label="`Fjern ${member.inhabitant?.name} ${member.inhabitant?.lastName} fra holdet`"
                     :data-testid="`team-member-remove-${member.id}`"
                     @click="emit('remove:member', member.id)"
@@ -463,8 +462,7 @@ const handleFormSubmit = (inhabitantId: number, role: TeamRole, allocationPercen
                   </UBadge>
                   <UButton
                     v-if="isEditable"
-                    v-bind="BUTTONS.edit"
-                    :icon="ICONS.trash"
+                    v-bind="BUTTONS.remove"
                     :aria-label="`Slet jokertjans ${formatDateRange({start: slot.startDate, end: slot.endDate})}`"
                     :data-testid="`joker-slot-delete-${slot.id}`"
                     @click="emit('remove:jokerSlot', slot.id)"

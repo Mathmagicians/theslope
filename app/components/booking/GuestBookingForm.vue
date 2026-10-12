@@ -49,7 +49,7 @@ const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets')
 
 // Booking logic
 const {getBookingOptions, resolveUserBookingBuckets} = useBooking()
-const {createBookingBadges, formatActionPreview} = useBookingUi()
+const {createBookingBadges, formatActionPreview, guestSaveLabel} = useBookingUi()
 const {canModifyOrders, canEditDiningMode} = props.deadlines
 
 // Validation schemas
@@ -93,6 +93,9 @@ const validateForm = () => {
 // Deadline badges using existing factory
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))
 
+// The client settles a claim against the tickets for sale on this dinner (the lock status)
+const supply = () => ({ticketsForSale: props.releasedTicketCounts.total})
+
 // Action preview: show what the server will do when saving (uses same resolver)
 const actionPreviewItems = computed(() => {
   if (!formState.ticketPriceId || !bookingOptions.value.action) return []
@@ -117,8 +120,13 @@ const actionPreviewItems = computed(() => {
   )
 
   // Format preview items - use booker name for guest label
-  return formatActionPreview(buckets, [], () => props.bookerName)
+  return formatActionPreview(buckets, [], () => props.bookerName, supply)
 })
+
+// The button previews the outcome: before the deadline the guest is booked; after it the claim buys a ticket for
+// sale, else queues the guest
+const saveLabel = computed(() =>
+  guestSaveLabel(bookingOutcome(bookingOptions.value.action === 'claim' ? 'claim' : 'create', supply())))
 
 // Enabled modes for guest: filter out NONE (can't add a guest who won't eat)
 const enabledModesForGuest = computed((): DinnerMode[] =>
@@ -298,7 +306,7 @@ const handleCancel = () => emit('cancel')
               <template #leading>
                 <UIcon :name="ICONS.userPlus" />
               </template>
-              Tilføj gæst
+              {{ saveLabel }}
             </UButton>
           </div>
         </div>

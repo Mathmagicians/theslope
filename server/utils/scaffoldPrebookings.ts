@@ -1,8 +1,8 @@
-import {fetchOrders, createOrders, deleteOrder, updateOrdersBatch, claimOrder, type OrderBatchUpdate, fetchUserIntentKeys} from "~~/server/data/financesRepository"
+import {fetchOrders, createOrders, deleteOrder, updateOrdersBatch, claimOrder, countReleasedTickets, type OrderBatchUpdate, fetchUserIntentKeys} from "~~/server/data/financesRepository"
 import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/prismaRepository"
 import {useSeason, type BookingDeadlines} from "~/composables/useSeason"
 import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, type QueuePosition, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
-import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets} from "~/composables/useBooking"
+import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets, bookingOutcome} from "~/composables/useBooking"
 import {assignReleasedTicket, joinWaitlist, type WaitlistSender} from "~~/server/utils/waitlistAssignment"
 import {fetchWaitlistForHousehold, deleteWaitlistEntry, updateWaitlistEntryOrder} from "~~/server/data/waitlistRepository"
 import {getNotificationConfig} from "~~/server/utils/sender/config"
@@ -11,6 +11,8 @@ import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {getSystemUserId} from "~~/server/utils/systemUser"
 
 const LOG = '🎟️ > SEASON > [SCAFFOLD_PREBOOKINGS]'
+// Each lost race re-reads the supply; past this many rounds the wish queues
+const CLAIM_ROUNDS = 3
 
 /**
  * Determine audit action based on user vs system trigger
@@ -362,21 +364,26 @@ export async function scaffoldPrebookings(
                 }
             }
 
-            // Claims settle the supply at this instant: a released ticket at the price, else the wish joins the queue
+            // Claims act on bookingOutcome over the supply read at this instant: buy, or queue the wish
             let householdClaimed = 0
             let householdQueued = 0
             let householdDuplicates = 0
             for (const toClaim of result.claim) {
-                const claimed = await claimOrder(
-                    d1Client,
-                    toClaim.dinnerEventId,
-                    toClaim.ticketPriceId,
-                    toClaim.inhabitantId,
-                    effectiveUserId,
-                    toClaim.dinnerMode,
-                    toClaim.isGuestTicket
-                )
-                if (claimed) {
+                let bought = false
+                for (let round = 0; round < CLAIM_ROUNDS && !bought; round++) {
+                    const ticketsForSale = await countReleasedTickets(d1Client, toClaim.dinnerEventId, toClaim.ticketPriceId)
+                    if (bookingOutcome('claim', {ticketsForSale}) !== 'buy') break
+                    bought = !!await claimOrder(
+                        d1Client,
+                        toClaim.dinnerEventId,
+                        toClaim.ticketPriceId,
+                        toClaim.inhabitantId,
+                        effectiveUserId,
+                        toClaim.dinnerMode,
+                        toClaim.isGuestTicket
+                    )
+                }
+                if (bought) {
                     householdClaimed++
                     continue
                 }

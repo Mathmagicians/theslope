@@ -261,7 +261,7 @@ describe('Allergies Store - gated reads', () => {
         },
         {
             dataset: 'household allergies',
-            idleKey: '/api/household/allergy-null',
+            idleKey: '/api/household/allergy',
             requestedKey: '/api/household/allergy?householdId=1',
             endpoint: allergiesEndpoint,
             request: (store: Store) => store.loadAllergiesForHousehold(1)

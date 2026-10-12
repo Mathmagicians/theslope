@@ -520,6 +520,20 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       }
     })
 
+    test('GIVEN a queued guest entry WHEN NONE is sent on that entry THEN the guest leaves the queue', async ({ browser }) => {
+      const context = await validatedBrowserContext(browser)
+      const dinnerEventId = await closedDinner(context, 'Queue guest leave')
+      await WaitlistFactory.queue(context, testHouseholdId, testSeason.id!,
+        OrderFactory.createGuestOrder(testInhabitantId, dinnerEventId, testAdultTicketPriceId))
+      const [guestEntry] = await WaitlistFactory.entries(context, [dinnerEventId])
+      expect(guestEntry!.isGuestTicket).toBe(true)
+
+      const result = await WaitlistFactory.leave(context, testSeason.id!, guestEntry!)
+
+      expect(result).toMatchObject({ left: 1, queued: 0 })
+      expect(await WaitlistFactory.entries(context, [dinnerEventId])).toEqual([])
+    })
+
     test('GIVEN two entries WHEN the first sends NONE on its entry THEN it leaves and the second is first in line', async ({ browser }) => {
       const context = await validatedBrowserContext(browser)
       const dinnerEventId = await closedDinner(context, 'Queue leave')

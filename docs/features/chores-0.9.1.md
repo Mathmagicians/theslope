@@ -172,7 +172,7 @@ Rule signed 2026-10-11. A ticket carries a stored list or follows its holder's l
 
 - API: `household/scaffold` — a guest order with ids comes back with them, an own ticket with the holder's live ids, a
   profile edit shows on the next read; `admin/order` — a claimed ticket carries the releasing owner's ids, a second
-  claim keeps them, the claim snapshot holds them; `household/waitlist` — an assigned entry keeps its ids;
+  claim keeps them, the claim snapshot holds them; the scaffold's queue path — an assigned entry keeps its ids;
   `chef/dinner` — the dinner detail's tickets carry `allergyTypeIds`.
 - Unit: `getTicketAllergens` by id; `computeAffectedDiners` counts a guest and a swapped ticket; the stored list's
   round trip.
@@ -183,7 +183,7 @@ Rule signed 2026-10-11. A ticket carries a stored list or follows its holder's l
 
 `useBookingValidation.ts`, `useBooking.ts` (snapshot builder, guest grouping), `useAllergy.ts`,
 `financesRepository.ts` (create, claim, orders list, dinner detail), `scaffoldPrebookings.ts`,
-`waitlistAssignment.ts`, `api/order/index.put.ts`, `DinnerTicket.vue`, `DinnerBookingForm.vue`,
+`waitlistAssignment.ts`, `scaffold.post.ts`, `DinnerTicket.vue`, `DinnerBookingForm.vue`,
 `prisma/schema.prisma`, `migrations/`, `docs/adr-compliance-backend.md` (order rows).
 
 ## Waitlist: no-seat notice at dinner start
@@ -209,3 +209,23 @@ service skips an entry whose reference exists). Deletion stays in daily maintena
 
 `server/utils/sender/events/waitlist.ts`, `server/tasks/waitlist-close.ts`, `nuxt.config.ts` (scheduled tasks),
 `feature-proposal-notification-triggers.md` (catalog row), `docs/adr-compliance-backend.md`.
+
+## Map.groupBy in the Workers runtime
+
+### Problem
+
+`Map.groupBy` failed in the Workers runtime on 2026-01-20 (cc05ea9, the commit that added `groupBy` to
+`app/utils/batchUtils.ts`) although the Workers docs (Runtime APIs, Web standards) state the runtime tracks the V8 of
+the current Chrome stable, where the method has shipped since Chrome 117. ADR-013 rule 7 records the finding; the
+cause, a compatibility flag or date gating the method, is not named anywhere in our docs.
+
+### Solution
+
+The Cloudflare compatibility-flags page and the workerd changelog name the flag or date that enables the ES2024
+grouping methods. With that reference the rule names the flag, the compatibility date moves past it, the helper leaves
+with its unit cases, and the call sites in `server/` and the stores use the method. Without it the rule and the helper
+stay.
+
+### Affected
+
+`docs/adr.md` ADR-013 rule 7, `app/utils/batchUtils.ts` (`groupBy`), its call sites in `server/` and `app/stores/`.

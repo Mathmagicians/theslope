@@ -80,7 +80,8 @@ export const useUsersStore = defineStore("Users", () => {
         try {
             heynaboImport.value = await apiRequest<HeynaboImportResponse>('/api/admin/heynabo/import', {
                 query: { triggeredBy: `ADMIN:${authStore.email}` },
-                action: 'Heynabo import fejlede'
+                action: 'importHeynaboData',
+                errorMessage: 'Heynabo import fejlede'
             })
         } catch (error) {
             heynaboImport.value = null

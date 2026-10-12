@@ -131,7 +131,7 @@ const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
     const currentGroups = currentPeriodData.value
 
     // Control sum for virtual: Σ transaction amounts
-    const virtualTransactionSum = currentPeriod.transactions.reduce((sum, tx) => sum + tx.amount, 0)
+    const virtualTransactionSum = sumAmounts(currentPeriod.transactions)
 
     periods.push({
         id: 'virtual',
@@ -149,7 +149,7 @@ const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
     for (const inv of billing.value.pastInvoices) {
         const groups = groupTxByDinner(inv.transactions, tx => tx.amount)
         // Control sum: Σ transaction amounts vs invoice amount
-        const invoiceTransactionSum = inv.transactions.reduce((sum, tx) => sum + tx.amount, 0)
+        const invoiceTransactionSum = sumAmounts(inv.transactions)
         periods.push({
             id: inv.id,
             period: createDateRange(new Date(inv.cutoffDate), new Date(inv.paymentDate)),

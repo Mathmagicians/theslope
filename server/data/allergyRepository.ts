@@ -1,6 +1,5 @@
-import {PrismaD1} from "@prisma/adapter-d1"
-import {PrismaClient} from "~~/prisma/generated/client/client"
 import eventHandlerHelper from "../utils/eventHandlerHelper"
+import {getPrismaClientConnection} from '~~/server/utils/database'
 import type {
     AllergyTypeCreate,
     AllergyTypeUpdate,
@@ -15,16 +14,6 @@ import {useAllergyValidation} from '~/composables/useAllergyValidation'
 
 const {throwH3Error} = eventHandlerHelper
 
-/**
- * Get Prisma client connection to D1 database
- */
-export async function getPrismaClientConnection(d1Client: D1Database) {
-    const adapter = new PrismaD1(d1Client)
-    const prisma = new PrismaClient({adapter})
-    await prisma.$connect()
-    return prisma
-}
-
 /*** ALLERGY TYPES ***/
 
 /**
@@ -34,7 +23,7 @@ export async function getPrismaClientConnection(d1Client: D1Database) {
  */
 export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTypeDetail[]> {
     console.info(`🏥 > ALLERGY_TYPE > [GET] Fetching all allergy types with inhabitants`)
-    const prisma = await getPrismaClientConnection(d1Client)
+    const prisma = await getPrismaClientConnection(d1Client, [])
     const {AllergyTypeDetailSchema} = useAllergyValidation()
 
     try {
@@ -97,7 +86,7 @@ export async function fetchAllergyTypes(d1Client: D1Database): Promise<AllergyTy
  */
 export async function fetchAllergyType(d1Client: D1Database, id: number): Promise<AllergyTypeDisplay | null> {
     console.info(`🏥 > ALLERGY_TYPE > [GET] Fetching allergy type with ID ${id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
+    const prisma = await getPrismaClientConnection(d1Client, [])
     const {AllergyTypeDisplaySchema} = useAllergyValidation()
 
     try {
@@ -123,7 +112,7 @@ export async function fetchAllergyType(d1Client: D1Database, id: number): Promis
  */
 export async function createAllergyType(d1Client: D1Database, allergyTypeData: AllergyTypeCreate): Promise<AllergyTypeDisplay> {
     console.info(`🏥 > ALLERGY_TYPE > [CREATE] Creating allergy type ${allergyTypeData.name}`)
-    const prisma = await getPrismaClientConnection(d1Client)
+    const prisma = await getPrismaClientConnection(d1Client, [])
     const {AllergyTypeDisplaySchema} = useAllergyValidation()
 
     try {
@@ -144,7 +133,7 @@ export async function createAllergyType(d1Client: D1Database, allergyTypeData: A
  */
 export async function updateAllergyType(d1Client: D1Database, allergyTypeData: AllergyTypeUpdate): Promise<AllergyTypeDisplay> {
     console.info(`🏥 > ALLERGY_TYPE > [UPDATE] Updating allergy type with ID ${allergyTypeData.id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
+    const prisma = await getPrismaClientConnection(d1Client, [])
     const {AllergyTypeDisplaySchema} = useAllergyValidation()
 
     const {id, ...updateData} = allergyTypeData
@@ -168,7 +157,7 @@ export async function updateAllergyType(d1Client: D1Database, allergyTypeData: A
  */
 export async function deleteAllergyType(d1Client: D1Database, id: number): Promise<AllergyTypeDisplay> {
     console.info(`🏥 > ALLERGY_TYPE > [DELETE] Deleting allergy type with ID ${id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
+    const prisma = await getPrismaClientConnection(d1Client, [])
     const {AllergyTypeDisplaySchema} = useAllergyValidation()
 
     try {
@@ -192,7 +181,7 @@ export async function deleteAllergyType(d1Client: D1Database, id: number): Promi
  */
 export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabitantId: number): Promise<AllergyDetail[]> {
     console.info(`🏥 > ALLERGY > [GET] Fetching allergies for inhabitant ID ${inhabitantId}`)
-    const prisma = await getPrismaClientConnection(d1Client)
+    const prisma = await getPrismaClientConnection(d1Client, [])
     const {AllergyDetailSchema} = useAllergyValidation()
 
     try {
@@ -230,7 +219,7 @@ export async function fetchAllergiesForInhabitant(d1Client: D1Database, inhabita
  */
 export async function fetchAllergiesForHousehold(d1Client: D1Database, householdId: number): Promise<AllergyDetail[]> {
     console.info(`🏥 > ALLERGY > [GET] Fetching allergies for household ID ${householdId}`)
-    const prisma = await getPrismaClientConnection(d1Client)
+    const prisma = await getPrismaClientConnection(d1Client, [])
     const {AllergyDetailSchema} = useAllergyValidation()
 
     try {
@@ -272,7 +261,7 @@ export async function fetchAllergiesForHousehold(d1Client: D1Database, household
  */
 export async function fetchAllergiesForAllergyType(d1Client: D1Database, allergyTypeId: number): Promise<AllergyDetail[]> {
     console.info(`🏥 > ALLERGY > [GET] Fetching allergies for allergy type ID ${allergyTypeId}`)
-    const prisma = await getPrismaClientConnection(d1Client)
+    const prisma = await getPrismaClientConnection(d1Client, [])
     const {AllergyDetailSchema} = useAllergyValidation()
 
     try {
@@ -310,7 +299,7 @@ export async function fetchAllergiesForAllergyType(d1Client: D1Database, allergy
  */
 export async function fetchAllergy(d1Client: D1Database, id: number): Promise<AllergyDetail | null> {
     console.info(`🏥 > ALLERGY > [GET] Fetching allergy with ID ${id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
+    const prisma = await getPrismaClientConnection(d1Client, [])
     const {AllergyDetailSchema} = useAllergyValidation()
 
     try {
@@ -352,7 +341,7 @@ export async function fetchAllergy(d1Client: D1Database, id: number): Promise<Al
  */
 export async function createAllergy(d1Client: D1Database, allergyData: AllergyCreate): Promise<AllergyDetail> {
     console.info(`🏥 > ALLERGY > [CREATE] Creating allergy for inhabitant ID ${allergyData.inhabitantId} with allergy type ID ${allergyData.allergyTypeId}`)
-    const prisma = await getPrismaClientConnection(d1Client)
+    const prisma = await getPrismaClientConnection(d1Client, [])
     const {AllergyDetailSchema} = useAllergyValidation()
 
     try {
@@ -392,7 +381,7 @@ export async function createAllergy(d1Client: D1Database, allergyData: AllergyCr
  */
 export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUpdate): Promise<AllergyDetail> {
     console.info(`🏥 > ALLERGY > [UPDATE] Updating allergy with ID ${allergyData.id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
+    const prisma = await getPrismaClientConnection(d1Client, [])
     const {AllergyDetailSchema} = useAllergyValidation()
 
     const {id, allergyType, ...updateData} = allergyData as AllergyUpdate & { allergyType?: unknown }
@@ -432,7 +421,7 @@ export async function updateAllergy(d1Client: D1Database, allergyData: AllergyUp
  */
 export async function deleteAllergy(d1Client: D1Database, id: number): Promise<AllergyDisplay> {
     console.info(`🏥 > ALLERGY > [DELETE] Deleting allergy with ID ${id}`)
-    const prisma = await getPrismaClientConnection(d1Client)
+    const prisma = await getPrismaClientConnection(d1Client, [])
     const {AllergyDisplaySchema} = useAllergyValidation()
 
     try {

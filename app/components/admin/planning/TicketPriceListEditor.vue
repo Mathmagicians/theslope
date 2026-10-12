@@ -171,9 +171,8 @@ const onAddTicketPrice = () => {
               </UInput>
               <UButton
                   v-if="!props.disabled"
-                  v-bind="BUTTONS.edit"
+                  v-bind="BUTTONS.remove"
                   :data-testid="`ticket-price-remove-${index}`"
-                  :icon="ICONS.trash"
                   :aria-label="`Fjern ${formatTicketType(ticket.ticketType)}-billet`"
                   class="mt-1"
                   @click="model.splice(index, 1)"/>

@@ -1,4 +1,4 @@
-import {emit} from '~~/server/utils/sender/emit'
+import {emit, notSent} from '~~/server/utils/sender/emit'
 import {composeEmail} from '~~/server/utils/sender/compose'
 import type {NotificationConfig, SenderEmitResult} from '~/composables/useNotificationValidation'
 import {formatDate} from '~/utils/date'
@@ -14,14 +14,10 @@ export interface WaitlistDinnerContext {
 // The mail names the dinner by its date and menu
 const dinnerLabel = ({date, menuTitle}: WaitlistDinnerContext): string => `${formatDate(date)} · ${menuTitle}`
 
-// A recipient without an address gets no mail; the result says so instead of failing the operation
-const unaddressed = (kind: string, subject: string): SenderEmitResult =>
-    ({queued: false, dedupeKey: `${kind}:EMAIL:unaddressed:${subject}`, degraded: true})
-
 export const emitWaitlistJoined = (
     queue: Queue | undefined, config: NotificationConfig, to: string | null, name: string, dinner: WaitlistDinnerContext, position: number
 ): Promise<SenderEmitResult> => {
-    if (!to) return Promise.resolve(unaddressed('WAITLIST_JOINED', `${dinner.dinnerEventId}`))
+    if (!to) return notSent('WAITLIST_JOINED', 'unaddressed', `${dinner.dinnerEventId}`)
     return emit(queue, composeEmail(config, {
         kind: 'WAITLIST_JOINED',
         to,
@@ -33,7 +29,7 @@ export const emitWaitlistJoined = (
 export const emitWaitlistTicketAssigned = (
     queue: Queue | undefined, config: NotificationConfig, to: string | null, name: string, dinner: WaitlistDinnerContext, ticket: string
 ): Promise<SenderEmitResult> => {
-    if (!to) return Promise.resolve(unaddressed('WAITLIST_TICKET_ASSIGNED', `${dinner.dinnerEventId}`))
+    if (!to) return notSent('WAITLIST_TICKET_ASSIGNED', 'unaddressed', `${dinner.dinnerEventId}`)
     return emit(queue, composeEmail(config, {
         kind: 'WAITLIST_TICKET_ASSIGNED',
         to,
@@ -47,7 +43,7 @@ export const emitWaitlistBuildup = (
 ): Promise<SenderEmitResult> => {
     if (!to) {
         console.warn(`${LOG} the chef of dinner ${dinner.dinnerEventId} has no address — buildup mail not sent`)
-        return Promise.resolve(unaddressed('WAITLIST_BUILDUP', `${dinner.dinnerEventId}`))
+        return notSent('WAITLIST_BUILDUP', 'unaddressed', `${dinner.dinnerEventId}`)
     }
     return emit(queue, composeEmail(config, {
         kind: 'WAITLIST_BUILDUP',

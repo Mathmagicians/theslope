@@ -4,7 +4,7 @@
  * Following ADR-001: Import enums from validation composables (NOT from generated layer)
  */
 import type {OrderDisplay, OrderDetail} from '~/composables/useBookingValidation'
-import {getPortionsForTicketType as portionsForTicketType, getPortionsForTicketPrice as portionsForTicketPrice} from '~/utils/portions'
+import {getPortionsForTicketType} from '~/utils/portions'
 
 /**
  * Statistics for one dining mode in kitchen display
@@ -124,10 +124,6 @@ export const useOrder = () => {
   const getReleasedOrders = <T extends OrderDisplay>(orders: T[]): T[] => {
     return orders.filter(o => isReleasedOrder(o))
   }
-
-  // The portion weights (ADULT=1, CHILD=0.5, BABY=0) live in ~/utils/portions, shared with the server (ADR-017)
-  const getPortionsForTicketType = portionsForTicketType
-  const getPortionsForTicketPrice = portionsForTicketPrice
 
   /**
    * Calculate total portions from orders
@@ -344,7 +340,6 @@ export const useOrder = () => {
     // Grouping and calculations
     groupByTicketType,
     calculateTotalPortionsFromPrices,
-    getPortionsForTicketPrice,
     requiresChair,
 
     // Kitchen statistics

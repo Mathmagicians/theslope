@@ -72,12 +72,7 @@ export const usePlanStore = defineStore("Plan", () => {
                 // The page's getter keeps driving the choice; the gone season re-derives through getDefaultSeasonId
                 notFound: {
                     recover: async () => {
-                        const goneId = selectedSeasonId.value
-                        const choice = seasonChoice.value
-                        seasonChoice.value = () => {
-                            const chosen = choice()
-                            return resolveSeasonChoice(chosen) === goneId ? null : chosen
-                        }
+                        skipGoneId(seasonChoice, selectedSeasonId.value, resolveSeasonChoice)
                         await Promise.all([refreshSeasons(), refreshActiveSeasonId()])
                     },
                     retries: 1,
@@ -375,11 +370,7 @@ export const usePlanStore = defineStore("Plan", () => {
             })
             console.info(`👥 > PLAN_STORE > Deleted team ${teamId}`)
             // A deleted team has no Detail to refresh: the choice skips it and keeps following the page's getter
-            const choice = teamChoice.value
-            teamChoice.value = () => {
-                const id = choice()
-                return id === teamId ? null : id
-            }
+            skipGoneId(teamChoice, teamId)
             await refreshTeamAggregates()
             toastSaved('Madhold slettet')
             return deleted

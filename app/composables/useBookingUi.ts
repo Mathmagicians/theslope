@@ -13,7 +13,9 @@ import {
     DinnerStepState,
     DEADLINE_LABELS,
     type AlarmLevel,
-    type BookingAction,
+    bookingOutcome,
+    type BookingOutcome,
+    type OrderBucket,
     type OrderBucketResult,
     type ReleasedTicketCounts
 } from '~/composables/useBooking'
@@ -158,15 +160,34 @@ export const createBookingBadges = (
     }
 }
 
-/**
- * The save button's label, a preview of what the one booking path will do: an existing ticket is updated, a new one
- * is booked before the deadline; after it the claim buys a ticket for sale, else takes a place in the queue
- */
-export const bookingSaveLabel = (action: BookingAction, hasTicket: boolean, hasReleasedTickets: boolean): string => {
-    if (hasTicket) return 'Opdater'
-    if (action !== 'claim') return 'Book'
-    return hasReleasedTickets ? 'Køb billet' : 'Skriv på venteliste'
+/** The supply a preview settles a claim against: the tickets for sale on the order's dinner, from the lock status */
+export type PreviewSupply = (order: DesiredOrder) => {ticketsForSale: number}
+const NOTHING_FOR_SALE: PreviewSupply = () => ({ticketsForSale: 0})
+
+/** The words of each booking outcome, once: the preview line, the save label and the guest form's button */
+export const OUTCOME_WORDS: Record<BookingOutcome, {icon: string, template: (name: string) => string, save: string, guestSave: string}> = {
+    book:    {icon: ICONS.plusCircle, template: name => `${name} tilmeldes`, save: 'Book', guestSave: 'Tilføj gæst'},
+    buy:     {icon: ICONS.claim, template: name => `${name} køber en ledig billet`, save: 'Køb billet', guestSave: 'Køb billet til gæst'},
+    queue:   {icon: ICONS.waitlist, template: name => `${name} skrives på ventelisten`, save: 'Skriv på venteliste', guestSave: 'Skriv gæst på venteliste'},
+    leave:   {icon: ICONS.xMark, template: name => `${name} forlader ventelisten`, save: 'Forlad ventelisten', guestSave: 'Forlad ventelisten'},
+    requeue: {icon: ICONS.waitlist, template: name => `${name} skrives på ventelisten igen`, save: 'Opdater ønsket', guestSave: 'Opdater ønsket'},
+    none:    {icon: ICONS.edit, template: name => `${name} opdaterer spisning`, save: 'Opdater', guestSave: 'Tilføj gæst'}
 }
+
+// The buckets whose execution has an outcome, in the order a row's preview reads them
+const OUTCOME_BUCKETS = ['claim', 'create', 'leave', 'requeue'] as const satisfies readonly OrderBucket[]
+
+/** What saving the previewed buckets does: the first bucket with an outcome, settled against the supply; else none */
+export const previewOutcome = (buckets: OrderBucketResult<DesiredOrder>, supply: PreviewSupply = NOTHING_FOR_SALE): BookingOutcome => {
+    const bucket = OUTCOME_BUCKETS.find(key => buckets[key].length > 0)
+    return bucket ? bookingOutcome(bucket, supply(buckets[bucket][0]!)) : 'none'
+}
+
+/** The save button's label for an outcome */
+export const bookingSaveLabel = (outcome: BookingOutcome): string => OUTCOME_WORDS[outcome].save
+
+/** The guest form's button label for an outcome */
+export const guestSaveLabel = (outcome: BookingOutcome): string => OUTCOME_WORDS[outcome].guestSave
 
 /** A member's place in the queue of a sold-out dinner, rendered compact beside the name */
 export const createWaitlistBadge = (position: number): DeadlineBadgeData => ({
@@ -181,7 +202,7 @@ export const createWaitlistBadge = (position: number): DeadlineBadgeData => ({
 // Action Preview - Show users what will happen before they save
 // ============================================================================
 
-export type ActionType = 'create' | 'delete' | 'release' | 'reclaim' | 'claim' | 'leave' | 'requeue' | 'updateMode'
+export type ActionType = Exclude<BookingOutcome, 'none'> | 'delete' | 'release' | 'reclaim' | 'updateMode'
 
 export interface ActionPreviewItem {
     name: string
@@ -197,26 +218,20 @@ export const useBookingUi = () => {
     const {orderStateConfig, formatGuestLabel} = useOrder()
     const {getCookingDeadlineThresholds} = useSeason()
 
+    // An outcome reads its words from OUTCOME_WORDS; the other actions change an order the household holds
+    const outcomeWords = (outcome: BookingOutcome) => ({icon: OUTCOME_WORDS[outcome].icon, template: OUTCOME_WORDS[outcome].template})
     const ACTION_PREVIEW = {
-        create:     { icon: ICONS.plusCircle, template: (n: string) => `${n} tilmeldes` },
+        book:       outcomeWords('book'),
+        buy:        outcomeWords('buy'),
+        queue:      outcomeWords('queue'),
+        leave:      outcomeWords('leave'),
+        requeue:    outcomeWords('requeue'),
         delete:     { icon: ICONS.xMark,      template: (n: string) => `${n} frameldes` },
         release:    { icon: ICONS.released,   template: (n: string) => `${n}s billet frigives` },
         reclaim:    { icon: ICONS.undo,       template: (n: string) => `${n} tilmeldes igen` },
-        claim:      { icon: ICONS.claim,      template: (n: string) => `${n} køber fra andre` },
-        leave:      { icon: ICONS.xMark,      template: (n: string) => `${n} forlader ventelisten` },
-        requeue:    { icon: ICONS.waitlist,   template: (n: string) => `${n} skrives på ventelisten igen` },
-        updateMode: { icon: ICONS.edit,       template: (n: string) => `${n} opdaterer spisning` }
+        // A mode change on a held ticket has no supply outcome: the none words
+        updateMode: outcomeWords('none')
     } as const
-
-    type BucketKey = keyof OrderBucketResult<DesiredOrder>
-
-    const BUCKET_TO_ACTION: Record<Exclude<BucketKey, 'idempotent' | 'update'>, ActionType> = {
-        create: 'create',
-        delete: 'delete',
-        claim: 'claim',
-        leave: 'leave',
-        requeue: 'requeue'
-    }
 
     const getUpdateAction = (
         order: DesiredOrder,
@@ -232,20 +247,22 @@ export const useBookingUi = () => {
     const formatActionPreview = (
         buckets: OrderBucketResult<DesiredOrder>,
         existingOrders: OrderDisplay[],
-        getInhabitantName: (id: number) => string
+        getInhabitantName: (id: number) => string,
+        supply: PreviewSupply = NOTHING_FOR_SALE
     ): ActionPreviewItem[] => {
         const OrderStateEnum = OrderStateSchema.enum
         const existingById = new Map(existingOrders.map(o => [o.id, o]))
 
         // Map action types to order states for color lookup
         const ACTION_TO_STATE = {
-            create:     OrderStateEnum.BOOKED,
+            book:       OrderStateEnum.BOOKED,
+            buy:        'claimed' as const,
+            queue:      'claimed' as const,
+            leave:      OrderStateEnum.CANCELLED,
+            requeue:    'claimed' as const,
             delete:     OrderStateEnum.CANCELLED,
             release:    OrderStateEnum.RELEASED,
             reclaim:    OrderStateEnum.BOOKED,
-            claim:      'claimed' as const,
-            leave:      OrderStateEnum.CANCELLED,
-            requeue:    'claimed' as const,
             updateMode: OrderStateEnum.CLOSED
         } as const
 
@@ -259,14 +276,16 @@ export const useBookingUi = () => {
             return { name, action, icon: config.icon, color: getActionColor(action), text: config.template(name) }
         }
 
-        const simpleItems = (Object.entries(BUCKET_TO_ACTION) as [BucketKey, ActionType][])
-            .flatMap(([bucket, action]) => buckets[bucket].map(order => toItem(order, action)))
+        // Each order of an outcome bucket settles against its dinner's supply
+        const outcomeItems = OUTCOME_BUCKETS.flatMap(bucket => buckets[bucket].map(order =>
+            toItem(order, bookingOutcome(bucket, supply(order)) as Exclude<BookingOutcome, 'none'>)))
+        const deleteItems = buckets.delete.map(order => toItem(order, 'delete'))
 
         const updateItems = buckets.update.map(order =>
             toItem(order, getUpdateAction(order, existingById, OrderStateSchema.enum))
         )
 
-        return [...simpleItems, ...updateItems]
+        return [...outcomeItems, ...deleteItems, ...updateItems]
     }
 
     /**
@@ -338,6 +357,8 @@ export const useBookingUi = () => {
         createBookingBadges,
         createWaitlistBadge,
         bookingSaveLabel,
+        guestSaveLabel,
+        previewOutcome,
         createChefBadges,
         // Action preview
         ACTION_PREVIEW,

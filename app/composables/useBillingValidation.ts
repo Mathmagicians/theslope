@@ -9,6 +9,7 @@ import {
     deserializeExpense
 } from '~/composables/fragments/domainFragments'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {sumAmounts} from '~/utils/ledger'
 import type {DinnerEventInfo} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
@@ -699,7 +700,7 @@ export const useBillingValidation = () => {
         ticketPrices: TicketPrice[]
     ): z.infer<typeof BillingPeriodSummaryDisplaySchema> => {
         const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(raw.invoices, ticketPrices)
-        const invoiceSum = raw.invoices.reduce((sum, inv) => sum + inv.amount, 0)
+        const invoiceSum = sumAmounts(raw.invoices)
         return BillingPeriodSummaryDisplaySchema.parse({...raw, invoiceSum, dinnerCount, ticketCountsByType})
     }
 
@@ -714,7 +715,7 @@ export const useBillingValidation = () => {
     ): z.infer<typeof BillingPeriodSummaryDetailSchema> | null => {
         if (!raw) return null
         const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(raw.invoices, ticketPrices)
-        const invoiceSum = raw.invoices.reduce((sum, inv) => sum + inv.amount, 0)
+        const invoiceSum = sumAmounts(raw.invoices)
         const invoices = raw.invoices.map(inv => deserializeInvoice(inv))
         return BillingPeriodSummaryDetailSchema.parse({...raw, invoices, invoiceSum, dinnerCount, ticketCountsByType})
     }
@@ -743,7 +744,7 @@ export const useBillingValidation = () => {
      */
     const deserializeInvoice = (raw: RawInvoice): z.infer<typeof InvoiceDisplaySchema> => {
         const {transactions, ...inv} = raw
-        const transactionSum = transactions.reduce((sum, tx) => sum + tx.amount, 0)
+        const transactionSum = sumAmounts(transactions)
 
         return InvoiceDisplaySchema.parse({
             ...inv,

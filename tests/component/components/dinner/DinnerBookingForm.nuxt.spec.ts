@@ -419,3 +419,39 @@ describe('DinnerBookingForm on a queued guest row', () => {
     })]]])
   })
 })
+
+describe('DinnerBookingForm previews the outcome of a save by the supply', () => {
+  const {DinnerModeSchema} = useBookingValidation()
+  const anna = householdWithInhabitants.inhabitants[0]!
+
+  const mountRow = (canModify: boolean, ticketsForSale: number) => {
+    mockIsHouseholdMember.mockReturnValue(true)
+    const deadlines = {...baseDeadlines, canModifyOrders: () => canModify, canEditDiningMode: () => true}
+    return mountSuspended(withTooltipProvider(DinnerBookingForm, {
+      ...baseProps, household: householdWithInhabitants, deadlines,
+      releasedTicketCounts: {total: ticketsForSale, formatted: `${ticketsForSale}V`}
+    }))
+  }
+
+  it.each([
+    {desc: 'before the deadline', canModify: true, ticketsForSale: 0, label: 'Book'},
+    {desc: 'after the deadline, a ticket for sale', canModify: false, ticketsForSale: 1, label: 'Køb billet'},
+    {desc: 'after the deadline, nothing for sale', canModify: false, ticketsForSale: 0, label: 'Skriv på venteliste'}
+  ])('$desc: a row without a ticket saves as "$label"', async ({canModify, ticketsForSale, label}) => {
+    const wrapper = await mountRow(canModify, ticketsForSale)
+    await clickByTestId(wrapper, `inhabitant-${anna.id}-toggle`)
+    await clickByTestId(wrapper, `inhabitant-${anna.id}-mode-edit-${DinnerModeSchema.enum.DINEIN}`)
+
+    expect(findByTestId(wrapper, `inhabitant-${anna.id}-save`).text()).toContain(label)
+  })
+
+  it.each([
+    {desc: 'nothing for sale', ticketsForSale: 0, label: 'Skriv gæst på venteliste'},
+    {desc: 'a ticket for sale', ticketsForSale: 1, label: 'Køb billet til gæst'}
+  ])('after the deadline with $desc: the guest form saves as "$label"', async ({ticketsForSale, label}) => {
+    const wrapper = await mountRow(false, ticketsForSale)
+    await clickByTestId(wrapper, 'guest-add-guest-toggle')
+
+    expect(findByTestId(wrapper, 'guest-form-save').text()).toContain(label)
+  })
+})
