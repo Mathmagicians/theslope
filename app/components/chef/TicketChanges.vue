@@ -116,7 +116,7 @@ const actionLabel = (change: TicketChange) => ORDER_ACTION_LABELS[change.action]
         </template>
         <template #revenue-cell="{ row }"><span data-testid="ticket-change-revenue">{{ formatPrice(row.original.revenue) }} kr</span></template>
         <template #empty>
-          <UAlert v-bind="ALERTS.emptyStateCompact" :title="`${noTicketChanges.emoji} ${noTicketChanges.text}`" data-testid="ticket-changes-none-since" />
+          <UAlert v-bind="ALERTS.emptyStateCompact" :title="noTicketChanges" data-testid="ticket-changes-none-since" />
         </template>
       </UTable>
 

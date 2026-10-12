@@ -7,6 +7,34 @@ type ApiError = { message?: string; statusCode?: number; statusMessage?: string;
 
 type ResponseSchema<T> = ZodType<T>
 
+/** ADR-007: initialized means loaded with data, not only a settled request */
+export type DatasetFlags = {
+    isLoading: ComputedRef<boolean>
+    isErrored: ComputedRef<boolean>
+    isInitialized: ComputedRef<boolean>
+}
+
+export type StoreDataset<T> = AsyncData<T, NuxtError | undefined> & DatasetFlags
+
+type JobStat = { label: string; value: string }
+
+type JobOptions<T> = {
+    url: string
+    method?: 'GET' | 'POST'
+    /** Read when the job runs */
+    query?: () => Record<string, string>
+    schema?: ResponseSchema<T>
+    action: string
+    errorMessage: string
+    formatStats: (result: T) => JobStat[]
+    /** The success toast's title */
+    title: string
+    /** Prefix of the completion log line */
+    log: string
+    /** Runs before the success toast, so the toast reports refreshed state */
+    onSuccess?: () => Promise<unknown>
+}
+
 export type StoreAsyncDataOptions<T> = Omit<AsyncDataOptions<unknown, T>, 'default' | 'transform' | 'pick'> & {
     schema: ResponseSchema<T>
     default: () => T
@@ -117,7 +145,7 @@ export const useApiHandler = () => {
                 case 401:
                     return 'Du er ikke autoriseret til at udføre denne handling'
                 case 404:
-                    return 'Kan ikke finde det, du leder efter'
+                    return NOT_FOUND_TEXT
                 case 500:
                     return 'Vi har desværre en intern server fejl'
                 default:
@@ -129,13 +157,7 @@ export const useApiHandler = () => {
         const statusInfo = err.statusCode ? `${err.statusCode}` : 'unknown'
         console.error(`❌ > API_ERROR > [${action}] ${statusInfo}: ${err.message || err.statusMessage || message}`)
 
-        toast.add({
-            icon: 'i-heroicons-exclamation-triangle',
-            title: `${err.statusCode ?? 500}: Uh, åh, fejl kan ske`,
-            description: message,
-            duration: 10000,
-            color: 'warning'
-        })
+        warnToast(`${err.statusCode ?? 500}: Uh, åh, fejl kan ske`, message)
     }
 
     const actionsFor = (action: string, customMessage?: string): ApiErrorActions => ({
@@ -167,7 +189,7 @@ export const useApiHandler = () => {
         key: MaybeRefOrGetter<string>,
         url: MaybeRefOrGetter<string>,
         {schema, default: defaultValue, errorMessage, dependsOn = [], enabled, watch: sources = [], notFound, ...options}: StoreAsyncDataOptions<T>
-    ): AsyncData<T, NuxtError | undefined> => {
+    ): StoreDataset<T> => {
         const surface = (error: unknown): never => {
             handleApiError(error, toValue(key), toValue(errorMessage))
             throw error
@@ -249,7 +271,22 @@ export const useApiHandler = () => {
                 if (!isEnabled) asyncData.clear()
             })
         }
-        return asyncData
+        // Assigned onto the thenable useAsyncData returns, so a dataset still awaits in `dependsOn`
+        return Object.assign(asyncData, {
+            isLoading: computed(() => asyncData.status.value === 'pending'),
+            isErrored: computed(() => asyncData.status.value === 'error'),
+            isInitialized: computed(() => asyncData.status.value === 'success' && asyncData.data.value !== null)
+        })
+    }
+
+    /** A store's load action: refreshes the dataset, rethrows its error, logs `loaded` (read after the refresh) */
+    const loadOrThrow = async (
+        {refresh, error}: Pick<AsyncData<unknown, unknown>, 'refresh' | 'error'>,
+        loaded: Text
+    ): Promise<void> => {
+        await refresh()
+        if (error.value) throw error.value
+        console.info(resolveText(loaded))
     }
 
     /**
@@ -269,9 +306,63 @@ export const useApiHandler = () => {
         }
     }
 
+    /** Reports a write `apiRequest` resolved */
+    const toastSaved = (title: string, description?: string) =>
+        toast.add({title, description, icon: ICONS.checkCircle, color: COLOR.success})
+    /** The warning toast of a failed request stays ten seconds */
+    const warnToast = (title: string, description?: string) =>
+        toast.add({title, description, icon: ICONS.warning, color: COLOR.warning, duration: 10000})
+
+    /** A `notFound.toast` naming the gone entity by its shortName, by its id once the list has dropped it */
+    const notFoundToast = (
+        list: MaybeRefOrGetter<{ id?: number; shortName: string }[]>,
+        id: MaybeRefOrGetter<number | null>,
+        noun: string
+    ) => () => {
+        const goneId = toValue(id)
+        return `Kan ikke finde ${noun} ${toValue(list).find(item => item.id === goneId)?.shortName ?? goneId}`
+    }
+
+    /**
+     * An admin job: one request, its result and error held in refs, the stats logged and toasted on success.
+     * `run` rethrows a failure after recording it; apiRequest has already toasted it.
+     */
+    const runJob = <T>({url, method, query, schema, action, errorMessage, formatStats, title, log, onSuccess}: JobOptions<T>) => {
+        const result = ref<T | null>(null) as Ref<T | null>
+        const error = ref<Error | null>(null)
+        const isRunning = ref(false)
+
+        const run = async (): Promise<T> => {
+            isRunning.value = true
+            error.value = null
+            let response: T
+            try {
+                response = await apiRequest<T>(url, {method, query: query?.(), schema, action, errorMessage})
+                result.value = response
+            } catch (failure) {
+                result.value = null
+                error.value = failure as Error
+                throw failure
+            } finally {
+                isRunning.value = false
+            }
+            const description = formatStats(response).map(s => `${s.label}: ${s.value}`).join(', ')
+            console.info(`${log} ${description}`)
+            await onSuccess?.()
+            toastSaved(title, description)
+            return response
+        }
+
+        return {result, error, isRunning, run}
+    }
+
     return {
         storeAsyncData,
+        loadOrThrow,
         apiRequest,
+        toastSaved,
+        notFoundToast,
+        runJob,
         handleApiError,
         handleUncaughtError
     }

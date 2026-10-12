@@ -193,7 +193,7 @@ const lineColumns: TableColumn<Expense>[] = [
           <UButton v-bind="BUTTONS.remove" aria-label="Slet" :disabled="pending" data-testid="expense-remove" @click="emit('remove', row.original.id)" />
         </template>
         <template #empty>
-          <UAlert v-bind="ALERTS.emptyStateCompact" :title="`${noReceipts.emoji} ${noReceipts.text}`" data-testid="expense-table-empty" />
+          <UAlert v-bind="ALERTS.emptyStateCompact" :title="noReceipts" data-testid="expense-table-empty" />
         </template>
         <template #body-bottom>
           <!-- The first sum row carries the rule that parts the lines from their sums -->

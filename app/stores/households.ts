@@ -13,8 +13,8 @@ import {useBooking} from '~/composables/useBooking'
 export const useHouseholdsStore = defineStore("Households", () => {
 
     // DEPENDENCIES
-    const {storeAsyncData, apiRequest} = useApiHandler()
-    const {formatScaffoldResult} = useBooking()
+    const {storeAsyncData, loadOrThrow, apiRequest, toastSaved, notFoundToast} = useApiHandler()
+    const {formatScaffoldResult, sumScaffoldResults} = useBooking()
     const {HouseholdDisplaySchema, HouseholdDetailSchema} = useCoreValidation()
 
     // Last preference update result (persists across component remounts)
@@ -39,9 +39,11 @@ export const useHouseholdsStore = defineStore("Households", () => {
     })
     const {
         data: households,
-        status: householdsStatus,
         error: householdsError,
-        refresh: refreshHouseholds
+        refresh: refreshHouseholds,
+        isLoading: isHouseholdsLoading,
+        isErrored: isHouseholdsErrored,
+        isInitialized: isHouseholdsInitialized
     } = householdsDataset
 
     const authStore = useAuthStore()
@@ -84,32 +86,24 @@ export const useHouseholdsStore = defineStore("Households", () => {
                     await refreshHouseholds()
                 },
                 retries: 1,
-                toast: () => `Kan ikke finde husstanden ${households.value.find(h => h.id === selectedHouseholdId.value)?.shortName ?? selectedHouseholdId.value}`,
-                message: () => {
-                    const {emoji, text} = getRandomEmptyMessage('household')
-                    return `${emoji} ${text}`
-                }
+                toast: notFoundToast(households, selectedHouseholdId, 'husstanden'),
+                message: () => getRandomEmptyMessageText('household')
             }
         }
     )
     const {
         data: selectedHousehold,
-        status: selectedHouseholdStatus,
         error: selectedHouseholdError,
-        refresh: refreshSelectedHousehold
+        refresh: refreshSelectedHousehold,
+        isLoading: isSelectedHouseholdLoading,
+        isErrored: isSelectedHouseholdErrored,
+        isInitialized: isSelectedHouseholdInitialized
     } = selectedHouseholdDataset
 
     // ========================================
     // Computed - Public API (derived from status)
     // ========================================
-    const isHouseholdsLoading = computed(() => householdsStatus.value === 'pending')
-    const isHouseholdsErrored = computed(() => householdsStatus.value === 'error')
-    const isHouseholdsInitialized = computed(() => householdsStatus.value === 'success')
     const isNoHouseholds = computed(() => isHouseholdsInitialized.value && households.value.length === 0)
-
-    const isSelectedHouseholdLoading = computed(() => selectedHouseholdStatus.value === 'pending')
-    const isSelectedHouseholdErrored = computed(() => selectedHouseholdStatus.value === 'error')
-    const isSelectedHouseholdInitialized = computed(() => selectedHouseholdStatus.value === 'success' && selectedHousehold.value !== null)
 
     // Convenience computed for components - true when store is fully initialized and ready to use
     const isHouseholdsStoreReady = computed(() =>
@@ -128,11 +122,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
     // ========================================
     // Store Actions
     // ========================================
-    const loadHouseholds = async () => {
-        await refreshHouseholds()
-        if (householdsError.value) throw householdsError.value
-        console.info(`🏠 > HOUSEHOLDS_STORE > Loaded ${households.value.length} households`)
-    }
+    const loadHouseholds = () => loadOrThrow(householdsDataset, () => `🏠 > HOUSEHOLDS_STORE > Loaded ${households.value.length} households`)
 
     const selectHousehold = (choice: MaybeRefOrGetter<HouseholdChoice>) => {
         householdChoice.value = () => toValue(choice)
@@ -217,23 +207,8 @@ export const useHouseholdsStore = defineStore("Households", () => {
             await refreshSelectedHousehold()
         }
 
-        // Aggregate scaffold results from all updates
-        const aggregatedResult: ScaffoldResult = results.reduce((acc, r) => ({
-            seasonId: r.scaffoldResult.seasonId,  // All results should have same seasonId
-            created: acc.created + r.scaffoldResult.created,
-            deleted: acc.deleted + r.scaffoldResult.deleted,
-            released: acc.released + r.scaffoldResult.released,
-            claimed: acc.claimed + r.scaffoldResult.claimed,
-            queued: acc.queued + r.scaffoldResult.queued,
-            positions: [...acc.positions, ...r.scaffoldResult.positions],
-            left: acc.left + r.scaffoldResult.left,
-            requeued: acc.requeued + r.scaffoldResult.requeued,
-            priceUpdated: acc.priceUpdated + r.scaffoldResult.priceUpdated,
-            modeUpdated: acc.modeUpdated + r.scaffoldResult.modeUpdated,
-            unchanged: acc.unchanged + r.scaffoldResult.unchanged,
-            households: 1,  // Power mode updates single household
-            errored: acc.errored + r.scaffoldResult.errored
-        }), { seasonId: null, created: 0, deleted: 0, released: 0, claimed: 0, queued: 0, positions: [], left: 0, requeued: 0, priceUpdated: 0, modeUpdated: 0, unchanged: 0, households: 1, errored: 0 } as ScaffoldResult)
+        // Power mode updates a single household
+        const aggregatedResult = {...sumScaffoldResults(results.map(r => r.scaffoldResult)), households: 1}
 
         // Store result for persistent UI display
         lastPreferenceResult.value = aggregatedResult
@@ -285,7 +260,6 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * Resolves undefined when the move fails; the request has already toasted it
      */
     const moveInhabitant = async (inhabitantId: number, targetHouseholdId: number) => {
-        const toast = useToast()
         console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Moving inhabitant ${inhabitantId} to household ${targetHouseholdId}`)
         const result = await apiRequest<InhabitantUpdateResponse>(`/api/admin/household/inhabitants/${inhabitantId}`, {
             method: 'POST',
@@ -310,11 +284,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         const scaffoldSummary = formatScaffoldResult(result.scaffoldResult)
         const hasOrderChanges = result.scaffoldResult.created > 0 || result.scaffoldResult.deleted > 0 || result.scaffoldResult.released > 0
 
-        toast.add({
-            title: `${result.inhabitant.name} ${result.inhabitant.lastName} flyttet til ${targetLabel}`,
-            description: hasOrderChanges ? scaffoldSummary : undefined,
-            color: 'success'
-        })
+        toastSaved(`${result.inhabitant.name} ${result.inhabitant.lastName} flyttet til ${targetLabel}`, hasOrderChanges ? scaffoldSummary : undefined)
 
         return result
     }
@@ -324,7 +294,6 @@ export const useHouseholdsStore = defineStore("Households", () => {
      * Resolves without deleting when the request fails; the request has already toasted it
      */
     const deleteHousehold = async (householdId: number) => {
-        const toast = useToast()
         // Capture identity before deletion (lookup disappears after refreshHouseholds)
         const deleted = households.value.find(h => h.id === householdId)
         console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Deleting household ${householdId}`)
@@ -336,11 +305,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         skipGoneId(householdChoice, householdId, resolveHouseholdId)
         await refreshHouseholds()
 
-        toast.add({
-            title: 'Husstand slettet',
-            description: deleted ? `${deleted.shortName} · PBS ${deleted.pbsId}` : undefined,
-            color: 'success'
-        })
+        toastSaved('Husstand slettet', deleted ? `${deleted.shortName} · PBS ${deleted.pbsId}` : undefined)
     }
 
     /**
@@ -356,7 +321,6 @@ export const useHouseholdsStore = defineStore("Households", () => {
         name: string
         prevOwnerMoveOutUpdates?: {id: number, moveOutDate: Date}[]
     }): Promise<HouseholdDetail | null> => {
-        const toast = useToast()
         const {prevOwnerMoveOutUpdates = [], ...createBody} = payload
         try {
             console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Creating household at ${payload.address} (PBS ${payload.pbsId})`)
@@ -372,7 +336,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
             }
 
             await refreshHouseholds()
-            toast.add({title: 'Husstand oprettet', description: `${created.shortName} · PBS ${created.pbsId}`, color: 'success'})
+            toastSaved('Husstand oprettet', `${created.shortName} · PBS ${created.pbsId}`)
             return created
         } catch {
             return null

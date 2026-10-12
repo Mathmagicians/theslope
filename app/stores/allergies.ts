@@ -19,7 +19,7 @@ const POSTER_NOTES_ENDPOINT = `/api/admin/setting/${POSTER_NOTES_KEY}`
 export const useAllergiesStore = defineStore("Allergies", () => {
 
     // DEPENDENCIES
-    const {storeAsyncData, apiRequest} = useApiHandler()
+    const {storeAsyncData, loadOrThrow, apiRequest} = useApiHandler()
     const {AllergyTypeDisplaySchema, AllergyTypeDetailSchema, AllergyDetailSchema} = useAllergyValidation()
     const {SettingDetailSchema, SETTING_REGISTRY} = useSettingValidation()
 
@@ -37,9 +37,11 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     })
     const {
         data: allergyTypes,
-        status: allergyTypesStatus,
         error: allergyTypesError,
-        refresh: refreshAllergyTypes
+        refresh: refreshAllergyTypes,
+        isLoading: isAllergyTypesLoading,
+        isErrored: isAllergyTypesErrored,
+        isInitialized: isAllergyTypesInitialized
     } = allergyTypesDataset
 
     // The page names the allergy type its URL carries; an id outside the catalog selects none
@@ -51,8 +53,10 @@ export const useAllergiesStore = defineStore("Allergies", () => {
 
     const {
         data: selectedAllergyType,
-        status: selectedAllergyTypeStatus,
-        error: selectedAllergyTypeError
+        error: selectedAllergyTypeError,
+        isLoading: isSelectedAllergyTypeLoading,
+        isErrored: isSelectedAllergyTypeErrored,
+        isInitialized: isSelectedAllergyTypeInitialized
     } = storeAsyncData(
         'allergy-store-selected-allergy-type',
         () => `/api/admin/allergy-type/${selectedAllergyTypeId.value}`,
@@ -73,18 +77,20 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     )
 
     // Poster notes - ONE Setting row, read by the catalog card header and the poster.
-    // It keeps its own status refs and stays out of isAllergyStoreReady, so the poster
+    // It keeps its own status flags and stays out of isAllergyStoreReady, so the poster
     // prints its notes even while the catalog is still loading.
-    const {
-        data: posterNotesSetting,
-        status: posterNotesStatus,
-        error: posterNotesError,
-        refresh: refreshPosterNotes
-    } = storeAsyncData('allergy-store-poster-notes', POSTER_NOTES_ENDPOINT, {
+    const posterNotesDataset = storeAsyncData('allergy-store-poster-notes', POSTER_NOTES_ENDPOINT, {
         schema: SettingDetailSchema.nullable(),
         default: () => null,
         errorMessage: 'Kunne ikke hente bemærkninger'
     })
+    const {
+        data: posterNotesSetting,
+        error: posterNotesError,
+        isLoading: isPosterNotesLoading,
+        isErrored: isPosterNotesErrored,
+        isInitialized: isPosterNotesInitialized
+    } = posterNotesDataset
 
     // Allergies - Filtered by household or inhabitant
     const filterHouseholdId = ref<number | null>(null)
@@ -102,9 +108,11 @@ export const useAllergiesStore = defineStore("Allergies", () => {
 
     const {
         data: allergies,
-        status: allergiesStatus,
         error: allergiesError,
-        refresh: refreshAllergies
+        refresh: refreshAllergies,
+        isLoading: isAllergiesLoading,
+        isErrored: isAllergiesErrored,
+        isInitialized: isAllergiesInitialized
     } = storeAsyncData(
         allergiesQueryKey,
         allergiesQueryKey,
@@ -120,34 +128,10 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     // Computed - Public API (derived from status)
     // ========================================
 
-    // AllergyTypes status
-    const isAllergyTypesLoading = computed(() => allergyTypesStatus.value === 'pending')
-    const isAllergyTypesErrored = computed(() => allergyTypesStatus.value === 'error')
-    // ADR-007: initialized requires data to exist, not just a successful status
-    const isAllergyTypesInitialized = computed(() =>
-        allergyTypesStatus.value === 'success' && allergyTypes.value !== null
-    )
     const isNoAllergyTypes = computed(() => isAllergyTypesInitialized.value && allergyTypes.value.length === 0)
 
-    // Selected AllergyType status
-    const isSelectedAllergyTypeLoading = computed(() => selectedAllergyTypeStatus.value === 'pending')
-    const isSelectedAllergyTypeErrored = computed(() => selectedAllergyTypeStatus.value === 'error')
-    const isSelectedAllergyTypeInitialized = computed(() =>
-        selectedAllergyTypeStatus.value === 'success' && selectedAllergyType.value !== null
-    )
-
-    // Allergies status
-    const isAllergiesLoading = computed(() => allergiesStatus.value === 'pending')
-    const isAllergiesErrored = computed(() => allergiesStatus.value === 'error')
-    const isAllergiesInitialized = computed(() => allergiesStatus.value === 'success')
     const isNoAllergies = computed(() => isAllergiesInitialized.value && allergies.value.length === 0)
 
-    // Poster notes status - deliberately NOT folded into isAllergyStoreReady
-    const isPosterNotesLoading = computed(() => posterNotesStatus.value === 'pending')
-    const isPosterNotesErrored = computed(() => posterNotesStatus.value === 'error')
-    const isPosterNotesInitialized = computed(() =>
-        posterNotesStatus.value === 'success' && posterNotesSetting.value !== null
-    )
     // The registry default covers the first paint and a failed fetch, so the box is never empty
     const posterNotes = computed(() =>
         posterNotesSetting.value?.value ?? SETTING_REGISTRY[POSTER_NOTES_KEY].defaultValue
@@ -160,11 +144,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     // Actions - AllergyTypes (Admin)
     // ========================================
 
-    const loadAllergyTypes = async () => {
-        await refreshAllergyTypes()
-        if (allergyTypesError.value) throw allergyTypesError.value
-        console.info(`🥜 > ALLERGY_STORE > Loaded ${allergyTypes.value.length} allergy types`)
-    }
+    const loadAllergyTypes = () => loadOrThrow(allergyTypesDataset, () => `🥜 > ALLERGY_STORE > Loaded ${allergyTypes.value.length} allergy types`)
 
     const selectAllergyType = (choice: MaybeRefOrGetter<number | null>) => {
         allergyTypeChoice.value = () => toValue(choice)
@@ -204,11 +184,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     // Actions - Poster notes (Setting)
     // ========================================
 
-    const loadPosterNotes = async () => {
-        await refreshPosterNotes()
-        if (posterNotesError.value) throw posterNotesError.value
-        console.info('🥜 > ALLERGY_STORE > Loaded poster notes')
-    }
+    const loadPosterNotes = () => loadOrThrow(posterNotesDataset, '🥜 > ALLERGY_STORE > Loaded poster notes')
 
     // The endpoint returns the stored row (ADR-009), so the response IS the new value.
     // Reading it back in a second round trip would put the box one failed request away from

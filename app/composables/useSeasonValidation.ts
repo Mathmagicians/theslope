@@ -5,6 +5,7 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import {IdSchema} from '~/composables/useCoreValidation'
 import type {WeekDayMap} from '~/types/dateTypes'
 
 // Season status constants - single source of truth
@@ -47,7 +48,7 @@ export const useSeasonValidation = () => {
         })
 
     const BaseSeasonSchema = z.object({
-        id: z.number().int().positive().optional(),
+        id: IdSchema.optional(),
         shortName: z.string().min(4),
         seasonDates: dateRangeSchema,
         isActive: z.boolean(),
@@ -105,7 +106,7 @@ export const useSeasonValidation = () => {
     })
 
     // GET /api/admin/season/active: a null id arrives as an empty body
-    const ActiveSeasonIdSchema = z.preprocess(id => id || null, z.number().int().positive().nullable())
+    const ActiveSeasonIdSchema = z.preprocess(id => id || null, IdSchema.nullable())
 
     // Serialization and deserialization functions
     const serializeSeason = (season: Season): SerializedSeason => SerializedSeasonSchema.parse(season)

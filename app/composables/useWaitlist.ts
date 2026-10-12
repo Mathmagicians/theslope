@@ -1,6 +1,11 @@
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {getPortionsForTicketType} from '~/utils/portions'
+import {sumBy} from '~/utils/ledger'
+
+// Ascending by time; the id breaks a tie between rows stamped in the same instant
+export const byTimeThenId = <T extends {id: number}>(getTime: (item: T) => number) => (a: T, b: T): number =>
+    getTime(a) - getTime(b) || a.id - b.id
 
 type PortionsOf = (entry: TicketWaitlistDisplay) => number
 
@@ -20,9 +25,9 @@ interface WaitlistAssignmentPlan {
  * Imported by the server: explicit imports only (ADR-017).
  */
 export const useWaitlist = () => {
-    // FIFO by join time; the id breaks a tie between entries created in the same instant
+    // FIFO by join time
     const inQueueOrder = (entries: TicketWaitlistDisplay[]): TicketWaitlistDisplay[] =>
-        [...entries].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id - b.id)
+        [...entries].sort(byTimeThenId(entry => entry.createdAt.getTime()))
 
     // 1-based place in the queue, null when the entry is not in it
     const positionOf = (entries: TicketWaitlistDisplay[], entryId: number): number | null => {
@@ -37,7 +42,7 @@ export const useWaitlist = () => {
     }
 
     const portionNeed = (entries: TicketWaitlistDisplay[], portionsOf: PortionsOf): number =>
-        entries.reduce((sum, entry) => sum + portionsOf(entry), 0)
+        sumBy(entries, portionsOf)
 
     // Strict FIFO: the walk stops at the first entry that does not fit the remaining supply, so nobody overtakes
     const resolveWaitlistAssignment = (

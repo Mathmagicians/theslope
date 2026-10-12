@@ -2925,6 +2925,12 @@ export const getRandomEmptyMessage = (context: keyof typeof EMPTY_STATE_MESSAGES
     return messages[index]!
 }
 
+/** The day's empty message as one line of text, emoji first */
+export const getRandomEmptyMessageText = (context: keyof typeof EMPTY_STATE_MESSAGES) => {
+    const {emoji, text} = getRandomEmptyMessage(context)
+    return `${emoji} ${text}`
+}
+
 /** The season status glyph as a UBadge's settings per status: a filled disc, green active, yellow in progress, grey ended; the sprout alone for an upcoming season */
 export const SEASON_STATUS_GLYPHS: Record<SeasonStatusValue, BadgeProps & {class: string}> = {
     [SEASON_STATUS.ACTIVE]: {class: BG.green[500], ui: COMPONENTS.seasonStatus.discUi},
@@ -3022,6 +3028,7 @@ export const useTheSlopeDesignSystem = () => {
         RESIDENCY_CONFIG,
         getResidencyDisplay,
         getRandomEmptyMessage,
+        getRandomEmptyMessageText,
         EMPTY_STATE_MESSAGES
     }
 }

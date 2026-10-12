@@ -8,7 +8,7 @@ export const LOGIN_FAILED_MESSAGE = 'Vi kunne ikke logge dig på, prøv igen. Du
 export const useAuthStore = defineStore("Auth", () => {
     const {loggedIn, user: _user, session, clear, fetch} = useUserSession()
     const permissions = usePermissions()
-    const {apiRequest} = useApiHandler()
+    const {apiRequest, toastSaved} = useApiHandler()
 
     const user = computed(() => _user.value as UserDetail | null)
 
@@ -50,7 +50,7 @@ export const useAuthStore = defineStore("Auth", () => {
     const savePreferences = async (update: UserPreferencesUpdate) => {
         await apiRequest('/api/user/preferences', {method: 'POST', body: update, action: 'savePreferences'})
         await fetch()
-        useToast().add({title: 'Indstillinger gemt', color: 'success'})
+        toastSaved('Indstillinger gemt')
     }
 
     /**
@@ -59,9 +59,8 @@ export const useAuthStore = defineStore("Auth", () => {
      */
     const sendTestNotification = async (): Promise<SenderEmitResult> => {
         const result = await apiRequest<SenderEmitResult>('/api/user/notifications/test', {method: 'POST', action: 'sendTestNotification'})
-        useToast().add(result.degraded
-            ? {title: 'Notifikationer er ikke sat op i dette miljø', description: result.dedupeKey, color: 'warning'}
-            : {title: 'Testbesked afsendt – tjek din indbakke/telefon', description: result.dedupeKey, color: 'success'})
+        if (result.degraded) useToast().add({title: 'Notifikationer er ikke sat op i dette miljø', description: result.dedupeKey, color: COLOR.warning})
+        else toastSaved('Testbesked afsendt – tjek din indbakke/telefon', result.dedupeKey)
         return result
     }
 

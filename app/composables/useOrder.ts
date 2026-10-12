@@ -5,6 +5,7 @@
  */
 import type {OrderDisplay, OrderDetail} from '~/composables/useBookingValidation'
 import {getPortionsForTicketType} from '~/utils/portions'
+import {sumBy} from '~/utils/ledger'
 
 /**
  * Statistics for one dining mode in kitchen display
@@ -129,11 +130,8 @@ export const useOrder = () => {
    * Calculate total portions from orders
    * Uses order.ticketType (priceAtBooking preserves the price)
    */
-  const calculateTotalPortionsFromPrices = (orders: OrderDetail[]): number => {
-    return orders.reduce((sum, order) => {
-      return sum + (order.ticketType ? getPortionsForTicketType(order.ticketType) : 0)
-    }, 0)
-  }
+  const calculateTotalPortionsFromPrices = (orders: OrderDetail[]): number =>
+    sumBy(orders, order => order.ticketType ? getPortionsForTicketType(order.ticketType) : 0)
 
   /**
    * Group orders by ticket type with counts, portions, and revenue
@@ -251,7 +249,7 @@ export const useOrder = () => {
 
     // Apply minimum, track how much we've used
     const withMin = stats.map(s => ({ key: s.key, width: Math.max(s.percentage, minWidth) }))
-    const total = withMin.reduce((sum, s) => sum + s.width, 0)
+    const total = sumBy(withMin, s => s.width)
 
     // Scale to 100% if needed
     const scale = total > 0 ? 100 / total : 1
@@ -291,7 +289,7 @@ export const useOrder = () => {
   ) => {
     const paidOrders = orders.filter(order => order.state !== OrderState.CANCELLED)
     const ticketCount = paidOrders.length
-    const totalRevenue = paidOrders.reduce((sum, o) => sum + o.priceAtBooking, 0)
+    const totalRevenue = sumBy(paidOrders, o => o.priceAtBooking)
     const kitchenContribution = Math.round(totalRevenue * kitchenBaseRatePercent / 100)
     const kitchenContributionExVat = convertVat(kitchenContribution, vatPercent, true)
     const availableBudget = totalRevenue - kitchenContribution
@@ -320,10 +318,8 @@ export const useOrder = () => {
   const typedKrOtherUnitOre = (amountKr: number, exVat: boolean, vatPercent: number = DEFAULT_VAT_PERCENT): number =>
     exVat ? typedKrToGrossOre(amountKr, true, vatPercent) : convertVat(Math.round(amountKr * 100), vatPercent, true)
 
-  const spendingTotals = (rows: SpendingFigures[]): SpendingFigures => rows.reduce(
-    (sum, row) => ({budgetGross: sum.budgetGross + row.budgetGross, spentGross: sum.spentGross + row.spentGross}),
-    {budgetGross: 0, spentGross: 0}
-  )
+  const spendingTotals = (rows: SpendingFigures[]): SpendingFigures =>
+    ({budgetGross: sumBy(rows, row => row.budgetGross), spentGross: sumBy(rows, row => row.spentGross)})
   const spendingLeft = (figures: SpendingFigures): number => figures.budgetGross - figures.spentGross
   const spendingAwaitsTickets = (figures: SpendingFigures): boolean => figures.budgetGross === 0
 

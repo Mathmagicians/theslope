@@ -66,7 +66,7 @@ const columns: TableColumn<SpendingTableRow>[] = [
         <VatAmount v-if="row.original.kind === 'dinner'" :gross="spendingLeft(row.original)" balance :pending="spendingAwaitsTickets(row.original)" />
       </template>
       <template #empty>
-        <UAlert v-bind="ALERTS.emptyStateCompact" :title="`${noReceipts.emoji} ${noReceipts.text}`" data-testid="cooking-round-empty" />
+        <UAlert v-bind="ALERTS.emptyStateCompact" :title="noReceipts" data-testid="cooking-round-empty" />
       </template>
       <template #body-bottom>
         <tr :class="COMPONENTS.table.totalRow" data-testid="cooking-round-total">

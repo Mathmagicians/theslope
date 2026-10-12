@@ -292,7 +292,7 @@ Vis fuld historik shows every row newest first, no line, no button.
 - Every amount sits in fixed columns with an icon slot that is always there, so kr lines up down a column with and without the check or exclamation icon, in the hint, the lines, the box and the round table.
 - Every table is a UTable on the table token, the lines table of the editor included; a header row over rows is a table even when drawn with divs. Every table's empty state is its own `#empty` slot, never a synthetic row, and reads one of the app's funny empty texts of the table's kind (`noTicketsSold`, `noReceipts`, `noTicketChanges`) in the compact empty-state alert.
 - The season status glyphs are one set, `STATUS_GLYPHS`, bound by the season status display; dinner rows carry no status.
-- No figure is computed in a component: sums, what is left, the waiting state and the receipt sub-rows come from the composables (`useOrder` spending helpers, `useBookingUi` for the table rows), components bind them.
+- No figure is computed in a component: sums, what is left, the waiting state, the receipt sub-rows and the sum rows under a block of lines come from the composables (`useOrder` spending helpers, `useBookingUi` for the table rows and `allowanceRows`), components bind them; the card builds the two spending fragments once for the editor and the Budget pane.
 - View mode shows the folded row without its button.
 
 **Mockup — season view (opens from [Se sæsontrend]; same component serves admin economy)** ✅ signed 2026-10-05

@@ -8,10 +8,12 @@ import type {InhabitantDisplay, HouseholdDisplay} from '~/composables/useCoreVal
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
+import {byTimeThenId} from '~/composables/useWaitlist'
 import type {PruneAndCreateResult} from '~/utils/batchUtils'
 import {calculateCountdown, formatDate, DATE_SETTINGS} from '~/utils/date'
 import {dateToWeekDay} from '~/utils/season'
 import {chunkArray, groupBy} from '~/utils/batchUtils'
+import {sumBy} from '~/utils/ledger'
 import {getPortionsForTicketType, type TicketType} from '~/utils/portions'
 import {differenceInCalendarDays} from 'date-fns'
 
@@ -1178,7 +1180,7 @@ export const useBooking = () => {
         )
         return {
             ticketCounts: formatTicketCounts(activeOrders),
-            totalPrice: activeOrders.reduce((sum, o) => sum + o.priceAtBooking, 0)
+            totalPrice: sumBy(activeOrders, o => o.priceAtBooking)
         }
     }
 
@@ -1241,6 +1243,14 @@ export const useBooking = () => {
         }
         return parts.join(format === 'compact' ? ' ' : ', ')
     }
+
+    // Sums the results of several scaffold runs; the season is the last run's
+    const sumScaffoldResults = (results: readonly ScaffoldResult[]): ScaffoldResult => ({
+        seasonId: results.at(-1)?.seasonId ?? null,
+        ...Object.fromEntries(SCAFFOLD_FIELDS.map(({key}) => [key, sumBy(results, result => result[key])])) as Record<typeof SCAFFOLD_FIELDS[number]['key'], number>,
+        positions: results.flatMap(result => result.positions),
+        households: sumBy(results, result => result.households)
+    })
 
     // ============================================================================
     // Bucket Resolution - Wrapper for UI components (mirrors server usage)
@@ -1433,22 +1443,26 @@ export const useBooking = () => {
     // Ticket changes (Billetændringer) and the cooking round
     // ============================================================================
 
-    const emptyCounts = (): TicketCounts => ({ADULT: 0, CHILD: 0, BABY: 0})
+    const {TicketTypeSchema} = useBookingValidation()
+    const countsBy = (count: (type: TicketType) => number): TicketCounts =>
+        Object.fromEntries(TicketTypeSchema.options.map(type => [type, count(type)])) as TicketCounts
+    const emptyCounts = (): TicketCounts => countsBy(() => 0)
+    const foldCounts = (op: (a: number, b: number) => number) => (a: TicketCounts, b: TicketCounts): TicketCounts =>
+        countsBy(type => op(a[type], b[type]))
 
     // The tickets a dinner holds after a history row; counts, kuverter and revenue are read off this set
     type HeldTicket = Readonly<{key: number, inhabitantId: number | null, type: TicketType | null, price: number, eating: boolean, householdId: number | null, householdShortname: string | null}>
     type HeldTickets = ReadonlyMap<number, HeldTicket>
 
-    const sumOver = (held: HeldTickets, weigh: (ticket: HeldTicket) => number): number =>
-        [...held.values()].reduce((sum, ticket) => sum + weigh(ticket), 0)
+    const sumOver = (held: HeldTickets, weigh: (ticket: HeldTicket) => number): number => sumBy([...held.values()], weigh)
     const countsOf = (held: HeldTickets): TicketCounts =>
         [...held.values()].reduce((counts, ticket) => ticket.type ? {...counts, [ticket.type]: counts[ticket.type] + 1} : counts, emptyCounts())
     // A ticket released after the booking deadline stays paid and leaves the table: revenue keeps it, kuverter drop it
     const portionsOf = (held: HeldTickets): number =>
         sumOver(held, ticket => ticket.eating && ticket.type ? getPortionsForTicketType(ticket.type) : 0)
     const revenueOf = (held: HeldTickets): number => sumOver(held, ticket => ticket.price)
-    const countsPlus = (a: TicketCounts, b: TicketCounts): TicketCounts => ({ADULT: a.ADULT + b.ADULT, CHILD: a.CHILD + b.CHILD, BABY: a.BABY + b.BABY})
-    const countsMinus = (a: TicketCounts, b: TicketCounts): TicketCounts => ({ADULT: a.ADULT - b.ADULT, CHILD: a.CHILD - b.CHILD, BABY: a.BABY - b.BABY})
+    const countsPlus = foldCounts((a, b) => a + b)
+    const countsMinus = foldCounts((a, b) => a - b)
 
     const withTicket = (held: HeldTickets, ticket: HeldTicket): HeldTickets => new Map(held).set(ticket.key, ticket)
     const withoutTicket = (held: HeldTickets, key: number): HeldTickets => new Map([...held].filter(([heldKey]) => heldKey !== key))
@@ -1458,7 +1472,7 @@ export const useBooking = () => {
         (orderId !== null ? held.get(orderId) : undefined)
         ?? [...held.values()].find(ticket => ticket.key < 0 && ticket.inhabitantId === inhabitantId)
 
-    const byTime = (a: OrderHistoryDisplay, b: OrderHistoryDisplay): number => a.timestamp.getTime() - b.timestamp.getTime() || a.id - b.id
+    const byTime = byTimeThenId<OrderHistoryDisplay>(row => row.timestamp.getTime())
 
     /**
      * Replays a dinner's order history in time order into one change per event: the tickets moved by type, the
@@ -1572,6 +1586,7 @@ export const useBooking = () => {
         partitionGuestOrders,
         // Scaffold Result Formatting
         formatScaffoldResult,
+        sumScaffoldResults,
         // Lock Status
         countReleasedOrdersByDinner,
         getLockedFutureDinnerIds,

@@ -52,7 +52,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, ALERTS, BUTTONS, COMPONENTS, columnVisibility, getRandomEmptyMessage, NOISE, breakpoint } = useTheSlopeDesignSystem()
+const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, ALERTS, BUTTONS, COMPONENTS, columnVisibility, NOISE, breakpoint } = useTheSlopeDesignSystem()
 
 // Maintenance helpers
 const {
@@ -128,8 +128,7 @@ const getLatestJobRunByType = (jobType: string): JobRunDisplay | null => {
 }
 
 // Empty state for job history table
-const jobHistoryEmptyMessage = getRandomEmptyMessage('jobHistory')
-const jobHistoryEmpty = `${jobHistoryEmptyMessage.emoji} ${jobHistoryEmptyMessage.text}`
+const jobHistoryEmpty = getRandomEmptyMessageText('jobHistory')
 
 // ============================================================================
 // JOB HISTORY TABLE

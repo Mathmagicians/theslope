@@ -17,7 +17,7 @@ const hasInhabitants = computed(() => props.household.inhabitants?.length > 0)
 
 <template>
     <div v-if="compact" class="flex flex-col md:flex-row md:items-center gap-3">
-        <UAvatarGroup :size="COMPONENTS.avatar.compact.size" :max="COMPONENTS.avatar.listItemMax">
+        <UAvatarGroup :size="COMPONENTS.avatar.compact.size" :ui="{base: COMPONENTS.avatar.compact.fit}" :max="COMPONENTS.avatar.listItemMax">
             <UTooltip v-for="inhabitant in household.inhabitants" :key="inhabitant.id" :text="inhabitant.name">
                 <UAvatar
                     :src="inhabitant.pictureUrl ?? undefined"

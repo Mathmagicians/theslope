@@ -182,7 +182,7 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
         <template #unitPrice-cell="{ row }">{{ formatPrice(row.original.unitPrice) }} kr</template>
         <template #revenue-cell="{ row }">{{ formatPrice(row.original.revenue) }} kr</template>
         <template #empty>
-          <UAlert v-bind="ALERTS.emptyStateCompact" :title="`${noTicketsSold.emoji} ${noTicketsSold.text}`" data-testid="budget-ticket-empty" />
+          <UAlert v-bind="ALERTS.emptyStateCompact" :title="noTicketsSold" data-testid="budget-ticket-empty" />
         </template>
         <template #body-bottom>
           <tr :class="COMPONENTS.table.totalRow" data-testid="budget-summary-revenue">

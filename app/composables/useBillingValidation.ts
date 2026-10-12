@@ -36,16 +36,14 @@ export const useBillingValidation = () => {
     const DinnerMode = DinnerModeSchema.enum
     const OrderState = OrderStateSchema.enum
     const {convertPriceToDecimalFormat} = useTicket()
+    const {CreateOrdersResultSchema, TicketCountsSchema} = useBookingValidation()
 
     // ============================================================================
     // BillingPeriodSummary Schemas (ADR-009: Display vs Detail)
     // ============================================================================
 
-    /**
-     * Ticket counts by type - raw data from repository
-     * Keys are TicketType enum values
-     */
-    const TicketCountsByTypeSchema = z.partialRecord(TicketTypeSchema, z.number().int())
+    // Ticket counts by type from the repository; a type without tickets is absent
+    const TicketCountsByTypeSchema = TicketCountsSchema.partial()
 
     /**
      * BillingPeriodSummary Display - for index endpoints (lightweight)
@@ -129,7 +127,6 @@ export const useBillingValidation = () => {
         csvContent: z.string().min(1, 'CSV content is required')
     })
 
-    const {CreateOrdersResultSchema} = useBookingValidation()
 
     const BillingImportResponseSchema = z.object({
         results: z.array(CreateOrdersResultSchema),

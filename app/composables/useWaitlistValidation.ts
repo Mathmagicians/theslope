@@ -1,5 +1,6 @@
 import {z} from 'zod'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {IdSchema} from '~/composables/useCoreValidation'
 
 /**
  * Waiting list schemas: an entry holds an unplaced order in its create shape, the queue reads FIFO by `createdAt`,
@@ -10,13 +11,13 @@ export const useWaitlistValidation = () => {
 
     // The order an entry holds: the shape `createOrders` places, plus the guest's allergies
     const WaitlistOrderSchema = OrderCreateWithPriceSchema.extend({
-        allergyTypeIds: z.array(z.number().int().positive()).optional()
+        allergyTypeIds: IdSchema.array().optional()
     })
 
     const TicketWaitlistDisplaySchema = z.object({
-        id: z.number().int().positive(),
-        dinnerEventId: z.number().int().positive(),
-        inhabitantId: z.number().int().positive(),
+        id: IdSchema,
+        dinnerEventId: IdSchema,
+        inhabitantId: IdSchema,
         isGuestTicket: z.boolean(),
         order: WaitlistOrderSchema,
         createdAt: z.coerce.date()
@@ -50,22 +51,22 @@ export const useWaitlistValidation = () => {
     })
 
     const WaitlistQueueSummarySchema = z.object({
-        dinnerEventId: z.number().int().positive(),
+        dinnerEventId: IdSchema,
         entries: z.number().int().nonnegative(),
         portions: z.number().nonnegative()
     })
 
     const WaitlistAssignedSchema = z.object({
-        entryId: z.number().int().positive(),
-        inhabitantId: z.number().int().positive(),
+        entryId: IdSchema,
+        inhabitantId: IdSchema,
         isGuestTicket: z.boolean(),
         portions: z.number().nonnegative(),
-        orderId: z.number().int().positive(),
+        orderId: IdSchema,
         notification: NotificationOutcomeSchema
     })
 
     const WaitlistAssignmentResultSchema = z.object({
-        dinnerEventId: z.number().int().positive(),
+        dinnerEventId: IdSchema,
         supplyPortions: z.number().nonnegative(),
         assigned: z.array(WaitlistAssignedSchema),
         portionsUsed: z.number().nonnegative(),
