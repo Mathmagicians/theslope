@@ -1,6 +1,6 @@
 # Release 0.9.0 — work-roster push overview
 
-**Status:** Draft | **Date:** 2026-10-05 | **Updated:** 2026-10-12 (implemented sections compacted to pointers) | **Branch:** `feature/work-roster`
+**Status:** Draft | **Date:** 2026-10-05 | **Updated:** 2026-10-13 (done work compacted, deferrals moved out of this-pr) | **Branch:** `feature/work-roster`
 
 The umbrella spec for this push (the finished push earns v0.9). Each package is briefed and approved in chat before
 any agent starts; detail lives in the linked docs. All Prisma work lands as ONE migration package (model sign-off
@@ -12,16 +12,17 @@ Sizing is informal t-shirt sizes.
 
 | Package | What | Detail | Size | Status |
 |---|---|---|---|---|
-| Framework research spike | prisma 7/8-RC + zod 4 + `zod-prisma-types` compatibility; removable workarounds and adoptable features; Nuxt roadmap evidence that `useAsyncData`'s option surface (`enabled`, `createUseAsyncData`) and named layout slots survive coming releases | `feature-proposal-framework-adoption.md` § Dependency clusters | S | committed |
+| Framework research spike | prisma 7/8-RC + zod 4 + `zod-prisma-types` compatibility; removable workarounds and adoptable features; Nuxt roadmap evidence that `useAsyncData`'s option surface (`enabled`, `createUseAsyncData`) and named layout slots survive coming releases | `../archived/feature-proposal-framework-adoption.md` § Dependency clusters | S | committed |
 | CI test reporting | Job summary: vitest's built-in GitHub summary + per-suite Playwright sections with report links | below | S | committed |
-| Framework pair upgrade | pinia 4 + @pinia/nuxt 1, @vueuse/core 15, ical-generator 11 | `feature-proposal-framework-adoption.md` § Clusters and order | S | committed |
-| Store fetcher factory + store alignment | `storeAsyncData` from `useApiHandler`, schema-driven types; every store converges on it (the misaligned fetch handling across stores, release-plan I2) | `feature-proposal-framework-adoption.md` | M–L | committed |
-| Fetch gating | `enabled` carries the fetch condition; id-in-key gates need nothing extra, login gates clear on logout; folded in 2026-10-07: datasets key on the real selection (no copy refs, no component watches), `selectedSeasonId = userChoice ?? getDefaultSeasonId()`, `dependsOn` for SSR of dependent chains | `feature-proposal-framework-adoption.md` | M–L | committed (fine-tuning open: stale-selection 404) |
+| Framework pair upgrade | pinia 4 + @pinia/nuxt 1, @vueuse/core 15, ical-generator 11 | `../archived/feature-proposal-framework-adoption.md` § Dependency clusters | S | committed |
+| Store fetcher factory + store alignment | `storeAsyncData` from `useApiHandler`, schema-driven types; every store converges on it (the misaligned fetch handling across stores, release-plan I2) | `../archived/feature-proposal-framework-adoption.md` | M–L | committed |
+| Fetch gating | `enabled` carries the fetch condition; id-in-key gates need nothing extra, login gates clear on logout; folded in 2026-10-07: datasets key on the real selection (no copy refs, no component watches), `selectedSeasonId = userChoice ?? getDefaultSeasonId()`, `dependsOn` for SSR of dependent chains | `../archived/feature-proposal-framework-adoption.md` | M–L | committed (fine-tuning open: stale-selection 404) |
 | Prisma bundle | ALL prisma/zod/migration work in one go: the prisma + zod majors the spike green-lights, `zod-prisma-types` regen, every new model of the push, one migration | below | L | committed (migration `0017_roster` on local, dev and prod 2026-10-08; later schema changes ride their packages) |
-| Duty roster (F5a) | Templates, duties, audit trail | `feature-proposal-duty-roster.md` | L | signed off (schema 2026-10-07, roster UX 2026-10-05, admin template UI 2026-10-06) |
-| Joker + vacancy overviews | `JokerSlot`, dinner "missing" face, CTC faces, shift counts, volunteering moves to duty level + data separation | `feature-proposal-duty-roster.md` § Joker + § Roster UX | L | signed off (CTC 2026-10-05, overviews 2026-10-06); the team-card slot committed (3cdb77c, 427a625, c62dd6b) |
-| Roster sign-off + cross-team swap (F5b) | Derived auto-sign + godkend-alligevel, duty swap | `feature-proposal-duty-roster.md` Phases 4–5 | M | signed off (2026-10-05, swap mode 2026-10-08) |
-| Waitlist | Queue, auto-assign sweep, extra portions, UI | `feature-proposal-waitlist.md` | L | signed off (chef 2026-10-05, member faces 2026-10-06, one booking path 2026-10-12); backend committed 2026-10-09; UI implemented 2026-10-12 |
+| Duty roster (F5a) | Templates, duties, audit trail | `../feature-proposal-duty-roster.md` | L | deferred to the next release 2026-10-13 (signed off: schema 2026-10-07, roster UX 2026-10-05); the joker slot shipped (`../archived/feature-joker-slot.md`) |
+| Joker + vacancy overviews | `JokerSlot`, dinner "missing" face, CTC faces, shift counts, volunteering moves to duty level + data separation | `../feature-proposal-duty-roster.md` § Joker + § Roster UX | L | the joker slot ✅ committed (c62dd6b, 427a625, 3cdb77c); the faces, overviews and data separation deferred with the roster |
+| Roster sign-off + cross-team swap (F5b) | Derived auto-sign + godkend-alligevel, duty swap | `../feature-proposal-duty-roster.md` Phases 4–5 | M | deferred with the roster |
+| Waitlist | Queue, auto-assign sweep, extra portions, one booking path, UI | `../archived/feature-waitlist.md` | L | committed (backend 2026-10-09, one booking path and UI 2026-10-12) |
+| Waitlist notifications | the serial e2e asserting each of the four shipped kinds writes its Delivery row | this doc § Waitlist notifications | S | planned |
 | Kitchen allergy line | the dining-mode panels show the allergy kuverter; the expanded list opens with the allergen breakdown and chips beside each diner | this doc § Kitchen allergy line | S | committed (5eedd34, 49ece5e) |
 | Chef allergen line | the chef's allergen section counts this dinner's diners in kuverter per menu allergen; the edit panel becomes the allergy panel | this doc § Chef allergen line | S | committed (49ece5e); selector population planned |
 | Chef calendar header | the Agenda/Kalender tabs and the collapse chevron share one header row above a `UCollapsible`; `/chef` hydrates with one footer | this doc § Chef calendar header | S | committed (42b380f) |
@@ -31,15 +32,16 @@ Sizing is informal t-shirt sizes.
 | One breakpoint source | the design system is the one reader of the layout's `isMd`; components bind responsive tokens, behaviour reads `breakpoint`; the household calendar's open state moves to `?cal=` | this doc § Decisions 2026-10-11 (one breakpoint source) | S | committed (8d98269) |
 | Calendar default waits for the viewport | `/dinner` and `/chef` land open on desktop and closed on a phone; the breakpoint reads null until the layout measures it | this doc § Small packages | S | committed (2a8d0e9) |
 | Season status glyphs | the season's status as a `UBadge` from `SEASON_STATUS_GLYPHS`, in the season selector and the status display | this doc § Small packages | S | committed (fd41213, bb3271e) |
-| Notifications | Waitlist + duty-swap kinds, buildup threshold | `feature-proposal-notification-triggers.md` § Trigger catalog | M | planned |
-| Adhoc billing + EXPENSE | Ad-hoc charges + chef spending as EXPENSE transactions; Mit forbrug + admin economy spending views | `feature-proposal-adhoc-admin-billing.md` | L | signed off (2026-10-08); ledger, chef endpoints and the budget pane committed (49ece5e, 24e9a3f, fd41213); spending views and adhoc charges planned |
+| Notifications | the remaining kinds: chef deadlines, roster, reminders, job failed, dinner cancelled, duty swapped | `../feature-proposal-notification-triggers.md` | M | next release (2026-10-13) |
+| Adhoc billing + EXPENSE | Ad-hoc charges + chef spending as EXPENSE rows; Mit forbrug + admin economy spending views | `../feature-proposal-adhoc-admin-billing.md`, `../feature-proposal-season-spending.md` | L | the ledger, the expense table, the chef endpoints and the budget pane committed (49ece5e, 24e9a3f, fd41213, c65feae); the charges and the spending views next release (2026-10-13) |
+| Season spending | the Sæsontrend view, the admin economy Forbrug, the basisvarer entry | `../feature-proposal-season-spending.md` | L | next release (mockups signed 2026-10-05 and 06) |
 | PRF spike | Passkey/PRF research + device protocol | `../feature-proposal-relogin-faceid.md` (parked proposal), `../archived/feature-mobile-native-feel.md` | S | committed (S5 re-login parked out of 0.9) |
-| Page composition | Master/detail + tab frames, `md` breakpoint | `feature-proposal-framework-adoption.md` | M | planned (decision open) |
+| Page composition | Master/detail + tab frames, `md` breakpoint | `../archived/feature-proposal-framework-adoption.md` | M | decided 2026-10-13: the frames stay; closed |
 | Order snapshot | Frozen `ticketType` on Order + backfill — the portion resolver reads it | `../chores-0.9.1.md` § Order snapshot | S | planned for 0.9.1 |
 | Booking one-path | One builder family for regular + guest orders across grid/preview/day; guest cells editable; power includes guests; honest toasts | `../archived/bug-fix-plan-v0.9.md` | M–L | committed |
-| Billing delivery report + interrupted runs | Repository fills delivery state on every read; stale RUNNING runs | `bug-fix-billing-delivery-report.md` | M | planned (decisions open) |
+| Billing delivery report + interrupted runs | Repository fills delivery state on every read; stale RUNNING runs | `../bug-fix-billing-delivery-report.md` | M | next release (three decisions open) |
 | Motion tokens | Raw motion classes into the design system | `chores-0.9.1.md` § Raw utility classes | S | planned for 0.9.1 |
-| Dinner-page follow-ups | PR #166 leftovers on `/dinner` | `bug-fix-dinner-page-and-dates.md` | S | planned for 0.9.1 |
+| Dinner-page follow-ups | PR #166 leftovers on `/dinner` | `../chores-0.9.1.md` § Stored dinner dates, § Dinner page remounts on claim, § Catch-up amounts, § Job schedule module; the shipped rows `../archived/bug-fix-dinner-page-and-dates.md` | S | planned for 0.9.1 |
 
 ## Build order
 
@@ -50,10 +52,10 @@ follow the framework's own shapes, adopt new features where they earn it.
 2. Framework pair upgrade ✅ (pinia 4 + @pinia/nuxt 1, ical-generator 11; @vueuse/core removed)
 3. Store fetcher factory + store alignment ✅ → Fetch gating ✅
 4. Prisma bundle ✅ (majors, every model of the push, migration `0017_roster` applied 2026-10-08)
-5. Duty roster F5a → Joker + overviews (+ data separation) → F5b
-6. Waitlist → Notifications
-7. Adhoc + EXPENSE (this release, lower priority)
-8. Page composition (if signed off)
+5. Duty roster → next release (`../feature-proposal-duty-roster.md`); the joker slot landed ✅
+6. Waitlist ✅ → Waitlist notifications (this release, § Waitlist notifications)
+7. Adhoc + EXPENSE: the ledger, the expense table and the budget pane ✅; the charges and the spending views → next release
+8. Page composition: decided 2026-10-13, the frames stay
 
 Landed beside the order, 2026-10-08 to 12: the kitchen and chef allergy lines, the chef calendar header, the ticket
 allergies, the chef budget pane, and the small packages of § Small packages.
@@ -62,16 +64,7 @@ One e2e runner at a time; packages that run Playwright are sequenced.
 
 ## CI test reporting
 
-**Problem.** The pipeline summary reports counts without categories; the e2e api and ui suites appear in neither the
-summary nor as result links; `continue-on-error: true` hides ui failures.
-**Solution.** Per tool, no cross-format normalization. Vitest 5 reports itself: its `github-actions`
-reporter (auto-enabled under `GITHUB_ACTIONS`) writes the Test Files / Test Results summary. Each Playwright suite — api, ui,
-smoke — writes its JSON (`PLAYWRIGHT_JSON_OUTPUT_NAME`) and `make test-report` renders that suite's section: counts,
-❌ heading on failures, the warning note (ui) and the report artifact link (`actions/upload-artifact` `artifact-url`).
-`continue-on-error` stays (decision 2026-10-05).
-**TDD.** `make test-report` rendered against sample reports (failing, green, missing file); the summary layout
-verifies on a CI run of this branch.
-**Affected.** `.github/workflows/cicd.yml`, `Makefile` (`test-report`), `package.json` (playwright json reporters).
+✅ committed: vitest 5 writes the unit summary itself; `make test-report` renders each Playwright suite (api, ui, smoke) from its JSON with counts, a ❌ heading on failures and the report artifact link; `continue-on-error` stays (decision 2026-10-05). The summary layout verifies on a CI run of this branch (§ Verifications).
 
 ## Prisma bundle
 
@@ -79,266 +72,23 @@ One package, one migration, produced by the Make targets after the user signs of
 
 | Model / change | Source |
 |---|---|
-| `DinnerDutyTemplate`, `DinnerDuty` (+ `jokerSlotId`), `DutyHistory`, `DutyState`, `DutyAuditAction` | `feature-proposal-duty-roster.md` § Schema additions |
-| `JokerSlot` | `feature-proposal-duty-roster.md` § Joker |
-| `TicketWaitlist` (an unplaced order in its create shape, as JSON) | `feature-proposal-waitlist.md` § Design |
-| `LedgerEntryType` (`REGULAR`, `ADHOC`), `Transaction.type` + `description`, `Expense` (list per dinner, payee user), `DinnerEvent.totalCost` kept and deprecated | `feature-proposal-adhoc-admin-billing.md` § Data model — ledger and expenses modelled symmetrically |
+| `DinnerDutyTemplate`, `DinnerDuty` (+ `jokerSlotId`), `DutyHistory`, `DutyState`, `DutyAuditAction` | `../feature-proposal-duty-roster.md` § Schema additions |
+| `JokerSlot` | `../feature-proposal-duty-roster.md` § Joker |
+| `TicketWaitlist` (an unplaced order in its create shape, as JSON) | `../archived/feature-waitlist.md` § Design |
+| `LedgerEntryType` (`REGULAR`, `ADHOC`), `Transaction.type` + `description`, `Expense` (list per dinner, payee user), `DinnerEvent.totalCost` kept and deprecated | `../feature-proposal-adhoc-admin-billing.md` § Data model — ledger and expenses modelled symmetrically |
 
-### Signed model set (2026-10-07) — the contract for the implementing agent
+### Signed model set ✅ applied 2026-10-08
 
-**Majors** ✅ applied 2026-10-08. prisma + @prisma/client + @prisma/adapter-d1 7.10.0 (pinned; npm `latest` is the
-8-RC), zod 4.6.5, zod-prisma-types 3.3.11.
-
-- `prisma.config.ts` holds the CLI config (schema path, migrations path, the local sqlite url Migrate diffs against);
-  the schema's datasource carries the provider only.
-- Generator `prisma-client`, `output = "./generated/client"`, `runtime = "workerd"`, `previewFeatures =
-  ["partialIndexes"]`; the client is committed; `make d1-prisma-check` fails CI when the generated layer drifts from
-  the schema. `strictUndefinedChecks` stays a preview feature in 7 (the generated input types carry `Skip` only
-  with the flag), so the flag remains; the 38 `Prisma.skip` sites read `skip` from
-  `@prisma/client/runtime/wasm-compiler-edge` (the runtime module the generated client binds to — the same object the
-  client compares against), `Prisma.validator<T>()({…})` is `{…} satisfies T`, the seven `@prisma/client` import
-  sites point at `~~/prisma/generated/client/client`.
-- The zod generator emits enums only (`createInputTypes = false`, `createModelTypes = false`): the code consumes 12
-  enum schemas and nothing else; the file is 122 lines. The old 17,756-line file carried 1,846 `Prisma.*` input-type
-  references, and instantiating them in every project that includes the zod layer pushed the root `npm run ts` past
-  the 4 GB heap (prisma/orm#29011 reports +32 % tsc memory on 7 for the same reason); enums-only brings it back
-  under the default heap.
-- zod 4: `invalid_type_error`/`required_error` → `error` (6 sites), `.errors` → `.issues`, `z.number({coerce})` →
-  `z.coerce.number()`, `.default({})` → `.prefault({})`, `z.string().email()/url()/uuid()/datetime()` →
-  `z.email()/z.url()/z.uuid()/z.iso.datetime()` (15 sites), `.passthrough()` → `z.looseObject`, the sparse
-  `TicketCountsByTypeSchema` → `z.partialRecord`; `mapZodErrorsToFormErrors` is `z.flattenError`, the 400 message
-  and the sender logs use `z.prettifyError`; `useDateRangeValidation`'s own mapper is gone (one mapper).
-- Manual chunking and raw-SQL joins stay (ADR-014). Gate: `make d1-prisma` + `npm run pre:all`.
-
-**New tables** ✅ in the schema (group 1 signed 2026-10-07, group 2 2026-10-08; Prisma blocks in the linked docs; every
-other column required):
-
-| Table | Column | Decision |
-|---|---|---|
-| `DinnerDutyTemplate` | `role` | required, default `COOK` |
-| `JokerSlot` | `role` / `allocationPercentage` / `affinity` / `startDate`, `endDate` / `note` | default `COOK` / default `100` / required (weekday map JSON) / required / nullable |
-| `DinnerDuty` | `inhabitantId` | nullable — vacant duty |
-| | `origin` | required, default `TEAM` (`DutyOrigin`: TEAM, JOKER, VOLUNTEER, SWAP) |
-| | `role`, `minutesFromDinnerStart`, `durationMinutes`, `taskDescription` | required — copied from the template duty at creation |
-| `DutyHistory` | `performedByUserId` | nullable (system actor), SET NULL |
-| | `dinnerDutyId` | nullable, SET NULL — null on `ROSTER_SIGNED_OFF` |
-| `TicketWaitlist` | `isGuestTicket` / `order` | default `false` / required JSON (order-create shape) |
-| | unique | partial unique `(dinnerEventId, inhabitantId) WHERE isGuestTicket = 0` via `partialIndexes` |
-| `Expense` | `type` / `dinnerEventId` / `paidByUserId` / `userSnapshot` / `amount`, `description` | default `REGULAR` / nullable, SET NULL (REGULAR set, ADHOC null) / nullable, SET NULL (null = the kitchen paid) / required JSON / required |
-| enums | `DutyAuditAction`, `DutyOrigin`, `LedgerEntryType` | as signed |
-
-**Columns on existing tables** — written as `ALTER TABLE … ADD COLUMN … NOT NULL DEFAULT` in the Prisma source (no
-table rebuild on D1):
-
-| Column | Decision | Convergent data line |
-|---|---|---|
-| `Transaction.type` | `LedgerEntryType`, required, default `REGULAR` | — (the default covers every existing row) |
-| `Transaction.description` | nullable | — |
-| `DinnerEvent.totalCost` | kept, `/// @deprecated` — the dinner's cost becomes `SUM(Expense.amount)` in the chef-spending package; the column is dropped by `../chores-0.9.1.md` next release | one REGULAR `Expense` per dinner with `totalCost > 0`: `amount = totalCost`, `description = 'Indkøb'`, `paidByUserId` null, `userSnapshot` = the SYSTEM snapshot (`{"id":null,"email":"SYSTEM"}`, one constant in the validation layer, asserted equal to the migration's literal); `WHERE NOT EXISTS` a REGULAR row for the dinner |
-| `Order` partial unique `(inhabitantId, dinnerEventId) WHERE isGuestTicket = 0` | via `partialIndexes` (decision 2026-10-07, reverses the earlier drop) | none — zero duplicate regular orders verified in every environment; the index creation is the proof |
-
-**Migration notes.** One migration, `0017_roster` (`make d1-create-migration name=roster`), with these rewrites in the Prisma
-source before the flattened copy is regenerated (`.claude/skills/prisma/SKILL.md`):
-- `Transaction.type` — Prisma emits a table rebuild for a required column; rewritten to
-  `ALTER TABLE "Transaction" ADD COLUMN "type" TEXT NOT NULL DEFAULT 'REGULAR'`.
-- New tables (`DinnerDutyTemplate`, `JokerSlot`, `DinnerDuty`, `DutyHistory`, `TicketWaitlist`, `Expense`), the
-  nullable `Transaction.description` and the two partial unique indexes
-  (`CREATE UNIQUE INDEX … WHERE "isGuestTicket" = false`) are taken as Prisma emits them.
-- Data line, convergent: the `totalCost` → `Expense` mapping (table above). No snapshot rewrite on `Transaction`.
-- `tests/component/architecture/migrations.unit.spec.ts` keeps rejecting `DROP TABLE`.
-
-**Migration safety.** The migration is additive: new tables, columns with a default or nullable, indexes, inserts
-into a new table. The code deployed at the time of the apply keeps working on the migrated schema — it selects
-columns that still exist and never touches the new tables; the one new behaviour it can meet is the `Order` partial
-unique index refusing a duplicate regular order (zero exist; a race that used to create one now fails and the
-idempotent job retries, ADR-015). The new code needs the migrated schema (`Transaction.type`), so the order per
-environment is migrate, then deploy. Proof, in order:
-1. local: `make d1-copy-dev-to-local` → `make d1-verify-local` (baseline) → `make d1-migrate-local` (the target
-   fails on a changed child-without-parent count) → `make d1-verify-local` → `npm run dev` → api + ui e2e suites green
-   (one runner at a time) → the chef, bookings and admin economy pages by hand. Database steps ✅ 2026-10-08 (one
-   `Expense` per dinner with a cost; parent-link counts unchanged); api suites ✅ in CI at 541fc01
-   (the framelding import test skipped, see round 8); the two failures seen only on the local dev copy (unfiltered
-   dinner-event list, live edit of the active season) pass in CI; the ui suite and the page walk follow.
-2. dev, old code first: deploy `main` to dev again so dev runs the released code → D1 Time Travel bookmark
-   (`wrangler d1 time-travel info`; rollback = `make d1-time-travel-dev`) → `make d1-migrate-dev` → the released code
-   still serves dev (login, dinner page, bookings) → `make deploy-dev` with the branch → smoke suite against dev → logs.
-   Database steps ✅ 2026-10-08 (dev ran the code of main; one `Expense` per dinner with a cost; parent-link counts
-   unchanged); the branch deploy and the smoke suite follow.
-3. prod: bookmark → `make d1-migrate-prod` → `make deploy-prod` → smoke suite, outside the cron windows (01:00 and
-   02:00 UTC daily, 03:00 UTC on the 18th). Database steps ✅ 2026-10-08 (one `Expense` per dinner with a cost, equal
-   to it; parent-link counts unchanged); the deploy and the smoke suite follow.
-4. next release: `../chores-0.9.1.md` drops the column once every environment runs the computed version.
-
-**Sequence.** schema ✅ + config ✅ + majors ✅ → `make d1-prisma` + `pre:all` + unit (gate) → user:
-`make d1-create-migration name=roster` → the rewrites and the data line in the Prisma source, flattened copy
-regenerated by the target → user: `make d1-migrate-local` → suites + `make d1-verify-local` clean. Fixtures and spec
-literals carry the new columns; validation composables re-export the new enums.
+The models, the majors (prisma 7.10, zod 4.6, zod-prisma-types 3.3), the partial unique indexes and the `totalCost` data line are `prisma/schema.prisma` and migration `0017_roster`, applied on local, dev and prod 2026-10-08; the decisions are in § Decisions rounds 5 to 8. `../chores-0.9.1.md` drops the deprecated column.
 
 ## Chef spending
 
 Expenses are EXPENSE rows in the transaction ledger, excluded from invoicing (decision 2026-10-05) —
-`feature-proposal-adhoc-admin-billing.md` § Expense type. Surfaces:
+`../feature-proposal-adhoc-admin-billing.md` § Expense type. Surfaces:
 
-**Mockup — Madbestilling and the Budget pane on the chef card** ✅ signed 2026-10-11, revised and re-signed the same day; the unfolded pane, the editor table and Billetændringer revised and ✅ signed 2026-10-12 (the three things the chef edits sit together as section rows; the lines editor behind Rediger madbestilling; status and money read-only below; one chevron on Budget)
+✅ implemented (24e9a3f, fd41213, c65feae, 52f395c, c151d74; signed 2026-10-11 and 12). The Madbestilling row and editor, the Budget pane with its boxes, the ticket table, this dinner's and the team's spending fragments and Se billetændringer: the mockups live in the headers of `ChefMenuCard.vue`, `DinnerBudget.vue`, `ExpenseLines.vue`, `CookingRoundSpending.vue` and `TicketChanges.vue`; the rules in § Decisions and `docs/ui.md`. The grocery line's note is prefilled by `useBilling.expenseNoteWords` and the route writes it when the body carries none.
 
-Folded (default):
-
-```
-┌ ChefMenuCard (edit) ──────────────────────────────────────────────────┐
-│ MENU        Spaghetti Carbonara        [Rediger menu] [Publicer]      │
-│ (allergy) ALLERGENER  12 kuverter · gluten 3     [Rediger allergener]  │
-│ (cart) MADBESTILLING  1.310 / 1.638 kr        [Rediger madbestilling]  │  <- "Madbestilling mangler" without lines
-├───────────────────────────────────────────────────────────────────────┤
-│ PLANLAGT  ANNONCERET  BOOKING  INDKØB  AFHOLDT   (stepper, deadlines)   │
-│                                                                       │
-│ Budget                                                            [>] │
-│ ┌ (money) INDTÆGTER ──┐ ┌ (cart) RÅDIGHEDSBELØB ─────────┐ ┌ (house) KØKKENBIDRAG ─┐ │
-│ │ 1.875 kr            │ │ 1.425 / 1.781 kr                │ │ 75 / 94 kr            │ │
-│ │                     │ │ ex     inkl. moms               │ │ ex   inkl. moms       │ │
-│ │ 45 kuverter         │ │ Brugt        1.310 / 1.638 kr   │ │ 5% af indtægter       │ │
-│ │                     │ │ Tilbage  +115 /  +143 kr (check) │ │                 │ │
-│ └─────────────────────┘ └─────────────────────────────────┘ └───────────────────────┘ │
-└───────────────────────────────────────────────────────────────────────┘
-```
-
-Unfolded Budget (the chevron turns; the boxes stay, this opens under them). The ticket table carries its sums as its own bottom rows and ends at Rådighedsbeløb; this dinner is one spending fragment in the team table's shape: its heading names the dinner (menu title, date), its rows are the receipts, its total row carries the dinner's figures labelled with the menu title; the team's round follows in the same shape:
-
-```
-│  Billettype   Antal     Stk pris     Total                            │
-│  Voksen          30        50 kr   1.500 kr                           │
-│  Barn            15        25 kr     375 kr                           │
-│  ───────────────────────────────────────────────────────────────────  │
-│  Indtægter                         1.875 kr                           │
-│  Køkkenbidrag (5%)            -75 /   -94 kr                          │
-│  ───────────────────────────────────────────────────────────────────  │
-│  Rådighedsbeløb             1.425 / 1.781 kr                          │
-│                                                                       │
-│  Risotto, 14/04/2026                                       ex / inkl. moms │
-│  Dato   Middag            Rådighedsbeløb      Brugt         Tilbage   │
-│  12/04/2026  "Risotto" 14/04/2026, Anna H. bestiller for Madhold 2      1.012 / 1.265 kr │
-│  14/04/2026  Mejeri                                                       298 /   373 kr │
-│  Risotto                 1.498 / 1.873 kr  1.310 / 1.638 kr  +188 / +235 kr (check) │
-│                                                                       │
-│  Hele Madhold 2, for perioden 12/04/2026-15/04/2026             ex / inkl. moms │
-│  Dato   Middag            Rådighedsbeløb      Brugt         Tilbage   │
-│  12/04/2026  Lasagne          1.425 / 1.781 kr  1.540 / 1.925 kr  -115 / -144 kr (overdraft) │
-│  14/04/2026  (arrow) Risotto    1.498 / 1.873 kr  1.310 / 1.638 kr  +188 / +235 kr (check)     │
-│  15/04/2026  Pasta                0 /     0 kr      0 /     0 kr      0 /     0 kr (waiting)   │
-│  Hele Madhold 2          2.923 / 3.654 kr  2.850 / 3.563 kr   +73 /  +91 kr (check)     │
-│                                                                       │
-│  (history) Se billetændringer                                    [>]  │
-```
-
-In the team's fragment an arrow before the menu title marks the dinner on view; the Budget shows no dinner status. A receipt row carries its date, the line's note in the Middag column, and its amount under Brugt. Without receipts the table shows its own empty state, a noReceipts message from the app's funny empty texts. A dinner without tickets shows the timeline's waiting glyph (the "om n dage" badge's) in Tilbage instead of a check. A lone dinner shows the first fragment only; the Hele Madhold table appears when the team cooks consecutive days.
-
-Madbestilling open, the editor: the same one table component with the entry row above it, its note field prefilled, and slet in its last column; its sums are the table's bottom rows:
-
-```
-│ Hvad kostede indkøbene?                                         [Luk]    │
-│ [ beløb      ] [ Ex moms v ] [ "Risotto" 14/04/2026, Anna H. bestiller for Madhold 2 ] [Tilføj] │
-│  Dato        Bestiller  Note                                                 ex / inkl. moms      │
-│  12/04/2026  Anna H.    "Risotto" 14/04/2026, Anna H. bestiller for Madhold 2  1.012 / 1.265 kr [slet]│
-│  14/04/2026  Bo K.      Mejeri                                                   298 /   373 kr [slet]│
-│  ──────────────────────────────────────────────────────────────────────  │
-│         Rådighedsbeløb                            1.425 / 1.781 kr       │
-│         Brugt                                     1.310 / 1.638 kr       │
-│  ──────────────────────────────────────────────────────────────────────  │
-│         Tilbage                                    +115 /  +143 kr (check) │
-│                                                                          │
-│  ──────────────────────────────────────────────────────────────────────  │
-│         Hele Madhold 2, for perioden 12/04/2026-14/04/2026                         │
-│         Rådighedsbeløb                            4.435 / 5.544 kr       │
-│         Brugt                                     4.245 / 5.307 kr       │
-│  ──────────────────────────────────────────────────────────────────────  │
-│         Tilbage                                    +190 /  +237 kr (check) │
-```
-
-Se billetændringer opened after Framelding closed (the same chevron as Budget with the history glyph in its title, folded by default; the changes since the booking deadline, newest first; the button loads the rest once):
-
-```
-│  (history) Se billetændringer                                                 [v] │
-│  Dato         Husstand  Ændring              Billetter · kuverter   Indtægter │
-│  09/04/2026 19:10  S_14      Købt fra anden  +1 B   29 V 11 B 3 b · 34,5   1.725 kr │
-│  09/04/2026 17:30  S_22      Afmeldt         -1 B   29 V 11 B 3 b · 34     1.725 kr │
-│  ── Framelding lukker · 09/04/2026 12:00 ───────────────────────────────────────── │
-│  [Vis fuld historik]                                                          │
-```
-
-Opened before Framelding closes: the newest change, in the same columns and words, and the rest behind the button:
-
-```
-│  Dato         Husstand  Ændring                          Billetter · kuverter   Indtægter │
-│  05/04/2026 02:00  System    Automatisk bestilling  +28 V +11 B +3 b   28 V 11 B 3 b · 33,5   1.675 kr │
-│  ── Framelding lukker · 09/04/2026 12:00 ───────────────────────────────────────────────── │
-│  [Vis fuld historik]                                                                  │
-```
-
-Vis fuld historik shows every row newest first, no line, no button.
-
-- Indtægter and the ticket prices are what the households pay: plain kr, no VAT split; Billetændringer the same.
-- Units: every money cell the chef reads shows the ex moms figure in the row's weight and the inkl. moms half in fine print after a slash; the unit words appear once per block, in the boxes as a fine-print line under the figure. Lines are stored gross; the select sets the unit of the typed amount.
-- Bestiller is the reporting user, named with `formatNameWithInitials`; the note is written by the server as the dinner's date and menu title; the body is `{amount}`.
-- Tilbage is what is left. With no Rådighedsbeløb yet, a dinner without tickets, it carries the timeline's waiting glyph (the "om n dage" badge's) and no check. At or above zero it reads in the card's ink with its plus and a check icon in the success colour; below zero in red with its minus and an exclamation circle in the error colour. The helping numbers above the entry row give this dinner's and the team round's figure.
-- One spending table component, Dato, Middag, Rådighedsbeløb, Brugt, Tilbage, renders two fragments: this dinner, headed by its menu title and date, its receipts as the rows and its figures in the total row; and, when the team cooks consecutive calendar days around it, the round headed by "Hele <madhold>, for perioden <first>–<last>" from `cookingRoundWords` with the team's total row. The ticket table ends at Rådighedsbeløb in its own bottom rows. The page computes it from the team's dinners, the bookings store loads their orders and `calculateBudget` gives each rådighedsbeløb.
-- Billettype names the ticket (`useTicket`), not the enum.
-- Se billetændringer sits last in the pane, behind the Budget pane's own chevron kind with the history glyph in its title, folded by default, and only while the dinner has tickets. Its window starts when Framelding closes, the booking deadline from the season's deadlines, and the line reads "Framelding lukker · <moment>". Before that moment it shows the newest change row, in the same columns and words as the full history, with the rest behind "Vis fuld historik". Moments compare through the date utilities, never by hand.
-- Tickets read as count and letter, V, B, b, never icons; a change as its signed count and letter.
-- Rows with the same rendered minute, household and event are one row with the summed tickets; a scaffold night reads as one "Automatisk bestilling" row per household.
-- Dates render whole through the app's date mask (`formatDate`), periods through `formatDateRange`, moments with the hour after the date.
-- Billetændringer: one row per order event of the dinner from `OrderHistory`, newest first: the household's short name (System for the scaffold), the event word the order history uses, the ticket moved as the ticket chip with its sign, the composition after the change as chips with counts and the kuverter, and Indtægter after the change in kr. After the booking deadline a released ticket stays paid, so Afmeldt and Købt fra anden move kuverter and the payer, not Indtægter. `GET /api/chef/dinner/[id]/order-history?since=` hands the rows from the menu deadline with the composition replayed server-side; the button fetches the rest.
-- Madbestilling is the timeline's word; the row leads with the cart glyph like Allergener leads with its glyph. Folded, chef and team members read the total alone, or "Madbestilling mangler"; the budget math lives in the RÅDIGHEDSBELØB box. The chef's Rediger madbestilling opens the editor in place, headed "Hvad kostede indkøbene?" with Luk; the helping numbers Rådighedsbeløb, Brugt, Tilbage and the round sit above the entry row and follow the lines. A line saves on Tilføj and goes on slet; there is no draft, so no Gem and no Annuller.
-- A line carries a note. The entry row's note field starts with the words `expenseNoteWords` builds from the dinner and the payer, `"Risotto" 14/04/2026, Anna H. bestiller for Madhold 2`; the words end at bestiller for a dinner without a team and start at the date for one without a title. The chef edits the words before Tilføj; the form sends the note as typed and leaves it out when the field is empty, and the route writes the same words when the body carries none. The editor table shows Bestiller and Note, the Budget's receipt rows read the note, and the save toast leads with it.
-- The editor leads with the action: the entry row, then the lines table, then the sums as the table's bottom rows; a rule sits above every result row (Rådighedsbeløb under the lines, Tilbage, the ticket table's Indtægter and Rådighedsbeløb; the box keeps its rows bare) and a gap with a rule sets the whole team's block apart; the folded total carries the unit words.
-- Every amount sits in fixed columns with an icon slot that is always there, so kr lines up down a column with and without the check or exclamation icon, in the hint, the lines, the box and the round table.
-- Every table is a UTable on the table token, the lines table of the editor included; a header row over rows is a table even when drawn with divs. Every table's empty state is its own `#empty` slot, never a synthetic row, and reads one of the app's funny empty texts of the table's kind (`noTicketsSold`, `noReceipts`, `noTicketChanges`) in the compact empty-state alert.
-- The season status glyphs are one set, `STATUS_GLYPHS`, bound by the season status display; dinner rows carry no status.
-- No figure is computed in a component: sums, what is left, the waiting state, the receipt sub-rows and the sum rows under a block of lines come from the composables (`useOrder` spending helpers, `useBookingUi` for the table rows and `allowanceRows`), components bind them; the card builds the two spending fragments once for the editor and the Budget pane.
-- View mode shows the folded row without its button.
-
-**Mockup — season view (opens from [Se sæsontrend]; same component serves admin economy)** ✅ signed 2026-10-05
-
-```
-Sæsonstatus — Anna, 2026/1
-  Budget i alt: 4.435 kr   Brugt: 2.935 kr   Balance: +2 kr   [I BALANCE]
-
-  kr (akkumuleret)      graf: budget-linje vs forbrugs-linje over sæsonens
-                        middage; grøn under budget / rød over
-
-  Dato        Middag            Budget(ex)   Brugt      Balance
-  15/04/20/202626  Lasagne           1.425 kr     1.540 kr   -115 kr
-  22/04/20/202626  Boller i karry    1.512 kr     1.395 kr   +117 kr
-  06/05/20/202626  Risotto (næste)   1.498 kr     —          —
-  Sæson                         4.435 kr     2.935 kr   +2 kr
-
-  Du kan bruge 1.500 kr til Risotto 06/05/2026  (budget 1.498 kr + balance +2 kr)
-```
-
-**Mockup — admin economy "Forbrug" (big overview)** ✅ signed 2026-10-06 — months as rows, a month opens to its
-dinners (the admin-economy drill-down pattern); same `SeasonBudgetOverview` component with the month table as the
-admin layer
-
-```
-AdminEconomy — Forbrug
-  Scope: [Alle chefkokke v]  (vælg chefkok | Madbudget)      Sæson: [2026/1 v]
-
-  Budget i alt: 32.100 kr   Brugt: 21.362 kr   Balance: +38 kr   [I BALANCE]
-  [graf: akkumuleret budget vs forbrug — grøn under / rød over]
-
-  Måned        Middage   Budget(ex)   Brugt       Balance
-  > august     8         9.500 kr     9.102 kr    +398 kr
-  v september  10        11.900 kr    12.260 kr   -360 kr
-      Dato     Middag        Chefkok   Budget(ex)   Brugt      Balance
-      02/09/2026    Lasagne       Anna      1.425 kr     1.540 kr   -115 kr
-      09/09/2026    Risotto       Bo        1.498 kr     1.395 kr   +103 kr
-  > oktober    9         10.700 kr    —            —
-  I alt        27        32.100 kr    21.362 kr    +38 kr
-```
-
-Grouping is a component parameter (`day` | `month`), not scope-wired: the mount decides the data points. The
-chef's own view and the single-chef scope pass `day` (flat table, dinners as graph points); the aggregate
-scopes pass `month` (month rows, drill-down to dinners). Madbudget scope: the graph plots køkkenbidrag-accrual vs
-basisvarer-spend and the month drill-down lists basisvarer purchases (dato, note, beløb). Basisvarer entry lives
-here, admin-only.
+The season view behind [Se sæsontrend], the admin economy Forbrug and the basisvarer entry are `../feature-proposal-season-spending.md` (signed mockups 2026-10-05 and 06; next release, 2026-10-13).
 
 ## Kitchen allergy line
 
@@ -384,6 +134,11 @@ All implemented and committed; the rules are in § Decisions.
 | Season pick prefers the one in progress | 9a03544 | committed (9a03544) |
 | One breakpoint source | 8d98269 | committed (8d98269) |
 | Season status glyphs | fd41213, bb3271e | committed (fd41213, bb3271e) |
+| Spinner motion token | 2026-10-13, uncommitted | one value with the motion-reduce guard behind `saveIconSaving`, `jobIconRunning` and `ticketChanges.spinner`; the rest of the motion sweep is `../chores-0.9.1.md` § Raw utility classes |
+
+## Waitlist notifications
+
+The four kinds shipped with the waitlist backend: `WAITLIST_JOINED`, `WAITLIST_TICKET_ASSIGNED`, `WAITLIST_BUILDUP` and `WAITLIST_TICKET_SOLD` are templates in `app/config/notificationTemplates.ts` and events in `server/utils/sender/events/waitlist.ts`, emitted from the assignment and the scaffold. The package is the test row the waitlist proposal left open: a serial e2e that joins a queue, releases a ticket and portions, crosses the buildup threshold, and asserts each event writes its Delivery row. S, planned.
 
 ## Decisions
 
@@ -418,11 +173,11 @@ All implemented and committed; the rules are in § Decisions.
 - All prisma, zod and migration work happens in one go: the Prisma bundle carries the majors, the regen and every
   new model in a single package.
 - Waitlist is strict FIFO: no overtaking — a smaller entry behind a too-big head waits.
-- **OPEN — page composition:** decided from the spike's research results, presented with findings, recommendations
+- **Page composition (closed 2026-10-13: the frames stay, `../archived/feature-proposal-framework-adoption.md`):** decided from the spike's research results, presented with findings, recommendations
   and options per topic (two-pane frame, tab scaffolding, `isMd` source). Direction stated 2026-10-05: a layout
   already exists and the hope is the new Nuxt reduces complexity — the spike verifies whether named layout slots
   and `useBreakpoints`/`ssrWidth` carry that.
-- **OPEN — store fetcher factory API:** drafted in `feature-proposal-framework-adoption.md`; signoff waits for the
+- **Store fetcher factory API (closed: shipped 33a3567):** drafted in `../archived/feature-proposal-framework-adoption.md`; signoff waits for the
   spike's Nuxt-roadmap evidence that the underlying option surface stays — building on a surface Nuxt is about to
   change is premature (user, 2026-10-05).
 
@@ -528,7 +283,7 @@ All implemented and committed; the rules are in § Decisions.
   now answers; they wait for the rendered page instead. Targeted proof 2026-10-09 (AdminTeams, household, SeasonSelector,
   HouseholdCard, HouseholdMembers, HouseholdAllergies, Dinner, Chef): every case outside AdminTeams passes; the three
   AdminTeams cases (rename, member finder, joker slot) sit on the roster package's in-flight AdminTeams and store work.
-- Open: the season dropdown cases under load, the holiday list editor's double-matched locator, and the full-suite
+- Closed 2026-10-13 (the full ui run passed, the one red fixed the same night): the season dropdown cases under load, the holiday list editor's double-matched locator, and the full-suite
   run once the roster package has landed.
 **2026-10-11** (ticket allergies)
 - A ticket carries a stored allergy list or follows its holder's live profile: own tickets live, guest tickets the ids
@@ -554,7 +309,7 @@ All implemented and committed; the rules are in § Decisions.
 - The season status is one icon beside the name, `SEASON_STATUS_GLYPHS` keyed by the four statuses: a green dot active, the team band's yellow dot in progress, the sprout in the calendar's holiday green upcoming, a grey dot ended; the season selector and the season status display render it as a `UBadge` whose settings come from the set, no component. The emoji set `STATUS_GLYPHS` is gone; dinner rows and the budget carry no season status.
 
 **2026-10-12** (one booking path)
-- The waitlist is not a second write: a member always sends a desired order through the scaffold; the generator decides create or claim by the deadline, the executor claims a released ticket or queues, and a queue entry rides the same matrix (leave, requeue, idempotent). Reads are open to every member; one read returns a dinner's entries in queue order and the client derives positions, sizes and portion need with `useWaitlist`. The join, leave, claim and single-order update endpoints go (`feature-proposal-waitlist.md` § One booking path).
+- The waitlist is not a second write: a member always sends a desired order through the scaffold; the generator decides create or claim by the deadline, the executor claims a released ticket or queues, and a queue entry rides the same matrix (leave, requeue, idempotent). Reads are open to every member; one read returns a dinner's entries in queue order and the client derives positions, sizes and portion need with `useWaitlist`. The join, leave, claim and single-order update endpoints go (`../archived/feature-waitlist.md` § One booking path).
 
 **2026-10-12** (waitlist UI)
 - The queued row shows the wish as a ghost of a booking (`COMPONENTS.waitlist`, no fill, muted ink) through `DinnerModeSelector` on the ticket card, the booking form and the grid cell; the ticket's edge keeps the normal face and the hourglass takes the state cell. The save carries the chosen mode and its label previews the outcome (Book, Køb billet, Skriv på venteliste); guests queue through the guest form's save. The notice for a member left without a seat goes to 0.9.1.
@@ -568,27 +323,28 @@ All implemented and committed; the rules are in § Decisions.
 |---|---|
 | Framework spike | report only; upgrade clusters verify with `npm run pre:all`, `make unit-test`, `npm run test:e2e:api` per cluster |
 | CI test reporting | committed |
-| Factory + gating | per `feature-proposal-framework-adoption.md` § Coverage |
+| Factory + gating | per `../archived/feature-proposal-framework-adoption.md` § Coverage |
 | Prisma bundle | committed (migration `0017_roster` on local, dev and prod 2026-10-08; later schema changes ride their packages) |
-| Duty roster + joker | per `feature-proposal-duty-roster.md` (API spec per endpoint, BDD e2e + component spec per surface, unit per util) |
-| Waitlist | per `feature-proposal-waitlist.md` § TDD and § One booking path |
-| Notifications | planned |
-| Adhoc + EXPENSE | per `feature-proposal-adhoc-admin-billing.md` phases |
+| Duty roster | deferred (`../feature-proposal-duty-roster.md`); the joker slot: `jokerSlot.e2e.spec.ts`, `JokerSlotForm.nuxt.spec.ts`, `CookingTeamCard.nuxt.spec.ts` |
+| Waitlist | Queue, auto-assign sweep, extra portions, one booking path, UI | `../archived/feature-waitlist.md` | L | committed (backend 2026-10-09, one booking path and UI 2026-10-12) |
+| Waitlist notifications | the serial e2e asserting each of the four shipped kinds writes its Delivery row | this doc § Waitlist notifications | S | planned |
+| Notifications | the remaining kinds: chef deadlines, roster, reminders, job failed, dinner cancelled, duty swapped | `../feature-proposal-notification-triggers.md` | M | next release (2026-10-13) |
+| Chef spending | `chef/expenses.e2e.spec.ts`, `ChefExpenses.e2e.spec.ts`, `chef/orderHistory.e2e.spec.ts`, the chef component specs; the charges and the spending views deferred |
 
 ## Verifications with human eyes
 
 | Check | Where | When |
 |---|---|---|
 | Visual check per UI package | route → viewport → DS element → expectation, posted per package, carried into the PR description | per package |
-| PWA install + icon | phone home screen (carried over from `chore/npm-dependencies`) | any time |
+| PWA install + icon | phone home screen (carried over from `chore/npm-dependencies`) | ✅ signed off by the user 2026-10-13 |
 | CI summary | Actions run page: categories, counts, red ui failures, report links | first CI run |
-| Data separation list | membership vs one-off volunteer rows, reviewed and applied by the user | before duty roster ships |
-| Admin economy spending | totals sanity against a real season | after the package lands |
-| Page composition | `/chef`, `/dinner`, `/admin/*`, `/household/*` render identically | planned (decision open) |
+| Data separation list | membership vs one-off volunteer rows, reviewed and applied by the user | with the roster, next release |
+| Admin economy spending | totals sanity against a real season | with `../feature-proposal-season-spending.md` |
+| Page composition | Master/detail + tab frames, `md` breakpoint | `../archived/feature-proposal-framework-adoption.md` | M | decided 2026-10-13: the frames stay; closed |
 
 ## ADR notes
 
-- ADR-007 amendment (factory + gating) per `feature-proposal-framework-adoption.md`.
-- Duty roster ADR table in `feature-proposal-duty-roster.md` § ADR compliance; the waitlist sweep follows ADR-015
+- ADR-007 amendment (factory + gating) per `../archived/feature-proposal-framework-adoption.md`.
+- Duty roster ADR table in `../feature-proposal-duty-roster.md` § ADR compliance; the waitlist sweep follows ADR-015
   (idempotent reconciliation) and ADR-016 (pure resolver → executor).
-- ADR-011 supplement (transaction variants) per `feature-proposal-adhoc-admin-billing.md`.
+- ADR-011 supplement (transaction variants) per `../feature-proposal-adhoc-admin-billing.md`.

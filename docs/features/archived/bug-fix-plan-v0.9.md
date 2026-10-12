@@ -7,7 +7,7 @@
 
 Moved out on archival: B6 → [chores-0.9.1.md](../chores-0.9.1.md) (the Order
 snapshot package, schema in the Prisma bundle); billing delivery report + interrupted job runs →
-[bug-fix-billing-delivery-report.md](../this-pr/bug-fix-billing-delivery-report.md).
+[bug-fix-billing-delivery-report.md](../bug-fix-billing-delivery-report.md).
 
 ## Fixes
 
@@ -19,7 +19,7 @@ snapshot package, schema in the Prisma bundle); billing delivery report + interr
   `removeChefRole.unit.spec.ts`, `inhabitant.e2e.spec.ts`, serial `heynabo.e2e.spec.ts`.
 - **B3 — Allergies catalog empty**: catalog on `useAsyncData` + `useRequestFetch`, `isInitialized` checks data
   presence (`app/stores/allergies.ts`); the shared status-computed helper continues as the Store fetcher factory
-  package ([feature-proposal-framework-adoption.md](../this-pr/feature-proposal-framework-adoption.md)).
+  package ([feature-proposal-framework-adoption.md](feature-proposal-framework-adoption.md)).
 - **B4 — Allergy edit errors**: closed with B3 and the AdminAllergies rework (PR #166); reopens on a repro.
 - **B5 — Holidays on new season**: shipped with the #166/#167 holiday rework — `commitHolidays` validates against
   `holidaysSchema`, holidays chronological via `sortDateRanges` (`useSeasonValidation.ts`); create-mode

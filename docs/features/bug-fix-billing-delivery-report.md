@@ -1,8 +1,8 @@
 # Bug Fix: Billing delivery report and interrupted job runs
 
-**Status:** OPEN decisions | **Date:** 2026-09-19 | **Moved out of** [archived/bug-fix-plan-v0.9.md](../archived/bug-fix-plan-v0.9.md) on its archival (2026-10-06)
+**Status:** OPEN decisions; next release (deferred 2026-10-13) | **Date:** 2026-09-19 | **Moved out of** [archived/bug-fix-plan-v0.9.md](archived/bug-fix-plan-v0.9.md) on its archival (2026-10-06)
 
-Blocked by the OPEN decisions below; lands before Adhoc + EXPENSE writes the ledger. The two fixes share
+Blocked by the OPEN decisions below; the expense ledger of release 0.9 writes no `JobRun`, so the fixes ride with the ad-hoc charges (`feature-proposal-adhoc-admin-billing.md`). The two fixes share
 surfaces (`JobRun`, the job history panel) — one package or sequenced.
 
 ## Billing delivery report

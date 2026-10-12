@@ -70,7 +70,10 @@ User (Bruger)
 | **Job History Panel** | View/trigger system jobs, track run history | [Admin Guide](../admin-guide.md#systemvedligeholdelse) |
 | **Authorization** | Role-based access control (Admin, AllergyManager) | — |
 | **Waitlist** | Claim a released ticket or queue for one through the booking form; the chef releases portions; queue mails (ADR-016) | [User Guide](../user-guide.md) |
-| **Chef Budget** | Income, allowance and kitchen share per dinner, grocery lines with VAT, ticket changes | [Chef Guide](../chef-guide.md#6-madbestilling-og-budget) |
+| **Chef Budget** | Income, allowance and kitchen share per dinner, grocery lines with VAT and a prefilled note, the team's round, ticket changes | [Chef Guide](../chef-guide.md#6-madbestilling-og-budget) |
+| **Joker Slots** | A time-bound team vacancy with a period, weekdays, role and note, managed in the team card | [Admin Guide](../admin-guide.md#cooking-teams) |
+| **Allergy Lines** | Allergy kuverter per dining mode in the kitchen stats, allergen counts in the chef's allergen row, a booked inhabitant's allergies on the ticket | [Chef Guide](../chef-guide.md) |
+| **Dead-session Re-login** | A request that meets a 401 loads the login page with the current URL as redirect and returns there after sign-in | — |
 
 ### Partially Implemented
 
@@ -83,6 +86,10 @@ User (Bruger)
 | Feature | Description |
 |---------|-------------|
 | **PBS Export** | Direct PBS file generation |
+| **Duty Roster** | Templates, duties, audit trail, derived sign-off and cross-team swap (`feature-proposal-duty-roster.md`) |
+| **Season Spending** | Sæsontrend per chef, admin Forbrug with scopes, basisvarer entry (`feature-proposal-season-spending.md`) |
+| **Ad-hoc Charges** | Admin charges on a household, reversal, the spending views (`feature-proposal-adhoc-admin-billing.md`) |
+| **Notification Triggers** | Chef deadlines, roster and shift reminders, job failed, dinner cancelled, duty swapped (`feature-proposal-notification-triggers.md`) |
 
 ---
 

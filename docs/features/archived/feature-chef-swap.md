@@ -15,11 +15,11 @@ Volunteer/claim/resign for the CHEF role, single entry point at the `ChefMenuCar
 | Store | `plan.ts → assignRoleToDinner, claimRoleForMe, resignRoleForMe`; `bookings.ts → selectedDinnerEventId` reactive-key detail (SSR-safe, Phase 2.5) |
 | Auth | `requireChefForDinner` |
 | Specs | `ChefSwap.e2e.spec.ts`, `useCookingTeam` unit specs |
-| Takeover menu/Heynabo handling | `archived/bug-fix-chef-takeover.md` |
+| Takeover menu/Heynabo handling | `bug-fix-chef-takeover.md` |
 
 ## Not shipped here
 
 - **Phase 3b (assignment swap endpoint + swap panel):** superseded — cross-team duty swap in
-  `this-pr/feature-proposal-duty-roster.md` Phase 5 covers the swap need.
-- **Phase 4 (move-out cascade + "Flytter" badge):** moved to `this-pr/feature-proposal-duty-roster.md`
+  `../feature-proposal-duty-roster.md` Phase 5 covers the swap need.
+- **Phase 4 (move-out cascade + "Flytter" badge):** moved to `../feature-proposal-duty-roster.md`
   (move-out section under Phase 5).

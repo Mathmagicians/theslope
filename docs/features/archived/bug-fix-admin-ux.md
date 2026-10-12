@@ -1,7 +1,7 @@
 # Bug Fix: Admin UX — allergy catalog, alerts, poster, planning, preferences, palettes
 
 **Status:** Shipped in #166 | **Date:** 2026-09-01 | **Updated:** 2026-09-18 | **Branch:** `bugfix/admin-ux` | **PR:** #166
-The allergy catalog fixes D1, D2 and A1 shipped in #165. Follow-up defects found on this branch: `bug-fix-dinner-page-and-dates.md`.
+The allergy catalog fixes D1, D2 and A1 shipped in #165. Follow-up defects found on this branch: `bug-fix-dinner-page-and-dates.md` (archived beside this file).
 
 ## Fix inventory
 
@@ -274,7 +274,7 @@ returns it; `AdminTeams.vue` writes both numbers. **Tests:** `team.e2e` (API), `
 Stored dinner dates carry UTC midnight; date-fns and local `Date` values carry local midnight. `computeTeamAssignmentsForEvents` and
 `isCalendarDateInDateList` compare calendar days with `isSameDay`, so team assignment and holiday cells hold in Copenhagen, in UTC (CI, the
 SSR worker) and in between. **Tests:** `season.unit` (UTC-midnight events), `date.unit` (`isCalendarDateInDateList`), `CalendarDisplay.nuxt`,
-run in UTC and Copenhagen. The storage convention: `bug-fix-dinner-page-and-dates.md`.
+run in UTC and Copenhagen. The storage convention: `../chores-0.9.1.md` § Stored dinner dates.
 
 ---
 

@@ -3,7 +3,7 @@
 **NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
 ## ADR-018: Design System Owns Shared UI Patterns
 
-**Status:** Accepted | **Date:** 2026-09-16
+**Status:** Accepted | **Date:** 2026-09-16 | **Updated:** 2026-10-13
 
 ### Context
 
@@ -34,14 +34,14 @@ decision the user takes from a visual proposal.
 1. A new Nuxt UI component family gets a token before its first use, and its architecture rule lands in the same change
 2. Token sweeps are value-preserving; the proof is a before/after comparison of the classes each template renders
 3. The design system is client-only and never imported from `server/` (ADR-017)
-4. `docs/ui.md` documents every token and names the visual check a change requires
+4. `docs/ui.md` documents the token families and the shared patterns; a component's header names its visual check
 
 ### Key Files
 
 | File | Role |
 |------|------|
 | `app/composables/useTheSlopeDesignSystem.ts` | Tokens and the responsive factories `createResponsiveAlerts`, `createResponsiveButtons`, `createDayCircleClasses` |
-| `tests/component/architecture/designSystemUsage.unit.spec.ts` | The six rules |
+| `tests/component/architecture/designSystemUsage.unit.spec.ts` | The usage rules, one case each (14) |
 | `docs/ui.md` | Token reference, alert kinds, edit affordances, calendar presets |
 
 ### Related ADRs
@@ -221,7 +221,7 @@ endpoint hands the scaffolder its deadlines: the season's (`deadlinesForSeason`)
 
 ## ADR-015: Idempotent Automated Jobs with Rolling Window
 
-**Status:** Accepted | **Date:** 2025-12-12
+**Status:** Accepted | **Date:** 2025-12-12 | **Updated:** 2026-10-13
 
 ### Context
 
@@ -246,7 +246,7 @@ Daily maintenance consumes past dinners (SCHEDULED/ANNOUNCED → CONSUMED), clos
 
 | Job | Idempotency Mechanism |
 |-----|----------------------|
-| **scaffoldPrebookings** | `pruneAndCreate` reconciles existing vs desired orders by `inhabitantId-dinnerEventId` key |
+| **scaffoldPrebookings** | Reads the existing orders of the window's dinner events and lets the generator (`resolveOrdersFromPreferencesToBuckets`) decide per `orderId` which bucket each order falls in — `create`, `update`, `delete` or `idempotent` — so a re-run finds its orders in `idempotent` (ADR-016) |
 | **consumeDinners** | Only updates dinners with `state NOT IN (CONSUMED, CANCELLED)` that are past (already consumed = no-op) |
 | **closeOrders** | Only updates orders with `state IN (BOOKED, RELEASED)` on CONSUMED dinners (already closed = no-op) |
 | **createTransactions** | Only creates for orders with `Transaction: null` (existing transaction = skipped) |
@@ -384,7 +384,7 @@ const { create, update, idempotent, delete: toDelete } = reconcile(existing)(inc
 
 ### Heynabo Import Routing (Multiple Households per Address)
 
-`Household.heynaboId` is NOT unique — multiple households can share an address (old family leaving, new family arriving). The import service uses `buildResolvedHouseholdMap` (Decision 4 in `feature-proposal-move-out-date.md`) to deterministically pick one household per heynaboId for reconciliation and inhabitant routing. All households at the same heynaboId receive Heynabo-owned field updates (name, address); each household's TheSlope-owned fields (pbsId, movedInDate, moveOutDate) are preserved individually via `mergeHouseholdForUpdate`.
+`Household.heynaboId` is NOT unique — multiple households can share an address (old family leaving, new family arriving). The import service uses `buildResolvedHouseholdMap` (Decision 4 in `docs/features/archived/feature-move-out-date.md`) to deterministically pick one household per heynaboId for reconciliation and inhabitant routing. All households at the same heynaboId receive Heynabo-owned field updates (name, address); each household's TheSlope-owned fields (pbsId, movedInDate, moveOutDate) are preserved individually via `mergeHouseholdForUpdate`.
 
 ### Household & Inhabitant Lifecycle (Decided 2026-08-19)
 

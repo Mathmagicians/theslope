@@ -1,8 +1,8 @@
 # Feature Proposal: Ad-hoc Admin Billing
 
-**Status:** Proposal
+**Status:** Signed off 2026-10-08; the ledger type, the expense table, the chef endpoints and the budget pane shipped in 0.9; the ad-hoc charges and the spending views are next release (deferred 2026-10-13)
 **Date:** 2026-04-20
-**Updated:** 2026-10-05 — the EXPENSE transaction type joins the scope: a cost record against a dinner's kitchen money, excluded from invoicing (work-roster push, `release-0.9.0.md` § Chef spending)
+**Updated:** 2026-10-05 — the EXPENSE transaction type joins the scope: a cost record against a dinner's kitchen money, excluded from invoicing (work-roster push, `this-pr/release-0.9.0.md` § Chef spending)
 
 ## Problem
 
@@ -156,64 +156,13 @@ model Transaction {
 
 `Transaction.orderId` stays nullable (existing `SetNull`). `Invoice.householdId` already nullable. Both FKs on the Transaction use `SetNull` so the row survives deletion of related entities.
 
-### Snapshot per kind ✅ signed 2026-10-08
+### Snapshot per kind ✅ signed 2026-10-08 · ✅ shipped in 0.9
 
-`Transaction.type` is the discriminator; `orderSnapshot` keeps the order shape for REGULAR rows as it is today and
-carries the charged household at its root for ADHOC rows. Existing rows stay as written.
+`Transaction.type` (`LedgerEntryType`) and `Transaction.description` are in the schema since migration `0017_roster`; the REGULAR snapshot keeps the shape stored today, the ADHOC snapshot carries the charged household at its root and the deserializer picks the schema by `type` (`useBillingValidation`).
 
-```ts
-OrderChargeSnapshotSchema = z.object({          // REGULAR — the shape stored today
-  dinnerEvent: z.object({id, date, menuTitle}),
-  inhabitant:  z.object({id, name, household: HouseholdInfoSchema}),
-  ticketType:  TicketTypeSchema.nullable()
-})
+### Expenses — chef spending ✅ signed 2026-10-08 · ✅ shipped in 0.9
 
-AdhocChargeSnapshotSchema = z.object({          // ADHOC
-  household:   HouseholdInfoSchema,
-  description: z.string()
-})
-```
-
-The deserializer picks the schema by `type` and resolves `TransactionDisplay.household` from either shape (live
-through the order for REGULAR, the snapshot root for ADHOC) — the live-first pattern the order variant already uses
-for `inhabitant` / `dinnerEvent`.
-
-### Expenses — chef spending ✅ signed 2026-10-08
-
-An expense is a cost paid from the kitchen's money; it answers **how much can I spend?** Payment happens in the bank;
-the ledger tracks where the spending stands and who is reimbursed. Expenses are their own table, modelled
-symmetrically with transactions: one `LedgerEntryType` (`REGULAR`, `ADHOC`) on both.
-
-```prisma
-model Expense {
-  id            Int             @id @default(autoincrement())
-  type          LedgerEntryType @default(REGULAR)
-  dinnerEventId Int? // REGULAR: set; ADHOC: null
-  dinnerEvent   DinnerEvent?    @relation(fields: [dinnerEventId], references: [id], onDelete: SetNull)
-  paidByUserId  Int? // the user who reported the line and is reimbursed; SetNull once the user row is gone, the snapshot keeps them
-  paidByUser    User?           @relation(fields: [paidByUserId], references: [id], onDelete: SetNull)
-  userSnapshot  String // JSON snapshot of the payer at the time of the expense
-  amount        Int // DKK øre
-  description   String
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-}
-```
-
-| Kind | `dinnerEventId` | Drawn from | Balance |
-|---|---|---|---|
-| REGULAR (grocery lines of a dinner) | set | the dinner's rådighedsbeløb | per chef across the season: a chef is responsible for all the dinners they chef and may overspend a single dinner as long as the season balances |
-| ADHOC (basisvarer) | null | the køkkenbidrag pool | pool balance per period/season: sum of køkkenbidrag vs ADHOC rows |
-
-- `DinnerEvent.totalCost` stays, `/// @deprecated`, until `../chores-0.9.1.md` drops it next release; a dinner's cost is `SUM(amount)` over its REGULAR rows; the dinner's
-  GROCERIES_DONE step derives from them.
-- The chef enters a dinner's expense lines in `ChefMenuCard` under the budget (amount, description; the reporting user is the payer);
-  line-wise delete. Brugt = the sum, Balance = rådighedsbeløb (ex moms) − Brugt (`DinnerBudget.vue`).
-- The payee is a user; the reimbursement stream reads `User.expenses`; `userSnapshot` keeps the payee after the
-  user row is gone (the Heynabo import deletes users first).
-- "Mit forbrug" on `/chef` and the admin economy spending section read the same rows — mockups in
-  `release-0.9.0.md` § Chef spending. Billing reads `Transaction` only; `Expense` never reaches an invoice.
-- Implemented 2026-10-09 (E1): `useBillingValidation` Expense schemas and transforms (fragment in `domainFragments.ts`), `financesRepository` expense functions, the computed dinner cost on every dinner read (Display the sum, Detail the sum and `expenses`), the strict dinner write schemas, `/api/chef/dinner/[id]/expenses` GET, PUT and DELETE. Implemented 2026-10-11: `ExpenseLines` between Allergener and the stepper on `ChefMenuCard` (helping numbers for the dinner and the team's round), `VatAmount` for every money cell, `DinnerBudget` with start / Brugt / Til rådighed, the ticket table named by type, `TicketChanges` on `GET /api/chef/dinner/[id]/order-history` and `CookingRoundSpending`; `bookings` store `addExpense` / `removeExpense` / `fetchTicketChanges`. Open: Mit forbrug, the admin Forbrug view, ADHOC basisvarer.
+The `Expense` table (a list per dinner, `paidByUserId` with a `userSnapshot`, `description`, `LedgerEntryType`), the chef endpoints (`GET`/`PUT /api/chef/dinner/[id]/expenses`, `DELETE …/[expenseId]`, the note prefilled by `useBilling.expenseNoteWords`), the computed `DinnerEvent.totalCost` (ADR-010 rule 6) and the Budget pane with the Madbestilling editor shipped with release 0.9: `this-pr/release-0.9.0.md` § Chef spending. The basisvarer entry (ADHOC expenses) is `feature-proposal-season-spending.md`.
 
 ### Query ergonomics
 
@@ -311,9 +260,9 @@ No change to `createTransactions` nightly job (scoped to `Order.state: CLOSED`, 
 
 ### Migration (next after `20260416091019_severalhouseholdsonsameadress`)
 
-Part of the 0.9 Prisma bundle (`release-0.9.0.md` § Prisma bundle, Migration notes): `Transaction.type` as
+Part of the 0.9 Prisma bundle (`this-pr/release-0.9.0.md` § Prisma bundle, Migration notes): `Transaction.type` as
 `ALTER TABLE … ADD COLUMN … NOT NULL DEFAULT 'REGULAR'`, `Transaction.description` nullable, the `Expense` table,
-`DinnerEvent.totalCost` kept and deprecated (dropped by `../chores-0.9.1.md`). Data line: existing `totalCost` values map to REGULAR `Expense` rows (SYSTEM snapshot, no payer); the `type` default covers every existing
+`DinnerEvent.totalCost` kept and deprecated (dropped by `chores-0.9.1.md`). Data line: existing `totalCost` values map to REGULAR `Expense` rows (SYSTEM snapshot, no payer); the `type` default covers every existing
 row and the snapshots stay as written.
 
 ### ADR Compliance
@@ -345,7 +294,7 @@ row and the snapshots stay as written.
 Review + sign-off.
 
 ### Phase 1: Schema + serialization
-- Prisma migration (3 steps: columns, set type, rewrite snapshots)
+- ✅ shipped (`0017_roster`): the type and description columns; snapshots stay as written
 - Shared-root union zod schemas in `useBillingValidation`
 - Rewrite `deserializeTransaction` with live-FK-first fallback for `household`
 - Filter adhoc out of `computeStatsFromSnapshots`

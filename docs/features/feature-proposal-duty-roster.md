@@ -1,9 +1,9 @@
 # Feature Proposal: Duty Roster (with Audit Trail + Cross-Team Swap)
 
-**Status:** Draft
+**Status:** Signed off (schema 2026-10-07, roster UX 2026-10-05 to 08); deferred to the next release 2026-10-13; the joker slot shipped in 0.9 (`archived/feature-joker-slot.md`) | **Umbrella of the signoffs:** `this-pr/release-0.9.0.md`
 **Date:** 2026-04-29
-**Updated:** 2026-10-05 — refreshed for the work-roster push (`release-0.9.0.md`): chef-swap shipped (`assign-role`, `remove-role` live; `assignment/swap` did not ship — cross-team duty swap in Phase 5 covers the swap need); instrumentation of shipped endpoints is retroactive; Joker section added; schema lands via the PR's bundled Prisma package
-**Builds on:** `../archived/feature-chef-swap.md` (shipped; its unshipped Phase 4 move-out cascade is carried here under Phase 5)
+**Updated:** 2026-10-05 — refreshed for the work-roster push (`this-pr/release-0.9.0.md`): chef-swap shipped (`assign-role`, `remove-role` live; `assignment/swap` did not ship — cross-team duty swap in Phase 5 covers the swap need); instrumentation of shipped endpoints is retroactive; Joker section added; schema lands via the PR's bundled Prisma package
+**Builds on:** `archived/feature-chef-swap.md` (shipped; its unshipped Phase 4 move-out cascade is carried here under Phase 5)
 
 ## Problem
 
@@ -47,120 +47,9 @@ The "roster" is a derived view: `DinnerEvent.dinnerDuties` (the duty rows for on
 | **3. Concrete dinner duty** | `DinnerDuty` (NEW) | "Anna is on dinner 2026-04-15, COOK, 3h before dinner, 180min, madlavning" — links directly to `DinnerEvent` | new |
 | **Audit** | `DutyHistory` (NEW) | Timeline of duty changes and roster sign-offs: `DUTY_ASSIGNED`, `DUTY_UNASSIGNED`, `DUTY_SWAPPED`, `DUTY_UPDATED`, `ROSTER_SIGNED_OFF` | new |
 
-## Schema additions ✅ signed 2026-10-07
+## Schema additions ✅ signed 2026-10-07 · ✅ in the 0.9 Prisma bundle
 
-Terms: a **template duty** is one row of the team's standard roster; a **roster duty** is one `DinnerDuty` on one
-dinner, with role, time and task copied from the template at creation (a template edit changes future rosters
-only); a duty without a person is **vacant**; a **joker** is a time-bound team assignment without a person,
-modelled as its own table beside `CookingTeamAssignment` (which stays untouched — SQLite cannot alter a column's
-nullability without a table rebuild).
-
-Derived, never stored: **completed** = the dinner is CONSUMED and the duty has a person (the skeleton crew's duties
-on an unsigned roster count); **roster signed** = the dinner's latest `ROSTER_SIGNED_OFF` row is newer than the
-latest duty change on any of its duties; **workload** = completed duties per person, split by `DutyOrigin` and the
-chef role. Why a duty was not completed is not recorded.
-
-```prisma
-enum DutyAuditAction {
-  DUTY_ASSIGNED
-  DUTY_UNASSIGNED
-  DUTY_SWAPPED
-  DUTY_UPDATED
-  ROSTER_SIGNED_OFF
-}
-
-enum DutyOrigin {
-  TEAM
-  JOKER
-  VOLUNTEER
-  SWAP
-}
-
-// A team's standard duties for a cooking day: one row per person needed
-model DinnerDutyTemplate {
-  id                     Int         @id @default(autoincrement())
-  cookingTeamId          Int
-  cookingTeam            CookingTeam @relation(fields: [cookingTeamId], references: [id], onDelete: Cascade)
-  role                   Role        @default(COOK)
-  minutesFromDinnerStart Int // signed offset from the dinner's start time
-  durationMinutes        Int
-  taskDescription        String
-  createdAt              DateTime    @default(now())
-  updatedAt              DateTime    @updatedAt
-
-  @@index([cookingTeamId])
-}
-
-// A time-bound team assignment without a person: one more of a role, open to any volunteer per dinner
-model JokerSlot {
-  id                   Int         @id @default(autoincrement())
-  cookingTeamId        Int
-  cookingTeam          CookingTeam @relation(fields: [cookingTeamId], references: [id], onDelete: Cascade)
-  role                 Role        @default(COOK)
-  allocationPercentage Int         @default(100)
-  affinity             String // JSON stringified map of Weekday to boolean
-  startDate            DateTime
-  endDate              DateTime
-  note                 String?
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
-
-  @@index([cookingTeamId])
-}
-
-// A roster duty on one dinner; role, time and task are copied from the template at creation
-model DinnerDuty {
-  id                     Int           @id @default(autoincrement())
-  dinnerEventId          Int
-  dinnerEvent            DinnerEvent   @relation(fields: [dinnerEventId], references: [id], onDelete: Cascade)
-  inhabitantId           Int? // null = vacant
-  inhabitant             Inhabitant?   @relation(fields: [inhabitantId], references: [id], onDelete: SetNull)
-  origin                 DutyOrigin    @default(TEAM)
-  role                   Role
-  minutesFromDinnerStart Int // signed offset from the dinner's start time
-  durationMinutes        Int
-  taskDescription        String
-  createdAt              DateTime      @default(now())
-  updatedAt              DateTime      @updatedAt
-  history                DutyHistory[]
-
-  @@index([dinnerEventId])
-  @@index([inhabitantId])
-}
-
-// Audit timeline of duties and roster sign-offs; the denormalized keys outlive the duty
-model DutyHistory {
-  id                Int             @id @default(autoincrement())
-  dinnerDutyId      Int? // null for ROSTER_SIGNED_OFF
-  dinnerDuty        DinnerDuty?     @relation(fields: [dinnerDutyId], references: [id], onDelete: SetNull)
-  action            DutyAuditAction
-  performedByUserId Int? // null = system
-  performedByUser   User?           @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
-  auditData         String // JSON
-  timestamp         DateTime        @default(now())
-  swapGroupId       String? // shared by the two rows of one swap
-  inhabitantId      Int?
-  dinnerEventId     Int?
-  seasonId          Int?
-
-  @@index([dinnerDutyId])
-  @@index([performedByUserId])
-  @@index([inhabitantId])
-  @@index([dinnerEventId, action])
-  @@index([seasonId])
-  @@index([timestamp])
-  @@index([swapGroupId])
-}
-```
-
-Back-relations: `CookingTeam.dutyTemplates`, `CookingTeam.jokerSlots`, `DinnerEvent.dinnerDuties`,
-`Inhabitant.dinnerDuties`, `User.dutyHistory`.
-
-`DutyOrigin` on a duty says how its holder got there — TEAM (the team's own member), JOKER (a planned vacancy via a
-joker slot), VOLUNTEER (an unplanned vacancy, someone released or sick, taken by whoever shows up), SWAP (came in by
-a duty swap). Volunteering writes a duty with its origin, never a `CookingTeamAssignment` row. Roster markers:
-joker / frivillig / bytter. The actor invariant: `ROSTER_SIGNED_OFF` carries a null actor on auto-sign and the chef
-on "Godkend alligevel"; every `DUTY_*` row carries the acting user.
+`DinnerDutyTemplate`, `DinnerDuty` (+ `jokerSlotId`), `DutyHistory`, `JokerSlot`, `DutyState`, `DutyAuditAction` and `DutyOrigin` are in `prisma/schema.prisma` since migration `0017_roster` (2026-10-08); the model set and its cascade rules are the schema file.
 
 ## Default templates (`app.config.ts`) + team-creation bootstrap
 
@@ -401,20 +290,7 @@ The team administrator sees vacancies and load in `/admin/teams`:
 
 The team card's joker slots and shift counts are part of the signed CTC season face — § Roster UX.
 
-**Mockup — joker slot form** ✅ signed 2026-10-06 (admin teams, team detail, under the Jokertjanser list)
-
-```
-[ + Tilføj jokertjans ]
-   +- form:
-      Periode   [07/10/2026] - [01/12/2026]      <- CalendarDateRangePicker
-      Ugedage   [man][ons][fre]                       <- the weekday picker restricted to the team's affinity days (parent override), defaulting to them
-      Rolle     [KOK v]                               <- ROLE_ICONS select
-      Note      [Anna barsel            ]             <- fri tekst, valgfri
-      [Opret]  [Fortryd]
-```
-
-A slot holds only days the team cooks: the form restricts the weekday picker to the team's affinity (✅ 2026-10-08) and the period defaults to the season's dates. The scaffolder expands the slot to one vacant duty per matching cooking day in the period. Deleting a slot removes
-its unclaimed future duties; claimed duties survive — the volunteer keeps their duty (audited).
+**Joker slot CRUD** ✅ shipped in 0.9: the form, the team card's Jokertjanser list and the admin endpoints are pointers in `archived/feature-joker-slot.md`; the form restricts the weekday picker to the team's affinity and the period defaults to the season's dates. The scaffolder (Phase 3) expands a slot to one vacant duty per matching cooking day in the period.
 
 **Mockup — vacancy big overview (admin teams)** ✅ signed 2026-10-06 · rows refined ✅ 2026-10-08
 
@@ -536,7 +412,7 @@ Phone (375 px), chef present
 | Role | Powers |
 |---|---|
 | Team member | Meld til (vacant seat, Chefkok seat, Ekstra vagt), Meld fra (own seats), Byt (take a seat here, optional return seat) |
-| Chef | the same pane through [Opdater holdplan] with the Hvem picker and every seat in Meld fra; [Godkend holdplan]; release extra portions (`feature-proposal-waitlist.md`) |
+| Chef | the same pane through [Opdater holdplan] with the Hvem picker and every seat in Meld fra; [Godkend holdplan]; release extra portions (`archived/feature-waitlist.md`) |
 | Admin | membership moves; game-plan drill-down is view-only |
 | System | auto-sign, reopening on a vacancy, the Holdplan step's countdown |
 
@@ -783,7 +659,7 @@ The current document. Reviewable artifact before code.
 
 ### Phase 1 — Schema + audit infrastructure (no behavior change)
 
-- Schema (in the 0.9 Prisma bundle): `DinnerDutyTemplate`, `JokerSlot`, `DinnerDuty`, `DutyHistory`, enums `DutyAuditAction`, `DutyOrigin`; back-relations only on `CookingTeam`, `DinnerEvent`, `Inhabitant`, `User`.
+- ✅ shipped (`0017_roster`) — Schema: `DinnerDutyTemplate`, `JokerSlot`, `DinnerDuty`, `DutyHistory`, enums `DutyAuditAction`, `DutyOrigin`; back-relations only on `CookingTeam`, `DinnerEvent`, `Inhabitant`, `User`.
 - `useDutyValidation` composable + unit tests.
 - `getDutyTimeRange` added to `app/utils/season.ts` next to `getDinnerTimeRange` + unit tests.
 - Repository functions in `cookingRepository.ts` (or extend `prismaRepository.ts`): `writeDutyHistory(entries[])`, `fetchDutyHistoryForDinner(dinnerEventId)`, `fetchDutyHistoryForMember(cookingTeamId, inhabitantId)`.

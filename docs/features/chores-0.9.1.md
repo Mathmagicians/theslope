@@ -236,6 +236,125 @@ stay.
 
 `docs/adr.md` ADR-013 rule 7, `app/utils/batchUtils.ts` (`groupBy`), its call sites in `server/` and `app/stores/`.
 
+## Stored dinner dates
+
+### Problem
+
+A dinner date is a `Date` at the midnight of the clock that wrote it: rows written on the workers and by the season
+import carry UTC midnight; a row written on a Copenhagen machine carries 22:00Z of the day before. The repository
+serializes season ranges (ADR-010) and leaves dinner dates as they arrive; fixtures build dates from local components,
+so the specs never hold the stored shape. `app/utils/season.ts` matches a cooking day to a dinner by calendar day
+(`isSameDay`), guarded by a unit case with UTC-midnight events in both timezones.
+
+### Solution
+
+The repository writes a dinner date as the UTC midnight of its calendar day, in one serializer next to the season one.
+Callers compare dinner dates by calendar day. Fixtures for stored dates use ISO strings; the temporal rule in
+`docs/testing.md` names the stored shape. A read of dev and prod confirms the rows carry UTC midnight before the change
+ships; no migration.
+
+### TDD
+
+`date.unit`: local midnight in → UTC midnight out, UTC midnight unchanged, the day survives the DST switch.
+`useSeason.nuxt`: assignment and reconciliation with events in the stored shape. `season.e2e`: a generated dinner reads
+back at UTC midnight.
+
+### Affected
+
+`server/data/prismaRepository.ts`, `server/utils/reconcileDinnerEvents.ts`, `app/utils/date.ts`,
+`tests/e2e/testDataFactories/dinnerEventFactory.ts`, `docs/testing.md`.
+
+## Dinner page remounts on claim
+
+### Problem
+
+Claiming or resigning a role on `/dinner` swaps the whole page for the loader and mounts it again: `assignRoleToDinner`
+in `app/stores/plan.ts` awaits `refreshSelectedSeason()`, the dataset turns `pending`, `isPlanStoreReady` turns false,
+and `app/pages/dinner/index.vue` replaces `<UPage>` with `<Loader>` until the refresh resolves.
+
+### Solution
+
+The page shows the loader on first load only; a refresh keeps the mounted tree and the store exposes a separate
+`isRefreshing` flag for inline feedback (ADR-007 status computeds).
+
+### TDD
+
+`plan.nuxt`: a refresh after initialization keeps `isPlanStoreReady` true. `Chef.e2e` or `Dinner.e2e`: claiming a role
+keeps the page mounted (the calendar keeps its open state, no loader).
+
+### Affected
+
+`app/stores/plan.ts`, `app/pages/dinner/index.vue`.
+
+## Catch-up amounts
+
+### Problem
+
+A transaction billed into an already-closed period (ADR-015 catch-up: a straggler order transacted after the period's
+first run) is linked to the household's existing invoice, but the invoice `amount` stays at its creation value and the
+period's stored aggregates stay at the first run's values. The accountant CSV is built from `invoice.amount`
+(`useBillingValidation.ts` `generateCsvRow`), so the straggler reaches the CSV as a version bump with unchanged figures;
+the public page shows the mismatch as `invoiceSum` ≠ `transactionSum`. In `server/utils/generateBilling.ts`
+`processBillingPeriod`, `totalAmount`, `householdCount` and `ticketCount` are written by `createBillingPeriodSummary`
+only, an existing summary is reused as is, and households with an existing invoice only get transactions linked.
+
+### Solution
+
+After linking, in the same `processBillingPeriod` call: `addToInvoiceAmount(d1, invoiceId, delta)` for each household
+that already had an invoice (delta = the sum of the transactions linked now) and
+`addToBillingPeriodTotals(d1, summaryId, {totalAmount, householdCount: newInvoices.length, ticketCount})` for an
+existing summary. Both are increments of exactly the transactions linked in this run; a transaction is linked once
+(unbilled → invoiced), so a re-run adds nothing (ADR-015). `bumpBillingPeriodVersion` stays; the v2 CSV and the
+`BILLING_PERIOD_UPDATED` mail carry the corrected figures. Two repository functions in `financesRepository.ts`
+(`prisma.invoice.update` / `prisma.billingPeriodSummary.update` with `increment`).
+
+### TDD
+
+`tests/e2e/api/serial/admin/maintenance.e2e.spec.ts`: after the first billing, transact one more order in the same
+period (order → consume → daily maintenance), run billing again → the household's invoice `amount` and the period's
+`totalAmount` / `ticketCount` include it, `version` is 2, `invoiceSum` = `transactionSum` on the period detail. The
+control sums (`useBilling` `controlInvoices` / `controlTransactions`) already assert equality.
+
+### Affected
+
+`server/utils/generateBilling.ts`, `server/data/financesRepository.ts`, the serial maintenance spec,
+`docs/adr-compliance-backend.md` (Admin – Billing row).
+
+## Job schedule module
+
+### Problem
+
+One schedule is written in five places — `wrangler.toml` `[triggers] crons` in the three environment blocks,
+`nuxt.config.ts` `nitro.scheduledTasks`, `app.config.ts` `theslope.systemJobs` — and labelled in two:
+`useMaintenance` `jobScheduleLabels` and `systemJobs[].description`. The monthly job runs `0 3 18 * *`: the 18th at
+03:00 UTC, 05:00 in summer time and 04:00 in winter time; the labels carry the winter clock only ("kl. 02:00",
+"kl. 03:00", "kl. 04:00").
+
+### Solution
+
+`app/config/systemJobs.ts`, a plain module (the `notificationTemplates.ts` pattern): per job its cron and its Danish
+label with the UTC time and the Copenhagen summer and winter times. `nuxt.config.ts` builds `scheduledTasks` from it,
+`app.config.ts` spreads it into `theslope.systemJobs`, `useMaintenance` labels read it. The three `wrangler.toml`
+`crons` lists stay per environment block (TOML).
+
+### Mockup
+
+Text only, on the job cards and the job-run table of `/admin/system` — ⏳ awaiting signoff:
+
+```
+Månedlig fakturering    D. 18. hver måned kl. 05:00 (sommertid) / 04:00 (vintertid)
+```
+
+### TDD
+
+Unit: every `systemJobs` cron is a key of `scheduledTasks` and appears in each `wrangler.toml` `crons` list (parsed with
+wrangler's own config reader); `useMaintenance` labels equal the module's labels.
+
+### Affected
+
+`app/config/systemJobs.ts` (new), `nuxt.config.ts`, `app/app.config.ts`, `app/composables/useMaintenance.ts`,
+`docs/adr-compliance-frontend.md` (`useMaintenance` row).
+
 ## DRY improvements
 
 ### Spread row primitive
@@ -372,15 +491,47 @@ Six routes still spell a coerced id in a query schema (`order/index.get.ts`, `ad
 (`admin/sender/event/test.post.ts`, `admin/sender/event/monthly-billing.post.ts`, `user/notifications/test.post.ts`) beside
 `senderFromEvent`. `useQueryParam.ts` repeats the normalize-or-default block three times. The order-history route
 reads the households its creation rows name because the creation audit row carries no `householdShortname`.
+`useOrder.ts` holds `orderStateConfig` (labels, colours, icons on a design-system call) where ADR-017 r2 places presentation
+in `useBookingUi`; `app/stores/users.ts` exposes no `isEmpty` and `isStoreReady` (ADR-007 r2); `usePermissions.ts` and
+`useUserRoles.ts` import `SystemRoleSchema` from the generated layer where ADR-001 routes it through `useCoreValidation`.
 
 #### Solution
 
 `RouteIdSchema` / `RouteIdSchema.optional()` in the six query schemas; `senderFromEvent(event)` destructured in the three
 routes; one `fallback(invalid)` in `useQueryParam`; `createOrders` writes `householdShortname` into the creation audit
 row, `readAuditTicket` reads it from both shapes, and a convergent backfill fills the existing rows, after which the
-households read in `chef/dinner/[id]/order-history.get.ts` goes.
+households read in `chef/dinner/[id]/order-history.get.ts` goes. `orderStateConfig` moves to `useBookingUi` on tokens;
+the users store gains the two flags with a case each; the two composables import the enum from `useCoreValidation`.
 
 #### Affected
 
 The nine routes, `app/composables/useQueryParam.ts`, `server/data/financesRepository.ts`,
 `app/composables/useBookingValidation.ts`, a D1 migration for the backfill, `docs/adr-compliance-backend.md` rows.
+
+## Dependency clusters
+
+### Problem
+
+Three majors wait on upstream: `typescript` 7 (`vue-tsc` on TypeScript 7.1), `@types/node` 26 (Node 26) and `h3` 2
+(Nuxt 5). The ADR-017 follow-up, Nuxt's root `references` layout with `nuxt typecheck` as the gate, waited on
+nuxt/nuxt#34385; `nuxt typecheck` runs clean on `feature/work-roster` (2026-10-13).
+
+### Solution
+
+Each major moves through an explicit install the day its gate opens, one package each with `npm run pre:all`,
+`make unit-test` and the api suite. `nuxt typecheck` replaces the three `vue-tsc` projects in `pre:all` and the CI
+step once its run time on CI is known; `server/tsconfig.json` stays until then.
+
+### Affected
+
+`package.json`, `package-lock.json`, `.github/workflows/cicd.yml`, `docs/adr.md` ADR-017 (the gate), `CLAUDE.md` (the commands).
+
+## Deferred from release 0.9
+
+| Work | Where it lives | State |
+|---|---|---|
+| Duty roster: audit instrumentation, read endpoints and timeline, template CRUD and duty scaffolding, the single-dinner roster with sign-off, the duty swap, the data separation | `feature-proposal-duty-roster.md` | signed off; the joker slot shipped (`archived/feature-joker-slot.md`) |
+| Season spending: Sæsontrend, admin Forbrug, basisvarer entry | `feature-proposal-season-spending.md` | mockups signed |
+| Ad-hoc charges and the spending views | `feature-proposal-adhoc-admin-billing.md` phases 2 to 5 | signed off; the ledger, the expense table and the chef endpoints shipped |
+| Notification triggers beyond the waitlist kinds | `feature-proposal-notification-triggers.md` | proposal, two open questions |
+| Billing delivery report and interrupted runs | `bug-fix-billing-delivery-report.md` | three open decisions |

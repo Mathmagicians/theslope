@@ -2,8 +2,8 @@
 
 **Status:** ✅ Implemented on `bugfix/admin-ux` (PR #166), 2026-09-18; ADRs open | **Date:** 2026-08-31 | **Updated:** 2026-09-18
 **Operations:** `docs/ops-runbook.md` → "Sender (e-mail delivery worker)", "Schema Changes (Prisma → D1)".
-**Follow-ups:** triggers, landing-page alarms and SMS in `feature-proposal-notification-triggers.md`; parked defects and findings
-in `bug-fix-dinner-page-and-dates.md`.
+**Follow-ups:** triggers, landing-page alarms and SMS in `../feature-proposal-notification-triggers.md`; parked defects and findings
+in `bug-fix-dinner-page-and-dates.md` (archived beside this file).
 
 ## Inventory
 
@@ -38,7 +38,7 @@ in `bug-fix-dinner-page-and-dates.md`.
 | Migration `0015` marks the periods closed before 2026-09-17 as mailed at v1; the first run archives their CSVs | 2026-09-17 |
 | Local runs every binding in miniflare; dev and prod use their own resources; Make targets call the deployed app through `BASE_URL` from `.env.<env>` | 2026-09-16 |
 | CI steps are Make targets; `make deploy-<env>` deploys the sender before the app | 2026-09-16 |
-| SMS: the contract channel, the `SmsProvider` port and a stub that acknowledges; the gateway adapter is in `feature-proposal-notification-triggers.md` | 2026-09-16 |
+| SMS: the contract channel, the `SmsProvider` port and a stub that acknowledges; the gateway adapter is in `../feature-proposal-notification-triggers.md` | 2026-09-16 |
 
 ## Platform facts (Cloudflare docs, 2026-09-16)
 
