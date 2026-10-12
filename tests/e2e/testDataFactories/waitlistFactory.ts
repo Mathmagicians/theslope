@@ -2,53 +2,86 @@
 import type {BrowserContext} from '@playwright/test'
 import {expect} from '@playwright/test'
 import testHelpers from '../testHelpers'
-import {useWaitlistValidation, type WaitlistJoinRequest, type WaitlistJoinResult, type WaitlistEntryWithPosition, type WaitlistQueueSummary, type WaitlistAssignmentResult, type TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useWaitlistValidation, type WaitlistEntryWithPosition, type WaitlistQueueSummary, type WaitlistAssignmentResult, type TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
+import {useBookingValidation, type DesiredOrder, type ScaffoldResult} from '~/composables/useBookingValidation'
+import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 
 const {headers} = testHelpers
-const {DinnerModeSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 
-const WAITLIST_ENDPOINT = '/api/household/waitlist'
-const chefWaitlistEndpoint = (dinnerEventId: number) => `/api/chef/dinner/${dinnerEventId}/waitlist`
+const entriesEndpoint = (dinnerEventIds: number[]) =>
+    `/api/order/waitlist?${dinnerEventIds.map(id => `dinnerEventIds=${id}`).join('&')}`
 const chefReleaseEndpoint = (dinnerEventId: number) => `/api/chef/dinner/${dinnerEventId}/release-portions`
 
 export class WaitlistFactory {
-    static readonly defaultJoinRequest = (overrides: Partial<WaitlistJoinRequest> & Pick<WaitlistJoinRequest, 'householdId' | 'dinnerEventId' | 'inhabitantId' | 'ticketPriceId'>): WaitlistJoinRequest => ({
-        dinnerMode: DinnerModeSchema.enum.DINEIN,
-        isGuestTicket: false,
+    // The desired order that targets an entry: its wish, with the overrides applied
+    static readonly wishOf = (entry: TicketWaitlistDisplay, overrides: Partial<DesiredOrder> = {}): DesiredOrder => ({
+        inhabitantId: entry.inhabitantId,
+        dinnerEventId: entry.dinnerEventId,
+        dinnerMode: entry.order.dinnerMode,
+        ticketPriceId: entry.order.ticketPriceId,
+        isGuestTicket: entry.isGuestTicket,
+        allergyTypeIds: entry.order.allergyTypeIds,
+        state: OrderStateSchema.enum.BOOKED,
+        waitlistEntryId: entry.id,
         ...overrides
     })
 
-    // PUT: 201 with the entry and its position; another expected status returns null
-    static readonly join = async (context: BrowserContext, request: WaitlistJoinRequest, expectedStatus = 201, adminBypass = false): Promise<WaitlistJoinResult | null> => {
-        const {WaitlistJoinResultSchema} = useWaitlistValidation()
-        const response = await context.request.put(`${WAITLIST_ENDPOINT}${adminBypass ? '?adminBypass=true' : ''}`, {headers, data: request})
-        const body = response.status() === expectedStatus ? null : await response.text()
-        expect(response.status(), `Unexpected status joining the waiting list: ${body}`).toBe(expectedStatus)
-        return expectedStatus === 201 ? WaitlistJoinResultSchema.parse(await response.json()) : null
+    // An entry as the household read returns it; the held order follows the entry's keys and mode
+    static readonly defaultEntry = (overrides: Partial<Omit<WaitlistEntryWithPosition, 'order'>> & {dinnerMode?: WaitlistEntryWithPosition['order']['dinnerMode'], ticketPriceId?: number, householdId?: number} = {}): WaitlistEntryWithPosition => {
+        const {dinnerMode = DinnerModeSchema.enum.DINEIN, ticketPriceId = 1, householdId = 1, ...entry} = overrides
+        const keys = {id: 1, dinnerEventId: 1, inhabitantId: 1, isGuestTicket: false, position: 1, createdAt: new Date(), ...entry}
+        return {
+            ...keys,
+            order: {
+                dinnerEventId: keys.dinnerEventId,
+                inhabitantId: keys.inhabitantId,
+                bookedByUserId: 1,
+                ticketPriceId,
+                priceAtBooking: 5500,
+                householdId,
+                dinnerMode,
+                state: OrderStateSchema.enum.BOOKED,
+                isGuestTicket: keys.isGuestTicket
+            }
+        }
     }
 
-    static readonly leave = async (context: BrowserContext, entryId: number, expectedStatus = 200, adminBypass = false): Promise<TicketWaitlistDisplay | null> => {
+    static readonly defaultQueueSummary = (overrides: Partial<WaitlistQueueSummary> = {}): WaitlistQueueSummary => ({
+        dinnerEventId: 1,
+        entries: 4,
+        portions: 2.5,
+        ...overrides
+    })
+
+    static readonly defaultAssignmentResult = (overrides: Partial<WaitlistAssignmentResult> = {}): WaitlistAssignmentResult => ({
+        dinnerEventId: 1,
+        supplyPortions: 2.5,
+        assigned: [],
+        portionsUsed: 0,
+        waiting: 0,
+        ...overrides
+    })
+
+    // A desired order on a closed dinner through the scaffold: a released ticket at the price, else a queue entry
+    static readonly queue = async (
+        context: BrowserContext, householdId: number, seasonId: number, order: DesiredOrder, adminBypass = false
+    ): Promise<ScaffoldResult> => {
+        const response = await OrderFactory.scaffoldOrders(context, {householdId, seasonId, dinnerEventIds: [order.dinnerEventId], orders: [order]}, 200, adminBypass)
+        return response!.scaffoldResult
+    }
+
+    // NONE on the entry through the scaffold
+    static readonly leave = (context: BrowserContext, seasonId: number, entry: TicketWaitlistDisplay, adminBypass = false): Promise<ScaffoldResult> =>
+        WaitlistFactory.queue(context, entry.order.householdId, seasonId, WaitlistFactory.wishOf(entry, {dinnerMode: DinnerModeSchema.enum.NONE}), adminBypass)
+
+    // Every entry of the dinners in queue order
+    static readonly entries = async (context: BrowserContext, dinnerEventIds: number[], expectedStatus = 200): Promise<TicketWaitlistDisplay[]> => {
         const {TicketWaitlistDisplaySchema} = useWaitlistValidation()
-        const response = await context.request.delete(`${WAITLIST_ENDPOINT}/${entryId}${adminBypass ? '?adminBypass=true' : ''}`, {headers})
-        expect(response.status(), 'Unexpected status leaving the waiting list').toBe(expectedStatus)
-        return expectedStatus === 200 ? TicketWaitlistDisplaySchema.parse(await response.json()) : null
-    }
-
-    static readonly entriesForHousehold = async (context: BrowserContext, householdId: number, dinnerEventIds?: number[], adminBypass = false): Promise<WaitlistEntryWithPosition[]> => {
-        const {WaitlistEntryWithPositionSchema} = useWaitlistValidation()
-        const params = new URLSearchParams({householdId: String(householdId), ...(adminBypass ? {adminBypass: 'true'} : {})})
-        for (const id of dinnerEventIds ?? []) params.append('dinnerEventIds', String(id))
-        const response = await context.request.get(`${WAITLIST_ENDPOINT}?${params}`, {headers})
-        expect(response.status(), 'Unexpected status reading the household entries').toBe(200)
-        return WaitlistEntryWithPositionSchema.array().parse(await response.json())
-    }
-
-    static readonly chefSummary = async (context: BrowserContext, dinnerEventId: number, expectedStatus = 200): Promise<WaitlistQueueSummary | null> => {
-        const {WaitlistQueueSummarySchema} = useWaitlistValidation()
-        const response = await context.request.get(chefWaitlistEndpoint(dinnerEventId), {headers})
-        expect(response.status(), 'Unexpected status reading the chef queue summary').toBe(expectedStatus)
-        return expectedStatus === 200 ? WaitlistQueueSummarySchema.parse(await response.json()) : null
+        const response = await context.request.get(entriesEndpoint(dinnerEventIds), {headers})
+        const body = response.status() === expectedStatus ? null : await response.text()
+        expect(response.status(), `Unexpected status reading the queue entries: ${body}`).toBe(expectedStatus)
+        return expectedStatus === 200 ? TicketWaitlistDisplaySchema.array().parse(await response.json()) : []
     }
 
     static readonly releasePortions = async (context: BrowserContext, dinnerEventId: number, portions: number, expectedStatus = 200): Promise<WaitlistAssignmentResult | null> => {
@@ -59,11 +92,10 @@ export class WaitlistFactory {
         return expectedStatus === 200 ? WaitlistAssignmentResultSchema.parse(await response.json()) : null
     }
 
-    // Cleanup: a missing entry counts as removed
-    static readonly cleanupEntries = async (context: BrowserContext, entryIds: number[]): Promise<void> => {
-        await Promise.all(entryIds.map(async id => {
-            const response = await context.request.delete(`${WAITLIST_ENDPOINT}/${id}?adminBypass=true`, {headers})
-            expect([200, 404], `Unexpected status cleaning up entry ${id}`).toContain(response.status())
-        }))
+    // Cleanup: the entries still queued on the dinners leave; a dinner's deletion cascades to the rest
+    static readonly cleanupEntries = async (context: BrowserContext, seasonId: number, dinnerEventIds: number[]): Promise<void> => {
+        for (const entry of await WaitlistFactory.entries(context, dinnerEventIds)) {
+            await WaitlistFactory.leave(context, seasonId, entry, true)
+        }
     }
 }

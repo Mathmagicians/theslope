@@ -5,6 +5,8 @@ import {findByTestId, clickByTestId, withTooltipProvider, VIEWPORTS} from '~~/te
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
+import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
+import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
 import type {DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
@@ -274,5 +276,146 @@ describe('DinnerBookingForm', () => {
       expect(wrapper.findAll('thead th')[ticketIndex]!.classes()).toEqual(expect.arrayContaining(meta.class.th.split(' ')))
       expect(wrapper.findAll('tbody tr')[0]!.findAll('td')[ticketIndex]!.classes()).toEqual(expect.arrayContaining(meta.class.td.split(' ')))
     })
+  })
+})
+
+describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => {
+  const {DinnerModeSchema, TicketTypeSchema, OrderStateSchema} = useBookingValidation()
+  const DinnerMode = DinnerModeSchema.enum
+  const adultPrice = baseProps.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
+  const [anna, bo] = householdWithInhabitants.inhabitants
+  const dinnerEventId = baseProps.dinnerEvent.id
+  const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo!.id, dinnerEventId, position: 2, dinnerMode: DinnerMode.TAKEAWAY})
+
+  const mountClosed = (props: {orders?: OrderDisplay[], waitlistEntries?: ReturnType<typeof WaitlistFactory.defaultEntry>[]} = {}) => {
+    mockIsHouseholdMember.mockReturnValue(true)
+    const deadlines = {...baseDeadlines, canModifyOrders: () => false, canEditDiningMode: () => true}
+    return mountSuspended(withTooltipProvider(DinnerBookingForm, {...baseProps, household: householdWithInhabitants, deadlines, ...props}))
+  }
+  const emittedSaves = (wrapper: Awaited<ReturnType<typeof mountClosed>>) => wrapper.findComponent(DinnerBookingForm).emitted('saveBookings')
+  const editSelector = (wrapper: Awaited<ReturnType<typeof mountClosed>>, inhabitantId: number) =>
+    wrapper.findAllComponents({name: 'DinnerModeSelector'}).find(selector => selector.props('name') === `inhabitant-${inhabitantId}-mode-edit`)!
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('GIVEN no ticket WHEN the member picks a mode THEN the save previews the queue and sends the mode at the row\'s ticket price through the one booking path', async () => {
+    const wrapper = await mountClosed({waitlistEntries: [boQueued]})
+    await clickByTestId(wrapper, `inhabitant-${anna!.id}-toggle`)
+    await clickByTestId(wrapper, `inhabitant-${anna!.id}-mode-edit-${DinnerMode.TAKEAWAY}`)
+
+    const save = findByTestId(wrapper, `inhabitant-${anna!.id}-save`)
+    expect(save.text()).toContain('Skriv på venteliste')
+    await save.trigger('click')
+
+    expect(emittedSaves(wrapper)).toEqual([[[expect.objectContaining({
+      inhabitantId: anna!.id,
+      dinnerEventId,
+      dinnerMode: DinnerMode.TAKEAWAY,
+      ticketPriceId: adultPrice.id,
+      isGuestTicket: false
+    })]]])
+  })
+
+  it('GIVEN a queued member THEN the row shows the position badge and the ticket shows the wished mode ghosted', async () => {
+    const wrapper = await mountClosed({waitlistEntries: [boQueued]})
+
+    expect(findByTestId(wrapper, `waitlist-position-${bo!.id}`).text()).toContain('#2 i køen')
+    const queuedTickets = wrapper.findAllComponents(DinnerTicket).filter(ticket => ticket.props('isQueued'))
+    expect(queuedTickets.length).toBeGreaterThan(0)
+    queuedTickets.forEach(ticket => expect(ticket.props('dinnerMode')).toBe(DinnerMode.TAKEAWAY))
+  })
+
+  it('GIVEN a queued member WHEN the row expands THEN the draft starts on the wish and Ingen is open to leave the queue', async () => {
+    const wrapper = await mountClosed({waitlistEntries: [boQueued]})
+    await clickByTestId(wrapper, `inhabitant-${bo!.id}-toggle`)
+
+    const selector = editSelector(wrapper, bo!.id)
+    expect(selector.props('modelValue')).toBe(DinnerMode.TAKEAWAY)
+    expect(selector.props('disabledModes')).not.toContain(DinnerMode.NONE)
+  })
+
+  it('GIVEN a member holding a ticket THEN the row shows no queue position', async () => {
+    const order = OrderFactory.defaultOrder('ticket-holder', {inhabitantId: anna!.id, dinnerEventId, ticketPriceId: adultPrice.id, priceAtBooking: adultPrice.price, state: OrderStateSchema.enum.BOOKED})
+    const wrapper = await mountClosed({orders: [order], waitlistEntries: [{...boQueued, inhabitantId: anna!.id}]})
+
+    expect(findByTestId(wrapper, `waitlist-position-${anna!.id}`).exists()).toBe(false)
+    expect(wrapper.findAllComponents(DinnerTicket).some(ticket => ticket.props('isQueued'))).toBe(false)
+  })
+
+  it('GIVEN the guest form WHEN it saves a guest THEN the guest goes through the one booking path', async () => {
+    const wrapper = await mountClosed()
+    await clickByTestId(wrapper, 'guest-add-guest-toggle')
+    const guest = OrderFactory.defaultDesiredOrder({inhabitantId: 1, dinnerEventId, dinnerMode: DinnerMode.DINEIN, ticketPriceId: adultPrice.id, isGuestTicket: true, allergyTypeIds: [4]})
+
+    wrapper.findComponent(GuestBookingForm).vm.$emit('save', [guest])
+    await nextTick()
+
+    expect(emittedSaves(wrapper)).toEqual([[[guest]]])
+  })
+})
+
+describe('DinnerBookingForm on a queued row', () => {
+  const {DinnerModeSchema} = useBookingValidation()
+  const DinnerMode = DinnerModeSchema.enum
+  const bo = householdWithInhabitants.inhabitants[1]!
+  const dinnerEventId = baseProps.dinnerEvent.id
+  const QUEUED_ENTRY_ID = 31
+  const boQueued = WaitlistFactory.defaultEntry({id: QUEUED_ENTRY_ID, inhabitantId: bo.id, dinnerEventId, position: 2, dinnerMode: DinnerMode.TAKEAWAY})
+
+  it.each([
+    {intent: 'leaves the queue', dinnerMode: DinnerMode.NONE},
+    {intent: 'requeues the wish', dinnerMode: DinnerMode.DINEINLATE}
+  ])('WHEN the member picks $dinnerMode and saves THEN the order names the entry and $intent', async ({dinnerMode}) => {
+    mockIsHouseholdMember.mockReturnValue(true)
+    const deadlines = {...baseDeadlines, canModifyOrders: () => false, canEditDiningMode: () => true}
+    const wrapper = await mountSuspended(withTooltipProvider(DinnerBookingForm, {...baseProps, household: householdWithInhabitants, deadlines, waitlistEntries: [boQueued]}))
+    await clickByTestId(wrapper, `inhabitant-${bo.id}-toggle`)
+    await clickByTestId(wrapper, `inhabitant-${bo.id}-mode-edit-${dinnerMode}`)
+    await clickByTestId(wrapper, `inhabitant-${bo.id}-save`)
+
+    expect(wrapper.findComponent(DinnerBookingForm).emitted('saveBookings')).toEqual([[[expect.objectContaining({
+      inhabitantId: bo.id, dinnerEventId, dinnerMode, waitlistEntryId: QUEUED_ENTRY_ID
+    })]]])
+  })
+})
+
+describe('DinnerBookingForm on a queued guest row', () => {
+  const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
+  const DinnerMode = DinnerModeSchema.enum
+  const childPrice = baseProps.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.CHILD)!
+  const bo = householdWithInhabitants.inhabitants[1]!
+  const dinnerEventId = baseProps.dinnerEvent.id
+  const GUEST_ENTRY_ID = 41
+  const guestQueued = WaitlistFactory.defaultEntry({id: GUEST_ENTRY_ID, inhabitantId: bo.id, dinnerEventId, isGuestTicket: true, position: 3, ticketPriceId: childPrice.id, dinnerMode: DinnerMode.DINEIN})
+  const rowId = `guest-order-guest-entry-${GUEST_ENTRY_ID}`
+
+  const mountQueuedGuest = () => {
+    mockIsHouseholdMember.mockReturnValue(true)
+    const deadlines = {...baseDeadlines, canModifyOrders: () => false, canEditDiningMode: () => true}
+    return mountSuspended(withTooltipProvider(DinnerBookingForm, {...baseProps, household: householdWithInhabitants, deadlines, waitlistEntries: [guestQueued]}))
+  }
+
+  it('renders the marks of a queued inhabitant: the position badge, the hourglass ticket with the guest glyph and the ghosted wish', async () => {
+    const wrapper = await mountQueuedGuest()
+
+    expect(findByTestId(wrapper, `waitlist-position-guest-entry-${GUEST_ENTRY_ID}`).text()).toContain('#3 i køen')
+    const ticket = wrapper.findAllComponents(DinnerTicket).find(candidate => candidate.props('isQueued') && candidate.props('guestCount') !== undefined)
+    expect(ticket?.props()).toMatchObject({dinnerMode: DinnerMode.DINEIN, guestCount: 1})
+  })
+
+  it.each([
+    {intent: 'leaves the queue', dinnerMode: DinnerMode.NONE},
+    {intent: 'requeues the new wish', dinnerMode: DinnerMode.TAKEAWAY}
+  ])('WHEN the member picks $dinnerMode and saves THEN the guest order names the entry and $intent', async ({dinnerMode}) => {
+    const wrapper = await mountQueuedGuest()
+    await clickByTestId(wrapper, `${rowId}-toggle`)
+    await clickByTestId(wrapper, `${rowId}-mode-edit-${dinnerMode}`)
+    await clickByTestId(wrapper, `${rowId}-save`)
+
+    expect(wrapper.findComponent(DinnerBookingForm).emitted('saveBookings')).toEqual([[[expect.objectContaining({
+      inhabitantId: bo.id, dinnerEventId, dinnerMode, ticketPriceId: childPrice.id, isGuestTicket: true, waitlistEntryId: GUEST_ENTRY_ID
+    })]]])
   })
 })

@@ -53,4 +53,13 @@ describe('DinnerModeLegend', () => {
         expect(grid.text()).toContain('Klik på en celle')
         expect(plain.find('[data-testid="dinner-mode-legend-modified"]').exists()).toBe(false)
     })
+
+    it('explains the queue marker only where the surface shows queued cells', async () => {
+        const plain = await mountSuspended(DinnerModeLegend)
+        const grid = await mountSuspended(DinnerModeLegend, {props: {showWaitlist: true}})
+
+        expect(grid.find('[data-testid="dinner-mode-legend-waitlist"]').text()).toContain('På venteliste')
+        expect(grid.findAllComponents(DinnerModeSelector).some(selector => selector.props('ghost'))).toBe(true)
+        expect(plain.find('[data-testid="dinner-mode-legend-waitlist"]').exists()).toBe(false)
+    })
 })

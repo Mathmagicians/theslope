@@ -3,16 +3,17 @@ import {registerEndpoint, mockNuxtImport, mountSuspended} from '@nuxt/test-utils
 import {clearNuxtData, useNuxtApp} from '#app'
 import {ref, h, defineComponent, type Ref} from 'vue'
 import {defineStore, type Pinia} from 'pinia'
-import {useApiHandler, resolveUncaughtApiError, type StoreAsyncDataOptions} from '~/composables/useApiHandler'
+import {useApiHandler, resolveApiError, type StoreAsyncDataOptions} from '~/composables/useApiHandler'
 import {useAllergyValidation, type AllergyTypeDetail} from '~/composables/useAllergyValidation'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 
 const CATALOG = '/api/admin/allergy-type'
 const ERROR_MESSAGE = 'Kunne ikke hente allergi katalog'
 
-// The real showError swaps the test app for the Nuxt error page
-const {showErrorSpy} = vi.hoisted(() => ({showErrorSpy: vi.fn()}))
+// The real showError swaps the test app for the Nuxt error page; the real reloadNuxtApp leaves the test app
+const {showErrorSpy, reloadSpy} = vi.hoisted(() => ({showErrorSpy: vi.fn(), reloadSpy: vi.fn()}))
 mockNuxtImport('showError', () => showErrorSpy)
+mockNuxtImport('reloadNuxtApp', () => reloadSpy)
 
 const catalogEndpoint = vi.fn()
 const createEndpoint = vi.fn()
@@ -20,8 +21,12 @@ const goneEndpoint = vi.fn()
 const foundEndpoint = vi.fn()
 const GONE = [`${CATALOG}/404`, `${CATALOG}/410`] as const
 const FOUND = `${CATALOG}/2`
+const DEAD_SESSION = `${CATALOG}/dead-session`
 GONE.forEach(path => registerEndpoint(path, goneEndpoint))
 registerEndpoint(FOUND, foundEndpoint)
+registerEndpoint(DEAD_SESSION, () => {
+    throw createError({statusCode: 401})
+})
 registerEndpoint(`${CATALOG}/1`, () => AllergyFactory.createMockAllergyTypesWithInhabitants().slice(0, 1))
 registerEndpoint(CATALOG, catalogEndpoint)
 registerEndpoint(CATALOG, {handler: createEndpoint, method: 'PUT'})
@@ -379,28 +384,93 @@ describe('useApiHandler', () => {
         })
     })
 
-    describe('resolveUncaughtApiError (the error floor of plugins/apiErrors.client.ts)', () => {
+    describe('resolveApiError (the one decision for an API error)', () => {
         const page = {path: '/admin/teams', fullPath: '/admin/teams?mode=create&team=5'}
+        const login = {path: '/login', fullPath: '/login'}
         const actions = {login: vi.fn(), toast: vi.fn()}
 
         it.each([
             {error: {statusCode: 401}, route: page, expectedCall: () => expect(actions.login).toHaveBeenCalledWith(page.fullPath), description: 'a dead session re-authenticates with a return path'},
             {error: {status: 401}, route: page, expectedCall: () => expect(actions.login).toHaveBeenCalledWith(page.fullPath), description: 'FetchError status spelling counts as 401'},
+            {error: {statusCode: 401}, route: login, expectedCall: () => expect(actions.toast).toHaveBeenCalledWith({statusCode: 401}), description: 'on the login page a 401 is the sign-in\'s own failure and toasts'},
             {error: {statusCode: 500}, route: page, expectedCall: () => expect(actions.toast).toHaveBeenCalledWith({statusCode: 500}), description: 'any other API error surfaces as the standard toast'}
         ])('$description', ({error, route, expectedCall}) => {
-            const handler = resolveUncaughtApiError(error, route, actions)
+            const handler = resolveApiError(error, route, actions)
             expect(handler).toBeTypeOf('function')
             handler!()
             expectedCall()
         })
 
-        it.each([
-            {error: {statusCode: 401}, route: {path: '/login', fullPath: '/login'}, description: 'the login page keeps its own 401s'},
-            {error: new Error('not an api error'), route: page, description: 'non-API errors are not this floor\'s to handle'}
-        ])('$description', ({error, route}) => {
-            expect(resolveUncaughtApiError(error, route, actions)).toBeNull()
+        it('non-API errors are not decided here', () => {
+            expect(resolveApiError(new Error('not an api error'), page, actions)).toBeNull()
             expect(actions.login).not.toHaveBeenCalled()
             expect(actions.toast).not.toHaveBeenCalled()
+        })
+    })
+
+    describe('a dead session (401) on a page', () => {
+        const loginFor = (fullPath: string) => ({path: `/login?redirect=${encodeURIComponent(fullPath)}`, force: true})
+        const here = () => loginFor(useRouter().currentRoute.value.fullPath)
+
+        it('GIVEN a 401 on a store write WHEN it fails THEN the login page loads with the page as redirect, and no toast', async () => {
+            await expect(apiRequest(DEAD_SESSION, {action: 'dead'})).rejects.toMatchObject({statusCode: 401})
+
+            expect(reloadSpy).toHaveBeenCalledWith(here())
+            expect(lastToast()).toBeUndefined()
+        })
+
+        it('GIVEN a 401 on a store read WHEN it fails THEN the dataset reads the error and the login page loads', async () => {
+            const {error, status} = storeAsyncData('dead-session-read', DEAD_SESSION, {schema: AllergyTypeDetailSchema.array(), default: () => []})
+            await vi.waitFor(() => expect(status.value).toBe('error'))
+
+            expect(error.value).toMatchObject({statusCode: 401})
+            expect(reloadSpy).toHaveBeenCalledTimes(1)
+            expect(reloadSpy).toHaveBeenCalledWith(here())
+            expect(lastToast()).toBeUndefined()
+        })
+
+        it('GIVEN a 401 met while a navigation is in flight WHEN handled THEN the redirect is the page the user is heading to', async () => {
+            const router = useRouter()
+            let land!: () => void
+            let hold!: () => void
+            // A guard that holds the navigation in flight; the tracker's own guard has run by the time it is entered
+            const inFlight = new Promise<void>(entered => {
+                hold = router.beforeEach(() => {
+                    entered()
+                    return new Promise<boolean>(resolve => { land = () => resolve(true) })
+                })
+            })
+            const navigation = router.push('/chef?team=5')
+            await inFlight
+
+            useApiHandler().handleUncaughtError({statusCode: 401})
+
+            expect(reloadSpy).toHaveBeenCalledWith(loginFor('/chef?team=5'))
+            land()
+            hold()
+            await navigation
+            await router.push('/')
+        })
+
+        it('GIVEN a 401 escaping component code WHEN the floor handles it THEN it is ours and the login page loads', () => {
+            const {handleUncaughtError} = useApiHandler()
+            expect(handleUncaughtError({statusCode: 401})).toBe(true)
+            expect(reloadSpy).toHaveBeenCalledWith(here())
+        })
+
+        it('GIVEN an error that is no API response WHEN the floor sees it THEN it is not ours and nothing toasts', () => {
+            const {handleUncaughtError} = useApiHandler()
+            expect(handleUncaughtError(new Error('a bug'))).toBe(false)
+            expect(reloadSpy).not.toHaveBeenCalled()
+            expect(lastToast()).toBeUndefined()
+        })
+
+        it('GIVEN a 500 on a store write WHEN it fails THEN the standard toast, and the page stays', async () => {
+            goneEndpoint.mockImplementation(failWith(500))
+            await expect(apiRequest(GONE[0], {action: 'broken'})).rejects.toMatchObject({statusCode: 500})
+
+            expect(reloadSpy).not.toHaveBeenCalled()
+            expect(lastToast()?.title).toBe('500: Uh, åh, fejl kan ske')
         })
     })
 })

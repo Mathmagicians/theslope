@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, TicketChangesResponse, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
+import type { OrderDisplay, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, TicketChangesResponse, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
@@ -25,13 +25,19 @@ const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema,
 // API endpoints
 const ORDER_ENDPOINT = '/api/order'
 
+/** Orders a test sets up on one dinner of a household; the scaffold books them with the deadlines lifted */
+export type OrderSetupRequest = {
+  householdId: number
+  dinnerEventId: number
+  orders: Array<Pick<DesiredOrder, 'inhabitantId' | 'ticketPriceId' | 'dinnerMode'> & { isGuestTicket?: boolean }>
+}
+
 export class OrderFactory {
 
   /** Default order item - pass inhabitantId & ticketPriceId, rest uses defaults */
-  static readonly defaultOrderItem = (overrides: Partial<CreateOrdersRequest['orders'][number]>) => ({
+  static readonly defaultOrderItem = (overrides: Partial<OrderSetupRequest['orders'][number]>) => ({
     inhabitantId: 1,
     ticketPriceId: 1,
-    bookedByUserId: 1,
     dinnerMode: DinnerModeSchema.enum.DINEIN,
     isGuestTicket: false,
     ...overrides
@@ -133,7 +139,7 @@ export class OrderFactory {
     }
   }
 
-  static readonly defaultCreateOrdersRequest = (overrides?: Partial<CreateOrdersRequest>): CreateOrdersRequest => {
+  static readonly defaultCreateOrdersRequest = (overrides?: Partial<OrderSetupRequest>): OrderSetupRequest => {
     const defaults = {
       householdId: 1,
       dinnerEventId: 5,
@@ -276,31 +282,29 @@ export class OrderFactory {
 
   // === API METHODS ===
 
+  /**
+   * Set up orders through the scaffold with `?adminBypass=true`: an admin books any household on any dinner,
+   * the deadlines lifted; a member books its own household. createdIds are the household's new orders on the dinner.
+   */
   static readonly createOrder = async (
     context: BrowserContext,
-    orderData?: Partial<CreateOrdersRequest>,
-    expectedStatus: number = 201,
-    withAdminBypass: boolean = false
+    orderData?: Partial<OrderSetupRequest>,
+    expectedStatus: number = 200
   ): Promise<CreateOrdersResult | null> => {
-    const { CreateOrdersResultSchema } = useBookingValidation()
     const data = this.defaultCreateOrdersRequest(orderData)
-
-    const query = withAdminBypass ? '?adminBypass=true' : ''
-    const response = await context.request.put(`${ORDER_ENDPOINT}${query}`, {
-      headers,
-      data
-    })
-
-    const status = response.status()
-    const errorBody = status !== expectedStatus ? await response.text() : ''
-    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
-
-    if (expectedStatus === 201) {
-      const responseBody = await response.json()
-      return CreateOrdersResultSchema.parse(responseBody)
-    }
-
-    return null
+    const householdOrders = () => this.getOrders(context, {dinnerEventIds: data.dinnerEventId, householdId: data.householdId})
+    const before = new Set((await householdOrders()).map(order => order.id))
+    const dinnerEvent = await DinnerEventFactory.getDinnerEvent(context, data.dinnerEventId)
+    const response = await this.scaffoldOrders(context, {
+      householdId: data.householdId,
+      seasonId: dinnerEvent?.seasonId ?? undefined,
+      dinnerEventIds: [data.dinnerEventId],
+      orders: data.orders.map(order => this.defaultDesiredOrder({...order, dinnerEventId: data.dinnerEventId, isGuestTicket: order.isGuestTicket ?? false}))
+    }, expectedStatus, true)
+    if (!response) return null
+    expect(response.scaffoldResult.errored, 'The scaffold placed every order').toBe(0)
+    const createdIds = (await householdOrders()).map(order => order.id).filter(id => !before.has(id))
+    return {householdId: data.householdId, createdIds}
   }
 
   static readonly getOrder = async (
@@ -321,28 +325,34 @@ export class OrderFactory {
     return null
   }
 
+  /**
+   * Change an order's mode through the scaffold under the deadlines: NONE deletes before the cancellation deadline
+   * and releases after it. `withAdminBypass` lifts the deadlines (the admin correction). Returns the order after.
+   */
   static readonly updateOrder = async (
     context: BrowserContext,
     orderId: number,
-    updateData: { dinnerMode: string },
+    updateData: { dinnerMode: DinnerMode },
     expectedStatus: number = 200,
     withAdminBypass: boolean = false
   ): Promise<OrderDetail | null> => {
-    const query = withAdminBypass ? '?adminBypass=true' : ''
-    const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}${query}`, {
-      headers,
-      data: updateData
-    })
-
-    const status = response.status()
-    const errorBody = status !== expectedStatus ? await response.text() : ''
-    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
-
-    if (expectedStatus === 200) {
-      return await response.json()
-    }
-
-    return null
+    const order = await this.getOrder(context, orderId)
+    await this.scaffoldOrders(context, {
+      householdId: order!.inhabitant.householdId,
+      seasonId: order!.dinnerEvent.seasonId ?? undefined,
+      dinnerEventIds: [order!.dinnerEventId],
+      orders: [this.defaultDesiredOrder({
+        inhabitantId: order!.inhabitantId,
+        dinnerEventId: order!.dinnerEventId,
+        ticketPriceId: order!.ticketPriceId!,
+        isGuestTicket: order!.isGuestTicket,
+        dinnerMode: updateData.dinnerMode,
+        orderId
+      })]
+    }, expectedStatus, withAdminBypass)
+    if (expectedStatus !== 200) return null
+    const response = await context.request.get(`${ORDER_ENDPOINT}/${orderId}`, { headers })
+    return response.status() === 200 ? await response.json() : null
   }
 
   /**
@@ -352,42 +362,31 @@ export class OrderFactory {
    * @param expectedStatus - Expected HTTP status (default 200)
    * @param withAdminBypass - If true, adds ?adminBypass=true (for admin tests deleting orders from test households)
    */
+  /**
+   * Delete an order through the scaffold with `?adminBypass=true`: NONE with the deadlines lifted deletes it.
+   * Returns the order as it was, or null when it is already gone.
+   */
   static readonly deleteOrder = async (
     context: BrowserContext,
-    orderId: number,
-    expectedStatus: number = 200,
-    withAdminBypass: boolean = false
-  ): Promise<OrderDisplay | null> => {
-    const query = withAdminBypass ? '?adminBypass=true' : ''
-    const response = await context.request.delete(`${ORDER_ENDPOINT}/${orderId}${query}`, { headers })
-
-    const status = response.status()
-    const errorBody = status !== expectedStatus ? await response.text() : ''
-    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
-
-    if (expectedStatus === 200) {
-      return await response.json()
-    }
-
-    return null
-  }
-
-  static readonly releaseOrder = async (
-    context: BrowserContext,
-    orderId: number,
-    expectedStatus: number = 200
-  ): Promise<OrderDisplay | null> => {
-    const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}/release`, { headers })
-
-    const status = response.status()
-    const errorBody = status !== expectedStatus ? await response.text() : ''
-    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
-
-    if (expectedStatus === 200) {
-      return await response.json()
-    }
-
-    return null
+    orderId: number
+  ): Promise<OrderDetail | null> => {
+    const response = await context.request.get(`${ORDER_ENDPOINT}/${orderId}`, { headers })
+    if (response.status() === 404) return null
+    const order: OrderDetail = await response.json()
+    await this.scaffoldOrders(context, {
+      householdId: order.inhabitant.householdId,
+      seasonId: order.dinnerEvent.seasonId ?? undefined,
+      dinnerEventIds: [order.dinnerEventId],
+      orders: [this.defaultDesiredOrder({
+        inhabitantId: order.inhabitantId,
+        dinnerEventId: order.dinnerEventId,
+        ticketPriceId: order.ticketPriceId!,
+        isGuestTicket: order.isGuestTicket,
+        dinnerMode: DinnerModeSchema.enum.NONE,
+        orderId
+      })]
+    }, 200, true)
+    return order
   }
 
   static readonly swapOrder = async (
@@ -401,30 +400,6 @@ export class OrderFactory {
     const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}/swap-order`, {
       headers,
       data
-    })
-
-    const status = response.status()
-    const errorBody = status !== expectedStatus ? await response.text() : ''
-    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
-
-    if (expectedStatus === 200) {
-      return await response.json()
-    }
-
-    return null
-  }
-
-  static readonly claimOrder = async (
-    context: BrowserContext,
-    dinnerEventId: number,
-    ticketPriceId: number,
-    inhabitantId: number,
-    isGuestTicket: boolean = false,
-    expectedStatus: number = 200
-  ): Promise<OrderDetail | null> => {
-    const response = await context.request.post(`${ORDER_ENDPOINT}/claim`, {
-      headers,
-      data: { dinnerEventId, ticketPriceId, inhabitantId, isGuestTicket }
     })
 
     const status = response.status()
@@ -573,20 +548,12 @@ export class OrderFactory {
    * @param orderIds - Array of order IDs to delete
    * @param withAdminBypass - If true, adds ?adminBypass=true (for admin tests deleting orders from test households)
    */
+  /** Cleanup orders by ID (afterAll hooks); an order already gone counts as removed */
   static readonly cleanupOrders = async (
     context: BrowserContext,
-    orderIds: number[],
-    withAdminBypass: boolean = false
+    orderIds: number[]
   ): Promise<void> => {
-    if (orderIds.length === 0) return
-
-    const query = withAdminBypass ? '?adminBypass=true' : ''
-    await Promise.all(orderIds.map(async (id) => {
-      const response = await context.request.delete(`${ORDER_ENDPOINT}/${id}${query}`)
-      if (response.status() !== 200 && response.status() !== 404) {
-        console.warn(`Failed to cleanup order ${id}: status ${response.status()}`)
-      }
-    }))
+    for (const id of orderIds) await this.deleteOrder(context, id)
   }
 
   // === SCAFFOLD ORDERS (ADR-016 Unified Booking) ===
@@ -619,7 +586,7 @@ export class OrderFactory {
 
   /** ScaffoldResult data for component tests (no API call) */
   static readonly defaultScaffoldResult = (overrides?: Partial<ScaffoldResult>): ScaffoldResult => ({
-    seasonId: 1, created: 0, deleted: 0, released: 0, claimed: 0, claimRejected: 0,
+    seasonId: 1, created: 0, deleted: 0, released: 0, claimed: 0, queued: 0, positions: [], left: 0, requeued: 0,
     priceUpdated: 0, modeUpdated: 0, unchanged: 0, households: 1, errored: 0,
     ...overrides
   })
@@ -648,16 +615,18 @@ export class OrderFactory {
    * @param context - Browser context for API requests
    * @param request - ScaffoldOrdersRequest with householdId, dinnerEventIds, orders
    * @param expectedStatus - Expected HTTP status (default 200)
+   * @param adminBypass - Admin acts for a household that is not its own
    * @returns ScaffoldOrdersResponse with householdId and scaffoldResult
    */
   static readonly scaffoldOrders = async (
     context: BrowserContext,
     request: ScaffoldOrdersRequest,
-    expectedStatus: number = 200
+    expectedStatus: number = 200,
+    adminBypass: boolean = false
   ): Promise<ScaffoldOrdersResponse | null> => {
     const { ScaffoldOrdersResponseSchema } = useBookingValidation()
 
-    const response = await context.request.post(HOUSEHOLD_SCAFFOLD_ENDPOINT, {
+    const response = await context.request.post(`${HOUSEHOLD_SCAFFOLD_ENDPOINT}${adminBypass ? '?adminBypass=true' : ''}`, {
       headers,
       data: request
     })

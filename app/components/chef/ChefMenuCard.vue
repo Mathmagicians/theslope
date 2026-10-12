@@ -69,8 +69,19 @@
  *
  * Action row noise ladder (NOISE: loud -> medium) - matches use frequency:
  *   [edit menu] solid primary | [publish] outline secondary | [⚙ ▾] outline settings wheel
- * The ⚙ ▾ trigger (BUTTONS.settings + chevron) reveals a danger zone holding the rare
- * cancel-dinner action.
+ * The ⚙ ▾ trigger (BUTTONS.settings + chevron) reveals the Flere panel: Frigiv portioner above a
+ * danger zone holding the rare cancel-dinner action.
+ *
+ * RELEASE PORTIONS (EDIT, the queue on the dinner) - one form, two triggers:
+ *   [Rediger menu] [Annoncer] [Flere v]
+ *                              +- Frigiv portioner          permanent entry in the Flere panel
+ *   +----------------------------------------------------------------+
+ *   | (i) 4 på venteliste · 2,5 portioner                            |  ALERTS.info + withActions, only while
+ *   |     Mange skrånere mangler en billet til din middag — har du   |  the queue has entries
+ *   |     mulighed for at mætte flere munde?    [Frigiv portioner]   |
+ *   +----------------------------------------------------------------+
+ *   form:  Kan du frigive [ 2,5 ] portioner?  [Frigiv] [Fortryd]     UForm on WaitlistReleaseRequestSchema,
+ *                                                                    prefilled with the queue's portion need
  *
  * ADR Compliance:
  * - ADR-001: Types from validation composables, FORM_MODES from ~/types/form
@@ -85,7 +96,8 @@ import {cookingRoundWords, type CookingRoundRow} from '~/composables/useBookingU
 import type { AllergyTypeDisplay } from '~/composables/useAllergyValidation'
 import type { SeasonDeadlines } from '~/composables/useSeason'
 import type { NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
-import type { FormSubmitEvent } from '#ui/types'
+import type { Form, FormSubmitEvent } from '#ui/types'
+import type { WaitlistQueueSummary, WaitlistReleaseRequest } from '~/composables/useWaitlistValidation'
 import { FORM_MODES, type FormMode } from '~/types/form'
 
 interface Props {
@@ -104,6 +116,7 @@ interface Props {
   navColor?: NuxtUIColor        // Navigation button color
   roundRows?: CookingRoundRow[] // The team's cooking round around this dinner (chef page)
   expenseNote?: string          // The words a grocery line's note starts with (expenseNoteWords, built by the page)
+  waitlist?: WaitlistQueueSummary | null // The dinner's queue: its size and portion need (chef page)
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -119,7 +132,8 @@ const props = withDefaults(defineProps<Props>(), {
   calendarOpen: false,
   navColor: undefined,
   roundRows: () => [],
-  expenseNote: ''
+  expenseNote: '',
+  waitlist: null
 })
 
 const emit = defineEmits<{
@@ -129,6 +143,8 @@ const emit = defineEmits<{
   /** The chef's grocery lines (DinnerBudget → ExpenseLines); the page calls the bookings store */
   'add-expense': [line: ExpenseCreate]
   'remove-expense': [expenseId: number]
+  /** The chef releases portions to the queue; the page calls the bookings store */
+  'release-portions': [portions: number]
   'cancel-dinner': []
   'undo-cancel-dinner': []
   'toggle-calendar': []
@@ -141,7 +157,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { TYPOGRAPHY, SIZES, ICONS, ALERTS, BUTTONS, DINNER_STATE_BADGES, COMPONENTS, URGENCY_TO_BADGE, BACKGROUNDS, LAYOUTS, TEXT, RING, NOISE, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, SIZES, ICONS, ALERTS, BUTTONS, DINNER_STATE_BADGES, COMPONENTS, URGENCY_TO_BADGE, LAYOUTS, TEXT, NOISE, COLOR, getRandomEmptyMessage } = useTheSlopeDesignSystem()
 
 // Hero panel button colors (ChefMenuCard sits on hero background with food image)
 const HERO_BUTTON = COMPONENTS.heroPanel.light
@@ -288,12 +304,33 @@ const isEditingMenu = ref(false)
 // The danger zone (cancel dinner) sits behind the actions trigger, away from the routine edit controls
 const isMoreOpen = ref(false)
 
+// ========== RELEASE PORTIONS (the queue) ==========
+
+const { WaitlistReleaseRequestSchema } = useWaitlistValidation()
+const hasQueue = computed(() => (props.waitlist?.entries ?? 0) > 0)
+// The Flere entry and the CTA open one form; the draft starts on the open, prefilled with the queue's portion need
+const isReleasing = ref(false)
+const releaseDraft = ref<Partial<WaitlistReleaseRequest>>({})
+const releaseFormRef = useTemplateRef<Form<WaitlistReleaseRequest>>('releaseFormRef')
+
+const openRelease = () => {
+  releaseDraft.value = { portions: props.waitlist?.portions || undefined }
+  isMoreOpen.value = false
+  isReleasing.value = true
+}
+
+const handleReleaseSubmit = (event: FormSubmitEvent<WaitlistReleaseRequest>) => {
+  emit('release-portions', event.data.portions)
+  isReleasing.value = false
+}
+
 // Reset transient edit/panel state when navigating to another dinner - never carry a stale
 // edit form or an armed danger action across.
 watch(() => props.dinnerEvent.id, () => {
   isMoreOpen.value = false
   isEditingMenu.value = false
   isEditingAllergens.value = false
+  isReleasing.value = false
 })
 
 // Can publish: not cancelled or consumed
@@ -408,7 +445,7 @@ const handleCardClick = () => {
     v-else
     :name="`chef-menu-card-${dinnerEvent.id}`"
     :class="LAYOUTS.cardResponsive"
-    :ui="{ root: `${RING.amber[500]} relative overflow-hidden`, header: `p-0 ${BACKGROUNDS.hero.mocha}` }"
+    :ui="COMPONENTS.chefMenuCard.fullUi"
   >
     <!-- Cancelled ribbon -->
     <div
@@ -438,12 +475,12 @@ const handleCardClick = () => {
       <div v-if="!isEditingMenu">
         <UFormField
           :hint="isEditing ? 'Rediger og publicer aftenens menu' : undefined"
-          :ui="{ hint: 'hidden md:block' }"
+          :ui="COMPONENTS.chefMenuCard.menuFieldUi"
         >
           <template #default>
-            <div class="flex flex-col md:flex-row md:items-center gap-2">
+            <div :class="COMPONENTS.chefMenuCard.menuRow">
               <!-- Menu title -->
-              <div :class="['text-lg font-medium md:flex-1', hasMenuTitle ? '' : `italic ${TEXT.neutral[500]}`]" data-testid="chef-menu-title">
+              <div :class="hasMenuTitle ? COMPONENTS.chefMenuCard.menuTitle : COMPONENTS.chefMenuCard.menuTitlePlaceholder" data-testid="chef-menu-title">
                 {{ menuTitle }}
               </div>
 
@@ -483,7 +520,7 @@ const handleCardClick = () => {
                 <UButton
                   v-if="canCancelDinner(dinnerEvent)"
                   v-bind="{...BUTTONS.settings, ...BUTTONS.flipOpen(isMoreOpen)}"
-                  class="self-end md:self-auto"
+                  :class="COMPONENTS.chefMenuCard.moreTrigger"
                   :disabled="isUpdating"
                   aria-label="Flere handlinger"
                   data-testid="dinner-more-actions"
@@ -508,48 +545,103 @@ const handleCardClick = () => {
           </template>
         </UFormField>
 
-        <!-- Overflow panel: danger zone for rare + destructive actions, separated from routine controls -->
+        <!-- Overflow panel: the release entry, then the danger zone for rare + destructive actions, separated from routine controls -->
         <UCollapsible
           v-if="isEditing && canCancelDinner(dinnerEvent)"
           v-model:open="isMoreOpen"
           v-bind="COMPONENTS.collapsible.belowTrigger"
         >
           <template #content>
-            <div :class="COMPONENTS.dangerZone.container" data-testid="dinner-danger-zone">
-              <div :class="COMPONENTS.dangerZone.heading">
-                <UIcon :name="ICONS.warning" />
-                Farezone
-              </div>
-              <p :class="TYPOGRAPHY.bodyTextMuted">
-                <span class="font-semibold">Aflys middagen</span> — hele fællesspisningen aflyses for alle beboere.
-                Skal du blot melde fra som chefkok? Brug «Ændre tjans» ved kokkens portræt nedenfor.
-              </p>
-              <div :class="LAYOUTS.formButtonRow">
-                <UButton
-                  v-bind="BUTTONS.cancel"
-                  data-testid="dinner-aflys-dismiss"
-                  @click="isMoreOpen = false"
-                >
-                  Annuller
-                </UButton>
-                <DangerButton
-                  :label="isUpdating ? 'Arbejder...' : 'Aflys middagen'"
-                  :confirm-label="`Tryk igen for at aflyse ${formattedShortDate}`"
-                  :loading="isUpdating"
-                  :disabled="isUpdating"
-                  @confirm="handleCancelConfirm"
-                />
+            <div :class="COMPONENTS.chefMenuCard.morePanel">
+              <UButton
+                v-bind="BUTTONS.secondaryAction"
+                :color="HERO_BUTTON.primaryButton"
+                :icon="ICONS.waitlist"
+                :disabled="isUpdating"
+                data-testid="chef-release-portions"
+                @click="openRelease"
+              >
+                Frigiv portioner
+              </UButton>
+              <div :class="COMPONENTS.dangerZone.container" data-testid="dinner-danger-zone">
+                <div :class="COMPONENTS.dangerZone.heading">
+                  <UIcon :name="ICONS.warning" />
+                  Farezone
+                </div>
+                <p :class="TYPOGRAPHY.bodyTextMuted">
+                  <span :class="COMPONENTS.chefMenuCard.dangerLead">Aflys middagen</span> — hele fællesspisningen aflyses for alle beboere.
+                  Skal du blot melde fra som chefkok? Brug «Ændre tjans» ved kokkens portræt nedenfor.
+                </p>
+                <div :class="LAYOUTS.formButtonRow">
+                  <UButton
+                    v-bind="BUTTONS.cancel"
+                    data-testid="dinner-aflys-dismiss"
+                    @click="isMoreOpen = false"
+                  >
+                    Annuller
+                  </UButton>
+                  <DangerButton
+                    :label="isUpdating ? 'Arbejder...' : 'Aflys middagen'"
+                    :confirm-label="`Tryk igen for at aflyse ${formattedShortDate}`"
+                    :loading="isUpdating"
+                    :disabled="isUpdating"
+                    @confirm="handleCancelConfirm"
+                  />
+                </div>
               </div>
             </div>
           </template>
         </UCollapsible>
 
-        <div v-if="dinnerEvent.menuDescription" :class="[TYPOGRAPHY.bodyTextSmall, TEXT.menuBody, 'mt-1']" data-testid="chef-menu-description">
+        <!-- The queue asks the chef for portions while anyone waits; Frigiv portioner opens the same form -->
+        <UAlert
+          v-if="isEditing && hasQueue && !isReleasing && canCancelDinner(dinnerEvent)"
+          v-bind="{...ALERTS.info, ...ALERTS.withActions}"
+          :icon="ICONS.waitlist"
+          :title="`${waitlist!.entries} på venteliste · ${formatPortions(waitlist!.portions)} portioner`"
+          description="Mange skrånere mangler en billet til din middag — har du mulighed for at mætte flere munde?"
+          :class="COMPONENTS.chefMenuCard.alertGap"
+          data-testid="chef-waitlist-alert"
+        >
+          <template #actions>
+            <UButton
+              v-bind="BUTTONS.secondaryAction"
+              :color="COLOR.info"
+              :icon="ICONS.waitlist"
+              :disabled="isUpdating"
+              data-testid="chef-release-portions-cta"
+              @click="openRelease"
+            >
+              Frigiv portioner
+            </UButton>
+          </template>
+        </UAlert>
+
+        <!-- Release portions: one number, prefilled with the queue's portion need -->
+        <UForm
+          v-if="isEditing && isReleasing"
+          ref="releaseFormRef"
+          :schema="WaitlistReleaseRequestSchema"
+          :state="releaseDraft"
+          :class="[COMPONENTS.chefMenuCard.form, COMPONENTS.chefMenuCard.alertGap]"
+          data-testid="chef-release-portions-form"
+          @submit="handleReleaseSubmit"
+        >
+          <UFormField label="Kan du frigive portioner?" name="portions" hint="Portioner, f.eks. 2,5" :class="COMPONENTS.chefMenuCard.field">
+            <UInput v-model.number="releaseDraft.portions" type="number" :step="0.5" :min="0" :size="SIZES.standard" name="chef-release-portions-input" :class="COMPONENTS.chefMenuCard.field" />
+          </UFormField>
+          <div :class="LAYOUTS.formButtonRow">
+            <UButton v-bind="BUTTONS.cancel" data-testid="chef-release-portions-cancel" @click="isReleasing = false">Fortryd</UButton>
+            <UButton v-bind="BUTTONS.save" :color="HERO_BUTTON.primaryButton" :loading="isUpdating" data-testid="chef-release-portions-submit" @click="releaseFormRef?.submit()">Frigiv</UButton>
+          </div>
+        </UForm>
+
+        <div v-if="dinnerEvent.menuDescription" :class="COMPONENTS.chefMenuCard.description" data-testid="chef-menu-description">
           {{ dinnerEvent.menuDescription }}
         </div>
 
         <!-- Chef portrait + RoleAssignment trigger -->
-        <div class="pt-4 mt-4 flex items-center gap-3 flex-wrap">
+        <div :class="COMPONENTS.chefMenuCard.chefRow">
           <div
             :class="dinnerEvent.chef ? COMPONENTS.wantedPoster.trigger : [COMPONENTS.wantedPoster.trigger, COMPONENTS.wantedPoster.frame]"
             :data-testid="dinnerEvent.chef ? 'chef-display' : 'chef-wanted'"
@@ -592,7 +684,7 @@ const handleCardClick = () => {
           v-if="isEditing && canAnnounce && !canAdvanceState"
           v-bind="ALERTS.warning"
           :icon="ICONS.info"
-          class="mt-2"
+          :class="COMPONENTS.chefMenuCard.alertGap"
         >
           <template #description>Chefkokken skal oprette en menu, før den kan publiceres</template>
         </UAlert>

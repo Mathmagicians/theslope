@@ -13,6 +13,7 @@ import {
     DinnerStepState,
     DEADLINE_LABELS,
     type AlarmLevel,
+    type BookingAction,
     type OrderBucketResult,
     type ReleasedTicketCounts
 } from '~/composables/useBooking'
@@ -30,7 +31,7 @@ import {calculateCountdown, formatDate, formatDateRange} from '~/utils/date'
 export interface DeadlineBadgeData {
     label: string
     icon: string
-    color: 'success' | 'error' | 'warning' | 'neutral'
+    color: typeof COLOR.success | typeof COLOR.error | typeof COLOR.warning | typeof COLOR.neutral
     value: string       // Badge text
     helpText: string
     step?: number       // Chef stepper: which step this badge belongs to
@@ -107,7 +108,7 @@ export const createBookingBadge = (isOpen: boolean, releasedCounts?: ReleasedTic
     return {
         label: DEADLINE_LABELS.BOOKING_CLOSED.label,
         icon: isOpen ? ICONS.lockOpen : (hasTickets ? ICONS.released : ICONS.lockClosed),
-        color: isOpen ? 'success' : (hasTickets ? 'warning' : 'error'),
+        color: isOpen ? COLOR.success : (hasTickets ? COLOR.warning : COLOR.error),
         value: isOpen ? 'Åben' : (hasTickets ? `${releasedCounts!.formatted} ledig${releasedCounts!.total === 1 ? '' : 'e'}` : 'Lukket'),
         helpText: isOpen
             ? DEADLINE_LABELS.BOOKING_CLOSED.openText
@@ -128,7 +129,7 @@ export const createDiningModeBadge = (
         return {
             label: DEADLINE_LABELS.DINING_MODE.label,
             icon: ICONS.lockOpen,
-            color: countdown.hours < 1 ? 'error' : 'warning',
+            color: countdown.hours < 1 ? COLOR.error : COLOR.warning,
             value: `lukker om ${countdown.formatted.toLowerCase()}`,
             helpText: DEADLINE_LABELS.DINING_MODE.openText
         }
@@ -136,7 +137,7 @@ export const createDiningModeBadge = (
     return {
         label: DEADLINE_LABELS.DINING_MODE.label,
         icon: isOpen ? ICONS.lockOpen : ICONS.lockClosed,
-        color: isOpen ? 'success' : 'error',
+        color: isOpen ? COLOR.success : COLOR.error,
         value: isOpen ? 'Åben' : 'Lukket',
         helpText: isOpen ? DEADLINE_LABELS.DINING_MODE.openText : DEADLINE_LABELS.DINING_MODE.closedText
     }
@@ -157,17 +158,36 @@ export const createBookingBadges = (
     }
 }
 
+/**
+ * The save button's label, a preview of what the one booking path will do: an existing ticket is updated, a new one
+ * is booked before the deadline; after it the claim buys a ticket for sale, else takes a place in the queue
+ */
+export const bookingSaveLabel = (action: BookingAction, hasTicket: boolean, hasReleasedTickets: boolean): string => {
+    if (hasTicket) return 'Opdater'
+    if (action !== 'claim') return 'Book'
+    return hasReleasedTickets ? 'Køb billet' : 'Skriv på venteliste'
+}
+
+/** A member's place in the queue of a sold-out dinner, rendered compact beside the name */
+export const createWaitlistBadge = (position: number): DeadlineBadgeData => ({
+    label: 'Venteliste',
+    icon: ICONS.waitlist,
+    color: COLOR.neutral,
+    value: `#${position} i køen`,
+    helpText: 'Du får en billet, når en bliver ledig eller kokken frigiver portioner'
+})
+
 // ============================================================================
 // Action Preview - Show users what will happen before they save
 // ============================================================================
 
-export type ActionType = 'create' | 'delete' | 'release' | 'reclaim' | 'claim' | 'updateMode'
+export type ActionType = 'create' | 'delete' | 'release' | 'reclaim' | 'claim' | 'leave' | 'requeue' | 'updateMode'
 
 export interface ActionPreviewItem {
     name: string
     action: ActionType
     icon: string
-    color: 'primary' | 'error' | 'info' | 'neutral'
+    color: typeof COLOR.primary | typeof COLOR.error | typeof COLOR.info | typeof COLOR.neutral
     text: string
 }
 
@@ -183,6 +203,8 @@ export const useBookingUi = () => {
         release:    { icon: ICONS.released,   template: (n: string) => `${n}s billet frigives` },
         reclaim:    { icon: ICONS.undo,       template: (n: string) => `${n} tilmeldes igen` },
         claim:      { icon: ICONS.claim,      template: (n: string) => `${n} køber fra andre` },
+        leave:      { icon: ICONS.xMark,      template: (n: string) => `${n} forlader ventelisten` },
+        requeue:    { icon: ICONS.waitlist,   template: (n: string) => `${n} skrives på ventelisten igen` },
         updateMode: { icon: ICONS.edit,       template: (n: string) => `${n} opdaterer spisning` }
     } as const
 
@@ -191,7 +213,9 @@ export const useBookingUi = () => {
     const BUCKET_TO_ACTION: Record<Exclude<BucketKey, 'idempotent' | 'update'>, ActionType> = {
         create: 'create',
         delete: 'delete',
-        claim: 'claim'
+        claim: 'claim',
+        leave: 'leave',
+        requeue: 'requeue'
     }
 
     const getUpdateAction = (
@@ -220,6 +244,8 @@ export const useBookingUi = () => {
             release:    OrderStateEnum.RELEASED,
             reclaim:    OrderStateEnum.BOOKED,
             claim:      'claimed' as const,
+            leave:      OrderStateEnum.CANCELLED,
+            requeue:    'claimed' as const,
             updateMode: OrderStateEnum.CLOSED
         } as const
 
@@ -279,7 +305,7 @@ export const useBookingUi = () => {
                 label: 'label' in labels ? labels.label : '',
                 icon: b.icon,
                 value: done ? '' : result.description,
-                color: b.color as 'success' | 'error' | 'warning' | 'neutral',
+                color: b.color as DeadlineBadgeData['color'],
                 helpText: text
             }
         }
@@ -310,6 +336,8 @@ export const useBookingUi = () => {
         createBookingBadge,
         createDiningModeBadge,
         createBookingBadges,
+        createWaitlistBadge,
+        bookingSaveLabel,
         createChefBadges,
         // Action preview
         ACTION_PREVIEW,

@@ -10,6 +10,7 @@ import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFact
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {formatPortions} from '~/utils/utils'
 import {FORM_MODES} from '~/types/form'
 import {COMPONENTS, ICONS, getRandomEmptyMessage} from '~/composables/useTheSlopeDesignSystem'
@@ -369,5 +370,84 @@ describe('ChefMenuCard — Madbestilling', () => {
         expect(findByTestId(wrapper, 'expense-table').text()).toContain('Rådighedsbeløb')
         expect(findByTestId(wrapper, 'expense-hint-heading').text()).toBe(`Hele ${useCookingTeam().getTeamShortName('Madhold 2')}, for perioden 12/04/2026-13/04/2026`)
         expect(findAllByTestId(wrapper, 'expense-hint-row')).toHaveLength(6)
+    })
+})
+
+// ---- Frigiv portioner: the chef releases portions to the queue from the Flere menu or from the queue's CTA ----
+
+describe('ChefMenuCard — release portions', () => {
+    let deadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
+    beforeAll(() => {
+        deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason())
+    })
+
+    const QUEUE = WaitlistFactory.defaultQueueSummary({entries: 4, portions: 2.5})
+    const RELEASE_FORM = 'chef-release-portions-form'
+
+    const mountChefCard = (waitlist: ReturnType<typeof WaitlistFactory.defaultQueueSummary> | null) => mountSuspended(ChefMenuCard, {
+        props: {dinnerEvent: DinnerEventFactory.defaultDinnerEventDetail(), deadlines, formMode: FORM_MODES.EDIT, waitlist},
+        global: {provide: {isMd: ref(true)}}
+    })
+
+    const submitRelease = async (wrapper: Awaited<ReturnType<typeof mountChefCard>>) => {
+        await clickByTestId(wrapper, 'chef-release-portions-submit')
+        await flushPromises()
+        await nextTick()
+    }
+
+    it.each([
+        {desc: 'a queue with entries', waitlist: QUEUE, cta: true},
+        {desc: 'an empty queue', waitlist: WaitlistFactory.defaultQueueSummary({entries: 0, portions: 0}), cta: false},
+        {desc: 'no queue read', waitlist: null, cta: false}
+    ])('GIVEN $desc THEN the CTA under the action row shows: $cta', async ({waitlist, cta}) => {
+        const wrapper = await mountChefCard(waitlist)
+
+        expect(findByTestId(wrapper, 'chef-release-portions-cta').exists()).toBe(cta)
+    })
+
+    it('GIVEN a queue THEN the CTA names its size', async () => {
+        const wrapper = await mountChefCard(QUEUE)
+
+        expect(findByTestId(wrapper, 'chef-waitlist-alert').text()).toContain(String(QUEUE.entries))
+    })
+
+    it.each([
+        {trigger: 'the Flere entry', open: async (wrapper: Awaited<ReturnType<typeof mountChefCard>>) => {
+            await clickByTestId(wrapper, 'dinner-more-actions')
+            await flushPromises()
+            await clickByTestId(wrapper, 'chef-release-portions')
+        }},
+        {trigger: 'the CTA', open: (wrapper: Awaited<ReturnType<typeof mountChefCard>>) => clickByTestId(wrapper, 'chef-release-portions-cta')}
+    ])('$trigger opens the release form prefilled with the queue\'s portion need, and Frigiv emits the portions', async ({open}) => {
+        const wrapper = await mountChefCard(QUEUE)
+        expect(findByTestId(wrapper, RELEASE_FORM).exists()).toBe(false)
+
+        await open(wrapper)
+
+        const form = findByTestId(wrapper, RELEASE_FORM)
+        expect((form.find('input').element as HTMLInputElement).value).toBe(String(QUEUE.portions))
+        await submitRelease(wrapper)
+        expect(wrapper.emitted('release-portions')).toEqual([[QUEUE.portions]])
+        expect(findByTestId(wrapper, RELEASE_FORM).exists()).toBe(false)
+    })
+
+    it('Fortryd closes the form without releasing', async () => {
+        const wrapper = await mountChefCard(QUEUE)
+        await clickByTestId(wrapper, 'chef-release-portions-cta')
+
+        await clickByTestId(wrapper, 'chef-release-portions-cancel')
+
+        expect(findByTestId(wrapper, RELEASE_FORM).exists()).toBe(false)
+        expect(wrapper.emitted('release-portions')).toBeUndefined()
+    })
+
+    it('a draft above the release limit blocks the emit', async () => {
+        const wrapper = await mountChefCard(QUEUE)
+        await clickByTestId(wrapper, 'chef-release-portions-cta')
+
+        await findByTestId(wrapper, RELEASE_FORM).find('input').setValue('1000')
+        await submitRelease(wrapper)
+
+        expect(wrapper.emitted('release-portions')).toBeUndefined()
     })
 })

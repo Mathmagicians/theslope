@@ -309,6 +309,10 @@ export const TEXT = {
     toned: 'text-gray-600 dark:text-gray-400',
     /** Supporting text: counts, empty-state prose */
     muted: 'text-gray-500 dark:text-gray-400',
+    /** The ink of a figure in the black, a check, a saved state */
+    success: 'text-success-700 dark:text-success-400',
+    /** The ink of an overdraft, a released ticket, a validation line */
+    error: 'text-error-700 dark:text-error-400',
     /** Recedes: a decorative glyph, a column separator, a stack trace. One rung deeper than
      *  `muted` in each mode, and off the 400 rung the RELEASED kitchen panel fills with */
     dimmed: 'text-gray-500 dark:text-gray-400',
@@ -418,6 +422,8 @@ export const TYPOGRAPHY = {
 
     // Small text
     finePrint: 'text-xs',
+    /** Fine print that recedes: unit words, a note under a field, a comment */
+    finePrintMuted: `text-xs ${TEXT.muted}`,
     caption: 'text-xs font-medium',
 
     // Footer
@@ -652,7 +658,16 @@ const TABLE_DENSE_UI = {th: 'px-1 py-1 md:px-4 md:py-3', td: `px-1 md:px-4 ${TAB
 // The turn of an open-panel chevron; the classes go on whichever icon slot carries the chevron
 const flipOpenTurn = (isOpen: boolean): string => `${isOpen ? 'rotate-180 ' : ''}transition-transform duration-200`
 
+// A spinning icon while something runs: saving, a job, a fetch
+const MOTION_SPIN = 'animate-spin motion-reduce:animate-none'
+
+// The row over a collapsible: its title or tabs left, the chevron right
+const COLLAPSIBLE_HEADER_ROW = 'flex items-center justify-between gap-2'
+
 export const COMPONENTS = {
+    // The turn of an open-panel chevron on a button whose own icon carries it; BUTTONS.flipOpen turns a trailing chevron
+    openTurn: flipOpenTurn,
+
     // Kitchen panels (functional data) - Vibrant Pantone colors
     kitchenStatsBar: `${BG.mocha[50]} ${TEXT.gray[900]} px-0 py-4 md:p-6`,
 
@@ -660,13 +675,15 @@ export const COMPONENTS = {
      * The dining modes walk `RAINBOW` from its first stop, so a panel is the same brand surface
      * the landing band paints and the panel owns only its edge and its box. Each divider is its
      * own family one rung deeper. TIL SALG stays grey: it is a ticket on offer, not a dining
-     * mode, and the neutral fill is what says so. Dark ink reads 8.07:1 on it.
+     * mode, and the neutral fill is what says so. Dark ink reads 8.07:1 on it. VENTELISTE takes
+     * the fourth box while the queue has entries, on the same grey.
      */
     kitchenPanel: {
         TAKEAWAY: `${getRainbowBand(0)} ${BORDER.pink[600]} ${KITCHEN_PANEL_BOX}`,
         DINEIN: `${getRainbowBand(1)} ${BORDER.orange[600]} ${KITCHEN_PANEL_BOX}`,
         DINEINLATE: `${getRainbowBand(2)} ${BORDER.ocean[600]} ${KITCHEN_PANEL_BOX}`,
-        RELEASED: `${BG.gray[400]} ${TEXT.black} ${BORDER.gray[500]} ${KITCHEN_PANEL_BOX}`
+        RELEASED: `${BG.gray[400]} ${TEXT.black} ${BORDER.gray[500]} ${KITCHEN_PANEL_BOX}`,
+        WAITLIST: `${BG.gray[400]} ${TEXT.black} ${BORDER.gray[500]} ${KITCHEN_PANEL_BOX}`
     },
 
     /**
@@ -677,7 +694,6 @@ export const COMPONENTS = {
      */
     kitchen: {
         totals: 'text-center',
-        totalsSecondary: KITCHEN_STATS_BAR_SECONDARY,
         totalsLabel: `${TYPOGRAPHY.kitchenLabel} ${KITCHEN_STATS_BAR_SECONDARY}`,
         totalsMain: 'text-2xl md:text-3xl lg:text-4xl font-bold',
         totalsBreakdown: `text-xs md:text-sm flex flex-wrap justify-center gap-x-2 ${KITCHEN_STATS_BAR_SECONDARY}`,
@@ -761,7 +777,7 @@ export const COMPONENTS = {
         }),
         allergies: 'flex flex-wrap gap-1 md:gap-2',
         allergy: 'flex items-center gap-1',
-        comment: `${TYPOGRAPHY.finePrint} ${TEXT.muted}`,
+        comment: TYPOGRAPHY.finePrintMuted,
         editor: 'p-4'
     },
 
@@ -776,7 +792,7 @@ export const COMPONENTS = {
         select: 'w-full',
         item: 'flex items-center gap-2',
         empty: TEXT.muted,
-        allSelected: `${TYPOGRAPHY.finePrint} ${TEXT.muted}`,
+        allSelected: TYPOGRAPHY.finePrintMuted,
         commentList: 'space-y-2',
         commentCard: `flex flex-col md:flex-row md:items-center gap-2 p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 ${BG.panelNested}`,
         commentType: 'flex items-center gap-2 md:flex-shrink-0',
@@ -962,7 +978,7 @@ export const COMPONENTS = {
         actionsRow: 'flex justify-start md:justify-end',
         saveButton: 'group',
         saveIcon: 'transition-all duration-700',
-        saveIconSaving: 'animate-spin',
+        saveIconSaving: MOTION_SPIN,
         saveIconIdle: 'group-hover:animate-pulse group-hover:scale-125 group-hover:rotate-12 group-active:rotate-[360deg]',
         hintList: 'flex flex-col gap-1',
         hintLine: 'flex items-center gap-1',
@@ -989,14 +1005,14 @@ export const COMPONENTS = {
         jobCard: {ui: {root: 'h-full flex flex-col', body: 'flex-1 flex flex-col'}},
         jobHeader: 'rounded-t-lg -mx-4 -mt-4 px-4 py-6 md:py-8 flex flex-col items-center justify-center gap-2',
         jobIcon: 'text-5xl md:text-6xl opacity-80',
-        jobIconRunning: 'animate-spin',
+        jobIconRunning: MOTION_SPIN,
         jobTitle: `${TYPOGRAPHY.cardTitle} mb-2`,
         // A fixed height keeps the cards' footers level
         jobDescription: `${TYPOGRAPHY.bodyTextMuted} mb-4 min-h-[3rem]`,
         jobBody: 'flex-1',
         stats: 'space-y-1',
         stat: 'flex items-center gap-2',
-        statIcon: 'text-sm text-success-700 dark:text-success-400',
+        statIcon: `text-sm ${TEXT.success}`,
         skeletons: 'space-y-2',
         skeletonRow: 'flex items-center gap-2',
         skeletonDot: 'h-4 w-4 rounded-full',
@@ -1023,6 +1039,8 @@ export const COMPONENTS = {
      * The trigger stays outside the collapsible, so the panel's header may hold its own controls.
      */
     collapsible: {
+        // The row that holds the title and the chevron (the Budget pane, Se billetændringer)
+        headerRow: COLLAPSIBLE_HEADER_ROW,
         // A panel that opens below the button that toggles it (ChefMenuCard danger zone, RoleAssignment form)
         belowTrigger: {class: 'mt-3'},
         // The chef calendar's agenda or calendar below its header row, taking the column's remaining height
@@ -1035,7 +1053,7 @@ export const COMPONENTS = {
      */
     chefCalendar: {
         root: 'flex flex-col h-full',
-        header: 'flex items-center justify-between gap-2',
+        header: COLLAPSIBLE_HEADER_ROW,
         viewTabs: {variant: NOISE.link, orientation: 'horizontal' as const},
         agenda: 'flex-1 flex flex-col overflow-x-hidden',
         agendaHeader: 'flex items-center justify-between w-full',
@@ -1073,7 +1091,8 @@ export const COMPONENTS = {
      * `watermark` layer and its `watermarkIcon`, the `content` stack, and row 1 in three slots: the `special` slot of
      * three fixed `cell`s (state | guest | allergy) whose state glyph takes the state colour (`stateIcon`) and whose
      * guest and allergy glyphs take the type badge's colour (`infoIcon`), the type `badge`, and `modeSlot` (how you
-     * eat, right-aligned); `subRow` starts row 2 under the badge with its `provenance` line
+     * eat, right-aligned); `subRow` starts row 2 under the badge with its `provenance` line. A queued ticket keeps
+     * the normal face: its glyph (`stateIcon.queued`) takes the toned ink, not a state colour
      */
     ticket: {
         face: {
@@ -1089,13 +1108,14 @@ export const COMPONENTS = {
         // 20px, the badge's height; an empty cell keeps the width so the badges share one left edge
         cell: 'size-5 flex-shrink-0 flex items-center justify-center',
         stateIcon: {
-            released: 'size-5 text-error-700 dark:text-error-400',
-            claimed: 'size-5 text-info'
+            released: `size-5 ${TEXT.error}`,
+            claimed: 'size-5 text-info',
+            queued: `size-5 ${TEXT.toned}`
         },
         // Keyed by the ticket type colours (TICKET_TYPE_COLORS)
         infoIcon: {
             [COLOR.primary]: 'size-5 text-primary-800 dark:text-primary-300',
-            [COLOR.success]: 'size-5 text-success-700 dark:text-success-400',
+            [COLOR.success]: `size-5 ${TEXT.success}`,
             [COLOR.neutral]: 'size-5 text-neutral-700 dark:text-neutral-400'
         } satisfies Record<TicketTypeColor, string>,
         badge: 'uppercase whitespace-nowrap',
@@ -1126,9 +1146,7 @@ export const COMPONENTS = {
         deadlineBadges: 'flex flex-col md:flex-row gap-2 md:gap-8',
         dayBill: 'border-b-2 border-default px-2 pb-1',
         releasedAlerts: 'space-y-2',
-        // The row toggle turns over when open; the power row's toggle pulses while closed
-        expandToggle: 'transition-all duration-300',
-        expandToggleOpen: 'rotate-180',
+        // The power row's toggle pulses while closed; the toggle turns through `COMPONENTS.openTurn`
         powerToggleIdle: 'hover:animate-pulse hover:text-warning',
         nameCell: 'py-1',
         powerName: 'flex flex-col gap-0.5',
@@ -1163,8 +1181,6 @@ export const COMPONENTS = {
          * A data table wider than a phone scrolls inside its own box, the page never does (MobileViewport.e2e).
          */
         ui: {th: 'px-2 md:px-4', td: `px-2 py-1 md:px-4 md:py-2 ${TABLE_CELL_WRAP}`},
-        /** Compact tables with many narrow columns (booking form, household preferences) */
-        denseUi: TABLE_DENSE_UI,
         /** The household allergies: the dense cells, an expanded inhabitant row tinted */
         householdAllergiesUi: {...TABLE_DENSE_UI, tr: BG.expandedRow},
         /** The booking form: the dense cells, the power row first in the warning tint, an expanded row tinted */
@@ -1175,12 +1191,103 @@ export const COMPONENTS = {
         agendaUi: {th: 'border-b-0', td: 'py-1 md:py-2 max-w-0 w-full', base: 'table-fixed w-full'},
         /** The allergy catalog in its narrow master column: tighter horizontal cell padding */
         catalogUi: {th: 'px-1', td: `px-1 py-1 md:px-1 md:py-2 ${TABLE_CELL_WRAP}`},
-        /** The booking grid: centred day cells, a sticky footer */
+        /** The booking grid: centred day cells, a sticky footer, the power row first in the warning tint, an expanded row tinted */
         gridUi: {
             th: 'px-1 py-1 md:px-2 md:py-2 text-center',
             td: `px-1 py-1 md:px-2 text-center ${TABLE_CELL_WRAP}`,
-            tfoot: 'sticky bottom-0 bg-default px-1 py-1 md:px-2 text-center text-xs'
+            tfoot: 'sticky bottom-0 bg-default px-1 py-1 md:px-2 text-center text-xs',
+            tbody: '[&_tr:first-child]:bg-warning/10',
+            tr: BG.expandedRow
         }
+    },
+
+    /**
+     * BookingGridView: the `root` column, the `nav` bar with its two `navSide`s (the right one ends in the edit
+     * pencil), the residency `alert`, the `dayContent` slot; a day column's `eventHeader` with its `chipSlot` and
+     * `lockChip`, muted while the dinner is out of reach (`eventHeaderDisabled`), and `weekBoundary` on the first
+     * dinner of a week; the name cells (`powerName`, `inhabitantName`, `guestName` with `guestIcon`, `guestLabel`,
+     * `guestUnknown`, `guestAddName` with `guestAddLabel`) and the count badges' `countIcon`; the guest-add
+     * button, turning through `COMPONENTS.openTurn` while its form is open; the footer `summary` with its `summaryPrice`, the
+     * edit footer's `actionCell` and `actionStack`, and the `legend` gap
+     */
+    bookingGrid: {
+        root: 'flex flex-col',
+        nav: 'flex items-center px-2 py-2 border-b border-default',
+        navSide: 'flex-1',
+        navEnd: 'flex-1 flex justify-end',
+        alert: 'mx-2 mt-2',
+        dayContent: 'pt-2 md:pt-4',
+        eventHeader: 'flex flex-col items-center',
+        eventHeaderDisabled: TEXT.muted,
+        chipSlot: 'h-6 flex items-center justify-center',
+        lockChip: {size: '3xl', position: 'bottom-left', standalone: true},
+        weekBoundary: 'border-l-2 border-primary',
+        powerName: 'flex items-center gap-2',
+        inhabitantName: 'flex items-center gap-1',
+        countIcon: 'size-3',
+        guestName: 'flex items-center gap-2',
+        guestIcon: 'size-4 text-info flex-shrink-0',
+        guestLabel: `${TYPOGRAPHY.bodyTextSmall} ${TEXT.muted}`,
+        guestUnknown: TYPOGRAPHY.bodyTextSmall,
+        guestAddName: 'flex items-center gap-1',
+        guestAddLabel: `${TYPOGRAPHY.bodyText} ${TEXT.muted}`,
+        summary: 'flex flex-col items-center',
+        summaryPrice: TEXT.muted,
+        actionCell: 'px-2 py-2 border-t border-default',
+        actionStack: 'flex flex-col gap-2',
+        legend: 'mt-4'
+    },
+
+    /**
+     * GuestBookingForm: the info `card` (soft, its body a stack), the `header` row with its `headerIcon` and `title`,
+     * the `deadlines` row, the two `columns` (ticket | allergies) with the left `fieldStack`, a ticket type `option`
+     * in the select (`optionBadge`, `optionNote`), the `footer` stack, the `errors` block and an `error` line with its `errorIcon`
+     */
+    guestBookingForm: {
+        card: {variant: NOISE.soft, ui: {body: 'p-4 flex flex-col gap-4', footer: 'p-4'}},
+        header: 'flex items-center gap-2',
+        headerIcon: 'size-5 text-info',
+        title: 'text-md font-semibold',
+        deadlines: 'flex flex-col md:flex-row md:justify-between gap-2',
+        columns: LAYOUTS.gridTwoCol,
+        fieldStack: 'flex flex-col gap-4',
+        select: 'w-full',
+        option: 'flex flex-col gap-0.5',
+        optionBadge: 'uppercase w-fit',
+        optionNote: TYPOGRAPHY.finePrintMuted,
+        footer: 'flex flex-col gap-2',
+        errors: `text-sm ${TEXT.error}`,
+        error: 'flex items-center gap-1',
+        errorIcon: 'size-4'
+    },
+
+    /**
+     * The waiting list on the booking surfaces: the wished mode reads as a ghost of a booking (`ghostBadge`, no
+     * fill, in the muted `ghostInk`), bound by DinnerModeSelector's view face on the ticket card, the booking form
+     * and the grid; a queued grid cell and its legend sample carry the hourglass in a corner `chip` (`chipIcon`)
+     */
+    waitlist: {
+        ghostBadge: {color: COLOR.neutral, variant: NOISE.medium},
+        ghostInk: TEXT.muted,
+        chip: {color: COLOR.neutral, size: '3xl', position: 'top-right'},
+        chipIcon: 'size-3'
+    },
+
+    /**
+     * DinnerModeSelector: the weekday title's `weekdayLabel`, the view and edit faces' `stack` (the badge or the
+     * button group over its label), the edit face's `fieldGroup` and each mode's square `segment` on a phone, the
+     * grid's unsaved-cell accent (`modified`), the DINEIN button's `pulse` while a household disagrees, and the
+     * glyph size per Nuxt UI size (`iconSize`); without a size the glyph follows `WEEKDAY.badgeContentSize`
+     */
+    dinnerModeSelector: {
+        weekdayLabel: `flex items-center justify-center ${TYPOGRAPHY.caption} ${TEXT.ink}`,
+        stack: 'flex flex-col items-center gap-0.5',
+        fieldGroup: 'p-0 md:p-1.5 rounded-none md:rounded-lg border border-default bg-default gap-0 md:gap-1',
+        // The view badge sits in its own wrapper, where the field group's corner rules never reach it, so both faces carry the corners
+        segment: 'rounded-none md:rounded-md',
+        modified: 'border-l-2 border-warning pl-0.5',
+        pulse: 'animate-pulse',
+        iconSize: {xs: 'size-3', sm: 'size-3', md: 'size-4', lg: 'size-5', xl: 'size-6'}
     },
 
     // Card action buttons - positioned in card corners or footers
@@ -1346,8 +1453,7 @@ export const COMPONENTS = {
     dangerZone: {
         container: 'rounded-lg border border-error-300 dark:border-error-800 ' +
                    'bg-error-50 dark:bg-error-950/40 p-4 space-y-3',
-        heading: 'text-xs font-bold uppercase tracking-wide ' +
-                 'text-error-700 dark:text-error-400 flex items-center gap-1.5'
+        heading: `text-xs font-bold uppercase tracking-wide ${TEXT.error} flex items-center gap-1.5`
     },
 
     /**
@@ -1438,11 +1544,6 @@ export const COMPONENTS = {
     },
 
     /**
-     * ChefMenuCard below the hero: the compact face (a calendar list row: date, title, badges, budget), the stacked
-     * sections with a rule above each, the allergen row (label, overview line, Rediger allergener), the allergen editor
-     * head, and the menu form's fields with the cost row
-     */
-    /**
      * The dinner budget pane (DinnerBudget): the compact amount, the three boxes, the expandable breakdown table and
      * summary lines, then the grocery lines (ExpenseLines) under them
      */
@@ -1450,30 +1551,21 @@ export const COMPONENTS = {
         compact: `inline-flex items-center gap-1 ${TYPOGRAPHY.bodyTextSmall}`,
         compactAmount: 'font-medium',
         stack: 'space-y-3',
-        toggle: 'flex items-center gap-2 hover:opacity-80 transition-opacity',
-        toggleIcon: 'w-4 h-4 opacity-50',
         boxes: 'grid grid-cols-1 md:grid-cols-3 gap-3',
         boxUi: {body: 'p-3'},
         box: 'text-center',
         // The glyph keeps its full ink; only the words are muted
         boxLabel: `flex items-center justify-center gap-1 ${TYPOGRAPHY.caption} mb-1`,
-        boxLabelText: 'opacity-60',
+        boxLabelText: TEXT.muted,
         boxGlyph: 'size-4',
         // A fact under the figure the chef reads (the kuverter), louder than the unit words
         boxFact: TYPOGRAPHY.bodyTextSmall,
-        boxAmount: `${TYPOGRAPHY.cardTitle} font-bold text-success-700 dark:text-success-400`,
-        boxAmountLarge: `${TYPOGRAPHY.cardTitle} font-bold text-xl text-success-700 dark:text-success-400`,
-        boxSecondary: 'mt-1',
-        boxSecondaryAmount: `${TYPOGRAPHY.bodyTextSmall} text-success-700 dark:text-success-400`,
-        unit: `${TYPOGRAPHY.finePrint} opacity-60`,
-        // The unfolded pane runs on under the boxes; its sections draw their own rules
-        details: 'mt-2',
-        summaryDeduction: `${TYPOGRAPHY.bodyTextMedium} opacity-60`,
-        boxUnit: `${TYPOGRAPHY.finePrint} opacity-60`,
+        boxAmountLarge: `${TYPOGRAPHY.cardTitle} font-bold text-xl ${TEXT.success}`,
+        // The unit words under a figure, and the rate under the contribution
+        boxUnit: TYPOGRAPHY.finePrintMuted,
+        summaryDeduction: `${TYPOGRAPHY.bodyTextMedium} ${TEXT.muted}`,
         boxLine: `flex items-center justify-between gap-2 whitespace-nowrap ${TYPOGRAPHY.bodyTextSmall}`,
-        section: 'border-t p-4 space-y-2',
-        sectionTitle: TYPOGRAPHY.sectionSubheading,
-        unitHeader: `flex justify-end ${TYPOGRAPHY.finePrint} opacity-60`
+        section: 'border-t p-4 space-y-2'
     },
 
     /**
@@ -1484,14 +1576,14 @@ export const COMPONENTS = {
         // Fixed columns for the ex figure, the inkl. half and the icon slot, so kr lines up down a column of amounts
         root: 'inline-grid grid-cols-[minmax(3.75rem,max-content)_minmax(4.5rem,max-content)_1rem] items-baseline gap-x-1 whitespace-nowrap tabular-nums',
         ex: 'text-right',
-        incl: `${TYPOGRAPHY.finePrint} opacity-60 text-right`,
-        over: 'text-error-700 dark:text-error-400',
+        incl: `${TYPOGRAPHY.finePrintMuted} text-right`,
+        // The overdraft's ink, on the figure and on its icon
+        over: TEXT.error,
         iconSlot: 'inline-flex justify-center self-center',
         icon: 'size-4',
-        iconOk: 'text-success-700 dark:text-success-400',
-        iconOver: 'text-error-700 dark:text-error-400',
+        iconOk: TEXT.success,
         iconWaiting: TEXT.muted,
-        unitHeader: `${TYPOGRAPHY.finePrint} opacity-60`
+        unitHeader: TYPOGRAPHY.finePrintMuted
     },
 
     /**
@@ -1506,7 +1598,7 @@ export const COMPONENTS = {
         vatField: 'w-full md:w-36',
         noteField: 'w-full md:flex-1',
         control: 'w-full',
-        alternative: `${TYPOGRAPHY.finePrint} opacity-60`,
+        alternative: TYPOGRAPHY.finePrintMuted,
         // A text cell (the bestiller, the note) wraps on a phone, where the amount columns leave it little room, and truncates beside them on a desktop
         textCell: `${TYPOGRAPHY.bodyTextSmall} break-words md:truncate`,
         empty: TEXT.muted
@@ -1520,11 +1612,14 @@ export const COMPONENTS = {
         // The history glyph leads the title, in its ink and size
         title: 'inline-flex items-center gap-1',
         chips: 'inline-flex flex-wrap items-center gap-1',
-        divider: `flex items-center gap-2 py-2 ${TYPOGRAPHY.finePrint} opacity-60`,
-        dividerLine: 'flex-1 border-t',
         loading: `flex items-center gap-2 py-2 ${TYPOGRAPHY.finePrint}`,
-        spinner: 'animate-spin motion-reduce:animate-none',
+        spinner: MOTION_SPIN,
         moreRow: 'flex justify-center py-2'
+    },
+
+    /** `USeparator` with a label: the moment line in a history (Framelding lukker · 09/04/2026 12:00) */
+    separator: {
+        moment: {class: 'py-2', ui: {label: TYPOGRAPHY.finePrintMuted}}
     },
 
     /**
@@ -1542,6 +1637,11 @@ export const COMPONENTS = {
         editorTitle: `${TYPOGRAPHY.sectionSubheading} md:flex-1`
     },
 
+    /**
+     * ChefMenuCard below the hero: the compact face (a calendar list row: date, title, badges, budget), the full card's
+     * ring and hero header, the menu row with its title, the Flere panel above the danger zone, the stacked sections with
+     * a rule above each, the chef row, the alerts under the menu row, and the menu and release forms' stack and fields
+     */
     chefMenuCard: {
         compactUi: (selected: boolean) => ({
             root: `${CALENDAR.selection.card.base} ${selected ? CHEF_CALENDAR.selection : ''}`,
@@ -1554,6 +1654,22 @@ export const COMPONENTS = {
         compactTitlePlaceholder: `text-sm truncate italic ${TEXT.muted}`,
         compactBadge: 'shrink-0',
         compactBudget: 'text-sm font-medium shrink-0',
+        // The full card: the amber ring, the hero fill behind the header
+        fullUi: {root: `${RING.amber[500]} relative overflow-hidden`, header: `p-0 ${BACKGROUNDS.hero.mocha}`},
+        // The menu field's hint shows from md
+        menuFieldUi: {hint: 'hidden md:block'},
+        menuRow: 'flex flex-col md:flex-row md:items-center gap-2',
+        menuTitle: 'text-lg font-medium md:flex-1',
+        menuTitlePlaceholder: `text-lg font-medium md:flex-1 italic ${TEXT.muted}`,
+        description: `${TYPOGRAPHY.bodyTextSmall} ${TEXT.menuBody} mt-1`,
+        // The Flere trigger sits at the row's end on a phone
+        moreTrigger: 'self-end md:self-auto',
+        // The Flere panel: the release entry above the danger zone
+        morePanel: 'space-y-3',
+        dangerLead: 'font-semibold',
+        chefRow: 'pt-4 mt-4 flex items-center gap-3 flex-wrap',
+        // An alert under the menu row: the missing-title warning, the queue's call to release portions
+        alertGap: 'mt-2',
         stack: 'space-y-6',
         section: 'pt-4 border-t',
         form: 'space-y-4',
@@ -1568,7 +1684,7 @@ export const COMPONENTS = {
 /**
  * Get kitchen panel classes dynamically
  *
- * @param mode - Dining mode (TAKEAWAY, DINEIN, DINEINLATE, RELEASED)
+ * @param mode - Dining mode (TAKEAWAY, DINEIN, DINEINLATE), RELEASED or WAITLIST
  * @returns Tailwind class string with vibrant Pantone colors
  *
  * @example
@@ -1577,8 +1693,9 @@ export const COMPONENTS = {
  * // Returns: 'bg-orange-500 text-black border-orange-600 ...'
  * ```
  */
+export type KitchenPanelKey = keyof typeof COMPONENTS.kitchenPanel
 export function getKitchenPanelClasses(
-    mode: 'TAKEAWAY' | 'DINEIN' | 'DINEINLATE' | 'RELEASED'
+    mode: KitchenPanelKey
 ): string {
     return COMPONENTS.kitchenPanel[mode]
 }
@@ -1704,6 +1821,8 @@ export const ICONS = {
     shoppingCart: 'i-heroicons-shopping-cart',
     released: 'i-heroicons-arrow-up-tray',
     claim: 'i-heroicons-arrows-right-left',
+    /** A place in the queue for a sold-out dinner */
+    waitlist: 'i-lucide-hourglass',
     archive: 'i-heroicons-archive-box',
     holiday: 'i-heroicons-sun',
     /** A household member without allergies */
@@ -1753,7 +1872,8 @@ export const ICONS = {
     sprout: 'i-mdi-sprout',
 
 
-    // Dinner modes named in the household preference hint
+    // Dinner modes: the household preference hint, DinnerModeSelector (DINEIN takes `dinner`)
+    lateDinner: 'i-heroicons-moon',
     takeaway: 'i-heroicons-shopping-bag',
     noDinner: 'i-heroicons-x-circle',
 

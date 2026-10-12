@@ -67,7 +67,12 @@ button that opens a panel below it spreads `BUTTONS.flipOpen(isOpen)`: a chevron
 A panel that opens and closes is a `UCollapsible` with its toggle outside it: a `UButton` spreading `BUTTONS.flipOpen(isOpen)`,
 and the collapsible binds a `COMPONENTS.collapsible` kind for its spacing. The toggle and the other controls of a header are
 siblings in a plain row, so no button holds another. The chef calendar header in `ChefCalendarDisplay.vue` is the reference:
-tabs on the left, the chevron on the right, the body below.
+tabs on the left, the chevron on the right, the body below. A title with its chevron shares `COMPONENTS.collapsible.headerRow`.
+
+### Separators
+
+A rule with words on it is a `USeparator` with a `label`, bound to a `COMPONENTS.separator` kind; the moment line in a
+history (`TicketChanges.vue`) is the reference.
 
 ### Alerts
 

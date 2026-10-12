@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, bookingSaveLabel, dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, type ReleasedTicketCounts} from '~/composables/useBooking'
 import {useBookingValidation} from '~/composables/useBookingValidation'
@@ -75,6 +75,23 @@ describe('useBookingUi', () => {
             {desc: 'closed', isOpen: false, countdown: {hours: 0, formatted: ''}, icon: ICONS.lockClosed, color: 'error', value: 'Lukket'}
         ])('$desc', ({isOpen, countdown, icon, color, value}) => {
             expect(createDiningModeBadge(isOpen, countdown)).toMatchObject({label: DEADLINE_LABELS.DINING_MODE.label, icon, color, value})
+        })
+    })
+
+    describe('createWaitlistBadge', () => {
+        it.each([1, 3])('names queue position %i under the hourglass', (position) => {
+            expect(createWaitlistBadge(position)).toMatchObject({icon: ICONS.waitlist, value: `#${position} i køen`})
+        })
+    })
+
+    describe('bookingSaveLabel', () => {
+        it.each([
+            {desc: 'a held ticket', action: 'process' as const, hasTicket: true, hasReleased: false, label: 'Opdater'},
+            {desc: 'a new ticket before the deadline', action: 'process' as const, hasTicket: false, hasReleased: false, label: 'Book'},
+            {desc: 'a ticket for sale after the deadline', action: 'claim' as const, hasTicket: false, hasReleased: true, label: 'Køb billet'},
+            {desc: 'nothing for sale after the deadline', action: 'claim' as const, hasTicket: false, hasReleased: false, label: 'Skriv på venteliste'}
+        ])('$desc → $label', ({action, hasTicket, hasReleased, label}) => {
+            expect(bookingSaveLabel(action, hasTicket, hasReleased)).toBe(label)
         })
     })
 

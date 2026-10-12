@@ -16,7 +16,7 @@ const {JobType, JobStatus} = useMaintenanceValidation()
 const DinnerState = DinnerStateSchema.enum
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
-const {validatedBrowserContext, temporaryAndRandom, getSessionUserInfo, salt} = testHelpers
+const {validatedBrowserContext, temporaryAndRandom, getSessionUserInfo, salt, daysFromNow} = testHelpers
 
 // === HELPERS ===
 
@@ -59,7 +59,6 @@ const createTestOrder = async (
         dinnerEventId: dinnerId,
         orders: [{
             inhabitantId,
-            bookedByUserId: 1, // Factory default
             ticketPriceId: ticketPrice.id!,
             dinnerMode: DinnerMode.DINEIN,
             isGuestTicket: false
@@ -150,7 +149,7 @@ test.describe('Daily Maintenance API', () => {
         createdDinnerEventIds.push(dinner.id)
         const {orderId} = await createTestOrder(context, fullSeason, dinner.id, householdId, inhabitantId)
 
-        // Setup: Create GUEST order via PUT /api/order (bypasses deadline for test setup)
+        // Setup: Create GUEST order through the scaffold with the deadlines lifted
         // Note: Scaffold endpoint can't create orders for past dinners - deadline restriction
         const ticketPrice = fullSeason.ticketPrices[0]!
         const guestOrderResult = await OrderFactory.createOrder(context, {
@@ -158,7 +157,6 @@ test.describe('Daily Maintenance API', () => {
             dinnerEventId: dinner.id,
             orders: [{
                 inhabitantId,
-                bookedByUserId: 1,
                 ticketPriceId: ticketPrice.id!,
                 dinnerMode: DinnerMode.DINEIN,
                 isGuestTicket: true
@@ -179,7 +177,8 @@ test.describe('Daily Maintenance API', () => {
         // Setup: 2nd household at a different address so billing yields ≥2 invoices → can verify ordering
         const secondHousehold = await HouseholdFactory.createHouseholdWithInhabitants(
             context,
-            {address: salt('ZZZ Ordering Test', testSalt)}, // 'ZZZ' sorts after session household's address
+            // 'ZZZ' sorts after session household's address; moved in before the dinner, so the dinner falls in its residency
+            {address: salt('ZZZ Ordering Test', testSalt), movedInDate: daysFromNow(-60)},
             1
         )
         createdHouseholdIds.push(secondHousehold.household.id)
@@ -189,12 +188,11 @@ test.describe('Daily Maintenance API', () => {
             dinnerEventId: dinner.id,
             orders: [{
                 inhabitantId: secondHousehold.inhabitants[0]!.id,
-                bookedByUserId: 1,
                 ticketPriceId: ticketPrice.id!,
                 dinnerMode: DinnerMode.DINEIN,
                 isGuestTicket: false
             }]
-        }, 201, true)
+        })
 
         // Setup: Create inhabitant with NULL preferences (simulates Heynabo import)
         const nullPrefsInhabitant = await HouseholdFactory.createInhabitantWithConfig(

@@ -287,41 +287,6 @@ export const useBookingValidation = () => {
     })
 
     /**
-     * Batch order creation request (PUT /api/order)
-     * Business rules:
-     * - ONE user (bookedByUserId) books for entire family
-     * - Can have different inhabitantIds (family members + guests)
-     * - One regular order per inhabitant per dinner (the Order unique index); guest tickets are unlimited
-     * - All bookedByUserId must be the same (VALIDATED HERE, skipped if empty)
-     * - All inhabitants must belong to householdId (VALIDATED IN ENDPOINT)
-     */
-    const CreateOrdersRequestSchema = z.object({
-        householdId: z.number().int().positive(),
-        dinnerEventId: z.number().int().positive(),
-        orders: z.array(z.object({
-            inhabitantId: z.number().int().positive(),
-            ticketPriceId: z.number().int().positive(),
-            dinnerMode: DinnerModeSchema,
-            bookedByUserId: z.number().int().positive(),
-            isGuestTicket: z.boolean().optional().default(false)
-        }))
-    }).refine(
-        (data) => {
-            // Business rule: All orders must have same bookedByUserId (single parent booking)
-            // Skip validation if no orders (empty array is valid - graceful no-op)
-            if (data.orders.length === 0) return true
-            const userIds = [...new Set(data.orders.map(o => o.bookedByUserId))]
-            return userIds.length === 1
-        },
-        {
-            message: "Alle ordrer skal være booket af samme bruger (én forælder booker for familien)",
-            path: ["orders"]
-        }
-    )
-
-
-
-    /**
      * Order swap request (POST /api/order/swap)
      */
     const SwapOrderRequestSchema = z.object({
@@ -699,13 +664,23 @@ export const useBookingValidation = () => {
      * Result schema for scaffold-prebookings endpoint
      * Used to validate API response structure
      */
+    const QueuePositionSchema = z.object({
+        inhabitantId: z.number().int().positive(),
+        dinnerEventId: z.number().int().positive(),
+        isGuestTicket: z.boolean(),
+        position: z.number().int().positive()
+    })
+
     const ScaffoldResultSchema = z.object({
         seasonId: z.number().int().positive().nullable(),
         created: z.number().int().nonnegative(),
         deleted: z.number().int().nonnegative(),
         released: z.number().int().nonnegative().default(0),
-        claimed: z.number().int().nonnegative().default(0),         // Tickets claimed from marketplace (past deadline)
-        claimRejected: z.number().int().nonnegative().default(0),   // Claim attempts that failed (race condition)
+        claimed: z.number().int().nonnegative().default(0),         // Released tickets bought after the deadline
+        queued: z.number().int().nonnegative().default(0),          // Claims with no ticket for sale, or a lost race: queue entries created
+        positions: z.array(QueuePositionSchema).default([]),        // The place in the dinner's queue of each queued entry
+        left: z.number().int().nonnegative().default(0),            // Queue entries deleted (NONE on an entry)
+        requeued: z.number().int().nonnegative().default(0),        // Queue entries whose wish changed, place kept
         priceUpdated: z.number().int().nonnegative().default(0),    // Price category changes (birthdate added/changed or birthday passed)
         modeUpdated: z.number().int().nonnegative().default(0),     // Dining mode changes (before deadline)
         unchanged: z.number().int().nonnegative(),
@@ -741,12 +716,13 @@ export const useBookingValidation = () => {
 
     // ============================================================================
     // UNIFIED BOOKING SCAFFOLD (ADR-016)
-    // All booking mutations go through scaffolder except atomic claim
+    // Every member booking write goes through the scaffolder, the claim and the queue included
     // ============================================================================
 
     /**
      * Desired order - unified schema for all booking types
      * - orderId: Present for updates (existing order), absent for creates (new order)
+     * - waitlistEntryId: Present for the household's queue entry (leave, requeue), absent otherwise
      * - state: Generator sets based on intent (BOOKED for eating, RELEASED for release)
      * - ticketPriceId: Required, UI sends the price shown to user
      * - allergyTypeIds: guest allergies (inhabitants have allergies via Allergy table)
@@ -759,6 +735,7 @@ export const useBookingValidation = () => {
         state: true
     }).extend({
         orderId: z.number().int().positive().optional(),
+        waitlistEntryId: z.number().int().positive().optional(),
         ticketPriceId: z.number().int().positive(),
         allergyTypeIds: z.array(z.number().int().positive()).optional()
     })
@@ -949,7 +926,6 @@ export const useBookingValidation = () => {
         OrderDisplaySchema,
         OrderDetailSchema,
         OrderCreateSchema,
-        CreateOrdersRequestSchema,
         SwapOrderRequestSchema,
         AssignRoleSchema,
         MenuSwapStrategySchema,
@@ -998,6 +974,7 @@ export const useBookingValidation = () => {
 
         // Scaffold Pre-bookings
         ScaffoldResultSchema,
+        QueuePositionSchema,
         InhabitantUpdateResponseSchema,
         HouseholdUpdateResponseSchema,
         AssignCookingTeamsResponseSchema,
@@ -1051,7 +1028,6 @@ export type ChefMenuForm = z.infer<ReturnType<typeof useBookingValidation>['Chef
 export type OrderDisplay = z.infer<ReturnType<typeof useBookingValidation>['OrderDisplaySchema']>
 export type OrderDetail = z.infer<ReturnType<typeof useBookingValidation>['OrderDetailSchema']>
 export type OrderCreate = z.infer<ReturnType<typeof useBookingValidation>['OrderCreateSchema']>
-export type CreateOrdersRequest = z.infer<ReturnType<typeof useBookingValidation>['CreateOrdersRequestSchema']>
 export type SwapOrderRequest = z.infer<ReturnType<typeof useBookingValidation>['SwapOrderRequestSchema']>
 export type AssignRole = z.infer<ReturnType<typeof useBookingValidation>['AssignRoleSchema']>
 export type MenuSwapStrategy = z.infer<ReturnType<typeof useBookingValidation>['MenuSwapStrategySchema']>
@@ -1080,6 +1056,7 @@ export type HeynaboEventStatus = z.infer<ReturnType<typeof useBookingValidation>
 
 // Scaffold Pre-bookings
 export type ScaffoldResult = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldResultSchema']>
+export type QueuePosition = z.infer<ReturnType<typeof useBookingValidation>['QueuePositionSchema']>
 export type InhabitantUpdateResponse = z.infer<ReturnType<typeof useBookingValidation>['InhabitantUpdateResponseSchema']>
 export type HouseholdUpdateResponse = z.infer<ReturnType<typeof useBookingValidation>['HouseholdUpdateResponseSchema']>
 

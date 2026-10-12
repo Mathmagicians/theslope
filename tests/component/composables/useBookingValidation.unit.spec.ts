@@ -25,7 +25,6 @@ describe('useBookingValidation', () => {
     DinnerEventUpdateSchema,
     OrderDisplaySchema,
     OrderDetailSchema,
-    CreateOrdersRequestSchema,
     OrderHistoryDisplaySchema,
     OrderHistoryDetailSchema,
     OrderHistoryCreateSchema,
@@ -232,15 +231,6 @@ describe('useBookingValidation', () => {
         const result = OrderDetailSchema.safeParse(detail)
         expect(result.success, getValidationError(result)).toBe(true)
       })
-    })
-
-    describe('CreateOrdersRequestSchema', () => {
-      it('GIVEN valid batch request WHEN parsing THEN succeeds', () => {
-        const validInput = OrderFactory.defaultCreateOrdersRequest()
-        const result = CreateOrdersRequestSchema.safeParse(validInput)
-        expect(result.success, getValidationError(result)).toBe(true)
-      })
-
     })
 
     describe.each([
@@ -685,8 +675,18 @@ describe('useBookingValidation', () => {
         expect(() => ScaffoldResultSchema.parse(data)).not.toThrow()
       })
 
+      it('GIVEN a result without the queue counts WHEN parsing THEN they default to none', () => {
+        expect(ScaffoldResultSchema.parse(validScaffoldResult)).toMatchObject({claimed: 0, queued: 0, positions: [], left: 0, requeued: 0})
+      })
+
+      it('GIVEN queued entries with their positions WHEN parsing THEN the positions survive', () => {
+        const positions = [{inhabitantId: 1, dinnerEventId: 10, isGuestTicket: false, position: 2}]
+        expect(ScaffoldResultSchema.parse({...validScaffoldResult, queued: 1, positions}).positions).toEqual(positions)
+      })
+
       it.each([
         {desc: 'missing seasonId', data: {created: 10, deleted: 2, unchanged: 50, households: 5}},
+        {desc: 'position zero', data: {...validScaffoldResult, positions: [{inhabitantId: 1, dinnerEventId: 10, isGuestTicket: false, position: 0}]}},
         {desc: 'negative created', data: {...validScaffoldResult, created: -1}},
         {desc: 'non-integer deleted', data: {...validScaffoldResult, deleted: 1.5}},
         {desc: 'zero seasonId', data: {...validScaffoldResult, seasonId: 0}}
@@ -805,7 +805,8 @@ describe('useBookingValidation', () => {
         {desc: 'guest ticket with allergies', data: {...validDesiredOrder, isGuestTicket: true, allergyTypeIds: [1, 2]}},
         {desc: 'guest ticket without allergies', data: {...validDesiredOrder, isGuestTicket: true}},
         {desc: 'TAKEAWAY mode', data: {...validDesiredOrder, dinnerMode: DinnerMode.TAKEAWAY}},
-        {desc: 'NONE mode', data: {...validDesiredOrder, dinnerMode: DinnerMode.NONE}}
+        {desc: 'NONE mode', data: {...validDesiredOrder, dinnerMode: DinnerMode.NONE}},
+        {desc: 'a queue entry', data: {...validDesiredOrder, waitlistEntryId: 7}}
       ])('GIVEN $desc WHEN parsing THEN succeeds', ({data}) => {
         expect(() => DesiredOrderSchema.parse(data)).not.toThrow()
       })
@@ -816,7 +817,8 @@ describe('useBookingValidation', () => {
         {desc: 'missing dinnerMode', data: {inhabitantId: 1, dinnerEventId: 10, ticketPriceId: 5, state: OrderState.BOOKED}},
         {desc: 'missing ticketPriceId', data: {inhabitantId: 1, dinnerEventId: 10, dinnerMode: DinnerMode.DINEIN, state: OrderState.BOOKED}},
         {desc: 'missing state', data: {inhabitantId: 1, dinnerEventId: 10, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 5}},
-        {desc: 'invalid dinnerMode', data: {...validDesiredOrder, dinnerMode: 'INVALID'}}
+        {desc: 'invalid dinnerMode', data: {...validDesiredOrder, dinnerMode: 'INVALID'}},
+        {desc: 'zero waitlistEntryId', data: {...validDesiredOrder, waitlistEntryId: 0}}
       ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
         expect(() => DesiredOrderSchema.parse(data)).toThrow()
       })

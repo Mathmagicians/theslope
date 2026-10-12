@@ -80,6 +80,8 @@ useUsersStore()  // chef-volunteer flow needs it instantiated in setup context
 
 const {
   lockStatus,
+  householdWaitlist,
+  selectedDinnerWaitlist,
   selectedDinnerEventDetail: dinnerEventDetail,
   isSelectedDinnerEventLoading: isDinnerDetailLoading,
   isSelectedDinnerEventErrored: isDinnerDetailError
@@ -249,6 +251,7 @@ useHead({
             :ticket-prices="selectedSeason?.ticketPrices ?? []"
             :deadlines="deadlinesForSeason(selectedSeason)"
             :released-ticket-counts="lockStatus.get(dinnerEventDetail.id) ?? { total: 0, formatted: '-' }"
+            :waitlist-entries="householdWaitlist"
             @save-bookings="handleSaveBookings"
           />
 
@@ -281,6 +284,7 @@ useHead({
           v-if="dinnerEventDetail"
           :orders="dinnerEventDetail.tickets ?? []"
           :allergens="dinnerEventDetail.allergens"
+          :waitlist="selectedDinnerWaitlist"
         />
       </template>
     </DinnerDetailPanel>

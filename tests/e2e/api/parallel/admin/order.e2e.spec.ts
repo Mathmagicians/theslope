@@ -1,18 +1,12 @@
-import { test, expect, type BrowserContext } from '@playwright/test'
+import { test, expect } from '@playwright/test'
 import { OrderFactory } from '~~/tests/e2e/testDataFactories/orderFactory'
-import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
-import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import { useBookingValidation } from '~/composables/useBookingValidation'
-import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
 import type { TicketPrice } from '~/composables/useTicketPriceValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
-const { validatedBrowserContext, salt, headers, getSessionUserInfo } = testHelpers
+const { validatedBrowserContext, getSessionUserInfo } = testHelpers
 const { TicketTypeSchema, DinnerModeSchema, OrderStateSchema } = useBookingValidation()
-const { createDefaultWeekdayMap } = useWeekDayMapValidation()
-
-const ORDER_ENDPOINT = '/api/order'
 
 const testOrderIds: number[] = []
 let testSeasonId: number
@@ -20,7 +14,6 @@ let testHouseholdId: number
 let testInhabitantId: number
 let testDinnerEventId: number
 let testAdultTicketPriceId: number
-let testChildTicketPriceId: number
 
 test.describe('Order API', () => {
 
@@ -36,14 +29,12 @@ test.describe('Order API', () => {
     testSeasonId = season.id!
 
     const adultTicketPrice = season.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.ADULT)
-    const childTicketPrice = season.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.CHILD)
 
-    if (!adultTicketPrice?.id || !childTicketPrice?.id) {
-      throw new Error('Season must have ticket prices with IDs for ADULT and CHILD')
+    if (!adultTicketPrice?.id) {
+      throw new Error('Season must have an ADULT ticket price with an id')
     }
 
     testAdultTicketPriceId = adultTicketPrice.id
-    testChildTicketPriceId = childTicketPrice.id
 
     const generatedEvents = await SeasonFactory.generateDinnerEventsForSeason(context, season.id!)
     testDinnerEventId = generatedEvents.events[0]!.id
@@ -66,7 +57,7 @@ test.describe('Order API', () => {
     // Don't delete testHouseholdId - it's the user's real household, not a test one
   })
 
-  test('PUT can create and GET can retrieve order with status 200/201', async ({ browser }) => {
+  test('GIVEN an order booked through the scaffold WHEN reading it by id THEN it carries its dinner, inhabitant and ticket type', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
     const result = await OrderFactory.createOrder(context, {
@@ -94,397 +85,10 @@ test.describe('Order API', () => {
     expect(retrievedOrder!.createdAt).toBeDefined()
   })
 
-  test('POST can update order dinnerMode with status 200', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
-
-    // Create an order first
-    const result = await OrderFactory.createOrder(context, {
-      householdId: testHouseholdId,
-      dinnerEventId: testDinnerEventId,
-      orders: [OrderFactory.defaultOrderItem({
-        inhabitantId: testInhabitantId,
-        ticketPriceId: testAdultTicketPriceId
-      })]
-    })
-    const orderId = result!.createdIds[0]!
-    testOrderIds.push(orderId)
-
-    // Update to TAKEAWAY
-    const updatedOrder = await OrderFactory.updateOrder(context, orderId, {
-      dinnerMode: DinnerModeSchema.enum.TAKEAWAY
-    })
-
-    expect(updatedOrder).toBeDefined()
-    expect(updatedOrder!.id).toBe(orderId)
-    expect(updatedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.TAKEAWAY)
-
-    // Verify the change persisted
-    const retrievedOrder = await OrderFactory.getOrder(context, orderId)
-    expect(retrievedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.TAKEAWAY)
-  })
-
-  const afterDeadlineCases = [
-    {adminBypass: false, expectDeleted: false, desc: 'releases order (user pays)'},
-    {adminBypass: true, expectDeleted: true, desc: 'with adminBypass deletes order'},
-  ]
-
-  afterDeadlineCases.forEach(({adminBypass, expectDeleted, desc}) => {
-    test(`POST cancellation AFTER deadline ${desc}`, async ({ browser }) => {
-      const context = await validatedBrowserContext(browser)
-
-      // Default season events are within 7 days (< 8 day deadline) = AFTER deadline
-      const result = await OrderFactory.createOrder(context, {
-        householdId: testHouseholdId,
-        dinnerEventId: testDinnerEventId,
-        orders: [OrderFactory.defaultOrderItem({
-          inhabitantId: testInhabitantId,
-          ticketPriceId: testAdultTicketPriceId
-        })]
-      })
-      const orderId = result!.createdIds[0]!
-      testOrderIds.push(orderId)
-
-      // Cancel by setting dinnerMode to NONE
-      const updatedOrder = await OrderFactory.updateOrder(context, orderId, {
-        dinnerMode: DinnerModeSchema.enum.NONE
-      }, 200, adminBypass)
-
-      expect(updatedOrder).toBeDefined()
-      expect(updatedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
-
-      const retrievedOrder = await OrderFactory.getOrder(context, orderId, expectDeleted ? 404 : 200)
-
-      if (expectDeleted) {
-        // Admin bypass: order deleted
-        expect(retrievedOrder).toBeNull()
-      } else {
-        // Normal: order released
-        expect(retrievedOrder).toBeDefined()
-        expect(retrievedOrder!.state).toBe(OrderStateSchema.enum.RELEASED)
-        expect(retrievedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
-      }
-    })
-  })
-
-  test('POST cancellation BEFORE deadline deletes order (user not charged)', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
-
-    // Create season with events far in the future (15+ days = BEFORE 8-day deadline)
-    const futureStart = new Date()
-    futureStart.setDate(futureStart.getDate() + 15)
-    const futureEnd = new Date(futureStart)
-    futureEnd.setDate(futureEnd.getDate() + 7)
-
-    const futureSeason = await SeasonFactory.createSeason(context, {
-      shortName: salt('FutureCancelTest'),
-      seasonDates: { start: futureStart, end: futureEnd },
-      cookingDays: createDefaultWeekdayMap([true, true, true, true, true, false, false]) // Mon-Fri
-    })
-
-    try {
-      const futureDinnerEventId = futureSeason.dinnerEvents![0]!.id
-      const futureTicketPriceId = futureSeason.ticketPrices!.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!.id!
-
-      // Create order for future dinner
-      const result = await OrderFactory.createOrder(context, {
-        householdId: testHouseholdId,
-        dinnerEventId: futureDinnerEventId,
-        orders: [OrderFactory.defaultOrderItem({
-          inhabitantId: testInhabitantId,
-          ticketPriceId: futureTicketPriceId
-        })]
-      })
-      const orderId = result!.createdIds[0]!
-
-      // Cancel by setting dinnerMode to NONE
-      const updatedOrder = await OrderFactory.updateOrder(context, orderId, {
-        dinnerMode: DinnerModeSchema.enum.NONE
-      })
-
-      // Response should show NONE dinnerMode
-      expect(updatedOrder).toBeDefined()
-      expect(updatedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.NONE)
-
-      // Order should be DELETED from database (not found)
-      await OrderFactory.getOrder(context, orderId, 404)
-    } finally {
-      // Cleanup future season
-      await SeasonFactory.deleteSeason(context, futureSeason.id!)
-    }
-  })
-
-  test('POST returns 400 for invalid dinnerMode', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
-
-    // Create an order first
-    const result = await OrderFactory.createOrder(context, {
-      householdId: testHouseholdId,
-      dinnerEventId: testDinnerEventId,
-      orders: [OrderFactory.defaultOrderItem({
-        inhabitantId: testInhabitantId,
-        ticketPriceId: testAdultTicketPriceId
-      })]
-    })
-    const orderId = result!.createdIds[0]!
-    testOrderIds.push(orderId)
-
-    // Try to update with invalid dinnerMode
-    await OrderFactory.updateOrder(context, orderId, {
-      dinnerMode: 'INVALID_MODE'
-    }, 400)
-  })
-
-  test('DELETE can remove existing order with status 200', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
-
-    const result = await OrderFactory.createOrder(context, {
-      householdId: testHouseholdId,
-      dinnerEventId: testDinnerEventId,
-      orders: [OrderFactory.defaultOrderItem({
-        inhabitantId: testInhabitantId,
-        ticketPriceId: testChildTicketPriceId
-      })]
-    })
-    expect(result!.createdIds).toHaveLength(1)
-    const orderId = result!.createdIds[0]!
-
-    const deletedOrder = await OrderFactory.deleteOrder(context, orderId)
-
-    expect(deletedOrder).toBeDefined()
-    expect(deletedOrder!.id).toBe(orderId)
-
-    const response = await context.request.get(`${ORDER_ENDPOINT}/${orderId}`)
-    expect(response.status()).toBe(404)
-  })
-
   test('GET should return 404 for non-existent order', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
     const nonExistentId = 999999
     await OrderFactory.getOrder(context, nonExistentId, 404)
-  })
-
-  test('PUT should validate required fields', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
-
-    const invalidData = {
-      dinnerEventId: testDinnerEventId,
-      ticketType: TicketTypeSchema.enum.ADULT
-    }
-
-    const response = await context.request.put(ORDER_ENDPOINT, {
-      headers: { 'Content-Type': 'application/json' },
-      data: invalidData
-    })
-
-    expect(response.status()).toBe(400)
-  })
-
-  test('PUT should validate ticket type enum', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
-
-    const invalidData = {
-      dinnerEventId: testDinnerEventId,
-      inhabitantId: testInhabitantId,
-      ticketType: 'INVALID_TYPE'
-    }
-
-    const response = await context.request.put(ORDER_ENDPOINT, {
-      headers: { 'Content-Type': 'application/json' },
-      data: invalidData
-    })
-
-    expect(response.status()).toBe(400)
-  })
-
-  test('GIVEN orders with different bookedByUserId WHEN creating batch THEN fails with 400', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
-
-    const invalidData = {
-      householdId: testHouseholdId,
-      dinnerEventId: testDinnerEventId,
-      orders: [
-        {
-          inhabitantId: testInhabitantId,
-          ticketPriceId: testAdultTicketPriceId,
-          dinnerMode: DinnerModeSchema.enum.DINEIN,
-          bookedByUserId: 1
-        },
-        {
-          inhabitantId: testInhabitantId,
-          ticketPriceId: testChildTicketPriceId,
-          dinnerMode: DinnerModeSchema.enum.DINEIN,
-          bookedByUserId: 999
-        }
-      ]
-    }
-
-    const response = await context.request.put(ORDER_ENDPOINT, {
-      headers,
-      data: invalidData
-    })
-
-    expect(response.status()).toBe(400)
-    const errorBody = await response.json()
-    expect(errorBody.message || errorBody.statusMessage).toMatch(/samme bruger/i)
-  })
-
-  test('GIVEN orders from different households WHEN creating batch THEN fails with 400', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
-
-    const household2 = await HouseholdFactory.createHousehold(context)
-    const inhabitant2 = await HouseholdFactory.createInhabitantForHousehold(context, household2.id, 'TestPerson2')
-
-    const invalidData = {
-      householdId: testHouseholdId,
-      dinnerEventId: testDinnerEventId,
-      orders: [
-        {
-          inhabitantId: testInhabitantId,
-          ticketPriceId: testAdultTicketPriceId,
-          dinnerMode: DinnerModeSchema.enum.DINEIN,
-          bookedByUserId: 1
-        },
-        {
-          inhabitantId: inhabitant2.id,
-          ticketPriceId: testAdultTicketPriceId,
-          dinnerMode: DinnerModeSchema.enum.DINEIN,
-          bookedByUserId: 1
-        }
-      ]
-    }
-
-    const response = await context.request.put(ORDER_ENDPOINT, {
-      headers,
-      data: invalidData
-    })
-
-    expect(response.status()).toBe(400)
-    const errorBody = await response.json()
-    expect(errorBody.message || errorBody.statusMessage).toMatch(/same household|household/i)
-
-    await HouseholdFactory.deleteHousehold(context, household2.id)
-  })
-
-  // Orders the test inhabitant holds on the test dinner
-  const ordersForTestInhabitant = async (context: BrowserContext) =>
-    (await OrderFactory.getOrders(context, { dinnerEventIds: testDinnerEventId }))
-      .filter(o => o.inhabitantId === testInhabitantId)
-
-  test('GIVEN two regular orders for same inhabitant WHEN creating batch THEN fails with 409 and creates nothing', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
-
-    await OrderFactory.createOrder(context, {
-      householdId: testHouseholdId,
-      dinnerEventId: testDinnerEventId,
-      orders: [
-        OrderFactory.defaultOrderItem({ inhabitantId: testInhabitantId, ticketPriceId: testAdultTicketPriceId }),
-        OrderFactory.defaultOrderItem({ inhabitantId: testInhabitantId, ticketPriceId: testChildTicketPriceId })
-      ]
-    }, 409)
-
-    // The whole batch is refused
-    expect(await ordersForTestInhabitant(context)).toHaveLength(0)
-  })
-
-  test('GIVEN one regular and one guest order for same inhabitant WHEN creating batch THEN succeeds', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
-
-    const result = await OrderFactory.createOrder(context, {
-      householdId: testHouseholdId,
-      dinnerEventId: testDinnerEventId,
-      orders: [
-        OrderFactory.defaultOrderItem({ inhabitantId: testInhabitantId, ticketPriceId: testAdultTicketPriceId }),
-        OrderFactory.defaultOrderItem({ inhabitantId: testInhabitantId, ticketPriceId: testAdultTicketPriceId, isGuestTicket: true })
-      ]
-    })
-    testOrderIds.push(...result!.createdIds)
-
-    // CreateOrdersResult: { householdId, createdIds }
-    expect(result!.householdId).toBe(testHouseholdId)
-    expect(result!.createdIds).toHaveLength(2)
-  })
-
-  test('GIVEN existing regular order WHEN booking same inhabitant again on same dinner THEN fails with 409', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
-
-    const orderRequest = {
-      householdId: testHouseholdId,
-      dinnerEventId: testDinnerEventId,
-      orders: [OrderFactory.defaultOrderItem({
-        inhabitantId: testInhabitantId,
-        ticketPriceId: testAdultTicketPriceId
-      })]
-    }
-
-    const result = await OrderFactory.createOrder(context, orderRequest)
-    const orderId = result!.createdIds[0]!
-    testOrderIds.push(orderId)
-
-    await OrderFactory.createOrder(context, orderRequest, 409)
-
-    // The dinner still holds exactly the first order for the inhabitant
-    const orders = await ordersForTestInhabitant(context)
-    expect(orders.map(o => o.id)).toEqual([orderId])
-  })
-
-  test('GIVEN released order WHEN claiming THEN state becomes BOOKED', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
-
-    // Create order
-    const result = await OrderFactory.createOrder(context, {
-      householdId: testHouseholdId,
-      dinnerEventId: testDinnerEventId,
-      orders: [OrderFactory.defaultOrderItem({
-        inhabitantId: testInhabitantId,
-        ticketPriceId: testAdultTicketPriceId
-      })]
-    })
-    const orderId = result!.createdIds[0]!
-    testOrderIds.push(orderId)
-
-    // Release (dinnerMode: NONE after deadline)
-    await OrderFactory.updateOrder(context, orderId, { dinnerMode: DinnerModeSchema.enum.NONE })
-
-    // Claim using dinnerEventId + ticketPriceId (FIFO by releasedAt)
-    const claimedOrder = await OrderFactory.claimOrder(context, testDinnerEventId, testAdultTicketPriceId, testInhabitantId)
-
-    expect(claimedOrder!.state).toBe(OrderStateSchema.enum.BOOKED)
-    expect(claimedOrder!.inhabitantId).toBe(testInhabitantId)
-    expect(claimedOrder!.releasedAt).toBeNull()
-    // Claim defaults to DINEIN when no mode specified (per claim endpoint schema)
-    expect(claimedOrder!.dinnerMode).toBe(DinnerModeSchema.enum.DINEIN)
-  })
-
-  test('GIVEN no RELEASED orders WHEN claiming THEN fails with 409', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
-
-    // Create isolated dinner event to avoid race conditions with other tests that release orders
-    const isolatedEvent = await DinnerEventFactory.createDinnerEvent(context, {
-      seasonId: testSeasonId,
-      date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days from now
-      menuTitle: salt('IsolatedClaimTest')
-    })
-
-    // Create order on isolated event (state=BOOKED, not released)
-    const result = await OrderFactory.createOrder(context, {
-      householdId: testHouseholdId,
-      dinnerEventId: isolatedEvent.id,
-      orders: [OrderFactory.defaultOrderItem({
-        inhabitantId: testInhabitantId,
-        ticketPriceId: testAdultTicketPriceId
-      })]
-    })
-    testOrderIds.push(result!.createdIds[0]!)
-
-    // Claim without releasing - should fail (no RELEASED tickets available on this isolated event)
-    await OrderFactory.claimOrder(context, isolatedEvent.id, testAdultTicketPriceId, testInhabitantId, false, 409)
-  })
-
-  test('GIVEN non-existent dinner event WHEN claiming THEN fails with 409', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
-
-    // Non-existent dinner event ID - no matching tickets
-    await OrderFactory.claimOrder(context, 999999, testAdultTicketPriceId, testInhabitantId, false, 409)
   })
 
   test('GET with allHouseholds=true returns orders from all households', async ({ browser }) => {

@@ -20,6 +20,7 @@ Shared UI values had drifted into per-component colour, variant and `:ui` patche
 | Buttons | `BUTTONS.<kind>` with `ICONS` | `v-bind="BUTTONS.secondaryAction" :color="COLOR.primary" :icon="ICONS.edit"` |
 | Calendars | `COMPONENTS.calendarGrid`, `CALENDAR.picker`, `dayCircleClasses(variant)` | `v-bind="COMPONENTS.calendarGrid"`; every day circle renders through the helper |
 | Table empty states | the `UTable` `#empty` slot | one empty state per table, inside the slot |
+| Separators | `COMPONENTS.separator.<kind>` on a labelled `USeparator` | `v-bind="COMPONENTS.separator.moment" :label="…"` |
 
 A token holds exactly one value. Two values are two tokens, named by where they are used. Merging values is a design
 decision the user takes from a visual proposal.
@@ -105,7 +106,7 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 
 ## ADR-016: Unified Booking Through Scaffold
 
-**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-03-04
+**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-10-12
 
 ### Context
 
@@ -116,20 +117,21 @@ Abstract composite keys (`inhabitantId-dinnerEventId`) caused bugs:
 
 ### Decision
 
-**Use `orderId` for updates. Generator decides intent → Scaffolder executes.**
+**Use `orderId` for updates and `waitlistEntryId` for a queue entry. Generator decides intent → Scaffolder executes.**
 
 ### Architecture
 
 | Stage | File | Role |
 |-------|------|------|
-| **Generator** | `useBooking.ts` | `decideOrderAction(input) → { bucket, order } \| null` — pure function, returns bucket `create \| update \| delete \| idempotent`, sets `state` (BOOKED/RELEASED) and `dinnerMode`. Entry points: `resolveDesiredOrdersToBuckets` (user mode), `resolveOrdersFromPreferencesToBuckets` (system mode) |
-| **Scaffolder** | `scaffoldPrebookings.ts` | Transforms `DesiredOrder → OrderCreateWithPrice` (adds `bookedByUserId`, `priceAtBooking`, `householdId`) and executes the buckets: `createOrders()`, `updateOrder()` + `releasedAt` for releases, `deleteOrder()`, skip idempotent |
+| **Generator** | `useBooking.ts` | `decideOrderAction(input) → { bucket, order } \| null` — pure function, returns bucket `create \| update \| delete \| idempotent \| claim \| leave \| requeue`, sets `state` (BOOKED/RELEASED) and `dinnerMode`. Entry points: `resolveDesiredOrdersToBuckets` (user mode, with the household's queue entries), `resolveOrdersFromPreferencesToBuckets` (system mode) |
+| **Scaffolder** | `scaffoldPrebookings.ts` | Transforms `DesiredOrder → OrderCreateWithPrice` (adds `bookedByUserId`, `priceAtBooking`, `householdId`) and executes the buckets: `createOrders()`, `updateOrdersBatch()` + `releasedAt` for releases, `deleteOrder()`, `claimOrder()` else `joinWaitlist()` for claims, `deleteWaitlistEntry()` for leave, `updateWaitlistEntryOrder()` for requeue, skip idempotent |
 
 ### Decision Matrix
 
 | `orderId` | `dinnerMode` | `existing` | `deadline` | → Action |
 |-----------|--------------|------------|------------|----------|
-| absent | ≠ NONE | N/A | any | **CREATE** (state=BOOKED) |
+| absent | ≠ NONE | N/A | before | **CREATE** (state=BOOKED) |
+| absent | ≠ NONE | N/A | after | **CLAIM** (state=BOOKED) |
 | absent | = NONE | N/A | any | SKIP |
 | present | = NONE | found | before | **DELETE** |
 | present | = NONE | found | after | **UPDATE** (state=RELEASED) |
@@ -137,6 +139,20 @@ Abstract composite keys (`inhabitantId-dinnerEventId`) caused bugs:
 | present | ≠ NONE | same | any | **IDEMPOTENT** |
 | present | ≠ NONE | diff | any | **UPDATE** (mode/price change) |
 | present | any | not found | any | SKIP (stale) |
+
+The claim bucket executes by supply at that instant: a released ticket at the price, FIFO by `releasedAt`, else a queue
+entry at the frozen price with the wish (mode, guest flag, allergy ids); the result reports the entry's position. A lost
+claim race queues.
+
+A desired order targets a queue entry by `waitlistEntryId`; a regular desired order without ids targets the inhabitant's
+own regular entry on the dinner.
+
+| Queue entry | `dinnerMode` / price | → Action |
+|-------------|----------------------|----------|
+| found | = NONE | **LEAVE** (deletes the entry) |
+| found | another mode or price | **REQUEUE** (rewrites the entry's order, position kept) |
+| found | unchanged | **IDEMPOTENT** |
+| not found | any | SKIP (placed or swept) |
 
 ### DesiredOrder Schema
 
@@ -149,6 +165,7 @@ DesiredOrderSchema = {
   isGuestTicket: boolean,
   state: OrderState,           // Generator sets: BOOKED or RELEASED
   orderId?: number,            // Present for updates, absent for creates
+  waitlistEntryId?: number,    // Present for the household's queue entry (leave, requeue)
   allergyTypeIds?: number[]    // Guest allergies
 }
 ```
@@ -166,17 +183,22 @@ DesiredOrderSchema = {
 | Mode | Trigger | Generator | Use Case |
 |------|---------|-----------|----------|
 | **System** | Preference change, cron, field change | `resolveOrdersFromPreferencesToBuckets` | Scaffolding, preference updates, residency changes |
-| **User** | UI booking | `resolveDesiredOrdersToBuckets` | Grid view, single booking |
+| **User** | UI booking, admin correction | `resolveDesiredOrdersToBuckets` | Grid view, single booking, claim and queue, the admin's correction |
+
+System mode never reaches the claim bucket. `POST /api/household/order/scaffold` is the member's booking write; the
+endpoint hands the scaffolder its deadlines: the season's (`deadlinesForSeason`) for a member, `OPEN_DEADLINES`
+(`useSeason.ts`) for an admin's request with `?adminBypass=true`.
 
 ### Compliance
 
 1. Generator MUST set `state` and `dinnerMode` - scaffolder doesn't re-derive
-2. Scaffolder ONLY enriches (`priceAtBooking`, `bookedByUserId`, `releasedAt`)
+2. Scaffolder enriches (`priceAtBooking`, `bookedByUserId`, `releasedAt`) and settles supply for the claim bucket (a released ticket, else a queue entry)
 3. UI MUST include `orderId` from existing orders for updates
 4. Guest orders preserved (not managed by preferences)
 5. User cancellations tracked in `cancelledKeys` set
 6. Generators MUST receive dinner events filtered by `isHouseholdActiveOnDay`
 7. Booking-relevant field changes MUST trigger immediate re-scaffold via `rescaffoldOnFieldChange`
+8. UI MUST include `waitlistEntryId` from the household's queue entries to leave or requeue
 
 ### Key Files
 
@@ -184,8 +206,10 @@ DesiredOrderSchema = {
 |------|------|
 | `app/composables/useBooking.ts` | Generator: `decideOrderAction`, bucket resolvers |
 | `app/composables/useBookingValidation.ts` | Schemas: `DesiredOrderSchema`, `ScaffoldResultSchema` |
+| `app/composables/useSeason.ts` | `deadlinesForSeason`, `OPEN_DEADLINES` |
 | `app/composables/useHousehold.ts` | `isHouseholdActiveOnDay` residency predicate |
 | `server/utils/scaffoldPrebookings.ts` | Scaffolder: transforms, executes, `rescaffoldOnFieldChange` |
+| `server/utils/waitlistAssignment.ts` | `joinWaitlist`, the release hand-over `assignReleasedTicket`, `assignWaitlistPortions` |
 
 ### Related ADRs
 

@@ -26,14 +26,13 @@ const {household} = toRefs(props)
 
 const {deadlinesForSeason} = useSeason()
 const {BOOKING_TOAST_TITLES, buildBookingChanges} = useBooking()
-const {handleApiError} = useApiHandler()
 const {ICONS, ALERTS, COMPONENTS} = useTheSlopeDesignSystem()
 
 const planStore = usePlanStore()
 const {selectedSeason, isSelectedSeasonInitialized, isSelectedSeasonLoading, isSelectedSeasonErrored} = storeToRefs(planStore)
 
 const bookingsStore = useBookingsStore()
-const {orders, isProcessingBookings, lockStatus} = storeToRefs(bookingsStore)
+const {orders, isProcessingBookings, lockStatus, householdWaitlist} = storeToRefs(bookingsStore)
 
 // Allergies store for guest booking form
 const allergiesStore = useAllergiesStore()
@@ -154,17 +153,13 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
   const event = dinnerEvents.value.find(e => e.id === eventId)
   const dateStr = event ? formatDate(new Date(event.date)) : ''
 
-  try {
-    await bookingsStore.processSingleEventBookings(
-      household.value.id,
-      eventId,
-      guestOrders,
-      props.adminBypass,
-      {title: BOOKING_TOAST_TITLES.guest, suffix: ` d. ${dateStr}`}
-    )
-  } catch (e) {
-    handleApiError(e, 'handleAddGuest', 'Kunne ikke tilføje gæst')
-  }
+  await bookingsStore.processSingleEventBookings(
+    household.value.id,
+    eventId,
+    guestOrders,
+    props.adminBypass,
+    {title: BOOKING_TOAST_TITLES.guest, suffix: ` d. ${dateStr}`}
+  )
 }
 </script>
 
@@ -206,6 +201,7 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
           :ticket-prices="ticketPrices"
           :deadlines="deadlines"
           :lock-status="lockStatus"
+          :waitlist-entries="householdWaitlist"
           :allergy-types="allergyTypes"
           :booker-id="bookerId"
           :is-saving="isProcessingBookings"
@@ -226,6 +222,7 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
               :deadlines="deadlines"
               :released-ticket-counts="lockStatus.get(selectedDinnerEvent.id) ?? { total: 0, formatted: '-' }"
               :can-edit-admin-override="adminBypass ? () => canEdit : undefined"
+              :waitlist-entries="householdWaitlist"
               @save-bookings="handleDayViewSave"
             />
             <UAlert

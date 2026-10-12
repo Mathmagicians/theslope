@@ -30,12 +30,11 @@ test.describe('Waiting list assignment', () => {
     let inhabitants: InhabitantDisplay[]
     let adultPrice: TicketPrice
     let childPrice: TicketPrice
-    const entryIds: number[] = []
-    // The admin acts for the test household, which is not its own
-    const join = (context: Parameters<typeof WaitlistFactory.join>[0], request: Parameters<typeof WaitlistFactory.join>[1], expectedStatus = 201) =>
-        WaitlistFactory.join(context, request, expectedStatus, true)
-    const householdEntries = (context: Parameters<typeof WaitlistFactory.entriesForHousehold>[0]) =>
-        WaitlistFactory.entriesForHousehold(context, householdId, [dinnerEventId], true)
+    // Four inhabitants of the admin's household queue on dinners past their booking deadline
+    const queue = (context: Parameters<typeof WaitlistFactory.queue>[0], order: Parameters<typeof WaitlistFactory.queue>[3]) =>
+        WaitlistFactory.queue(context, householdId, activeSeasonId, order)
+    const householdEntries = async (context: Parameters<typeof WaitlistFactory.entries>[0], dinnerId = dinnerEventId) =>
+        (await WaitlistFactory.entries(context, [dinnerId])).filter(entry => entry.order.householdId === householdId)
     const orderIds: number[] = []
 
     test.beforeAll(async ({browser}) => {
@@ -45,28 +44,26 @@ test.describe('Waiting list assignment', () => {
         adultPrice = activeSeason.ticketPrices.find(price => price.ticketType === TicketType.ADULT)!
         childPrice = activeSeason.ticketPrices.find(price => price.ticketType === TicketType.CHILD)!
         activeSeasonId = activeSeason.id!
-        adminInhabitantId = (await getSessionUserInfo(context)).inhabitantId
+        ;({inhabitantId: adminInhabitantId, householdId} = await getSessionUserInfo(context))
         const team = await SeasonFactory.createCookingTeamForSeason(context, activeSeason.id!, salt('Ventelistehold', testSalt))
         teamId = team.id!
         await SeasonFactory.assignMemberToTeam(context, teamId, adminInhabitantId, TeamRoleSchema.enum.CHEF)
-        const dinners = await DinnerEventFactory.getDinnerEventsForSeason(context, activeSeason.id!)
-        const futureDinner = dinners.find(dinner => new Date(dinner.date) > new Date())
-        expect(futureDinner, 'the active season has a future dinner').toBeDefined()
         const dinner = await DinnerEventFactory.createDinnerEvent(context, {
-            date: new Date(futureDinner!.date), menuTitle: salt('Ventelistemiddag', testSalt), seasonId: activeSeason.id!, cookingTeamId: teamId, chefId: adminInhabitantId
+            date: daysFromNow(2), menuTitle: salt('Ventelistemiddag', testSalt), seasonId: activeSeason.id!, cookingTeamId: teamId, chefId: adminInhabitantId
         })
         dinnerEventId = dinner.id!
         dinnerIds.push(dinnerEventId)
-        const created = await HouseholdFactory.createHouseholdWithInhabitants(context, {address: salt('Ventelistevej 2', testSalt)}, 4)
-        householdId = created.household.id
-        inhabitants = created.inhabitants
+        inhabitants = []
+        for (const name of ['Et', 'To', 'Tre', 'Fire']) {
+            inhabitants.push(await HouseholdFactory.createInhabitantForHousehold(context, householdId, salt(`Venter ${name}`, testSalt)))
+        }
     })
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        await WaitlistFactory.cleanupEntries(context, entryIds)
+        await WaitlistFactory.cleanupEntries(context, activeSeasonId, dinnerIds)
         await OrderFactory.cleanupOrders(context, orderIds)
-        await HouseholdFactory.deleteHousehold(context, householdId).catch(() => undefined)
+        for (const inhabitant of inhabitants) await HouseholdFactory.deleteInhabitant(context, inhabitant.id!)
         for (const id of dinnerIds) await DinnerEventFactory.deleteDinnerEvent(context, id).catch(() => undefined)
         await SeasonFactory.deleteCookingTeam(context, teamId).catch(() => undefined)
     })
@@ -75,11 +72,8 @@ test.describe('Waiting list assignment', () => {
         const context = await validatedBrowserContext(browser)
         const types = [adultPrice, childPrice, adultPrice, childPrice]
         for (const [index, price] of types.entries()) {
-            const joined = await join(context, WaitlistFactory.defaultJoinRequest({
-                householdId, dinnerEventId, inhabitantId: inhabitants[index]!.id!, ticketPriceId: price.id!
-            }))
-            entryIds.push(joined!.id)
-            expect(joined!.position).toBe(index + 1)
+            const result = await queue(context, OrderFactory.createBookingOrder(inhabitants[index]!.id!, dinnerEventId, price.id!))
+            expect(result.positions.map(queued => queued.position)).toEqual([index + 1])
         }
 
         const result = await WaitlistFactory.releasePortions(context, dinnerEventId, 2.5)
@@ -96,7 +90,7 @@ test.describe('Waiting list assignment', () => {
         expect(placed.map(order => order.priceAtBooking).sort()).toEqual([adultPrice.price, childPrice.price, adultPrice.price].sort())
 
         const waiting = await householdEntries(context)
-        expect(waiting.map(entry => [entry.inhabitantId, entry.position])).toEqual([[inhabitants[3]!.id, 1]])
+        expect(waiting.map(entry => entry.inhabitantId)).toEqual([inhabitants[3]!.id])
     })
 
     test('GIVEN one barn waiting WHEN the chef releases half a portion THEN it gets its ticket and a further release assigns nothing', async ({browser}) => {
@@ -115,16 +109,14 @@ test.describe('Waiting list assignment', () => {
     test('GIVEN an inhabitant with a ticket WHEN joining the queue again THEN the Order unique index refuses the assignment path too', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         // The queue accepts the entry; the release cannot place a second regular order for the inhabitant
-        const joined = await join(context, WaitlistFactory.defaultJoinRequest({
-            householdId, dinnerEventId, inhabitantId: inhabitants[0]!.id!, ticketPriceId: adultPrice.id!
-        }))
-        entryIds.push(joined!.id)
+        const result = await queue(context, OrderFactory.createBookingOrder(inhabitants[0]!.id!, dinnerEventId, adultPrice.id!))
+        expect(result.queued).toBe(1)
 
         await WaitlistFactory.releasePortions(context, dinnerEventId, 1, 409)
 
         const waiting = await householdEntries(context)
-        expect(waiting.map(entry => entry.id)).toEqual([joined!.id])
-        await WaitlistFactory.leave(context, joined!.id, 200, true)
+        expect(waiting.map(entry => entry.inhabitantId)).toEqual([inhabitants[0]!.id])
+        await WaitlistFactory.leave(context, activeSeasonId, waiting[0]!, true)
     })
 
     test('GIVEN a queue on a dinner of yesterday WHEN the daily maintenance consumes it THEN the queue is gone', async ({browser}) => {
@@ -134,15 +126,12 @@ test.describe('Waiting list assignment', () => {
             date: daysFromNow(-1), menuTitle: salt('Gårsdagens middag', temporaryAndRandom()), seasonId: activeSeasonId, cookingTeamId: teamId, chefId: adminInhabitantId
         })
         dinnerIds.push(pastDinner.id!)
-        const joined = await join(context, WaitlistFactory.defaultJoinRequest({
-            householdId, dinnerEventId: pastDinner.id!, inhabitantId: inhabitants[3]!.id!, ticketPriceId: childPrice.id!, isGuestTicket: true
-        }))
-        entryIds.push(joined!.id)
+        const result = await queue(context, OrderFactory.createGuestOrder(inhabitants[3]!.id!, pastDinner.id!, childPrice.id!))
+        expect(result.queued).toBe(1)
 
         const maintenance = await SeasonFactory.runDailyMaintenance(context)
         expect(maintenance.consume.consumed).toBeGreaterThanOrEqual(1)
 
-        const waiting = await WaitlistFactory.entriesForHousehold(context, householdId, [pastDinner.id!], true)
-        expect(waiting).toEqual([])
+        expect(await householdEntries(context, pastDinner.id!)).toEqual([])
     })
 })

@@ -191,6 +191,16 @@ describe('ADR-018: components bind design-system tokens, never raw Nuxt UI props
         expect(report(violations)).toBe('')
     })
 
+    it('every labelled <USeparator> binds a COMPONENTS.separator kind', () => {
+        const violations = vueFiles.flatMap(file => {
+            const source = readVue(file)
+            return openingTags(source, 'USeparator')
+                .filter(tag => /(?:^|\s):?label=/.test(tag.text) && !/v-bind="COMPONENTS\.separator\./.test(tag.text))
+                .map(tag => `app/${file}:${tag.line} - a labelled separator binds a separator kind (v-bind="COMPONENTS.separator.<kind>")`)
+        })
+        expect(report(violations)).toBe('')
+    })
+
     it('no .vue names a Tailwind palette shade', () => {
         const violations = scan(colourFiles, RAW_COLOUR_CLASS, 'raw palette shade - use a BG/TEXT/BORDER/TYPOGRAPHY token')
         expect(report(violations)).toBe('')

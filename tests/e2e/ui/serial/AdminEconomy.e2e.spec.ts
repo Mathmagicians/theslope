@@ -31,7 +31,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
 
     test.beforeAll(async ({browser}) => {
         adminContext = await validatedBrowserContext(browser)
-        const {householdId, inhabitantId, userId} = await getSessionUserInfo(adminContext)
+        const {householdId, inhabitantId} = await getSessionUserInfo(adminContext)
         testHouseholdId = householdId
         testInhabitantId = inhabitantId
 
@@ -75,7 +75,6 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
             orders: [OrderFactory.defaultOrderItem({
                 inhabitantId: testInhabitantId,
                 ticketPriceId: testTicketPriceId,
-                bookedByUserId: userId,
                 dinnerMode: DinnerMode.DINEIN
             })]
         })

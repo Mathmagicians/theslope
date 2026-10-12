@@ -23,7 +23,7 @@ const props = defineProps<{
   since: Date | null
 }>()
 
-const {COMPONENTS, BUTTONS, SIZES, ICONS, NOISE, TYPOGRAPHY, ALERTS} = useTheSlopeDesignSystem()
+const {COMPONENTS, BUTTONS, SIZES, ICONS, NOISE, COLOR, TYPOGRAPHY, ALERTS} = useTheSlopeDesignSystem()
 const changeColumns: TableColumn<TicketChange>[] = [
   {accessorKey: 'timestamp', header: 'Dato'},
   {accessorKey: 'householdShortname', header: 'Husstand'},
@@ -70,22 +70,30 @@ const actionLabel = (change: TicketChange) => ORDER_ACTION_LABELS[change.action]
 
 <template>
   <div data-testid="ticket-changes">
-    <!-- The same chevron row as the Budget pane's own toggle; folded by default -->
-    <button type="button" :class="COMPONENTS.dinnerBudget.toggle" data-testid="ticket-changes-toggle" @click="toggle">
-      <h5 :class="[COMPONENTS.dinnerBudget.sectionTitle, COMPONENTS.ticketChanges.title]">
+    <!-- The same title-and-chevron row as the Budget pane; folded by default -->
+    <div :class="COMPONENTS.collapsible.headerRow">
+      <h5 :class="[TYPOGRAPHY.sectionSubheading, COMPONENTS.ticketChanges.title]">
         <UIcon :name="ICONS.clipboard" :class="COMPONENTS.cardSection.glyph" />
         Se billetændringer
       </h5>
-      <UIcon :name="open ? ICONS.chevronDown : ICONS.chevronRight" :class="COMPONENTS.dinnerBudget.toggleIcon" />
-    </button>
+      <UButton
+        v-bind="BUTTONS.flipOpen(open)"
+        :color="COLOR.neutral"
+        :variant="NOISE.quiet"
+        :size="SIZES.standard"
+        :aria-label="open ? 'Skjul billetændringer' : 'Vis billetændringer'"
+        data-testid="ticket-changes-toggle"
+        @click="toggle"
+      />
+    </div>
 
-    <template v-if="open">
+    <UCollapsible v-model:open="open" v-bind="COMPONENTS.collapsible.belowTrigger">
+      <template #content>
       <div v-if="isLoading" :class="COMPONENTS.ticketChanges.loading">
         <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.ticketChanges.spinner" />
         <span>Henter...</span>
       </div>
       <UAlert v-else-if="error" v-bind="ALERTS.error" title="Kunne ikke hente billetændringer" />
-      <span v-else-if="rows.length === 0 && moreCount === 0" :class="TYPOGRAPHY.finePrint" data-testid="ticket-changes-empty">Ingen historik</span>
       <UTable v-else :data="rows" :columns="changeColumns" :ui="COMPONENTS.table.ui">
         <template #timestamp-cell="{ row }">{{ formatMoment(row.original.timestamp) }}</template>
         <template #householdShortname-cell="{ row }">{{ row.original.householdShortname ?? 'System' }}</template>
@@ -109,16 +117,18 @@ const actionLabel = (change: TicketChange) => ORDER_ACTION_LABELS[change.action]
         <template #empty><span data-testid="ticket-changes-none-since">Ingen ændringer</span></template>
       </UTable>
 
-      <div v-if="!isLoading && !error && since && !showAll" :class="COMPONENTS.ticketChanges.divider" data-testid="ticket-changes-deadline">
-        <span :class="COMPONENTS.ticketChanges.dividerLine" />
-        <span>Framelding lukker · {{ formatMoment(since) }}</span>
-        <span :class="COMPONENTS.ticketChanges.dividerLine" />
-      </div>
+      <USeparator
+        v-if="!isLoading && !error && since && !showAll"
+        v-bind="COMPONENTS.separator.moment"
+        :label="`Framelding lukker · ${formatMoment(since)}`"
+        data-testid="ticket-changes-deadline"
+      />
       <div v-if="!isLoading && !error && !showAll && moreCount > 0" :class="COMPONENTS.ticketChanges.moreRow">
         <UButton v-bind="BUTTONS.secondaryAction" :size="SIZES.small" data-testid="ticket-changes-more" @click="showAll = true">
           Vis fuld historik
         </UButton>
       </div>
-    </template>
+      </template>
+    </UCollapsible>
   </div>
 </template>

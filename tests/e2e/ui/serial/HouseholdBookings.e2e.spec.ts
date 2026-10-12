@@ -31,7 +31,7 @@ import {formatDate} from '~/utils/date'
  */
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo, waitForHydration, collectHydrationWarnings} = testHelpers
+const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, waitForHydration, collectHydrationWarnings} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -172,7 +172,6 @@ test('week forward arrow hides at last dinner of season', async ({page}) => {
 
 test('GIVEN an inhabitant holding only a guest ticket on a dinner WHEN the week grid power mode books the family THEN a regular order is booked and the guest ticket carries the family\'s mode', async ({page, browser}) => {
     const context = await validatedBrowserContext(browser)
-    const {userId} = await getSessionUserInfo(context)
 
     // GIVEN: NONE preferences, so the only order on the dinner is the guest ticket
     const inhabitant = await HouseholdFactory.createInhabitantWithConfig(context, householdId, {
@@ -185,8 +184,8 @@ test('GIVEN an inhabitant holding only a guest ticket on a dinner WHEN the week 
     const guest = await OrderFactory.createOrder(context, {
         householdId,
         dinnerEventId: dinnerEvent.id,
-        orders: [{inhabitantId: inhabitant.id, bookedByUserId: userId, ticketPriceId: adultPrice.id!, dinnerMode: DinnerMode.DINEIN, isGuestTicket: true}]
-    }, 201, true)
+        orders: [{inhabitantId: inhabitant.id, ticketPriceId: adultPrice.id!, dinnerMode: DinnerMode.DINEIN, isGuestTicket: true}]
+    })
     const guestOrderId = guest!.createdIds[0]!
 
     // WHEN: admin unlocks the household, toggles the power cell for the dinner and saves
@@ -219,7 +218,6 @@ test('GIVEN an inhabitant holding only a guest ticket on a dinner WHEN the week 
 
 test('GIVEN a member holding a regular order and a guest ticket on a dinner WHEN the week grid changes the guest cell\'s mode and saves THEN the guest order carries the new mode and the regular order is untouched', async ({page, browser}) => {
     const context = await validatedBrowserContext(browser)
-    const {userId} = await getSessionUserInfo(context)
 
     // GIVEN: NONE preferences, so the member's orders on the dinner are exactly the two created here
     const inhabitant = await HouseholdFactory.createInhabitantWithConfig(context, householdId, {
@@ -233,10 +231,10 @@ test('GIVEN a member holding a regular order and a guest ticket on a dinner WHEN
         householdId,
         dinnerEventId: dinnerEvent.id,
         orders: [
-            {inhabitantId: inhabitant.id, bookedByUserId: userId, ticketPriceId: adultPrice.id!, dinnerMode: DinnerMode.DINEIN, isGuestTicket: false},
-            {inhabitantId: inhabitant.id, bookedByUserId: userId, ticketPriceId: adultPrice.id!, dinnerMode: DinnerMode.DINEIN, isGuestTicket: true}
+            {inhabitantId: inhabitant.id, ticketPriceId: adultPrice.id!, dinnerMode: DinnerMode.DINEIN, isGuestTicket: false},
+            {inhabitantId: inhabitant.id, ticketPriceId: adultPrice.id!, dinnerMode: DinnerMode.DINEIN, isGuestTicket: true}
         ]
-    }, 201, true)
+    })
     const before = (await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEvent.id))
         .filter(o => created!.createdIds.includes(o.id))
     const regularOrder = before.find(o => !o.isGuestTicket)!

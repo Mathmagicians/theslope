@@ -57,7 +57,7 @@ const props = withDefaults(defineProps<Props>(), {
   roundWords: null
 })
 
-const { TYPOGRAPHY, COMPONENTS, ICONS } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, COMPONENTS, ICONS, BUTTONS, COLOR, NOISE, SIZES } = useTheSlopeDesignSystem()
 
 // Kitchen config from app.config.ts
 const appConfig = useAppConfig()
@@ -110,16 +110,19 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
 
   <!-- Full Mode: Title + 3-Box Layout -->
   <div v-else :class="COMPONENTS.dinnerBudget.stack">
-    <!-- Section title with expand toggle -->
-    <button
-      type="button"
-      :class="COMPONENTS.dinnerBudget.toggle"
-      name="toggle-budget-details"
-      @click="showDetails = !showDetails"
-    >
+    <!-- The pane's title with the chevron that opens the details below -->
+    <div :class="COMPONENTS.collapsible.headerRow">
       <h4 :class="TYPOGRAPHY.sectionSubheading">Budget</h4>
-      <UIcon :name="showDetails ? ICONS.chevronDown : ICONS.chevronRight" :class="COMPONENTS.dinnerBudget.toggleIcon" />
-    </button>
+      <UButton
+        v-bind="BUTTONS.flipOpen(showDetails)"
+        :color="COLOR.neutral"
+        :variant="NOISE.quiet"
+        :size="SIZES.standard"
+        :aria-label="showDetails ? 'Skjul budgettet' : 'Vis budgettet'"
+        name="toggle-budget-details"
+        @click="showDetails = !showDetails"
+      />
+    </div>
 
     <!-- 3 Summary Boxes -->
     <div :class="COMPONENTS.dinnerBudget.boxes">
@@ -167,13 +170,15 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
           </div>
           <div :class="COMPONENTS.dinnerBudget.boxAmountLarge"><VatAmount :gross="budget.kitchenContribution" /></div>
           <div :class="COMPONENTS.dinnerBudget.boxUnit">ex / inkl. moms</div>
-          <div :class="COMPONENTS.dinnerBudget.unit">{{ budget.kitchenBaseRatePercent }}% af indtægter</div>
+          <div :class="COMPONENTS.dinnerBudget.boxUnit">{{ budget.kitchenBaseRatePercent }}% af indtægter</div>
         </div>
       </UCard>
     </div>
 
-    <!-- Expandable Details -->
-    <div v-if="showDetails" :class="COMPONENTS.dinnerBudget.details" data-testid="budget-details">
+    <!-- The details, below the boxes -->
+    <UCollapsible v-model:open="showDetails" v-bind="COMPONENTS.collapsible.belowTrigger">
+      <template #content>
+    <div data-testid="budget-details">
       <!-- Billetter: the ticket table named by type -->
       <UTable :data="revenueByType" :columns="ticketColumns" :ui="COMPONENTS.table.ui" data-testid="budget-ticket-table">
         <template #ticketType-cell="{ row }">{{ ticketLabel(row.original.ticketType) }}</template>
@@ -211,5 +216,7 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
         <TicketChanges :dinner-event-id="dinnerEventId" :since="bookingDeadline" />
       </div>
     </div>
+      </template>
+    </UCollapsible>
   </div>
 </template>

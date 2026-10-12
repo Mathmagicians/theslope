@@ -23,12 +23,9 @@ function and the spec hold the detail; a row names a gap in a few words.
 | Endpoint | Return type | Validation | Repository | E2E | Status |
 |---|---|---|---|---|---|
 | **Orders** | | | | | |
-| `/api/order/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/order/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/order/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/order/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/order/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/order/claim.post.ts` | ✅ | ✅ | ✅ | ❓ | ❓ spec not found |
+| `/api/order/waitlist.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Admin - dinner events** | | | | | |
 | `/api/admin/dinner-event/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/dinner-event/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -114,16 +111,12 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/household/allergy/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/allergy/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/allergy/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/household/waitlist/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/household/waitlist/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/household/waitlist/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **Chef** | | | | | |
 | `/api/chef/dinner/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/chef/dinner/[id]/expenses/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/chef/dinner/[id]/expenses/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/chef/dinner/[id]/expenses/[expenseId].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/chef/dinner/[id]/order-history.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/order/waitlist.get.ts` | ✅ | ✅ | ✅ | ✅ serial | ✅ |
 | `/api/chef/dinner/[id]/release-portions.post.ts` | ✅ | ✅ | ✅ | ✅ serial | ✅ |
 | **Teams** | | | | | |
 | `/api/team/my.get.ts` | ✅ | N/A | ✅ | ✅ | ✅ |
@@ -168,7 +161,7 @@ For a new or changed endpoint:
 | Pattern | File |
 |---|---|
 | Route param validation, return type, error handling | `/api/admin/allergy-type/[id].get.ts` |
-| Delete with validation and cascade | `/api/order/[id].delete.ts` |
+| Delete with validation and cascade | `/api/household/allergy/[id].delete.ts` |
 | Household-scoped authorization with admin bypass | `/api/household/order/scaffold.post.ts` |
 | Chef endpoint with the Heynabo token pattern (ADR-013) | `/api/chef/dinner/[id].post.ts` |
 | Operation result envelope (ADR-009) | `/api/admin/season/[id].post.ts` |

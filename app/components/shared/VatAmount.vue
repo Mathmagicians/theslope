@@ -29,7 +29,7 @@ const negative = computed(() => props.balance && !props.pending && props.gross <
 const sign = computed(() => props.balance && !props.pending ? (props.gross < 0 ? '-' : '+') : '')
 const figure = (ore: number) => `${sign.value}${formatPrice(Math.abs(ore))}`
 const iconName = computed(() => props.pending ? ICONS.waiting : negative.value ? ICONS.exclamationCircle : ICONS.check)
-const iconClass = computed(() => props.pending ? COMPONENTS.vatAmount.iconWaiting : negative.value ? COMPONENTS.vatAmount.iconOver : COMPONENTS.vatAmount.iconOk)
+const iconClass = computed(() => props.pending ? COMPONENTS.vatAmount.iconWaiting : negative.value ? COMPONENTS.vatAmount.over : COMPONENTS.vatAmount.iconOk)
 const iconTestId = computed(() => props.pending ? 'vat-amount-pending' : negative.value ? 'vat-amount-over' : 'vat-amount-ok')
 </script>
 

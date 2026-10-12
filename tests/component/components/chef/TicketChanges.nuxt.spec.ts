@@ -142,10 +142,11 @@ describe('TicketChanges', () => {
         expect(findByTestId(wrapper, 'ticket-changes-more').exists()).toBe(true)
     })
 
-    it('GIVEN no history at all WHEN opened THEN it says so', async () => {
+    it('GIVEN no history at all WHEN opened THEN the table says so and offers no more', async () => {
         historyEndpoint.mockImplementationOnce(() => ({dinnerEventId: DINNER_ID, since: SINCE.toISOString(), changes: [], olderCount: 0}))
         const wrapper = await mount()
         await open(wrapper)
-        expect(findByTestId(wrapper, 'ticket-changes-empty').text()).toBe('Ingen historik')
+        expect(findByTestId(wrapper, 'ticket-changes-none-since').text()).toBe('Ingen ændringer')
+        expect(findByTestId(wrapper, 'ticket-changes-more').exists()).toBe(false)
     })
 })

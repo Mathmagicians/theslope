@@ -322,7 +322,10 @@ describe('Households Store', () => {
         households: 1,   // Power mode = single household
         errored: 0,      // 0 + 0
         claimed: 0,      // 0 + 0
-        claimRejected: 0 // 0 + 0
+        queued: 0,       // 0 + 0
+        positions: [],
+        left: 0,         // 0 + 0
+        requeued: 0      // 0 + 0
       })
     })
 

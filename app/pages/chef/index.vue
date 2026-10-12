@@ -58,6 +58,7 @@ allergiesStore.initAllergiesStore()
 const bookingsStore = useBookingsStore()
 const {
   isDinnerUpdating,
+  selectedDinnerWaitlist,
   selectedDinnerEventDetail: dinnerEventDetail,
   isSelectedDinnerEventLoading: isDinnerDetailLoading,
   isSelectedDinnerEventErrored: isDinnerDetailError
@@ -210,6 +211,11 @@ const handleAddExpense = (line: ExpenseCreate) => {
 }
 const handleRemoveExpense = (expenseId: number) => {
   if (dinnerEventDetail.value) bookingsStore.removeExpense(dinnerEventDetail.value.id, expenseId)
+}
+
+// The chef releases portions to the queue on the dinner on view
+const handleReleasePortions = (portions: number) => {
+  if (dinnerEventDetail.value) bookingsStore.releasePortions(dinnerEventDetail.value.id, portions)
 }
 
 // The team's cooking round around the dinner on view: the round's orders give each dinner its allowance
@@ -390,6 +396,7 @@ useHead({
               :show-state-controls="true"
               :round-rows="roundRows"
               :expense-note="expenseNote"
+              :waitlist="selectedDinnerWaitlist"
               :show-allergens="true"
               :is-updating="isDinnerUpdating"
               :has-prev="hasPrev"
@@ -398,6 +405,7 @@ useHead({
               @update:form="handleFormUpdate"
               @add-expense="handleAddExpense"
               @remove-expense="handleRemoveExpense"
+              @release-portions="handleReleasePortions"
               @update:allergens="handleAllergenUpdate"
               @advance-state="handleAdvanceState"
               @cancel-dinner="handleCancelDinner"
@@ -431,7 +439,7 @@ useHead({
 
         <!-- #stats: Kitchen statistics -->
         <template #stats>
-          <KitchenPreparation v-if="dinnerEventDetail" :orders="dinnerEventDetail.tickets ?? []" :allergens="dinnerEventDetail.allergens"/>
+          <KitchenPreparation v-if="dinnerEventDetail" :orders="dinnerEventDetail.tickets ?? []" :allergens="dinnerEventDetail.allergens" :waitlist="selectedDinnerWaitlist"/>
         </template>
       </DinnerDetailPanel>
   </UPage>

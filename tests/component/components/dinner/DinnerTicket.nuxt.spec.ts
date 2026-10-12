@@ -95,7 +95,8 @@ describe('DinnerTicket', () => {
 
         it.each([
             {state: 'released', props: {isReleased: true}, icon: ICONS.released},
-            {state: 'claimed', props: {isClaimed: true}, icon: ICONS.claim}
+            {state: 'claimed', props: {isClaimed: true}, icon: ICONS.claim},
+            {state: 'queued', props: {isQueued: true}, icon: ICONS.waitlist}
         ] as const)('GIVEN a $state ticket THEN the state glyph binds its state token', async ({state, props, icon}) => {
             const wrapper = await mountTicket(props)
 
@@ -144,5 +145,33 @@ describe('DinnerTicket', () => {
 
             expect(wrapper.findComponent({name: 'UBadge'}).text()).toContain(label)
         })
+    })
+})
+
+describe('DinnerTicket on the waiting list', () => {
+    it('GIVEN a queued ticket THEN the hourglass sits in the state cell and the edge keeps the normal face', async () => {
+        const wrapper = await mountTicket({isQueued: true})
+
+        expect(iconNamesIn(wrapper, 'ticket-state-cell')).toEqual([ICONS.waitlist])
+        expect(wrapper.classes()).toEqual(COMPONENTS.ticket.face.normal.split(' '))
+    })
+
+    it.each([
+        {desc: 'a queued ticket', isQueued: true},
+        {desc: 'a booked ticket', isQueued: false}
+    ])('GIVEN $desc THEN the mode slot shows the mode ghosted: $isQueued', async ({isQueued}) => {
+        const wrapper = await mountTicket({isQueued})
+
+        const selector = wrapper.findComponent({name: 'DinnerModeSelector'})
+        expect(selector.props()).toMatchObject({modelValue: baseProps.dinnerMode, ghost: isQueued})
+    })
+})
+
+describe('DinnerTicket for a queued guest', () => {
+    it('GIVEN a queued guest THEN the state cell carries the hourglass and the guest cell the guest glyph', async () => {
+        const wrapper = await mountTicket({isQueued: true, guestCount: 1})
+
+        expect(iconNamesIn(wrapper, 'ticket-state-cell')).toEqual([ICONS.waitlist])
+        expect(iconNamesIn(wrapper, 'ticket-guest-cell')).toEqual([ICONS.userPlus])
     })
 })

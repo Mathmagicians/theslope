@@ -1,9 +1,10 @@
 import {fetchOrders, createOrders, deleteOrder, updateOrdersBatch, claimOrder, type OrderBatchUpdate, fetchUserIntentKeys} from "~~/server/data/financesRepository"
 import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/prismaRepository"
-import {useSeason} from "~/composables/useSeason"
-import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
+import {useSeason, type BookingDeadlines} from "~/composables/useSeason"
+import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, type QueuePosition, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
 import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets} from "~/composables/useBooking"
-import {assignReleasedTicket} from "~~/server/utils/waitlistAssignment"
+import {assignReleasedTicket, joinWaitlist, type WaitlistSender} from "~~/server/utils/waitlistAssignment"
+import {fetchWaitlistForHousehold, deleteWaitlistEntry, updateWaitlistEntryOrder} from "~~/server/data/waitlistRepository"
 import {getNotificationConfig} from "~~/server/utils/sender/config"
 import {isHouseholdActiveOnDay} from "~/composables/useHousehold"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
@@ -56,6 +57,10 @@ export type ScaffoldOptions = {
     desiredOrders?: DesiredOrder[]
     /** If provided, use USER_* audit actions. Otherwise SYSTEM_*. */
     userId?: number
+    /** The notification queue and config for the queue and hand-over mails; the request's sender in user mode */
+    sender?: WaitlistSender
+    /** The deadlines user mode decides by; the season's when absent */
+    deadlines?: BookingDeadlines
 }
 
 /**
@@ -67,7 +72,10 @@ const skippedResult = (): ScaffoldResult => ({
     deleted: 0,
     released: 0,
     claimed: 0,
-    claimRejected: 0,
+    queued: 0,
+    positions: [],
+    left: 0,
+    requeued: 0,
     priceUpdated: 0,
     modeUpdated: 0,
     unchanged: 0,
@@ -167,30 +175,29 @@ export async function scaffoldPrebookings(
 
     const households = await fetchHouseholds(d1Client, options.householdId)
 
-    // Fetch orders (chunked) and user intent keys in parallel
-    const [orderBatches, userIntentKeys] = await Promise.all([
+    // Fetch orders (chunked), user intent keys and, in user mode, the household's queue entries in parallel
+    const [orderBatches, userIntentKeys, existingEntries] = await Promise.all([
         Promise.all(chunkFetchIds(dinnerEventIds).map(batch => fetchOrders(d1Client, batch))),
-        fetchUserIntentKeys(d1Client, effectiveSeasonId)
+        fetchUserIntentKeys(d1Client, effectiveSeasonId),
+        isUserMode ? fetchWaitlistForHousehold(d1Client, options.householdId!, dinnerEventIds) : Promise.resolve([])
     ])
     const existingOrders = orderBatches.flat()
     const {confirmedKeys, cancelledKeys} = userIntentKeys
+    const entryById = new Map(existingEntries.map(entry => [entry.id, entry]))
+    // Resolved on first use: a scaffold that hands over or queues nothing needs no notification config
+    const senderOf = (): WaitlistSender => options.sender ?? {queue: undefined, config: getNotificationConfig()}
 
-    // Build set of "eventId-priceId" keys where released tickets exist (for claim decisions)
-    const releasedByEventAndPrice = new Set<string>()
-    for (const order of existingOrders) {
-        if (order.state === OrderStateSchema.enum.RELEASED && order.ticketPriceId) {
-            releasedByEventAndPrice.add(`${order.dinnerEventId}-${order.ticketPriceId}`)
-        }
-    }
-
-    console.info(`${LOG} ${isUserMode ? 'User' : 'System'} mode: ${households.length} household(s), ${dinnerEvents.length} events, ${releasedByEventAndPrice.size} event-price combos with released tickets`)
+    console.info(`${LOG} ${isUserMode ? 'User' : 'System'} mode: ${households.length} household(s), ${dinnerEvents.length} events, ${existingEntries.length} queue entries`)
 
     // Process each household and accumulate results
     let totalCreated = 0
     let totalDeleted = 0
     let totalReleased = 0
     let totalClaimed = 0
-    let totalClaimRejected = 0
+    let totalQueued = 0
+    let totalLeft = 0
+    let totalRequeued = 0
+    const positions: QueuePosition[] = []
     let totalPriceUpdated = 0
     let totalModeUpdated = 0
     let totalUnchanged = 0
@@ -210,7 +217,7 @@ export async function scaffoldPrebookings(
             // Build lookup: orderId → existing order (for updates)
             const orderById = new Map(householdOrders.map(o => [o.id, o]))
             const dinnerEventById = new Map(householdDinnerEvents.map(de => [de.id, de]))
-            const {canModifyOrders, canEditDiningMode} = deadlinesForSeason(season)
+            const {canModifyOrders, canEditDiningMode} = options.deadlines ?? deadlinesForSeason(season)
 
             // Build ticket price lookup (needed for creates and price change detection)
             const ticketPriceById = new Map(season.ticketPrices.map(tp => [tp.id, tp]))
@@ -225,15 +232,14 @@ export async function scaffoldPrebookings(
                     canEditDiningMode,
                     DinnerModeSchema.enum,
                     OrderStateSchema.enum,
-                    releasedByEventAndPrice
+                    existingEntries
                 )
                 : resolveOrdersFromPreferencesToBuckets(
                     { ...season, dinnerEvents: householdDinnerEvents },
                     household,
                     householdOrders,
                     confirmedKeys,
-                    cancelledKeys,
-                    releasedByEventAndPrice
+                    cancelledKeys
                 )
 
             // Transform DesiredOrder[] to OrderCreateWithPrice[] for create
@@ -336,7 +342,7 @@ export async function scaffoldPrebookings(
             for (const released of batchUpdates.filter(update => update.isNewRelease)) {
                 const existing = orderById.get(released.orderId)
                 if (existing?.ticketPriceId) {
-                    await assignReleasedTicket(d1Client, existing.dinnerEventId, existing.ticketPriceId, household.id, {queue: undefined, config: getNotificationConfig()})
+                    await assignReleasedTicket(d1Client, existing.dinnerEventId, existing.ticketPriceId, household.id, senderOf())
                 }
             }
 
@@ -356,9 +362,10 @@ export async function scaffoldPrebookings(
                 }
             }
 
-            // Process claims (try to claim released tickets from marketplace)
+            // Claims settle the supply at this instant: a released ticket at the price, else the wish joins the queue
             let householdClaimed = 0
-            let householdClaimRejected = 0
+            let householdQueued = 0
+            let householdDuplicates = 0
             for (const toClaim of result.claim) {
                 const claimed = await claimOrder(
                     d1Client,
@@ -371,19 +378,69 @@ export async function scaffoldPrebookings(
                 )
                 if (claimed) {
                     householdClaimed++
-                } else {
-                    householdClaimRejected++
+                    continue
                 }
+                const ticketPrice = ticketPriceById.get(toClaim.ticketPriceId)
+                if (!ticketPrice) {
+                    throw new Error(`${LOG} Missing ticket price ${toClaim.ticketPriceId} for queue entry`)
+                }
+                try {
+                    const {position} = await joinWaitlist(d1Client, {
+                        dinnerEventId: toClaim.dinnerEventId,
+                        inhabitantId: toClaim.inhabitantId,
+                        isGuestTicket: toClaim.isGuestTicket,
+                        order: {
+                            dinnerEventId: toClaim.dinnerEventId,
+                            inhabitantId: toClaim.inhabitantId,
+                            bookedByUserId: effectiveUserId,
+                            ticketPriceId: toClaim.ticketPriceId,
+                            priceAtBooking: ticketPrice.price,
+                            householdId: household.id,
+                            dinnerMode: toClaim.dinnerMode,
+                            state: OrderStateSchema.enum.BOOKED,
+                            isGuestTicket: toClaim.isGuestTicket,
+                            allergyTypeIds: toClaim.allergyTypeIds
+                        }
+                    }, senderOf())
+                    householdQueued++
+                    positions.push({inhabitantId: toClaim.inhabitantId, dinnerEventId: toClaim.dinnerEventId, isGuestTicket: toClaim.isGuestTicket, position})
+                } catch (error) {
+                    // The partial unique index holds one regular entry per inhabitant per dinner: a concurrent join already queued it
+                    if ((error as {statusCode?: number}).statusCode !== 409) throw error
+                    console.info(`${LOG} Inhabitant ${toClaim.inhabitantId} already queues for dinner ${toClaim.dinnerEventId}`)
+                    householdDuplicates++
+                }
+            }
+
+            for (const toLeave of result.leave) {
+                await deleteWaitlistEntry(d1Client, toLeave.waitlistEntryId!)
+            }
+
+            for (const toRequeue of result.requeue) {
+                const entry = entryById.get(toRequeue.waitlistEntryId!)
+                const ticketPrice = ticketPriceById.get(toRequeue.ticketPriceId)
+                if (!entry || !ticketPrice) {
+                    throw new Error(`${LOG} Data integrity: requeue of entry ${toRequeue.waitlistEntryId} at ticket price ${toRequeue.ticketPriceId}`)
+                }
+                await updateWaitlistEntryOrder(d1Client, entry.id, {
+                    ...entry.order,
+                    dinnerMode: toRequeue.dinnerMode,
+                    ticketPriceId: toRequeue.ticketPriceId,
+                    priceAtBooking: ticketPrice.price,
+                    allergyTypeIds: toRequeue.allergyTypeIds ?? entry.order.allergyTypeIds
+                })
             }
 
             totalCreated += result.create.length
             totalDeleted += result.delete.length
             totalReleased += householdReleased
             totalClaimed += householdClaimed
-            totalClaimRejected += householdClaimRejected
+            totalQueued += householdQueued
+            totalLeft += result.leave.length
+            totalRequeued += result.requeue.length
             totalPriceUpdated += householdPriceUpdates
             totalModeUpdated += householdModeUpdates
-            totalUnchanged += result.idempotent.length
+            totalUnchanged += result.idempotent.length + householdDuplicates
             totalOrderErrors += householdUpdateErrors
             processedHouseholds++
         } catch (error) {
@@ -398,7 +455,7 @@ export async function scaffoldPrebookings(
         }
     }
 
-    console.info(`${LOG} Complete: created=${totalCreated}, deleted=${totalDeleted}, released=${totalReleased}, claimed=${totalClaimed}, claimRejected=${totalClaimRejected}, priceUpdated=${totalPriceUpdated}, modeUpdated=${totalModeUpdated}, unchanged=${totalUnchanged}, orderErrors=${totalOrderErrors}, households=${processedHouseholds}, householdErrors=${erroredHouseholds}`)
+    console.info(`${LOG} Complete: created=${totalCreated}, deleted=${totalDeleted}, released=${totalReleased}, claimed=${totalClaimed}, queued=${totalQueued}, left=${totalLeft}, requeued=${totalRequeued}, priceUpdated=${totalPriceUpdated}, modeUpdated=${totalModeUpdated}, unchanged=${totalUnchanged}, orderErrors=${totalOrderErrors}, households=${processedHouseholds}, householdErrors=${erroredHouseholds}`)
 
     return ScaffoldResultSchema.parse({
         seasonId: effectiveSeasonId,
@@ -406,7 +463,10 @@ export async function scaffoldPrebookings(
         deleted: totalDeleted,
         released: totalReleased,
         claimed: totalClaimed,
-        claimRejected: totalClaimRejected,
+        queued: totalQueued,
+        positions,
+        left: totalLeft,
+        requeued: totalRequeued,
         priceUpdated: totalPriceUpdated,
         modeUpdated: totalModeUpdated,
         unchanged: totalUnchanged,

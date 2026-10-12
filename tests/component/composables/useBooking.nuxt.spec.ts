@@ -3,11 +3,13 @@ import {addDays, addYears, differenceInDays, nextDay, type Day} from 'date-fns'
 import {useBooking, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useBookingValidation, type OrderDisplay, type DinnerMode, type DesiredOrder} from '~/composables/useBookingValidation'
+import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
+import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 import appConfig from '~/app.config'
 
@@ -481,12 +483,10 @@ describe('useBooking', () => {
 
 describe('getNewOrderAction', () => {
     it.each([
-        { canModify: true, hasReleased: false, expected: 'process' },
-        { canModify: true, hasReleased: true, expected: 'process' },  // before deadline always wins
-        { canModify: false, hasReleased: true, expected: 'claim' },
-        { canModify: false, hasReleased: false, expected: null }
-    ])('canModify=$canModify, hasReleased=$hasReleased → $expected', ({ canModify, hasReleased, expected }) => {
-        expect(getNewOrderAction(canModify, hasReleased)).toBe(expected)
+        { canModify: true, expected: 'process' },
+        { canModify: false, expected: 'claim' }  // the executor settles the supply: a released ticket, else the queue
+    ])('canModify=$canModify → $expected', ({ canModify, expected }) => {
+        expect(getNewOrderAction(canModify)).toBe(expected)
     })
 })
 
@@ -528,8 +528,8 @@ describe('decideOrderAction', () => {
         existing: OrderDisplay | null,
         beforeCancellationDeadline = true,
         canEditMode = true,
-        hasReleasedTickets = false
-    ): OrderDecisionInput => ({ desired, existing, beforeCancellationDeadline, canEditMode, hasReleasedTickets })
+        existingEntry: TicketWaitlistDisplay | null = null
+    ): OrderDecisionInput => ({ desired, existing, existingEntry, beforeCancellationDeadline, canEditMode })
 
     describe('decision matrix (9 cases)', () => {
         it.each([
@@ -540,7 +540,6 @@ describe('decideOrderAction', () => {
                 existing: null,
                 beforeDeadline: true,
                 canEditMode: true,
-                hasReleased: false,
                 expectedBucket: 'create',
                 expectedState: OrderState.BOOKED
             },
@@ -551,31 +550,18 @@ describe('decideOrderAction', () => {
                 existing: null,
                 beforeDeadline: true,
                 canEditMode: true,
-                hasReleased: false,
                 expectedBucket: null,
                 expectedState: null
             },
-            // Case 3: No orderId + eating mode + after deadline + released available → claim
+            // Case 3: No orderId + eating mode + after deadline → claim (a released ticket, else the queue)
             {
-                desc: 'no orderId + DINEIN + after deadline + hasReleased → claim BOOKED',
+                desc: 'no orderId + DINEIN + after deadline → claim BOOKED',
                 desired: createDesired({ dinnerMode: DinnerMode.DINEIN }),
                 existing: null,
                 beforeDeadline: false,
                 canEditMode: false,
-                hasReleased: true,
                 expectedBucket: 'claim',
                 expectedState: OrderState.BOOKED
-            },
-            // Case 4: No orderId + eating mode + after deadline + no released → null (no capacity)
-            {
-                desc: 'no orderId + DINEIN + after deadline + !hasReleased → skip (null)',
-                desired: createDesired({ dinnerMode: DinnerMode.DINEIN }),
-                existing: null,
-                beforeDeadline: false,
-                canEditMode: false,
-                hasReleased: false,
-                expectedBucket: null,
-                expectedState: null
             },
             // Case 5: orderId + NONE + before deadline → delete
             {
@@ -584,7 +570,6 @@ describe('decideOrderAction', () => {
                 existing: createExisting(),
                 beforeDeadline: true,
                 canEditMode: true,
-                hasReleased: false,
                 expectedBucket: 'delete',
                 expectedState: undefined  // delete doesn't set state
             },
@@ -595,7 +580,6 @@ describe('decideOrderAction', () => {
                 existing: createExisting(),
                 beforeDeadline: false,
                 canEditMode: false,
-                hasReleased: false,
                 expectedBucket: 'update',
                 expectedState: OrderState.RELEASED
             },
@@ -606,7 +590,6 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ state: OrderState.RELEASED }),
                 beforeDeadline: false,
                 canEditMode: false,
-                hasReleased: false,
                 expectedBucket: 'update',
                 expectedState: OrderState.BOOKED
             },
@@ -617,7 +600,6 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ dinnerMode: DinnerMode.DINEIN, ticketPriceId: 1, state: OrderState.BOOKED }),
                 beforeDeadline: true,
                 canEditMode: true,
-                hasReleased: false,
                 expectedBucket: 'idempotent',
                 expectedState: OrderState.BOOKED  // preserved from existing
             },
@@ -628,7 +610,6 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ dinnerMode: DinnerMode.NONE, ticketPriceId: 1, state: OrderState.RELEASED }),
                 beforeDeadline: false,  // after deadline
                 canEditMode: false,
-                hasReleased: false,
                 expectedBucket: 'idempotent',
                 expectedState: OrderState.RELEASED  // preserved from existing
             },
@@ -639,7 +620,6 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ dinnerMode: DinnerMode.DINEIN }),
                 beforeDeadline: true,
                 canEditMode: true,
-                hasReleased: false,
                 expectedBucket: 'update',
                 expectedState: OrderState.BOOKED
             },
@@ -650,7 +630,6 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ ticketPriceId: 1 }),
                 beforeDeadline: true,
                 canEditMode: true,
-                hasReleased: false,
                 expectedBucket: 'update',
                 expectedState: OrderState.BOOKED
             },
@@ -662,7 +641,6 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ state: OrderState.RELEASED, ticketPriceId: 1 }),
                 beforeDeadline: false,
                 canEditMode: false,
-                hasReleased: false,
                 expectedBucket: 'update',
                 expectedState: OrderState.RELEASED
             },
@@ -674,12 +652,11 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ state: OrderState.RELEASED, ticketPriceId: null as unknown as number }),
                 beforeDeadline: false,
                 canEditMode: false,
-                hasReleased: false,
                 expectedBucket: 'update',
                 expectedState: OrderState.RELEASED
             }
-        ])('$desc', ({ desired, existing, beforeDeadline, canEditMode, hasReleased, expectedBucket, expectedState }) => {
-            const input = createInput(desired, existing, beforeDeadline, canEditMode, hasReleased)
+        ])('$desc', ({ desired, existing, beforeDeadline, canEditMode, expectedBucket, expectedState }) => {
+            const input = createInput(desired, existing, beforeDeadline, canEditMode)
             const result = decideOrderAction(input, DinnerMode, OrderState)
 
             if (expectedBucket === null) {
@@ -713,6 +690,28 @@ describe('decideOrderAction', () => {
             const result = decideOrderAction(input, DinnerMode, OrderState)
 
             expect(result!.order.dinnerMode).toBe(DinnerMode.TAKEAWAY)  // changed
+        })
+    })
+
+    describe('queue entry rows', () => {
+        const entry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: 1, dinnerEventId: 101, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 1})
+
+        it.each([
+            {desc: 'NONE on an entry → leave', desired: createDesired({waitlistEntryId: 7, dinnerMode: DinnerMode.NONE}), canEditMode: true, expectedBucket: 'leave', expectedMode: DinnerMode.NONE},
+            {desc: 'another mode on an entry → requeue', desired: createDesired({waitlistEntryId: 7, dinnerMode: DinnerMode.TAKEAWAY}), canEditMode: true, expectedBucket: 'requeue', expectedMode: DinnerMode.TAKEAWAY},
+            {desc: 'another price on an entry → requeue', desired: createDesired({waitlistEntryId: 7, ticketPriceId: 2}), canEditMode: true, expectedBucket: 'requeue', expectedMode: DinnerMode.DINEIN},
+            {desc: 'the entry unchanged → idempotent', desired: createDesired({waitlistEntryId: 7}), canEditMode: true, expectedBucket: 'idempotent', expectedMode: DinnerMode.DINEIN},
+            {desc: 'another mode after the mode deadline → idempotent, the wish keeps its mode', desired: createDesired({waitlistEntryId: 7, dinnerMode: DinnerMode.TAKEAWAY}), canEditMode: false, expectedBucket: 'idempotent', expectedMode: DinnerMode.DINEIN}
+        ])('$desc', ({desired, canEditMode, expectedBucket, expectedMode}) => {
+            const result = decideOrderAction(createInput(desired, null, false, canEditMode, entry), DinnerMode, OrderState)
+
+            expect(result).toMatchObject({bucket: expectedBucket, order: {waitlistEntryId: 7, dinnerMode: expectedMode}})
+        })
+
+        it('skips a desired order naming an entry that left the queue (placed or swept)', () => {
+            const result = decideOrderAction(createInput(createDesired({waitlistEntryId: 7}), null, false, false), DinnerMode, OrderState)
+
+            expect(result).toBeNull()
         })
     })
 
@@ -771,35 +770,30 @@ describe('resolveDesiredOrdersToBuckets', () => {
             desc: 'all new orders (no existing)',
             desired: [createDesired(1, 101)],
             existing: [],
-            releasedKeys: new Set<string>(),
             expected: { create: 1, update: 0, delete: 0, idempotent: 0, claim: 0 }
         },
         {
             desc: 'existing matches incoming (idempotent)',
             desired: [createDesired(1, 101, { orderId: 42 })],
             existing: [createExisting(42, 1, 101)],
-            releasedKeys: new Set<string>(),
             expected: { create: 0, update: 0, delete: 0, idempotent: 1, claim: 0 }
         },
         {
             desc: 'mode change → update',
             desired: [createDesired(1, 101, { orderId: 42, dinnerMode: DinnerMode.TAKEAWAY })],
             existing: [createExisting(42, 1, 101, { dinnerMode: DinnerMode.DINEIN })],
-            releasedKeys: new Set<string>(),
             expected: { create: 0, update: 1, delete: 0, idempotent: 0, claim: 0 }
         },
         {
             desc: 'price change → update',
             desired: [createDesired(1, 101, { orderId: 42, ticketPriceId: 2 })],
             existing: [createExisting(42, 1, 101, { ticketPriceId: 1 })],
-            releasedKeys: new Set<string>(),
             expected: { create: 0, update: 1, delete: 0, idempotent: 0, claim: 0 }
         },
         {
             desc: 'NONE before deadline → delete',
             desired: [createDesired(1, 101, { orderId: 42, dinnerMode: DinnerMode.NONE })],
             existing: [createExisting(42, 1, 101)],
-            releasedKeys: new Set<string>(),
             expected: { create: 0, update: 0, delete: 1, idempotent: 0, claim: 0 }
         },
         {
@@ -809,10 +803,9 @@ describe('resolveDesiredOrdersToBuckets', () => {
                 createDesired(2, 101)  // no orderId = new
             ],
             existing: [createExisting(42, 1, 101)],
-            releasedKeys: new Set<string>(),
             expected: { create: 1, update: 0, delete: 0, idempotent: 1, claim: 0 }
         }
-    ])('$desc', ({ desired, existing, releasedKeys, expected }) => {
+    ])('$desc', ({ desired, existing, expected }) => {
         const result = resolveDesiredOrdersToBuckets(
             desired,
             existing,
@@ -820,8 +813,7 @@ describe('resolveDesiredOrdersToBuckets', () => {
             canModifyOrders,
             canEditDiningMode,
             DinnerMode,
-            OrderState,
-            releasedKeys
+            OrderState
         )
 
         expect(result.create).toHaveLength(expected.create)
@@ -831,7 +823,7 @@ describe('resolveDesiredOrdersToBuckets', () => {
         expect(result.claim).toHaveLength(expected.claim)
     })
 
-    describe('claim bucket (after deadline with released tickets)', () => {
+    describe('claim and queue buckets (after deadline)', () => {
         // Past date - after all deadlines
         const pastDate = new Date()
         pastDate.setDate(pastDate.getDate() + 1)  // Tomorrow = after deadline
@@ -840,45 +832,55 @@ describe('resolveDesiredOrdersToBuckets', () => {
         const cannotModify = () => false
         const cannotEdit = () => false
 
+        const regularEntry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: 1, dinnerEventId: 201, ticketPriceId: 1})
+
         it.each([
             {
-                desc: 'new order after deadline + released → claim',
-                desired: [createDesired(1, 201)],
-                existing: [],
-                releasedKeys: new Set(['201-1']),  // eventId-priceId
-                expected: { create: 0, claim: 1 }
+                desc: 'new orders after deadline → claim each, whatever is for sale',
+                desired: [createDesired(1, 201, { ticketPriceId: 1 }), createDesired(2, 201, { ticketPriceId: 2 })],
+                entries: [],
+                expected: { claim: 2, leave: 0, requeue: 0, idempotent: 0 }
             },
             {
-                desc: 'new order after deadline + no released → skip',
-                desired: [createDesired(1, 201)],
-                existing: [],
-                releasedKeys: new Set<string>(),
-                expected: { create: 0, claim: 0 }
+                desc: 'NONE on the entry it names → leave',
+                desired: [createDesired(1, 201, { waitlistEntryId: 7, dinnerMode: DinnerMode.NONE })],
+                entries: [regularEntry],
+                expected: { claim: 0, leave: 1, requeue: 0, idempotent: 0 }
             },
             {
-                desc: 'multiple new orders + released for one price → claim only matching',
-                desired: [
-                    createDesired(1, 201, { ticketPriceId: 1 }),
-                    createDesired(2, 201, { ticketPriceId: 2 })
-                ],
-                existing: [],
-                releasedKeys: new Set(['201-1']),  // Only price 1 has released
-                expected: { create: 0, claim: 1 }
+                desc: 'a new price on the entry it names → requeue',
+                desired: [createDesired(1, 201, { waitlistEntryId: 7, ticketPriceId: 2 })],
+                entries: [regularEntry],
+                expected: { claim: 0, leave: 0, requeue: 1, idempotent: 0 }
+            },
+            {
+                desc: 'a regular order for an inhabitant already queued → the entry, unchanged',
+                desired: [createDesired(1, 201)],
+                entries: [regularEntry],
+                expected: { claim: 0, leave: 0, requeue: 0, idempotent: 1 }
+            },
+            {
+                desc: 'a guest order of a queued member → claim, a guest is never the member\'s own entry',
+                desired: [createDesired(1, 201, { isGuestTicket: true })],
+                entries: [regularEntry],
+                expected: { claim: 1, leave: 0, requeue: 0, idempotent: 0 }
             }
-        ])('$desc', ({ desired, existing, releasedKeys, expected }) => {
+        ])('$desc', ({ desired, entries, expected }) => {
             const result = resolveDesiredOrdersToBuckets(
                 desired,
-                existing,
+                [],
                 pastEventById,
                 cannotModify,
                 cannotEdit,
                 DinnerMode,
                 OrderState,
-                releasedKeys
+                entries
             )
 
-            expect(result.create).toHaveLength(expected.create)
-            expect(result.claim).toHaveLength(expected.claim)
+            expect(result.create).toHaveLength(0)
+            expect({
+                claim: result.claim.length, leave: result.leave.length, requeue: result.requeue.length, idempotent: result.idempotent.length
+            }).toEqual(expected)
         })
     })
 
@@ -958,6 +960,12 @@ describe('buildDesiredOrder', () => {
             {desc: 'guest listed before regular order', orders: [order(GUEST_ID, true), order(REGULAR_ID, false)], expectedId: REGULAR_ID}
         ])('$desc → order $expectedId', ({orders, expectedId}) => {
             expect(findRegularOrder(orders, inhabitant.id, dinnerEvent.id)?.id).toBe(expectedId)
+        })
+
+        it('finds the inhabitant\'s own queue entry, never a guest entry they booked', () => {
+            const entries = [true, false].map((isGuestTicket, index) =>
+                WaitlistFactory.defaultEntry({id: index + 1, inhabitantId: inhabitant.id, dinnerEventId: dinnerEvent.id, isGuestTicket}))
+            expect(findRegularOrder(entries, inhabitant.id, dinnerEvent.id)?.id).toBe(2)
         })
     })
 
@@ -1455,7 +1463,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         expect(result.delete).toHaveLength(0)
     })
 
-    describe('claim bucket (preference change after deadline with released tickets)', () => {
+    describe('system mode after the deadline', () => {
         // Tomorrow = after deadline. Use DINEIN for ALL days so weekday doesn't matter
         const tomorrowDinner = DinnerEventFactory.dinnerEventAt(301, 1)
         const pastDeadlineSeason = seasonWith([tomorrowDinner])
@@ -1464,24 +1472,16 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
 
         it.each([
             {
-                desc: 'preference change to DINEIN + released tickets → claim',
+                desc: 'preference change to DINEIN after the deadline → nothing, system mode never claims',
                 prefs: allDaysPrefs,
-                releasedKeys: new Set(['301-4']),  // eventId-priceId (4 = ADULT)
-                expected: { create: 0, claim: 1 }
-            },
-            {
-                desc: 'preference change to DINEIN + no released tickets → skip (no capacity)',
-                prefs: allDaysPrefs,
-                releasedKeys: new Set<string>(),
                 expected: { create: 0, claim: 0 }
             },
             {
-                desc: 'preference stays NONE + released tickets → no action',
+                desc: 'preference stays NONE after the deadline → nothing',
                 prefs: noDaysPrefs,
-                releasedKeys: new Set(['301-4']),
                 expected: { create: 0, claim: 0 }
             }
-        ])('$desc', ({ prefs, releasedKeys, expected }) => {
+        ])('$desc', ({ prefs, expected }) => {
             const household = createHousehold(1, [createInhabitant(1, prefs)])
 
             const result = resolveOrdersFromPreferencesToBuckets(
@@ -1489,8 +1489,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
                 household,
                 [],  // No existing orders
                 new Set(),  // confirmedKeys
-                new Set(),  // cancelledKeys
-                releasedKeys
+                new Set()  // cancelledKeys
             )
 
             expect(result.create).toHaveLength(expected.create)
@@ -1662,35 +1661,29 @@ describe('getBookingOptions', () => {
 
     it.each([
         // Cancelled/consumed dinner - no booking possible
-        {desc: 'CANCELLED dinner', orderState: null, canModify: true, canEdit: true, dinnerState: DS.CANCELLED, hasReleased: false, inResidency: true, expectedModes: EMPTY, expectedAction: null},
-        {desc: 'CONSUMED dinner', orderState: null, canModify: true, canEdit: true, dinnerState: DS.CONSUMED, hasReleased: false, inResidency: true, expectedModes: EMPTY, expectedAction: null},
+        {desc: 'CANCELLED dinner', orderState: null, canModify: true, canEdit: true, dinnerState: DS.CANCELLED, inResidency: true, expectedModes: EMPTY, expectedAction: null},
+        {desc: 'CONSUMED dinner', orderState: null, canModify: true, canEdit: true, dinnerState: DS.CONSUMED, inResidency: true, expectedModes: EMPTY, expectedAction: null},
 
         // BOOKED order
-        {desc: 'BOOKED + canEdit=true', orderState: OS.BOOKED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
-        {desc: 'BOOKED + canEdit=false', orderState: OS.BOOKED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: NONE_ONLY, expectedAction: 'process'},
+        {desc: 'BOOKED + canEdit=true', orderState: OS.BOOKED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
+        {desc: 'BOOKED + canEdit=false', orderState: OS.BOOKED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: NONE_ONLY, expectedAction: 'process'},
 
         // RELEASED order (reclaim own)
-        {desc: 'RELEASED + canEdit=true', orderState: OS.RELEASED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
-        {desc: 'RELEASED + canEdit=false', orderState: OS.RELEASED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: DINEIN_NONE, expectedAction: 'process'},
+        {desc: 'RELEASED + canEdit=true', orderState: OS.RELEASED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
+        {desc: 'RELEASED + canEdit=false', orderState: OS.RELEASED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: DINEIN_NONE, expectedAction: 'process'},
 
         // No order - before deadline
-        {desc: 'null + canModify=true', orderState: null, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
-        {desc: 'null + canModify=false + !hasReleased', orderState: null, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: true, expectedModes: EMPTY, expectedAction: null},
+        {desc: 'null + canModify=true', orderState: null, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
 
-        // No order - claim (after booking deadline, released available)
-        {desc: 'claim + canEdit=true → all eating modes', orderState: null, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: true, inResidency: true, expectedModes: EATING, expectedAction: 'claim'},
-        {desc: 'claim + canEdit=false → DINEIN only', orderState: null, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: true, inResidency: true, expectedModes: DINEIN_ONLY, expectedAction: 'claim'},
-
-        // Edge: existing order ignores hasReleased (uses process, not claim)
-        {desc: 'BOOKED ignores hasReleased', orderState: OS.BOOKED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: true, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
-        {desc: 'RELEASED ignores hasReleased', orderState: OS.RELEASED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, hasReleased: true, inResidency: true, expectedModes: DINEIN_NONE, expectedAction: 'process'},
+        // No order - after the deadline: a claim, the server buys a released ticket or queues
+        {desc: 'after deadline + canEdit=true → claim, all eating modes', orderState: null, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: EATING, expectedAction: 'claim'},
+        {desc: 'after deadline + canEdit=false → claim, DINEIN only', orderState: null, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: DINEIN_ONLY, expectedAction: 'claim'},
 
         // Outside residency - no booking regardless of other params
-        {desc: 'outside residency + no order', orderState: null, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: false, expectedModes: EMPTY, expectedAction: null},
-        {desc: 'outside residency + BOOKED order', orderState: OS.BOOKED, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: false, inResidency: false, expectedModes: EMPTY, expectedAction: null},
-        {desc: 'outside residency + released tickets', orderState: null, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, hasReleased: true, inResidency: false, expectedModes: EMPTY, expectedAction: null},
-    ])('$desc → modes=$expectedModes.length, action=$expectedAction', ({orderState, canModify, canEdit, dinnerState, hasReleased, inResidency, expectedModes, expectedAction}) => {
-        const result = getBookingOptions(orderState, canModify, canEdit, dinnerState, hasReleased, inResidency)
+        {desc: 'outside residency + no order', orderState: null, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: false, expectedModes: EMPTY, expectedAction: null},
+        {desc: 'outside residency + BOOKED order', orderState: OS.BOOKED, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: false, expectedModes: EMPTY, expectedAction: null},
+    ])('$desc → modes=$expectedModes.length, action=$expectedAction', ({orderState, canModify, canEdit, dinnerState, inResidency, expectedModes, expectedAction}) => {
+        const result = getBookingOptions(orderState, canModify, canEdit, dinnerState, inResidency)
         expect(result.enabledModes).toEqual(expectedModes)
         expect(result.action).toBe(expectedAction)
     })
@@ -1810,7 +1803,9 @@ describe('Action Preview', () => {
         update: [],
         delete: [],
         idempotent: [],
-        claim: []
+        claim: [],
+        leave: [],
+        requeue: []
     })
 
     // Name lookup for tests
@@ -1939,6 +1934,8 @@ describe('Action Preview', () => {
             {desc: 'delete → true', buckets: {...emptyBuckets(), delete: [desired()]}, expected: true},
             {desc: 'update → true', buckets: {...emptyBuckets(), update: [desired()]}, expected: true},
             {desc: 'claim → true', buckets: {...emptyBuckets(), claim: [desired()]}, expected: true},
+            {desc: 'leave → true', buckets: {...emptyBuckets(), leave: [desired()]}, expected: true},
+            {desc: 'requeue → true', buckets: {...emptyBuckets(), requeue: [desired()]}, expected: true},
         ])('$desc', ({buckets, expected}) => {
             expect(hasChanges(buckets)).toBe(expected)
         })
@@ -1956,8 +1953,10 @@ describe('Action Preview', () => {
                 delete: [desired(), desired()],
                 update: [desired()],
                 claim: [desired()],
+                leave: [desired()],
+                requeue: [desired()],
                 idempotent: [desired(), desired(), desired()]  // not counted
-            }, expected: 5},
+            }, expected: 7},
         ])('$desc', ({buckets, expected}) => {
             expect(countChanges(buckets)).toBe(expected)
         })
@@ -2007,6 +2006,16 @@ describe('replayTicketChanges', () => {
         expect(changes[2]!.delta).toEqual({ADULT: 0, CHILD: 0, BABY: 0})
         expect(changes[2]!.householdShortname).toBe('S_22')
         expect(changes[2]!.ticketType).toBe(TicketType.CHILD)
+    })
+
+    it('GIVEN a release written by the scaffold\'s batch update WHEN replaying THEN the change carries the released ticket\'s type and household', () => {
+        const {replayTicketChanges} = useBooking()
+        const batchRelease = OrderFactory.defaultOrderHistoryDisplay(undefined, {
+            id: ++seq, orderId: 2, inhabitantId: 2, action: Action.USER_CANCELLED, timestamp: at(2),
+            auditData: JSON.stringify({state: OrderStateSchema.enum.RELEASED, dinnerMode: DinnerModeSchema.enum.NONE, ticketPriceId: null, priceAtBooking: null})
+        })
+        const changes = replayTicketChanges([row(Action.USER_BOOKED, 2, 2, 'S_22', at(1)), batchRelease], typeOf)
+        expect(changes.at(-1)).toMatchObject({action: Action.USER_CANCELLED, ticketType: TicketType.CHILD, householdShortname: 'S_22', counts: {ADULT: 0, CHILD: 1, BABY: 0}, portions: 0, revenue: 2500})
     })
 
     it.each([

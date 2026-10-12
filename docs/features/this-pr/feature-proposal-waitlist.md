@@ -1,6 +1,6 @@
 # Feature Proposal: Waitlist — queue, auto-assign, extra portions
 
-**Status:** backend committed 2026-10-09; UI in progress 2026-10-12 | **Date:** 2026-10-05 | **Branch:** `feature/work-roster` (umbrella: `release-0.9.0.md`)
+**Status:** backend committed 2026-10-09; UI implemented 2026-10-12 | **Date:** 2026-10-05 | **Branch:** `feature/work-roster` (umbrella: `release-0.9.0.md`)
 
 ## Problem
 
@@ -93,60 +93,28 @@ System mode never reaches the claim bucket. `DesiredOrder` carries `waitlistEntr
 The client derives a household's rows, the position (the index in the dinner's queue), the queue size and the
 portion need per dinner with the isomorphic `useWaitlist`, the same rule the server's assignment uses. Removed:
 `PUT`/`DELETE /api/household/waitlist`, `GET /api/household/waitlist`, `GET /api/chef/dinner/[id]/waitlist`,
-`POST /api/order/claim`, `POST /api/order/[id]`.
+`POST /api/order/claim`, `PUT /api/order`, `POST /api/order/[id]`, `DELETE /api/order/[id]`; the admin correction is the scaffold with
+`?adminBypass=true`, which hands the scaffolder `OPEN_DEADLINES`.
 
 ## Mockups
 
-**Member faces — queued is a badge on Ingen, never a mode** ✅ signed 2026-10-06
+The mockups live in the component headers.
 
-A new `ICONS.waitlist` design-system token (hourglass glyph, picked at implementation); the badge renders through
-the same `useBookingUi` badge path as the swap/deadline markers, shared by day and grid. On assignment the order
-lands as Spiser med (DINEIN), changeable afterwards like any order within the rules.
-
-```
-DinnerBookingForm — efter deadline, udsolgt (revised ✅ signed 2026-10-12: the queued row shows the ghost of the wish)
-  Anna    [  ][  ][  ] [VOKSEN · 55kr]   [mode] Spisesal   [Skriv på venteliste]   picks the mode, then joins
-  Bo      [wl][  ][  ] [VOKSEN · 55kr]   (mode) Spisesal   [hourglass #2 i køen]    the wish, ghosted, disabled
-                                                           [Forlad ventelisten]
-  Emil    [  ][  ][  ] [VOKSEN · 55kr]   [mode] Spisesal   (har billet)
-  ...billet tildelt -> Bo: Spisesal for real (badge gone, a normal order)
-
-BookingGridView — the cell of a queued person: the wished mode ghosted with the hourglass badge in the corner;
-the legend gains "hourglass = på venteliste (#n)". A ticket for sale after the deadline keeps [Tag billet] (claim).
-DinnerTicket — the hourglass in the state cell, the edge unchanged, the wished mode ghosted in the mode slot.
-```
-
-**Chef side — demand-driven release** ✅ signed 2026-10-05
-
-One release-portions form, two triggers: a permanent entry `Frigiv portioner` in ChefMenuCard's [Flere]-menu (the
-findable home next to the chef's actions), and a CTA alert directly under the action row that renders only while
-the queue is non-empty. Both open the same form; the prefill is the queue's portion need.
-
-```
-ChefMenuCard
-  [Rediger menu] [Annoncer] [Flere v]
-                             +- Frigiv portioner
-  +----------------------------------------------------------------+
-  | (i) Mange skrånere mangler en billet til din middag — har du   |
-  |     mulighed for at mætte flere munde?    [Frigiv portioner]   |
-  +----------------------------------------------------------------+
-  form:  Kan du frigive [ 2,5 ] portioner?  [Frigiv] [Fortryd]
-```
-
-Queue/for-sale status lives in the kitchen stats panel as the alternating fourth box — never both, since
-auto-assign consumes supply while anyone queues:
-
-```
-KitchenPreparation:  TAKEAWAY 12   SPISESAL 28   SPIS SENT 5   TIL SALG 2
-                                                        eller: VENTELISTE 4
-```
+| Mockup | Signoff | Header |
+|---|---|---|
+| Member faces: queued is a badge on Ingen, never a mode | ✅ signed 2026-10-06 | `DinnerBookingForm.vue` |
+| DinnerBookingForm after the deadline, sold out: the queued row shows the ghost of the wish | ✅ signed 2026-10-12 | `DinnerBookingForm.vue`, `DinnerModeSelector.vue` |
+| BookingGridView queued cell and the legend entry | ✅ signed 2026-10-12 | `BookingGridView.vue`, `DinnerModeLegend.vue` |
+| DinnerTicket queued state | ✅ signed 2026-10-12 | `DinnerTicket.vue` |
+| Chef side: demand-driven release, one form with two triggers | ✅ signed 2026-10-05 | `ChefMenuCard.vue` |
+| Kitchen stats: the alternating fourth box | ✅ signed 2026-10-05 | `KitchenPreparation.vue` |
 
 ## TDD
 
 | Change | Tests |
 |---|---|
 | `TicketWaitlist` + sweep | unit spec for the pure resolver (FIFO, portion fitting, replay repair); serial e2e: release → head assigned, extra portions → first N assigned, re-run sweep → no double assignment |
-| Queue join/leave endpoint | Playwright API spec (join, duplicate join 409 via unique, leave) |
+| Queue through the scaffold | scaffold API spec (claim a ticket for sale, else queue with the position; guest entry; leave; requeue keeps the place; a repeated wish is idempotent; system mode queues nothing; admin correction); waitlist API spec (the entries read) |
 | Day/grid UI | component specs (sold-out face, queue position, available face), BDD e2e: join → release → ticket assigned |
 | Chef extra portions | API spec + component spec (ChefMenuCard), serial e2e via sweep |
 | Notifications | serial e2e: each event writes its Delivery row |

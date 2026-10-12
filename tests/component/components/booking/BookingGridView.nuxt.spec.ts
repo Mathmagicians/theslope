@@ -10,6 +10,7 @@ import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {addDays, startOfDay} from 'date-fns'
 
 const ticketPrices = TicketFactory.defaultTicketPrices()
@@ -311,6 +312,36 @@ describe('BookingGridView', () => {
         expect(selectorProps(wrapper, guestCellName(wrapper)).disabledModes)
           .toEqual(selectorProps(wrapper, `cell-${anna.id}-${event.id}`).disabledModes)
       })
+    })
+  })
+
+  describe('queued cells', () => {
+    const {DinnerModeSchema} = useBookingValidation()
+    const DinnerMode = DinnerModeSchema.enum
+    const anna = mockHousehold.inhabitants[0]!
+    const closedDinner = DinnerEventFactory.dinnerEventAt(1, 1)
+    const annaQueued = WaitlistFactory.defaultEntry({id: 9, inhabitantId: anna.id, dinnerEventId: closedDinner.id, position: 3, dinnerMode: DinnerMode.TAKEAWAY})
+    const mountQueued = (formMode: FormMode = FORM_MODES.VIEW) => mount({
+      view: 'week',
+      dateRange: {start: addDays(closedDinner.date, -3), end: addDays(closedDinner.date, 3)},
+      dinnerEvents: [closedDinner],
+      waitlistEntries: [annaQueued],
+      formMode
+    })
+    const queuedCell = (wrapper: Awaited<ReturnType<typeof mount>>) =>
+      wrapper.findAllComponents(DinnerModeSelector).find(selector => selector.props('name') === `cell-${anna.id}-${closedDinner.id}`)!
+
+    it.each([FORM_MODES.VIEW, FORM_MODES.EDIT])('in %s mode the queued cell shows the wished mode ghosted under the queue marker, read-only', async (formMode) => {
+      const wrapper = await mountQueued(formMode)
+
+      expect(findByTestId(wrapper, `grid-waitlist-${anna.id}-${closedDinner.id}`).exists()).toBe(true)
+      expect(queuedCell(wrapper).props()).toMatchObject({modelValue: DinnerMode.TAKEAWAY, ghost: true, formMode: FORM_MODES.VIEW})
+    })
+
+    it('the legend explains the queue marker', async () => {
+      const wrapper = await mountQueued()
+
+      expect(findByTestId(wrapper, 'dinner-mode-legend-waitlist').exists()).toBe(true)
     })
   })
 })

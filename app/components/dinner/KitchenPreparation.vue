@@ -22,6 +22,10 @@
  *    pink + black              orange + black        ocean + black  gray + black
  *    RAINBOW[0]                RAINBOW[1]            RAINBOW[2]     neutral
  *
+ * The fourth box alternates on the queue, never both (the queue takes released supply as it comes):
+ *   TAKEAWAY 12   SPISESAL 28   SPIS SENT 5   TIL SALG 2
+ *                                             or: VENTELISTE 4   (4 i kø, its portion need in kuv., the TIL SALG grey)
+ *
  * Expanded (SPISESAL selected), on the panel's surface below the row:
  * │  (allergy) 3,5 kuv. | (milk) Mælk · 2,5 | (wheat) Gluten · 1                │
  * │  S_31 · 2V 1B · Anna (wheat) Gluten (milk) Mælk, Bo, Emil                   │
@@ -43,6 +47,8 @@ import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {AllergenOverview} from '~/composables/useAllergy'
 import type {DiningModeStats} from '~/composables/useOrder'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
+import type {WaitlistQueueSummary} from '~/composables/useWaitlistValidation'
+import type {KitchenPanelKey} from '~/composables/useTheSlopeDesignSystem'
 
 interface TicketBreakdown {
   adult: number
@@ -55,14 +61,19 @@ interface TicketBreakdown {
 interface ExtendedDiningModeStats extends DiningModeStats {
   ticketBreakdown: TicketBreakdown | null
   allergies: AllergenOverview
+  secondary: string // The line under the label: the share of the portions, or the queue size
 }
 
 interface Props {
   orders: OrderDetail[]
   allergens?: AllergyTypeDisplay[]  // The menu's allergens, the only allergies the panels count
+  waitlist?: WaitlistQueueSummary | null  // The dinner's queue: VENTELISTE takes the fourth box while it has entries
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  allergens: () => [],
+  waitlist: null
+})
 
 // Use business logic composables (ADR-001)
 const {
@@ -158,10 +169,29 @@ const diningModeStats = computed((): ExtendedDiningModeStats[] => {
     return {
       ...stat,
       ticketBreakdown,
-      allergies: computeAllergenOverview(modeOrders, props.allergens ?? [])
+      allergies: computeAllergenOverview(modeOrders, props.allergens ?? []),
+      secondary: `${stat.percentage}%`
     }
   })
 })
+
+// While anyone queues, the fourth box is the queue: the same box on its own data
+const WAITLIST_KEY = 'WAITLIST'
+const panels = computed((): ExtendedDiningModeStats[] => {
+  const queue = props.waitlist
+  if (!queue || queue.entries === 0) return diningModeStats.value
+  return diningModeStats.value.map(stat => stat.key !== 'RELEASED' ? stat : {
+    key: WAITLIST_KEY,
+    label: 'VENTELISTE',
+    percentage: stat.percentage,
+    portions: queue.portions,
+    orderCount: queue.entries,
+    ticketBreakdown: null,
+    allergies: computeAllergenOverview([], []),
+    secondary: `${queue.entries} i kø`
+  })
+})
+const panelTestId = (key: string) => key === WAITLIST_KEY ? 'kitchen-box-waitlist' : `kitchen-panel-${key}`
 
 const selectedPanelAllergies = computed(() =>
   diningModeStats.value.find(mode => mode.key === selectedPanel.value)?.allergies ?? null
@@ -176,11 +206,11 @@ const { getKitchenPanelClasses, COMPONENTS, ICONS, TYPOGRAPHY } = useTheSlopeDes
 
 // Get background color classes for each dining mode
 const getModeClasses = (key: string) => {
-  return getKitchenPanelClasses(key as 'TAKEAWAY' | 'DINEIN' | 'DINEINLATE' | 'RELEASED')
+  return getKitchenPanelClasses(key as KitchenPanelKey)
 }
 
 // Normalize percentages: minimum 10% each, sum always equals 100%
-const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStats.value))
+const normalizedWidths = computed(() => calculateNormalizedWidths(panels.value))
 </script>
 
 <template>
@@ -206,9 +236,9 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
     <!-- Bottom bar: Dining mode distribution - Proportional heights on mobile, widths on desktop -->
     <div :class="COMPONENTS.kitchen.panels">
       <div
-        v-for="mode in diningModeStats"
+        v-for="mode in panels"
         :key="mode.key"
-        :data-testid="`kitchen-panel-${mode.key}`"
+        :data-testid="panelTestId(mode.key)"
         :style="{ flex: `${normalizedWidths[mode.key]} 0 0` }"
         :class="[COMPONENTS.kitchen.panel, getModeClasses(mode.key)]"
         @click="togglePanel(mode.key)"
@@ -219,12 +249,12 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
           <UIcon v-if="getOrdersForMode(mode.key).length > 0" :name="selectedPanel === mode.key ? ICONS.chevronUp : ICONS.chevronDown" :class="COMPONENTS.kitchen.glyph" />
         </div>
         <div :class="TYPOGRAPHY.kitchenSecondary">
-          {{ mode.percentage }}%
+          {{ mode.secondary }}
         </div>
 
         <!-- Portions (main number) -->
         <div :class="TYPOGRAPHY.kitchenMain">
-          {{ mode.portions }} kuv.
+          {{ formatPortions(mode.portions) }} kuv.
         </div>
 
         <!-- Ticket breakdown -->

@@ -404,6 +404,7 @@ const INK_ON_FILL: Record<string, PlacedInk[]> = {
  * | `LAYOUTS.sectionDivider` | A rule between page sections; the heading and the gap separate them |
  * | `LAYOUTS.panelDivider` | The rule above a detail panel's action row; the buttons carry their own edges |
  * | `COMPONENTS.bookingForm.dayBill` | The rule under the booking form's day bill; the bill's figures read without it |
+ * | `COMPONENTS.bookingGrid.nav` / `.actionCell` | The rule under the grid's date navigation and above its save row; the table's own header and the buttons separate them |
  * | `COMPONENTS.economyTable.level{1,2,3}.border` | The nesting tint of a tree row, alongside the row's indentation, icon and heading |
  * | `COMPONENTS.economyTable.level{1,2,3}.header` / `.footer` / `.statBox` / `.tableHead` | Banding of a table's own header, footer and stat boxes - a surface, measured for its ink in the text groups |
  *
@@ -415,6 +416,8 @@ const DECORATIVE_EDGES = [
     'LAYOUTS.sectionDivider',
     'LAYOUTS.panelDivider',
     'COMPONENTS.bookingForm.dayBill',
+    'COMPONENTS.bookingGrid.nav',
+    'COMPONENTS.bookingGrid.actionCell',
     'COMPONENTS.economyTable.level1.border',
     'COMPONENTS.economyTable.level2.border',
     'COMPONENTS.economyTable.level3.border',

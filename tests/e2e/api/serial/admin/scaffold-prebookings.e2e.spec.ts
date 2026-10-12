@@ -460,8 +460,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
                 }
 
                 if (action === 'delete') {
-                    // Use adminBypass when deleting from test household (admin is not a member)
-                    await OrderFactory.deleteOrder(context, order.id, 200, isTestHousehold)
+                    await OrderFactory.deleteOrder(context, order.id)
                     await OrderFactory.getOrder(context, order.id, 404)
                 } else {
                     const released = await OrderFactory.updateOrder(context, order.id, {dinnerMode: DinnerMode.NONE})

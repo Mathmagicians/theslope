@@ -1,4 +1,6 @@
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+import {getPortionsForTicketType} from '~/utils/portions'
 
 export type PortionsOf = (entry: TicketWaitlistDisplay) => number
 
@@ -28,6 +30,12 @@ export const useWaitlist = () => {
         return index === -1 ? null : index + 1
     }
 
+    // An entry weighs what its ticket type weighs on the kitchen's count; the price the entry holds names the type
+    const portionsOfEntryFor = (ticketPrices: Pick<TicketPrice, 'id' | 'ticketType'>[]): PortionsOf => (entry: TicketWaitlistDisplay): number => {
+        const ticketPrice = ticketPrices.find(price => price.id === entry.order.ticketPriceId)
+        return ticketPrice ? getPortionsForTicketType(ticketPrice.ticketType) : 0
+    }
+
     const portionNeed = (entries: TicketWaitlistDisplay[], portionsOf: PortionsOf): number =>
         entries.reduce((sum, entry) => sum + portionsOf(entry), 0)
 
@@ -52,5 +60,5 @@ export const useWaitlist = () => {
         return {take, portionsUsed: supplyPortions - remaining, waiting: queue.slice(index)}
     }
 
-    return {inQueueOrder, positionOf, portionNeed, resolveWaitlistAssignment}
+    return {inQueueOrder, positionOf, portionsOfEntryFor, portionNeed, resolveWaitlistAssignment}
 }

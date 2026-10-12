@@ -2,13 +2,14 @@
 DinnerModeLegend - the ONE "Forklaring" panel for dinner-mode surfaces
 
 Shared by the booking grid (week/month) and the single-dinner form, which differ only
-in which extras they explain: the grid also has a modified-cell marker and a hint.
+in which extras they explain: the grid also has a modified-cell marker, the queue marker and a hint.
 
-┌ ⓘ Forklaring ───────────────────────────────────────────────┐
-│  [🍽️]      [🌙]    [🛍️]      [❌]     [❓]      ┃[🍽️]      │
-│  Spisesal   Sen     Takeaway   Ingen    Blandet   Ændret    │
-│  Klik på en celle for at ændre din booking …  (hint, grid)  │
-└─────────────────────────────────────────────────────────────┘
+┌ ⓘ Forklaring ────────────────────────────────────────────────────────────────┐
+│  [🍽️]      [🌙]    [🛍️]      [❌]     [❓]      ┃[🍽️]      (mode)°hourglass       │
+│  Spisesal   Sen     Takeaway   Ingen    Blandet   Ændret    På venteliste (#n)   │
+│  Klik på en celle for at ændre din booking …  (hint, grid)                    │
+└──────────────────────────────────────────────────────────────────────────────┘
+(mode)°hourglass = the wish ghosted (COMPONENTS.waitlist) under the corner chip, grid only
 -->
 <script setup lang="ts">
 import {DinnerMode} from '~/composables/useBookingValidation'
@@ -21,12 +22,15 @@ withDefaults(defineProps<{
   showNoConsensus?: boolean
   /** Grid only: the unsaved-cell border accent */
   showModified?: boolean
+  /** Grid only: the queued cell, the wish ghosted under the hourglass */
+  showWaitlist?: boolean
   /** Grid only: how to operate the cells */
   hint?: string
 }>(), {
   modes: () => [DinnerMode.DINEIN, DinnerMode.DINEINLATE, DinnerMode.TAKEAWAY, DinnerMode.NONE],
   showNoConsensus: true,
   showModified: false,
+  showWaitlist: false,
   hint: undefined
 })
 
@@ -61,6 +65,20 @@ const {ALERTS, ICONS, SIZES, TYPOGRAPHY, COMPONENTS} = useTheSlopeDesignSystem()
               is-modified
           />
           <span :class="TYPOGRAPHY.finePrint">Ændret</span>
+        </div>
+        <div v-if="showWaitlist" :class="COMPONENTS.legend.stackedEntry" data-testid="dinner-mode-legend-waitlist">
+          <UChip v-bind="COMPONENTS.waitlist.chip">
+            <DinnerModeSelector
+                :model-value="DinnerMode.DINEIN"
+                :form-mode="FORM_MODES.VIEW"
+                :size="SIZES.xs"
+                ghost
+            />
+            <template #content>
+              <UIcon :name="ICONS.waitlist" :class="COMPONENTS.waitlist.chipIcon" />
+            </template>
+          </UChip>
+          <span :class="TYPOGRAPHY.finePrint">På venteliste (#n)</span>
         </div>
       </div>
       <p v-if="hint" :class="[TYPOGRAPHY.finePrint, COMPONENTS.legend.hint]">{{ hint }}</p>

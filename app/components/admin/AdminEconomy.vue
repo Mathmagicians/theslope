@@ -428,9 +428,7 @@ const handleAdminSave = async (orders: DesiredOrder[]) => {
     const result = await processAdminCorrection(
         editingHouseholdId.value,
         editingDinnerId.value,
-        editingDinnerEvent.value.date,
         orders,
-        editingOrders.value,
         guestBookerInhabitantId
     )
     await refreshUpcomingOrders()

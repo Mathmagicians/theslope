@@ -1,12 +1,14 @@
-import type {OrderDisplay, OrderDetail, CreateOrdersRequest, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, CreateOrdersResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder, DinnerState, DinnerMode, TicketChangesResponse} from '~/composables/useBookingValidation'
+import type {OrderDisplay, OrderDetail, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder, DinnerState, TicketChangesResponse} from '~/composables/useBookingValidation'
 import type {MonthlyBillingResponse, Expense, ExpenseCreate} from '~/composables/useBillingValidation'
-import {type ReleasedTicketCounts, resolveDesiredOrdersToBuckets} from '~/composables/useBooking'
+import type {WaitlistAssignmentResult, TicketWaitlistDisplay, WaitlistEntryWithPosition, WaitlistQueueSummary} from '~/composables/useWaitlistValidation'
+import {useWaitlist} from '~/composables/useWaitlist'
+import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import {useBilling} from '~/composables/useBilling'
 import {isSameDay} from 'date-fns'
 
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
-    const {storeAsyncData, apiRequest, handleApiError} = useApiHandler()
+    const {storeAsyncData, apiRequest} = useApiHandler()
     const {OrderDisplaySchema, OrderDetailSchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema, TicketChangesResponseSchema} = useBookingValidation()
     const {formatScaffoldResult} = useBooking()
     const {formatDailyMaintenanceStats} = useMaintenance()
@@ -56,6 +58,47 @@ export const useBookingsStore = defineStore("Bookings", () => {
         }
     )
 
+    // The queues of the dinners the page shows, every household's entries in queue order; the rows, the positions,
+    // the queue size and the portion need derive from them
+    const {TicketWaitlistDisplaySchema, WaitlistAssignmentResultSchema} = useWaitlistValidation()
+    const {inQueueOrder, positionOf, portionNeed, portionsOfEntryFor} = useWaitlist()
+
+    const {
+        data: waitlistEntries, status: waitlistEntriesStatus,
+        refresh: refreshWaitlistEntries
+    } = storeAsyncData(
+        'bookings-store-waitlist-entries',
+        () => {
+            const params = new URLSearchParams()
+            ordersFilter.value().dinnerEventIds.forEach(id => params.append('dinnerEventIds', String(id)))
+            return `/api/order/waitlist?${params.toString()}`
+        },
+        {
+            schema: TicketWaitlistDisplaySchema.array(),
+            default: () => [],
+            enabled: hasFilters,
+            dependsOn: [planStore.selectedSeasonDataset],
+            errorMessage: 'Kunne ikke hente ventelisten'
+        }
+    )
+
+    const waitlistOf = (dinnerEventId: number): TicketWaitlistDisplay[] =>
+        inQueueOrder(waitlistEntries.value.filter(entry => entry.dinnerEventId === dinnerEventId))
+
+    // The household the page names, else the selected one: its entries with their place in their dinner's queue
+    const waitlistHouseholdId = computed(() => ordersFilter.value().householdId ?? householdsStore.selectedHouseholdId)
+    const householdWaitlist = computed((): WaitlistEntryWithPosition[] => waitlistEntries.value
+        .filter(entry => entry.order.householdId === waitlistHouseholdId.value)
+        .map(entry => ({...entry, position: positionOf(waitlistOf(entry.dinnerEventId), entry.id) ?? 1})))
+
+    // The queue on the dinner on view: its size and its portion need (the chef card, the kitchen box)
+    const selectedDinnerWaitlist = computed((): WaitlistQueueSummary | null => {
+        const dinnerEventId = selectedDinnerEventId.value
+        if (!dinnerEventId) return null
+        const queue = waitlistOf(dinnerEventId)
+        return {dinnerEventId, entries: queue.length, portions: portionNeed(queue, portionsOfEntryFor(planStore.selectedSeason?.ticketPrices ?? []))}
+    })
+
     // ========================================
     // Computed - Public API (derived from status)
     // ========================================
@@ -64,8 +107,12 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const isOrdersInitialized = computed(() => ordersStatus.value === 'success')
     const isNoOrders = computed(() => isOrdersInitialized.value && orders.value.length === 0)
 
+    const isWaitlistEntriesLoading = computed(() => waitlistEntriesStatus.value === 'pending')
+    const isWaitlistEntriesErrored = computed(() => waitlistEntriesStatus.value === 'error')
+    const isWaitlistEntriesInitialized = computed(() => waitlistEntriesStatus.value === 'success')
+
     // Convenience computed for components - true when store is fully initialized and ready to use
-    const isBookingsStoreReady = computed(() => !hasFilters.value || isOrdersInitialized.value)
+    const isBookingsStoreReady = computed(() => !hasFilters.value || (isOrdersInitialized.value && isWaitlistEntriesInitialized.value))
 
     // Business logic computeds
     const totalOrdersCount = computed(() => orders.value.length)
@@ -87,49 +134,6 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const loadOrdersForDinners = (filter: MaybeRefOrGetter<OrdersFilter>) => {
         ordersFilter.value = () => toValue(filter)
         console.info(CTX, `Loading orders for ${toValue(filter).dinnerEventIds.length} dinner(s)`)
-    }
-
-    // Internal order methods - only used by processAdminCorrection
-    const createOrder = async (request: CreateOrdersRequest): Promise<CreateOrdersResult> => {
-        const result = await apiRequest<CreateOrdersResult>(`/api/order?adminBypass=${authStore.isAdmin}`, {
-            method: 'PUT',
-            body: request,
-            action: 'Kunne ikke oprette bestilling'
-        })
-        console.info(CTX, `Created ${result.createdIds.length} order(s)`)
-        await refreshOrders()
-        return result
-    }
-
-    const deleteOrder = async (orderId: number): Promise<void> => {
-        await apiRequest(`/api/order/${orderId}?adminBypass=${authStore.isAdmin}`, {
-            method: 'DELETE',
-            action: 'Kunne ikke slette bestilling'
-        })
-        console.info(CTX, `Deleted order ${orderId}`)
-        await refreshOrders()
-    }
-
-    const updateOrder = async (orderId: number, orderData: { dinnerMode: DinnerMode }): Promise<OrderDisplay> => {
-        const updatedOrder = await apiRequest<OrderDisplay>(`/api/order/${orderId}?adminBypass=${authStore.isAdmin}`, {
-            method: 'POST',
-            body: orderData,
-            action: 'Kunne ikke opdatere bestilling'
-        })
-        console.info(CTX, `Updated order ${orderId}`)
-        await refreshOrders()
-        return updatedOrder
-    }
-
-    const claimOrder = async (dinnerEventId: number, ticketPriceId: number, inhabitantId: number, isGuestTicket: boolean = false): Promise<OrderDetail> => {
-        const claimedOrder = await apiRequest<OrderDetail>('/api/order/claim', {
-            method: 'POST',
-            body: {dinnerEventId, ticketPriceId, inhabitantId, isGuestTicket},
-            action: 'Kunne ikke overtage billet'
-        })
-        console.info(CTX, `Claimed ticket (dinner=${dinnerEventId}, ticketPrice=${ticketPriceId}) for inhabitant ${inhabitantId}, guest=${isGuestTicket}`)
-        await Promise.all([refreshOrders(), refreshReleasedCounts()])
-        return claimedOrder
     }
 
     // Upcoming orders of the selected season with their dinner context. The page names the scope:
@@ -261,7 +265,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 schema: ScaffoldOrdersResponseSchema,
                 action: 'Kunne ikke gemme bookinger'
             })
-            await Promise.all([refreshOrders(), refreshReleasedCounts()])
+            await Promise.all([refreshOrders(), refreshReleasedCounts(), refreshWaitlistEntries()])
             console.info(CTX, `${label}: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
             if (report) toast.add({
                 title: report.title,
@@ -301,93 +305,22 @@ export const useBookingsStore = defineStore("Bookings", () => {
         processBookings({householdId, dinnerEventIds, orders}, adminBypass, report, 'processMultipleEventsBookings')
 
     /**
-     * Admin-only: Process order corrections bypassing deadlines.
-     * Uses individual order endpoints (PUT, POST, DELETE) with adminBypass.
-     * Reuses resolveDesiredOrdersToBuckets with always-true predicates (admin bypasses deadlines).
-     * Returns ScaffoldResult for consistent formatting with formatScaffoldResult.
+     * Admin correction of a household's bookings on one dinner: the scaffold with adminBypass lifts the deadlines
+     * (NONE deletes, a mode change lands after the deadline). Returns the ScaffoldResult; the caller toasts it.
      *
-     * @param guestBookerInhabitantId - For guest tickets, use this inhabitant (from target household) instead of the one in orders
+     * @param guestBookerInhabitantId - A new guest ticket books on this inhabitant of the target household
      */
     const processAdminCorrection = async (
         householdId: number,
         dinnerEventId: number,
-        dinnerEventDate: Date,
         orders: DesiredOrder[],
-        existingOrders: OrderDisplay[],
         guestBookerInhabitantId?: number
     ): Promise<ScaffoldResult> => {
-        const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
-
-        const emptyResult: ScaffoldResult = {
-            seasonId: null, created: 0, deleted: 0, released: 0, claimed: 0,
-            claimRejected: 0, priceUpdated: 0, modeUpdated: 0, unchanged: 0, households: 0, errored: 0
-        }
-
-        // Fail fast: admin access required
-        if (!authStore.isAdmin) {
-            handleApiError(new Error('Admin access required'), 'Kun administratorer kan rette bookinger')
-            return emptyResult
-        }
-
-        const bookedByUserId = authStore.user?.id
-        if (!bookedByUserId) {
-            handleApiError(new Error('User ID required'), 'Bruger-ID mangler')
-            return emptyResult
-        }
-
-        isProcessingBookings.value = true
-        try {
-            // Admin bypasses deadlines: always-true predicates → DELETE instead of RELEASE
-            const dinnerEventById = new Map([[dinnerEventId, { date: dinnerEventDate }]])
-            const buckets = resolveDesiredOrdersToBuckets(
-                orders,
-                existingOrders,
-                dinnerEventById,
-                () => true,  // canModifyOrders: admin bypasses
-                () => true,  // canEditDiningMode: admin bypasses
-                DinnerModeSchema.enum,
-                OrderStateSchema.enum
-            )
-
-            // Execute creates
-            if (buckets.create.length > 0) {
-                await createOrder({
-                    householdId,
-                    dinnerEventId,
-                    orders: buckets.create.map(o => ({
-                        // For guest tickets, use the provided booker from target household
-                        inhabitantId: o.isGuestTicket ? guestBookerInhabitantId! : o.inhabitantId,
-                        ticketPriceId: o.ticketPriceId,
-                        dinnerMode: o.dinnerMode,
-                        bookedByUserId,
-                        isGuestTicket: o.isGuestTicket
-                    }))
-                })
-            }
-
-            // Execute deletes
-            for (const order of buckets.delete) {
-                await deleteOrder(order.orderId!)
-            }
-
-            // Execute updates
-            for (const order of buckets.update) {
-                await updateOrder(order.orderId!, { dinnerMode: order.dinnerMode })
-            }
-
-            const result: ScaffoldResult = {
-                ...emptyResult,
-                created: buckets.create.length,
-                deleted: buckets.delete.length,
-                modeUpdated: buckets.update.length,
-                unchanged: buckets.idempotent.length,
-                households: 1
-            }
-            console.info(CTX, `processAdminCorrection: ${formatScaffoldResult(result, 'compact')}`)
-            return result
-        } finally {
-            isProcessingBookings.value = false
-        }
+        const corrected = orders.map(order => order.isGuestTicket && !order.orderId && guestBookerInhabitantId
+            ? {...order, inhabitantId: guestBookerInhabitantId}
+            : order)
+        const {scaffoldResult} = await processBookings({householdId, dinnerEventIds: [dinnerEventId], orders: corrected}, true, undefined, 'processAdminCorrection')
+        return scaffoldResult
     }
 
     // DINNER EVENT ACTIONS
@@ -457,7 +390,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
                     toast.add({
                         title: 'Heynabo-synkronisering',
                         description,
-                        color: 'error'
+                        color: COLOR.error
                     })
                 }
             },
@@ -504,6 +437,27 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const cancelDinner = withLoading((id: number) => updateDinner(id, {state: DinnerState.CANCELLED}, 'Kunne ikke aflyse fællesspisningen'))
     const undoCancelDinner = withLoading((id: number, targetState: DinnerState = DinnerState.SCHEDULED) => updateDinner(id, {state: targetState}, 'Kunne ikke annullere aflysningen'))
 
+    // ========================================
+    // WAITING LIST (ADR-007)
+    // ========================================
+
+    // The release places the first entries that fit as orders: the dinner's tickets and the queue both change
+    const releasePortions = withLoading(async (dinnerEventId: number, portions: number): Promise<WaitlistAssignmentResult> => {
+        const result = await apiRequest(`/api/chef/dinner/${dinnerEventId}/release-portions`, {
+            method: 'POST', body: {portions}, schema: WaitlistAssignmentResultSchema,
+            action: 'releasePortions', errorMessage: 'Kunne ikke frigive portionerne'
+        })
+        console.info(CTX, `Released ${portions} portions on dinner ${dinnerEventId}: ${result.assigned.length} assigned, ${result.waiting} waiting`)
+        await Promise.all([refreshWaitlistEntries(), refreshOrders(), refreshDinnerIfSelected(dinnerEventId)])
+        toast.add({
+            title: 'Portioner frigivet',
+            description: `${result.assigned.length} fik billet, ${result.waiting} venter stadig`,
+            color: COLOR.success,
+            icon: ICONS.waitlist
+        })
+        return result
+    })
+
     /**
      * Update dinner menu fields with implicit chef auto-claim.
      * If the dinner has no chef and the caller has an Inhabitant, the chef role is
@@ -540,7 +494,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 ? `Menu gemt — ${formatRoleClaimedTitle(dinner, TeamRoleSchema.enum.CHEF)}`
                 : 'Menu gemt',
             description: `"${dinner.menuTitle}" er nu opdateret`,
-            color: 'success'
+            color: COLOR.success
         })
 
         return {dinner, wasAutoClaimed}
@@ -583,7 +537,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         toast.add({
             title: 'Daglig vedligeholdelse afsluttet',
             description,
-            color: 'success'
+            color: COLOR.success
         })
     }
 
@@ -751,7 +705,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         toast.add({
             title: 'Månedlig fakturering afsluttet',
             description,
-            color: 'success'
+            color: COLOR.success
         })
     }
 
@@ -779,7 +733,6 @@ export const useBookingsStore = defineStore("Bookings", () => {
         isUpcomingOrdersLoading,
         loadUpcomingOrders,
         refreshUpcomingOrders,
-        claimOrder,
         fetchOrderDetail,
         fetchTicketChanges,
         fetchReleasedOrders,
@@ -810,6 +763,15 @@ export const useBookingsStore = defineStore("Bookings", () => {
         undoCancelDinner,
         addExpense,
         removeExpense,
+
+        // waiting list: the queues of the dinners on view, the household's places, the queue on the dinner on view, release
+        waitlistEntries,
+        householdWaitlist,
+        selectedDinnerWaitlist,
+        isWaitlistEntriesLoading,
+        isWaitlistEntriesErrored,
+        isWaitlistEntriesInitialized,
+        releasePortions,
 
         // daily maintenance
         dailyMaintenanceResult,

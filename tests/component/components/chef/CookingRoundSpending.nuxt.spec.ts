@@ -23,7 +23,7 @@ const rows: CookingRoundRow[] = [
 ]
 const words = {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, for perioden 12/04–14/04'}
 
-const mount = (props: {fragment: SpendingFragment, emptyText?: string}) => mountSuspended(CookingRoundSpending, {
+const mount = (props: {fragment: SpendingFragment}) => mountSuspended(CookingRoundSpending, {
     props,
     global: {provide: {isMd: ref(true)}}
 })
@@ -74,15 +74,16 @@ describe('CookingRoundSpending, the team\'s round', () => {
 })
 
 describe('CookingRoundSpending, this dinner', () => {
-    const receipt = ExpenseFactory.defaultExpense({id: 7, amount: 126500, paidBy: {id: 1, email: 'anna@example.com', name: 'Anna H.'}, createdAt: new Date('2026-04-12T10:00:00')})
+    const NOTE = '"Risotto" 14/04/2026, Anna H. bestiller for Madhold 2'
+    const receipt = ExpenseFactory.defaultExpense({id: 7, amount: 126500, description: NOTE, createdAt: new Date('2026-04-12T10:00:00')})
 
-    it('heads with the menu title and date, lists the receipts with bestiller and amount, and carries the figures in the total row', async () => {
+    it('heads with the menu title and date, lists the receipts with their note and amount, and carries the figures in the total row', async () => {
         const wrapper = await mount({fragment: dinnerSpendingFragment(rows[2]!, [receipt])})
         expect(findByTestId(wrapper, 'cooking-round-heading').text()).toBe('Risotto, 14/04/2026')
         const rendered = dataRows(wrapper)
         expect(rendered).toHaveLength(1)
         expect(rendered[0]!.text()).toContain('12/04/2026')
-        expect(rendered[0]!.text()).toContain('Anna H.')
+        expect(rendered[0]!.text()).toContain(NOTE)
         expect(rendered[0]!.text()).toContain(`/ ${formatPrice(126500)} kr`)
         expect(rendered[0]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(false)
         const total = findByTestId(wrapper, 'cooking-round-total')

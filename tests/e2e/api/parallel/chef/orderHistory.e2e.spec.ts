@@ -50,10 +50,10 @@ test.describe('Chef dinner order history', () => {
         const result = await OrderFactory.createOrder(adminContext, {
             householdId: member.householdId, dinnerEventId,
             orders: [
-                {inhabitantId: member.inhabitantId, bookedByUserId: member.userId, ticketPriceId: adultPrice.id, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: false},
-                {inhabitantId: member.inhabitantId, bookedByUserId: member.userId, ticketPriceId: childPrice.id, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: true}
+                {inhabitantId: member.inhabitantId, ticketPriceId: adultPrice.id, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: false},
+                {inhabitantId: member.inhabitantId, ticketPriceId: childPrice.id, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: true}
             ]
-        }, 201, true)
+        })
         orderIds.push(...result!.createdIds)
     })
 
@@ -72,8 +72,11 @@ test.describe('Chef dinner order history', () => {
         const released = await OrderFactory.updateOrder(memberContext, childOrderId, {dinnerMode: DinnerModeSchema.enum.NONE})
         expect(released!.state, 'the dinner sits inside the deadline, so the ticket is released, not deleted').toBe(OrderStateSchema.enum.RELEASED)
         const admin = await getSessionUserInfo(adminContext)
-        const claimed = await OrderFactory.claimOrder(adminContext, dinnerEventId, childPrice.id, admin.inhabitantId)
-        expect(claimed).not.toBeNull()
+        const claimed = await OrderFactory.scaffoldOrders(adminContext, {
+            householdId: admin.householdId, seasonId, dinnerEventIds: [dinnerEventId],
+            orders: [OrderFactory.createBookingOrder(admin.inhabitantId, dinnerEventId, childPrice.id)]
+        })
+        expect(claimed!.scaffoldResult.claimed).toBe(1)
 
         const response = (await OrderFactory.getTicketChanges(memberContext, dinnerEventId))!
         const adultPortions = getPortionsForTicketType(TicketTypeSchema.enum.ADULT)

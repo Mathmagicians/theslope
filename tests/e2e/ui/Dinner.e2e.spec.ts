@@ -278,7 +278,7 @@ test.describe('Dinner Page URL Navigation', () => {
         test.beforeAll(async ({browser}) => {
             const adminContext = await validatedBrowserContext(browser)
             const memberContext = await memberValidatedBrowserContext(browser)
-            const {householdId, userId} = await getSessionUserInfo(memberContext)
+            const {householdId} = await getSessionUserInfo(memberContext)
             const season = await SeasonFactory.createActiveSeason(adminContext)
             const adultPrice = season.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
             // The second future dinner: the first may be today and already past its serving time
@@ -298,9 +298,9 @@ test.describe('Dinner Page URL Navigation', () => {
                 householdId,
                 dinnerEventId: dinnerEvent.id,
                 orders: [allergicId, notAllergicId].map(inhabitantId => ({
-                    inhabitantId, bookedByUserId: userId, ticketPriceId: adultPrice.id!, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: false
+                    inhabitantId, ticketPriceId: adultPrice.id!, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: false
                 }))
-            }, 201, true)
+            })
         })
 
         test.afterAll(async ({browser}) => {

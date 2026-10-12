@@ -48,7 +48,13 @@
  * | guest-order | 🎫   | Booking state  | Locked past, edit   | Existing guest     |
  * | guest-add   | ➕   | Hidden         | + buttons (future)  | Add new guest      |
  *
- * CELL STATES: 🍽️=dine-in, 🕐=late, 🛍️=takeaway, ❌=none, ?=no consensus, °=modified
+ * QUEUED CELL (a sold-out dinner, the member on the waiting list), read-only in both modes:
+ *   ┌──────┐
+ *   │  ⌛ │  the wished mode ghosted (COMPONENTS.waitlist.ghostBadge) under the hourglass in the corner chip
+ *   └──────┘  (COMPONENTS.waitlist.chip); the legend gains "På venteliste (#n)" while the household has entries.
+ *   A ticket for sale after the deadline keeps the claim: the cell toggles through the eating modes as before.
+ *
+ * CELL STATES: 🍽️=dine-in, 🕐=late, 🛍️=takeaway, ❌=none, ?=no consensus, °=modified, ⌛=queued (the wish ghosted)
  * HEADER CHIPS: (🟠)=locked, (🟡N)=locked with N tickets available
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
@@ -60,6 +66,7 @@ import type {BookingView} from '~/composables/useBookingView'
 import type {DateRange} from '~/types/dateTypes'
 import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
 import type {BookingChanges, GuestBookingIntent, ReleasedTicketCounts} from '~/composables/useBooking'
+import type {WaitlistEntryWithPosition} from '~/composables/useWaitlistValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 // Row types for synthetic rows (same pattern as HouseholdCard)
@@ -92,6 +99,7 @@ interface Props {
   ticketPrices: TicketPrice[]
   deadlines: SeasonDeadlines
   lockStatus?: Map<number, ReleasedTicketCounts | null>
+  waitlistEntries?: WaitlistEntryWithPosition[] // The household's queue entries: a queued cell shows the wish ghosted
   allergyTypes?: AllergyTypeDisplay[]
   bookerId?: number // Current user's inhabitant ID for guest booking
   formMode?: FormMode
@@ -103,6 +111,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   lockStatus: () => new Map(),
+  waitlistEntries: () => [],
   allergyTypes: () => [],
   bookerId: undefined,
   formMode: FORM_MODES.VIEW,
@@ -124,7 +133,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEmptyMessage, getOrderStateColor, getLockStatusConfig, getResidencyDisplay, LAYOUTS, NOISE, BG} = useTheSlopeDesignSystem()
+const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEmptyMessage, getOrderStateColor, getLockStatusConfig, getResidencyDisplay, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
 const emptyState = getRandomEmptyMessage('noDinners')
 
 // Ticket price formatting
@@ -188,6 +197,10 @@ const effectiveFormMode = computed(() => props.isSaving ? FORM_MODES.VIEW : prop
 
 const getOrderForCell = (inhabitantId: number, eventId: number): OrderDisplay | undefined =>
   findRegularOrder(props.orders, inhabitantId, eventId)
+
+// A cell without a ticket may hold a queue entry; an order supersedes it
+const getWaitlistEntryForCell = (inhabitantId: number, eventId: number): WaitlistEntryWithPosition | undefined =>
+  getOrderForCell(inhabitantId, eventId) ? undefined : findRegularOrder(props.waitlistEntries, inhabitantId, eventId)
 
 const getServerMode = (inhabitantId: number, eventId: number): DinnerMode =>
   getOrderForCell(inhabitantId, eventId)?.dinnerMode ?? DinnerModeEnum.NONE
@@ -329,7 +342,7 @@ const columns = computed(() => {
   // Dynamic columns for each dinner event (footer via slot template)
   const eventColumns = flatEvents.value.map((event, idx) => {
     const isWeekBoundary = isFirstEventOfWeek(event, idx)
-    const boundaryClass = isWeekBoundary ? 'border-l-2 border-primary' : ''
+    const boundaryClass = isWeekBoundary ? COMPONENTS.bookingGrid.weekBoundary : ''
     return {
       id: `event-${event.id}`,
       header: formatCompactWeekdayDate(event.date),
@@ -471,14 +484,11 @@ const isEventDisabled = (event: DinnerEventDisplay): boolean =>
 const getDisabledModes = (order: OrderDisplay | undefined, event: DinnerEventDisplay): DinnerMode[] => {
   if (isDinnerPast(event.date)) return ALL_MODES
 
-  const releasedCount = props.lockStatus?.get(event.id)?.total ?? 0
-
   const {enabledModes} = getBookingOptions(
     order?.state ?? null,
     canBookEvent(event),
     canChangeEventMode(event),
     event.state,
-    releasedCount > 0,
     isHouseholdInResidency(event.date)
   )
   return ALL_MODES.filter(m => !enabledModes.includes(m))
@@ -544,10 +554,10 @@ const getEventSummary = (eventId: number) => {
 </script>
 
 <template>
-  <div data-testid="booking-grid-view" class="flex flex-col">
+  <div data-testid="booking-grid-view" :class="COMPONENTS.bookingGrid.root">
     <!-- Navigation Header (3-column: spacer | centered nav | edit button) -->
-    <div class="flex items-center px-2 py-2 border-b border-default">
-      <div class="flex-1" />
+    <div :class="COMPONENTS.bookingGrid.nav">
+      <div :class="COMPONENTS.bookingGrid.navSide" />
       <CalendarDateNav
         :open="calendarOpen"
         :has-prev="props.hasPrev"
@@ -559,7 +569,7 @@ const getEventSummary = (eventId: number) => {
       >
         {{ navigationLabel }}
       </CalendarDateNav>
-      <div class="flex-1 flex justify-end">
+      <div :class="COMPONENTS.bookingGrid.navEnd">
         <!-- Pencil button to enter edit mode (week/month grid only, hidden when !canEdit) -->
         <UButton
           v-if="view !== 'day' && formMode === FORM_MODES.VIEW && canEdit"
@@ -579,11 +589,11 @@ const getEventSummary = (eventId: number) => {
       :title="residencyAlert.alertTitle"
       :description="residencyAlert.alertDescription"
       data-testid="outside-residency-alert"
-      class="mx-2 mt-2"
+      :class="COMPONENTS.bookingGrid.alert"
     />
 
     <!-- Day view: slot for DinnerBookingForm -->
-    <div v-if="view === 'day'" class="pt-2 md:pt-4">
+    <div v-if="view === 'day'" :class="COMPONENTS.bookingGrid.dayContent">
       <slot name="day-content" />
     </div>
 
@@ -596,11 +606,7 @@ const getEventSummary = (eventId: number) => {
       :data="tableData"
       :columns="columns"
       row-key="id"
-      :ui="{
-        ...COMPONENTS.table.gridUi,
-        tbody: '[&_tr:first-child]:bg-warning/10',
-        tr: BG.expandedRow
-      }"
+      :ui="COMPONENTS.table.gridUi"
     >
       <!-- Empty state -->
       <template #empty>
@@ -617,21 +623,16 @@ const getEventSummary = (eventId: number) => {
 
       <!-- Dynamic event column headers: M / 29/1 / chip (fixed height) -->
       <template v-for="event in flatEvents" :key="`header-${event.id}`" #[`event-${event.id}-header`]>
-        <div
-          class="flex flex-col items-center"
-          :class="{ 'text-muted': isEventDisabled(event) }"
-        >
+        <div :class="[COMPONENTS.bookingGrid.eventHeader, isEventDisabled(event) && COMPONENTS.bookingGrid.eventHeaderDisabled]">
           <span :class="TYPOGRAPHY.caption">{{ formatDate(event.date, 'EEEEE') }}</span>
           <span :class="TYPOGRAPHY.finePrint">{{ formatDate(event.date, 'd/M') }}</span>
           <!-- Fixed height slot for chip: 🟠=locked, 🟡N=locked with N tickets -->
-          <div class="h-6 flex items-center justify-center">
+          <div :class="COMPONENTS.bookingGrid.chipSlot">
             <UChip
               v-if="getEventLockStatus(event)"
+              v-bind="COMPONENTS.bookingGrid.lockChip"
               :color="getEventLockStatus(event)!.config.color"
               :text="getEventLockStatus(event)!.count > 0 ? String(getEventLockStatus(event)!.count) : undefined"
-              size="3xl"
-              position="bottom-left"
-              standalone
             />
           </div>
         </div>
@@ -640,14 +641,14 @@ const getEventSummary = (eventId: number) => {
       <!-- Name column -->
       <template #name-cell="{row}">
         <!-- Power row -->
-        <div v-if="row.original.rowType === 'power'" class="flex items-center gap-2">
+        <div v-if="row.original.rowType === 'power'" :class="COMPONENTS.bookingGrid.powerName">
           <UIcon :name="COMPONENTS.powerMode.buttonIcon" :class="COMPONENTS.powerMode.iconClass" />
           <UBadge :color="COMPONENTS.powerMode.color" :variant="NOISE.subtle" :size="SIZES.sm">
             POWERMODE!
           </UBadge>
         </div>
         <!-- Inhabitant row: user + ticket count badge + released badge -->
-        <div v-else-if="row.original.rowType === 'inhabitant' && row.original.inhabitant" class="flex items-center gap-1">
+        <div v-else-if="row.original.rowType === 'inhabitant' && row.original.inhabitant" :class="COMPONENTS.bookingGrid.inhabitantName">
           <UserListItem
             :inhabitants="row.original.inhabitant"
             :link-to-profile="false"
@@ -672,7 +673,7 @@ const getEventSummary = (eventId: number) => {
             :variant="NOISE.soft"
             :size="SIZES.xs"
           >
-            <UIcon :name="ICONS.ticket" class="size-3" />
+            <UIcon :name="ICONS.ticket" :class="COMPONENTS.bookingGrid.countIcon" />
             {{ getOrderCountsForInhabitant(row.original.inhabitant.id).total }}
           </UBadge>
           <!-- Released badge (only if > 0) -->
@@ -683,14 +684,14 @@ const getEventSummary = (eventId: number) => {
             :variant="NOISE.soft"
             :size="SIZES.xs"
           >
-            <UIcon :name="ICONS.released" class="size-3" />
+            <UIcon :name="ICONS.released" :class="COMPONENTS.bookingGrid.countIcon" />
             {{ getOrderCountsForInhabitant(row.original.inhabitant.id).released }}
           </UBadge>
         </div>
         <!-- Guest order row - show who invited using UserListItem (same as DinnerBookingForm) -->
-        <div v-else-if="row.original.rowType === 'guest-order'" class="flex items-center gap-2">
-          <UIcon :name="ICONS.userPlus" class="size-4 text-info flex-shrink-0" />
-          <span class="text-sm text-muted">Gæst af</span>
+        <div v-else-if="row.original.rowType === 'guest-order'" :class="COMPONENTS.bookingGrid.guestName">
+          <UIcon :name="ICONS.userPlus" :class="COMPONENTS.bookingGrid.guestIcon" />
+          <span :class="COMPONENTS.bookingGrid.guestLabel">Gæst af</span>
           <UserListItem
             v-if="row.original.inhabitant"
             :inhabitants="row.original.inhabitant"
@@ -709,12 +710,12 @@ const getEventSummary = (eventId: number) => {
               </UBadge>
             </template>
           </UserListItem>
-          <span v-else class="text-sm">ukendt</span>
+          <span v-else :class="COMPONENTS.bookingGrid.guestUnknown">ukendt</span>
         </div>
         <!-- Guest add row -->
-        <div v-else-if="row.original.rowType === 'guest-add'" class="flex items-center gap-1">
+        <div v-else-if="row.original.rowType === 'guest-add'" :class="COMPONENTS.bookingGrid.guestAddName">
           <UIcon :name="COMPONENTS.guestRow.addIcon" :class="COMPONENTS.guestRow.iconClass" />
-          <span :class="[TYPOGRAPHY.bodyText, 'text-muted']">{{ row.original.name }}</span>
+          <span :class="COMPONENTS.bookingGrid.guestAddLabel">{{ row.original.name }}</span>
         </div>
       </template>
 
@@ -732,6 +733,23 @@ const getEventSummary = (eventId: number) => {
           :name="`power-${event.id}`"
           @update:model-value="(mode: DinnerMode) => handlePowerUpdate(event.id, mode)"
         />
+        <!-- Inhabitant row, queued: the wish ghosted under the hourglass, read-only -->
+        <UChip
+          v-else-if="row.original.rowType === 'inhabitant' && row.original.inhabitant && getWaitlistEntryForCell(row.original.inhabitant.id, event.id)"
+          v-bind="COMPONENTS.waitlist.chip"
+          :data-testid="`grid-waitlist-${row.original.inhabitant.id}-${event.id}`"
+        >
+          <DinnerModeSelector
+            :model-value="getWaitlistEntryForCell(row.original.inhabitant.id, event.id)!.order.dinnerMode"
+            :form-mode="FORM_MODES.VIEW"
+            :size="SIZES.standard"
+            :name="`cell-${row.original.inhabitant.id}-${event.id}`"
+            ghost
+          />
+          <template #content>
+            <UIcon :name="ICONS.waitlist" :class="COMPONENTS.waitlist.chipIcon" />
+          </template>
+        </UChip>
         <!-- Inhabitant row -->
         <DinnerModeSelector
           v-else-if="row.original.rowType === 'inhabitant' && row.original.inhabitant"
@@ -764,17 +782,16 @@ const getEventSummary = (eventId: number) => {
           :variant="NOISE.quiet"
           :size="SIZES.standard"
           :data-testid="`guest-add-${event.id}`"
-          :class="activeGuestEventId === event.id ? 'rotate-45' : ''"
-          class="transition-transform duration-200"
+          :class="COMPONENTS.openTurn(activeGuestEventId === event.id)"
           @click="handleGuestAdd(event.id)"
         />
       </template>
 
       <!-- Dynamic event column footers: ticket counts + price on separate lines -->
       <template v-for="event in flatEvents" :key="`footer-${event.id}`" #[`event-${event.id}-footer`]>
-        <div class="flex flex-col items-center">
+        <div :class="COMPONENTS.bookingGrid.summary">
           <span>{{ getEventSummary(event.id).ticketCounts }}</span>
-          <span class="text-muted">{{ formatPrice(getEventSummary(event.id).totalPrice) }} kr</span>
+          <span :class="COMPONENTS.bookingGrid.summaryPrice">{{ formatPrice(getEventSummary(event.id).totalPrice) }} kr</span>
         </div>
       </template>
 
@@ -798,8 +815,8 @@ const getEventSummary = (eventId: number) => {
       <!-- Footer: Cancel/Save buttons (ADR-016) - using body-bottom slot per NuxtUI docs -->
       <template v-if="formMode === FORM_MODES.EDIT" #body-bottom>
         <tr>
-          <td :colspan="columns.length" class="px-2 py-2 border-t border-default">
-            <div class="flex flex-col gap-2">
+          <td :colspan="columns.length" :class="COMPONENTS.bookingGrid.actionCell">
+            <div :class="COMPONENTS.bookingGrid.actionStack">
               <!-- Action preview: show what will happen when saving -->
               <ActionPreview :items="actionPreviewItems" />
 
@@ -834,8 +851,9 @@ const getEventSummary = (eventId: number) => {
     <DinnerModeLegend
       v-if="view !== 'day'"
       show-modified
+      :show-waitlist="waitlistEntries.length > 0"
       hint="Klik på en celle for at ændre din booking, den cykler igennem mulighederne. Når du er færdig, husk at trykke gem."
-      class="mt-4"
+      :class="COMPONENTS.bookingGrid.legend"
     />
   </div>
 </template>

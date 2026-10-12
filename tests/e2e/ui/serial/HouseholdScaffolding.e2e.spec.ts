@@ -204,9 +204,6 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
     test('RELEASE bucket: GIVEN inhabitant with orders WHEN changing to NONE after deadline THEN orders are RELEASED not deleted', async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
 
-        // Get admin user ID for order creation
-        const {userId: adminUserId} = await getSessionUserInfo(adminContext)
-
         // GIVEN: Create inhabitant with DINEIN preferences (will get orders via scaffold)
         const dineInPrefs = createDinnerModeWeekdayMap(DinnerMode.DINEIN)
         const inhabitant = await HouseholdFactory.createInhabitantWithConfig(adminContext, householdId, {
@@ -249,7 +246,6 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
                 dinnerEventId: afterDeadlineEvent.id,
                 orders: [{
                     inhabitantId: inhabitant.id,
-                    bookedByUserId: adminUserId,
                     ticketPriceId,
                     dinnerMode: DinnerMode.DINEIN,
                     isGuestTicket: false

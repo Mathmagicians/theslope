@@ -57,7 +57,7 @@ test.describe('Authorization Middleware', () => {
             householdId,
             dinnerEventId: dinnerEvent.id,
             orders: [OrderFactory.defaultOrderItem({ inhabitantId, ticketPriceId })]
-        }, 201)
+        })
 
         expect(result).not.toBeNull()
         expect(result!.createdIds.length).toBe(1)
@@ -85,10 +85,11 @@ test.describe('Authorization Middleware', () => {
             salt('OtherInhabitant', testSalt)
         )
 
-        await OrderFactory.createOrder(context, {
+        await OrderFactory.scaffoldOrders(context, {
             householdId: otherHousehold.id,
-            dinnerEventId: dinnerEvent.id,
-            orders: [OrderFactory.defaultOrderItem({ inhabitantId: otherInhabitant.id, ticketPriceId })]
+            seasonId: season.id!,
+            dinnerEventIds: [dinnerEvent.id],
+            orders: [OrderFactory.createBookingOrder(otherInhabitant.id, dinnerEvent.id, ticketPriceId)]
         }, 403)
     })
 

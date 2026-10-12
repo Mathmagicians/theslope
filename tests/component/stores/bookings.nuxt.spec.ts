@@ -4,7 +4,7 @@ import {afterEach, beforeAll, beforeEach, describe, expect, it, vi} from 'vitest
 import {ref, computed, type MaybeRefOrGetter} from 'vue'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {clearNuxtData} from '#app'
-import {getQuery, type H3Event} from 'h3'
+import {getQuery, readBody, type H3Event} from 'h3'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
@@ -12,6 +12,7 @@ import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
+import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {useBookingsStore} from '~/stores/bookings'
 import {usePlanStore} from '~/stores/plan'
 import {useCookingTeam} from '~/composables/useCookingTeam'
@@ -100,6 +101,9 @@ registerEndpoint('/api/admin/users/by-role/ALLERGYMANAGER', () => [])
 registerEndpoint('/api/admin/users', () => [])
 registerEndpoint('/api/admin/billing/periods', billingPeriodsEndpoint)
 registerEndpoint('/api/admin/billing/current-period', () => [])
+// Specific before the generic /api/order route
+const waitlistEntriesEndpoint = vi.fn((): unknown[] => [])
+registerEndpoint('/api/order/waitlist', waitlistEntriesEndpoint)
 registerEndpoint('/api/order', ordersEndpoint)
 registerEndpoint(`/api/team/cooking/${DINNER_ID}/assign-role`, {method: 'POST', handler: assignRoleEndpoint})
 registerEndpoint(`/api/chef/dinner/${DINNER_ID}`, {method: 'POST', handler: updateDinnerEndpoint})
@@ -107,6 +111,10 @@ registerEndpoint('/api/household/order/scaffold', {method: 'POST', handler: scaf
 registerEndpoint('/api/admin/maintenance/daily', {method: 'POST', handler: dailyMaintenanceEndpoint})
 registerEndpoint('/api/billing', householdBillingEndpoint)
 registerEndpoint('/api/order/77', () => OrderFactory.defaultOrderDetail('order-history', {id: 77}))
+
+const WAITLIST_DINNER_ID = 1
+const releasePortionsEndpoint = vi.fn()
+registerEndpoint(`/api/chef/dinner/${WAITLIST_DINNER_ID}/release-portions`, {method: 'POST', handler: releasePortionsEndpoint})
 
 const failure = () => {
     throw createError({statusCode: 500})
@@ -302,6 +310,32 @@ describe('Bookings store — scaffold bookings', () => {
         await store.processMultipleEventsBookings(1, [DINNER_ID], [])
 
         expect(useToast().toasts.value).toHaveLength(0)
+    })
+
+    it('reports the queued places and the queue left in the toast', async () => {
+        const positions = [3, 1].map(position => ({inhabitantId: position, dinnerEventId: DINNER_ID, isGuestTicket: false, position}))
+        scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({queued: 2, positions, left: 1}))
+        const store = useBookingsStore()
+
+        await store.processSingleEventBookings(1, DINNER_ID, [], false, {title: 'day'})
+
+        expect(useToast().toasts.value.at(-1)!.description).toBe('2 kom på ventelisten (nr. 1, 3), 1 forlod ventelisten')
+    })
+
+    it('sends an admin correction as one scaffold with adminBypass, a new guest booked on the household\'s inhabitant', async () => {
+        const sent: {query: Record<string, unknown>, body: unknown}[] = []
+        scaffoldEndpoint.mockImplementation(async (event: H3Event) => {
+            sent.push({query: getQuery(event), body: await readBody(event)})
+            return OrderFactory.defaultScaffoldOrdersResponse({deleted: 1})
+        })
+        const store = useBookingsStore()
+        const regular = OrderFactory.defaultDesiredOrder({dinnerEventId: DINNER_ID, orderId: 5, inhabitantId: 2})
+        const guest = OrderFactory.defaultDesiredOrder({dinnerEventId: DINNER_ID, inhabitantId: 99, isGuestTicket: true})
+
+        const result = await store.processAdminCorrection(7, DINNER_ID, [regular, guest], 3)
+
+        expect(sent).toEqual([{query: {adminBypass: 'true'}, body: {householdId: 7, dinnerEventIds: [DINNER_ID], orders: [regular, {...guest, inhabitantId: 3}]}}])
+        expect(result.deleted).toBe(1)
     })
 
     it('rethrows a failed scaffold and clears the processing flag', async () => {
@@ -686,5 +720,92 @@ describe('Bookings store — ticket changes', () => {
         const store = useBookingsStore()
         await store.fetchTicketChanges(DINNER_ID)
         expect(lastQuery(ticketChangesEndpoint)).not.toHaveProperty('since')
+    })
+})
+
+describe('Bookings store — waiting list', () => {
+    const ENTRIES_KEY = 'bookings-store-waitlist-entries'
+    const queuedDinner = {...DinnerEventFactory.defaultDinnerEventDisplay('waitlist'), id: WAITLIST_DINNER_ID}
+    const {TicketTypeSchema} = useBookingValidation()
+    // Ids on the season's prices: an entry names its price by id, the portion need weighs it by type
+    const ticketPrices = SEASON.ticketPrices.map((price, index) => ({...price, id: index + 1}))
+    const priceOf = (ticketType: typeof TicketTypeSchema.enum[keyof typeof TicketTypeSchema.enum]) => ticketPrices.find(price => price.ticketType === ticketType)!.id!
+    const OTHER_HOUSEHOLD_ID = MY_HOUSEHOLD_ID + 1
+    // The dinner's queue: another household's adult first, then this household's child
+    const QUEUE = [
+        WaitlistFactory.defaultEntry({id: 21, dinnerEventId: WAITLIST_DINNER_ID, householdId: OTHER_HOUSEHOLD_ID, ticketPriceId: priceOf(TicketTypeSchema.enum.ADULT), createdAt: new Date('2026-10-01T10:00:00Z')}),
+        WaitlistFactory.defaultEntry({id: 22, dinnerEventId: WAITLIST_DINNER_ID, householdId: MY_HOUSEHOLD_ID, ticketPriceId: priceOf(TicketTypeSchema.enum.CHILD), createdAt: new Date('2026-10-01T11:00:00Z')})
+    ]
+    const releasedBodies: unknown[] = []
+
+    beforeEach(() => {
+        resetStores()
+        selectSeason([queuedDinner])
+        seasonByIdEndpoint.mockReturnValue({...SEASON, ticketPrices, dinnerEvents: [queuedDinner]})
+        ordersEndpoint.mockImplementation(() => [])
+        // The read answers the queue as stored: the position is the client's to derive
+        waitlistEntriesEndpoint.mockImplementation(() => [...QUEUE].reverse().map(({position: _position, ...entry}) => entry))
+        releasedBodies.length = 0
+        releasePortionsEndpoint.mockImplementation(async (event: H3Event) => {
+            releasedBodies.push(await readBody(event))
+            return WaitlistFactory.defaultAssignmentResult({
+                dinnerEventId: WAITLIST_DINNER_ID,
+                assigned: [1, 2].map(entryId => ({entryId, inhabitantId: entryId, isGuestTicket: false, portions: 1, orderId: 100 + entryId, notification: {queued: true, dedupeKey: `assigned-${entryId}`}})),
+                portionsUsed: 2,
+                waiting: 1
+            })
+        })
+    })
+
+    it('reads every household\'s entries on the dinners the page shows, parsed to domain types', async () => {
+        const store = useBookingsStore()
+
+        store.loadOrdersForDinners({dinnerEventIds: [WAITLIST_DINNER_ID]})
+
+        await vi.waitFor(() => expect(store.waitlistEntries).toHaveLength(QUEUE.length))
+        expect(store.waitlistEntries[0]!.createdAt).toBeInstanceOf(Date)
+        expect(lastQuery(waitlistEntriesEndpoint)).toEqual({dinnerEventIds: String(WAITLIST_DINNER_ID)})
+    })
+
+    it('stays idle and unrequested while the page shows no dinners', async () => {
+        const store = useBookingsStore()
+
+        store.loadOrdersForDinners({dinnerEventIds: []})
+
+        await vi.waitFor(() => expect(usePlanStore().isPlanStoreReady).toBe(true))
+        await flushPromises()
+        expect(asyncDataStatus(ENTRIES_KEY)).toBe('idle')
+        expect(waitlistEntriesEndpoint).not.toHaveBeenCalled()
+    })
+
+    it('derives the household\'s places from the dinner\'s queue order', async () => {
+        const store = useBookingsStore()
+
+        store.loadOrdersForDinners({dinnerEventIds: [WAITLIST_DINNER_ID]})
+
+        await vi.waitFor(() => expect(store.householdWaitlist).toHaveLength(1))
+        expect(store.householdWaitlist[0]).toMatchObject({id: 22, position: 2})
+    })
+
+    it('derives the queue on the dinner on view: its size and its portion need', async () => {
+        const store = useBookingsStore()
+
+        store.loadOrdersForDinners({dinnerEventIds: [WAITLIST_DINNER_ID]})
+        store.selectDinnerDate(() => new Date(queuedDinner.date))
+
+        await vi.waitFor(() => expect(store.selectedDinnerWaitlist).toEqual({dinnerEventId: WAITLIST_DINNER_ID, entries: 2, portions: 1.5}))
+    })
+
+    it('releases portions, toasts the tickets handed out and the entries still waiting, and re-reads the queue', async () => {
+        const store = useBookingsStore()
+        store.loadOrdersForDinners({dinnerEventIds: [WAITLIST_DINNER_ID]})
+        await vi.waitFor(() => expect(waitlistEntriesEndpoint).toHaveBeenCalledTimes(1))
+
+        const result = await store.releasePortions(WAITLIST_DINNER_ID, 2.5)
+
+        expect(result?.assigned).toHaveLength(2)
+        expect(releasedBodies).toEqual([{portions: 2.5}])
+        expect(String(useToast().toasts.value.at(-1)?.description)).toMatch(/2 .*1 /)
+        expect(waitlistEntriesEndpoint).toHaveBeenCalledTimes(2)
     })
 })

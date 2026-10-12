@@ -37,36 +37,23 @@ export async function createWaitlistEntry(d1Client: D1Database, entry: WaitlistE
     }
 }
 
-export async function fetchWaitlistEntry(d1Client: D1Database, id: number): Promise<(TicketWaitlistDisplay & {householdId: number}) | null> {
-    const {deserializeTicketWaitlist} = useWaitlistValidation()
-    const prisma = await getPrismaClientConnection(d1Client)
-    try {
-        const row = await prisma.ticketWaitlist.findUnique({
-            where: {id},
-            include: {inhabitant: {select: {householdId: true}}}
-        })
-        if (!row) return null
-        const {inhabitant, ...entry} = row
-        return {...deserializeTicketWaitlist(entry), householdId: inhabitant.householdId}
-    } catch (error) {
-        return throwH3Error(`${LOG} > [GET] Error fetching queue entry ${id}`, error)
-    }
-}
-
-// The queue of a dinner, first joined first
-export async function fetchWaitlistForDinner(d1Client: D1Database, dinnerEventId: number): Promise<TicketWaitlistDisplay[]> {
+// The queues of the dinners, first joined first; the entries of the dinners interleave by join time
+export async function fetchWaitlistForDinners(d1Client: D1Database, dinnerEventIds: number[]): Promise<TicketWaitlistDisplay[]> {
     const {deserializeTicketWaitlist} = useWaitlistValidation()
     const prisma = await getPrismaClientConnection(d1Client)
     try {
         const rows = await prisma.ticketWaitlist.findMany({
-            where: {dinnerEventId},
+            where: {dinnerEventId: {in: dinnerEventIds}},
             orderBy: [{createdAt: 'asc'}, {id: 'asc'}]
         })
         return rows.map(deserializeTicketWaitlist)
     } catch (error) {
-        return throwH3Error(`${LOG} > [GET] Error fetching the queue of dinner ${dinnerEventId}`, error)
+        return throwH3Error(`${LOG} > [GET] Error fetching the queues of dinners ${dinnerEventIds.join(', ')}`, error)
     }
 }
+
+export const fetchWaitlistForDinner = (d1Client: D1Database, dinnerEventId: number): Promise<TicketWaitlistDisplay[]> =>
+    fetchWaitlistForDinners(d1Client, [dinnerEventId])
 
 // A household's entries, across the given dinners or all of them
 export async function fetchWaitlistForHousehold(d1Client: D1Database, householdId: number, dinnerEventIds?: number[]): Promise<TicketWaitlistDisplay[]> {
@@ -83,6 +70,19 @@ export async function fetchWaitlistForHousehold(d1Client: D1Database, householdI
         return rows.map(deserializeTicketWaitlist)
     } catch (error) {
         return throwH3Error(`${LOG} > [GET] Error fetching the queue entries of household ${householdId}`, error)
+    }
+}
+
+// A new wish on an entry: `createdAt` stays, so the entry keeps its place in the queue
+export async function updateWaitlistEntryOrder(d1Client: D1Database, id: number, order: WaitlistOrder): Promise<TicketWaitlistDisplay> {
+    const {serializeWaitlistOrder, deserializeTicketWaitlist} = useWaitlistValidation()
+    const prisma = await getPrismaClientConnection(d1Client)
+    console.info(`${LOG} > [REQUEUE] Queue entry ${id} now wishes ${order.dinnerMode} at ticket price ${order.ticketPriceId}`)
+    try {
+        const row = await prisma.ticketWaitlist.update({where: {id}, data: {order: serializeWaitlistOrder(order)}})
+        return deserializeTicketWaitlist(row)
+    } catch (error) {
+        return throwH3Error(`${LOG} > [REQUEUE] Error rewriting queue entry ${id}`, error)
     }
 }
 

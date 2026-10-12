@@ -14,6 +14,8 @@ import AllergyTypeDisplayComponent from '~/components/allergy/AllergyTypeDisplay
 import {mountWithTooltipProvider, findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
+import {COMPONENTS} from '~/composables/useTheSlopeDesignSystem'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {OrderDetail} from '~/composables/useBookingValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
@@ -146,5 +148,35 @@ describe('KitchenPreparation allergy line', () => {
         expect(findByTestId(findByTestId(wrapper, PANEL(DinnerMode.DINEIN)), ALLERGY_HEAD).text()).toBe('0,5 kuv.')
         await clickByTestId(wrapper, PANEL(DinnerMode.DINEIN))
         expect(allergenNamesIn(findByTestId(wrapper, HOUSEHOLD_LIST))).toEqual([MILK.name])
+    })
+})
+
+describe('KitchenPreparation fourth box', () => {
+    const WAITLIST_BOX = 'kitchen-box-waitlist'
+    const mountWith = async (waitlist: ReturnType<typeof WaitlistFactory.defaultQueueSummary> | null) => {
+        const wrapper = await mountWithTooltipProvider(KitchenPreparation, {props: {orders: ORDERS, allergens: [], waitlist}, isMd: true})
+        await flushPromises()
+        return wrapper
+    }
+
+    it('GIVEN a queue with entries THEN the box reads VENTELISTE with the queue size, on the TIL SALG surface, and TIL SALG is gone', async () => {
+        const queue = WaitlistFactory.defaultQueueSummary({entries: 4, portions: 2.5})
+        const wrapper = await mountWith(queue)
+
+        const box = findByTestId(wrapper, WAITLIST_BOX)
+        expect(box.text()).toContain('VENTELISTE')
+        expect(box.text()).toContain(String(queue.entries))
+        expect(box.classes()).toEqual(expect.arrayContaining(COMPONENTS.kitchenPanel.WAITLIST.split(' ')))
+        expect(findByTestId(wrapper, PANEL('RELEASED')).exists()).toBe(false)
+    })
+
+    it.each([
+        {desc: 'an empty queue', waitlist: WaitlistFactory.defaultQueueSummary({entries: 0, portions: 0})},
+        {desc: 'no queue read', waitlist: null}
+    ])('GIVEN $desc THEN the box reads TIL SALG', async ({waitlist}) => {
+        const wrapper = await mountWith(waitlist)
+
+        expect(findByTestId(wrapper, PANEL('RELEASED')).text()).toContain('TIL SALG')
+        expect(findByTestId(wrapper, WAITLIST_BOX).exists()).toBe(false)
     })
 })

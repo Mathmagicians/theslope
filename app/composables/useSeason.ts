@@ -21,6 +21,12 @@ import {chunkArray, pruneAndCreate} from '~/utils/batchUtils'
  */
 export type DeadlineUrgency = 0 | 1 | 2
 
+/** The two predicates the booking generator decides by */
+export type BookingDeadlines = Pick<SeasonDeadlines, 'canModifyOrders' | 'canEditDiningMode'>
+
+/** Every dinner books, cancels and changes mode as if before its deadlines: an admin's correction */
+export const OPEN_DEADLINES: BookingDeadlines = {canModifyOrders: () => true, canEditDiningMode: () => true}
+
 /**
  * Season-configured deadline functions.
  * Time getters are ROOT, predicates derive via isBefore(now, timeGetter).

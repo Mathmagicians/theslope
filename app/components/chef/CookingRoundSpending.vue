@@ -23,14 +23,11 @@
 import type {TableColumn} from '@nuxt/ui'
 import type {SpendingFragment, SpendingTableRow} from '~/composables/useBookingUi'
 
-withDefaults(defineProps<{
+defineProps<{
   fragment: SpendingFragment
-  emptyText?: string
-}>(), {
-  emptyText: 'Madbestilling mangler'
-})
+}>()
 
-const {COMPONENTS, ICONS} = useTheSlopeDesignSystem()
+const {COMPONENTS, ICONS, TYPOGRAPHY} = useTheSlopeDesignSystem()
 const {spendingLeft, spendingAwaitsTickets} = useOrder()
 
 const columns: TableColumn<SpendingTableRow>[] = [
@@ -45,7 +42,7 @@ const columns: TableColumn<SpendingTableRow>[] = [
 <template>
   <section data-testid="cooking-round">
     <div :class="COMPONENTS.dinnerBudget.boxLine">
-      <h5 :class="COMPONENTS.dinnerBudget.sectionTitle" data-testid="cooking-round-heading">{{ fragment.heading }}</h5>
+      <h5 :class="TYPOGRAPHY.sectionSubheading" data-testid="cooking-round-heading">{{ fragment.heading }}</h5>
       <span :class="COMPONENTS.vatAmount.unitHeader">ex / inkl. moms</span>
     </div>
     <UTable :data="fragment.rows" :columns="columns" :ui="COMPONENTS.table.ui">
@@ -67,7 +64,7 @@ const columns: TableColumn<SpendingTableRow>[] = [
       <template #left-cell="{ row }">
         <VatAmount v-if="row.original.kind === 'dinner'" :gross="spendingLeft(row.original)" balance :pending="spendingAwaitsTickets(row.original)" />
       </template>
-      <template #empty><span :class="COMPONENTS.expenseLines.empty">{{ emptyText }}</span></template>
+      <template #empty><span :class="COMPONENTS.expenseLines.empty">Madbestilling mangler</span></template>
       <template #body-bottom>
         <tr :class="COMPONENTS.table.totalRow" data-testid="cooking-round-total">
           <td :class="COMPONENTS.table.ui.td" colspan="2">{{ fragment.total.label }}</td>
