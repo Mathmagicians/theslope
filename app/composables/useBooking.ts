@@ -8,9 +8,9 @@ import type {InhabitantDisplay, HouseholdDisplay} from '~/composables/useCoreVal
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import type {PruneAndCreateResult} from '~/utils/batchUtils'
-import {calculateCountdown} from '~/utils/date'
+import {calculateCountdown, formatDate, DATE_SETTINGS} from '~/utils/date'
 import {dateToWeekDay} from '~/utils/season'
-import {chunkArray} from '~/utils/batchUtils'
+import {chunkArray, groupBy} from '~/utils/batchUtils'
 import {getPortionsForTicketType, type TicketType} from '~/utils/portions'
 import {differenceInCalendarDays} from 'date-fns'
 
@@ -1430,7 +1430,7 @@ export const useBooking = () => {
      * Replays a dinner's order history in time order into one change per event: the tickets moved by type, the
      * composition after it, the kuverter and the revenue. A change is the difference between the tickets held before
      * and after its row. A ticket price the season no longer names leaves the change without a type. Consecutive
-     * system rows with no user row between them are one run and collapse into one change, dated by the last row.
+     * changes with the same rendered moment, household and event collect into one change carrying the summed delta.
      */
     const replayTicketChanges = (
         history: OrderHistoryDisplay[],
@@ -1461,7 +1461,7 @@ export const useBooking = () => {
             }
         }
 
-        const toChange = (row: OrderHistoryDisplay, ticket: AuditTicket, before: HeldTickets, after: HeldTickets): TicketChange & {system: boolean} => ({
+        const toChange = (row: OrderHistoryDisplay, ticket: AuditTicket, before: HeldTickets, after: HeldTickets): TicketChange => ({
             id: row.id,
             timestamp: row.timestamp,
             action: row.action,
@@ -1470,8 +1470,7 @@ export const useBooking = () => {
             delta: countsMinus(countsOf(after), countsOf(before)),
             counts: countsOf(after),
             portions: portionsOf(after),
-            revenue: revenueOf(after),
-            system: row.performedByUserId === null
+            revenue: revenueOf(after)
         })
 
         const {changes} = [...history].sort(byTime)
@@ -1480,22 +1479,20 @@ export const useBooking = () => {
             .reduce(({held, changes}, {row, ticket}) => {
                 const after = step(held, row.action, row.id, ticket)
                 return {held: after, changes: [...changes, toChange(row, ticket, held, after)]}
-            }, {held: new Map() as HeldTickets, changes: [] as Array<TicketChange & {system: boolean}>})
-        return collapseSystemRuns(changes)
+            }, {held: new Map() as HeldTickets, changes: [] as TicketChange[]})
+        return collapseByKey(changes)
     }
 
-    // Consecutive system rows of one action are one change carrying the summed delta, however far apart the nights that wrote them
-    const continuesRun = (previous: TicketChange | undefined, change: TicketChange & {system: boolean}): previous is TicketChange =>
-        previous !== undefined && change.system && previous.householdShortname === null && previous.action === change.action
-    const collapseSystemRuns = (changes: Array<TicketChange & {system: boolean}>): TicketChange[] =>
-        changes.reduce<TicketChange[]>((collapsed, change) => {
-            const {system, ...plain} = change
-            const previous = collapsed.at(-1)
-            const shown: TicketChange = system ? {...plain, householdShortname: null, ticketType: null} : plain
-            return continuesRun(previous, change)
-                ? [...collapsed.slice(0, -1), {...shown, delta: countsPlus(previous.delta, change.delta)}]
-                : [...collapsed, shown]
-        }, [])
+    /** A moment as the chef reads it: the date mask and the hour */
+    const formatMoment = (date: Date): string => formatDate(date, `${DATE_SETTINGS.DATE_MASK} HH:mm`)
+    // Every change with the same rendered moment, household and event collects into one: the deltas add up, the last row gives the rest
+    const changeKey = (change: TicketChange): string => `${formatMoment(change.timestamp)}|${change.householdShortname ?? ''}|${change.action}`
+    const collapseByKey = (changes: TicketChange[]): TicketChange[] =>
+        [...groupBy(changeKey)(changes).values()].map(group => ({
+            ...group.at(-1)!,
+            ticketType: group.every(change => change.ticketType === group[0]!.ticketType) ? group[0]!.ticketType : null,
+            delta: group.reduce((sum, change) => countsPlus(sum, change.delta), emptyCounts())
+        }))
 
     // The team's dinners on consecutive calendar days around one dinner; a day without a team dinner ends the run
     const consecutiveDinnerRun = <T extends {id: number, date: Date}>(dinners: T[], aroundId: number): T[] => {
@@ -1556,6 +1553,7 @@ export const useBooking = () => {
         hasChanges,
         countChanges,
         // Ticket changes and the cooking round
+        formatMoment,
         replayTicketChanges,
         consecutiveDinnerRun
     }

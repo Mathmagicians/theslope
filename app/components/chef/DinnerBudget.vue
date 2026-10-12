@@ -35,7 +35,7 @@
  */
 import type { OrderDetail } from '~/composables/useBookingValidation'
 import type { Expense } from '~/composables/useBillingValidation'
-import type { CookingRoundRow, CookingRoundWords } from '~/composables/useBookingUi'
+import { dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow, type CookingRoundWords } from '~/composables/useBookingUi'
 import type {TableColumn} from '@nuxt/ui'
 
 interface Props {
@@ -89,6 +89,8 @@ const figures = computed(() => ({budgetGross: budget.value.availableBudget, spen
 const left = computed(() => spendingLeft(figures.value))
 // This dinner's row of the spending table, the one the page marks as current
 const ownRow = computed(() => props.roundRows.find(row => row.isCurrent) ?? null)
+const dinnerFragment = computed(() => ownRow.value ? dinnerSpendingFragment(ownRow.value, props.expenses) : null)
+const teamFragment = computed(() => props.roundWords && props.roundRows.length > 1 ? teamSpendingFragment(props.roundRows, props.roundWords) : null)
 
 type TicketRevenueRow = (typeof revenueByType.value)[number]
 const ticketColumns: TableColumn<TicketRevenueRow>[] = [
@@ -194,14 +196,14 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
         </template>
       </UTable>
 
-      <!-- This dinner in the spending table's shape, its receipts under it -->
-      <div v-if="ownRow" :class="COMPONENTS.dinnerBudget.section">
-        <CookingRoundSpending :words="null" :rows="[ownRow]" :receipts="expenses" />
+      <!-- This dinner: its receipts under its heading, its figures in the total row -->
+      <div v-if="dinnerFragment" :class="COMPONENTS.dinnerBudget.section">
+        <CookingRoundSpending :fragment="dinnerFragment" />
       </div>
 
       <!-- The team's cooking round -->
-      <div v-if="roundWords && roundRows.length > 1" :class="COMPONENTS.dinnerBudget.section">
-        <CookingRoundSpending :words="roundWords" :rows="roundRows" />
+      <div v-if="teamFragment" :class="COMPONENTS.dinnerBudget.section">
+        <CookingRoundSpending :fragment="teamFragment" />
       </div>
 
       <!-- Billetændringer last, folded, only while there are tickets -->

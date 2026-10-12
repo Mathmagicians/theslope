@@ -81,16 +81,17 @@ test.describe('Chef dinner order history', () => {
         const revenue = adultPrice.price + childPrice.price
 
         expect(response.olderCount).toBe(0)
-        expect(response.changes.map(change => change.action)).toEqual([Action.USER_CLAIMED, Action.USER_CANCELLED, Action.USER_BOOKED, Action.USER_BOOKED])
-        const [claim, release, secondBooking] = response.changes
+        // The two bookings of one household within one minute are one row
+        expect(response.changes.map(change => change.action)).toEqual([Action.USER_CLAIMED, Action.USER_CANCELLED, Action.USER_BOOKED])
+        const [claim, release, booking] = response.changes
         expect(claim).toMatchObject({ticketType: TicketTypeSchema.enum.CHILD, counts: {ADULT: 1, CHILD: 1, BABY: 0}, portions: adultPortions + childPortions, revenue})
         expect(release).toMatchObject({ticketType: TicketTypeSchema.enum.CHILD, delta: {ADULT: 0, CHILD: 0, BABY: 0}, counts: {ADULT: 1, CHILD: 1, BABY: 0}, portions: adultPortions, revenue})
-        expect(secondBooking!.counts).toEqual({ADULT: 1, CHILD: 1, BABY: 0})
+        expect(booking).toMatchObject({delta: {ADULT: 1, CHILD: 1, BABY: 0}, counts: {ADULT: 1, CHILD: 1, BABY: 0}})
         expect(response.changes.every(change => change.householdShortname !== null)).toBe(true)
 
         const sinceRelease = await OrderFactory.getTicketChanges(memberContext, dinnerEventId, release!.timestamp)
         expect(sinceRelease!.changes.map(change => change.id)).toEqual([claim!.id, release!.id])
-        expect(sinceRelease!.olderCount).toBe(2)
+        expect(sinceRelease!.olderCount).toBe(1)
     })
 
     test('GIVEN an unknown dinner WHEN reading the changes THEN 404', async ({browser}) => {

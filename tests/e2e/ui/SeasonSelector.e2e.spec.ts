@@ -133,19 +133,18 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         // WHEN: Switch to future season
         await selectDropdownOption(page, 'season-selector', futureSeason.shortName)
 
-        // Wait for selection to update (poll for seedling emoji)
+        // Wait for the selection to update
         await pollUntil(
             async () => {
                 const text = await seasonSelector.textContent()
-                return text?.includes('🌱') || false
+                return text?.includes(futureSeason.shortName) || false
             },
-            (hasEmoji) => hasEmoji,
+            (selected) => selected,
             10
         )
 
         // THEN: Future season should be selected
         await expect(seasonSelector).toContainText(futureSeason.shortName)
-        await expect(seasonSelector).toContainText('🌱')
 
         // Verify URL updated
         await expect.poll(() => page.url(), {timeout: 15000}).toContain(`season=${encodeURIComponent(futureSeason.shortName)}`)
@@ -172,7 +171,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         await expect(activateButton).toContainText('Aktiver Sæson')
 
         // Verify status text
-        await expect(page.getByText('Fremtidig sæson 🌱')).toBeVisible()
+        await expect(page.getByText('Fremtidig sæson')).toBeVisible()
 
         // Take screenshot
         await doScreenshot(page, 'admin/season-status-display-future-season', true)
@@ -196,6 +195,6 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         await expect(deactivateButton).toContainText('Deaktiver Sæson')
 
         // Verify status text
-        await expect(page.getByText('Aktiv sæson 🟢')).toBeVisible()
+        await expect(page.getByText('Aktiv sæson')).toBeVisible()
     })
 })

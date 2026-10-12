@@ -98,14 +98,17 @@ describe('DinnerBudget', () => {
         expect(findByTestId(wrapper, 'budget-summary-left').exists()).toBe(false)
         expect(findByTestId(wrapper, 'budget-summary-available').exists()).toBe(true)
         expect(findAllByTestId(wrapper, 'cooking-round')).toHaveLength(2)
-        expect(findAllByTestId(wrapper, 'cooking-round')[0]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(true)
-        // The one line of this dinner follows its row as a receipt sub-row
-        expect(findAllByTestId(wrapper, 'cooking-round')[0]!.text()).toContain(`/ ${formatPrice(4000)} kr`)
+        // This dinner: its heading, its one receipt as a row, its figures in the total row; the arrow only in the team's
+        const own = findAllByTestId(wrapper, 'cooking-round')[0]!
+        expect(own.find('[data-testid="cooking-round-heading"]').text()).toBe('Lasagne, 12/04/2026')
+        expect(own.text()).toContain(`/ ${formatPrice(4000)} kr`)
+        expect(own.find('[data-testid="cooking-round-marker"]').exists()).toBe(false)
+        expect(findAllByTestId(wrapper, 'cooking-round')[1]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(true)
         expect(findByTestId(wrapper, 'ticket-changes').exists()).toBe(true)
         expect(findByTestId(wrapper, 'cooking-round').exists()).toBe(true)
         // The dinner's figures, then the team's, then the ticket changes last
         expect(wrapper.html().indexOf('data-testid="ticket-changes"')).toBeGreaterThan(wrapper.html().indexOf('data-testid="cooking-round"'))
-        expect(findByTestId(wrapper, 'cooking-round-heading').text()).toBe('Hele Madhold 2, for perioden 12/04–13/04')
+        expect(findAllByTestId(wrapper, 'cooking-round-heading')[1]!.text()).toBe('Hele Madhold 2, for perioden 12/04–13/04')
     })
 
     it('GIVEN no tickets WHEN opened THEN there are no ticket changes to see', async () => {
@@ -115,13 +118,13 @@ describe('DinnerBudget', () => {
         expect(findByTestId(wrapper, 'ticket-changes').exists()).toBe(false)
     })
 
-    it('GIVEN a lone dinner WHEN opened THEN the spending table shows its one row without the team heading', async () => {
+    it('GIVEN a lone dinner WHEN opened THEN only this dinner\'s fragment shows, headed by the dinner', async () => {
         const wrapper = await mount({roundRows: [round[0]!], roundWords: null})
         await wrapper.find('button[name="toggle-budget-details"]').trigger('click')
         await wrapper.vm.$nextTick()
         expect(findAllByTestId(wrapper, 'cooking-round')).toHaveLength(1)
-        expect(findByTestId(wrapper, 'cooking-round-heading').exists()).toBe(false)
-        expect(findByTestId(wrapper, 'cooking-round-total').exists()).toBe(false)
+        expect(findByTestId(wrapper, 'cooking-round-heading').text()).toBe('Lasagne, 12/04/2026')
+        expect(findByTestId(wrapper, 'cooking-round-total').text()).toContain('Lasagne')
     })
 
     it('GIVEN no round WHEN opened THEN the round section is absent', async () => {

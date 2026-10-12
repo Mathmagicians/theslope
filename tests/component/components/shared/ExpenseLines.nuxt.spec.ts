@@ -178,7 +178,7 @@ describe('ExpenseLines', () => {
             const rows = lineRows(wrapper)
             expect(rows).toHaveLength(2)
             lines().forEach((line, index) => {
-                expect(rows[index]!.text()).toContain(formatDate(line.createdAt, 'dd/MM'))
+                expect(rows[index]!.text()).toContain(formatDate(line.createdAt))
                 expect(rows[index]!.text()).toContain(line.paidBy.name!)
                 expect(rows[index]!.text()).toContain(formatPrice(exOf(line.amount)))
                 expect(rows[index]!.text()).toContain(`/ ${formatPrice(line.amount)} kr`)

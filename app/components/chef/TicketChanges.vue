@@ -33,6 +33,7 @@ const changeColumns: TableColumn<TicketChange>[] = [
 ]
 const {TicketTypeSchema} = useBookingValidation()
 const {ticketTypeConfig, formatPrice} = useTicket()
+const {formatMoment} = useBooking()
 const bookingsStore = useBookingsStore()
 
 const open = ref(false)
@@ -65,7 +66,6 @@ const movedTypes = (delta: TicketCounts) => TICKET_TYPES.filter(type => delta[ty
 const heldTypes = (counts: TicketCounts) => TICKET_TYPES.filter(type => counts[type] > 0)
 const signed = (count: number) => `${count > 0 ? '+' : ''}${count}`
 const actionLabel = (change: TicketChange) => ORDER_ACTION_LABELS[change.action].label
-const formatMoment = (date: Date) => formatDate(date, 'dd/MM HH:mm')
 </script>
 
 <template>

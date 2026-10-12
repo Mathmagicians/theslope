@@ -367,7 +367,7 @@ describe('ChefMenuCard — Madbestilling', () => {
         await flushPromises()
         await wrapper.vm.$nextTick()
         expect(findByTestId(wrapper, 'expense-table').text()).toContain('Rådighedsbeløb')
-        expect(findByTestId(wrapper, 'expense-hint-heading').text()).toBe(`Hele ${useCookingTeam().getTeamShortName('Madhold 2')}, for perioden 12/04–13/04`)
+        expect(findByTestId(wrapper, 'expense-hint-heading').text()).toBe(`Hele ${useCookingTeam().getTeamShortName('Madhold 2')}, for perioden 12/04/2026-13/04/2026`)
         expect(findAllByTestId(wrapper, 'expense-hint-row')).toHaveLength(6)
     })
 })

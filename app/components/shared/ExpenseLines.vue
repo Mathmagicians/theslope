@@ -166,7 +166,7 @@ const lineColumns: TableColumn<Expense>[] = [
 
       <!-- The lines and, as the table's bottom rows, the sums: this dinner's, then the whole team's set apart -->
       <UTable :data="expenses" :columns="lineColumns" :ui="COMPONENTS.table.ui" data-testid="expense-table">
-        <template #date-cell="{ row }">{{ formatDate(row.original.createdAt, 'dd/MM') }}</template>
+        <template #date-cell="{ row }">{{ formatDate(row.original.createdAt) }}</template>
         <template #payer-cell="{ row }"><span :class="COMPONENTS.expenseLines.payer" data-testid="expense-payer">{{ row.original.paidBy.name ?? '' }}</span></template>
         <template #amount-cell="{ row }"><VatAmount :gross="row.original.amount" /></template>
         <template #remove-cell="{ row }">

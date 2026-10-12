@@ -17,11 +17,11 @@ import {
     type ReleasedTicketCounts
 } from '~/composables/useBooking'
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
-import {useOrder} from '~/composables/useOrder'
+import {useOrder, type SpendingFigures} from '~/composables/useOrder'
 import type {Expense} from '~/composables/useBillingValidation'
 import {useBookingValidation, type DinnerEventDisplay, type OrderDisplay, type DesiredOrder, type OrderState, type OrderAuditAction} from '~/composables/useBookingValidation'
 import {ICONS, COLOR, ALARM_TO_BADGE, type NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
-import {calculateCountdown, formatDate} from '~/utils/date'
+import {calculateCountdown, formatDate, formatDateRange} from '~/utils/date'
 
 // ============================================================================
 // Deadline Badges
@@ -63,24 +63,31 @@ export interface CookingRoundRow {
 export interface CookingRoundWords { team: string; heading: string }
 export const cookingRoundWords = (teamShortName: string, first: Date, last: Date): CookingRoundWords => {
     const team = `Hele ${teamShortName}`
-    return {team, heading: `${team}, for perioden ${formatDate(first, 'dd/MM')}–${formatDate(last, 'dd/MM')}`}
+    return {team, heading: `${team}, for perioden ${formatDateRange({start: first, end: last})}`}
 }
 
 /**
- * The rows of a spending table: a dinner row, and under this dinner its receipts as sub-rows (the bestiller as the
- * label, the amount) or one row with the empty text when there are none
+ * A spending table fragment: a heading, the rows (a team's cooking days, or this dinner's receipts with the bestiller
+ * as the label) and a total row carrying the figures the rows add up to
  */
 export type SpendingTableRow =
     | ({kind: 'dinner'} & CookingRoundRow)
     | {kind: 'receipt', id: string, date: Date, label: string, amount: number}
-    | {kind: 'none', id: string, label: string}
-export const spendingTableRows = (rows: CookingRoundRow[], receipts: Expense[] | null, emptyText: string): SpendingTableRow[] =>
-    rows.flatMap(row => {
-        const dinner: SpendingTableRow = {kind: 'dinner', ...row}
-        if (!row.isCurrent || receipts === null) return [dinner]
-        if (receipts.length === 0) return [dinner, {kind: 'none', id: `none-${row.dinnerEventId}`, label: emptyText}]
-        return [dinner, ...receipts.map((receipt): SpendingTableRow => ({kind: 'receipt', id: `receipt-${receipt.id}`, date: receipt.createdAt, label: receipt.paidBy.name ?? '', amount: receipt.amount}))]
-    })
+export interface SpendingFragment {
+    heading: string
+    rows: SpendingTableRow[]
+    total: {label: string, figures: SpendingFigures}
+}
+export const dinnerSpendingFragment = (dinner: CookingRoundRow, receipts: Expense[]): SpendingFragment => ({
+    heading: `${dinner.menuTitle}, ${formatDate(dinner.date)}`,
+    rows: receipts.map(receipt => ({kind: 'receipt', id: `receipt-${receipt.id}`, date: receipt.createdAt, label: receipt.paidBy.name ?? '', amount: receipt.amount})),
+    total: {label: dinner.menuTitle, figures: {budgetGross: dinner.budgetGross, spentGross: dinner.spentGross}}
+})
+export const teamSpendingFragment = (rows: CookingRoundRow[], words: CookingRoundWords): SpendingFragment => ({
+    heading: words.heading,
+    rows: rows.map(row => ({kind: 'dinner', ...row})),
+    total: {label: words.team, figures: useOrder().spendingTotals(rows)}
+})
 
 export const STEP_ICONS: Record<DinnerStepState, string> = {
     [DinnerStepState.SCHEDULED]: ICONS.calendar,

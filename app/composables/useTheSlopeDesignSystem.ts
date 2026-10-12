@@ -266,7 +266,7 @@ export const TEXT = {
         800: 'text-ocean-800'     // Chef calendar - future cookings
     },
     green: {
-        500: 'text-green-500'    // The sprout on the upcoming season's mark, the holiday ring's green
+        500: 'text-green-500'    // The sprout of an upcoming season, the holiday ring's green
     },
     gray: {
         400: 'text-gray-400',
@@ -937,8 +937,11 @@ export const COMPONENTS = {
 
     /** SeasonSelector: the select keeps room for the longest season name */
     seasonSelector: {select: 'min-w-48'},
-    // SeasonStatusMark: the disc the size of the text and the icon inside it
-    seasonStatus: {disc: 'inline-flex size-3 shrink-0 items-center justify-center rounded-full align-middle', discIcon: 'size-2.5'},
+    // The season status glyph beside a season name, the size of the text
+    seasonStatus: {
+        discUi: {base: 'size-3 rounded-full p-0 align-middle'},
+        sproutUi: {base: 'p-0 align-middle', leadingIcon: 'size-4'}
+    },
 
     /**
      * HouseholdCard: the preferences card's title and stack, the row toggle (the power row's toggle plays while closed),
@@ -2774,12 +2777,12 @@ export const getRandomEmptyMessage = (context: keyof typeof EMPTY_STATE_MESSAGES
     return messages[index]!
 }
 
-/** The season status marks: a disc per status; the upcoming one carries the sprout in the calendar's holiday green */
-export const SEASON_STATUS_GLYPHS: Record<SeasonStatusValue, {disc: string, icon?: string, iconClass?: string}> = {
-    [SEASON_STATUS.ACTIVE]: {disc: BG.green[600]},
-    [SEASON_STATUS.CURRENT]: {disc: BG.yellow[400]},
-    [SEASON_STATUS.FUTURE]: {disc: BG.allergyAvatar, icon: ICONS.sprout, iconClass: TEXT.green[500]},
-    [SEASON_STATUS.PAST]: {disc: BG.gray[500]}
+/** The season status glyph as a UBadge's settings per status: a filled disc, green active, yellow in progress, grey ended; the sprout alone for an upcoming season */
+export const SEASON_STATUS_GLYPHS: Record<SeasonStatusValue, BadgeProps & {class: string}> = {
+    [SEASON_STATUS.ACTIVE]: {class: BG.green[600], ui: COMPONENTS.seasonStatus.discUi},
+    [SEASON_STATUS.CURRENT]: {class: BG.yellow[400], ui: COMPONENTS.seasonStatus.discUi},
+    [SEASON_STATUS.FUTURE]: {icon: ICONS.sprout, class: `bg-transparent ${TEXT.green[500]}`, ui: COMPONENTS.seasonStatus.sproutUi},
+    [SEASON_STATUS.PAST]: {class: BG.gray[500], ui: COMPONENTS.seasonStatus.discUi}
 }
 
 export const useTheSlopeDesignSystem = () => {

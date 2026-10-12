@@ -2,8 +2,9 @@
 import {describe, it, expect} from 'vitest'
 import {mountSuspended} from "@nuxt/test-utils/runtime"
 import {findByTestId, VIEWPORTS} from '~~/tests/component/testHelpers'
-import {createResponsiveSizes, SEASON_STATUS_MARKS} from '~/composables/useTheSlopeDesignSystem'
+import {createResponsiveSizes, ICONS, SEASON_STATUS_GLYPHS} from '~/composables/useTheSlopeDesignSystem'
 import {getSeasonStatus} from '~/utils/season'
+import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 import SeasonSelector from '~/components/form/SeasonSelector.vue'
 import {nextTick, ref} from 'vue'
 import {SeasonFactory} from '../../../e2e/testDataFactories/seasonFactory'
@@ -181,13 +182,16 @@ describe('SeasonSelector', () => {
         expect(wrapper.findComponent({name: 'USelect'}).props('size')).toBe(createResponsiveSizes(ref(isMd)).seasonSelect)
     })
 
-    it('every option carries the icon and the marker of its season status from SEASON_STATUS_MARKS', async () => {
+    it('every option carries its status, the archive icon for an ended season and the calendar otherwise, and the selected one shows its status glyph', async () => {
         const wrapper = await createWrapper({modelValue: 1, seasons: mockSeasons})
-        const items = wrapper.findComponent({name: 'USelect'}).props('items') as Array<Season & {icon: string, suffix: string}>
+        const items = wrapper.findComponent({name: 'USelect'}).props('items') as Array<Season & {status: string, icon: string}>
         expect(items).toHaveLength(mockSeasons.length)
         for (const item of items) {
-            expect(item.icon).toBe(SEASON_STATUS_MARKS[getSeasonStatus(item)].icon)
-            expect(item.suffix).toBe(SEASON_STATUS_MARKS[getSeasonStatus(item)].glyph)
+            expect(item.status).toBe(getSeasonStatus(item))
+            expect(item.icon).toBe(item.status === SEASON_STATUS.PAST ? ICONS.seasonPast : ICONS.calendar)
         }
+        const glyph = wrapper.findAllComponents({name: 'UBadge'}).find(badge => badge.attributes('data-testid') === 'season-status-mark')
+        expect(glyph?.exists()).toBe(true)
+        expect(glyph!.classes()).toEqual(expect.arrayContaining(SEASON_STATUS_GLYPHS[getSeasonStatus(mockSeasons[0]!)].class.split(' ')))
     })
 })

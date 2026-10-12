@@ -57,7 +57,7 @@ Status.
 | `AdminToCreateSeason.vue` | `/admin/planning`, `/admin/teams` | none | ✅ | ❌ | ✅ |
 | `TicketPriceListEditor.vue` | `/admin/planning` | none | ✅ | ✅ parent | ✅ |
 | `SeasonSelector.vue` | `/admin/planning`, `/admin/teams` | plan | ✅ | ✅ parent | ✅ |
-| `SeasonStatusDisplay.vue` | `/admin/planning` | plan | ✅ | ✅ parent | ✅; binds `STATUS_GLYPHS` for its status circle |
+| `SeasonStatusDisplay.vue` | `/admin/planning` | plan | ✅ | ✅ parent | ✅ |
 
 ### Admin teams
 

@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, spendingTableRows, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, type ReleasedTicketCounts} from '~/composables/useBooking'
 import {useBookingValidation} from '~/composables/useBookingValidation'
@@ -26,19 +26,23 @@ const farFutureDinner = (overrides = {}) =>
 
 const released = (total: number, formatted = `${total}V`): ReleasedTicketCounts => ({total, formatted})
 
-describe('spendingTableRows', () => {
-    const dinner = (id: number, isCurrent: boolean): CookingRoundRow => ({dinnerEventId: id, date: new Date(2026, 3, 10 + id), menuTitle: `Ret ${id}`, isCurrent, budgetGross: 1000, spentGross: 0})
+describe('spending fragments', () => {
+    const dinner = (id: number, isCurrent: boolean): CookingRoundRow => ({dinnerEventId: id, date: new Date(2026, 3, 10 + id), menuTitle: `Ret ${id}`, isCurrent, budgetGross: 1000 * id, spentGross: 100 * id})
 
-    it('puts this dinner\'s receipts under its row as sub-rows, the bestiller as the label', () => {
+    it('builds this dinner\'s fragment: heading with title and date, the receipts as rows, its figures in the total', () => {
         const receipts = [ExpenseFactory.defaultExpense({id: 7, amount: 101200, paidBy: {id: 1, email: 'anna@example.com', name: 'Anna H.'}})]
-        const rows = spendingTableRows([dinner(1, false), dinner(2, true)], receipts, 'Madbestilling mangler')
-        expect(rows.map(row => row.kind)).toEqual(['dinner', 'dinner', 'receipt'])
-        expect(rows[2]).toMatchObject({kind: 'receipt', label: 'Anna H.', amount: 101200})
+        const fragment = dinnerSpendingFragment(dinner(2, true), receipts)
+        expect(fragment.heading).toBe('Ret 2, 12/04/2026')
+        expect(fragment.rows).toHaveLength(1)
+        expect(fragment.rows[0]).toMatchObject({kind: 'receipt', label: 'Anna H.', amount: 101200})
+        expect(fragment.total).toEqual({label: 'Ret 2', figures: {budgetGross: 2000, spentGross: 200}})
     })
 
-    it('says so under this dinner when there are no receipts, and adds nothing when none are given', () => {
-        expect(spendingTableRows([dinner(2, true)], [], 'Madbestilling mangler').map(row => row.kind)).toEqual(['dinner', 'none'])
-        expect(spendingTableRows([dinner(2, true)], null, 'Madbestilling mangler').map(row => row.kind)).toEqual(['dinner'])
+    it('builds the team\'s fragment: its words as heading and total label, the days as rows, the sums as figures', () => {
+        const fragment = teamSpendingFragment([dinner(1, false), dinner(2, true)], {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, for perioden 11/04–12/04'})
+        expect(fragment.heading).toBe('Hele Madhold 2, for perioden 11/04–12/04')
+        expect(fragment.rows.map(row => row.kind)).toEqual(['dinner', 'dinner'])
+        expect(fragment.total).toEqual({label: 'Hele Madhold 2', figures: {budgetGross: 3000, spentGross: 300}})
     })
 })
 
