@@ -40,6 +40,22 @@ test.describe('Login flow', () => {
         expect(lifetime, 'the cookie lives at most a day').toBeLessThanOrEqual(DAY_SECONDS)
     })
 
+    test('GIVEN a session that dies WHEN navigating in the app THEN login asks once and returns to the page', async ({page}) => {
+        await page.goto(DEEP_LINK)
+        await logInThroughForm(page)
+        await page.waitForURL(url => url.pathname === DEEP_LINK)
+        await waitForHydration(page)
+        await page.context().clearCookies()
+
+        // A client-side navigation: the page's datasets answer 401 and the login page loads with the page as redirect
+        await page.locator('a[href^="/dinner"]').first().click()
+
+        await page.waitForURL(url => url.pathname === '/login' && (url.searchParams.get('redirect') ?? '').startsWith('/dinner'))
+        await expect(page.locator('input[type="email"]')).toBeVisible()
+        await logInThroughForm(page)
+        await page.waitForURL(url => url.pathname === '/dinner')
+    })
+
     test('GIVEN a plain login WHEN logging in THEN the dashboard shows', async ({page}) => {
         await page.goto('/login')
         await logInThroughForm(page)

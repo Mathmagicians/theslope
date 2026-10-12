@@ -1,6 +1,7 @@
 import type {AsyncData, AsyncDataOptions, NuxtApp, NuxtError} from '#app'
 import type {NitroFetchOptions, NitroFetchRequest} from 'nitropack/types'
 import type {ZodType} from 'zod'
+import type {Router} from 'vue-router'
 
 type ApiError = { message?: string; statusCode?: number; statusMessage?: string; data?: unknown }
 
@@ -54,42 +55,61 @@ const statusCodeOf = (error: unknown): number | undefined => isApiError(error)
     ? error.statusCode ?? (error as Record<string, unknown>).status as number | undefined
     : undefined
 
-export type UncaughtApiErrorHandler = () => void
+export type ApiErrorHandler = () => void
 
-export interface UncaughtApiErrorActions {
+export interface ApiErrorActions {
     login: (redirect: string) => void
-    toast: (error: unknown) => void
+    toast: (error: ApiError) => void
 }
 
 /**
- * The application's error floor (plugins/apiErrors.client.ts): picks the handler an uncaught
- * error gets. A dead session re-authenticates and returns in place (the login page follows
- * ?redirect, and its own 401s stay put), any other API error surfaces as the standard toast;
- * an error that is not an API response is not this floor's to handle (null).
+ * The one decision for an API error, taken by handleApiError for every store read and write and by
+ * plugins/apiErrors.client.ts for what escapes component code. A dead session re-authenticates and
+ * returns in place (the login page follows ?redirect); on the login page itself a 401 is the sign-in's
+ * own failure and toasts. Any other API error surfaces as the standard toast; an error that is not an
+ * API response is not decided here (null).
  */
-export const resolveUncaughtApiError = (
+export const resolveApiError = (
     error: unknown,
     route: {path: string, fullPath: string},
-    actions: UncaughtApiErrorActions
-): UncaughtApiErrorHandler | null => {
+    actions: ApiErrorActions
+): ApiErrorHandler | null => {
     if (!isApiError(error)) return null
-    if (statusCodeOf(error) === 401) {
-        return route.path === '/login' ? null : () => actions.login(route.fullPath)
-    }
+    if (statusCodeOf(error) === 401 && route.path !== '/login') return () => actions.login(route.fullPath)
     return () => actions.toast(error)
+}
+
+/**
+ * The login page loads fresh, with the dead session's app state gone, and no URL write of the dying page can
+ * cancel the leave the way it cancels a router push. Every failing dataset calls this; the browser takes one load
+ */
+const leaveForLogin = (redirect: string, action: string) => {
+    if (import.meta.server) return
+    console.warn(`🔒 > API_ERROR > [${action}] 401: re-authenticating, returning to ${redirect}`)
+    reloadNuxtApp({path: `/login?redirect=${encodeURIComponent(redirect)}`, force: true})
+}
+
+// While a navigation is in flight, the page the user is heading to: a dead session met on the way returns there
+let heading: {path: string, fullPath: string} | null = null
+let tracking = false
+const trackNavigation = (router: Router) => {
+    if (tracking || import.meta.server) return
+    tracking = true
+    router.beforeEach((to) => { heading = {path: to.path, fullPath: to.fullPath} })
+    router.afterEach((to, _from, failure) => {
+        if (!failure || heading?.fullPath === to.fullPath) heading = null
+    })
 }
 
 export const useApiHandler = () => {
     // Captured in the setup context: the request fetch forwards the session cookie during SSR
     const toast = useToast()
     const requestFetch = useRequestFetch()
+    const router = useRouter()
+    trackNavigation(router)
+    const routeNow = () => heading ?? router.currentRoute.value
 
-    const handleApiError = (error: ApiError | unknown, action: string, customMessage?: string): string => {
-        // Extract serializable parts (FetchError is not a POJO)
-        const err: ApiError = isApiError(error)
-            ? { ...error, statusCode: statusCodeOf(error) }
-            : { message: String(error) }
-
+    const toastApiError = (err: ApiError, action: string, customMessage?: string): void => {
         const message = customMessage || (() => {
             switch (err.statusCode) {
                 case 400:
@@ -116,8 +136,26 @@ export const useApiHandler = () => {
             duration: 10000,
             color: 'warning'
         })
+    }
 
-        return message
+    const actionsFor = (action: string, customMessage?: string): ApiErrorActions => ({
+        login: (redirect) => leaveForLogin(redirect, action),
+        // Serializable parts only (FetchError is not a POJO)
+        toast: (error) => toastApiError({...error, statusCode: statusCodeOf(error)}, action, customMessage)
+    })
+
+    /** Every failure of a store read or write: the resolver's handler, or the standard toast for an error that is not an API response */
+    const handleApiError = (error: unknown, action: string, customMessage?: string): void => {
+        const handler = resolveApiError(error, routeNow(), actionsFor(action, customMessage))
+            ?? (() => toastApiError({message: String(error)}, action, customMessage))
+        handler()
+    }
+
+    /** What escapes component code (plugins/apiErrors.client.ts): an API error runs its handler; anything else is not ours */
+    const handleUncaughtError = (error: unknown): boolean => {
+        const handler = resolveApiError(error, routeNow(), actionsFor('uncaught'))
+        handler?.()
+        return handler !== null
     }
 
     /**
@@ -234,6 +272,7 @@ export const useApiHandler = () => {
     return {
         storeAsyncData,
         apiRequest,
-        handleApiError
+        handleApiError,
+        handleUncaughtError
     }
 }
