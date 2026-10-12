@@ -5,7 +5,7 @@
  * (POST /api/admin/sender/event/monthly-billing).
  */
 import {emit, notSent} from '~~/server/utils/sender/emit'
-import {composeEmail, missingAddress} from '~~/server/utils/sender/compose'
+import {composeEmail, missingAddress, siteUrl} from '~~/server/utils/sender/compose'
 import {useBillingValidation, type BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
 import type {EmailMessage, NotificationConfig, SenderEmitResult} from '~/composables/useNotificationValidation'
 
@@ -28,7 +28,7 @@ export const buildBillingPeriodClosedEmail = (config: NotificationConfig, summar
             billingPeriod: summary.billingPeriod,
             householdCount: String(summary.householdCount),
             totalAmount: formatKroner(summary.totalAmount),
-            summaryUrl: `https://${config.site}/public/billing/${summary.shareToken}`,
+            summaryUrl: siteUrl(config, `/public/billing/${summary.shareToken}`),
             ...(kind === 'BILLING_PERIOD_UPDATED' ? {version: String(summary.version)} : {})
         },
         attachments: [{filename: generateCsvFilename(summary), contentType: 'text/csv; charset=utf-8', content: generateBillingCsv(summary)}],

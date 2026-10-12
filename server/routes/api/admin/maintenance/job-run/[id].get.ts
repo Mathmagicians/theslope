@@ -1,5 +1,5 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from 'h3'
-import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 import {fetchJobRun} from '~~/server/data/maintenanceRepository'
 import type {JobRunDisplay} from '~/composables/useMaintenanceValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
@@ -7,9 +7,7 @@ import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 const {throwH3Error} = eventHandlerHelper
 const LOG = '🔧 > JOB_RUN > [GET]'
 
-const idSchema = z.object({
-    id: z.coerce.number().int().positive()
-})
+const paramSchema = idParams('id')
 
 /**
  * GET /api/admin/maintenance/job-run/[id]
@@ -23,7 +21,7 @@ export default defineEventHandler(async (event): Promise<JobRunDisplay> => {
     // Validation - ADR-002
     let params
     try {
-        params = await getValidatedRouterParams(event, idSchema.parse)
+        params = await getValidatedRouterParams(event, paramSchema.parse)
     } catch (e) {
         return throwH3Error(`${LOG} Invalid job run ID`, e, 400)
     }

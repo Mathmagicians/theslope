@@ -1,5 +1,5 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from "h3"
-import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 import type {ScaffoldResult} from "~/composables/useBookingValidation"
@@ -8,9 +8,7 @@ const {throwH3Error} = eventHandlerHelper
 
 const LOG = '🎟️ > SEASON > [SCAFFOLD_PREBOOKINGS]'
 
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('Season ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 /**
  * POST /api/admin/season/[id]/scaffold-prebookings
@@ -24,7 +22,7 @@ export default defineEventHandler(async (event): Promise<ScaffoldResult> => {
     // Input validation
     let seasonId: number
     try {
-        const params = await getValidatedRouterParams(event, idSchema.parse)
+        const params = await getValidatedRouterParams(event, paramSchema.parse)
         seasonId = params.id
     } catch (error) {
         return throwH3Error(`${LOG} Validation error`, error)

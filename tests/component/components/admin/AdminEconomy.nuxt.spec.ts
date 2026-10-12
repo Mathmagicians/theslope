@@ -5,41 +5,26 @@ import {toValue} from 'vue'
 import {enableAutoUnmount} from '@vue/test-utils'
 import AdminEconomy from '~/components/admin/AdminEconomy.vue'
 import {useBookingsStore} from '~/stores/bookings'
-import type {UserDetail} from '~/composables/useCoreValidation'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
-import {mountWithTooltipProvider, mountedStore, resetStores} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, mountedStore, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
 
 // The test environment has no router to land a deep link on, and no session cookie
-const {mockRoute, sessionUser} = await vi.hoisted(async () => {
-    const {reactive, ref} = await import('vue')
-    return {
-        mockRoute: reactive({path: '/admin/economy', params: {tab: 'economy'}, query: {} as Record<string, string>, hash: ''}),
-        sessionUser: ref<UserDetail | null>(null)
-    }
+const {mockRoute, mockNavigateTo, landNavigation, useRoute, session, useUserSession} = await vi.hoisted(async () => {
+    const {mockRouteAndNavigation, mockSession} = await import('~~/tests/component/hoistedMocks')
+    return {...mockRouteAndNavigation({path: '/admin/economy', params: {tab: 'economy'}}), ...mockSession()}
 })
-mockNuxtImport('useRoute', () => () => mockRoute)
-mockNuxtImport('navigateTo', () => vi.fn((to: {query: Record<string, string>}) => {
-    mockRoute.query = to.query
-}))
-mockNuxtImport('useUserSession', () => () => ({
-    loggedIn: {value: true},
-    user: sessionUser,
-    session: {value: null},
-    clear: vi.fn(),
-    fetch: vi.fn()
-}))
+mockNuxtImport('useRoute', () => useRoute)
+mockNuxtImport('navigateTo', () => mockNavigateTo)
+mockNuxtImport('useUserSession', () => useUserSession)
+mockNavigateTo.mockImplementation(landNavigation)
 
 const period = BillingFactory.defaultSummaryData('admin-economy')
 const invoice = period.invoices[0]!
+registerEmptyStoreEndpoints()
 registerEndpoint(`/api/admin/billing/periods/${period.id}`, () => period)
 registerEndpoint('/api/admin/billing/periods', () => [period])
 registerEndpoint(`/api/admin/billing/invoices/${invoice.id}`, () => [])
-registerEndpoint('/api/admin/billing/current-period', () => [])
-registerEndpoint('/api/order', () => [])
-registerEndpoint('/api/admin/household', () => [])
-registerEndpoint('/api/admin/season/active', () => null)
-registerEndpoint('/api/admin/season', () => [])
 
 // The next test's resetStores drops the datasets a still-mounted page reads
 enableAutoUnmount(afterEach)
@@ -49,7 +34,7 @@ type Store = ReturnType<typeof useBookingsStore>
 describe('AdminEconomy - the billing selection in the URL', () => {
     beforeEach(() => {
         resetStores()
-        sessionUser.value = UserFactory.defaultUserWithInhabitant('admin-economy')
+        session.user.value = UserFactory.defaultUserWithInhabitant('admin-economy')
         mockRoute.query = {}
     })
 

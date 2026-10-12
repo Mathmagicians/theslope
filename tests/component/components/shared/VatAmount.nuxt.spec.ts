@@ -1,11 +1,9 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
-import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {ref} from 'vue'
 import VatAmount from '~/components/shared/VatAmount.vue'
 import {useOrder} from '~/composables/useOrder'
 import {useTicket} from '~/composables/useTicket'
-import {findByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, kitchenConfig} from '~~/tests/component/testHelpers'
 
 /**
  * VatAmount: one gross figure rendered in both units, the ex moms half first; a balance carries its sign and icon.
@@ -15,10 +13,10 @@ const {formatPrice} = useTicket()
 
 let vatPercent: number
 beforeAll(() => {
-    vatPercent = useAppConfig().theslope?.kitchen?.vatPercent ?? 25
+    ({vatPercent} = kitchenConfig())
 })
 
-const mount = (props: {gross: number, balance?: boolean, pending?: boolean}) => mountSuspended(VatAmount, {props, global: {provide: {isMd: ref(true)}}})
+const mount = (props: {gross: number, balance?: boolean, pending?: boolean}) => mountWithTooltipProvider(VatAmount, {props, isMd: true})
 
 describe('VatAmount', () => {
     it('GIVEN a gross amount WHEN rendering THEN the ex moms figure comes first and the inkl. moms half after the slash', async () => {

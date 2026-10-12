@@ -81,7 +81,8 @@ test.describe('Chef expense lines', () => {
 
         await pane.getByTestId('expense-remove').first().click()
         await expect(pane.getByTestId('expense-remove')).toHaveCount(0)
-        await expect(pane.getByTestId('expense-table')).toContainText('Madbestilling mangler')
+        // The table's own empty state, one of the noReceipts messages
+        await expect(pane.getByTestId('expense-table-empty')).toBeVisible()
         await pane.getByTestId('expense-back').click()
         await expect(pane.getByTestId('expense-empty')).toHaveText('Madbestilling mangler')
         expect(await ExpenseFactory.list(memberContext, dinnerEventId)).toEqual([])

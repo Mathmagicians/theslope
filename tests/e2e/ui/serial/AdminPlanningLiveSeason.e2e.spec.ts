@@ -6,16 +6,14 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
-import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {formatDate} from '~/utils/date'
 import type {Season} from '~/composables/useSeasonValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, temporaryAndRandom, waitForHydration, fillDateField} = testHelpers
+const {validatedBrowserContext, pollUntil, temporaryAndRandom, waitForHydration, fillDateField, waitForApi} = testHelpers
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const {createDefaultWeekdayMap: createDefaultDinnerModeMap} = useCoreValidation()
-const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
 
 /**
  * Editing the ACTIVE season from /admin/planning - SERIAL
@@ -37,21 +35,9 @@ test.describe('AdminPlanning on the live season - Serial UI', () => {
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        const tomorrow = new Date()
-        tomorrow.setDate(tomorrow.getDate() + 1)
-        tomorrow.setHours(0, 0, 0, 0)
-        const tenDaysOn = new Date(tomorrow)
-        tenDaysOn.setDate(tenDaysOn.getDate() + 10)
-
-        const created = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
-            cookingDays: createBooleanWeekdayMap([true, true, true, true, true, true, true]),
-            seasonDates: {start: tomorrow, end: tenDaysOn},
-            holidays: [],
-            ticketIsCancellableDaysBefore: 2
-        })
+        const created = await SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days: 10, deadline: 2, cookingDays: 'all'})
         season = created.season
         createdSeasonIds.push(season.id!)
-        await SeasonFactory.activateSeason(context, season.id!)
 
         const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
             context, HouseholdFactory.defaultHouseholdData(testSalt), 1
@@ -101,10 +87,7 @@ test.describe('AdminPlanning on the live season - Serial UI', () => {
         await expect(page.locator('[name="holidayRangeList-0"]')).toBeVisible()
 
         // The save reconciles and re-scaffolds every household, so wait for the response itself
-        const savePromise = page.waitForResponse(
-            response => response.url().includes(`/api/admin/season/${season.id}`) && response.request().method() === 'POST',
-            {timeout: 90_000}
-        )
+        const savePromise = waitForApi(page, `/api/admin/season/${season.id}`, 'POST', {timeout: 90_000})
         await page.getByTestId('submit-season').click()
         expect((await savePromise).status()).toBe(200)
 

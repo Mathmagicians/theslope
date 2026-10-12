@@ -9,7 +9,7 @@ import {formatDate} from '~/utils/date'
 import {addDays} from 'date-fns/addDays'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, waitForHydration, collectHydrationWarnings, getSessionUserInfo, gotoHydrated, salt, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, expectHydratedWithoutMismatch, getSessionUserInfo, gotoHydrated, salt, temporaryAndRandom} = testHelpers
 const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
 
 /**
@@ -73,8 +73,7 @@ test.describe('Dinner Page URL Navigation', () => {
         const page = await context.newPage()
 
         // WHEN: Navigate to dinner page without date parameter
-        await page.goto(dinnerPageUrl)
-        await waitForHydration(page)
+        await gotoHydrated(page, dinnerPageUrl)
 
         // THEN: URL should auto-sync to a valid dinner date (component calculates "next" at runtime)
         await pollUntil(
@@ -107,8 +106,7 @@ test.describe('Dinner Page URL Navigation', () => {
         const page = await context.newPage()
 
         // WHEN: Navigate with invalid date parameter
-        await page.goto(`${dinnerPageUrl}?date=99/99/9999`)
-        await waitForHydration(page)
+        await gotoHydrated(page, `${dinnerPageUrl}?date=99/99/9999`)
 
         // THEN: URL should auto-sync to a valid dinner date
         await pollUntil(
@@ -142,8 +140,7 @@ test.describe('Dinner Page URL Navigation', () => {
         const secondEventDate = testData.dates.second
 
         // WHEN: Navigate directly to second event's date (bypassing "next dinner" logic)
-        await page.goto(`${dinnerPageUrl}?date=${secondEventDate}`)
-        await waitForHydration(page)
+        await gotoHydrated(page, `${dinnerPageUrl}?date=${secondEventDate}`)
 
         // Wait for dinner detail panel to load
         await pollUntil(
@@ -175,13 +172,9 @@ test.describe('Dinner Page URL Navigation', () => {
     test('GIVEN a dinner date in the URL WHEN the page loads THEN the client hydrates the server-rendered dinner without a mismatch', async ({browser}) => {
         const context = await memberValidatedBrowserContext(browser)
         const page = await context.newPage()
-        const hydrationWarnings = collectHydrationWarnings(page)
-
-        await page.goto(`${dinnerPageUrl}?date=${testData.dates.second}`)
-        await waitForHydration(page)
+        await expectHydratedWithoutMismatch(page, `${dinnerPageUrl}?date=${testData.dates.second}`)
 
         await expect(page.getByTestId('dinner-detail-panel')).toContainText(testData.dates.second)
-        expect(hydrationWarnings).toEqual([])
     })
 
     test('GIVEN date without dinner event WHEN page loads THEN auto-syncs to nearest dinner event', async ({browser}) => {
@@ -192,8 +185,7 @@ test.describe('Dinner Page URL Navigation', () => {
         const noDinnerDate = formatDate(addDays(new Date(), 10))
 
         // WHEN: Navigate with date that has no dinner event
-        await page.goto(`${dinnerPageUrl}?date=${noDinnerDate}`)
-        await waitForHydration(page)
+        await gotoHydrated(page, `${dinnerPageUrl}?date=${noDinnerDate}`)
 
         // THEN: URL should auto-sync to one of the valid dinner dates
         await pollUntil(
@@ -227,8 +219,7 @@ test.describe('Dinner Page URL Navigation', () => {
         const event2 = testData.events[1]!
 
         // GIVEN: Load page with first event's date
-        await page.goto(`${dinnerPageUrl}?date=${testData.dates.first}`)
-        await waitForHydration(page)
+        await gotoHydrated(page, `${dinnerPageUrl}?date=${testData.dates.first}`)
 
         // Wait for dinner detail panel to be visible (confirms first event is loaded)
         await pollUntil(

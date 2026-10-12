@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
 import {mountSuspended} from "@nuxt/test-utils/runtime"
-import {findByTestId, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, VIEWPORTS} from '~~/tests/component/testHelpers'
 import {createResponsiveSizes, ICONS, SEASON_STATUS_GLYPHS} from '~/composables/useTheSlopeDesignSystem'
 import {getSeasonStatus} from '~/utils/season'
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
@@ -11,8 +11,6 @@ import {SeasonFactory} from '../../../e2e/testDataFactories/seasonFactory'
 import type {Season} from '~/composables/useSeasonValidation'
 
 describe('SeasonSelector', () => {
-
-    type WrapperType = Awaited<ReturnType<typeof mountSuspended>>
 
     const DROPDOWN_TEST_ID = 'season-selector'
 
@@ -31,23 +29,16 @@ describe('SeasonSelector', () => {
         }
     ]
 
-    const createWrapper = async (props: {
+    const createWrapper = (props: {
         modelValue: number | undefined
         seasons: Season[]
         loading?: boolean
         disabled?: boolean
-    }) => {
-        return await mountSuspended(SeasonSelector, {
-            props,
-            global: {
-                provide: {
-                    isMd: ref(false) // Provide isMd injection for responsive breakpoint
-                }
-            }
-        })
-    }
+    }, isMd = false) => mountWithTooltipProvider(SeasonSelector, {props, isMd})
 
-    const getDropdown = (wrapper: WrapperType) => {
+    type WrapperType = Awaited<ReturnType<typeof createWrapper>>
+
+    const getDropdown = (wrapper: Parameters<typeof findByTestId>[0]) => {
         return findByTestId(wrapper, DROPDOWN_TEST_ID)
     }
 
@@ -157,10 +148,11 @@ describe('SeasonSelector', () => {
         expect(options.length).toBe(0)
     })
 
+    // setProps works on the mounted root alone
     it('updates displayed value when modelValue prop changes', async () => {
-        const wrapper = await createWrapper({
-            modelValue: 1,
-            seasons: mockSeasons
+        const wrapper = await mountSuspended(SeasonSelector, {
+            props: {modelValue: 1, seasons: mockSeasons},
+            global: {provide: {isMd: ref(false)}}
         })
 
         let dropdown = getDropdown(wrapper)
@@ -175,10 +167,7 @@ describe('SeasonSelector', () => {
     })
 
     it.each(VIEWPORTS)('$viewport: binds the season select size of its viewport', async ({isMd}) => {
-        const wrapper = await mountSuspended(SeasonSelector, {
-            props: {modelValue: 1, seasons: mockSeasons},
-            global: {provide: {isMd: ref(isMd)}}
-        })
+        const wrapper = await createWrapper({modelValue: 1, seasons: mockSeasons}, isMd)
         expect(wrapper.findComponent({name: 'USelect'}).props('size')).toBe(createResponsiveSizes(ref(isMd)).seasonSelect)
     })
 

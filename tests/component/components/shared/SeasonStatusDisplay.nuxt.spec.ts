@@ -1,9 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach} from 'vitest'
-import {setActivePinia, createPinia} from 'pinia'
 import {mountSuspended, registerEndpoint} from '@nuxt/test-utils/runtime'
-import {clearNuxtData} from '#app'
-import {findByTestId, pollFor} from '~~/tests/component/testHelpers'
+import {findByTestId, pollFor, resetStores} from '~~/tests/component/testHelpers'
 import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTestIds'
 import SeasonStatusDisplay from '~/components/shared/SeasonStatusDisplay.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -23,8 +21,7 @@ registerEndpoint('/api/admin/season', () => [activeSeason, inactiveSeason])
 describe('SeasonStatusDisplay', () => {
 
     beforeEach(() => {
-        setActivePinia(createPinia())
-        clearNuxtData()
+        resetStores()
     })
 
     const mount = async (props: {seasonId: number | null, showActivationButton?: boolean}) => {

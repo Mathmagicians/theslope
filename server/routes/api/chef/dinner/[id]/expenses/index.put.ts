@@ -1,5 +1,5 @@
 import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus} from 'h3'
-import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {requireChefForDinner} from '~~/server/utils/authorizationHelper'
 import {createExpense} from '~~/server/data/financesRepository'
@@ -9,7 +9,7 @@ import {useHousehold} from '~/composables/useHousehold'
 
 const {throwH3Error} = eventHandlerHelper
 const LOG = '🧾 > CHEF > EXPENSES > [PUT]'
-const paramsSchema = z.object({id: z.coerce.number().int().positive()})
+const paramSchema = idParams('id')
 
 /**
  * PUT /api/chef/dinner/[id]/expenses - a grocery line on the dinner
@@ -25,7 +25,7 @@ export default defineEventHandler(async (event): Promise<Expense> => {
     let id!: number
     let body!: ExpenseCreate
     try {
-        ({id} = await getValidatedRouterParams(event, paramsSchema.parse))
+        ({id} = await getValidatedRouterParams(event, paramSchema.parse))
         body = await readValidatedBody(event, ExpenseCreateSchema.parse)
     } catch (error) {
         return throwH3Error(`${LOG} Input validation error`, error, 400)

@@ -5,13 +5,11 @@ import type { Season } from '~/composables/useSeasonValidation'
 import type { SeasonSelectorOptions } from '~/composables/useSeasonSelector'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 
-const { mockNavigateTo, mockRouteData } = vi.hoisted(() => ({
-  mockNavigateTo: vi.fn(),
-  mockRouteData: { path: '/admin/planning', params: {}, query: {}, hash: '' }
-}))
+const { mockNavigateTo, mockRoute: mockRouteData, useRoute } = await vi.hoisted(async () =>
+  (await import('~~/tests/component/hoistedMocks')).mockRouteAndNavigation({path: '/admin/planning'}))
 
 mockNuxtImport('navigateTo', () => mockNavigateTo)
-mockNuxtImport('useRoute', () => () => mockRouteData)
+mockNuxtImport('useRoute', () => useRoute)
 
 // Mock seasons using factory pattern
 const mockSeasons: Season[] = [

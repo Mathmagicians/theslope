@@ -4,7 +4,7 @@ import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import testHelpers from '../testHelpers'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, getSessionUserInfo, temporaryAndRandom, gotoHydrated, waitForHydration, collectHydrationWarnings} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, getSessionUserInfo, temporaryAndRandom, gotoHydrated, expectHydratedWithoutMismatch} = testHelpers
 const {TeamRoleSchema} = useCookingTeamValidation()
 const TeamRole = TeamRoleSchema.enum
 
@@ -100,13 +100,9 @@ test.describe('Chef Page', () => {
     test('GIVEN member chef with assigned team WHEN the chef page loads THEN the client hydrates the server render without a mismatch and one footer', async ({browser}) => {
         const memberContext = await memberValidatedBrowserContext(browser)
         const page = await memberContext.newPage()
-        const hydrationWarnings = collectHydrationWarnings(page)
-
-        await page.goto(`${chefPageUrl}?team=${team1Id}`)
-        await waitForHydration(page)
+        await expectHydratedWithoutMismatch(page, `${chefPageUrl}?team=${team1Id}`)
 
         await expect(page.getByTestId('chef-calendar-header')).toBeVisible()
-        expect(hydrationWarnings).toEqual([])
         await expect(page.locator('footer')).toHaveCount(1)
     })
 
@@ -116,7 +112,7 @@ test.describe('Chef Page', () => {
         const page = await memberContext.newPage()
         // The countdown reads the team's next cooking day; the affinity assignment can give both teams the same one
         const nextCookingDay = async (teamId: number) => {
-            const team = await SeasonFactory.getCookingTeam(adminContext, teamId)
+            const team = (await SeasonFactory.getCookingTeamById(adminContext, teamId))!
             const upcoming = team.dinnerEvents.map(dinner => new Date(dinner.date).getTime()).filter(time => time > Date.now()).sort((a, b) => a - b)
             return upcoming[0] === undefined ? null : new Date(upcoming[0]).toDateString()
         }

@@ -6,7 +6,7 @@ import {BillingFactory} from '../testDataFactories/billingFactory'
 import {getHouseholdUrl} from '~/utils/household'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, doScreenshot, waitForHydration, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, pollUntil, doScreenshot, gotoHydrated, getSessionUserInfo} = testHelpers
 
 /**
  * Mobile viewport guard (iPhone X, 375x812): every screen fits a phone.
@@ -182,8 +182,7 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
             await sampleOverflowEveryFrame(page)
 
             // WHEN: the page is loaded and hydrated
-            await page.goto(url)
-            await waitForHydration(page)
+            await gotoHydrated(page, url)
             await pollUntil(
                 async () => page.getByTestId(ready).isVisible().catch(() => false),
                 (isVisible) => isVisible,

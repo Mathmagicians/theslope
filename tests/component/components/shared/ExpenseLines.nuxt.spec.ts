@@ -9,7 +9,7 @@ import {useOrder} from '~/composables/useOrder'
 import {useTicket} from '~/composables/useTicket'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {formatDate} from '~/utils/date'
-import {findByTestId, findAllByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, kitchenConfig} from '~~/tests/component/testHelpers'
 
 /**
  * ExpenseLines: folded it is one row, the glyph, the title and the total in both units (or the empty text), with the
@@ -23,7 +23,7 @@ const {VatModeSchema} = useBillingValidation()
 
 let vatPercent: number
 beforeAll(() => {
-    vatPercent = useAppConfig().theslope?.kitchen?.vatPercent ?? 25
+    ({vatPercent} = kitchenConfig())
 })
 const grossOf = (exKr: number) => convertVat(exKr * 100, vatPercent, false)
 const exOf = (grossOre: number) => convertVat(grossOre, vatPercent, true)
@@ -36,16 +36,16 @@ const lines = () => [
 const spentOf = (expenses: ReturnType<typeof lines>) => expenses.reduce((sum, line) => sum + line.amount, 0)
 const BUDGET = 178100
 
-const mount = (props: Record<string, unknown> = {}) => mountSuspended(ExpenseLines, {
-    props: {
-        expenses: lines(), title: 'Madbestilling', hint: 'Hvad kostede indkøbene?', emptyText: 'Madbestilling mangler',
-        editLabel: 'Rediger madbestilling', budgetGross: BUDGET, notePrefill: NOTE_PREFILL, ...props
-    },
-    global: {provide: {isMd: ref(true)}}
+const defaultProps = (props: Record<string, unknown>) => ({
+    expenses: lines(), title: 'Madbestilling', hint: 'Hvad kostede indkøbene?', emptyText: 'Madbestilling mangler',
+    editLabel: 'Rediger madbestilling', budgetGross: BUDGET, notePrefill: NOTE_PREFILL, ...props
 })
+const mount = (props: Record<string, unknown> = {}) => mountWithTooltipProvider(ExpenseLines, {props: defaultProps(props), isMd: true})
+// The root wrapper, for the one case that changes a prop after mount: setProps works on the mounted root only
+const mountRoot = (props: Record<string, unknown> = {}) => mountSuspended(ExpenseLines, {props: defaultProps(props), global: {provide: {isMd: ref(true)}}})
 type Wrapper = Awaited<ReturnType<typeof mount>>
 
-const open = async (wrapper: Wrapper) => {
+const open = async (wrapper: Parameters<typeof clickByTestId>[0]) => {
     await clickByTestId(wrapper, 'expense-edit')
     await nextTick()
 }
@@ -280,7 +280,7 @@ describe('ExpenseLines', () => {
         })
 
         it('GIVEN a pending request WHEN open THEN add and remove are disabled', async () => {
-            const wrapper = await mount({editable: true})
+            const wrapper = await mountRoot({editable: true})
             await open(wrapper)
             await wrapper.setProps({pending: true})
             await nextTick()

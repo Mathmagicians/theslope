@@ -6,7 +6,7 @@ import {PREF_TEST_IDS} from '~~/tests/component/components/user/userPreferencesT
 import type {Appearance, NotificationChannel} from '~/composables/useUserPreferenceValidation'
 
 const {memberUIFile} = authFiles
-const {waitForHydration, gotoHydrated, memberValidatedBrowserContext} = testHelpers
+const {waitForHydration, gotoHydrated, memberValidatedBrowserContext, waitForApi} = testHelpers
 
 /**
  * "Mine indstillinger" on the dashboard: the appearance a member picks reaches <html> on every page,
@@ -32,10 +32,7 @@ test.describe('My preferences', () => {
         await page.getByTestId(PREF_TEST_IDS.edit).click()
         await page.getByTestId(PREF_TEST_IDS.palette(palette)).click()
         await page.getByTestId(PREF_TEST_IDS.textScale(textScale)).click()
-        const saved = page.waitForResponse(
-            (response) => response.url().includes('/api/user/preferences') && response.request().method() === 'POST',
-            {timeout: 15000}
-        )
+        const saved = waitForApi(page, '/api/user/preferences', 'POST', {timeout: 15000})
         await page.getByTestId(PREF_TEST_IDS.save).click()
         expect((await saved).status()).toBe(200)
     }

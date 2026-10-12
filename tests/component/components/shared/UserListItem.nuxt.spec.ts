@@ -2,7 +2,7 @@
 import {describe, it, expect} from 'vitest'
 import UserListItem from '~/components/shared/UserListItem.vue'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
-import {mountWithTooltipProvider} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, VIEWPORTS} from '~~/tests/component/testHelpers'
 
 const SHOWN_AVATARS = 5
 
@@ -28,7 +28,7 @@ describe('UserListItem', () => {
         expect(desktop.html()).toBe(phone.html())
     })
 
-    describe.each([false, true])('group with isMd %s', (isMd) => {
+    describe.each(VIEWPORTS)('group on $viewport', ({isMd}) => {
         it(`shows ${SHOWN_AVATARS} avatars and counts the rest`, async () => {
             const wrapper = await mountItem({inhabitants, showNames: false, linkToProfile: false}, isMd)
 

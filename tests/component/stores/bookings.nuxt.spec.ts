@@ -26,28 +26,22 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import {formatDate} from '~/utils/date'
 import {addDays} from 'date-fns'
 import {flushPromises} from '@vue/test-utils'
-import {asyncDataStatus, resetStores} from '~~/tests/component/testHelpers'
+import {asyncDataStatus, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
 
 const DINNER_ID = 100
 const TEAM = SeasonFactory.defaultCookingTeamDisplay({id: 7, name: 'Madhold A - Winter 2026'})
 
 // The test runtime has no session cookie and no /api/_auth endpoint, so the session is the one
 // thing faked; the auth, plan and users stores are real
-const {session} = vi.hoisted(() => ({session: {} as {user: {value: UserDetail | null}}}))
-mockNuxtImport('useUserSession', () => {
-    session.user = ref<UserDetail | null>(null)
-    return () => ({
-        loggedIn: computed(() => session.user.value !== null),
-        user: session.user,
-        session: ref(null),
-        clear: vi.fn(),
-        fetch: vi.fn()
-    })
-})
+const {session, useUserSession} = await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).mockSession())
+mockNuxtImport('useUserSession', () => useUserSession)
 
 // The real showError swaps the test app for the Nuxt error page
 const {showErrorSpy} = vi.hoisted(() => ({showErrorSpy: vi.fn()}))
 mockNuxtImport('showError', () => showErrorSpy)
+
+// The stores' own datasets answer empty; the routes this spec drives register after, and the last registration answers
+registerEmptyStoreEndpoints()
 
 const GONE_DINNER_ID = 404
 const goneDinnerEndpoint = vi.fn(() => {
@@ -95,13 +89,7 @@ const selectSeason = (dinnerEvents: DinnerEventDisplay[] = []) => {
 // The session user's household is the households store's default selection
 const MY_HOUSEHOLD_ID = UserFactory.defaultUserWithInhabitant('bookings-store').Inhabitant!.household!.id
 registerEndpoint(`/api/admin/household/${MY_HOUSEHOLD_ID}`, () => ({...HouseholdFactory.defaultHouseholdDetail('bookings-store'), id: MY_HOUSEHOLD_ID}))
-registerEndpoint('/api/admin/household', () => [])
-registerEndpoint('/api/team/my', () => [])
-registerEndpoint('/api/admin/users/by-role/ALLERGYMANAGER', () => [])
-registerEndpoint('/api/admin/users', () => [])
 registerEndpoint('/api/admin/billing/periods', billingPeriodsEndpoint)
-registerEndpoint('/api/admin/billing/current-period', () => [])
-// Specific before the generic /api/order route
 const waitlistEntriesEndpoint = vi.fn((): unknown[] => [])
 registerEndpoint('/api/order/waitlist', waitlistEntriesEndpoint)
 registerEndpoint('/api/order', ordersEndpoint)

@@ -6,7 +6,7 @@ import {INSTALL_TEST_IDS} from '~~/tests/component/components/installPromptTestI
 import {INSTALL_MEDIA_QUERIES, INSTALL_PROMPT_STATE} from '~/composables/useInstallPrompt'
 
 const {memberUIFile} = authFiles
-const {waitForHydration} = testHelpers
+const {waitForHydration, gotoHydrated} = testHelpers
 
 type StubbedWindow = Window & {
     installPromptCalls?: number
@@ -59,8 +59,7 @@ const chromiumInstallable = (capturedEventKey: string) => {
 }
 
 const openDashboard = async (page: Page) => {
-    await page.goto('/login')
-    await waitForHydration(page)
+    await gotoHydrated(page, '/login')
     await expect(page.getByTestId('logout-button')).toBeVisible()
 }
 

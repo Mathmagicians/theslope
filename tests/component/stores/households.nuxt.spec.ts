@@ -6,8 +6,7 @@ import { setActivePinia, createPinia } from 'pinia'
 import { registerEndpoint, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import type {
   HouseholdDisplay,
-  HouseholdDetail,
-  UserDetail
+  HouseholdDetail
 } from '~/composables/useCoreValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -18,17 +17,10 @@ import { asyncDataStatus, resetStores } from '~~/tests/component/testHelpers'
 import { useHouseholdsStore } from '~/stores/households'
 
 // nuxt-auth-utils has no session in the test environment; the spec logs in and out and sets the session user
-const { mockLoggedIn, mockSessionUser } = await vi.hoisted(async () => {
-  const { ref } = await import('vue')
-  return { mockLoggedIn: ref(true), mockSessionUser: ref<UserDetail | null>(null) }
-})
-mockNuxtImport('useUserSession', () => () => ({
-  loggedIn: mockLoggedIn,
-  user: mockSessionUser,
-  session: { value: null },
-  clear: vi.fn(),
-  fetch: vi.fn()
-}))
+const { session, useUserSession } = await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).mockSession())
+mockNuxtImport('useUserSession', () => useUserSession)
+// Logged in without a session user: the reads gate on the flag alone
+session.loggedIn.value = true
 
 // Schema for validating mock responses
 const { InhabitantUpdateResponseSchema } = useBookingValidation()
@@ -576,14 +568,14 @@ describe('Households Store - gated reads', () => {
   beforeEach(() => {
     resetStores()
     vi.clearAllMocks()
-    mockLoggedIn.value = true
+    session.loggedIn.value = true
     householdIndexEndpoint.mockReturnValue(createMockHouseholds())
     householdByIdEndpoint.mockReturnValue(createMockHouseholdDetail())
     deleteHouseholdEndpoint.mockReturnValue(null)
   })
 
   afterEach(() => {
-    mockLoggedIn.value = true
+    session.loggedIn.value = true
   })
 
   const readFlags = (store: ReturnType<typeof useHouseholdsStore>) => ({
@@ -603,7 +595,7 @@ describe('Households Store - gated reads', () => {
 
   describe('households list (login gate, constant key)', () => {
     it('is idle and unrequested while logged out, and the store is not ready', async () => {
-      mockLoggedIn.value = false
+      session.loggedIn.value = false
 
       const store = useHouseholdsStore()
       await flushPromises()
@@ -614,11 +606,11 @@ describe('Households Store - gated reads', () => {
     })
 
     it('fetches once the user logs in', async () => {
-      mockLoggedIn.value = false
+      session.loggedIn.value = false
       const store = useHouseholdsStore()
       await flushPromises()
 
-      mockLoggedIn.value = true
+      session.loggedIn.value = true
 
       await vi.waitFor(() => expect(asyncDataStatus(HOUSEHOLDS_KEY)).toBe('success'))
       expect(householdIndexEndpoint).toHaveBeenCalled()
@@ -629,7 +621,7 @@ describe('Households Store - gated reads', () => {
       const store = await setupStore()
       expect(store.households).toHaveLength(createMockHouseholds().length)
 
-      mockLoggedIn.value = false
+      session.loggedIn.value = false
 
       await vi.waitFor(() => expect(asyncDataStatus(HOUSEHOLDS_KEY)).toBe('idle'))
       expect(store.households).toEqual([])
@@ -677,14 +669,14 @@ describe('Households Store - household selection', () => {
   beforeEach(() => {
     resetStores()
     vi.clearAllMocks()
-    mockSessionUser.value = UserFactory.defaultUserWithInhabitant('households-selection')
+    session.user.value = UserFactory.defaultUserWithInhabitant('households-selection')
     householdIndexEndpoint.mockReturnValue(createMockHouseholds())
     householdByIdEndpoint.mockReturnValue(createMockHouseholdDetail())
     deleteHouseholdEndpoint.mockReturnValue(null)
   })
 
   afterEach(() => {
-    mockSessionUser.value = null
+    session.user.value = null
   })
 
   it('selects my household by default once the households load', async () => {

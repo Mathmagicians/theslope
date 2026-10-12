@@ -30,7 +30,7 @@ export async function fetchJobRuns(
     limit: number = 10
 ): Promise<JobRunDisplay[]> {
     console.info(`${LOG} > [GET] Fetching job runs (jobType=${jobType ?? 'all'}, limit=${limit})`)
-    const prisma = await getPrismaClientConnection(d1Client, [])
+    const prisma = await getPrismaClientConnection(d1Client)
     const {JobRunDisplaySchema} = useMaintenanceValidation()
 
     const jobRuns = await prisma.jobRun.findMany({
@@ -53,7 +53,7 @@ export async function fetchJobRun(
     id: number
 ): Promise<JobRunDisplay | null> {
     console.info(`${LOG} > [GET] Fetching job run with ID ${id}`)
-    const prisma = await getPrismaClientConnection(d1Client, [])
+    const prisma = await getPrismaClientConnection(d1Client)
     const {JobRunDisplaySchema} = useMaintenanceValidation()
 
     const jobRun = await prisma.jobRun.findUnique({
@@ -77,7 +77,7 @@ export async function fetchLatestJobRun(
     jobType: JobType
 ): Promise<JobRunDisplay | null> {
     console.info(`${LOG} > [GET] Fetching latest job run for ${jobType}`)
-    const prisma = await getPrismaClientConnection(d1Client, [])
+    const prisma = await getPrismaClientConnection(d1Client)
     const {JobRunDisplaySchema} = useMaintenanceValidation()
 
     const jobRun = await prisma.jobRun.findFirst({
@@ -102,7 +102,7 @@ export async function createJobRun(
     data: JobRunCreate
 ): Promise<JobRunDisplay> {
     console.info(`${LOG} > [CREATE] Starting job run for ${data.jobType} (triggeredBy=${data.triggeredBy})`)
-    const prisma = await getPrismaClientConnection(d1Client, [])
+    const prisma = await getPrismaClientConnection(d1Client)
     const {JobRunDisplaySchema, JobStatus} = useMaintenanceValidation()
 
     const jobRun = await prisma.jobRun.create({
@@ -128,7 +128,7 @@ export async function updateJobRun(
     data: JobRunUpdate
 ): Promise<JobRunDisplay> {
     console.info(`${LOG} > [UPDATE] Updating job run ${id} with status=${data.status}`)
-    const prisma = await getPrismaClientConnection(d1Client, [])
+    const prisma = await getPrismaClientConnection(d1Client)
     const {JobRunDisplaySchema} = useMaintenanceValidation()
 
     const jobRun = await prisma.jobRun.update({
@@ -159,7 +159,7 @@ export async function completeJobRun(
     result?: JobResultSummary,
     errorMessage?: string
 ): Promise<JobRunDisplay> {
-    const prisma = await getPrismaClientConnection(d1Client, [])
+    const prisma = await getPrismaClientConnection(d1Client)
     const {JobRunDisplaySchema, serializeResultSummary} = useMaintenanceValidation()
 
     // Fetch current job run to calculate duration

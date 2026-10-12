@@ -22,13 +22,9 @@ import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
 
 // nuxt-auth-utils has no session in the test environment; the households store reads only while logged in
-mockNuxtImport('useUserSession', () => () => ({
-    loggedIn: ref(true),
-    user: ref(null),
-    session: ref(null),
-    clear: vi.fn(),
-    fetch: vi.fn()
-}))
+const {session, useUserSession} = await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).mockSession())
+mockNuxtImport('useUserSession', () => useUserSession)
+session.loggedIn.value = true
 
 const {TicketTypeSchema, DinnerModeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum

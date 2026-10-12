@@ -1,5 +1,5 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from 'h3'
-import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {requireChefForDinner} from '~~/server/utils/authorizationHelper'
 import {deleteExpense} from '~~/server/data/financesRepository'
@@ -7,10 +7,7 @@ import type {Expense} from '~/composables/useBillingValidation'
 
 const {throwH3Error} = eventHandlerHelper
 const LOG = '🧾 > CHEF > EXPENSES > [DELETE]'
-const paramsSchema = z.object({
-    id: z.coerce.number().int().positive(),
-    expenseId: z.coerce.number().int().positive()
-})
+const paramSchema = idParams('id', 'expenseId')
 
 /**
  * DELETE /api/chef/dinner/[id]/expenses/[expenseId] - remove a grocery line; returns the removed line (ADR-009)
@@ -21,7 +18,7 @@ export default defineEventHandler(async (event): Promise<Expense> => {
     let id!: number
     let expenseId!: number
     try {
-        ({id, expenseId} = await getValidatedRouterParams(event, paramsSchema.parse))
+        ({id, expenseId} = await getValidatedRouterParams(event, paramSchema.parse))
     } catch (error) {
         return throwH3Error(`${LOG} Input validation error`, error, 400)
     }

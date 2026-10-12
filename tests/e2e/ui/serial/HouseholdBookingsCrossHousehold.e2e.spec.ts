@@ -12,7 +12,6 @@ const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionU
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 
-const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
 const {createDefaultWeekdayMap: createDinnerModeWeekdayMap} = useWeekDayMapValidation({
     valueSchema: DinnerModeSchema,
     defaultValue: DinnerMode.DINEIN
@@ -52,20 +51,8 @@ test.describe('Cross-Household Bookings - Serial UI Tests', () => {
         })
         targetInhabitantId = targetInhabitant.id
 
-        const allDaysCooking = createBooleanWeekdayMap([true, true, true, true, true, true, true])
-        const fiveDaysFromNow = new Date()
-        fiveDaysFromNow.setDate(fiveDaysFromNow.getDate() + 5)
-        fiveDaysFromNow.setHours(0, 0, 0, 0)
-        const fifteenDaysFromNow = new Date(fiveDaysFromNow)
-        fifteenDaysFromNow.setDate(fifteenDaysFromNow.getDate() + 10)
-
-        testSeason = await SeasonFactory.createSeasonWithDinnerEvents(adminContext, testSalt, {
-            cookingDays: allDaysCooking,
-            seasonDates: {start: fiveDaysFromNow, end: fifteenDaysFromNow},
-            ticketIsCancellableDaysBefore: 2
-        })
+        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 10, deadline: 2, cookingDays: 'all', startInDays: 5})
         createdSeasonIds.push(testSeason.season.id!)
-        await SeasonFactory.activateSeason(adminContext, testSeason.season.id!)
 
         // Trigger scaffold via admin endpoint to create orders based on preferences
         await HouseholdFactory.updateInhabitant(

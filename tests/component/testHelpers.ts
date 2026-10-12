@@ -1,9 +1,9 @@
 import {nextTick, h, defineComponent, ref, isRef, type Component, type Ref} from 'vue'
 import {expect} from 'vitest'
 import {TooltipProvider} from 'reka-ui'
-import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {useNuxtApp, clearNuxtData} from '#app'
-import {createPinia, getActivePinia, setActivePinia, type Pinia} from 'pinia'
+import {mountSuspended, registerEndpoint} from '@nuxt/test-utils/runtime'
+import {useNuxtApp, clearNuxtData, useAppConfig} from '#app'
+import {getActivePinia, setActivePinia, type Pinia} from 'pinia'
 import {flushPromises, type BaseWrapper, type VueWrapper} from '@vue/test-utils'
 import {toCalendarDate} from '~/utils/date'
 
@@ -38,19 +38,40 @@ export async function pollFor(
 export const asyncDataStatus = (key: string) => useNuxtApp()._asyncData[key]?.status.value
 
 /**
- * Fresh stores over a fresh data layer per test: clearNuxtData keeps the keyed entries earlier stores
- * registered, and an earlier store left alive keeps watching them; a new app has neither
+ * Fresh stores over a fresh data layer per test. Every store of the app's pinia and of the active one is disposed,
+ * and the app's pinia stays active, so a spec and the components it mounts share one store instance; clearNuxtData
+ * keeps the keyed entries earlier stores registered, and a store left alive keeps watching them, so those go too
  */
 export const resetStores = () => {
     const nuxtApp = useNuxtApp()
-    getActivePinia()?._s.forEach(store => store.$dispose())
-    setActivePinia(createPinia())
+    const appPinia = nuxtApp.$pinia as Pinia
+    new Set([getActivePinia(), appPinia]).forEach(pinia => pinia?._s.forEach(store => store.$dispose()))
+    setActivePinia(appPinia)
     clearNuxtData()
     Object.keys(nuxtApp._asyncData).forEach(key => Reflect.deleteProperty(nuxtApp._asyncData, key))
 }
 
 /** The store instance a mounted component uses: components inject the Nuxt app's pinia, not the spec's active one */
 export const mountedStore = <S>(useStore: (pinia: Pinia) => S): S => useStore(useNuxtApp().$pinia as Pinia)
+
+/** The datasets the stores request on creation, answered empty; a spec's own route for one of them registers after this call, as the last registration of a url answers */
+export const registerEmptyStoreEndpoints = () => {
+    registerEndpoint('/api/admin/season/active', () => null)
+    registerEndpoint('/api/admin/season', () => [])
+    registerEndpoint('/api/admin/household', () => [])
+    registerEndpoint('/api/team/my', () => [])
+    registerEndpoint('/api/admin/users/by-role/ALLERGYMANAGER', () => [])
+    registerEndpoint('/api/admin/users', () => [])
+    registerEndpoint('/api/admin/billing/periods', () => [])
+    registerEndpoint('/api/admin/billing/current-period', () => [])
+    registerEndpoint('/api/order', () => [])
+}
+
+/** The kitchen's rates the money components calculate with, read from the app config inside a hook or a test */
+export const kitchenConfig = () => {
+    const kitchen = useAppConfig().theslope?.kitchen
+    return {baseRatePercent: kitchen?.baseRatePercent ?? 5, vatPercent: kitchen?.vatPercent ?? 25}
+}
 
 // Anything with find/findAll: a mountSuspended root, a findComponent() result or a DOMWrapper
 type Searchable = Pick<BaseWrapper<Node>, 'find' | 'findAll'>

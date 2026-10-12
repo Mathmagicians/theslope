@@ -1,5 +1,5 @@
 import {defineEventHandler, setResponseStatus, getValidatedRouterParams, createError} from 'h3'
-import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 import {fetchTransactionsForInvoice} from '~~/server/data/financesRepository'
 import type {TransactionDisplay} from '~/composables/useBillingValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
@@ -7,7 +7,7 @@ import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 const {throwH3Error} = eventHandlerHelper
 const LOG = '💰 > INVOICE > [GET TRANSACTIONS]'
 
-const idSchema = z.object({id: z.coerce.number().int().positive()})
+const paramSchema = idParams('id')
 
 /**
  * GET /api/admin/billing/invoices/[id]
@@ -24,7 +24,7 @@ export default defineEventHandler(async (event): Promise<TransactionDisplay[]> =
     // Validation (ADR-002)
     let invoiceId: number
     try {
-        const params = await getValidatedRouterParams(event, idSchema.parse)
+        const params = await getValidatedRouterParams(event, paramSchema.parse)
         invoiceId = params.id
     } catch (e) {
         throw createError({statusCode: 400, message: 'Invalid invoice ID', cause: e})

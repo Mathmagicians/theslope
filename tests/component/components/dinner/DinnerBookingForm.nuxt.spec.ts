@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach, beforeAll} from 'vitest'
-import {mountSuspended, mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {findByTestId, clickByTestId, withTooltipProvider, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS} from '~~/tests/component/testHelpers'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
@@ -10,33 +10,23 @@ import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {MODE_WORDS, bookingSaveLabel} from '~/composables/useBookingUi'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
 import type {DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
+import type {HouseholdDetail, UserDetail} from '~/composables/useCoreValidation'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
+import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {COMPONENTS, ICONS, createTableColumns} from '~/composables/useTheSlopeDesignSystem'
+import {WAITLIST_TEST_IDS} from './waitlistTestIds'
 
-// Mock stores
-const mockHouseholdsStore = {
-  selectedHousehold: null,
-  myInhabitant: {id: 1, name: 'Test', lastName: 'User'}
-}
-mockNuxtImport('useHouseholdsStore', () => () => mockHouseholdsStore)
-mockNuxtImport('storeToRefs', () => (store: typeof mockHouseholdsStore) => ({
-  selectedHousehold: ref(store.selectedHousehold),
-  myInhabitant: ref(store.myInhabitant)
-}))
-mockNuxtImport('useAllergiesStore', () => () => ({allergyTypes: []}))
-
-// Mock auth store - control isMemberOfHousehold behavior (session predicate lives on the store, ADR-017)
-const mockIsHouseholdMember = vi.fn(() => false)
-mockNuxtImport('useAuthStore', () => () => ({
-  user: null,
-  isAdmin: false,
-  inhabitantId: null,
-  isMemberOfHousehold: mockIsHouseholdMember
-}))
+/**
+ * DinnerBookingForm: real component tree and real stores (testing.md Rule 6); only HTTP and the session are faked.
+ * The edit permission is the auth store's isMemberOfHousehold over the session user, so the spec logs a member of
+ * the household or a stranger in.
+ */
+const {session, useUserSession} = await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).mockSession())
+mockNuxtImport('useUserSession', () => useUserSession)
 
 // Test fixtures - use real deadlinesForSeason() to stay in sync with SeasonDeadlines interface
 // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not at module level
@@ -52,16 +42,41 @@ const baseProps = {
   get deadlines() { return baseDeadlines }
 }
 const householdWithInhabitants = HouseholdFactory.defaultHouseholdDetail('test')
+const strangerHousehold = HouseholdFactory.defaultHouseholdDetail('stranger')
+
+/** A session user living in the household: the auth store's isMemberOfHousehold reads the inhabitant's householdId */
+const userInHousehold = (salt: string, household: HouseholdDetail): UserDetail => {
+  const base = UserFactory.defaultUserWithInhabitant(salt)
+  const inhabitant = household.inhabitants[0]!
+  return {
+    ...base,
+    Inhabitant: {
+      ...base.Inhabitant!,
+      id: inhabitant.id,
+      householdId: household.id,
+      household: {...base.Inhabitant!.household, id: household.id, pbsId: household.pbsId, shortName: household.shortName}
+    }
+  }
+}
+const member = userInHousehold('member', householdWithInhabitants)
+const stranger = userInHousehold('stranger', strangerHousehold)
+
+// Only HTTP is faked: the households store reads the session user's household once logged in
+registerEmptyStoreEndpoints()
+registerEndpoint('/api/admin/allergy-type', () => [])
+registerEndpoint(`/api/admin/household/${householdWithInhabitants.id}`, () => householdWithInhabitants)
+registerEndpoint(`/api/admin/household/${strangerHousehold.id}`, () => strangerHousehold)
+
+const mountForm = (props: Record<string, unknown>, isMd?: boolean) => mountWithTooltipProvider(DinnerBookingForm, {props, isMd})
+
+beforeEach(() => {
+  resetStores()
+  session.user.value = null
+})
 
 describe('DinnerBookingForm', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mockHouseholdsStore.selectedHousehold = null
-    mockIsHouseholdMember.mockReturnValue(false)
-  })
-
   it('renders empty state when no household', async () => {
-    const wrapper = await mountSuspended(DinnerBookingForm, {props: baseProps})
+    const wrapper = await mountForm(baseProps)
     expect(wrapper.text()).toContain('Ingen husstandsmedlemmer')
   })
 
@@ -74,9 +89,9 @@ describe('DinnerBookingForm', () => {
     ] as const
 
     it.each(editPermissionCases)('GIVEN $desc THEN edit=$expectEdit', async ({isMember, adminOverride, expectEdit}) => {
-      mockIsHouseholdMember.mockReturnValue(isMember)
+      session.user.value = isMember ? member : stranger
       const props = {...baseProps, household: householdWithInhabitants, canEditAdminOverride: adminOverride}
-      const wrapper = await mountSuspended(withTooltipProvider(DinnerBookingForm, props))
+      const wrapper = await mountForm(props)
       expect(findByTestId(wrapper, 'power-power-mode-toggle').exists()).toBe(expectEdit)
     })
   })
@@ -88,10 +103,10 @@ describe('DinnerBookingForm', () => {
     ]
 
     it.each(deadlineCases)('GIVEN canModifyOrders=$canModify THEN shows $desc', async ({canModify, expectedText}) => {
-      mockIsHouseholdMember.mockReturnValue(true)
+      session.user.value = member
       const deadlines = {...baseDeadlines, canModifyOrders: () => canModify}
       const props = {...baseProps, household: householdWithInhabitants, deadlines}
-      const wrapper = await mountSuspended(withTooltipProvider(DinnerBookingForm, props))
+      const wrapper = await mountForm(props)
       expect(wrapper.text()).toContain(expectedText)
     })
   })
@@ -126,16 +141,16 @@ describe('DinnerBookingForm', () => {
     }))
 
     const mountMember = (orders: OrderDisplay[]) => {
-      mockIsHouseholdMember.mockReturnValue(true)
+      session.user.value = member
       const deadlines = {...baseDeadlines, canModifyOrders: () => true, canEditDiningMode: () => true}
-      return mountSuspended(withTooltipProvider(DinnerBookingForm, {...baseProps, household: householdWithInhabitants, orders, deadlines}))
+      return mountForm({...baseProps, household: householdWithInhabitants, orders, deadlines})
     }
 
     const saveRow = async (wrapper: Awaited<ReturnType<typeof mountMember>>, rowId: string, dinnerMode: DinnerMode) => {
       await clickByTestId(wrapper, `${rowId}-toggle`)
       await clickByTestId(wrapper, `${rowId}-mode-edit-${dinnerMode}`)
       await clickByTestId(wrapper, `${rowId}-save`)
-      return wrapper.findComponent(DinnerBookingForm).emitted('saveBookings')
+      return wrapper.emitted('saveBookings')
     }
 
     it.each([DinnerMode.DINEINLATE, DinnerMode.TAKEAWAY, DinnerMode.NONE])(
@@ -183,10 +198,10 @@ describe('DinnerBookingForm', () => {
       }
 
       const mountBooked = () => {
-        mockIsHouseholdMember.mockReturnValue(true)
+        session.user.value = member
         const deadlines = {...baseDeadlines, canModifyOrders: () => true, canEditDiningMode: () => true}
         const orders = [...familyOrders(DinnerMode.DINEIN), ...guestOrders]
-        return mountSuspended(withTooltipProvider(DinnerBookingForm, {...baseProps, household: householdWithAllergies, orders, deadlines}))
+        return mountForm({...baseProps, household: householdWithAllergies, orders, deadlines})
       }
 
       const ticketAllergies = (wrapper: Awaited<ReturnType<typeof mountBooked>>) =>
@@ -263,14 +278,14 @@ describe('DinnerBookingForm', () => {
   describe('name column header', () => {
     it.each(VIEWPORTS)('$viewport: the name column carries the header of its viewport', async ({isMd}) => {
       const props = {...baseProps, household: householdWithInhabitants}
-      const wrapper = await mountSuspended(withTooltipProvider(DinnerBookingForm, props), {global: {provide: {isMd: ref(isMd)}}})
+      const wrapper = await mountForm(props, isMd)
       const headers = wrapper.findAll('thead th').map(th => th.text())
       expect(headers).toContain(createTableColumns(ref(isMd)).bookingFormName.header)
     })
 
     it.each(VIEWPORTS)('$viewport: the ticket column renders its header and cells from md through its column meta', async ({isMd}) => {
       const props = {...baseProps, household: householdWithInhabitants}
-      const wrapper = await mountSuspended(withTooltipProvider(DinnerBookingForm, props), {global: {provide: {isMd: ref(isMd)}}})
+      const wrapper = await mountForm(props, isMd)
       const {meta} = createTableColumns(ref(isMd)).bookingFormTicket
       const columns = wrapper.findComponent({name: 'UTable'}).props('columns') as Array<{id: string}>
       const ticketIndex = columns.findIndex(column => column.id === 'ticket')
@@ -289,17 +304,13 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
   const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo!.id, dinnerEventId, position: 2, dinnerMode: DinnerMode.TAKEAWAY})
 
   const mountClosed = (props: {orders?: OrderDisplay[], waitlistEntries?: ReturnType<typeof WaitlistFactory.defaultEntry>[]} = {}) => {
-    mockIsHouseholdMember.mockReturnValue(true)
+    session.user.value = member
     const deadlines = {...baseDeadlines, canModifyOrders: () => false, canEditDiningMode: () => true}
-    return mountSuspended(withTooltipProvider(DinnerBookingForm, {...baseProps, household: householdWithInhabitants, deadlines, ...props}))
+    return mountForm({...baseProps, household: householdWithInhabitants, deadlines, ...props})
   }
-  const emittedSaves = (wrapper: Awaited<ReturnType<typeof mountClosed>>) => wrapper.findComponent(DinnerBookingForm).emitted('saveBookings')
+  const emittedSaves = (wrapper: Awaited<ReturnType<typeof mountClosed>>) => wrapper.emitted('saveBookings')
   const editSelector = (wrapper: Awaited<ReturnType<typeof mountClosed>>, inhabitantId: number) =>
     wrapper.findAllComponents({name: 'DinnerModeSelector'}).find(selector => selector.props('name') === `inhabitant-${inhabitantId}-mode-edit`)!
-
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
 
   it('GIVEN no ticket WHEN the member picks a mode THEN the save previews the queue and sends the mode at the row\'s ticket price through the one booking path', async () => {
     const wrapper = await mountClosed({waitlistEntries: [boQueued]})
@@ -322,7 +333,7 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
   it('GIVEN a queued member THEN the row shows the position badge and the ticket shows the wished mode ghosted', async () => {
     const wrapper = await mountClosed({waitlistEntries: [boQueued]})
 
-    expect(findByTestId(wrapper, `waitlist-position-${bo!.id}`).text()).toContain('#2 i køen')
+    expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(bo!.id)).text()).toContain('#2 i køen')
     const queuedTickets = wrapper.findAllComponents(DinnerTicket).filter(ticket => ticket.props('isQueued'))
     expect(queuedTickets.length).toBeGreaterThan(0)
     queuedTickets.forEach(ticket => expect(ticket.props('dinnerMode')).toBe(DinnerMode.TAKEAWAY))
@@ -341,7 +352,7 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
     const order = OrderFactory.defaultOrder('ticket-holder', {inhabitantId: anna!.id, dinnerEventId, ticketPriceId: adultPrice.id, priceAtBooking: adultPrice.price, state: OrderStateSchema.enum.BOOKED})
     const wrapper = await mountClosed({orders: [order], waitlistEntries: [{...boQueued, inhabitantId: anna!.id}]})
 
-    expect(findByTestId(wrapper, `waitlist-position-${anna!.id}`).exists()).toBe(false)
+    expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(anna!.id)).exists()).toBe(false)
     expect(wrapper.findAllComponents(DinnerTicket).some(ticket => ticket.props('isQueued'))).toBe(false)
   })
 
@@ -369,14 +380,14 @@ describe('DinnerBookingForm on a queued row', () => {
     {intent: 'leaves the queue', dinnerMode: DinnerMode.NONE},
     {intent: 'requeues the wish', dinnerMode: DinnerMode.DINEINLATE}
   ])('WHEN the member picks $dinnerMode and saves THEN the order names the entry and $intent', async ({dinnerMode}) => {
-    mockIsHouseholdMember.mockReturnValue(true)
+    session.user.value = member
     const deadlines = {...baseDeadlines, canModifyOrders: () => false, canEditDiningMode: () => true}
-    const wrapper = await mountSuspended(withTooltipProvider(DinnerBookingForm, {...baseProps, household: householdWithInhabitants, deadlines, waitlistEntries: [boQueued]}))
+    const wrapper = await mountForm({...baseProps, household: householdWithInhabitants, deadlines, waitlistEntries: [boQueued]})
     await clickByTestId(wrapper, `inhabitant-${bo.id}-toggle`)
     await clickByTestId(wrapper, `inhabitant-${bo.id}-mode-edit-${dinnerMode}`)
     await clickByTestId(wrapper, `inhabitant-${bo.id}-save`)
 
-    expect(wrapper.findComponent(DinnerBookingForm).emitted('saveBookings')).toEqual([[[expect.objectContaining({
+    expect(wrapper.emitted('saveBookings')).toEqual([[[expect.objectContaining({
       inhabitantId: bo.id, dinnerEventId, dinnerMode, waitlistEntryId: QUEUED_ENTRY_ID
     })]]])
   })
@@ -390,18 +401,20 @@ describe('DinnerBookingForm on a queued guest row', () => {
   const dinnerEventId = baseProps.dinnerEvent.id
   const GUEST_ENTRY_ID = 41
   const guestQueued = WaitlistFactory.defaultEntry({id: GUEST_ENTRY_ID, inhabitantId: bo.id, dinnerEventId, isGuestTicket: true, position: 3, ticketPriceId: childPrice.id, dinnerMode: DinnerMode.DINEIN})
-  const rowId = `guest-order-guest-entry-${GUEST_ENTRY_ID}`
+  // A queued guest's row id names its entry; the row's test ids prefix it with the row type
+  const guestRowId = `guest-entry-${GUEST_ENTRY_ID}`
+  const rowId = `guest-order-${guestRowId}`
 
   const mountQueuedGuest = () => {
-    mockIsHouseholdMember.mockReturnValue(true)
+    session.user.value = member
     const deadlines = {...baseDeadlines, canModifyOrders: () => false, canEditDiningMode: () => true}
-    return mountSuspended(withTooltipProvider(DinnerBookingForm, {...baseProps, household: householdWithInhabitants, deadlines, waitlistEntries: [guestQueued]}))
+    return mountForm({...baseProps, household: householdWithInhabitants, deadlines, waitlistEntries: [guestQueued]})
   }
 
   it('renders the marks of a queued inhabitant: the position badge, the hourglass ticket with the guest glyph and the ghosted wish', async () => {
     const wrapper = await mountQueuedGuest()
 
-    expect(findByTestId(wrapper, `waitlist-position-guest-entry-${GUEST_ENTRY_ID}`).text()).toContain('#3 i køen')
+    expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(guestRowId)).text()).toContain('#3 i køen')
     const ticket = wrapper.findAllComponents(DinnerTicket).find(candidate => candidate.props('isQueued') && candidate.props('guestCount') !== undefined)
     expect(ticket?.props()).toMatchObject({dinnerMode: DinnerMode.DINEIN, guestCount: 1})
   })
@@ -415,7 +428,7 @@ describe('DinnerBookingForm on a queued guest row', () => {
     await clickByTestId(wrapper, `${rowId}-mode-edit-${dinnerMode}`)
     await clickByTestId(wrapper, `${rowId}-save`)
 
-    expect(wrapper.findComponent(DinnerBookingForm).emitted('saveBookings')).toEqual([[[expect.objectContaining({
+    expect(wrapper.emitted('saveBookings')).toEqual([[[expect.objectContaining({
       inhabitantId: bo.id, dinnerEventId, dinnerMode, ticketPriceId: childPrice.id, isGuestTicket: true, waitlistEntryId: GUEST_ENTRY_ID
     })]]])
   })
@@ -426,12 +439,12 @@ describe('DinnerBookingForm previews the outcome of a save by the supply', () =>
   const anna = householdWithInhabitants.inhabitants[0]!
 
   const mountRow = (canModify: boolean, ticketsForSale: number) => {
-    mockIsHouseholdMember.mockReturnValue(true)
+    session.user.value = member
     const deadlines = {...baseDeadlines, canModifyOrders: () => canModify, canEditDiningMode: () => true}
-    return mountSuspended(withTooltipProvider(DinnerBookingForm, {
+    return mountForm({
       ...baseProps, household: householdWithInhabitants, deadlines,
       releasedTicketCounts: {total: ticketsForSale, formatted: `${ticketsForSale}V`}
-    }))
+    })
   }
 
   it.each([
@@ -463,9 +476,9 @@ describe('DinnerBookingForm previews a requeue', () => {
   const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo.id, dinnerEventId: baseProps.dinnerEvent.id, position: 2, dinnerMode: DinnerModeSchema.enum.TAKEAWAY})
 
   it('WHEN a queued member picks another mode THEN the save reads Opdater and the preview names the new mode and the kept place', async () => {
-    mockIsHouseholdMember.mockReturnValue(true)
+    session.user.value = member
     const deadlines = {...baseDeadlines, canModifyOrders: () => false, canEditDiningMode: () => true}
-    const wrapper = await mountSuspended(withTooltipProvider(DinnerBookingForm, {...baseProps, household: householdWithInhabitants, deadlines, waitlistEntries: [boQueued]}))
+    const wrapper = await mountForm({...baseProps, household: householdWithInhabitants, deadlines, waitlistEntries: [boQueued]})
     await clickByTestId(wrapper, `inhabitant-${bo.id}-toggle`)
     await clickByTestId(wrapper, `inhabitant-${bo.id}-mode-edit-${DinnerModeSchema.enum.DINEINLATE}`)
 

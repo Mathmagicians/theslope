@@ -1,16 +1,13 @@
 // DELETE /api/admin/team/[id]/joker-slot/[slotId] - Delete a team's joker slot
 
 import {defineEventHandler, getValidatedRouterParams} from "h3"
-import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 import {deleteJokerSlot} from "~~/server/data/prismaRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {throwH3Error} = eventHandlerHelper
 
-const paramSchema = z.object({
-    id: z.coerce.number().int().positive('Team ID must be a positive integer'),
-    slotId: z.coerce.number().int().positive('Joker slot ID must be a positive integer')
-})
+const paramSchema = idParams('id', 'slotId')
 
 /**
  * Returns: the deleted count (ADR-009)

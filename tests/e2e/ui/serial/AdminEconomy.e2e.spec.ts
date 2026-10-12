@@ -7,7 +7,7 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import {getHouseholdUrl} from '~/utils/household'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot, waitForHydration} = testHelpers
+const {validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot, gotoHydrated} = testHelpers
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -36,22 +36,9 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         testInhabitantId = inhabitantId
 
         // Create dedicated season with future dinner events
-        const tomorrow = new Date()
-        tomorrow.setDate(tomorrow.getDate() + 1)
-        tomorrow.setHours(0, 0, 0, 0)
-
-        const twoWeeksFromTomorrow = new Date(tomorrow)
-        twoWeeksFromTomorrow.setDate(twoWeeksFromTomorrow.getDate() + 14)
-
-        testSeason = await SeasonFactory.createSeasonWithDinnerEvents(adminContext, testSalt, {
-            seasonDates: {start: tomorrow, end: twoWeeksFromTomorrow}
-        })
+        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 14})
 
         expect(testSeason.dinnerEvents.length, 'Test season should have dinner events').toBeGreaterThan(0)
-
-        // Activate the test season
-        const activated = await SeasonFactory.activateSeason(adminContext, testSeason.season.id!)
-        expect(activated.isActive, 'Test season should be active').toBe(true)
 
         // Get first future dinner event
         const today = new Date()
@@ -108,8 +95,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         expect(orderBefore!.dinnerMode).toBe(DinnerMode.DINEIN)
 
         // Navigate and select the test season (UI shows selected season's dinner events)
-        await page.goto('/admin/planning')
-        await waitForHydration(page)
+        await gotoHydrated(page, '/admin/planning')
         await page.waitForSelector('[data-testid="season-selector"]')
 
         // Select test season from dropdown

@@ -1,12 +1,10 @@
 import {describe, it, expect, beforeEach} from 'vitest'
-import {setActivePinia, createPinia} from 'pinia'
-import {clearNuxtData} from '#app'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {nextTick} from 'vue'
 import ChefCalendarDisplay from '~/components/calendar/ChefCalendarDisplay.vue'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
-import {findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
 
 const TEST_IDS = {
     header: 'chef-calendar-header',
@@ -43,8 +41,7 @@ const mountCalendar = async ({viewMode = 'agenda', accordionOpen = true, dinnerE
 
 describe('ChefCalendarDisplay', () => {
     beforeEach(() => {
-        setActivePinia(createPinia())
-        clearNuxtData()
+        resetStores()
     })
 
     it('tells the chef when the team has no dinners', async () => {

@@ -106,7 +106,7 @@ test.describe('Chef dinner expenses', () => {
         const dinner = await createDinner(adminContext)
         await addTwoLines(memberContext, dinner)
 
-        const team = await SeasonFactory.getCookingTeam(adminContext, teamId)
+        const team = (await SeasonFactory.getCookingTeamById(adminContext, teamId))!
         expect(team.dinnerEvents.find(event => event.id === dinner.dinnerEventId)?.totalCost).toBe(131000)
     })
 

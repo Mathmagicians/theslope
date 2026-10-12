@@ -1,7 +1,8 @@
 import {getPrismaClientConnection} from '~~/server/utils/database'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {useWaitlistValidation, type TicketWaitlistCreate, type TicketWaitlistDisplay, type WaitlistOrder} from '~/composables/useWaitlistValidation'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useBookingValidation, type ClearWaitlistResult} from '~/composables/useBookingValidation'
+import {groupBy} from '~/utils/batchUtils'
 
 const {throwH3Error} = eventHandlerHelper
 const LOG = '⏳ > WAITLIST'
@@ -82,15 +83,21 @@ export async function deleteWaitlistEntry(d1Client: D1Database, id: number): Pro
 }
 
 // Daily maintenance: a dinner that reached CONSUMED has no queue
-export async function deleteWaitlistForConsumedDinners(d1Client: D1Database): Promise<number> {
+export async function deleteWaitlistForConsumedDinners(d1Client: D1Database): Promise<ClearWaitlistResult> {
     const {DinnerStateSchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
     try {
-        const result = await prisma.ticketWaitlist.deleteMany({
-            where: {dinnerEvent: {state: DinnerStateSchema.enum.CONSUMED}}
+        const ofConsumedDinners = {dinnerEvent: {state: DinnerStateSchema.enum.CONSUMED}}
+        const entries = await prisma.ticketWaitlist.findMany({
+            where: ofConsumedDinners,
+            select: {dinnerEventId: true, dinnerEvent: {select: {date: true}}}
         })
-        console.info(`${LOG} > [SWEEP] Cleared ${result.count} queue entries of consumed dinners`)
-        return result.count
+        const result = await prisma.ticketWaitlist.deleteMany({where: ofConsumedDinners})
+        const dinners = [...groupBy((entry: typeof entries[number]) => entry.dinnerEventId)(entries).values()]
+            .map(rows => ({dinnerEventId: rows[0]!.dinnerEventId, date: rows[0]!.dinnerEvent.date, cleared: rows.length}))
+            .sort((a, b) => a.date.getTime() - b.date.getTime())
+        console.info(`${LOG} > [SWEEP] Cleared ${result.count} queue entries of ${dinners.length} consumed dinners`)
+        return {cleared: result.count, dinners}
     } catch (error) {
         return throwH3Error(`${LOG} > [SWEEP] Error clearing the queues of consumed dinners`, error)
     }

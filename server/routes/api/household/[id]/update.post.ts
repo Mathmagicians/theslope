@@ -2,26 +2,19 @@
 
 import {defineEventHandler, readValidatedBody, getValidatedRouterParams, getValidatedQuery, setResponseStatus} from "h3"
 import {updateHousehold} from "~~/server/data/prismaRepository"
-import {useCoreValidation} from "~/composables/useCoreValidation"
+import {AdminBypassQuerySchema, idParams, useCoreValidation} from "~/composables/useCoreValidation"
 import type {HouseholdUpdate} from "~/composables/useCoreValidation"
 import {useBookingValidation, type HouseholdUpdateResponse} from "~/composables/useBookingValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {rescaffoldOnFieldChange} from "~~/server/utils/scaffoldPrebookings"
 import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import {isAdmin} from '~/composables/usePermissions'
-import {z} from 'zod'
 
 const {throwH3Error} = eventHandlerHelper
 
 const LOG = '🏠 > HOUSEHOLD > [UPDATE]'
 
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('Household ID must be a positive integer')
-})
-
-const querySchema = z.object({
-    adminBypass: z.coerce.boolean().default(false)
-})
+const paramSchema = idParams('id')
 
 /**
  * POST /api/household/[id]/update
@@ -39,8 +32,8 @@ export default defineEventHandler<Promise<HouseholdUpdateResponse>>(async (event
     let adminBypass!: boolean
     let householdData!: Partial<HouseholdUpdate>
     try {
-        ({id} = await getValidatedRouterParams(event, idSchema.parse))
-        const query = await getValidatedQuery(event, querySchema.parse)
+        ({id} = await getValidatedRouterParams(event, paramSchema.parse))
+        const query = await getValidatedQuery(event, AdminBypassQuerySchema.parse)
         adminBypass = query.adminBypass
         householdData = await readValidatedBody(event, HouseholdUpdateSchema.omit({id: true}).parse)
     } catch (error) {

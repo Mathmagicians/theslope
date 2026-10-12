@@ -1,10 +1,9 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
-import {mountSuspended} from '@nuxt/test-utils/runtime'
 import TeamMemberAddForm from '~/components/cooking-team/TeamMemberAddForm.vue'
-import {nextTick, ref, type ComponentPublicInstance} from 'vue'
+import {nextTick, type ComponentPublicInstance} from 'vue'
 import type {VueWrapper} from '@vue/test-utils'
-import {findByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId} from '~~/tests/component/testHelpers'
 import {ROLE_ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {createDefaultWeekdayMap} from '~/types/dateTypes'
@@ -15,10 +14,7 @@ describe('TeamMemberAddForm', () => {
     const Role = TeamRoleSchema.enum
 
     const mount = (props: Record<string, unknown> = {}) =>
-        mountSuspended(TeamMemberAddForm, {
-            props: {...props},
-            global: {provide: {isMd: ref(true)}}
-        })
+        mountWithTooltipProvider(TeamMemberAddForm, {props, isMd: true})
 
     // ========== RENDERING ==========
 

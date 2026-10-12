@@ -1,10 +1,8 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach} from 'vitest'
-import {setActivePinia, createPinia} from 'pinia'
 import {mountSuspended, registerEndpoint} from '@nuxt/test-utils/runtime'
-import {clearNuxtData} from '#app'
 import {nextTick} from 'vue'
-import {findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
 import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTestIds'
 import AdminPlanningSeason from '~/components/admin/planning/AdminPlanningSeason.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -27,8 +25,7 @@ const mount = async (mode: FormMode, canEdit = true) => {
 
 describe('AdminPlanningSeason', () => {
     beforeEach(() => {
-        setActivePinia(createPinia())
-        clearNuxtData()
+        resetStores()
     })
 
     it('renders the season form', async () => {

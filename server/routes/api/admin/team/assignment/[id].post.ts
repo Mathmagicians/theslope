@@ -5,13 +5,11 @@ import {updateTeamAssignment} from "~~/server/data/prismaRepository"
 import type {CookingTeamAssignment, CookingTeamAssignmentUpdate} from "~/composables/useCookingTeamValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
 
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('Assignment ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 const {CookingTeamAssignmentUpdateSchema} = useCookingTeamValidation()
 
@@ -23,7 +21,7 @@ export default defineEventHandler(async (event): Promise<CookingTeamAssignment> 
     let id!: number
     let updateData!: CookingTeamAssignmentUpdate
     try {
-        ({id} = await getValidatedRouterParams(event, idSchema.parse))
+        ({id} = await getValidatedRouterParams(event, paramSchema.parse))
         updateData = await readValidatedBody(event, CookingTeamAssignmentUpdateSchema.parse)
     } catch (error) {
         return throwH3Error('👥🔗 > ASSIGNMENT > [POST] Input validation error', error)

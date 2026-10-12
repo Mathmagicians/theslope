@@ -45,8 +45,8 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
         console.info(`${LOG} Step 3 complete: created ${transactResult.created} transactions`)
 
         // 4. A consumed dinner has no queue
-        const waitlistCleared = await deleteWaitlistForConsumedDinners(d1Client)
-        console.info(`${LOG} Step 4 complete: cleared ${waitlistCleared} waiting-list entries`)
+        const clearWaitlist = await deleteWaitlistForConsumedDinners(d1Client)
+        console.info(`${LOG} Step 4 complete: cleared ${clearWaitlist.cleared} waiting-list entries`)
 
         // Initialize NULL preferences + scaffold pre-bookings (requires active season)
         const activeSeasonId = await fetchActiveSeasonId(d1Client)
@@ -68,7 +68,7 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
             consume: consumeResult,
             close: closeResult,
             transact: transactResult,
-            clearWaitlist: {cleared: waitlistCleared},
+            clearWaitlist,
             initPrefs: initPrefsResult,
             scaffold: scaffoldResult
         }

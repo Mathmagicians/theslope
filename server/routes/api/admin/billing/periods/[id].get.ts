@@ -1,12 +1,12 @@
 import {defineEventHandler, setResponseStatus, getValidatedRouterParams, createError} from 'h3'
-import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 import {fetchBillingPeriodSummary} from '~~/server/data/prismaRepository'
 import type {BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 const {throwH3Error} = eventHandlerHelper
 
-const idSchema = z.object({id: z.coerce.number().int().positive()})
+const paramSchema = idParams('id')
 
 /**
  * GET /api/admin/billing/periods/[id]
@@ -19,7 +19,7 @@ export default defineEventHandler(async (event): Promise<BillingPeriodSummaryDet
     // ADR-002: Separate validation try-catch
     let id: number
     try {
-        const params = await getValidatedRouterParams(event, idSchema.parse)
+        const params = await getValidatedRouterParams(event, paramSchema.parse)
         id = params.id
     } catch (e) {
         throw createError({statusCode: 400, message: 'Invalid billing period ID', cause: e})

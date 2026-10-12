@@ -2,19 +2,14 @@ import {useWaitlist} from '~/composables/useWaitlist'
 import {createError} from 'h3'
 import {useBookingValidation, type DinnerEventDetail} from '~/composables/useBookingValidation'
 import type {TicketWaitlistCreate, TicketWaitlistDisplay, WaitlistAssigned, WaitlistAssignmentResult, NotificationOutcome} from '~/composables/useWaitlistValidation'
-import type {NotificationConfig} from '~/composables/useNotificationValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {createOrders, claimOrder, fetchDinnerEvent} from '~~/server/data/financesRepository'
 import {fetchSeason, fetchInhabitant, fetchUser, fetchHousehold} from '~~/server/data/prismaRepository'
 import {fetchWaitlistForDinners, deleteWaitlistEntry, createWaitlistEntry} from '~~/server/data/waitlistRepository'
 import {emitWaitlistTicketAssigned, emitWaitlistTicketSold, emitWaitlistJoined, emitWaitlistBuildup, type WaitlistDinnerContext} from '~~/server/utils/sender/events/waitlist'
+import type {SenderBindings} from "~~/server/utils/sender/config"
 
 const LOG = '⏳ > WAITLIST > [ASSIGN]'
-
-export interface WaitlistSender {
-    queue: Queue | undefined
-    config: NotificationConfig
-}
 
 interface DinnerForWaitlist {
     context: WaitlistDinnerContext
@@ -60,7 +55,7 @@ const outcome = ({queued, dedupeKey}: {queued: boolean, dedupeKey: string}): Not
  * the position; the chef hears once, when the queue reaches the buildup threshold with this entry.
  */
 export async function joinWaitlist(
-    d1Client: D1Database, request: TicketWaitlistCreate, sender: WaitlistSender
+    d1Client: D1Database, request: TicketWaitlistCreate, sender: SenderBindings
 ): Promise<{entry: TicketWaitlistDisplay, position: number}> {
     const {positionOf, portionNeed, portionsOfEntryFor} = useWaitlist()
     const {DinnerStateSchema} = useBookingValidation()
@@ -89,7 +84,7 @@ export async function joinWaitlist(
 // Places one entry's order, removes the entry and tells the inhabitant
 const placeEntry = async (
     d1Client: D1Database, dinner: DinnerForWaitlist, entry: TicketWaitlistDisplay, portions: number,
-    performedByUserId: number | null, sender: WaitlistSender
+    performedByUserId: number | null, sender: SenderBindings
 ): Promise<WaitlistAssigned> => {
     const {OrderAuditActionSchema} = useBookingValidation()
     const {allergyTypeIds: _allergies, ...order} = entry.order
@@ -111,7 +106,7 @@ const placeEntry = async (
  * unique index refuses a second regular order for the same inhabitant and dinner (ADR-015).
  */
 export async function assignWaitlistPortions(
-    d1Client: D1Database, dinnerEvent: DinnerEventDetail, supplyPortions: number, performedByUserId: number | null, sender: WaitlistSender
+    d1Client: D1Database, dinnerEvent: DinnerEventDetail, supplyPortions: number, performedByUserId: number | null, sender: SenderBindings
 ): Promise<WaitlistAssignmentResult> {
     const {resolveWaitlistAssignment, portionsOfEntryFor} = useWaitlist()
     const dinnerEventId = dinnerEvent.id
@@ -133,7 +128,7 @@ export async function assignWaitlistPortions(
  * marketplace; nobody overtakes.
  */
 export async function assignReleasedTicket(
-    d1Client: D1Database, dinnerEventId: number, ticketPriceId: number, releasedByHouseholdId: number, sender: WaitlistSender
+    d1Client: D1Database, dinnerEventId: number, ticketPriceId: number, releasedByHouseholdId: number, sender: SenderBindings
 ): Promise<WaitlistAssigned | null> {
     const {inQueueOrder, portionsOfEntryFor} = useWaitlist()
     const entries = inQueueOrder(await fetchWaitlistForDinners(d1Client, [dinnerEventId]))

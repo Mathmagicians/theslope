@@ -17,9 +17,6 @@ const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
 
-// Boolean WeekDayMap for cookingDays (uses default options)
-const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
-
 // DinnerMode WeekDayMap for inhabitant preferences
 const {createDefaultWeekdayMap: createDinnerModeWeekdayMap} = useWeekDayMapValidation({
     valueSchema: DinnerModeSchema,
@@ -79,27 +76,9 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
 
         // Create dedicated season for scaffolding tests:
         // - ALL days cooking (Mon-Sun) for predictable event count regardless of day-of-week
-        // - 10 days duration starting tomorrow
         // - 2-day deadline: tomorrow is always AFTER deadline (deadline was yesterday)
-        // All days cooking: [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
-        const allDaysCooking = createBooleanWeekdayMap([true, true, true, true, true, true, true])
-
-        const tomorrow = new Date()
-        tomorrow.setDate(tomorrow.getDate() + 1)
-        tomorrow.setHours(0, 0, 0, 0)
-
-        const tenDaysFromTomorrow = new Date(tomorrow)
-        tenDaysFromTomorrow.setDate(tenDaysFromTomorrow.getDate() + 10)
-
-        testSeason = await SeasonFactory.createSeasonWithDinnerEvents(adminContext, testSalt, {
-            cookingDays: allDaysCooking,
-            seasonDates: {start: tomorrow, end: tenDaysFromTomorrow},
-            ticketIsCancellableDaysBefore: 2
-        })
+        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 10, deadline: 2, cookingDays: 'all'})
         createdSeasonIds.push(testSeason.season.id!)
-
-        // Activate the test season
-        await SeasonFactory.activateSeason(adminContext, testSeason.season.id!)
     })
 
     test.afterAll(async ({browser}) => {

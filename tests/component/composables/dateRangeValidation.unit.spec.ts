@@ -74,7 +74,6 @@ describe('dateRangeSchema', () => {
         }
 
         const duration = intervalToDuration(asDateRange)
-        console.log('duration', duration)
         expect(duration.years ?? 0).toBe(1)
         expect((duration.years ?? 0) < 1).toBe(false)
 

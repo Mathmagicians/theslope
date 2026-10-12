@@ -34,3 +34,17 @@ describe.each([
         expect(error.statusCode).toBe(statusCode)
     })
 })
+
+// A unique violation reads as a conflict whether it arrives raw from Prisma or already mapped by throwH3Error
+describe('isConflict', () => {
+    it.each([
+        {name: 'a Prisma unique violation', error: prismaError('P2002', 'Unique constraint failed'), expected: true},
+        {name: 'an H3 error with status 409', error: createError({statusCode: 409}), expected: true},
+        {name: 'a mapped unique violation', error: nuxtErrorFromCatch(PREPEND, prismaError('P2002', 'Unique constraint failed')), expected: true},
+        {name: 'a Prisma not-found', error: prismaError('P2025', 'Record to update not found.'), expected: false},
+        {name: 'an H3 error with status 400', error: createError({statusCode: 400}), expected: false},
+        {name: 'a plain error', error: new Error('boom'), expected: false}
+    ])('is $expected for $name', ({error, expected}) => {
+        expect(eventHandlerHelper.isConflict(error)).toBe(expected)
+    })
+})

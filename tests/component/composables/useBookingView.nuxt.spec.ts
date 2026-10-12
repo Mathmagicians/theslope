@@ -1,9 +1,10 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, vi} from 'vitest'
 import {flushPromises} from '@vue/test-utils'
-import {mockNuxtImport, mountSuspended} from '@nuxt/test-utils/runtime'
+import {mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {useBookingView, useDinnerDateParam, useCalendarOpenParam, BookingViewSchema, type BookingView} from '~/composables/useBookingView'
 import {defineComponent, h, type Ref} from 'vue'
+import {mountWithTooltipProvider} from '~~/tests/component/testHelpers'
 
 /**
  * Unit tests for useBookingView composable (curried pattern)
@@ -17,18 +18,11 @@ import {defineComponent, h, type Ref} from 'vue'
  * the next/previous dinner on that side of the boundary (null if none, which hides the arrow).
  */
 
-const {mockNavigateTo, mockRouteData} = vi.hoisted(() => ({
-  mockNavigateTo: vi.fn(),
-  mockRouteData: {
-    path: '/household/test/bookings',
-    params: {} as Record<string, string | undefined>,
-    query: {} as Record<string, string>,
-    hash: ''
-  }
-}))
+const {mockNavigateTo, mockRoute: mockRouteData, useRoute} = await vi.hoisted(async () =>
+  (await import('~~/tests/component/hoistedMocks')).mockRouteAndNavigation({path: '/household/test/bookings'}))
 
 mockNuxtImport('navigateTo', () => mockNavigateTo)
-mockNuxtImport('useRoute', () => () => mockRouteData)
+mockNuxtImport('useRoute', () => useRoute)
 
 const setupQuery = (query: Record<string, string>) => {
   for (const key in mockRouteData.query) {
@@ -240,12 +234,12 @@ describe('useCalendarOpenParam', () => {
   // The design system reads the layout's breakpoint through inject, so the composable runs in a component's setup
   const mountParam = async (isMd: Ref<boolean | null>, syncWhen: () => boolean = () => true) => {
     let param: ReturnType<typeof useCalendarOpenParam> | undefined
-    await mountSuspended(defineComponent({
+    await mountWithTooltipProvider(defineComponent({
       setup() {
         param = useCalendarOpenParam(syncWhen)
         return () => h('div')
       }
-    }), {global: {provide: {isMd}}})
+    }), {isMd})
     await flushPromises()
     return param!
   }

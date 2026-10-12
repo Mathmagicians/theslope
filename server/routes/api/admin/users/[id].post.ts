@@ -1,16 +1,14 @@
 import {defineEventHandler, getValidatedRouterParams, readValidatedBody} from "h3"
 import {fetchUser, saveUser} from "~~/server/data/prismaRepository"
-import {useCoreValidation, type UserCreate, type UserDetail} from "~/composables/useCoreValidation"
+import {idParams, useCoreValidation, type UserCreate, type UserDetail} from "~/composables/useCoreValidation"
 import {reconcileUserRoles, RoleOwner} from "~/composables/useUserRoles"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import {z} from 'zod'
+import type {z} from 'zod'
 
 const {throwH3Error} = eventHandlerHelper
 const LOG = '🪪 > USER > [POST]'
 
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('User ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 export default defineEventHandler(async (event): Promise<UserDetail> => {
     const {cloudflare} = event.context
@@ -30,7 +28,7 @@ export default defineEventHandler(async (event): Promise<UserDetail> => {
     let userId!: number
     let body!: z.infer<typeof UpdateUserBodySchema>
     try {
-        userId = (await getValidatedRouterParams(event, idSchema.parse)).id
+        userId = (await getValidatedRouterParams(event, paramSchema.parse)).id
         body = await readValidatedBody(event, UpdateUserBodySchema.parse)
     } catch (error) {
         return throwH3Error(`${LOG} Input validation error`, error)

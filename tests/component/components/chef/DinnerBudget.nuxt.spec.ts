@@ -1,7 +1,6 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
-import {mountSuspended, registerEndpoint} from '@nuxt/test-utils/runtime'
-import {ref} from 'vue'
+import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import DinnerBudget from '~/components/chef/DinnerBudget.vue'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
@@ -9,7 +8,7 @@ import {useOrder} from '~/composables/useOrder'
 import {useTicket} from '~/composables/useTicket'
 import {useBookingValidation, type OrderDetail, type OrderState, type TicketType} from '~/composables/useBookingValidation'
 import {dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
-import {findByTestId, findAllByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, registerEmptyStoreEndpoints, kitchenConfig} from '~~/tests/component/testHelpers'
 
 /**
  * DinnerBudget: the three boxes in both units, the RÅDIGHEDSBELØB box with start, Brugt and Tilbage, and under the
@@ -22,9 +21,7 @@ const {TicketTypeSchema, OrderStateSchema} = useBookingValidation()
 let baseRate: number
 let vatPercent: number
 beforeAll(() => {
-    const kitchen = useAppConfig().theslope?.kitchen
-    baseRate = kitchen?.baseRatePercent ?? 5
-    vatPercent = kitchen?.vatPercent ?? 25
+    ({baseRatePercent: baseRate, vatPercent} = kitchenConfig())
 })
 
 const ticket = (id: number, ticketType: TicketType, price: number, state: OrderState = OrderStateSchema.enum.BOOKED): OrderDetail =>
@@ -42,20 +39,12 @@ const round: CookingRoundRow[] = [
 ]
 
 // The ticket changes pane reaches the bookings store; its datasets answer empty here
+registerEmptyStoreEndpoints()
 registerEndpoint('/api/chef/dinner/7/order-history', () => ({dinnerEventId: 7, since: null, changes: [], olderCount: 0}))
-registerEndpoint('/api/admin/season/active', () => null)
-registerEndpoint('/api/admin/season', () => [])
-registerEndpoint('/api/admin/household', () => [])
-registerEndpoint('/api/team/my', () => [])
-registerEndpoint('/api/admin/users/by-role/ALLERGYMANAGER', () => [])
-registerEndpoint('/api/admin/users', () => [])
-registerEndpoint('/api/admin/billing/periods', () => [])
-registerEndpoint('/api/admin/billing/current-period', () => [])
-registerEndpoint('/api/order', () => [])
 
-const mount = (props: Record<string, unknown> = {}) => mountSuspended(DinnerBudget, {
+const mount = (props: Record<string, unknown> = {}) => mountWithTooltipProvider(DinnerBudget, {
     props: {orders, mode: 'full', expenses, dinnerEventId: 7, bookingDeadline: new Date('2026-04-03T18:00:00'), dinnerFragment: dinnerSpendingFragment(round[0]!, expenses), teamFragment: teamSpendingFragment(round, {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, for perioden 12/04–13/04'}), ...props},
-    global: {provide: {isMd: ref(true)}}
+    isMd: true
 })
 
 describe('DinnerBudget', () => {

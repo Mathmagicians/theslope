@@ -836,6 +836,35 @@ export class SeasonFactory {
     }
 
     /**
+     * A serial spec's own active season: starts `startInDays` days from today at midnight (tomorrow by default) and
+     * ends `days` days after the start, inside the pre-booking window (ADR-015). `cookingDays` picks all seven days
+     * or Monday to Friday over the default Mon/Wed/Fri; `deadline` is the cancel deadline in days. Serial only:
+     * activating it displaces the singleton active season.
+     */
+    static readonly createActiveSeasonFromTomorrow = async (
+        context: BrowserContext,
+        testSalt: string,
+        {days, deadline, cookingDays, startInDays = 1}: {days: number, deadline?: number, cookingDays?: 'all' | 'weekdays', startInDays?: number}
+    ): Promise<{ season: Season, dinnerEvents: DinnerEventDisplay[] }> => {
+        const start = new Date()
+        start.setDate(start.getDate() + startInDays)
+        start.setHours(0, 0, 0, 0)
+        const end = new Date(start)
+        end.setDate(end.getDate() + days)
+        const cookingDayMaps = {
+            all: createDefaultWeekdayMap([true, true, true, true, true, true, true]),
+            weekdays: createDefaultWeekdayMap([true, true, true, true, true, false, false])
+        }
+        const created = await this.createSeasonWithDinnerEvents(context, testSalt, {
+            seasonDates: {start, end},
+            cookingDays: cookingDays === undefined ? this.defaultSeasonData.cookingDays : cookingDayMaps[cookingDays],
+            ticketIsCancellableDaysBefore: deadline ?? this.defaultSeasonData.ticketIsCancellableDaysBefore
+        })
+        await this.activateSeason(context, created.season.id!)
+        return created
+    }
+
+    /**
      * Create a single dinner event for a season (convenience wrapper)
      */
     static readonly createDinnerEventForSeason = async (
@@ -1081,15 +1110,6 @@ export class SeasonFactory {
         expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
         return expectedStatus === 200 ? DeletedCountSchema.parse(await response.json()) : null
-    }
-
-    static readonly getCookingTeam = async (
-        context: BrowserContext,
-        teamId: number
-    ): Promise<CookingTeamDetail> => {
-        const response = await context.request.get(`${ADMIN_TEAM_ENDPOINT}/${teamId}`)
-        expect(response.status(), `team ${teamId} exists`).toBe(200)
-        return await response.json()
     }
 
     static readonly getCookingTeamsForSeason = async (

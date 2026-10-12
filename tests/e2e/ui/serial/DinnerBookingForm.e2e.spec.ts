@@ -10,7 +10,7 @@ import {formatDate} from '~/utils/date'
 import {EMPTY_STATE_MESSAGES} from '~/composables/useTheSlopeDesignSystem'
 
 const {memberUIFile, adminUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, getSessionUserInfo, waitForHydration, selectDropdownOption} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, getSessionUserInfo, gotoHydrated, selectDropdownOption} = testHelpers
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -50,24 +50,10 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
         householdPbsId = sessionInfo.householdPbsId
 
         // Create dedicated season with SHORT deadline so all events are bookable
-        const tomorrow = new Date()
-        tomorrow.setDate(tomorrow.getDate() + 1)
-        tomorrow.setHours(0, 0, 0, 0)
-
-        const twoWeeksFromTomorrow = new Date(tomorrow)
-        twoWeeksFromTomorrow.setDate(twoWeeksFromTomorrow.getDate() + 14)
-
-        testSeason = await SeasonFactory.createSeasonWithDinnerEvents(adminContext, testSalt, {
-            ticketIsCancellableDaysBefore: 0,
-            seasonDates: {start: tomorrow, end: twoWeeksFromTomorrow}
-        })
+        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 14, deadline: 0})
 
         // Verify dinner events were created
         expect(testSeason.dinnerEvents.length, 'Test season should have dinner events').toBeGreaterThan(0)
-
-        // Activate the test season and verify
-        const activated = await SeasonFactory.activateSeason(adminContext, testSeason.season.id!)
-        expect(activated.isActive, 'Test season should be active').toBe(true)
     })
 
     test.afterAll(async () => {
@@ -90,8 +76,7 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
 
     const goToBookingsPage = async (page: import('@playwright/test').Page, date: Date) => {
         const dateParam = formatDate(date)
-        await page.goto(`/household/${householdShortname}/bookings?pbs=${householdPbsId}&date=${dateParam}`)
-        await waitForHydration(page)
+        await gotoHydrated(page, `/household/${householdShortname}/bookings?pbs=${householdPbsId}&date=${dateParam}`)
 
         // Wait for booking table - ignore transient "no season" state during store init
         await pollUntil(
@@ -258,8 +243,7 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
             const gone = await getFutureDinnerEvent(3)
             const next = await getFutureDinnerEvent(4)
             const dateParam = () => new URL(page.url()).searchParams.get('date')
-            await page.goto(`/dinner?date=${formatDate(gone.date)}`)
-            await waitForHydration(page)
+            await gotoHydrated(page, `/dinner?date=${formatDate(gone.date)}`)
             await expect(page.getByTestId('dinner-detail-header')).toBeVisible()
             await page.evaluate(() => Object.assign(window, {sameDocument: true}))
 
@@ -292,8 +276,7 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
 
             test('GIVEN /admin/planning WHEN a listed season is deleted and then chosen THEN a toast names it and the default season loads', async ({page}) => {
                 const goneSeason = await SeasonFactory.createSeason(adminContext, SeasonFactory.defaultSeason(`${testSalt}-gone`))
-                await page.goto('/admin/planning')
-                await waitForHydration(page)
+                await gotoHydrated(page, '/admin/planning')
                 await expect(page.getByTestId('season-selector')).toContainText(testSeason.season.shortName)
 
                 await SeasonFactory.deleteSeason(adminContext, goneSeason.id!)

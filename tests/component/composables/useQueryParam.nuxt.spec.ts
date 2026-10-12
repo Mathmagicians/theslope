@@ -14,19 +14,12 @@ import {formatDate, parseDate} from '~/utils/date'
  * - Dinner date (Date with formatDate/parseDate)
  */
 
-// Mock navigateTo and useRoute
-const {mockNavigateTo, mockRouteData} = vi.hoisted(() => ({
-  mockNavigateTo: vi.fn(),
-  mockRouteData: {
-    path: '/test',
-    params: {} as Record<string, string | undefined>,
-    query: {} as Record<string, string>,
-    hash: ''
-  }
-}))
+// The test environment has no router: the route is read from, and the navigation recorded on, the mocks
+const {mockNavigateTo, mockRoute: mockRouteData, useRoute} = await vi.hoisted(async () =>
+  (await import('~~/tests/component/hoistedMocks')).mockRouteAndNavigation({path: '/test'}))
 
 mockNuxtImport('navigateTo', () => mockNavigateTo)
-mockNuxtImport('useRoute', () => () => mockRouteData)
+mockNuxtImport('useRoute', () => useRoute)
 
 describe('useQueryParam.ts', () => {
   const setupQuery = (query: Record<string, string>) => {

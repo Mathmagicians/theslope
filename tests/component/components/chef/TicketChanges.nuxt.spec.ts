@@ -1,16 +1,14 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, vi} from 'vitest'
-import {mountSuspended, registerEndpoint} from '@nuxt/test-utils/runtime'
-import {setActivePinia, createPinia} from 'pinia'
-import {clearNuxtData} from '#app'
+import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {flushPromises} from '@vue/test-utils'
-import {nextTick, ref} from 'vue'
+import {nextTick} from 'vue'
 import {getQuery, type H3Event} from 'h3'
 import TicketChanges from '~/components/chef/TicketChanges.vue'
 import {useBookingValidation, type TicketChange} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 import {formatPortions} from '~/utils/utils'
-import {findByTestId, findAllByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
 
 /**
  * TicketChanges: closed until its toggle opens; then the dinner's changes from the menu deadline, newest first, with
@@ -38,21 +36,13 @@ const historyEndpoint = vi.fn((event: H3Event) => {
     const since = getQuery(event).since
     return {dinnerEventId: DINNER_ID, since: since ?? null, changes: since ? recent : [...recent, ...older], olderCount: since ? older.length : 0}
 })
-registerEndpoint(`/api/chef/dinner/${DINNER_ID}/order-history`, historyEndpoint)
 // The bookings store's own datasets and the stores it reaches for
-registerEndpoint('/api/admin/season/active', () => null)
-registerEndpoint('/api/admin/season', () => [])
-registerEndpoint('/api/admin/household', () => [])
-registerEndpoint('/api/team/my', () => [])
-registerEndpoint('/api/admin/users/by-role/ALLERGYMANAGER', () => [])
-registerEndpoint('/api/admin/users', () => [])
-registerEndpoint('/api/admin/billing/periods', () => [])
-registerEndpoint('/api/admin/billing/current-period', () => [])
-registerEndpoint('/api/order', () => [])
+registerEmptyStoreEndpoints()
+registerEndpoint(`/api/chef/dinner/${DINNER_ID}/order-history`, historyEndpoint)
 
-const mount = (props: Record<string, unknown> = {}) => mountSuspended(TicketChanges, {
+const mount = (props: Record<string, unknown> = {}) => mountWithTooltipProvider(TicketChanges, {
     props: {dinnerEventId: DINNER_ID, since: SINCE, ...props},
-    global: {provide: {isMd: ref(true)}}
+    isMd: true
 })
 type Wrapper = Awaited<ReturnType<typeof mount>>
 
@@ -64,8 +54,7 @@ const open = async (wrapper: Wrapper) => {
 
 describe('TicketChanges', () => {
     beforeEach(() => {
-        setActivePinia(createPinia())
-        clearNuxtData()
+        resetStores()
         historyEndpoint.mockClear()
     })
 

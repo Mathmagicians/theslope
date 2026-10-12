@@ -1,4 +1,4 @@
-import {addDays, startOfDay} from "date-fns"
+import {addDays, isSameDay, startOfDay} from "date-fns"
 import {
     type DinnerEventDisplay,
     type DinnerEventDetail,
@@ -185,7 +185,6 @@ export class DinnerEventFactory {
         dinnerEventData: Partial<Omit<DinnerEventCreate, 'date'>> = {},
         attempts: number = 4
     ): Promise<DinnerEventDisplay> => {
-        const sameDay = (a: Date, b: Date) => startOfDay(a).getTime() === startOfDay(b).getTime()
         const first = startOfDay(new Date(Math.max(new Date(season.seasonDates.start).getTime(), this.tomorrow.getTime())))
         const last = startOfDay(new Date(season.seasonDates.end))
         const givenUp: Date[] = []
@@ -194,7 +193,7 @@ export class DinnerEventFactory {
             const occupied = [...dinners.map(dinner => new Date(dinner.date)), ...givenUp]
             const freeDays: Date[] = []
             for (let day = first; day <= last; day = addDays(day, 1)) {
-                if (!occupied.some(date => sameDay(date, day))) freeDays.push(day)
+                if (!occupied.some(date => isSameDay(date, day))) freeDays.push(day)
             }
             const lastDinner = occupied.length > 0 ? startOfDay(new Date(Math.max(...occupied.map(date => date.getTime())))) : null
             const afterLast = lastDinner ? freeDays.filter(day => day > lastDinner) : freeDays
@@ -203,13 +202,32 @@ export class DinnerEventFactory {
             const day = candidates[Math.floor(Math.random() * candidates.length)]!
 
             const dinner = await this.createDinnerEvent(context, {...dinnerEventData, date: day, seasonId: season.id!})
-            const onThatDay = (await this.getDinnerEventsForSeason(context, season.id!)).filter(other => sameDay(new Date(other.date), day))
-            if (onThatDay.length === 1) return dinner
+            if ((await this.dinnersOnDay(context, season.id!, day)).length === 1) return dinner
             await this.deleteDinnerEvent(context, dinner.id!)
             givenUp.push(day)
         }
         throw new Error(`No day of season ${season.shortName} stayed free for the spec's dinner in ${attempts} attempts`)
     }
+
+    /**
+     * A serial spec's dinner alone on `day`: the dinners the season already holds on that day give way, since the
+     * dinner and chef pages select a dinner by date. Serial only: a parallel spec's dinner on the day would go with them.
+     */
+    static readonly createDinnerEventAloneOnDay = async (
+        context: BrowserContext,
+        season: Season,
+        day: Date,
+        dinnerEventData: Partial<Omit<DinnerEventCreate, 'date'>> = {}
+    ): Promise<DinnerEventDisplay> => {
+        for (const dinner of await this.dinnersOnDay(context, season.id!, day)) {
+            await this.deleteDinnerEvent(context, dinner.id!)
+        }
+        return await this.createDinnerEvent(context, {...dinnerEventData, date: day, seasonId: season.id!})
+    }
+
+    /** The season's dinners on `day` */
+    private static readonly dinnersOnDay = async (context: BrowserContext, seasonId: number, day: Date): Promise<DinnerEventDisplay[]> =>
+        (await this.getDinnerEventsForSeason(context, seasonId)).filter(dinner => isSameDay(new Date(dinner.date), day))
 
     static readonly getDinnerEvent = async (
         context: BrowserContext,

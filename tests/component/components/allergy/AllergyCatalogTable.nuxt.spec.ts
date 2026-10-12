@@ -1,8 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
-import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {findByTestId, findAllByTestId} from '~~/tests/component/testHelpers'
-import {ref, nextTick, h, defineComponent} from 'vue'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId} from '~~/tests/component/testHelpers'
+import {nextTick, h, defineComponent} from 'vue'
 import AllergyCatalogTable from '~/components/allergy/AllergyCatalogTable.vue'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 
@@ -13,8 +12,9 @@ const mockAllergyTypes = AllergyFactory.createMockAllergyTypesWithInhabitants()
 // - multi mode: checkboxes emit id[] (AllergenMultiSelector / compare)
 // It forwards UTable's expanded model + #expanded slot so the detail panel
 // can dock under the selected row on mobile.
+// A host renders the table, so the cases hand it slots; the wrapper is the host's
 const mountTable = async (props: Record<string, unknown> = {}, slots: Record<string, unknown> = {}) => {
-    const wrapper = await mountSuspended(defineComponent({
+    const wrapper = await mountWithTooltipProvider(defineComponent({
         components: {AllergyCatalogTable},
         setup: () => ({props, slots}),
         render() {
@@ -24,9 +24,7 @@ const mountTable = async (props: Record<string, unknown> = {}, slots: Record<str
                 ...props
             }, slots)
         }
-    }), {
-        global: {provide: {isMd: ref(false)}}
-    })
+    }), {isMd: false})
     await nextTick()
     return wrapper
 }

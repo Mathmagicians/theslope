@@ -20,3 +20,11 @@ export const getNotificationConfig = (event?: H3Event): NotificationConfig => {
     const {theslope: {notifications: {signature, templates}}} = useAppConfig()
     return NotificationConfigSchema.parse({...notifications, environment, site, from: senderAddress(environment), fromName: senderDisplayName(environment), signature, templates})
 }
+
+export interface SenderBindings {
+    queue: Queue | undefined
+    config: NotificationConfig
+}
+
+export const senderFromEvent = (event: H3Event): SenderBindings =>
+    ({queue: event.context.cloudflare.env.SENDER, config: getNotificationConfig(event)})

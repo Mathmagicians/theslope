@@ -1,14 +1,12 @@
 import {defineEventHandler, createError, getValidatedRouterParams} from "h3"
 import {deleteTeam} from "~~/server/data/prismaRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import * as z from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('Team ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 export default defineEventHandler(async (event): Promise<number> => {
     const {cloudflare} = event.context
@@ -17,7 +15,7 @@ export default defineEventHandler(async (event): Promise<number> => {
     // Input validation try-catch - FAIL EARLY
     let id!: number
     try {
-        const params = await getValidatedRouterParams(event, idSchema.parse)
+        const params = await getValidatedRouterParams(event, paramSchema.parse)
         id = params.id
     } catch (error) {
         console.error("👥 > TEAM > [DELETE] Input validation error:", error)

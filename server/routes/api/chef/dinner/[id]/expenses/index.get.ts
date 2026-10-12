@@ -1,5 +1,5 @@
 import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from 'h3'
-import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {requireChefForDinner} from '~~/server/utils/authorizationHelper'
 import {fetchExpensesForDinner} from '~~/server/data/financesRepository'
@@ -7,7 +7,7 @@ import type {Expense} from '~/composables/useBillingValidation'
 
 const {throwH3Error} = eventHandlerHelper
 const LOG = '🧾 > CHEF > EXPENSES > [GET]'
-const paramsSchema = z.object({id: z.coerce.number().int().positive()})
+const paramSchema = idParams('id')
 
 /**
  * GET /api/chef/dinner/[id]/expenses - the dinner's grocery lines in the order they were entered
@@ -17,7 +17,7 @@ export default defineEventHandler(async (event): Promise<Expense[]> => {
 
     let id!: number
     try {
-        ({id} = await getValidatedRouterParams(event, paramsSchema.parse))
+        ({id} = await getValidatedRouterParams(event, paramSchema.parse))
     } catch (error) {
         return throwH3Error(`${LOG} Input validation error`, error, 400)
     }

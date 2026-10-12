@@ -1,4 +1,4 @@
-import type {Browser, Page, BrowserContext, BrowserContextOptions, Locator} from "@playwright/test"
+import type {Browser, Page, BrowserContext, BrowserContextOptions, Locator, Response} from "@playwright/test"
 import {expect} from "@playwright/test"
 import {authFiles} from './config'
 import {randomUUID} from 'crypto'
@@ -265,6 +265,17 @@ const collectHydrationWarnings = (page: Page): string[] => {
     return warnings
 }
 
+/** Navigates, waits for hydration and asserts Vue logged no hydration mismatch on the way */
+const expectHydratedWithoutMismatch = async (page: Page, url: string): Promise<void> => {
+    const warnings = collectHydrationWarnings(page)
+    await gotoHydrated(page, url)
+    expect(warnings).toEqual([])
+}
+
+/** The next response to a `method` request whose url contains `path`; attach it before the action that sends the request */
+const waitForApi = (page: Page, path: string, method: string, options?: {timeout?: number}): Promise<Response> =>
+    page.waitForResponse(response => response.url().includes(path) && response.request().method() === method, options)
+
 /**
  * Types a dd/MM/yyyy date into a UInputDate field: clicks the field's day segment and
  * types the digits - the segments auto-advance through day, month and year.
@@ -311,6 +322,8 @@ const testHelpers = {
     waitForHydration,
     gotoHydrated,
     collectHydrationWarnings,
+    expectHydratedWithoutMismatch,
+    waitForApi,
     fillDateField,
     readDateField
 }

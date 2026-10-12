@@ -15,6 +15,11 @@ const PRISMA_UNIQUE_VIOLATION = 'P2002'
 const isPrismaNotFound = (error: unknown): boolean =>
     error instanceof Prisma.PrismaClientKnownRequestError && error.code === PRISMA_RECORD_NOT_FOUND
 
+// A unique violation, raw from Prisma or already mapped to 409 by throwH3Error
+const isConflict = (error: unknown): boolean =>
+    (error instanceof H3Error && error.statusCode === 409)
+    || (error instanceof Prisma.PrismaClientKnownRequestError && error.code === PRISMA_UNIQUE_VIOLATION)
+
 type SerializableError = {
     name: string
     message: string
@@ -209,6 +214,7 @@ const getSessionUserId = async (event: H3Event): Promise<number | null> => {
 
 const eventHandlerHelper = {
     isPrismaNotFound,
+    isConflict,
     nuxtErrorFromCatch,
     nuxtErrorFromPrismaError,
     logNuxtError,

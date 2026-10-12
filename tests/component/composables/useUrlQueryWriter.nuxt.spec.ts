@@ -4,27 +4,15 @@ import {flushPromises} from '@vue/test-utils'
 import {mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {useUrlQueryWriter} from '~/composables/useUrlQueryWriter'
 
-const {mockNavigateTo, mockRouteData} = vi.hoisted(() => ({
-  mockNavigateTo: vi.fn(),
-  mockRouteData: {
-    path: '/admin/teams',
-    params: {} as Record<string, string | undefined>,
-    query: {} as Record<string, string>,
-    hash: ''
-  }
-}))
+const {mockNavigateTo, mockRoute: mockRouteData, landNavigation, useRoute} = await vi.hoisted(async () =>
+  (await import('~~/tests/component/hoistedMocks')).mockRouteAndNavigation({path: '/admin/teams'}))
 mockNuxtImport('navigateTo', () => mockNavigateTo)
-mockNuxtImport('useRoute', () => () => mockRouteData)
+mockNuxtImport('useRoute', () => useRoute)
 
 describe('useUrlQueryWriter', () => {
   const setupQuery = (query: Record<string, string>) => {
     for (const key of Object.keys(mockRouteData.query)) Reflect.deleteProperty(mockRouteData.query, key)
     Object.assign(mockRouteData.query, query)
-  }
-  // The mocked navigation lands on the mocked route, as the router does
-  const landNavigation = async ({path, query}: {path: string, query: Record<string, string>}) => {
-    mockRouteData.path = path
-    setupQuery(query)
   }
 
   beforeEach(async () => {

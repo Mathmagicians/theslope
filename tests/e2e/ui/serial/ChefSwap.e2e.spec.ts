@@ -3,7 +3,6 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {formatDate} from '~/utils/date'
-import {isThisACookingDay} from '~/utils/season'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
 const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, getSessionUserInfo, temporaryAndRandom, doScreenshot} = testHelpers
@@ -43,31 +42,16 @@ test.describe('Chef Swap — volunteer flow', () => {
             5
         )
 
-    // Non-cooking days carry no generated event. All tests share the first free date:
-    // afterEach empties the calendar, so dinners never coexist on it.
+    // The dinner stands alone on a free day of the season; afterEach empties the calendar again
     const createVacantDinner = async (ctx: BrowserContext) => {
         const season = await SeasonFactory.createActiveSeason(ctx)
-
-        const freeDates: Date[] = []
-        const cursor = new Date(season.seasonDates.start)
-        const end = new Date(season.seasonDates.end)
-        while (cursor <= end) {
-            if (!isThisACookingDay(cursor, season.cookingDays)) freeDates.push(new Date(cursor))
-            cursor.setDate(cursor.getDate() + 1)
-        }
-        expect(freeDates.length, 'season needs a free date').toBeGreaterThan(0)
-        const date = freeDates[0]!
-        date.setHours(12, 0, 0, 0)
-
-        const dinner = await DinnerEventFactory.createDinnerEvent(ctx, {
-            date,
+        const dinner = await DinnerEventFactory.createDinnerEventOnFreeDay(ctx, season, {
             menuTitle: `VacantDinner-${temporaryAndRandom()}`,
-            seasonId: season.id!,
             cookingTeamId: teamId,
             chefId: null
         })
         createdDinnerIds.push(dinner.id!)
-        return {id: dinner.id!, date}
+        return {id: dinner.id!, date: new Date(dinner.date)}
     }
 
     test.beforeAll(async ({browser}) => {

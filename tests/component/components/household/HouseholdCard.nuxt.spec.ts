@@ -1,11 +1,9 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach} from 'vitest'
-import {setActivePinia, createPinia} from 'pinia'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {flushPromises} from '@vue/test-utils'
-import {clearNuxtData} from '#app'
 import {ref} from 'vue'
-import {mountWithTooltipProvider, clickByTestId, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, clickByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
 import HouseholdCard from '~/components/household/HouseholdCard.vue'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -29,8 +27,7 @@ const mountCard = async (isMd: boolean) => {
 
 describe.each(VIEWPORTS)('HouseholdCard on $viewport', ({isMd}) => {
     beforeEach(() => {
-        setActivePinia(createPinia())
-        clearNuxtData()
+        resetStores()
     })
 
     it.each([

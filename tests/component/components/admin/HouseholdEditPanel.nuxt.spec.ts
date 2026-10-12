@@ -1,10 +1,10 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
-import {mountSuspended} from '@nuxt/test-utils/runtime'
 import HouseholdEditPanel from '~/components/admin/HouseholdEditPanel.vue'
-import {nextTick, ref} from 'vue'
+import {nextTick} from 'vue'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
+import {mountWithTooltipProvider} from '~~/tests/component/testHelpers'
 
 describe('HouseholdEditPanel', () => {
 
@@ -33,10 +33,7 @@ describe('HouseholdEditPanel', () => {
     const allHouseholds = [household1, household2]
 
     const mount = (household: HouseholdDisplay = household1) =>
-        mountSuspended(HouseholdEditPanel, {
-            props: {household, allHouseholds},
-            global: {provide: {isMd: ref(true)}}
-        })
+        mountWithTooltipProvider(HouseholdEditPanel, {props: {household, allHouseholds}, isMd: true})
 
     // ========== STAMDATA ==========
 

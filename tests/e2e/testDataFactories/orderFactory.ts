@@ -556,7 +556,7 @@ export class OrderFactory {
     consume: {consumed: 0},
     close: {closed: 0},
     transact: {created: 0},
-    clearWaitlist: {cleared: 0},
+    clearWaitlist: {cleared: 0, dinners: []},
     initPrefs: {initialized: 0},
     scaffold: null,
     ...overrides

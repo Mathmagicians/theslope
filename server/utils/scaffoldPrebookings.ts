@@ -3,9 +3,9 @@ import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/
 import {useSeason, type BookingDeadlines} from "~/composables/useSeason"
 import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, type QueuePosition, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
 import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets, bookingOutcome} from "~/composables/useBooking"
-import {assignReleasedTicket, joinWaitlist, type WaitlistSender} from "~~/server/utils/waitlistAssignment"
+import {assignReleasedTicket, joinWaitlist} from "~~/server/utils/waitlistAssignment"
 import {fetchWaitlistForHousehold, deleteWaitlistEntry, updateWaitlistEntryOrder} from "~~/server/data/waitlistRepository"
-import {getNotificationConfig} from "~~/server/utils/sender/config"
+import {getNotificationConfig, type SenderBindings} from "~~/server/utils/sender/config"
 import {isHouseholdActiveOnDay} from "~/composables/useHousehold"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {getSystemUserId} from "~~/server/utils/systemUser"
@@ -60,7 +60,7 @@ export type ScaffoldOptions = {
     /** If provided, use USER_* audit actions. Otherwise SYSTEM_*. */
     userId?: number
     /** The notification queue and config for the queue and hand-over mails; the request's sender in user mode */
-    sender?: WaitlistSender
+    sender?: SenderBindings
     /** The deadlines user mode decides by; the season's when absent */
     deadlines?: BookingDeadlines
 }
@@ -187,7 +187,7 @@ export async function scaffoldPrebookings(
     const {confirmedKeys, cancelledKeys} = userIntentKeys
     const entryById = new Map(existingEntries.map(entry => [entry.id, entry]))
     // Resolved on first use: a scaffold that hands over or queues nothing needs no notification config
-    const senderOf = (): WaitlistSender => options.sender ?? {queue: undefined, config: getNotificationConfig()}
+    const senderOf = (): SenderBindings => options.sender ?? {queue: undefined, config: getNotificationConfig()}
 
     console.info(`${LOG} ${isUserMode ? 'User' : 'System'} mode: ${households.length} household(s), ${dinnerEvents.length} events, ${existingEntries.length} queue entries`)
 
@@ -244,8 +244,8 @@ export async function scaffoldPrebookings(
                     cancelledKeys
                 )
 
-            // Transform DesiredOrder[] to OrderCreateWithPrice[] for create
-            const ordersToCreate = result.create.map(desired => {
+            // DesiredOrder → OrderCreateWithPrice: the payer, the frozen price and the household
+            const toOrderCreate = (desired: DesiredOrder) => {
                 const ticketPrice = ticketPriceById.get(desired.ticketPriceId)
                 if (!ticketPrice) {
                     throw new Error(`${LOG} Missing ticket price ${desired.ticketPriceId} for order`)
@@ -261,7 +261,8 @@ export async function scaffoldPrebookings(
                     isGuestTicket: desired.isGuestTicket,
                     householdId: household.id
                 }
-            })
+            }
+            const ordersToCreate = result.create.map(toOrderCreate)
 
             // Create new orders
             for (const batch of chunkOrderBatch(ordersToCreate)) {
@@ -387,33 +388,19 @@ export async function scaffoldPrebookings(
                     householdClaimed++
                     continue
                 }
-                const ticketPrice = ticketPriceById.get(toClaim.ticketPriceId)
-                if (!ticketPrice) {
-                    throw new Error(`${LOG} Missing ticket price ${toClaim.ticketPriceId} for queue entry`)
-                }
+                const order = {...toOrderCreate(toClaim), state: OrderStateSchema.enum.BOOKED, allergyTypeIds: toClaim.allergyTypeIds}
                 try {
                     const {position} = await joinWaitlist(d1Client, {
                         dinnerEventId: toClaim.dinnerEventId,
                         inhabitantId: toClaim.inhabitantId,
                         isGuestTicket: toClaim.isGuestTicket,
-                        order: {
-                            dinnerEventId: toClaim.dinnerEventId,
-                            inhabitantId: toClaim.inhabitantId,
-                            bookedByUserId: effectiveUserId,
-                            ticketPriceId: toClaim.ticketPriceId,
-                            priceAtBooking: ticketPrice.price,
-                            householdId: household.id,
-                            dinnerMode: toClaim.dinnerMode,
-                            state: OrderStateSchema.enum.BOOKED,
-                            isGuestTicket: toClaim.isGuestTicket,
-                            allergyTypeIds: toClaim.allergyTypeIds
-                        }
+                        order
                     }, senderOf())
                     householdQueued++
                     positions.push({inhabitantId: toClaim.inhabitantId, dinnerEventId: toClaim.dinnerEventId, isGuestTicket: toClaim.isGuestTicket, position})
                 } catch (error) {
                     // The partial unique index holds one regular entry per inhabitant per dinner: a concurrent join already queued it
-                    if ((error as {statusCode?: number}).statusCode !== 409) throw error
+                    if (!eventHandlerHelper.isConflict(error)) throw error
                     console.info(`${LOG} Inhabitant ${toClaim.inhabitantId} already queues for dinner ${toClaim.dinnerEventId}`)
                     householdDuplicates++
                 }

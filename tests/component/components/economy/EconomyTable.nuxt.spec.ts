@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {findByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId} from '~~/tests/component/testHelpers'
 import EconomyTable from '~/components/economy/EconomyTable.vue'
 import {nextTick, ref} from 'vue'
 
@@ -39,28 +39,15 @@ describe('EconomyTable', () => {
         {accessorKey: 'totalAmount', header: 'Beløb'}
     ]
 
-    type WrapperType = Awaited<ReturnType<typeof mountSuspended>>
-
-    // Required dateAccessor for EconomyTable (typed as unknown for mountSuspended compatibility)
+    // Required dateAccessor for EconomyTable (typed as unknown for mount compatibility)
     const dateAccessor = (item: unknown) => (item as TestRow).date
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const createWrapper = async (data: TestRow[] = createTestData(), pageSize = 5): Promise<any> => {
-        return await mountSuspended(EconomyTable, {
-            props: {
-                data,
-                columns: defaultColumns,
-                rowKey: 'date',
-                dateAccessor,
-                pageSize
-            },
-            global: {
-                provide: {
-                    isMd: ref(true)
-                }
-            }
-        })
-    }
+    const createWrapper = (props: Record<string, unknown> = {}) => mountWithTooltipProvider(EconomyTable, {
+        props: {data: createTestData(), columns: defaultColumns, rowKey: 'date', dateAccessor, pageSize: 5, ...props},
+        isMd: true
+    })
+
+    type WrapperType = Awaited<ReturnType<typeof createWrapper>>
 
     const getSearchInput = (wrapper: WrapperType) =>
         wrapper.find('input[type="text"]')
@@ -88,18 +75,7 @@ describe('EconomyTable', () => {
 
         it('renders custom search placeholder', async () => {
             const customPlaceholder = 'Søg måned...'
-            const wrapper = await mountSuspended(EconomyTable, {
-                props: {
-                    data: createTestData(),
-                    columns: defaultColumns,
-                    rowKey: 'date',
-                    dateAccessor,
-                    searchPlaceholder: customPlaceholder
-                },
-                global: {
-                    provide: {isMd: ref(true)}
-                }
-            })
+            const wrapper = await createWrapper({searchPlaceholder: customPlaceholder})
             const searchInput = wrapper.find('input[type="text"]')
             expect(searchInput.attributes('placeholder')).toBe(customPlaceholder)
         })
@@ -160,18 +136,7 @@ describe('EconomyTable', () => {
         })
 
         it('sorts descending when defaultSortDesc=true', async () => {
-            const wrapper = await mountSuspended(EconomyTable, {
-                props: {
-                    data: createTestData(),
-                    columns: defaultColumns,
-                    rowKey: 'date',
-                    dateAccessor,
-                    defaultSortDesc: true
-                },
-                global: {
-                    provide: {isMd: ref(true)}
-                }
-            })
+            const wrapper = await createWrapper({defaultSortDesc: true})
             const vm = wrapper.vm as unknown as EconomyTableVm
 
             // First item should be latest date (Feb 15)
@@ -209,19 +174,19 @@ describe('EconomyTable', () => {
 
     describe('Pagination', () => {
         it('shows pagination when data exceeds pageSize', async () => {
-            const wrapper = await createWrapper(createTestData(), 5)
+            const wrapper = await createWrapper({data: createTestData(), pageSize: 5})
             const vm = wrapper.vm as unknown as EconomyTableVm
             expect(vm.showPagination).toBe(true)
         })
 
         it('hides pagination when data fits in one page', async () => {
-            const wrapper = await createWrapper(createTestData().slice(0, 3), 5)
+            const wrapper = await createWrapper({data: createTestData().slice(0, 3), pageSize: 5})
             const vm = wrapper.vm as unknown as EconomyTableVm
             expect(vm.showPagination).toBe(false)
         })
 
         it('hides pagination when data equals pageSize', async () => {
-            const wrapper = await createWrapper(createTestData().slice(0, 5), 5)
+            const wrapper = await createWrapper({data: createTestData().slice(0, 5), pageSize: 5})
             const vm = wrapper.vm as unknown as EconomyTableVm
             expect(vm.showPagination).toBe(false)
         })
@@ -240,18 +205,7 @@ describe('EconomyTable', () => {
 
     describe('Loading State', () => {
         it('passes loading prop to UTable', async () => {
-            const wrapper = await mountSuspended(EconomyTable, {
-                props: {
-                    data: createTestData(),
-                    columns: defaultColumns,
-                    rowKey: 'date',
-                    dateAccessor,
-                    loading: true
-                },
-                global: {
-                    provide: {isMd: ref(true)}
-                }
-            })
+            const wrapper = await createWrapper({loading: true})
 
             const table = wrapper.findComponent({name: 'UTable'})
             expect(table.props('loading')).toBe(true)
@@ -260,10 +214,11 @@ describe('EconomyTable', () => {
 
     describe('Empty State', () => {
         it('renders with empty data', async () => {
-            const wrapper = await createWrapper([])
+            const wrapper = await createWrapper({data: []})
             expect(wrapper.exists()).toBe(true)
         })
 
+        // Slots go through the root mount alone
         it('passes empty slot through', async () => {
             const wrapper = await mountSuspended(EconomyTable, {
                 props: {

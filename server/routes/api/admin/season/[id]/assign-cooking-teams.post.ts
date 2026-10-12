@@ -3,15 +3,13 @@ import {fetchSeason} from "~~/server/data/prismaRepository"
 import {assignCookingTeamToDinnerEvent} from "~~/server/data/financesRepository"
 import {useSeason} from "~/composables/useSeason"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import {z} from "zod"
+import {idParams} from '~/composables/useCoreValidation'
 import type {Season} from "~/composables/useSeasonValidation"
 import type {DinnerEventDisplay} from "~/composables/useBookingValidation"
 
 const {throwH3Error} = eventHandlerHelper
 
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('Season ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 type AssignTeamsResponse = {
     seasonId: number
@@ -26,7 +24,7 @@ export default defineEventHandler(async (event): Promise<AssignTeamsResponse> =>
     // Input validation - FAIL EARLY
     let seasonId!: number
     try {
-        const params = await getValidatedRouterParams(event, idSchema.parse)
+        const params = await getValidatedRouterParams(event, paramSchema.parse)
         seasonId = params.id
     } catch (error) {
         return throwH3Error('🗓️ > SEASON > [ASSIGN_COOKING_TEAMS] Input validation error', error)

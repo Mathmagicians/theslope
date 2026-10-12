@@ -1,9 +1,8 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
-import {mountSuspended} from '@nuxt/test-utils/runtime'
 import WeekDayMapDisplay from '~/components/calendar/WeekDayMapDisplay.vue'
-import {ref} from 'vue'
 import {WEEKDAYS, createDefaultWeekdayMap} from '~/types/dateTypes'
+import {mountWithTooltipProvider} from '~~/tests/component/testHelpers'
 
 describe('WeekDayMapDisplay', () => {
 
@@ -12,10 +11,7 @@ describe('WeekDayMapDisplay', () => {
     const noDays = createDefaultWeekdayMap(false)
 
     const mount = (props: Record<string, unknown> = {}) =>
-        mountSuspended(WeekDayMapDisplay, {
-            props: {modelValue: allDays, ...props},
-            global: {provide: {isMd: ref(true)}}
-        })
+        mountWithTooltipProvider(WeekDayMapDisplay, {props: {modelValue: allDays, ...props}, isMd: true})
 
     // ========== COMPACT VIEW ==========
 

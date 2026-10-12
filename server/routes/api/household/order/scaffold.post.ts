@@ -1,11 +1,11 @@
-import {z} from 'zod'
 import {defineEventHandler, readValidatedBody, getValidatedQuery, setResponseStatus} from "h3"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import {isAdmin} from '~/composables/usePermissions'
 import {useBookingValidation, type ScaffoldOrdersRequest, type ScaffoldOrdersResponse} from "~/composables/useBookingValidation"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
-import {getNotificationConfig} from "~~/server/utils/sender/config"
+import {senderFromEvent} from "~~/server/utils/sender/config"
+import {AdminBypassQuerySchema} from '~/composables/useCoreValidation'
 import {OPEN_DEADLINES} from '~/composables/useSeason'
 
 const {throwH3Error} = eventHandlerHelper
@@ -32,16 +32,15 @@ export default defineEventHandler<Promise<ScaffoldOrdersResponse>>(async (event)
 
     // Input validation (ADR-002)
     let requestData!: ScaffoldOrdersRequest
+    let adminBypass!: boolean
     try {
         requestData = await readValidatedBody(event, ScaffoldOrdersRequestSchema.parse)
+        adminBypass = (await getValidatedQuery(event, AdminBypassQuerySchema.parse)).adminBypass
     } catch (error) {
         return throwH3Error(`${LOG} Input validation error`, error)
     }
 
     // Authorization: verify user belongs to household (admin can bypass via ?adminBypass=true)
-    // The flag lifts the deadlines, so only the literal 'true' counts; the store sends 'false' on a member's booking
-    const querySchema = z.object({adminBypass: z.enum(['true', 'false']).optional().transform(flag => flag === 'true')})
-    const {adminBypass} = await getValidatedQuery(event, querySchema.parse)
     const user = await requireHouseholdAccess(event, requestData.householdId, adminBypass ? isAdmin : undefined)
 
     // Business logic (ADR-002)
@@ -56,7 +55,7 @@ export default defineEventHandler<Promise<ScaffoldOrdersResponse>>(async (event)
             desiredOrders: requestData.orders,
             userId: user.id,
             deadlines: adminBypass && isAdmin(user) ? OPEN_DEADLINES : undefined,
-            sender: {queue: cloudflare.env.SENDER, config: getNotificationConfig(event)}
+            sender: senderFromEvent(event)
         })
 
         console.info(`${LOG} Scaffold complete: created=${result.created}, deleted=${result.deleted}, released=${result.released}, claimed=${result.claimed}, queued=${result.queued}, left=${result.left}, requeued=${result.requeued}`)

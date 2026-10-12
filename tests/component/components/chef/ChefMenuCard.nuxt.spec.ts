@@ -1,11 +1,13 @@
 // @vitest-environment nuxt
-import {describe, it, expect, vi, beforeAll} from 'vitest'
-import {mountSuspended, mockNuxtImport, mockComponent} from '@nuxt/test-utils/runtime'
-import {findByTestId, findAllByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {describe, it, expect, beforeAll, beforeEach, afterEach} from 'vitest'
+import {registerEndpoint} from '@nuxt/test-utils/runtime'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
 import ChefMenuCard from '~/components/chef/ChefMenuCard.vue'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
-import {ref, h, type ComponentPublicInstance} from 'vue'
-import {flushPromises, type VueWrapper} from '@vue/test-utils'
+import AllergenMultiSelector from '~/components/allergy/AllergenMultiSelector.vue'
+import {nextTick, type ComponentPublicInstance} from 'vue'
+import {flushPromises, enableAutoUnmount, type VueWrapper} from '@vue/test-utils'
+import {useAllergiesStore} from '~/stores/allergies'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -14,53 +16,28 @@ import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {formatPortions} from '~/utils/utils'
 import {FORM_MODES} from '~/types/form'
 import {COMPONENTS, ICONS, getRandomEmptyMessage} from '~/composables/useTheSlopeDesignSystem'
+import {WAITLIST_TEST_IDS} from '../dinner/waitlistTestIds'
 
 /**
- * ChefMenuCard Unit Tests
- *
- * Focus: Allergen ID extraction from dinner event
- * The bug fix: allergens array contains AllergyType objects with `id`,
- * NOT join table objects with `allergyTypeId`
+ * ChefMenuCard: the allergen line and its editor over the dinner's allergens (the catalog's `id`, not a join row's
+ * `allergyTypeId`), the action row, the chef portrait, the Madbestilling row and the release-portions form.
+ * Real component tree and real stores (testing.md Rule 6); only HTTP is faked.
  */
+registerEmptyStoreEndpoints()
+registerEndpoint('/api/admin/allergy-type', () => AllergyFactory.createMockAllergyTypesWithInhabitants())
 
-// Mock stores
-mockNuxtImport('useAllergiesStore', () => {
-    return () => ({
-        allergyTypes: ref(AllergyFactory.createMockAllergyTypesWithInhabitants()),
-        isAllergyTypesInitialized: ref(true)
-    })
+// The next test's resetStores drops the datasets a still-mounted card reads
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
 })
 
-mockNuxtImport('usePlanStore', () => {
-    return () => ({
-        assignRoleToDinner: vi.fn()
-    })
-})
-
-mockNuxtImport('useAuthStore', () => {
-    return () => ({
-        user: ref({Inhabitant: {id: 1, name: 'Test User'}})
-    })
-})
-
-// Mock complex child components
-mockComponent('AllergenMultiSelector', {
-    props: ['modelValue', 'allergyTypes', 'tickets'],
-    emits: ['update:modelValue'],
-    setup(props) {
-        return () => h('div', {'data-testid': 'allergen-selector'}, [
-            h('span', `Selected: ${props.modelValue?.join(', ') || 'none'}`),
-            h('span', `Tickets: ${props.tickets?.length ?? 'none'}`)
-        ])
-    }
-})
-
-mockComponent('DinnerBookingForm', {
-    props: ['household', 'dinnerEvent', 'orders', 'ticketPrices', 'mode'],
-    setup() {
-        return () => h('div', {'data-testid': 'booking-form'}, 'Booking Form')
-    }
-})
+// The allergen section renders over the catalog the store holds
+const mountCard = async (props: Record<string, unknown>) => {
+    await useAllergiesStore().loadAllergyTypes()
+    return mountWithTooltipProvider(ChefMenuCard, {props, isMd: true})
+}
 
 describe('ChefMenuCard', () => {
     // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not in the describe body
@@ -70,23 +47,13 @@ describe('ChefMenuCard', () => {
         defaultDeadlines = deadlinesForSeason(SeasonFactory.defaultSeason())
     })
 
-    // DRY: Create wrapper with defaults
-    const createWrapper = async (props: Record<string, unknown> = {}) => {
-        return await mountSuspended(ChefMenuCard, {
-            props: {
-                dinnerEvent: DinnerEventFactory.defaultDinnerEventDetail(),
-                deadlines: defaultDeadlines,
-                formMode: FORM_MODES.EDIT,
-                showAllergens: true,
-                ...props
-            },
-            global: {
-                provide: {
-                    isMd: ref(true)
-                }
-            }
-        })
-    }
+    const createWrapper = (props: Record<string, unknown> = {}) => mountCard({
+        dinnerEvent: DinnerEventFactory.defaultDinnerEventDetail(),
+        deadlines: defaultDeadlines,
+        formMode: FORM_MODES.EDIT,
+        showAllergens: true,
+        ...props
+    })
 
     // Factory: Create dinner event with allergens
     const createDinnerEventWithAllergens = (allergenIds: number[]) => ({
@@ -102,12 +69,11 @@ describe('ChefMenuCard', () => {
     const ALLERGEN_LINE = 'chef-allergen-line'
     const ALLERGEN_OVERVIEW = 'chef-allergen-overview'
     const ALLERGEN_LABEL = 'chef-allergen-label'
-    const ALLERGEN_SELECTOR = 'allergen-selector'
 
     // The selector opens behind "Rediger allergener"
     const openAllergenEditor = async (wrapper: Awaited<ReturnType<typeof createWrapper>>) => {
         await clickByTestId(wrapper, 'edit-allergens')
-        return findByTestId(wrapper, ALLERGEN_SELECTOR)
+        return wrapper.findComponent(AllergenMultiSelector)
     }
 
     describe('Allergen ID Extraction', () => {
@@ -131,23 +97,13 @@ describe('ChefMenuCard', () => {
             const dinnerEvent = createDinnerEventWithAllergens(allergenIds)
             const wrapper = await createWrapper({dinnerEvent})
 
-            // The AllergenMultiSelector should receive the extracted IDs
+            // The AllergenMultiSelector receives the extracted IDs
             const selector = await openAllergenEditor(wrapper)
             expect(selector.exists()).toBe(true)
-
-            // Verify the text shows the correct IDs
-            const text = selector.text()
-            if (expectedIds.length === 0) {
-                expect(text).toContain('none')
-            } else {
-                expectedIds.forEach(id => {
-                    expect(text).toContain(String(id))
-                })
-            }
+            expect(selector.props('modelValue')).toEqual(expectedIds)
         })
 
-        it('uses id property NOT allergyTypeId (bug fix verification)', async () => {
-            // This test verifies the bug fix: we use a.id not a.allergyTypeId
+        it('uses the allergen id, not a join row allergyTypeId', async () => {
             const dinnerEvent = {
                 ...DinnerEventFactory.defaultDinnerEventDetail(),
                 allergens: [
@@ -158,9 +114,7 @@ describe('ChefMenuCard', () => {
             const wrapper = await createWrapper({dinnerEvent})
             const selector = await openAllergenEditor(wrapper)
 
-            // Should show id=42, not undefined (which would happen with allergyTypeId)
-            expect(selector.text()).toContain('42')
-            expect(selector.text()).not.toContain('undefined')
+            expect(selector.props('modelValue')).toEqual([42])
         })
     })
 
@@ -174,9 +128,9 @@ describe('ChefMenuCard', () => {
             const wrapper = await createWrapper({dinnerEvent})
             expect(findByTestId(wrapper, ALLERGEN_LINE).text()).toContain(getRandomEmptyMessage('noAllergens').text)
 
-            // Should show empty selection, not crash
+            // An empty selection, no crash
             const selector = await openAllergenEditor(wrapper)
-            expect(selector.text()).toContain('none')
+            expect(selector.props('modelValue')).toEqual([])
         })
     })
 
@@ -231,7 +185,7 @@ describe('ChefMenuCard', () => {
             const wrapper = await createWrapper({dinnerEvent})
 
             const selector = await openAllergenEditor(wrapper)
-            expect(selector.text()).toContain(`Tickets: ${tickets.length}`)
+            expect(selector.props('tickets')).toHaveLength(tickets.length)
         })
     })
 
@@ -239,10 +193,9 @@ describe('ChefMenuCard', () => {
         it('shows a labelled primary edit, secondary publish, and a quiet overflow trigger', async () => {
             const wrapper = await createWrapper()
 
-            // Primary action is labelled (no longer a bare pencil icon)
+            // The primary action is labelled, the overflow trigger is the quiet icon-only one
             expect(findByTestId(wrapper, 'edit-menu').text()).toContain('Rediger menu')
             expect(wrapper.find('[name="announce-dinner"]').text()).toContain('Publicer')
-            // Overflow trigger is the quiet icon-only "..." (no label)
             expect(findByTestId(wrapper, 'dinner-more-actions').exists()).toBe(true)
         })
 
@@ -312,15 +265,12 @@ describe('ChefMenuCard — Madbestilling', () => {
         deadlines = useSeason().deadlinesForSeason(SeasonFactory.defaultSeason())
     })
 
-    const mountChefCard = (props: Record<string, unknown> = {}) => mountSuspended(ChefMenuCard, {
-        props: {
-            dinnerEvent: DinnerEventFactory.defaultDinnerEventDetail(),
-            deadlines,
-            formMode: FORM_MODES.EDIT,
-            showStateControls: true,
-            ...props
-        },
-        global: {provide: {isMd: ref(true)}}
+    const mountChefCard = (props: Record<string, unknown> = {}) => mountCard({
+        dinnerEvent: DinnerEventFactory.defaultDinnerEventDetail(),
+        deadlines,
+        formMode: FORM_MODES.EDIT,
+        showStateControls: true,
+        ...props
     })
 
     it('GIVEN the chef\'s card WHEN rendering THEN the Madbestilling row sits above the Budget pane and the stepper', async () => {
@@ -382,15 +332,12 @@ describe('ChefMenuCard — release portions', () => {
     })
 
     const QUEUE = WaitlistFactory.defaultQueueSummary({entries: 4, portions: 2.5})
-    const RELEASE_FORM = 'chef-release-portions-form'
 
-    const mountChefCard = (waitlist: ReturnType<typeof WaitlistFactory.defaultQueueSummary> | null) => mountSuspended(ChefMenuCard, {
-        props: {dinnerEvent: DinnerEventFactory.defaultDinnerEventDetail(), deadlines, formMode: FORM_MODES.EDIT, waitlist},
-        global: {provide: {isMd: ref(true)}}
-    })
+    const mountChefCard = (waitlist: ReturnType<typeof WaitlistFactory.defaultQueueSummary> | null) =>
+        mountCard({dinnerEvent: DinnerEventFactory.defaultDinnerEventDetail(), deadlines, formMode: FORM_MODES.EDIT, waitlist})
 
     const submitRelease = async (wrapper: Awaited<ReturnType<typeof mountChefCard>>) => {
-        await clickByTestId(wrapper, 'chef-release-portions-submit')
+        await clickByTestId(wrapper, WAITLIST_TEST_IDS.releaseSubmit)
         await flushPromises()
         await nextTick()
     }
@@ -402,50 +349,50 @@ describe('ChefMenuCard — release portions', () => {
     ])('GIVEN $desc THEN the CTA under the action row shows: $cta', async ({waitlist, cta}) => {
         const wrapper = await mountChefCard(waitlist)
 
-        expect(findByTestId(wrapper, 'chef-release-portions-cta').exists()).toBe(cta)
+        expect(findByTestId(wrapper, WAITLIST_TEST_IDS.releaseCta).exists()).toBe(cta)
     })
 
     it('GIVEN a queue THEN the CTA names its size', async () => {
         const wrapper = await mountChefCard(QUEUE)
 
-        expect(findByTestId(wrapper, 'chef-waitlist-alert').text()).toContain(String(QUEUE.entries))
+        expect(findByTestId(wrapper, WAITLIST_TEST_IDS.chefAlert).text()).toContain(String(QUEUE.entries))
     })
 
     it.each([
         {trigger: 'the Flere entry', open: async (wrapper: Awaited<ReturnType<typeof mountChefCard>>) => {
             await clickByTestId(wrapper, 'dinner-more-actions')
             await flushPromises()
-            await clickByTestId(wrapper, 'chef-release-portions')
+            await clickByTestId(wrapper, WAITLIST_TEST_IDS.releaseEntry)
         }},
-        {trigger: 'the CTA', open: (wrapper: Awaited<ReturnType<typeof mountChefCard>>) => clickByTestId(wrapper, 'chef-release-portions-cta')}
+        {trigger: 'the CTA', open: (wrapper: Awaited<ReturnType<typeof mountChefCard>>) => clickByTestId(wrapper, WAITLIST_TEST_IDS.releaseCta)}
     ])('$trigger opens the release form prefilled with the queue\'s portion need, and Frigiv emits the portions', async ({open}) => {
         const wrapper = await mountChefCard(QUEUE)
-        expect(findByTestId(wrapper, RELEASE_FORM).exists()).toBe(false)
+        expect(findByTestId(wrapper, WAITLIST_TEST_IDS.releaseForm).exists()).toBe(false)
 
         await open(wrapper)
 
-        const form = findByTestId(wrapper, RELEASE_FORM)
+        const form = findByTestId(wrapper, WAITLIST_TEST_IDS.releaseForm)
         expect((form.find('input').element as HTMLInputElement).value).toBe(String(QUEUE.portions))
         await submitRelease(wrapper)
         expect(wrapper.emitted('release-portions')).toEqual([[QUEUE.portions]])
-        expect(findByTestId(wrapper, RELEASE_FORM).exists()).toBe(false)
+        expect(findByTestId(wrapper, WAITLIST_TEST_IDS.releaseForm).exists()).toBe(false)
     })
 
     it('Fortryd closes the form without releasing', async () => {
         const wrapper = await mountChefCard(QUEUE)
-        await clickByTestId(wrapper, 'chef-release-portions-cta')
+        await clickByTestId(wrapper, WAITLIST_TEST_IDS.releaseCta)
 
-        await clickByTestId(wrapper, 'chef-release-portions-cancel')
+        await clickByTestId(wrapper, WAITLIST_TEST_IDS.releaseCancel)
 
-        expect(findByTestId(wrapper, RELEASE_FORM).exists()).toBe(false)
+        expect(findByTestId(wrapper, WAITLIST_TEST_IDS.releaseForm).exists()).toBe(false)
         expect(wrapper.emitted('release-portions')).toBeUndefined()
     })
 
     it('a draft above the release limit blocks the emit', async () => {
         const wrapper = await mountChefCard(QUEUE)
-        await clickByTestId(wrapper, 'chef-release-portions-cta')
+        await clickByTestId(wrapper, WAITLIST_TEST_IDS.releaseCta)
 
-        await findByTestId(wrapper, RELEASE_FORM).find('input').setValue('1000')
+        await findByTestId(wrapper, WAITLIST_TEST_IDS.releaseForm).find('input').setValue('1000')
         await submitRelease(wrapper)
 
         expect(wrapper.emitted('release-portions')).toBeUndefined()

@@ -1,18 +1,11 @@
 import {flushPromises} from '@vue/test-utils'
 import {nextTick} from 'vue'
 import {findByTestId, type clickByTestId} from '~~/tests/component/testHelpers'
+import {JOKER_SLOT_IDS} from '~~/tests/component/components/cooking-team/jokerSlotIds'
+
+export {JOKER_SLOT_IDS}
 
 type Searchable = Parameters<typeof clickByTestId>[0]
-
-/** The joker slot test-id contract, shared by the form and the team card specs */
-export const JOKER_SLOT_IDS = {
-    form: 'joker-slot-form',
-    add: 'joker-slot-add',
-    delete: (slotId: number) => `joker-slot-delete-${slotId}`,
-    submit: 'joker-slot-submit',
-    cancel: 'joker-slot-cancel',
-    roleSelect: 'joker-slot-role-select'
-} as const
 
 /** Toggles every weekday checkbox the form shows */
 export const toggleEveryWeekday = async (wrapper: Searchable) => {

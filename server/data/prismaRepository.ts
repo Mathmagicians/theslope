@@ -2,6 +2,7 @@ import {Prisma} from "~~/prisma/generated/client/client"
 import eventHandlerHelper from "../utils/eventHandlerHelper"
 import {getPrismaClientConnection} from "../utils/database"
 import {maskPassword} from '~/utils/utils'
+import {chunkArray} from '~/utils/batchUtils'
 import type {PreferenceUpdate} from '~/composables/useSeason'
 
 import type {Season} from "~/composables/useSeasonValidation"
@@ -738,42 +739,56 @@ export async function deleteHouseholdsByHeynaboId(
     }
 }
 
-// ADR-009 & ADR-010: Returns HouseholdDisplay (all scalar fields + lightweight inhabitant relation)
-export async function fetchHouseholds(d1Client: D1Database, householdId?: number): Promise<HouseholdDisplay[]> {
-    console.info(`🏠 > HOUSEHOLD > [GET] Fetching households${householdId ? ` for id ${householdId}` : ''} with lightweight inhabitant data`)
+// ADR-009 & ADR-010: HouseholdDisplay (all scalar fields + lightweight inhabitant relation), ordered by address
+const findHouseholdDisplays = async (d1Client: D1Database, where: Prisma.HouseholdWhereInput): Promise<HouseholdDisplay[]> => {
     const prisma = await getPrismaClientConnection(d1Client)
     const {deserializeHouseholdDisplay} = useCoreValidation()
-
-    try {
-        const households = await prisma.household.findMany({
-            where: householdId !== undefined ? {id: householdId} : {},
-            include: {
-                inhabitants: {
-                    select: {
-                        id: true,
-                        heynaboId: true,
-                        userId: true,
-                        householdId: true,
-                        name: true,
-                        lastName: true,
-                        pictureUrl: true,
-                        birthDate: true,
-                        dinnerPreferences: true
-                    }
+    const households = await prisma.household.findMany({
+        where,
+        include: {
+            inhabitants: {
+                select: {
+                    id: true,
+                    heynaboId: true,
+                    userId: true,
+                    householdId: true,
+                    name: true,
+                    lastName: true,
+                    pictureUrl: true,
+                    birthDate: true,
+                    dinnerPreferences: true
                 }
-            },
-            orderBy: {
-                address: 'asc'  // Sort alphabetically by address for consistent UI ordering
             }
-        })
+        },
+        orderBy: {
+            address: 'asc'  // Sort alphabetically by address for consistent UI ordering
+        }
+    })
+    // ADR-010: Repository validates data after deserialization
+    return households.map(household => deserializeHouseholdDisplay(household))
+}
 
-        // ADR-010: Repository validates data after deserialization
-        const validatedHouseholds = households.map(household => deserializeHouseholdDisplay(household))
-
+export async function fetchHouseholds(d1Client: D1Database, householdId?: number): Promise<HouseholdDisplay[]> {
+    console.info(`🏠 > HOUSEHOLD > [GET] Fetching households${householdId ? ` for id ${householdId}` : ''} with lightweight inhabitant data`)
+    try {
+        const households = await findHouseholdDisplays(d1Client, householdId !== undefined ? {id: householdId} : {})
         console.info(`🏠 > HOUSEHOLD > [GET] Successfully fetched ${households.length} households`)
-        return validatedHouseholds
+        return households
     } catch (error) {
         return throwH3Error('🏠 > HOUSEHOLDS > [GET]: Error fetching households', error)
+    }
+}
+
+// ADR-014: the id list chunks under D1's bound-parameter limit
+const chunkHouseholdIds = chunkArray<number>(90)
+
+export async function fetchHouseholdsByIds(d1Client: D1Database, ids: number[]): Promise<HouseholdDisplay[]> {
+    console.info(`🏠 > HOUSEHOLD > [GET] Fetching ${ids.length} households by id`)
+    try {
+        const batches = await Promise.all(chunkHouseholdIds([...new Set(ids)]).map(batch => findHouseholdDisplays(d1Client, {id: {in: batch}})))
+        return batches.flat()
+    } catch (error) {
+        return throwH3Error(`🏠 > HOUSEHOLDS > [GET]: Error fetching households ${ids.join(', ')}`, error)
     }
 }
 

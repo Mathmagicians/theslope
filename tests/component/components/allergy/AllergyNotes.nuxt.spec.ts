@@ -1,11 +1,9 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
 import {defineComponent, h, nextTick, ref} from 'vue'
-import {TooltipProvider} from 'reka-ui'
-import {mountSuspended} from '@nuxt/test-utils/runtime'
 import AllergyNotes from '~/components/allergy/AllergyNotes.vue'
 import {ALLERGY_TEST_IDS} from './allergyTestIds'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, VIEWPORTS} from '~~/tests/component/testHelpers'
 
 // The notes box is prop-driven and mounts on two surfaces (catalog footer, poster).
 // The text is one note per line - blank lines and stray whitespace are not notes.
@@ -15,11 +13,6 @@ const mountNotes = (props: {notes: string, canEdit?: boolean, isSaving?: boolean
     mountWithTooltipProvider(AllergyNotes, {props, isMd})
 
 type Wrapper = Awaited<ReturnType<typeof mountNotes>>
-
-const VIEWPORTS = [
-    {viewport: 'desktop', isMd: true},
-    {viewport: 'mobile', isMd: false}
-] as const
 
 const textareaEl = (wrapper: Wrapper) =>
     findByTestId(wrapper, ALLERGY_TEST_IDS.notesTextarea).element as HTMLTextAreaElement
@@ -111,14 +104,14 @@ describe.each(VIEWPORTS)('AllergyNotes - edit face on $viewport', ({isMd}) => {
     it('stays open while the parent reports isSaving, and closes when the save resolves', async () => {
         const isSaving = ref(false)
         const Host = defineComponent({
-            render: () => h(TooltipProvider, {}, () => h(AllergyNotes, {
+            render: () => h(AllergyNotes, {
                 notes: 'A',
                 canEdit: true,
                 isSaving: isSaving.value,
                 onSave: () => { isSaving.value = true }
-            }))
+            })
         })
-        const root = await mountSuspended(Host, {global: {provide: {isMd: ref(isMd)}}})
+        const root = await mountWithTooltipProvider(Host, {isMd})
         const wrapper = root.findComponent(AllergyNotes)
         await openEditor(wrapper)
 

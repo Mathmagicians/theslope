@@ -1,30 +1,26 @@
 // @vitest-environment nuxt
-import {describe, it, expect, vi, beforeEach} from 'vitest'
+import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {setActivePinia, createPinia} from 'pinia'
-import {flushPromises} from '@vue/test-utils'
-import {clearNuxtData} from '#app'
+import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {nextTick, toValue} from 'vue'
 import AdminAllergies from '~/components/admin/AdminAllergies.vue'
 import {useAllergiesStore} from '~/stores/allergies'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ALLERGY_TEST_IDS} from '../allergy/allergyTestIds'
-import {mountWithTooltipProvider, mountedStore, findByTestId, findAllByTestId, clickByTestId, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, mountedStore, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS} from '~~/tests/component/testHelpers'
 
 // The test environment has no router: navigateTo lands the written query on the route the component reads
-const {mockRoute} = await vi.hoisted(async () => {
-    const {reactive} = await import('vue')
-    return {mockRoute: reactive({path: '/admin/allergies', params: {tab: 'allergies'}, query: {} as Record<string, string>, hash: ''})}
-})
-mockNuxtImport('useRoute', () => () => mockRoute)
-mockNuxtImport('navigateTo', () => vi.fn((to: {query: Record<string, string>}) => {
-    mockRoute.query = to.query
-}))
+const {mockRoute, mockNavigateTo, landNavigation, useRoute} = await vi.hoisted(async () =>
+    (await import('~~/tests/component/hoistedMocks')).mockRouteAndNavigation({path: '/admin/allergies', params: {tab: 'allergies'}}))
+mockNuxtImport('useRoute', () => useRoute)
+mockNuxtImport('navigateTo', () => mockNavigateTo)
+mockNavigateTo.mockImplementation(landNavigation)
 
 // The one Setting row the catalog footer and the poster read
 const POSTER_NOTES_ENDPOINT = '/api/admin/setting/allergy-poster-notes'
 
-// Endpoint mocks - specific FIRST, generic LAST (docs/testing.md)
+// Only HTTP is faked (docs/testing.md Rule 6)
+registerEmptyStoreEndpoints()
 const allergyTypesEndpoint = vi.fn()
 const posterNotesGetEndpoint = vi.fn()
 const posterNotesPostEndpoint = vi.fn()
@@ -34,15 +30,12 @@ registerEndpoint('/api/admin/allergy-type', allergyTypesEndpoint)
 // Generic (GET) registered BEFORE method-specific so POST wins (reverse-order lookup)
 registerEndpoint(POSTER_NOTES_ENDPOINT, posterNotesGetEndpoint)
 registerEndpoint(POSTER_NOTES_ENDPOINT, {handler: posterNotesPostEndpoint, method: 'POST'})
-registerEndpoint('/api/admin/users/by-role/ALLERGYMANAGER', () => [])
-registerEndpoint('/api/admin/users', () => [])
-registerEndpoint('/api/admin/household', () => [])
-registerEndpoint('/api/admin/season/active', () => null)
-registerEndpoint('/api/admin/season', () => [])
 
 // Container spec: every test mounts the whole catalog page with three real stores (~0.6s alone,
 // several seconds under full-suite parallelism on a loaded machine) - size the timeout accordingly
 vi.setConfig({testTimeout: 15_000})
+// The next test's resetStores drops the datasets a still-mounted page reads
+enableAutoUnmount(afterEach)
 
 // The stored notes - two lines, so the assertions cannot pass on the three-bullet registry default
 const STORED_NOTES = 'Glutenfri boller findes i fryseren\nHusk at give besked ved menu-præsentationen'
@@ -79,9 +72,8 @@ type Wrapper = Awaited<ReturnType<typeof mountAdmin>>
 
 describe('AdminAllergies', () => {
     beforeEach(() => {
-        setActivePinia(createPinia())
+        resetStores()
         mockRoute.query = {}
-        clearNuxtData()
         vi.clearAllMocks()
         allergyTypesEndpoint.mockReturnValue(mockAllergyTypes)
         posterNotesGetEndpoint.mockReturnValue(aNotesRow(STORED_NOTES))

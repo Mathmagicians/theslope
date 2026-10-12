@@ -14,19 +14,12 @@ import { useTabNavigation } from '~/composables/useTabNavigation'
  * Note: Full navigation behavior tested in E2E (admin.e2e.spec.ts, household.e2e.spec.ts)
  */
 
-// Mock navigateTo and useRoute using the official pattern from nuxt/test-utils
-const { mockNavigateTo, mockRouteData } = vi.hoisted(() => ({
-  mockNavigateTo: vi.fn(),
-  mockRouteData: {
-    path: '/simple/tab1',
-    params: { tab: 'tab1' } as Record<string, string | undefined>,
-    query: {} as Record<string, string>,
-    hash: ''
-  }
-}))
+// The test environment has no router: the route is read from, and the navigation recorded on, the mocks
+const { mockNavigateTo, mockRoute: mockRouteData, useRoute } = await vi.hoisted(async () =>
+  (await import('~~/tests/component/hoistedMocks')).mockRouteAndNavigation({path: '/simple/tab1', params: {tab: 'tab1'}}))
 
 mockNuxtImport('navigateTo', () => mockNavigateTo)
-mockNuxtImport('useRoute', () => () => mockRouteData)
+mockNuxtImport('useRoute', () => useRoute)
 
 describe('useTabNavigation.ts', () => {
   // Test fixtures - Generic simple route

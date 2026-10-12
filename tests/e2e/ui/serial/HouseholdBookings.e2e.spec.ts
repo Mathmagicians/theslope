@@ -31,11 +31,10 @@ import {formatDate} from '~/utils/date'
  */
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, waitForHydration, collectHydrationWarnings} = testHelpers
+const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, gotoHydrated, expectHydratedWithoutMismatch, waitForApi} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
-const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
 const {createDefaultWeekdayMap: createDinnerModeWeekdayMap} = useWeekDayMapValidation({
     valueSchema: DinnerModeSchema,
     defaultValue: DinnerMode.NONE
@@ -55,23 +54,8 @@ test.beforeAll(async ({browser}) => {
     const context = await validatedBrowserContext(browser)
 
     // Mon–Fri cooking gives predictable density regardless of which weekday the test starts on.
-    const weekdaysCooking = createBooleanWeekdayMap([true, true, true, true, true, false, false])
-
-    const tomorrow = new Date()
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    tomorrow.setHours(0, 0, 0, 0)
-
-    const fiftyDaysLater = new Date(tomorrow)
-    fiftyDaysLater.setDate(fiftyDaysLater.getDate() + 50)
-
-    testSeason = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
-        cookingDays: weekdaysCooking,
-        seasonDates: {start: tomorrow, end: fiftyDaysLater},
-        holidays: []
-    })
+    testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days: 50, cookingDays: 'weekdays'})
     createdSeasonIds.push(testSeason.season.id!)
-
-    await SeasonFactory.activateSeason(context, testSeason.season.id!)
 
     const household = await HouseholdFactory.createHousehold(context, {name: salt('HouseholdBookings', testSalt)})
     householdId = household.id
@@ -189,17 +173,14 @@ test('GIVEN an inhabitant holding only a guest ticket on a dinner WHEN the week 
     const guestOrderId = guest!.createdIds[0]!
 
     // WHEN: admin unlocks the household, toggles the power cell for the dinner and saves
-    await page.goto(buildBookingsUrl('week', dinnerEvent.date))
-    await waitForHydration(page)
+    await gotoHydrated(page, buildBookingsUrl('week', dinnerEvent.date))
     const adminOverride = page.getByTestId('admin-override-btn')
     await adminOverride.click()
     await adminOverride.click()
     await page.getByTestId('grid-edit').click()
     await page.getByTestId(`power-${dinnerEvent.id}`).click()
 
-    const scaffoldResponse = page.waitForResponse(r =>
-        r.url().includes('/api/household/order/scaffold') && r.request().method() === 'POST'
-    )
+    const scaffoldResponse = waitForApi(page, '/api/household/order/scaffold', 'POST')
     await page.getByTestId('grid-save').click()
     const response = await scaffoldResponse
     expect(response.status()).toBe(200)
@@ -241,17 +222,14 @@ test('GIVEN a member holding a regular order and a guest ticket on a dinner WHEN
     const guestOrder = before.find(o => o.isGuestTicket)!
 
     // WHEN: admin unlocks the household, toggles the guest cell once (DINEIN → DINEINLATE) and saves
-    await page.goto(buildBookingsUrl('week', dinnerEvent.date))
-    await waitForHydration(page)
+    await gotoHydrated(page, buildBookingsUrl('week', dinnerEvent.date))
     const adminOverride = page.getByTestId('admin-override-btn')
     await adminOverride.click()
     await adminOverride.click()
     await page.getByTestId('grid-edit').click()
     await page.locator(`[data-testid^="guest-guest-group-${inhabitant.id}-"][data-testid$="-${dinnerEvent.id}"]`).click()
 
-    const scaffoldResponse = page.waitForResponse(r =>
-        r.url().includes('/api/household/order/scaffold') && r.request().method() === 'POST'
-    )
+    const scaffoldResponse = waitForApi(page, '/api/household/order/scaffold', 'POST')
     await page.getByTestId('grid-save').click()
     const response = await scaffoldResponse
     expect(response.status()).toBe(200)
@@ -275,12 +253,8 @@ for (const view of ['day', 'week', 'month'] as const) {
             dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)
         })))
 
-        const hydrationWarnings = collectHydrationWarnings(page)
         await page.setViewportSize({width: 1280, height: 900})
-        await page.goto(`/household/${encodeURIComponent(household.shortName)}/bookings?pbs=${household.pbsId}&view=${view}`)
-        await waitForHydration(page)
+        await expectHydratedWithoutMismatch(page, `/household/${encodeURIComponent(household.shortName)}/bookings?pbs=${household.pbsId}&view=${view}`)
         await expect(page.getByTestId('household-bookings')).toBeVisible()
-
-        expect(hydrationWarnings).toEqual([])
     })
 }

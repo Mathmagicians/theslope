@@ -1,6 +1,6 @@
 // DELETE /api/admin/household/inhabitants/:id - remove inhabitant
 
-import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 import {getValidatedRouterParams, setResponseStatus} from "h3"
 import {deleteInhabitant} from "~~/server/data/prismaRepository"
 import {removeChefRoleForInhabitants} from "~~/server/utils/removeChefRole"
@@ -8,9 +8,7 @@ import type {InhabitantDetail} from "~/composables/useCoreValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {throwH3Error} = eventHandlerHelper
-const paramSchema = z.object({
-    id: z.coerce.number().int().positive('Inhabitant ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 export default defineEventHandler(async (event): Promise<InhabitantDetail> => {
     const {cloudflare} = event.context

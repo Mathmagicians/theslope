@@ -1,15 +1,16 @@
 import {createError, defineEventHandler, getValidatedQuery, getValidatedRouterParams, setResponseStatus} from 'h3'
 import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {getRequiredUser} from '~~/server/utils/authorizationHelper'
 import {fetchDinnerEvent, fetchOrderHistoryForDinner} from '~~/server/data/financesRepository'
-import {fetchHouseholds, fetchSeason} from '~~/server/data/prismaRepository'
+import {fetchHouseholdsByIds, fetchSeason} from '~~/server/data/prismaRepository'
 import {useBookingValidation, type TicketChangesResponse} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
 
 const {throwH3Error} = eventHandlerHelper
 const LOG = '🎟️ > CHEF > ORDER_HISTORY > [GET]'
-const paramsSchema = z.object({id: z.coerce.number().int().positive()})
+const paramSchema = idParams('id')
 const querySchema = z.object({since: z.coerce.date().optional()})
 
 /**
@@ -21,13 +22,13 @@ const querySchema = z.object({since: z.coerce.date().optional()})
  */
 export default defineEventHandler(async (event): Promise<TicketChangesResponse> => {
     const d1Client = event.context.cloudflare.env.DB
-    const {TicketChangesResponseSchema} = useBookingValidation()
+    const {TicketChangesResponseSchema, readAuditTicket} = useBookingValidation()
     const {replayTicketChanges} = useBooking()
 
     let id!: number
     let since: Date | undefined
     try {
-        ({id} = await getValidatedRouterParams(event, paramsSchema.parse))
+        ({id} = await getValidatedRouterParams(event, paramSchema.parse))
         ;({since} = await getValidatedQuery(event, querySchema.parse))
     } catch (error) {
         return throwH3Error(`${LOG} Input validation error`, error, 400)
@@ -38,11 +39,12 @@ export default defineEventHandler(async (event): Promise<TicketChangesResponse> 
     try {
         const dinner = await fetchDinnerEvent(d1Client, id)
         if (!dinner?.seasonId) throw createError({statusCode: 404, message: `Dinner event ${id} not found in a season`})
-        const [season, households, history] = await Promise.all([
-            fetchSeason(d1Client, dinner.seasonId), fetchHouseholds(d1Client), fetchOrderHistoryForDinner(d1Client, id)
-        ])
-        const ticketTypeOf = (ticketPriceId: number) => season?.ticketPrices.find(price => price.id === ticketPriceId)?.ticketType ?? null
+        const [season, history] = await Promise.all([fetchSeason(d1Client, dinner.seasonId), fetchOrderHistoryForDinner(d1Client, id)])
         // A creation row names its household by id; the snapshot rows carry the short name themselves
+        const unnamedHouseholdIds = history.map(readAuditTicket)
+            .flatMap(ticket => ticket?.householdId && !ticket.householdShortname ? [ticket.householdId] : [])
+        const households = await fetchHouseholdsByIds(d1Client, unnamedHouseholdIds)
+        const ticketTypeOf = (ticketPriceId: number) => season?.ticketPrices.find(price => price.id === ticketPriceId)?.ticketType ?? null
         const shortNames = new Map(households.map(household => [household.id, household.shortName]))
         const householdShortnameOf = (householdId: number) => shortNames.get(householdId) ?? null
 

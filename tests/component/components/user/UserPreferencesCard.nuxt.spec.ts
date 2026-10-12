@@ -6,37 +6,21 @@
  * session are faked. Runs every case on both viewports through the injected `isMd` breakpoint.
  */
 import {describe, it, expect, vi, beforeEach} from 'vitest'
-import {nextTick, type Ref} from 'vue'
+import {nextTick} from 'vue'
 import {flushPromises} from '@vue/test-utils'
-import {setActivePinia, createPinia} from 'pinia'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {readBody, type H3Event} from 'h3'
-import {clearNuxtData} from '#app'
 import UserPreferencesCard from '~/components/user/UserPreferencesCard.vue'
-import {mountWithTooltipProvider, findByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import type {UserDetail} from '~/composables/useCoreValidation'
 import {PALETTES} from '~/composables/useUserPreferenceValidation'
 import {PREF_TEST_IDS, PALETTE_BADGE_TEXT, COLOUR_SAFE_BADGE_TEXT} from './userPreferencesTestIds'
 
 // The test runtime has no session cookie and no /api/_auth endpoint, so the session nuxt-auth-utils
-// would hydrate is the one thing faked (households.nuxt.spec.ts precedent) - the auth store is real.
-// The Nuxt app owns one pinia for the whole file, so the session user must be a real ref: the store's
-// `user` computed is created once and only re-reads what it can track.
-const {session} = vi.hoisted(() => ({
-    session: {} as {user: Ref<UserDetail | null>, fetch: ReturnType<typeof vi.fn>}
-}))
-mockNuxtImport('useUserSession', () => {
-    session.user = ref<UserDetail | null>(null)
-    session.fetch = vi.fn()
-    return () => ({
-        loggedIn: computed(() => session.user.value !== null),
-        user: session.user,
-        session: ref(null),
-        clear: vi.fn(),
-        fetch: session.fetch
-    })
-})
+// would hydrate is the one thing faked - the auth store is real
+const {session, useUserSession} = await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).mockSession())
+mockNuxtImport('useUserSession', () => useUserSession)
 
 const savedBodies: Record<string, unknown>[] = []
 const testNotificationSpy = vi.fn()
@@ -91,16 +75,12 @@ const isOn = (wrapper: Wrapper, testId: string) =>
     findByTestId(wrapper, testId).attributes('aria-checked') === 'true'
 
 beforeEach(() => {
-    setActivePinia(createPinia())
+    resetStores()
     vi.clearAllMocks()
-    clearNuxtData()
     savedBodies.length = 0
 })
 
-describe.each([
-    {viewport: 'phone', isMd: false},
-    {viewport: 'desktop', isMd: true}
-])('UserPreferencesCard ($viewport)', ({isMd}) => {
+describe.each(VIEWPORTS)('UserPreferencesCard ($viewport)', ({isMd}) => {
     it('GIVEN saved preferences WHEN the card renders THEN the view face shows the channels and the appearance', async () => {
         const wrapper = await mountCard(userWith({
             notificationChannels: ['EMAIL'],

@@ -486,14 +486,11 @@ describe('useBookingValidation', () => {
         expect(result.allergens).toEqual([])
       })
 
-      it.each([
-        {desc: 'expense amounts', expenses: [{amount: 101200}, {amount: 29800}], expected: 131000},
-        {desc: 'no expense rows', expenses: [], expected: 0},
-        {desc: 'no expenses relation', expenses: undefined, expected: 0}
-      ])('GIVEN $desc WHEN deserializing THEN the cost is their sum and the stored column is discarded', ({expenses, expected}) => {
-        const prismaEvent = {...DinnerEventFactory.defaultDinnerEventDisplay(), totalCost: 99, expenses}
+      // The arithmetic of the sum, an empty relation included, is sumAmounts' (utils/ledger.unit.spec.ts)
+      it('GIVEN expense rows WHEN deserializing THEN the cost is their sum and the stored column is discarded', () => {
+        const prismaEvent = {...DinnerEventFactory.defaultDinnerEventDisplay(), totalCost: 99, expenses: [{amount: 101200}, {amount: 29800}]}
         const result = deserializeDinnerEvent(prismaEvent)
-        expect(result.totalCost).toBe(expected)
+        expect(result.totalCost).toBe(131000)
         expect(result).not.toHaveProperty('expenses')
       })
     })
@@ -701,7 +698,7 @@ describe('useBookingValidation', () => {
         consume: {consumed: 5},
         close: {closed: 10},
         transact: {created: 8},
-        clearWaitlist: {cleared: 3},
+        clearWaitlist: {cleared: 3, dinners: [{dinnerEventId: 644, date: new Date('2026-10-12'), cleared: 3}]},
         scaffold: {seasonId: 1, created: 20, deleted: 0, released: 0, unchanged: 100, households: 10}
       }
 
@@ -712,6 +709,7 @@ describe('useBookingValidation', () => {
         expect(result.close.closed).toBe(10)
         expect(result.transact.created).toBe(8)
         expect(result.clearWaitlist.cleared).toBe(3)
+        expect(result.clearWaitlist.dinners).toEqual([{dinnerEventId: 644, date: new Date('2026-10-12'), cleared: 3}])
         expect(result.scaffold?.seasonId).toBe(1)
       })
 

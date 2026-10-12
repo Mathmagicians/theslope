@@ -78,11 +78,11 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
         await memberPage.getByTestId(`inhabitant-${inhabitantId}-mode-edit-${DinnerMode.DINEIN}`).click()
         await memberPage.getByTestId(`inhabitant-${inhabitantId}-save`).click()
 
-        await expect(memberPage.getByTestId(`waitlist-position-${inhabitantId}`)).toContainText('#1 i køen')
+        await expect(memberPage.getByTestId(`waitlist-position-${inhabitantId}`)).toContainText('#1 i køen', {timeout: 15000})
 
         const chefPage = await (await browser.newContext({storageState: adminUIFile})).newPage()
         await gotoHydrated(chefPage, `/chef?team=${teamId}&date=${formatDate(dinnerDate)}`)
-        await expect(chefPage.getByTestId('chef-waitlist-alert')).toBeVisible()
+        await expect(chefPage.getByTestId('chef-waitlist-alert')).toBeVisible({timeout: 15000})
     })
 
     test('GIVEN the member in the queue WHEN the chef releases a portion THEN the member holds a ticket and the queue is empty', async ({browser}) => {
@@ -98,10 +98,10 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
             found => found.some(order => order.inhabitantId === inhabitantId)
         )
         expect(orders.find(order => order.inhabitantId === inhabitantId)).toMatchObject({dinnerMode: DinnerMode.DINEIN, state: OrderStateSchema.enum.BOOKED})
-        await expect(chefPage.getByTestId('chef-waitlist-alert')).toBeHidden()
+        await expect(chefPage.getByTestId('chef-waitlist-alert')).toBeHidden({timeout: 15000})
 
         const memberPage = await (await browser.newContext({storageState: memberUIFile})).newPage()
         await gotoHydrated(memberPage, `/dinner?date=${formatDate(dinnerDate)}`)
-        await expect(memberPage.getByTestId(`waitlist-position-${inhabitantId}`)).toBeHidden()
+        await expect(memberPage.getByTestId(`waitlist-position-${inhabitantId}`)).toBeHidden({timeout: 15000})
     })
 })

@@ -1,11 +1,10 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
-import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {flushPromises} from '@vue/test-utils'
 import HouseholdCreateForm from '~/components/admin/HouseholdCreateForm.vue'
-import {nextTick, ref} from 'vue'
+import {nextTick} from 'vue'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
-import {findDateSegments} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findDateSegments} from '~~/tests/component/testHelpers'
 
 // ---- Test data helpers ----
 
@@ -27,10 +26,7 @@ const makeHousehold = (overrides: Partial<HouseholdDisplay> = {}): HouseholdDisp
 const DEFAULT_HOUSEHOLDS: HouseholdDisplay[] = [makeHousehold()]
 
 const mount = (props: {existingHouseholds?: HouseholdDisplay[]} = {}) =>
-    mountSuspended(HouseholdCreateForm, {
-        props: {existingHouseholds: props.existingHouseholds ?? DEFAULT_HOUSEHOLDS},
-        global: {provide: {isMd: ref(true)}}
-    })
+    mountWithTooltipProvider(HouseholdCreateForm, {props: {existingHouseholds: props.existingHouseholds ?? DEFAULT_HOUSEHOLDS}, isMd: true})
 
 // ---- Interaction helpers ----
 

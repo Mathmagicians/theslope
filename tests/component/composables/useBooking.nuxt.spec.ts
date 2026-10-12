@@ -8,6 +8,7 @@ import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
@@ -397,28 +398,12 @@ describe('useBooking', () => {
 
     describe('buildOrderSnapshot', () => {
 
-        // Base order data reused across tests
-        const baseOrder = () => ({
-            id: 42,
-            inhabitantId: 10,
-            dinnerEventId: 5,
-            ticketPriceId: 1,
-            priceAtBooking: 5500,
-            dinnerMode: 'DINEIN' as const,
-            state: 'BOOKED' as const,
-            inhabitant: {
-                id: 10,
-                heynaboId: 1001,
-                householdId: 7,
-                name: 'Anna',
-                lastName: 'Berg Larsen',
-                pictureUrl: null,
-                allergies: [
-                    {id: 1, inhabitantId: 10, allergyTypeId: 1, inhabitantComment: null, allergyType: {id: 1, name: 'Peanuts', description: 'Nut allergy', icon: '🥜'}, createdAt: new Date(), updatedAt: new Date()},
-                    {id: 2, inhabitantId: 10, allergyTypeId: 2, inhabitantComment: null, allergyType: {id: 2, name: 'Gluten', description: 'Wheat allergy', icon: '🌾'}, createdAt: new Date(), updatedAt: new Date()}
-                ]
-            }
-        })
+        // Base order data reused across tests: Anna of household 7, with one allergy per catalog type
+        const allergyTypes = AllergyFactory.createMockAllergyTypes()
+        const baseOrder = () => {
+            const order = OrderFactory.defaultOrderDetailWithAllergies(10, 'Anna', allergyTypes, {id: 42, dinnerEventId: 5, ticketPriceId: 1, priceAtBooking: 5500})
+            return {...order, inhabitant: {...order.inhabitant, householdId: 7, lastName: 'Berg Larsen'}}
+        }
 
         it('builds snapshot with all fields from order', () => {
             const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
@@ -450,7 +435,7 @@ describe('useBooking', () => {
 
         it('extracts allergy type names from nested allergies', () => {
             const snapshot = buildOrderSnapshot(baseOrder(), 'AR_7')
-            expect(snapshot.allergies).toEqual(['Peanuts', 'Gluten'])
+            expect(snapshot.allergies).toEqual(allergyTypes.map(type => type.name))
         })
 
         it('handles empty allergies array', () => {

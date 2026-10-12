@@ -21,7 +21,7 @@ const toDomain = (row: {key: string, value: string, updatedAt: Date, updatedByUs
 
 /** The stored row, or null while the key has never been written (the caller answers with the registry default) */
 export async function fetchSetting(d1Client: D1Database, key: SettingKey): Promise<SettingDetail | null> {
-    const prisma = await getPrismaClientConnection(d1Client, [])
+    const prisma = await getPrismaClientConnection(d1Client)
     const row = await prisma.setting.findUnique({where: {key}})
 
     if (!row) {
@@ -38,7 +38,7 @@ export async function upsertSetting(
     value: string,
     updatedByUserId: number
 ): Promise<SettingDetail> {
-    const prisma = await getPrismaClientConnection(d1Client, [])
+    const prisma = await getPrismaClientConnection(d1Client)
     const serialized = JSON.stringify(value)
 
     const row = await prisma.setting.upsert({

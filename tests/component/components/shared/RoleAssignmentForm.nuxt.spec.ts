@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach} from 'vitest'
-import {mountSuspended, mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {findByTestId} from '~~/tests/component/testHelpers'
+import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {findByTestId, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
 import {nextTick} from 'vue'
 import RoleAssignmentForm from '~/components/shared/RoleAssignmentForm.vue'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -18,7 +18,8 @@ const DinnerStates = DinnerStateSchema.enum
 const COOKING_TEAM = {id: 7, name: 'Madhold A - Winter 2026'} as unknown as never
 const CHEF: InhabitantDisplay = {id: 99, name: 'Anna', lastName: 'Hansen'} as unknown as InhabitantDisplay
 
-mockNuxtImport('usePlanStore', () => () => ({isRoleUpdating: false}))
+// The form reads isRoleUpdating from the real plan store; only HTTP is faked (testing.md Rule 6)
+registerEmptyStoreEndpoints()
 
 const TEST_IDS = {
     cancel: 'role-assignment-cancel',

@@ -1,7 +1,6 @@
 import {test, expect} from '@playwright/test'
 import {useCoreValidation} from '~~/app/composables/useCoreValidation'
 import {useBookingValidation} from '~~/app/composables/useBookingValidation'
-import {useWeekDayMapValidation} from '~~/app/composables/useWeekDayMapValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
@@ -11,7 +10,6 @@ import type {Season} from '~/composables/useSeasonValidation'
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const {createDefaultWeekdayMap: createDefaultDinnerModeMap} = useCoreValidation()
-const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
 const {validatedBrowserContext, temporaryAndRandom} = testHelpers
 
 /**
@@ -42,18 +40,9 @@ test.describe('POST /api/admin/season/[id] on the active season', () => {
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        const tomorrow = new Date()
-        tomorrow.setDate(tomorrow.getDate() + 1)
-        tomorrow.setHours(0, 0, 0, 0)
-
-        const created = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
-            cookingDays: createBooleanWeekdayMap([true, true, true, true, true, true, true]),
-            seasonDates: {start: tomorrow, end: dayAfter(tomorrow, 10)},
-            ticketIsCancellableDaysBefore: 2
-        })
+        const created = await SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days: 10, deadline: 2, cookingDays: 'all'})
         season = created.season
         createdSeasonIds.push(season.id!)
-        await SeasonFactory.activateSeason(context, season.id!)
 
         const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
             context, HouseholdFactory.defaultHouseholdData(testSalt), 1

@@ -1,11 +1,9 @@
 // @vitest-environment nuxt
-import {describe, it, expect, vi, beforeEach} from 'vitest'
-import {setActivePinia, createPinia} from 'pinia'
+import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {flushPromises} from '@vue/test-utils'
-import {clearNuxtData} from '#app'
+import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {nextTick} from 'vue'
-import {mountWithTooltipProvider, findByTestId, clickByTestId, pollFor} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, pollFor, resetStores} from '~~/tests/component/testHelpers'
 import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTestIds'
 import AdminPlanning from '~/components/admin/AdminPlanning.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -30,6 +28,8 @@ registerEndpoint('/api/admin/season', seasonsEndpoint)
 
 // Container spec: every test mounts the whole planning card with the real plan store
 vi.setConfig({testTimeout: 20_000})
+// The next test's resetStores drops the datasets a still-mounted card reads
+enableAutoUnmount(afterEach)
 
 const mountPlanning = async (props: Record<string, unknown> = {}) => {
     await useAuthStore().fetch()
@@ -50,8 +50,7 @@ const lastModeQuery = () => {
 
 describe('AdminPlanning', () => {
     beforeEach(() => {
-        setActivePinia(createPinia())
-        clearNuxtData()
+        resetStores()
         vi.clearAllMocks()
         sessionEndpoint.mockReturnValue({user: {id: 1, email: 'admin@skraaningen.dk', systemRoles: ['ADMIN']}})
         seasonsEndpoint.mockReturnValue([season])

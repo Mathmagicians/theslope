@@ -1,13 +1,11 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
-import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {ref} from 'vue'
 import CookingRoundSpending from '~/components/chef/CookingRoundSpending.vue'
 import {dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow, type SpendingFragment} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useTicket} from '~/composables/useTicket'
 import {formatDate} from '~/utils/date'
-import {findByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId} from '~~/tests/component/testHelpers'
 
 /**
  * CookingRoundSpending: a fragment of the one spending table. The team's round: heading, one row per cooking day with
@@ -23,10 +21,7 @@ const rows: CookingRoundRow[] = [
 ]
 const words = {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, for perioden 12/04–14/04'}
 
-const mount = (props: {fragment: SpendingFragment}) => mountSuspended(CookingRoundSpending, {
-    props,
-    global: {provide: {isMd: ref(true)}}
-})
+const mount = (props: {fragment: SpendingFragment}) => mountWithTooltipProvider(CookingRoundSpending, {props, isMd: true})
 // The table's body rows without the total row the body-bottom slot adds
 const dataRows = (wrapper: Awaited<ReturnType<typeof mount>>) => wrapper.findAll('tbody tr').filter(tr => tr.attributes('data-testid') !== 'cooking-round-total')
 

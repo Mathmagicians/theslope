@@ -168,14 +168,8 @@ test.describe('Admin Teams API', () => {
                 cookingTeamId: createdTeam.id
             })
 
-            // WHEN: GET team detail by ID
-            const response = await context.request.get(`${ADMIN_TEAM_ENDPOINT}/${createdTeam.id}`, {
-                headers: headers
-            })
-
-            // THEN: Response is successful
-            expect(response.status()).toBe(200)
-            const teamDetail = await response.json()
+            // WHEN: GET team detail by ID (the factory asserts the 200)
+            const teamDetail = (await SeasonFactory.getCookingTeamById(context, createdTeam.id!))!
 
             // AND: Contains Detail entity fields (ADR-009)
             expect(teamDetail.id).toBe(createdTeam.id)
@@ -267,15 +261,13 @@ test.describe('Admin Teams API', () => {
             testHouseholdIds.push(teamWithMembers.householdId)
 
             // WHEN: GET the full team (includes assignments with inhabitant relation populated)
-            const getResponse = await context.request.get(`${ADMIN_TEAM_ENDPOINT}/${teamWithMembers.id}`)
-            expect(getResponse.status()).toBe(200)
-            const fetchedTeam = await getResponse.json()
+            const fetchedTeam = (await SeasonFactory.getCookingTeamById(context, teamWithMembers.id!))!
 
             expect(fetchedTeam.assignments).toBeDefined()
             expect(fetchedTeam.assignments.length).toBeGreaterThan(0)
-            expect(fetchedTeam.assignments[0].inhabitant).toBeDefined()
-            expect(fetchedTeam.assignments[0].inhabitant.name).toBeDefined()
-            expect(fetchedTeam.assignments[0].inhabitantId).toBeDefined()
+            expect(fetchedTeam.assignments[0]!.inhabitant).toBeDefined()
+            expect(fetchedTeam.assignments[0]!.inhabitant.name).toBeDefined()
+            expect(fetchedTeam.assignments[0]!.inhabitantId).toBeDefined()
 
             // THEN: POST the full team back with a name change (simulating UI workflow with populated inhabitant relation)
             const updatedData = {

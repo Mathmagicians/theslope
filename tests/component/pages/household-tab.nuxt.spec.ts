@@ -4,28 +4,18 @@ import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {toValue} from 'vue'
 import HouseholdPage from '~/pages/household/[shortname]/[tab].vue'
 import {useHouseholdsStore} from '~/stores/households'
-import type {UserDetail} from '~/composables/useCoreValidation'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {mountWithTooltipProvider, mountedStore, resetStores} from '~~/tests/component/testHelpers'
 
 // The test environment has no router to land a deep link on, and no session cookie
-const {mockRoute, sessionUser} = await vi.hoisted(async () => {
-    const {reactive, ref} = await import('vue')
-    return {
-        mockRoute: reactive({path: '/household', params: {shortname: '', tab: 'bookings'}, query: {} as Record<string, string>, hash: ''}),
-        sessionUser: ref<UserDetail | null>(null)
-    }
+const {mockRoute, mockNavigateTo, useRoute, session, useUserSession} = await vi.hoisted(async () => {
+    const {mockRouteAndNavigation, mockSession} = await import('~~/tests/component/hoistedMocks')
+    return {...mockRouteAndNavigation({path: '/household', params: {shortname: '', tab: 'bookings'}}), ...mockSession()}
 })
-mockNuxtImport('useRoute', () => () => mockRoute)
-mockNuxtImport('navigateTo', () => vi.fn())
-mockNuxtImport('useUserSession', () => () => ({
-    loggedIn: {value: true},
-    user: sessionUser,
-    session: {value: null},
-    clear: vi.fn(),
-    fetch: vi.fn()
-}))
+mockNuxtImport('useRoute', () => useRoute)
+mockNuxtImport('navigateTo', () => mockNavigateTo)
+mockNuxtImport('useUserSession', () => useUserSession)
 
 const me = UserFactory.defaultUserWithInhabitant('household-tab')
 const mine = {...HouseholdFactory.defaultHouseholdDetail('household-tab-mine'), id: me.Inhabitant!.household!.id, pbsId: me.Inhabitant!.household!.pbsId}
@@ -43,7 +33,7 @@ const landOn = (shortname: string, query: Record<string, string>) => {
 describe('household/[shortname]/[tab] - the household in the URL', () => {
     beforeEach(() => {
         resetStores()
-        sessionUser.value = me
+        session.user.value = me
     })
 
     it.each([

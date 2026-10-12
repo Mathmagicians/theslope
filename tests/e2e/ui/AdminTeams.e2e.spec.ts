@@ -1,13 +1,14 @@
-import {test, expect, type BrowserContext, type Page, type Response} from '@playwright/test'
+import {test, expect, type BrowserContext, type Page} from '@playwright/test'
 import {authFiles} from '~~/tests/e2e/config'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
+import {JOKER_SLOT_IDS} from '~~/tests/component/components/cooking-team/jokerSlotIds'
 import type {Season} from '~/composables/useSeasonValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, doScreenshot, gotoHydrated} = testHelpers
+const {validatedBrowserContext, pollUntil, doScreenshot, gotoHydrated, waitForApi} = testHelpers
 
 test.describe('AdminTeams Form UI', () => {
     const adminTeamsUrl = '/admin/teams'
@@ -205,10 +206,7 @@ test.describe('AdminTeams Form UI', () => {
 
             // Setup response wait BEFORE blur to avoid race condition.
             // 15s timeout tolerates parallel-load latency; POST triggers dinner event reconciliation (ADR-015).
-            const responsePromise = page.waitForResponse(
-                (response: Response) => response.url().includes('/api/admin/team/') && response.request().method() === 'POST',
-                { timeout: 15000 }
-            )
+            const responsePromise = waitForApi(page, '/api/admin/team/', 'POST', {timeout: 15000})
             await teamInput.blur() // Trigger save on blur
             await responsePromise
 
@@ -243,10 +241,7 @@ test.describe('AdminTeams Form UI', () => {
             await deleteButton.click()
 
             // Second click: actually trigger delete
-            const responsePromise = page.waitForResponse(
-                (response: Response) => response.url().includes('/api/admin/team/') && response.request().method() === 'DELETE',
-                { timeout: 5000 }
-            )
+            const responsePromise = waitForApi(page, '/api/admin/team/', 'DELETE', {timeout: 5000})
             await deleteButton.click()
             await responsePromise
 
@@ -319,10 +314,7 @@ test.describe('AdminTeams Form UI', () => {
             await expect(page.getByText(`Medlem-${testSalt}`)).toBeVisible()
             await page.getByRole('button', {name: 'Tilføj', exact: true}).first().click()
             await expect(page.getByRole('button', {name: 'Luk', exact: true}).first()).toBeVisible()
-            const responsePromise = page.waitForResponse(
-                (response: Response) => response.url().includes('/api/admin/team/assignment') && response.request().method() === 'PUT',
-                {timeout: 15000}
-            )
+            const responsePromise = waitForApi(page, '/api/admin/team/assignment', 'PUT', {timeout: 15000})
             // The expanded member form's submit comes first in the column; the joker row's Tilføj follows it
             await page.getByRole('button', {name: 'Tilføj', exact: true}).first().click()
             const response = await responsePromise
@@ -344,17 +336,14 @@ test.describe('AdminTeams Form UI', () => {
             // GIVEN: a team open in the edit face
             const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Joker')
             await gotoHydrated(page, `${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
-            await expect(page.getByTestId('joker-slot-add')).toBeVisible({timeout: 10000})
+            await expect(page.getByTestId(JOKER_SLOT_IDS.add)).toBeVisible({timeout: 10000})
 
             // WHEN: opening the form, ticking a weekday and creating the slot
-            await page.getByTestId('joker-slot-add').click()
-            const form = page.getByTestId('joker-slot-form')
+            await page.getByTestId(JOKER_SLOT_IDS.add).click()
+            const form = page.getByTestId(JOKER_SLOT_IDS.form)
             await form.getByRole('checkbox').first().check()
-            const responsePromise = page.waitForResponse(
-                (response: Response) => response.url().includes(`/api/admin/team/${team.id}/joker-slot`) && response.request().method() === 'PUT',
-                {timeout: 15000}
-            )
-            await page.getByTestId('joker-slot-submit').click()
+            const responsePromise = waitForApi(page, `/api/admin/team/${team.id}/joker-slot`, 'PUT', {timeout: 15000})
+            await page.getByTestId(JOKER_SLOT_IDS.submit).click()
             expect((await responsePromise).status()).toBe(201)
 
             // THEN: the Jokere box shows the slot line, and the team counts it

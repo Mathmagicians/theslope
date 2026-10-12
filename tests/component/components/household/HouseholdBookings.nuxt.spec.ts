@@ -11,20 +11,10 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 
 // The test environment has no router to navigate: useQueryParam writes the URL through navigateTo (ADR-006)
-const {mockNavigateTo, mockRoute} = await vi.hoisted(async () => {
-    const {reactive} = await import('vue')
-    return {
-        mockNavigateTo: vi.fn(),
-        mockRoute: reactive({path: '/', query: {} as Record<string, string>, params: {}, hash: ''})
-    }
-})
+const {mockNavigateTo, mockRoute, landNavigation, useRoute} = await vi.hoisted(async () =>
+    (await import('~~/tests/component/hoistedMocks')).mockRouteAndNavigation())
 mockNuxtImport('navigateTo', () => mockNavigateTo)
-mockNuxtImport('useRoute', () => () => mockRoute)
-// The mocked navigation lands on the mocked route, as the router does
-const landNavigation = async ({path, query}: {path: string, query: Record<string, string>}) => {
-    mockRoute.path = path
-    mockRoute.query = query
-}
+mockNuxtImport('useRoute', () => useRoute)
 
 // Only HTTP is faked (testing.md Rule 6)
 const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDisplay('household-bookings'), seasonId: 1}

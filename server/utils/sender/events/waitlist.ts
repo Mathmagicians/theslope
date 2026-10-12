@@ -1,5 +1,5 @@
 import {emit, notSent} from '~~/server/utils/sender/emit'
-import {composeEmail} from '~~/server/utils/sender/compose'
+import {composeEmail, siteUrl} from '~~/server/utils/sender/compose'
 import type {NotificationConfig, SenderEmitResult} from '~/composables/useNotificationValidation'
 import {formatDate} from '~/utils/date'
 
@@ -53,7 +53,7 @@ export const emitWaitlistBuildup = (
             dinner: dinnerLabel(dinner),
             entries: String(entries),
             portions: portions.toLocaleString('da-DK'),
-            dinnerUrl: `https://${config.site}/chef`
+            dinnerUrl: siteUrl(config, '/chef')
         },
         correlationId: `dinner ${dinner.dinnerEventId}`
     }))

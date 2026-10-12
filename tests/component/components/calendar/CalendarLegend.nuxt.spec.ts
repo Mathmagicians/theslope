@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
 import {h} from 'vue'
-import {mountSuspended} from '/test-utils/runtime'
+import {mountSuspended} from '@nuxt/test-utils/runtime'
 import CalendarLegend from '~/components/calendar/CalendarLegend.vue'
 import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
 import {mountWithTooltipProvider, findAllByTestId, findByTestId} from '~~/tests/component/testHelpers'

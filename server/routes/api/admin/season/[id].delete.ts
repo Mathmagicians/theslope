@@ -3,13 +3,11 @@ import {deleteSeason} from "~~/server/data/prismaRepository"
 import {deleteHeynaboEventsAsSystem} from "~~/server/integration/heynabo/heynaboClient"
 import type {Season} from "~/composables/useSeasonValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import * as z from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('Season ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 /**
  * Delete season (admin operation)
@@ -24,7 +22,7 @@ export default defineEventHandler(async (event): Promise<Season> => {
     // Input validation try-catch - FAIL EARLY
     let id!: number
     try {
-        ( {id} = await getValidatedRouterParams(event, idSchema.parse))
+        ( {id} = await getValidatedRouterParams(event, paramSchema.parse))
     } catch (error) {
         return throwH3Error('🌞 > DELETE SEASON > Invalid season ID', error)
     }

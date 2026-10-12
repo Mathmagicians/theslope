@@ -9,14 +9,13 @@ import type {UserSession} from '~/composables/useCoreValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {requireChefForDinner} from '~~/server/utils/authorizationHelper'
 import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
 const {DinnerStateSchema, DinnerEventUpdateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 // Consolidated schema: menu fields + state + allergens (all optional, at least one required). Strict: the cost is
 // computed from the dinner's expense lines, so a body carrying totalCost is a 400
@@ -51,7 +50,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     let id!: number
     let updates!: ChefDinnerUpdate
     try {
-        ({id} = await getValidatedRouterParams(event, idSchema.parse))
+        ({id} = await getValidatedRouterParams(event, paramSchema.parse))
         updates = await readValidatedBody(event, ChefDinnerUpdateSchema.parse)
         console.info(PREFIX, `Called with dinner ID ${id}, updates:`, Object.keys(updates).join(', '))
     } catch (error) {

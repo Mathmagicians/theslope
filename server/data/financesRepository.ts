@@ -25,6 +25,7 @@ import type {
 } from '~/composables/useBookingValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
+import {byTimeThenId} from '~/composables/useWaitlist'
 import {useHousehold} from '~/composables/useHousehold'
 import {getHouseholdShortName} from '~/composables/useCoreValidation'
 import {fetchActiveSeasonId, costRowsInclude} from '~~/server/data/prismaRepository'
@@ -652,10 +653,7 @@ export async function deleteOrder(
  * Extracted for unit testing (ADR-003).
  */
 export const getOrderSortComparator = (sortBy: 'createdAt' | 'releasedAt') =>
-    (a: OrderDisplay, b: OrderDisplay): number =>
-        sortBy === 'releasedAt'
-            ? (a.releasedAt?.getTime() ?? 0) - (b.releasedAt?.getTime() ?? 0)
-            : a.createdAt.getTime() - b.createdAt.getTime()
+    byTimeThenId<OrderDisplay>(sortBy === 'releasedAt' ? order => order.releasedAt?.getTime() ?? 0 : order => order.createdAt.getTime())
 
 /**
  * ADR-014: Batch size for dinner event ID queries.

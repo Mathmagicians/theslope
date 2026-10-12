@@ -4,13 +4,11 @@ import {useSeason} from "~/composables/useSeason"
 import {useCookingTeam} from "~/composables/useCookingTeam"
 import type {CookingTeamDetail} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import {z} from "zod"
+import {idParams} from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
 
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('Season ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 // ADR-009: Mutations return Detail type (full team with all relations)
 type AssignAffinitiesResponse = {
@@ -26,7 +24,7 @@ export default defineEventHandler(async (event): Promise<AssignAffinitiesRespons
     // Input validation try-catch - FAIL EARLY
     let seasonId!: number
     try {
-        const params = await getValidatedRouterParams(event, idSchema.parse)
+        const params = await getValidatedRouterParams(event, paramSchema.parse)
         seasonId = params.id
     } catch (error) {
         return throwH3Error('👥 > SEASON > [ASSIGN_AFFINITIES] Input validation error', error)

@@ -8,12 +8,10 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {mountWithTooltipProvider} from '~~/tests/component/testHelpers'
 
 // The test environment has no router to land a deep link on
-const {mockRoute} = await vi.hoisted(async () => {
-    const {reactive} = await import('vue')
-    return {mockRoute: reactive({path: '/admin/teams', params: {tab: 'teams'}, query: {} as Record<string, string>, hash: ''})}
-})
-mockNuxtImport('useRoute', () => () => mockRoute)
-mockNuxtImport('navigateTo', () => vi.fn())
+const {mockRoute, mockNavigateTo, useRoute} = await vi.hoisted(async () =>
+    (await import('~~/tests/component/hoistedMocks')).mockRouteAndNavigation({path: '/admin/teams', params: {tab: 'teams'}}))
+mockNuxtImport('useRoute', () => useRoute)
+mockNuxtImport('navigateTo', () => mockNavigateTo)
 
 const TEAM_ID = 11
 const season = {...SeasonFactory.defaultSeason('admin-tab'), id: 1}

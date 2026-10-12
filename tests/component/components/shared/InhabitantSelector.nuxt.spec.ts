@@ -4,6 +4,7 @@ import {mountSuspended} from '@nuxt/test-utils/runtime'
 import InhabitantSelector from '~/components/shared/InhabitantSelector.vue'
 import {nextTick, ref} from 'vue'
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
+import {mountWithTooltipProvider} from '~~/tests/component/testHelpers'
 
 describe('InhabitantSelector', () => {
 
@@ -21,12 +22,11 @@ describe('InhabitantSelector', () => {
     const dummySortFn = (a: {original: InhabitantDisplay}, b: {original: InhabitantDisplay}) =>
         a.original.name.localeCompare(b.original.name)
 
-    const mount = (overrides: Record<string, unknown> = {}, slots?: Record<string, (props: {row: {original: InhabitantDisplay}}) => string>) =>
-        mountSuspended(InhabitantSelector, {
-            props: {inhabitants, ...overrides},
-            global: {provide: {isMd: ref(true)}},
-            ...(slots ? {slots} : {})
-        })
+    const mount = (overrides: Record<string, unknown> = {}) =>
+        mountWithTooltipProvider(InhabitantSelector, {props: {inhabitants, ...overrides}, isMd: true})
+    // Slots go through the root mount alone
+    const mountWithSlots = (slots: Record<string, (props: {row: {original: InhabitantDisplay}}) => string>) =>
+        mountSuspended(InhabitantSelector, {props: {inhabitants}, global: {provide: {isMd: ref(true)}}, slots})
 
     const typeSearch = async (wrapper: Awaited<ReturnType<typeof mount>>, query: string) => {
         await wrapper.find('input').setValue(query)
@@ -111,7 +111,7 @@ describe('InhabitantSelector', () => {
         ['status'],
         ['actions']
     ])('#%s slot renders per row', async (slotName) => {
-        const wrapper = await mount({}, {
+        const wrapper = await mountWithSlots({
             [slotName]: ({row}: {row: {original: InhabitantDisplay}}) =>
                 `slot-${slotName}-${row.original.id}`
         })

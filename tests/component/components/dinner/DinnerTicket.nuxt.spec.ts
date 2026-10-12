@@ -8,7 +8,7 @@ import {describe, it, expect, beforeAll} from 'vitest'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
 import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
-import {findByTestId, mountWithTooltipProvider} from '~~/tests/component/testHelpers'
+import {findByTestId, mountWithTooltipProvider, VIEWPORTS} from '~~/tests/component/testHelpers'
 import {TicketTypeSchema} from '~~/prisma/generated/zod'
 
 const ALLERGY_TYPES = AllergyFactory.createMockAllergyTypes()
@@ -44,7 +44,7 @@ const bindsToken = (wrapper: Mounted, name: string, token: string) =>
     expect(iconNamed(wrapper, name).classes()).toEqual(expect.arrayContaining(token.split(' ')))
 
 describe('DinnerTicket', () => {
-    describe.each([{viewport: 'desktop', isMd: true}, {viewport: 'phone', isMd: false}])('$viewport', ({isMd}) => {
+    describe.each(VIEWPORTS)('$viewport', ({isMd}) => {
         it.each([
             {desc: 'two allergy types', allergies: ALLERGY_TYPES, hasGlyph: true},
             {desc: 'no allergy types', allergies: [], hasGlyph: false}

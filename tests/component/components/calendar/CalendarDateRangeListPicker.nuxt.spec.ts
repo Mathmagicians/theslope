@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import { describe, it, expect } from 'vitest'
 import { mountSuspended } from "@nuxt/test-utils/runtime"
-import {findByTestId, findDateSegments, asCalendarDays} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findDateSegments, asCalendarDays} from '~~/tests/component/testHelpers'
 import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTestIds'
 import CalendarDateRangeListPicker from '~/components/calendar/CalendarDateRangeListPicker.vue'
 import { nextTick, ref } from 'vue'
@@ -13,18 +13,11 @@ describe('CalendarDateRangeListPicker', () => {
         end: Date;
     }
 
-    type WrapperType = Awaited<ReturnType<typeof mountSuspended>>
+    // The mounts with `attrs` and `setProps` below stay on the root mount, which alone takes them
+    const createWrapper = (modelValue: DateRange[] = [], props: Record<string, unknown> = {}) =>
+        mountWithTooltipProvider(CalendarDateRangeListPicker, {props: {modelValue, ...props}, isMd: true})
 
-    const createWrapper = async (modelValue: DateRange[] = []) => {
-        return await mountSuspended(CalendarDateRangeListPicker, {
-            props: { modelValue },
-            global: {
-                provide: {
-                    isMd: ref(true)
-                }
-            }
-        })
-    }
+    type WrapperType = Awaited<ReturnType<typeof createWrapper>>
 
     const setDateRange = async (wrapper: WrapperType, start: Date, end: Date) => {
         const datePicker = wrapper.findComponent({ name: 'CalendarDateRangePicker' })
@@ -139,20 +132,7 @@ describe('CalendarDateRangeListPicker', () => {
 
     it('renders correctly in disabled mode with holiday periods', async () => {
         // Create with initial holidays and disabled prop set to true
-        const wrapper = await mountSuspended(CalendarDateRangeListPicker, {
-            props: { 
-                modelValue: [{
-                    start: new Date(2025, 0, 1),
-                    end: new Date(2025, 0, 5)
-                }],
-                disabled: true
-            },
-            global: {
-                provide: {
-                    isMd: ref(true)
-                }
-            }
-        });
+        const wrapper = await createWrapper([{start: new Date(2025, 0, 1), end: new Date(2025, 0, 5)}], {disabled: true});
 
         // The component should exist
         expect(wrapper.exists()).toBe(true);
@@ -327,10 +307,7 @@ describe('CalendarDateRangeListPicker', () => {
         })
 
         it('keeps rows read-only when disabled', async () => {
-            const wrapper = await mountSuspended(CalendarDateRangeListPicker, {
-                props: {modelValue: [first], disabled: true},
-                global: {provide: {isMd: ref(true)}}
-            })
+            const wrapper = await createWrapper([first], {disabled: true})
             const row = findByTestId(wrapper, PLANNING_TEST_IDS.holidayItem(0))
             expect(row.exists()).toBe(true)
             expect(findDateSegments(row, 'day').length).toBe(0)

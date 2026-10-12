@@ -1,8 +1,7 @@
 // @vitest-environment nuxt
-import {setActivePinia, createPinia} from 'pinia'
-import {beforeAll, beforeEach, describe, expect, it, vi} from 'vitest'
+import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
-import {clearNuxtData} from '#app'
+import {resetStores} from '~~/tests/component/testHelpers'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -33,13 +32,8 @@ const allergyManager = UserFactory.defaultUserWithInhabitant('users-store-am', {
 const toastTitles = () => useToast().toasts.value.map(toast => String(toast.title))
 
 describe('Users store', () => {
-    beforeAll(() => {
-        // One pinia for the file: the Nuxt app keeps one asyncData entry per key across store instances
-        setActivePinia(createPinia())
-    })
-
     beforeEach(() => {
-        clearNuxtData()
+        resetStores()
         useToast().clear()
         vi.clearAllMocks()
         usersEndpoint.mockImplementation(() => [user])

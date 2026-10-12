@@ -506,6 +506,7 @@ describe('useAllergyValidation', () => {
 
     describe('InhabitantWithAllergiesSchema', () => {
         it('should accept inhabitant with nested allergies array', () => {
+            const allergies = AllergyFactory.serializedAllergies(2, 1)
             const inhabitantWithAllergies = {
                 id: 1,
                 heynaboId: 101,
@@ -514,44 +515,15 @@ describe('useAllergyValidation', () => {
                 lastName: 'Hansen',
                 pictureUrl: 'https://example.com/anna.jpg',
                 birthDate: new Date('1990-01-01'),
-                allergies: [
-                    {
-                        id: 1,
-                        inhabitantId: 1,
-                        allergyTypeId: 1,
-                        inhabitantComment: 'Meget alvorlig',
-                        createdAt: new Date(),
-                        updatedAt: new Date(),
-                        allergyType: {
-                            id: 1,
-                            name: 'Peanuts',
-                            description: 'Alvorlig allergi',
-                            icon: '🥜'
-                        }
-                    },
-                    {
-                        id: 2,
-                        inhabitantId: 1,
-                        allergyTypeId: 2,
-                        inhabitantComment: null,
-                        createdAt: new Date(),
-                        updatedAt: new Date(),
-                        allergyType: {
-                            id: 2,
-                            name: 'Gluten',
-                            description: 'Cøliaki',
-                            icon: '🌾'
-                        }
-                    }
-                ]
+                allergies
             }
 
             const result = InhabitantWithAllergiesSchema.safeParse(inhabitantWithAllergies)
             expect(result.success).toBe(true)
             if (result.success) {
                 expect(result.data.allergies).toHaveLength(2)
-                expect(result.data.allergies[0]!.allergyType.name).toBe('Peanuts')
-                expect(result.data.allergies[1]!.allergyType.name).toBe('Gluten')
+                expect(result.data.allergies[0]!.allergyType.name).toBe(allergies[0]!.allergyType.name)
+                expect(result.data.allergies[1]!.allergyType.name).toBe(allergies[1]!.allergyType.name)
             }
         })
 

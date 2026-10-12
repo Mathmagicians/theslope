@@ -1,11 +1,9 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
-import {setActivePinia, createPinia} from 'pinia'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {flushPromises} from '@vue/test-utils'
-import {clearNuxtData} from '#app'
+import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {nextTick, ref} from 'vue'
-import {mountWithTooltipProvider, clickByTestId, findAllByTestId, pollFor, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, clickByTestId, findAllByTestId, pollFor, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
 import AdminTeams from '~/components/admin/AdminTeams.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {usePlanStore} from '~/stores/plan'
@@ -15,20 +13,10 @@ import {COMPONENTS, getRainbowBand, getRainbowAccent, createResponsiveIcons} fro
 
 // The test environment has no router to navigate: useEntityFormManager and useQueryParam
 // write the URL state through navigateTo (ADR-006 / ADR-008)
-const {mockNavigateTo, mockRoute} = await vi.hoisted(async () => {
-    const {reactive} = await import('vue')
-    return {
-        mockNavigateTo: vi.fn(),
-        mockRoute: reactive({path: '/', query: {} as Record<string, string>, params: {}, hash: ''})
-    }
-})
+const {mockNavigateTo, mockRoute, landNavigation, useRoute} = await vi.hoisted(async () =>
+    (await import('~~/tests/component/hoistedMocks')).mockRouteAndNavigation())
 mockNuxtImport('navigateTo', () => mockNavigateTo)
-mockNuxtImport('useRoute', () => () => mockRoute)
-// The mocked navigation lands on the mocked route, as the router does
-const landNavigation = async ({path, query}: {path: string, query: Record<string, string>}) => {
-    mockRoute.path = path
-    mockRoute.query = query
-}
+mockNuxtImport('useRoute', () => useRoute)
 
 // Only HTTP is faked (testing.md Rule 6) - specific routes first, generic last
 const season = {...SeasonFactory.defaultSeason('teams'), id: 1, CookingTeams: [] as CookingTeamDisplay[]}
@@ -45,6 +33,8 @@ registerEndpoint('/api/admin/season', () => [season])
 registerEndpoint('/api/admin/team', {method: 'PUT', handler: createTeamsEndpoint})
 
 vi.setConfig({testTimeout: 20_000})
+// The next test's resetStores drops the datasets a still-mounted table reads
+enableAutoUnmount(afterEach)
 
 const mountTeams = async (isMd = true) => {
     await useAuthStore().fetch()
@@ -76,8 +66,7 @@ const lastToast = async () => {
 
 describe('AdminTeams', () => {
     beforeEach(() => {
-        setActivePinia(createPinia())
-        clearNuxtData()
+        resetStores()
         vi.clearAllMocks()
         createTeamsEndpoint.mockReturnValue({teams: createdTeams, eventsAssigned: 6})
         seasonByIdEndpoint.mockReturnValue(season)
@@ -103,8 +92,7 @@ describe('AdminTeams', () => {
 
 describe('AdminTeams master table', () => {
     beforeEach(() => {
-        setActivePinia(createPinia())
-        clearNuxtData()
+        resetStores()
         vi.clearAllMocks()
     })
 
@@ -144,8 +132,7 @@ describe('AdminTeams team selection', () => {
     registerEndpoint(`/api/admin/team/${team.id}`, () => SeasonFactory.defaultCookingTeamDetail({id: team.id, name: team.name}))
 
     beforeEach(() => {
-        setActivePinia(createPinia())
-        clearNuxtData()
+        resetStores()
         vi.clearAllMocks()
         seasonByIdEndpoint.mockReturnValue({...season, CookingTeams: [team]})
         mockNavigateTo.mockImplementation(landNavigation)
@@ -204,8 +191,7 @@ describe('AdminTeams team colours', () => {
         registerEndpoint(`/api/admin/team/${team.id}`, () => SeasonFactory.defaultCookingTeamDetail({id: team.id, name: team.name})))
 
     beforeEach(() => {
-        setActivePinia(createPinia())
-        clearNuxtData()
+        resetStores()
         vi.clearAllMocks()
         seasonByIdEndpoint.mockReturnValue({...season, CookingTeams: seasonTeams})
         mockNavigateTo.mockImplementation(landNavigation)
