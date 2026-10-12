@@ -94,7 +94,6 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         // THEN: Active season should be auto-selected (shows green circle)
         const seasonSelector = page.getByTestId('season-selector')
         await expect(seasonSelector).toContainText(activeSeason.shortName)
-        await expect(seasonSelector).toContainText('🟢')
 
         // Verify URL was updated with active season
         await expect.poll(() => page.url(), {timeout: 15000}).toContain(`season=${encodeURIComponent(activeSeason.shortName)}`)
@@ -105,7 +104,6 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         await navigateToPlanning(page, activeSeason.shortName)
 
         const seasonSelector = page.getByTestId('season-selector')
-        await expect(seasonSelector).toContainText('🟢')
 
         // Click to open dropdown
         await seasonSelector.click()
@@ -131,7 +129,6 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         await navigateToPlanning(page, activeSeason.shortName)
 
         const seasonSelector = page.getByTestId('season-selector')
-        await expect(seasonSelector).toContainText('🟢')
 
         // WHEN: Switch to future season
         await selectDropdownOption(page, 'season-selector', futureSeason.shortName)

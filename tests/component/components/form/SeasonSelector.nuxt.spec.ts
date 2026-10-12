@@ -2,7 +2,8 @@
 import {describe, it, expect} from 'vitest'
 import {mountSuspended} from "@nuxt/test-utils/runtime"
 import {findByTestId, VIEWPORTS} from '~~/tests/component/testHelpers'
-import {createResponsiveSizes} from '~/composables/useTheSlopeDesignSystem'
+import {createResponsiveSizes, SEASON_STATUS_MARKS} from '~/composables/useTheSlopeDesignSystem'
+import {getSeasonStatus} from '~/utils/season'
 import SeasonSelector from '~/components/form/SeasonSelector.vue'
 import {nextTick, ref} from 'vue'
 import {SeasonFactory} from '../../../e2e/testDataFactories/seasonFactory'
@@ -178,5 +179,15 @@ describe('SeasonSelector', () => {
             global: {provide: {isMd: ref(isMd)}}
         })
         expect(wrapper.findComponent({name: 'USelect'}).props('size')).toBe(createResponsiveSizes(ref(isMd)).seasonSelect)
+    })
+
+    it('every option carries the icon and the marker of its season status from SEASON_STATUS_MARKS', async () => {
+        const wrapper = await createWrapper({modelValue: 1, seasons: mockSeasons})
+        const items = wrapper.findComponent({name: 'USelect'}).props('items') as Array<Season & {icon: string, suffix: string}>
+        expect(items).toHaveLength(mockSeasons.length)
+        for (const item of items) {
+            expect(item.icon).toBe(SEASON_STATUS_MARKS[getSeasonStatus(item)].icon)
+            expect(item.suffix).toBe(SEASON_STATUS_MARKS[getSeasonStatus(item)].glyph)
+        }
     })
 })

@@ -18,9 +18,10 @@ import {
 } from '~/composables/useBooking'
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
 import {useOrder} from '~/composables/useOrder'
+import type {Expense} from '~/composables/useBillingValidation'
 import {useBookingValidation, type DinnerEventDisplay, type OrderDisplay, type DesiredOrder, type OrderState, type OrderAuditAction} from '~/composables/useBookingValidation'
 import {ICONS, COLOR, ALARM_TO_BADGE, type NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
-import {calculateCountdown} from '~/utils/date'
+import {calculateCountdown, formatDate} from '~/utils/date'
 
 // ============================================================================
 // Deadline Badges
@@ -57,6 +58,29 @@ export interface CookingRoundRow {
     budgetGross: number
     spentGross: number
 }
+
+/** The words of a team's cooking round, shared by the Madbestilling hint and the Budget pane's round table */
+export interface CookingRoundWords { team: string; heading: string }
+export const cookingRoundWords = (teamShortName: string, first: Date, last: Date): CookingRoundWords => {
+    const team = `Hele ${teamShortName}`
+    return {team, heading: `${team}, for perioden ${formatDate(first, 'dd/MM')}–${formatDate(last, 'dd/MM')}`}
+}
+
+/**
+ * The rows of a spending table: a dinner row, and under this dinner its receipts as sub-rows (the bestiller as the
+ * label, the amount) or one row with the empty text when there are none
+ */
+export type SpendingTableRow =
+    | ({kind: 'dinner'} & CookingRoundRow)
+    | {kind: 'receipt', id: string, date: Date, label: string, amount: number}
+    | {kind: 'none', id: string, label: string}
+export const spendingTableRows = (rows: CookingRoundRow[], receipts: Expense[] | null, emptyText: string): SpendingTableRow[] =>
+    rows.flatMap(row => {
+        const dinner: SpendingTableRow = {kind: 'dinner', ...row}
+        if (!row.isCurrent || receipts === null) return [dinner]
+        if (receipts.length === 0) return [dinner, {kind: 'none', id: `none-${row.dinnerEventId}`, label: emptyText}]
+        return [dinner, ...receipts.map((receipt): SpendingTableRow => ({kind: 'receipt', id: `receipt-${receipt.id}`, date: receipt.createdAt, label: receipt.paidBy.name ?? '', amount: receipt.amount}))]
+    })
 
 export const STEP_ICONS: Record<DinnerStepState, string> = {
     [DinnerStepState.SCHEDULED]: ICONS.calendar,

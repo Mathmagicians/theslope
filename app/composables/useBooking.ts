@@ -1400,7 +1400,6 @@ export const useBooking = () => {
     // ============================================================================
 
     const emptyCounts = (): TicketCounts => ({ADULT: 0, CHILD: 0, BABY: 0})
-    const SYSTEM_RUN_WINDOW_MS = 60_000
 
     // The tickets a dinner holds after a history row; counts, kuverter and revenue are read off this set
     type HeldTicket = Readonly<{key: number, inhabitantId: number | null, type: TicketType | null, price: number, eating: boolean}>
@@ -1431,7 +1430,7 @@ export const useBooking = () => {
      * Replays a dinner's order history in time order into one change per event: the tickets moved by type, the
      * composition after it, the kuverter and the revenue. A change is the difference between the tickets held before
      * and after its row. A ticket price the season no longer names leaves the change without a type. Consecutive
-     * system rows within a minute are one run and collapse into one change.
+     * system rows with no user row between them are one run and collapse into one change, dated by the last row.
      */
     const replayTicketChanges = (
         history: OrderHistoryDisplay[],
@@ -1485,10 +1484,9 @@ export const useBooking = () => {
         return collapseSystemRuns(changes)
     }
 
-    // Consecutive system rows of one action within the run window are one change carrying the summed delta
+    // Consecutive system rows of one action are one change carrying the summed delta, however far apart the nights that wrote them
     const continuesRun = (previous: TicketChange | undefined, change: TicketChange & {system: boolean}): previous is TicketChange =>
         previous !== undefined && change.system && previous.householdShortname === null && previous.action === change.action
-        && change.timestamp.getTime() - previous.timestamp.getTime() <= SYSTEM_RUN_WINDOW_MS
     const collapseSystemRuns = (changes: Array<TicketChange & {system: boolean}>): TicketChange[] =>
         changes.reduce<TicketChange[]>((collapsed, change) => {
             const {system, ...plain} = change

@@ -44,6 +44,8 @@ at a time behind an explicit approval. The plan document is the deliverable; the
   improvements are welcome as suggestions; the architect signs them off before they are built.
 - When a design round changes a signed mockup, the spec is updated before the first line of code, and each changed block
   is signed on its own.
+- The report that closes a package assesses what was built against the spec, block by block, and names every deviation
+  with the decision that led to it; a deviation never passes silently.
 
 ## Cleaning up the doc once a fix is implemented
 

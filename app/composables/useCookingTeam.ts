@@ -56,11 +56,19 @@ export const useCookingTeam = () => {
     }
 
     /**
-     * A team's number: the one in its name, else its position in the season's full team list + 1, else 1.
-     * Names are free text, so every site passes the same season list to agree on the fallback.
+     * A team's number: the one in its name when it is 1 or more, else its position in the season's full team list + 1,
+     * else 1. Names are free text, so every site passes the same season list to agree on the fallback.
      */
-    const getTeamNumber = (team: Pick<CookingTeamDisplay, 'id' | 'name'>, seasonTeams: Array<Pick<CookingTeamDisplay, 'id'>>): number =>
-        extractTeamNumber(team.name) ?? (seasonTeams.findIndex(seasonTeam => seasonTeam.id === team.id) + 1 || 1)
+    const getTeamNumber = (team: Pick<CookingTeamDisplay, 'id' | 'name'>, seasonTeams: Array<Pick<CookingTeamDisplay, 'id'>>): number => {
+        const named = extractTeamNumber(team.name)
+        return named !== null && named >= 1
+            ? named
+            : seasonTeams.findIndex(seasonTeam => seasonTeam.id === team.id) + 1 || 1
+    }
+
+    /** Number of CHEF-role assignments on a team */
+    const countChefs = (assignments: Pick<CookingTeamAssignment, 'role'>[]): number =>
+        assignments.filter(assignment => assignment.role === TeamRoleSchema.enum.CHEF).length
 
     /**
      * Get a compact short name for display in badges and tight UI spaces
@@ -68,10 +76,6 @@ export const useCookingTeam = () => {
      * Cuts off everything after the first dash
      * Fallback: Returns full name if no dash found
      */
-    /** Number of CHEF-role assignments on a team */
-    const countChefs = (assignments: Pick<CookingTeamAssignment, 'role'>[]): number =>
-        assignments.filter(assignment => assignment.role === TeamRoleSchema.enum.CHEF).length
-
     const getTeamShortName = (teamName: string): string => {
         const dashIndex = teamName.indexOf(' - ')
         return dashIndex !== -1 ? teamName.substring(0, dashIndex) : teamName

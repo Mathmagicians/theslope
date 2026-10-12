@@ -14,6 +14,9 @@ import {subDays} from "date-fns/subDays"
 import {subMinutes} from "date-fns/subMinutes"
 import {addMinutes} from "date-fns/addMinutes"
 
+/** The four season statuses as a union of their values */
+export type SeasonStatusValue = typeof SEASON_STATUS[keyof typeof SEASON_STATUS]
+
 export const isThisACookingDay = (date: Date, cookingDays: WeekDayMap): boolean => {
     const isoDay = getISODay(date)
     const weekDay = WEEKDAYS[isoDay - 1]
@@ -344,7 +347,7 @@ export const canSeasonBeActive = (season: Season, referenceDate: Date = new Date
  * @param referenceDate - Date to compare against (defaults to now)
  * @returns 'aktiv' | 'kommende' | 'i gang' | 'afsluttet'
  */
-export const getSeasonStatus = (season: Season, referenceDate: Date = new Date()): SeasonStatus => {
+export const getSeasonStatus = (season: Season, referenceDate: Date = new Date()): SeasonStatusValue => {
     // Active takes precedence regardless of dates
     if (season.isActive) {
         return SEASON_STATUS.ACTIVE

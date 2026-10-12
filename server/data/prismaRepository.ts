@@ -29,6 +29,7 @@ import type {
     CookingTeamAssignment
 } from '~/composables/useCookingTeamValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {JokerSlot, JokerSlotCreate} from '~/composables/useDutyValidation'
 import {useDutyValidation} from '~/composables/useDutyValidation'
 import type {BillingPeriodSummaryDisplay, BillingPeriodSummaryDetail} from '~/composables/useBillingValidation'
@@ -1285,7 +1286,8 @@ const cookingTeamDetailInclude = {
     assignments: {
         include: {inhabitant: true}
     },
-    dinners: {orderBy: {date: 'asc'}},  // Chronological for getNextDinnerDate
+    // Chronological for getNextDinnerDate; the amounts give each dinner its computed cost (ADR-010)
+    dinners: {orderBy: {date: 'asc'}, include: {expenses: {select: {amount: true}}}},
     jokerSlots: true,
     _count: {
         select: {dinners: true, jokerSlots: true}
@@ -1297,13 +1299,14 @@ type CookingTeamDetailPayload = Prisma.CookingTeamGetPayload<{include: typeof co
 // Maps Prisma 'dinners' to domain 'dinnerEvents' and _count to cookingDaysCount and jokerSlotCount; drops season and _count
 const toCookingTeamDetail = (team: CookingTeamDetailPayload): CookingTeamDetail => {
     const {deserializeCookingTeamDetail} = useCookingTeamValidation()
+    const {deserializeDinnerEvent} = useBookingValidation()
     return deserializeCookingTeamDetail({
         id: team.id,
         seasonId: team.seasonId,
         name: team.name,
         affinity: team.affinity,
         assignments: team.assignments,
-        dinnerEvents: team.dinners,
+        dinnerEvents: team.dinners.map(dinner => deserializeDinnerEvent(dinner)),
         jokerSlots: team.jokerSlots,
         cookingDaysCount: team._count.dinners,
         jokerSlotCount: team._count.jokerSlots

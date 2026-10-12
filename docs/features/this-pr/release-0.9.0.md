@@ -212,21 +212,21 @@ Unfolded Budget (the chevron turns; the boxes stay, this opens under them). The 
 │                                                                       │
 │                                                       ex / inkl. moms │
 │  Dato   Middag            Rådighedsbeløb      Brugt         Tilbage   │
-│  14/04  🟢 Risotto       1.498 / 1.873 kr  1.310 / 1.638 kr  +188 / +235 kr (check) │
+│  14/04  (arrow) Risotto    1.498 / 1.873 kr  1.310 / 1.638 kr  +188 / +235 kr (check) │
 │  12/04     Anna H.                         1.012 / 1.265 kr           │
 │  14/04     Bo K.                             298 /   373 kr           │
 │                                                                       │
 │  Hele Madhold 2, for perioden 12/04–15/04             ex / inkl. moms │
 │  Dato   Middag            Rådighedsbeløb      Brugt         Tilbage   │
 │  12/04  Lasagne          1.425 / 1.781 kr  1.540 / 1.925 kr  -115 / -144 kr (overdraft) │
-│  14/04  🟢 Risotto       1.498 / 1.873 kr  1.310 / 1.638 kr  +188 / +235 kr (check)     │
+│  14/04  (arrow) Risotto    1.498 / 1.873 kr  1.310 / 1.638 kr  +188 / +235 kr (check)     │
 │  15/04  Pasta                0 /     0 kr      0 /     0 kr      0 /     0 kr (waiting)   │
 │  Hele Madhold 2          2.923 / 3.654 kr  2.850 / 3.563 kr   +73 /  +91 kr (check)     │
 │                                                                       │
 │  (history) Se billetændringer                                    [>]  │
 ```
 
-The marker before the menu title is the dinner's status, the set the seasons wear: 🟢 the active dinner (the one on view), 🟡 a dinner of today that is not on view, 🌱 a future dinner, and the archive box icon for a past dinner. The RÅDIGHEDSBELØB box wears the same 🟢. A receipt sub-row carries its date, the bestiller in the Middag column in the muted ink, and its amount under Brugt. Without receipts the dinner row is followed by one sub-row reading "Madbestilling mangler". A dinner without tickets shows the timeline's waiting glyph (the "om n dage" badge's) in Tilbage instead of a check. A lone dinner shows the first fragment only; the Hele Madhold table appears when the team cooks consecutive days.
+An arrow before the menu title marks the dinner on view; the Budget shows no dinner status. A receipt sub-row carries its date, the bestiller in the Middag column in the muted ink, and its amount under Brugt. Without receipts the dinner row is followed by one sub-row reading "Madbestilling mangler". A dinner without tickets shows the timeline's waiting glyph (the "om n dage" badge's) in Tilbage instead of a check. A lone dinner shows the first fragment only; the Hele Madhold table appears when the team cooks consecutive days.
 
 Madbestilling open, the editor: the same one table component with the entry row above it and slet in its last column; its sums are the table's bottom rows:
 
@@ -286,7 +286,7 @@ Vis fuld historik shows every row newest first, no line, no button.
 - The editor leads with the action: the entry row, then the lines table, then the sums as the table's bottom rows; a rule sits above every result row (Rådighedsbeløb under the lines, Tilbage, the ticket table's Indtægter and Rådighedsbeløb; the box keeps its rows bare) and a gap with a rule sets the whole team's block apart; the folded total carries the unit words.
 - Every amount sits in fixed columns with an icon slot that is always there, so kr lines up down a column with and without the check or exclamation icon, in the hint, the lines, the box and the round table.
 - Every table is a UTable on the table token, the lines table of the editor included; a header row over rows is a table even when drawn with divs.
-- The status glyphs are one set, `STATUS_GLYPHS`, bound by the season status, the season selector and the spending rows.
+- The season status glyphs are one set, `STATUS_GLYPHS`, bound by the season status display; dinner rows carry no status.
 - No figure is computed in a component: sums, what is left, the waiting state and the receipt sub-rows come from the composables (`useOrder` spending helpers, `useBookingUi` for the table rows), components bind them.
 - View mode shows the folded row without its button.
 

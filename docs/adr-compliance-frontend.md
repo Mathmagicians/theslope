@@ -153,10 +153,10 @@ Status.
 | Component | Routes | Stores | Component spec | E2E | Status |
 |---|---|---|---|---|---|
 | `ChefMenuCard.vue` | `/chef`, `/dinner` | allergies | ⚠️ mocks stores | ❌ | ⚠️ missing e2e |
-| `DinnerBudget.vue` | `/chef` | none | ✅ | ✅ | ✅; the RÅDIGHEDSBELØB box wears `STATUS_GLYPHS.active` |
+| `DinnerBudget.vue` | `/chef` | none | ✅ | ✅ | ✅ |
 | `ExpenseLines.vue` | `/chef` | none | ✅ | ✅ | ✅ |
 | `VatAmount.vue` | `/chef` | none | ✅ | ✅ parent | ✅ |
-| `CookingRoundSpending.vue` | `/chef` | none | ✅ | ❌ | ✅; the status marker before the name from `spendingRowMarker` (`STATUS_GLYPHS`, the archive box for the past) |
+| `CookingRoundSpending.vue` | `/chef` | none | ✅ | ❌ | ✅; an arrow (`table.currentMarker`) before the name of the dinner on view |
 | `TicketChanges.vue` | `/chef` | bookings | ✅ | ❌ | ✅ |
 
 ### Layout

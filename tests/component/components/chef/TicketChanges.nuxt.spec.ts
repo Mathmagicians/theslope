@@ -113,7 +113,7 @@ describe('TicketChanges', () => {
         expect(findByTestId(wrapper, 'ticket-changes-more').exists()).toBe(false)
     })
 
-    it('GIVEN Framelding still ahead WHEN opened THEN the newest change shows alone, in the full history's columns, with the rest behind the button', async () => {
+    it('GIVEN Framelding still ahead WHEN opened THEN the newest change shows alone in the full history columns, with the rest behind the button', async () => {
         const ahead = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
         const wrapper = await mount({since: ahead})
         await open(wrapper)

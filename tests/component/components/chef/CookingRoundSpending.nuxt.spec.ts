@@ -4,6 +4,7 @@ import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {ref} from 'vue'
 import CookingRoundSpending from '~/components/chef/CookingRoundSpending.vue'
 import type {CookingRoundRow} from '~/composables/useBookingUi'
+import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useTicket} from '~/composables/useTicket'
 import {formatDate} from '~/utils/date'
 import {findByTestId} from '~~/tests/component/testHelpers'
@@ -38,8 +39,9 @@ describe('CookingRoundSpending', () => {
             expect(rendered[index]!.text()).toContain(formatDate(row.date, 'dd/MM'))
             expect(rendered[index]!.text()).toContain(row.menuTitle)
         })
-        expect(rendered[2]!.text()).toContain('denne')
-        expect(rendered[0]!.text()).not.toContain('denne')
+        // The arrow marks the dinner on view alone
+        expect(rendered[2]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(true)
+        expect(rendered[0]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(false)
     })
 
     it('reads each row\'s allowance, spending and what is left in both units, red with the exclamation icon when over', async () => {
@@ -59,7 +61,22 @@ describe('CookingRoundSpending', () => {
         expect(findByTestId(wrapper, 'cooking-round-total').exists()).toBe(false)
         const rendered = dataRows(wrapper)
         expect(rendered).toHaveLength(1)
-        expect(rendered[0]!.text()).toContain('denne')
+        expect(rendered[0]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(true)
+    })
+
+    it('GIVEN receipts WHEN rendering this dinner THEN they follow its row as sub-rows with the bestiller and the amount', async () => {
+        const receipt = ExpenseFactory.defaultExpense({id: 7, amount: 126500, paidBy: {id: 1, email: 'anna@example.com', name: 'Anna H.'}, createdAt: new Date('2026-04-12T10:00:00')})
+        const wrapper = await mount({words: null, rows: [rows[2]], receipts: [receipt]})
+        const rendered = dataRows(wrapper)
+        expect(rendered).toHaveLength(2)
+        expect(rendered[1]!.text()).toContain('Anna H.')
+        expect(rendered[1]!.text()).toContain(`/ ${formatPrice(126500)} kr`)
+        expect(rendered[1]!.text()).toContain('12/04')
+    })
+
+    it('GIVEN no receipts WHEN rendering this dinner THEN one sub-row says Madbestilling mangler', async () => {
+        const wrapper = await mount({words: null, rows: [rows[2]], receipts: []})
+        expect(dataRows(wrapper)[1]!.text()).toContain('Madbestilling mangler')
     })
 
     it('GIVEN a dinner without tickets yet WHEN rendering THEN its Tilbage carries the waiting glyph, not the check', async () => {

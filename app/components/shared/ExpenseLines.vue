@@ -5,23 +5,35 @@
  * Folded, one row like the card's other sections:
  *   (cart) MADBESTILLING   1.310 / 1.638 kr                      [Rediger madbestilling]   <- or the empty text
  *
- * Open, the editor the button reveals:
- *   Hvad kostede indkøbene?                                                    [Tilbage]
- *   Rådighedsbeløb                                   1.425 / 1.781 kr
- *   Brugt                                            1.310 / 1.638 kr
- *   Til rådighed                                      +115 /  +143 kr (check)
- *   Madhold 2, 12/04–14/04                            +190 /  +238 kr (check)
+ * Open, the editor the button reveals: the action first, the lines, then the sums with a rule above each result
+ *   Hvad kostede indkøbene?                                                    [Luk]
  *   [ beløb      ] [ Ex moms v ] [Tilføj]
  *   Dato   Bestiller                                   ex / inkl. moms
  *   12/04  Anna H.                                   1.012 / 1.265 kr   [slet]
+ *   ──────────────────────────────────────────────────────────────────
+ *   Rådighedsbeløb                                   1.425 / 1.781 kr
+ *   Brugt                                            1.310 / 1.638 kr
+ *   ──────────────────────────────────────────────────────────────────
+ *   Tilbage                                           +115 /  +143 kr (check)
  *
- * A line saves as it is added and goes as it is removed; Tilbage folds the row. The helping numbers follow the lines.
+ *   ──────────────────────────────────────────────────────────────────
+ *   Hele Madhold 2, for perioden 12/04–14/04
+ *   Rådighedsbeløb                                   4.435 / 5.544 kr
+ *   Brugt                                            4.245 / 5.307 kr
+ *   ──────────────────────────────────────────────────────────────────
+ *   Tilbage                                           +190 /  +237 kr (check)
+ *
+ * A line saves as it is added and goes as it is removed; Luk folds the row. The helping numbers follow the lines.
  * The reporting user is the payer and the server writes the note, so the form carries the amount alone. The same
  * section serves the kitchen's own purchases with its own title, hint and texts.
+ *
+ * Tokens: the folded row and the editor head bind cardSection like the allergen row; the edit button is
+ * BUTTONS.secondaryAction, Luk BUTTONS.cancel, Tilføj BUTTONS.save, slet BUTTONS.remove; every amount is a VatAmount
+ * in the expenseLines grid; the whole-team heading is the text cookingRoundWords builds, shared with CookingRoundSpending.
  */
 import type {Expense, ExpenseCreate, ExpenseLineForm, VatMode} from '~/composables/useBillingValidation'
 import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
-import type {Form, FormSubmitEvent} from '@nuxt/ui'
+import type {Form, FormSubmitEvent, TableColumn} from '@nuxt/ui'
 
 const props = withDefaults(defineProps<{
   expenses: Expense[]
@@ -34,14 +46,14 @@ const props = withDefaults(defineProps<{
   editable?: boolean
   pending?: boolean
   budgetGross?: number | null
-  leftRound?: {label: string, gross: number} | null
+  round?: {label: string, budgetGross: number, spentGross: number} | null
 }>(), {
   glyph: undefined,
   color: undefined,
   editable: false,
   pending: false,
   budgetGross: null,
-  leftRound: null
+  round: null
 })
 
 const emit = defineEmits<{
@@ -52,7 +64,7 @@ const emit = defineEmits<{
 const {COMPONENTS, BUTTONS, ICONS, COLOR, LAYOUTS, SIZES} = useTheSlopeDesignSystem()
 const {ExpenseLineFormSchema, VatModeSchema} = useBillingValidation()
 const {formatPrice} = useTicket()
-const {convertVat} = useOrder()
+const {spendingLeft, spendingAwaitsTickets, typedKrToGrossOre, typedKrOtherUnitOre} = useOrder()
 const appConfig = useAppConfig()
 const vatPercent = appConfig.theslope?.kitchen?.vatPercent ?? 25
 const VatModeValue = VatModeSchema.enum
@@ -66,8 +78,7 @@ const buttonColor = computed(() => props.color ?? COLOR.primary)
 const isOpen = ref(false)
 
 // The receipt states one unit; the chef types that unit, the line is stored gross
-const toGrossOre = (amountKr: number, vatMode: VatMode): number =>
-  vatMode === VatModeValue.ex ? convertVat(amountKr * 100, vatPercent, false) : Math.round(amountKr * 100)
+const isExVat = (vatMode: VatMode) => vatMode === VatModeValue.ex
 
 const draft = reactive<{amountKr: number | undefined, vatMode: VatMode}>({amountKr: undefined, vatMode: VatModeValue.ex})
 const formRef = useTemplateRef<Form<ExpenseLineForm>>('formRef')
@@ -75,18 +86,24 @@ const formRef = useTemplateRef<Form<ExpenseLineForm>>('formRef')
 const alternative = computed(() => {
   const kr = Number(draft.amountKr)
   if (!(kr > 0)) return null
-  return draft.vatMode === VatModeValue.ex
-    ? `= ${formatPrice(toGrossOre(kr, VatModeValue.ex))} kr inkl. moms`
-    : `= ${formatPrice(convertVat(kr * 100, vatPercent, true))} kr ex moms`
+  const other = formatPrice(typedKrOtherUnitOre(kr, isExVat(draft.vatMode), vatPercent))
+  return isExVat(draft.vatMode) ? `= ${other} kr inkl. moms` : `= ${other} kr ex moms`
 })
 
 const handleSubmit = ({data}: FormSubmitEvent<ExpenseLineForm>) => {
-  emit('add', {amount: toGrossOre(data.amountKr, data.vatMode)})
+  emit('add', {amount: typedKrToGrossOre(data.amountKr, isExVat(data.vatMode), vatPercent)})
   draft.amountKr = undefined
 }
 
 const spent = computed(() => sumAmounts(props.expenses))
-const left = computed(() => props.budgetGross === null ? null : props.budgetGross - spent.value)
+// This dinner's figures for the sums, once there is a budget to hold them against
+const figures = computed(() => props.budgetGross === null ? null : {budgetGross: props.budgetGross, spentGross: spent.value})
+const lineColumns: TableColumn<Expense>[] = [
+  {id: 'date', header: 'Dato'},
+  {id: 'payer', header: 'Bestiller'},
+  {id: 'amount', header: 'ex / inkl. moms', meta: COMPONENTS.table.amountColumn},
+  {id: 'remove', header: ''}
+]
 </script>
 
 <template>
@@ -97,7 +114,10 @@ const left = computed(() => props.budgetGross === null ? null : props.budgetGros
         {{ title }}
       </span>
       <div :class="COMPONENTS.cardSection.line">
-        <VatAmount v-if="expenses.length" :gross="spent" data-testid="expense-total" />
+        <template v-if="expenses.length">
+          <VatAmount :gross="spent" data-testid="expense-total" />
+          <span :class="COMPONENTS.vatAmount.unitHeader">ex / inkl. moms</span>
+        </template>
         <span v-else :class="COMPONENTS.expenseLines.empty" data-testid="expense-empty">{{ emptyText }}</span>
       </div>
       <UButton
@@ -118,30 +138,7 @@ const left = computed(() => props.budgetGross === null ? null : props.budgetGros
       <div :class="COMPONENTS.cardSection.editorHead">
         <h4 :class="COMPONENTS.cardSection.editorTitle">{{ hint }}</h4>
         <div :class="LAYOUTS.formButtonRow">
-          <UButton v-bind="BUTTONS.back" data-testid="expense-back" @click="isOpen = false">Tilbage</UButton>
-        </div>
-      </div>
-
-      <div :class="COMPONENTS.expenseLines.hint" data-testid="expense-hint">
-        <div v-if="budgetGross !== null" :class="COMPONENTS.expenseLines.row" data-testid="expense-hint-row">
-          <span :class="COMPONENTS.expenseLines.hintLabel">Rådighedsbeløb</span>
-          <VatAmount :gross="budgetGross" :class="COMPONENTS.expenseLines.amount" />
-          <span :class="COMPONENTS.expenseLines.removeSlot" />
-        </div>
-        <div :class="COMPONENTS.expenseLines.row" data-testid="expense-hint-row">
-          <span :class="COMPONENTS.expenseLines.hintLabel">Brugt</span>
-          <VatAmount :gross="spent" :class="COMPONENTS.expenseLines.amount" />
-          <span :class="COMPONENTS.expenseLines.removeSlot" />
-        </div>
-        <div v-if="left !== null" :class="COMPONENTS.expenseLines.row" data-testid="expense-hint-row">
-          <span :class="COMPONENTS.expenseLines.hintLabel">Til rådighed</span>
-          <VatAmount :gross="left" balance :class="COMPONENTS.expenseLines.amount" />
-          <span :class="COMPONENTS.expenseLines.removeSlot" />
-        </div>
-        <div v-if="leftRound" :class="COMPONENTS.expenseLines.row" data-testid="expense-hint-row">
-          <span :class="COMPONENTS.expenseLines.hintLabel">{{ leftRound.label }}</span>
-          <VatAmount :gross="leftRound.gross" balance :class="COMPONENTS.expenseLines.amount" />
-          <span :class="COMPONENTS.expenseLines.removeSlot" />
+          <UButton v-bind="BUTTONS.cancel" data-testid="expense-back" @click="isOpen = false">Luk</UButton>
         </div>
       </div>
 
@@ -167,20 +164,54 @@ const left = computed(() => props.budgetGross === null ? null : props.budgetGros
         <div v-if="alternative" :class="COMPONENTS.expenseLines.alternative" data-testid="expense-alternative">{{ alternative }}</div>
       </UForm>
 
-      <div v-if="expenses.length" :class="COMPONENTS.expenseLines.list">
-        <div :class="COMPONENTS.expenseLines.row">
-          <span :class="COMPONENTS.expenseLines.head">Dato</span>
-          <span :class="COMPONENTS.expenseLines.head">Bestiller</span>
-          <span :class="COMPONENTS.expenseLines.headRight">ex / inkl. moms</span>
-          <span :class="COMPONENTS.expenseLines.removeSlot" />
-        </div>
-        <div v-for="expense in expenses" :key="expense.id" :class="COMPONENTS.expenseLines.row" data-testid="expense-line">
-          <span :class="COMPONENTS.expenseLines.date">{{ formatDate(expense.createdAt, 'dd/MM') }}</span>
-          <span :class="COMPONENTS.expenseLines.payer" data-testid="expense-payer">{{ expense.paidBy.name ?? '' }}</span>
-          <VatAmount :gross="expense.amount" :class="COMPONENTS.expenseLines.amount" />
-          <UButton v-bind="BUTTONS.remove" aria-label="Slet" :disabled="pending" data-testid="expense-remove" @click="emit('remove', expense.id)" />
-        </div>
-      </div>
+      <!-- The lines and, as the table's bottom rows, the sums: this dinner's, then the whole team's set apart -->
+      <UTable :data="expenses" :columns="lineColumns" :ui="COMPONENTS.table.ui" data-testid="expense-table">
+        <template #date-cell="{ row }">{{ formatDate(row.original.createdAt, 'dd/MM') }}</template>
+        <template #payer-cell="{ row }"><span :class="COMPONENTS.expenseLines.payer" data-testid="expense-payer">{{ row.original.paidBy.name ?? '' }}</span></template>
+        <template #amount-cell="{ row }"><VatAmount :gross="row.original.amount" /></template>
+        <template #remove-cell="{ row }">
+          <UButton v-bind="BUTTONS.remove" aria-label="Slet" :disabled="pending" data-testid="expense-remove" @click="emit('remove', row.original.id)" />
+        </template>
+        <template #empty><span :class="COMPONENTS.expenseLines.empty">{{ emptyText }}</span></template>
+        <template #body-bottom>
+          <tr v-if="budgetGross !== null" :class="COMPONENTS.table.totalRow" data-testid="expense-hint-row">
+            <td :class="COMPONENTS.table.ui.td" colspan="2">Rådighedsbeløb</td>
+            <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><VatAmount :gross="budgetGross" /></td>
+            <td :class="COMPONENTS.table.ui.td" />
+          </tr>
+          <tr :class="budgetGross === null ? COMPONENTS.table.totalRow : ''" data-testid="expense-hint-row">
+            <td :class="COMPONENTS.table.ui.td" colspan="2">Brugt</td>
+            <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><VatAmount :gross="spent" /></td>
+            <td :class="COMPONENTS.table.ui.td" />
+          </tr>
+          <tr v-if="figures" :class="COMPONENTS.table.totalRow" data-testid="expense-hint-row">
+            <td :class="COMPONENTS.table.ui.td" colspan="2">Tilbage</td>
+            <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><VatAmount :gross="spendingLeft(figures)" balance :pending="spendingAwaitsTickets(figures)" /></td>
+            <td :class="COMPONENTS.table.ui.td" />
+          </tr>
+          <template v-if="round">
+            <tr><td :class="COMPONENTS.table.spacerCell" colspan="4" /></tr>
+            <tr :class="COMPONENTS.table.totalRow" data-testid="expense-hint-heading">
+              <td :class="COMPONENTS.table.ui.td" colspan="4">{{ round.label }}</td>
+            </tr>
+            <tr data-testid="expense-hint-row">
+              <td :class="COMPONENTS.table.ui.td" colspan="2">Rådighedsbeløb</td>
+              <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><VatAmount :gross="round.budgetGross" /></td>
+              <td :class="COMPONENTS.table.ui.td" />
+            </tr>
+            <tr data-testid="expense-hint-row">
+              <td :class="COMPONENTS.table.ui.td" colspan="2">Brugt</td>
+              <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><VatAmount :gross="round.spentGross" /></td>
+              <td :class="COMPONENTS.table.ui.td" />
+            </tr>
+            <tr :class="COMPONENTS.table.totalRow" data-testid="expense-hint-row">
+              <td :class="COMPONENTS.table.ui.td" colspan="2">Tilbage</td>
+              <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><VatAmount :gross="spendingLeft(round)" balance :pending="spendingAwaitsTickets(round)" /></td>
+              <td :class="COMPONENTS.table.ui.td" />
+            </tr>
+          </template>
+        </template>
+      </UTable>
     </div>
   </section>
 </template>

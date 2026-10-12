@@ -1,7 +1,8 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges} from '~/composables/useBookingUi'
+import {useBookingUi, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, spendingTableRows, type CookingRoundRow} from '~/composables/useBookingUi'
+import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, type ReleasedTicketCounts} from '~/composables/useBooking'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
@@ -24,6 +25,22 @@ const farFutureDinner = (overrides = {}) =>
     ({...DinnerEventFactory.defaultDinnerEventDisplay(), date: addDays(new Date(), FAR_FUTURE_DAYS), ...overrides})
 
 const released = (total: number, formatted = `${total}V`): ReleasedTicketCounts => ({total, formatted})
+
+describe('spendingTableRows', () => {
+    const dinner = (id: number, isCurrent: boolean): CookingRoundRow => ({dinnerEventId: id, date: new Date(2026, 3, 10 + id), menuTitle: `Ret ${id}`, isCurrent, budgetGross: 1000, spentGross: 0})
+
+    it('puts this dinner\'s receipts under its row as sub-rows, the bestiller as the label', () => {
+        const receipts = [ExpenseFactory.defaultExpense({id: 7, amount: 101200, paidBy: {id: 1, email: 'anna@example.com', name: 'Anna H.'}})]
+        const rows = spendingTableRows([dinner(1, false), dinner(2, true)], receipts, 'Madbestilling mangler')
+        expect(rows.map(row => row.kind)).toEqual(['dinner', 'dinner', 'receipt'])
+        expect(rows[2]).toMatchObject({kind: 'receipt', label: 'Anna H.', amount: 101200})
+    })
+
+    it('says so under this dinner when there are no receipts, and adds nothing when none are given', () => {
+        expect(spendingTableRows([dinner(2, true)], [], 'Madbestilling mangler').map(row => row.kind)).toEqual(['dinner', 'none'])
+        expect(spendingTableRows([dinner(2, true)], null, 'Madbestilling mangler').map(row => row.kind)).toEqual(['dinner'])
+    })
+})
 
 describe('useBookingUi', () => {
     describe('STEP_ICONS', () => {

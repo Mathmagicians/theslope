@@ -4,20 +4,23 @@
  *
  * Compact mode (in ChefMenuCard summary line):
  * ┌──────────────────────────────────────────────────────────────────────────┐
- * │ 💰 1.425 kr                                                              │
+ * │ (money) 1.425 kr                                                         │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
  * Full mode, folded (title + 3 boxes, one chevron):
  * Budget                                                                    [>]
- * ┌ 💰 INDTÆGTER ──────┐ ┌ 🛒 RÅDIGHEDSBELØB ─────────────────┐ ┌ 🏠 KØKKENBIDRAG ──┐
+ * ┌ (money) INDTÆGTER ─┐ ┌ (cart) RÅDIGHEDSBELØB ─────────────┐ ┌ (house) KØKKENBIDRAG ┐
  * │ 1.500 / 1.875 kr   │ │ 1.425 / 1.781 kr                    │ │ 75 / 94 kr        │
  * │ ex / inkl. moms    │ │ ex / inkl. moms                     │ │ ex / inkl. moms   │
  * │ 45 kuverter        │ │ Brugt          1.310 / 1.638 kr     │ │ 5% af indtægter   │
- * │                    │ │ Til rådighed    +115 / +143 kr (check) │ │                │
+ * │                    │ │ Tilbage    +115 / +143 kr (check) │ │                │
  * └────────────────────┘ └─────────────────────────────────────┘ └───────────────────┘
  *
- * Unfolded, under the boxes: Billetter (the ticket table named by type, Indtægter, Køkkenbidrag, Rådighedsbeløb,
- * Brugt, Til rådighed), Billetændringer (TicketChanges, lazy) and the team's round (CookingRoundSpending).
+ * Unfolded, under the boxes: Billetter (the ticket table named by type, its sums as its bottom rows down to
+ * Rådighedsbeløb), this dinner as one spending row with its receipts under it, the team's round in the same shape
+ * (CookingRoundSpending, headed by the words cookingRoundWords builds, handed in as roundWords) and last
+ * Billetændringer (TicketChanges, folded behind its chevron, its window from the booking deadline), shown only while
+ * the dinner has tickets.
  *
  * Every amount renders both units through VatAmount, the ex moms figure loud. Revenue counts every paid ticket, a
  * released one included (useOrder.calculateBudget).
@@ -32,25 +35,26 @@
  */
 import type { OrderDetail } from '~/composables/useBookingValidation'
 import type { Expense } from '~/composables/useBillingValidation'
-import type { CookingRoundRow } from '~/composables/useBookingUi'
+import type { CookingRoundRow, CookingRoundWords } from '~/composables/useBookingUi'
+import type {TableColumn} from '@nuxt/ui'
 
 interface Props {
   orders: OrderDetail[]
   mode?: 'compact' | 'full'
   expenses?: Expense[]
   dinnerEventId?: number | null
-  menuDeadline?: Date | null
+  bookingDeadline?: Date | null
   roundRows?: CookingRoundRow[]
-  roundLabel?: string
+  roundWords?: CookingRoundWords | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
   mode: 'compact',
   expenses: () => [],
   dinnerEventId: null,
-  menuDeadline: null,
+  bookingDeadline: null,
   roundRows: () => [],
-  roundLabel: ''
+  roundWords: null
 })
 
 const { TYPOGRAPHY, COMPONENTS, ICONS } = useTheSlopeDesignSystem()
@@ -61,7 +65,7 @@ const kitchenBaseRatePercent = appConfig.theslope?.kitchen?.baseRatePercent ?? 5
 const vatPercent = appConfig.theslope?.kitchen?.vatPercent ?? 25
 
 // Business logic from useOrder and useTicket
-const { getActiveOrders, groupByTicketType, calculateBudget, calculateTotalPortionsFromPrices } = useOrder()
+const { getActiveOrders, groupByTicketType, calculateBudget, calculateTotalPortionsFromPrices, spendingLeft, spendingAwaitsTickets } = useOrder()
 const { formatPrice, ticketTypeConfig } = useTicket()
 
 // Expandable details state
@@ -81,13 +85,24 @@ const ticketLabel = (ticketType: string) => ticketTypeConfig[ticketType as keyof
 
 // The grocery lines against the allowance
 const spent = computed(() => sumAmounts(props.expenses))
-const left = computed(() => budget.value.availableBudget - spent.value)
+const figures = computed(() => ({budgetGross: budget.value.availableBudget, spentGross: spent.value}))
+const left = computed(() => spendingLeft(figures.value))
+// This dinner's row of the spending table, the one the page marks as current
+const ownRow = computed(() => props.roundRows.find(row => row.isCurrent) ?? null)
+
+type TicketRevenueRow = (typeof revenueByType.value)[number]
+const ticketColumns: TableColumn<TicketRevenueRow>[] = [
+  {accessorKey: 'ticketType', header: 'Billettype'},
+  {accessorKey: 'count', header: 'Antal', meta: COMPONENTS.table.amountColumn},
+  {accessorKey: 'unitPrice', header: 'Stk pris', meta: COMPONENTS.table.amountColumn},
+  {accessorKey: 'revenue', header: 'Total', meta: COMPONENTS.table.amountColumn}
+]
 </script>
 
 <template>
   <!-- Compact Mode -->
   <div v-if="mode === 'compact'" :class="COMPONENTS.dinnerBudget.compact">
-    <span>💰</span>
+    <UIcon :name="ICONS.economy" :class="COMPONENTS.dinnerBudget.boxGlyph" />
     <span :class="COMPONENTS.dinnerBudget.compactAmount">{{ formatPrice(budget.availableBudget) }} kr</span>
   </div>
 
@@ -110,12 +125,12 @@ const left = computed(() => budget.value.availableBudget - spent.value)
       <UCard :ui="COMPONENTS.dinnerBudget.boxUi" data-testid="budget-box-revenue">
         <div :class="COMPONENTS.dinnerBudget.box">
           <div :class="COMPONENTS.dinnerBudget.boxLabel">
-            <span>💰</span>
-            <span>INDTÆGTER</span>
+            <UIcon :name="ICONS.economy" :class="COMPONENTS.dinnerBudget.boxGlyph" />
+            <span :class="COMPONENTS.dinnerBudget.boxLabelText">INDTÆGTER</span>
           </div>
-          <div :class="COMPONENTS.dinnerBudget.boxAmountLarge"><VatAmount :gross="budget.totalRevenue" /></div>
-          <div :class="COMPONENTS.dinnerBudget.boxUnit">ex / inkl. moms</div>
-          <div :class="COMPONENTS.dinnerBudget.unit">
+          <!-- Ticket money is what the households pay: plain kr, no VAT split -->
+          <div :class="COMPONENTS.dinnerBudget.boxAmountLarge">{{ formatPrice(budget.totalRevenue) }} kr</div>
+          <div :class="COMPONENTS.dinnerBudget.boxFact">
             {{ formatPortions(totalPortions) }} kuverter
           </div>
         </div>
@@ -125,8 +140,8 @@ const left = computed(() => budget.value.availableBudget - spent.value)
       <UCard :ui="COMPONENTS.dinnerBudget.boxUi" data-testid="budget-box-available">
         <div :class="COMPONENTS.dinnerBudget.box">
           <div :class="COMPONENTS.dinnerBudget.boxLabel">
-            <span>🛒</span>
-            <span>RÅDIGHEDSBELØB</span>
+            <UIcon :name="ICONS.shoppingCart" :class="COMPONENTS.dinnerBudget.boxGlyph" />
+            <span :class="COMPONENTS.dinnerBudget.boxLabelText">RÅDIGHEDSBELØB</span>
           </div>
           <div :class="COMPONENTS.dinnerBudget.boxAmountLarge"><VatAmount :gross="budget.availableBudget" /></div>
           <div :class="COMPONENTS.dinnerBudget.boxUnit">ex / inkl. moms</div>
@@ -135,8 +150,8 @@ const left = computed(() => budget.value.availableBudget - spent.value)
             <VatAmount :gross="spent" data-testid="budget-spent" />
           </div>
           <div :class="COMPONENTS.dinnerBudget.boxLine">
-            <span>Til rådighed</span>
-            <VatAmount :gross="left" balance data-testid="budget-left" />
+            <span>Tilbage</span>
+            <VatAmount :gross="left" balance :pending="spendingAwaitsTickets(figures)" data-testid="budget-left" />
           </div>
         </div>
       </UCard>
@@ -145,8 +160,8 @@ const left = computed(() => budget.value.availableBudget - spent.value)
       <UCard :ui="COMPONENTS.dinnerBudget.boxUi" data-testid="budget-box-contribution">
         <div :class="COMPONENTS.dinnerBudget.box">
           <div :class="COMPONENTS.dinnerBudget.boxLabel">
-            <span>🏠</span>
-            <span>KØKKENBIDRAG</span>
+            <UIcon :name="ICONS.home" :class="COMPONENTS.dinnerBudget.boxGlyph" />
+            <span :class="COMPONENTS.dinnerBudget.boxLabelText">KØKKENBIDRAG</span>
           </div>
           <div :class="COMPONENTS.dinnerBudget.boxAmountLarge"><VatAmount :gross="budget.kitchenContribution" /></div>
           <div :class="COMPONENTS.dinnerBudget.boxUnit">ex / inkl. moms</div>
@@ -158,67 +173,40 @@ const left = computed(() => budget.value.availableBudget - spent.value)
     <!-- Expandable Details -->
     <div v-if="showDetails" :class="COMPONENTS.dinnerBudget.details" data-testid="budget-details">
       <!-- Billetter: the ticket table named by type -->
-      <div :class="COMPONENTS.dinnerBudget.tableScroll">
-        <table :class="COMPONENTS.dinnerBudget.table">
-          <thead>
-            <tr :class="COMPONENTS.dinnerBudget.tableHead">
-              <th :class="COMPONENTS.dinnerBudget.th">Billettype</th>
-              <th :class="COMPONENTS.dinnerBudget.thRight">Antal</th>
-              <th :class="COMPONENTS.dinnerBudget.thRight">Stk pris</th>
-              <th :class="COMPONENTS.dinnerBudget.thRight">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr
-              v-for="group in revenueByType"
-              :key="group.ticketType"
-              :class="COMPONENTS.dinnerBudget.tr"
-              data-testid="budget-ticket-row"
-            >
-              <td :class="COMPONENTS.dinnerBudget.td">{{ ticketLabel(group.ticketType) }}</td>
-              <td :class="COMPONENTS.dinnerBudget.tdRight">{{ group.count }}</td>
-              <td :class="COMPONENTS.dinnerBudget.tdRight"><VatAmount :gross="group.unitPrice" /></td>
-              <td :class="COMPONENTS.dinnerBudget.tdTotal"><VatAmount :gross="group.revenue" /></td>
-            </tr>
-            <!-- Empty state row when no tickets -->
-            <tr v-if="revenueByType.length === 0">
-              <td :class="COMPONENTS.dinnerBudget.tdEmpty" colspan="4">
-                Ingen billetter solgt endnu
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <UTable :data="revenueByType" :columns="ticketColumns" :ui="COMPONENTS.table.ui" data-testid="budget-ticket-table">
+        <template #ticketType-cell="{ row }">{{ ticketLabel(row.original.ticketType) }}</template>
+        <template #unitPrice-cell="{ row }">{{ formatPrice(row.original.unitPrice) }} kr</template>
+        <template #revenue-cell="{ row }">{{ formatPrice(row.original.revenue) }} kr</template>
+        <template #empty>Ingen billetter solgt endnu</template>
+        <template #body-bottom>
+          <tr :class="COMPONENTS.table.totalRow" data-testid="budget-summary-revenue">
+            <td :class="COMPONENTS.table.ui.td" colspan="3">Indtægter</td>
+            <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]">{{ formatPrice(budget.totalRevenue) }} kr</td>
+          </tr>
+          <tr>
+            <td :class="COMPONENTS.table.ui.td" colspan="3">Køkkenbidrag ({{ budget.kitchenBaseRatePercent }}%)</td>
+            <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><span :class="COMPONENTS.dinnerBudget.summaryDeduction">-<VatAmount :gross="budget.kitchenContribution" /></span></td>
+          </tr>
+          <tr :class="COMPONENTS.table.totalRow" data-testid="budget-summary-available">
+            <td :class="COMPONENTS.table.ui.td" colspan="3">Rådighedsbeløb</td>
+            <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><VatAmount :gross="budget.availableBudget" /></td>
+          </tr>
+        </template>
+      </UTable>
 
-      <!-- Summary lines -->
-      <div :class="COMPONENTS.dinnerBudget.summary">
-        <div :class="COMPONENTS.dinnerBudget.unitHeader">ex / inkl. moms</div>
-        <div :class="COMPONENTS.dinnerBudget.summaryRow">
-          <span :class="TYPOGRAPHY.bodyTextMuted">Indtægter</span>
-          <VatAmount :gross="budget.totalRevenue" />
-        </div>
-        <div :class="COMPONENTS.dinnerBudget.summaryRow">
-          <span :class="TYPOGRAPHY.bodyTextMuted">Køkkenbidrag ({{ budget.kitchenBaseRatePercent }}%)</span>
-          <span :class="COMPONENTS.dinnerBudget.summaryDeduction">-<VatAmount :gross="budget.kitchenContribution" /></span>
-        </div>
-        <div :class="COMPONENTS.dinnerBudget.summaryTotalRow">
-          <span>Rådighedsbeløb</span>
-          <VatAmount :gross="budget.availableBudget" />
-        </div>
-        <div :class="COMPONENTS.dinnerBudget.summaryRow">
-          <span :class="TYPOGRAPHY.bodyTextMuted">Brugt</span>
-          <VatAmount :gross="spent" />
-        </div>
-        <div :class="COMPONENTS.dinnerBudget.summaryRow">
-          <span :class="TYPOGRAPHY.bodyTextMuted">Til rådighed</span>
-          <VatAmount :gross="left" balance data-testid="budget-summary-left" />
-        </div>
-        <TicketChanges v-if="dinnerEventId" :dinner-event-id="dinnerEventId" :since="menuDeadline" />
+      <!-- This dinner in the spending table's shape, its receipts under it -->
+      <div v-if="ownRow" :class="COMPONENTS.dinnerBudget.section">
+        <CookingRoundSpending :words="null" :rows="[ownRow]" :receipts="expenses" />
       </div>
 
       <!-- The team's cooking round -->
-      <div v-if="roundRows.length" :class="COMPONENTS.dinnerBudget.section">
-        <CookingRoundSpending :label="roundLabel" :rows="roundRows" />
+      <div v-if="roundWords && roundRows.length > 1" :class="COMPONENTS.dinnerBudget.section">
+        <CookingRoundSpending :words="roundWords" :rows="roundRows" />
+      </div>
+
+      <!-- Billetændringer last, folded, only while there are tickets -->
+      <div v-if="dinnerEventId && orders.length" :class="COMPONENTS.dinnerBudget.section">
+        <TicketChanges :dinner-event-id="dinnerEventId" :since="bookingDeadline" />
       </div>
     </div>
   </div>

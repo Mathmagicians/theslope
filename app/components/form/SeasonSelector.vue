@@ -1,29 +1,21 @@
 <!--
-UX MOCKUP: Season Selector with Status Indicators
+SeasonSelector: one option per season, sorted active, in progress, upcoming, ended; a calendar icon leads, the archive
+icon for an ended season, and the STATUS_GLYPHS marker follows the name
 
 ┌─────────────────────────────────┐
-│ 📅 Forår 2025            🟢 ▼ │  ◄─── Selected (ACTIVE - green circle)
+│ [cal] Forår 2025         🟢  ▼ │  the selected season
 │ ─────────────────────────────── │
-│ 📅 Forår 2025            🟢    │  ◄─── ACTIVE (calendar icon, green circle)
-│ 📅 Efterår 2025          🌱    │  ◄─── FUTURE (calendar icon, seedling)
-│ 📅 Efterår 2025          🟡    │  ◄─── CURRENT (calendar icon, yellow circle)
-│ 📦 Efterår 2024          ⚪    │  ◄─── PAST (archive icon, grey circle)
+│ [cal] Forår 2025         🟢    │  active: visible to every member
+│ [cal] Efterår 2025       🟡    │  in progress, not activated
+│ [cal] Efterår 2025       🌱    │  starts later
+│ [box] Efterår 2024       ⚪    │  archived
 └─────────────────────────────────┘
 
-Season Status Legend:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🟢 ACTIVE    - Synlig for alle brugere (solid green)
-🌱 FUTURE    - Fremtidig sæson (green seedling)
-🟡 CURRENT   - Igangværende men ikke aktiv (yellow)
-⚪ PAST      - Arkiveret sæson (grey/white)
-
-Icons: 📅 Calendar for active/future/current, 📦 Archive for past
-Sorting: Active → Future → Current → Past (by date)
+[cal] = ICONS.calendar, [box] = ICONS.seasonPast, the markers = STATUS_GLYPHS, all through SEASON_STATUS_MARKS
 -->
 
 <script setup lang="ts">
 import type {Season} from '~/composables/useSeasonValidation'
-import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 
 interface Props {
   modelValue: number | null | undefined
@@ -44,51 +36,16 @@ const emit = defineEmits<{
 }>()
 
 const {getSeasonStatus, sortSeasonsByActivePriority} = useSeason()
-const {COLOR, SIZES, ICONS, COMPONENTS} = useTheSlopeDesignSystem()
+const {COLOR, SIZES, COMPONENTS, SEASON_STATUS_MARKS} = useTheSlopeDesignSystem()
 
-// Get status icon for a season
-const getStatusIcon = (season: Season): string => {
-  const status = getSeasonStatus(season)
-
-  switch (status) {
-    case SEASON_STATUS.ACTIVE:
-      return ICONS.calendar
-    case SEASON_STATUS.FUTURE:
-      return ICONS.calendar
-    case SEASON_STATUS.CURRENT:
-      return ICONS.calendar
-    case SEASON_STATUS.PAST:
-      return ICONS.seasonPast
-    default:
-      return ICONS.seasonUnknown
-  }
-}
-
-// Get status emoji circle
-const getStatusEmoji = (season: Season): string => {
-  const status = getSeasonStatus(season)
-
-  switch (status) {
-    case SEASON_STATUS.ACTIVE:
-      return '🟢'  // Solid green circle
-    case SEASON_STATUS.FUTURE:
-      return '🌱'  // Green heart (no green outline emoji exists)
-    case SEASON_STATUS.CURRENT:
-      return '🟡'  // Solid yellow circle
-    case SEASON_STATUS.PAST:
-    default:
-      return '⚪'  // Grey circle
-  }
-}
-
-// Sort seasons and add icons for USelect
+// Sorted for USelect, each season carrying its status icon and marker
 type SeasonWithIcon = Season & { icon: string; suffix: string }
 
 const sortedSeasonsWithIcons = computed<SeasonWithIcon[]>(() => {
   return sortSeasonsByActivePriority(props.seasons).map(season => ({
     ...season,
-    icon: getStatusIcon(season),
-    suffix: getStatusEmoji(season)
+    icon: SEASON_STATUS_MARKS[getSeasonStatus(season)].icon,
+    suffix: SEASON_STATUS_MARKS[getSeasonStatus(season)].glyph
   }))
 })
 

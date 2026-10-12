@@ -38,6 +38,21 @@ export const useDinnerDateParam = (options: {
 }
 
 /**
+ * useCalendarOpenParam - the booking calendar's open state in `?cal=` (ADR-006): open from md, collapsed on a phone.
+ * The default reads the viewport, so the one-shot sync also waits for the layout to measure it.
+ */
+export const useCalendarOpenParam = (syncWhen: () => boolean) => {
+  const {breakpoint} = useTheSlopeDesignSystem()
+
+  return useQueryParam<boolean>('cal', {
+    serialize: (open) => open ? 'open' : 'closed',
+    deserialize: (s) => s === 'open' ? true : s === 'closed' ? false : null,
+    defaultValue: () => breakpoint.isMd.value ?? false,
+    syncWhen: () => syncWhen() && breakpoint.measured.value
+  })
+}
+
+/**
  * useBookingView - Navigation and date range logic for booking calendars
  *
  * Curried composable: caller provides date/view state (from useQueryParam),

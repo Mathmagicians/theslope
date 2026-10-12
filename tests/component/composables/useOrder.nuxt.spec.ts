@@ -32,6 +32,26 @@ const createTestOrder = (overrides: {
   })
 }
 
+describe('useOrder spending figures', () => {
+    const {spendingTotals, spendingLeft, spendingAwaitsTickets} = useOrder()
+
+    it('sums the allowance and the spending over rows', () => {
+        expect(spendingTotals([{budgetGross: 178100, spentGross: 192500}, {budgetGross: 189000, spentGross: 0}])).toEqual({budgetGross: 367100, spentGross: 192500})
+        expect(spendingTotals([])).toEqual({budgetGross: 0, spentGross: 0})
+    })
+
+    it('reads what is left as the allowance less the spending, below zero included', () => {
+        expect(spendingLeft({budgetGross: 178100, spentGross: 163800})).toBe(14300)
+        expect(spendingLeft({budgetGross: 178100, spentGross: 192500})).toBe(-14400)
+    })
+
+    it('waits for tickets while there is no allowance, whatever was spent', () => {
+        expect(spendingAwaitsTickets({budgetGross: 0, spentGross: 0})).toBe(true)
+        expect(spendingAwaitsTickets({budgetGross: 0, spentGross: 500})).toBe(true)
+        expect(spendingAwaitsTickets({budgetGross: 1, spentGross: 0})).toBe(false)
+    })
+})
+
 describe('useOrder', () => {
   const { calculateBudget, getActiveOrders, getReleasedOrders, getPortionsForTicketPrice, requiresChair, convertVat, formatGuestLabel } = useOrder()
 

@@ -58,6 +58,8 @@ const clickAdd = async (wrapper: Wrapper) => {
     await flushPromises()
     await nextTick()
 }
+// The lines are the table's plain body rows; the sum rows carry test ids
+const lineRows = (wrapper: Wrapper) => wrapper.findAll('tbody tr').filter(tr => tr.attributes('data-testid') === undefined && !tr.text().includes('Madbestilling mangler'))
 const hintRow = (wrapper: Wrapper, label: string) => findAllByTestId(wrapper, 'expense-hint-row').find(row => row.text().startsWith(label))
 
 describe('ExpenseLines', () => {
@@ -69,9 +71,9 @@ describe('ExpenseLines', () => {
             expect(findByTestId(wrapper, 'expense-total').text()).toContain(formatPrice(exOf(spent)))
             expect(findByTestId(wrapper, 'expense-total').text()).toContain(`/ ${formatPrice(spent)} kr`)
             expect(findByTestId(wrapper, 'expense-row').text()).toContain('ex / inkl. moms')
-            expect(findAllByTestId(wrapper, 'expense-line')).toHaveLength(0)
+            expect(lineRows(wrapper)).toHaveLength(0)
             expect(findByTestId(wrapper, 'expense-form').exists()).toBe(false)
-            expect(findByTestId(wrapper, 'expense-hint').exists()).toBe(false)
+            expect(findByTestId(wrapper, 'expense-table').exists()).toBe(false)
         })
 
         it('GIVEN no lines WHEN rendering THEN the row carries the empty text instead of a total', async () => {
@@ -110,11 +112,11 @@ describe('ExpenseLines', () => {
             await open(wrapper)
             const html = wrapper.html()
             const form = html.indexOf('data-testid="expense-form"')
-            const line = html.indexOf('data-testid="expense-line"')
-            const hint = html.indexOf('data-testid="expense-hint"')
+            const table = html.indexOf('data-testid="expense-table"')
+            const sums = html.indexOf('data-testid="expense-hint-row"')
             expect(form).toBeGreaterThan(-1)
-            expect(line).toBeGreaterThan(form)
-            expect(hint).toBeGreaterThan(line)
+            expect(table).toBeGreaterThan(form)
+            expect(sums).toBeGreaterThan(table)
         })
 
         it('GIVEN a budget WHEN open THEN the hint reads Rådighedsbeløb, Brugt and Tilbage as the difference with its icon', async () => {
@@ -173,7 +175,7 @@ describe('ExpenseLines', () => {
         it('GIVEN lines WHEN open THEN every line shows its date, bestiller and both units in entry order, with slet', async () => {
             const wrapper = await mount({editable: true})
             await open(wrapper)
-            const rows = findAllByTestId(wrapper, 'expense-line')
+            const rows = lineRows(wrapper)
             expect(rows).toHaveLength(2)
             lines().forEach((line, index) => {
                 expect(rows[index]!.text()).toContain(formatDate(line.createdAt, 'dd/MM'))
@@ -184,10 +186,11 @@ describe('ExpenseLines', () => {
             expect(findAllByTestId(wrapper, 'expense-remove')).toHaveLength(2)
         })
 
-        it('GIVEN no lines WHEN open THEN no header row shows and the form is ready', async () => {
+        it('GIVEN no lines WHEN open THEN the table says so under its headers and the form is ready', async () => {
             const wrapper = await mount({editable: true, expenses: []})
             await open(wrapper)
-            expect(wrapper.text()).not.toContain('Bestiller')
+            expect(findByTestId(wrapper, 'expense-table').text()).toContain('Madbestilling mangler')
+            expect(lineRows(wrapper)).toHaveLength(0)
             expect(findByTestId(wrapper, 'expense-form').exists()).toBe(true)
         })
     })

@@ -37,6 +37,8 @@ export interface FormattedOrder {
   isClaimed: boolean
 }
 
+export type SpendingFigures = {budgetGross: number, spentGross: number}
+
 export const useOrder = () => {
   // Import enum schemas from validation layer (ADR-001)
   const {OrderStateSchema, TicketTypeSchema} = useBookingValidation()
@@ -311,6 +313,24 @@ export const useOrder = () => {
     }
   }
 
+  /**
+   * The spending figures of a dinner or a run of dinners, gross øre: the allowance and what was spent. A sum over rows,
+   * what is left, and whether the figure still waits for tickets (no allowance yet) all come from here; components bind
+   */
+  /** A typed kroner amount as gross øre: an ex moms amount gains the VAT, an inkl. moms amount is the figure itself */
+  const typedKrToGrossOre = (amountKr: number, exVat: boolean, vatPercent: number = DEFAULT_VAT_PERCENT): number =>
+    exVat ? convertVat(Math.round(amountKr * 100), vatPercent, false) : Math.round(amountKr * 100)
+  /** The other unit of a typed kroner amount, for the hint beside the field */
+  const typedKrOtherUnitOre = (amountKr: number, exVat: boolean, vatPercent: number = DEFAULT_VAT_PERCENT): number =>
+    exVat ? typedKrToGrossOre(amountKr, true, vatPercent) : convertVat(Math.round(amountKr * 100), vatPercent, true)
+
+  const spendingTotals = (rows: SpendingFigures[]): SpendingFigures => rows.reduce(
+    (sum, row) => ({budgetGross: sum.budgetGross + row.budgetGross, spentGross: sum.spentGross + row.spentGross}),
+    {budgetGross: 0, spentGross: 0}
+  )
+  const spendingLeft = (figures: SpendingFigures): number => figures.budgetGross - figures.spentGross
+  const spendingAwaitsTickets = (figures: SpendingFigures): boolean => figures.budgetGross === 0
+
   return {
     // Order display formatting
     orderStateConfig,
@@ -333,6 +353,11 @@ export const useOrder = () => {
 
     // Budget & VAT
     calculateBudget,
+    spendingTotals,
+    spendingLeft,
+    spendingAwaitsTickets,
+    typedKrToGrossOre,
+    typedKrOtherUnitOre,
     convertVat
   }
 }

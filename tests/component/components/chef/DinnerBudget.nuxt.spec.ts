@@ -9,7 +9,7 @@ import {useOrder} from '~/composables/useOrder'
 import {useTicket} from '~/composables/useTicket'
 import {useBookingValidation, type OrderDetail, type OrderState, type TicketType} from '~/composables/useBookingValidation'
 import type {CookingRoundRow} from '~/composables/useBookingUi'
-import {findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {findByTestId, findAllByTestId, clickByTestId} from '~~/tests/component/testHelpers'
 
 /**
  * DinnerBudget: the three boxes in both units, the RÅDIGHEDSBELØB box with start, Brugt and Tilbage, and under the
@@ -93,11 +93,14 @@ describe('DinnerBudget', () => {
         await wrapper.find('button[name="toggle-budget-details"]').trigger('click')
         await wrapper.vm.$nextTick()
 
-        const rows = findByTestId(wrapper, 'budget-ticket-table').findAll('tbody tr')
+        const rows = findByTestId(wrapper, 'budget-ticket-table').findAll('tbody tr').filter(tr => tr.attributes('data-testid') === undefined && !tr.text().includes('Køkkenbidrag'))
         expect(rows.map(row => row.find('td').text())).toEqual([ticketTypeConfig.ADULT.label, ticketTypeConfig.CHILD.label])
         expect(findByTestId(wrapper, 'budget-summary-left').exists()).toBe(false)
         expect(findByTestId(wrapper, 'budget-summary-available').exists()).toBe(true)
-        expect(findByTestId(wrapper, 'cooking-round').text()).toContain('denne')
+        expect(findAllByTestId(wrapper, 'cooking-round')).toHaveLength(2)
+        expect(findAllByTestId(wrapper, 'cooking-round')[0]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(true)
+        // The one line of this dinner follows its row as a receipt sub-row
+        expect(findAllByTestId(wrapper, 'cooking-round')[0]!.text()).toContain(`/ ${formatPrice(4000)} kr`)
         expect(findByTestId(wrapper, 'ticket-changes').exists()).toBe(true)
         expect(findByTestId(wrapper, 'cooking-round').exists()).toBe(true)
         // The dinner's figures, then the team's, then the ticket changes last
@@ -116,7 +119,7 @@ describe('DinnerBudget', () => {
         const wrapper = await mount({roundRows: [round[0]!], roundWords: null})
         await wrapper.find('button[name="toggle-budget-details"]').trigger('click')
         await wrapper.vm.$nextTick()
-        expect(findByTestId(wrapper, 'cooking-round').exists()).toBe(true)
+        expect(findAllByTestId(wrapper, 'cooking-round')).toHaveLength(1)
         expect(findByTestId(wrapper, 'cooking-round-heading').exists()).toBe(false)
         expect(findByTestId(wrapper, 'cooking-round-total').exists()).toBe(false)
     })

@@ -63,7 +63,7 @@ const emit = defineEmits<{
 
 const planStore = usePlanStore()
 const {getSeasonStatus, canSeasonBeActive} = useSeason()
-const {BUTTONS, COLOR, ICONS, SIZES, TYPOGRAPHY, ALERTS} = useTheSlopeDesignSystem()
+const {BUTTONS, COLOR, ICONS, SIZES, TYPOGRAPHY, ALERTS, STATUS_GLYPHS} = useTheSlopeDesignSystem()
 
 // Reactively get season from store - updates when store changes
 const season = computed(() => {
@@ -84,14 +84,14 @@ const status = computed(() => {
 const getStatusEmoji = (status: string): string => {
   switch (status) {
     case SEASON_STATUS.ACTIVE:
-      return '🟢'  // Solid green circle
+      return STATUS_GLYPHS.active
     case SEASON_STATUS.FUTURE:
-      return '🌱'  // Green seedling (no green outline emoji exists)
+      return STATUS_GLYPHS.future
     case SEASON_STATUS.CURRENT:
-      return '🟡'  // Solid yellow circle
+      return STATUS_GLYPHS.current
     case SEASON_STATUS.PAST:
     default:
-      return '⚪'  // Grey circle
+      return STATUS_GLYPHS.past
   }
 }
 

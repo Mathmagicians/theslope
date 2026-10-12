@@ -46,7 +46,7 @@ const emit = defineEmits<{
 
 const {formatPrice, ticketTypeConfig} = useTicket()
 const {formatOrder} = useOrder()
-const {TYPOGRAPHY, ICONS, SIZES, COMPONENTS, COLOR, NOISE} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, SIZES, COMPONENTS, NOISE, BUTTONS} = useTheSlopeDesignSystem()
 const {OrderStateSchema} = useBookingValidation()
 const OrderState = OrderStateSchema.enum
 
@@ -58,7 +58,7 @@ const orderId = computed(() => {
     }
     return props.item.id  // orders - use own id for history
 })
-const isHistoryExpanded = computed(() => orderId.value && props.historyOrderId === orderId.value)
+const isHistoryExpanded = computed(() => orderId.value !== null && props.historyOrderId === orderId.value)
 const ticketLabel = computed(() => props.item.ticketType ? ticketTypeConfig[props.item.ticketType as keyof typeof ticketTypeConfig]?.label : 'Ukendt')
 const ticketColor = computed(() => props.item.ticketType ? ticketTypeConfig[props.item.ticketType as keyof typeof ticketTypeConfig]?.color : 'neutral')
 // DinnerModeSelector accepts string | undefined, handles type validation internally
@@ -88,11 +88,7 @@ const formatted = computed(() => {
       <div>
         <UButton
             v-if="orderId"
-            :color="COLOR.neutral"
-            :variant="NOISE.quiet"
-            :icon="isHistoryExpanded ? ICONS.chevronUp : ICONS.clipboard"
-            square
-            :size="SIZES.small"
+            v-bind="BUTTONS.history(isHistoryExpanded)"
             aria-label="Vis ordrehistorik"
             @click="emit('toggle-history', orderId)"
         />

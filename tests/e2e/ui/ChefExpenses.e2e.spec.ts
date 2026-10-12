@@ -66,19 +66,22 @@ test.describe('Chef expense lines', () => {
         await page.locator('input[name="expense-amount-input"]').fill('1012')
         await page.getByTestId('expense-add').click()
 
-        const line = pane.getByTestId('expense-line')
-        await expect(line).toHaveCount(1)
-        // Typed ex moms, stored gross, read in both units; Brugt in the hint follows
-        await expect(line.first().getByTestId('vat-amount-ex')).toHaveText(formatPrice(101200))
-        await expect(line.first().getByTestId('vat-amount-incl')).toHaveText(`/ ${formatPrice(126500)} kr`)
-        await expect(pane.getByTestId('expense-hint')).toContainText(`/ ${formatPrice(126500)} kr`)
+        // The line is the table's one plain row; its slet button counts it
+        await expect(pane.getByTestId('expense-remove')).toHaveCount(1)
+        const line = pane.getByTestId('expense-table').locator('tbody tr').first()
+        // Typed ex moms, stored gross, read in both units; Brugt in the sums follows
+        await expect(line.getByTestId('vat-amount-ex')).toHaveText(formatPrice(101200))
+        await expect(line.getByTestId('vat-amount-incl')).toHaveText(`/ ${formatPrice(126500)} kr`)
+        // This dinner's Brugt is the first of the two sum blocks
+        await expect(pane.getByTestId('expense-hint-row').filter({hasText: 'Brugt'}).first()).toContainText(`/ ${formatPrice(126500)} kr`)
 
         const stored = await ExpenseFactory.list(memberContext, dinnerEventId)
         expenseIds.push(...stored.map(expense => expense.id))
         expect(stored, `the API lines of dinner ${dinnerEventId}`).toHaveLength(1)
 
-        await line.first().getByTestId('expense-remove').click()
-        await expect(pane.getByTestId('expense-line')).toHaveCount(0)
+        await pane.getByTestId('expense-remove').first().click()
+        await expect(pane.getByTestId('expense-remove')).toHaveCount(0)
+        await expect(pane.getByTestId('expense-table')).toContainText('Madbestilling mangler')
         await pane.getByTestId('expense-back').click()
         await expect(pane.getByTestId('expense-empty')).toHaveText('Madbestilling mangler')
         expect(await ExpenseFactory.list(memberContext, dinnerEventId)).toEqual([])

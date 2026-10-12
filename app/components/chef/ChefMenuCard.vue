@@ -81,7 +81,7 @@
  */
 import type { DinnerEventDetail, ChefMenuForm } from '~/composables/useBookingValidation'
 import type { ExpenseCreate } from '~/composables/useBillingValidation'
-import type { CookingRoundRow } from '~/composables/useBookingUi'
+import {cookingRoundWords, type CookingRoundRow} from '~/composables/useBookingUi'
 import type { AllergyTypeDisplay } from '~/composables/useAllergyValidation'
 import type { SeasonDeadlines } from '~/composables/useSeason'
 import type { NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
@@ -103,7 +103,6 @@ interface Props {
   calendarOpen?: boolean        // Calendar accordion state
   navColor?: NuxtUIColor        // Navigation button color
   roundRows?: CookingRoundRow[] // The team's cooking round around this dinner (chef page)
-  roundLabel?: string           // "Madhold 2, 12/04–14/04"
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -119,7 +118,6 @@ const props = withDefaults(defineProps<Props>(), {
   calendarOpen: false,
   navColor: undefined,
   roundRows: () => [],
-  roundLabel: ''
 })
 
 const emit = defineEmits<{
@@ -160,14 +158,25 @@ const { getStepConfig, canCancelDinner } = useBooking()
 const { formatNameWithInitials } = useHousehold()
 
 // The dinner's money: the expense lines' helping numbers read it, the Budget pane shows it
-const { calculateBudget } = useOrder()
+const {calculateBudget, spendingTotals} = useOrder()
 const kitchenConfig = useAppConfig().theslope?.kitchen
 const budget = computed(() => calculateBudget(props.dinnerEvent.tickets ?? [], kitchenConfig?.baseRatePercent ?? 5, kitchenConfig?.vatPercent ?? 25))
 // The round's figure matters when the team cooks several days in a row
-const leftRound = computed(() => props.roundRows.length > 1
-  ? {label: props.roundLabel, gross: props.roundRows.reduce((sum, row) => sum + row.budgetGross - row.spentGross, 0)}
+// The round's words, built once for the Madbestilling hint and the Budget pane's round table
+const {getTeamShortName} = useCookingTeam()
+const roundWords = computed(() => {
+  const first = props.roundRows[0]
+  const last = props.roundRows.at(-1)
+  if (props.roundRows.length <= 1 || !first || !last || !props.dinnerEvent.cookingTeam) return null
+  return cookingRoundWords(getTeamShortName(props.dinnerEvent.cookingTeam.name), first.date, last.date)
+})
+const round = computed(() => roundWords.value
+  ? {
+      label: roundWords.value.heading,
+      ...spendingTotals(props.roundRows)
+    }
   : null)
-const menuDeadline = computed(() => props.deadlines.getMenuDeadlineTime(props.dinnerEvent.date))
+const bookingDeadline = computed(() => props.deadlines.getBookingDeadlineTime(props.dinnerEvent.date))
 
 // Time logic from useSeason (ADR-001: business logic in composables)
 const { getDefaultDinnerStartTime, getDinnerTimeRange, getDeadlineUrgency } = useSeason()
@@ -670,7 +679,7 @@ const handleCardClick = () => {
           :editable="isEditing"
           :pending="isUpdating"
           :budget-gross="budget.availableBudget"
-          :left-round="leftRound"
+          :round="round"
           @add="emit('add-expense', $event)"
           @remove="emit('remove-expense', $event)"
         />
@@ -699,9 +708,9 @@ const handleCardClick = () => {
             :orders="dinnerEvent.tickets ?? []"
             :expenses="dinnerEvent.expenses"
             :dinner-event-id="dinnerEvent.id"
-            :menu-deadline="menuDeadline"
+            :booking-deadline="bookingDeadline"
             :round-rows="roundRows"
-            :round-label="roundLabel"
+            :round-words="roundWords"
             mode="full"
           />
         </div>

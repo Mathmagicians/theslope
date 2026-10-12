@@ -1,5 +1,8 @@
+import {computed} from 'vue'
 import type {WeekDay} from '~/types/dateTypes'
 import type {AlertProps, AvatarProps, ButtonProps, BadgeProps, ChipProps} from '@nuxt/ui'
+import {SEASON_STATUS} from '~/composables/useSeasonValidation'
+import type {SeasonStatusValue} from '~/utils/season'
 
 // NuxtUI size types extracted from component props
 export type NuxtUISize = NonNullable<ButtonProps['size']>
@@ -171,6 +174,9 @@ export const BG = {
     sky: {
         700: 'bg-sky-700'       // Rainbow stop 7
     },
+    green: {
+        600: 'bg-green-600'     // Season status mark: active; the diff legend's new fill
+    },
     gray: {
         50: 'bg-gray-50',
         100: 'bg-gray-100',
@@ -258,6 +264,9 @@ export const TEXT = {
         400: 'text-ocean-400',    // Chef calendar - countdown timer
         600: 'text-ocean-600',    // Chef calendar - rings
         800: 'text-ocean-800'     // Chef calendar - future cookings
+    },
+    green: {
+        500: 'text-green-500'    // The sprout on the upcoming season's mark, the holiday ring's green
     },
     gray: {
         400: 'text-gray-400',
@@ -898,13 +907,109 @@ export const COMPONENTS = {
         plainDay: 'text-sm'
     },
 
-    /** AdminTeams around `masterDetail`: the dock's stack, the detail header row, the md pane and the overview calendar */
+    /** AdminTeams: the card, the header's season selector, the create face, and around `masterDetail` the dock's stack, the detail header row, the md pane and the overview calendar */
     adminTeams: {
         dockStack: 'space-y-2',
         detailHeaderRow: 'flex items-center justify-between gap-2',
         pane: 'md:w-2/3 space-y-4 self-start',
-        overviewCalendar: 'w-full md:w-2/3 self-start'
+        overviewCalendar: 'w-full md:w-2/3 self-start',
+        card: 'w-full px-0',
+        seasonSelector: 'w-full md:w-auto',
+        // The create face: the team count row over the preview grid (LAYOUTS.gridTwoCol), and its footer
+        createFace: 'px-4 pb-4 space-y-4',
+        countRow: 'flex items-center gap-4',
+        countLabel: 'text-lg font-bold',
+        countInput: 'w-20 px-3 py-2 border rounded',
+        previewTeam: 'p-4 border rounded',
+        previewName: 'font-semibold',
+        createFooter: 'flex gap-2',
+        // The view and edit face: the master column beside the detail region
+        viewFace: 'px-4 pb-4 space-y-6',
+        masterDetailRow: 'flex flex-col md:flex-row gap-6 md:gap-3',
+        master: 'w-full md:w-1/3'
     },
+
+    /** PageFooter: the centre row, and the footer's icon buttons inked like its text */
+    pageFooter: {
+        row: 'flex flex-col md:flex-row items-center justify-between gap-4 py-4',
+        iconButtonUi: {leadingIcon: TYPOGRAPHY.footerText}
+    },
+
+    /** SeasonSelector: the select keeps room for the longest season name */
+    seasonSelector: {select: 'min-w-48'},
+    // SeasonStatusMark: the disc the size of the text and the icon inside it
+    seasonStatus: {disc: 'inline-flex size-3 shrink-0 items-center justify-center rounded-full align-middle', discIcon: 'size-2.5'},
+
+    /**
+     * HouseholdCard: the preferences card's title and stack, the row toggle (the power row's toggle plays while closed),
+     * the name cell with the ticket under it on a phone, the expanded editor and its actions, the save icon, and the hint
+     */
+    householdCard: {
+        title: TYPOGRAPHY.cardTitle,
+        stack: 'space-y-2 md:space-y-4',
+        expandToggle: 'transition-all duration-700',
+        expandToggleOpen: 'rotate-180',
+        powerToggleIdle: 'hover:animate-pulse hover:scale-125 hover:rotate-45 hover:text-warning active:scale-175 active:rotate-[720deg] active:text-error',
+        ticketDesktop: 'hidden md:block',
+        nameCell: 'flex flex-col gap-0.5',
+        ticketPhone: 'md:hidden w-fit',
+        editorField: 'py-2',
+        editorStack: 'flex flex-col gap-3',
+        actionsRow: 'flex justify-start md:justify-end',
+        saveButton: 'group',
+        saveIcon: 'transition-all duration-700',
+        saveIconSaving: 'animate-spin',
+        saveIconIdle: 'group-hover:animate-pulse group-hover:scale-125 group-hover:rotate-12 group-active:rotate-[360deg]',
+        hintList: 'flex flex-col gap-1',
+        hintLine: 'flex items-center gap-1',
+        hintModes: 'flex items-center gap-1 mt-1',
+        hintIcon: 'size-4'
+    },
+
+    /** HouseholdBookings: the calendar column beside the booking panel from md, stacked on a phone */
+    householdBookings: {
+        layout: 'flex flex-col md:flex-row gap-6',
+        calendar: 'md:basis-1/3',
+        panel: 'flex-1',
+        panelHeader: 'flex items-center justify-between mb-4',
+        panelTitle: 'text-sm font-semibold'
+    },
+
+    /**
+     * AdminSystem: the job cards (coloured header, icon, title, description, stats or skeletons) and the panels'
+     * headers, the job history table and its expanded details
+     */
+    adminSystem: {
+        root: 'space-y-6',
+        header: 'flex items-center gap-3',
+        jobCard: {ui: {root: 'h-full flex flex-col', body: 'flex-1 flex flex-col'}},
+        jobHeader: 'rounded-t-lg -mx-4 -mt-4 px-4 py-6 md:py-8 flex flex-col items-center justify-center gap-2',
+        jobIcon: 'text-5xl md:text-6xl opacity-80',
+        jobIconRunning: 'animate-spin',
+        jobTitle: `${TYPOGRAPHY.cardTitle} mb-2`,
+        // A fixed height keeps the cards' footers level
+        jobDescription: `${TYPOGRAPHY.bodyTextMuted} mb-4 min-h-[3rem]`,
+        jobBody: 'flex-1',
+        stats: 'space-y-1',
+        stat: 'flex items-center gap-2',
+        statIcon: 'text-sm text-success-700 dark:text-success-400',
+        skeletons: 'space-y-2',
+        skeletonRow: 'flex items-center gap-2',
+        skeletonDot: 'h-4 w-4 rounded-full',
+        skeletonLong: 'h-4 w-32',
+        skeletonShort: 'h-4 w-24',
+        panelHeader: 'flex items-center gap-2',
+        panelIcon: 'text-lg',
+        panelTitle: 'font-semibold',
+        historyTable: 'w-full',
+        statusBadge: 'gap-1',
+        statusIcon: 'text-xs',
+        details: `p-4 space-y-1 ${BG.panel}`,
+        detailLabel: 'font-semibold'
+    },
+
+    /** /dinner with no season: the empty state's frame */
+    dinnerPage: {emptyFrame: `p-4 md:p-8 ${BACKGROUNDS.card}`},
 
     /** /chef master header: the team selector above the team's role status */
     chefTeamStatus: 'space-y-1 md:space-y-4',
@@ -1010,7 +1115,26 @@ export const COMPONENTS = {
         // A guest order's name cell: the add-guest row's disc, label and gap, so both rows share their x
         guestOf: 'flex items-center gap-3',
         guestOfLabel: `${TYPOGRAPHY.bodyTextMedium} uppercase`,
-        allergyLine: 'flex flex-wrap items-center gap-2'
+        allergyLine: 'flex flex-wrap items-center gap-2',
+        root: 'space-y-4',
+        // Deadline badges left (stacked on a phone), the day bill right
+        statusRow: 'flex justify-between items-start gap-4 md:gap-8',
+        deadlineBadges: 'flex flex-col md:flex-row gap-2 md:gap-8',
+        dayBill: 'border-b-2 border-default px-2 pb-1',
+        releasedAlerts: 'space-y-2',
+        // The row toggle turns over when open; the power row's toggle pulses while closed
+        expandToggle: 'transition-all duration-300',
+        expandToggleOpen: 'rotate-180',
+        powerToggleIdle: 'hover:animate-pulse hover:text-warning',
+        nameCell: 'py-1',
+        powerName: 'flex flex-col gap-0.5',
+        // The expanded row's edit card: wide content scrolls inside it
+        editCard: {class: 'max-w-full overflow-x-auto', ui: {body: 'p-4 flex flex-col gap-4', footer: 'p-4', header: 'p-4'}},
+        editTitle: 'text-md font-semibold text-balance',
+        editDeadlines: 'flex flex-col md:flex-row md:justify-between gap-2',
+        history: 'mt-2',
+        editFooter: 'flex flex-col gap-2',
+        legend: 'mt-4'
     },
 
     // Table interactions - row selection and click patterns
@@ -1018,6 +1142,16 @@ export const COMPONENTS = {
         selectedRow: 'bg-secondary-100 dark:bg-secondary-900',
         clickableCell: 'cursor-pointer',
         selectedCell: 'bg-secondary-50 dark:bg-secondary-950',
+        /** An amount column: header and cells right-aligned (a column's `meta`) */
+        amountColumn: {class: {th: 'text-right', td: 'text-right'}},
+        /** The total row a table adds in its body-bottom slot */
+        totalRow: `border-t ${TYPOGRAPHY.bodyTextMedium}`,
+        /** The arrow before the name of the dinner on view */
+        currentMarker: 'inline-block size-4 mr-1 align-middle',
+        /** A receipt sub-row under a dinner: indented, in the muted ink */
+        receiptLabel: `pl-4 ${TEXT.muted}`,
+        /** A spacer row between two groups of bottom rows */
+        spacerCell: 'h-3',
         /**
          * THE table cell styling (ADR-018): every UTable binds one of these three
          * (`designSystemUsage.unit.spec.ts` rejects a table without).
@@ -1031,6 +1165,8 @@ export const COMPONENTS = {
         householdAllergiesUi: {...TABLE_DENSE_UI, tr: BG.expandedRow},
         /** The booking form: the dense cells, the power row first in the warning tint, an expanded row tinted */
         bookingUi: {...TABLE_DENSE_UI, tbody: '[&_tr:first-child]:bg-warning/10', tr: BG.expandedRow},
+        /** The household preferences: the dense cells, the power row first in the info tint, an expanded row tinted */
+        householdPreferencesUi: {...TABLE_DENSE_UI, tbody: '[&_tr:first-child]:bg-info/10', tr: BG.expandedRow},
         /** The chef agenda: one full-width card column in a fixed layout, no header rule */
         agendaUi: {th: 'border-b-0', td: 'py-1 md:py-2 max-w-0 w-full', base: 'table-fixed w-full'},
         /** The allergy catalog in its narrow master column: tighter horizontal cell padding */
@@ -1164,8 +1300,8 @@ export const COMPONENTS = {
         container: 'relative overflow-hidden',
         colors: {
             cancel: 'bg-red-600',
-            past: 'bg-gray-500',
-            new: 'bg-green-600'
+            past: BG.gray[500],
+            new: BG.green[600]
         }
     },
 
@@ -1315,28 +1451,20 @@ export const COMPONENTS = {
         boxes: 'grid grid-cols-1 md:grid-cols-3 gap-3',
         boxUi: {body: 'p-3'},
         box: 'text-center',
-        boxLabel: `flex items-center justify-center gap-1 ${TYPOGRAPHY.caption} opacity-60 mb-1`,
+        // The glyph keeps its full ink; only the words are muted
+        boxLabel: `flex items-center justify-center gap-1 ${TYPOGRAPHY.caption} mb-1`,
+        boxLabelText: 'opacity-60',
+        boxGlyph: 'size-4',
+        // A fact under the figure the chef reads (the kuverter), louder than the unit words
+        boxFact: TYPOGRAPHY.bodyTextSmall,
         boxAmount: `${TYPOGRAPHY.cardTitle} font-bold text-success-700 dark:text-success-400`,
         boxAmountLarge: `${TYPOGRAPHY.cardTitle} font-bold text-xl text-success-700 dark:text-success-400`,
         boxSecondary: 'mt-1',
         boxSecondaryAmount: `${TYPOGRAPHY.bodyTextSmall} text-success-700 dark:text-success-400`,
         unit: `${TYPOGRAPHY.finePrint} opacity-60`,
-        details: 'border rounded-lg overflow-hidden',
-        tableScroll: 'overflow-x-auto',
-        table: 'w-full',
-        tableHead: `border-b ${BG.budgetHead}`,
-        th: `px-4 py-2 text-left ${TYPOGRAPHY.caption} opacity-60`,
-        thRight: `px-4 py-2 text-right ${TYPOGRAPHY.caption} opacity-60`,
-        tr: 'border-b last:border-b-0',
-        td: `px-4 py-2 ${TYPOGRAPHY.bodyTextSmall}`,
-        tdRight: `px-4 py-2 text-right ${TYPOGRAPHY.bodyTextSmall}`,
-        tdTotal: `px-4 py-2 text-right ${TYPOGRAPHY.bodyTextMedium}`,
-        tdEmpty: `px-4 py-4 text-center italic ${TYPOGRAPHY.bodyTextMuted}`,
-        summary: 'border-t p-4 space-y-2',
-        summaryRow: 'flex justify-between',
+        // The unfolded pane runs on under the boxes; its sections draw their own rules
+        details: 'mt-2',
         summaryDeduction: `${TYPOGRAPHY.bodyTextMedium} opacity-60`,
-        summaryTotalRow: `flex justify-between pt-2 border-t ${TYPOGRAPHY.bodyTextMedium} font-semibold`,
-        summaryTotal: 'text-success-700 dark:text-success-400',
         boxUnit: `${TYPOGRAPHY.finePrint} opacity-60`,
         boxLine: `flex items-center justify-between gap-2 whitespace-nowrap ${TYPOGRAPHY.bodyTextSmall}`,
         section: 'border-t p-4 space-y-2',
@@ -1358,6 +1486,7 @@ export const COMPONENTS = {
         icon: 'size-4',
         iconOk: 'text-success-700 dark:text-success-400',
         iconOver: 'text-error-700 dark:text-error-400',
+        iconWaiting: TEXT.muted,
         unitHeader: `${TYPOGRAPHY.finePrint} opacity-60`
     },
 
@@ -1367,40 +1496,15 @@ export const COMPONENTS = {
      * and every remove button share a column. Folded, the row binds cardSection
      */
     expenseLines: {
-        // The hint rows share the lines' grid, the label over the date and bestiller columns, so kr lines up with the lines
-        hint: 'space-y-0.5',
-        hintLabel: `col-span-2 ${TYPOGRAPHY.bodyTextSmall}`,
         form: 'space-y-1',
         formRow: 'flex flex-col md:flex-row md:items-start gap-2',
         amountField: 'w-full md:w-32',
         vatField: 'w-full md:w-36',
         control: 'w-full',
         alternative: `${TYPOGRAPHY.finePrint} opacity-60`,
-        list: 'divide-y',
-        row: 'grid grid-cols-[3rem_1fr_auto_2.25rem] items-center gap-2 py-1',
-        head: `${TYPOGRAPHY.caption} opacity-60`,
-        headRight: `${TYPOGRAPHY.caption} opacity-60 text-right`,
-        date: `${TYPOGRAPHY.finePrint} opacity-60`,
         // The name wraps on a phone, where the amount columns leave it little room, and truncates beside them on a desktop
         payer: `${TYPOGRAPHY.bodyTextSmall} break-words md:truncate`,
-        amount: 'justify-self-end',
-        removeSlot: 'w-9',
         empty: TEXT.muted
-    },
-
-    /**
-     * The team's cooking round (CookingRoundSpending): one row per consecutive dinner with its allowance, spending and
-     * what is left, the current dinner marked, a total row
-     */
-    cookingRound: {
-        table: 'w-full',
-        th: `px-2 py-1 text-left ${TYPOGRAPHY.caption} opacity-60`,
-        thRight: `px-2 py-1 text-right ${TYPOGRAPHY.caption} opacity-60`,
-        tr: 'border-b last:border-b-0',
-        td: `px-2 py-1 ${TYPOGRAPHY.bodyTextSmall}`,
-        tdRight: `px-2 py-1 text-right ${TYPOGRAPHY.bodyTextSmall}`,
-        current: 'font-semibold',
-        total: `border-t ${TYPOGRAPHY.bodyTextMedium}`
     },
 
     /**
@@ -1408,13 +1512,8 @@ export const COMPONENTS = {
      * from the menu deadline first and the rest behind one button
      */
     ticketChanges: {
-        toggleRow: 'flex items-center justify-between gap-2 py-1',
-        table: 'w-full',
-        th: `px-2 py-1 text-left ${TYPOGRAPHY.caption} opacity-60`,
-        thRight: `px-2 py-1 text-right ${TYPOGRAPHY.caption} opacity-60`,
-        tr: 'border-b last:border-b-0 align-top',
-        td: `px-2 py-1 ${TYPOGRAPHY.bodyTextSmall}`,
-        tdRight: `px-2 py-1 text-right ${TYPOGRAPHY.bodyTextSmall} whitespace-nowrap`,
+        // The history glyph leads the title, in its ink and size
+        title: 'inline-flex items-center gap-1',
         chips: 'inline-flex flex-wrap items-center gap-1',
         divider: `flex items-center gap-2 py-2 ${TYPOGRAPHY.finePrint} opacity-60`,
         dividerLine: 'flex-1 border-t',
@@ -1559,6 +1658,7 @@ export const ICONS = {
     settings: 'i-heroicons-cog-6-tooth',
     allergy: 'i-mdi-food-allergy-off-outline',
     economy: 'i-heroicons-currency-dollar',
+    home: 'i-heroicons-home',
     login: 'i-guidance-entry',
     logout: 'i-tdesign-wave-bye',
     moveIn: 'i-guidance-entry',
@@ -1625,6 +1725,8 @@ export const ICONS = {
     // Time & info
     clock: 'i-heroicons-clock',
     ellipsisCircle: 'i-heroicons-ellipsis-horizontal-circle',
+    // The timeline badge's glyph for a moment still ahead; a figure that waits for tickets wears it too
+    waiting: 'i-heroicons-ellipsis-horizontal-circle',
     info: 'i-heroicons-information-circle',
 
     // Status/state
@@ -1636,6 +1738,19 @@ export const ICONS = {
     share: 'i-heroicons-share',
     download: 'i-heroicons-arrow-down-tray',
     externalLink: 'i-heroicons-arrow-top-right-on-square',
+
+    // Screen size
+    desktopScreen: 'i-heroicons-computer-desktop',
+    phoneScreen: 'i-heroicons-device-phone-mobile',
+
+    // Season status in the season selector: active, current and future seasons take ICONS.calendar
+    seasonPast: 'i-heroicons-archive-box-solid',
+    sprout: 'i-mdi-sprout',
+
+
+    // Dinner modes named in the household preference hint
+    takeaway: 'i-heroicons-shopping-bag',
+    noDinner: 'i-heroicons-x-circle',
 
     // External links
     github: 'i-hugeicons-github-01',
@@ -1792,6 +1907,16 @@ export const createResponsiveSizes = (isMd: Ref<boolean | null>) => ({
         return isMd.value ? '3xl' : 'lg'
     },
 
+    // The season selector's USelect
+    get seasonSelect(): NuxtUISize {
+        return isMd.value ? 'lg' : 'sm'
+    },
+
+    // A card's action UFieldGroup (the household card's preference actions)
+    get cardFieldGroup(): NuxtUISize {
+        return isMd.value ? 'md' : 'sm'
+    },
+
     // Static sizes (for when you need non-responsive)
     xs: 'xs' as const,
     sm: 'sm' as const,
@@ -1810,10 +1935,18 @@ export const createResponsiveSizes = (isMd: Ref<boolean | null>) => ({
  * @param isMd - Responsive breakpoint ref
  * @returns Icon helpers
  */
-const createResponsiveIcons = (isMd: Ref<boolean | null>) => ({
+export const createResponsiveIcons = (isMd: Ref<boolean | null>) => ({
     // Arrow pointing to master panel: up on mobile (stacked), left on desktop (side-by-side)
     get arrowToMaster(): string {
         return isMd.value ? ICONS.arrowLeft : ICONS.arrowUp
+    },
+    // The footer's screen size indicator
+    get screen(): string {
+        return isMd.value ? ICONS.desktopScreen : ICONS.phoneScreen
+    },
+    // The toggle of an open master row turns toward its detail: right into the pane from md, up to fold the phone dock
+    get detailOpen(): string {
+        return isMd.value ? ICONS.chevronRight : ICONS.chevronUp
     }
 })
 
@@ -2338,6 +2471,48 @@ export const createColumnVisibility = (isMd: Ref<boolean | null>) =>
     (hiddenOnPhone: readonly string[], hiddenFromMd: readonly string[] = []): Record<string, boolean> =>
         Object.fromEntries((isMd.value ? hiddenFromMd : hiddenOnPhone).map(column => [column, false]))
 
+// A column whose header and cells render from md: a column carries it in its `meta`, which UTable reads
+const TABLE_COLUMN_FROM_MD = {class: {th: 'hidden md:table-cell', td: 'hidden md:table-cell'}}
+
+/**
+ * UTable column definitions whose header or cell depends on the breakpoint, spread after the column id.
+ * An undefined header renders an empty header cell.
+ * @example {id: 'name', ...TABLE_COLUMNS.bookingFormName}
+ */
+export const createTableColumns = (isMd: Ref<boolean | null>) => ({
+    // On a phone the booking form's name column carries each inhabitant's tickets inline
+    get bookingFormName(): {header: string} {
+        return {header: isMd.value ? 'Beboer' : 'Billetter'}
+    },
+    bookingFormTicket: {meta: TABLE_COLUMN_FROM_MD},
+    get householdMemberName(): {header: string | undefined} {
+        return {header: isMd.value ? 'Medlem' : undefined}
+    },
+    get householdTicketType(): {header: string | undefined, meta: typeof TABLE_COLUMN_FROM_MD} {
+        return {header: isMd.value ? 'Billet' : undefined, meta: TABLE_COLUMN_FROM_MD}
+    }
+})
+
+/**
+ * COMPONENTS.masterDetail with the mount point of the detail: the pane beside the master from md,
+ * the dock in the master row on a phone and until the layout has measured.
+ */
+export const createMasterDetail = (isMd: Ref<boolean | null>) => ({
+    ...COMPONENTS.masterDetail,
+    get detailAsPane(): boolean {
+        return isMd.value === true
+    }
+})
+
+/**
+ * The layout's breakpoint for behaviour that needs the ref itself (a watch, a URL parameter's default).
+ * `isMd` is null until the layout measures after mount; `measured` gates a default that reads it.
+ */
+export const createBreakpoint = (isMd: Ref<boolean | null>) => ({
+    isMd,
+    measured: computed(() => isMd.value !== null)
+})
+
 /**
  * The shared calendar day circle: responsive size + shape + the variant the surface adds
  * (CALENDAR.holiday, PLANNING_CALENDAR.day.generated, CHEF_CALENDAR.day.next, …).
@@ -2599,6 +2774,14 @@ export const getRandomEmptyMessage = (context: keyof typeof EMPTY_STATE_MESSAGES
     return messages[index]!
 }
 
+/** The season status marks: a disc per status; the upcoming one carries the sprout in the calendar's holiday green */
+export const SEASON_STATUS_GLYPHS: Record<SeasonStatusValue, {disc: string, icon?: string, iconClass?: string}> = {
+    [SEASON_STATUS.ACTIVE]: {disc: BG.green[600]},
+    [SEASON_STATUS.CURRENT]: {disc: BG.yellow[400]},
+    [SEASON_STATUS.FUTURE]: {disc: BG.allergyAvatar, icon: ICONS.sprout, iconClass: TEXT.green[500]},
+    [SEASON_STATUS.PAST]: {disc: BG.gray[500]}
+}
+
 export const useTheSlopeDesignSystem = () => {
     // Inject responsive breakpoint from layout
     const isMd = inject<Ref<boolean | null>>('isMd', ref(null))
@@ -2606,6 +2789,9 @@ export const useTheSlopeDesignSystem = () => {
     const columnVisibility = createColumnVisibility(isMd)
 
     return {
+        // The layout's breakpoint, for behaviour that needs the ref; a rendered value binds a responsive token
+        breakpoint: createBreakpoint(isMd),
+
         // For NuxtUI components
         COLOR,
         NOISE,
@@ -2637,13 +2823,14 @@ export const useTheSlopeDesignSystem = () => {
         getRainbowAccent,
         getCalendarCountBadge,
         ICONS,
+        SEASON_STATUS_GLYPHS,
         IMG,
 
         // Semantic design patterns (USE THESE!)
         TYPOGRAPHY,
         LAYOUTS,
         BACKGROUNDS,
-        COMPONENTS,
+        COMPONENTS: {...COMPONENTS, masterDetail: createMasterDetail(isMd)},
 
         // Responsive sizes
         SIZES: createResponsiveSizes(isMd),
@@ -2662,6 +2849,9 @@ export const useTheSlopeDesignSystem = () => {
 
         // Responsive icons
         RESPONSIVE_ICONS: createResponsiveIcons(isMd),
+
+        // UTable column definitions that follow the breakpoint
+        TABLE_COLUMNS: createTableColumns(isMd),
 
         // Responsive buttons (standardized button configs with sizing)
         BUTTONS: createResponsiveButtons(isMd),
