@@ -196,7 +196,7 @@ const configTreeItems = computed(() => objectToTreeItems(appConfig.theslope as R
 // ============================================================================
 
 const jobIconsMap = {
-  DAILY_MAINTENANCE: [ICONS.checkCircle, ICONS.ticket, ICONS.shoppingCart, ICONS.edit, ICONS.ticket],
+  DAILY_MAINTENANCE: [ICONS.checkCircle, ICONS.ticket, ICONS.shoppingCart, ICONS.waitlist, ICONS.edit, ICONS.ticket],
   MONTHLY_BILLING: [ICONS.calendar, ICONS.ticket, ICONS.shoppingCart, ICONS.economy],
   HEYNABO_IMPORT: [ICONS.household, ICONS.users, ICONS.user]
 } as const

@@ -3,6 +3,7 @@ import {useBookingValidation, type DailyMaintenanceResult} from '~/composables/u
 import {useHeynaboValidation, type HeynaboImportResponse} from '~/composables/useHeynaboValidation'
 import {useBillingValidation, type MonthlyBillingJobResult} from '~/composables/useBillingValidation'
 import {useBooking} from '~/composables/useBooking'
+import {formatDate} from '~/utils/date'
 
 /**
  * Business logic for maintenance jobs
@@ -145,12 +146,16 @@ export const useMaintenance = () => {
     /**
      * Format daily maintenance result as stats array for action cards
      */
+    /** The scaffold's compact symbols per dinner: the date and `-n` entries removed */
+    const formatClearedWaitlists = ({dinners}: DailyMaintenanceResult['clearWaitlist']): string =>
+        dinners.length > 0 ? dinners.map(d => `${formatDate(d.date, 'dd/MM')} -${d.cleared}`).join(', ') : '0'
+
     const formatDailyMaintenanceStats = (result: DailyMaintenanceResult): { label: string; value: string }[] => {
         const stats = [
             { label: 'Middage afholdt', value: `${result.consume.consumed}` },
             { label: 'Ordrer lukket', value: `${result.close.closed}` },
             { label: 'Transaktioner', value: `${result.transact.created}` },
-            { label: 'Ventelister ryddet', value: `${result.clearWaitlist.cleared}` },
+            { label: 'Ventelister', value: formatClearedWaitlists(result.clearWaitlist) },
             { label: 'Præferencer klippet', value: `${result.initPrefs.initialized}` }
         ]
         if (result.scaffold) {

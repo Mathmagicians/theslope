@@ -34,6 +34,12 @@ import {AppearanceSchema, DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} fro
 // ============================================================================
 
 /**
+ * Positive integer ID - single source of truth for entity ids (ADR-001), re-exported by useCoreValidation.
+ * Use IdSchema for required ids, IdSchema.nullable() for FK fields.
+ */
+export const IdSchema = z.number().int().positive()
+
+/**
  * User Fragment - Authentication, system access and own settings
  * Used by: useCoreValidation, useBookingValidation (bookedByUser)
  *
@@ -41,7 +47,7 @@ import {AppearanceSchema, DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} fro
  * `user.appearance.palette` without a fallback (ADR-010: the repository holds the JSON strings).
  */
 export const UserFragmentSchema = z.object({
-    id: z.number().int().positive(),
+    id: IdSchema,
     email: z.email(),
     phone: z.string().nullable().optional(),
     systemRoles: z.array(SystemRoleSchema).default([]),
@@ -54,10 +60,10 @@ export const UserFragmentSchema = z.object({
  * Used by: useCoreValidation, useHealthValidation, useBookingValidation, usePlanningValidation
  */
 export const InhabitantFragmentSchema = z.object({
-    id: z.number().int().positive(),
-    heynaboId: z.number().int().positive(),
-    userId: z.number().int().positive().nullable().optional(),
-    householdId: z.number().int().positive(),
+    id: IdSchema,
+    heynaboId: IdSchema,
+    userId: IdSchema.nullable().optional(),
+    householdId: IdSchema,
     name: z.string(),
     lastName: z.string(),
     pictureUrl: z.string().nullable().optional(),
@@ -69,9 +75,9 @@ export const InhabitantFragmentSchema = z.object({
  * Used by: useCoreValidation, useFinancialValidation
  */
 export const HouseholdFragmentSchema = z.object({
-    id: z.number().int().positive(),
-    heynaboId: z.number().int().positive(),
-    pbsId: z.number().int().positive(),
+    id: IdSchema,
+    heynaboId: IdSchema,
+    pbsId: IdSchema,
     name: z.string(),
     address: z.string(),
     movedInDate: z.coerce.date(),
@@ -87,7 +93,7 @@ export const HouseholdFragmentSchema = z.object({
  * Used by: usePlanningValidation, useBookingValidation
  */
 export const SeasonFragmentSchema = z.object({
-    id: z.number().int().positive(),
+    id: IdSchema,
     shortName: z.string().min(4),
     isActive: z.boolean(),
     ticketIsCancellableDaysBefore: z.number().min(0).max(31),
@@ -100,8 +106,8 @@ export const SeasonFragmentSchema = z.object({
  * Used by: usePlanningValidation, useBookingValidation
  */
 export const CookingTeamFragmentSchema = z.object({
-    id: z.number().int().positive(),
-    seasonId: z.number().int().positive(),
+    id: IdSchema,
+    seasonId: IdSchema,
     name: z.string()
 })
 
@@ -110,17 +116,17 @@ export const CookingTeamFragmentSchema = z.object({
  * Used by: useBookingValidation, usePlanningValidation, useHealthValidation
  */
 export const DinnerEventFragmentSchema = z.object({
-    id: z.number().int().positive(),
+    id: IdSchema,
     date: z.coerce.date(),
     menuTitle: z.string().max(500),
     menuDescription: z.string().nullable(),
     menuPictureUrl: z.string().nullable(),
     state: DinnerStateSchema,
     totalCost: z.number().int().min(0),
-    chefId: z.number().int().positive().nullable(),
-    cookingTeamId: z.number().int().positive().nullable(),
-    heynaboEventId: z.number().int().positive().nullable(),
-    seasonId: z.number().int().positive().nullable(),
+    chefId: IdSchema.nullable(),
+    cookingTeamId: IdSchema.nullable(),
+    heynaboEventId: IdSchema.nullable(),
+    seasonId: IdSchema.nullable(),
     createdAt: z.coerce.date(),
     updatedAt: z.coerce.date()
 })
@@ -134,11 +140,11 @@ export const DinnerEventFragmentSchema = z.object({
  * Used by: useBookingValidation, useFinancialValidation
  */
 export const OrderFragmentSchema = z.object({
-    id: z.number().int().positive(),
-    dinnerEventId: z.number().int().positive(),
-    inhabitantId: z.number().int().positive(),
-    bookedByUserId: z.number().int().positive().nullable(),
-    ticketPriceId: z.number().int().positive(),
+    id: IdSchema,
+    dinnerEventId: IdSchema,
+    inhabitantId: IdSchema,
+    bookedByUserId: IdSchema.nullable(),
+    ticketPriceId: IdSchema,
     priceAtBooking: z.number().int(),
     dinnerMode: DinnerModeSchema,
     state: OrderStateSchema,
@@ -153,8 +159,8 @@ export const OrderFragmentSchema = z.object({
  * Used by: useBookingValidation, usePlanningValidation
  */
 export const TicketPriceFragmentSchema = z.object({
-    id: z.number().int().positive(),
-    seasonId: z.number().int().positive(),
+    id: IdSchema,
+    seasonId: IdSchema,
     ticketType: TicketTypeSchema,
     price: z.number().int(),
     description: z.string().nullable(),
@@ -183,11 +189,11 @@ export const PayerSnapshotSchema = z.object({
  * The two transforms live beside the fragment so both composables share them without importing each other (ADR-010)
  */
 export const ExpenseFragmentSchema = z.object({
-    id: z.number().int().positive(),
+    id: IdSchema,
     type: LedgerEntryTypeSchema,
-    dinnerEventId: z.number().int().positive().nullable(),
+    dinnerEventId: IdSchema.nullable(),
     // The reporting user; SetNull once their user row is gone, the snapshot keeps them
-    paidByUserId: z.number().int().positive().nullable(),
+    paidByUserId: IdSchema.nullable(),
     paidBy: PayerSnapshotSchema,
     amount: z.number().int(),
     description: z.string(),
@@ -217,7 +223,7 @@ export const deserializeExpense = (row: Record<string, unknown>): z.infer<typeof
  * Used by: useAllergyValidation (AllergyTypeDisplay), useCoreValidation (via the Allergy fragment)
  */
 export const AllergyTypeFragmentSchema = z.object({
-    id: z.number().int().positive(),
+    id: IdSchema,
     name: z.string(),
     description: z.string(),
     icon: z.string().nullable().optional()
@@ -228,9 +234,9 @@ export const AllergyTypeFragmentSchema = z.object({
  * Used by: useAllergyValidation (AllergyDisplay), useCoreValidation (HouseholdDetail inhabitants)
  */
 export const AllergyFragmentSchema = z.object({
-    id: z.number().int().positive(),
-    inhabitantId: z.number().int().positive(),
-    allergyTypeId: z.number().int().positive(),
+    id: IdSchema,
+    inhabitantId: IdSchema,
+    allergyTypeId: IdSchema,
     inhabitantComment: z.string().nullable().optional(),
     createdAt: z.coerce.date(),
     updatedAt: z.coerce.date(),

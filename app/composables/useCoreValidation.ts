@@ -1,7 +1,7 @@
 import {z} from 'zod'
 import {isBefore} from 'date-fns'
 import {SystemRoleSchema, DinnerModeSchema} from '~~/prisma/generated/zod'
-import {UserFragmentSchema, InhabitantFragmentSchema, HouseholdFragmentSchema, AllergyFragmentSchema} from '~/composables/fragments/domainFragments'
+import {IdSchema, UserFragmentSchema, InhabitantFragmentSchema, HouseholdFragmentSchema, AllergyFragmentSchema} from '~/composables/fragments/domainFragments'
 import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} from '~/composables/useUserPreferenceValidation'
 import {useWeekDayMapValidation} from './useWeekDayMapValidation'
 
@@ -20,11 +20,18 @@ import {useWeekDayMapValidation} from './useWeekDayMapValidation'
 // Re-export SystemRole type
 export type SystemRole = z.infer<typeof SystemRoleSchema>
 
-/**
- * Positive integer ID — single source of truth for entity ids (ADR-001).
- * Use IdSchema for required ids, IdSchema.nullable() for FK fields.
- */
-export const IdSchema = z.number().int().positive()
+export {IdSchema}
+
+// A url carries its ids as strings
+export const RouteIdSchema = z.coerce.number().int().positive()
+
+export const idParams = <const K extends string>(...names: K[]) =>
+    z.object(Object.fromEntries(names.map(name => [name, RouteIdSchema])) as Record<K, typeof RouteIdSchema>)
+
+// Only the literal "true" bypasses: z.coerce.boolean() reads the string "false" as true
+export const AdminBypassQuerySchema = z.object({
+    adminBypass: z.enum(['true', 'false']).optional().transform(flag => flag === 'true')
+})
 
 // Response of a delete whose entity no caller renders (ADR-009)
 export const DeletedCountSchema = z.number().int().min(0)

@@ -841,9 +841,10 @@ export const useBookingValidation = () => {
         initialized: z.number().int().nonnegative()
     })
 
-    // Result of clearing the queues of consumed dinners
+    // Result of clearing the queues of consumed dinners: the entries removed, and each dinner's share by date
     const ClearWaitlistResultSchema = z.object({
-        cleared: z.number().int().nonnegative()
+        cleared: z.number().int().nonnegative(),
+        dinners: z.array(z.object({dinnerEventId: IdSchema, date: z.coerce.date(), cleared: z.number().int().positive()})).default([])
     })
 
     /**
@@ -855,7 +856,7 @@ export const useBookingValidation = () => {
         consume: ConsumeResultSchema,
         close: CloseOrdersResultSchema,
         transact: CreateTransactionsResultSchema,
-        clearWaitlist: ClearWaitlistResultSchema.default({cleared: 0}),
+        clearWaitlist: ClearWaitlistResultSchema.default({cleared: 0, dinners: []}),
         initPrefs: InitPreferencesResultSchema.default({initialized: 0}),
         scaffold: ScaffoldResultSchema.nullable()
     })
@@ -1079,6 +1080,7 @@ export type CloseOrdersResult = z.infer<ReturnType<typeof useBookingValidation>[
 export type CreateTransactionsResult = z.infer<ReturnType<typeof useBookingValidation>['CreateTransactionsResultSchema']>
 export type InitPreferencesResult = z.infer<ReturnType<typeof useBookingValidation>['InitPreferencesResultSchema']>
 export type DailyMaintenanceResult = z.infer<ReturnType<typeof useBookingValidation>['DailyMaintenanceResultSchema']>
+export type ClearWaitlistResult = z.infer<ReturnType<typeof useBookingValidation>['ClearWaitlistResultSchema']>
 
 // User Booking (processBooking feedback)
 export type BookingAction = z.infer<ReturnType<typeof useBookingValidation>['BookingActionSchema']>
