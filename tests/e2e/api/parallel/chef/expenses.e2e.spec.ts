@@ -83,9 +83,21 @@ test.describe('Chef dinner expenses', () => {
         const payer = {paidByUserId: chef.userId, paidBy: {id: chef.userId, email: chef.userEmail}}
         expect(first).toMatchObject({type: LedgerEntryTypeSchema.enum.REGULAR, dinnerEventId: dinner.dinnerEventId, ...payer})
         expect(second).toMatchObject({amount: 29800, ...payer})
-        // The note is the dinner's date and menu title, written by the server
-        expect(first!.description).toMatch(/^\d{2}\/\d{2} Test Menu/)
+        // A body without a note gets the words: the menu in quotes with the dinner's date, then who bought for which team
+        expect(first!.description).toMatch(/^".+" \d{2}\/\d{2}\/\d{4}, .+ bestiller for .+$/)
+        expect(first!.description).toContain(first!.paidBy.name)
         expect(typeof first!.paidBy.name).toBe('string')
+    })
+
+    test('GIVEN a note WHEN adding THEN the line carries it as typed', async ({browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
+        const memberContext = await memberValidatedBrowserContext(browser)
+        const dinner = await createDinner(adminContext)
+
+        const line = await addLine(memberContext, dinner, ExpenseFactory.defaultExpenseCreate({description: 'Mejeri'}))
+
+        expect(line.description).toBe('Mejeri')
+        expect((await ExpenseFactory.list(memberContext, dinner.dinnerEventId))[0]?.description).toBe('Mejeri')
     })
 
     test('GIVEN two lines WHEN reading the team THEN its dinner carries the sum as its cost', async ({browser}) => {
@@ -141,7 +153,7 @@ test.describe('Chef dinner expenses', () => {
         {desc: 'an amount of zero', body: {amount: 0}},
         {desc: 'a negative amount', body: {amount: -100}},
         {desc: 'a fractional amount', body: {amount: 10.5}},
-        {desc: 'a description key', body: {description: 'Mejeri'}},
+        {desc: 'a note that is not text', body: {description: 7}},
         {desc: 'a totalCost key', body: {totalCost: 100}},
         {desc: 'a payer key', body: {paidByUserId: 7}}
     ]) {

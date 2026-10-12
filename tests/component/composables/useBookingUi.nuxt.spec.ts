@@ -30,11 +30,12 @@ describe('spending fragments', () => {
     const dinner = (id: number, isCurrent: boolean): CookingRoundRow => ({dinnerEventId: id, date: new Date(2026, 3, 10 + id), menuTitle: `Ret ${id}`, isCurrent, budgetGross: 1000 * id, spentGross: 100 * id})
 
     it('builds this dinner\'s fragment: heading with title and date, the receipts as rows, its figures in the total', () => {
-        const receipts = [ExpenseFactory.defaultExpense({id: 7, amount: 101200, paidBy: {id: 1, email: 'anna@example.com', name: 'Anna H.'}})]
+        const receipts = [ExpenseFactory.defaultExpense({id: 7, amount: 101200, description: '"Ret 2" 12/04/2026, Anna H. bestiller for Madhold 2'})]
         const fragment = dinnerSpendingFragment(dinner(2, true), receipts)
         expect(fragment.heading).toBe('Ret 2, 12/04/2026')
         expect(fragment.rows).toHaveLength(1)
-        expect(fragment.rows[0]).toMatchObject({kind: 'receipt', label: 'Anna H.', amount: 101200})
+        // The receipt row reads the line's note
+        expect(fragment.rows[0]).toMatchObject({kind: 'receipt', label: '"Ret 2" 12/04/2026, Anna H. bestiller for Madhold 2', amount: 101200})
         expect(fragment.total).toEqual({label: 'Ret 2', figures: {budgetGross: 2000, spentGross: 200}})
     })
 

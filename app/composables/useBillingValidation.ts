@@ -313,17 +313,19 @@ export const useBillingValidation = () => {
     const ExpenseSchema = ExpenseFragmentSchema
     const SerializedExpenseSchema = SerializedExpenseFragmentSchema
 
-    // API body of a grocery line in gross øre; the caller is the payer, the route writes the note (dinner date and menu
-    // title) and the ledger type. Strict: a stray key is a 400
+    // API body of a grocery line in gross øre with its note; the caller is the payer, the route writes the ledger type
+    // and, when the body carries no note, the words of useBilling's expenseNoteWords. Strict: a stray key is a 400
     const ExpenseCreateSchema = z.object({
-        amount: z.number().int().positive('Beløbet skal være større end nul')
+        amount: z.number().int().positive('Beløbet skal være større end nul'),
+        description: z.string().optional()
     }).strict()
 
-    // The entry form: a kr amount in the unit the receipt states; the component turns it into gross øre
+    // The entry form: a kr amount in the unit the receipt states and the note; the component turns the amount into gross øre
     const VatModeSchema = z.enum(['inkl', 'ex'])
     const ExpenseLineFormSchema = z.object({
         amountKr: z.coerce.number().positive('Beløbet skal være større end nul'),
-        vatMode: VatModeSchema
+        vatMode: VatModeSchema,
+        note: z.string().optional()
     })
 
     // Repository input: the row without its database-assigned fields

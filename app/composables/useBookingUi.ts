@@ -67,7 +67,7 @@ export const cookingRoundWords = (teamShortName: string, first: Date, last: Date
 }
 
 /**
- * A spending table fragment: a heading, the rows (a team's cooking days, or this dinner's receipts with the bestiller
+ * A spending table fragment: a heading, the rows (a team's cooking days, or this dinner's receipts with the note
  * as the label) and a total row carrying the figures the rows add up to
  */
 export type SpendingTableRow =
@@ -80,7 +80,7 @@ export interface SpendingFragment {
 }
 export const dinnerSpendingFragment = (dinner: CookingRoundRow, receipts: Expense[]): SpendingFragment => ({
     heading: `${dinner.menuTitle}, ${formatDate(dinner.date)}`,
-    rows: receipts.map(receipt => ({kind: 'receipt', id: `receipt-${receipt.id}`, date: receipt.createdAt, label: receipt.paidBy.name ?? '', amount: receipt.amount})),
+    rows: receipts.map(receipt => ({kind: 'receipt', id: `receipt-${receipt.id}`, date: receipt.createdAt, label: receipt.description, amount: receipt.amount})),
     total: {label: dinner.menuTitle, figures: {budgetGross: dinner.budgetGross, spentGross: dinner.spentGross}}
 })
 export const teamSpendingFragment = (rows: CookingRoundRow[], words: CookingRoundWords): SpendingFragment => ({

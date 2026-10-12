@@ -175,7 +175,8 @@ export const BG = {
         700: 'bg-sky-700'       // Rainbow stop 7
     },
     green: {
-        600: 'bg-green-600'     // Season status mark: active; the diff legend's new fill
+        500: 'bg-green-500',    // The active season's disc, the holiday ring's green
+        600: 'bg-green-600'     // The diff legend's new fill
     },
     gray: {
         50: 'bg-gray-50',
@@ -1503,10 +1504,11 @@ export const COMPONENTS = {
         formRow: 'flex flex-col md:flex-row md:items-start gap-2',
         amountField: 'w-full md:w-32',
         vatField: 'w-full md:w-36',
+        noteField: 'w-full md:flex-1',
         control: 'w-full',
         alternative: `${TYPOGRAPHY.finePrint} opacity-60`,
-        // The name wraps on a phone, where the amount columns leave it little room, and truncates beside them on a desktop
-        payer: `${TYPOGRAPHY.bodyTextSmall} break-words md:truncate`,
+        // A text cell (the bestiller, the note) wraps on a phone, where the amount columns leave it little room, and truncates beside them on a desktop
+        textCell: `${TYPOGRAPHY.bodyTextSmall} break-words md:truncate`,
         empty: TEXT.muted
     },
 
@@ -2779,7 +2781,7 @@ export const getRandomEmptyMessage = (context: keyof typeof EMPTY_STATE_MESSAGES
 
 /** The season status glyph as a UBadge's settings per status: a filled disc, green active, yellow in progress, grey ended; the sprout alone for an upcoming season */
 export const SEASON_STATUS_GLYPHS: Record<SeasonStatusValue, BadgeProps & {class: string}> = {
-    [SEASON_STATUS.ACTIVE]: {class: BG.green[600], ui: COMPONENTS.seasonStatus.discUi},
+    [SEASON_STATUS.ACTIVE]: {class: BG.green[500], ui: COMPONENTS.seasonStatus.discUi},
     [SEASON_STATUS.CURRENT]: {class: BG.yellow[400], ui: COMPONENTS.seasonStatus.discUi},
     [SEASON_STATUS.FUTURE]: {icon: ICONS.sprout, class: `bg-transparent ${TEXT.green[500]}`, ui: COMPONENTS.seasonStatus.sproutUi},
     [SEASON_STATUS.PAST]: {class: BG.gray[500], ui: COMPONENTS.seasonStatus.discUi}

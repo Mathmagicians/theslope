@@ -6,10 +6,10 @@
  *   (cart) MADBESTILLING   1.310 / 1.638 kr                      [Rediger madbestilling]   <- or the empty text
  *
  * Open, the editor the button reveals: the action first, the lines, then the sums with a rule above each result
- *   Hvad kostede indkøbene?                                                    [Luk]
- *   [ beløb      ] [ Ex moms v ] [Tilføj]
- *   Dato   Bestiller                                   ex / inkl. moms
- *   12/04  Anna H.                                   1.012 / 1.265 kr   [slet]
+ *   Hvad kostede indkøbene?                                                                           [Luk]
+ *   [ beløb      ] [ Ex moms v ] [ "Risotto" 14/04/2026, Anna H. bestiller for Madhold 2 ] [Tilføj]
+ *   Dato        Bestiller  Note                                                 ex / inkl. moms
+ *   12/04/2026  Anna H.    "Risotto" 14/04/2026, Anna H. bestiller for Madhold 2  1.012 / 1.265 kr   [slet]
  *   ──────────────────────────────────────────────────────────────────
  *   Rådighedsbeløb                                   1.425 / 1.781 kr
  *   Brugt                                            1.310 / 1.638 kr
@@ -24,8 +24,10 @@
  *   Tilbage                                           +190 /  +237 kr (check)
  *
  * A line saves as it is added and goes as it is removed; Luk folds the row. The helping numbers follow the lines.
- * The reporting user is the payer and the server writes the note, so the form carries the amount alone. The same
- * section serves the kitchen's own purchases with its own title, hint and texts.
+ * The reporting user is the payer. The note field starts with the words handed in as notePrefill when the editor
+ * opens and after each Tilføj; the form sends the note as typed and leaves it out when the field is empty, and the
+ * route writes the prefill's words for a body without one. The same section serves the kitchen's own purchases with
+ * its own title, hint and texts.
  *
  * Tokens: the folded row and the editor head bind cardSection like the allergen row; the edit button is
  * BUTTONS.secondaryAction, Luk BUTTONS.cancel, Tilføj BUTTONS.save, slet BUTTONS.remove; every amount is a VatAmount
@@ -47,13 +49,15 @@ const props = withDefaults(defineProps<{
   pending?: boolean
   budgetGross?: number | null
   round?: {label: string, budgetGross: number, spentGross: number} | null
+  notePrefill?: string
 }>(), {
   glyph: undefined,
   color: undefined,
   editable: false,
   pending: false,
   budgetGross: null,
-  round: null
+  round: null,
+  notePrefill: ''
 })
 
 const emit = defineEmits<{
@@ -76,11 +80,16 @@ const vatModeItems = [
 const glyphName = computed(() => props.glyph ?? ICONS.shoppingCart)
 const buttonColor = computed(() => props.color ?? COLOR.primary)
 const isOpen = ref(false)
+// The note starts from the prefill each time the editor opens; the prefill follows the dinner on view
+const openEditor = () => {
+  draft.note = props.notePrefill
+  isOpen.value = true
+}
 
 // The receipt states one unit; the chef types that unit, the line is stored gross
 const isExVat = (vatMode: VatMode) => vatMode === VatModeValue.ex
 
-const draft = reactive<{amountKr: number | undefined, vatMode: VatMode}>({amountKr: undefined, vatMode: VatModeValue.ex})
+const draft = reactive<{amountKr: number | undefined, vatMode: VatMode, note: string}>({amountKr: undefined, vatMode: VatModeValue.ex, note: ''})
 const formRef = useTemplateRef<Form<ExpenseLineForm>>('formRef')
 
 const alternative = computed(() => {
@@ -91,8 +100,10 @@ const alternative = computed(() => {
 })
 
 const handleSubmit = ({data}: FormSubmitEvent<ExpenseLineForm>) => {
-  emit('add', {amount: typedKrToGrossOre(data.amountKr, isExVat(data.vatMode), vatPercent)})
+  const amount = typedKrToGrossOre(data.amountKr, isExVat(data.vatMode), vatPercent)
+  emit('add', data.note ? {amount, description: data.note} : {amount})
   draft.amountKr = undefined
+  draft.note = props.notePrefill
 }
 
 const spent = computed(() => sumAmounts(props.expenses))
@@ -101,6 +112,7 @@ const figures = computed(() => props.budgetGross === null ? null : {budgetGross:
 const lineColumns: TableColumn<Expense>[] = [
   {id: 'date', header: 'Dato'},
   {id: 'payer', header: 'Bestiller'},
+  {id: 'note', header: 'Note'},
   {id: 'amount', header: 'ex / inkl. moms', meta: COMPONENTS.table.amountColumn},
   {id: 'remove', header: ''}
 ]
@@ -128,7 +140,7 @@ const lineColumns: TableColumn<Expense>[] = [
         :icon="ICONS.edit"
         :disabled="pending"
         data-testid="expense-edit"
-        @click="isOpen = true"
+        @click="openEditor"
       >
         {{ editLabel }}
       </UButton>
@@ -157,6 +169,9 @@ const lineColumns: TableColumn<Expense>[] = [
           <UFormField name="vatMode" :class="COMPONENTS.expenseLines.vatField">
             <USelect v-model="draft.vatMode" :items="vatModeItems" value-key="value" name="expense-vat-select" :size="SIZES.small" :class="COMPONENTS.expenseLines.control" />
           </UFormField>
+          <UFormField name="note" :class="COMPONENTS.expenseLines.noteField">
+            <UInput v-model="draft.note" placeholder="note" name="expense-note-input" :size="SIZES.small" :class="COMPONENTS.expenseLines.control" />
+          </UFormField>
           <UButton v-bind="BUTTONS.save" :size="SIZES.small" :loading="pending" :disabled="pending" data-testid="expense-add" @click="formRef?.submit()">
             Tilføj
           </UButton>
@@ -167,7 +182,8 @@ const lineColumns: TableColumn<Expense>[] = [
       <!-- The lines and, as the table's bottom rows, the sums: this dinner's, then the whole team's set apart -->
       <UTable :data="expenses" :columns="lineColumns" :ui="COMPONENTS.table.ui" data-testid="expense-table">
         <template #date-cell="{ row }">{{ formatDate(row.original.createdAt) }}</template>
-        <template #payer-cell="{ row }"><span :class="COMPONENTS.expenseLines.payer" data-testid="expense-payer">{{ row.original.paidBy.name ?? '' }}</span></template>
+        <template #payer-cell="{ row }"><span :class="COMPONENTS.expenseLines.textCell" data-testid="expense-payer">{{ row.original.paidBy.name ?? '' }}</span></template>
+        <template #note-cell="{ row }"><span :class="COMPONENTS.expenseLines.textCell" data-testid="expense-note">{{ row.original.description }}</span></template>
         <template #amount-cell="{ row }"><VatAmount :gross="row.original.amount" /></template>
         <template #remove-cell="{ row }">
           <UButton v-bind="BUTTONS.remove" aria-label="Slet" :disabled="pending" data-testid="expense-remove" @click="emit('remove', row.original.id)" />

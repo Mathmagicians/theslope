@@ -1,10 +1,11 @@
 import type {DateRange} from '~/types/dateTypes'
-import {createDateRange, formatDateRange} from '~/utils/date'
+import {createDateRange, formatDate, formatDateRange} from '~/utils/date'
 import {useSeason} from '~/composables/useSeason'
 import {useTicket} from '~/composables/useTicket'
-import {useBookingValidation, type TicketType, type OrderDisplay, type DinnerEventInfo} from '~/composables/useBookingValidation'
+import {useCookingTeam} from '~/composables/useCookingTeam'
+import {useBookingValidation, type TicketType, type OrderDisplay, type DinnerEventInfo, type DinnerEventDetail} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
-import type {BillingSideEffectStamps, CostEntry, HouseholdEntry, InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'
+import type {BillingSideEffectStamps, CostEntry, Expense, HouseholdEntry, InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'
 
 const LINK_TRANSACTION_BATCH_SIZE = 90
 
@@ -326,7 +327,23 @@ export const useBilling = () => {
         notify: notifiedVersion < version
     })
 
+    /**
+     * The note a grocery line starts with, as the ledgers read it where lines of many dinners meet: the menu in quotes with
+     * the dinner's date, then who bought for which team. The words end at bestiller for a dinner without a team and start
+     * at the date for one without a title. The entry form prefills them; the route writes them for a body without a note
+     */
+    const {getTeamShortName} = useCookingTeam()
+    const expenseNoteWords = (
+        dinner: Pick<DinnerEventDetail, 'date' | 'menuTitle'> & {cookingTeam: Pick<NonNullable<DinnerEventDetail['cookingTeam']>, 'name'> | null},
+        payer: Pick<Expense['paidBy'], 'name' | 'email'>
+    ): string => {
+        const title = dinner.menuTitle ? `"${dinner.menuTitle}" ` : ''
+        const team = dinner.cookingTeam ? ` for ${getTeamShortName(dinner.cookingTeam.name)}` : ''
+        return `${title}${formatDate(dinner.date)}, ${payer.name ?? payer.email} bestiller${team}`
+    }
+
     return {
+        expenseNoteWords,
         calculateClosedBillingPeriod,
         calculateCurrentBillingPeriod,
         getBillingPeriodForDate,

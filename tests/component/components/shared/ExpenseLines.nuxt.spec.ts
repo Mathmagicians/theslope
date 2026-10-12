@@ -28,9 +28,10 @@ beforeAll(() => {
 const grossOf = (exKr: number) => convertVat(exKr * 100, vatPercent, false)
 const exOf = (grossOre: number) => convertVat(grossOre, vatPercent, true)
 
+const NOTE_PREFILL = '"Risotto" 14/04/2026, Anna H. bestiller for Madhold 2'
 const lines = () => [
-    ExpenseFactory.defaultExpense({id: 1, amount: grossOf(1012), paidBy: {id: 1, email: 'anna@example.com', name: 'Anna H.'}, createdAt: new Date('2026-04-12T10:00:00')}),
-    ExpenseFactory.defaultExpense({id: 2, amount: grossOf(298), paidBy: {id: 2, email: 'bo@example.com', name: 'Bo K.'}, createdAt: new Date('2026-04-14T10:00:00')})
+    ExpenseFactory.defaultExpense({id: 1, amount: grossOf(1012), paidBy: {id: 1, email: 'anna@example.com', name: 'Anna H.'}, description: NOTE_PREFILL, createdAt: new Date('2026-04-12T10:00:00')}),
+    ExpenseFactory.defaultExpense({id: 2, amount: grossOf(298), paidBy: {id: 2, email: 'bo@example.com', name: 'Bo K.'}, description: 'Mejeri', createdAt: new Date('2026-04-14T10:00:00')})
 ]
 const spentOf = (expenses: ReturnType<typeof lines>) => expenses.reduce((sum, line) => sum + line.amount, 0)
 const BUDGET = 178100
@@ -38,7 +39,7 @@ const BUDGET = 178100
 const mount = (props: Record<string, unknown> = {}) => mountSuspended(ExpenseLines, {
     props: {
         expenses: lines(), title: 'Madbestilling', hint: 'Hvad kostede indkøbene?', emptyText: 'Madbestilling mangler',
-        editLabel: 'Rediger madbestilling', budgetGross: BUDGET, ...props
+        editLabel: 'Rediger madbestilling', budgetGross: BUDGET, notePrefill: NOTE_PREFILL, ...props
     },
     global: {provide: {isMd: ref(true)}}
 })
@@ -50,6 +51,11 @@ const open = async (wrapper: Wrapper) => {
 }
 const fillAmount = async (wrapper: Wrapper, value: string) => {
     await wrapper.find('input[name="expense-amount-input"]').setValue(value)
+    await nextTick()
+}
+const noteInput = (wrapper: Wrapper) => wrapper.find('input[name="expense-note-input"]')
+const fillNote = async (wrapper: Wrapper, value: string) => {
+    await noteInput(wrapper).setValue(value)
     await nextTick()
 }
 // The add button calls formRef.submit(); validation resolves asynchronously
@@ -172,14 +178,15 @@ describe('ExpenseLines', () => {
             expect(hintRow(wrapper, 'Brugt')).toBeDefined()
         })
 
-        it('GIVEN lines WHEN open THEN every line shows its date, bestiller and both units in entry order, with slet', async () => {
+        it('GIVEN lines WHEN open THEN every line shows its date, bestiller, note and both units in entry order, with slet', async () => {
             const wrapper = await mount({editable: true})
             await open(wrapper)
             const rows = lineRows(wrapper)
             expect(rows).toHaveLength(2)
             lines().forEach((line, index) => {
                 expect(rows[index]!.text()).toContain(formatDate(line.createdAt))
-                expect(rows[index]!.text()).toContain(line.paidBy.name!)
+                expect(rows[index]!.find('[data-testid="expense-payer"]').text()).toBe(line.paidBy.name!)
+                expect(rows[index]!.find('[data-testid="expense-note"]').text()).toBe(line.description)
                 expect(rows[index]!.text()).toContain(formatPrice(exOf(line.amount)))
                 expect(rows[index]!.text()).toContain(`/ ${formatPrice(line.amount)} kr`)
             })
@@ -204,8 +211,37 @@ describe('ExpenseLines', () => {
 
             await clickAdd(wrapper)
 
-            expect(wrapper.emitted('add')).toEqual([[{amount: grossOf(1012)}]])
+            expect(wrapper.emitted('add')).toEqual([[{amount: grossOf(1012), description: NOTE_PREFILL}]])
             expect((wrapper.find('input[name="expense-amount-input"]').element as HTMLInputElement).value).toBe('')
+        })
+
+        it('GIVEN the editor WHEN opened THEN the note field carries the prefill', async () => {
+            const wrapper = await mount({editable: true})
+            await open(wrapper)
+            expect((noteInput(wrapper).element as HTMLInputElement).value).toBe(NOTE_PREFILL)
+        })
+
+        it('GIVEN an edited note WHEN adding THEN emits it as typed and the field returns to the prefill', async () => {
+            const wrapper = await mount({editable: true})
+            await open(wrapper)
+            await fillAmount(wrapper, '298')
+            await fillNote(wrapper, 'Mejeri')
+
+            await clickAdd(wrapper)
+
+            expect(wrapper.emitted('add')).toEqual([[{amount: grossOf(298), description: 'Mejeri'}]])
+            expect((noteInput(wrapper).element as HTMLInputElement).value).toBe(NOTE_PREFILL)
+        })
+
+        it('GIVEN an emptied note WHEN adding THEN the line carries no note, so the route writes the words', async () => {
+            const wrapper = await mount({editable: true})
+            await open(wrapper)
+            await fillAmount(wrapper, '298')
+            await fillNote(wrapper, '')
+
+            await clickAdd(wrapper)
+
+            expect(wrapper.emitted('add')).toEqual([[{amount: grossOf(298)}]])
         })
 
         it('GIVEN an inkl. moms amount WHEN adding THEN the øre are the typed kr', async () => {
@@ -218,7 +254,7 @@ describe('ExpenseLines', () => {
 
             await clickAdd(wrapper)
 
-            expect(wrapper.emitted('add')).toEqual([[{amount: 126500}]])
+            expect(wrapper.emitted('add')).toEqual([[{amount: 126500, description: NOTE_PREFILL}]])
         })
 
         it.each([

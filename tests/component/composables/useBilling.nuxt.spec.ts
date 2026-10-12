@@ -18,8 +18,10 @@ describe('useBilling', () => {
     let formatTicketCounts: Billing['formatTicketCounts']
     let groupByHouseholdEntry: Billing['groupByHouseholdEntry']
     let decideBillingSideEffects: Billing['decideBillingSideEffects']
+    let expenseNoteWords: Billing['expenseNoteWords']
     beforeAll(() => {
         ({
+            expenseNoteWords,
             calculateClosedBillingPeriod,
             calculateCurrentBillingPeriod,
             getBillingPeriodForDate,
@@ -270,6 +272,20 @@ describe('useBilling', () => {
             ['a migrated period: mailed at v1 by definition, CSV pending', {version: 1, archivedVersion: 0, notifiedVersion: 1}, {archive: true, notify: false}]
         ])('redoes only what is missing or stale for %s', (_name, stamps, plan) => {
             expect(decideBillingSideEffects(stamps)).toEqual(plan)
+        })
+    })
+
+    describe('expenseNoteWords', () => {
+        const dinner = {date: new Date(2026, 3, 14, 18), menuTitle: 'Risotto', cookingTeam: {name: 'Madhold 2 - 08/25-06/26'}}
+        const payer = {email: 'anna@example.com', name: 'Anna H.'}
+
+        it.each([
+            {desc: 'a titled dinner with a team', dinner, payer, words: '"Risotto" 14/04/2026, Anna H. bestiller for Madhold 2'},
+            {desc: 'a dinner without a team', dinner: {...dinner, cookingTeam: null}, payer, words: '"Risotto" 14/04/2026, Anna H. bestiller'},
+            {desc: 'a dinner without a title', dinner: {...dinner, menuTitle: ''}, payer, words: '14/04/2026, Anna H. bestiller for Madhold 2'},
+            {desc: 'a payer without a name', dinner, payer: {email: 'anna@example.com'}, words: '"Risotto" 14/04/2026, anna@example.com bestiller for Madhold 2'}
+        ])('GIVEN $desc WHEN building the words THEN they read as the ledger does', ({dinner: d, payer: p, words}) => {
+            expect(expenseNoteWords(d, p)).toBe(words)
         })
     })
 })

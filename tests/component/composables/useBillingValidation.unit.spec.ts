@@ -368,15 +368,18 @@ describe('useBillingValidation', () => {
         const {ExpenseCreateSchema} = useBillingValidation()
         const valid = ExpenseFactory.defaultExpenseCreate()
 
-        it('GIVEN a gross amount and a note WHEN parsing THEN succeeds', () => {
-            expect(ExpenseCreateSchema.parse(valid)).toEqual(valid)
+        it.each([
+            {desc: 'a gross amount alone (the route writes the note)', body: valid},
+            {desc: 'a gross amount and a note', body: {...valid, description: 'Mejeri'}}
+        ])('GIVEN $desc WHEN parsing THEN succeeds', ({body}) => {
+            expect(ExpenseCreateSchema.parse(body)).toEqual(body)
         })
 
         it.each([
             {desc: 'an amount of zero', body: {...valid, amount: 0}},
             {desc: 'a negative amount', body: {...valid, amount: -1}},
             {desc: 'a fractional amount', body: {...valid, amount: 10.5}},
-            {desc: 'a description key (the route writes the note)', body: {...valid, description: 'Mejeri'}},
+            {desc: 'a note that is not text', body: {...valid, description: 7}},
             {desc: 'a stray totalCost key', body: {...valid, totalCost: 100}},
             {desc: 'a payer key (the caller is the payer)', body: {...valid, paidByUserId: 7}}
         ])('GIVEN $desc WHEN parsing THEN throws', ({body}) => {
@@ -391,7 +394,8 @@ describe('useBillingValidation', () => {
         it.each([
             {desc: 'a kr amount ex moms', form: valid},
             {desc: 'a kr amount inkl. moms', form: {...valid, vatMode: VatModeSchema.enum.inkl}},
-            {desc: 'a kr amount typed as text', form: {...valid, amountKr: '1012'}, expected: valid}
+            {desc: 'a kr amount typed as text', form: {...valid, amountKr: '1012'}, expected: valid},
+            {desc: 'a kr amount with a note', form: {...valid, note: 'Mejeri'}}
         ])('GIVEN $desc WHEN parsing THEN succeeds', ({form, expected}) => {
             expect(ExpenseLineFormSchema.parse(form)).toEqual(expected ?? form)
         })

@@ -103,6 +103,7 @@ interface Props {
   calendarOpen?: boolean        // Calendar accordion state
   navColor?: NuxtUIColor        // Navigation button color
   roundRows?: CookingRoundRow[] // The team's cooking round around this dinner (chef page)
+  expenseNote?: string          // The words a grocery line's note starts with (expenseNoteWords, built by the page)
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -118,6 +119,7 @@ const props = withDefaults(defineProps<Props>(), {
   calendarOpen: false,
   navColor: undefined,
   roundRows: () => [],
+  expenseNote: ''
 })
 
 const emit = defineEmits<{
@@ -680,6 +682,7 @@ const handleCardClick = () => {
           :pending="isUpdating"
           :budget-gross="budget.availableBudget"
           :round="round"
+          :note-prefill="expenseNote"
           @add="emit('add-expense', $event)"
           @remove="emit('remove-expense', $event)"
         />

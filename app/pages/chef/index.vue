@@ -195,6 +195,16 @@ const handleFormUpdate = async (data: ChefMenuForm) => {
 }
 
 // The chef's grocery lines go to the dinner whose detail is on view; the store re-reads it for its computed cost
+// The words a grocery line's note starts with: this dinner, and the signed-in chef as the card names people
+const {expenseNoteWords} = useBilling()
+const {formatNameWithInitials} = useHousehold()
+const expenseNote = computed(() => {
+  const user = authStore.user
+  if (!dinnerEventDetail.value || !user) return ''
+  const name = user.Inhabitant ? formatNameWithInitials(user.Inhabitant) : user.email
+  return expenseNoteWords(dinnerEventDetail.value, {name, email: user.email})
+})
+
 const handleAddExpense = (line: ExpenseCreate) => {
   if (dinnerEventDetail.value) bookingsStore.addExpense(dinnerEventDetail.value.id, line)
 }
@@ -379,6 +389,7 @@ useHead({
               :form-mode="chefFormMode"
               :show-state-controls="true"
               :round-rows="roundRows"
+              :expense-note="expenseNote"
               :show-allergens="true"
               :is-updating="isDinnerUpdating"
               :has-prev="hasPrev"

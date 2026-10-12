@@ -1,6 +1,6 @@
 # Release 0.9.0 — work-roster push overview
 
-**Status:** Draft | **Date:** 2026-10-05 | **Updated:** 2026-10-08 (decisions round 9) | **Branch:** `feature/work-roster`
+**Status:** Draft | **Date:** 2026-10-05 | **Updated:** 2026-10-12 (implemented sections compacted to pointers) | **Branch:** `feature/work-roster`
 
 The umbrella spec for this push (the finished push earns v0.9). Each package is briefed and approved in chat before
 any agent starts; detail lives in the linked docs. All Prisma work lands as ONE migration package (model sign-off
@@ -12,32 +12,34 @@ Sizing is informal t-shirt sizes.
 
 | Package | What | Detail | Size | Status |
 |---|---|---|---|---|
-| Framework research spike | prisma 7/8-RC + zod 4 + `zod-prisma-types` compatibility; removable workarounds and adoptable features; Nuxt roadmap evidence that `useAsyncData`'s option surface (`enabled`, `createUseAsyncData`) and named layout slots survive coming releases | `feature-proposal-framework-adoption.md` § Dependency clusters | S | ✅ decided — spike first |
-| CI test reporting | Job summary: vitest's built-in GitHub summary + per-suite Playwright sections with report links | below | S | ✅ approved 2026-10-05 |
-| Framework pair upgrade | pinia 4 + @pinia/nuxt 1, @vueuse/core 15, ical-generator 11 | `feature-proposal-framework-adoption.md` § Clusters and order | S | ✅ implemented 2026-10-05 — zero source changes, user commit pending |
-| Store fetcher factory + store alignment | `useStoreAsyncData`, schema-driven types; every store converges on it (the misaligned fetch handling across stores, release-plan I2) | `feature-proposal-framework-adoption.md` | M–L | ✅ approved 2026-10-05 |
-| Fetch gating | `enabled` carries the fetch condition; id-in-key gates need nothing extra, login gates clear on logout; folded in 2026-10-07: datasets key on the real selection (no copy refs, no component watches), `selectedSeasonId = userChoice ?? getDefaultSeasonId()`, `dependsOn` for SSR of dependent chains | `feature-proposal-framework-adoption.md` | M–L | ✅ implemented 2026-10-07 — both serial e2e specs green; user commit pending; fine-tuning OPEN (stale-selection 404) |
-| Prisma bundle | ALL prisma/zod/migration work in one go: the prisma + zod majors the spike green-lights, `zod-prisma-types` regen, every new model of the push, one migration | below | L | 🔧 IN PROGRESS — model set signed 2026-10-07 (§ Prisma bundle is the contract); migration `0017_roster` applied on local, dev and prod 2026-10-08 |
-| Duty roster (F5a) | Templates, duties, audit trail | `feature-proposal-duty-roster.md` | L | Draft |
-| Joker + vacancy overviews | `JokerSlot`, dinner "missing" face, CTC faces, shift counts, volunteering moves to duty level + data separation | `feature-proposal-duty-roster.md` § Joker + § Roster UX | L | ✅ UX signed (CTC 2026-10-05, big overview + calendar markers 2026-10-06) |
-| Roster sign-off + cross-team swap (F5b) | Derived auto-sign + godkend-alligevel, duty swap | `feature-proposal-duty-roster.md` Phases 4–5 | M | roster UX ✅ signed 2026-10-05 |
-| Waitlist | Queue, auto-assign sweep, extra portions, UI | `feature-proposal-waitlist.md` | L | ✅ UX signed (chef 2026-10-05, member faces 2026-10-06); backend ✅ 2026-10-09 (queue, assignment, release-portions, maintenance sweep, four notification kinds; unit + API specs green); UI open |
-| Kitchen allergy line | the dining-mode panels show the allergy kuverter; the expanded list opens with the allergen breakdown and chips beside each diner | this doc § Kitchen allergy line | S | ✅ UX signed 2026-10-08 |
-| Chef allergen line | the chef's allergen section counts this dinner's diners in kuverter per menu allergen; the edit panel becomes the allergy panel | this doc § Chef allergen line | S | ✅ UX signed 2026-10-09 |
-| Chef calendar header | the Agenda/Kalender tabs and the collapse chevron share one header row above a `UCollapsible`; `/chef` hydrates with one footer | this doc § Chef calendar header | S | ✅ option B signed 2026-10-10; implemented, user commit pending |
-| Ticket allergies | the booking form shows a booked inhabitant's live allergies on the ticket card (glyph) and in the expanded row (compact elements); guest ids and swapped tickets: `../chores-0.9.1.md` § Ticket allergies on the order | this doc § Ticket allergies | S | ✅ UX signed 2026-10-11 |
-| One team number | a team's number comes from its name, else its season position; every team band derives from it (`/admin/teams`, `/chef`, `/dinner`) | this doc § Decisions 2026-10-11 (one team number) | S | ordered 2026-10-11; implemented, user commit pending |
-| Season pick prefers the one in progress | the season order is active, in progress, upcoming, ended; the e2e teardown keeps a non-past active season | this doc § Decisions 2026-10-11 (season pick) | S | signed 2026-10-11 |
-| One breakpoint source | the design system is the one reader of the layout's `isMd`; components bind responsive tokens, behaviour reads `breakpoint`; the household calendar's open state moves to `?cal=` | this doc § Decisions 2026-10-11 (one breakpoint source) | S | signed 2026-10-11; implemented, user commit pending |
-| Notifications | Waitlist + duty-swap kinds, buildup threshold | `feature-proposal-notification-triggers.md` § Trigger catalog | M | catalog updated |
-| Adhoc billing + EXPENSE | Ad-hoc charges + chef spending as EXPENSE transactions; Mit forbrug + admin economy spending views | `feature-proposal-adhoc-admin-billing.md` | L | EXPENSE design ✅ signed 2026-10-08; E1 backend ✅ 2026-10-09 (Expense ledger, computed dinner cost, chef expense endpoints; unit + API specs green); E1b chef entry ✅ 2026-10-10 (`ExpenseLines` in the budget pane, store actions, component + ui e2e specs); Indkøbsomkostninger and the Budget pane ✅ 2026-10-11 (lines beside the edits, two-unit amounts, RÅDIGHEDSBELØB start/Brugt/Tilbage, named ticket table, Billetændringer, the team's round; paid tickets count released ones); chef browser specs on free days ✅ 2026-10-11 (`DinnerEventFactory.createDinnerEventOnFreeDay`: one dinner per day, as the chef and dinner pages select by date; `Chef.e2e` + `ChefExpenses.e2e`); OPEN — admin spending views, adhoc charges |
-| PRF spike | Passkey/PRF research + device protocol | `../feature-proposal-relogin-faceid.md` (parked proposal), `../archived/feature-mobile-native-feel.md` | S | ✅ done 2026-10-06; S5 re-login parked out of 0.9, no option chosen |
-| Page composition | Master/detail + tab frames, `md` breakpoint | `feature-proposal-framework-adoption.md` | M | OPEN — decided from spike findings |
-| Order snapshot | Frozen `ticketType` on Order + backfill — the portion resolver reads it | `../chores-0.9.1.md` § Order snapshot | S | parked for the release after 0.9 (2026-10-08) |
-| Booking one-path | One builder family for regular + guest orders across grid/preview/day; guest cells editable; power includes guests; honest toasts | `../archived/bug-fix-plan-v0.9.md` | M–L | ✅ approved 2026-10-06 — user commit pending |
-| Billing delivery report + interrupted runs | Repository fills delivery state on every read; stale RUNNING runs | `bug-fix-billing-delivery-report.md` | M | OPEN decisions |
-| Motion tokens | Raw motion classes into the design system | `bug-fix-motion-tokens.md` | S | parked for this release |
-| Dinner-page follow-ups | PR #166 leftovers on `/dinner` | `bug-fix-dinner-page-and-dates.md` | S | parked for this release |
+| Framework research spike | prisma 7/8-RC + zod 4 + `zod-prisma-types` compatibility; removable workarounds and adoptable features; Nuxt roadmap evidence that `useAsyncData`'s option surface (`enabled`, `createUseAsyncData`) and named layout slots survive coming releases | `feature-proposal-framework-adoption.md` § Dependency clusters | S | committed |
+| CI test reporting | Job summary: vitest's built-in GitHub summary + per-suite Playwright sections with report links | below | S | committed |
+| Framework pair upgrade | pinia 4 + @pinia/nuxt 1, @vueuse/core 15, ical-generator 11 | `feature-proposal-framework-adoption.md` § Clusters and order | S | committed |
+| Store fetcher factory + store alignment | `useStoreAsyncData`, schema-driven types; every store converges on it (the misaligned fetch handling across stores, release-plan I2) | `feature-proposal-framework-adoption.md` | M–L | committed |
+| Fetch gating | `enabled` carries the fetch condition; id-in-key gates need nothing extra, login gates clear on logout; folded in 2026-10-07: datasets key on the real selection (no copy refs, no component watches), `selectedSeasonId = userChoice ?? getDefaultSeasonId()`, `dependsOn` for SSR of dependent chains | `feature-proposal-framework-adoption.md` | M–L | committed (fine-tuning open: stale-selection 404) |
+| Prisma bundle | ALL prisma/zod/migration work in one go: the prisma + zod majors the spike green-lights, `zod-prisma-types` regen, every new model of the push, one migration | below | L | committed (migration `0017_roster` on local, dev and prod 2026-10-08; later schema changes ride their packages) |
+| Duty roster (F5a) | Templates, duties, audit trail | `feature-proposal-duty-roster.md` | L | signed off (schema 2026-10-07, roster UX 2026-10-05, admin template UI 2026-10-06) |
+| Joker + vacancy overviews | `JokerSlot`, dinner "missing" face, CTC faces, shift counts, volunteering moves to duty level + data separation | `feature-proposal-duty-roster.md` § Joker + § Roster UX | L | signed off (CTC 2026-10-05, overviews 2026-10-06); the team-card slot committed (3cdb77c, 427a625, c62dd6b) |
+| Roster sign-off + cross-team swap (F5b) | Derived auto-sign + godkend-alligevel, duty swap | `feature-proposal-duty-roster.md` Phases 4–5 | M | signed off (2026-10-05, swap mode 2026-10-08) |
+| Waitlist | Queue, auto-assign sweep, extra portions, UI | `feature-proposal-waitlist.md` | L | signed off (chef 2026-10-05, member faces 2026-10-06); backend committed 2026-10-09, UI planned |
+| Kitchen allergy line | the dining-mode panels show the allergy kuverter; the expanded list opens with the allergen breakdown and chips beside each diner | this doc § Kitchen allergy line | S | committed (5eedd34, 49ece5e) |
+| Chef allergen line | the chef's allergen section counts this dinner's diners in kuverter per menu allergen; the edit panel becomes the allergy panel | this doc § Chef allergen line | S | committed (49ece5e); selector population planned |
+| Chef calendar header | the Agenda/Kalender tabs and the collapse chevron share one header row above a `UCollapsible`; `/chef` hydrates with one footer | this doc § Chef calendar header | S | committed (42b380f) |
+| Ticket allergies | the booking form shows a booked inhabitant's live allergies on the ticket card (glyph) and in the expanded row (compact elements); guest ids and swapped tickets: `../chores-0.9.1.md` § Ticket allergies on the order | this doc § Ticket allergies | S | committed (7df4c17, bcf56c8, fd41213); guest and swapped tickets planned for 0.9.1 |
+| One team number | a team's number comes from its name, else its season position; every team band derives from it (`/admin/teams`, `/chef`, `/dinner`) | this doc § Decisions 2026-10-11 (one team number) | S | committed (0b54a73, 8d98269) |
+| Season pick prefers the one in progress | the season order is active, in progress, upcoming, ended; the e2e teardown keeps a non-past active season | this doc § Decisions 2026-10-11 (season pick) | S | committed (9a03544) |
+| One breakpoint source | the design system is the one reader of the layout's `isMd`; components bind responsive tokens, behaviour reads `breakpoint`; the household calendar's open state moves to `?cal=` | this doc § Decisions 2026-10-11 (one breakpoint source) | S | committed (8d98269) |
+| Calendar default waits for the viewport | `/dinner` and `/chef` land open on desktop and closed on a phone; the breakpoint reads null until the layout measures it | this doc § Small packages | S | committed (2a8d0e9) |
+| Season status glyphs | the season's status as a `UBadge` from `SEASON_STATUS_GLYPHS`, in the season selector and the status display | this doc § Small packages | S | committed (fd41213, bb3271e) |
+| Notifications | Waitlist + duty-swap kinds, buildup threshold | `feature-proposal-notification-triggers.md` § Trigger catalog | M | planned |
+| Adhoc billing + EXPENSE | Ad-hoc charges + chef spending as EXPENSE transactions; Mit forbrug + admin economy spending views | `feature-proposal-adhoc-admin-billing.md` | L | signed off (2026-10-08); ledger, chef endpoints and the budget pane committed (49ece5e, 24e9a3f, fd41213); spending views and adhoc charges planned |
+| PRF spike | Passkey/PRF research + device protocol | `../feature-proposal-relogin-faceid.md` (parked proposal), `../archived/feature-mobile-native-feel.md` | S | committed (S5 re-login parked out of 0.9) |
+| Page composition | Master/detail + tab frames, `md` breakpoint | `feature-proposal-framework-adoption.md` | M | planned (decision open) |
+| Order snapshot | Frozen `ticketType` on Order + backfill — the portion resolver reads it | `../chores-0.9.1.md` § Order snapshot | S | planned for 0.9.1 |
+| Booking one-path | One builder family for regular + guest orders across grid/preview/day; guest cells editable; power includes guests; honest toasts | `../archived/bug-fix-plan-v0.9.md` | M–L | committed |
+| Billing delivery report + interrupted runs | Repository fills delivery state on every read; stale RUNNING runs | `bug-fix-billing-delivery-report.md` | M | planned (decisions open) |
+| Motion tokens | Raw motion classes into the design system | `bug-fix-motion-tokens.md` | S | planned for 0.9.1 |
+| Dinner-page follow-ups | PR #166 leftovers on `/dinner` | `bug-fix-dinner-page-and-dates.md` | S | planned for 0.9.1 |
 
 ## Build order
 
@@ -46,14 +48,15 @@ follow the framework's own shapes, adopt new features where they earn it.
 
 1. Framework research spike ✅ + CI test reporting ✅ + PRF spike ✅ (S5 parked, nothing of it in the bundle)
 2. Framework pair upgrade ✅ (pinia 4 + @pinia/nuxt 1, ical-generator 11; @vueuse/core removed)
-3. Store fetcher factory + store alignment (in progress 2026-10-07) → Fetch gating — the spike found they order
-   freely around the dependency clusters, so they run before the bundle
-4. Prisma bundle: prisma 7.10 + zod 4.6 per spike findings + every model of the push + one migration (models
-   signed off, Make targets produce the files, user applies)
+3. Store fetcher factory + store alignment ✅ → Fetch gating ✅
+4. Prisma bundle ✅ (majors, every model of the push, migration `0017_roster` applied 2026-10-08)
 5. Duty roster F5a → Joker + overviews (+ data separation) → F5b
 6. Waitlist → Notifications
 7. Adhoc + EXPENSE (this release, lower priority)
 8. Page composition (if signed off)
+
+Landed beside the order, 2026-10-08 to 12: the kitchen and chef allergy lines, the chef calendar header, the ticket
+allergies, the chef budget pane, and the small packages of § Small packages.
 
 One e2e runner at a time; packages that run Playwright are sequenced.
 
@@ -226,7 +229,7 @@ Unfolded Budget (the chevron turns; the boxes stay, this opens under them). The 
 │  (history) Se billetændringer                                    [>]  │
 ```
 
-In the team's fragment an arrow before the menu title marks the dinner on view; the Budget shows no dinner status. A receipt row carries its date, the bestiller in the Middag column, and its amount under Brugt. Without receipts the table shows its own empty state, "Madbestilling mangler". A receipt sub-row carries its date, the bestiller in the Middag column in the muted ink, and its amount under Brugt. Without receipts the dinner row is followed by one sub-row reading "Madbestilling mangler". A dinner without tickets shows the timeline's waiting glyph (the "om n dage" badge's) in Tilbage instead of a check. A lone dinner shows the first fragment only; the Hele Madhold table appears when the team cooks consecutive days.
+In the team's fragment an arrow before the menu title marks the dinner on view; the Budget shows no dinner status. A receipt row carries its date, the line's note in the Middag column, and its amount under Brugt. Without receipts the table shows its own empty state, "Madbestilling mangler". A dinner without tickets shows the timeline's waiting glyph (the "om n dage" badge's) in Tilbage instead of a check. A lone dinner shows the first fragment only; the Hele Madhold table appears when the team cooks consecutive days.
 
 Madbestilling open, the editor: the same one table component with the entry row above it, its note field prefilled, and slet in its last column; its sums are the table's bottom rows:
 
@@ -284,6 +287,7 @@ Vis fuld historik shows every row newest first, no line, no button.
 - Dates render whole through the app's date mask (`formatDate`), periods through `formatDateRange`, moments with the hour after the date.
 - Billetændringer: one row per order event of the dinner from `OrderHistory`, newest first: the household's short name (System for the scaffold), the event word the order history uses, the ticket moved as the ticket chip with its sign, the composition after the change as chips with counts and the kuverter, and Indtægter after the change in kr. After the booking deadline a released ticket stays paid, so Afmeldt and Købt fra anden move kuverter and the payer, not Indtægter. `GET /api/chef/dinner/[id]/order-history?since=` hands the rows from the menu deadline with the composition replayed server-side; the button fetches the rest.
 - Madbestilling is the timeline's word; the row leads with the cart glyph like Allergener leads with its glyph. Folded, chef and team members read the total alone, or "Madbestilling mangler"; the budget math lives in the RÅDIGHEDSBELØB box. The chef's Rediger madbestilling opens the editor in place, headed "Hvad kostede indkøbene?" with Luk; the helping numbers Rådighedsbeløb, Brugt, Tilbage and the round sit above the entry row and follow the lines. A line saves on Tilføj and goes on slet; there is no draft, so no Gem and no Annuller.
+- A line carries a note. The entry row's note field starts with the words `expenseNoteWords` builds from the dinner and the payer, `"Risotto" 14/04/2026, Anna H. bestiller for Madhold 2`; the words end at bestiller for a dinner without a team and start at the date for one without a title. The chef edits the words before Tilføj; the form sends the note as typed and leaves it out when the field is empty, and the route writes the same words when the body carries none. The editor table shows Bestiller and Note, the Budget's receipt rows read the note, and the save toast leads with it.
 - The editor leads with the action: the entry row, then the lines table, then the sums as the table's bottom rows; a rule sits above every result row (Rådighedsbeløb under the lines, Tilbage, the ticket table's Indtægter and Rådighedsbeløb; the box keeps its rows bare) and a gap with a rule sets the whole team's block apart; the folded total carries the unit words.
 - Every amount sits in fixed columns with an icon slot that is always there, so kr lines up down a column with and without the check or exclamation icon, in the hint, the lines, the box and the round table.
 - Every table is a UTable on the table token, the lines table of the editor included; a header row over rows is a table even when drawn with divs. Every table's empty state is its own `#empty` slot, never a synthetic row.
@@ -338,140 +342,48 @@ here, admin-only.
 
 ## Kitchen allergy line
 
-**Problem.** A chef opening the kitchen stats sees the diners per dining mode and, in the panel head, the names
-whose allergies match tonight's menu. The chefs (meeting 2026-10-08) want the count of allergic diners per panel at a
-glance and, on opening a panel, which diners carry which allergies.
-
-**Solution.** The panel head carries the allergy glyph and the number of diners in that mode with a registered
-allergy counted in kuverter with the panel's portion weights, nothing else. The expanded list opens with the overview line, the same glyph and number followed by each
-menu allergen as a compact `AllergyTypeDisplay` with its name and its kuverter, in menu order; every diner with an allergy carries one compact
-`AllergyTypeDisplay` per allergy beside the name: the type's own icon or emoji and its name. A household row centres
-its segments on one line. The panel
-head's per-name flags go. `useAllergy().computeAffectedDiners` counts all registered allergies of the diners with
-the menu filter optional, so the chefs' existing menu-match reads keep their behaviour.
-The kitchen panels and the chef's allergen line count the menu's allergens only, through one `computeAllergenOverview`,
-so the panel heads add up to the chef's total (signed 2026-10-09). A diner's allergy counts once however many rows
-carry it, and a guest ticket counts the allergies named on the ticket, never its booker's.
-
-**Mockup** ✅ signed 2026-10-08 (desktop; the phone wraps the overview line after the total)
-
-```
-Panel head, collapsed
-| SPISESAL - 33% (v)                                  |
-|  35 kuv. · Voksen: 25 | Barn: 8 | Baby: 2 # 35      |
-|  (allergy) 3,5 kuv.                                 |
-
-Expanded
-|  (allergy) 3,5 kuv. | (wheat) Gluten · 1 | (milk) Mælk · 2,5         |   <- first line, the overview, kuverter
-|  S_31 · 2 voksne, 1 barn · Anna (wheat) Gluten (milk) Mælk, Bo, Emil |
-|  N_12 · 1 voksen · Maria (milk) Mælk                                 |
-|  V_04 · 2 voksne · Per, Lise (wheat) Gluten                          |
-```
-
-A panel with no allergic diner shows no line and no allergy types.
-
-**TDD.** `useAllergy.unit.spec`: a `describe.each` over orders with and without the menu filter (total, breakdown
-order in kuverter, diners with their allergens). `KitchenPreparation.nuxt.spec`: a mode with an adult and a child allergic renders the head
-1,5 kuv., the overview line with one compact `AllergyTypeDisplay` per menu allergen, and one compact `AllergyTypeDisplay` with
-its name per diner allergy; a mode without renders neither.
-
-**Affected.** `useAllergy.ts`, `KitchenPreparation.vue` (header mockup), `docs/adr-compliance-frontend.md`.
-
-**Stats bar ink** (option C signed 2026-10-10). The stats bar's label and ticket breakdown bind
-`COMPONENTS.kitchen.totalsSecondary`: `TEXT.mocha[800]` (`text-amber-800`) on the bar's `BG.mocha[50]`, 8.37:1 in light and
-dark mode. The contrast gate measures the pair on its own fill.
-
-**No-allergy ink.** The sun of the no-allergy state binds `COMPONENTS.allergyTypeDisplay.noneAvatarUi`: the white disc
-carries `TEXT.gray[500]` in light and gray-800 in dark, and the icon inherits it. 5.59:1 light and 14.67:1 dark in Glade
-farver and Til farveblinde, 8.52:1 and 14.67:1 in Høj kontrast. A type's own icon or emoji keeps its ink.
+✅ implemented (5eedd34, 49ece5e, 42b380f; UX signed 2026-10-08, stats bar ink option C 2026-10-10). The dining-mode
+panel heads carry the allergy glyph and the kuverter of allergic diners; the expanded list opens with the overview line
+and marks each diner's allergy types; the no-allergy sun has its own ink. Mockups: `KitchenPreparation.vue` and
+`AllergyOverviewLine.vue` headers. Code: `useAllergy.ts` (`computeAllergenOverview`, `computeAffectedDiners`),
+`AllergyTypeDisplay.vue` compact face, `COMPONENTS.kitchen`, `COMPONENTS.allergyOverview`. Specs: `useAllergy.unit.spec`,
+`KitchenPreparation.nuxt.spec`, `AllergyTypeDisplay.nuxt.spec`.
 
 ## Chef allergen line
 
-**Problem.** Under the chef portrait the allergen section shows the menu's allergens as chips and counts everyone
-in the community with those allergies; the chef needs the diners of this dinner, in kuverter, split on the menu's
-allergens. In the edit face the detail panel is titled "Statistik" with a chart glyph.
-
-**Solution.** The view line is the kitchen's overview on this dinner's diners filtered by the menu's allergens:
-total kuverter, then every menu allergen as a compact `AllergyTypeDisplay` with its name and its kuverter, a zero included;
-"ingen" when the menu names no allergen. The edit face's allergen table counts this dinner's kuverter per allergen
-and its detail panel becomes the allergy panel: `ICONS.allergy` large, the title "Allergier blandt gæsterne", the
-overview line, and the names, each allergy a compact `AllergyTypeDisplay` with its name, behind a flip-open "Hvem". The community-wide count and avatars go.
-`useAllergy().computeAffectedDiners` with the menu filter supplies both.
-Both places count the menu's allergens only, the kitchen panels splitting the chef's total by dining mode (signed
-2026-10-09). A diner's allergy counts once however many rows carry it, and a guest ticket counts the allergies named on
-the ticket, never its booker's.
-
-**Mockup** ✅ signed 2026-10-09 (desktop; the phone wraps the line after the total)
-
-```
-View, under the chef portrait
-| (allergy) ALLERGENER   3,5 kuv. | (milk) Mælk · 2,5 | (nuts) Nødder · 1 | (wheat) Gluten · 0   [Rediger allergener] |
-| (allergy) ALLERGENER   ingen                                                                  [Rediger allergener] |
-
-Edit, the allergen selector
-| ☑ (milk)  Mælk & Smør     2,5  |  (allergy) Allergier blandt gæsterne                        |
-| ☑ (nuts)  Nødder           1   |  (allergy) 3,5 kuv. | (milk) Mælk · 2,5 | (nuts) Nødder · 1 |
-| ☐ (wheat) Gluten           0   |  [v] Hvem                                                   |
-|                                |      Dorthe (milk) Mælk, Skraaningen (milk) Mælk,           |
-|                                |      Martin (nuts) Nødder                                   |
-```
-
-**TDD.** `ChefMenuCard.nuxt.spec`: the line shows the total and each menu allergen as its compact `AllergyTypeDisplay`
-with its kuverter, "ingen" with no allergens. `AllergenMultiSelector.nuxt.spec`: counts per allergen from the diners; the panel's title and glyph; the
-names behind the toggle.
-
-**Affected.** `ChefMenuCard.vue`, `AllergenMultiSelector.vue` (header mockups), `docs/adr-compliance-frontend.md`.
-
-**Compact title placeholder ink.** A dinner without a menu title reads in `COMPONENTS.chefMenuCard.compactTitlePlaceholder`,
-which carries `TEXT.muted` on the compact face (the page surface, selected or not): 5.59:1 light and 5.45:1 dark in Glade
-farver, 5.59:1 and 5.51:1 in Til farveblinde, 8.52:1 and 8.43:1 in Høj kontrast.
+✅ implemented (49ece5e; UX signed 2026-10-09). The ALLERGENER row counts this dinner's diners per menu allergen through
+the same overview; the edit panel is the allergy panel. Mockups: `ChefMenuCard.vue` and `AllergenMultiSelector.vue`
+headers. Specs: `ChefMenuCard.nuxt.spec` (Allergen line). Open: the selector counts a population through a ticket
+allergies map (brief halted 2026-10-10, re-presented after the 0.9.1 ticket allergies design).
 
 ## Chef calendar header
 
-**Problem.** `/chef` renders two footers and logs 18 hydration warnings.
-
-**Root cause.** `ChefCalendarDisplay` rendered the Agenda/Kalender `UTabs` in the `UAccordion` `#leading` slot, inside the
-accordion trigger `<button>`. The HTML parser closes the outer button at the first tab button, the hydrated DOM differs
-from the Vue tree, and the repair inserts a second footer outside the Nuxt root.
-
-**Solution.** The header is one row (`COMPONENTS.chefCalendar.header`): the tabs on the left, a chevron `UButton` bound
-to `BUTTONS.flipOpen(accordionOpen)` with `aria-expanded` on the right. The agenda or calendar sits in a `UCollapsible`
-(`COMPONENTS.collapsible.chefCalendar`). The component keeps its contract: `accordionOpen` in, `update:accordion-open`
-from the chevron, `tab-click` from a tab; `/chef` keeps the `view` query parameter (`mode:open`).
-
-**Mockup** ✅ signed 2026-10-10 (option B): `ChefCalendarDisplay.vue` header.
-
-**TDD.** `ChefCalendarDisplay.nuxt.spec`: a tab click emits `tab-click` with its mode, the chevron emits the toggled open
-state and carries `aria-expanded`, the content renders when open and is absent when closed, the header holds three buttons
-with no button inside another. `Chef.e2e.spec`: the chef page hydrates without a warning and renders one `footer`.
-
-**Affected.** `ChefCalendarDisplay.vue` (header mockup), `useTheSlopeDesignSystem.ts` (`COMPONENTS.collapsible`,
-`COMPONENTS.chefCalendar`, `COMPONENTS.table.agendaUi`, `ICONS.agenda`), `ChefMenuCard.vue` and `RoleAssignment.vue`
-(`COMPONENTS.collapsible.belowTrigger`), `designSystemUsage.unit.spec.ts`, `docs/ui.md`, `docs/adr-compliance-frontend.md`.
+✅ implemented (42b380f; option B signed 2026-10-10). One header row, the Agenda/Kalender tabs beside a chevron over a
+`UCollapsible`; `/chef` hydrates with one footer. Mockup: `ChefCalendarDisplay.vue` header. Tokens:
+`COMPONENTS.chefCalendar`, `COMPONENTS.collapsible`. Specs: `ChefCalendarDisplay.nuxt.spec`, `Chef.e2e.spec`
+(hydration guard).
 
 ## Ticket allergies
 
-**Problem.** A booked inhabitant's allergies are on their profile and on the chef's allergen line, and the booking
-form shows nothing on the ticket: the household detail loads each inhabitant's allergies (`fetchHousehold`) and
-`HouseholdDetailSchema` parses the inhabitants without them; the ticket card and the form read `provenanceAllergies`,
-a field no path writes (`../chores-0.9.1.md` § Ticket allergies on the order holds the guest and swap report).
+✅ implemented (7df4c17, bcf56c8, fd41213; UX signed 2026-10-11). A booked inhabitant's live allergies: the glyph in the
+ticket card's special slot and the compact allergy line in the expanded row. The card row is three fixed slots, special
+(state, guest, allergy), type and how you eat; the state colour paints the edge and the state glyph, the type colour the
+badge and the info glyphs; the guest-of row aligns with the add-guest row. Mockups: `DinnerTicket.vue` and
+`DinnerBookingForm.vue` headers. Specs: `DinnerTicket.nuxt.spec`, `DinnerBookingForm.nuxt.spec`,
+`useCoreValidation.unit.spec`, `Dinner.e2e.spec` (Ticket allergies). Guest and swapped tickets:
+`../chores-0.9.1.md` § Ticket allergies on the order.
 
-**Solution.** The household detail's inhabitants carry `allergies` with their `allergyType`, through the deserializer
-and the schema. A booked inhabitant's ticket card shows `ICONS.allergy` in row 1 when the profile has an allergy; the
-expanded row opens with the same glyph followed by one compact `AllergyTypeDisplay` per allergy. The names badge on
-the card and the badge in the name cell go. Guest and swapped tickets read the stored list in 0.9.1 through the same
-prop.
+## Small packages of 2026-10-11 and 12
 
-**Mockup** ✅ signed 2026-10-11: `DinnerTicket.vue` header.
+All implemented and committed; the rules are in § Decisions.
 
-**TDD.** `Dinner.e2e.spec`: GIVEN an inhabitant with an allergy WHEN their ticket is booked THEN the card shows the
-glyph and the expanded row names the type. `DinnerTicket.nuxt.spec` (new): glyph with allergies, none without, no
-names on the card. `DinnerBookingForm.nuxt.spec`: one `AllergyTypeDisplay` per allergy in the expanded row, no badge
-in the name cell. `useCoreValidation.unit.spec`: the household detail keeps the inhabitants' allergies.
-
-**Affected.** `useCoreValidation.ts` (household detail inhabitants and their deserializer), `DinnerTicket.vue`
-(header mockup, tokens), `DinnerBookingForm.vue` (expanded row, name cell, touched classes),
-`useTheSlopeDesignSystem.ts` (ticket allergy tokens), `docs/ui.md`, `docs/adr-compliance-frontend.md`.
+| Package | Commit | Pointers |
+|---|---|---|
+| One team number | 0b54a73, 8d98269 | committed (0b54a73, 8d98269) |
+| Calendar default waits for the viewport | 2a8d0e9 | committed (2a8d0e9) |
+| Season pick prefers the one in progress | 9a03544 | committed (9a03544) |
+| One breakpoint source | 8d98269 | committed (8d98269) |
+| Season status glyphs | fd41213, bb3271e | committed (fd41213, bb3271e) |
 
 ## Decisions
 
@@ -646,12 +558,12 @@ in the name cell. `useCoreValidation.unit.spec`: the household detail keeps the 
 | Package | Tests |
 |---|---|
 | Framework spike | report only; upgrade clusters verify with `npm run pre:all`, `make unit-test`, `npm run test:e2e:api` per cluster |
-| CI test reporting | CI run on this branch |
+| CI test reporting | committed |
 | Factory + gating | per `feature-proposal-framework-adoption.md` § Coverage |
-| Prisma bundle | `npx prisma validate`, generated-zod regen, suites green post-migration |
+| Prisma bundle | committed (migration `0017_roster` on local, dev and prod 2026-10-08; later schema changes ride their packages) |
 | Duty roster + joker | per `feature-proposal-duty-roster.md` (API spec per endpoint, BDD e2e + component spec per surface, unit per util) |
-| Waitlist | per `feature-proposal-waitlist.md` § TDD |
-| Notifications | serial e2e per kind: event writes its Delivery row |
+| Waitlist | signed off (chef 2026-10-05, member faces 2026-10-06); backend committed 2026-10-09, UI planned |
+| Notifications | planned |
 | Adhoc + EXPENSE | per `feature-proposal-adhoc-admin-billing.md` phases |
 
 ## Verifications with human eyes
@@ -663,7 +575,7 @@ in the name cell. `useCoreValidation.unit.spec`: the household detail keeps the 
 | CI summary | Actions run page: categories, counts, red ui failures, report links | first CI run |
 | Data separation list | membership vs one-off volunteer rows, reviewed and applied by the user | before duty roster ships |
 | Admin economy spending | totals sanity against a real season | after the package lands |
-| Page composition | `/chef`, `/dinner`, `/admin/*`, `/household/*` render identically | if the package ships |
+| Page composition | `/chef`, `/dinner`, `/admin/*`, `/household/*` render identically | planned (decision open) |
 
 ## ADR notes
 

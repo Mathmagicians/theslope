@@ -4,8 +4,8 @@ import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {requireChefForDinner} from '~~/server/utils/authorizationHelper'
 import {createExpense, fetchDinnerEvent} from '~~/server/data/financesRepository'
 import {useBillingValidation, type Expense, type ExpenseCreate} from '~/composables/useBillingValidation'
+import {useBilling} from '~/composables/useBilling'
 import {useHousehold} from '~/composables/useHousehold'
-import {formatDate} from '~/utils/date'
 
 const {throwH3Error} = eventHandlerHelper
 const LOG = '🧾 > CHEF > EXPENSES > [PUT]'
@@ -15,8 +15,8 @@ const paramsSchema = z.object({id: z.coerce.number().int().positive()})
  * PUT /api/chef/dinner/[id]/expenses - a grocery line on the dinner
  *
  * The chef entering the line is its payer, named as the card names people; the snapshot outlives the user row (the
- * Heynabo import deletes users first). The note is the dinner's date and menu title, so the line reads in the ledgers
- * where lines of many dinners meet.
+ * Heynabo import deletes users first). The note is the body's; a body without one gets the words of expenseNoteWords,
+ * so the line reads in the ledgers where lines of many dinners meet.
  */
 export default defineEventHandler(async (event): Promise<Expense> => {
     const d1Client = event.context.cloudflare.env.DB
@@ -34,15 +34,18 @@ export default defineEventHandler(async (event): Promise<Expense> => {
     const chef = await requireChefForDinner(event, id)
 
     try {
-        const dinner = await fetchDinnerEvent(d1Client, id)
+        // The chef guard has answered 404 for a missing dinner, so the detail is here
+        const dinner = (await fetchDinnerEvent(d1Client, id))!
         const {formatNameWithInitials} = useHousehold()
+        const {expenseNoteWords} = useBilling()
+        const paidBy = {id: chef.id, email: chef.email, name: chef.Inhabitant ? formatNameWithInitials(chef.Inhabitant) : chef.email}
         const expense = await createExpense(d1Client, {
             type: LedgerEntryTypeSchema.enum.REGULAR,
             dinnerEventId: id,
             paidByUserId: chef.id,
-            paidBy: {id: chef.id, email: chef.email, name: chef.Inhabitant ? formatNameWithInitials(chef.Inhabitant) : chef.email},
+            paidBy,
             amount: body.amount,
-            description: dinner ? `${formatDate(dinner.date, 'dd/MM')} ${dinner.menuTitle}`.trim() : formatDate(new Date(), 'dd/MM')
+            description: body.description ?? expenseNoteWords(dinner, paidBy)
         })
         setResponseStatus(event, 201)
         return expense
