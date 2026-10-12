@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
-import {describe, it, expect, vi, beforeEach} from 'vitest'
+import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
-import {flushPromises} from '@vue/test-utils'
+import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import AllergyPosterPage from '~/pages/admin/allergies/pdf.vue'
 import {useAllergiesStore} from '~/stores/allergies'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
@@ -21,6 +21,9 @@ registerEndpoint(POSTER_NOTES_ENDPOINT, () => ({
     updatedByUserId: 3
 }))
 registerEndpoint('/api/admin/allergy-type', () => AllergyFactory.createMockAllergyTypesWithInhabitants())
+
+// The next test's resetStores drops the datasets a still-mounted poster reads
+enableAutoUnmount(afterEach)
 
 // Fetching is the store's concern; explicit load repopulates after resetStores.
 // The poster has no layout (no UApp), so the real AllergyManagersList gets its

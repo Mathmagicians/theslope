@@ -1,6 +1,7 @@
 // @vitest-environment nuxt
-import {describe, it, expect, beforeEach} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended, registerEndpoint} from '@nuxt/test-utils/runtime'
+import {enableAutoUnmount} from '@vue/test-utils'
 import {findByTestId, pollFor, resetStores} from '~~/tests/component/testHelpers'
 import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTestIds'
 import SeasonStatusDisplay from '~/components/shared/SeasonStatusDisplay.vue'
@@ -17,6 +18,9 @@ registerEndpoint('/api/admin/season/active', () => activeSeason.id)
 registerEndpoint('/api/admin/season/1', () => activeSeason)
 registerEndpoint('/api/admin/season/2', () => inactiveSeason)
 registerEndpoint('/api/admin/season', () => [activeSeason, inactiveSeason])
+
+// The next test's resetStores drops the datasets a still-mounted display reads
+enableAutoUnmount(afterEach)
 
 describe('SeasonStatusDisplay', () => {
 

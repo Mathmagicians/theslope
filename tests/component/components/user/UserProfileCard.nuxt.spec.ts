@@ -6,9 +6,9 @@
  * Real component tree, real stores (testing.md Rule 6); only HTTP and the session are faked.
  * The toggle and Log ud belong to the current user's own card, so the spec drives `authStore.user`.
  */
-import {describe, it, expect, vi, beforeEach} from 'vitest'
+import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {nextTick} from 'vue'
-import {flushPromises} from '@vue/test-utils'
+import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {mockNuxtImport} from '@nuxt/test-utils/runtime'
 import UserProfileCard from '~/components/user/UserProfileCard.vue'
 import {mountWithTooltipProvider, findByTestId, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
@@ -28,6 +28,9 @@ mockNuxtImport('useUserSession', () => useUserSession)
 
 // The users store fetches on creation (role manager data)
 registerEmptyStoreEndpoints()
+
+// The next test's resetStores drops the datasets a still-mounted card reads
+enableAutoUnmount(afterEach)
 
 const me = UserFactory.defaultUserWithInhabitant('profile-me', {id: 1})
 const someoneElse = UserFactory.defaultUserWithInhabitant('profile-other', {id: 2})

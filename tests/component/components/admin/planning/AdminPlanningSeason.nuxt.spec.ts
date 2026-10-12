@@ -1,6 +1,7 @@
 // @vitest-environment nuxt
-import {describe, it, expect, beforeEach} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended, registerEndpoint} from '@nuxt/test-utils/runtime'
+import {enableAutoUnmount} from '@vue/test-utils'
 import {nextTick} from 'vue'
 import {findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
 import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTestIds'
@@ -12,6 +13,9 @@ import {computeCookingDates} from '~/utils/season'
 // The form reads its saving state from the real plan store; only HTTP is faked (testing.md Rule 6)
 registerEndpoint('/api/admin/season/active', () => null)
 registerEndpoint('/api/admin/season', () => [])
+
+// The next test's resetStores drops the datasets a still-mounted form reads
+enableAutoUnmount(afterEach)
 
 const season = {...SeasonFactory.defaultSeason('form'), id: 1}
 

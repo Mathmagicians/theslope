@@ -5,9 +5,9 @@
  * Real component, real auth store, real design system (testing.md Rule 6); only HTTP and the
  * session are faked. Runs every case on both viewports through the injected `isMd` breakpoint.
  */
-import {describe, it, expect, vi, beforeEach} from 'vitest'
+import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {nextTick} from 'vue'
-import {flushPromises} from '@vue/test-utils'
+import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {readBody, type H3Event} from 'h3'
 import UserPreferencesCard from '~/components/user/UserPreferencesCard.vue'
@@ -21,6 +21,9 @@ import {PREF_TEST_IDS, PALETTE_BADGE_TEXT, COLOUR_SAFE_BADGE_TEXT} from './userP
 // would hydrate is the one thing faked - the auth store is real
 const {session, useUserSession} = await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).mockSession())
 mockNuxtImport('useUserSession', () => useUserSession)
+
+// The next test's resetStores drops the datasets a still-mounted card reads
+enableAutoUnmount(afterEach)
 
 const savedBodies: Record<string, unknown>[] = []
 const testNotificationSpy = vi.fn()

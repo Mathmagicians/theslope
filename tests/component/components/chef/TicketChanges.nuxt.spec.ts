@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
-import {describe, it, expect, beforeEach, vi} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach, vi} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
-import {flushPromises} from '@vue/test-utils'
+import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {nextTick} from 'vue'
 import {getQuery, type H3Event} from 'h3'
 import TicketChanges from '~/components/chef/TicketChanges.vue'
@@ -40,7 +40,10 @@ const historyEndpoint = vi.fn((event: H3Event) => {
 registerEmptyStoreEndpoints()
 registerEndpoint(`/api/chef/dinner/${DINNER_ID}/order-history`, historyEndpoint)
 
-const mount = (props: Record<string, unknown> = {}) => mountWithTooltipProvider(TicketChanges, {
+// The next test's resetStores drops the datasets a still-mounted pane reads
+enableAutoUnmount(afterEach)
+
+const mount =(props: Record<string, unknown> = {}) => mountWithTooltipProvider(TicketChanges, {
     props: {dinnerEventId: DINNER_ID, since: SINCE, ...props},
     isMd: true
 })

@@ -1,6 +1,7 @@
 // @vitest-environment nuxt
-import {describe, it, expect, vi, beforeEach, beforeAll} from 'vitest'
+import {describe, it, expect, vi, beforeEach, afterEach, beforeAll} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
+import {enableAutoUnmount} from '@vue/test-utils'
 import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS} from '~~/tests/component/testHelpers'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
@@ -68,6 +69,9 @@ registerEndpoint(`/api/admin/household/${householdWithInhabitants.id}`, () => ho
 registerEndpoint(`/api/admin/household/${strangerHousehold.id}`, () => strangerHousehold)
 
 const mountForm = (props: Record<string, unknown>, isMd?: boolean) => mountWithTooltipProvider(DinnerBookingForm, {props, isMd})
+
+// The next test's resetStores drops the datasets a still-mounted form reads
+enableAutoUnmount(afterEach)
 
 beforeEach(() => {
   resetStores()

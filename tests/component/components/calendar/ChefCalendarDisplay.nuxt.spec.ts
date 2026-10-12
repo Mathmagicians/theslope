@@ -1,5 +1,6 @@
-import {describe, it, expect, beforeEach} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {enableAutoUnmount} from '@vue/test-utils'
 import {nextTick} from 'vue'
 import ChefCalendarDisplay from '~/components/calendar/ChefCalendarDisplay.vue'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
@@ -22,6 +23,9 @@ const team = {
 } as unknown as CookingTeamDisplay
 
 type ViewMode = 'agenda' | 'calendar'
+
+// The next test's resetStores drops the datasets a still-mounted calendar reads
+enableAutoUnmount(afterEach)
 
 const mountCalendar = async ({viewMode = 'agenda', accordionOpen = true, dinnerEvents = []}: {
     viewMode?: ViewMode, accordionOpen?: boolean, dinnerEvents?: DinnerEventDisplay[]

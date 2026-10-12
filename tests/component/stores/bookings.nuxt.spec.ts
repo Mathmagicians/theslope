@@ -89,6 +89,8 @@ const selectSeason = (dinnerEvents: DinnerEventDisplay[] = []) => {
 const MY_HOUSEHOLD_ID = UserFactory.defaultUserWithInhabitant('bookings-store').Inhabitant!.household!.id
 registerEndpoint(`/api/admin/household/${MY_HOUSEHOLD_ID}`, () => ({...HouseholdFactory.defaultHouseholdDetail('bookings-store'), id: MY_HOUSEHOLD_ID}))
 registerEndpoint('/api/admin/billing/periods', billingPeriodsEndpoint)
+const currentPeriodEndpoint = vi.fn((): unknown[] => [])
+registerEndpoint('/api/admin/billing/current-period', currentPeriodEndpoint)
 const waitlistEntriesEndpoint = vi.fn((): unknown[] => [])
 registerEndpoint('/api/order/waitlist', waitlistEntriesEndpoint)
 registerEndpoint('/api/order', ordersEndpoint)
@@ -401,6 +403,10 @@ describe('Bookings store — gated reads', () => {
             endpoint: ordersEndpoint, request: (store: Store) => store.loadUpcomingOrders(true)},
         {dataset: 'household billing', idleKey: 'bookings-store-household-billing', requestedKey: 'bookings-store-household-billing',
             endpoint: householdBillingEndpoint, request: (store: Store) => store.loadHouseholdBilling()},
+        {dataset: 'billing periods', idleKey: 'bookings-store-billing-periods', requestedKey: 'bookings-store-billing-periods',
+            endpoint: billingPeriodsEndpoint, request: (store: Store) => store.loadBillingOverview(() => true)},
+        {dataset: 'current period', idleKey: 'bookings-store-current-period', requestedKey: 'bookings-store-current-period',
+            endpoint: currentPeriodEndpoint, request: (store: Store) => store.loadBillingOverview(() => true)},
         {dataset: 'selected billing period', idleKey: BILLING_PERIOD_KEY, requestedKey: BILLING_PERIOD_KEY,
             endpoint: billingPeriodDetailEndpoint, request: (store: Store) => store.selectBillingPeriod(() => ID)},
         {dataset: 'selected invoice', idleKey: INVOICE_KEY, requestedKey: INVOICE_KEY,

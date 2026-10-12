@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
-import {describe, it, expect, beforeEach} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
-import {flushPromises} from '@vue/test-utils'
+import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {ref} from 'vue'
 import {mountWithTooltipProvider, clickByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
 import HouseholdCard from '~/components/household/HouseholdCard.vue'
@@ -15,6 +15,9 @@ registerEndpoint('/api/admin/season/active', () => season.id)
 registerEndpoint(`/api/admin/season/${season.id}`, () => season)
 registerEndpoint('/api/admin/season', () => [season])
 registerEndpoint('/api/admin/household', () => [])
+
+// The next test's resetStores drops the datasets a still-mounted card reads
+enableAutoUnmount(afterEach)
 
 const household = HouseholdFactory.defaultHouseholdDetail('household-card')
 const inhabitant = household.inhabitants[0]!
