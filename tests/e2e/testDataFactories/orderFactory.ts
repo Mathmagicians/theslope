@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { OrderDisplay, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, TicketChangesResponse, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
+import type { OrderDisplay, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, TicketChangesResponse, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
@@ -157,11 +157,6 @@ export class OrderFactory {
 
     return { ...defaults, ...overrides }
   }
-
-  static readonly defaultSwapOrderRequest = (overrides?: Partial<SwapOrderRequest>): SwapOrderRequest => ({
-    inhabitantId: 10,
-    ...overrides
-  })
 
   static readonly defaultOrderForTransaction = (testSalt: string = temporaryAndRandom()): OrderForTransaction => {
     const detail = OrderFactory.defaultOrderDetail(testSalt, {state: OrderStateSchema.enum.CLOSED, closedAt: new Date()})
@@ -389,48 +384,6 @@ export class OrderFactory {
     return order
   }
 
-  static readonly swapOrder = async (
-    context: BrowserContext,
-    orderId: number,
-    swapData?: Partial<SwapOrderRequest>,
-    expectedStatus: number = 200
-  ): Promise<OrderDisplay | null> => {
-    const data = this.defaultSwapOrderRequest(swapData)
-
-    const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}/swap-order`, {
-      headers,
-      data
-    })
-
-    const status = response.status()
-    const errorBody = status !== expectedStatus ? await response.text() : ''
-    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
-
-    if (expectedStatus === 200) {
-      return await response.json()
-    }
-
-    return null
-  }
-
-  static readonly getOrderHistory = async (
-    context: BrowserContext,
-    orderId: number,
-    expectedStatus: number = 200
-  ): Promise<OrderHistoryDisplay[]> => {
-    const response = await context.request.get(`${ORDER_ENDPOINT}/${orderId}/history`, { headers })
-
-    const status = response.status()
-    const errorBody = status !== expectedStatus ? await response.text() : ''
-    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
-
-    if (expectedStatus === 200) {
-      return await response.json()
-    }
-
-    return []
-  }
-
   /**
    * Get orders with flexible query options
    * @param context - Browser context for API requests
@@ -603,6 +556,7 @@ export class OrderFactory {
     consume: {consumed: 0},
     close: {closed: 0},
     transact: {created: 0},
+    clearWaitlist: {cleared: 0},
     initPrefs: {initialized: 0},
     scaffold: null,
     ...overrides

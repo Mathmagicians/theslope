@@ -1,12 +1,12 @@
 import {useWaitlist} from '~/composables/useWaitlist'
 import {createError} from 'h3'
 import {useBookingValidation, type DinnerEventDetail} from '~/composables/useBookingValidation'
-import type {TicketWaitlistDisplay, WaitlistAssigned, WaitlistAssignmentResult, NotificationOutcome} from '~/composables/useWaitlistValidation'
+import type {TicketWaitlistCreate, TicketWaitlistDisplay, WaitlistAssigned, WaitlistAssignmentResult, NotificationOutcome} from '~/composables/useWaitlistValidation'
 import type {NotificationConfig} from '~/composables/useNotificationValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {createOrders, claimOrder, fetchDinnerEvent} from '~~/server/data/financesRepository'
 import {fetchSeason, fetchInhabitant, fetchUser, fetchHousehold} from '~~/server/data/prismaRepository'
-import {fetchWaitlistForDinners, deleteWaitlistEntry, createWaitlistEntry, type WaitlistEntryCreate} from '~~/server/data/waitlistRepository'
+import {fetchWaitlistForDinners, deleteWaitlistEntry, createWaitlistEntry} from '~~/server/data/waitlistRepository'
 import {emitWaitlistTicketAssigned, emitWaitlistTicketSold, emitWaitlistJoined, emitWaitlistBuildup, type WaitlistDinnerContext} from '~~/server/utils/sender/events/waitlist'
 
 const LOG = '⏳ > WAITLIST > [ASSIGN]'
@@ -25,8 +25,7 @@ interface DinnerForWaitlist {
 }
 
 // The dinner, its season's ticket prices and the label the mails use
-const loadDinner = async (d1Client: D1Database, dinnerEventId: number): Promise<DinnerForWaitlist> => {
-    const dinner = await fetchDinnerEvent(d1Client, dinnerEventId)
+const forWaitlist = async (d1Client: D1Database, dinner: DinnerEventDetail | null, dinnerEventId: number): Promise<DinnerForWaitlist> => {
     if (!dinner?.seasonId) throw new Error(`${LOG} Dinner ${dinnerEventId} not found in a season`)
     const season = await fetchSeason(d1Client, dinner.seasonId)
     if (!season) throw new Error(`${LOG} Season ${dinner.seasonId} of dinner ${dinnerEventId} not found`)
@@ -38,6 +37,9 @@ const loadDinner = async (d1Client: D1Database, dinnerEventId: number): Promise<
         state: dinner.state
     }
 }
+
+const loadDinner = async (d1Client: D1Database, dinnerEventId: number): Promise<DinnerForWaitlist> =>
+    forWaitlist(d1Client, await fetchDinnerEvent(d1Client, dinnerEventId), dinnerEventId)
 
 const ticketLabel = (ticketPrices: TicketPrice[], ticketPriceId: number): string =>
     ticketPrices.find(price => price.id === ticketPriceId)?.description ?? 'billet'
@@ -58,7 +60,7 @@ const outcome = ({queued, dedupeKey}: {queued: boolean, dedupeKey: string}): Not
  * the position; the chef hears once, when the queue reaches the buildup threshold with this entry.
  */
 export async function joinWaitlist(
-    d1Client: D1Database, request: WaitlistEntryCreate, sender: WaitlistSender
+    d1Client: D1Database, request: TicketWaitlistCreate, sender: WaitlistSender
 ): Promise<{entry: TicketWaitlistDisplay, position: number}> {
     const {positionOf, portionNeed, portionsOfEntryFor} = useWaitlist()
     const {DinnerStateSchema} = useBookingValidation()
@@ -109,10 +111,11 @@ const placeEntry = async (
  * unique index refuses a second regular order for the same inhabitant and dinner (ADR-015).
  */
 export async function assignWaitlistPortions(
-    d1Client: D1Database, dinnerEventId: number, supplyPortions: number, performedByUserId: number | null, sender: WaitlistSender
+    d1Client: D1Database, dinnerEvent: DinnerEventDetail, supplyPortions: number, performedByUserId: number | null, sender: WaitlistSender
 ): Promise<WaitlistAssignmentResult> {
     const {resolveWaitlistAssignment, portionsOfEntryFor} = useWaitlist()
-    const dinner = await loadDinner(d1Client, dinnerEventId)
+    const dinnerEventId = dinnerEvent.id
+    const dinner = await forWaitlist(d1Client, dinnerEvent, dinnerEventId)
     const entries = await fetchWaitlistForDinners(d1Client, [dinnerEventId])
     const plan = resolveWaitlistAssignment(entries, supplyPortions, portionsOfEntryFor(dinner.ticketPrices))
     console.info(`${LOG} Dinner ${dinnerEventId}: ${supplyPortions} portions released, ${plan.take.length} of ${entries.length} entries fit`)

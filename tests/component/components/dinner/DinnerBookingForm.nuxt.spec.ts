@@ -7,6 +7,7 @@ import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
 import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
+import {MODE_WORDS, bookingSaveLabel} from '~/composables/useBookingUi'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
 import type {DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
@@ -453,5 +454,22 @@ describe('DinnerBookingForm previews the outcome of a save by the supply', () =>
     await clickByTestId(wrapper, 'guest-add-guest-toggle')
 
     expect(findByTestId(wrapper, 'guest-form-save').text()).toContain(label)
+  })
+})
+
+describe('DinnerBookingForm previews a requeue', () => {
+  const {DinnerModeSchema} = useBookingValidation()
+  const bo = householdWithInhabitants.inhabitants[1]!
+  const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo.id, dinnerEventId: baseProps.dinnerEvent.id, position: 2, dinnerMode: DinnerModeSchema.enum.TAKEAWAY})
+
+  it('WHEN a queued member picks another mode THEN the save reads Opdater and the preview names the new mode and the kept place', async () => {
+    mockIsHouseholdMember.mockReturnValue(true)
+    const deadlines = {...baseDeadlines, canModifyOrders: () => false, canEditDiningMode: () => true}
+    const wrapper = await mountSuspended(withTooltipProvider(DinnerBookingForm, {...baseProps, household: householdWithInhabitants, deadlines, waitlistEntries: [boQueued]}))
+    await clickByTestId(wrapper, `inhabitant-${bo.id}-toggle`)
+    await clickByTestId(wrapper, `inhabitant-${bo.id}-mode-edit-${DinnerModeSchema.enum.DINEINLATE}`)
+
+    expect(findByTestId(wrapper, `inhabitant-${bo.id}-save`).text()).toContain(bookingSaveLabel('requeue'))
+    expect(wrapper.text()).toContain(`ændrer ønsket tilmelding til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label}, beholder plads #${boQueued.position} i køen`)
   })
 })

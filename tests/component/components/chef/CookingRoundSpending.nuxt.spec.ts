@@ -92,9 +92,9 @@ describe('CookingRoundSpending, this dinner', () => {
         expect(total.text()).toContain(`/ +${formatPrice(187300 - 163800)} kr`)
     })
 
-    it('GIVEN no receipts WHEN rendering THEN the table\'s empty state says Madbestilling mangler', async () => {
+    it('GIVEN no receipts WHEN rendering THEN the table\'s empty state is a noReceipts message', async () => {
         const wrapper = await mount({fragment: dinnerSpendingFragment(rows[2]!, [])})
         expect(dataRows(wrapper)).toHaveLength(1)
-        expect(wrapper.text()).toContain('Madbestilling mangler')
+        expect(findByTestId(wrapper, 'cooking-round-empty').text()).toContain(useTheSlopeDesignSystem().getRandomEmptyMessage('noReceipts').text)
     })
 })

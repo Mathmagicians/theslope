@@ -841,6 +841,11 @@ export const useBookingValidation = () => {
         initialized: z.number().int().nonnegative()
     })
 
+    // Result of clearing the queues of consumed dinners
+    const ClearWaitlistResultSchema = z.object({
+        cleared: z.number().int().nonnegative()
+    })
+
     /**
      * Combined result of daily maintenance endpoint
      * Includes jobRunId for observability and parallel-safe test assertions
@@ -850,6 +855,7 @@ export const useBookingValidation = () => {
         consume: ConsumeResultSchema,
         close: CloseOrdersResultSchema,
         transact: CreateTransactionsResultSchema,
+        clearWaitlist: ClearWaitlistResultSchema.default({cleared: 0}),
         initPrefs: InitPreferencesResultSchema.default({initialized: 0}),
         scaffold: ScaffoldResultSchema.nullable()
     })
@@ -990,6 +996,7 @@ export const useBookingValidation = () => {
         CloseOrdersResultSchema,
         CreateTransactionsResultSchema,
         InitPreferencesResultSchema,
+        ClearWaitlistResultSchema,
         DailyMaintenanceResultSchema,
 
         // User Booking (processBooking feedback)

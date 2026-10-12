@@ -70,7 +70,8 @@
  * The collapsed row: DinnerTicket queued (the hourglass, the wish ghosted) and the position badge on the line under
  * the name (createWaitlistBadge through DeadlineBadge). One booking path: the save sends the desired order through the scaffold,
  * which books, buys a ticket for sale or queues by supply; the save label previews the outcome (bookingSaveLabel over
- * previewOutcome: Book, Køb billet, Skriv på venteliste, Forlad ventelisten, Opdater ønsket, Opdater). A queued row edits its wish (requeued) or picks Ingen to leave; Tilføj gæst saves the
+ * previewOutcome: Book, Køb billet, Skriv på venteliste, Forlad ventelisten, Opdater); a requeue previews "X ændrer ønsket
+ * tilmelding til Sen, beholder plads #2 i køen". A queued row edits its wish (requeued) or picks Ingen to leave; Tilføj gæst saves the
  * same way.
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
@@ -80,7 +81,7 @@ import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
 import type {ReleasedTicketCounts, BookingAction} from '~/composables/useBooking'
-import type {WaitlistEntryWithPosition} from '~/composables/useWaitlistValidation'
+import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES} from '~/types/form'
 
 // Row types for synthetic rows in table
@@ -104,7 +105,7 @@ interface TableRow {
   dinnerMode: DinnerMode
   disabledModes: DinnerMode[] // Computed via getBookingOptions per row
   bookingAction: BookingAction // What action is possible for this row
-  waitlistEntry?: WaitlistEntryWithPosition // The inhabitant's own place in the queue, while they hold no ticket
+  waitlistEntry?: TicketWaitlistDetail // The inhabitant's own place in the queue, while they hold no ticket
   consensus?: boolean // Power mode: true=all agree, false=mixed
   price: number
   ticketPriceId: number | null // Nullable: TicketPrice may be deleted (priceAtBooking preserved)
@@ -125,7 +126,7 @@ interface Props {
   /** Admin override for edit permission - bypasses the auth store isMemberOfHousehold check when provided */
   canEditAdminOverride?: () => boolean
   /** The household's queue entries with their positions (a closed, sold-out dinner) */
-  waitlistEntries?: WaitlistEntryWithPosition[]
+  waitlistEntries?: TicketWaitlistDetail[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -343,7 +344,7 @@ const tableData = computed((): TableRow[] => {
   })
 
   // A guest row is a placed group (booker, ticketType, eventId) or one queued guest: the same row, booked or queued
-  type GuestItem = {id: string, orders: OrderDisplay[], waitlistEntry?: WaitlistEntryWithPosition}
+  type GuestItem = {id: string, orders: OrderDisplay[], waitlistEntry?: TicketWaitlistDetail}
   const placedGuests: GuestItem[] = Object.entries(groupGuestOrders(guestOrders.value))
     .filter(([, orders]) => orders.length > 0)
     .map(([key, orders]) => ({id: `guest-group-${key}`, orders}))
@@ -538,7 +539,7 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
 // ============================================================================
 
 const {partitionGuestOrders, groupGuestOrders, getBookingOptions, getDayBillSummary, resolveUserBookingBuckets, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
-const {createBookingBadges, createWaitlistBadge, bookingSaveLabel, previewOutcome, formatActionPreview} = useBookingUi()
+const {createBookingBadges, createWaitlistBadge, bookingSaveLabel, previewOutcome, formatActionPreview, waitlistPositionOf} = useBookingUi()
 
 // Deadline badges
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))
@@ -568,7 +569,7 @@ const editingBuckets = computed(() => {
 })
 
 const actionPreviewItems = computed(() =>
-  editingBuckets.value ? formatActionPreview(editingBuckets.value, eventOrders.value, getInhabitantName, supply) : [])
+  editingBuckets.value ? formatActionPreview(editingBuckets.value, eventOrders.value, getInhabitantName, supply, waitlistPositionOf(eventWaitlistEntries.value)) : [])
 const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? previewOutcome(editingBuckets.value, supply) : 'none'))
 </script>
 

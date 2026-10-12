@@ -17,9 +17,6 @@ const {allergyTypes, isAllergyTypesLoading, posterNotes} = storeToRefs(store)
 const planStore = usePlanStore()
 const {activeSeason} = storeToRefs(planStore)
 
-// Initialize stores
-store.initAllergiesStore()
-
 // Current date for header (formatted in Danish)
 const currentDate = computed(() => formatDate(new Date(), 'd. MMMM yyyy'))
 

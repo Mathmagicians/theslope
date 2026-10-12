@@ -651,6 +651,8 @@ const CHOICE_LABEL_UI = {
 
 /** Table cells wrap between words; a word stays whole */
 const TABLE_CELL_WRAP = 'whitespace-normal'
+/** A data table's cell, the one `table.ui` gives every td and a sum row binds through `table.sumCell` */
+const TABLE_CELL = `px-2 py-1 md:px-4 md:py-2 ${TABLE_CELL_WRAP}`
 
 /** Compact tables with many narrow columns */
 const TABLE_DENSE_UI = {th: 'px-1 py-1 md:px-4 md:py-3', td: `px-1 md:px-4 ${TABLE_CELL_WRAP}`} as const
@@ -836,11 +838,13 @@ export const COMPONENTS = {
 
     /**
      * Inhabitant avatars (`UserListItem`): the server renders before the breakpoint is known, so
-     * `max` and `size` are one value everywhere and `fit` steps the avatar up a size from md.
+     * `size` is one value everywhere, `max` too but for the compact household list item (`listItemMax`), and `fit` steps the avatar up a size from md.
      * `fit` goes on each `UAvatar` and on the group's `ui.base`, which reaches the overflow count.
      */
     avatar: {
         max: 5,
+        // The compact household list item shows three faces before the overflow count
+        listItemMax: 3,
         regular: {size: 'md' as const, fit: 'md:size-9 md:text-lg'},
         compact: {size: 'sm' as const, fit: 'md:size-8 md:text-base'}
     },
@@ -938,7 +942,6 @@ export const COMPONENTS = {
         createFace: 'px-4 pb-4 space-y-4',
         countRow: 'flex items-center gap-4',
         countLabel: 'text-lg font-bold',
-        countInput: 'w-20 px-3 py-2 border rounded',
         previewTeam: 'p-4 border rounded',
         previewName: 'font-semibold',
         createFooter: 'flex gap-2',
@@ -969,8 +972,6 @@ export const COMPONENTS = {
     householdCard: {
         title: TYPOGRAPHY.cardTitle,
         stack: 'space-y-2 md:space-y-4',
-        expandToggle: 'transition-all duration-700',
-        expandToggleOpen: 'rotate-180',
         powerToggleIdle: 'hover:animate-pulse hover:scale-125 hover:rotate-45 hover:text-warning active:scale-175 active:rotate-[720deg] active:text-error',
         ticketDesktop: 'hidden md:block',
         nameCell: 'flex flex-col gap-0.5',
@@ -1170,6 +1171,9 @@ export const COMPONENTS = {
         amountColumn: {class: {th: 'text-right', td: 'text-right'}},
         /** The total row a table adds in its body-bottom slot */
         totalRow: `border-t ${TYPOGRAPHY.bodyTextMedium}`,
+        /** The cells of a sum row in the body-bottom slot: a label cell, and an amount cell aligned with the amount column */
+        sumCell: TABLE_CELL,
+        sumAmountCell: `${TABLE_CELL} text-right`,
         /** The arrow before the name of the dinner on view */
         currentMarker: 'inline-block size-4 mr-1 align-middle',
         /** A receipt sub-row under a dinner: indented, in the muted ink */
@@ -1182,7 +1186,7 @@ export const COMPONENTS = {
          * Cells wrap between words on every viewport (Nuxt UI's theme cell is `whitespace-nowrap`); a word stays whole.
          * A data table wider than a phone scrolls inside its own box, the page never does (MobileViewport.e2e).
          */
-        ui: {th: 'px-2 md:px-4', td: `px-2 py-1 md:px-4 md:py-2 ${TABLE_CELL_WRAP}`},
+        ui: {th: 'px-2 md:px-4', td: TABLE_CELL},
         /** The household allergies: the dense cells, an expanded inhabitant row tinted */
         householdAllergiesUi: {...TABLE_DENSE_UI, tr: BG.expandedRow},
         /** The booking form: the dense cells, the power row first in the warning tint, an expanded row tinted */
@@ -2896,6 +2900,18 @@ export const EMPTY_STATE_MESSAGES = {
         { emoji: '📅', text: 'Sæsonen er pakket sammen og sat op på loftet' },
         { emoji: '🍂', text: 'Denne sæson er måske blæst væk med bladene' },
         { emoji: '🗓️', text: 'Kalenderen har vendt bladet, sæsonen er væk' }
+    ],
+    noTicketsSold: [
+        { emoji: '🎟️', text: 'Billetlugen er stadig lukket, ingen har købt endnu' },
+        { emoji: '⏳', text: 'Billetterne er på vej, husstandene skal lige vågne' }
+    ],
+    noReceipts: [
+        { emoji: '🛒', text: 'Indkøbsvognen er tom, kvitteringerne er ikke kommet endnu' },
+        { emoji: '🧾', text: 'Kvitteringerne gemmer sig stadig i jakkelommen' }
+    ],
+    noTicketChanges: [
+        { emoji: '🧘', text: 'Billetterne har holdt sig i ro' },
+        { emoji: '📭', text: 'Postkassen er tom, ingen billetter er flyttet' }
     ]
 } as const
 

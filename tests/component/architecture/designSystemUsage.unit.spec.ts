@@ -108,7 +108,7 @@ const COLOUR_NAMES = ['primary', 'secondary', 'success', 'error', 'warning', 'in
 const LITERAL_COLOUR_PROP = new RegExp(`\\bcolor="'?(?:${COLOUR_NAMES})'?"`, 'g')
 
 /** The Nuxt UI families whose size, variant and icon come from SIZES, NOISE, BUTTONS and ICONS */
-const SIZED_FAMILIES = ['UButton', 'UBadge', 'UAvatar']
+const SIZED_FAMILIES = ['UButton', 'UBadge', 'UAvatar', 'UAvatarGroup']
 
 /** ` size="sm"`, ` variant="ghost"`, ` icon="i-…"`, ` :size="'md'"` - a design value spelled out in the tag */
 const LITERAL_DESIGN_PROP = /(?:^|\s)(?:(?:size|variant|icon|leading-icon|trailing-icon)="[^"]*"|:(?:size|variant|icon|leading-icon|trailing-icon)="'[^"]*'")/g
@@ -211,7 +211,7 @@ describe('ADR-018: components bind design-system tokens, never raw Nuxt UI props
         expect(report(violations)).toBe('')
     })
 
-    it('no <UButton>, <UBadge> or <UAvatar> passes a literal size, variant or icon', () => {
+    it('no <UButton>, <UBadge>, <UAvatar> or <UAvatarGroup> passes a literal size, variant or icon', () => {
         const violations = vueFiles.flatMap(file => {
             const source = readVue(file)
             return SIZED_FAMILIES.flatMap(family => openingTags(source, family).flatMap(tag =>

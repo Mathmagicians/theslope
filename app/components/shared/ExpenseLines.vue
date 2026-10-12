@@ -34,6 +34,8 @@
  * in the expenseLines grid; the whole-team heading is the text cookingRoundWords builds, shared with CookingRoundSpending.
  */
 import type {Expense, ExpenseCreate, ExpenseLineForm, VatMode} from '~/composables/useBillingValidation'
+import type {SpendingFigures} from '~/composables/useOrder'
+import {allowanceRows} from '~/composables/useBookingUi'
 import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
 import type {Form, FormSubmitEvent, TableColumn} from '@nuxt/ui'
 
@@ -48,7 +50,7 @@ const props = withDefaults(defineProps<{
   editable?: boolean
   pending?: boolean
   budgetGross?: number | null
-  round?: {label: string, budgetGross: number, spentGross: number} | null
+  round?: {label: string, figures: SpendingFigures} | null
   notePrefill?: string
 }>(), {
   glyph: undefined,
@@ -65,10 +67,11 @@ const emit = defineEmits<{
   remove: [expenseId: number]
 }>()
 
-const {COMPONENTS, BUTTONS, ICONS, COLOR, LAYOUTS, SIZES} = useTheSlopeDesignSystem()
+const {COMPONENTS, BUTTONS, ICONS, COLOR, LAYOUTS, SIZES, ALERTS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
+const noReceipts = getRandomEmptyMessage('noReceipts')
 const {ExpenseLineFormSchema, VatModeSchema} = useBillingValidation()
 const {formatPrice} = useTicket()
-const {spendingLeft, spendingAwaitsTickets, typedKrToGrossOre, typedKrOtherUnitOre} = useOrder()
+const {typedKrToGrossOre, typedKrOtherUnitOre} = useOrder()
 const appConfig = useAppConfig()
 const vatPercent = appConfig.theslope?.kitchen?.vatPercent ?? 25
 const VatModeValue = VatModeSchema.enum
@@ -107,8 +110,9 @@ const handleSubmit = ({data}: FormSubmitEvent<ExpenseLineForm>) => {
 }
 
 const spent = computed(() => sumAmounts(props.expenses))
-// This dinner's figures for the sums, once there is a budget to hold them against
-const figures = computed(() => props.budgetGross === null ? null : {budgetGross: props.budgetGross, spentGross: spent.value})
+// The sums under the lines (Brugt alone without a budget to hold them against), and the whole team's under its heading
+const sumRows = computed(() => allowanceRows({budgetGross: props.budgetGross, spentGross: spent.value}))
+const roundRows = computed(() => props.round ? allowanceRows(props.round.figures) : [])
 const lineColumns: TableColumn<Expense>[] = [
   {id: 'date', header: 'Dato'},
   {id: 'payer', header: 'Bestiller'},
@@ -188,42 +192,25 @@ const lineColumns: TableColumn<Expense>[] = [
         <template #remove-cell="{ row }">
           <UButton v-bind="BUTTONS.remove" aria-label="Slet" :disabled="pending" data-testid="expense-remove" @click="emit('remove', row.original.id)" />
         </template>
-        <template #empty><span :class="COMPONENTS.expenseLines.empty">{{ emptyText }}</span></template>
+        <template #empty>
+          <UAlert v-bind="ALERTS.emptyStateCompact" :title="`${noReceipts.emoji} ${noReceipts.text}`" data-testid="expense-table-empty" />
+        </template>
         <template #body-bottom>
-          <tr v-if="budgetGross !== null" :class="COMPONENTS.table.totalRow" data-testid="expense-hint-row">
-            <td :class="COMPONENTS.table.ui.td" colspan="2">Rådighedsbeløb</td>
-            <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><VatAmount :gross="budgetGross" /></td>
-            <td :class="COMPONENTS.table.ui.td" />
-          </tr>
-          <tr :class="budgetGross === null ? COMPONENTS.table.totalRow : ''" data-testid="expense-hint-row">
-            <td :class="COMPONENTS.table.ui.td" colspan="2">Brugt</td>
-            <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><VatAmount :gross="spent" /></td>
-            <td :class="COMPONENTS.table.ui.td" />
-          </tr>
-          <tr v-if="figures" :class="COMPONENTS.table.totalRow" data-testid="expense-hint-row">
-            <td :class="COMPONENTS.table.ui.td" colspan="2">Tilbage</td>
-            <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><VatAmount :gross="spendingLeft(figures)" balance :pending="spendingAwaitsTickets(figures)" /></td>
-            <td :class="COMPONENTS.table.ui.td" />
+          <!-- The first sum row carries the rule that parts the lines from their sums -->
+          <tr v-for="(row, index) in sumRows" :key="row.label" :class="row.rule || index === 0 ? COMPONENTS.table.totalRow : ''" data-testid="expense-hint-row">
+            <td :class="COMPONENTS.table.sumCell" colspan="3">{{ row.label }}</td>
+            <td :class="COMPONENTS.table.sumAmountCell"><VatAmount :gross="row.gross" :balance="row.balance" :pending="row.pending" /></td>
+            <td :class="COMPONENTS.table.sumCell" />
           </tr>
           <template v-if="round">
-            <tr><td :class="COMPONENTS.table.spacerCell" colspan="4" /></tr>
+            <tr><td :class="COMPONENTS.table.spacerCell" colspan="5" /></tr>
             <tr :class="COMPONENTS.table.totalRow" data-testid="expense-hint-heading">
-              <td :class="COMPONENTS.table.ui.td" colspan="4">{{ round.label }}</td>
+              <td :class="COMPONENTS.table.sumCell" colspan="5">{{ round.label }}</td>
             </tr>
-            <tr data-testid="expense-hint-row">
-              <td :class="COMPONENTS.table.ui.td" colspan="2">Rådighedsbeløb</td>
-              <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><VatAmount :gross="round.budgetGross" /></td>
-              <td :class="COMPONENTS.table.ui.td" />
-            </tr>
-            <tr data-testid="expense-hint-row">
-              <td :class="COMPONENTS.table.ui.td" colspan="2">Brugt</td>
-              <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><VatAmount :gross="round.spentGross" /></td>
-              <td :class="COMPONENTS.table.ui.td" />
-            </tr>
-            <tr :class="COMPONENTS.table.totalRow" data-testid="expense-hint-row">
-              <td :class="COMPONENTS.table.ui.td" colspan="2">Tilbage</td>
-              <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><VatAmount :gross="spendingLeft(round)" balance :pending="spendingAwaitsTickets(round)" /></td>
-              <td :class="COMPONENTS.table.ui.td" />
+            <tr v-for="row in roundRows" :key="row.label" :class="row.rule ? COMPONENTS.table.totalRow : ''" data-testid="expense-hint-row">
+              <td :class="COMPONENTS.table.sumCell" colspan="3">{{ row.label }}</td>
+              <td :class="COMPONENTS.table.sumAmountCell"><VatAmount :gross="row.gross" :balance="row.balance" :pending="row.pending" /></td>
+              <td :class="COMPONENTS.table.sumCell" />
             </tr>
           </template>
         </template>

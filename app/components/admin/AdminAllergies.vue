@@ -70,9 +70,6 @@ const {
 } = storeToRefs(store)
 const {createAllergyType, updateAllergyType, deleteAllergyType, savePosterNotes} = store
 
-// Initialize store
-store.initAllergiesStore()
-
 // SELECTION STATE - ?allergy= carries the selection (ADR-006)
 const isKnownAllergyType = (id: number | null) => id !== null && allergyTypes.value.some(at => at.id === id)
 const {value: allergyParam, setValue: setAllergyParam} = useQueryParam<number | null>('allergy', {

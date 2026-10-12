@@ -1,4 +1,4 @@
-import {skip} from '@prisma/client/runtime/wasm-compiler-edge'
+import {Prisma} from "~~/prisma/generated/client/client"
 import {getPrismaClientConnection} from '~~/server/utils/database'
 import type {
     JobRunDisplay,
@@ -135,10 +135,10 @@ export async function updateJobRun(
         where: {id},
         data: {
             status: data.status,
-            completedAt: data.completedAt ?? skip,
-            durationMs: data.durationMs ?? skip,
-            resultSummary: data.resultSummary ?? skip,
-            errorMessage: data.errorMessage ?? skip
+            completedAt: data.completedAt ?? Prisma.skip,
+            durationMs: data.durationMs ?? Prisma.skip,
+            resultSummary: data.resultSummary ?? Prisma.skip,
+            errorMessage: data.errorMessage ?? Prisma.skip
         }
     })
 
@@ -170,7 +170,7 @@ export async function completeJobRun(
 
     const completedAt = new Date()
     const durationMs = existing ? completedAt.getTime() - existing.startedAt.getTime() : null
-    const resultSummary = result ? serializeResultSummary(result) : skip
+    const resultSummary = result ? serializeResultSummary(result) : Prisma.skip
 
     console.info(`${LOG} > [COMPLETE] Completing job run ${id} with status=${status}, duration=${durationMs}ms`)
 
@@ -181,7 +181,7 @@ export async function completeJobRun(
             completedAt,
             durationMs,
             resultSummary,
-            errorMessage: errorMessage ?? skip
+            errorMessage: errorMessage ?? Prisma.skip
         }
     })
 

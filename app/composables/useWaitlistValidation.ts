@@ -22,16 +22,20 @@ export const useWaitlistValidation = () => {
         createdAt: z.coerce.date()
     })
 
+    const TicketWaitlistCreateSchema = TicketWaitlistDisplaySchema.omit({id: true, createdAt: true})
+
     // Database row: the order travels as JSON (ADR-010)
     const SerializedTicketWaitlistSchema = TicketWaitlistDisplaySchema.extend({
         order: z.string()
     })
 
-    const serializeWaitlistOrder = (order: z.infer<typeof WaitlistOrderSchema>): string => JSON.stringify(order)
+    const serializeTicketWaitlist = <T extends {order: z.infer<typeof WaitlistOrderSchema>}>(entry: T): Omit<T, 'order'> & {order: string} =>
+        ({...entry, order: JSON.stringify(entry.order)})
     const deserializeTicketWaitlist = (row: z.infer<typeof SerializedTicketWaitlistSchema>): z.infer<typeof TicketWaitlistDisplaySchema> =>
         TicketWaitlistDisplaySchema.parse({...row, order: WaitlistOrderSchema.parse(JSON.parse(row.order))})
 
-    const WaitlistEntryWithPositionSchema = TicketWaitlistDisplaySchema.extend({
+    // An entry with its place in the dinner's queue
+    const TicketWaitlistDetailSchema = TicketWaitlistDisplaySchema.extend({
         position: z.number().int().positive()
     })
 
@@ -71,22 +75,23 @@ export const useWaitlistValidation = () => {
     return {
         WaitlistOrderSchema,
         TicketWaitlistDisplaySchema,
+        TicketWaitlistCreateSchema,
         SerializedTicketWaitlistSchema,
-        WaitlistEntryWithPositionSchema,
+        TicketWaitlistDetailSchema,
         WaitlistReleaseRequestSchema,
         WaitlistQueueSummarySchema,
         WaitlistAssignedSchema,
         WaitlistAssignmentResultSchema,
         NotificationOutcomeSchema,
-        serializeWaitlistOrder,
+        serializeTicketWaitlist,
         deserializeTicketWaitlist
     }
 }
 
 export type WaitlistOrder = z.infer<ReturnType<typeof useWaitlistValidation>['WaitlistOrderSchema']>
 export type TicketWaitlistDisplay = z.infer<ReturnType<typeof useWaitlistValidation>['TicketWaitlistDisplaySchema']>
-export type SerializedTicketWaitlist = z.infer<ReturnType<typeof useWaitlistValidation>['SerializedTicketWaitlistSchema']>
-export type WaitlistEntryWithPosition = z.infer<ReturnType<typeof useWaitlistValidation>['WaitlistEntryWithPositionSchema']>
+export type TicketWaitlistCreate = z.infer<ReturnType<typeof useWaitlistValidation>['TicketWaitlistCreateSchema']>
+export type TicketWaitlistDetail = z.infer<ReturnType<typeof useWaitlistValidation>['TicketWaitlistDetailSchema']>
 export type WaitlistReleaseRequest = z.infer<ReturnType<typeof useWaitlistValidation>['WaitlistReleaseRequestSchema']>
 export type WaitlistQueueSummary = z.infer<ReturnType<typeof useWaitlistValidation>['WaitlistQueueSummarySchema']>
 export type WaitlistAssigned = z.infer<ReturnType<typeof useWaitlistValidation>['WaitlistAssignedSchema']>

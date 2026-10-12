@@ -633,7 +633,7 @@ export class SeasonFactory {
         context: BrowserContext,
         id: number,
         expectedStatus: number = 200
-    ): Promise<Season | null> => {
+    ): Promise<Season |number | null> => {
         try {
             const deleteResponse = await context.request.delete(`/api/admin/season/${id}`)
 
@@ -1029,13 +1029,13 @@ export class SeasonFactory {
         context: BrowserContext,
         teamId: number,
         expectedStatus: number = 200
-    ): Promise<CookingTeamDetail | null> => {
+    ): Promise<number | null> => {
         const response = await context.request.delete(`${ADMIN_TEAM_ENDPOINT}/${teamId}`)
 
         const status = response.status()
         expect(status, 'Unexpected status').toBe(expectedStatus)
         if (expectedStatus === 200) {
-            return CookingTeamDetailSchema.parse(await response.json())
+            return DeletedCountSchema.parse(await response.json())
         }
         return null
     }

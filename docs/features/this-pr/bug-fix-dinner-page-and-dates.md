@@ -1,9 +1,9 @@
 # Bug fix: follow-ups found on `bugfix/admin-ux`
 
-**Status:** Parked until the `bugfix/admin-ux` release | **Date:** 2026-09-18 | **Updated:** 2026-09-18 | **Found on:** `bugfix/admin-ux` (PR #166)
+**Status:** Follow-ups, two shipped | **Date:** 2026-09-18 | **Updated:** 2026-10-12 | **Found on:** `bugfix/admin-ux` (PR #166)
 
 Defects and findings from `bugfix/admin-ux`; they exist on `main`. The first four came up on 2026-09-18 while chasing a
-team-assignment failure and a "become chef" error on `/dinner`; the dinner-date matcher is fixed on the branch, the rest are
+team-assignment failure and a "become chef" error on `/dinner`; the dinner-date matcher and the one-flush query sync are shipped, the rest are
 proposals. The last four came up while building the notification pipe (`archived/feature-notifications.md`).
 
 ## Fix inventory
@@ -11,9 +11,9 @@ proposals. The last four came up while building the notification pipe (`archived
 | Fix | What | State |
 |---|---|---|
 | Stored dinner dates | one convention for the midnight a dinner date carries | matcher fixed; storage convention proposed |
-| Query params synced in one flush | the second auto-sync overwrites the first param | proposed |
+| Query params synced in one flush | the second auto-sync overwrites the first param | ✅ shipped: `useUrlQueryWriter` (ADR-006) |
 | Dinner page remounts on claim | the whole page swaps to the loader while the season refreshes | proposed |
-| Composables after an await | the plan store injects outside setup on every claim and resign | proposed |
+| Composables after an await | the plan store injects outside setup on every claim and resign | partly: `useToast` resolved at setup; `useCookingTeam()` still called inside `claimRoleForMe` |
 | Catch-up amounts | invoice amounts and period totals follow the transactions a catch-up run links | proposed |
 | Job schedule labels | `/admin/system` labels the monthly billing job "D. 17." and it runs on the 18th | proposed |
 | Configuration duplication | values stated in several config files | findings, report only |
@@ -45,21 +45,8 @@ UTC midnight.
 
 ## Query params synced in one flush
 
-**Problem.** Landing on a bare `/dinner` yields `/dinner?date=…` with `cal` missing. The calendar then opens from the breakpoint
-default after hydration and again on every remount.
-
-**Root cause.** `app/pages/dinner/index.vue` declares `cal` (line 77) and `date` (line 112); both need syncing in the same flush.
-`app/composables/useQueryParam.ts` runs each sync in its own `watchPostEffect` (164–170) and `updateURL` (117–141) builds the new
-query from a snapshot of `route.query` before an async `navigateTo`, so the second navigation overwrites the first param.
-`hasSyncedSinceReady` (72, set at 166) blocks any retry.
-
-**Solution.** One pending write per route: `useQueryParam` merges concurrent syncs into a single `navigateTo` per flush, so every
-synced param lands. The accumulator is request-scoped so SSR stays safe.
-
-**TDD.** `useQueryParam.nuxt`: two instances synced in one flush → the last navigation carries both params (red today: the query
-holds `date` alone). `pages.e2e`: `/dinner` lands with both `cal` and `date`.
-
-**Affected.** `app/composables/useQueryParam.ts`.
+**Shipped.** `app/composables/useUrlQueryWriter.ts` is the page's one URL writer: the writes of a tick batch per app instance, apply in
+priority order and land in one navigation (ADR-006 § URL Writes). Spec: `tests/component/composables/useUrlQueryWriter.nuxt.spec.ts`.
 
 ## Dinner page remounts on claim
 

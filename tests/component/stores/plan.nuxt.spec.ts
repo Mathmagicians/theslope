@@ -79,7 +79,7 @@ const { id: _newSeasonId, ...newSeason } = season2
 const deactivateSeasonEndpoint = vi.fn(() => season1)
 const teamDetail = SeasonFactory.defaultCookingTeamDetail({ id: TEAM_ID })
 const updateTeamEndpoint = vi.fn(() => teamDetail)
-const deleteTeamEndpoint = vi.fn(() => teamDetail)
+const deleteTeamEndpoint = vi.fn(() => 1)
 const assignAffinitiesEndpoint = vi.fn(() => ({ seasonId: season1.id, teamCount: 1, teams: [teamDetail] }))
 const assignCookingTeamsEndpoint = vi.fn(() => ({ seasonId: season1.id, eventCount: 1, events: [DinnerEventFactory.defaultDinnerEventDisplay()] }))
 const dinner = { ...DinnerEventFactory.defaultDinnerEventDetail(), id: 21 }
@@ -509,7 +509,7 @@ describe('Plan Store - write actions', () => {
             action: 'deleteTeam',
             endpoint: deleteTeamEndpoint,
             write: (store: PlanStore) => store.deleteTeam(TEAM_ID),
-            parsed: teamDetail,
+            parsed: 1,
             refreshes: 'the selected season',
             refreshed: seasonByIdEndpoint,
             toast: {title: 'Madhold slettet'}

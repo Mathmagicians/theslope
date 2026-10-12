@@ -362,10 +362,10 @@ export const usePlanStore = defineStore("Plan", () => {
             return updated
         }
 
-        const deleteTeam = async (teamId: number): Promise<CookingTeamDetail> => {
+        const deleteTeam = async (teamId: number): Promise<number> => {
             const deleted = await apiRequest(`/api/admin/team/${teamId}`, {
                 method: 'DELETE',
-                schema: CookingTeamDetailSchema,
+                schema: DeletedCountSchema,
                 action: 'deleteTeam'
             })
             console.info(`👥 > PLAN_STORE > Deleted team ${teamId}`)

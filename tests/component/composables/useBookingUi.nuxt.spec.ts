@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, bookingSaveLabel, guestSaveLabel, OUTCOME_WORDS, previewOutcome, dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, bookingSaveLabel, guestSaveLabel, OUTCOME_WORDS, MODE_WORDS, previewOutcome, dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, type ReleasedTicketCounts} from '~/composables/useBooking'
@@ -11,7 +11,7 @@ import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFact
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import appConfig from '~/app.config'
 
-const {DinnerStateSchema} = useBookingValidation()
+const {DinnerStateSchema, DinnerModeSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 const {ICONS} = useTheSlopeDesignSystem()
 // @nuxt/test-utils 4 starts Nuxt in beforeAll: useSeason runs there, not at module level
@@ -45,6 +45,15 @@ describe('spending fragments', () => {
         expect(fragment.heading).toBe('Hele Madhold 2, for perioden 11/04–12/04')
         expect(fragment.rows.map(row => row.kind)).toEqual(['dinner', 'dinner'])
         expect(fragment.total).toEqual({label: 'Hele Madhold 2', figures: {budgetGross: 3000, spentGross: 300}})
+    })
+
+    it('builds the allowance rows: the allowance, Brugt and Tilbage with its balance, or Brugt alone without an allowance', () => {
+        const rows = allowanceRows({budgetGross: 2000, spentGross: 500})
+        expect(rows.map(row => row.label)).toEqual(['Rådighedsbeløb', 'Brugt', 'Tilbage'])
+        expect(rows[0]).toEqual({label: 'Rådighedsbeløb', gross: 2000})
+        expect(rows[2]).toEqual({label: 'Tilbage', gross: 1500, balance: true, pending: false, rule: true})
+        expect(allowanceRows({budgetGross: 0, spentGross: 500})[2]).toMatchObject({pending: true})
+        expect(allowanceRows({budgetGross: null, spentGross: 500})).toEqual([{label: 'Brugt', gross: 500, rule: true}])
     })
 })
 
@@ -86,17 +95,19 @@ describe('useBookingUi', () => {
     })
 
     describe('outcome words', () => {
+        // The words a requeue names: the mode, from the one mode-words table, and the queue place it keeps
+        const LATE_AT_TWO = {mode: MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label, position: 2}
         it.each([
             {outcome: 'book' as const, save: 'Book', guestSave: 'Tilføj gæst', preview: 'Anna tilmeldes'},
             {outcome: 'buy' as const, save: 'Køb billet', guestSave: 'Køb billet til gæst', preview: 'Anna køber en ledig billet'},
             {outcome: 'queue' as const, save: 'Skriv på venteliste', guestSave: 'Skriv gæst på venteliste', preview: 'Anna skrives på ventelisten'},
             {outcome: 'leave' as const, save: 'Forlad ventelisten', guestSave: 'Forlad ventelisten', preview: 'Anna forlader ventelisten'},
-            {outcome: 'requeue' as const, save: 'Opdater ønsket', guestSave: 'Opdater ønsket', preview: 'Anna skrives på ventelisten igen'},
+            {outcome: 'requeue' as const, save: 'Opdater', guestSave: 'Opdater', preview: `Anna ændrer ønsket tilmelding til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label}, beholder plads #2 i køen`},
             {outcome: 'none' as const, save: 'Opdater', guestSave: 'Tilføj gæst', preview: 'Anna opdaterer spisning'}
         ])('$outcome → save "$save", guest "$guestSave", preview "$preview"', ({outcome, save, guestSave, preview}) => {
             expect(bookingSaveLabel(outcome)).toBe(save)
             expect(guestSaveLabel(outcome)).toBe(guestSave)
-            expect(OUTCOME_WORDS[outcome].template('Anna')).toBe(preview)
+            expect(OUTCOME_WORDS[outcome].template('Anna', LATE_AT_TWO)).toBe(preview)
         })
     })
 

@@ -15,9 +15,9 @@ import {scaffoldPrebookings} from '~~/server/utils/scaffoldPrebookings'
 import {fetchActiveSeasonId} from '~~/server/data/prismaRepository'
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
+import {deleteWaitlistForConsumedDinners} from '~~/server/data/waitlistRepository'
 import type {DailyMaintenanceResult} from '~/composables/useBookingValidation'
 
-import {deleteWaitlistForConsumedDinners} from '~~/server/data/waitlistRepository'
 const LOG = '🔧 > DAILY > [MAINTENANCE]'
 
 export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: string): Promise<DailyMaintenanceResult> {
@@ -68,6 +68,7 @@ export async function runDailyMaintenance(d1Client: D1Database, triggeredBy: str
             consume: consumeResult,
             close: closeResult,
             transact: transactResult,
+            clearWaitlist: {cleared: waitlistCleared},
             initPrefs: initPrefsResult,
             scaffold: scaffoldResult
         }

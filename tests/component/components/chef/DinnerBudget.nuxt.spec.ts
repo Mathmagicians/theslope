@@ -8,7 +8,7 @@ import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useOrder} from '~/composables/useOrder'
 import {useTicket} from '~/composables/useTicket'
 import {useBookingValidation, type OrderDetail, type OrderState, type TicketType} from '~/composables/useBookingValidation'
-import type {CookingRoundRow} from '~/composables/useBookingUi'
+import {dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
 import {findByTestId, findAllByTestId, clickByTestId} from '~~/tests/component/testHelpers'
 
 /**
@@ -54,7 +54,7 @@ registerEndpoint('/api/admin/billing/current-period', () => [])
 registerEndpoint('/api/order', () => [])
 
 const mount = (props: Record<string, unknown> = {}) => mountSuspended(DinnerBudget, {
-    props: {orders, mode: 'full', expenses, dinnerEventId: 7, bookingDeadline: new Date('2026-04-03T18:00:00'), roundRows: round, roundWords: {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, for perioden 12/04–13/04'}, ...props},
+    props: {orders, mode: 'full', expenses, dinnerEventId: 7, bookingDeadline: new Date('2026-04-03T18:00:00'), dinnerFragment: dinnerSpendingFragment(round[0]!, expenses), teamFragment: teamSpendingFragment(round, {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, for perioden 12/04–13/04'}), ...props},
     global: {provide: {isMd: ref(true)}}
 })
 
@@ -119,7 +119,7 @@ describe('DinnerBudget', () => {
     })
 
     it('GIVEN a lone dinner WHEN opened THEN only this dinner\'s fragment shows, headed by the dinner', async () => {
-        const wrapper = await mount({roundRows: [round[0]!], roundWords: null})
+        const wrapper = await mount({dinnerFragment: dinnerSpendingFragment(round[0]!, expenses), teamFragment: null})
         await wrapper.find('button[name="toggle-budget-details"]').trigger('click')
         await wrapper.vm.$nextTick()
         expect(findAllByTestId(wrapper, 'cooking-round')).toHaveLength(1)
@@ -128,7 +128,7 @@ describe('DinnerBudget', () => {
     })
 
     it('GIVEN no round WHEN opened THEN the round section is absent', async () => {
-        const wrapper = await mount({roundRows: []})
+        const wrapper = await mount({dinnerFragment: null, teamFragment: null})
         await clickByTestId(wrapper, 'budget-box-revenue').catch(() => undefined)
         await wrapper.find('button[name="toggle-budget-details"]').trigger('click')
         await wrapper.vm.$nextTick()

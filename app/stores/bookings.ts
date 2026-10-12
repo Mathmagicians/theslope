@@ -1,6 +1,6 @@
 import type {OrderDisplay, OrderDetail, DinnerEventDetail, DinnerEventUpdate, DailyMaintenanceResult, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DesiredOrder, DinnerState, TicketChangesResponse} from '~/composables/useBookingValidation'
 import type {MonthlyBillingResponse, Expense, ExpenseCreate} from '~/composables/useBillingValidation'
-import type {WaitlistAssignmentResult, TicketWaitlistDisplay, WaitlistEntryWithPosition, WaitlistQueueSummary} from '~/composables/useWaitlistValidation'
+import type {WaitlistAssignmentResult, TicketWaitlistDisplay, TicketWaitlistDetail, WaitlistQueueSummary} from '~/composables/useWaitlistValidation'
 import {useWaitlist} from '~/composables/useWaitlist'
 import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import {useBilling} from '~/composables/useBilling'
@@ -87,7 +87,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
     // The household the page names, else the selected one: its entries with their place in their dinner's queue
     const waitlistHouseholdId = computed(() => ordersFilter.value().householdId ?? householdsStore.selectedHouseholdId)
-    const householdWaitlist = computed((): WaitlistEntryWithPosition[] => waitlistEntries.value
+    const householdWaitlist = computed((): TicketWaitlistDetail[] => waitlistEntries.value
         .filter(entry => entry.order.householdId === waitlistHouseholdId.value)
         .map(entry => ({...entry, position: positionOf(waitlistOf(entry.dinnerEventId), entry.id) ?? 1})))
 

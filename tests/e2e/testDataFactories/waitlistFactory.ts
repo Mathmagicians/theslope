@@ -2,7 +2,7 @@
 import type {BrowserContext} from '@playwright/test'
 import {expect} from '@playwright/test'
 import testHelpers from '../testHelpers'
-import {useWaitlistValidation, type WaitlistEntryWithPosition, type WaitlistQueueSummary, type WaitlistAssignmentResult, type TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
+import {useWaitlistValidation, type TicketWaitlistDetail, type WaitlistQueueSummary, type WaitlistAssignmentResult, type TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {useBookingValidation, type DesiredOrder, type ScaffoldResult} from '~/composables/useBookingValidation'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 
@@ -28,7 +28,7 @@ export class WaitlistFactory {
     })
 
     // An entry as the household read returns it; the held order follows the entry's keys and mode
-    static readonly defaultEntry = (overrides: Partial<Omit<WaitlistEntryWithPosition, 'order'>> & {dinnerMode?: WaitlistEntryWithPosition['order']['dinnerMode'], ticketPriceId?: number, householdId?: number} = {}): WaitlistEntryWithPosition => {
+    static readonly defaultEntry = (overrides: Partial<Omit<TicketWaitlistDetail, 'order'>> & {dinnerMode?: TicketWaitlistDetail['order']['dinnerMode'], ticketPriceId?: number, householdId?: number} = {}): TicketWaitlistDetail => {
         const {dinnerMode = DinnerModeSchema.enum.DINEIN, ticketPriceId = 1, householdId = 1, ...entry} = overrides
         const keys = {id: 1, dinnerEventId: 1, inhabitantId: 1, isGuestTicket: false, position: 1, createdAt: new Date(), ...entry}
         return {

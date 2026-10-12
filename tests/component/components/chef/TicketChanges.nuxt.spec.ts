@@ -138,7 +138,7 @@ describe('TicketChanges', () => {
         historyEndpoint.mockImplementationOnce(() => ({dinnerEventId: DINNER_ID, since: SINCE.toISOString(), changes: [], olderCount: 2}))
         const wrapper = await mount()
         await open(wrapper)
-        expect(findByTestId(wrapper, 'ticket-changes-none-since').text()).toBe('Ingen ændringer')
+        expect(findByTestId(wrapper, 'ticket-changes-none-since').text()).toContain(useTheSlopeDesignSystem().getRandomEmptyMessage('noTicketChanges').text)
         expect(findByTestId(wrapper, 'ticket-changes-more').exists()).toBe(true)
     })
 
@@ -146,7 +146,7 @@ describe('TicketChanges', () => {
         historyEndpoint.mockImplementationOnce(() => ({dinnerEventId: DINNER_ID, since: SINCE.toISOString(), changes: [], olderCount: 0}))
         const wrapper = await mount()
         await open(wrapper)
-        expect(findByTestId(wrapper, 'ticket-changes-none-since').text()).toBe('Ingen ændringer')
+        expect(findByTestId(wrapper, 'ticket-changes-none-since').text()).toContain(useTheSlopeDesignSystem().getRandomEmptyMessage('noTicketChanges').text)
         expect(findByTestId(wrapper, 'ticket-changes-more').exists()).toBe(false)
     })
 })

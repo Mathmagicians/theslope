@@ -37,7 +37,6 @@ const {orders, isProcessingBookings, lockStatus, householdWaitlist} = storeToRef
 // Allergies store for guest booking form
 const allergiesStore = useAllergiesStore()
 const {allergyTypes} = storeToRefs(allergiesStore)
-allergiesStore.initAllergiesStore()
 
 // Households store for booker ID (current user's inhabitant)
 const householdsStore = useHouseholdsStore()

@@ -240,7 +240,7 @@ Automated jobs (daily cron, season activation, billing imports) run on Cloudflar
 
 ### Rolling Window Pattern
 
-Daily maintenance consumes past dinners (SCHEDULED/ANNOUNCED → CONSUMED), closes orders on consumed dinners (BOOKED/RELEASED → CLOSED), creates transactions for closed orders without one, then scaffolds pre-bookings for `today → today + 60 days`. A re-run after an outage catches up by itself: each step processes all qualifying records and the scaffold window starts from the current day. Users book manually beyond the window.
+Daily maintenance consumes past dinners (SCHEDULED/ANNOUNCED → CONSUMED), closes orders on consumed dinners (BOOKED/RELEASED → CLOSED), creates transactions for closed orders without one, clears the waiting-list entries of consumed dinners (`deleteWaitlistForConsumedDinners`, reported as `clearWaitlist.cleared`), then scaffolds pre-bookings for `today → today + 60 days`. A re-run after an outage catches up by itself: each step processes all qualifying records and the scaffold window starts from the current day. Users book manually beyond the window.
 
 ### Idempotency Patterns
 
@@ -412,7 +412,7 @@ const { create, update, idempotent, delete: toDelete } = reconcile(existing)(inc
 
 ## ADR-012: Prisma.skip for Optional Field Updates
 
-**Status:** Accepted | **Date:** 2025-11-24 | **Updated:** 2026-01-02
+**Status:** Accepted | **Date:** 2025-11-24 | **Updated:** 2026-10-12
 
 ### Decision
 
@@ -439,7 +439,7 @@ where: householdId ? { id: householdId } : Prisma.skip
 // ✅ CORRECT: Empty object for "no filter"
 where: householdId !== undefined ? { id: householdId } : {}
 
-// ✅ ALSO CORRECT: Spread pattern acceptable in WHERE
+// ✅ ALSO CORRECT: Conditional spread in WHERE
 where: { ...(householdId && { id: householdId }) }
 ```
 
@@ -448,8 +448,8 @@ where: { ...(householdId && { id: householdId }) }
 ### Compliance
 
 1. MUST use `Prisma.skip` for conditional field omission in `data` objects
-2. MUST NOT use `Prisma.skip` in `where` clauses - use `{}` or spread pattern
-3. MUST NOT use spread patterns in `data` objects (use `Prisma.skip`)
+2. MUST NOT use `Prisma.skip` in `where` clauses - use `{}` or a conditional spread
+3. MUST NOT use a conditional spread (`...(x && {x})`) in `data` objects (use `Prisma.skip`); a validated shape MAY be spread whole
 4. `undefined` in `where` clauses is acceptable (Prisma ignores undefined conditions)
 
 ---

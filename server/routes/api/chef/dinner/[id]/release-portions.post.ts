@@ -28,10 +28,10 @@ export default defineEventHandler(async (event): Promise<WaitlistAssignmentResul
         return throwH3Error(`${LOG} Input validation error`, error, 400)
     }
 
-    const {user: chef} = await requireChefForDinner(event, id)
+    const {user: chef, dinner} = await requireChefForDinner(event, id)
 
     try {
-        const result = await assignWaitlistPortions(d1Client, id, body.portions, chef.id, {
+        const result = await assignWaitlistPortions(d1Client, dinner, body.portions, chef.id, {
             queue: cloudflare.env.SENDER,
             config: getNotificationConfig(event)
         })

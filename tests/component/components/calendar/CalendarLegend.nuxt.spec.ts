@@ -1,5 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect} from 'vitest'
+import {h} from 'vue'
+import {mountSuspended} from '/test-utils/runtime'
 import CalendarLegend from '~/components/calendar/CalendarLegend.vue'
 import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
 import {mountWithTooltipProvider, findAllByTestId, findByTestId} from '~~/tests/component/testHelpers'
@@ -56,4 +58,13 @@ describe('CalendarLegend', () => {
         expect(findByTestId(wrapper, 'calendar-legend-badge').classes()).toContain('band-one')
     })
 
+    it('hosts own entries in the default slot and the hint under them', async () => {
+        const wrapper = await mountSuspended(CalendarLegend, {
+            props: {hint: 'Klik på en celle'},
+            slots: {default: () => h('span', {'data-testid': 'own-entry'}, 'Egen')}
+        })
+        expect(findByTestId(wrapper, 'own-entry').text()).toBe('Egen')
+        expect(findAllByTestId(wrapper, 'calendar-legend-entry')).toHaveLength(0)
+        expect(findByTestId(wrapper, 'calendar-legend').text()).toContain('Klik på en celle')
+    })
 })

@@ -150,6 +150,7 @@ export const useMaintenance = () => {
             { label: 'Middage afholdt', value: `${result.consume.consumed}` },
             { label: 'Ordrer lukket', value: `${result.close.closed}` },
             { label: 'Transaktioner', value: `${result.transact.created}` },
+            { label: 'Ventelister ryddet', value: `${result.clearWaitlist.cleared}` },
             { label: 'Præferencer klippet', value: `${result.initPrefs.initialized}` }
         ]
         if (result.scaffold) {

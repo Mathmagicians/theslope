@@ -35,7 +35,7 @@
  * │ Lars V 🎟️3 🔓1  │  🍽️  │  🕐  ║  🍽️  │  ❌° │  🍽️  ║  ❌  │
  * ├──────────────────┼──────┼──────╫──────┼──────┼──────╫──────┤
  * │ 🎫 Gæst af Anna  │  🍽️  │      ║      │      │  🍽️  ║      │ <- existing guest
- * │ ➕ Tilføj gæst   │      │      ║      │  +   │  +   ║  +   │ <- add guest (future only)
+ * │ ➕ Tilføj gæst   │      │      ║      │  v   │  v   ║  v   │ <- add guest (future only): chevron, up while its form is open
  * ├──────────────────┴──────┴──────╨──────┴──────┴──────╨──────┤
  * │ 3 ændringer                         [Annuller] [Gem]       │
  * └────────────────────────────────────────────────────────────┘
@@ -46,7 +46,7 @@
  * | power       | ⚡   | Consensus/?    | Editable (future)   | Bulk update all    |
  * | inhabitant  | 👤   | Booking state  | Editable (future)   | Household member   |
  * | guest-order | 🎫   | Booking state  | Locked past, edit   | Existing guest     |
- * | guest-add   | ➕   | Hidden         | + buttons (future)  | Add new guest      |
+ * | guest-add   | ➕   | Hidden         | v buttons (future)  | Add new guest      |
  *
  * QUEUED CELL (a sold-out dinner, the member on the waiting list), read-only in both modes:
  *   ┌──────┐
@@ -66,7 +66,7 @@ import type {BookingView} from '~/composables/useBookingView'
 import type {DateRange} from '~/types/dateTypes'
 import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
 import type {BookingChanges, GuestBookingIntent, ReleasedTicketCounts} from '~/composables/useBooking'
-import type {WaitlistEntryWithPosition} from '~/composables/useWaitlistValidation'
+import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 // Row types for synthetic rows (same pattern as HouseholdCard)
@@ -99,7 +99,7 @@ interface Props {
   ticketPrices: TicketPrice[]
   deadlines: SeasonDeadlines
   lockStatus?: Map<number, ReleasedTicketCounts | null>
-  waitlistEntries?: WaitlistEntryWithPosition[] // The household's queue entries: a queued cell shows the wish ghosted
+  waitlistEntries?: TicketWaitlistDetail[] // The household's queue entries: a queued cell shows the wish ghosted
   allergyTypes?: AllergyTypeDisplay[]
   bookerId?: number // Current user's inhabitant ID for guest booking
   formMode?: FormMode
@@ -141,7 +141,7 @@ const {formatPrice, getTicketTypeConfig, resolveTicketPrice, ticketTypeConfig} =
 
 // Booking helpers (shared with DinnerBookingForm)
 const {groupGuestOrders, partitionGuestOrders, getDayBillSummary, resolveUserBookingBuckets, getBookingOptions, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
-const {formatActionPreview} = useBookingUi()
+const {formatActionPreview, waitlistPositionOf} = useBookingUi()
 
 // Inhabitant name lookup (used by actionPreviewItems)
 const getInhabitantName = (id: number) =>
@@ -190,7 +190,7 @@ const actionPreviewItems = computed(() => {
   )
 
   // Each dinner settles a claim against its own tickets for sale (the lock status)
-  return formatActionPreview(buckets, props.orders, getInhabitantName, order => ({ticketsForSale: props.lockStatus.get(order.dinnerEventId)?.total ?? 0}))
+  return formatActionPreview(buckets, props.orders, getInhabitantName, order => ({ticketsForSale: props.lockStatus.get(order.dinnerEventId)?.total ?? 0}), waitlistPositionOf(props.waitlistEntries))
 })
 
 // Effective form mode - VIEW when saving to prevent cell edits
@@ -200,7 +200,7 @@ const getOrderForCell = (inhabitantId: number, eventId: number): OrderDisplay | 
   findRegularOrder(props.orders, inhabitantId, eventId)
 
 // A cell without a ticket may hold a queue entry; an order supersedes it
-const getWaitlistEntryForCell = (inhabitantId: number, eventId: number): WaitlistEntryWithPosition | undefined =>
+const getWaitlistEntryForCell = (inhabitantId: number, eventId: number): TicketWaitlistDetail | undefined =>
   getOrderForCell(inhabitantId, eventId) ? undefined : findRegularOrder(props.waitlistEntries, inhabitantId, eventId)
 
 const getServerMode = (inhabitantId: number, eventId: number): DinnerMode =>
@@ -775,10 +775,10 @@ const getEventSummary = (eventId: number) => {
           :is-modified="isGuestCellModified(row.original.guestOrders)"
           @update:model-value="(mode: DinnerMode) => handleGuestCellUpdate({guestOrders: row.original.guestOrders!, dinnerMode: mode})"
         />
-        <!-- Guest add row: + button for future events -->
+        <!-- Guest add row: a chevron per future dinner, turned up while its form is open below -->
         <UButton
           v-else-if="row.original.rowType === 'guest-add' && !isEventDisabled(event) && canBookEvent(event)"
-          :icon="activeGuestEventId === event.id ? ICONS.chevronDown : ICONS.plusCircle"
+          :icon="ICONS.chevronDown"
           :color="COMPONENTS.guestRow.color"
           :variant="NOISE.quiet"
           :size="SIZES.standard"

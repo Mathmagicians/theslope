@@ -2,7 +2,6 @@ import {defineEventHandler, createError, getValidatedRouterParams} from "h3"
 import {deleteTeam} from "~~/server/data/prismaRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import * as z from 'zod'
-import type {CookingTeamDetail} from '~/composables/useCookingTeamValidation'
 
 const {throwH3Error} = eventHandlerHelper
 
@@ -11,7 +10,7 @@ const idSchema = z.object({
     id: z.coerce.number().int().positive('Team ID must be a positive integer')
 })
 
-export default defineEventHandler(async (event): Promise<CookingTeamDetail> => {
+export default defineEventHandler(async (event): Promise<number> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
 
@@ -31,10 +30,9 @@ export default defineEventHandler(async (event): Promise<CookingTeamDetail> => {
 
     // Database operations try-catch - separate concerns
     try {
-        console.log(`👥 > TEAM > [DELETE] Deleting team with id ${id}`)
-        const deletedTeam = await deleteTeam(d1Client, id)
-        console.info(`👥 > TEAM > [DELETE] Successfully deleted team ${deletedTeam.name}`)
-        return deletedTeam
+        const deleted = await deleteTeam(d1Client, id)
+        console.info(`👥 > TEAM > [DELETE] Deleted ${deleted} team(s) with id ${id}`)
+        return deleted
     } catch (error) {
         return throwH3Error(`👥 > TEAM > [DELETE] Error deleting team with id ${id}`, error)
     }

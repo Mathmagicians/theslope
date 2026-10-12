@@ -10,23 +10,30 @@ export type CalendarLegendItem =
 
 <script setup lang="ts">
 /**
- * CalendarLegend - the "Forklaring" panel under a calendar
+ * CalendarLegend - the one "Forklaring" panel
  *
  * ┌ ⓘ Forklaring ──────────────────────────────────────────────┐
  * │  (1) Næste fællesspisning   (1)* Ledige billetter   [1] Madhold 1 │
+ * │  <default slot: a surface's own entries>                          │
+ * │  hint                                                             │
  * └────────────────────────────────────────────────────────────┘
  *   circle: a day circle in the variant's classes
  *   chip:   that circle wrapped in a chip, with a count when asked
  *   badge:  the team's rainbow band
  *
- * The same ALERTS.legend panel as DinnerModeLegend; the entries wrap in a row.
- * Rendered in BaseCalendar's #legend slot.
+ * The calendars pass `items` and render it in BaseCalendar's #legend slot. DinnerModeLegend fills the
+ * default slot with its mode samples and passes the grid's operating `hint`.
  */
-defineProps<{
-  items: CalendarLegendItem[]
-}>()
+withDefaults(defineProps<{
+  items?: CalendarLegendItem[]
+  /** The operating hint under the entries */
+  hint?: string
+}>(), {
+  items: () => [],
+  hint: undefined
+})
 
-const {ALERTS, ICONS, COMPONENTS, SIZES} = useTheSlopeDesignSystem()
+const {ALERTS, ICONS, COMPONENTS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
 </script>
 
 <template>
@@ -56,7 +63,9 @@ const {ALERTS, ICONS, COMPONENTS, SIZES} = useTheSlopeDesignSystem()
           </div>
           <span>{{ item.label }}</span>
         </div>
+        <slot />
       </div>
+      <p v-if="hint" :class="[TYPOGRAPHY.finePrint, COMPONENTS.legend.hint]">{{ hint }}</p>
     </template>
   </UAlert>
 </template>

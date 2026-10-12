@@ -12,7 +12,7 @@ off one at a time in chat; the user runs installs and database commands.
 | Store fetcher factory + alignment | every fetch in a store through `useApiHandler().storeAsyncData` / `apiRequest` | ✅ shipped `33a3567` |
 | Fetch gating, selection-driven datasets, stale-selection recovery | `enabled`, `dependsOn`, `notFound` on the factory; no copy refs, no page-level store init | ✅ shipped `d6fe721` |
 | Hydration structure fixes | same structure on server and client; one toaster | ✅ implemented 2026-10-07, user commit pending |
-| Page composition | master/detail and tab frames, the `isMd` source | **OPEN** |
+| Page composition | master/detail and tab frames | **OPEN**; the `isMd` source ✅ shipped `8d98269`: the design system is the one reader of the breakpoint (`docs/ui.md` Rules) |
 | Dependency clusters | framework pair ✅ shipped 2026-10-05; Prisma 7.10 + zod 4.6 in the Prisma bundle (`release-0.9.0.md` § Signed model set); TS 7 / @types/node 26 / h3 2 wait | split |
 
 ## Shipped — pointers
@@ -50,8 +50,7 @@ each without detail. Next fix under the same principle, on the user's go.
 **Findings.** `/chef` and `/dinner` build the same master/detail frame in the page (`UPage :ui="LAYOUTS.masterDetailPage"`
 + `#left`, four lines each); `/admin/[tab]` and `/household/[shortname]/[tab]` repeat the chain tabs array →
 `defineAsyncComponent` map → `useTabNavigation` → `UTabs`; `layouts/default.vue` measures `md` with a hidden element
-and provides `isMd` (`default.vue:26-47`), injected by 12 components and the design system — `false` on the server
-until `onMounted`.
+and provides `isMd`; the design system is its one reader (`breakpoint`, `isMd`, `measured`), `null` until measured.
 
 Stable surfaces only (decision 2026-10-05): typed layout props (4.4), `useLayout()` (4.5), `useBreakpoints` +
 `ssrWidth` (`@vueuse/core`, re-added by the package that first imports it).
@@ -60,7 +59,7 @@ Stable surfaces only (decision 2026-10-05): typed layout props (4.4), `useLayout
 |---|---|---|
 | Two-pane frame | leave — the token owns the shape, the pages' differences dominate the four shared lines; a `MasterDetailPage` component when a third two-pane page lands | a `MasterDetailPage` component now |
 | Tab scaffolding | a `TabbedPage` component owning the chain (props `tabs`, `basePath`, `additionalParams`, the component map; the page keeps `#content`) | leave — two hand-kept copies |
-| `isMd` source | `useBreakpoints(breakpointsTailwind).greaterOrEqual('md')` in the layout, keeping the `provide('isMd')` seam so the 12 components and `mountWithTooltipProvider` stay untouched; deletes the hidden element and listener | keep the element — reads the real CSS breakpoint |
+| `isMd` source | ✅ shipped `8d98269`: the layout keeps the element and provides `isMd`; the design system is the one injector, components read `isMd` and `measured` from it, and the usage spec fails any other inject | — |
 
 `provideSSRWidth` is a separate decision: a guessed desktop first paint versus today's phone-first paint; wrong-guess
 clients flip after hydration either way.

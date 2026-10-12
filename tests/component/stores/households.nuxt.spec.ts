@@ -12,6 +12,7 @@ import type {
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { UserFactory } from '~~/tests/e2e/testDataFactories/userFactory'
+import { OrderFactory } from '~~/tests/e2e/testDataFactories/orderFactory'
 import { asyncDataStatus, resetStores } from '~~/tests/component/testHelpers'
 
 import { useHouseholdsStore } from '~/stores/households'
@@ -30,7 +31,7 @@ mockNuxtImport('useUserSession', () => () => ({
 }))
 
 // Schema for validating mock responses
-const { InhabitantUpdateResponseSchema, ScaffoldResultSchema } = useBookingValidation()
+const { InhabitantUpdateResponseSchema } = useBookingValidation()
 
 // IMPORTANT: Register endpoints BEFORE importing the store
 // The store's module-level useFetch executes on import
@@ -122,27 +123,10 @@ const createMockHouseholdDetail = (): HouseholdDetail => {
   }
 }
 
-const createMockScaffoldResult = (overrides = {}) => {
-  const result = {
-    seasonId: 1,
-    created: 5,
-    deleted: 0,
-    released: 0,
-    priceUpdated: 0,
-    modeUpdated: 0,
-    unchanged: 0,
-    households: 1,
-    errored: 0,
-    ...overrides
-  }
-  // Validate with schema
-  return ScaffoldResultSchema.parse(result)
-}
-
 const createMockInhabitantUpdateResponse = (inhabitantId = 1) => {
   const response = {
     inhabitant: createMockInhabitant(inhabitantId, 1),
-    scaffoldResult: createMockScaffoldResult()
+    scaffoldResult: OrderFactory.defaultScaffoldResult()
   }
   // Validate with schema
   return InhabitantUpdateResponseSchema.parse(response)
@@ -301,11 +285,11 @@ describe('Households Store', () => {
       // Mock different results for each inhabitant - use factory + schema validation
       preferencesEndpoint1.mockReturnValue(InhabitantUpdateResponseSchema.parse({
         inhabitant: createMockInhabitant(1, 1),
-        scaffoldResult: createMockScaffoldResult({ created: 3, deleted: 1, unchanged: 2 })
+        scaffoldResult: OrderFactory.defaultScaffoldResult({ created: 3, deleted: 1, unchanged: 2 })
       }))
       preferencesEndpoint2.mockReturnValue(InhabitantUpdateResponseSchema.parse({
         inhabitant: createMockInhabitant(2, 1),
-        scaffoldResult: createMockScaffoldResult({ created: 2, deleted: 1, released: 1, priceUpdated: 1, unchanged: 1 })
+        scaffoldResult: OrderFactory.defaultScaffoldResult({ created: 2, deleted: 1, released: 1, priceUpdated: 1, unchanged: 1 })
       }))
 
       await store.updateAllInhabitantPreferences(1, { MONDAY: 'DINEIN' })
@@ -456,7 +440,7 @@ describe('Households Store', () => {
       moveInhabitantEndpoint.mockReturnValue(
         InhabitantUpdateResponseSchema.parse({
           inhabitant: createMockInhabitant(1, 2),
-          scaffoldResult: createMockScaffoldResult(scaffoldOverrides)
+          scaffoldResult: OrderFactory.defaultScaffoldResult(scaffoldOverrides)
         })
       )
 
@@ -519,7 +503,7 @@ describe('Households Store', () => {
 
   describe('setMoveOutDate', () => {
     it('returns the scaffold result and keeps it in lastMoveOutResult', async () => {
-      const scaffoldResult = createMockScaffoldResult({ deleted: 4 })
+      const scaffoldResult = OrderFactory.defaultScaffoldResult({ deleted: 4 })
       moveOutEndpoint.mockReturnValue({ household: createMockHouseholdDetail(), scaffoldResult })
       const store = await setupStore()
 

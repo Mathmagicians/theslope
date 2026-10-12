@@ -6,43 +6,16 @@
  * - Master (Calendar): 1/4 width, shows calendar with dinner events
  * - Detail (Dinner info): 3/4 width, shows selected day details
  *
- * Detail View Layout:
+ * Detail view: DinnerDetailPanel lays out three slots; each component's header draws its own layout.
  * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ MENU HERO (UCard Header - Full Bleed)                                      │
- * │ ┌─────────────────────────────────────────────────────────────────────────┐ │
- * │ │ [Baggrund: Menu Foto eller Fast Farve]                                  │ │
- * │ │                                                                          │ │
- * │ │                       SPAGHETTI CARBONARA                                │ │
- * │ │               Cremet pasta med bacon og parmesan                         │ │
- * │ │                                                                          │ │
- * │ │     Allergener: 🥛 Laktose   🌾 Gluten   🥚 Æg                           │ │
- * │ │                                                                          │ │
- * │ │     [Bestil] [Byt] [Annuller] [Skift Servering]                         │ │
- * │ └─────────────────────────────────────────────────────────────────────────┘ │
+ * │ #hero  [ChefMenuCard] in view mode: the dinner, its menu and allergens     │
+ * │        └─ [DinnerBookingForm] the household's tickets and queue places     │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ #team  [CookingTeamCard] (monitor) or the no-team alert, [WorkAssignment]  │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ #stats [KitchenPreparation] the kitchen stats with the alternating fourth  │
+ * │        box (TIL SALG or VENTELISTE), drawn in KitchenPreparation.vue       │
  * └─────────────────────────────────────────────────────────────────────────────┘
- *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ KØKKEN FORBEREDELSE (UCard Body - Full Bleed)                              │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │ 👨‍🍳 Chefkok: Anna Larsen                                                   │
- * │ 👥 Madhold 3: Bob Jensen, Clara Nielsen, David Hansen                      │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │                          LAV MAD - 100%                                     │
- * │  100 KUVERTER                                                               │
- * │  Voksne: 80  |  Børn: 40 (20 kuverter)  |  Baby: 5 (0 kuverter)            │
- * ├──────────────────────────┬─────────────────────┬──────────────┬────────────┤
- * │   TAKEAWAY - 40%         │  SPIS HER - 35%     │SPIS SENT-20% │IKKE-5%     │
- * │                          │                     │              │            │
- * │      50 personer         │    44 personer      │  25 personer │ 6 personer │
- * │                          │                     │              │            │
- * │    40 kuverter           │     35 stole        │   20 stole   │            │
- * │    40 tallerkener        │   33 tallerkener    │18 tallerkener│            │
- * │                          │                     │              │            │
- * │    🌾 Maria (2)          │   🥛 Anna (3)       │  🌾 Peter    │            │
- * │    🥚 Tom (1)            │   🥚 Lars (1)       │              │            │
- * │                          │                     │              │            │
- * └──────────────────────────┴─────────────────────┴──────────────┴────────────┘
- * ←─────────── 40% ─────────→←──────── 35% ──────→←──── 20% ───→←─── 5% ──→
  */
 
 import {FORM_MODES} from '~/types/form'
@@ -71,9 +44,6 @@ const {selectedSeason, isPlanStoreReady, isSelectedSeasonInitialized, isSelected
 
 const {value: calendarOpen, setValue: setCalendarOpen} = useCalendarOpenParam(() => isPlanStoreReady.value)
 
-// Initialize allergies store for allergen data
-const allergiesStore = useAllergiesStore()
-allergiesStore.initAllergiesStore()
 
 const bookingsStore = useBookingsStore()
 useUsersStore()  // chef-volunteer flow needs it instantiated in setup context

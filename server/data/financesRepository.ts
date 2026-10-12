@@ -1,3 +1,4 @@
+import type {Prisma} from "~~/prisma/generated/client/client"
 import eventHandlerHelper from "../utils/eventHandlerHelper"
 import {getPrismaClientConnection} from "../utils/database"
 import {useDeliveryValidation, type Delivery, type DeliveryCreate} from '~/composables/useDeliveryValidation'
@@ -26,7 +27,7 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
 import {useHousehold} from '~/composables/useHousehold'
 import {getHouseholdShortName} from '~/composables/useCoreValidation'
-import {fetchActiveSeasonId} from '~~/server/data/prismaRepository'
+import {fetchActiveSeasonId, costRowsInclude} from '~~/server/data/prismaRepository'
 import {useBilling} from '~/composables/useBilling'
 import {
     useBillingValidation,
@@ -59,6 +60,57 @@ const {throwH3Error, isPrismaNotFound} = eventHandlerHelper
 
 // The dinner embedded in an order read: its cost is the sum of the selected expense amounts, never the stored column
 const embeddedDinnerEvent = (dinnerEvent: Record<string, unknown>) => useBookingValidation().deserializeDinnerEvent(dinnerEvent)
+
+// The expense amounts give each dinner its computed cost (ADR-010)
+const orderDetailInclude = {
+    dinnerEvent: {
+        select: {
+            id: true, date: true, menuTitle: true, menuDescription: true,
+            menuPictureUrl: true, state: true, ...costRowsInclude,
+            heynaboEventId: true, chefId: true, cookingTeamId: true,
+            seasonId: true, createdAt: true, updatedAt: true
+        }
+    },
+    inhabitant: {
+        select: {
+            id: true, heynaboId: true, householdId: true,
+            name: true, lastName: true, pictureUrl: true
+        }
+    },
+    bookedByUser: {select: {id: true, email: true}},
+    ticketPrice: {select: {id: true, ticketType: true, price: true, description: true}}
+} satisfies Prisma.OrderInclude
+
+type OrderDetailPayload = Prisma.OrderGetPayload<{include: typeof orderDetailInclude}> & {orderHistory?: unknown[]}
+
+// Flattens ticketType (ADR-009); history only on the reads that include it
+const toOrderDetail = (order: OrderDetailPayload): OrderDetail => useBookingValidation().OrderDetailSchema.parse({
+    ...order,
+    dinnerEvent: embeddedDinnerEvent(order.dinnerEvent),
+    ticketType: order.ticketPrice?.ticketType ?? null,
+    history: order.orderHistory
+})
+
+const dinnerEventDetailInclude = {
+    Season: true,
+    chef: true,
+    cookingTeam: {
+        include: {
+            season: true,
+            assignments: {include: {inhabitant: true}},
+            _count: {select: {dinners: true, jokerSlots: true}}
+        }
+    },
+    tickets: {
+        include: {
+            inhabitant: {include: {allergies: {include: {allergyType: true}}}},
+            bookedByUser: true,
+            ticketPrice: true
+        }
+    },
+    allergens: {include: {allergyType: true}},
+    expenses: {orderBy: [{createdAt: 'asc'}, {id: 'asc'}]}
+} satisfies Prisma.DinnerEventInclude
 
 /*** ORDER AUDIT ***/
 
@@ -312,54 +364,13 @@ export async function createOrders(
 
 export async function fetchOrder(d1Client: D1Database, id: number): Promise<OrderDetail | null> {
     console.info(`🎟️ > ORDER > [GET] Fetching order with ID ${id}`)
-    const {OrderDetailSchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
         const order = await prisma.order.findFirst({
             where: {id},
             include: {
-                dinnerEvent: {
-                    select: {
-                        id: true,
-                        date: true,
-                        menuTitle: true,
-                        menuDescription: true,
-                        menuPictureUrl: true,
-                        state: true,
-                        expenses: {select: {amount: true}},
-                        heynaboEventId: true,
-                        chefId: true,
-                        cookingTeamId: true,
-                        seasonId: true,
-                        createdAt: true,
-                        updatedAt: true
-                    }
-                },
-                inhabitant: {
-                    select: {
-                        id: true,
-                        heynaboId: true,
-                        householdId: true,
-                        name: true,
-                        lastName: true,
-                        pictureUrl: true
-                    }
-                },
-                bookedByUser: {
-                    select: {
-                        id: true,
-                        email: true
-                    }
-                },
-                ticketPrice: {
-                    select: {
-                        id: true,
-                        ticketType: true,
-                        price: true,
-                        description: true
-                    }
-                },
+                ...orderDetailInclude,
                 // ADR-011: Full order history audit trail for detail endpoint
                 orderHistory: {
                     select: {
@@ -391,13 +402,7 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
 
         console.info(`🎟️ > ORDER > [GET] Successfully fetched order ${order.id} with ${order.orderHistory?.length ?? 0} history entries`)
 
-        // Transform: flatten ticketType (ADR-009)
-        return OrderDetailSchema.parse({
-            ...order,
-            dinnerEvent: embeddedDinnerEvent(order.dinnerEvent),
-            ticketType: order.ticketPrice?.ticketType ?? null,
-            history: order.orderHistory
-        })
+        return toOrderDetail(order)
     } catch (error) {
         return throwH3Error(`🎟️ > ORDER > [GET]: Error fetching order with ID ${id}`, error)
     }
@@ -443,7 +448,7 @@ export async function claimOrder(
     maxRetries: number = 3
 ): Promise<OrderDetail | null> {
     const LOG = '🎟️ > ORDER > [CLAIM]'
-    const {OrderDetailSchema, OrderStateSchema, OrderAuditActionSchema, createOrderAuditData} = useBookingValidation()
+    const {OrderStateSchema, OrderAuditActionSchema, createOrderAuditData} = useBookingValidation()
     const {formatNameWithInitials} = useHousehold()
     const prisma = await getPrismaClientConnection(d1Client)
 
@@ -490,24 +495,7 @@ export async function claimOrder(
                     isGuestTicket,
                     releasedAt: null
                 },
-                include: {
-                    dinnerEvent: {
-                        select: {
-                            id: true, date: true, menuTitle: true, menuDescription: true,
-                            menuPictureUrl: true, state: true, expenses: {select: {amount: true}},
-                            heynaboEventId: true, chefId: true, cookingTeamId: true,
-                            seasonId: true, createdAt: true, updatedAt: true
-                        }
-                    },
-                    inhabitant: {
-                        select: {
-                            id: true, heynaboId: true, householdId: true,
-                            name: true, lastName: true, pictureUrl: true
-                        }
-                    },
-                    bookedByUser: {select: {id: true, email: true}},
-                    ticketPrice: {select: {id: true, ticketType: true, price: true, description: true}}
-                }
+                include: orderDetailInclude
             })
 
             // Create audit entry with ORIGINAL household provenance
@@ -537,11 +525,7 @@ export async function claimOrder(
 
             console.info(`${LOG} Successfully claimed order ${orderId}`)
 
-            return OrderDetailSchema.parse({
-                ...claimedOrder,
-                dinnerEvent: embeddedDinnerEvent(claimedOrder.dinnerEvent),
-                ticketType: claimedOrder.ticketPrice?.ticketType ?? null
-            })
+            return toOrderDetail(claimedOrder)
         } catch (error) {
             // P2025: Race lost - someone else claimed this ticket
             if (isPrismaNotFound(error)) {
@@ -948,7 +932,7 @@ export async function fetchDinnerEvents(d1Client: D1Database, filter: DinnerEven
                         season: true
                     }
                 },
-                expenses: {select: {amount: true}}
+                ...costRowsInclude
             },
             orderBy: {
                 date: 'asc'
@@ -970,44 +954,7 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
     try {
         const dinnerEvent = await prisma.dinnerEvent.findFirst({
             where: {id},
-            include: {
-                Season: true,
-                chef: true,
-                cookingTeam: {
-                    include: {
-                        season: true,
-                        assignments: {
-                            include: {
-                                inhabitant: true
-                            }
-                        },
-                        _count: {
-                            select: {dinners: true, jokerSlots: true}
-                        }
-                    }
-                },
-                tickets: {
-                    include: {
-                        inhabitant: {
-                            include: {
-                                allergies: {
-                                    include: {
-                                        allergyType: true
-                                    }
-                                }
-                            }
-                        },
-                        bookedByUser: true,
-                        ticketPrice: true
-                    }
-                },
-                allergens: {
-                    include: {
-                        allergyType: true
-                    }
-                },
-                expenses: {orderBy: [{createdAt: 'asc'}, {id: 'asc'}]}
-            }
+            include: dinnerEventDetailInclude
         })
 
         if (dinnerEvent) {
@@ -1042,44 +989,7 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
         const updatedDinnerEvent = await prisma.dinnerEvent.update({
             where: {id},
             data: updateData,
-            include: {
-                Season: true,
-                chef: true,
-                cookingTeam: {
-                    include: {
-                        season: true,
-                        assignments: {
-                            include: {
-                                inhabitant: true
-                            }
-                        },
-                        _count: {
-                            select: {dinners: true, jokerSlots: true}
-                        }
-                    }
-                },
-                tickets: {
-                    include: {
-                        inhabitant: {
-                            include: {
-                                allergies: {
-                                    include: {
-                                        allergyType: true
-                                    }
-                                }
-                            }
-                        },
-                        bookedByUser: true,
-                        ticketPrice: true
-                    }
-                },
-                allergens: {
-                    include: {
-                        allergyType: true
-                    }
-                },
-                expenses: {orderBy: [{createdAt: 'asc'}, {id: 'asc'}]}
-            }
+            include: dinnerEventDetailInclude
         })
 
         // ADR-010: Deserialize handles all transformations (same as fetchDinnerEvent)
@@ -1099,7 +1009,7 @@ export async function assignCookingTeamToDinnerEvent(d1Client: D1Database, dinne
     const updated = await prisma.dinnerEvent.update({
         where: {id: dinnerEventId},
         data: {cookingTeamId},
-        include: {expenses: {select: {amount: true}}}
+        include: costRowsInclude
     })
 
     return deserializeDinnerEvent(updated)

@@ -18,7 +18,7 @@
  *
  * Unfolded, under the boxes: Billetter (the ticket table named by type, its sums as its bottom rows down to
  * Rådighedsbeløb), this dinner as one spending row with its receipts under it, the team's round in the same shape
- * (CookingRoundSpending, headed by the words cookingRoundWords builds, handed in as roundWords) and last
+ * (CookingRoundSpending; the card builds both fragments once and hands them in) and last
  * Billetændringer (TicketChanges, folded behind its chevron, its window from the booking deadline), shown only while
  * the dinner has tickets.
  *
@@ -35,7 +35,7 @@
  */
 import type { OrderDetail } from '~/composables/useBookingValidation'
 import type { Expense } from '~/composables/useBillingValidation'
-import { dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow, type CookingRoundWords } from '~/composables/useBookingUi'
+import type { SpendingFragment } from '~/composables/useBookingUi'
 import type {TableColumn} from '@nuxt/ui'
 
 interface Props {
@@ -44,8 +44,8 @@ interface Props {
   expenses?: Expense[]
   dinnerEventId?: number | null
   bookingDeadline?: Date | null
-  roundRows?: CookingRoundRow[]
-  roundWords?: CookingRoundWords | null
+  dinnerFragment?: SpendingFragment | null
+  teamFragment?: SpendingFragment | null
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -53,11 +53,12 @@ const props = withDefaults(defineProps<Props>(), {
   expenses: () => [],
   dinnerEventId: null,
   bookingDeadline: null,
-  roundRows: () => [],
-  roundWords: null
+  dinnerFragment: null,
+  teamFragment: null
 })
 
-const { TYPOGRAPHY, COMPONENTS, ICONS, BUTTONS, COLOR, NOISE, SIZES } = useTheSlopeDesignSystem()
+const { TYPOGRAPHY, COMPONENTS, ICONS, BUTTONS, COLOR, NOISE, SIZES, ALERTS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const noTicketsSold = getRandomEmptyMessage('noTicketsSold')
 
 // Kitchen config from app.config.ts
 const appConfig = useAppConfig()
@@ -87,10 +88,6 @@ const ticketLabel = (ticketType: string) => ticketTypeConfig[ticketType as keyof
 const spent = computed(() => sumAmounts(props.expenses))
 const figures = computed(() => ({budgetGross: budget.value.availableBudget, spentGross: spent.value}))
 const left = computed(() => spendingLeft(figures.value))
-// This dinner's row of the spending table, the one the page marks as current
-const ownRow = computed(() => props.roundRows.find(row => row.isCurrent) ?? null)
-const dinnerFragment = computed(() => ownRow.value ? dinnerSpendingFragment(ownRow.value, props.expenses) : null)
-const teamFragment = computed(() => props.roundWords && props.roundRows.length > 1 ? teamSpendingFragment(props.roundRows, props.roundWords) : null)
 
 type TicketRevenueRow = (typeof revenueByType.value)[number]
 const ticketColumns: TableColumn<TicketRevenueRow>[] = [
@@ -184,19 +181,21 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
         <template #ticketType-cell="{ row }">{{ ticketLabel(row.original.ticketType) }}</template>
         <template #unitPrice-cell="{ row }">{{ formatPrice(row.original.unitPrice) }} kr</template>
         <template #revenue-cell="{ row }">{{ formatPrice(row.original.revenue) }} kr</template>
-        <template #empty>Ingen billetter solgt endnu</template>
+        <template #empty>
+          <UAlert v-bind="ALERTS.emptyStateCompact" :title="`${noTicketsSold.emoji} ${noTicketsSold.text}`" data-testid="budget-ticket-empty" />
+        </template>
         <template #body-bottom>
           <tr :class="COMPONENTS.table.totalRow" data-testid="budget-summary-revenue">
-            <td :class="COMPONENTS.table.ui.td" colspan="3">Indtægter</td>
-            <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]">{{ formatPrice(budget.totalRevenue) }} kr</td>
+            <td :class="COMPONENTS.table.sumCell" colspan="3">Indtægter</td>
+            <td :class="COMPONENTS.table.sumAmountCell">{{ formatPrice(budget.totalRevenue) }} kr</td>
           </tr>
           <tr>
-            <td :class="COMPONENTS.table.ui.td" colspan="3">Køkkenbidrag ({{ budget.kitchenBaseRatePercent }}%)</td>
-            <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><span :class="COMPONENTS.dinnerBudget.summaryDeduction">-<VatAmount :gross="budget.kitchenContribution" /></span></td>
+            <td :class="COMPONENTS.table.sumCell" colspan="3">Køkkenbidrag ({{ budget.kitchenBaseRatePercent }}%)</td>
+            <td :class="COMPONENTS.table.sumAmountCell"><span :class="COMPONENTS.dinnerBudget.summaryDeduction">-<VatAmount :gross="budget.kitchenContribution" /></span></td>
           </tr>
           <tr :class="COMPONENTS.table.totalRow" data-testid="budget-summary-available">
-            <td :class="COMPONENTS.table.ui.td" colspan="3">Rådighedsbeløb</td>
-            <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><VatAmount :gross="budget.availableBudget" /></td>
+            <td :class="COMPONENTS.table.sumCell" colspan="3">Rådighedsbeløb</td>
+            <td :class="COMPONENTS.table.sumAmountCell"><VatAmount :gross="budget.availableBudget" /></td>
           </tr>
         </template>
       </UTable>

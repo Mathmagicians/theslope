@@ -701,6 +701,7 @@ describe('useBookingValidation', () => {
         consume: {consumed: 5},
         close: {closed: 10},
         transact: {created: 8},
+        clearWaitlist: {cleared: 3},
         scaffold: {seasonId: 1, created: 20, deleted: 0, released: 0, unchanged: 100, households: 10}
       }
 
@@ -710,6 +711,7 @@ describe('useBookingValidation', () => {
         expect(result.consume.consumed).toBe(5)
         expect(result.close.closed).toBe(10)
         expect(result.transact.created).toBe(8)
+        expect(result.clearWaitlist.cleared).toBe(3)
         expect(result.scaffold?.seasonId).toBe(1)
       })
 
@@ -717,6 +719,11 @@ describe('useBookingValidation', () => {
         const resultWithNullScaffold = {...validResult, scaffold: null}
         const result = DailyMaintenanceResultSchema.parse(resultWithNullScaffold)
         expect(result.scaffold).toBeNull()
+      })
+
+      it('GIVEN a result without clearWaitlist WHEN parsing THEN clearWaitlist defaults to zero', () => {
+        const {clearWaitlist: _cleared, ...withoutClearWaitlist} = validResult
+        expect(DailyMaintenanceResultSchema.parse(withoutClearWaitlist).clearWaitlist.cleared).toBe(0)
       })
 
       it('GIVEN all zero counts WHEN parsing THEN succeeds (idempotent run)', () => {
@@ -737,6 +744,7 @@ describe('useBookingValidation', () => {
         {desc: 'missing transact', data: {jobRunId: 1, consume: {consumed: 0}, close: {closed: 0}, scaffold: null}},
         {desc: 'invalid jobRunId', data: {...validResult, jobRunId: 0}},
         {desc: 'invalid consume', data: {...validResult, consume: {consumed: -1}}},
+        {desc: 'invalid clearWaitlist', data: {...validResult, clearWaitlist: {cleared: -1}}},
         {desc: 'invalid scaffold', data: {...validResult, scaffold: {seasonId: 0}}}
       ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
         expect(() => DailyMaintenanceResultSchema.parse(data)).toThrow()

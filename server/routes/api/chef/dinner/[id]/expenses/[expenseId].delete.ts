@@ -1,8 +1,8 @@
-import {createError, defineEventHandler, getValidatedRouterParams, setResponseStatus} from 'h3'
+import {defineEventHandler, getValidatedRouterParams, setResponseStatus} from 'h3'
 import {z} from 'zod'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {requireChefForDinner} from '~~/server/utils/authorizationHelper'
-import {deleteExpense, fetchExpense} from '~~/server/data/financesRepository'
+import {deleteExpense} from '~~/server/data/financesRepository'
 import type {Expense} from '~/composables/useBillingValidation'
 
 const {throwH3Error} = eventHandlerHelper
@@ -29,11 +29,7 @@ export default defineEventHandler(async (event): Promise<Expense> => {
     await requireChefForDinner(event, id)
 
     try {
-        const expense = await fetchExpense(d1Client, expenseId)
-        if (!expense || expense.dinnerEventId !== id) {
-            throw createError({statusCode: 404, message: `Expense ${expenseId} not found on dinner ${id}`})
-        }
-        const removed = await deleteExpense(d1Client, expenseId)
+        const removed = await deleteExpense(d1Client, id, expenseId)
         setResponseStatus(event, 200)
         return removed
     } catch (error) {

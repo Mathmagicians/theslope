@@ -22,7 +22,7 @@ import {
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
 import {useOrder, type SpendingFigures} from '~/composables/useOrder'
 import type {Expense} from '~/composables/useBillingValidation'
-import {useBookingValidation, type DinnerEventDisplay, type OrderDisplay, type DesiredOrder, type OrderState, type OrderAuditAction} from '~/composables/useBookingValidation'
+import {useBookingValidation, DinnerMode as DinnerModeEnum, type DinnerMode, type DinnerEventDisplay, type OrderDisplay, type DesiredOrder, type OrderState, type OrderAuditAction} from '~/composables/useBookingValidation'
 import {ICONS, COLOR, ALARM_TO_BADGE, type NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
 import {calculateCountdown, formatDate, formatDateRange} from '~/utils/date'
 
@@ -91,6 +91,22 @@ export const teamSpendingFragment = (rows: CookingRoundRow[], words: CookingRoun
     rows: rows.map(row => ({kind: 'dinner', ...row})),
     total: {label: words.team, figures: useOrder().spendingTotals(rows)}
 })
+
+/**
+ * The figures under a block of lines, as the rows a table adds in its body-bottom slot: the allowance, what was spent
+ * and what is left with its balance icon; without an allowance, what was spent alone. `rule` marks the row a rule sits above
+ */
+export interface AllowanceRow { label: string; gross: number; balance?: boolean; pending?: boolean; rule?: boolean }
+export const allowanceRows = ({budgetGross, spentGross}: {budgetGross: number | null, spentGross: number}): AllowanceRow[] => {
+    if (budgetGross === null) return [{label: 'Brugt', gross: spentGross, rule: true}]
+    const figures = {budgetGross, spentGross}
+    const {spendingLeft, spendingAwaitsTickets} = useOrder()
+    return [
+        {label: 'Rådighedsbeløb', gross: figures.budgetGross},
+        {label: 'Brugt', gross: figures.spentGross},
+        {label: 'Tilbage', gross: spendingLeft(figures), balance: true, pending: spendingAwaitsTickets(figures), rule: true}
+    ]
+}
 
 export const STEP_ICONS: Record<DinnerStepState, string> = {
     [DinnerStepState.SCHEDULED]: ICONS.calendar,
@@ -164,15 +180,37 @@ export const createBookingBadges = (
 export type PreviewSupply = (order: DesiredOrder) => {ticketsForSale: number}
 const NOTHING_FOR_SALE: PreviewSupply = () => ({ticketsForSale: 0})
 
+/** The words of a dinner mode, once: DinnerModeSelector's glyph and label, and the mode a preview line names */
+export const MODE_WORDS: Record<DinnerMode, {label: string, icon: string}> = {
+    [DinnerModeEnum.DINEIN]: {label: 'Spisesal', icon: ICONS.dinner},
+    [DinnerModeEnum.DINEINLATE]: {label: 'Sen', icon: ICONS.lateDinner},
+    [DinnerModeEnum.TAKEAWAY]: {label: 'Takeaway', icon: ICONS.takeaway},
+    [DinnerModeEnum.NONE]: {label: 'Ingen', icon: ICONS.noDinner}
+}
+
+/** What a preview line names beside the person: the mode's word, and the queue place a requeue keeps */
+export type PreviewWords = {mode: string, position?: number}
+type PreviewTemplate = (name: string, words: PreviewWords) => string
+
 /** The words of each booking outcome, once: the preview line, the save label and the guest form's button */
-export const OUTCOME_WORDS: Record<BookingOutcome, {icon: string, template: (name: string) => string, save: string, guestSave: string}> = {
+export const OUTCOME_WORDS: Record<BookingOutcome, {icon: string, template: PreviewTemplate, save: string, guestSave: string}> = {
     book:    {icon: ICONS.plusCircle, template: name => `${name} tilmeldes`, save: 'Book', guestSave: 'Tilføj gæst'},
     buy:     {icon: ICONS.claim, template: name => `${name} køber en ledig billet`, save: 'Køb billet', guestSave: 'Køb billet til gæst'},
     queue:   {icon: ICONS.waitlist, template: name => `${name} skrives på ventelisten`, save: 'Skriv på venteliste', guestSave: 'Skriv gæst på venteliste'},
     leave:   {icon: ICONS.xMark, template: name => `${name} forlader ventelisten`, save: 'Forlad ventelisten', guestSave: 'Forlad ventelisten'},
-    requeue: {icon: ICONS.waitlist, template: name => `${name} skrives på ventelisten igen`, save: 'Opdater ønsket', guestSave: 'Opdater ønsket'},
+    requeue: {
+        icon: ICONS.waitlist,
+        template: (name, {mode, position}) =>
+            `${name} ændrer ønsket tilmelding til ${mode}${position ? `, beholder plads #${position} i køen` : ''}`,
+        save: 'Opdater',
+        guestSave: 'Opdater'
+    },
     none:    {icon: ICONS.edit, template: name => `${name} opdaterer spisning`, save: 'Opdater', guestSave: 'Tilføj gæst'}
 }
+
+/** The queue place lookup a preview takes: the place of the household entry a desired order names */
+export const waitlistPositionOf = (entries: {id: number, position: number}[]) =>
+    (order: DesiredOrder): number | undefined => entries.find(entry => entry.id === order.waitlistEntryId)?.position
 
 // The buckets whose execution has an outcome, in the order a row's preview reads them
 const OUTCOME_BUCKETS = ['claim', 'create', 'leave', 'requeue'] as const satisfies readonly OrderBucket[]
@@ -220,7 +258,7 @@ export const useBookingUi = () => {
 
     // An outcome reads its words from OUTCOME_WORDS; the other actions change an order the household holds
     const outcomeWords = (outcome: BookingOutcome) => ({icon: OUTCOME_WORDS[outcome].icon, template: OUTCOME_WORDS[outcome].template})
-    const ACTION_PREVIEW = {
+    const ACTION_PREVIEW: Record<ActionType, {icon: string, template: PreviewTemplate}> = {
         book:       outcomeWords('book'),
         buy:        outcomeWords('buy'),
         queue:      outcomeWords('queue'),
@@ -231,7 +269,7 @@ export const useBookingUi = () => {
         reclaim:    { icon: ICONS.undo,       template: (n: string) => `${n} tilmeldes igen` },
         // A mode change on a held ticket has no supply outcome: the none words
         updateMode: outcomeWords('none')
-    } as const
+    }
 
     const getUpdateAction = (
         order: DesiredOrder,
@@ -248,7 +286,8 @@ export const useBookingUi = () => {
         buckets: OrderBucketResult<DesiredOrder>,
         existingOrders: OrderDisplay[],
         getInhabitantName: (id: number) => string,
-        supply: PreviewSupply = NOTHING_FOR_SALE
+        supply: PreviewSupply = NOTHING_FOR_SALE,
+        positionOf: (order: DesiredOrder) => number | undefined = () => undefined
     ): ActionPreviewItem[] => {
         const OrderStateEnum = OrderStateSchema.enum
         const existingById = new Map(existingOrders.map(o => [o.id, o]))
@@ -273,7 +312,9 @@ export const useBookingUi = () => {
             const bookerName = getInhabitantName(order.inhabitantId)
             const name = order.isGuestTicket ? formatGuestLabel(bookerName) : bookerName
             const config = ACTION_PREVIEW[action]
-            return { name, action, icon: config.icon, color: getActionColor(action), text: config.template(name) }
+            // Only a requeue keeps a queue place to name
+            const words = {mode: MODE_WORDS[order.dinnerMode].label, position: action === 'requeue' ? positionOf(order) : undefined}
+            return { name, action, icon: config.icon, color: getActionColor(action), text: config.template(name, words) }
         }
 
         // Each order of an outcome bucket settles against its dinner's supply
@@ -357,6 +398,7 @@ export const useBookingUi = () => {
         createBookingBadges,
         createWaitlistBadge,
         bookingSaveLabel,
+        waitlistPositionOf,
         guestSaveLabel,
         previewOutcome,
         createChefBadges,

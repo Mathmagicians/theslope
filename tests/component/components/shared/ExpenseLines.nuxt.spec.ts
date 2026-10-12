@@ -65,7 +65,7 @@ const clickAdd = async (wrapper: Wrapper) => {
     await nextTick()
 }
 // The lines are the table's plain body rows; the sum rows carry test ids
-const lineRows = (wrapper: Wrapper) => wrapper.findAll('tbody tr').filter(tr => tr.attributes('data-testid') === undefined && !tr.text().includes('Madbestilling mangler'))
+const lineRows = (wrapper: Wrapper) => wrapper.findAll('tbody tr').filter(tr => tr.attributes('data-testid') === undefined && !tr.find('[data-testid="expense-table-empty"]').exists())
 const hintRow = (wrapper: Wrapper, label: string) => findAllByTestId(wrapper, 'expense-hint-row').find(row => row.text().startsWith(label))
 
 describe('ExpenseLines', () => {
@@ -146,7 +146,7 @@ describe('ExpenseLines', () => {
         })
 
         it('GIVEN the round WHEN open THEN the whole team gets its heading and the same three rows; without one no round block shows', async () => {
-            const withRound = await mount({editable: true, round: {label: 'Hele Madhold 2, for perioden 12/04–14/04', budgetGross: 400000, spentGross: 423800}})
+            const withRound = await mount({editable: true, round: {label: 'Hele Madhold 2, for perioden 12/04–14/04', figures: {budgetGross: 400000, spentGross: 423800}}})
             await open(withRound)
             expect(findByTestId(withRound, 'expense-hint-heading').text()).toBe('Hele Madhold 2, for perioden 12/04–14/04')
             const rows = findAllByTestId(withRound, 'expense-hint-row')
@@ -196,7 +196,7 @@ describe('ExpenseLines', () => {
         it('GIVEN no lines WHEN open THEN the table says so under its headers and the form is ready', async () => {
             const wrapper = await mount({editable: true, expenses: []})
             await open(wrapper)
-            expect(findByTestId(wrapper, 'expense-table').text()).toContain('Madbestilling mangler')
+            expect(findByTestId(wrapper, 'expense-table-empty').text()).toContain(useTheSlopeDesignSystem().getRandomEmptyMessage('noReceipts').text)
             expect(lineRows(wrapper)).toHaveLength(0)
             expect(findByTestId(wrapper, 'expense-form').exists()).toBe(true)
         })

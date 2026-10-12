@@ -1,35 +1,23 @@
 import {getPrismaClientConnection} from '~~/server/utils/database'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
-import {useWaitlistValidation, type TicketWaitlistDisplay, type WaitlistOrder} from '~/composables/useWaitlistValidation'
+import {useWaitlistValidation, type TicketWaitlistCreate, type TicketWaitlistDisplay, type WaitlistOrder} from '~/composables/useWaitlistValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 
 const {throwH3Error} = eventHandlerHelper
 const LOG = '⏳ > WAITLIST'
-
-export interface WaitlistEntryCreate {
-    dinnerEventId: number
-    inhabitantId: number
-    isGuestTicket: boolean
-    order: WaitlistOrder
-}
 
 /**
  * The waiting list rows: an entry per unplaced order, read FIFO by `createdAt`. The `order` column carries the
  * order-create shape as JSON (ADR-010); the partial unique index on (dinnerEventId, inhabitantId) for regular
  * entries answers a second regular entry with the unique-violation code, which the error floor maps to 409.
  */
-export async function createWaitlistEntry(d1Client: D1Database, entry: WaitlistEntryCreate): Promise<TicketWaitlistDisplay> {
-    const {serializeWaitlistOrder, deserializeTicketWaitlist} = useWaitlistValidation()
+export async function createWaitlistEntry(d1Client: D1Database, entry: TicketWaitlistCreate): Promise<TicketWaitlistDisplay> {
+    const {serializeTicketWaitlist, deserializeTicketWaitlist} = useWaitlistValidation()
     const prisma = await getPrismaClientConnection(d1Client)
     console.info(`${LOG} > [JOIN] Inhabitant ${entry.inhabitantId} joins the queue of dinner ${entry.dinnerEventId}${entry.isGuestTicket ? ' with a guest ticket' : ''}`)
     try {
         const row = await prisma.ticketWaitlist.create({
-            data: {
-                dinnerEventId: entry.dinnerEventId,
-                inhabitantId: entry.inhabitantId,
-                isGuestTicket: entry.isGuestTicket,
-                order: serializeWaitlistOrder(entry.order)
-            }
+            data: serializeTicketWaitlist(entry)
         })
         return deserializeTicketWaitlist(row)
     } catch (error) {
@@ -72,11 +60,11 @@ export async function fetchWaitlistForHousehold(d1Client: D1Database, householdI
 
 // A new wish on an entry: `createdAt` stays, so the entry keeps its place in the queue
 export async function updateWaitlistEntryOrder(d1Client: D1Database, id: number, order: WaitlistOrder): Promise<TicketWaitlistDisplay> {
-    const {serializeWaitlistOrder, deserializeTicketWaitlist} = useWaitlistValidation()
+    const {serializeTicketWaitlist, deserializeTicketWaitlist} = useWaitlistValidation()
     const prisma = await getPrismaClientConnection(d1Client)
     console.info(`${LOG} > [REQUEUE] Queue entry ${id} now wishes ${order.dinnerMode} at ticket price ${order.ticketPriceId}`)
     try {
-        const row = await prisma.ticketWaitlist.update({where: {id}, data: {order: serializeWaitlistOrder(order)}})
+        const row = await prisma.ticketWaitlist.update({where: {id}, data: serializeTicketWaitlist({order})})
         return deserializeTicketWaitlist(row)
     } catch (error) {
         return throwH3Error(`${LOG} > [REQUEUE] Error rewriting queue entry ${id}`, error)

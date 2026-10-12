@@ -27,7 +27,8 @@ defineProps<{
   fragment: SpendingFragment
 }>()
 
-const {COMPONENTS, ICONS, TYPOGRAPHY} = useTheSlopeDesignSystem()
+const {COMPONENTS, ICONS, TYPOGRAPHY, ALERTS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
+const noReceipts = getRandomEmptyMessage('noReceipts')
 const {spendingLeft, spendingAwaitsTickets} = useOrder()
 
 const columns: TableColumn<SpendingTableRow>[] = [
@@ -64,13 +65,15 @@ const columns: TableColumn<SpendingTableRow>[] = [
       <template #left-cell="{ row }">
         <VatAmount v-if="row.original.kind === 'dinner'" :gross="spendingLeft(row.original)" balance :pending="spendingAwaitsTickets(row.original)" />
       </template>
-      <template #empty><span :class="COMPONENTS.expenseLines.empty">Madbestilling mangler</span></template>
+      <template #empty>
+        <UAlert v-bind="ALERTS.emptyStateCompact" :title="`${noReceipts.emoji} ${noReceipts.text}`" data-testid="cooking-round-empty" />
+      </template>
       <template #body-bottom>
         <tr :class="COMPONENTS.table.totalRow" data-testid="cooking-round-total">
-          <td :class="COMPONENTS.table.ui.td" colspan="2">{{ fragment.total.label }}</td>
-          <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><VatAmount :gross="fragment.total.figures.budgetGross" /></td>
-          <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><VatAmount :gross="fragment.total.figures.spentGross" /></td>
-          <td :class="[COMPONENTS.table.ui.td, COMPONENTS.table.amountColumn.class.td]"><VatAmount :gross="spendingLeft(fragment.total.figures)" balance :pending="spendingAwaitsTickets(fragment.total.figures)" /></td>
+          <td :class="COMPONENTS.table.sumCell" colspan="2">{{ fragment.total.label }}</td>
+          <td :class="COMPONENTS.table.sumAmountCell"><VatAmount :gross="fragment.total.figures.budgetGross" /></td>
+          <td :class="COMPONENTS.table.sumAmountCell"><VatAmount :gross="fragment.total.figures.spentGross" /></td>
+          <td :class="COMPONENTS.table.sumAmountCell"><VatAmount :gross="spendingLeft(fragment.total.figures)" balance :pending="spendingAwaitsTickets(fragment.total.figures)" /></td>
         </tr>
       </template>
     </UTable>

@@ -2,6 +2,7 @@ import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, addYears, differenceInDays, nextDay, type Day} from 'date-fns'
 import {useBooking, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcome, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
+import {MODE_WORDS} from '~/composables/useBookingUi'
 import {useBookingValidation, type OrderDisplay, type DinnerMode, type DesiredOrder} from '~/composables/useBookingValidation'
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -1838,14 +1839,14 @@ describe('Action Preview', () => {
             {action: 'buy', expectedText: 'Anna køber en ledig billet'},
             {action: 'queue', expectedText: 'Anna skrives på ventelisten'},
             {action: 'leave', expectedText: 'Anna forlader ventelisten'},
-            {action: 'requeue', expectedText: 'Anna skrives på ventelisten igen'},
+            {action: 'requeue', expectedText: `Anna ændrer ønsket tilmelding til ${MODE_WORDS[DM.DINEIN].label}`},
             {action: 'delete', expectedText: 'Anna frameldes'},
             {action: 'release', expectedText: 'Annas billet frigives'},
             {action: 'reclaim', expectedText: 'Anna tilmeldes igen'},
             {action: 'updateMode', expectedText: 'Anna opdaterer spisning'}
         ])('$action template produces "$expectedText"', ({action, expectedText}) => {
             const config = ACTION_PREVIEW[action as keyof typeof ACTION_PREVIEW]
-            expect(config.template('Anna')).toBe(expectedText)
+            expect(config.template('Anna', {mode: MODE_WORDS[DM.DINEIN].label})).toBe(expectedText)
             expect(config.icon).toBeDefined()
         })
     })
@@ -1863,7 +1864,7 @@ describe('Action Preview', () => {
             {bucket: 'claim', ticketsForSale: 1, action: 'buy' as const, textContains: 'køber en ledig billet'},
             {bucket: 'claim', ticketsForSale: 0, action: 'queue' as const, textContains: 'skrives på ventelisten'},
             {bucket: 'leave', ticketsForSale: 0, action: 'leave' as const, textContains: 'forlader ventelisten'},
-            {bucket: 'requeue', ticketsForSale: 0, action: 'requeue' as const, textContains: 'skrives på ventelisten igen'}
+            {bucket: 'requeue', ticketsForSale: 0, action: 'requeue' as const, textContains: 'ændrer ønsket tilmelding til'}
         ])('$bucket bucket with $ticketsForSale for sale → $action action', ({bucket, ticketsForSale, action, textContains}) => {
             const buckets = {...emptyBuckets(), [bucket]: [desired({inhabitantId: 1})]}
             const result = formatActionPreview(buckets, [], getName, () => ({ticketsForSale}))

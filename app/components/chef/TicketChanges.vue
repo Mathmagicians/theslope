@@ -23,7 +23,8 @@ const props = defineProps<{
   since: Date | null
 }>()
 
-const {COMPONENTS, BUTTONS, SIZES, ICONS, NOISE, COLOR, TYPOGRAPHY, ALERTS} = useTheSlopeDesignSystem()
+const {COMPONENTS, BUTTONS, SIZES, ICONS, NOISE, COLOR, TYPOGRAPHY, ALERTS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
+const noTicketChanges = getRandomEmptyMessage('noTicketChanges')
 const changeColumns: TableColumn<TicketChange>[] = [
   {accessorKey: 'timestamp', header: 'Dato'},
   {accessorKey: 'householdShortname', header: 'Husstand'},
@@ -114,7 +115,9 @@ const actionLabel = (change: TicketChange) => ORDER_ACTION_LABELS[change.action]
           </span>
         </template>
         <template #revenue-cell="{ row }"><span data-testid="ticket-change-revenue">{{ formatPrice(row.original.revenue) }} kr</span></template>
-        <template #empty><span data-testid="ticket-changes-none-since">Ingen ændringer</span></template>
+        <template #empty>
+          <UAlert v-bind="ALERTS.emptyStateCompact" :title="`${noTicketChanges.emoji} ${noTicketChanges.text}`" data-testid="ticket-changes-none-since" />
+        </template>
       </UTable>
 
       <USeparator

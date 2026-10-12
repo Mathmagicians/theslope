@@ -13,7 +13,7 @@ import {useBooking} from '~/composables/useBooking'
 export const useHouseholdsStore = defineStore("Households", () => {
 
     // DEPENDENCIES
-    const {storeAsyncData, apiRequest, handleApiError} = useApiHandler()
+    const {storeAsyncData, apiRequest} = useApiHandler()
     const {formatScaffoldResult} = useBooking()
     const {HouseholdDisplaySchema, HouseholdDetailSchema} = useCoreValidation()
 
@@ -66,14 +66,6 @@ export const useHouseholdsStore = defineStore("Households", () => {
         return (byShortName.find(h => h.id === myHousehold.value?.id) ?? byShortName[0])?.id ?? null
     }
     const selectedHouseholdId = computed(() => resolveHouseholdId(householdChoice.value()) ?? myHousehold.value?.id ?? null)
-    // A gone household is masked out of the page's getter, which keeps carrying every later URL to the store
-    const skipHousehold = (goneId: number | null) => {
-        const choice = householdChoice.value
-        householdChoice.value = () => {
-            const chosen = choice()
-            return resolveHouseholdId(chosen) === goneId ? null : chosen
-        }
-    }
 
     // The key stays constant: a pbs resolves after the households load, mid-render on the server
     const selectedHouseholdDataset = storeAsyncData(
@@ -88,7 +80,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
             // The page's getter keeps driving the choice; the gone household re-derives to my household
             notFound: {
                 recover: async () => {
-                    skipHousehold(selectedHouseholdId.value)
+                    skipGoneId(householdChoice, selectedHouseholdId.value, resolveHouseholdId)
                     await refreshHouseholds()
                 },
                 retries: 1,
@@ -154,7 +146,8 @@ export const useHouseholdsStore = defineStore("Households", () => {
         console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Fetching household detail: ${householdId}`)
         return apiRequest(`/api/admin/household/${householdId}`, {
             schema: HouseholdDetailSchema,
-            action: `Kunne ikke hente husstand ${householdId}`
+            action: 'fetchHouseholdDetail',
+            errorMessage: `Kunne ikke hente husstand ${householdId}`
         })
     }
 
@@ -202,11 +195,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
     const updateAllInhabitantPreferences = async (householdId: number, preferences: Record<string, string>, adminBypass = false) => {
         // Get the household to access inhabitants
         const household = households.value.find(h => h.id === householdId)
-        if (!household) {
-            const error = new Error(`Household ${householdId} not found`)
-            handleApiError(error, 'updateAllInhabitantPreferences')
-            throw error
-        }
+        if (!household) throw new Error(`Household ${householdId} not found`)
 
         console.info(`🏠 > HOUSEHOLDS_STORE > Power mode: Updating preferences for all ${household.inhabitants.length} inhabitants in household ${householdId}${adminBypass ? ' (admin bypass)' : ''}`)
 
@@ -344,7 +333,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
         if (!isDeleted) return
         console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Household ${householdId} deleted`)
 
-        skipHousehold(householdId)
+        skipGoneId(householdChoice, householdId, resolveHouseholdId)
         await refreshHouseholds()
 
         toast.add({

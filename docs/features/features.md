@@ -69,21 +69,20 @@ User (Bruger)
 | **Monthly Billing** | Generate invoices, magic link sharing, CSV export | [Admin Guide](../admin-guide.md#økonomi) |
 | **Job History Panel** | View/trigger system jobs, track run history | [Admin Guide](../admin-guide.md#systemvedligeholdelse) |
 | **Authorization** | Role-based access control (Admin, AllergyManager) | — |
+| **Waitlist** | Claim a released ticket or queue for one through the booking form; the chef releases portions; queue mails (ADR-016) | [User Guide](../user-guide.md) |
+| **Chef Budget** | Income, allowance and kitchen share per dinner, grocery lines with VAT, ticket changes | [Chef Guide](../chef-guide.md#6-madbestilling-og-budget) |
 
 ### Partially Implemented
 
 | Feature | Remaining Work |
 |---------|----------------|
-| **Ticket Claim UI** | Backend done, need UI for claiming released tickets |
 | **Chef Components** | Missing component tests for DinnerStatusStepper, TeamRoleStatus, DinnerDetailPanel |
 
 ### Planned
 
 | Feature | Description |
 |---------|-------------|
-| **Ticket Claim UI** | Claim released tickets from other households (backend ready) |
 | **PBS Export** | Direct PBS file generation |
-| **Chef Budget View** | Calculate budget from ticket counts |
 
 ---
 

@@ -130,35 +130,31 @@ type ModeDisplayConfig = {
   editInactiveVariant: ButtonVariant
 }
 
-// Dinner mode display config
+// Dinner mode display config: the words (label, glyph) come from MODE_WORDS, the colours and variants live here
 const dinnerModeConfig: Record<DinnerMode, ModeDisplayConfig> = {
   [DinnerMode.DINEIN]: {
-    label: 'Spisesal',
-    icon: ICONS.dinner,
+    ...MODE_WORDS[DinnerMode.DINEIN],
     activeColor: COLOR.success,
     viewVariant: NOISE.loud,
     editActiveVariant: NOISE.loud,
     editInactiveVariant: NOISE.soft
   },
   [DinnerMode.DINEINLATE]: {
-    label: 'Sen',
-    icon: ICONS.lateDinner,
+    ...MODE_WORDS[DinnerMode.DINEINLATE],
     activeColor: COLOR.success,
     viewVariant: NOISE.loud,
     editActiveVariant: NOISE.loud,
     editInactiveVariant: NOISE.soft
   },
   [DinnerMode.TAKEAWAY]: {
-    label: 'Takeaway',
-    icon: ICONS.takeaway,
+    ...MODE_WORDS[DinnerMode.TAKEAWAY],
     activeColor: COLOR.success,
     viewVariant: NOISE.loud,
     editActiveVariant: NOISE.loud,
     editInactiveVariant: NOISE.soft
   },
   [DinnerMode.NONE]: {
-    label: 'Ingen',
-    icon: ICONS.noDinner,
+    ...MODE_WORDS[DinnerMode.NONE],
     activeColor: COLOR.error,
     viewVariant: NOISE.soft,
     editActiveVariant: NOISE.soft,

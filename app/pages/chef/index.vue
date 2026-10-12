@@ -52,9 +52,6 @@ const usersStore = useUsersStore()
 const {myTeams, isMyTeamsLoading, isMyTeamsErrored, isMyTeamsInitialized, myTeamsError} = storeToRefs(usersStore)
 usersStore.loadMyTeams()
 
-const allergiesStore = useAllergiesStore()
-allergiesStore.initAllergiesStore()
-
 const bookingsStore = useBookingsStore()
 const {
   isDinnerUpdating,

@@ -201,7 +201,7 @@ const invoiceTransactionsGrouped = computed(() =>
 
 // Current period total
 const currentPeriodTotal = computed(() =>
-    currentPeriodTransactions.value.reduce((sum, tx) => sum + tx.amount, 0)
+    sumAmounts(currentPeriodTransactions.value)
 )
 
 // Count unique households in current period

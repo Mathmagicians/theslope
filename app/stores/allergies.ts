@@ -277,15 +277,6 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         console.info(`🥜 > ALLERGY_STORE > Deleted allergy ID: ${id}`)
     }
 
-    // ========================================
-    // Initialize Store
-    // ========================================
-
-    const initAllergiesStore = () => {
-        // AllergyTypes auto-load on store creation (immediate: true)
-        console.info('🥜 > ALLERGY_STORE > Store initialized')
-    }
-
     return {
         // State - AllergyTypes
         allergyTypes,
@@ -332,9 +323,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         loadAllergiesForInhabitant,
         createAllergy,
         updateAllergy,
-        deleteAllergy,
-        // Initialize
-        initAllergiesStore
+        deleteAllergy
     }
 })
 

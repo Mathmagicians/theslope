@@ -1,5 +1,5 @@
 <!--
-DinnerModeLegend - the ONE "Forklaring" panel for dinner-mode surfaces
+DinnerModeLegend - the dinner-mode entries of the "Forklaring" panel (CalendarLegend)
 
 Shared by the booking grid (week/month) and the single-dinner form, which differ only
 in which extras they explain: the grid also has a modified-cell marker, the queue marker and a hint.
@@ -34,54 +34,49 @@ withDefaults(defineProps<{
   hint: undefined
 })
 
-const {ALERTS, ICONS, SIZES, TYPOGRAPHY, COMPONENTS} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS} = useTheSlopeDesignSystem()
 </script>
 
 <template>
-  <UAlert v-bind="ALERTS.legend" :icon="ICONS.info" title="Forklaring" data-testid="dinner-mode-legend">
-    <template #description>
-      <div :class="COMPONENTS.legend.entries">
+  <CalendarLegend :hint="hint" data-testid="dinner-mode-legend">
+    <DinnerModeSelector
+        v-for="mode in modes"
+        :key="mode"
+        :model-value="mode"
+        :form-mode="FORM_MODES.VIEW"
+        show-label
+        :size="SIZES.xs"
+    />
+    <DinnerModeSelector
+        v-if="showNoConsensus"
+        :model-value="DinnerMode.DINEIN"
+        :form-mode="FORM_MODES.VIEW"
+        show-label
+        :size="SIZES.xs"
+        :consensus="false"
+    />
+    <div v-if="showModified" :class="COMPONENTS.legend.stackedEntry" data-testid="dinner-mode-legend-modified">
+      <DinnerModeSelector
+          :model-value="DinnerMode.DINEIN"
+          :form-mode="FORM_MODES.VIEW"
+          :size="SIZES.xs"
+          is-modified
+      />
+      <span :class="TYPOGRAPHY.finePrint">Ændret</span>
+    </div>
+    <div v-if="showWaitlist" :class="COMPONENTS.legend.stackedEntry" data-testid="dinner-mode-legend-waitlist">
+      <UChip v-bind="COMPONENTS.waitlist.chip">
         <DinnerModeSelector
-            v-for="mode in modes"
-            :key="mode"
-            :model-value="mode"
-            :form-mode="FORM_MODES.VIEW"
-            show-label
-            :size="SIZES.xs"
-        />
-        <DinnerModeSelector
-            v-if="showNoConsensus"
             :model-value="DinnerMode.DINEIN"
             :form-mode="FORM_MODES.VIEW"
-            show-label
             :size="SIZES.xs"
-            :consensus="false"
+            ghost
         />
-        <div v-if="showModified" :class="COMPONENTS.legend.stackedEntry" data-testid="dinner-mode-legend-modified">
-          <DinnerModeSelector
-              :model-value="DinnerMode.DINEIN"
-              :form-mode="FORM_MODES.VIEW"
-              :size="SIZES.xs"
-              is-modified
-          />
-          <span :class="TYPOGRAPHY.finePrint">Ændret</span>
-        </div>
-        <div v-if="showWaitlist" :class="COMPONENTS.legend.stackedEntry" data-testid="dinner-mode-legend-waitlist">
-          <UChip v-bind="COMPONENTS.waitlist.chip">
-            <DinnerModeSelector
-                :model-value="DinnerMode.DINEIN"
-                :form-mode="FORM_MODES.VIEW"
-                :size="SIZES.xs"
-                ghost
-            />
-            <template #content>
-              <UIcon :name="ICONS.waitlist" :class="COMPONENTS.waitlist.chipIcon" />
-            </template>
-          </UChip>
-          <span :class="TYPOGRAPHY.finePrint">På venteliste (#n)</span>
-        </div>
-      </div>
-      <p v-if="hint" :class="[TYPOGRAPHY.finePrint, COMPONENTS.legend.hint]">{{ hint }}</p>
-    </template>
-  </UAlert>
+        <template #content>
+          <UIcon :name="ICONS.waitlist" :class="COMPONENTS.waitlist.chipIcon" />
+        </template>
+      </UChip>
+      <span :class="TYPOGRAPHY.finePrint">På venteliste (#n)</span>
+    </div>
+  </CalendarLegend>
 </template>
