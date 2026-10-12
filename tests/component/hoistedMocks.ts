@@ -36,7 +36,7 @@ export const mockSession = (user: UserDetail | null = null) => {
     return {session, useUserSession}
 }
 
-type RouteQuery = Record<string, string>
+type RouteQuery = Record<string, string | undefined>
 type RouteParams = Record<string, string | undefined>
 
 /**

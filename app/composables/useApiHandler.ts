@@ -216,12 +216,7 @@ export const useApiHandler = () => {
             }
             consecutiveNotFound++
             console.warn(`🔎 > API_NOT_FOUND > [${toValue(key)}] ${requestUrl}: recovering (${consecutiveNotFound}/${retries})`)
-            toast.add({
-                icon: 'i-heroicons-exclamation-triangle',
-                title: resolveText(toastText) ?? NOT_FOUND_TEXT,
-                duration: 10000,
-                color: 'warning'
-            })
+            warnToast(resolveText(toastText) ?? NOT_FOUND_TEXT)
             await recover()
             // The url watch has already issued the re-derived request
             if (signal.aborted) throw gateClosed()

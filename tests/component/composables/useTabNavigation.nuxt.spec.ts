@@ -3,6 +3,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { flushPromises } from '@vue/test-utils'
 import { mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { useTabNavigation } from '~/composables/useTabNavigation'
+import { useTestScope } from '~~/tests/component/testHelpers'
 
 /**
  * Unit tests for useTabNavigation.ts composable
@@ -62,9 +63,10 @@ describe('useTabNavigation.ts', () => {
     expect(mockNavigateTo.mock.calls[0]![0].path).toBe(expectedPath)
   }
 
-  const createNavigationInstance = (config: typeof simpleRouteConfig | typeof nestedRouteConfig) => {
-    return useTabNavigation(config)
-  }
+  // Each test's instance lives in the test's scope: the route is reactive, so one left alive would answer the next test's route
+  const inScope = useTestScope()
+  const createNavigationInstance = (config: typeof simpleRouteConfig | typeof nestedRouteConfig) =>
+    inScope(() => useTabNavigation(config))
 
   // Helper to set activeTab and wait for async navigation
   const setActiveTab = async (activeTabRef: { value: string }, tab: string) => {

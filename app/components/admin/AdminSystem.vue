@@ -52,7 +52,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system
-const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, ALERTS, BUTTONS, COMPONENTS, columnVisibility, NOISE, breakpoint } = useTheSlopeDesignSystem()
+const { COLOR, ICONS, SIZES, TYPOGRAPHY, LAYOUTS, BG, ALERTS, BUTTONS, COMPONENTS, columnVisibility, getRandomEmptyMessageText, NOISE, breakpoint } = useTheSlopeDesignSystem()
 
 // Maintenance helpers
 const {

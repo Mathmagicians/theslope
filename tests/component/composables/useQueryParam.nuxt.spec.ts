@@ -2,8 +2,9 @@
 import {describe, it, expect, beforeEach, vi} from 'vitest'
 import {flushPromises} from '@vue/test-utils'
 import {mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {useQueryParam} from '~/composables/useQueryParam'
+import {useQueryParam as createQueryParam} from '~/composables/useQueryParam'
 import {formatDate, parseDate} from '~/utils/date'
+import {useTestScope} from '~~/tests/component/testHelpers'
 
 /**
  * Unit tests for useQueryParam.ts composable
@@ -20,6 +21,10 @@ const {mockNavigateTo, mockRoute: mockRouteData, useRoute} = await vi.hoisted(as
 
 mockNuxtImport('navigateTo', () => mockNavigateTo)
 mockNuxtImport('useRoute', () => useRoute)
+
+// Each test's parameters live in the test's scope: the route is reactive, so an instance left alive would answer the next test's route
+const inScope = useTestScope()
+const useQueryParam = <T>(...args: Parameters<typeof createQueryParam<T>>) => inScope(() => createQueryParam<T>(...args))
 
 describe('useQueryParam.ts', () => {
   const setupQuery = (query: Record<string, string>) => {

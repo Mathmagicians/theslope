@@ -105,34 +105,40 @@ which the Order unique index refuses. The e2e test is skipped; the endpoint stay
 
 ### Problem
 
-Nuxt 4.6 reports the server payload per page (`NUXT_E8006`, above 100 kB). On production-sized data `/chef` ships
-about 870 kB: `bookings-store-current-period` alone is about 700 kB, read by one component (`AdminEconomy`), and
-`households-store-households` and `users` add about 150 kB. A store that several pages share requests every dataset
-it holds on init, and every page that opens the store pays for all of them. The existing `loadHouseholdBilling`,
-`loadUpcomingOrders` and `loadOrdersForDinners` setters keep a "requested" flag in the store, which is page state.
+Nuxt reports the server payload per page (`NUXT_E8006`, above 100 kB). A store that several pages share requests
+every ungated dataset it holds on init, and every page that opens the store pays for all of them. The member pages
+(`/dinner`, `/chef`, `/household/[shortname]/*`) carry datasets one admin tab reads: `users`, `allergyManagers` and
+`my-teams` in the users store (`app/stores/users.ts`), opened by the dinner page and the profile card for a write
+only; the households list with every inhabitant's preferences; the dinner Detail's tickets, each carrying the parent
+dinner again. The economy datasets are gated in release 0.9 (`loadBillingOverview`, ADR-007 rule 9).
 
 ### Solution
 
-1. Data one component reads lives with that component: a component-local `useAsyncData` over a store method built on
-   `apiRequest` (ADR-007, component-local data), as `CookingTeamCard` and `OrderHistoryDisplay` do. The current
-   period moves to `AdminEconomy` this way.
-2. Seldom-used datasets that stay in a store load lazily through the framework: `immediate: false` with `execute()`
-   from the page, or `lazy` where the route must not wait. No requested flags in stores; the existing ones go the same
-   way, and ADR-007 rule 9 is rewritten to the framework's trigger.
-3. `/chef` reads from `households` and `users` only what the page shows; the heavy shapes stay on the admin pages.
+1. A dataset one tab or page reads is gated on the setter that page flips at setup (ADR-007 rule 9,
+   `loadHouseholdBilling`): `users` and `allergyManagers` behind `loadUsers()` and `loadAllergyManagers()`, flipped by
+   `AdminUsers` and `AllergyManagersList`; `my-teams` behind the existing `loadMyTeams()`, flipped by the chef page.
+2. The tickets on a dinner Detail take the shape their readers render (the grid, the kitchen box, the allergen
+   overview): the order's scalars, the inhabitant with allergies, the ticket price. The parent dinner is the Detail
+   itself.
+3. `HouseholdDisplay` carries what its readers render (`households.ts`, the household pickers, `CookingTeamCard`);
+   the fields only the household card edits ride on the household Detail.
 4. The payload line for `/chef`, `/household/[shortname]/bookings` and `/dinner` stays under 100 kB on a copy of dev.
 
 ### TDD
 
-- Store specs: the gated-dataset rows become store-method tests; a shared store's init requests no dataset a page
-  did not ask for.
+- Store specs: a gated row per dataset in `users.nuxt.spec.ts` (idle until the setter, fetched after), as
+  `bookings.nuxt.spec.ts` § gated reads.
+- Dinner Detail: the API spec asserts the ticket shape; the component specs of the grid, the kitchen box and the
+  allergen overview pass on it.
 - E2E: the dev log shows no `NUXT_E8006` for the three pages above.
 
 ### Affected
 
-`app/stores/bookings.ts`, `app/stores/households.ts`, `app/stores/users.ts`, `app/components/admin/AdminEconomy.vue`,
-`app/pages/chef/index.vue`, `tests/component/stores/*.nuxt.spec.ts`, `docs/adr.md` (ADR-007 rule 9),
-`docs/adr-compliance-frontend.md` (store rows).
+`app/stores/users.ts`, `app/stores/households.ts`, `app/components/admin/AdminUsers.vue`,
+`app/components/allergy/AllergyManagersList.vue`, `app/pages/chef/index.vue`,
+`app/composables/useBookingValidation.ts` (`DinnerEventDetailSchema.tickets`), `app/composables/useHouseholdValidation.ts`
+(`HouseholdDisplaySchema`), `server/data/prismaRepository.ts` (the dinner Detail and household index includes),
+`tests/component/stores/*.nuxt.spec.ts`, `docs/adr-compliance-frontend.md` (store rows).
 
 ## Ticket allergies on the order
 

@@ -2,8 +2,11 @@
 import {describe, it, expect} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {mountWithTooltipProvider, findByTestId} from '~~/tests/component/testHelpers'
-import EconomyTable from '~/components/economy/EconomyTable.vue'
-import {nextTick, ref} from 'vue'
+import EconomyTableGeneric from '~/components/economy/EconomyTable.vue'
+import {nextTick, ref, type DefineComponent} from 'vue'
+
+// A generic component's type is a function; the mount helper keys on a constructor
+const EconomyTable = EconomyTableGeneric as unknown as DefineComponent
 
 interface TestRow {
     id: number

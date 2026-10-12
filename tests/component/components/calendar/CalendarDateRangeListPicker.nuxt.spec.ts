@@ -4,7 +4,8 @@ import { mountSuspended } from "@nuxt/test-utils/runtime"
 import {mountWithTooltipProvider, findByTestId, findDateSegments, asCalendarDays} from '~~/tests/component/testHelpers'
 import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTestIds'
 import CalendarDateRangeListPicker from '~/components/calendar/CalendarDateRangeListPicker.vue'
-import { nextTick, ref } from 'vue'
+import { nextTick, ref, type ComponentPublicInstance } from 'vue'
+import type { VueWrapper } from '@vue/test-utils'
 import {formatDateRange} from '~/utils/date'
 
 describe('CalendarDateRangeListPicker', () => {
@@ -260,11 +261,11 @@ describe('CalendarDateRangeListPicker', () => {
         const first = {start: new Date(2025, 0, 1), end: new Date(2025, 0, 5)}
         const second = {start: new Date(2025, 0, 10), end: new Date(2025, 0, 12)}
 
-        type PickerWrapper = ReturnType<WrapperType['findAllComponents']>[number]
+        type PickerWrapper = VueWrapper<ComponentPublicInstance<{name: string, selection: string}>>
+        const rowPickers = (wrapper: WrapperType) => wrapper.findAllComponents({name: 'CalendarDateRangePicker'}) as PickerWrapper[]
 
         const rowPicker = (wrapper: WrapperType, index: number) =>
-            wrapper.findAllComponents({name: 'CalendarDateRangePicker'})
-                .find((picker: PickerWrapper) => picker.props('name') === `holidayRangeList-${index}`)
+            rowPickers(wrapper).find(picker => picker.props('name') === `holidayRangeList-${index}`)
 
         const editRow = async (wrapper: WrapperType, index: number, range: DateRange) => {
             await rowPicker(wrapper, index)!.vm.$emit('update:modelValue', range)
@@ -279,8 +280,7 @@ describe('CalendarDateRangeListPicker', () => {
 
         it('picks holidays, so every picker uses the holiday selection style', async () => {
             const wrapper = await createWrapper([first, second])
-            const selections = wrapper.findAllComponents({name: 'CalendarDateRangePicker'})
-                .map((picker: PickerWrapper) => picker.props('selection'))
+            const selections = rowPickers(wrapper).map(picker => picker.props('selection'))
 
             expect(selections.length).toBeGreaterThan(0)
             expect(selections.every(selection => selection === 'holiday')).toBe(true)

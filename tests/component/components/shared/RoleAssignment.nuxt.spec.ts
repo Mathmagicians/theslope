@@ -92,14 +92,14 @@ describe('RoleAssignment', () => {
         expect(findByTestId(wrapper, TEST_IDS.save).exists()).toBe(true)
     })
 
+    // The store settles a claim over several requests (the claim, the teams, the dinner on view), so the emit is awaited
     it('volunteer flow: save claims the role for me on the dinner and emits role-assigned', async () => {
         const wrapper = await mountWith()
         await clickByTestId(wrapper, TEST_IDS.trigger)
         await clickByTestId(wrapper, TEST_IDS.save)
-        await flushPromises()
 
+        await vi.waitFor(() => expect(wrapper.emitted('role-assigned')).toHaveLength(1))
         expect(roleRequests).toEqual([{route: 'assign-role', body: MY_CHEF_REQUEST}])
-        expect(wrapper.emitted('role-assigned')).toHaveLength(1)
     })
 
     it('resign flow: DangerButton confirm resigns the role for me on the dinner and emits role-removed', async () => {
@@ -111,20 +111,18 @@ describe('RoleAssignment', () => {
         await nextTick()
         await resignBtn.trigger('click')
         await nextTick()
-        await flushPromises()
 
+        await vi.waitFor(() => expect(wrapper.emitted('role-removed')).toHaveLength(1))
         expect(roleRequests).toEqual([{route: 'remove-role', body: MY_CHEF_REQUEST}])
-        expect(wrapper.emitted('role-removed')).toHaveLength(1)
     })
 
     it('takeover: swap save claims the duty on the dinner and emits role-assigned', async () => {
         const wrapper = await mountWith(OTHER)
         await clickByTestId(wrapper, TEST_IDS.trigger)
         await clickByTestId(wrapper, TEST_IDS.save)
-        await flushPromises()
 
+        await vi.waitFor(() => expect(wrapper.emitted('role-assigned')).toHaveLength(1))
         expect(roleRequests).toEqual([{route: 'assign-role', body: MY_CHEF_REQUEST}])
-        expect(wrapper.emitted('role-assigned')).toHaveLength(1)
     })
 
     it('cancel closes the panel without calling the API', async () => {

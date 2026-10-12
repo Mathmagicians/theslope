@@ -1,5 +1,5 @@
-import {nextTick, h, defineComponent, ref, isRef, type Component, type Ref} from 'vue'
-import {expect} from 'vitest'
+import {nextTick, h, defineComponent, ref, isRef, effectScope, type Component, type Ref} from 'vue'
+import {expect, beforeEach, afterEach} from 'vitest'
 import {TooltipProvider} from 'reka-ui'
 import {mountSuspended, registerEndpoint} from '@nuxt/test-utils/runtime'
 import {useNuxtApp, clearNuxtData, useAppConfig} from '#app'
@@ -49,6 +49,19 @@ export const resetStores = () => {
     setActivePinia(appPinia)
     clearNuxtData()
     Object.keys(nuxtApp._asyncData).forEach(key => Reflect.deleteProperty(nuxtApp._asyncData, key))
+}
+
+/**
+ * A scope per test for the composables a test body creates: the watchers they start stop with the test, as they do
+ * when a component unmounts, so an earlier test's instance never answers a later test's route
+ */
+export const useTestScope = () => {
+    let scope = effectScope()
+    beforeEach(() => {
+        scope = effectScope()
+    })
+    afterEach(() => scope.stop())
+    return <T>(create: () => T): T => scope.run(create) as T
 }
 
 /** The store instance a mounted component uses: components inject the Nuxt app's pinia, not the spec's active one */
