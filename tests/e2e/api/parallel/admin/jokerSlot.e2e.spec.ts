@@ -30,14 +30,14 @@ test.describe('Admin Joker Slot API', () => {
         expect(fetched!.jokerSlots).toEqual([created])
     })
 
-    test('GIVEN a team with a joker slot WHEN the slot is deleted THEN the API returns the deleted count and the team Detail has no slots', async ({browser}) => {
+    test('GIVEN a team with a joker slot WHEN the slot is deleted THEN the API returns the id of the deleted slot and the team Detail has no slots', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const team = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId)
         const created = await SeasonFactory.createJokerSlot(context, team.id!)
 
-        const deleted = await SeasonFactory.deleteJokerSlot(context, team.id!, created!.id)
+        const deletedId = await SeasonFactory.deleteJokerSlot(context, team.id!, created!.id)
 
-        expect(deleted).toBe(1)
+        expect(deletedId).toBe(created!.id)
         const fetched = await SeasonFactory.getCookingTeamById(context, team.id!)
         expect(fetched!.jokerSlotCount).toBe(0)
         expect(fetched!.jokerSlots).toEqual([])

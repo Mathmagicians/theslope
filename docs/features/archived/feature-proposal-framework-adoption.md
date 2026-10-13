@@ -13,7 +13,7 @@ off one at a time in chat; the user runs installs and database commands.
 | Fetch gating, selection-driven datasets, stale-selection recovery | `enabled`, `dependsOn`, `notFound` on the factory; no copy refs, no page-level store init | ✅ shipped `d6fe721` |
 | Hydration structure fixes | same structure on server and client; one toaster | ✅ shipped 2026-10-07 |
 | Page composition | master/detail and tab frames | decided 2026-10-13: the frames stay; the `isMd` source ✅ shipped `8d98269` |
-| Dependency clusters | framework pair ✅ shipped 2026-10-05; Prisma 7.10 + zod 4.6 in the Prisma bundle (`../this-pr/release-0.9.0.md` § Signed model set); TS 7 / @types/node 26 / h3 2 in `../chores-0.9.1.md` | split |
+| Dependency clusters | framework pair ✅ shipped 2026-10-05; Prisma 7.10 + zod 4.6 in the Prisma bundle (`../this-pr/release-0.9.0.md` § Prisma bundle); TS 7 / @types/node 26 / h3 2 in `../chores-0.9.1.md` | split |
 
 ## Shipped — pointers
 

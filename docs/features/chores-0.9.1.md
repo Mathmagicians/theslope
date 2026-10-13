@@ -147,7 +147,7 @@ dinner again. The economy datasets are gated in release 0.9 (`loadBillingOvervie
 
 A guest's allergy type ids are chosen in `GuestBookingForm` and leave the client as `allergyTypeIds` on the desired
 order (ADR-016), and every creation path drops them before `createOrders`: the scaffold's create transform
-(`scaffoldPrebookings.ts`), the waitlist assignment (`waitlistAssignment.ts`), `PUT /api/order` and the billing
+(`scaffoldPrebookings.ts`), the waitlist assignment (`waitlistAssignment.ts`) and the billing
 import. The orders list reads `provenanceAllergies` from the latest `USER_CLAIMED` audit row (`fetchOrders`), and the
 claim snapshot carries no allergies, so the field is empty on every order. The dinner detail resolves a ticket's
 allergies from its current inhabitant's profile, so a swapped ticket counts the claimer's allergies; the groceries
@@ -355,6 +355,34 @@ wrangler's own config reader); `useMaintenance` labels equal the module's labels
 `app/config/systemJobs.ts` (new), `nuxt.config.ts`, `app/app.config.ts`, `app/composables/useMaintenance.ts`,
 `docs/adr-compliance-frontend.md` (`useMaintenance` row).
 
+## Delete responses
+
+### Problem
+
+`deleteMany` on D1 reports the statement's change counter: the adapter returns `meta.changes` (`@prisma/adapter-d1`),
+which the runtime computes from SQLite's `total_changes()`, and that total includes the rows a foreign key action
+changes. The Heynabo import adds up the counts of `deleteInhabitantsByHeynaboId` and `deleteHouseholdsByHeynaboId`
+(`server/utils/heynaboImportService.ts`), whose rows have cascading children, so its report counts the children too.
+`DELETE /api/admin/team/assignment/[id]` is a single delete that answers a count; ADR-009 rule 7 gives a single delete
+the deleted id.
+
+### Solution
+
+The bulk deletes read the ids they delete before the delete and report that length, as `deleteDinnerEvent` does
+(`server/data/financesRepository.ts`). The assignment delete answers the deleted id through `IdSchema`, as the team and joker slot
+deletes do.
+
+### TDD
+
+- Serial API: an import that removes an inhabitant with an allergy reports one deleted inhabitant.
+- API: the assignment delete case asserts the deleted id; its 404 case stays.
+
+### Affected
+
+`server/data/prismaRepository.ts`, `server/utils/heynaboImportService.ts`, the assignment delete route,
+`app/stores/plan.ts`, `tests/e2e/testDataFactories/seasonFactory.ts`, `team.e2e.spec.ts`,
+`docs/adr-compliance-backend.md`.
+
 ## DRY improvements
 
 ### Spread row primitive
@@ -508,6 +536,21 @@ the users store gains the two flags with a case each; the two composables import
 The nine routes, `app/composables/useQueryParam.ts`, `server/data/financesRepository.ts`,
 `app/composables/useBookingValidation.ts`, a D1 migration for the backfill, `docs/adr-compliance-backend.md` rows.
 
+### Waitlist chip
+
+#### Problem
+
+`BookingGridView.vue` and `DinnerModeLegend.vue` each spell the same template: a `UChip` on `COMPONENTS.waitlist.chip`
+with the hourglass (`COMPONENTS.waitlist.chipIcon`) over the ghosted wish.
+
+#### Solution
+
+One component renders the chip with a slot for the ghosted wish; the grid cell and the legend use it.
+
+#### Affected
+
+`app/components/booking/BookingGridView.vue`, `app/components/dinner/DinnerModeLegend.vue`, their component specs.
+
 ## Dependency clusters
 
 ### Problem
@@ -530,8 +573,58 @@ step once its run time on CI is known; `server/tsconfig.json` stays until then.
 
 | Work | Where it lives | State |
 |---|---|---|
-| Duty roster: audit instrumentation, read endpoints and timeline, template CRUD and duty scaffolding, the single-dinner roster with sign-off, the duty swap, the data separation | `feature-proposal-duty-roster.md` | signed off; the joker slot shipped (`archived/feature-joker-slot.md`) |
-| Season spending: Sæsontrend, admin Forbrug, basisvarer entry | `feature-proposal-season-spending.md` | mockups signed |
-| Ad-hoc charges and the spending views | `feature-proposal-adhoc-admin-billing.md` phases 2 to 5 | signed off; the ledger, the expense table and the chef endpoints shipped |
-| Notification triggers beyond the waitlist kinds | `feature-proposal-notification-triggers.md` | proposal, two open questions |
+| Duty roster (F5a): audit instrumentation, read endpoints and timeline, template CRUD and duty scaffolding, the single-dinner roster | `feature-proposal-duty-roster.md` Phases 1–4 | signed off (schema 2026-10-07, roster UX 2026-10-05); the tables shipped in migration `0017_roster`, the joker slot in `archived/feature-joker-slot.md` |
+| Joker and vacancy overviews: the dinner "missing" face, the team-card faces, shift counts, volunteering at duty level, the data separation list the user reviews and applies | `feature-proposal-duty-roster.md` § Joker, § Roster UX | signed off |
+| Roster sign-off and cross-team swap (F5b): derived auto-sign, Godkend alligevel, the duty swap | `feature-proposal-duty-roster.md` Phases 4–5 | signed off |
+| Season spending: Sæsontrend behind [Se sæsontrend], the admin economy Forbrug, the basisvarer entry; the totals are checked against a real season | `feature-proposal-season-spending.md` | mockups signed 2026-10-05 and 06 |
+| Ad-hoc charges and the spending views; the ADR-011 supplement on transaction variants | `feature-proposal-adhoc-admin-billing.md` phases 2 to 5 | signed off; the ledger, the expense table and the chef endpoints shipped |
+| Notification kinds beyond the waitlist: chef deadlines, roster, reminders, job failed, dinner cancelled, duty swapped | `feature-proposal-notification-triggers.md` | proposal, two open questions |
 | Billing delivery report and interrupted runs | `bug-fix-billing-delivery-report.md` | three open decisions |
+| Re-login with Face ID (S5) | `feature-proposal-relogin-faceid.md` | parked proposal; the PRF spike is complete |
+| Chef allergen selector: the selector counts a population through a ticket allergies map | § Ticket allergies on the order | brief halted 2026-10-10; presented again with the ticket allergies design |
+| Queue size on the dinner calendar chip | `GET /api/order/waitlist` returns a dinner's entries in queue order | parked 2026-10-12 |
+| Heal user bookings: a one-off recovery endpoint; its serial e2e case is skipped (`heal-user-bookings.e2e.spec.ts`) | `server/routes/api/admin/maintenance/heal-user-bookings.post.ts` | **OPEN**: retire the endpoint or repair the case |
+
+### Decisions carried from release 0.9
+
+**2026-10-05** (joker, roster, spending)
+- Joker: per-dinner volunteering by any inhabitant; a vacancy surfaces as a "missing" on the dinner; a team-card and a
+  big overview (split on teams and on people) for the admin; per-member shift counts (chefkok, fast tjans, joker) in
+  the team card; `/chef` is the member planning surface.
+- Volunteering writes season membership (`CookingTeamAssignment`) today. The roster replaces it, and the shipped rows
+  get a one-time data separation the user reviews and applies before ship.
+- CTC drives the roster: the dinner face leads with who comes today (vacancies, swaps, joker status); the season face
+  (admin teams) leads with the regular team, jokertjanser, shift counts and a view-only game-plan drill-down; which
+  face leads follows the dinner context. The Flytter badge leaves `/chef`.
+- A template row is one seat: capacity is modelled with rows and the counts in the UI are derived. Slot times and
+  tasks are templates, edited in the team's template editor.
+- Sign-off is derived: all seats filled → auto-signed (system actor); short → "MANGLER n" and the chef's
+  [Godkend alligevel] (chef actor). Members self-serve their own rows; the duty-level admin bypass is parked.
+- Basisvarer expenses are dinner-less and track against the køkkenbidrag pool. The Budget pane's [Se sæsontrend]
+  button unfolds the season view.
+
+**2026-10-06**
+- Admin economy Forbrug: month rows with dinner drill-down and a scope switcher (alle chefkokke, én chefkok,
+  Madbudget); the basisvarer entry is admin-only, in that section. `SeasonBudgetOverview` takes
+  `grouping: day | month`.
+- Vacancy big overview: per team, chronological, the origin on each hole (the joker note or who released). Calendar
+  gap markers are DS tokens, ink-coloured: a chef hat for a missing chef, a joker hat for an unfilled joker seat, a dot
+  for an unfilled regular seat.
+- S5 re-login is parked: the comparison by platform, the hypotheses and the spike findings live in
+  `feature-proposal-relogin-faceid.md`.
+
+**2026-10-08**
+- `Order.orderSnapshot` (B6) and the drop of `DinnerEvent.totalCost` ride this release's migration (§ Order snapshot,
+  § Drop `DinnerEvent.totalCost`).
+- The framelding billing import books every ticket on the first inhabitant and answers 409; its e2e test is skipped
+  until § Billing import in the export format.
+
+**2026-10-11**
+- A ticket carries a stored allergy list or follows its holder's live profile: own tickets live, guest tickets the ids
+  chosen at booking, swapped tickets the releasing owner's profile ids frozen at the claim (after the deadline; a
+  second swap keeps the first list). The list holds ids. § Ticket allergies on the order.
+
+**2026-10-13**
+- The duty roster, the season spending views, the ad-hoc charges, the remaining notification kinds and the billing
+  delivery report move from release 0.9 to this release.
+- The users store, the dinner Detail's tickets and `HouseholdDisplay`: § Server payload of the shared stores.

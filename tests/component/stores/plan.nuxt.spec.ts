@@ -66,7 +66,7 @@ const removeTeamMemberEndpoint = vi.fn(() => 1)
 const updatedAssignment = {...assignment, role: useCookingTeamValidation().TeamRoleSchema.enum.COOK, allocationPercentage: 50}
 const updateTeamMemberEndpoint = vi.fn(() => updatedAssignment)
 const createJokerSlotEndpoint = vi.fn(() => createdJokerSlot)
-const deleteJokerSlotEndpoint = vi.fn(() => 1)
+const deleteJokerSlotEndpoint = vi.fn(() => JOKER_SLOT_ID)
 registerEndpoint(`/api/admin/team/assignment/${ASSIGNMENT_ID}`, { method: 'DELETE', handler: removeTeamMemberEndpoint })
 registerEndpoint(`/api/admin/team/assignment/${ASSIGNMENT_ID}`, { method: 'POST', handler: updateTeamMemberEndpoint })
 registerEndpoint('/api/admin/team/assignment', { method: 'PUT', handler: addTeamMemberEndpoint })
@@ -79,7 +79,7 @@ const { id: _newSeasonId, ...newSeason } = season2
 const deactivateSeasonEndpoint = vi.fn(() => season1)
 const teamDetail = SeasonFactory.defaultCookingTeamDetail({ id: TEAM_ID })
 const updateTeamEndpoint = vi.fn(() => teamDetail)
-const deleteTeamEndpoint = vi.fn(() => 1)
+const deleteTeamEndpoint = vi.fn(() => TEAM_ID)
 const assignAffinitiesEndpoint = vi.fn(() => ({ seasonId: season1.id, teamCount: 1, teams: [teamDetail] }))
 const assignCookingTeamsEndpoint = vi.fn(() => ({ seasonId: season1.id, eventCount: 1, events: [DinnerEventFactory.defaultDinnerEventDisplay()] }))
 const dinner = { ...DinnerEventFactory.defaultDinnerEventDetail(), id: 21 }
@@ -509,7 +509,7 @@ describe('Plan Store - write actions', () => {
             action: 'deleteTeam',
             endpoint: deleteTeamEndpoint,
             write: (store: PlanStore) => store.deleteTeam(TEAM_ID),
-            parsed: 1,
+            parsed: TEAM_ID,
             refreshes: 'the selected season',
             refreshed: seasonByIdEndpoint,
             toast: {title: 'Madhold slettet'}
@@ -556,7 +556,7 @@ describe('Plan Store - write actions', () => {
             action: 'deleteJokerSlot',
             endpoint: deleteJokerSlotEndpoint,
             write: (store: PlanStore) => store.deleteJokerSlot(TEAM_ID, JOKER_SLOT_ID),
-            parsed: 1,
+            parsed: JOKER_SLOT_ID,
             refreshes: 'the selected season',
             refreshed: seasonByIdEndpoint,
             toast: {title: 'Joker fjernet'}

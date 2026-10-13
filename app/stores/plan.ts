@@ -352,8 +352,7 @@ export const usePlanStore = defineStore("Plan", () => {
             return deletedId
         }
 
-        // TEAM MEMBER AND JOKER SLOT ACTIONS - Part of Team aggregate (ADR-005); a create returns the
-        // created entity, a delete the deleted count, and the refresh carries the season and the team (ADR-009)
+        // TEAM MEMBER AND JOKER SLOT ACTIONS - Part of Team aggregate (ADR-005); the refresh carries the season and the team
         const addTeamMember = async (assignment: CookingTeamAssignmentCreate): Promise<CookingTeamAssignment> => {
             const created = await apiRequest('/api/admin/team/assignment', {
                 method: 'PUT',
@@ -406,15 +405,15 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         const deleteJokerSlot = async (teamId: number, slotId: number): Promise<number> => {
-            const deleted = await apiRequest(`/api/admin/team/${teamId}/joker-slot/${slotId}`, {
+            const deletedId = await apiRequest(`/api/admin/team/${teamId}/joker-slot/${slotId}`, {
                 method: 'DELETE',
-                schema: DeletedCountSchema,
+                schema: IdSchema,
                 action: 'deleteJokerSlot'
             })
             console.info(`🃏 > PLAN_STORE > Removed joker slot ${slotId} from team ${teamId}`)
             await refreshTeamAggregates()
             toastSaved('Joker fjernet')
-            return deleted
+            return deletedId
         }
 
         // DINNER EVENT ACTIONS

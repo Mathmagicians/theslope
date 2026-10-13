@@ -341,8 +341,8 @@ test.describe('Admin Teams API', () => {
             expect(getTeamMemberCounts(createdTeam)).toBe(3)
             expect(createdTeam.assignments.length).toBe(3)
             // Delete the team
-            const deleted = await SeasonFactory.deleteCookingTeam(context, createdTeam.id!)
-            expect(deleted).toBe(1)
+            const deletedId = await SeasonFactory.deleteCookingTeam(context, createdTeam.id!)
+            expect(deletedId).toBe(createdTeam.id)
 
             // Verify team is deleted
             await SeasonFactory.getCookingTeamById(context, createdTeam.id!, 404)

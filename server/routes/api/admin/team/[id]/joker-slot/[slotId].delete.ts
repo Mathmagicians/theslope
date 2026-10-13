@@ -10,7 +10,7 @@ const {throwH3Error} = eventHandlerHelper
 const paramSchema = idParams('id', 'slotId')
 
 /**
- * Returns: the deleted count (ADR-009)
+ * Returns: the deleted slot's id (ADR-009)
  * @throws 400 - Invalid team or slot ID
  * @throws 404 - Slot not found on this team
  */
@@ -27,9 +27,9 @@ export default defineEventHandler(async (event): Promise<number> => {
     }
 
     try {
-        const deleted = await deleteJokerSlot(d1Client, teamId, slotId)
-        console.info(`🃏 > JOKER_SLOT > [DELETE] Deleted ${deleted} joker slot(s) on team ${teamId}`)
-        return deleted
+        const deletedId = await deleteJokerSlot(d1Client, teamId, slotId)
+        console.info(`🃏 > JOKER_SLOT > [DELETE] Deleted joker slot ${deletedId} on team ${teamId}`)
+        return deletedId
     } catch (error) {
         return throwH3Error(`🃏 > JOKER_SLOT > [DELETE] Error deleting joker slot ${slotId} on team ${teamId}`, error)
     }

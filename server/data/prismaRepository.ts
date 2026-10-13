@@ -1625,7 +1625,7 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Coo
     }
 }
 
-/** Deletes a cooking team and returns its id: the cascade removes its assignments and joker slots, its dinners keep a null team (ADR-005) */
+/** Returns the deleted team's id; the cascade removes its assignments and joker slots, its dinners keep a null team (ADR-005) */
 export async function deleteTeam(d1Client: D1Database, id: number): Promise<number> {
     console.info(`👥 > TEAM > [DELETE] Deleting team with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
@@ -1667,21 +1667,15 @@ export async function createJokerSlot(d1Client: D1Database, teamId: number, slot
     }
 }
 
-/**
- * Delete a team's joker slot; returns the deleted count (ADR-009)
- * The team id in the WHERE makes a slot of another team a miss (404)
- */
+/** Returns the deleted slot's id; the team id in the WHERE makes a slot of another team a miss (404) */
 export async function deleteJokerSlot(d1Client: D1Database, teamId: number, slotId: number): Promise<number> {
     console.info(`🃏 > JOKER_SLOT > [DELETE] Deleting joker slot ${slotId} on team ${teamId}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        const {count} = await prisma.jokerSlot.deleteMany({where: {id: slotId, cookingTeamId: teamId}})
-        if (count === 0) {
-            throw createError({statusCode: 404, message: `Joker slot ${slotId} not found on team ${teamId}`})
-        }
-        console.info(`🃏 > JOKER_SLOT > [DELETE] Deleted joker slot ${slotId} on team ${teamId}`)
-        return count
+        const deleted = await prisma.jokerSlot.delete({where: {id: slotId, cookingTeamId: teamId}, select: {id: true}})
+        console.info(`🃏 > JOKER_SLOT > [DELETE] Deleted joker slot ${deleted.id} on team ${teamId}`)
+        return deleted.id
     } catch (error) {
         return throwH3Error(`🃏 > JOKER_SLOT > [DELETE]: Error deleting joker slot ${slotId} on team ${teamId}`, error)
     }

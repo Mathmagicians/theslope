@@ -1,7 +1,7 @@
 import {useSeasonValidation, type Season, type SeasonUpdateResponse} from "~/composables/useSeasonValidation"
 import {useWeekDayMapValidation} from "~/composables/useWeekDayMapValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
-import {DeletedCountSchema} from "~/composables/useCoreValidation"
+import {DeletedCountSchema, IdSchema} from "~/composables/useCoreValidation"
 import type {
     CookingTeamDisplay,
     CookingTeamDetail,
@@ -1051,9 +1051,7 @@ export class SeasonFactory {
         return null
     }
 
-    /**
-     * Delete cooking team (for 1a test scenarios)
-     */
+    /** Returns the deleted team's id, null when another status is expected */
     static readonly deleteCookingTeam = async (
         context: BrowserContext,
         teamId: number,
@@ -1064,7 +1062,7 @@ export class SeasonFactory {
         const status = response.status()
         expect(status, 'Unexpected status').toBe(expectedStatus)
         if (expectedStatus === 200) {
-            return DeletedCountSchema.parse(await response.json())
+            return IdSchema.parse(await response.json())
         }
         return null
     }
@@ -1109,7 +1107,7 @@ export class SeasonFactory {
         const errorBody = status !== expectedStatus ? await response.text() : ''
         expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
 
-        return expectedStatus === 200 ? DeletedCountSchema.parse(await response.json()) : null
+        return expectedStatus === 200 ? IdSchema.parse(await response.json()) : null
     }
 
     static readonly getCookingTeamsForSeason = async (

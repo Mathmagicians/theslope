@@ -260,7 +260,7 @@ No change to `createTransactions` nightly job (scoped to `Order.state: CLOSED`, 
 
 ### Migration (next after `20260416091019_severalhouseholdsonsameadress`)
 
-Part of the 0.9 Prisma bundle (`this-pr/release-0.9.0.md` § Prisma bundle, Migration notes): `Transaction.type` as
+Part of the 0.9 Prisma bundle (`this-pr/release-0.9.0.md` § Prisma bundle and § Decisions 2026-10-08): `Transaction.type` as
 `ALTER TABLE … ADD COLUMN … NOT NULL DEFAULT 'REGULAR'`, `Transaction.description` nullable, the `Expense` table,
 `DinnerEvent.totalCost` kept and deprecated (dropped by `chores-0.9.1.md`). Data line: existing `totalCost` values map to REGULAR `Expense` rows (SYSTEM snapshot, no payer); the `type` default covers every existing
 row and the snapshots stay as written.
