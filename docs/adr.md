@@ -519,7 +519,7 @@ export const deserializeSeason = (s: SerializedSeason) => ({ ...s, holidays: JSO
 
 ## ADR-009: API Index Endpoint Data Inclusion Strategy
 
-**Status:** Accepted | **Date:** 2025-01-28 | **Updated:** 2025-12-01
+**Status:** Accepted | **Date:** 2025-01-28 | **Updated:** 2026-10-13
 
 ### Decision
 
@@ -563,7 +563,7 @@ Create lightweight repository functions for bulk updates (>10 entities).
 4. Batch operations MUST use Display types
 5. Prisma types MUST NOT leave repository layer (ADR-010)
 6. Operation result types are NOT entity types - they MAY be added as needed for side-effect operations
-7. A delete returns the deleted entity's Detail when a caller renders it, otherwise the deleted count
+7. A delete returns the deleted entity's Detail when a caller renders it, otherwise the deleted id for a single delete and the deleted count for a bulk delete
 
 ---
 

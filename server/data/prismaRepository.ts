@@ -1625,18 +1625,15 @@ export async function updateTeam(d1Client: D1Database, id: number, teamData: Coo
     }
 }
 
-/** Deletes a cooking team: the cascade removes its assignments and joker slots, its dinners keep a null team (ADR-005) */
+/** Deletes a cooking team and returns its id: the cascade removes its assignments and joker slots, its dinners keep a null team (ADR-005) */
 export async function deleteTeam(d1Client: D1Database, id: number): Promise<number> {
     console.info(`👥 > TEAM > [DELETE] Deleting team with ID ${id}`)
     const prisma = await getPrismaClientConnection(d1Client)
 
     try {
-        const {count} = await prisma.cookingTeam.deleteMany({where: {id}})
-        if (count === 0) {
-            throw createError({statusCode: 404, message: `Team ${id} not found`})
-        }
-        console.info(`👥 > TEAM > [DELETE] Deleted team ${id}`)
-        return count
+        const deleted = await prisma.cookingTeam.delete({where: {id}, select: {id: true}})
+        console.info(`👥 > TEAM > [DELETE] Deleted team ${deleted.id}`)
+        return deleted.id
     } catch (error) {
         return throwH3Error(`👥 > TEAM > [DELETE] > Error deleting team with ID ${id}`, error)
     }

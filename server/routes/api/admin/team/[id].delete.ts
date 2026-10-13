@@ -28,9 +28,9 @@ export default defineEventHandler(async (event): Promise<number> => {
 
     // Database operations try-catch - separate concerns
     try {
-        const deleted = await deleteTeam(d1Client, id)
-        console.info(`👥 > TEAM > [DELETE] Deleted ${deleted} team(s) with id ${id}`)
-        return deleted
+        const deletedId = await deleteTeam(d1Client, id)
+        console.info(`👥 > TEAM > [DELETE] Deleted team ${deletedId}`)
+        return deletedId
     } catch (error) {
         return throwH3Error(`👥 > TEAM > [DELETE] Error deleting team with id ${id}`, error)
     }

@@ -87,7 +87,7 @@ export const usePlanStore = defineStore("Plan", () => {
         } = selectedSeasonDataset
 
         const {CookingTeamDetailSchema, CreateTeamsResponseSchema, AssignTeamAffinitiesResponseSchema, CookingTeamAssignmentSchema} = useCookingTeamValidation()
-        const {DeletedCountSchema} = useCoreValidation()
+        const {DeletedCountSchema, IdSchema} = useCoreValidation()
         const {DinnerEventDetailSchema, AssignCookingTeamsResponseSchema} = useBookingValidation()
         const {JokerSlotSchema} = useDutyValidation()
         const {formatRoleClaimedTitle} = useCookingTeam()
@@ -339,9 +339,9 @@ export const usePlanStore = defineStore("Plan", () => {
         }
 
         const deleteTeam = async (teamId: number): Promise<number> => {
-            const deleted = await apiRequest(`/api/admin/team/${teamId}`, {
+            const deletedId = await apiRequest(`/api/admin/team/${teamId}`, {
                 method: 'DELETE',
-                schema: DeletedCountSchema,
+                schema: IdSchema,
                 action: 'deleteTeam'
             })
             console.info(`👥 > PLAN_STORE > Deleted team ${teamId}`)
@@ -349,7 +349,7 @@ export const usePlanStore = defineStore("Plan", () => {
             skipGoneId(teamChoice, teamId)
             await refreshTeamAggregates()
             toastSaved('Madhold slettet')
-            return deleted
+            return deletedId
         }
 
         // TEAM MEMBER AND JOKER SLOT ACTIONS - Part of Team aggregate (ADR-005); a create returns the

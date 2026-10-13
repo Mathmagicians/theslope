@@ -82,6 +82,13 @@ const season = await SeasonFactory.createSeason(context, SeasonFactory.defaultSe
 - `EntityFactory.deleteEntity(context, id)` - Cleanup
 - `EntityFactory.getEntity(context, id)` - Fetch for verification
 
+**Factories on disk:** `AllergyFactory`, `BillingFactory`, `DinnerEventFactory`, `ExpenseFactory`, `HouseholdFactory`, `NotificationFactory`, `OrderFactory`, `SeasonFactory`, `SeasonImportFactory`, `SenderFactory`, `SettingFactory`, `TicketFactory`, `UserFactory`, `WaitlistFactory`; `reconciliationTestData.ts` holds the data for the four reconciliation outcomes of households, inhabitants and users, shared by unit and e2e specs.
+
+**Scenario methods:**
+- `SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days, deadline?, cookingDays?, startInDays?})` - a serial spec's own active season, returned as `{season, dinnerEvents}`: starts `startInDays` days from today at midnight (1 by default) and ends `days` days after the start, inside the pre-booking window (ADR-015); `cookingDays` picks `'all'` or `'weekdays'` over the default Mon/Wed/Fri; `deadline` is the cancel deadline in days. Serial only: activating it displaces the singleton active season
+- `DinnerEventFactory.createDinnerEventOnFreeDay(context, season, data?)` - a browser spec's dinner alone on a free day of the season, picked at random after the season's last dinner where one is free; a day that turns double in the meantime gives the dinner up and another day is tried
+- `DinnerEventFactory.createDinnerEventAloneOnDay(context, season, day, data?)` - a serial spec's dinner alone on `day`: the dinners the season holds on that day give way. Serial only: a parallel spec's dinner on the day goes with them
+
 ### Rule 3: E2E Tests MUST Be Parallel-Safe
 
 ```typescript
@@ -146,9 +153,9 @@ A mock proves nothing about the code it replaces. When a spec renders a hand-wri
 |-------|--------------------|-----|
 | Component under test and its children | **REAL** | Render them. Supply the context they need: `mountWithTooltipProvider()` for anything containing `UTooltip` |
 | Composables, validation schemas, utils | **REAL** | Nothing to do |
-| Pinia stores | **REAL** | `setActivePinia(createPinia())` + `clearNuxtData()` in `beforeEach`; the store fetches from the registered endpoints |
+| Pinia stores | **REAL** | `resetStores()` in `beforeEach`: fresh stores over a fresh data layer per test; the store fetches from the registered endpoints |
 | HTTP | **FAKE** | `registerEndpoint()` per route - specific FIRST, generic LAST |
-| Nuxt runtime the test drives (`useRoute`, `navigateTo`) | FAKE when the test steers it | `mockNuxtImport()` |
+| Nuxt runtime the test drives (`useRoute`, `navigateTo`, `useUserSession`) | FAKE when the test steers it | `mockNuxtImport()` over `tests/component/hoistedMocks.ts` (`mockRouteAndNavigation`, `mockSession`) |
 | Browser-only or third-party APIs the environment lacks | FAKE, with a reason | `mockNuxtImport()` + a comment naming the gap |
 
 ```typescript
@@ -233,21 +240,54 @@ await doScreenshot(page, 'dropdown-timeout')  // Debug: test-results/
 await doScreenshot(page, 'admin/page', true)  // Docs: docs/screenshots/
 ```
 
+### Hydration and request helpers
+
+| Helper | Use |
+|--------|-----|
+| `gotoHydrated(page, url)` | Navigates and waits for hydration: the entry point for a test that interacts with the page |
+| `collectHydrationWarnings(page)` | Collects the console messages Vue logs on a hydration mismatch; attach it before the navigation |
+| `expectHydratedWithoutMismatch(page, url)` | Navigates, waits for hydration and asserts Vue logged no hydration mismatch on the way |
+| `waitForApi(page, path, method, options?)` | The next response to a `method` request whose url contains `path`; attach it before the action that sends the request |
+
 ### Component helpers: `/tests/component/testHelpers.ts`
 
 ```typescript
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, pollFor} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, pollFor, resetStores, registerEmptyStoreEndpoints, VIEWPORTS, kitchenConfig, useTestScope} from '~~/tests/component/testHelpers'
 ```
 
 | Helper | Use |
 |--------|-----|
-| `mountWithTooltipProvider(Component, {props?, isMd?})` | `mountSuspended` under reka-ui's `TooltipProvider` (the context `UApp` supplies in the app). Returns the component's own wrapper, so `find`, `text`, `emitted` and `props` read the component, not the shell. `isMd` provides the layout breakpoint ref |
+| `mountWithTooltipProvider(Component, {props?, isMd?})` | `mountSuspended` under reka-ui's `TooltipProvider` (the context `UApp` supplies in the app). Returns the component's own wrapper, so `find`, `text`, `emitted` and `props` read the component, not the shell. `isMd` provides the layout's responsive breakpoint ref when given (`null` before the layout has measured); pass a ref to change the breakpoint after mount |
 | `withTooltipProvider(Component, props)` | The bare wrapper definition, for the rare spec that needs the root wrapper |
 | `findByTestId(wrapper, id)` / `findAllByTestId(wrapper, id)` | `data-testid` lookups - never hand-build the selector string |
 | `clickByTestId(wrapper, id)` | Click + `await nextTick()` |
 | `pollFor(condition, maxAttempts?)` | Poll a predicate across ticks (store readiness) |
+| `resetStores()` | Fresh stores over a fresh data layer per test: the stores of the app's pinia and of the active one are disposed, the app's pinia stays active so a spec and the components it mounts share one store instance, and the keyed `useAsyncData` entries earlier stores registered go with them |
+| `registerEmptyStoreEndpoints()` | The datasets the stores request on creation, answered empty; a spec's own route for one of them registers after this call, as the last registration of a url answers |
+| `VIEWPORTS` | The two layouts a responsive token answers for, the phone (`isMd: false`) and md and up (`isMd: true`), as the table of a `describe.each` |
+| `kitchenConfig()` | The kitchen's rates the money components calculate with, read from the app config inside a hook or a test |
+| `useTestScope()` | A scope per test for the composables a test body creates: the watchers they start stop with the test, as they do when a component unmounts |
 
-Shared `data-testid` contracts live next to the specs that share them, e.g. `tests/component/components/allergy/allergyTestIds.ts`.
+Shared `data-testid` contracts live next to the specs that share them: `tests/component/components/allergy/allergyTestIds.ts` (the allergy catalog UI), `cooking-team/jokerSlotIds.ts` (JokerSlotForm and the team card's joker box, shared with the AdminTeams e2e spec) and `dinner/waitlistTestIds.ts` (the waiting list UI).
+
+### Hoisted mocks: `/tests/component/hoistedMocks.ts`
+
+The runtime a spec fakes before Nuxt boots. `mockNuxtImport` rewrites each call into a hoisted `vi.mock`, so its factory sees hoisted bindings only; a spec builds them inside `vi.hoisted` and hands them to the macro:
+
+```typescript
+const {session, useUserSession} = await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).mockSession())
+mockNuxtImport('useUserSession', () => useUserSession)
+
+const {mockRoute, mockNavigateTo, useRoute} = await vi.hoisted(async () =>
+    (await import('~~/tests/component/hoistedMocks')).mockRouteAndNavigation({path: '/admin/economy'}))
+mockNuxtImport('useRoute', () => useRoute)
+mockNuxtImport('navigateTo', () => mockNavigateTo)
+```
+
+| Helper | Use |
+|--------|-----|
+| `mockSession(user?)` | The session nuxt-auth-utils hydrates from a cookie the test runtime lacks; the auth store reading it is real. `session.user` is the one switch: `loggedIn` follows it, and a spec that gates on login alone writes `loggedIn` itself |
+| `mockRouteAndNavigation({path?, params?, query?})` | The route a page reads and the navigation it writes, with no router in the test runtime. `mockRoute` is reactive, so the computeds over `route.query` follow a write; `mockNavigateTo` records the calls, and `mockNavigateTo.mockImplementation(landNavigation)` lands each call on the route, as the router does |
 
 ---
 
@@ -405,16 +445,31 @@ it('does not emit save when validation fails', async () => {
 
 ## Architecture Tests
 
-`tests/component/architecture/*.unit.spec.ts` read the `.vue` sources and fail on a *pattern*, not on a render. They are
-how a design-system sweep stays swept: once every `<UAlert>` binds an `ALERTS` kind, the test is what stops the 57th one
-from being written with a raw `:color` (ADR-018). `designSystemUsage.unit.spec.ts` guards the ADR-018 rules — every `<UAlert`
-binds `ALERTS.` and none passes a raw `color`/`variant`/`type`, every `<UCalendar` binds `COMPONENTS.calendarGrid`, every
-`<UTable` binds a `COMPONENTS.table` token, every team `<UTabs` (one whose file renders `CookingTeamBadges`) binds
-`COMPONENTS.teamTabs`, no `.vue` names a Tailwind palette shade or passes a literal colour prop, no `<UButton`, `<UBadge`
-or `<UAvatar` passes a literal `size`, `variant` or `icon`, no `.vue` spells out `LAYOUTS.formButtonRow`'s class string, and no
-template uses the dead Nuxt UI v2 slot name `#empty-state`. `fetchUsage.unit.spec.ts` guards ADR-007: a `$fetch(` or `useRequestFetch(` anywhere
-under `app/` outside `app/composables/useApiHandler.ts` fails — stores read through `storeAsyncData` and write through
-`apiRequest`. Violations are reported as `file:line`, so a failure names the sites to fix.
+`tests/component/architecture/*.unit.spec.ts` read sources — the `.vue` files under `app/`, the SQL under `migrations/`,
+the palettes under `app/assets/css/palettes/` — and fail on a *pattern*, not on a render. They are how a design-system
+sweep stays swept: once every `<UAlert>` binds an `ALERTS` kind, the test is what stops the 57th one from being written
+with a raw `:color` (ADR-018). Violations are reported as `file:line`, so a failure names the sites to fix.
+
+| Spec | Reads | Rule |
+|------|-------|------|
+| `designSystemUsage.unit.spec.ts` | `.vue` under `app/` | The ADR-018 usage rules, one case each (below) |
+| `fetchUsage.unit.spec.ts` | `app/` | ADR-007: a `$fetch(` or `useRequestFetch(` outside `app/composables/useApiHandler.ts` fails — stores read through `storeAsyncData` and write through `apiRequest` |
+| `migrations.unit.spec.ts` | `migrations/*.sql` from `0015` on | A migration adds a column with `ALTER TABLE … ADD COLUMN` and keeps every table: D1 runs a migration inside a transaction where `PRAGMA foreign_keys=OFF` is a no-op, so a table rebuild (`DROP TABLE`, `-- RedefineTables`) fires the children's ON DELETE actions |
+| `designSystemContrast.unit.spec.ts` | the tokens and the palettes | EN 301 549 / WCAG 2.1 contrast of every pair the tokens define (next section) |
+| `designSystemColourVision.unit.spec.ts` | the palettes and `designSystemMeanings.ts` | WCAG 2.1 §1.4.1: the meaning pairs stay apart under colour vision deficiency (next section) |
+
+`contrast.ts`, `colourVision.ts`, `designSystemPairs.ts`, `designSystemMeanings.ts` and `palettes.ts` hold the colour
+maths, the simulation, the pair inventory, the meaning inventory and the palette list, shared with the palette generator.
+
+`designSystemUsage.unit.spec.ts` asserts: a `<UAlert>` binds an `ALERTS` kind and takes `color`, `variant` and `type`
+from it; a `<UCalendar>` binds `COMPONENTS.calendarGrid`; a `<UTable>` binds a `COMPONENTS.table` token; a table under
+`app/` is a `UTable` on a table token (a raw `<table>` fails; the print page `pages/admin/allergies/pdf.vue` is exempt);
+a team `<UTabs>` (one whose file renders `CookingTeamBadges`) binds `COMPONENTS.teamTabs`; a `<UCollapsible>` that
+styles itself does so through a `COMPONENTS.collapsible` token; a labelled `<USeparator>` binds a `COMPONENTS.separator`
+kind; a `.vue` names its colours through tokens (a Tailwind palette shade or a literal colour prop fails); a `<UButton>`,
+`<UBadge>`, `<UAvatar>` or `<UAvatarGroup>` takes `size`, `variant` and `icon` from a token; the form button row binds
+`LAYOUTS.formButtonRow`; the layout (`layouts/default.vue`) provides the breakpoint and the design system reads it (an
+`inject` of `isMd` in another `.vue` fails); a table empty state is the `#empty` slot (the Nuxt UI v2 name `#empty-state` fails).
 
 Add one whenever a fix to a Nuxt UI component family becomes a token: add the token, sweep all instances, add the rule.
 
@@ -467,24 +522,28 @@ assert *behaviour* (text renders, CTA present or absent, events emitted); e2e as
 
 ### Mock Nuxt Auto-imports
 
-```typescript
-import { mockNuxtImport } from '@nuxt/test-utils/runtime'
+The route and the navigation come from `tests/component/hoistedMocks.ts` (see [Hoisted mocks](#hoisted-mocks-testscomponenthoistedmocksts)):
 
-const { mockNavigateTo, mockRouteData } = vi.hoisted(() => ({
-  mockNavigateTo: vi.fn(),
-  mockRouteData: { path: '/tab1', params: { tab: 'tab1' }, query: {}, hash: '' }
-}))
+```typescript
+import {mockNuxtImport} from '@nuxt/test-utils/runtime'
+
+const {mockNavigateTo, mockRoute: mockRouteData, useRoute} = await vi.hoisted(async () =>
+  (await import('~~/tests/component/hoistedMocks')).mockRouteAndNavigation({path: '/household/test/bookings'}))
 
 mockNuxtImport('navigateTo', () => mockNavigateTo)
-mockNuxtImport('useRoute', () => () => mockRouteData)
+mockNuxtImport('useRoute', () => useRoute)
 ```
 
 ### Mutate Mock Data Between Tests
 
+`mockRoute` is reactive, so a write to its `params` or `query` reaches the computeds under test:
+
 ```typescript
-const setupRoute = (params: Record<string, string | undefined>) => {
-  Object.keys(mockRouteData.params).forEach(key => delete mockRouteData.params[key])
-  Object.assign(mockRouteData.params, params)
+const setupRoute = (query: Record<string, string | undefined>) => {
+  for (const key in mockRouteData.query) {
+    if (Object.hasOwn(mockRouteData.query, key)) Reflect.deleteProperty(mockRouteData.query, key)
+  }
+  Object.assign(mockRouteData.query, query)
 }
 ```
 
@@ -494,13 +553,16 @@ const setupRoute = (params: Record<string, string | undefined>) => {
 
 ### Clear Cache Between Tests
 
+`resetStores()` gives each test fresh stores over a fresh data layer: the stores of the app's pinia and of the active one
+are disposed, the app's pinia stays active so a spec and the components it mounts share one store instance, and the
+keyed `useAsyncData` entries earlier stores registered go with them.
+
 ```typescript
-import { clearNuxtData } from '#app'
+import {resetStores} from '~~/tests/component/testHelpers'
 
 beforeEach(() => {
-    setActivePinia(createPinia())
+    resetStores()
     vi.clearAllMocks()
-    clearNuxtData()  // Prevent useFetch cache pollution
 })
 ```
 
@@ -534,7 +596,7 @@ test('GIVEN create mode WHEN submit THEN created', async ({ page, browser }) => 
   await page.getByTestId('submit-season').click()
 
   // THEN: Verify via API (reliable)
-  const seasons = await SeasonFactory.getSeasons(context)
+  const seasons = await SeasonFactory.getAllSeasons(context)
   expect(seasons.find(s => s.shortName.includes(testSalt))).toBeDefined()
 })
 ```
@@ -640,23 +702,8 @@ Business logic often depends on deadlines (e.g., "can only cancel 2 days before 
 // - ALL days cooking (Mon-Sun) → predictable event count regardless of day-of-week
 // - 2-day deadline → tomorrow is ALWAYS after deadline
 // - 10-day duration → guarantees both before/after deadline events exist
-const allDaysCooking = createBooleanWeekdayMap([true, true, true, true, true, true, true])
-
-const tomorrow = new Date()
-tomorrow.setDate(tomorrow.getDate() + 1)
-tomorrow.setHours(0, 0, 0, 0)
-
-const tenDaysFromTomorrow = new Date(tomorrow)
-tenDaysFromTomorrow.setDate(tenDaysFromTomorrow.getDate() + 10)
-
-testSeason = await SeasonFactory.createSeasonWithDinnerEvents(adminContext, testSalt, {
-    cookingDays: allDaysCooking,
-    seasonDates: {start: tomorrow, end: tenDaysFromTomorrow},
-    ticketIsCancellableDaysBefore: 2  // Key: short deadline
-})
-
-// MUST activate the test season (only one season can be active)
-await SeasonFactory.activateSeason(adminContext, testSeason.season.id!)
+// The factory creates the season with its dinner events from tomorrow and activates it (one season is active at a time)
+testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 10, deadline: 2, cookingDays: 'all'})
 ```
 
 **Result with 2-day deadline:**
@@ -788,7 +835,7 @@ test('RELEASE bucket: after-deadline orders are RELEASED not deleted', async ({b
 | Issue | Symptom | Fix |
 |-------|---------|-----|
 | Click not emitting | `emitted()` undefined | Use `findByTestId()` not `findAllComponents()` |
-| Test pollution | Pass alone, fail together | Add `clearNuxtData()` to `beforeEach()` |
+| Test pollution | Pass alone, fail together | `resetStores()` in `beforeEach()` (`tests/component/testHelpers.ts`) |
 | Reactive updates | Assertion fails after trigger | Add `await nextTick()` |
 | Linux CI failures | Strict mode violation | Use `getByRole()` or `.first()` for dropdowns |
 | Tooltip provider error | `UTooltip` needs the `TooltipProvider` context `UApp` supplies in the app | Mount via `mountWithTooltipProvider()` (`tests/component/testHelpers.ts`) |
