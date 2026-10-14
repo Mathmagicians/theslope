@@ -12,6 +12,8 @@ import {getPrismaClientConnection} from "~~/server/utils/database"
 import {fetchUserIntentKeys, fetchOrders} from "~~/server/data/financesRepository"
 import {fetchActiveSeasonId, fetchSeason} from "~~/server/data/prismaRepository"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
+import {emailChannel} from "~~/server/utils/sender/config"
+import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
 import {useBookingValidation, type DinnerMode} from "~/composables/useBookingValidation"
 import {useSeason} from "~/composables/useSeason"
 import {useTicket} from "~/composables/useTicket"
@@ -340,6 +342,7 @@ export default defineEventHandler(async (event): Promise<HealingResult> => {
                         desiredOrders: orders
                         // No userId → system mode → SYSTEM_CREATED audit
                     })
+                    await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), result.outcomes)
                     healed += result.created + result.modeUpdated
                     console.info(`${LOG} Healed household ${hid}: created=${result.created}, modeUpdated=${result.modeUpdated}`)
                 } catch (e) {

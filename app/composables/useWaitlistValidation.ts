@@ -40,12 +40,6 @@ export const useWaitlistValidation = () => {
         position: z.number().int().positive()
     })
 
-    // What the sender did with a notification the operation emitted
-    const NotificationOutcomeSchema = z.object({
-        queued: z.boolean(),
-        dedupeKey: z.string()
-    })
-
     const WaitlistReleaseRequestSchema = z.object({
         portions: z.number().positive().max(100)
     })
@@ -62,7 +56,7 @@ export const useWaitlistValidation = () => {
         isGuestTicket: z.boolean(),
         portions: z.number().nonnegative(),
         orderId: IdSchema,
-        notification: NotificationOutcomeSchema
+        ticketPriceId: IdSchema
     })
 
     const WaitlistAssignmentResultSchema = z.object({
@@ -83,7 +77,6 @@ export const useWaitlistValidation = () => {
         WaitlistQueueSummarySchema,
         WaitlistAssignedSchema,
         WaitlistAssignmentResultSchema,
-        NotificationOutcomeSchema,
         serializeTicketWaitlist,
         deserializeTicketWaitlist
     }
@@ -97,4 +90,3 @@ export type WaitlistReleaseRequest = z.infer<ReturnType<typeof useWaitlistValida
 export type WaitlistQueueSummary = z.infer<ReturnType<typeof useWaitlistValidation>['WaitlistQueueSummarySchema']>
 export type WaitlistAssigned = z.infer<ReturnType<typeof useWaitlistValidation>['WaitlistAssignedSchema']>
 export type WaitlistAssignmentResult = z.infer<ReturnType<typeof useWaitlistValidation>['WaitlistAssignmentResultSchema']>
-export type NotificationOutcome = z.infer<ReturnType<typeof useWaitlistValidation>['NotificationOutcomeSchema']>

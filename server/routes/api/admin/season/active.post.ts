@@ -5,6 +5,8 @@ import * as z from 'zod'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {clipPreferences} from "~~/server/utils/initializePreferences"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
+import {emailChannel} from "~~/server/utils/sender/config"
+import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
 
 const {throwH3Error} = eventHandlerHelper
 
@@ -41,6 +43,7 @@ export default defineEventHandler(async (event): Promise<Season> => {
         console.info(`🌞 > SEASON > [POST /active] Clipped ${clipResult.initialized} inhabitants`)
 
         const scaffoldResult = await scaffoldPrebookings(d1Client, {seasonId: activatedSeason.id!})
+        await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), scaffoldResult.outcomes)
         console.info(`🌞 > SEASON > [POST /active] Scaffolded ${scaffoldResult?.created ?? 0} orders`)
 
         setResponseStatus(event, 200)

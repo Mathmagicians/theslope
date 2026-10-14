@@ -474,6 +474,7 @@ export class HouseholdFactory {
      *
      * @param seasonId - Optional seasonId query param for parallel-safe testing
      * @param assertResponse - Optional callback to assert response properties
+     * @param adminBypass - An admin changing another household's preferences
      */
     static readonly updateInhabitantPreferences = async (
         context: BrowserContext,
@@ -481,11 +482,13 @@ export class HouseholdFactory {
         dinnerPreferences: Record<string, string>,
         expectedStatus: number = 200,
         seasonId?: number,
-        assertResponse?: (response: InhabitantUpdateResponse) => void
+        assertResponse?: (response: InhabitantUpdateResponse) => void,
+        adminBypass: boolean = false
     ): Promise<InhabitantUpdateResponse | null> => {
-        const url = seasonId !== undefined
-            ? `/api/household/inhabitants/${inhabitantId}/preferences?seasonId=${seasonId}`
-            : `/api/household/inhabitants/${inhabitantId}/preferences`
+        const query = new URLSearchParams()
+        if (seasonId !== undefined) query.append('seasonId', String(seasonId))
+        if (adminBypass) query.append('adminBypass', 'true')
+        const url = `/api/household/inhabitants/${inhabitantId}/preferences${query.size > 0 ? `?${query}` : ''}`
 
         const response = await context.request.post(url, {
             headers,

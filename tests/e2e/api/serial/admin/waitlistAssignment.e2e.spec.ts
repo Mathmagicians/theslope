@@ -8,12 +8,16 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
-import type {InhabitantDisplay} from '~/composables/useCoreValidation'
+import type {Season} from '~/composables/useSeasonValidation'
+import {useCoreValidation, type InhabitantDisplay} from '~/composables/useCoreValidation'
+import {useBookingValidation, type DinnerMode} from '~/composables/useBookingValidation'
 
 const {validatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo, daysFromNow} = testHelpers
 const {TicketTypeSchema} = useTicketPriceValidation()
 const TicketType = TicketTypeSchema.enum
 const {TeamRoleSchema} = useCookingTeamValidation()
+const {createDefaultWeekdayMap} = useCoreValidation()
+const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 
 /**
  * The chef releases portions on a sold-out dinner of the active season: the queue is served in strict FIFO, each
@@ -24,6 +28,7 @@ test.describe('Waiting list assignment', () => {
     let teamId: number
     let dinnerEventId: number
     let activeSeasonId: number
+    let activeSeason: Season
     let adminInhabitantId: number
     const dinnerIds: number[] = []
     let householdId: number
@@ -36,11 +41,12 @@ test.describe('Waiting list assignment', () => {
     const householdEntries = async (context: Parameters<typeof WaitlistFactory.entries>[0], dinnerId = dinnerEventId) =>
         (await WaitlistFactory.entries(context, [dinnerId])).filter(entry => entry.order.householdId === householdId)
     const orderIds: number[] = []
+    const sellerHouseholdIds: number[] = []
 
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
-        const activeSeason = await SeasonFactory.createActiveSeason(context)
+        activeSeason = await SeasonFactory.createActiveSeason(context)
         adultPrice = activeSeason.ticketPrices.find(price => price.ticketType === TicketType.ADULT)!
         childPrice = activeSeason.ticketPrices.find(price => price.ticketType === TicketType.CHILD)!
         activeSeasonId = activeSeason.id!
@@ -64,6 +70,7 @@ test.describe('Waiting list assignment', () => {
         await WaitlistFactory.cleanupEntries(context, activeSeasonId, dinnerIds)
         await OrderFactory.cleanupOrders(context, orderIds)
         for (const inhabitant of inhabitants) await HouseholdFactory.deleteInhabitant(context, inhabitant.id!)
+        if (sellerHouseholdIds.length > 0) await HouseholdFactory.deleteHousehold(context, sellerHouseholdIds)
         for (const id of dinnerIds) await DinnerEventFactory.deleteDinnerEvent(context, id).catch(() => undefined)
         await SeasonFactory.deleteCookingTeam(context, teamId).catch(() => undefined)
     })
@@ -133,5 +140,40 @@ test.describe('Waiting list assignment', () => {
         expect(maintenance.consume.consumed).toBeGreaterThanOrEqual(1)
 
         expect(await householdEntries(context, pastDinner.id!)).toEqual([])
+    })
+
+    test('GIVEN a household holding a ticket past the deadline and a waiting entry at its price WHEN an admin sets the household\'s preferences to Ingen THEN the first in the waiting list holds the ticket and the household\'s open orders are cancelled', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const testSalt = temporaryAndRandom()
+        const dinnerAt = (days: number, title: string) => DinnerEventFactory.createDinnerEvent(context, {
+            date: daysFromNow(days), menuTitle: salt(title, testSalt), seasonId: activeSeasonId, cookingTeamId: teamId, chefId: adminInhabitantId
+        })
+        const closedDinner = await dinnerAt(3, 'Frigivet billet')
+        const openDinner = await dinnerAt(20, 'Åben middag')
+        dinnerIds.push(closedDinner.id!, openDinner.id!)
+        const {household: seller, inhabitants: [sellerInhabitant]} = await HouseholdFactory.createHouseholdWithInhabitants(context, HouseholdFactory.defaultHouseholdData(testSalt), 1)
+        sellerHouseholdIds.push(seller.id)
+        const preferences = (mode: DinnerMode) => HouseholdFactory.updateInhabitantPreferences(
+            context, sellerInhabitant!.id, createDefaultWeekdayMap(mode), 200, activeSeasonId, undefined, true
+        )
+        // The scaffold books the seller while both dinners are open, as the nightly run does; the season's own deadline then closes the near one
+        await SeasonFactory.updateSeason(context, {...activeSeason, ticketIsCancellableDaysBefore: 0})
+        await preferences(DinnerModeSchema.enum.NONE)
+        await preferences(DinnerModeSchema.enum.DINEIN)
+        await SeasonFactory.updateSeason(context, activeSeason)
+        const waiting = inhabitants[3]!
+        expect((await queue(context, OrderFactory.createBookingOrder(waiting.id!, closedDinner.id!, adultPrice.id!))).queued).toBe(1)
+
+        const response = await preferences(DinnerModeSchema.enum.NONE)
+
+        expect(response!.scaffoldResult.errored).toBe(0)
+        expect(response!.scaffoldResult.outcomes.waitlistTicketsSold).toEqual([{
+            dinnerEventId: closedDinner.id, ticketPriceId: adultPrice.id,
+            buyerInhabitantId: waiting.id, buyerHouseholdId: householdId, sellerHouseholdId: seller.id
+        }])
+        const bought = (await OrderFactory.getOrdersForDinnerEvent(context, closedDinner.id!)).filter(order => order.inhabitantId === waiting.id)
+        expect(bought.map(order => order.state)).toEqual([OrderStateSchema.enum.BOOKED])
+        expect(await householdEntries(context, closedDinner.id!)).toEqual([])
+        expect(await OrderFactory.getOrders(context, {dinnerEventIds: openDinner.id!, householdId: seller.id})).toEqual([])
     })
 })

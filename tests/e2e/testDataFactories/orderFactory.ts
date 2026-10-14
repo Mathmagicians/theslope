@@ -541,6 +541,7 @@ export class OrderFactory {
   static readonly defaultScaffoldResult = (overrides?: Partial<ScaffoldResult>): ScaffoldResult => ({
     seasonId: 1, created: 0, deleted: 0, released: 0, claimed: 0, queued: 0, positions: [], left: 0, requeued: 0,
     priceUpdated: 0, modeUpdated: 0, unchanged: 0, households: 1, errored: 0,
+    outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: []},
     ...overrides
   })
 

@@ -1248,7 +1248,12 @@ export const useBooking = () => {
         seasonId: results.at(-1)?.seasonId ?? null,
         ...Object.fromEntries(SCAFFOLD_FIELDS.map(({key}) => [key, sumBy(results, result => result[key])])) as Record<typeof SCAFFOLD_FIELDS[number]['key'], number>,
         positions: results.flatMap(result => result.positions),
-        households: sumBy(results, result => result.households)
+        households: sumBy(results, result => result.households),
+        outcomes: {
+            joined: results.flatMap(result => result.outcomes.joined),
+            ticketsSold: results.flatMap(result => result.outcomes.ticketsSold),
+            waitlistTicketsSold: results.flatMap(result => result.outcomes.waitlistTicketsSold)
+        }
     })
 
     // ============================================================================

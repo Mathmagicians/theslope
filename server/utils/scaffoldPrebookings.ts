@@ -1,11 +1,10 @@
 import {fetchOrders, createOrders, deleteOrder, updateOrdersBatch, claimOrder, countReleasedTickets, type OrderBatchUpdate, fetchUserIntentKeys} from "~~/server/data/financesRepository"
 import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/prismaRepository"
 import {useSeason, type BookingDeadlines} from "~/composables/useSeason"
-import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, type QueuePosition, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
+import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, type QueuePosition, type BookingOutcomes, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
 import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets, bookingOutcome} from "~/composables/useBooking"
 import {assignReleasedTicket, joinWaitlist} from "~~/server/utils/waitlistAssignment"
 import {fetchWaitlistForHousehold, deleteWaitlistEntry, updateWaitlistEntryOrder} from "~~/server/data/waitlistRepository"
-import {emailChannel, type EmailChannel} from "~~/server/utils/sender/config"
 import {isHouseholdActiveOnDay} from "~/composables/useHousehold"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {getSystemUserId} from "~~/server/utils/systemUser"
@@ -59,8 +58,6 @@ export type ScaffoldOptions = {
     desiredOrders?: DesiredOrder[]
     /** If provided, use USER_* audit actions. Otherwise SYSTEM_*. */
     userId?: number
-    /** The e-mail channel for the waiting-list mails; without one they are off */
-    email?: EmailChannel
     /** The deadlines user mode decides by; the season's when absent */
     deadlines?: BookingDeadlines
 }
@@ -82,7 +79,8 @@ const skippedResult = (): ScaffoldResult => ({
     modeUpdated: 0,
     unchanged: 0,
     households: 0,
-    errored: 0
+    errored: 0,
+    outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: []}
 })
 
 /** Default scaffold result when no re-scaffold needed */
@@ -186,7 +184,6 @@ export async function scaffoldPrebookings(
     const existingOrders = orderBatches.flat()
     const {confirmedKeys, cancelledKeys} = userIntentKeys
     const entryById = new Map(existingEntries.map(entry => [entry.id, entry]))
-    const channel = options.email ?? emailChannel({})
 
     console.info(`${LOG} ${isUserMode ? 'User' : 'System'} mode: ${households.length} household(s), ${dinnerEvents.length} events, ${existingEntries.length} queue entries`)
 
@@ -199,6 +196,8 @@ export async function scaffoldPrebookings(
     let totalLeft = 0
     let totalRequeued = 0
     const positions: QueuePosition[] = []
+    // What happened that the caller notifies about after the run; a household that fails later keeps what already happened
+    const outcomes: BookingOutcomes = {joined: [], ticketsSold: [], waitlistTicketsSold: []}
     let totalPriceUpdated = 0
     let totalModeUpdated = 0
     let totalUnchanged = 0
@@ -344,7 +343,8 @@ export async function scaffoldPrebookings(
             for (const released of batchUpdates.filter(update => update.isNewRelease)) {
                 const existing = orderById.get(released.orderId)
                 if (existing?.ticketPriceId) {
-                    await assignReleasedTicket(d1Client, existing.dinnerEventId, existing.ticketPriceId, household.id, channel)
+                    const sale = await assignReleasedTicket(d1Client, existing.dinnerEventId, existing.ticketPriceId)
+                    if (sale) outcomes.waitlistTicketsSold.push(sale)
                 }
             }
 
@@ -373,7 +373,7 @@ export async function scaffoldPrebookings(
                 for (let round = 0; round < CLAIM_ROUNDS && !bought; round++) {
                     const ticketsForSale = await countReleasedTickets(d1Client, toClaim.dinnerEventId, toClaim.ticketPriceId)
                     if (bookingOutcome('claim', {ticketsForSale}) !== 'buy') break
-                    bought = !!await claimOrder(
+                    const claimed = await claimOrder(
                         d1Client,
                         toClaim.dinnerEventId,
                         toClaim.ticketPriceId,
@@ -382,6 +382,13 @@ export async function scaffoldPrebookings(
                         toClaim.dinnerMode,
                         toClaim.isGuestTicket
                     )
+                    if (claimed) {
+                        outcomes.ticketsSold.push({
+                            dinnerEventId: toClaim.dinnerEventId, ticketPriceId: toClaim.ticketPriceId,
+                            buyerInhabitantId: toClaim.inhabitantId, buyerHouseholdId: household.id, sellerHouseholdId: claimed.sellerHouseholdId
+                        })
+                        bought = true
+                    }
                 }
                 if (bought) {
                     householdClaimed++
@@ -389,12 +396,13 @@ export async function scaffoldPrebookings(
                 }
                 const order = {...toOrderCreate(toClaim), state: OrderStateSchema.enum.BOOKED, allergyTypeIds: toClaim.allergyTypeIds}
                 try {
-                    const {position} = await joinWaitlist(d1Client, {
+                    const {position, joined} = await joinWaitlist(d1Client, {
                         dinnerEventId: toClaim.dinnerEventId,
                         inhabitantId: toClaim.inhabitantId,
                         isGuestTicket: toClaim.isGuestTicket,
                         order
-                    }, channel)
+                    })
+                    outcomes.joined.push(joined)
                     householdQueued++
                     positions.push({inhabitantId: toClaim.inhabitantId, dinnerEventId: toClaim.dinnerEventId, isGuestTicket: toClaim.isGuestTicket, position})
                 } catch (error) {
@@ -464,6 +472,7 @@ export async function scaffoldPrebookings(
         modeUpdated: totalModeUpdated,
         unchanged: totalUnchanged,
         households: processedHouseholds,
-        errored: erroredHouseholds + totalOrderErrors
+        errored: erroredHouseholds + totalOrderErrors,
+        outcomes
     })
 }

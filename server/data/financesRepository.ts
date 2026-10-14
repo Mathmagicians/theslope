@@ -420,6 +420,9 @@ export async function countReleasedTickets(d1Client: D1Database, dinnerEventId: 
     }
 }
 
+/** A claimed order and the household whose released ticket it was */
+export type ClaimedOrder = {order: OrderDetail, sellerHouseholdId: number}
+
 /**
  * Claim a released ticket for an inhabitant.
  *
@@ -434,7 +437,7 @@ export async function countReleasedTickets(d1Client: D1Database, dinnerEventId: 
  * @param ticketPriceId - Ticket price tier to match
  * @param newInhabitantId - Inhabitant claiming the ticket
  * @param claimedByUserId - User performing the claim
- * @returns Claimed order, or null if no matching ticket available
+ * @returns Claimed order with the household that sold it, or null if no matching ticket available
  *
  * ADR-011: Creates USER_CLAIMED audit entry with original household provenance
  */
@@ -447,13 +450,13 @@ export async function claimOrder(
     dinnerMode: DinnerMode,
     isGuestTicket: boolean = false,
     maxRetries: number = 3
-): Promise<OrderDetail | null> {
+): Promise<ClaimedOrder | null> {
     const LOG = '🎟️ > ORDER > [CLAIM]'
     const {OrderStateSchema, OrderAuditActionSchema, createOrderAuditData} = useBookingValidation()
     const {formatNameWithInitials} = useHousehold()
     const prisma = await getPrismaClientConnection(d1Client)
 
-    const attemptClaim = async (attempt: number): Promise<OrderDetail | null> => {
+    const attemptClaim = async (attempt: number): Promise<ClaimedOrder | null> => {
         console.info(`${LOG} Attempt ${attempt}: claiming ticket (dinner=${dinnerEventId}, ticketPrice=${ticketPriceId}) for inhabitant ${newInhabitantId}`)
 
         // Find first RELEASED order matching criteria (FIFO by releasedAt)
@@ -526,7 +529,7 @@ export async function claimOrder(
 
             console.info(`${LOG} Successfully claimed order ${orderId}`)
 
-            return toOrderDetail(claimedOrder)
+            return {order: toOrderDetail(claimedOrder), sellerHouseholdId: existingOrder.inhabitant.householdId}
         } catch (error) {
             // P2025: Race lost - someone else claimed this ticket
             if (isPrismaNotFound(error)) {

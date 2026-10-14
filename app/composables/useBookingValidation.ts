@@ -664,6 +664,32 @@ export const useBookingValidation = () => {
         position: z.number().int().positive()
     })
 
+    // A wish joined a dinner's waiting list
+    const WaitlistJoinedSchema = z.object({
+        dinnerEventId: IdSchema,
+        inhabitantId: IdSchema,
+        bookedByUserId: IdSchema,
+        position: z.number().int().positive(),
+        queueSize: z.number().int().positive(),
+        portionNeed: z.number().nonnegative()
+    })
+
+    // A released ticket got a new owner: a member bought it, or the first in the waiting list got it
+    const TicketSaleSchema = z.object({
+        dinnerEventId: IdSchema,
+        ticketPriceId: IdSchema,
+        buyerInhabitantId: IdSchema,
+        buyerHouseholdId: IdSchema,
+        sellerHouseholdId: IdSchema
+    })
+
+    // What one scaffold run did that its caller notifies about, one list per event
+    const BookingOutcomesSchema = z.object({
+        joined: z.array(WaitlistJoinedSchema),
+        ticketsSold: z.array(TicketSaleSchema),
+        waitlistTicketsSold: z.array(TicketSaleSchema)
+    })
+
     const ScaffoldResultSchema = z.object({
         seasonId: IdSchema.nullable(),
         created: z.number().int().nonnegative(),
@@ -678,7 +704,8 @@ export const useBookingValidation = () => {
         modeUpdated: z.number().int().nonnegative().default(0),     // Dining mode changes (before deadline)
         unchanged: z.number().int().nonnegative(),
         households: z.number().int().nonnegative(),
-        errored: z.number().int().nonnegative().default(0)
+        errored: z.number().int().nonnegative().default(0),
+        outcomes: BookingOutcomesSchema.default({joined: [], ticketsSold: [], waitlistTicketsSold: []})
     })
 
     /**
@@ -976,6 +1003,9 @@ export const useBookingValidation = () => {
 
         // Scaffold Pre-bookings
         ScaffoldResultSchema,
+        WaitlistJoinedSchema,
+        TicketSaleSchema,
+        BookingOutcomesSchema,
         QueuePositionSchema,
         InhabitantUpdateResponseSchema,
         HouseholdUpdateResponseSchema,
@@ -1061,6 +1091,9 @@ export type HeynaboEventStatus = z.infer<ReturnType<typeof useBookingValidation>
 // Scaffold Pre-bookings
 export type ScaffoldResult = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldResultSchema']>
 export type QueuePosition = z.infer<ReturnType<typeof useBookingValidation>['QueuePositionSchema']>
+export type WaitlistJoined = z.infer<ReturnType<typeof useBookingValidation>['WaitlistJoinedSchema']>
+export type TicketSale = z.infer<ReturnType<typeof useBookingValidation>['TicketSaleSchema']>
+export type BookingOutcomes = z.infer<ReturnType<typeof useBookingValidation>['BookingOutcomesSchema']>
 export type InhabitantUpdateResponse = z.infer<ReturnType<typeof useBookingValidation>['InhabitantUpdateResponseSchema']>
 export type HouseholdUpdateResponse = z.infer<ReturnType<typeof useBookingValidation>['HouseholdUpdateResponseSchema']>
 

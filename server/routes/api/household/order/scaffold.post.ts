@@ -5,6 +5,7 @@ import {isAdmin} from '~/composables/usePermissions'
 import {useBookingValidation, type ScaffoldOrdersRequest, type ScaffoldOrdersResponse} from "~/composables/useBookingValidation"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 import {emailChannel} from "~~/server/utils/sender/config"
+import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
 import {AdminBypassQuerySchema} from '~/composables/useCoreValidation'
 import {OPEN_DEADLINES} from '~/composables/useSeason'
 
@@ -54,9 +55,9 @@ export default defineEventHandler<Promise<ScaffoldOrdersResponse>>(async (event)
             dinnerEventIds: requestData.dinnerEventIds,
             desiredOrders: requestData.orders,
             userId: user.id,
-            deadlines: adminBypass && isAdmin(user) ? OPEN_DEADLINES : undefined,
-            email: emailChannel(event.context.cloudflare.env)
+            deadlines: adminBypass && isAdmin(user) ? OPEN_DEADLINES : undefined
         })
+        await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), result.outcomes)
 
         console.info(`${LOG} Scaffold complete: created=${result.created}, deleted=${result.deleted}, released=${result.released}, claimed=${result.claimed}, queued=${result.queued}, left=${result.left}, requeued=${result.requeued}`)
 

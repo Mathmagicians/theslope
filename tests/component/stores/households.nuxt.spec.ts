@@ -301,7 +301,8 @@ describe('Households Store', () => {
         queued: 0,       // 0 + 0
         positions: [],
         left: 0,         // 0 + 0
-        requeued: 0      // 0 + 0
+        requeued: 0,     // 0 + 0
+        outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: []}
       })
     })
 

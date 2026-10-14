@@ -6,6 +6,8 @@ import {AdminBypassQuerySchema, RouteIdSchema, idParams, useCoreValidation} from
 import {useBookingValidation, type InhabitantUpdateResponse, type ScaffoldResult, type DinnerMode} from "~/composables/useBookingValidation"
 import {fetchInhabitant, updateInhabitant} from "~~/server/data/prismaRepository"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
+import {emailChannel} from "~~/server/utils/sender/config"
+import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
 import type {WeekDayMap} from "~/types/dateTypes"
 
 const {throwH3Error} = eventHandlerHelper
@@ -63,6 +65,7 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
             seasonId,
             householdId: updatedInhabitant.householdId
         })
+        await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), scaffoldResult.outcomes)
 
         const {InhabitantUpdateResponseSchema} = useBookingValidation()
         setResponseStatus(event, 200)

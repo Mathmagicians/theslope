@@ -751,7 +751,7 @@ describe('Bookings store — waiting list', () => {
             releasedBodies.push(await readBody(event))
             return WaitlistFactory.defaultAssignmentResult({
                 dinnerEventId: WAITLIST_DINNER_ID,
-                assigned: [1, 2].map(entryId => ({entryId, inhabitantId: entryId, isGuestTicket: false, portions: 1, orderId: 100 + entryId, notification: {queued: true, dedupeKey: `assigned-${entryId}`}})),
+                assigned: [1, 2].map(entryId => ({entryId, inhabitantId: entryId, isGuestTicket: false, portions: 1, orderId: 100 + entryId, ticketPriceId: 1})),
                 portionsUsed: 2,
                 waiting: 1
             })
