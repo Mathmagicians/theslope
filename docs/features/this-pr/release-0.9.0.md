@@ -41,12 +41,14 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | Validation owns the types | `TicketType` and the booking row action (`BookingRowActionSchema`) come from `useBookingValidation`; `app/utils/portions.ts` and `useBooking.ts` import them | ADR-001 | signed off |
 | DRY sweep | dead code and duplicate token paths removed; the specs share their mount, endpoint and session helpers | `tests/component/testHelpers.ts`, `tests/component/hoistedMocks.ts` | committed (72cf9d9, 6b65a70, b456b2f, 999bdbd, c0beb62, 43876aa) |
 | PRF spike | passkey and PRF research with the device protocol | `../feature-proposal-relogin-faceid.md`, `../archived/feature-mobile-native-feel.md` | committed |
+| One booking path, end to end | outcomes in, notification out; the scaffold survives a partial failure and reports per person; the waiting list catches up; one client write; preview and toast from one word table; the ticket history follows kuverter | § One booking path, end to end | planned |
 | Docs and tooling | the user, chef and admin guides; `docs/ui.md` and the compliance tables compacted; `docs/testing.md` Rule 0; the ui skill and the frontend agent | `docs/`, `.claude/skills/`, `.claude/agents/` | committed (b82852e, 38804ef, 0dfd8eb, 450bcc8) |
 
 ## Open before the release
 
 | Item | State |
 |---|---|
+| One booking path, end to end | planned, § One booking path, end to end; seven points, each signed off on its own |
 | Waitlist notifications | planned, § Waitlist notifications |
 | CI summary | read on the Actions run page: categories, counts, red ui failures, report links |
 | Visual check per UI package | the route → viewport → element tables, carried into the PR description |
@@ -103,6 +105,65 @@ UX signed 2026-10-11. A booked inhabitant's live allergies: the glyph in the tic
 compact allergy line in the expanded row. Mockups: `DinnerTicket.vue` and `DinnerBookingForm.vue` headers. Specs:
 `DinnerTicket.nuxt.spec`, `DinnerBookingForm.nuxt.spec`, `useCoreValidation.unit.spec`, `Dinner.e2e.spec` (Ticket
 allergies).
+
+## One booking path, end to end
+
+### Problem
+
+An admin's preference change for a whole household (power mode) released the tickets past the deadline, then failed
+when the first released ticket went to the waiting list: the scaffold resolved the mail settings without a request, and
+locally `DEPLOY_URL` is unset. The failure skipped the rest of the household's steps (the cancellations of the open
+dinners and the assignment to the waiting list) and dropped the household's counts from the reply, so the toast read
+only "fejlede", in green. Other views in the session kept the old released counts until reload, the waiting list stayed
+beside tickets for sale, and "Se billetændringer" left the releases out (it drops every system update).
+
+### Points
+
+Each point is presented with its files and code, and signed off on its own.
+
+| Point | What | Status |
+|---|---|---|
+| 1. Mail is configured or off | The notification service decides its channels from the environment; `DEPLOY_URL` unset means e-mail is off, a channel that is off logs the kind and the missing setting and reports not sent; the request fallback goes | ✅ signed off 2026-10-14 |
+| 2. Notification after the action | The scaffold and the waiting-list steps send nothing and return outcomes that carry what a notification needs; the caller passes them to the notification service | ⏳ awaiting signoff |
+| 3. The scaffold survives a partial failure | Each step's failure lands on its item and the rest runs on; the reply is the executed plan, one item per order, built by the function that builds the preview; counts are grouped from the items | ⏳ awaiting signoff |
+| 4. The waiting list catches up | A ticket for sale at a waiting entry's price goes to the first in the waiting list at release, after each scaffold run on its dinners and in daily maintenance; idempotent (ADR-015) | ⏳ awaiting signoff |
+| 5. One client write | Every booking write goes through one bookings-store action that refreshes orders, released tickets, the waiting list and the household | ⏳ awaiting signoff |
+| 6. Preview and toast from one word table | Future words in the preview, past words in the toast, grouped per person; the toast is red as soon as one item failed, green otherwise | ⏳ awaiting signoff |
+| 7. The ticket history follows kuverter | Every audit row replays, system or member alike; a line for each change of kuverter; a system run and the nightly close are one line for the dinner; the replay ends equal to state | ⏳ awaiting signoff |
+
+### Coverage
+
+The preference-change cases (`household/preferences.e2e.spec.ts`, `admin/inhabitant.e2e.spec.ts`,
+`serial/admin/scaffold-prebookings.e2e.spec.ts`) release tickets on dinners without a waiting list; the waiting-list
+cases release through the member's booking route. The package adds the case that joins them.
+
+| Case | Level |
+|---|---|
+| GIVEN a dinner past its booking deadline with a waiting entry at a household's ticket price WHEN an admin sets the household's preferences to Ingen THEN the first in the waiting list holds the ticket, the household's orders on open dinners are cancelled, and the reply names each person's counts with no failure | serial API e2e, `scaffold-prebookings.e2e.spec.ts` |
+| The same with e-mail off: the booking work completes and the reply carries the outcomes | unit, the scaffold with no `DEPLOY_URL` |
+
+### Mockup — toast and preview ⏳ awaiting signoff
+
+```
+Preference change for the household, past the deadline, a waiting list on Monday
+  Preview   Du er ved at ændre familiens booking
+              Knud: 2 billetter frigives (1 til ventelisten), 4 skifter spisemåde, 14 frameldes
+              Lene: 2 billetter frigives, 4 skifter spisemåde, 14 frameldes
+  Toast     Alle præferencer opdateret (red: one item failed)
+              Knud: 2 billetter frigivet (1 solgt til ventelisten), 4 skiftede spisemåde, 14 frameldt
+              Lene: 2 billetter frigivet, 4 skiftede spisemåde, 13 frameldt, 1 fejlede
+
+Grid save after the deadline
+  Preview   Anna: 1 køber en ledig billet, 2 skrives på ventelisten
+            Gæst af Anna: skrives på ventelisten
+  Toast     Bookinger gemt (green)
+              Anna: 1 købte en ledig billet, 2 kom på ventelisten (#3, #5)
+              Gæst af Anna: kom på ventelisten (#6)
+
+One dinner: a count of 1 drops
+  Preview   Anna køber en ledig billet / Peter skrives på ventelisten
+  Toast     Anna købte en ledig billet / Peter kom på ventelisten (#2)
+```
 
 ## Waitlist notifications
 
@@ -184,6 +245,16 @@ crosses the buildup threshold and asserts each event writes its Delivery row.
 - A single delete returns the deleted id and a bulk delete the count (ADR-009 rule 7); the team and joker slot deletes
   are single `delete` calls.
 - Page composition: the frames stay (`../archived/feature-proposal-framework-adoption.md`).
+
+**2026-10-14** (one booking path, end to end)
+- Notification happens after the action: the scaffold and the waiting-list steps do the booking work and return
+  outcomes; the caller hands them to the notification service, which picks the channels and decides whether each is
+  set in the environment.
+- Mail is configured or off: `DEPLOY_URL` is the one source of the site; unset, e-mail is off and logs.
+- The scaffold survives a partial failure and reports per person.
+- Toast colour B: red as soon as one item failed, green otherwise.
+- The ticket history replays system updates; a change between eating modes stays out of it (option A); the nightly
+  close is one line for the dinner.
 
 ## Coverage
 

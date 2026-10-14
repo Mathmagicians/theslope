@@ -29,16 +29,15 @@ import {deliveredVersions} from '~/composables/useDeliveryValidation'
 const {decideBillingSideEffects} = useBilling()
 const LOG = '💰 > MONTHLY > [BILLING]'
 
-/** The bindings and config the side effects need — from cloudflare.env and getNotificationConfig() at the call site */
+/** The bindings the side effects need — the archive from cloudflare.env and the e-mail channel from emailChannel(env) at the call site */
 export type MonthlyBillingSideEffects = {
-    queue: Queue | undefined
     archive: R2Bucket | undefined
-    notifications: NotificationConfig
+    email: EmailChannel
 }
 
 /** Queue the accountant mail for a period's current version and record the delivery — the monthly run and the re-send endpoint share this */
-export const notifyBillingPeriod = async (d1Client: D1Database, queue: Queue | undefined, config: NotificationConfig, summary: BillingPeriodSummaryDetail, jobRunId?: number): Promise<SenderEmitResult> => {
-    const notification = await emitBillingPeriodClosed(queue, config, summary)
+export const notifyBillingPeriod = async (d1Client: D1Database, email: EmailChannel, summary: BillingPeriodSummaryDetail, jobRunId?: number): Promise<SenderEmitResult> => {
+    const notification = await emitBillingPeriodClosed(email, summary)
     if (notification.queued) await recordDelivery(d1Client, {subjectType: 'BILLING_PERIOD', subjectId: summary.id, version: summary.version, kind: 'EMAIL', reference: notification.dedupeKey, jobRunId})
     return notification
 }
@@ -57,7 +56,7 @@ const syncBillingPeriod = async (d1Client: D1Database, summary: BillingPeriodSum
         }
     }
     if (plan.notify) {
-        state.notification = await notifyBillingPeriod(d1Client, sideEffects.queue, sideEffects.notifications, summary, jobRunId)
+        state.notification = await notifyBillingPeriod(d1Client, sideEffects.email, summary, jobRunId)
         state.emailSent = state.notification.queued
     }
     if (plan.archive || plan.notify) console.info(`${LOG} Period ${summary.billingPeriod} v${summary.version}: csvUploaded=${state.csvUploaded} emailSent=${state.emailSent}`)

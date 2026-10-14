@@ -5,7 +5,7 @@ import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type Order
 import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets, bookingOutcome} from "~/composables/useBooking"
 import {assignReleasedTicket, joinWaitlist} from "~~/server/utils/waitlistAssignment"
 import {fetchWaitlistForHousehold, deleteWaitlistEntry, updateWaitlistEntryOrder} from "~~/server/data/waitlistRepository"
-import {getNotificationConfig, type SenderBindings} from "~~/server/utils/sender/config"
+import {emailChannel, type EmailChannel} from "~~/server/utils/sender/config"
 import {isHouseholdActiveOnDay} from "~/composables/useHousehold"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {getSystemUserId} from "~~/server/utils/systemUser"
@@ -59,8 +59,8 @@ export type ScaffoldOptions = {
     desiredOrders?: DesiredOrder[]
     /** If provided, use USER_* audit actions. Otherwise SYSTEM_*. */
     userId?: number
-    /** The notification queue and config for the queue and hand-over mails; the request's sender in user mode */
-    sender?: SenderBindings
+    /** The e-mail channel for the waiting-list mails; without one they are off */
+    email?: EmailChannel
     /** The deadlines user mode decides by; the season's when absent */
     deadlines?: BookingDeadlines
 }
@@ -186,8 +186,7 @@ export async function scaffoldPrebookings(
     const existingOrders = orderBatches.flat()
     const {confirmedKeys, cancelledKeys} = userIntentKeys
     const entryById = new Map(existingEntries.map(entry => [entry.id, entry]))
-    // Resolved on first use: a scaffold that hands over or queues nothing needs no notification config
-    const senderOf = (): SenderBindings => options.sender ?? {queue: undefined, config: getNotificationConfig()}
+    const channel = options.email ?? emailChannel({})
 
     console.info(`${LOG} ${isUserMode ? 'User' : 'System'} mode: ${households.length} household(s), ${dinnerEvents.length} events, ${existingEntries.length} queue entries`)
 
@@ -345,7 +344,7 @@ export async function scaffoldPrebookings(
             for (const released of batchUpdates.filter(update => update.isNewRelease)) {
                 const existing = orderById.get(released.orderId)
                 if (existing?.ticketPriceId) {
-                    await assignReleasedTicket(d1Client, existing.dinnerEventId, existing.ticketPriceId, household.id, senderOf())
+                    await assignReleasedTicket(d1Client, existing.dinnerEventId, existing.ticketPriceId, household.id, channel)
                 }
             }
 
@@ -395,7 +394,7 @@ export async function scaffoldPrebookings(
                         inhabitantId: toClaim.inhabitantId,
                         isGuestTicket: toClaim.isGuestTicket,
                         order
-                    }, senderOf())
+                    }, channel)
                     householdQueued++
                     positions.push({inhabitantId: toClaim.inhabitantId, dinnerEventId: toClaim.dinnerEventId, isGuestTicket: toClaim.isGuestTicket, position})
                 } catch (error) {

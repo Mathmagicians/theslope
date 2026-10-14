@@ -6,7 +6,7 @@
  * Uses D1 directly via context.cloudflare.env.DB; archives the CSV (ARCHIVE) and queues the accountant mail (SENDER).
  */
 import {runMonthlyBilling} from '~~/server/utils/monthlyBillingService'
-import {getNotificationConfig} from '~~/server/utils/sender/config'
+import {emailChannel} from '~~/server/utils/sender/config'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 const LOG = '🔧 > TASK > [MONTHLY_BILLING]'
@@ -24,7 +24,7 @@ export default defineTask({
         }
 
         try {
-            const result = await runMonthlyBilling(env.DB, 'CRON', {queue: env.SENDER, archive: env.ARCHIVE, notifications: getNotificationConfig()})
+            const result = await runMonthlyBilling(env.DB, 'CRON', {archive: env.ARCHIVE, email: emailChannel(env)})
             return { result }
         } catch (error) {
             return throwH3Error(`${LOG} Failed`, error)

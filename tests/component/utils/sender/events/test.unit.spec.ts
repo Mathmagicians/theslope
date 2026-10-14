@@ -39,7 +39,7 @@ describe('emitTestEmail', () => {
     it('queues the mail through the binding', async () => {
         const queue = {send: vi.fn().mockResolvedValue(undefined)} as unknown as Queue
 
-        const result = await emitTestEmail(queue, NotificationFactory.config())
+        const result = await emitTestEmail(NotificationFactory.channel(queue))
 
         expect(result.queued).toBe(true)
         expect(queue.send).toHaveBeenCalledOnce()
@@ -48,7 +48,7 @@ describe('emitTestEmail', () => {
     it('queues to a named recipient even when no admin mailbox is configured', async () => {
         const queue = {send: vi.fn().mockResolvedValue(undefined)} as unknown as Queue
 
-        const result = await emitTestEmail(queue, NotificationFactory.config({adminEmail: ''}), 'anna@example.com')
+        const result = await emitTestEmail(NotificationFactory.channel(queue, {adminEmail: ''}), 'anna@example.com')
 
         expect(result).toMatchObject({queued: true, degraded: false})
         expect(queue.send).toHaveBeenCalledOnce()
@@ -57,10 +57,17 @@ describe('emitTestEmail', () => {
     it('reports degraded without touching the binding when no admin mailbox is configured', async () => {
         const queue = {send: vi.fn()} as unknown as Queue
 
-        const result = await emitTestEmail(queue, NotificationFactory.config({adminEmail: ''}))
+        const result = await emitTestEmail(NotificationFactory.channel(queue, {adminEmail: ''}))
 
         expect(result).toMatchObject({queued: false, degraded: true})
         expect(queue.send).not.toHaveBeenCalled()
         expect(logs.warn).toHaveBeenCalledOnce()
+    })
+
+    it('reports not sent and logs the missing setting when e-mail is off', async () => {
+        const result = await emitTestEmail({on: false, missing: 'DEPLOY_URL'})
+
+        expect(result).toMatchObject({queued: false, degraded: true})
+        expect(logs.warn).toHaveBeenCalledWith(expect.stringContaining('DEPLOY_URL'))
     })
 })

@@ -13,7 +13,7 @@ import {defineEventHandler, setResponseStatus} from 'h3'
 import type {SenderEmitResult} from '~/composables/useNotificationValidation'
 import type {UserSession} from '~/composables/useCoreValidation'
 import {emitTestEmail} from '~~/server/utils/sender/events/test'
-import {getNotificationConfig} from '~~/server/utils/sender/config'
+import {emailChannel} from '~~/server/utils/sender/config'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 const {throwH3Error} = eventHandlerHelper
@@ -24,7 +24,7 @@ export default defineEventHandler(async (event): Promise<SenderEmitResult> => {
     const user = session.user as unknown as UserSession
 
     try {
-        const result = await emitTestEmail(event.context.cloudflare.env.SENDER, getNotificationConfig(event), user.email)
+        const result = await emitTestEmail(emailChannel(event.context.cloudflare.env), user.email)
         console.info(`${LOG} ${result.queued ? 'queued' : 'not queued'} for user id=${user.id}`, {dedupeKey: result.dedupeKey, degraded: result.degraded})
         setResponseStatus(event, 200)
         return result

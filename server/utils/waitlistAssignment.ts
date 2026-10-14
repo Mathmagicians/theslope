@@ -7,7 +7,7 @@ import {createOrders, claimOrder, fetchDinnerEvent} from '~~/server/data/finance
 import {fetchSeason, fetchInhabitant, fetchUser, fetchHousehold} from '~~/server/data/prismaRepository'
 import {fetchWaitlistForDinners, deleteWaitlistEntry, createWaitlistEntry} from '~~/server/data/waitlistRepository'
 import {emitWaitlistTicketAssigned, emitWaitlistTicketSold, emitWaitlistJoined, emitWaitlistBuildup, type WaitlistDinnerContext} from '~~/server/utils/sender/events/waitlist'
-import type {SenderBindings} from "~~/server/utils/sender/config"
+import type {EmailChannel} from "~~/server/utils/sender/config"
 
 const LOG = '⏳ > WAITLIST > [ASSIGN]'
 
@@ -55,7 +55,7 @@ const outcome = ({queued, dedupeKey}: {queued: boolean, dedupeKey: string}): Not
  * the position; the chef hears once, when the queue reaches the buildup threshold with this entry.
  */
 export async function joinWaitlist(
-    d1Client: D1Database, request: TicketWaitlistCreate, sender: SenderBindings
+    d1Client: D1Database, request: TicketWaitlistCreate, channel: EmailChannel
 ): Promise<{entry: TicketWaitlistDisplay, position: number}> {
     const {positionOf, portionNeed, portionsOfEntryFor} = useWaitlist()
     const {DinnerStateSchema} = useBookingValidation()
@@ -69,13 +69,13 @@ export async function joinWaitlist(
     const position = positionOf(queue, entry.id) ?? queue.length
 
     const [email, {name}] = await Promise.all([emailOf(d1Client, request.order.bookedByUserId), addressOf(d1Client, request.inhabitantId)])
-    await emitWaitlistJoined(sender.queue, sender.config, email, name, dinner.context, position)
+    await emitWaitlistJoined(channel, email, name, dinner.context, position)
 
     const threshold = useAppConfig().theslope.waitlistBuildupThreshold
     if (queue.length === threshold && dinner.chefId) {
         const chef = await addressOf(d1Client, dinner.chefId)
         const portions = portionNeed(queue, portionsOfEntryFor(dinner.ticketPrices))
-        await emitWaitlistBuildup(sender.queue, sender.config, chef.email, chef.name, dinner.context, queue.length, portions)
+        await emitWaitlistBuildup(channel, chef.email, chef.name, dinner.context, queue.length, portions)
     }
     console.info(`${LOG} Inhabitant ${request.inhabitantId} is #${position} in the queue of dinner ${request.dinnerEventId}`)
     return {entry, position}
@@ -84,7 +84,7 @@ export async function joinWaitlist(
 // Places one entry's order, removes the entry and tells the inhabitant
 const placeEntry = async (
     d1Client: D1Database, dinner: DinnerForWaitlist, entry: TicketWaitlistDisplay, portions: number,
-    performedByUserId: number | null, sender: SenderBindings
+    performedByUserId: number | null, channel: EmailChannel
 ): Promise<WaitlistAssigned> => {
     const {OrderAuditActionSchema} = useBookingValidation()
     const {allergyTypeIds: _allergies, ...order} = entry.order
@@ -96,7 +96,7 @@ const placeEntry = async (
     })
     await deleteWaitlistEntry(d1Client, entry.id)
     const {email, name} = await addressOf(d1Client, entry.inhabitantId)
-    const notification = await emitWaitlistTicketAssigned(sender.queue, sender.config, email, name, dinner.context, ticketLabel(dinner.ticketPrices, entry.order.ticketPriceId))
+    const notification = await emitWaitlistTicketAssigned(channel, email, name, dinner.context, ticketLabel(dinner.ticketPrices, entry.order.ticketPriceId))
     return {entryId: entry.id, inhabitantId: entry.inhabitantId, isGuestTicket: entry.isGuestTicket, portions, orderId: created.createdIds[0]!, notification: outcome(notification)}
 }
 
@@ -106,7 +106,7 @@ const placeEntry = async (
  * unique index refuses a second regular order for the same inhabitant and dinner (ADR-015).
  */
 export async function assignWaitlistPortions(
-    d1Client: D1Database, dinnerEvent: DinnerEventDetail, supplyPortions: number, performedByUserId: number | null, sender: SenderBindings
+    d1Client: D1Database, dinnerEvent: DinnerEventDetail, supplyPortions: number, performedByUserId: number | null, channel: EmailChannel
 ): Promise<WaitlistAssignmentResult> {
     const {resolveWaitlistAssignment, portionsOfEntryFor} = useWaitlist()
     const dinnerEventId = dinnerEvent.id
@@ -116,7 +116,7 @@ export async function assignWaitlistPortions(
     console.info(`${LOG} Dinner ${dinnerEventId}: ${supplyPortions} portions released, ${plan.take.length} of ${entries.length} entries fit`)
     const assigned: WaitlistAssigned[] = []
     for (const {entry, portions} of plan.take) {
-        assigned.push(await placeEntry(d1Client, dinner, entry, portions, performedByUserId, sender))
+        assigned.push(await placeEntry(d1Client, dinner, entry, portions, performedByUserId, channel))
     }
     return {dinnerEventId, supplyPortions, assigned, portionsUsed: plan.portionsUsed, waiting: plan.waiting.length}
 }
@@ -128,7 +128,7 @@ export async function assignWaitlistPortions(
  * marketplace; nobody overtakes.
  */
 export async function assignReleasedTicket(
-    d1Client: D1Database, dinnerEventId: number, ticketPriceId: number, releasedByHouseholdId: number, sender: SenderBindings
+    d1Client: D1Database, dinnerEventId: number, ticketPriceId: number, releasedByHouseholdId: number, channel: EmailChannel
 ): Promise<WaitlistAssigned | null> {
     const {inQueueOrder, portionsOfEntryFor} = useWaitlist()
     const entries = inQueueOrder(await fetchWaitlistForDinners(d1Client, [dinnerEventId]))
@@ -139,11 +139,11 @@ export async function assignReleasedTicket(
     if (!claimed) return null
     await deleteWaitlistEntry(d1Client, head.id)
     const {email, name} = await addressOf(d1Client, head.inhabitantId)
-    const notification = await emitWaitlistTicketAssigned(sender.queue, sender.config, email, name, dinner.context, ticketLabel(dinner.ticketPrices, ticketPriceId))
+    const notification = await emitWaitlistTicketAssigned(channel, email, name, dinner.context, ticketLabel(dinner.ticketPrices, ticketPriceId))
     const household = await fetchHousehold(d1Client, releasedByHouseholdId)
     for (const inhabitant of household?.inhabitants ?? []) {
         const email = await emailOf(d1Client, inhabitant.userId)
-        if (email) await emitWaitlistTicketSold(sender.queue, sender.config, email, dinner.context)
+        if (email) await emitWaitlistTicketSold(channel, email, dinner.context)
     }
     console.info(`${LOG} Dinner ${dinnerEventId}: released ticket ${ticketPriceId} went to the head of the queue (inhabitant ${head.inhabitantId})`)
     const portions = portionsOfEntryFor(dinner.ticketPrices)(head)

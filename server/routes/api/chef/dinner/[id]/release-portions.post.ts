@@ -3,7 +3,7 @@ import {idParams} from '~/composables/useCoreValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {requireChefForDinner} from '~~/server/utils/authorizationHelper'
 import {assignWaitlistPortions} from '~~/server/utils/waitlistAssignment'
-import {senderFromEvent} from '~~/server/utils/sender/config'
+import {emailChannel} from '~~/server/utils/sender/config'
 import {useWaitlistValidation, type WaitlistAssignmentResult, type WaitlistReleaseRequest} from '~/composables/useWaitlistValidation'
 
 const {throwH3Error} = eventHandlerHelper
@@ -31,7 +31,7 @@ export default defineEventHandler(async (event): Promise<WaitlistAssignmentResul
     const {user: chef, dinner} = await requireChefForDinner(event, id)
 
     try {
-        const result = await assignWaitlistPortions(d1Client, dinner, body.portions, chef.id, senderFromEvent(event))
+        const result = await assignWaitlistPortions(d1Client, dinner, body.portions, chef.id, emailChannel(event.context.cloudflare.env))
         console.info(`${LOG} Chef ${chef.id} released ${body.portions} portions on dinner ${id}: ${result.assigned.length} assigned, ${result.waiting} waiting`)
         setResponseStatus(event, 200)
         return WaitlistAssignmentResultSchema.parse(result)

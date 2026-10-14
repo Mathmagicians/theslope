@@ -1,6 +1,7 @@
-import {emit, notSent} from '~~/server/utils/sender/emit'
+import {channelOff, emit, notSent} from '~~/server/utils/sender/emit'
+import type {EmailChannel} from '~~/server/utils/sender/config'
 import {composeEmail, siteUrl} from '~~/server/utils/sender/compose'
-import type {NotificationConfig, SenderEmitResult} from '~/composables/useNotificationValidation'
+import type {SenderEmitResult} from '~/composables/useNotificationValidation'
 import {formatDate} from '~/utils/date'
 
 const LOG = '📮 > SENDER > [EVENT waitlist]'
@@ -15,10 +16,11 @@ export interface WaitlistDinnerContext {
 const dinnerLabel = ({date, menuTitle}: WaitlistDinnerContext): string => `${formatDate(date)} · ${menuTitle}`
 
 export const emitWaitlistJoined = (
-    queue: Queue | undefined, config: NotificationConfig, to: string | null, name: string, dinner: WaitlistDinnerContext, position: number
+    channel: EmailChannel, to: string | null, name: string, dinner: WaitlistDinnerContext, position: number
 ): Promise<SenderEmitResult> => {
+    if (!channel.on) return channelOff('WAITLIST_JOINED', channel.missing, `${dinner.dinnerEventId}`)
     if (!to) return notSent('WAITLIST_JOINED', 'unaddressed', `${dinner.dinnerEventId}`)
-    return emit(queue, composeEmail(config, {
+    return emit(channel.queue, composeEmail(channel.config, {
         kind: 'WAITLIST_JOINED',
         to,
         values: {name, dinner: dinnerLabel(dinner), position: String(position)},
@@ -27,10 +29,11 @@ export const emitWaitlistJoined = (
 }
 
 export const emitWaitlistTicketAssigned = (
-    queue: Queue | undefined, config: NotificationConfig, to: string | null, name: string, dinner: WaitlistDinnerContext, ticket: string
+    channel: EmailChannel, to: string | null, name: string, dinner: WaitlistDinnerContext, ticket: string
 ): Promise<SenderEmitResult> => {
+    if (!channel.on) return channelOff('WAITLIST_TICKET_ASSIGNED', channel.missing, `${dinner.dinnerEventId}`)
     if (!to) return notSent('WAITLIST_TICKET_ASSIGNED', 'unaddressed', `${dinner.dinnerEventId}`)
-    return emit(queue, composeEmail(config, {
+    return emit(channel.queue, composeEmail(channel.config, {
         kind: 'WAITLIST_TICKET_ASSIGNED',
         to,
         values: {name, dinner: dinnerLabel(dinner), ticket},
@@ -39,8 +42,10 @@ export const emitWaitlistTicketAssigned = (
 }
 
 export const emitWaitlistBuildup = (
-    queue: Queue | undefined, config: NotificationConfig, to: string | null, name: string, dinner: WaitlistDinnerContext, entries: number, portions: number
+    channel: EmailChannel, to: string | null, name: string, dinner: WaitlistDinnerContext, entries: number, portions: number
 ): Promise<SenderEmitResult> => {
+    if (!channel.on) return channelOff('WAITLIST_BUILDUP', channel.missing, `${dinner.dinnerEventId}`)
+    const {queue, config} = channel
     if (!to) {
         console.warn(`${LOG} the chef of dinner ${dinner.dinnerEventId} has no address — buildup mail not sent`)
         return notSent('WAITLIST_BUILDUP', 'unaddressed', `${dinner.dinnerEventId}`)
@@ -60,11 +65,13 @@ export const emitWaitlistBuildup = (
 }
 
 export const emitWaitlistTicketSold = (
-    queue: Queue | undefined, config: NotificationConfig, to: string, dinner: WaitlistDinnerContext
-): Promise<SenderEmitResult> =>
-    emit(queue, composeEmail(config, {
+    channel: EmailChannel, to: string, dinner: WaitlistDinnerContext
+): Promise<SenderEmitResult> => {
+    if (!channel.on) return channelOff('WAITLIST_TICKET_SOLD', channel.missing, `${dinner.dinnerEventId}`)
+    return emit(channel.queue, composeEmail(channel.config, {
         kind: 'WAITLIST_TICKET_SOLD',
         to,
         values: {dinner: dinnerLabel(dinner)},
         correlationId: `dinner ${dinner.dinnerEventId}`
     }))
+}

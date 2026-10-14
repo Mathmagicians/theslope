@@ -17,6 +17,12 @@ const dedupeKeyOf = (message: unknown): string =>
 export const notSent = (kind: string, reason: 'unaddressed' | 'unconfigured', subject?: string): Promise<SenderEmitResult> =>
     Promise.resolve({queued: false, dedupeKey: [kind, 'EMAIL', reason, subject].filter(part => part !== undefined).join(':'), degraded: true})
 
+// E-mail is off in this environment: the kind is logged with the missing setting and reported not sent
+export const channelOff = (kind: string, missing: string, subject?: string): Promise<SenderEmitResult> => {
+    console.warn(`${LOG} e-mail is off (${missing} not set): ${kind} not sent`)
+    return notSent(kind, 'unconfigured', subject)
+}
+
 export const emit = async (queue: Queue | undefined, message: unknown): Promise<SenderEmitResult> => {
     const dedupeKey = dedupeKeyOf(message)
     const parsed = NotificationMessageSchema.safeParse(message)
