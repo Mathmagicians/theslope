@@ -419,10 +419,10 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // ========================================
 
     // The release places the first entries that fit as orders: the dinner's tickets and the queue both change
-    const releasePortions = withLoading(async (dinnerEventId: number, portions: number): Promise<WaitlistAssignmentResult> => {
-        const result = await apiRequest(`/api/chef/dinner/${dinnerEventId}/release-portions`, {
+    const addExtraPortions = withLoading(async (dinnerEventId: number, portions: number): Promise<WaitlistAssignmentResult> => {
+        const result = await apiRequest(`/api/chef/dinner/${dinnerEventId}/extra-portions`, {
             method: 'POST', body: {portions}, schema: WaitlistAssignmentResultSchema,
-            action: 'releasePortions', errorMessage: 'Kunne ikke frigive portionerne'
+            action: 'addExtraPortions', errorMessage: 'Kunne ikke frigive portionerne'
         })
         console.info(CTX, `Released ${portions} portions on dinner ${dinnerEventId}: ${result.assigned.length} assigned, ${result.waiting} waiting`)
         await Promise.all([refreshWaitlistEntries(), refreshOrders(), refreshDinnerIfSelected(dinnerEventId)])
@@ -713,7 +713,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         isWaitlistEntriesLoading,
         isWaitlistEntriesErrored,
         isWaitlistEntriesInitialized,
-        releasePortions,
+        addExtraPortions,
 
         // daily maintenance
         dailyMaintenanceResult,

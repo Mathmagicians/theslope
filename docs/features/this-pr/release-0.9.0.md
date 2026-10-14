@@ -124,7 +124,7 @@ Each point is presented with its files and code, and signed off on its own.
 | Point | What | Status |
 |---|---|---|
 | 1. Mail is configured or off | The notification service decides its channels from the environment; `DEPLOY_URL` unset means e-mail is off, a channel that is off logs the kind and the missing setting and reports not sent; the request fallback goes; `npm run dev` sets `DEPLOY_URL` locally | ✅ signed off 2026-10-14, implemented |
-| 2. Notification after the action | The scaffold and the waiting-list steps send nothing and return outcomes that carry what a notification needs; the caller passes them to the notification service | ⏳ awaiting signoff |
+| 2. Notification after the action | The scaffold and the waiting-list steps send nothing and return outcomes that carry what a notification needs; the caller passes them to the notification service | ✅ signed off 2026-10-14, implemented |
 | 3. The scaffold survives a partial failure | Each step's failure lands on its item and the rest runs on; the reply is the executed plan, one item per order, built by the function that builds the preview; counts are grouped from the items | ⏳ awaiting signoff |
 | 4. The waiting list catches up | A ticket for sale at a waiting entry's price goes to the first in the waiting list at release, after each scaffold run on its dinners and in daily maintenance; idempotent (ADR-015) | ⏳ awaiting signoff |
 | 5. One client write | Every booking write goes through one bookings-store action that refreshes orders, released tickets, the waiting list and the household | ⏳ awaiting signoff |
@@ -139,7 +139,7 @@ cases release through the member's booking route. The package adds the case that
 
 | Case | Level |
 |---|---|
-| GIVEN a dinner past its booking deadline with a waiting entry at a household's ticket price WHEN an admin sets the household's preferences to Ingen THEN the first in the waiting list holds the ticket, the household's orders on open dinners are cancelled, and the reply names each person's counts with no failure | serial API e2e, `scaffold-prebookings.e2e.spec.ts` |
+| GIVEN a dinner past its booking deadline with a waiting entry at a household's ticket price WHEN an admin sets the household's preferences to Ingen THEN the first in the waiting list holds the ticket, the household's orders on open dinners are cancelled, and the reply names each person's counts with no failure | serial API e2e, `waitlistAssignment.e2e.spec.ts` |
 | The same with e-mail off: the booking work completes and the reply carries the outcomes | unit, the scaffold with no `DEPLOY_URL` |
 
 ### Mockup — toast and preview ⏳ awaiting signoff
@@ -167,9 +167,9 @@ One dinner: a count of 1 drops
 
 ## Waitlist notifications
 
-Planned. `WAITLIST_JOINED`, `WAITLIST_TICKET_ASSIGNED`, `WAITLIST_BUILDUP` and `WAITLIST_TICKET_SOLD` are templates
-in `app/config/notificationTemplates.ts` and events in `server/utils/sender/events/waitlist.ts`, emitted from the
-assignment and the scaffold. The package is one serial e2e that joins a queue, releases a ticket and portions,
+Planned. `WAITLIST_JOINED`, `WAITLIST_TICKET_ASSIGNED`, `WAITLIST_EXTRA_PORTION`, `WAITLIST_BUILDUP`, `TICKET_SOLD` are templates in
+`app/config/notificationTemplates.ts` and events in `server/utils/sender/events/waitlist.ts`, sent after the booking
+action from its outcomes. The package is one serial e2e that joins a queue, releases a ticket and portions,
 crosses the buildup threshold and asserts each event writes its Delivery row.
 
 ## Decisions
@@ -253,6 +253,12 @@ crosses the buildup threshold and asserts each event writes its Delivery row.
 - Mail is configured or off: `DEPLOY_URL` is the one source of the site; unset, e-mail is off and logs.
 - The scaffold survives a partial failure and reports per person.
 - Toast colour B: red as soon as one item failed, green otherwise.
+- A ticket sale is its own event: whenever a released ticket gets a new owner, the selling household hears it,
+  named with the buying household's shortname (`TICKET_SOLD`). A waiting entry hears when it gets a ticket, a released
+  one (`WAITLIST_TICKET_ASSIGNED`, naming seller and buyer) or one of the chef's extra portions
+  (`WAITLIST_EXTRA_PORTION`). The chef cooks more; the waiting entries that fit get regular orders.
+- Outcomes are one list per event (`joined`, `ticketsSold`, `waitlistTicketsSold`), with no nullable field standing for
+  a second meaning; the claim returns the selling household, so the sold mail reaches the household whose ticket it was.
 - The ticket history replays system updates; a change between eating modes stays out of it (option A); the nightly
   close is one line for the dinner.
 

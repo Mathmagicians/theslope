@@ -11,7 +11,7 @@ const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 
 const entriesEndpoint = (dinnerEventIds: number[]) =>
     `/api/order/waitlist?${dinnerEventIds.map(id => `dinnerEventIds=${id}`).join('&')}`
-const chefReleaseEndpoint = (dinnerEventId: number) => `/api/chef/dinner/${dinnerEventId}/release-portions`
+const extraPortionsEndpoint = (dinnerEventId: number) => `/api/chef/dinner/${dinnerEventId}/extra-portions`
 
 export class WaitlistFactory {
     // The desired order that targets an entry: its wish, with the overrides applied
@@ -84,9 +84,9 @@ export class WaitlistFactory {
         return expectedStatus === 200 ? TicketWaitlistDisplaySchema.array().parse(await response.json()) : []
     }
 
-    static readonly releasePortions = async (context: BrowserContext, dinnerEventId: number, portions: number, expectedStatus = 200): Promise<WaitlistAssignmentResult | null> => {
+    static readonly addExtraPortions = async (context: BrowserContext, dinnerEventId: number, portions: number, expectedStatus = 200): Promise<WaitlistAssignmentResult | null> => {
         const {WaitlistAssignmentResultSchema} = useWaitlistValidation()
-        const response = await context.request.post(chefReleaseEndpoint(dinnerEventId), {headers, data: {portions}})
+        const response = await context.request.post(extraPortionsEndpoint(dinnerEventId), {headers, data: {portions}})
         const body = response.status() === expectedStatus ? null : await response.text()
         expect(response.status(), `Unexpected status releasing portions: ${body}`).toBe(expectedStatus)
         return expectedStatus === 200 ? WaitlistAssignmentResultSchema.parse(await response.json()) : null

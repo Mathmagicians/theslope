@@ -102,8 +102,8 @@ registerEndpoint('/api/billing', householdBillingEndpoint)
 registerEndpoint('/api/order/77', () => OrderFactory.defaultOrderDetail('order-history', {id: 77}))
 
 const WAITLIST_DINNER_ID = 1
-const releasePortionsEndpoint = vi.fn()
-registerEndpoint(`/api/chef/dinner/${WAITLIST_DINNER_ID}/release-portions`, {method: 'POST', handler: releasePortionsEndpoint})
+const extraPortionsEndpoint = vi.fn()
+registerEndpoint(`/api/chef/dinner/${WAITLIST_DINNER_ID}/extra-portions`, {method: 'POST', handler: extraPortionsEndpoint})
 
 const failure = () => {
     throw createError({statusCode: 500})
@@ -747,7 +747,7 @@ describe('Bookings store — waiting list', () => {
         // The read answers the queue as stored: the position is the client's to derive
         waitlistEntriesEndpoint.mockImplementation(() => [...QUEUE].reverse().map(({position: _position, ...entry}) => entry))
         releasedBodies.length = 0
-        releasePortionsEndpoint.mockImplementation(async (event: H3Event) => {
+        extraPortionsEndpoint.mockImplementation(async (event: H3Event) => {
             releasedBodies.push(await readBody(event))
             return WaitlistFactory.defaultAssignmentResult({
                 dinnerEventId: WAITLIST_DINNER_ID,
@@ -802,7 +802,7 @@ describe('Bookings store — waiting list', () => {
         store.loadOrdersForDinners({dinnerEventIds: [WAITLIST_DINNER_ID]})
         await vi.waitFor(() => expect(waitlistEntriesEndpoint).toHaveBeenCalledTimes(1))
 
-        const result = await store.releasePortions(WAITLIST_DINNER_ID, 2.5)
+        const result = await store.addExtraPortions(WAITLIST_DINNER_ID, 2.5)
 
         expect(result?.assigned).toHaveLength(2)
         expect(releasedBodies).toEqual([{portions: 2.5}])

@@ -40,7 +40,7 @@ export const useWaitlistValidation = () => {
         position: z.number().int().positive()
     })
 
-    const WaitlistReleaseRequestSchema = z.object({
+    const ExtraPortionsRequestSchema = z.object({
         portions: z.number().positive().max(100)
     })
 
@@ -73,7 +73,7 @@ export const useWaitlistValidation = () => {
         TicketWaitlistCreateSchema,
         SerializedTicketWaitlistSchema,
         TicketWaitlistDetailSchema,
-        WaitlistReleaseRequestSchema,
+        ExtraPortionsRequestSchema,
         WaitlistQueueSummarySchema,
         WaitlistAssignedSchema,
         WaitlistAssignmentResultSchema,
@@ -86,7 +86,7 @@ export type WaitlistOrder = z.infer<ReturnType<typeof useWaitlistValidation>['Wa
 export type TicketWaitlistDisplay = z.infer<ReturnType<typeof useWaitlistValidation>['TicketWaitlistDisplaySchema']>
 export type TicketWaitlistCreate = z.infer<ReturnType<typeof useWaitlistValidation>['TicketWaitlistCreateSchema']>
 export type TicketWaitlistDetail = z.infer<ReturnType<typeof useWaitlistValidation>['TicketWaitlistDetailSchema']>
-export type WaitlistReleaseRequest = z.infer<ReturnType<typeof useWaitlistValidation>['WaitlistReleaseRequestSchema']>
+export type ExtraPortionsRequest = z.infer<ReturnType<typeof useWaitlistValidation>['ExtraPortionsRequestSchema']>
 export type WaitlistQueueSummary = z.infer<ReturnType<typeof useWaitlistValidation>['WaitlistQueueSummarySchema']>
 export type WaitlistAssigned = z.infer<ReturnType<typeof useWaitlistValidation>['WaitlistAssignedSchema']>
 export type WaitlistAssignmentResult = z.infer<ReturnType<typeof useWaitlistValidation>['WaitlistAssignmentResultSchema']>

@@ -20,7 +20,7 @@ import {WAITLIST_TEST_IDS} from '../dinner/waitlistTestIds'
 
 /**
  * ChefMenuCard: the allergen line and its editor over the dinner's allergens (the catalog's `id`, not a join row's
- * `allergyTypeId`), the action row, the chef portrait, the Madbestilling row and the release-portions form.
+ * `allergyTypeId`), the action row, the chef portrait, the Madbestilling row and the extra-portions form.
  * Real component tree and real stores (testing.md Rule 6); only HTTP is faked.
  */
 registerEmptyStoreEndpoints()
@@ -337,7 +337,7 @@ describe('ChefMenuCard — release portions', () => {
         mountCard({dinnerEvent: DinnerEventFactory.defaultDinnerEventDetail(), deadlines, formMode: FORM_MODES.EDIT, waitlist})
 
     const submitRelease = async (wrapper: Awaited<ReturnType<typeof mountChefCard>>) => {
-        await clickByTestId(wrapper, WAITLIST_TEST_IDS.releaseSubmit)
+        await clickByTestId(wrapper, WAITLIST_TEST_IDS.extraPortionsSubmit)
         await flushPromises()
         await nextTick()
     }
@@ -349,7 +349,7 @@ describe('ChefMenuCard — release portions', () => {
     ])('GIVEN $desc THEN the CTA under the action row shows: $cta', async ({waitlist, cta}) => {
         const wrapper = await mountChefCard(waitlist)
 
-        expect(findByTestId(wrapper, WAITLIST_TEST_IDS.releaseCta).exists()).toBe(cta)
+        expect(findByTestId(wrapper, WAITLIST_TEST_IDS.extraPortionsCta).exists()).toBe(cta)
     })
 
     it('GIVEN a queue THEN the CTA names its size', async () => {
@@ -362,39 +362,39 @@ describe('ChefMenuCard — release portions', () => {
         {trigger: 'the Flere entry', open: async (wrapper: Awaited<ReturnType<typeof mountChefCard>>) => {
             await clickByTestId(wrapper, 'dinner-more-actions')
             await flushPromises()
-            await clickByTestId(wrapper, WAITLIST_TEST_IDS.releaseEntry)
+            await clickByTestId(wrapper, WAITLIST_TEST_IDS.extraPortionsEntry)
         }},
-        {trigger: 'the CTA', open: (wrapper: Awaited<ReturnType<typeof mountChefCard>>) => clickByTestId(wrapper, WAITLIST_TEST_IDS.releaseCta)}
+        {trigger: 'the CTA', open: (wrapper: Awaited<ReturnType<typeof mountChefCard>>) => clickByTestId(wrapper, WAITLIST_TEST_IDS.extraPortionsCta)}
     ])('$trigger opens the release form prefilled with the queue\'s portion need, and Frigiv emits the portions', async ({open}) => {
         const wrapper = await mountChefCard(QUEUE)
-        expect(findByTestId(wrapper, WAITLIST_TEST_IDS.releaseForm).exists()).toBe(false)
+        expect(findByTestId(wrapper, WAITLIST_TEST_IDS.extraPortionsForm).exists()).toBe(false)
 
         await open(wrapper)
 
-        const form = findByTestId(wrapper, WAITLIST_TEST_IDS.releaseForm)
+        const form = findByTestId(wrapper, WAITLIST_TEST_IDS.extraPortionsForm)
         expect((form.find('input').element as HTMLInputElement).value).toBe(String(QUEUE.portions))
         await submitRelease(wrapper)
-        expect(wrapper.emitted('release-portions')).toEqual([[QUEUE.portions]])
-        expect(findByTestId(wrapper, WAITLIST_TEST_IDS.releaseForm).exists()).toBe(false)
+        expect(wrapper.emitted('extra-portions')).toEqual([[QUEUE.portions]])
+        expect(findByTestId(wrapper, WAITLIST_TEST_IDS.extraPortionsForm).exists()).toBe(false)
     })
 
     it('Fortryd closes the form without releasing', async () => {
         const wrapper = await mountChefCard(QUEUE)
-        await clickByTestId(wrapper, WAITLIST_TEST_IDS.releaseCta)
+        await clickByTestId(wrapper, WAITLIST_TEST_IDS.extraPortionsCta)
 
-        await clickByTestId(wrapper, WAITLIST_TEST_IDS.releaseCancel)
+        await clickByTestId(wrapper, WAITLIST_TEST_IDS.extraPortionsCancel)
 
-        expect(findByTestId(wrapper, WAITLIST_TEST_IDS.releaseForm).exists()).toBe(false)
-        expect(wrapper.emitted('release-portions')).toBeUndefined()
+        expect(findByTestId(wrapper, WAITLIST_TEST_IDS.extraPortionsForm).exists()).toBe(false)
+        expect(wrapper.emitted('extra-portions')).toBeUndefined()
     })
 
     it('a draft above the release limit blocks the emit', async () => {
         const wrapper = await mountChefCard(QUEUE)
-        await clickByTestId(wrapper, WAITLIST_TEST_IDS.releaseCta)
+        await clickByTestId(wrapper, WAITLIST_TEST_IDS.extraPortionsCta)
 
-        await findByTestId(wrapper, WAITLIST_TEST_IDS.releaseForm).find('input').setValue('1000')
+        await findByTestId(wrapper, WAITLIST_TEST_IDS.extraPortionsForm).find('input').setValue('1000')
         await submitRelease(wrapper)
 
-        expect(wrapper.emitted('release-portions')).toBeUndefined()
+        expect(wrapper.emitted('extra-portions')).toBeUndefined()
     })
 })

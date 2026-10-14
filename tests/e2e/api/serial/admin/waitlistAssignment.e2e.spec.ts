@@ -83,7 +83,7 @@ test.describe('Waiting list assignment', () => {
             expect(result.positions.map(queued => queued.position)).toEqual([index + 1])
         }
 
-        const result = await WaitlistFactory.releasePortions(context, dinnerEventId, 2.5)
+        const result = await WaitlistFactory.addExtraPortions(context, dinnerEventId, 2.5)
         orderIds.push(...result!.assigned.map(assigned => assigned.orderId))
 
         expect(result!.assigned.map(assigned => assigned.inhabitantId)).toEqual(inhabitants.slice(0, 3).map(inhabitant => inhabitant.id))
@@ -103,12 +103,12 @@ test.describe('Waiting list assignment', () => {
     test('GIVEN one barn waiting WHEN the chef releases half a portion THEN it gets its ticket and a further release assigns nothing', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        const first = await WaitlistFactory.releasePortions(context, dinnerEventId, 0.5)
+        const first = await WaitlistFactory.addExtraPortions(context, dinnerEventId, 0.5)
         orderIds.push(...first!.assigned.map(assigned => assigned.orderId))
         expect(first!.assigned.map(assigned => assigned.inhabitantId)).toEqual([inhabitants[3]!.id])
         expect(first!.waiting).toBe(0)
 
-        const again = await WaitlistFactory.releasePortions(context, dinnerEventId, 1)
+        const again = await WaitlistFactory.addExtraPortions(context, dinnerEventId, 1)
         expect(again!.assigned).toEqual([])
         expect(again!.portionsUsed).toBe(0)
     })
@@ -119,7 +119,7 @@ test.describe('Waiting list assignment', () => {
         const result = await queue(context, OrderFactory.createBookingOrder(inhabitants[0]!.id!, dinnerEventId, adultPrice.id!))
         expect(result.queued).toBe(1)
 
-        await WaitlistFactory.releasePortions(context, dinnerEventId, 1, 409)
+        await WaitlistFactory.addExtraPortions(context, dinnerEventId, 1, 409)
 
         const waiting = await householdEntries(context)
         expect(waiting.map(entry => entry.inhabitantId)).toEqual([inhabitants[0]!.id])

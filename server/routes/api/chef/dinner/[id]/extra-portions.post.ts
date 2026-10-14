@@ -5,26 +5,26 @@ import {requireChefForDinner} from '~~/server/utils/authorizationHelper'
 import {assignWaitlistPortions} from '~~/server/utils/waitlistAssignment'
 import {emailChannel} from '~~/server/utils/sender/config'
 import {notifyExtraPortions} from '~~/server/utils/sender/events/waitlist'
-import {useWaitlistValidation, type WaitlistAssignmentResult, type WaitlistReleaseRequest} from '~/composables/useWaitlistValidation'
+import {useWaitlistValidation, type WaitlistAssignmentResult, type ExtraPortionsRequest} from '~/composables/useWaitlistValidation'
 
 const {throwH3Error} = eventHandlerHelper
-const LOG = '👨‍🍳 > CHEF > WAITLIST > [RELEASE]'
+const LOG = '👨‍🍳 > CHEF > WAITLIST > [EXTRA_PORTIONS]'
 
 const paramSchema = idParams('id')
 
 /**
- * POST /api/chef/dinner/[id]/release-portions - the chef releases N portions; the queue's first entries that fit get their tickets
+ * POST /api/chef/dinner/[id]/extra-portions - the chef cooks N more portions; the waiting entries that fit, in queue order, get regular orders
  */
 export default defineEventHandler(async (event): Promise<WaitlistAssignmentResult> => {
     const {cloudflare} = event.context
     const d1Client = cloudflare.env.DB
-    const {WaitlistReleaseRequestSchema, WaitlistAssignmentResultSchema} = useWaitlistValidation()
+    const {ExtraPortionsRequestSchema, WaitlistAssignmentResultSchema} = useWaitlistValidation()
 
     let id!: number
-    let body!: WaitlistReleaseRequest
+    let body!: ExtraPortionsRequest
     try {
         id = (await getValidatedRouterParams(event, paramSchema.parse)).id
-        body = await readValidatedBody(event, WaitlistReleaseRequestSchema.parse)
+        body = await readValidatedBody(event, ExtraPortionsRequestSchema.parse)
     } catch (error) {
         return throwH3Error(`${LOG} Input validation error`, error, 400)
     }

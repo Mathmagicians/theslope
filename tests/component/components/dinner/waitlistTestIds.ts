@@ -3,11 +3,11 @@
 export const WAITLIST_TEST_IDS = {
     // ChefMenuCard - the queue's alert and the one release form behind its two triggers
     chefAlert: 'chef-waitlist-alert',
-    releaseEntry: 'chef-release-portions',
-    releaseCta: 'chef-release-portions-cta',
-    releaseForm: 'chef-release-portions-form',
-    releaseSubmit: 'chef-release-portions-submit',
-    releaseCancel: 'chef-release-portions-cancel',
+    extraPortionsEntry: 'chef-extra-portions',
+    extraPortionsCta: 'chef-extra-portions-cta',
+    extraPortionsForm: 'chef-extra-portions-form',
+    extraPortionsSubmit: 'chef-extra-portions-submit',
+    extraPortionsCancel: 'chef-extra-portions-cancel',
     // DinnerBookingForm - the position badge of a queued row, keyed by the row id
     position: (rowId: number | string) => `waitlist-position-${rowId}`
 } as const

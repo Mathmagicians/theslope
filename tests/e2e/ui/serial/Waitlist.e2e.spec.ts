@@ -89,9 +89,9 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
         const chefPage = await (await browser.newContext({storageState: adminUIFile})).newPage()
         await gotoHydrated(chefPage, `/chef?team=${teamId}&date=${formatDate(dinnerDate)}`)
 
-        await chefPage.getByTestId('chef-release-portions-cta').click()
-        await chefPage.getByTestId('chef-release-portions-form').locator('input').fill('1')
-        await chefPage.getByTestId('chef-release-portions-submit').click()
+        await chefPage.getByTestId('chef-extra-portions-cta').click()
+        await chefPage.getByTestId('chef-extra-portions-form').locator('input').fill('1')
+        await chefPage.getByTestId('chef-extra-portions-submit').click()
 
         const orders = await pollUntil(
             () => OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, dinnerEventId),

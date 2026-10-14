@@ -80,7 +80,7 @@
  *   |     Mange skrånere mangler en billet til din middag — har du   |  the queue has entries
  *   |     mulighed for at mætte flere munde?    [Frigiv portioner]   |
  *   +----------------------------------------------------------------+
- *   form:  Kan du frigive [ 2,5 ] portioner?  [Frigiv] [Fortryd]     UForm on WaitlistReleaseRequestSchema,
+ *   form:  Kan du frigive [ 2,5 ] portioner?  [Frigiv] [Fortryd]     UForm on ExtraPortionsRequestSchema,
  *                                                                    prefilled with the queue's portion need
  *
  * ADR Compliance:
@@ -97,7 +97,7 @@ import type { AllergyTypeDisplay } from '~/composables/useAllergyValidation'
 import type { SeasonDeadlines } from '~/composables/useSeason'
 import type { NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
 import type { Form, FormSubmitEvent } from '#ui/types'
-import type { WaitlistQueueSummary, WaitlistReleaseRequest } from '~/composables/useWaitlistValidation'
+import type { WaitlistQueueSummary, ExtraPortionsRequest } from '~/composables/useWaitlistValidation'
 import { FORM_MODES, type FormMode } from '~/types/form'
 
 interface Props {
@@ -143,8 +143,8 @@ const emit = defineEmits<{
   /** The chef's grocery lines (DinnerBudget → ExpenseLines); the page calls the bookings store */
   'add-expense': [line: ExpenseCreate]
   'remove-expense': [expenseId: number]
-  /** The chef releases portions to the queue; the page calls the bookings store */
-  'release-portions': [portions: number]
+  /** The chef cooks more portions for the waiting list; the page calls the bookings store */
+  'extra-portions': [portions: number]
   'cancel-dinner': []
   'undo-cancel-dinner': []
   'toggle-calendar': []
@@ -305,22 +305,22 @@ const isMoreOpen = ref(false)
 
 // ========== RELEASE PORTIONS (the queue) ==========
 
-const { WaitlistReleaseRequestSchema } = useWaitlistValidation()
+const { ExtraPortionsRequestSchema } = useWaitlistValidation()
 const hasQueue = computed(() => (props.waitlist?.entries ?? 0) > 0)
 // The Flere entry and the CTA open one form; the draft starts on the open, prefilled with the queue's portion need
-const isReleasing = ref(false)
-const releaseDraft = ref<Partial<WaitlistReleaseRequest>>({})
-const releaseFormRef = useTemplateRef<Form<WaitlistReleaseRequest>>('releaseFormRef')
+const isAddingExtraPortions = ref(false)
+const extraPortionsDraft = ref<Partial<ExtraPortionsRequest>>({})
+const extraPortionsFormRef = useTemplateRef<Form<ExtraPortionsRequest>>('extraPortionsFormRef')
 
-const openRelease = () => {
-  releaseDraft.value = { portions: props.waitlist?.portions || undefined }
+const openExtraPortions = () => {
+  extraPortionsDraft.value = { portions: props.waitlist?.portions || undefined }
   isMoreOpen.value = false
-  isReleasing.value = true
+  isAddingExtraPortions.value = true
 }
 
-const handleReleaseSubmit = (event: FormSubmitEvent<WaitlistReleaseRequest>) => {
-  emit('release-portions', event.data.portions)
-  isReleasing.value = false
+const handleExtraPortionsSubmit = (event: FormSubmitEvent<ExtraPortionsRequest>) => {
+  emit('extra-portions', event.data.portions)
+  isAddingExtraPortions.value = false
 }
 
 // Reset transient edit/panel state when navigating to another dinner - never carry a stale
@@ -329,7 +329,7 @@ watch(() => props.dinnerEvent.id, () => {
   isMoreOpen.value = false
   isEditingMenu.value = false
   isEditingAllergens.value = false
-  isReleasing.value = false
+  isAddingExtraPortions.value = false
 })
 
 // Can publish: not cancelled or consumed
@@ -544,7 +544,7 @@ const handleCardClick = () => {
           </template>
         </UFormField>
 
-        <!-- Overflow panel: the release entry, then the danger zone for rare + destructive actions, separated from routine controls -->
+        <!-- Overflow panel: the extra-portions entry, then the danger zone for rare + destructive actions, separated from routine controls -->
         <UCollapsible
           v-if="isEditing && canCancelDinner(dinnerEvent)"
           v-model:open="isMoreOpen"
@@ -557,8 +557,8 @@ const handleCardClick = () => {
                 :color="HERO_BUTTON.primaryButton"
                 :icon="ICONS.waitlist"
                 :disabled="isUpdating"
-                data-testid="chef-release-portions"
-                @click="openRelease"
+                data-testid="chef-extra-portions"
+                @click="openExtraPortions"
               >
                 Frigiv portioner
               </UButton>
@@ -594,7 +594,7 @@ const handleCardClick = () => {
 
         <!-- The queue asks the chef for portions while anyone waits; Frigiv portioner opens the same form -->
         <UAlert
-          v-if="isEditing && hasQueue && !isReleasing && canCancelDinner(dinnerEvent)"
+          v-if="isEditing && hasQueue && !isAddingExtraPortions && canCancelDinner(dinnerEvent)"
           v-bind="{...ALERTS.info, ...ALERTS.withActions}"
           :icon="ICONS.waitlist"
           :title="`${waitlist!.entries} på venteliste · ${formatPortions(waitlist!.portions)} portioner`"
@@ -608,30 +608,30 @@ const handleCardClick = () => {
               :color="COLOR.info"
               :icon="ICONS.waitlist"
               :disabled="isUpdating"
-              data-testid="chef-release-portions-cta"
-              @click="openRelease"
+              data-testid="chef-extra-portions-cta"
+              @click="openExtraPortions"
             >
               Frigiv portioner
             </UButton>
           </template>
         </UAlert>
 
-        <!-- Release portions: one number, prefilled with the queue's portion need -->
+        <!-- Extra portions: one number, prefilled with the waiting list's portion need -->
         <UForm
-          v-if="isEditing && isReleasing"
-          ref="releaseFormRef"
-          :schema="WaitlistReleaseRequestSchema"
-          :state="releaseDraft"
+          v-if="isEditing && isAddingExtraPortions"
+          ref="extraPortionsFormRef"
+          :schema="ExtraPortionsRequestSchema"
+          :state="extraPortionsDraft"
           :class="[COMPONENTS.chefMenuCard.form, COMPONENTS.chefMenuCard.alertGap]"
-          data-testid="chef-release-portions-form"
-          @submit="handleReleaseSubmit"
+          data-testid="chef-extra-portions-form"
+          @submit="handleExtraPortionsSubmit"
         >
           <UFormField label="Kan du frigive portioner?" name="portions" hint="Portioner, f.eks. 2,5" :class="COMPONENTS.chefMenuCard.field">
-            <UInput v-model.number="releaseDraft.portions" type="number" :step="0.5" :min="0" :size="SIZES.standard" name="chef-release-portions-input" :class="COMPONENTS.chefMenuCard.field" />
+            <UInput v-model.number="extraPortionsDraft.portions" type="number" :step="0.5" :min="0" :size="SIZES.standard" name="chef-extra-portions-input" :class="COMPONENTS.chefMenuCard.field" />
           </UFormField>
           <div :class="LAYOUTS.formButtonRow">
-            <UButton v-bind="BUTTONS.cancel" data-testid="chef-release-portions-cancel" @click="isReleasing = false">Fortryd</UButton>
-            <UButton v-bind="BUTTONS.save" :color="HERO_BUTTON.primaryButton" :loading="isUpdating" data-testid="chef-release-portions-submit" @click="releaseFormRef?.submit()">Frigiv</UButton>
+            <UButton v-bind="BUTTONS.cancel" data-testid="chef-extra-portions-cancel" @click="isAddingExtraPortions = false">Fortryd</UButton>
+            <UButton v-bind="BUTTONS.save" :color="HERO_BUTTON.primaryButton" :loading="isUpdating" data-testid="chef-extra-portions-submit" @click="extraPortionsFormRef?.submit()">Frigiv</UButton>
           </div>
         </UForm>
 

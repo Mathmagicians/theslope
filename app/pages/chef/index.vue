@@ -210,9 +210,9 @@ const handleRemoveExpense = (expenseId: number) => {
   if (dinnerEventDetail.value) bookingsStore.removeExpense(dinnerEventDetail.value.id, expenseId)
 }
 
-// The chef releases portions to the queue on the dinner on view
-const handleReleasePortions = (portions: number) => {
-  if (dinnerEventDetail.value) bookingsStore.releasePortions(dinnerEventDetail.value.id, portions)
+// The chef cooks more portions for the waiting list of the dinner on view
+const handleExtraPortions = (portions: number) => {
+  if (dinnerEventDetail.value) bookingsStore.addExtraPortions(dinnerEventDetail.value.id, portions)
 }
 
 // The team's cooking round around the dinner on view: the round's orders give each dinner its allowance
@@ -402,7 +402,7 @@ useHead({
               @update:form="handleFormUpdate"
               @add-expense="handleAddExpense"
               @remove-expense="handleRemoveExpense"
-              @release-portions="handleReleasePortions"
+              @extra-portions="handleExtraPortions"
               @update:allergens="handleAllergenUpdate"
               @advance-state="handleAdvanceState"
               @cancel-dinner="handleCancelDinner"

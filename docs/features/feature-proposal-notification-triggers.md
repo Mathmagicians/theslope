@@ -44,7 +44,7 @@ contract messages through `env.SENDER`.
 | `DINNER_CANCELLED` | the dinner's diners | a dinner is cancelled |
 | `DUTY_SWAPPED` | both swap parties | a duty swap commits (`feature-proposal-duty-roster.md` Phase 5; the chef-swap flow joins the same kind) |
 
-The four waitlist kinds (`WAITLIST_JOINED`, `WAITLIST_TICKET_ASSIGNED`, `WAITLIST_BUILDUP`, `WAITLIST_TICKET_SOLD`) shipped in 0.9 as templates and sender events (`server/utils/sender/events/waitlist.ts`, `archived/feature-waitlist.md`). The reminder crons join the schedule module of `chores-0.9.1.md` § Job schedule module.
+The waiting-list and sale kinds (`WAITLIST_JOINED`, `WAITLIST_TICKET_ASSIGNED`, `WAITLIST_EXTRA_PORTION`, `WAITLIST_BUILDUP`, `TICKET_SOLD`) shipped in 0.9 as templates and sender events (`server/utils/sender/events/waitlist.ts`, `archived/feature-waitlist.md`). The reminder crons join the schedule module of `chores-0.9.1.md` § Job schedule module.
 
 ## Producer for user notifications
 

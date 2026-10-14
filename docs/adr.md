@@ -106,7 +106,7 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 
 ## ADR-016: Unified Booking Through Scaffold
 
-**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-10-12
+**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-10-15
 
 ### Context
 
@@ -199,6 +199,7 @@ endpoint hands the scaffolder its deadlines: the season's (`deadlinesForSeason`)
 6. Generators MUST receive dinner events filtered by `isHouseholdActiveOnDay`
 7. Booking-relevant field changes MUST trigger immediate re-scaffold via `rescaffoldOnFieldChange`
 8. UI MUST include `waitlistEntryId` from the household's queue entries to leave or requeue
+9. The scaffold and the waiting-list steps send no notification: they return their outcomes (joined, sold, sold to the waiting list, the chef's extra portions), and the caller hands them to the notification service after the action (`notifyBookingOutcomes`, `notifyExtraPortions`)
 
 ### Key Files
 
@@ -209,7 +210,8 @@ endpoint hands the scaffolder its deadlines: the season's (`deadlinesForSeason`)
 | `app/composables/useSeason.ts` | `deadlinesForSeason`, `OPEN_DEADLINES` |
 | `app/composables/useHousehold.ts` | `isHouseholdActiveOnDay` residency predicate |
 | `server/utils/scaffoldPrebookings.ts` | Scaffolder: transforms, executes, `rescaffoldOnFieldChange` |
-| `server/utils/waitlistAssignment.ts` | `joinWaitlist`, the release hand-over `assignReleasedTicket`, `assignWaitlistPortions` |
+| `server/utils/waitlistAssignment.ts` | `joinWaitlist`; `assignReleasedTicket`, a released ticket to the first in the waiting list; `assignWaitlistPortions`, the chef's extra portions |
+| `server/utils/sender/events/waitlist.ts` | `notifyBookingOutcomes`, `notifyExtraPortions`: the booking mails after the action |
 
 ### Related ADRs
 
