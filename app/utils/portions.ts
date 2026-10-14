@@ -1,9 +1,8 @@
-import type {z} from 'zod'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import type {TicketType} from '~/composables/useBookingValidation'
 
 const {TicketTypeSchema} = useTicketPriceValidation()
 const TICKET = TicketTypeSchema.enum
-export type TicketType = z.infer<typeof TicketTypeSchema>
 
 type PortionTicketPrice = {ticketType: TicketType}
 

@@ -468,9 +468,11 @@ describe('useBooking', () => {
 // =============================================================================
 
 describe('getNewOrderAction', () => {
+    const RA = useBookingValidation().BookingRowActionSchema.enum
+
     it.each([
-        { canModify: true, expected: 'process' },
-        { canModify: false, expected: 'claim' }  // the executor settles the supply: a released ticket, else the queue
+        { canModify: true, expected: RA.process },
+        { canModify: false, expected: RA.claim }  // the executor settles the supply: a released ticket, else the queue
     ])('canModify=$canModify → $expected', ({ canModify, expected }) => {
         expect(getNewOrderAction(canModify)).toBe(expected)
     })
@@ -1651,10 +1653,11 @@ describe('Lock Status Utilities', () => {
 // =============================================================================
 
 describe('getBookingOptions', () => {
-    const {DinnerModeSchema, OrderStateSchema, DinnerStateSchema} = useBookingValidation()
+    const {DinnerModeSchema, OrderStateSchema, DinnerStateSchema, BookingRowActionSchema} = useBookingValidation()
     const DM = DinnerModeSchema.enum
     const OS = OrderStateSchema.enum
     const DS = DinnerStateSchema.enum
+    const RA = BookingRowActionSchema.enum
 
     const ALL = [DM.DINEIN, DM.DINEINLATE, DM.TAKEAWAY, DM.NONE]
     const EATING = [DM.DINEIN, DM.DINEINLATE, DM.TAKEAWAY]  // All modes except NONE (for claims)
@@ -1669,19 +1672,19 @@ describe('getBookingOptions', () => {
         {desc: 'CONSUMED dinner', orderState: null, canModify: true, canEdit: true, dinnerState: DS.CONSUMED, inResidency: true, expectedModes: EMPTY, expectedAction: null},
 
         // BOOKED order
-        {desc: 'BOOKED + canEdit=true', orderState: OS.BOOKED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
-        {desc: 'BOOKED + canEdit=false', orderState: OS.BOOKED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: NONE_ONLY, expectedAction: 'process'},
+        {desc: 'BOOKED + canEdit=true', orderState: OS.BOOKED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: ALL, expectedAction: RA.process},
+        {desc: 'BOOKED + canEdit=false', orderState: OS.BOOKED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: NONE_ONLY, expectedAction: RA.process},
 
         // RELEASED order (reclaim own)
-        {desc: 'RELEASED + canEdit=true', orderState: OS.RELEASED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
-        {desc: 'RELEASED + canEdit=false', orderState: OS.RELEASED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: DINEIN_NONE, expectedAction: 'process'},
+        {desc: 'RELEASED + canEdit=true', orderState: OS.RELEASED, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: ALL, expectedAction: RA.process},
+        {desc: 'RELEASED + canEdit=false', orderState: OS.RELEASED, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: DINEIN_NONE, expectedAction: RA.process},
 
         // No order - before deadline
-        {desc: 'null + canModify=true', orderState: null, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: ALL, expectedAction: 'process'},
+        {desc: 'null + canModify=true', orderState: null, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: ALL, expectedAction: RA.process},
 
         // No order - after the deadline: a claim, the server buys a released ticket or queues
-        {desc: 'after deadline + canEdit=true → claim, all eating modes', orderState: null, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: EATING, expectedAction: 'claim'},
-        {desc: 'after deadline + canEdit=false → claim, DINEIN only', orderState: null, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: DINEIN_ONLY, expectedAction: 'claim'},
+        {desc: 'after deadline + canEdit=true → claim, all eating modes', orderState: null, canModify: false, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: EATING, expectedAction: RA.claim},
+        {desc: 'after deadline + canEdit=false → claim, DINEIN only', orderState: null, canModify: false, canEdit: false, dinnerState: DS.ANNOUNCED, inResidency: true, expectedModes: DINEIN_ONLY, expectedAction: RA.claim},
 
         // Outside residency - no booking regardless of other params
         {desc: 'outside residency + no order', orderState: null, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: false, expectedModes: EMPTY, expectedAction: null},

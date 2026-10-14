@@ -75,12 +75,12 @@
  * same way.
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
-import type {DinnerEventDisplay, OrderDisplay, DinnerMode, OrderState, DesiredOrder} from '~/composables/useBookingValidation'
+import type {DinnerEventDisplay, OrderDisplay, DinnerMode, OrderState, DesiredOrder, BookingRowAction} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
-import type {ReleasedTicketCounts, BookingAction} from '~/composables/useBooking'
+import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES} from '~/types/form'
 
@@ -104,7 +104,7 @@ interface TableRow {
   orderState: OrderState | undefined
   dinnerMode: DinnerMode
   disabledModes: DinnerMode[] // Computed via getBookingOptions per row
-  bookingAction: BookingAction // What action is possible for this row
+  bookingAction: BookingRowAction | null // What action is possible for this row
   waitlistEntry?: TicketWaitlistDetail // The inhabitant's own place in the queue, while they hold no ticket
   consensus?: boolean // Power mode: true=all agree, false=mixed
   price: number
@@ -237,7 +237,7 @@ const residencyAlert = computed(() => {
 const ALL_MODES: DinnerMode[] = [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY, DinnerModeEnum.NONE]
 
 // Compute booking state for a row using getBookingOptions
-const getRowBookingState = (orderState: OrderState | undefined, isGuestAddRow: boolean, isQueued = false): { disabledModes: DinnerMode[], bookingAction: BookingAction } => {
+const getRowBookingState = (orderState: OrderState | undefined, isGuestAddRow: boolean, isQueued = false): { disabledModes: DinnerMode[], bookingAction: BookingRowAction | null } => {
   const {enabledModes, action} = getBookingOptions(
     orderState ?? null,
     canBook.value,
@@ -395,7 +395,7 @@ const tableData = computed((): TableRow[] => {
     price: 0,
     ticketPriceId: 0,
     disabledModes: [] as DinnerMode[],
-    bookingAction: null as BookingAction,
+    bookingAction: null as BookingRowAction | null,
     allergyTypes: [] as AllergyTypeDisplay[]
   }
 

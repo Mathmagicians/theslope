@@ -1,4 +1,4 @@
-import {useBookingValidation, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketCounts, type AuditTicket, type OrderAuditAction} from '~/composables/useBookingValidation'
+import {useBookingValidation, type TicketType, type BookingRowAction, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketCounts, type AuditTicket, type OrderAuditAction} from '~/composables/useBookingValidation'
 import {useBillingValidation, type TransactionCreateData} from '~/composables/useBillingValidation'
 import {useBilling} from '~/composables/useBilling'
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
@@ -14,8 +14,10 @@ import {calculateCountdown, formatDate, DATE_SETTINGS} from '~/utils/date'
 import {dateToWeekDay} from '~/utils/season'
 import {chunkArray, groupBy} from '~/utils/batchUtils'
 import {sumBy} from '~/utils/ledger'
-import {getPortionsForTicketType, type TicketType} from '~/utils/portions'
+import {getPortionsForTicketType} from '~/utils/portions'
 import {differenceInCalendarDays} from 'date-fns'
+
+const ROW_ACTION = useBookingValidation().BookingRowActionSchema.enum
 
 /**
  * Field set that reverts a dinner to a clean chef-less SCHEDULED state.
@@ -78,10 +80,10 @@ export type OrderDecisionInput = {
  * After the deadline the executor settles the supply: a released ticket at the price, else a queue entry.
  *
  * @param canModifyOrders - Before booking deadline (can create new orders)
- * @returns 'process' (create) or 'claim'
+ * @returns process (create) or claim
  */
-export const getNewOrderAction = (canModifyOrders: boolean): 'process' | 'claim' =>
-    canModifyOrders ? 'process' : 'claim'
+export const getNewOrderAction = (canModifyOrders: boolean): BookingRowAction =>
+    canModifyOrders ? ROW_ACTION.process : ROW_ACTION.claim
 
 /** What executing a bucket does: book, buy a released ticket, queue, leave or requeue the entry, or nothing */
 export type BookingOutcome = 'book' | 'buy' | 'queue' | 'leave' | 'requeue' | 'none'
@@ -142,7 +144,7 @@ export const decideOrderAction = (
     // No orderId = new order intent
     if (!desired.orderId) {
         if (isNone) return null // Skip: no order to create for NONE
-        const bucket = getNewOrderAction(beforeCancellationDeadline) === 'process' ? 'create' : 'claim'
+        const bucket = getNewOrderAction(beforeCancellationDeadline) === ROW_ACTION.process ? 'create' : 'claim'
         return { bucket, order: { ...desired, state: OrderState.BOOKED } }
     }
 
@@ -274,9 +276,6 @@ export const findRegularOrder = <T extends Pick<OrderDisplay, 'inhabitantId' | '
     dinnerEventId: number
 ): T | undefined =>
     orders.find(o => o.inhabitantId === inhabitantId && o.dinnerEventId === dinnerEventId && !o.isGuestTicket)
-
-/** What a booking row can do: book before the deadline, or claim after it (a released ticket, else a place in the queue) */
-export type BookingAction = 'process' | 'claim' | null
 
 /**
  * Turn a user's booking intent for an inhabitant into a DesiredOrder.
@@ -1119,7 +1118,7 @@ export const useBooking = () => {
         canEditDiningMode: boolean,
         dinnerState: DinnerState,
         isHouseholdInResidency: boolean
-    ): { enabledModes: DinnerMode[], action: BookingAction } => {
+    ): { enabledModes: DinnerMode[], action: BookingRowAction | null } => {
         const {DinnerModeSchema, DinnerStateSchema} = useBookingValidation()
         const DinnerModeEnum = DinnerModeSchema.enum
         const DinnerStateEnum = DinnerStateSchema.enum
@@ -1139,20 +1138,20 @@ export const useBooking = () => {
         // BOOKED order
         if (orderState === OrderStateEnum.BOOKED) {
             return canEditDiningMode
-                ? { enabledModes: ALL_MODES, action: 'process' }
-                : { enabledModes: [DinnerModeEnum.NONE], action: 'process' }
+                ? { enabledModes: ALL_MODES, action: ROW_ACTION.process }
+                : { enabledModes: [DinnerModeEnum.NONE], action: ROW_ACTION.process }
         }
 
         // RELEASED order (can reclaim own)
         if (orderState === OrderStateEnum.RELEASED) {
             return canEditDiningMode
-                ? { enabledModes: ALL_MODES, action: 'process' }
-                : { enabledModes: [DinnerModeEnum.DINEIN, DinnerModeEnum.NONE], action: 'process' }
+                ? { enabledModes: ALL_MODES, action: ROW_ACTION.process }
+                : { enabledModes: [DinnerModeEnum.DINEIN, DinnerModeEnum.NONE], action: ROW_ACTION.process }
         }
 
         // No order - use shared decision logic; after the deadline the claim buys a ticket or queues
         const action = getNewOrderAction(canModifyOrders)
-        if (action === 'process') return { enabledModes: ALL_MODES, action }
+        if (action === ROW_ACTION.process) return { enabledModes: ALL_MODES, action }
         // A claim picks an eating mode, never NONE (can't claim and immediately release), and respects canEditDiningMode
         const EATING_MODES: DinnerMode[] = [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY]
         return canEditDiningMode

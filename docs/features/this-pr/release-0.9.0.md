@@ -37,7 +37,8 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | Spinner motion token | one spin value with the motion-reduce guard behind the save, job and ticket-change spinners | `MOTION_SPIN` in `useTheSlopeDesignSystem.ts` | committed (c151d74) |
 | Admin economy loads on request | the billing periods and the current period fetch while the economy tab is on the page | `loadBillingOverview` in `app/stores/bookings.ts`, ADR-007 rule 9 | committed (83597f8) |
 | Team delete returns the deleted id | `DELETE /api/admin/team/[id]` answers the id of the deleted team | ADR-009 rule 7 | committed (afadb83) |
-| Joker slot delete returns the deleted id | `DELETE /api/admin/team/[id]/joker-slot/[slotId]` answers the id of the deleted slot; a slot of another team answers 404 | ADR-009 rule 7 | signed off |
+| Joker slot delete returns the deleted id | `DELETE /api/admin/team/[id]/joker-slot/[slotId]` answers the id of the deleted slot; a slot of another team answers 404 | ADR-009 rule 7 | committed (679fc8f) |
+| Validation owns the types | `TicketType` and the booking row action (`BookingRowActionSchema`) come from `useBookingValidation`; `app/utils/portions.ts` and `useBooking.ts` import them | ADR-001 | signed off |
 | DRY sweep | dead code and duplicate token paths removed; the specs share their mount, endpoint and session helpers | `tests/component/testHelpers.ts`, `tests/component/hoistedMocks.ts` | committed (72cf9d9, 6b65a70, b456b2f, 999bdbd, c0beb62, 43876aa) |
 | PRF spike | passkey and PRF research with the device protocol | `../feature-proposal-relogin-faceid.md`, `../archived/feature-mobile-native-feel.md` | committed |
 | Docs and tooling | the user, chef and admin guides; `docs/ui.md` and the compliance tables compacted; `docs/testing.md` Rule 0; the ui skill and the frontend agent | `docs/`, `.claude/skills/`, `.claude/agents/` | committed (b82852e, 38804ef, 0dfd8eb, 450bcc8) |
@@ -197,6 +198,7 @@ crosses the buildup threshold and asserts each event writes its Delivery row.
 | Chef spending | `chef/expenses.e2e.spec.ts`, `ChefExpenses.e2e.spec.ts`, `chef/orderHistory.e2e.spec.ts`, the chef component specs |
 | Admin economy loads on request | `bookings.nuxt.spec.ts` (gated reads), `admin-tab.nuxt.spec.ts` |
 | Team and joker slot deletes return the deleted id | `team.e2e.spec.ts`, `jokerSlot.e2e.spec.ts`, `plan.nuxt.spec.ts` |
+| Validation owns the types | `useBooking.nuxt.spec.ts` (`getNewOrderAction`, `getBookingOptions`) |
 | UI packages | the component specs named in their sections |
 
 ## Verifications with human eyes
