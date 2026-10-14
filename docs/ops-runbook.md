@@ -73,7 +73,7 @@ npx wrangler queues info theslope-sender-dev              # expect: Queue ID + 0
 
 ### App config `.env` (local `nuxt dev`)
 
-`runtimeConfig.notifications` holds the mailboxes, read from `NUXT_NOTIFICATIONS_*`: `.env` locally, worker secrets deployed. An unset mailbox makes the mail that needs it report `degraded` and log the variable name. Environment and site derive from `DEPLOY_URL` (`wrangler.toml` `[env.*.vars]`, `.env` locally). Unset, e-mail is off: each notification logs its kind and `DEPLOY_URL` and reports not sent. Sender address and display name derive from the environment.
+`runtimeConfig.notifications` holds the mailboxes, read from `NUXT_NOTIFICATIONS_*`: `.env` locally, worker secrets deployed. An unset mailbox makes the mail that needs it report `degraded` and log the variable name. Environment and site derive from `DEPLOY_URL`: `wrangler.toml` `[env.*.vars]` deployed, `npm run dev` sets `http://localhost:3000` locally, where mails land in the local queue. Unset, e-mail is off: each notification logs its kind and `DEPLOY_URL` and reports not sent. Sender address and display name derive from the environment.
 
 | Key | Local value |
 |-----|-------------|

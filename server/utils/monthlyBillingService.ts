@@ -23,7 +23,8 @@ import {useBilling} from '~/composables/useBilling'
 import {emitBillingPeriodClosed} from '~~/server/utils/sender/events/monthly-billing'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
 import type {BillingPeriodSideEffects, BillingPeriodSummaryDetail, MonthlyBillingResponse} from '~/composables/useBillingValidation'
-import type {NotificationConfig, SenderEmitResult} from '~/composables/useNotificationValidation'
+import type {SenderEmitResult} from '~/composables/useNotificationValidation'
+import type {EmailChannel} from '~~/server/utils/sender/config'
 import {deliveredVersions} from '~/composables/useDeliveryValidation'
 
 const {decideBillingSideEffects} = useBilling()

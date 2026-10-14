@@ -123,7 +123,7 @@ Each point is presented with its files and code, and signed off on its own.
 
 | Point | What | Status |
 |---|---|---|
-| 1. Mail is configured or off | The notification service decides its channels from the environment; `DEPLOY_URL` unset means e-mail is off, a channel that is off logs the kind and the missing setting and reports not sent; the request fallback goes | ✅ signed off 2026-10-14 |
+| 1. Mail is configured or off | The notification service decides its channels from the environment; `DEPLOY_URL` unset means e-mail is off, a channel that is off logs the kind and the missing setting and reports not sent; the request fallback goes; `npm run dev` sets `DEPLOY_URL` locally | ✅ signed off 2026-10-14, implemented |
 | 2. Notification after the action | The scaffold and the waiting-list steps send nothing and return outcomes that carry what a notification needs; the caller passes them to the notification service | ⏳ awaiting signoff |
 | 3. The scaffold survives a partial failure | Each step's failure lands on its item and the rest runs on; the reply is the executed plan, one item per order, built by the function that builds the preview; counts are grouped from the items | ⏳ awaiting signoff |
 | 4. The waiting list catches up | A ticket for sale at a waiting entry's price goes to the first in the waiting list at release, after each scaffold run on its dinners and in daily maintenance; idempotent (ADR-015) | ⏳ awaiting signoff |
