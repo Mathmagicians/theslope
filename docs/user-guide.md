@@ -66,6 +66,8 @@ I appen bruges følgende symboler til at vise spisningsform og status:
 
 Kalenderne har også en **Forklaring** nederst, der viser symbolerne for netop den visning.
 
+På middagskalenderen bærer en lukket middag en lille prik med et tal, der siger hvor mange billetter der er til salg – og står der et minus, som **-3**, er alt udsolgt, og tre sultne naboer står allerede på ventelisten.
+
 ---
 
 ## Kom godt i gang

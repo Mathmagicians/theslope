@@ -519,8 +519,7 @@ Six routes still spell a coerced id in a query schema (`order/index.get.ts`, `ad
 `admin/team/index.get.ts`, `household/allergy/index.get.ts`, `billing/index.get.ts`, `admin/household/inhabitants/[id].post.ts`
 `seasonId`) beside `RouteIdSchema`. `useQueryParam.ts` repeats the normalize-or-default block three times. The
 order-history route reads the households its creation rows name because the creation audit row carries no `householdShortname`.
-`useOrder.ts` holds `orderStateConfig` (labels, colours, icons on a design-system call) where ADR-017 r2 places presentation
-in `useBookingUi`; `app/stores/users.ts` exposes no `isEmpty` and `isStoreReady` (ADR-007 r2); `usePermissions.ts` and
+`app/stores/users.ts` exposes no `isEmpty` and `isStoreReady` (ADR-007 r2); `usePermissions.ts` and
 `useUserRoles.ts` import `SystemRoleSchema` from the generated layer where ADR-001 routes it through `useCoreValidation`.
 `chef/dinner/[id]/order-history.get.ts`, `expenses/index.get.ts` and `expenses/[expenseId].delete.ts` log no success line
 (ADR-004).
@@ -529,14 +528,13 @@ in `useBookingUi`; `app/stores/users.ts` exposes no `isEmpty` and `isStoreReady`
 
 `RouteIdSchema` / `RouteIdSchema.optional()` in the six query schemas; one `fallback(invalid)` in `useQueryParam`;
 `createOrders` writes `householdShortname` into the creation audit row, `readAuditTicket` reads it from both shapes, and a convergent backfill fills the existing rows, after which the
-households read in `chef/dinner/[id]/order-history.get.ts` goes. `orderStateConfig` moves to `useBookingUi` on tokens;
-the users store gains the two flags with a case each; the two composables import the enum from `useCoreValidation`;
+households read in `chef/dinner/[id]/order-history.get.ts` goes. The users store gains the two flags with a case each; the two composables import the enum from `useCoreValidation`;
 the three chef routes log one `console.info` on success.
 
 #### Affected
 
 The six query routes, the three chef routes, `app/composables/useQueryParam.ts`, `server/data/financesRepository.ts`,
-`app/composables/useBookingValidation.ts`, `useOrder.ts`, `useBookingUi.ts`, `usePermissions.ts`, `useUserRoles.ts`,
+`app/composables/useBookingValidation.ts`, `usePermissions.ts`, `useUserRoles.ts`,
 `app/stores/users.ts` and its spec, a D1 migration for the backfill, `docs/adr-compliance-backend.md` rows.
 
 ### Waitlist chip
@@ -585,7 +583,6 @@ step once its run time on CI is known; `server/tsconfig.json` stays until then.
 | Billing delivery report and interrupted runs | `bug-fix-billing-delivery-report.md` | three open decisions |
 | Re-login with Face ID (S5) | `feature-proposal-relogin-faceid.md` | parked proposal; the PRF spike is complete |
 | Chef allergen selector: the selector counts a population through a ticket allergies map | § Ticket allergies on the order | brief halted 2026-10-10; presented again with the ticket allergies design |
-| Queue size on the dinner calendar chip | `GET /api/order/waitlist` returns a dinner's entries in queue order | parked 2026-10-12 |
 | Heal user bookings: a one-off recovery endpoint; its serial e2e case is skipped (`heal-user-bookings.e2e.spec.ts`) | `server/routes/api/admin/maintenance/heal-user-bookings.post.ts` | **OPEN**: retire the endpoint or repair the case |
 
 ### Decisions carried from release 0.9

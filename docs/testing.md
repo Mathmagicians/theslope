@@ -502,6 +502,8 @@ Every palette under `app/assets/css/palettes/` — the base `default.css` and ea
 `PALETTES` entry carries (`tests/component/architecture/palettes.ts` derives the list from the registry). `color="neutral"`
 badges, buttons and alerts are measured on the faces Nuxt UI gives them (`bg-inverted`, `bg-elevated`, `bg-elevated/50`).
 One case per palette and mode lists every pair below its bar and expects exactly the pairs listed in `PRESET_FINDINGS`.
+The palette files are generated and committed, and the specs measure them as committed: after a change to the `main.css`
+scales, `ui.colors` or a token that adds a fill or an ink, `make palettes` regenerates them before the specs run.
 
 `designSystemColourVision.unit.spec.ts` measures the meaning pairs of `designSystemMeanings.ts` (shared with the generator)
 under protanopia, deuteranopia and tritanopia for the base and every `colourSafe` palette, and the rainbow stops apart in

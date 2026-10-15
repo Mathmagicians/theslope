@@ -49,7 +49,7 @@ Ikke-admin ser en **"Se, men ikke røre"**-besked øverst og kan ikke ændre dat
 | Kør systemjobs | [System](https://www.skraaningen.dk/admin/system) |
 | Importér sæson fra CSV | `make theslope-import-season-*` |
 | Eksportér holdmedlemmer til CSV | `make theslope-export-teams env=<env>` |
-| Synkronisér fra Heynabo | `make heynabo-import-*` |
+| Synkronisér fra Heynabo | [System](https://www.skraaningen.dk/admin/system) → **Heynabo** (kører også hver nat) |
 
 ---
 

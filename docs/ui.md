@@ -92,7 +92,7 @@ site that adds to a kind's `ui` merges on top of it.
 
 ### Tables
 
-The empty state renders in the `UTable` `#empty` slot. `COMPONENTS.table.ui` cells wrap between words and keep words, dates
+The empty state renders in the `UTable` `#empty` slot. A table that binds `loading` fills its `#loading` slot with the spinning sync glyph and a line of text from the table tokens, so the empty state shows only once the data has answered. `COMPONENTS.table.ui` cells wrap between words and keep words, dates
 and e-mails whole; a dense variant per surface sits beside it (`table.catalogUi`, `table.bookingUi`, …). A data table wider
 than a phone scrolls inside its own box. A column sizes through its `meta.class` (`{th, td}`); `COMPONENTS.masterDetail`
 holds the master table's `primaryColumn` and `compactColumn`.
@@ -140,7 +140,7 @@ name; the header also names the visual check.
   ```
 
 - **Checks** (`npx vitest run tests/component/architecture`): `designSystemContrast.unit.spec.ts` measures every pair
-  `designSystemPairs.ts` walks from the tokens at each preset's level and compares each committed file with a fresh render;
+  `designSystemPairs.ts` walks from the tokens in each committed palette file at its preset's level;
   `designSystemColourVision.unit.spec.ts` measures meaning pairs and rainbow stops under three vision types (ΔE ≥ 0.075 in Oklab);
   `palettes.ts` derives the measured list from `PALETTES`.
 - **Preview** in the browser console:

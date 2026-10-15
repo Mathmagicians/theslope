@@ -1180,6 +1180,10 @@ export const COMPONENTS = {
         receiptLabel: `pl-4 ${TEXT.muted}`,
         /** A spacer row between two groups of bottom rows */
         spacerCell: 'h-3',
+        /** The row a table fills its `#loading` slot with while its data is on the way; UTable renders `#empty` without it */
+        loadingRow: `flex items-center justify-center gap-2 py-2 ${TYPOGRAPHY.finePrintMuted}`,
+        /** The sync glyph of the loading row, spinning */
+        loadingSpinner: MOTION_SPIN,
         /**
          * THE table cell styling (ADR-018): every UTable binds one of these three
          * (`designSystemUsage.unit.spec.ts` rejects a table without).
@@ -1424,10 +1428,13 @@ export const COMPONENTS = {
 
     // CostLine - line item in economy views with fixed column widths for vertical alignment
     costLine: {
+        stack: 'space-y-1',
         row: 'grid items-center justify-items-center gap-1 md:gap-2 max-w-2xl',
         columns: 'grid-cols-[1.5rem_6rem_3rem_1.5rem_3rem_5rem_auto] md:grid-cols-[1.5rem_8rem_3.5rem_1.5rem_4rem_5.5rem_auto]',
-        nameSlot: 'justify-self-start',
-        amountSlot: 'justify-self-end'
+        nameSlot: 'truncate justify-self-start',
+        amountSlot: 'justify-self-end',
+        // The order history unfolds indented under its line
+        history: 'pl-6 md:pl-8 pt-1'
     },
 
     // Hero-complementary panels - Sections that sit on hero backgrounds (mocha/peach/pink/orange)
@@ -2806,29 +2813,18 @@ export const URGENCY_TO_CHIP_COLOR = {
 } as const
 
 /**
- * BOOKING_LOCK_STATUS - Lock indicator chips for household booking calendar
+ * BOOKING_LOCK_STATUS - Lock chips on a dinner past its booking deadline (dinner calendar day, booking grid header)
  *
- * Shows booking deadline status based on released ticket count:
- * - null: Not locked (deadline not yet passed) - no chip
- * - 0: Locked, no tickets available - peach chip (matches selection ring)
- * - >0: Locked, tickets available - yellow chip
+ * The chip shows the dinner's supply (`lockChip` in useBookingUi):
+ * - locked: nothing for sale, no waiting list - peach chip (matches selection ring)
+ * - lockedWithTickets: tickets for sale - yellow chip reading the count
+ * - lockedWithQueue: a waiting list - yellow chip reading the count with a minus
  */
 export const BOOKING_LOCK_STATUS = {
-    locked: {
-        color: 'peach' as NuxtUIColor,
-        icon: ICONS.lockClosed
-    },
-    lockedWithTickets: {
-        color: 'yellow' as NuxtUIColor,
-        icon: ICONS.lockClosed
-    }
+    locked: {color: 'peach' as NuxtUIColor},
+    lockedWithTickets: {color: 'yellow' as NuxtUIColor},
+    lockedWithQueue: {color: 'yellow' as NuxtUIColor}
 } as const
-
-/** Get lock status config from released ticket count (null = not locked, 0 = locked, >0 = tickets available) */
-export const getLockStatusConfig = (releasedCount: number | null) => {
-    if (releasedCount === null) return null
-    return releasedCount > 0 ? BOOKING_LOCK_STATUS.lockedWithTickets : BOOKING_LOCK_STATUS.locked
-}
 
 // ============================================================================
 // PART 7: Empty State Messages (fun placeholders)
@@ -2967,7 +2963,6 @@ export const useTheSlopeDesignSystem = () => {
         URGENCY_TO_BADGE,
         URGENCY_TO_CHIP_COLOR,
         BOOKING_LOCK_STATUS,
-        getLockStatusConfig,
         ORDER_STATE_COLORS,
         getOrderStateColor,
         getTicketState,

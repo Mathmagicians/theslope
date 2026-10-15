@@ -24,7 +24,14 @@
  * - #share-cell: Share link column
  * - #control-cell: Control sum column
  * - #expanded: Expanded row content
- * - #empty: Empty state content
+ * - #empty: Empty state content, once the data has answered with no rows
+ *
+ * While `loading` and without rows, UTable renders the loading row (its `#loading` slot) instead of `#empty`:
+ * ┌──────────┬──────────────────┬──────────┬──────────┐
+ * │ Dato     │ Middag           │ Kuverter │ Beløb    │
+ * ├──────────┴──────────────────┴──────────┴──────────┤   UTable's loading bar under the header
+ * │     (sync, spinning)  Henter fremtidige bestillinger │   COMPONENTS.table.loadingRow, the text from loadingText
+ * └───────────────────────────────────────────────────┘
  *
  * For columns without explicit slots (menuTitle, ticketCounts, householdCount, paymentMonth),
  * UTable renders the value from row.original[accessorKey] automatically.
@@ -46,6 +53,8 @@ interface Props {
     dateAccessor: (item: T) => Date
     /** Loading state */
     loading?: boolean
+    /** The line the loading row shows while the data is on the way */
+    loadingText?: string
     /** Page size */
     pageSize?: number
     /** Placeholder for search input */
@@ -56,6 +65,7 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
     loading: false,
+    loadingText: 'Henter data',
     pageSize: 5,
     searchPlaceholder: 'Søg på dato',
     defaultSortDesc: false
@@ -215,6 +225,13 @@ const toggleSort = () => {
 
       <template #expanded="slotProps">
         <slot name="expanded" v-bind="slotProps"/>
+      </template>
+
+      <template #loading>
+        <div :class="COMPONENTS.table.loadingRow">
+          <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.table.loadingSpinner"/>
+          {{ loadingText }}
+        </div>
       </template>
 
       <template #empty>

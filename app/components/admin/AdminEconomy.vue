@@ -92,11 +92,12 @@ const getInhabitantName = (id: number) => inhabitantsMap.value.get(id) ?? `#${id
 // Household lookup from store (reused in KitchenPreparation)
 const {getHouseholdForInhabitant} = householdsStore
 
-const {upcomingOrders, isUpcomingOrdersLoading: isUpcomingOrdersFetching} = storeToRefs(bookingsStore)
+const {upcomingOrders, isUpcomingOrdersLoaded} = storeToRefs(bookingsStore)
 const {refreshUpcomingOrders} = bookingsStore
 bookingsStore.loadUpcomingOrders(true)
+// Loading until the upcoming orders have answered: a dataset idle in the server render reads as loading, not empty
 const isUpcomingOrdersLoading = computed(() =>
-    !isPlanStoreReady.value || isUpcomingOrdersFetching.value
+    !isPlanStoreReady.value || !isUpcomingOrdersLoaded.value
 )
 
 type OrderWithInhabitant = OrderDisplay & { inhabitant: InhabitantInfo, dinnerEvent: DinnerEventInfo }
@@ -473,6 +474,8 @@ const dinnerBreakdownStats = computed(() => {
             row-key="dinnerEvent.id"
             :date-accessor="(item) => item.dinnerEvent.date"
             :loading="isUpcomingOrdersLoading"
+            loading-text="Henter fremtidige bestillinger"
+            data-testid="future-orders-table"
         >
           <template #expand-cell="{ row }">
             <UButton

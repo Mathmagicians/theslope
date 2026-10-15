@@ -1,7 +1,7 @@
 # ADR Compliance - Frontend
 
 **Generated:** 2025-11-11
-**Last Updated:** 2026-10-12
+**Last Updated:** 2026-10-16
 **History:** git and the feature plans under `docs/features/` (shipped plans in `docs/features/archived/`)
 
 One row per route, component, store and composable: which ADRs it answers to, its markers and its test coverage. The code
@@ -34,7 +34,7 @@ and the component headers hold the detail; a row names a gap in a few words.
 | **Household** | | | | | | | |
 | `/household/[shortname]` | `household/[shortname]/index.vue` | ✅ households | N/A | ✅ `?pbs=` | ✅ | ⚠️ | ⚠️ review `?pbs` on redirect |
 | `/household/[shortname]/bookings` | `HouseholdBookings.vue` | ✅ plan, households, bookings | N/A | ✅ `?pbs=` `?cal=` | ✅ | ⚠️ | ⚠️ partial unit |
-| `/household/[shortname]/allergies` | `HouseholdAllergies.vue` | ✅ allergies | ❓ | ✅ `?pbs=` | ❌ | ❌ | ❌ no tests |
+| `/household/[shortname]/allergies` | `HouseholdAllergies.vue` | ✅ allergies | ❓ | ✅ `?pbs=` | ✅ | ❌ | ⚠️ e2e only |
 | `/household/[shortname]/settings` | `HouseholdSettings.vue` | ✅ households | N/A | ✅ `?pbs=` | ✅ | ❌ | ⚠️ e2e only |
 | `/household/[shortname]/economy` | `HouseholdEconomy.vue` | ✅ plan, bookings | N/A | ✅ `?pbs=` | ❌ | ⚠️ store specs | ⚠️ store specs only |
 | **Other** | | | | | | | |
@@ -42,6 +42,9 @@ and the component headers hold the detail; a row names a gap in a few words.
 | `/login` | `Login.vue` | ✅ auth | N/A | ✅ | ✅ | ⚠️ via the cards | ⚠️ e2e only |
 | `/dinner` | `dinner/index.vue` | ✅ plan, bookings, auth | N/A | ✅ `?date=` `?cal=` | ✅ | ❌ | ⚠️ e2e only |
 | `/chef` | `chef/index.vue` | ✅ plan, users, allergies, bookings | N/A | ✅ `?team=` `?view=` | ✅ | ❌ | ⚠️ e2e only |
+| **Public** | | | | | | | |
+| `/public/billing/[token]` | `public/billing/[token].vue` | N/A, `storeAsyncData` (ADR-007 component-local) | N/A | N/A | ✅ `PublicBilling` | ❌ | ⚠️ e2e only |
+| `/public/billing/[token].csv` | `public/billing/[token].csv.vue` | N/A | N/A | N/A | ❌ | ❌ | ❌ no tests; no link reaches it |
 
 ## Components
 
@@ -98,7 +101,7 @@ Status.
 | `AllergyTypeCard.vue` | `/admin/allergies`, `/household/[shortname]/allergies` | plan | ✅ | ✅ parent | ✅ |
 | `AllergyTypeDisplay.vue` | `/dinner`, `/chef`, `/admin/allergies`, `/household/[shortname]/allergies` | none | ✅ | N/A | ✅ |
 | `AllergyNotes.vue` | `/admin/allergies`, `/admin/allergies/pdf` | none | ✅ | ✅ parent | ✅ |
-| `HouseholdAllergies.vue` | `/household/[shortname]/allergies` | allergies, households | ❌ | ❌ | ❌ no tests |
+| `HouseholdAllergies.vue` | `/household/[shortname]/allergies` | allergies, households | ❌ | ✅ | ⚠️ e2e only |
 | `AllergyEditor.vue` | `/household/[shortname]/allergies` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `AllergyManagersList.vue` | `/admin/allergies`, `/household/[shortname]/allergies` | users | ❌ | ❌ | ❌ no tests |
 
@@ -114,6 +117,10 @@ Status.
 | `DangerButton.vue` | `/household/[shortname]/settings`, `/admin/economy`, `/chef` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `QrCode.vue` | `/admin/allergies/pdf` | none | ✅ | ✅ parent | ✅ |
 | `InstallPrompt.vue` | `/login` | none | ✅ | ✅ | ✅ |
+| `ActionCard.vue` | `/login` | none | ❌ | ✅ parent | ⚠️ missing unit |
+| `RoleAssignment.vue` | `/chef`, `/dinner` | auth, plan | ✅ | ✅ serial | ✅ |
+| `RoleAssignmentForm.vue` | `/chef`, `/dinner` | plan | ✅ | ✅ serial | ✅ |
+| `DeadlineBadge.vue` | `/chef`, `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | none | ✅ parent | ✅ parent | ✅ |
 
 ### Calendars
 
@@ -126,10 +133,13 @@ Status.
 | `WeekDayMapDisplay.vue` | `/admin/planning`, `/admin/teams` | none | ✅ | ✅ parent | ✅ |
 | `WeekDayMapDinnerModeDisplay.vue` | `/household/[shortname]/settings` | none | ❌ | ❌ | ❌ no tests |
 | `BaseCalendar.vue` | every calendar | none | ❌ | N/A | ⚠️ missing unit |
-| `CalendarLegend.vue` | `/chef`, `/dinner`, `/household/[shortname]/bookings` | none | ✅ | ✅ parent | ✅ |
+| `CalendarLegend.vue` | `/admin/teams`, `/chef`, `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | none | ✅ | ✅ parent | ✅ the one "Forklaring" panel; `DinnerModeLegend` renders inside it |
 | `CalendarDisplay.vue` | `/admin/planning` | none | ✅ | ❌ | ✅ |
 | `ChefCalendarDisplay.vue` | `/chef` | none | ✅ | ✅ | ✅ |
-| `DinnerCalendarDisplay.vue` | `/dinner`, `/household/[shortname]/bookings` | none | ❌ | ✅ parent | ⚠️ e2e only |
+| `DinnerCalendarDisplay.vue` | `/dinner`, `/household/[shortname]/bookings` | none | ✅ | ✅ serial `Waitlist` | ✅ |
+| `CountdownTimer.vue` | `/chef`, `/dinner` | none | ❌ | ✅ | ⚠️ missing unit |
+| `CalendarDateNav.vue` | `/household/[shortname]/bookings`, `/chef`, `/dinner` | none | ✅ parent | ✅ serial | ✅ |
+| `CalendarMasterPanel.vue` | `/chef`, `/dinner` | none | ❌ | ✅ parent | ⚠️ missing unit |
 
 ### Bookings
 
@@ -139,25 +149,40 @@ Status.
 | `BookingGridView.vue` | `/household/[shortname]/bookings` | none | ✅ | ✅ serial | ✅ |
 | `BookingViewSwitcher.vue` | `/household/[shortname]/bookings` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `ActionPreview.vue` | `/household/[shortname]/bookings`, `/admin/economy` | none | ✅ | ✅ parent | ✅ |
-| `GuestBookingForm.vue` | `/household/[shortname]/bookings`, `/admin/economy` | none | ❌ | ✅ parent | ⚠️ missing unit |
-| `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | bookings, auth | ✅ | ✅ serial | ✅ |
-| `DinnerModeLegend.vue` | `/household/[shortname]/bookings` | none | ✅ | ✅ parent | ✅ |
-| `DinnerModeSelector.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ❌ | ✅ parent | ⚠️ missing unit |
+| `GuestBookingForm.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ parent | ✅ parent | ✅ via `DinnerBookingForm` |
+| `DinnerBookingForm.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/economy` | allergies, auth, households | ✅ | ✅ serial, incl. `Waitlist` | ✅ |
+| `DinnerModeLegend.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ | ✅ parent | ✅ renders through `CalendarLegend` |
+| `DinnerModeSelector.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ✅ parent | ✅ parent | ✅ |
 | `DinnerEvent.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `DinnerTicket.vue` | `/dinner`, `/household/[shortname]/bookings` | none | ✅ | ✅ parent | ✅ |
 | `OrderHistoryDisplay.vue` | `/admin/economy`, `/household/[shortname]/economy` | bookings | ✅ | ✅ parent | ✅ |
-| `KitchenPreparation.vue` | `/dinner`, `/chef` | none | ✅ | ✅ parent | ✅ |
+| `KitchenPreparation.vue` | `/dinner`, `/chef` | households | ✅ | ✅ parent | ✅ |
+| `DinnerDetailHeader.vue` | `/chef`, `/dinner` | none | ✅ | ✅ serial | ✅ |
+| `DinnerDetailPanel.vue` | `/chef`, `/dinner` | none | ❌ | ✅ | ⚠️ missing unit |
 
 ### Chef
 
 | Component | Routes | Stores | Component spec | E2E | Status |
 |---|---|---|---|---|---|
-| `ChefMenuCard.vue` | `/chef`, `/dinner` | allergies | ⚠️ mocks stores | ❌ | ⚠️ missing e2e |
+| `ChefMenuCard.vue` | `/chef`, `/dinner` | allergies | ✅ real stores | ✅ serial `Waitlist` | ✅ |
 | `DinnerBudget.vue` | `/chef` | none | ✅ | ✅ | ✅ |
 | `ExpenseLines.vue` | `/chef` | none | ✅ | ✅ | ✅ |
 | `VatAmount.vue` | `/chef` | none | ✅ | ✅ parent | ✅ |
 | `CookingRoundSpending.vue` | `/chef` | none | ✅ | ❌ | ✅; an arrow (`table.currentMarker`) before the name of the dinner on view |
 | `TicketChanges.vue` | `/chef` | bookings | ✅ | ❌ | ✅ |
+| `TeamRoleStatus.vue` | `/chef` | none | ❌ | ✅ parent | ⚠️ missing unit |
+| `ChefDinnerCard.vue` | `/chef` | bookings | ✅ | ✅ parent | ✅ |
+| `DinnerStatusStepper.vue` | `/chef` | bookings | ✅ parent | ✅ parent | ✅ |
+
+### Economy
+
+| Component | Routes | Stores | Component spec | E2E | Status |
+|---|---|---|---|---|---|
+| `EconomyTable.vue` | `/admin/economy`, `/household/[shortname]/economy` | none | ✅ | ✅ parent | ✅ |
+| `CostEntry.vue` | `/admin/economy`, `/household/[shortname]/economy` | none | ❌ | ✅ parent | ⚠️ missing unit |
+| `CostLine.vue` | `/admin/economy`, `/household/[shortname]/economy` | none | ❌ | ✅ parent | ⚠️ missing unit; `state`, `ticketType` typed as strings |
+| `ControlBadge.vue` | `/admin/economy`, `/household/[shortname]/economy` | none | ❌ | ✅ parent | ⚠️ missing unit |
+| `ShareLinksPopover.vue` | `/admin/economy`, `/public/billing/[token]` | none | ❌ | ✅ parent | ⚠️ missing unit |
 
 ### Layout
 
@@ -169,6 +194,7 @@ Status.
 | `Loader.vue` | every route | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `Ticker.vue` | `/` | none | ❌ | N/A | ⚠️ missing unit |
 | `HelpButton.vue` | every route | none | ❌ | N/A | ⚠️ missing unit |
+| `Logo.vue` | every route | none | ❌ | ✅ parent | ⚠️ missing unit |
 
 ## Stores
 
@@ -177,9 +203,9 @@ Status.
 | `plan.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `households.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `users.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `users.ts` | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ no ready flag, no `isEmpty`, `isInitialized` on my teams only; 0.9.1 |
 | `auth.ts` | N/A | ✅ | N/A | ✅ parent | ✅ |
-| `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ✅ spec covers the queue entries, the household places, the dinner's queue and `addExtraPortions` |
 
 ## Composables
 
@@ -203,6 +229,7 @@ Status.
 | `useSettingValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ | ✅ |
 | `useUserPreferenceValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `useWaitlistValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ parent | ✅ |
+| `fragments/domainFragments.ts` | isomorphic | ✅ | N/A | ✅ | ✅ | ✅ `server/` reaches it through the validation composables |
 | **Business logic** | | | | | | |
 | `useBooking()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
 | `useWaitlist()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
@@ -211,12 +238,12 @@ Status.
 | `useCookingTeam()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `useBilling()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
 | `useHeynabo()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
-| `useOrder()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
-| `useAllergy()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
+| `useOrder()` | client | N/A | N/A | ✅ | ✅ | ✅ |
+| `useAllergy()` | client | N/A | N/A | ✅ | ✅ | ✅ |
 | `useTicket()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
 | `useMaintenance()` | client | N/A | N/A | ✅ | ✅ | ✅ |
-| `useUserRoles` (module) | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
-| `usePermissions()` | isomorphic | N/A | ✅ | N/A | ✅ | ✅ |
+| `useUserRoles` (module) | isomorphic | ⚠️ | N/A | ✅ | ✅ | ⚠️ generated-enum import; 0.9.1 |
+| `usePermissions()` | isomorphic | ⚠️ | N/A | N/A | ✅ | ⚠️ generated-enum import; 0.9.1 |
 | **UI and navigation** | | | | | | |
 | `useBookingView()` (with `useCalendarOpenParam`, `useDinnerDateParam`) | client | ✅ | N/A | ✅ | ✅ | ✅ |
 | `useEntityFormManager()` | client | N/A | N/A | N/A | ✅ | ✅ |
@@ -229,6 +256,8 @@ Status.
 | `useUserRolesUi()` | pure UI | N/A | N/A | N/A | ✅ | ✅ |
 | `useInstallPrompt()` | pure UI | N/A | N/A | N/A | ✅ | ✅ |
 | `useTemporalCalendar()` | client | N/A | N/A | ✅ | ✅ | ✅ |
+| `useCalendarEvents()` | client | N/A | N/A | N/A | ✅ | ✅ |
+| `useExpandableRow()` | client | N/A | N/A | N/A | ❌ | ⚠️ missing unit |
 | `useTheSlopeDesignSystem()` | design system (ADR-018) | N/A | N/A | N/A | ✅ architecture specs | ✅ |
 
 ## Checklist

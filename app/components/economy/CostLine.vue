@@ -45,8 +45,8 @@ const emit = defineEmits<{
 }>()
 
 const {formatPrice, ticketTypeConfig} = useTicket()
-const {formatOrder} = useOrder()
-const {TYPOGRAPHY, SIZES, COMPONENTS, NOISE, BUTTONS} = useTheSlopeDesignSystem()
+const {formatOrder} = useBookingUi()
+const {TYPOGRAPHY, SIZES, COMPONENTS, NOISE, BUTTONS, COLOR} = useTheSlopeDesignSystem()
 const {OrderStateSchema} = useBookingValidation()
 const OrderState = OrderStateSchema.enum
 
@@ -60,7 +60,7 @@ const orderId = computed(() => {
 })
 const isHistoryExpanded = computed(() => orderId.value !== null && props.historyOrderId === orderId.value)
 const ticketLabel = computed(() => props.item.ticketType ? ticketTypeConfig[props.item.ticketType as keyof typeof ticketTypeConfig]?.label : 'Ukendt')
-const ticketColor = computed(() => props.item.ticketType ? ticketTypeConfig[props.item.ticketType as keyof typeof ticketTypeConfig]?.color : 'neutral')
+const ticketColor = computed(() => props.item.ticketType ? ticketTypeConfig[props.item.ticketType as keyof typeof ticketTypeConfig]?.color : COLOR.neutral)
 // DinnerModeSelector accepts string | undefined, handles type validation internally
 const dinnerModeValue = computed(() => props.item.dinnerMode)
 // Show dinner mode icon for all modes including NONE (X icon) - only hide if dinnerMode is undefined
@@ -82,7 +82,7 @@ const formatted = computed(() => {
 </script>
 
 <template>
-  <div class="space-y-1">
+  <div :class="COMPONENTS.costLine.stack">
     <div :class="[COMPONENTS.costLine.row, COMPONENTS.costLine.columns, compact ? TYPOGRAPHY.finePrint : TYPOGRAPHY.bodyTextSmall]">
       <!-- History button -->
       <div>
@@ -94,7 +94,7 @@ const formatted = computed(() => {
         />
       </div>
       <!-- Name -->
-      <span :class="['truncate', COMPONENTS.costLine.nameSlot]">{{ item.inhabitant.name }}</span>
+      <span :class="COMPONENTS.costLine.nameSlot">{{ item.inhabitant.name }}</span>
       <!-- Ticket type -->
       <div>
         <UBadge :color="ticketColor" :variant="NOISE.soft" :size="SIZES.small">
@@ -103,7 +103,7 @@ const formatted = computed(() => {
       </div>
       <!-- Dinner mode -->
       <div>
-        <DinnerModeSelector v-if="showDinnerMode" :model-value="dinnerModeValue" size="xs"/>
+        <DinnerModeSelector v-if="showDinnerMode" :model-value="dinnerModeValue" :size="SIZES.xs"/>
       </div>
       <!-- Guest badge -->
       <div>
@@ -120,7 +120,7 @@ const formatted = computed(() => {
       <!-- Amount -->
       <span :class="[COMPONENTS.costLine.amountSlot, compact ? TYPOGRAPHY.finePrint : TYPOGRAPHY.bodyTextMuted]">{{ formatPrice(itemAmount) }} kr</span>
     </div>
-    <div v-if="isHistoryExpanded" class="pl-6 md:pl-8 pt-1">
+    <div v-if="isHistoryExpanded" :class="COMPONENTS.costLine.history">
       <OrderHistoryDisplay :order-id="orderId!"/>
     </div>
   </div>

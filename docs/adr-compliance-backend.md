@@ -1,7 +1,7 @@
 # ADR Compliance - Backend
 
 **Generated:** 2025-01-09
-**Last Updated:** 2026-10-12
+**Last Updated:** 2026-10-15
 **History:** git and the feature plans under `docs/features/` (shipped plans in `docs/features/archived/`)
 
 One row per endpoint and per server module an ADR names, with its markers and its API spec. The handler, its repository
@@ -36,14 +36,14 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/team/index.put.ts` | ✅ | ⚠️ | ✅ | ✅ | ⚠️ raw body read beside the validated one |
 | `/api/admin/team/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/team/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/team/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/team/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deleted id |
 | `/api/admin/team/[id]/joker-slot/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/team/[id]/joker-slot/[slotId].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/team/[id]/joker-slot/[slotId].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ returns the deleted id |
 | `/api/admin/team/assignment/index.get.ts` | ❌ | N/A | N/A | N/A | ❌ stub |
 | `/api/admin/team/assignment/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/team/assignment/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/team/assignment/[id].post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec written, not run |
-| `/api/admin/team/assignment/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/admin/team/assignment/[id].delete.ts` | ⚠️ | ✅ | ✅ | ✅ | ⚠️ returns the deleted count for a single delete (ADR-009 r7: the id) |
 | **Admin - users** | | | | | |
 | `/api/admin/users/index.get.ts` | ✅ | ⚠️ | ✅ | ✅ | ⚠️ raw query read |
 | `/api/admin/users/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -54,7 +54,6 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/admin/household/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/household/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/household/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/admin/household/[id].post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/household/[id].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/household/inhabitants/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/admin/household/inhabitants/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |

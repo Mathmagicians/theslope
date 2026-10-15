@@ -93,48 +93,10 @@ User (Bruger)
 
 ---
 
-## Screenshots
+## Guides
 
-### User Dashboard
-![User Dashboard](screenshots/user/dashboard.png)
-*Dashboard shown after login with quick actions for Dinner, Household, and Cooking Team*
-
-### Dinner Calendar
-![Dinner Calendar](screenshots/dinner/dinner-calendar.png)
-*Public dinner calendar showing upcoming events with booking status*
-
-### Household Views
-![Household Bookings](screenshots/household/household-bookings.png)
-*Household booking view showing family members and their reservations*
-
-![Weekly Preferences](screenshots/household/household-members-view-mode.png)
-*VIEW mode: Compact badges show preferences. Click ✏️ to edit individual, ⚡ for power mode*
-
-![Editing Preferences](screenshots/household/household-card-preferences-editing.png)
-*EDIT mode: Button groups for each day with immediate save*
-
-### Chef Views
-![Chef Dashboard](screenshots/chef/chef-dashboard.png)
-*Chef view showing upcoming cooking assignments*
-
-![Chef Menu Card](screenshots/chef/chef-menu-card.png)
-*Menu card with team info and allergen tracking*
-
-### Admin Views
-![Admin Planning](screenshots/admin/admin-planning-loaded.png)
-*Season planning with cooking days and holiday configuration*
-
-![Season Selector](screenshots/admin/season-selector-dropdown-status-indicators.png)
-*Season selector with status indicators: 🟢 Active | 🌱 Future | ⚪ Past*
-
-![Admin Teams](screenshots/admin/admin-teams-edit.png)
-*Team management with master-detail interface*
-
-![Admin Households](screenshots/admin/admin-households-list.png)
-*Household list with inhabitants — inline edit-panel expands per row for move/delete*
-
-![Household Settings](screenshots/household/household-settings.png)
-*Husstandens indstillinger — set/clear move-out date via pencil-gate*
+The guides show the app with screenshots, in Danish: [user guide](../user-guide.md) for members,
+[chef guide](../chef-guide.md) for the chef and the cooking team, [admin guide](../admin-guide.md) for admins.
 
 ---
 
@@ -265,8 +227,8 @@ Legend: ⚡ Power mode | ✏️ Edit | 🍽️ Dine in | 🕐 Late | 🛍️ Tak
 - **ADR-010:** Domain-driven serialization (repository layer)
 - **ADR-015:** Idempotent automated jobs with rolling window
 
-> **For developers:** See [Architecture Decision Records](adr.md) for detailed patterns.
+> **For developers:** See [Architecture Decision Records](../adr.md) for detailed patterns.
 
 ---
 
-*Last Updated: April 2026*
+*Last Updated: October 2026*

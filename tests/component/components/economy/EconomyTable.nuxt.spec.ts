@@ -213,6 +213,29 @@ describe('EconomyTable', () => {
             const table = wrapper.findComponent({name: 'UTable'})
             expect(table.props('loading')).toBe(true)
         })
+
+        // Slots go through the root mount alone
+        const mountEmpty = (loading: boolean) => mountSuspended(EconomyTable, {
+            props: {data: [], columns: defaultColumns, rowKey: 'date', dateAccessor, loading, loadingText: 'Henter fremtidige bestillinger'},
+            slots: {empty: '<div data-testid="custom-empty">No data</div>'},
+            global: {provide: {isMd: ref(true)}}
+        })
+
+        it('while loading with no rows, shows the loading row with its text and not the empty state', async () => {
+            const wrapper = await mountEmpty(true)
+
+            const loadingRow = wrapper.find('[data-slot="loading"]')
+            expect(loadingRow.exists()).toBe(true)
+            expect(loadingRow.text()).toContain('Henter fremtidige bestillinger')
+            expect(findByTestId(wrapper, 'custom-empty').exists()).toBe(false)
+        })
+
+        it('once loaded with no rows, shows the empty state and no loading row', async () => {
+            const wrapper = await mountEmpty(false)
+
+            expect(findByTestId(wrapper, 'custom-empty').exists()).toBe(true)
+            expect(wrapper.find('[data-slot="loading"]').exists()).toBe(false)
+        })
     })
 
     describe('Empty State', () => {

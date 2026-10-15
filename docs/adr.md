@@ -3,7 +3,7 @@
 **NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
 ## ADR-018: Design System Owns Shared UI Patterns
 
-**Status:** Accepted | **Date:** 2026-09-16 | **Updated:** 2026-10-13
+**Status:** Accepted | **Date:** 2026-09-16 | **Updated:** 2026-10-16
 
 ### Context
 
@@ -20,6 +20,7 @@ Shared UI values had drifted into per-component colour, variant and `:ui` patche
 | Buttons | `BUTTONS.<kind>` with `ICONS` | `v-bind="BUTTONS.secondaryAction" :color="COLOR.primary" :icon="ICONS.edit"` |
 | Calendars | `COMPONENTS.calendarGrid`, `CALENDAR.picker`, `dayCircleClasses(variant)` | `v-bind="COMPONENTS.calendarGrid"`; every day circle renders through the helper |
 | Table empty states | the `UTable` `#empty` slot | one empty state per table, inside the slot |
+| Table loading | `COMPONENTS.table.loadingRow`, `COMPONENTS.table.loadingSpinner` with `ICONS.sync` | a table that binds `loading` fills the `UTable` `#loading` slot with the spinning glyph and its text; without the slot UTable renders `#empty` while loading |
 | Separators | `COMPONENTS.separator.<kind>` on a labelled `USeparator` | `v-bind="COMPONENTS.separator.moment" :label="…"` |
 
 A token holds exactly one value. Two values are two tokens, named by where they are used. Merging values is a design
