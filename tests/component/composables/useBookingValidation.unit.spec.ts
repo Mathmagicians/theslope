@@ -593,8 +593,10 @@ describe('useBookingValidation', () => {
       CloseOrdersResultSchema,
       CreateTransactionsResultSchema,
       DailyMaintenanceResultSchema,
-      ScaffoldResultSchema
+      ScaffoldResultSchema,
+      BookingActionSchema
     } = useBookingValidation()
+    const Action = BookingActionSchema.enum
 
     describe('ConsumeResultSchema', () => {
       it.each([
@@ -652,40 +654,44 @@ describe('useBookingValidation', () => {
     })
 
     describe('ScaffoldResultSchema', () => {
-      const validScaffoldResult = {
-        seasonId: 1,
-        created: 10,
-        deleted: 2,
-        released: 1,
-        unchanged: 50,
-        households: 5
-      }
-
-      it('GIVEN valid scaffold result WHEN parsing THEN succeeds', () => {
-        expect(() => ScaffoldResultSchema.parse(validScaffoldResult)).not.toThrow()
-      })
+      const validScaffoldResult = OrderFactory.defaultScaffoldResult({totals: {[Action.BOOK]: 10, [Action.CANCEL]: 2, [Action.RELEASE]: 1}, unchanged: 50, households: 5})
+      const position = {inhabitantId: 1, dinnerEventId: 10, isGuestTicket: false, position: 2}
 
       it.each([
-        {desc: 'zero counts', data: {seasonId: 1, created: 0, deleted: 0, released: 0, unchanged: 0, households: 0}},
-        {desc: 'large counts', data: {seasonId: 99, created: 1000, deleted: 500, released: 200, unchanged: 2000, households: 100}}
+        {desc: 'a run with orders', data: validScaffoldResult},
+        {desc: 'zero counts', data: OrderFactory.defaultScaffoldResult({households: 0})},
+        {desc: 'large counts', data: OrderFactory.defaultScaffoldResult({totals: {[Action.BOOK]: 1000, [Action.CANCEL]: 500, [Action.RELEASE]: 200}, unchanged: 2000, households: 100})},
+        {desc: 'no active season', data: OrderFactory.defaultScaffoldResult({seasonId: null})}
       ])('GIVEN $desc WHEN parsing THEN succeeds', ({data}) => {
         expect(() => ScaffoldResultSchema.parse(data)).not.toThrow()
       })
 
-      it('GIVEN a result without the queue counts WHEN parsing THEN they default to none', () => {
-        expect(ScaffoldResultSchema.parse(validScaffoldResult)).toMatchObject({claimed: 0, queued: 0, positions: [], left: 0, requeued: 0})
+      it('GIVEN a result without positions, errors and outcomes WHEN parsing THEN they default to none', () => {
+        const {positions: _p, errored: _e, outcomes: _o, ...bare} = validScaffoldResult
+        expect(ScaffoldResultSchema.parse(bare)).toMatchObject({positions: [], errored: 0, outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: []}})
       })
 
       it('GIVEN queued entries with their positions WHEN parsing THEN the positions survive', () => {
-        const positions = [{inhabitantId: 1, dinnerEventId: 10, isGuestTicket: false, position: 2}]
-        expect(ScaffoldResultSchema.parse({...validScaffoldResult, queued: 1, positions}).positions).toEqual(positions)
+        const result = OrderFactory.defaultScaffoldResult({totals: {[Action.QUEUE]: 1}, positions: [position]})
+        expect(ScaffoldResultSchema.parse(result).positions).toEqual([position])
+      })
+
+      it('GIVEN landed and failed orders WHEN parsing THEN each keeps its action', () => {
+        const landed = OrderFactory.defaultBookingResult({action: Action.RELEASE})
+        const failed = OrderFactory.defaultBookingResult({inhabitantId: 2, action: Action.BOOK})
+        const result = OrderFactory.defaultScaffoldResult({errored: 1, results: [landed], failed: [failed]})
+        expect(ScaffoldResultSchema.parse(result)).toMatchObject({results: [landed], failed: [failed]})
       })
 
       it.each([
-        {desc: 'missing seasonId', data: {created: 10, deleted: 2, unchanged: 50, households: 5}},
-        {desc: 'position zero', data: {...validScaffoldResult, positions: [{inhabitantId: 1, dinnerEventId: 10, isGuestTicket: false, position: 0}]}},
-        {desc: 'negative created', data: {...validScaffoldResult, created: -1}},
-        {desc: 'non-integer deleted', data: {...validScaffoldResult, deleted: 1.5}},
+        {desc: 'missing seasonId', data: (({seasonId: _s, ...rest}) => rest)(validScaffoldResult)},
+        {desc: 'missing results', data: (({results: _r, ...rest}) => rest)(validScaffoldResult)},
+        {desc: 'missing failed', data: (({failed: _f, ...rest}) => rest)(validScaffoldResult)},
+        {desc: 'a total missing an action', data: {...validScaffoldResult, totals: {[Action.BOOK]: 1}}},
+        {desc: 'position zero', data: {...validScaffoldResult, positions: [{...position, position: 0}]}},
+        {desc: 'negative total', data: {...validScaffoldResult, totals: {...validScaffoldResult.totals, [Action.BOOK]: -1}}},
+        {desc: 'non-integer total', data: {...validScaffoldResult, totals: {...validScaffoldResult.totals, [Action.CANCEL]: 1.5}}},
+        {desc: 'unknown action on a failed order', data: {...validScaffoldResult, failed: [{...OrderFactory.defaultBookingResult(), action: 'EAT'}]}},
         {desc: 'zero seasonId', data: {...validScaffoldResult, seasonId: 0}}
       ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
         expect(() => ScaffoldResultSchema.parse(data)).toThrow()
@@ -699,7 +705,7 @@ describe('useBookingValidation', () => {
         close: {closed: 10},
         transact: {created: 8},
         clearWaitlist: {cleared: 3, dinners: [{dinnerEventId: 644, date: new Date('2026-10-12'), cleared: 3}]},
-        scaffold: {seasonId: 1, created: 20, deleted: 0, released: 0, unchanged: 100, households: 10}
+        scaffold: OrderFactory.defaultScaffoldResult({totals: {[Action.BOOK]: 20}, unchanged: 100, households: 10})
       }
 
       it('GIVEN valid maintenance result WHEN parsing THEN succeeds', () => {
@@ -730,7 +736,7 @@ describe('useBookingValidation', () => {
           consume: {consumed: 0},
           close: {closed: 0},
           transact: {created: 0},
-          scaffold: {seasonId: 1, created: 0, deleted: 0, released: 0, unchanged: 150, households: 15}
+          scaffold: OrderFactory.defaultScaffoldResult({unchanged: 150, households: 15})
         }
         expect(() => DailyMaintenanceResultSchema.parse(idempotentResult)).not.toThrow()
       })
@@ -787,7 +793,8 @@ describe('useBookingValidation', () => {
       ScaffoldOrdersRequestSchema,
       ScaffoldOrdersResponseSchema,
       OrderStateSchema,
-      DinnerModeSchema
+      DinnerModeSchema,
+      BookingActionSchema
     } = useBookingValidation()
 
     const OrderState = OrderStateSchema.enum
@@ -862,20 +869,7 @@ describe('useBookingValidation', () => {
     })
 
     describe('ScaffoldOrdersResponseSchema', () => {
-      const validResponse = {
-        householdId: 1,
-        scaffoldResult: {
-          seasonId: 1,
-          created: 2,
-          deleted: 0,
-          released: 0,
-          priceUpdated: 0,
-          modeUpdated: 0,
-          unchanged: 5,
-          households: 1,
-          errored: 0
-        }
-      }
+      const validResponse = OrderFactory.defaultScaffoldOrdersResponse({totals: {[BookingActionSchema.enum.BOOK]: 2}, unchanged: 5})
 
       it('GIVEN valid response WHEN parsing THEN succeeds', () => {
         expect(() => ScaffoldOrdersResponseSchema.parse(validResponse)).not.toThrow()

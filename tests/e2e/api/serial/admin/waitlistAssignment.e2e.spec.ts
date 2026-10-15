@@ -11,6 +11,7 @@ import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import {useCoreValidation, type InhabitantDisplay} from '~/composables/useCoreValidation'
 import {useBookingValidation, type DinnerMode} from '~/composables/useBookingValidation'
+const Action = useBookingValidation().BookingActionSchema.enum
 
 const {validatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo, daysFromNow} = testHelpers
 const {TicketTypeSchema} = useTicketPriceValidation()
@@ -117,7 +118,7 @@ test.describe('Waiting list assignment', () => {
         const context = await validatedBrowserContext(browser)
         // The queue accepts the entry; the release cannot place a second regular order for the inhabitant
         const result = await queue(context, OrderFactory.createBookingOrder(inhabitants[0]!.id!, dinnerEventId, adultPrice.id!))
-        expect(result.queued).toBe(1)
+        expect(result.totals[Action.QUEUE]).toBe(1)
 
         await WaitlistFactory.addExtraPortions(context, dinnerEventId, 1, 409)
 
@@ -134,7 +135,7 @@ test.describe('Waiting list assignment', () => {
         })
         dinnerIds.push(pastDinner.id!)
         const result = await queue(context, OrderFactory.createGuestOrder(inhabitants[3]!.id!, pastDinner.id!, childPrice.id!))
-        expect(result.queued).toBe(1)
+        expect(result.totals[Action.QUEUE]).toBe(1)
 
         const maintenance = await SeasonFactory.runDailyMaintenance(context)
         expect(maintenance.consume.consumed).toBeGreaterThanOrEqual(1)
@@ -162,11 +163,16 @@ test.describe('Waiting list assignment', () => {
         await preferences(DinnerModeSchema.enum.DINEIN)
         await SeasonFactory.updateSeason(context, activeSeason)
         const waiting = inhabitants[3]!
-        expect((await queue(context, OrderFactory.createBookingOrder(waiting.id!, closedDinner.id!, adultPrice.id!))).queued).toBe(1)
+        expect((await queue(context, OrderFactory.createBookingOrder(waiting.id!, closedDinner.id!, adultPrice.id!))).totals[Action.QUEUE]).toBe(1)
 
         const response = await preferences(DinnerModeSchema.enum.NONE)
 
         expect(response!.scaffoldResult.errored).toBe(0)
+        expect(response!.scaffoldResult.failed).toEqual([])
+        expect(response!.scaffoldResult.results).toEqual(expect.arrayContaining([
+            expect.objectContaining({inhabitantId: sellerInhabitant!.id, dinnerEventId: closedDinner.id, action: Action.RELEASE}),
+            expect.objectContaining({inhabitantId: sellerInhabitant!.id, dinnerEventId: openDinner.id, action: Action.CANCEL})
+        ]))
         expect(response!.scaffoldResult.outcomes.waitlistTicketsSold).toEqual([{
             dinnerEventId: closedDinner.id, ticketPriceId: adultPrice.id,
             buyerInhabitantId: waiting.id, buyerHouseholdId: householdId, sellerHouseholdId: seller.id

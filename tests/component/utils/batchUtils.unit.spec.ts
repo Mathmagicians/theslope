@@ -1,5 +1,5 @@
-import {describe, it, expect} from 'vitest'
-import {chunkArray, groupBy, pruneAndCreate} from '~/utils/batchUtils'
+import {describe, it, expect, vi} from 'vitest'
+import {chunkArray, groupBy, pruneAndCreate, writeBatchOrEach} from '~/utils/batchUtils'
 
 describe('batchUtils', () => {
     describe('chunkArray', () => {
@@ -198,5 +198,35 @@ describe('batchUtils', () => {
             expect(result.update).toHaveLength(1)
             expect(result.idempotent).toHaveLength(0)
         })
+    })
+})
+
+describe('writeBatchOrEach', () => {
+    const collect = () => {
+        const done: number[] = []
+        const failed: number[] = []
+        return {done, failed, onDone: (items: number[]) => done.push(...items), onFailed: (item: number) => failed.push(item)}
+    }
+
+    it('writes a batch once and reports every item done', async () => {
+        const write = vi.fn().mockResolvedValue(undefined)
+        const {done, failed, onDone, onFailed} = collect()
+
+        await writeBatchOrEach([1, 2, 3], write, onDone, onFailed)
+
+        expect(write).toHaveBeenCalledTimes(1)
+        expect({done, failed}).toEqual({done: [1, 2, 3], failed: []})
+    })
+
+    it('writes the items one by one when the batch fails, and reports only the failing item', async () => {
+        const write = vi.fn(async (items: number[]) => {
+            if (items.includes(2)) throw new Error('UNIQUE constraint failed')
+        })
+        const {done, failed, onDone, onFailed} = collect()
+
+        await writeBatchOrEach([1, 2, 3], write, onDone, onFailed)
+
+        expect(write).toHaveBeenCalledTimes(4)
+        expect({done, failed}).toEqual({done: [1, 3], failed: [2]})
     })
 })

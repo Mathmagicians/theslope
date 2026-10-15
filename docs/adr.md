@@ -200,13 +200,14 @@ endpoint hands the scaffolder its deadlines: the season's (`deadlinesForSeason`)
 7. Booking-relevant field changes MUST trigger immediate re-scaffold via `rescaffoldOnFieldChange`
 8. UI MUST include `waitlistEntryId` from the household's queue entries to leave or requeue
 9. The scaffold and the waiting-list steps send no notification: they return their outcomes (joined, sold, sold to the waiting list, the chef's extra portions), and the caller hands them to the notification service after the action (`notifyBookingOutcomes`, `notifyExtraPortions`)
+10. A failed write batch is retried order by order; the reply counts the orders that landed per action (`totals`), lists them per person for a run scoped to one household (`results`) and lists the orders that failed (`failed`)
 
 ### Key Files
 
 | File | Role |
 |------|------|
 | `app/composables/useBooking.ts` | Generator: `decideOrderAction`, bucket resolvers |
-| `app/composables/useBookingValidation.ts` | Schemas: `DesiredOrderSchema`, `ScaffoldResultSchema` |
+| `app/composables/useBookingValidation.ts` | Schemas: `DesiredOrderSchema`, `ScaffoldResultSchema`; enums `OrderBucketSchema`, `BookingActionSchema` |
 | `app/composables/useSeason.ts` | `deadlinesForSeason`, `OPEN_DEADLINES` |
 | `app/composables/useHousehold.ts` | `isHouseholdActiveOnDay` residency predicate |
 | `server/utils/scaffoldPrebookings.ts` | Scaffolder: transforms, executes, `rescaffoldOnFieldChange` |
@@ -349,6 +350,11 @@ const reconcile = pruneAndCreate<TicketPrice, number>(
     (a, b) => a.price === b.price && a.ticketType === b.ticketType
 )
 const { create, update, idempotent, delete: toDelete } = reconcile(existing)(incoming)
+```
+
+**`writeBatchOrEach(items, write, onDone, onFailed)`** - Writes a batch; when the batch fails, writes item by item and reports each failed item:
+```typescript
+await writeBatchOrEach(batch, orders => createOrders(d1Client, householdId, orders, audit), landed => results.push(...landed), order => failed.push(order))
 ```
 
 ### Compliance

@@ -15,6 +15,7 @@ import { OrderFactory } from '~~/tests/e2e/testDataFactories/orderFactory'
 import { asyncDataStatus, resetStores } from '~~/tests/component/testHelpers'
 
 import { useHouseholdsStore } from '~/stores/households'
+const Action = useBookingValidation().BookingActionSchema.enum
 
 // nuxt-auth-utils has no session in the test environment; the spec logs in and out and sets the session user
 const { session, useUserSession } = await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).mockSession())
@@ -277,33 +278,21 @@ describe('Households Store', () => {
       // Mock different results for each inhabitant - use factory + schema validation
       preferencesEndpoint1.mockReturnValue(InhabitantUpdateResponseSchema.parse({
         inhabitant: createMockInhabitant(1, 1),
-        scaffoldResult: OrderFactory.defaultScaffoldResult({ created: 3, deleted: 1, unchanged: 2 })
+        scaffoldResult: OrderFactory.defaultScaffoldResult({totals: {[Action.BOOK]: 3, [Action.CANCEL]: 1}, unchanged: 2})
       }))
       preferencesEndpoint2.mockReturnValue(InhabitantUpdateResponseSchema.parse({
         inhabitant: createMockInhabitant(2, 1),
-        scaffoldResult: OrderFactory.defaultScaffoldResult({ created: 2, deleted: 1, released: 1, priceUpdated: 1, unchanged: 1 })
+        scaffoldResult: OrderFactory.defaultScaffoldResult({totals: {[Action.BOOK]: 2, [Action.CANCEL]: 1, [Action.RELEASE]: 1, [Action.CHANGE_PRICE]: 1}, unchanged: 1})
       }))
 
       await store.updateAllInhabitantPreferences(1, { MONDAY: 'DINEIN' })
 
       // Verify aggregated result (includes all ScaffoldResult fields)
-      expect(store.lastPreferenceResult).toEqual({
-        seasonId: 1,     // Same for all (household in same season)
-        created: 5,      // 3 + 2
-        deleted: 2,      // 1 + 1
-        released: 1,     // 0 + 1
-        priceUpdated: 1, // 0 + 1
-        modeUpdated: 0,  // 0 + 0
+      expect(store.lastPreferenceResult).toEqual(OrderFactory.defaultScaffoldResult({
+        totals: {[Action.BOOK]: 5, [Action.CANCEL]: 2, [Action.RELEASE]: 1, [Action.CHANGE_PRICE]: 1},
         unchanged: 3,    // 2 + 1
-        households: 1,   // Power mode = single household
-        errored: 0,      // 0 + 0
-        claimed: 0,      // 0 + 0
-        queued: 0,       // 0 + 0
-        positions: [],
-        left: 0,         // 0 + 0
-        requeued: 0,     // 0 + 0
-        outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: []}
-      })
+        households: 1    // Power mode = single household
+      }))
     })
 
     it('updates inhabitants sequentially to avoid race conditions', async () => {
@@ -426,8 +415,8 @@ describe('Households Store', () => {
     })
 
     it.each([
-      { description: 'no order changes (created=0, deleted=0, released=0)', scaffoldOverrides: { created: 0, deleted: 0, released: 0 } },
-      { description: 'with order changes (created=3)', scaffoldOverrides: { created: 3, deleted: 0, released: 0 } }
+      { description: 'no order changes (created=0, deleted=0, released=0)', scaffoldOverrides: {totals: {[Action.BOOK]: 0, [Action.CANCEL]: 0, [Action.RELEASE]: 0}} },
+      { description: 'with order changes (created=3)', scaffoldOverrides: {totals: {[Action.BOOK]: 3, [Action.CANCEL]: 0, [Action.RELEASE]: 0}} }
     ])('does not throw on success with $description', async ({ scaffoldOverrides }) => {
       const store = await setupStore()
       moveInhabitantEndpoint.mockReturnValue(
@@ -496,7 +485,7 @@ describe('Households Store', () => {
 
   describe('setMoveOutDate', () => {
     it('returns the scaffold result and keeps it in lastMoveOutResult', async () => {
-      const scaffoldResult = OrderFactory.defaultScaffoldResult({ deleted: 4 })
+      const scaffoldResult = OrderFactory.defaultScaffoldResult({totals: {[Action.CANCEL]: 4}})
       moveOutEndpoint.mockReturnValue({ household: createMockHouseholdDetail(), scaffoldResult })
       const store = await setupStore()
 

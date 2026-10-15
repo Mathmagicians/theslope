@@ -8,6 +8,7 @@ import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
+const Action = useBookingValidation().BookingActionSchema.enum
 
 const {validatedBrowserContext, getSessionUserInfo} = testHelpers
 const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
@@ -82,7 +83,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         ])
 
         // THEN: One regular order per inhabitant per dinner - the second booking finds the first or meets the unique index
-        expect(responses.reduce((sum, response) => sum + response!.scaffoldResult.created, 0), 'One create succeeds').toBe(1)
+        expect(responses.reduce((sum, response) => sum + response!.scaffoldResult.totals[Action.BOOK], 0), 'One create succeeds').toBe(1)
 
         // AND: Retrieve dinner event detail again with tickets
         const detailWithTickets = await DinnerEventFactory.getDinnerEvent(context, createdDinnerEvent.id!)

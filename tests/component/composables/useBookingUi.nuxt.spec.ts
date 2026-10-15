@@ -1,17 +1,18 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, bookingSaveLabel, guestSaveLabel, OUTCOME_WORDS, MODE_WORDS, previewOutcome, dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewOutcome, dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
-import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, type ReleasedTicketCounts} from '~/composables/useBooking'
+import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, emptyOrderBuckets, type OrderBucketResult, type ReleasedTicketCounts} from '~/composables/useBooking'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import appConfig from '~/app.config'
 
-const {DinnerStateSchema, DinnerModeSchema} = useBookingValidation()
+const {DinnerStateSchema, DinnerModeSchema, BookingActionSchema} = useBookingValidation()
+const Action = BookingActionSchema.enum
 const DinnerState = DinnerStateSchema.enum
 const {ICONS} = useTheSlopeDesignSystem()
 // @nuxt/test-utils 4 starts Nuxt in beforeAll: useSeason runs there, not at module level
@@ -98,16 +99,16 @@ describe('useBookingUi', () => {
         // The words a requeue names: the mode, from the one mode-words table, and the queue place it keeps
         const LATE_AT_TWO = {mode: MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label, position: 2}
         it.each([
-            {outcome: 'book' as const, save: 'Book', guestSave: 'Tilføj gæst', preview: 'Anna tilmeldes'},
-            {outcome: 'buy' as const, save: 'Køb billet', guestSave: 'Køb billet til gæst', preview: 'Anna køber en ledig billet'},
-            {outcome: 'queue' as const, save: 'Skriv på venteliste', guestSave: 'Skriv gæst på venteliste', preview: 'Anna skrives på ventelisten'},
-            {outcome: 'leave' as const, save: 'Forlad ventelisten', guestSave: 'Forlad ventelisten', preview: 'Anna forlader ventelisten'},
-            {outcome: 'requeue' as const, save: 'Opdater', guestSave: 'Opdater', preview: `Anna ændrer ønsket tilmelding til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label}, beholder plads #2 i køen`},
-            {outcome: 'none' as const, save: 'Opdater', guestSave: 'Tilføj gæst', preview: 'Anna opdaterer spisning'}
+            {outcome: Action.BOOK, save: 'Book', guestSave: 'Tilføj gæst', preview: 'Anna tilmeldes'},
+            {outcome: Action.BUY, save: 'Køb billet', guestSave: 'Køb billet til gæst', preview: 'Anna køber en ledig billet'},
+            {outcome: Action.QUEUE, save: 'Skriv på venteliste', guestSave: 'Skriv gæst på venteliste', preview: 'Anna skrives på ventelisten'},
+            {outcome: Action.LEAVE, save: 'Forlad ventelisten', guestSave: 'Forlad ventelisten', preview: 'Anna forlader ventelisten'},
+            {outcome: Action.REQUEUE, save: 'Opdater', guestSave: 'Opdater', preview: `Anna ændrer ønsket tilmelding til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label}, beholder plads #2 i køen`},
+            {outcome: Action.CHANGE_MODE, save: 'Opdater', guestSave: 'Tilføj gæst', preview: 'Anna opdaterer spisning'}
         ])('$outcome → save "$save", guest "$guestSave", preview "$preview"', ({outcome, save, guestSave, preview}) => {
             expect(bookingSaveLabel(outcome)).toBe(save)
             expect(guestSaveLabel(outcome)).toBe(guestSave)
-            expect(OUTCOME_WORDS[outcome].template('Anna', LATE_AT_TWO)).toBe(preview)
+            expect(ACTION_WORDS[outcome].template('Anna', LATE_AT_TWO)).toBe(preview)
         })
     })
 
@@ -156,16 +157,15 @@ describe('useBookingUi', () => {
 describe('previewOutcome', () => {
     const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
     const desired = OrderFactory.defaultDesiredOrder({dinnerMode: DinnerModeSchema.enum.DINEIN, state: OrderStateSchema.enum.BOOKED})
-    const buckets = (filled: Partial<Record<'create' | 'claim' | 'leave' | 'requeue' | 'update', typeof desired[]>>) =>
-        ({create: [], update: [], delete: [], idempotent: [], claim: [], leave: [], requeue: [], ...filled})
+    const buckets = (filled: Partial<OrderBucketResult>): OrderBucketResult => ({...emptyOrderBuckets(), ...filled})
 
     it.each([
-        {desc: 'a new ticket before the deadline', filled: {create: [desired]}, ticketsForSale: 0, outcome: 'book'},
-        {desc: 'a claim with a ticket for sale', filled: {claim: [desired]}, ticketsForSale: 1, outcome: 'buy'},
-        {desc: 'a claim with nothing for sale', filled: {claim: [desired]}, ticketsForSale: 0, outcome: 'queue'},
-        {desc: 'Ingen on a queued row', filled: {leave: [desired]}, ticketsForSale: 0, outcome: 'leave'},
-        {desc: 'a new wish on a queued row', filled: {requeue: [desired]}, ticketsForSale: 0, outcome: 'requeue'},
-        {desc: 'a mode change on a held ticket', filled: {update: [desired]}, ticketsForSale: 0, outcome: 'none'}
+        {desc: 'a new ticket before the deadline', filled: {create: [desired]}, ticketsForSale: 0, outcome: Action.BOOK},
+        {desc: 'a claim with a ticket for sale', filled: {claim: [desired]}, ticketsForSale: 1, outcome: Action.BUY},
+        {desc: 'a claim with nothing for sale', filled: {claim: [desired]}, ticketsForSale: 0, outcome: Action.QUEUE},
+        {desc: 'Ingen on a queued row', filled: {leave: [desired]}, ticketsForSale: 0, outcome: Action.LEAVE},
+        {desc: 'a new wish on a queued row', filled: {requeue: [desired]}, ticketsForSale: 0, outcome: Action.REQUEUE},
+        {desc: 'a mode change on a held ticket', filled: {update: [desired]}, ticketsForSale: 0, outcome: Action.CHANGE_MODE}
     ])('$desc → $outcome', ({filled, ticketsForSale, outcome}) => {
         expect(previewOutcome(buckets(filled), () => ({ticketsForSale}))).toBe(outcome)
     })

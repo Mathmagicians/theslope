@@ -11,7 +11,7 @@ import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {useCoreValidation, IdSchema} from '~/composables/useCoreValidation'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
-import {chunkArray} from '~/utils/batchUtils'
+import {chunkArray, ReconciliationBucketSchema} from '~/utils/batchUtils'
 import {sumAmounts} from '~/utils/ledger'
 import {ExpenseFragmentSchema, deserializeExpense} from '~/composables/fragments/domainFragments'
 
@@ -253,14 +253,9 @@ export const useBookingValidation = () => {
     // fetchOrders includes orderHistory with WHERE clause, so use conservative 30 for IDs.
     const FETCH_IDS_BATCH_SIZE = 30
 
-    // Local type for batch chunking (avoids circular reference with exported type)
-    type _OrderCreateWithPrice = z.infer<typeof OrderCreateWithPriceSchema>
-
-    // Curried chunk function for order batches
-    const chunkOrderBatch = chunkArray<_OrderCreateWithPrice>(ORDER_BATCH_SIZE)
-
-    // Curried chunk function for ID arrays (used for batch deletes/updates)
-    const chunkIds = chunkArray<number>(DELETE_BATCH_SIZE)
+    // Order writes in batches of the insert size, and deletes in batches within D1's parameter limit
+    const chunkOrderBatch = <T>(items: T[]): T[][] => chunkArray<T>(ORDER_BATCH_SIZE)(items)
+    const chunkDeleteBatch = <T>(items: T[]): T[][] => chunkArray<T>(DELETE_BATCH_SIZE)(items)
 
     // Curried chunk function for IDs in fetch operations with nested includes
     const chunkFetchIds = chunkArray<number>(FETCH_IDS_BATCH_SIZE)
@@ -690,21 +685,40 @@ export const useBookingValidation = () => {
         waitlistTicketsSold: z.array(TicketSaleSchema)
     })
 
+    // The generator's buckets: the reconciler's four, the claim, and a queue entry's leave and requeue
+    const OrderBucketSchema = z.enum([...ReconciliationBucketSchema.options, 'claim', 'leave', 'requeue'])
+
+    // What a booking does to one order: the preview shows it before, the reply reports it after
+    const BookingActionSchema = z.enum(['BOOK', 'CANCEL', 'RELEASE', 'RECLAIM', 'BUY', 'QUEUE', 'LEAVE', 'REQUEUE', 'CHANGE_PRICE', 'CHANGE_MODE'])
+    const Action = BookingActionSchema.enum
+
+    // What a save does to the supply, which names its button: a bucket with no supply effect changes the mode
+    const BookingOutcomeSchema = BookingActionSchema.extract([Action.BOOK, Action.BUY, Action.QUEUE, Action.LEAVE, Action.REQUEUE, Action.CHANGE_MODE])
+
+    // One order's result in a scaffold run: who, which dinner, the eating mode and the action
+    const BookingResultSchema = z.object({
+        inhabitantId: IdSchema,
+        inhabitantName: z.string(),
+        isGuestTicket: z.boolean(),
+        dinnerEventId: IdSchema,
+        dinnerMode: DinnerModeSchema,
+        action: BookingActionSchema
+    })
+
+    // The orders of a run per action, every action present
+    const BookingTotalsSchema = z.record(BookingActionSchema, z.number().int().nonnegative())
+
+    const ScaffoldResultFormatSchema = z.enum(['compact', 'verbose', 'past'])
+
     const ScaffoldResultSchema = z.object({
         seasonId: IdSchema.nullable(),
-        created: z.number().int().nonnegative(),
-        deleted: z.number().int().nonnegative(),
-        released: z.number().int().nonnegative().default(0),
-        claimed: z.number().int().nonnegative().default(0),         // Released tickets bought after the deadline
-        queued: z.number().int().nonnegative().default(0),          // Claims with no ticket for sale, or a lost race: queue entries created
+        totals: BookingTotalsSchema,
         positions: z.array(QueuePositionSchema).default([]),        // The place in the dinner's queue of each queued entry
-        left: z.number().int().nonnegative().default(0),            // Queue entries deleted (NONE on an entry)
-        requeued: z.number().int().nonnegative().default(0),        // Queue entries whose wish changed, place kept
-        priceUpdated: z.number().int().nonnegative().default(0),    // Price category changes (birthdate added/changed or birthday passed)
-        modeUpdated: z.number().int().nonnegative().default(0),     // Dining mode changes (before deadline)
         unchanged: z.number().int().nonnegative(),
         households: z.number().int().nonnegative(),
         errored: z.number().int().nonnegative().default(0),
+        results: z.array(BookingResultSchema),                       // Each order that landed, in a run scoped to one household
+        failed: z.array(BookingResultSchema),                        // Each order that failed
         outcomes: BookingOutcomesSchema.default({joined: [], ticketsSold: [], waitlistTicketsSold: []})
     })
 
@@ -898,40 +912,6 @@ export const useBookingValidation = () => {
     // What a booking row can do: book before the deadline, or claim after it (a released ticket, else a place in the queue)
     const BookingRowActionSchema = z.enum(['process', 'claim'])
 
-    // ============================================================================
-    // User Booking Result Schemas (for processBooking feedback)
-    // ============================================================================
-
-    /**
-     * Action taken on an order during booking operation
-     */
-    const BookingActionSchema = z.enum(['created', 'updated', 'released', 'deleted', 'skipped'])
-
-    /**
-     * Feedback item for user notification - includes name for toast message
-     * Example: "Anna Hansen tilmeldt til tirsdag"
-     */
-    const BookingFeedbackItemSchema = z.object({
-        inhabitantId: IdSchema,
-        inhabitantName: z.string(),
-        action: BookingActionSchema,
-        dinnerMode: DinnerModeSchema
-    })
-
-    /**
-     * Result from processBooking operation with detailed feedback per inhabitant
-     */
-    const ProcessBookingResultSchema = z.object({
-        feedback: z.array(BookingFeedbackItemSchema),
-        summary: z.object({
-            created: z.number().int().nonnegative(),
-            updated: z.number().int().nonnegative(),
-            released: z.number().int().nonnegative(),
-            deleted: z.number().int().nonnegative(),
-            skipped: z.number().int().nonnegative()
-        })
-    })
-
     return {
         // Enums
         OrderStateSchema,
@@ -978,7 +958,7 @@ export const useBookingValidation = () => {
         ORDER_BATCH_SIZE,
         DELETE_BATCH_SIZE,
         chunkOrderBatch,
-        chunkIds,
+        chunkDeleteBatch,
         chunkFetchIds,
 
         // Transaction Creation (lean batch schema - ADR-009)
@@ -1027,10 +1007,13 @@ export const useBookingValidation = () => {
 
         BookingRowActionSchema,
 
-        // User Booking (processBooking feedback)
+        // Booking plan and results
+        OrderBucketSchema,
         BookingActionSchema,
-        BookingFeedbackItemSchema,
-        ProcessBookingResultSchema,
+        BookingOutcomeSchema,
+        BookingResultSchema,
+        BookingTotalsSchema,
+        ScaffoldResultFormatSchema,
 
         // Query Parameter Normalization
         IdOrIdsSchema
@@ -1113,7 +1096,10 @@ export type ClearWaitlistResult = z.infer<ReturnType<typeof useBookingValidation
 
 export type BookingRowAction = z.infer<ReturnType<typeof useBookingValidation>['BookingRowActionSchema']>
 
-// User Booking (processBooking feedback)
+// Booking plan and results
+export type OrderBucket = z.infer<ReturnType<typeof useBookingValidation>['OrderBucketSchema']>
 export type BookingAction = z.infer<ReturnType<typeof useBookingValidation>['BookingActionSchema']>
-export type BookingFeedbackItem = z.infer<ReturnType<typeof useBookingValidation>['BookingFeedbackItemSchema']>
-export type ProcessBookingResult = z.infer<ReturnType<typeof useBookingValidation>['ProcessBookingResultSchema']>
+export type BookingOutcome = z.infer<ReturnType<typeof useBookingValidation>['BookingOutcomeSchema']>
+export type BookingResult = z.infer<ReturnType<typeof useBookingValidation>['BookingResultSchema']>
+export type BookingTotals = z.infer<ReturnType<typeof useBookingValidation>['BookingTotalsSchema']>
+export type ScaffoldResultFormat = z.infer<ReturnType<typeof useBookingValidation>['ScaffoldResultFormatSchema']>

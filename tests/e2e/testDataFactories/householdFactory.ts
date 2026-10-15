@@ -7,6 +7,8 @@ import type {HouseholdDetail, HouseholdDisplay, InhabitantDetail, InhabitantCrea
 import {useCoreValidation} from "~/composables/useCoreValidation"
 import {useBookingValidation, type InhabitantUpdateResponse, type HouseholdUpdateResponse} from "~/composables/useBookingValidation"
 import {useHeynaboValidation, type HeynaboImportResponse} from "~/composables/useHeynaboValidation"
+import {useBookingValidation as useActionValidation} from '~/composables/useBookingValidation'
+const Action = useActionValidation().BookingActionSchema.enum
 
 const {salt, saltedId, temporaryAndRandom, headers} = testHelpers
 const {createDefaultWeekdayMap, InhabitantDetailSchema, UserDisplaySchema, HouseholdDisplaySchema} = useCoreValidation()
@@ -525,7 +527,7 @@ export class HouseholdFactory {
         const result = await HouseholdFactory.updateInhabitant(context, inhabitantId, {
             dinnerPreferences: createDefaultWeekdayMap(DinnerMode.NONE)
         }, 200, seasonId)
-        return result?.scaffoldResult?.released ?? 0
+        return result?.scaffoldResult?.totals[Action.RELEASE] ?? 0
     }
 
     /**

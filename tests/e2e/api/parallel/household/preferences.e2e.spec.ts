@@ -6,6 +6,7 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
+const Action = useBookingValidation().BookingActionSchema.enum
 
 const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, salt} = testHelpers
 const {DinnerModeSchema} = useBookingValidation()
@@ -131,9 +132,9 @@ test.describe('Preference Transition Scaffold Counts', () => {
             200,
             testSeason.id,
             (response) => {
-                expect(response.scaffoldResult.created, 'Should create orders for each cooking day').toBe(cookingDayCount)
-                expect(response.scaffoldResult.released, 'Should not release any orders').toBe(0)
-                expect(response.scaffoldResult.deleted, 'Should not delete any orders').toBe(0)
+                expect(response.scaffoldResult.totals[Action.BOOK], 'Should create orders for each cooking day').toBe(cookingDayCount)
+                expect(response.scaffoldResult.totals[Action.RELEASE], 'Should not release any orders').toBe(0)
+                expect(response.scaffoldResult.totals[Action.CANCEL], 'Should not delete any orders').toBe(0)
             }
         )
         expect(result).not.toBeNull()
@@ -160,8 +161,8 @@ test.describe('Preference Transition Scaffold Counts', () => {
             testSeason.id,
             (response) => {
                 // Before deadline = deleted, After deadline = released
-                expect(response.scaffoldResult.deleted + response.scaffoldResult.released, 'Should remove all orders').toBe(cookingDayCount)
-                expect(response.scaffoldResult.created, 'Should not create any orders').toBe(0)
+                expect(response.scaffoldResult.totals[Action.CANCEL] + response.scaffoldResult.totals[Action.RELEASE], 'Should remove all orders').toBe(cookingDayCount)
+                expect(response.scaffoldResult.totals[Action.BOOK], 'Should not create any orders').toBe(0)
             }
         )
 
@@ -189,9 +190,9 @@ test.describe('Preference Transition Scaffold Counts', () => {
             200,
             testSeason.id,
             (response) => {
-                expect(response.scaffoldResult.released, 'Should NOT release orders for mode change').toBe(0)
-                expect(response.scaffoldResult.created, 'Should not create new orders').toBe(0)
-                expect(response.scaffoldResult.deleted, 'Should not delete orders').toBe(0)
+                expect(response.scaffoldResult.totals[Action.RELEASE], 'Should NOT release orders for mode change').toBe(0)
+                expect(response.scaffoldResult.totals[Action.BOOK], 'Should not create new orders').toBe(0)
+                expect(response.scaffoldResult.totals[Action.CANCEL], 'Should not delete orders').toBe(0)
             }
         )
     })
@@ -215,9 +216,9 @@ test.describe('Preference Transition Scaffold Counts', () => {
             testSeason.id,
             (response) => {
                 expect(response.scaffoldResult.unchanged, 'Should report unchanged orders').toBeGreaterThan(0)
-                expect(response.scaffoldResult.created, 'Should not create orders').toBe(0)
-                expect(response.scaffoldResult.released, 'Should not release orders').toBe(0)
-                expect(response.scaffoldResult.deleted, 'Should not delete orders').toBe(0)
+                expect(response.scaffoldResult.totals[Action.BOOK], 'Should not create orders').toBe(0)
+                expect(response.scaffoldResult.totals[Action.RELEASE], 'Should not release orders').toBe(0)
+                expect(response.scaffoldResult.totals[Action.CANCEL], 'Should not delete orders').toBe(0)
             }
         )
     })

@@ -1,8 +1,8 @@
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, addYears, differenceInDays, nextDay, type Day} from 'date-fns'
-import {useBooking, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcome, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
+import {useBooking, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcome, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
-import {MODE_WORDS} from '~/composables/useBookingUi'
+import {MODE_WORDS, ACTION_WORDS} from '~/composables/useBookingUi'
 import {useBookingValidation, type OrderDisplay, type DinnerMode, type DesiredOrder} from '~/composables/useBookingValidation'
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -16,6 +16,10 @@ import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 import appConfig from '~/app.config'
 
 // Shared test constant: days offset for dinners before cancellation deadline
+const {OrderBucketSchema, BookingActionSchema} = useBookingValidation()
+const Bucket = OrderBucketSchema.enum
+const Action = BookingActionSchema.enum
+
 const FAR_FUTURE_DAYS = appConfig.theslope.defaultSeason.ticketIsCancellableDaysBefore + 20
 
 // Helper: days from today to next occurrence of weekday (0=Sun..6=Sat), at least minDaysAhead from now
@@ -46,7 +50,6 @@ let countChanges: UseBookingT['countChanges']
 let getPowerChanges: UseBookingT['getPowerChanges']
 let getPowerConsensus: UseBookingT['getPowerConsensus']
 let formatActionPreview: UseBookingUiT['formatActionPreview']
-let ACTION_PREVIEW: UseBookingUiT['ACTION_PREVIEW']
 let defaultDeadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
 let resolveTicketPrice: ReturnType<typeof useTicket>['resolveTicketPrice']
 beforeAll(() => {
@@ -71,7 +74,7 @@ beforeAll(() => {
         getPowerChanges,
         getPowerConsensus
     } = useBooking());
-    ({formatActionPreview, ACTION_PREVIEW} = useBookingUi())
+    ({formatActionPreview} = useBookingUi())
     resolveTicketPrice = useTicket().resolveTicketPrice
 
     const {deadlinesForSeason} = useSeason()
@@ -484,15 +487,70 @@ describe('getNewOrderAction', () => {
 
 describe('bookingOutcome', () => {
     it.each([
-        {bucket: 'create', ticketsForSale: 0, expected: 'book'},
-        {bucket: 'claim', ticketsForSale: 2, expected: 'buy'},
-        {bucket: 'claim', ticketsForSale: 0, expected: 'queue'},
-        {bucket: 'leave', ticketsForSale: 0, expected: 'leave'},
-        {bucket: 'requeue', ticketsForSale: 1, expected: 'requeue'},
-        {bucket: 'idempotent', ticketsForSale: 1, expected: 'none'},
-        {bucket: null, ticketsForSale: 1, expected: 'none'}
-    ] as const)('$bucket with $ticketsForSale for sale → $expected', ({bucket, ticketsForSale, expected}) => {
+        {bucket: Bucket.create, ticketsForSale: 0, expected: Action.BOOK},
+        {bucket: Bucket.claim, ticketsForSale: 2, expected: Action.BUY},
+        {bucket: Bucket.claim, ticketsForSale: 0, expected: Action.QUEUE},
+        {bucket: Bucket.leave, ticketsForSale: 0, expected: Action.LEAVE},
+        {bucket: Bucket.requeue, ticketsForSale: 1, expected: Action.REQUEUE},
+        {bucket: Bucket.idempotent, ticketsForSale: 1, expected: Action.CHANGE_MODE},
+        {bucket: null, ticketsForSale: 1, expected: Action.CHANGE_MODE}
+    ])('$bucket with $ticketsForSale for sale → $expected', ({bucket, ticketsForSale, expected}) => {
         expect(bookingOutcome(bucket, {ticketsForSale})).toBe(expected)
+    })
+})
+
+// =============================================================================
+// actionOfUpdate, plannedActions, countTotals - one plan for the preview and the scaffold
+// =============================================================================
+
+describe('actionOfUpdate', () => {
+    const {OrderStateSchema} = useBookingValidation()
+    const OS = OrderStateSchema.enum
+    const existingOf = (state: typeof OS[keyof typeof OS], ticketPriceId = 1) =>
+        (OrderFactory.defaultOrder(undefined, {id: 10, state, ticketPriceId}))
+    const incomingOf = (state: typeof OS[keyof typeof OS], ticketPriceId = 1) =>
+        ({...OrderFactory.defaultDesiredOrder(), orderId: 10, state, ticketPriceId})
+
+    it.each([
+        {name: 'a booked ticket released', incoming: incomingOf(OS.RELEASED), existing: existingOf(OS.BOOKED), expected: Action.RELEASE},
+        {name: 'a released ticket booked again', incoming: incomingOf(OS.BOOKED), existing: existingOf(OS.RELEASED), expected: Action.RECLAIM},
+        {name: 'a booked ticket at another price', incoming: incomingOf(OS.BOOKED, 2), existing: existingOf(OS.BOOKED), expected: Action.CHANGE_PRICE},
+        {name: 'a released ticket at another price', incoming: incomingOf(OS.RELEASED, 2), existing: existingOf(OS.RELEASED), expected: Action.CHANGE_PRICE},
+        {name: 'a booked ticket in another mode', incoming: incomingOf(OS.BOOKED), existing: existingOf(OS.BOOKED), expected: Action.CHANGE_MODE}
+    ])('$name → $expected', ({incoming, existing, expected}) => {
+        expect(actionOfUpdate(incoming, existing)).toBe(expected)
+    })
+})
+
+describe('plannedActions', () => {
+    const {OrderStateSchema} = useBookingValidation()
+    const order = (inhabitantId: number, overrides: Partial<DesiredOrder> = {}): DesiredOrder =>
+        ({...OrderFactory.defaultDesiredOrder(), inhabitantId, ...overrides})
+    const released = OrderFactory.defaultOrder(undefined, {id: 50, state: OrderStateSchema.enum.BOOKED, ticketPriceId: 1})
+
+    it('names the action of every order in the buckets, a claim settled by the supply', () => {
+        const buckets = {
+            create: [order(1)], update: [order(2, {orderId: 50, state: OrderStateSchema.enum.RELEASED, ticketPriceId: 1})],
+            idempotent: [order(3)], delete: [order(4)], claim: [order(5, {dinnerEventId: 1}), order(6, {dinnerEventId: 2})],
+            leave: [order(7)], requeue: [order(8)]
+        }
+        const forSale = (desired: DesiredOrder) => ({ticketsForSale: desired.dinnerEventId === 1 ? 1 : 0})
+
+        const actions = plannedActions(buckets, new Map([[50, released]]), forSale)
+
+        expect(actions.map(({order, action}) => [order.inhabitantId, action])).toEqual([
+            [5, Action.BUY], [6, Action.QUEUE], [1, Action.BOOK], [7, Action.LEAVE], [8, Action.REQUEUE], [4, Action.CANCEL], [2, Action.RELEASE]
+        ])
+    })
+})
+
+describe('countTotals', () => {
+    it('counts the items per action, every action present', () => {
+        const item = (action: typeof Action[keyof typeof Action]) => ({...OrderFactory.defaultBookingResult(), action})
+
+        const totals = countTotals([item(Action.BOOK), item(Action.BOOK), item(Action.RELEASE)])
+
+        expect(totals).toEqual({...Object.fromEntries(BookingActionSchema.options.map(action => [action, 0])), [Action.BOOK]: 2, [Action.RELEASE]: 1})
     })
 })
 
@@ -546,7 +604,7 @@ describe('decideOrderAction', () => {
                 existing: null,
                 beforeDeadline: true,
                 canEditMode: true,
-                expectedBucket: 'create',
+                expectedBucket: Bucket.create,
                 expectedState: OrderState.BOOKED
             },
             // Case 2: No orderId + NONE → null (skip)
@@ -566,7 +624,7 @@ describe('decideOrderAction', () => {
                 existing: null,
                 beforeDeadline: false,
                 canEditMode: false,
-                expectedBucket: 'claim',
+                expectedBucket: Bucket.claim,
                 expectedState: OrderState.BOOKED
             },
             // Case 5: orderId + NONE + before deadline → delete
@@ -576,7 +634,7 @@ describe('decideOrderAction', () => {
                 existing: createExisting(),
                 beforeDeadline: true,
                 canEditMode: true,
-                expectedBucket: 'delete',
+                expectedBucket: Bucket.delete,
                 expectedState: undefined  // delete doesn't set state
             },
             // Case 6: orderId + NONE + after deadline → update (RELEASED)
@@ -586,7 +644,7 @@ describe('decideOrderAction', () => {
                 existing: createExisting(),
                 beforeDeadline: false,
                 canEditMode: false,
-                expectedBucket: 'update',
+                expectedBucket: Bucket.update,
                 expectedState: OrderState.RELEASED
             },
             // Case 7: orderId + RELEASED + eating mode → update (BOOKED, reclaim own)
@@ -596,7 +654,7 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ state: OrderState.RELEASED }),
                 beforeDeadline: false,
                 canEditMode: false,
-                expectedBucket: 'update',
+                expectedBucket: Bucket.update,
                 expectedState: OrderState.BOOKED
             },
             // Case 8a: orderId + eating mode + unchanged BOOKED → idempotent (preserves state)
@@ -606,7 +664,7 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ dinnerMode: DinnerMode.DINEIN, ticketPriceId: 1, state: OrderState.BOOKED }),
                 beforeDeadline: true,
                 canEditMode: true,
-                expectedBucket: 'idempotent',
+                expectedBucket: Bucket.idempotent,
                 expectedState: OrderState.BOOKED  // preserved from existing
             },
             // Case 8b: orderId + NONE unchanged on RELEASED → idempotent (preserves RELEASED state)
@@ -616,7 +674,7 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ dinnerMode: DinnerMode.NONE, ticketPriceId: 1, state: OrderState.RELEASED }),
                 beforeDeadline: false,  // after deadline
                 canEditMode: false,
-                expectedBucket: 'idempotent',
+                expectedBucket: Bucket.idempotent,
                 expectedState: OrderState.RELEASED  // preserved from existing
             },
             // Case 9a: orderId + mode changed → update
@@ -626,7 +684,7 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ dinnerMode: DinnerMode.DINEIN }),
                 beforeDeadline: true,
                 canEditMode: true,
-                expectedBucket: 'update',
+                expectedBucket: Bucket.update,
                 expectedState: OrderState.BOOKED
             },
             // Case 9b: orderId + price changed → update
@@ -636,7 +694,7 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ ticketPriceId: 1 }),
                 beforeDeadline: true,
                 canEditMode: true,
-                expectedBucket: 'update',
+                expectedBucket: Bucket.update,
                 expectedState: OrderState.BOOKED
             },
             // Case 10: Price healing - RELEASED + NONE + price mismatch → update (not idempotent)
@@ -647,7 +705,7 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ state: OrderState.RELEASED, ticketPriceId: 1 }),
                 beforeDeadline: false,
                 canEditMode: false,
-                expectedBucket: 'update',
+                expectedBucket: Bucket.update,
                 expectedState: OrderState.RELEASED
             },
             // Case 11: Price healing - RELEASED + NONE + null ticketPriceId → update
@@ -658,7 +716,7 @@ describe('decideOrderAction', () => {
                 existing: createExisting({ state: OrderState.RELEASED, ticketPriceId: null as unknown as number }),
                 beforeDeadline: false,
                 canEditMode: false,
-                expectedBucket: 'update',
+                expectedBucket: Bucket.update,
                 expectedState: OrderState.RELEASED
             }
         ])('$desc', ({ desired, existing, beforeDeadline, canEditMode, expectedBucket, expectedState }) => {
@@ -703,11 +761,11 @@ describe('decideOrderAction', () => {
         const entry = WaitlistFactory.defaultEntry({id: 7, inhabitantId: 1, dinnerEventId: 101, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 1})
 
         it.each([
-            {desc: 'NONE on an entry → leave', desired: createDesired({waitlistEntryId: 7, dinnerMode: DinnerMode.NONE}), canEditMode: true, expectedBucket: 'leave', expectedMode: DinnerMode.NONE},
-            {desc: 'another mode on an entry → requeue', desired: createDesired({waitlistEntryId: 7, dinnerMode: DinnerMode.TAKEAWAY}), canEditMode: true, expectedBucket: 'requeue', expectedMode: DinnerMode.TAKEAWAY},
-            {desc: 'another price on an entry → requeue', desired: createDesired({waitlistEntryId: 7, ticketPriceId: 2}), canEditMode: true, expectedBucket: 'requeue', expectedMode: DinnerMode.DINEIN},
-            {desc: 'the entry unchanged → idempotent', desired: createDesired({waitlistEntryId: 7}), canEditMode: true, expectedBucket: 'idempotent', expectedMode: DinnerMode.DINEIN},
-            {desc: 'another mode after the mode deadline → idempotent, the wish keeps its mode', desired: createDesired({waitlistEntryId: 7, dinnerMode: DinnerMode.TAKEAWAY}), canEditMode: false, expectedBucket: 'idempotent', expectedMode: DinnerMode.DINEIN}
+            {desc: 'NONE on an entry → leave', desired: createDesired({waitlistEntryId: 7, dinnerMode: DinnerMode.NONE}), canEditMode: true, expectedBucket: Bucket.leave, expectedMode: DinnerMode.NONE},
+            {desc: 'another mode on an entry → requeue', desired: createDesired({waitlistEntryId: 7, dinnerMode: DinnerMode.TAKEAWAY}), canEditMode: true, expectedBucket: Bucket.requeue, expectedMode: DinnerMode.TAKEAWAY},
+            {desc: 'another price on an entry → requeue', desired: createDesired({waitlistEntryId: 7, ticketPriceId: 2}), canEditMode: true, expectedBucket: Bucket.requeue, expectedMode: DinnerMode.DINEIN},
+            {desc: 'the entry unchanged → idempotent', desired: createDesired({waitlistEntryId: 7}), canEditMode: true, expectedBucket: Bucket.idempotent, expectedMode: DinnerMode.DINEIN},
+            {desc: 'another mode after the mode deadline → idempotent, the wish keeps its mode', desired: createDesired({waitlistEntryId: 7, dinnerMode: DinnerMode.TAKEAWAY}), canEditMode: false, expectedBucket: Bucket.idempotent, expectedMode: DinnerMode.DINEIN}
         ])('$desc', ({desired, canEditMode, expectedBucket, expectedMode}) => {
             const result = decideOrderAction(createInput(desired, null, false, canEditMode, entry), DinnerMode, OrderState)
 
@@ -1769,15 +1827,16 @@ describe('Action Preview', () => {
 
     // Action → OrderState mapping (mirrors useBookingUi.ts ACTION_TO_STATE)
     const ACTION_TO_STATE = {
-        book:       OS.BOOKED,
-        buy:        'claimed' as const,
-        queue:      'claimed' as const,
-        leave:      OS.CANCELLED,
-        requeue:    'claimed' as const,
-        delete:     OS.CANCELLED,
-        release:    OS.RELEASED,
-        reclaim:    OS.BOOKED,
-        updateMode: OS.CLOSED
+        [Action.BOOK]: OS.BOOKED,
+        [Action.BUY]: 'claimed' as const,
+        [Action.QUEUE]: 'claimed' as const,
+        [Action.LEAVE]: OS.CANCELLED,
+        [Action.REQUEUE]: 'claimed' as const,
+        [Action.CANCEL]: OS.CANCELLED,
+        [Action.RELEASE]: OS.RELEASED,
+        [Action.RECLAIM]: OS.BOOKED,
+        [Action.CHANGE_MODE]: OS.CLOSED,
+        [Action.CHANGE_PRICE]: OS.CLOSED
     } as const
 
     // Get expected color from orderStateConfig (DRY - same source as implementation)
@@ -1808,32 +1867,24 @@ describe('Action Preview', () => {
         })
 
     // Empty buckets helper
-    const emptyBuckets = (): Parameters<typeof formatActionPreview>[0] => ({
-        create: [],
-        update: [],
-        delete: [],
-        idempotent: [],
-        claim: [],
-        leave: [],
-        requeue: []
-    })
+    const emptyBuckets = (): Parameters<typeof formatActionPreview>[0] => emptyOrderBuckets<DesiredOrder>()
 
     // Name lookup for tests
     const getName = (id: number) => id === 1 ? 'Anna' : id === 2 ? 'Peter' : `User${id}`
 
-    describe('ACTION_PREVIEW config', () => {
+    describe('ACTION_WORDS', () => {
         it.each([
-            {action: 'book', expectedText: 'Anna tilmeldes'},
-            {action: 'buy', expectedText: 'Anna køber en ledig billet'},
-            {action: 'queue', expectedText: 'Anna skrives på ventelisten'},
-            {action: 'leave', expectedText: 'Anna forlader ventelisten'},
-            {action: 'requeue', expectedText: `Anna ændrer ønsket tilmelding til ${MODE_WORDS[DM.DINEIN].label}`},
-            {action: 'delete', expectedText: 'Anna frameldes'},
-            {action: 'release', expectedText: 'Annas billet frigives'},
-            {action: 'reclaim', expectedText: 'Anna tilmeldes igen'},
-            {action: 'updateMode', expectedText: 'Anna opdaterer spisning'}
+            {action: Action.BOOK, expectedText: 'Anna tilmeldes'},
+            {action: Action.BUY, expectedText: 'Anna køber en ledig billet'},
+            {action: Action.QUEUE, expectedText: 'Anna skrives på ventelisten'},
+            {action: Action.LEAVE, expectedText: 'Anna forlader ventelisten'},
+            {action: Action.REQUEUE, expectedText: `Anna ændrer ønsket tilmelding til ${MODE_WORDS[DM.DINEIN].label}`},
+            {action: Action.CANCEL, expectedText: 'Anna frameldes'},
+            {action: Action.RELEASE, expectedText: 'Annas billet frigives'},
+            {action: Action.RECLAIM, expectedText: 'Anna tilmeldes igen'},
+            {action: Action.CHANGE_MODE, expectedText: 'Anna opdaterer spisning'}
         ])('$action template produces "$expectedText"', ({action, expectedText}) => {
-            const config = ACTION_PREVIEW[action as keyof typeof ACTION_PREVIEW]
+            const config = ACTION_WORDS[action]
             expect(config.template('Anna', {mode: MODE_WORDS[DM.DINEIN].label})).toBe(expectedText)
             expect(config.icon).toBeDefined()
         })
@@ -1847,12 +1898,12 @@ describe('Action Preview', () => {
         })
 
         it.each([
-            {bucket: 'create', ticketsForSale: 0, action: 'book' as const, textContains: 'tilmeldes'},
-            {bucket: 'delete', ticketsForSale: 0, action: 'delete' as const, textContains: 'frameldes'},
-            {bucket: 'claim', ticketsForSale: 1, action: 'buy' as const, textContains: 'køber en ledig billet'},
-            {bucket: 'claim', ticketsForSale: 0, action: 'queue' as const, textContains: 'skrives på ventelisten'},
-            {bucket: 'leave', ticketsForSale: 0, action: 'leave' as const, textContains: 'forlader ventelisten'},
-            {bucket: 'requeue', ticketsForSale: 0, action: 'requeue' as const, textContains: 'ændrer ønsket tilmelding til'}
+            {bucket: Bucket.create, ticketsForSale: 0, action: Action.BOOK, textContains: 'tilmeldes'},
+            {bucket: Bucket.delete, ticketsForSale: 0, action: Action.CANCEL, textContains: 'frameldes'},
+            {bucket: Bucket.claim, ticketsForSale: 1, action: Action.BUY, textContains: 'køber en ledig billet'},
+            {bucket: Bucket.claim, ticketsForSale: 0, action: Action.QUEUE, textContains: 'skrives på ventelisten'},
+            {bucket: Bucket.leave, ticketsForSale: 0, action: Action.LEAVE, textContains: 'forlader ventelisten'},
+            {bucket: Bucket.requeue, ticketsForSale: 0, action: Action.REQUEUE, textContains: 'ændrer ønsket tilmelding til'}
         ])('$bucket bucket with $ticketsForSale for sale → $action action', ({bucket, ticketsForSale, action, textContains}) => {
             const buckets = {...emptyBuckets(), [bucket]: [desired({inhabitantId: 1})]}
             const result = formatActionPreview(buckets, [], getName, () => ({ticketsForSale}))
@@ -1873,21 +1924,21 @@ describe('Action Preview', () => {
                     desc: 'desired RELEASED → release action',
                     desiredOrder: desired({orderId: 42, state: OS.RELEASED}),
                     existingOrder: existing(42, {state: OS.BOOKED}),
-                    expectedAction: 'release' as const,
+                    expectedAction: Action.RELEASE,
                     expectedText: 'frigives'
                 },
                 {
                     desc: 'existing RELEASED + desired BOOKED → reclaim action',
                     desiredOrder: desired({orderId: 42, state: OS.BOOKED}),
                     existingOrder: existing(42, {state: OS.RELEASED}),
-                    expectedAction: 'reclaim' as const,
+                    expectedAction: Action.RECLAIM,
                     expectedText: 'tilmeldes igen'
                 },
                 {
                     desc: 'both BOOKED with different mode → updateMode action',
                     desiredOrder: desired({orderId: 42, dinnerMode: DM.TAKEAWAY, state: OS.BOOKED}),
                     existingOrder: existing(42, {dinnerMode: DM.DINEIN, state: OS.BOOKED}),
-                    expectedAction: 'updateMode' as const,
+                    expectedAction: Action.CHANGE_MODE,
                     expectedText: 'opdaterer spisning'
                 }
             ])('$desc', ({desiredOrder, existingOrder, expectedAction, expectedText}) => {
@@ -1938,7 +1989,7 @@ describe('Action Preview', () => {
 
             expect(result).toHaveLength(4)
             const actions = result.map(r => r.action).sort()
-            expect(actions).toEqual(['book', 'delete', 'queue', 'release'])
+            expect(actions).toEqual([Action.BOOK, Action.CANCEL, Action.QUEUE, Action.RELEASE])
         })
     })
 

@@ -169,7 +169,7 @@ const {isDinnerPast} = useSeason()
 const {canModifyOrders, canEditDiningMode} = props.deadlines
 
 // Validation
-const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema, BookingActionSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
 const OrderStateEnum = OrderStateSchema.enum
 
@@ -570,7 +570,7 @@ const editingBuckets = computed(() => {
 
 const actionPreviewItems = computed(() =>
   editingBuckets.value ? formatActionPreview(editingBuckets.value, eventOrders.value, getInhabitantName, supply, waitlistPositionOf(eventWaitlistEntries.value)) : [])
-const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? previewOutcome(editingBuckets.value, supply) : 'none'))
+const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? previewOutcome(editingBuckets.value, supply) : BookingActionSchema.enum.CHANGE_MODE))
 </script>
 
 <template>

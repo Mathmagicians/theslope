@@ -53,9 +53,10 @@ const {createBookingBadges, formatActionPreview, guestSaveLabel} = useBookingUi(
 const {canModifyOrders, canEditDiningMode} = props.deadlines
 
 // Validation schemas
-const {DinnerModeSchema, OrderStateSchema, GuestBookingFormSchema, BookingRowActionSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema, GuestBookingFormSchema, BookingRowActionSchema, OrderBucketSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
 const OrderStateEnum = OrderStateSchema.enum
+const Bucket = OrderBucketSchema.enum
 
 // Booking options using getBookingOptions utility (orderState = null for new guest)
 const bookingOptions = computed(() => getBookingOptions(
@@ -126,7 +127,7 @@ const actionPreviewItems = computed(() => {
 // The button previews the outcome: before the deadline the guest is booked; after it the claim buys a ticket for
 // sale, else queues the guest
 const saveLabel = computed(() =>
-  guestSaveLabel(bookingOutcome(bookingOptions.value.action === BookingRowActionSchema.enum.claim ? 'claim' : 'create', supply())))
+  guestSaveLabel(bookingOutcome(bookingOptions.value.action === BookingRowActionSchema.enum.claim ? Bucket.claim : Bucket.create, supply())))
 
 // Enabled modes for guest: filter out NONE (can't add a guest who won't eat)
 const enabledModesForGuest = computed((): DinnerMode[] =>

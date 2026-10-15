@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { OrderDisplay, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, TicketChangesResponse, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
+import type { OrderDisplay, BookingResult, BookingTotals, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, TicketChangesResponse, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
@@ -20,7 +20,7 @@ const { headers, salt, temporaryAndRandom, getSessionUserInfo } = testHelpers
 const HOUSEHOLD_SCAFFOLD_ENDPOINT = '/api/household/order/scaffold'
 
 // Get enum schemas from composable
-const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema, OrderAuditActionSchema } = useBookingValidation()
+const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema, OrderAuditActionSchema, BookingActionSchema } = useBookingValidation()
 
 // API endpoints
 const ORDER_ENDPOINT = '/api/order'
@@ -537,16 +537,26 @@ export class OrderFactory {
     ...overrides
   })
 
-  /** ScaffoldResult data for component tests (no API call) */
-  static readonly defaultScaffoldResult = (overrides?: Partial<ScaffoldResult>): ScaffoldResult => ({
-    seasonId: 1, created: 0, deleted: 0, released: 0, claimed: 0, queued: 0, positions: [], left: 0, requeued: 0,
-    priceUpdated: 0, modeUpdated: 0, unchanged: 0, households: 1, errored: 0,
+  /** One order's result in a scaffold run */
+  static readonly defaultBookingResult = (overrides?: Partial<BookingResult>): BookingResult => ({
+    inhabitantId: 1, inhabitantName: 'Anna', isGuestTicket: false, dinnerEventId: 1,
+    dinnerMode: DinnerModeSchema.enum.DINEIN, action: BookingActionSchema.enum.BOOK,
+    ...overrides
+  })
+
+  /** ScaffoldResult data for component tests (no API call); totals name only the actions that differ from zero */
+  static readonly defaultScaffoldResult = (
+    {totals, ...overrides}: Partial<Omit<ScaffoldResult, 'totals'>> & {totals?: Partial<BookingTotals>} = {}
+  ): ScaffoldResult => ({
+    seasonId: 1, positions: [], unchanged: 0, households: 1, errored: 0,
+    totals: {...Object.fromEntries(BookingActionSchema.options.map(action => [action, 0])) as BookingTotals, ...totals},
+    results: [], failed: [],
     outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: []},
     ...overrides
   })
 
   /** ScaffoldOrdersResponse data for component tests (no API call) */
-  static readonly defaultScaffoldOrdersResponse = (scaffoldResult: Partial<ScaffoldResult> = {}, householdId: number = 1): ScaffoldOrdersResponse => ({
+  static readonly defaultScaffoldOrdersResponse = (scaffoldResult: Parameters<typeof OrderFactory.defaultScaffoldResult>[0] = {}, householdId: number = 1): ScaffoldOrdersResponse => ({
     householdId,
     scaffoldResult: OrderFactory.defaultScaffoldResult(scaffoldResult)
   })

@@ -17,6 +17,7 @@ import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import type {OrderDisplay} from '~/composables/useBookingValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+const Action = useBookingValidation().BookingActionSchema.enum
 
 const {validatedBrowserContext, headers} = testHelpers
 const {DinnerModeSchema} = useBookingValidation()
@@ -58,7 +59,7 @@ test('Release orders by setting inhabitant preferences to NONE', async ({browser
         })
 
         if (res) {
-            const released = res.scaffoldResult?.released ?? 0
+            const released = res.scaffoldResult?.totals[Action.RELEASE] ?? 0
             totalReleased += released
             console.log(`  ✅ Inhabitant ${inhabitantId}: released ${released}`)
         } else {

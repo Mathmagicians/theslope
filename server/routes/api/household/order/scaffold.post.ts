@@ -4,6 +4,7 @@ import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import {isAdmin} from '~/composables/usePermissions'
 import {useBookingValidation, type ScaffoldOrdersRequest, type ScaffoldOrdersResponse} from "~/composables/useBookingValidation"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
+import {useBooking} from "~/composables/useBooking"
 import {emailChannel} from "~~/server/utils/sender/config"
 import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
 import {AdminBypassQuerySchema} from '~/composables/useCoreValidation'
@@ -59,7 +60,7 @@ export default defineEventHandler<Promise<ScaffoldOrdersResponse>>(async (event)
         })
         await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), result.outcomes)
 
-        console.info(`${LOG} Scaffold complete: created=${result.created}, deleted=${result.deleted}, released=${result.released}, claimed=${result.claimed}, queued=${result.queued}, left=${result.left}, requeued=${result.requeued}`)
+        console.info(`${LOG} Scaffold complete: ${useBooking().formatScaffoldResult(result, useBookingValidation().ScaffoldResultFormatSchema.enum.compact)}`)
 
         setResponseStatus(event, 200)
         return ScaffoldOrdersResponseSchema.parse({

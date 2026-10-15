@@ -6,6 +6,8 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
+import {useBookingValidation as useActionValidation} from '~/composables/useBookingValidation'
+const Action = useActionValidation().BookingActionSchema.enum
 
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
@@ -96,7 +98,7 @@ test.describe('POST /api/admin/season/[id] on the active season', () => {
 
         // AND: the same request scaffolded pre-bookings for the new dinner (ADR-015)
         expect(result.scaffold).not.toBeNull()
-        expect(result.scaffold!.created).toBeGreaterThan(0)
+        expect(result.scaffold!.totals[Action.BOOK]).toBeGreaterThan(0)
 
         const newEvent = result.season.dinnerEvents!.find(e => e.date.getTime() === newEnd.getTime())
         expect(newEvent, 'The extended season should have a dinner on the new end date').toBeDefined()

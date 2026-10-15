@@ -26,6 +26,7 @@ import {formatDate} from '~/utils/date'
 import {addDays} from 'date-fns'
 import {flushPromises} from '@vue/test-utils'
 import {asyncDataStatus, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
+const Action = useBookingValidation().BookingActionSchema.enum
 
 const DINNER_ID = 100
 const TEAM = SeasonFactory.defaultCookingTeamDisplay({id: 7, name: 'Madhold A - Winter 2026'})
@@ -138,7 +139,7 @@ beforeEach(() => {
     vi.clearAllMocks()
     assignRoleEndpoint.mockImplementation(() => dinnerResponse())
     updateDinnerEndpoint.mockImplementation(() => dinnerResponse())
-    scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({created: 2}))
+    scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({totals: {[Action.BOOK]: 2}}))
     dailyMaintenanceEndpoint.mockImplementation(() => OrderFactory.defaultDailyMaintenanceResult())
 })
 
@@ -272,7 +273,7 @@ describe('Bookings store — scaffold bookings', () => {
         expect(store.isProcessingBookings).toBe(true)
         const response = await promise
 
-        expect(response.scaffoldResult.created).toBe(2)
+        expect(response.scaffoldResult.totals[Action.BOOK]).toBe(2)
         expect(store.isProcessingBookings).toBe(false)
     })
 
@@ -280,7 +281,7 @@ describe('Bookings store — scaffold bookings', () => {
         {view: 'day', errored: 0, color: COLOR.success},
         {view: 'grid', errored: 1, color: COLOR.error}
     ])('reports the result in the toast it is given ($view view, errored $errored)', async ({view, errored, color}) => {
-        const response = OrderFactory.defaultScaffoldOrdersResponse({created: 2, errored})
+        const response = OrderFactory.defaultScaffoldOrdersResponse({totals: {[Action.BOOK]: 2}, errored})
         scaffoldEndpoint.mockImplementation(() => response)
         const store = useBookingsStore()
 
@@ -303,7 +304,7 @@ describe('Bookings store — scaffold bookings', () => {
 
     it('reports the queued places and the queue left in the toast', async () => {
         const positions = [3, 1].map(position => ({inhabitantId: position, dinnerEventId: DINNER_ID, isGuestTicket: false, position}))
-        scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({queued: 2, positions, left: 1}))
+        scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({totals: {[Action.QUEUE]: 2, [Action.LEAVE]: 1}, positions}))
         const store = useBookingsStore()
 
         await store.processSingleEventBookings(1, DINNER_ID, [], false, {title: 'day'})
@@ -315,7 +316,7 @@ describe('Bookings store — scaffold bookings', () => {
         const sent: {query: Record<string, unknown>, body: unknown}[] = []
         scaffoldEndpoint.mockImplementation(async (event: H3Event) => {
             sent.push({query: getQuery(event), body: await readBody(event)})
-            return OrderFactory.defaultScaffoldOrdersResponse({deleted: 1})
+            return OrderFactory.defaultScaffoldOrdersResponse({totals: {[Action.CANCEL]: 1}})
         })
         const store = useBookingsStore()
         const regular = OrderFactory.defaultDesiredOrder({dinnerEventId: DINNER_ID, orderId: 5, inhabitantId: 2})
@@ -324,7 +325,7 @@ describe('Bookings store — scaffold bookings', () => {
         const result = await store.processAdminCorrection(7, DINNER_ID, [regular, guest], 3)
 
         expect(sent).toEqual([{query: {adminBypass: 'true'}, body: {householdId: 7, dinnerEventIds: [DINNER_ID], orders: [regular, {...guest, inhabitantId: 3}]}}])
-        expect(result.deleted).toBe(1)
+        expect(result.totals[Action.CANCEL]).toBe(1)
     })
 
     it('rethrows a failed scaffold and clears the processing flag', async () => {

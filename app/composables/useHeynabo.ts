@@ -1,6 +1,6 @@
 import type { HouseholdCreate, HouseholdDisplay, InhabitantCreate, InhabitantDisplay, UserDisplay, SystemRole } from '~/composables/useCoreValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
-import { pruneAndCreate, groupBy, chunkArray, type PruneAndCreateResult, type ReconciliationBucket } from '~/utils/batchUtils'
+import { pruneAndCreate, groupBy, chunkArray, type PruneAndCreateResult, type ReconciliationBucket, ReconciliationBucketSchema } from '~/utils/batchUtils'
 import { buildResolvedHouseholdMap, type InhabitantPlacement } from '~/composables/useHousehold'
 import { isSameDay } from 'date-fns'
 
@@ -87,7 +87,8 @@ export const reconcileUsers = pruneAndCreate<UserDisplay, InhabitantData, number
 // INHABITANT IMPORT PLAN (ADR-013)
 // ========================================================================
 
-type RoutedMember = { bucket: Exclude<ReconciliationBucket, 'delete'>, inhabitant: InhabitantCreate }
+const Bucket = ReconciliationBucketSchema.enum
+type RoutedMember = { bucket: Exclude<ReconciliationBucket, typeof Bucket.delete>, inhabitant: InhabitantCreate }
 
 const routeMember = (
     member: InhabitantData,
@@ -96,10 +97,10 @@ const routeMember = (
     placements: Map<number, InhabitantPlacement>
 ): RoutedMember => {
     const placement = placements.get(member.heynaboId)
-    if (!placement) return {bucket: 'create', inhabitant: {...member, householdId: resolvedHousehold.id}}
-    if (placement.household.heynaboId !== addressHeynaboId) return {bucket: 'update', inhabitant: {...member, householdId: resolvedHousehold.id}}
-    if (!isInhabitantDataEqual(placement.inhabitant, member)) return {bucket: 'update', inhabitant: {...member, householdId: placement.household.id}}
-    return {bucket: 'idempotent', inhabitant: {...member, householdId: placement.household.id}}
+    if (!placement) return {bucket: Bucket.create, inhabitant: {...member, householdId: resolvedHousehold.id}}
+    if (placement.household.heynaboId !== addressHeynaboId) return {bucket: Bucket.update, inhabitant: {...member, householdId: resolvedHousehold.id}}
+    if (!isInhabitantDataEqual(placement.inhabitant, member)) return {bucket: Bucket.update, inhabitant: {...member, householdId: placement.household.id}}
+    return {bucket: Bucket.idempotent, inhabitant: {...member, householdId: placement.household.id}}
 }
 
 /**
@@ -133,9 +134,9 @@ export const resolveInhabitantImportPlan = (
     const bucket = (name: RoutedMember['bucket']) => (byBucket.get(name) ?? []).map(r => r.inhabitant)
 
     return {
-        create: bucket('create'),
-        update: bucket('update'),
-        idempotent: bucket('idempotent'),
+        create: bucket(Bucket.create),
+        update: bucket(Bucket.update),
+        idempotent: bucket(Bucket.idempotent),
         delete: [...inhabitantPlacements.values()]
             .map(p => p.inhabitant)
             .filter(i => !existsInHeynabo.has(i.heynaboId))

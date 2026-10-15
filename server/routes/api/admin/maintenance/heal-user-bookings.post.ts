@@ -15,6 +15,7 @@ import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
 import {emailChannel} from "~~/server/utils/sender/config"
 import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
 import {useBookingValidation, type DinnerMode} from "~/composables/useBookingValidation"
+import {useBooking} from "~/composables/useBooking"
 import {useSeason} from "~/composables/useSeason"
 import {useTicket} from "~/composables/useTicket"
 import {formatDate} from "~/utils/date"
@@ -343,8 +344,9 @@ export default defineEventHandler(async (event): Promise<HealingResult> => {
                         // No userId → system mode → SYSTEM_CREATED audit
                     })
                     await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), result.outcomes)
-                    healed += result.created + result.modeUpdated
-                    console.info(`${LOG} Healed household ${hid}: created=${result.created}, modeUpdated=${result.modeUpdated}`)
+                    const {BookingActionSchema, ScaffoldResultFormatSchema} = useBookingValidation()
+                    healed += result.totals[BookingActionSchema.enum.BOOK] + result.totals[BookingActionSchema.enum.CHANGE_MODE]
+                    console.info(`${LOG} Healed household ${hid}: ${useBooking().formatScaffoldResult(result, ScaffoldResultFormatSchema.enum.compact)}`)
                 } catch (e) {
                     errors.push(`Failed to heal household ${hid}: ${e}`)
                 }

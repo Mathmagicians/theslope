@@ -20,6 +20,8 @@ import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {COMPONENTS, ICONS, createTableColumns} from '~/composables/useTheSlopeDesignSystem'
 import {WAITLIST_TEST_IDS} from './waitlistTestIds'
+import {useBookingValidation as useActionValidation} from '~/composables/useBookingValidation'
+const Action = useActionValidation().BookingActionSchema.enum
 
 /**
  * DinnerBookingForm: real component tree and real stores (testing.md Rule 6); only HTTP and the session are faked.
@@ -486,7 +488,7 @@ describe('DinnerBookingForm previews a requeue', () => {
     await clickByTestId(wrapper, `inhabitant-${bo.id}-toggle`)
     await clickByTestId(wrapper, `inhabitant-${bo.id}-mode-edit-${DinnerModeSchema.enum.DINEINLATE}`)
 
-    expect(findByTestId(wrapper, `inhabitant-${bo.id}-save`).text()).toContain(bookingSaveLabel('requeue'))
+    expect(findByTestId(wrapper, `inhabitant-${bo.id}-save`).text()).toContain(bookingSaveLabel(Action.REQUEUE))
     expect(wrapper.text()).toContain(`ændrer ønsket tilmelding til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label}, beholder plads #${boQueued.position} i køen`)
   })
 })

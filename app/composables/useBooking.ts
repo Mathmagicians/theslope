@@ -1,4 +1,4 @@
-import {useBookingValidation, type TicketType, type BookingRowAction, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketCounts, type AuditTicket, type OrderAuditAction} from '~/composables/useBookingValidation'
+import {useBookingValidation, type TicketType, type BookingRowAction, type OrderBucket, type BookingAction, type BookingOutcome, type BookingResult, type BookingTotals, type ScaffoldResultFormat, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketCounts, type AuditTicket, type OrderAuditAction} from '~/composables/useBookingValidation'
 import {useBillingValidation, type TransactionCreateData} from '~/composables/useBillingValidation'
 import {useBilling} from '~/composables/useBilling'
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
@@ -9,7 +9,6 @@ import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {byTimeThenId} from '~/composables/useWaitlist'
-import type {PruneAndCreateResult} from '~/utils/batchUtils'
 import {calculateCountdown, formatDate, DATE_SETTINGS} from '~/utils/date'
 import {dateToWeekDay} from '~/utils/season'
 import {chunkArray, groupBy} from '~/utils/batchUtils'
@@ -17,7 +16,11 @@ import {sumBy} from '~/utils/ledger'
 import {getPortionsForTicketType} from '~/utils/portions'
 import {differenceInCalendarDays} from 'date-fns'
 
-const ROW_ACTION = useBookingValidation().BookingRowActionSchema.enum
+const {BookingRowActionSchema, OrderBucketSchema, BookingActionSchema, ScaffoldResultFormatSchema} = useBookingValidation()
+const ROW_ACTION = BookingRowActionSchema.enum
+const Bucket = OrderBucketSchema.enum
+const Action = BookingActionSchema.enum
+const Format = ScaffoldResultFormatSchema.enum
 
 /**
  * Field set that reverts a dinner to a clean chef-less SCHEDULED state.
@@ -38,12 +41,6 @@ export const CHEF_LOSS_DINNER_UPDATES = {
 // ============================================================================
 
 /**
- * Bucket types for order decisions.
- * Extends standard CRUD buckets with 'claim' (a released ticket, else a queue entry) and the queue entry's 'leave' and 'requeue'.
- */
-export type OrderBucket = 'create' | 'update' | 'delete' | 'idempotent' | 'claim' | 'leave' | 'requeue'
-
-/**
  * Result of order decision: which bucket and the order with state set.
  * null = skip (no action needed, e.g., no orderId + NONE, or no capacity)
  */
@@ -52,15 +49,11 @@ export type OrderDecision = {
     order: DesiredOrder
 } | null
 
-/**
- * Extended bucket result for order resolution.
- * Extends PruneAndCreateResult with the claim bucket and the queue entry buckets.
- */
-export type OrderBucketResult<T = DesiredOrder> = PruneAndCreateResult<T> & {
-    claim: T[]
-    leave: T[]
-    requeue: T[]
-}
+/** The orders of each bucket */
+export type OrderBucketResult<T = DesiredOrder> = Record<OrderBucket, T[]>
+
+export const emptyOrderBuckets = <T = DesiredOrder>(): OrderBucketResult<T> =>
+    Object.fromEntries(OrderBucketSchema.options.map(bucket => [bucket, []])) as unknown as OrderBucketResult<T>
 
 /**
  * Input for order decision: the desired order plus context for deadline enforcement
@@ -85,22 +78,52 @@ export type OrderDecisionInput = {
 export const getNewOrderAction = (canModifyOrders: boolean): BookingRowAction =>
     canModifyOrders ? ROW_ACTION.process : ROW_ACTION.claim
 
-/** What executing a bucket does: book, buy a released ticket, queue, leave or requeue the entry, or nothing */
-export type BookingOutcome = 'book' | 'buy' | 'queue' | 'leave' | 'requeue' | 'none'
-
 /**
  * The outcome of a bucket at the instant it executes. The claim bucket settles by supply: a released ticket at the
- * price is bought, none queues the wish. Buckets that change no supply (update, delete, idempotent, skip) are none.
+ * price is bought, none queues the wish. A bucket that changes no supply (update, delete, idempotent, skip) changes the mode.
  */
 export const bookingOutcome = (bucket: OrderBucket | null, supply: {ticketsForSale: number}): BookingOutcome => {
     switch (bucket) {
-        case 'create': return 'book'
-        case 'claim': return supply.ticketsForSale > 0 ? 'buy' : 'queue'
-        case 'leave': return 'leave'
-        case 'requeue': return 'requeue'
-        default: return 'none'
+        case Bucket.create: return Action.BOOK
+        case Bucket.claim: return supply.ticketsForSale > 0 ? Action.BUY : Action.QUEUE
+        case Bucket.leave: return Action.LEAVE
+        case Bucket.requeue: return Action.REQUEUE
+        default: return Action.CHANGE_MODE
     }
 }
+
+/** What a save would find for sale at an order's dinner and price */
+export type PreviewSupply = (order: DesiredOrder) => {ticketsForSale: number}
+export const NOTHING_FOR_SALE: PreviewSupply = () => ({ticketsForSale: 0})
+
+/** What an update does to the order it names; without the order at hand, a release or a mode change */
+export const actionOfUpdate = (incoming: DesiredOrder, existing: OrderDisplay | undefined): BookingAction => {
+    const {OrderStateSchema} = useBookingValidation()
+    const OrderState = OrderStateSchema.enum
+    if (incoming.state === OrderState.RELEASED && existing?.state !== OrderState.RELEASED) return Action.RELEASE
+    if (!existing) return Action.CHANGE_MODE
+    if (incoming.state !== OrderState.RELEASED && existing.state === OrderState.RELEASED) return Action.RECLAIM
+    if (incoming.ticketPriceId !== existing.ticketPriceId) return Action.CHANGE_PRICE
+    return Action.CHANGE_MODE
+}
+
+/** The buckets whose execution has a supply outcome, in the order a preview reads them */
+export const OUTCOME_BUCKETS = [Bucket.claim, Bucket.create, Bucket.leave, Bucket.requeue] as const
+
+/** Every order of the buckets with its action, the plan the preview shows and the scaffold executes; a claim settles by the supply */
+export const plannedActions = (
+    buckets: OrderBucketResult,
+    existingById: Map<number, OrderDisplay>,
+    supply: PreviewSupply = NOTHING_FOR_SALE
+): {order: DesiredOrder, action: BookingAction}[] => [
+    ...OUTCOME_BUCKETS.flatMap(bucket => buckets[bucket].map(order => ({order, action: bookingOutcome(bucket, supply(order)) as BookingAction}))),
+    ...buckets.delete.map(order => ({order, action: Action.CANCEL})),
+    ...buckets.update.map(order => ({order, action: actionOfUpdate(order, order.orderId ? existingById.get(order.orderId) : undefined)}))
+]
+
+/** The orders of a run per action, every action present */
+export const countTotals = (items: readonly BookingResult[]): BookingTotals =>
+    Object.fromEntries(BookingActionSchema.options.map(action => [action, items.filter(item => item.action === action).length])) as BookingTotals
 
 /**
  * Pure decision function for categorizing user booking intent into buckets.
@@ -130,12 +153,12 @@ export const decideOrderAction = (
     const isNone = desired.dinnerMode === DinnerMode.NONE
 
     if (existingEntry) {
-        if (isNone) return { bucket: 'leave', order: { ...desired, waitlistEntryId: existingEntry.id } }
+        if (isNone) return { bucket: Bucket.leave, order: { ...desired, waitlistEntryId: existingEntry.id } }
         const wish = existingEntry.order
         const dinnerMode = canEditMode ? desired.dinnerMode : wish.dinnerMode
         const changed = wish.dinnerMode !== dinnerMode || wish.ticketPriceId !== desired.ticketPriceId
         return {
-            bucket: changed ? 'requeue' : 'idempotent',
+            bucket: changed ? Bucket.requeue : Bucket.idempotent,
             order: { ...desired, dinnerMode, waitlistEntryId: existingEntry.id, state: OrderState.BOOKED }
         }
     }
@@ -144,7 +167,7 @@ export const decideOrderAction = (
     // No orderId = new order intent
     if (!desired.orderId) {
         if (isNone) return null // Skip: no order to create for NONE
-        const bucket = getNewOrderAction(beforeCancellationDeadline) === ROW_ACTION.process ? 'create' : 'claim'
+        const bucket = getNewOrderAction(beforeCancellationDeadline) === ROW_ACTION.process ? Bucket.create : Bucket.claim
         return { bucket, order: { ...desired, state: OrderState.BOOKED } }
     }
 
@@ -160,22 +183,22 @@ export const decideOrderAction = (
     // NONE mode = cancellation
     if (isNone) {
         if (beforeCancellationDeadline) {
-            return { bucket: 'delete', order: desired }
+            return { bucket: Bucket.delete, order: desired }
         }
         // After deadline: release BOOKED orders, update RELEASED if price needs correction
         if (existing.state === OrderState.RELEASED) {
             if (priceChanged) {
-                return { bucket: 'update', order: { ...desired, dinnerMode: DinnerMode.NONE, state: existing.state } }
+                return { bucket: Bucket.update, order: { ...desired, dinnerMode: DinnerMode.NONE, state: existing.state } }
             }
-            return { bucket: 'idempotent', order: { ...desired, dinnerMode: DinnerMode.NONE, state: existing.state } }
+            return { bucket: Bucket.idempotent, order: { ...desired, dinnerMode: DinnerMode.NONE, state: existing.state } }
         }
-        return { bucket: 'update', order: { ...desired, state: OrderState.RELEASED } }
+        return { bucket: Bucket.update, order: { ...desired, state: OrderState.RELEASED } }
     }
 
     // Reclaim: existing RELEASED + eating mode → update back to BOOKED
     // Price change is handled by scaffolder since desired.ticketPriceId is correct
     if (existing.state === OrderState.RELEASED) {
-        return { bucket: 'update', order: { ...desired, state: OrderState.BOOKED } }
+        return { bucket: Bucket.update, order: { ...desired, state: OrderState.BOOKED } }
     }
 
     // Eating mode on BOOKED order - check if changed
@@ -183,11 +206,11 @@ export const decideOrderAction = (
     const modeChanged = existing.dinnerMode !== effectiveMode
 
     if (modeChanged || priceChanged) {
-        return { bucket: 'update', order: { ...desired, dinnerMode: effectiveMode, state: OrderState.BOOKED } }
+        return { bucket: Bucket.update, order: { ...desired, dinnerMode: effectiveMode, state: OrderState.BOOKED } }
     }
 
     // Idempotent - preserve existing state and use effectiveMode to respect deadline enforcement
-    return { bucket: 'idempotent', order: { ...desired, dinnerMode: effectiveMode, state: existing.state } }
+    return { bucket: Bucket.idempotent, order: { ...desired, dinnerMode: effectiveMode, state: existing.state } }
 }
 
 /**
@@ -221,15 +244,7 @@ export const resolveDesiredOrdersToBuckets = (
         return findRegularOrder(existingEntries, desired.inhabitantId, desired.dinnerEventId) ?? null
     }
 
-    const result: OrderBucketResult<DesiredOrder> = {
-        create: [],
-        update: [],
-        delete: [],
-        idempotent: [],
-        claim: [],
-        leave: [],
-        requeue: []
-    }
+    const result = emptyOrderBuckets<DesiredOrder>()
 
     for (const desired of desiredOrders) {
         const de = dinnerEventById.get(desired.dinnerEventId)
@@ -464,9 +479,10 @@ export const resolveOrdersFromPreferencesToBuckets = (
         season.ticketPrices
     )
 
+    // System mode never claims
     const result = {
         ...resolveDesiredOrdersToBuckets(desiredOrders, existingOrders, dinnerEventById, canModifyOrders, canEditDiningMode, DinnerMode, OrderState),
-        claim: []
+        [Bucket.claim]: []
     }
 
     // Detect orphan orders: existing orders not matched by any desired order
@@ -1199,56 +1215,64 @@ export const useBooking = () => {
     // Scaffold Result Formatting - Consistent display across UI and logs
     // ============================================================================
 
-    const SCAFFOLD_FIELDS = [
-        { key: 'created', symbol: '+', label: 'oprettet', pastLabel: 'blev tilmeldt' },
-        { key: 'deleted', symbol: '-', label: 'slettet', pastLabel: 'blev frameldt' },
-        { key: 'released', symbol: '↑', label: 'frigivet', pastLabel: 'blev frigivet' },
-        { key: 'claimed', symbol: '⇅', label: 'købt fra andre', pastLabel: 'købt fra andre' },
-        { key: 'queued', symbol: 'w', label: 'på venteliste', pastLabel: 'kom på ventelisten' },
-        { key: 'left', symbol: 'l', label: 'forlader ventelisten', pastLabel: 'forlod ventelisten' },
-        { key: 'requeued', symbol: 'r', label: 'ønske på ventelisten opdateret', pastLabel: 'fik ønsket på ventelisten opdateret' },
-        { key: 'priceUpdated', symbol: '$', label: 'pris opdateret', pastLabel: 'fik pris opdateret' },
-        { key: 'modeUpdated', symbol: 'm', label: 'spisemåde opdateret', pastLabel: 'fik spisemåde opdateret' },
-        { key: 'unchanged', symbol: '=', label: 'uændret', pastLabel: 'uændret' },
-        { key: 'errored', symbol: '!', label: 'fejlet', pastLabel: 'fejlede' },
-    ] as const
-
-    type ScaffoldResultFormat = 'compact' | 'verbose' | 'past'
+    // The words of each total, in the enum's order: a symbol for the logs, a label, a past-tense label for the toast
+    const TOTAL_WORDS: Record<BookingAction, {symbol: string, label: string, pastLabel: string}> = {
+        [Action.BOOK]: {symbol: '+', label: 'oprettet', pastLabel: 'blev tilmeldt'},
+        [Action.CANCEL]: {symbol: '-', label: 'slettet', pastLabel: 'blev frameldt'},
+        [Action.RELEASE]: {symbol: '↑', label: 'frigivet', pastLabel: 'blev frigivet'},
+        [Action.RECLAIM]: {symbol: '↓', label: 'tilmeldt igen', pastLabel: 'blev tilmeldt igen'},
+        [Action.BUY]: {symbol: '⇅', label: 'købt fra andre', pastLabel: 'købt fra andre'},
+        [Action.QUEUE]: {symbol: 'w', label: 'på venteliste', pastLabel: 'kom på ventelisten'},
+        [Action.LEAVE]: {symbol: 'l', label: 'forlader ventelisten', pastLabel: 'forlod ventelisten'},
+        [Action.REQUEUE]: {symbol: 'r', label: 'ønske på ventelisten opdateret', pastLabel: 'fik ønsket på ventelisten opdateret'},
+        [Action.CHANGE_PRICE]: {symbol: '$', label: 'pris opdateret', pastLabel: 'fik pris opdateret'},
+        [Action.CHANGE_MODE]: {symbol: 'm', label: 'spisemåde opdateret', pastLabel: 'fik spisemåde opdateret'}
+    }
+    const UNCHANGED_WORDS = {symbol: '=', label: 'uændret', pastLabel: 'uændret'}
+    const ERRORED_WORDS = {symbol: '!', label: 'fejlet', pastLabel: 'fejlede'}
 
     /**
      * Format scaffold result for display (toast, logs)
-     * - 'verbose' (default): Danish labels for user toasts - "7 oprettet, 179 uændret"
-     * - 'compact': Technical symbols for admin/logs - "+7 =179"
-     * - 'past': Past tense for confirmation toasts - "7 blev tilmeldt, 2 blev frameldt"
+     * - verbose (default): Danish labels for user toasts - "7 oprettet, 179 uændret"
+     * - compact: Technical symbols for admin/logs - "+7 =179"
+     * - past: Past tense for confirmation toasts - "7 blev tilmeldt, 2 blev frameldt"
      * Only includes non-zero counts for cleaner output; queued entries carry their places in the queue in words
      */
     const formatScaffoldResult = (
         result: ScaffoldResult,
-        format: ScaffoldResultFormat = 'verbose'
+        format: ScaffoldResultFormat = Format.verbose
     ): string => {
         const places = result.positions.map(p => p.position).sort((a, b) => a - b)
         const placesSuffix = places.length > 0 ? ` (nr. ${places.join(', ')})` : ''
-        const parts = SCAFFOLD_FIELDS
-            .filter(f => result[f.key] > 0)
-            .map(f => {
-                if (format === 'compact') return `${f.symbol}${result[f.key]}`
-                const suffix = f.key === 'queued' ? placesSuffix : ''
-                if (format === 'past') return `${result[f.key]} ${f.pastLabel}${suffix}`
-                return `${result[f.key]} ${f.label}${suffix}`
+        const counts = [
+            ...BookingActionSchema.options.map(action => ({words: TOTAL_WORDS[action], count: result.totals[action], suffix: action === Action.QUEUE ? placesSuffix : ''})),
+            {words: UNCHANGED_WORDS, count: result.unchanged, suffix: ''},
+            {words: ERRORED_WORDS, count: result.errored, suffix: ''}
+        ]
+        const parts = counts
+            .filter(({count}) => count > 0)
+            .map(({words, count, suffix}) => {
+                if (format === Format.compact) return `${words.symbol}${count}`
+                if (format === Format.past) return `${count} ${words.pastLabel}${suffix}`
+                return `${count} ${words.label}${suffix}`
             })
 
         if (parts.length === 0) {
-            return format === 'compact' ? '(ingen)' : 'Der var ingen ændringer i dine bookinger'
+            return format === Format.compact ? '(ingen)' : 'Der var ingen ændringer i dine bookinger'
         }
-        return parts.join(format === 'compact' ? ' ' : ', ')
+        return parts.join(format === Format.compact ? ' ' : ', ')
     }
 
     // Sums the results of several scaffold runs; the season is the last run's
     const sumScaffoldResults = (results: readonly ScaffoldResult[]): ScaffoldResult => ({
         seasonId: results.at(-1)?.seasonId ?? null,
-        ...Object.fromEntries(SCAFFOLD_FIELDS.map(({key}) => [key, sumBy(results, result => result[key])])) as Record<typeof SCAFFOLD_FIELDS[number]['key'], number>,
+        totals: Object.fromEntries(BookingActionSchema.options.map(action => [action, sumBy(results, result => result.totals[action])])) as BookingTotals,
         positions: results.flatMap(result => result.positions),
+        unchanged: sumBy(results, result => result.unchanged),
         households: sumBy(results, result => result.households),
+        errored: sumBy(results, result => result.errored),
+        results: results.flatMap(result => result.results),
+        failed: results.flatMap(result => result.failed),
         outcomes: {
             joined: results.flatMap(result => result.outcomes.joined),
             ticketsSold: results.flatMap(result => result.outcomes.ticketsSold),

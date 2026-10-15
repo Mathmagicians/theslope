@@ -125,7 +125,7 @@ Each point is presented with its files and code, and signed off on its own.
 |---|---|---|
 | 1. Mail is configured or off | The notification service decides its channels from the environment; `DEPLOY_URL` unset means e-mail is off, a channel that is off logs the kind and the missing setting and reports not sent; the request fallback goes; `npm run dev` sets `DEPLOY_URL` locally | ✅ signed off 2026-10-14, implemented |
 | 2. Notification after the action | The scaffold and the waiting-list steps send nothing and return outcomes that carry what a notification needs; the caller passes them to the notification service | ✅ signed off 2026-10-14, implemented |
-| 3. The scaffold survives a partial failure | Each step's failure lands on its item and the rest runs on; the reply is the executed plan, one item per order, built by the function that builds the preview; counts are grouped from the items | ⏳ awaiting signoff |
+| 3. The scaffold survives a partial failure | A failed write batch is retried order by order; the rest of the household runs on; the reply counts the orders per action, lists them per person for a household run and lists the failed orders; the preview and the reply name the action through one function (`actionOfUpdate`) | ✅ signed off 2026-10-15, implemented |
 | 4. The waiting list catches up | A ticket for sale at a waiting entry's price goes to the first in the waiting list at release, after each scaffold run on its dinners and in daily maintenance; idempotent (ADR-015) | ⏳ awaiting signoff |
 | 5. One client write | Every booking write goes through one bookings-store action that refreshes orders, released tickets, the waiting list and the household | ⏳ awaiting signoff |
 | 6. Preview and toast from one word table | Future words in the preview, past words in the toast, grouped per person; the toast is red as soon as one item failed, green otherwise | ⏳ awaiting signoff |
@@ -139,8 +139,9 @@ cases release through the member's booking route. The package adds the case that
 
 | Case | Level |
 |---|---|
-| GIVEN a dinner past its booking deadline with a waiting entry at a household's ticket price WHEN an admin sets the household's preferences to Ingen THEN the first in the waiting list holds the ticket, the household's orders on open dinners are cancelled, and the reply names each person's counts with no failure | serial API e2e, `waitlistAssignment.e2e.spec.ts` |
+| GIVEN a dinner past its booking deadline with a waiting entry at a household's ticket price WHEN an admin sets the household's preferences to Ingen THEN the first in the waiting list holds the ticket, the household's orders on open dinners are cancelled, and the reply lists the release and the cancellation with no failure | serial API e2e, `waitlistAssignment.e2e.spec.ts` |
 | The same with e-mail off: the booking work completes and the reply carries the outcomes | unit, the scaffold with no `DEPLOY_URL` |
+| GIVEN a batch write that fails WHEN it is retried order by order THEN the orders that land are reported and only the failing order is listed as failed | unit, `batchUtils.unit.spec.ts` |
 
 ### Mockup — toast and preview ⏳ awaiting signoff
 
@@ -296,6 +297,7 @@ crosses the buildup threshold and asserts each event writes its Delivery row.
 | ADR-009 | rule 7, what a delete returns |
 | ADR-010 | rule 6, a deprecated column's value |
 | ADR-012 | conditional spread in `where`, `Prisma.skip` in `data` |
+| ADR-014 | `writeBatchOrEach` |
 | ADR-015 | the waitlist clear in daily maintenance; the scaffold's idempotency through the generator |
-| ADR-016 | the claim bucket, the queue entry rows, the two deadline sets |
+| ADR-016 | the claim bucket, the queue entry rows, the two deadline sets; rule 9, notification after the action; rule 10, a failed batch retried order by order |
 | ADR-018 | separators; the usage rules |

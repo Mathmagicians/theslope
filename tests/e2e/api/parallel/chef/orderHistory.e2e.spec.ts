@@ -76,7 +76,7 @@ test.describe('Chef dinner order history', () => {
             householdId: admin.householdId, seasonId, dinnerEventIds: [dinnerEventId],
             orders: [OrderFactory.createBookingOrder(admin.inhabitantId, dinnerEventId, childPrice.id)]
         })
-        expect(claimed!.scaffoldResult.claimed).toBe(1)
+        expect(claimed!.scaffoldResult.totals[useBookingValidation().BookingActionSchema.enum.BUY]).toBe(1)
 
         const response = (await OrderFactory.getTicketChanges(memberContext, dinnerEventId))!
         const adultPortions = getPortionsForTicketType(TicketTypeSchema.enum.ADULT)

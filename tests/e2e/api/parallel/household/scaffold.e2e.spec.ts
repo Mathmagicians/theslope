@@ -11,6 +11,7 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 import type { TicketPrice } from '~/composables/useTicketPriceValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 import type { ScaffoldOrdersRequest, DinnerMode as DinnerModeType } from '~/composables/useBookingValidation'
+const Action = useBookingValidation().BookingActionSchema.enum
 
 const { validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, salt, getSessionUserInfo, daysFromNow } = testHelpers
 const { TicketTypeSchema, DinnerModeSchema, OrderStateSchema } = useBookingValidation()
@@ -98,7 +99,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
 
       expect(result).not.toBeNull()
       expect(result!.householdId).toBe(testHouseholdId)
-      expect(result!.scaffoldResult.created).toBeGreaterThanOrEqual(0)
+      expect(result!.scaffoldResult.totals[Action.BOOK]).toBeGreaterThanOrEqual(0)
     })
 
     test('GIVEN admin user WHEN scaffolding for different household THEN returns 403', async ({ browser }) => {
@@ -165,7 +166,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
         })
 
         expect(result).not.toBeNull()
-        expect(result!.scaffoldResult.created).toBeGreaterThanOrEqual(1)
+        expect(result!.scaffoldResult.totals[Action.BOOK]).toBeGreaterThanOrEqual(1)
 
         // Verify order exists with correct mode
         const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, event.id)
@@ -202,7 +203,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       })
 
       expect(result).not.toBeNull()
-      expect(result!.scaffoldResult.created).toBeGreaterThanOrEqual(2)
+      expect(result!.scaffoldResult.totals[Action.BOOK]).toBeGreaterThanOrEqual(2)
     })
 
     test('GIVEN guest ticket WHEN scaffolding THEN guest order created with isGuestTicket=true', async ({ browser }) => {
@@ -223,7 +224,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       })
 
       expect(result).not.toBeNull()
-      expect(result!.scaffoldResult.created).toBeGreaterThanOrEqual(1)
+      expect(result!.scaffoldResult.totals[Action.BOOK]).toBeGreaterThanOrEqual(1)
 
       // Verify guest order exists
       const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, event.id)
@@ -303,7 +304,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       })
 
       expect(result).not.toBeNull()
-      expect(result!.scaffoldResult.modeUpdated).toBeGreaterThanOrEqual(1)
+      expect(result!.scaffoldResult.totals[Action.CHANGE_MODE]).toBeGreaterThanOrEqual(1)
 
       // Verify mode changed
       const orderAfter = await OrderFactory.getOrder(context, orderId)
@@ -341,7 +342,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       })
 
       expect(result).not.toBeNull()
-      expect(result!.scaffoldResult.released).toBeGreaterThanOrEqual(1)
+      expect(result!.scaffoldResult.totals[Action.RELEASE]).toBeGreaterThanOrEqual(1)
 
       // Verify order released (not deleted)
       const orderAfter = await OrderFactory.getOrder(context, orderId)
@@ -391,7 +392,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
 
       expect(reclaimResult).not.toBeNull()
       // Should NOT claim (that's different bucket) - should update existing order
-      expect(reclaimResult!.scaffoldResult.claimed, 'Should NOT use claim bucket').toBe(0)
+      expect(reclaimResult!.scaffoldResult.totals[Action.BUY], 'Should NOT use claim bucket').toBe(0)
 
       // 4. Verify order restored to BOOKED (same order ID)
       const orderAfter = await OrderFactory.getOrder(context, orderId)
@@ -449,9 +450,9 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       })
 
       expect(claimResult).not.toBeNull()
-      expect(claimResult!.scaffoldResult.claimed, 'Should claim via CLAIM bucket').toBeGreaterThanOrEqual(1)
-      expect(claimResult!.scaffoldResult.created, 'Should NOT create new order').toBe(0)
-      expect(claimResult!.scaffoldResult.queued, 'A ticket for sale is bought, never queued for').toBe(0)
+      expect(claimResult!.scaffoldResult.totals[Action.BUY], 'Should claim via CLAIM bucket').toBeGreaterThanOrEqual(1)
+      expect(claimResult!.scaffoldResult.totals[Action.BOOK], 'Should NOT create new order').toBe(0)
+      expect(claimResult!.scaffoldResult.totals[Action.QUEUE], 'A ticket for sale is bought, never queued for').toBe(0)
 
       // Verify ticket transferred to claiming inhabitant
       const orderAfterClaim = await OrderFactory.getOrder(context, releasedOrderId)
@@ -491,8 +492,8 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       const first = await queue(context, testHouseholdId, inhabitantId, dinnerEventId)
       const second = await queue(memberContext, member.householdId, member.inhabitantId, dinnerEventId)
 
-      expect(first).toMatchObject({ created: 0, claimed: 0, queued: 1, positions: [{ inhabitantId, dinnerEventId, isGuestTicket: false, position: 1 }] })
-      expect(second).toMatchObject({ queued: 1, positions: [{ inhabitantId: member.inhabitantId, position: 2 }] })
+      expect(first).toMatchObject({ totals: { [Action.BOOK]: 0, [Action.BUY]: 0, [Action.QUEUE]: 1 }, positions: [{ inhabitantId, dinnerEventId, isGuestTicket: false, position: 1 }] })
+      expect(second).toMatchObject({ totals: { [Action.QUEUE]: 1 }, positions: [{ inhabitantId: member.inhabitantId, position: 2 }] })
       const entries = await WaitlistFactory.entries(context, [dinnerEventId])
       expect(entries.map(entry => [entry.inhabitantId, entry.order.householdId, entry.order.priceAtBooking])).toEqual([
         [inhabitantId, testHouseholdId, testSeason.ticketPrices.find(price => price.id === testAdultTicketPriceId)!.price],
@@ -508,7 +509,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
         const result = await WaitlistFactory.queue(context, testHouseholdId, testSeason.id!,
           OrderFactory.createGuestOrder(testInhabitantId, dinnerEventId, testChildTicketPriceId, 'TAKEAWAY', [allergyType.id]))
 
-        expect(result).toMatchObject({ queued: 1, positions: [{ inhabitantId: testInhabitantId, isGuestTicket: true, position: 1 }] })
+        expect(result).toMatchObject({ totals: { [Action.QUEUE]: 1 }, positions: [{ inhabitantId: testInhabitantId, isGuestTicket: true, position: 1 }] })
         const [entry] = await WaitlistFactory.entries(context, [dinnerEventId])
         expect(entry).toMatchObject({
           isGuestTicket: true,
@@ -530,7 +531,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
 
       const result = await WaitlistFactory.leave(context, testSeason.id!, guestEntry!)
 
-      expect(result).toMatchObject({ left: 1, queued: 0 })
+      expect(result).toMatchObject({ totals: { [Action.LEAVE]: 1, [Action.QUEUE]: 0 } })
       expect(await WaitlistFactory.entries(context, [dinnerEventId])).toEqual([])
     })
 
@@ -545,7 +546,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
 
       const result = await WaitlistFactory.leave(context, testSeason.id!, firstEntry!)
 
-      expect(result).toMatchObject({ left: 1, queued: 0, claimed: 0 })
+      expect(result).toMatchObject({ totals: { [Action.LEAVE]: 1, [Action.QUEUE]: 0, [Action.BUY]: 0 } })
       const entries = await WaitlistFactory.entries(context, [dinnerEventId])
       expect(entries.map(entry => entry.inhabitantId)).toEqual([secondId])
     })
@@ -562,7 +563,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       const result = await WaitlistFactory.queue(context, testHouseholdId, testSeason.id!,
         WaitlistFactory.wishOf(firstEntry!, { ticketPriceId: testChildTicketPriceId }))
 
-      expect(result).toMatchObject({ requeued: 1, queued: 0, left: 0 })
+      expect(result).toMatchObject({ totals: { [Action.REQUEUE]: 1, [Action.QUEUE]: 0, [Action.LEAVE]: 0 } })
       const entries = await WaitlistFactory.entries(context, [dinnerEventId])
       expect(entries.map(entry => [entry.id, entry.order.ticketPriceId])).toEqual([
         [firstEntry!.id, testChildTicketPriceId],
@@ -579,7 +580,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
 
       const again = await queue(context, testHouseholdId, inhabitantId, dinnerEventId)
 
-      expect(again).toMatchObject({ queued: 0, claimed: 0, unchanged: 1 })
+      expect(again).toMatchObject({ totals: { [Action.QUEUE]: 0, [Action.BUY]: 0 }, unchanged: 1 })
       expect(await WaitlistFactory.entries(context, [dinnerEventId])).toHaveLength(1)
     })
 
@@ -593,7 +594,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
         dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
       }, 200, testSeason.id!)
 
-      expect(updated?.scaffoldResult).toMatchObject({ queued: 0, claimed: 0 })
+      expect(updated?.scaffoldResult).toMatchObject({ totals: { [Action.QUEUE]: 0, [Action.BUY]: 0 } })
       expect(await WaitlistFactory.entries(context, [dinnerEventId])).toEqual([])
     })
   })
@@ -628,7 +629,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
 
       const result = await correct(context, booked, DinnerMode.NONE)
 
-      expect(result!.scaffoldResult).toMatchObject({ deleted: 1, released: 0 })
+      expect(result!.scaffoldResult).toMatchObject({ totals: { [Action.CANCEL]: 1, [Action.RELEASE]: 0 } })
       await OrderFactory.getOrder(context, booked.orderId, 404)
     })
 
@@ -638,7 +639,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
 
       const result = await correct(context, booked, DinnerMode.TAKEAWAY)
 
-      expect(result!.scaffoldResult.modeUpdated).toBe(1)
+      expect(result!.scaffoldResult.totals[Action.CHANGE_MODE]).toBe(1)
       expect((await OrderFactory.getOrder(context, booked.orderId))!.dinnerMode).toBe(DinnerMode.TAKEAWAY)
     })
 

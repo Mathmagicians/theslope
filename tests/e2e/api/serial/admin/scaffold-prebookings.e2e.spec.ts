@@ -6,6 +6,8 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
+import {useBookingValidation as useActionValidation} from '~/composables/useBookingValidation'
+const Action = useActionValidation().BookingActionSchema.enum
 
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
@@ -62,7 +64,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
         const result = await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
 
         expect(result.seasonId).toBe(season.id)
-        expect(result.created).toBeGreaterThan(0)
+        expect(result.totals[Action.BOOK]).toBeGreaterThan(0)
 
         const orders = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
         const householdOrders = orders.filter(o => inhabitants.some(i => i.id === o.inhabitantId))
@@ -251,7 +253,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
                 // THEN: Response contains scaffoldResult with correct counts
                 expect(updateResult, 'should return HouseholdUpdateResponse').not.toBeNull()
                 const deletedCount = inhabitantOrdersBefore.length - eligibleIndices.length
-                expect(updateResult!.scaffoldResult.deleted, 'scaffoldResult.deleted matches removed orders').toBe(deletedCount)
+                expect(updateResult!.scaffoldResult.totals[Action.CANCEL], 'scaffoldResult.totals[Action.CANCEL] matches removed orders').toBe(deletedCount)
                 expect(updateResult!.household.moveOutDate, 'response household has moveOutDate set').not.toBeNull()
 
                 // Verify moveOutDate persisted via separate GET
@@ -304,7 +306,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
 
             // THEN: scaffoldResult reflects all orders deleted
             expect(updateResult, 'should return HouseholdUpdateResponse').not.toBeNull()
-            expect(updateResult!.scaffoldResult.deleted, 'scaffoldResult.deleted matches all removed orders').toBe(inhabitantOrdersBefore.length)
+            expect(updateResult!.scaffoldResult.totals[Action.CANCEL], 'scaffoldResult.totals[Action.CANCEL] matches all removed orders').toBe(inhabitantOrdersBefore.length)
 
             // THEN: ALL orders deleted — deadline doesn't protect moved-out households
             const ordersAfter = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
@@ -340,7 +342,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
 
             // GIVEN: Set moveOutDate to past → all orders deleted
             const setResult = await HouseholdFactory.updateHousehold(context, household.id, {moveOutDate: daysFromNow(-1)})
-            expect(setResult!.scaffoldResult.deleted, 'set: all orders deleted').toBe(dinnerEvents.length)
+            expect(setResult!.scaffoldResult.totals[Action.CANCEL], 'set: all orders deleted').toBe(dinnerEvents.length)
 
             const ordersAfterMoveOut = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
             expect(ordersAfterMoveOut.filter(o => o.inhabitantId === inhabitants[0]!.id).length, 'zero orders after moveOut').toBe(0)
@@ -352,10 +354,10 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
             expect(clearResult, 'should return HouseholdUpdateResponse').not.toBeNull()
             // Debug: log full scaffold result to understand what happened
             const sr = clearResult!.scaffoldResult
-            expect(sr.seasonId, `clear: scaffold ran with season (full: created=${sr.created} deleted=${sr.deleted} released=${sr.released} unchanged=${sr.unchanged} errored=${sr.errored} households=${sr.households})`).not.toBeNull()
+            expect(sr.seasonId, `clear: scaffold ran with season (full: created=${sr.totals[Action.BOOK]} deleted=${sr.totals[Action.CANCEL]} released=${sr.totals[Action.RELEASE]} unchanged=${sr.unchanged} errored=${sr.errored} households=${sr.households})`).not.toBeNull()
             expect(clearResult!.household.moveOutDate, 'response household has moveOutDate cleared').toBeNull()
             expect(sr.households, `clear: scaffold processed the household`).toBe(1)
-            expect(sr.created, 'clear: orders re-created').toBe(dinnerEvents.length)
+            expect(sr.totals[Action.BOOK], 'clear: orders re-created').toBe(dinnerEvents.length)
 
             // THEN: Orders are back
             const ordersAfterClear = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))

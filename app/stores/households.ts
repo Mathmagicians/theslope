@@ -282,7 +282,9 @@ export const useHouseholdsStore = defineStore("Households", () => {
         const targetHousehold = households.value.find(h => h.id === targetHouseholdId)
         const targetLabel = targetHousehold ? `${targetHousehold.shortName} (PBS ${targetHousehold.pbsId})` : `husstand ${targetHouseholdId}`
         const scaffoldSummary = formatScaffoldResult(result.scaffoldResult)
-        const hasOrderChanges = result.scaffoldResult.created > 0 || result.scaffoldResult.deleted > 0 || result.scaffoldResult.released > 0
+        const {BookingActionSchema} = useBookingValidation()
+        const Action = BookingActionSchema.enum
+        const hasOrderChanges = [Action.BOOK, Action.CANCEL, Action.RELEASE].some(action => result.scaffoldResult.totals[action] > 0)
 
         toastSaved(`${result.inhabitant.name} ${result.inhabitant.lastName} flyttet til ${targetLabel}`, hasOrderChanges ? scaffoldSummary : undefined)
 

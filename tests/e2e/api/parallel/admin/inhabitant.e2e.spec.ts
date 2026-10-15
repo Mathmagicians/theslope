@@ -7,6 +7,7 @@ import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFact
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
+const Action = useBookingValidation().BookingActionSchema.enum
 
 const {headers, validatedBrowserContext, pollUntil, salt, temporaryAndRandom} = testHelpers
 const {DinnerStateSchema} = useBookingValidation()
@@ -318,7 +319,7 @@ test.describe('Admin Inhabitant API', () => {
                 context, inhabitant.id, {dinnerPreferences: ALL_DINEIN}, 200, season.id,
                 ({scaffoldResult}) => {
                     expect(scaffoldResult.seasonId).toBe(season.id)
-                    expect(scaffoldResult.created).toBeGreaterThan(0)
+                    expect(scaffoldResult.totals[Action.BOOK]).toBeGreaterThan(0)
                 }
             )
 
@@ -358,7 +359,7 @@ test.describe('Admin Inhabitant API', () => {
                 ({scaffoldResult}) => {
                     expect(scaffoldResult.seasonId).toBe(season.id)
                     // Before deadline = deleted, After deadline = released
-                    expect(scaffoldResult.deleted + scaffoldResult.released).toBe(inhabitantOrdersBefore.length)
+                    expect(scaffoldResult.totals[Action.CANCEL] + scaffoldResult.totals[Action.RELEASE]).toBe(inhabitantOrdersBefore.length)
                 }
             )
 
@@ -451,8 +452,8 @@ test.describe('Admin Inhabitant API', () => {
             await HouseholdFactory.updateInhabitant(
                 context, inhabitant.id, {birthDate: childBirthdate}, 200, season.id,
                 ({scaffoldResult}) => {
-                    expect(scaffoldResult.priceUpdated, 'Should have price updates').toBeGreaterThan(0)
-                    expect(scaffoldResult.released, 'No releases expected').toBe(0)
+                    expect(scaffoldResult.totals[Action.CHANGE_PRICE], 'Should have price updates').toBeGreaterThan(0)
+                    expect(scaffoldResult.totals[Action.RELEASE], 'No releases expected').toBe(0)
                 }
             )
 
@@ -623,7 +624,7 @@ test.describe('Admin Inhabitant API', () => {
             await HouseholdFactory.updateInhabitant(
                 context, inhabitant.id, {householdId: hB.household.id}, 200, season.id,
                 ({scaffoldResult}) => {
-                    expect(scaffoldResult.created).toBe(0)
+                    expect(scaffoldResult.totals[Action.BOOK]).toBe(0)
                 }
             )
         })
