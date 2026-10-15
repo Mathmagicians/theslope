@@ -437,15 +437,16 @@ under Component layouts, the caption under Tables).
 `ChefMenuCard.vue` and `ExpenseLines.vue` each render the card section shell (`cardSection.row/label/glyph/line`, the
 secondary edit action, `cardSection.editor/editorHead/editorTitle`, `LAYOUTS.formButtonRow`). The total rows of
 `ExpenseLines.vue`, `CookingRoundSpending.vue` and `DinnerBudget.vue` spell the same `<tr>` with a label cell and a
-`VatAmount` cell twelve times. The unit words "ex / inkl. moms" sit on four tokens of one value (`dinnerBudget.unit`,
-`boxUnit`, `vatAmount.unitHeader`, `expenseLines.alternative`). `TicketChanges.vue` repeats its chip loop twice, and the
+`VatAmount` cell twelve times. The unit words "ex / inkl. moms" are a literal at five template sites (`DinnerBudget.vue` two,
+`CookingRoundSpending.vue`, `ExpenseLines.vue` two, one a column header) on three tokens of one value
+(`dinnerBudget.boxUnit`, `vatAmount.unitHeader`, `expenseLines.alternative`). `TicketChanges.vue` repeats its chip loop twice, and the
 design system spells `ticket.face.normal/released/claimed` and `stateIcon` as triplets that differ in one accent.
 
 #### Solution
 
 A `CardSection` atom (props: glyph, title, edit label, editing; slots: line, editor, actions) renders the shell for both
 cards. An `AmountTotalRow` atom (label, gross, balance, pending, colspan) renders every total row; `ExpenseLines`
-iterates `[{label, figures}]`. One unit-word token under `TYPOGRAPHY`, the other three go. One `#chips` fragment in
+iterates `[{label, figures}]`. One constant holds the unit words and one `TYPOGRAPHY` token styles them; the other two tokens go. One `#chips` fragment in
 `TicketChanges`. The ticket face is a base plus an accent map keyed by ticket state.
 
 #### Affected
@@ -457,9 +458,9 @@ iterates `[{label, figures}]`. One unit-word token under `TYPOGRAPHY`, the other
 
 #### Problem
 
-Seven sites append `kuv.` or `kuverter` to `formatPortions(x)` by hand (`KitchenPreparation.vue`, `AllergenMultiSelector.vue`,
-`AllergyOverviewLine.vue`, `DinnerBudget.vue`, `TicketChanges.vue`); thirty sites in ten files append ` kr` to
-`formatPrice(x)`, and `VatAmount.vue` spells its own.
+Six sites append `kuv.` or `kuverter` to `formatPortions(x)` by hand (`KitchenPreparation.vue` two,
+`AllergenMultiSelector.vue`, `AllergyOverviewLine.vue`, `DinnerBudget.vue`, `TicketChanges.vue`); thirty-six sites in
+twelve files append ` kr` to `formatPrice(x)`, `VatAmount.vue` among them.
 
 #### Solution
 
@@ -468,23 +469,24 @@ change.
 
 #### Affected
 
-The ten components with a ` kr` site (`AdminEconomy.vue` 11, `DinnerBudget.vue` 5, `HouseholdEconomy.vue` 4, the public
-billing page 3, `ControlBadge.vue` 2, `CostLine.vue`, `DinnerBookingForm.vue`, `TicketChanges.vue`, `BookingGridView.vue`,
-`VatAmount.vue`), the five with a portions site, `app/utils/utils.ts`, `app/composables/useTicket.ts`, the utils unit spec.
+The twelve files with a ` kr` site (`AdminEconomy.vue` 14, `DinnerBudget.vue` 5, `HouseholdEconomy.vue` 5, the
+public billing page 3, `ControlBadge.vue` 2, `CostLine.vue`, `DinnerBookingForm.vue`, `DinnerTicket.vue`, `ChefMenuCard.vue`,
+`TicketChanges.vue`, `BookingGridView.vue`, `VatAmount.vue`), the five with a portions site, `app/utils/utils.ts`, `app/composables/useTicket.ts`, the utils unit spec.
 
 ### Raw utility classes
 
 #### Problem
 
-The architecture rule fails a raw palette shade only, so about four hundred raw layout and typography utilities sit in
-sixty-one `.vue` files (`AdminEconomy.vue` 35, `AllergyTypeCard.vue` 27, `HouseholdSettings.vue` 25,
-`UserProfileCard.vue` 22, `UserPreferencesCard.vue` 20, `TicketPriceListEditor.vue` 14, `AllergyDetailPanel.vue` 13,
-`HouseholdEditPanel.vue` 11, `HelpButton.vue` 10, …). Per-site `:ui` patches and literal props sit beside them:
+The architecture rule fails a raw palette shade only, so about 560 raw utilities sit in the static `class`
+attributes of sixty-three `.vue` files (`AdminEconomy.vue` 68, `UserProfileCard.vue` 52, `UserPreferencesCard.vue` 50,
+`HouseholdSettings.vue` 46, `AllergyTypeCard.vue` 43, the public billing page 34, `HelpButton.vue` 32,
+`HouseholdEconomy.vue` 30, `AllergyDetailPanel.vue` 30, …). Per-site `:ui` patches and literal props sit beside them:
 `TicketPriceListEditor.vue` (three), `HelpButton.vue` (`variant="outline"` on a `UCard`), the page tabs of
 `pages/admin/[tab].vue`, `pages/household/[shortname]/[tab].vue` and `PageHeader.vue` (`label: 'hidden md:inline'`),
-`HouseholdListItem.vue:19`, `UserListItem.vue:152`, `CookingTeamCard.vue:339` (`:ui="{base: avatar.compact.fit}"`).
+`HouseholdListItem.vue:19` (a raw row), and the avatar groups of `UserListItem.vue:152`, `CookingTeamCard.vue:339` and
+`HouseholdListItem.vue:20` (`:ui="{base: avatar.compact.fit}"`).
 
-Motion utilities are the same class, 21 hits in 8 files: `animate-spin` beside `MOTION_SPIN` in `OrderHistoryDisplay.vue:59` and
+Motion utilities are the same class, 14 hits in 8 files: `animate-spin` beside `MOTION_SPIN` in `OrderHistoryDisplay.vue:59` and
 `AdminEconomy.vue:541`; hover interactions in `UserListItem.vue:158,199` (`hover:scale-110 hover:rotate-3 transition-transform duration-200`),
 `CountdownTimer.vue:122` (`hover:ring-2 … transition-all`), `ChefDinnerCard.vue:96` (`transition-shadow duration-200 hover:shadow-lg`),
 `UserProfileCard.vue:253` (`transition-colors` with a hover colour inside); the six `rotate-*` tilts by error code in
@@ -515,26 +517,27 @@ The sixty-one components, `app/composables/useTheSlopeDesignSystem.ts`,
 
 Six routes still spell a coerced id in a query schema (`order/index.get.ts`, `admin/dinner-event/index.get.ts`,
 `admin/team/index.get.ts`, `household/allergy/index.get.ts`, `billing/index.get.ts`, `admin/household/inhabitants/[id].post.ts`
-`seasonId`) beside `RouteIdSchema`. Three routes build the sender's queue and config pair as positional arguments
-(`admin/sender/event/test.post.ts`, `admin/sender/event/monthly-billing.post.ts`, `user/notifications/test.post.ts`) beside
-`senderFromEvent`. `useQueryParam.ts` repeats the normalize-or-default block three times. The order-history route
-reads the households its creation rows name because the creation audit row carries no `householdShortname`.
+`seasonId`) beside `RouteIdSchema`. `useQueryParam.ts` repeats the normalize-or-default block three times. The
+order-history route reads the households its creation rows name because the creation audit row carries no `householdShortname`.
 `useOrder.ts` holds `orderStateConfig` (labels, colours, icons on a design-system call) where ADR-017 r2 places presentation
 in `useBookingUi`; `app/stores/users.ts` exposes no `isEmpty` and `isStoreReady` (ADR-007 r2); `usePermissions.ts` and
 `useUserRoles.ts` import `SystemRoleSchema` from the generated layer where ADR-001 routes it through `useCoreValidation`.
+`chef/dinner/[id]/order-history.get.ts`, `expenses/index.get.ts` and `expenses/[expenseId].delete.ts` log no success line
+(ADR-004).
 
 #### Solution
 
-`RouteIdSchema` / `RouteIdSchema.optional()` in the six query schemas; `senderFromEvent(event)` destructured in the three
-routes; one `fallback(invalid)` in `useQueryParam`; `createOrders` writes `householdShortname` into the creation audit
-row, `readAuditTicket` reads it from both shapes, and a convergent backfill fills the existing rows, after which the
+`RouteIdSchema` / `RouteIdSchema.optional()` in the six query schemas; one `fallback(invalid)` in `useQueryParam`;
+`createOrders` writes `householdShortname` into the creation audit row, `readAuditTicket` reads it from both shapes, and a convergent backfill fills the existing rows, after which the
 households read in `chef/dinner/[id]/order-history.get.ts` goes. `orderStateConfig` moves to `useBookingUi` on tokens;
-the users store gains the two flags with a case each; the two composables import the enum from `useCoreValidation`.
+the users store gains the two flags with a case each; the two composables import the enum from `useCoreValidation`;
+the three chef routes log one `console.info` on success.
 
 #### Affected
 
-The nine routes, `app/composables/useQueryParam.ts`, `server/data/financesRepository.ts`,
-`app/composables/useBookingValidation.ts`, a D1 migration for the backfill, `docs/adr-compliance-backend.md` rows.
+The six query routes, the three chef routes, `app/composables/useQueryParam.ts`, `server/data/financesRepository.ts`,
+`app/composables/useBookingValidation.ts`, `useOrder.ts`, `useBookingUi.ts`, `usePermissions.ts`, `useUserRoles.ts`,
+`app/stores/users.ts` and its spec, a D1 migration for the backfill, `docs/adr-compliance-backend.md` rows.
 
 ### Waitlist chip
 

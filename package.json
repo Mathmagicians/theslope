@@ -49,8 +49,8 @@
   "dependencies": {
     "@nuxt/ui": "~4.11.3",
     "@pinia/nuxt": "~1.0.2",
-    "@prisma/adapter-d1": "~7.10.0",
-    "@prisma/client": "~7.10.0",
+    "@prisma/adapter-d1": "~7.10.1",
+    "@prisma/client": "~7.10.1",
     "date-fns": "~4.4.0",
     "ical-generator": "~11.1.2",
     "nuxt": "~4.6.0",
@@ -95,12 +95,11 @@
     "vue-demi@0.14.10": true,
     "esbuild@0.28.2": true,
     "esbuild@0.28.1": true,
-    "@prisma/client@6.19.3": true,
     "fsevents@2.3.3": true,
     "unrs-resolver@1.12.2": true,
     "esbuild@0.27.2": true,
-    "@prisma/engines@7.10.0": true,
-    "prisma@7.10.0": true,
-    "workerd@1.20261006.1": true
+    "workerd@1.20261006.1": true,
+    "prisma@7.10.1": true,
+    "@prisma/engines@7.10.1": true
   }
 }
