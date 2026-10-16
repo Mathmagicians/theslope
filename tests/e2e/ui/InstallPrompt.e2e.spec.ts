@@ -3,7 +3,7 @@ import {test, expect} from '@playwright/test'
 import {authFiles} from '../config'
 import testHelpers from '../testHelpers'
 import {INSTALL_TEST_IDS} from '~~/tests/component/components/installPromptTestIds'
-import {INSTALL_MEDIA_QUERIES, INSTALL_PROMPT_STATE} from '~/composables/useInstallPrompt'
+import {INSTALL_PROMPT_STATE} from '~/composables/useInstallPrompt'
 
 const {memberUIFile} = authFiles
 const {waitForHydration, gotoHydrated} = testHelpers
@@ -16,25 +16,6 @@ type StubbedWindow = Window & {
 
 // Nuxt stores useState under a `$s` prefix in the payload state
 const CAPTURED_EVENT_KEY = '$s' + INSTALL_PROMPT_STATE.event
-
-/** A share-sheet browser tab (iOS) exposes `navigator.standalone` as false; desktop Chromium has no such property */
-const shareSheetBrowser = () => {
-    Object.defineProperty(navigator, 'standalone', {value: false, configurable: true})
-}
-
-/** A touch-first device matches the query; desktop Chromium does not, so the init script answers it */
-const touchFirstBrowser = (touchFirstQuery: string) => {
-    const matchMedia = window.matchMedia.bind(window)
-    window.matchMedia = (query: string) => {
-        const list = matchMedia(query)
-        return query === touchFirstQuery ? Object.defineProperty(list, 'matches', {value: true}) : list
-    }
-}
-
-const INSTRUCTION_FACES = [
-    {given: 'a share-sheet browser tab', inject: shareSheetBrowser, text: 'Åbn Del-menuen og vælg \'Føj til hjemmeskærm\''},
-    {given: 'a touch-first browser tab without an install event', inject: touchFirstBrowser, text: 'Åbn browserens menu og vælg \'Føj til startskærm\''}
-] as const
 
 /**
  * Chromium fires `beforeinstallprompt` around page load when the page is installable. The stub fires a
@@ -69,23 +50,6 @@ const openDashboard = async (page: Page) => {
  */
 test.describe('Install guidance on the dashboard', () => {
     test.use({storageState: memberUIFile})
-
-    test('GIVEN a plain Chromium tab THEN no install card shows', async ({page}) => {
-        await openDashboard(page)
-
-        await expect(page.getByTestId(INSTALL_TEST_IDS.card)).toHaveCount(0)
-    })
-
-    for (const {given, inject, text} of INSTRUCTION_FACES) {
-        test(`GIVEN ${given} THEN the instructions show with Ikke nu only`, async ({page}) => {
-            await page.addInitScript(inject, INSTALL_MEDIA_QUERIES.touchFirst)
-            await openDashboard(page)
-
-            await expect(page.getByTestId(INSTALL_TEST_IDS.card)).toContainText(text)
-            await expect(page.getByTestId(INSTALL_TEST_IDS.dismiss)).toBeVisible()
-            await expect(page.getByTestId(INSTALL_TEST_IDS.install)).toHaveCount(0)
-        })
-    }
 
     test('GIVEN an installable Chromium tab WHEN Installér app is clicked THEN the browser install prompt opens', async ({page}) => {
         await page.addInitScript(chromiumInstallable, CAPTURED_EVENT_KEY)

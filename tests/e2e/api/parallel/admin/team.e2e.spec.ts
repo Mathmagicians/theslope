@@ -17,8 +17,8 @@ const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 // Season → CookingTeam → CookingTeamAssignment
 // Household → Inhabitant
 let testSeasonId: number
-const testHouseholdIds: number[] = []
-const additionalSeasonIds: number[] = []  // Track additional seasons created in tests for cleanup
+const createdSeasonIds: number[] = []
+const createdHouseholdIds: number[] = []
 
 test.describe('Admin Teams API', () => {
 
@@ -26,6 +26,7 @@ test.describe('Admin Teams API', () => {
         const context = await validatedBrowserContext(browser)
         const created = await SeasonFactory.createSeason(context)
         testSeasonId = created.id as number
+        createdSeasonIds.push(testSeasonId)
     })
 
     test.describe('Admin Team Endpoints CRUD Operations', () => {
@@ -47,38 +48,12 @@ test.describe('Admin Teams API', () => {
             expect(retrievedTeam!.seasonId).toBe(testTeam.seasonId)
         })
 
-        test('PUT /api/admin/team creates a team with team assignments and delete removes team and team assignments', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const testTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "Team-with-team-assignments", 2)
-            expect(testTeam.id).toBeDefined()
-            expect(testTeam.seasonId).toBe(testSeasonId)
-            expect(getTeamMemberCounts(testTeam)).toEqual(2)
-            expect(testTeam.assignments.length).toBe(2)
-            const memberAssignmentIds = testTeam.assignments.map((a) => a.id!)
-            const assignments = await Promise.all(
-                memberAssignmentIds.map((id) => SeasonFactory.getCookingTeamAssignment(context, id))
-            )
-            expect(assignments.map((a) => a?.id)).toEqual(memberAssignmentIds)
-
-            // Now delete the team
-            expect(testTeam.id).toBeDefined()
-            await SeasonFactory.deleteCookingTeam(context, testTeam.id!)
-
-            const assignmentsAfterDelete = await Promise.all(
-                memberAssignmentIds.map(id => SeasonFactory.getCookingTeamAssignment(context, id, 404)
-                ))
-            expect(assignmentsAfterDelete.filter(a => a !== null).length).toBe(0)
-
-            // Cleanup household
-            await HouseholdFactory.deleteHousehold(context, testTeam.householdId)
-        })
-
         test('PUT /api/admin/team returns the {teams, eventsAssigned} envelope (ADR-009)', async ({browser}) => {
             // GIVEN: an own season with auto-generated dinner events (parallel-safe: no shared season)
             const context = await validatedBrowserContext(browser)
             const testSalt = Date.now().toString()
             const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
-            additionalSeasonIds.push(season.id as number)
+            createdSeasonIds.push(season.id as number)
             expect(dinnerEvents.length).toBeGreaterThan(0)
 
             // WHEN: two teams are created in one PUT
@@ -128,7 +103,7 @@ test.describe('Admin Teams API', () => {
             const team1 = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, testTeamName)
             // Create teams for different seasons
             const otherSeason = await SeasonFactory.createSeason(context)
-            additionalSeasonIds.push(otherSeason.id as number)  // Track for cleanup
+            createdSeasonIds.push(otherSeason.id as number)
             const team2 = await SeasonFactory.createCookingTeamForSeason(context, otherSeason.id as number, "Other-Season-Team")
 
             // Filter teams by first season
@@ -140,22 +115,7 @@ test.describe('Admin Teams API', () => {
             expect(team2Found).toBeFalsy() // Should not appear in filtered results
         })
 
-        test('GET /api/admin/team/[id] should get specific team details', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const createdTeam = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, "team-details")
-            expect(createdTeam.id).toBeDefined()
-
-            // Get team details
-            const teamDetails = await SeasonFactory.getCookingTeamById(context, createdTeam.id!)
-            expect(teamDetails).not.toBeNull()
-            expect(teamDetails!.id).toBe(createdTeam.id)
-            expect(teamDetails!.name).toBe(createdTeam.name)
-            expect(teamDetails!.seasonId).toBe(testSeasonId)
-            expect(teamDetails).toHaveProperty('assignments')
-            expect(Array.isArray(teamDetails!.assignments)).toBe(true)
-        })
-
-        test('GET /api/admin/team/[id] should return Detail entity with dinnerEvents and cookingDaysCount (ADR-009)', async ({browser}) => {
+        test('GET /api/admin/team/[id] should return Detail entity with dinnerEvents, cookingDaysCount and joker slots (ADR-009)', async ({browser}) => {
             // GIVEN: A team with dinner events assigned
             const context = await validatedBrowserContext(browser)
             const createdTeam = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, "team-with-dinners")
@@ -174,6 +134,7 @@ test.describe('Admin Teams API', () => {
             // AND: Contains Detail entity fields (ADR-009)
             expect(teamDetail.id).toBe(createdTeam.id)
             expect(teamDetail.name).toBe(createdTeam.name)
+            expect(teamDetail.seasonId).toBe(testSeasonId)
 
             // AND: Contains assignments array
             expect(teamDetail).toHaveProperty('assignments')
@@ -193,31 +154,10 @@ test.describe('Admin Teams API', () => {
             // AND: Contains cookingDaysCount aggregate
             expect(teamDetail).toHaveProperty('cookingDaysCount')
             expect(teamDetail.cookingDaysCount).toBe(teamDinnerIds.length)
-        })
 
-        test('GET /api/admin/team/[id] returns the team joker slots in its Detail (ADR-009)', async ({browser}) => {
-            // GIVEN: A team with no joker slots
-            const context = await validatedBrowserContext(browser)
-            const createdTeam = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, "team-jokers")
-
-            // WHEN: GET team detail by ID
-            const teamDetail = await SeasonFactory.getCookingTeamById(context, createdTeam.id!)
-
-            // THEN: The Detail carries an empty jokerSlots array
-            expect(teamDetail!.jokerSlots).toEqual([])
-            // AND: The aggregate it inherits from the Display counts the same slots
-            expect(teamDetail!.jokerSlotCount).toBe(teamDetail!.jokerSlots.length)
-        })
-
-        test('GET /api/admin/team/[id] should return 404 for non-existent team', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const nonExistentId = 999999
-
-            const response = await context.request.get(`${ADMIN_TEAM_ENDPOINT}/${nonExistentId}`, {
-                headers: headers
-            })
-
-            expect(response.status()).toBe(404)
+            // AND: Carries the team's joker slots (none yet), and the aggregate it inherits from the Display counts them
+            expect(teamDetail.jokerSlots).toEqual([])
+            expect(teamDetail.jokerSlotCount).toBe(teamDetail.jokerSlots.length)
         })
 
         test('GET /api/admin/team/[id] should return 400 for invalid team ID', async ({browser}) => {
@@ -258,7 +198,7 @@ test.describe('Admin Teams API', () => {
             )
             expect(teamWithMembers.id).toBeDefined()
             expect(teamWithMembers.assignments).toHaveLength(1)
-            testHouseholdIds.push(teamWithMembers.householdId)
+            createdHouseholdIds.push(teamWithMembers.householdId)
 
             // WHEN: GET the full team (includes assignments with inhabitant relation populated)
             const fetchedTeam = (await SeasonFactory.getCookingTeamById(context, teamWithMembers.id!))!
@@ -331,45 +271,37 @@ test.describe('Admin Teams API', () => {
             expect(updated.affinity).toEqual(updatedAffinity)
         })
 
-        test('DELETE /api/admin/team/[id] should delete the cooking team, together with team assignments', async ({browser}) => {
+        test('DELETE /api/admin/team/[id] deletes the cooking team together with its team assignments, and a removed team answers 404', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-to-delete", 3)
-            expect(createdTeam.id).toBeDefined()
-            // Do not add to cleanup, we are deleting it here
+            createdHouseholdIds.push(createdTeam.householdId)
 
-            // Verify team and assignments exist
+            // GIVEN: The team Detail carries three assignments at full allocation, each readable on its own
             expect(getTeamMemberCounts(createdTeam)).toBe(3)
-            expect(createdTeam.assignments.length).toBe(3)
-            // Delete the team
-            const deletedId = await SeasonFactory.deleteCookingTeam(context, createdTeam.id!)
+            expect(createdTeam.assignments.every(assignment => assignment.allocationPercentage === 100)).toBe(true)
+            const assignmentIds = createdTeam.assignments.map(assignment => assignment.id!)
+            const assignments = await Promise.all(assignmentIds.map(id => SeasonFactory.getCookingTeamAssignment(context, id)))
+            expect(assignments.map(assignment => assignment?.id)).toEqual(assignmentIds)
+
+            // WHEN: The team is deleted
+            const deletedId = await SeasonFactory.deleteCookingTeam(context, createdTeam.id!, 200)
             expect(deletedId).toBe(createdTeam.id)
 
-            // Verify team is deleted
+            // THEN: The team and its assignments are gone
             await SeasonFactory.getCookingTeamById(context, createdTeam.id!, 404)
+            await Promise.all(assignmentIds.map(id => SeasonFactory.getCookingTeamAssignment(context, id, 404)))
 
-            // Cleanup household
-            await HouseholdFactory.deleteHousehold(context, createdTeam.householdId)
+            // AND: An update and a second delete of the removed team answer 404 (a valid body, so the 404 is the lookup)
+            const updateResponse = await context.request.post(`${ADMIN_TEAM_ENDPOINT}/${createdTeam.id}`, {
+                headers: headers,
+                data: {name: "Updated Name", seasonId: testSeasonId, assignments: []}
+            })
+            expect(updateResponse.status()).toBe(404)
+            await SeasonFactory.deleteCookingTeam(context, createdTeam.id!, 404)
         })
     })
 
     test.describe('Team Member Management', () => {
-
-        test('PUT /api/admin/team/[id]/members should add team member assignments', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-
-            // Create team with members using factory
-            const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-with-assignments", 3)
-            testHouseholdIds.push(createdTeam.householdId)
-
-            // Verify the team has the expected member structure
-            expect(createdTeam.id).toBeDefined()
-            const teamDetails = await SeasonFactory.getCookingTeamById(context, createdTeam.id!)
-            expect(teamDetails).not.toBeNull()
-            expect(getTeamMemberCounts(teamDetails!)).toBe(3)
-
-            // Verify allocationPercentage is set (defaults to 100)
-            expect(teamDetails!.assignments[0]!.allocationPercentage).toBe(100)
-        })
 
         test('POST /api/admin/team/assignment/[id] updates role and allocation, and the team Detail reflects it', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
@@ -377,7 +309,7 @@ test.describe('Admin Teams API', () => {
 
             // GIVEN: a team with one member at full time
             const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-for-update", 1)
-            testHouseholdIds.push(createdTeam.householdId)
+            createdHouseholdIds.push(createdTeam.householdId)
             const member = createdTeam.assignments[0]!
             const role = member.role === TeamRoleSchema.enum.COOK ? TeamRoleSchema.enum.JUNIORHELPER : TeamRoleSchema.enum.COOK
 
@@ -393,7 +325,7 @@ test.describe('Admin Teams API', () => {
         test('POST /api/admin/team/assignment/[id] rejects an allocation outside 1-100', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-for-invalid-update", 1)
-            testHouseholdIds.push(createdTeam.householdId)
+            createdHouseholdIds.push(createdTeam.householdId)
             await SeasonFactory.updateTeamMember(context, createdTeam.assignments[0]!.id!, {allocationPercentage: 0}, 400)
         })
 
@@ -402,7 +334,7 @@ test.describe('Admin Teams API', () => {
 
             // Create team with members using factory
             const createdTeam = await SeasonFactory.createCookingTeamWithMembersForSeason(context, testSeasonId, "team-for-removal", 2)
-            testHouseholdIds.push(createdTeam.householdId)
+            createdHouseholdIds.push(createdTeam.householdId)
 
             // Verify assignments exist
             expect(createdTeam.assignments.length).toBe(2)
@@ -422,47 +354,8 @@ test.describe('Admin Teams API', () => {
         test('PUT /api/admin/team should reject invalid team data', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
 
-            // Try to create team without seasonId - should fail
+            // Try to create team without seasonId - should fail (the schema's field rules: useCookingTeamValidation unit spec)
             await SeasonFactory.createCookingTeamForSeason(context, 0, "Invalid Team", 400)
-        })
-
-        test('PUT /api/admin/team should reject empty team name', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-
-            // Try to create team with empty name - should fail
-            await SeasonFactory.createCookingTeamForSeason(context, testSeasonId, "", 400)
-        })
-
-        test('GET /api/admin/team/[id] should return 404 for non-existent team', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-
-            // Try to get non-existent team - should return 404
-            await SeasonFactory.getCookingTeamById(context, 99999, 404)
-        })
-
-        test('POST /api/admin/team/[id] should return 404 for non-existent team', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-
-            // Create a valid team structure (with all required fields) to pass validation
-            // This ensures we get 404 (team not found) instead of 400 (validation error)
-            const response = await context.request.post(`${ADMIN_TEAM_ENDPOINT}/99999`,
-                {
-                    headers: headers,
-                    data: {
-                        name: "Updated Name",
-                        seasonId: testSeasonId,
-                        assignments: []
-                    }
-                })
-
-            expect(response.status()).toBe(404)
-        })
-
-        test('DELETE /api/admin/team/[id] should return 404 for non-existent team', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-
-            // Try to delete non-existent team - should return 404
-            await SeasonFactory.deleteCookingTeam(context, 99999, 404)
         })
 
     })
@@ -474,28 +367,7 @@ test.describe('Admin Teams API', () => {
         // Only need to delete root entities - CASCADE will handle the rest
         // Deleting Season cascades to CookingTeam → CookingTeamAssignment
         // Deleting Household cascades to Inhabitants
-
-        // Clean up main test season
-        if (testSeasonId) {
-            try {
-                await SeasonFactory.deleteSeason(context, testSeasonId)
-            } catch (error) {
-                console.warn(`Failed to cleanup test season ${testSeasonId}:`, error)
-            }
-        }
-
-        // Clean up all additional seasons created in tests
-        await Promise.all(additionalSeasonIds.map(id =>
-            SeasonFactory.deleteSeason(context, id).catch(error => {
-                console.warn(`Failed to cleanup additional season ${id}:`, error)
-            })
-        ))
-
-        // Clean up all created households
-        await Promise.all(testHouseholdIds.map(id =>
-            HouseholdFactory.deleteHousehold(context, id).catch(error => {
-                console.warn(`Failed to cleanup household ${id}:`, error)
-            })
-        ))
+        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
+        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
     })
 })

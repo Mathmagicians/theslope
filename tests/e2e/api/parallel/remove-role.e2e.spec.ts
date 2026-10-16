@@ -26,6 +26,7 @@ let memberContext: Awaited<ReturnType<typeof memberValidatedBrowserContext>>
 let testSeasonId: number
 let chefTeamId: number
 let memberInhabitantId: number
+const createdSeasonIds: number[] = []
 const createdAllergyTypeIds: number[] = []
 
 test.describe('Remove Role Endpoint (Meld afbud)', () => {
@@ -35,6 +36,7 @@ test.describe('Remove Role Endpoint (Meld afbud)', () => {
         memberContext = await memberValidatedBrowserContext(browser)
 
         testSeasonId = (await SeasonFactory.createSeason(adminContext)).id!
+        createdSeasonIds.push(testSeasonId)
         chefTeamId = (await SeasonFactory.createCookingTeamForSeason(
             adminContext, testSeasonId, salt('ChefTeam', temporaryAndRandom())
         )).id!
@@ -42,9 +44,10 @@ test.describe('Remove Role Endpoint (Meld afbud)', () => {
         await SeasonFactory.assignMemberToTeam(adminContext, chefTeamId, memberInhabitantId, Role.CHEF)
     })
 
-    test.afterAll(async () => {
-        if (testSeasonId) await SeasonFactory.cleanupSeasons(adminContext, [testSeasonId])
-        await AllergyFactory.cleanupAllergyTypes(adminContext, createdAllergyTypeIds)
+    test.afterAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
+        await AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
     })
 
     // Create a SCHEDULED dinner on the chef team with the member assigned as chef.
@@ -64,7 +67,7 @@ test.describe('Remove Role Endpoint (Meld afbud)', () => {
     const removeRole = (dinnerEventId: number, expectedStatus = 200) =>
         DinnerEventFactory.removeRoleFromDinnerEvent(memberContext, dinnerEventId, memberInhabitantId, Role.CHEF, expectedStatus)
 
-    test('GIVEN scheduled dinner with chef + menu + allergens WHEN remove-role THEN all cleared, state SCHEDULED', async () => {
+    test('GIVEN scheduled dinner with chef + menu + allergens WHEN remove-role THEN all cleared, state SCHEDULED, team membership preserved', async () => {
         const testSalt = temporaryAndRandom()
         const dinner = await createDinnerWithChef()
 
@@ -85,6 +88,12 @@ test.describe('Remove Role Endpoint (Meld afbud)', () => {
         expect(result!.totalCost).toBe(0)
         expect(result!.state).toBe(DinnerState.SCHEDULED)
         expect(result!.allergens!.length).toBe(0)
+
+        const team = await SeasonFactory.getCookingTeamById(adminContext, chefTeamId)
+        expect(
+            team!.assignments.find(a => a.inhabitantId === memberInhabitantId),
+            'Chef stays on the cooking team after Meld afbud'
+        ).toBeDefined()
     })
 
     test('GIVEN announced dinner with Heynabo event WHEN remove-role THEN heynaboEventId cleared and HN event deleted', async () => {
@@ -108,18 +117,12 @@ test.describe('Remove Role Endpoint (Meld afbud)', () => {
         await removeRole(dinner.id, 400)
     })
 
-    test('GIVEN non-existent dinner WHEN remove-role THEN 404', async () => {
-        await removeRole(999999, 404)
-    })
-
-    test('GIVEN remove-role WHEN completed THEN team membership preserved', async () => {
-        const dinner = await createDinnerWithChef()
-        await removeRole(dinner.id)
-
-        const team = await SeasonFactory.getCookingTeamById(adminContext, chefTeamId)
-        expect(
-            team!.assignments.find(a => a.inhabitantId === memberInhabitantId),
-            'Chef stays on the cooking team after Meld afbud'
-        ).toBeDefined()
+    test('GIVEN removed dinner WHEN remove-role THEN 404', async () => {
+        const dinner = await DinnerEventFactory.createDinnerEvent(adminContext, {
+            ...DinnerEventFactory.defaultDinnerEvent(temporaryAndRandom()),
+            seasonId: testSeasonId
+        })
+        await DinnerEventFactory.deleteDinnerEvent(adminContext, dinner.id, 200)
+        await removeRole(dinner.id, 404)
     })
 })

@@ -42,11 +42,11 @@ const {createDefaultWeekdayMap: createDinnerModeWeekdayMap} = useWeekDayMapValid
 
 const testSalt = temporaryAndRandom()
 const createdSeasonIds: number[] = []
+const createdHouseholdIds: number[] = []
 let testSeason: Awaited<ReturnType<typeof SeasonFactory.createSeasonWithDinnerEvents>>
 let householdId: number
 let shortName: string
 let pbsId: number
-const hydrationHouseholdIds: number[] = []
 
 test.use({storageState: adminUIFile})
 
@@ -59,16 +59,15 @@ test.beforeAll(async ({browser}) => {
 
     const household = await HouseholdFactory.createHousehold(context, {name: salt('HouseholdBookings', testSalt)})
     householdId = household.id
+    createdHouseholdIds.push(householdId)
     shortName = household.shortName
     pbsId = household.pbsId
 })
 
 test.afterAll(async ({browser}) => {
     const context = await validatedBrowserContext(browser)
-    if (householdId) {
-        await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
-    }
-    await Promise.all(hydrationHouseholdIds.map(id => HouseholdFactory.deleteHousehold(context, id).catch(() => {})))
+    // Deleting a household cascades its inhabitants and their orders; cleanup accepts a 404
+    await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
     await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
 })
 
@@ -94,7 +93,7 @@ const getDateFromUrl = (url: string): Date | null => {
 
 /** Open the bookings tab and wait until `useDinnerDateParam` has synced `?date=`. */
 const openBookingsView = async (page: Page, view: BookingView): Promise<Date> => {
-    await page.goto(buildBookingsUrl(view))
+    await gotoHydrated(page, buildBookingsUrl(view))
     await pollUntil(
         async () => page.locator('[data-testid="household-bookings"]').isVisible(),
         (v) => v,
@@ -126,15 +125,11 @@ const clickAndAwaitDateChange = async (page: Page, testId: 'date-nav-next' | 'da
 // ---- Tests ----
 
 for (const view of ['week', 'month'] as const) {
-    test(`${view} forward arrow advances ?date= to a later date`, async ({page}) => {
+    test(`${view} forward arrow advances ?date= to a later date and the backward arrow returns it to an earlier date`, async ({page}) => {
         const initial = await openBookingsView(page, view)
-        const after = await clickAndAwaitDateChange(page, 'date-nav-next')
-        expect(after.getTime()).toBeGreaterThan(initial.getTime())
-    })
-
-    test(`${view} backward arrow returns ?date= to an earlier date`, async ({page}) => {
-        await openBookingsView(page, view)
         const advanced = await clickAndAwaitDateChange(page, 'date-nav-next')
+        expect(advanced.getTime()).toBeGreaterThan(initial.getTime())
+
         const after = await clickAndAwaitDateChange(page, 'date-nav-prev')
         expect(after.getTime()).toBeLessThan(advanced.getTime())
     })
@@ -246,7 +241,7 @@ for (const view of ['day', 'week', 'month'] as const) {
     test(`GIVEN a household of more inhabitants than the avatar row shows WHEN the ${view} view loads at desktop width THEN the client hydrates the server markup without a mismatch`, async ({page, browser}) => {
         const context = await validatedBrowserContext(browser)
         const household = await HouseholdFactory.createHousehold(context, {name: salt(`Hydration-${view}`, testSalt)})
-        hydrationHouseholdIds.push(household.id)
+        createdHouseholdIds.push(household.id)
         await Promise.all(Array.from({length: 6}, (_, i) => HouseholdFactory.createInhabitantWithConfig(context, household.id, {
             name: salt(`Avatar${i}`, testSalt),
             pictureUrl: `https://theslope.example/avatar-${i}.png`,

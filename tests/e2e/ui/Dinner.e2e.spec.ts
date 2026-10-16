@@ -134,47 +134,14 @@ test.describe('Dinner Page URL Navigation', () => {
         await expect(panel, 'Dinner detail panel should be visible after auto-sync').toBeVisible()
     })
 
-    test('GIVEN valid date in URL WHEN page loads THEN displays correct dinner event with all details', async ({browser}) => {
-        const context = await memberValidatedBrowserContext(browser)
-        const page = await context.newPage()
-        const secondEventDate = testData.dates.second
-
-        // WHEN: Navigate directly to second event's date (bypassing "next dinner" logic)
-        await gotoHydrated(page, `${dinnerPageUrl}?date=${secondEventDate}`)
-
-        // Wait for dinner detail panel to load
-        await pollUntil(
-            async () => {
-                const panel = page.getByTestId('dinner-detail-panel')
-                return await panel.isVisible().catch(() => false)
-            },
-            (isVisible) => isVisible,
-            10
-        )
-
-        await doScreenshot(page, `dinner-second-event-date-${secondEventDate.replace(/\//g, '-')}`)
-
-        // THEN: URL should stay on the selected date (not redirect to "next dinner")
-        const currentUrl = page.url()
-        const urlObj = new URL(currentUrl)
-        const dateParam = urlObj.searchParams.get('date')
-        expect(dateParam, `URL should stay on explicitly requested date ${secondEventDate}`).toBe(secondEventDate)
-
-        // THEN: Dinner event panel should be displayed with correct date
-        const panel = page.getByTestId('dinner-detail-panel')
-        await expect(panel, `Dinner detail panel should be visible for ${secondEventDate}`).toBeVisible()
-
-        // Verify the panel contains the expected date (rendered via DinnerDetailHeader inside)
-        const panelText = await panel.textContent()
-        expect(panelText, `Panel should contain the date ${secondEventDate}`).toContain(secondEventDate)
-    })
-
     test('GIVEN a dinner date in the URL WHEN the page loads THEN the client hydrates the server-rendered dinner without a mismatch', async ({browser}) => {
         const context = await memberValidatedBrowserContext(browser)
         const page = await context.newPage()
         await expectHydratedWithoutMismatch(page, `${dinnerPageUrl}?date=${testData.dates.second}`)
 
         await expect(page.getByTestId('dinner-detail-panel')).toContainText(testData.dates.second)
+        // THEN: URL should stay on the selected date (not redirect to "next dinner")
+        expect(new URL(page.url()).searchParams.get('date'), `URL should stay on explicitly requested date ${testData.dates.second}`).toBe(testData.dates.second)
     })
 
     test('GIVEN date without dinner event WHEN page loads THEN auto-syncs to nearest dinner event', async ({browser}) => {
@@ -261,6 +228,8 @@ test.describe('Dinner Page URL Navigation', () => {
 
     test.describe('Ticket allergies', () => {
         const testSalt = temporaryAndRandom()
+        const createdInhabitantIds: number[] = []
+        const createdAllergyTypeIds: number[] = []
         let allergicId: number
         let notAllergicId: number
         let allergyType: Awaited<ReturnType<typeof AllergyFactory.createAllergyType>>
@@ -277,12 +246,16 @@ test.describe('Dinner Page URL Navigation', () => {
             dinnerDate = testData.dates.second
 
             const adultBirthDate = addDays(new Date(), -30 * 365)
-            const [allergic, notAllergic] = await Promise.all(['Anders', 'Anders2'].map(name =>
-                HouseholdFactory.createInhabitantForHousehold(adminContext, householdId, salt(name, testSalt), adultBirthDate)))
+            const [allergic, notAllergic] = await Promise.all(['Anders', 'Anders2'].map(async name => {
+                const inhabitant = await HouseholdFactory.createInhabitantForHousehold(adminContext, householdId, salt(name, testSalt), adultBirthDate)
+                createdInhabitantIds.push(inhabitant.id)
+                return inhabitant
+            }))
             allergicId = allergic!.id
             notAllergicId = notAllergic!.id
 
             allergyType = await AllergyFactory.createAllergyType(adminContext, AllergyFactory.defaultAllergyTypeData(testSalt))
+            createdAllergyTypeIds.push(allergyType.id)
             await AllergyFactory.createAllergy(adminContext, {inhabitantId: allergicId, allergyTypeId: allergyType.id, inhabitantComment: null})
 
             await OrderFactory.createOrder(adminContext, {
@@ -297,9 +270,8 @@ test.describe('Dinner Page URL Navigation', () => {
         test.afterAll(async ({browser}) => {
             const adminContext = await validatedBrowserContext(browser)
             // Deleting an inhabitant cascades its orders and allergies
-            await Promise.all([allergicId, notAllergicId].filter(Boolean)
-                .map(id => HouseholdFactory.deleteInhabitant(adminContext, id).catch(() => {})))
-            if (allergyType?.id) await AllergyFactory.deleteAllergyType(adminContext, allergyType.id).catch(() => {})
+            await Promise.all(createdInhabitantIds.map(id => HouseholdFactory.deleteInhabitant(adminContext, id)))
+            await AllergyFactory.cleanupAllergyTypes(adminContext, createdAllergyTypeIds)
         })
 
         const bookingRow = (page: Page, inhabitantId: number) =>
@@ -344,7 +316,7 @@ test.describe('Dinner Page URL Navigation', () => {
                 const page = await context.newPage()
                 await page.setViewportSize(viewport)
 
-                await page.goto(dinnerPageUrl)
+                await gotoHydrated(page, dinnerPageUrl)
 
                 await expect.poll(() => new URL(page.url()).searchParams.get('cal')).toBe(expected)
                 if (expected === 'open') await expect(calendarDays(page)).toBeVisible()

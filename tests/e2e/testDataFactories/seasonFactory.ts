@@ -14,6 +14,8 @@ import {useBookingValidation, type DinnerEventDisplay, type ScaffoldResult, type
 import {useMaintenanceValidation, type JobRunDisplay} from "~/composables/useMaintenanceValidation"
 import {useDutyValidation, type JokerSlot, type JokerSlotCreate} from "~/composables/useDutyValidation"
 import {getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
+import type {DateRange} from '~/types/dateTypes'
+import {addDays, nextMonday} from 'date-fns'
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
 import {HouseholdFactory} from "./householdFactory"
@@ -67,6 +69,18 @@ export class SeasonFactory {
         const randomMonth = Math.floor(Math.random() * 12) // 0-11
         const year = 4025 + randomYearOffset
         return new Date(year, randomMonth, 1)
+    }
+
+    /**
+     * A unique season week with a holiday inside it, for parallel runs and reruns: Monday to Sunday in a random
+     * far-future month (generateUniqueDate), so the weekdays are fixed; the holiday runs Wednesday to Friday
+     */
+    static readonly generateUniqueSeasonDates = (): { seasonDates: DateRange, holiday: DateRange } => {
+        const start = nextMonday(this.generateUniqueDate())
+        return {
+            seasonDates: {start, end: addDays(start, 6)},
+            holiday: {start: addDays(start, 2), end: addDays(start, 4)}
+        }
     }
 
     /**
@@ -1006,20 +1020,21 @@ export class SeasonFactory {
         return null
     }
 
-    /** Returns the deleted team's id, null when another status is expected */
+    /**
+     * Delete a cooking team, returns the deleted team's id
+     * Cleanup (afterAll): no expectedStatus - a team already gone counts as removed, any other status fails
+     * API tests: pass expectedStatus - the deletion answers it
+     */
     static readonly deleteCookingTeam = async (
         context: BrowserContext,
         teamId: number,
-        expectedStatus: number = 200
+        expectedStatus?: number
     ): Promise<number | null> => {
         const response = await context.request.delete(`${ADMIN_TEAM_ENDPOINT}/${teamId}`)
-
         const status = response.status()
-        expect(status, 'Unexpected status').toBe(expectedStatus)
-        if (expectedStatus === 200) {
-            return IdSchema.parse(await response.json())
-        }
-        return null
+        const body = await response.text()
+        expect(expectedStatus === undefined ? [200, 404] : [expectedStatus], `Unexpected status deleting cooking team ${teamId}: ${body}`).toContain(status)
+        return status === 200 ? IdSchema.parse(JSON.parse(body)) : null
     }
 
     // === JOKER SLOT METHODS ===

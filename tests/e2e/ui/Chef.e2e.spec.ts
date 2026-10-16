@@ -65,36 +65,13 @@ test.describe('Chef Page', () => {
 
     test.afterAll(async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
-        // The dinners go before their teams; another spec's season cleanup can cascade either away first
+        // The dinners go before their teams; another spec's season cleanup can cascade either away first (cleanup accepts a 404)
         for (const dinnerId of createdDinnerIds) {
-            await DinnerEventFactory.deleteDinnerEvent(adminContext, dinnerId).catch(() => undefined)
+            await DinnerEventFactory.deleteDinnerEvent(adminContext, dinnerId)
         }
         for (const teamId of createdTeamIds) {
-            // Another spec's season cleanup can cascade the team away first; gone is the goal either way
-            await SeasonFactory.deleteCookingTeam(adminContext, teamId).catch(() => undefined)
+            await SeasonFactory.deleteCookingTeam(adminContext, teamId)
         }
-    })
-
-    test('GIVEN member chef with assigned team WHEN viewing chef page THEN sees dashboard with countdown', async ({browser}) => {
-        const memberContext = await memberValidatedBrowserContext(browser)
-        const page = await memberContext.newPage()
-
-        await page.goto(`${chefPageUrl}?team=${team1Id}`)
-
-        await pollUntil(
-            async () => await page.locator('text=Du er chefkok').first().isVisible().catch(() => false),
-            (isVisible) => isVisible,
-            10
-        )
-        await expect(page.locator('text=Du er chefkok').first()).toBeVisible()
-
-        // Countdown renders once planStore is ready and ChefCalendarDisplay mounts - poll for testid
-        await pollUntil(
-            async () => await page.locator('[data-testid="chef-next-cooking-countdown"]').first().isVisible().catch(() => false),
-            (isVisible) => isVisible,
-            10
-        )
-        await expect(page.locator('[data-testid="chef-next-cooking-countdown"]').first()).toBeVisible()
     })
 
     test('GIVEN member chef with assigned team WHEN the chef page loads THEN the client hydrates the server render without a mismatch and one footer', async ({browser}) => {
@@ -120,12 +97,13 @@ test.describe('Chef Page', () => {
         // Navigate with Team 1 selected
         await gotoHydrated(page, `${chefPageUrl}?team=${team1Id}`)
 
-        // Wait for countdown to load
+        // Countdown renders once planStore is ready and ChefCalendarDisplay mounts - poll for testid
         await pollUntil(
             async () => await page.locator('[data-testid="chef-next-cooking-countdown"]').first().isVisible().catch(() => false),
             (isVisible) => isVisible,
             10
         )
+        await expect(page.locator('text=Du er chefkok').first()).toBeVisible()
 
         // Get Team 1's countdown text
         const team1CountdownText = await page.locator('[data-testid="chef-next-cooking-countdown"]').first().textContent()

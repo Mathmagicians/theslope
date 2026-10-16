@@ -1,40 +1,30 @@
 import {test, expect} from '@playwright/test'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {AllergyTypeDetail} from '~/composables/useAllergyValidation'
 
 const {validatedBrowserContext} = testHelpers
 
 // Variables to store IDs for cleanup
-let createdAllergyTypeIds: number[] = []
+const createdAllergyTypeIds: number[] = []
+const createdHouseholdIds: number[] = []
 
 test.describe('AllergyType API - CRUD Operations', () => {
 
-    test('GIVEN valid allergy type data WHEN creating THEN allergy type is created', async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
-
-        // WHEN: Create allergy type
-        const allergyTypeData = AllergyFactory.defaultAllergyTypeData()
-        const created = await AllergyFactory.createAllergyType(context, allergyTypeData)
-
-        // Save ID for cleanup
-        createdAllergyTypeIds.push(created.id)
-
-        // THEN: Verify response
-        expect(created).toHaveProperty('id')
-        expect(created.id).toBeGreaterThan(0)
-        expect(created.name).toBe(allergyTypeData.name)
-        expect(created.description).toBe(allergyTypeData.description)
-        expect(created.icon).toBe(allergyTypeData.icon)
-    })
-
-    test('GIVEN allergy type exists WHEN fetching by ID THEN returns correct allergy type', async ({browser}) => {
+    test('GIVEN valid allergy type data WHEN creating and fetching by ID THEN both return the allergy type', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
         // GIVEN: Create allergy type
         const allergyTypeData = AllergyFactory.defaultAllergyTypeData()
         const created = await AllergyFactory.createAllergyType(context, allergyTypeData)
         createdAllergyTypeIds.push(created.id)
+
+        // THEN: The create response carries the allergy type
+        expect(created.id).toBeGreaterThan(0)
+        expect(created.name).toBe(allergyTypeData.name)
+        expect(created.description).toBe(allergyTypeData.description)
+        expect(created.icon).toBe(allergyTypeData.icon)
 
         // WHEN: Fetch by ID
         const fetched = await AllergyFactory.getAllergyType(context, created.id)
@@ -99,7 +89,7 @@ test.describe('AllergyType API - CRUD Operations', () => {
         expect(fetched!.description).toBe(updateData.description)
     })
 
-    test('GIVEN allergy type exists WHEN deleting THEN deletes successfully', async ({browser}) => {
+    test('GIVEN allergy type exists WHEN deleting THEN deletes successfully, and a removed allergy type answers 404', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
         // GIVEN: Create allergy type
@@ -114,11 +104,7 @@ test.describe('AllergyType API - CRUD Operations', () => {
         expect(deleted!.id).toBe(created.id)
 
         // Verify it no longer exists (should return 404)
-        const response = await context.request.get(`/api/admin/allergy-type/${created.id}`)
-        expect(response.status()).toBe(404)
-
-        // Remove from cleanup list since already deleted
-        createdAllergyTypeIds = createdAllergyTypeIds.filter(id => id !== created.id)
+        await AllergyFactory.getAllergyType(context, created.id, 404)
     })
 
     test('GIVEN allergy type with optional icon omitted WHEN creating THEN creates successfully', async ({browser}) => {
@@ -142,7 +128,6 @@ test.describe('AllergyType API - CRUD Operations', () => {
 
     test('GIVEN allergies assigned to inhabitants WHEN fetching all types THEN includes inhabitants data', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        const {HouseholdFactory} = await import('~~/tests/e2e/testDataFactories/householdFactory')
 
         // GIVEN: Create allergy type
         const allergyType = await AllergyFactory.createAllergyType(context, {
@@ -154,6 +139,7 @@ test.describe('AllergyType API - CRUD Operations', () => {
 
         // GIVEN: Create household with inhabitants (parametrized)
         const household = await HouseholdFactory.createHousehold(context)
+        createdHouseholdIds.push(household.id)
         const inhabitantsData = [
             { name: 'TestPerson1', comment: 'Severe allergy' },
             { name: 'TestPerson2', comment: 'Mild reaction' }
@@ -196,14 +182,12 @@ test.describe('AllergyType API - CRUD Operations', () => {
             expect(foundInhabitant!.allergyUpdatedAt).toBeDefined()
             expect(new Date(foundInhabitant!.allergyUpdatedAt!).getTime()).not.toBeNaN()
         })
-
-        // Cleanup: Delete household (CASCADE removes inhabitants and their allergies per ADR-005)
-        await HouseholdFactory.deleteHousehold(context, household.id)
     })
 })
 
 test.describe('AllergyType API - Validation', () => {
 
+    // One 400 for the endpoint; the schema's field rules are proven in the useAllergyValidation unit spec
     test('GIVEN invalid data (empty name) WHEN creating THEN returns 400', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
@@ -220,64 +204,6 @@ test.describe('AllergyType API - Validation', () => {
         expect(response.status()).toBe(400)
     })
 
-    test('GIVEN invalid data (empty description) WHEN creating THEN returns 400', async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
-
-        // WHEN: Try to create with empty description
-        const response = await context.request.put('/api/admin/allergy-type', {
-            headers: testHelpers.headers,
-            data: {
-                name: 'Peanuts',
-                description: ''
-            }
-        })
-
-        // THEN: Should fail validation
-        expect(response.status()).toBe(400)
-    })
-
-    test('GIVEN invalid data (name too long) WHEN creating THEN returns 400', async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
-
-        // WHEN: Try to create with name > 100 chars
-        const response = await context.request.put('/api/admin/allergy-type', {
-            headers: testHelpers.headers,
-            data: {
-                name: 'a'.repeat(101),
-                description: 'Test description'
-            }
-        })
-
-        // THEN: Should fail validation
-        expect(response.status()).toBe(400)
-    })
-
-    test('GIVEN invalid data (description too long) WHEN creating THEN returns 400', async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
-
-        // WHEN: Try to create with description > 500 chars
-        const response = await context.request.put('/api/admin/allergy-type', {
-            headers: testHelpers.headers,
-            data: {
-                name: 'Peanuts',
-                description: 'a'.repeat(501)
-            }
-        })
-
-        // THEN: Should fail validation
-        expect(response.status()).toBe(400)
-    })
-
-    test('GIVEN non-existent ID WHEN fetching THEN returns 404', async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
-
-        // WHEN: Try to fetch non-existent allergy type
-        const response = await context.request.get('/api/admin/allergy-type/999999')
-
-        // THEN: Should return 404
-        expect(response.status()).toBe(404)
-    })
-
     test('GIVEN invalid ID (negative) WHEN fetching THEN returns 400', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
@@ -289,10 +215,9 @@ test.describe('AllergyType API - Validation', () => {
     })
 })
 
-// Cleanup after all tests
+// Cleanup after all tests: a household cascades to its inhabitants and their allergies (ADR-005)
 test.afterAll(async ({browser}) => {
-    if (createdAllergyTypeIds.length > 0) {
-        const context = await validatedBrowserContext(browser)
-        await AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
-    }
+    const context = await validatedBrowserContext(browser)
+    await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
+    await AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
 })

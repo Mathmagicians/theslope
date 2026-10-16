@@ -203,7 +203,7 @@ export class DinnerEventFactory {
 
             const dinner = await this.createDinnerEvent(context, {...dinnerEventData, date: day, seasonId: season.id!})
             if ((await this.dinnersOnDay(context, season.id!, day)).length === 1) return dinner
-            await this.deleteDinnerEvent(context, dinner.id!)
+            await this.deleteDinnerEvent(context, dinner.id!, 200)
             givenUp.push(day)
         }
         throw new Error(`No day of season ${season.shortName} stayed free for the spec's dinner in ${attempts} attempts`)
@@ -220,7 +220,7 @@ export class DinnerEventFactory {
         dinnerEventData: Partial<Omit<DinnerEventCreate, 'date'>> = {}
     ): Promise<DinnerEventDisplay> => {
         for (const dinner of await this.dinnersOnDay(context, season.id!, day)) {
-            await this.deleteDinnerEvent(context, dinner.id!)
+            await this.deleteDinnerEvent(context, dinner.id!, 200)
         }
         return await this.createDinnerEvent(context, {...dinnerEventData, date: day, seasonId: season.id!})
     }
@@ -274,21 +274,21 @@ export class DinnerEventFactory {
         return null
     }
 
+    /**
+     * Delete a dinner event, returns the deleted dinner event
+     * Cleanup (afterAll): no expectedStatus - a dinner event already gone counts as removed, any other status fails
+     * API tests: pass expectedStatus - the deletion answers it
+     */
     static readonly deleteDinnerEvent = async (
         context: BrowserContext,
         dinnerEventId: number,
-        expectedStatus: number = 200
+        expectedStatus?: number
     ): Promise<DinnerEventDisplay | null> => {
         const response = await context.request.delete(`${DINNER_EVENT_ENDPOINT}/${dinnerEventId}`)
-
         const status = response.status()
-        expect(status, `Expected status ${expectedStatus}`).toBe(expectedStatus)
-
-        if (expectedStatus === 200) {
-            return await response.json()
-        }
-
-        return null
+        const body = await response.text()
+        expect(expectedStatus === undefined ? [200, 404] : [expectedStatus], `Unexpected status deleting dinner event ${dinnerEventId}: ${body}`).toContain(status)
+        return status === 200 ? JSON.parse(body) : null
     }
 
     static readonly getDinnerEventsForSeason = async (

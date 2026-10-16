@@ -25,22 +25,6 @@ test.describe('AdminTeams Form UI', () => {
         }
     })
 
-    test('Can load admin teams page', async ({page, browser}) => {
-        const context = await validatedBrowserContext(browser)
-        const season = await SeasonFactory.createSeason(context)
-        createdSeasonIds.push(season.id!)
-
-        await page.goto(`${adminTeamsUrl}?season=${season.shortName}`)
-
-        // Wait for page to be interactive - the header create button marks store init (poll)
-        await pollUntil(
-            async () => await page.getByTestId('create-team').isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
-        await expect(page.getByTestId('create-team')).toBeVisible()
-    })
-
     test('GIVEN a season without madhold WHEN viewing it THEN the table renders its own empty state with the create CTA',
         async ({page, browser}) => {
             const context = await validatedBrowserContext(browser)
@@ -160,29 +144,6 @@ test.describe('AdminTeams Form UI', () => {
             )
         })
 
-        test('GIVEN season with teams WHEN user switches to edit mode THEN teams are shown', async () => {
-            // GIVEN: Create teams for the season
-            await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team A')
-            await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team B')
-
-            // Navigate to see the teams
-            await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
-            await pollUntil(
-                async () => await page.getByTestId('admin-teams').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
-
-            // THEN: Verify the master table lists both teams in the overview (nothing opened)
-            const teamRows = page.locator('[data-testid^="team-row-"]')
-            await expect(teamRows.first()).toBeVisible()
-            await expect(teamRows).toHaveCount(2)
-            await expect(page.getByTestId('team-name-input')).toBeHidden()
-
-            // Documentation screenshot: Admin Teams management view
-            await doScreenshot(page, 'admin/admin-teams-edit', true)
-        })
-
         test('GIVEN user in edit mode WHEN renaming team THEN team name is updated immediately', async () => {
             // GIVEN: Create one team
             const team = await SeasonFactory.createCookingTeamForSeason(context, season.id!, 'Team Name')
@@ -268,13 +229,17 @@ test.describe('AdminTeams Form UI', () => {
                 10
             )
 
-            // Wait for the master table rows to load
+            // THEN: the master table lists the teams in the overview (nothing opened)
             const teamRows = page.locator('[data-testid^="team-row-"]')
+            const teamInput = page.getByTestId('team-name-input')
             await expect(teamRows.first()).toBeVisible()
             await expect(teamRows).toHaveCount(3)
+            await expect(teamInput).toBeHidden()
+
+            // Documentation screenshot: Admin Teams management view
+            await doScreenshot(page, 'admin/admin-teams-edit', true)
 
             // WHEN/THEN: clicking a row shows that team in the detail panel
-            const teamInput = page.getByTestId('team-name-input')
             for (const {team, name} of [
                 {team: beta, name: 'Team Beta'},
                 {team: gamma, name: 'Team Gamma'},

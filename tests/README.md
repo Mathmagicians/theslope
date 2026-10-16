@@ -15,8 +15,8 @@ Runs the end-to-end tests.
 npx playwright test --ui
 Starts the interactive UI mode.
 
-npx playwright test --project=chromium
-Runs the tests only on Desktop Chrome.
+npx playwright test --project=chromium-ui
+Runs the parallel UI tests only (projects in `playwright.config.ts`).
 
 npx playwright test example
 Runs the tests in a specific file.
@@ -32,6 +32,5 @@ We suggest that you begin by typing:
     npx playwright test
 
 And check out the following files:
-- ./tests/e2e/pages.e2e.spec.ts - Example end-to-end test
-- ./tests-examples/demo-todo-app.spec.ts - Demo Todo App end-to-end tests
+- ./tests/e2e/ui/pages.e2e.spec.ts - Example end-to-end test
 - ./playwright.config.ts - Playwright Test configuration

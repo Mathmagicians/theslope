@@ -3,12 +3,14 @@ import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import {ExpenseFactory} from '../testDataFactories/expenseFactory'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useTicket} from '~/composables/useTicket'
 import {formatDate} from '~/utils/date'
 import testHelpers from '../testHelpers'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, gotoHydrated} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, gotoHydrated, waitForApi} = testHelpers
 const {TeamRoleSchema} = useCookingTeamValidation()
+const {ExpenseSchema} = useBillingValidation()
 const {formatPrice} = useTicket()
 
 /**
@@ -21,6 +23,8 @@ test.describe('Chef expense lines', () => {
     let dinnerEventId: number
     let dinnerDate: Date
     let menuTitle: string
+    const createdTeamIds: number[] = []
+    const createdDinnerIds: number[] = []
     const expenseIds: number[] = []
 
     test.beforeAll(async ({browser}) => {
@@ -32,6 +36,7 @@ test.describe('Chef expense lines', () => {
 
         const team = await SeasonFactory.createCookingTeamForSeason(adminContext, activeSeason.id!, `Indkøbshold-${testSalt}`)
         teamId = team.id!
+        createdTeamIds.push(teamId)
         await SeasonFactory.assignMemberToTeam(adminContext, teamId, inhabitantId, TeamRoleSchema.enum.CHEF)
         menuTitle = `Indkøbsmiddag-${testSalt}`
         // The page selects a dinner by date, and the new team also holds the season's generated dinners: the spec's dinner
@@ -40,16 +45,17 @@ test.describe('Chef expense lines', () => {
             menuTitle, cookingTeamId: teamId, chefId: inhabitantId
         })
         dinnerEventId = dinner.id!
+        createdDinnerIds.push(dinnerEventId)
         dinnerDate = new Date(dinner.date)
     })
 
     test.afterAll(async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
         const memberContext = await memberValidatedBrowserContext(browser)
-        // An expense row outlives its dinner (SetNull): the lines go first
+        // An expense row outlives its dinner (SetNull): the lines go first; the dinner and the team accept a 404
         await ExpenseFactory.cleanupExpenses(memberContext, dinnerEventId, expenseIds)
-        await DinnerEventFactory.deleteDinnerEvent(adminContext, dinnerEventId).catch(() => undefined)
-        await SeasonFactory.deleteCookingTeam(adminContext, teamId).catch(() => undefined)
+        for (const id of createdDinnerIds) await DinnerEventFactory.deleteDinnerEvent(adminContext, id)
+        for (const id of createdTeamIds) await SeasonFactory.deleteCookingTeam(adminContext, id)
     })
 
     test('GIVEN the chef on the dinner WHEN adding a line and removing it THEN the pane and the API follow', async ({browser}) => {
@@ -64,7 +70,11 @@ test.describe('Chef expense lines', () => {
         await pane.getByTestId('expense-edit').click()
 
         await page.locator('input[name="expense-amount-input"]').fill('1012')
+        const saved = waitForApi(page, `/api/chef/dinner/${dinnerEventId}/expenses`, 'PUT')
         await page.getByTestId('expense-add').click()
+        const response = await saved
+        expenseIds.push(ExpenseSchema.parse(await response.json()).id)
+        expect(response.status()).toBe(201)
 
         // The line is the table's one plain row; its slet button counts it
         await expect(pane.getByTestId('expense-remove')).toHaveCount(1)
@@ -76,7 +86,6 @@ test.describe('Chef expense lines', () => {
         await expect(pane.getByTestId('expense-hint-row').filter({hasText: 'Brugt'}).first()).toContainText(`/ ${formatPrice(126500)} kr`)
 
         const stored = await ExpenseFactory.list(memberContext, dinnerEventId)
-        expenseIds.push(...stored.map(expense => expense.id))
         expect(stored, `the API lines of dinner ${dinnerEventId}`).toHaveLength(1)
 
         await pane.getByTestId('expense-remove').first().click()

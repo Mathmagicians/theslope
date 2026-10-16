@@ -14,8 +14,9 @@ const {TeamRoleSchema} = useCookingTeamValidation()
 test.describe('Chef calendar default', () => {
     const DESKTOP = {width: 1280, height: 900}
     const PHONE = {width: 375, height: 812}
+    const createdTeamIds: number[] = []
+    const createdDinnerIds: number[] = []
     let teamId: number
-    let dinnerId: number
 
     const chefUrl = (view?: string) => `/chef?team=${teamId}${view ? `&view=${view}` : ''}`
     const calendarContent = (page: Page) => page.getByTestId('chef-calendar-content')
@@ -30,16 +31,17 @@ test.describe('Chef calendar default', () => {
         // The member chefs one team with one dinner of its own, alone on a free day, so the calendar has content
         const team = await SeasonFactory.createCookingTeamForSeason(adminContext, activeSeason.id!, `CalendarDefault-${temporaryAndRandom()}`)
         teamId = team.id!
+        createdTeamIds.push(teamId)
         await SeasonFactory.assignMemberToTeam(adminContext, teamId, inhabitantId, TeamRoleSchema.enum.CHEF)
         const dinner = await DinnerEventFactory.createDinnerEventOnFreeDay(adminContext, activeSeason, {cookingTeamId: teamId, chefId: inhabitantId})
-        dinnerId = dinner.id!
+        createdDinnerIds.push(dinner.id!)
     })
 
     test.afterAll(async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
-        // The dinner goes before its team; another spec's season cleanup can cascade either away first
-        if (dinnerId) await DinnerEventFactory.deleteDinnerEvent(adminContext, dinnerId).catch(() => undefined)
-        if (teamId) await SeasonFactory.deleteCookingTeam(adminContext, teamId).catch(() => undefined)
+        // The dinner goes before its team; another spec's season cleanup can cascade either away first (cleanup accepts a 404)
+        for (const dinnerId of createdDinnerIds) await DinnerEventFactory.deleteDinnerEvent(adminContext, dinnerId)
+        for (const id of createdTeamIds) await SeasonFactory.deleteCookingTeam(adminContext, id)
     })
 
     for (const {face, viewport, expected} of [
@@ -51,7 +53,7 @@ test.describe('Chef calendar default', () => {
             const page = await context.newPage()
             await page.setViewportSize(viewport)
 
-            await page.goto(chefUrl())
+            await gotoHydrated(page, chefUrl())
 
             await expect.poll(() => viewParam(page)).toBe(expected)
             if (expected === 'calendar:open') await expect(calendarContent(page)).toBeVisible()

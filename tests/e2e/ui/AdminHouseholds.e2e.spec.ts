@@ -2,9 +2,11 @@ import {test, expect, type Page} from '@playwright/test'
 import {authFiles} from '../config'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import testHelpers from '../testHelpers'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, temporaryAndRandom, salt, saltedId, doScreenshot, gotoHydrated, fillDateField, readDateField} = testHelpers
+const {validatedBrowserContext, pollUntil, temporaryAndRandom, salt, saltedId, doScreenshot, gotoHydrated, fillDateField, readDateField, waitForApi} = testHelpers
+const {HouseholdDetailSchema} = useCoreValidation()
 
 /**
  * UI TEST STRATEGY:
@@ -108,21 +110,19 @@ test.describe('AdminHouseholds View', () => {
         await expect(addressOption).toBeVisible()
         await addressOption.click()
 
+        const saved = waitForApi(page, '/api/admin/household', 'PUT')
         await page.getByTestId('create-household-submit').click()
+        const response = await saved
+        const savedHousehold = HouseholdDetailSchema.parse(await response.json())
+        createdHouseholdIds.push(savedHousehold.id)
+        expect(response.status()).toBe(201)
 
         // THEN: server persists a sibling household (heynaboId + name inherited from seed)
-        const newHousehold = await pollUntil(
-            () => HouseholdFactory.getAllHouseholds(context).then(all =>
-                all.find(h => h.pbsId === newPbsId)
-            ),
-            (h) => h !== undefined,
-            10
-        )
-        expect(newHousehold).toBeDefined()
+        const newHousehold = await HouseholdFactory.getHouseholdById(context, savedHousehold.id)
+        expect(newHousehold!.pbsId).toBe(newPbsId)
         expect(newHousehold!.heynaboId).toBe(seed.heynaboId)
         expect(newHousehold!.name).toBe(seed.name)
         expect(newHousehold!.address).toBe(seed.address)
-        createdHouseholdIds.push(newHousehold!.id)
 
         // THEN: table row shows the new household (after the inline form closes)
         await navigateAndFindHousehold(page, newHousehold!.id, seed.address, true)
@@ -231,7 +231,8 @@ test.describe('AdminHouseholds View', () => {
 
         // GIVEN: Empty household
         const household = await HouseholdFactory.createHousehold(context, HouseholdFactory.defaultHouseholdData(testSalt + '-delete'))
-        // Don't add to cleanup — we're deleting it
+        // Tracked in case the UI delete does not land; cleanup counts a household already gone as removed
+        createdHouseholdIds.push(household.id)
 
         // WHEN: Navigate, find household, expand edit panel
         await navigateAndFindHousehold(page, household.id, household.address, true)

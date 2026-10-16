@@ -17,11 +17,14 @@ const {createDefaultWeekdayMap, deserializeWeekDayMap} = useWeekDayMapValidation
     defaultValue: DinnerMode.DINEIN
 })
 
-test.describe('HouseholdCard - Weekday Preferences', () => {
+test.describe('HouseholdCard - Members and Weekday Preferences', () => {
     let householdId: number
     let shortName: string
     let pbsId: number
     let scroogeId: number
+    let babyId: number
+    let donaldId: number
+    let daisyId: number
     let _activeSeason: Awaited<ReturnType<typeof SeasonFactory.createActiveSeason>>
     const testSalt = temporaryAndRandom()
 
@@ -55,26 +58,43 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         shortName = household!.shortName
         pbsId = household!.pbsId
 
-        // Create test inhabitant in member's household (using admin for setup)
+        // Create test inhabitants in member's household (using admin for setup)
         // Use Anders- pattern for d1-nuke-all cleanup
         const today = new Date()
-        const scrooge = await HouseholdFactory.createInhabitantForHousehold(
-            adminContext,
-            householdId,
-            salt('Anders', testSalt),
-            new Date(today.getFullYear() - 30, today.getMonth(), 1)
-        )
-        scroogeId = scrooge.id
+        const createInhabitant = async (name: string, birthDate: Date) => {
+            const inhabitant = await HouseholdFactory.createInhabitantForHousehold(adminContext, householdId, name, birthDate)
+            createdInhabitantIds.push(inhabitant.id)
+            return inhabitant.id
+        }
+        scroogeId = await createInhabitant(salt('Anders', testSalt), new Date(today.getFullYear() - 30, today.getMonth(), 1))
+        // One member per ticket type: a baby born this month, an 8-year-old child, a 30-year-old adult
+        babyId = await createInhabitant(salt('Anders', testSalt) + '-Baby', new Date(today.getFullYear(), today.getMonth(), 1))
+        donaldId = await createInhabitant(salt('Anders', testSalt) + '-Donald', new Date(today.getFullYear() - 8, today.getMonth(), 1))
+        daisyId = await createInhabitant(salt('Anders', testSalt) + '-Daisy', new Date(today.getFullYear() - 30, today.getMonth(), 1))
     })
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        // Clean up ALL test inhabitants (not the household - it's the member's own)
-        const allInhabitantIds = [scroogeId, ...createdInhabitantIds].filter(Boolean)
-        await Promise.all(
-            allInhabitantIds.map(id => HouseholdFactory.deleteInhabitant(context, id).catch(() => {}))
-        )
+        // Clean up ALL test inhabitants (not the household - it's the member's own); cleanup accepts a 404
+        await Promise.all(createdInhabitantIds.map(id => HouseholdFactory.deleteInhabitant(context, id)))
         // NOTE: Singleton active season is cleaned up by global teardown, not here
+    })
+
+    test('GIVEN household with members of different ages WHEN viewing members tab THEN each member displays correct ticket type', async ({page}) => {
+        // The server renders the household into the page, so the browser issues no household request to wait for
+        await goToHouseholdMembers(page)
+
+        const babyTicket = page.locator(`[data-testid="ticket-type-${babyId}"]`)
+        await expect(babyTicket).toContainText('Baby')
+
+        const donaldTicket = page.locator(`[data-testid="ticket-type-${donaldId}"]`)
+        await expect(donaldTicket).toContainText('Barn')
+
+        const daisyTicket = page.locator(`[data-testid="ticket-type-${daisyId}"]`)
+        await expect(daisyTicket).toContainText('Voksen')
+
+        // Documentation screenshot showing ticket types in VIEW mode
+        await doScreenshot(page, 'household/household-members-view-mode', true)
     })
 
     test('GIVEN inhabitant with preferences WHEN editing via UI THEN changes persist and display correctly', async ({page, browser}) => {
@@ -97,6 +117,10 @@ test.describe('HouseholdCard - Weekday Preferences', () => {
         // WHEN: Click pencil icon to edit Scrooge's preferences (use specific testid, not .first())
         const editButton = page.getByTestId(`inhabitant-${scroogeId}-edit-preferences`)
         await editButton.click()
+
+        // Wait for edit panel to be visible (UFormField renders label as generic element, not heading)
+        const editPanel = page.getByText(`Opdater fællesspisning præferencer for ${salt('Anders', testSalt)}`)
+        await expect(editPanel, 'Edit panel should be visible after clicking edit button').toBeVisible({timeout: 5000})
 
         await pollUntil(
             async () => {

@@ -5,41 +5,10 @@ import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import testHelpers from '../testHelpers'
 import {formatDate} from '~/utils/date'
 import {useSeasonValidation} from '~/composables/useSeasonValidation'
-import {addDays} from 'date-fns/addDays'
 
 const {adminUIFile} = authFiles
 const {validatedBrowserContext, pollUntil, gotoHydrated, fillDateField, readDateField, waitForApi} = testHelpers
 const {SeasonSchema} = useSeasonValidation()
-
-/**
- * Generate unique test data for UI form submissions
- * Used when creating seasons via UI (not via factory)
- * Creates 1-week season (7 days) with Mon/Wed/Fri cooking days = exactly 3 events
- */
-const generateUniqueSeasonDates = () => {
-    const date1 = SeasonFactory.generateUniqueDate()
-    const date2 = addDays(date1, 7) // 7 days later (1 week)
-
-    // Holiday within season range (2 days after start, 2 days duration)
-    const holidayDate1 = addDays(date1, 2)
-    const holidayDate2 = addDays(holidayDate1, 2)
-
-    // Second holiday starting BEFORE the first one (season start, 1 day duration) - no overlap
-    const earlierHolidayDate1 = date1
-    const earlierHolidayDate2 = addDays(date1, 1)
-
-    return {
-        startDate: formatDate(date1),
-        endDate: formatDate(date2),
-        holidayStart: formatDate(holidayDate1),
-        holidayEnd: formatDate(holidayDate2),
-        earlierHolidayStart: formatDate(earlierHolidayDate1),
-        earlierHolidayEnd: formatDate(earlierHolidayDate2),
-        seasonStartDate: date1,  // Raw Date for API
-        seasonEndDate: date2,    // Raw Date for API
-        holidayPeriod: {start: holidayDate1, end: holidayDate2} // Single-day holiday on start
-    }
-}
 
 /** Submits the season form and returns the season the create request saved; attach before the click lands */
 const submitNewSeason = async (page: Page, createdSeasonIds: number[]) => {
@@ -91,20 +60,6 @@ test.describe('AdminPlanningSeason Form UI', () => {
         await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
     })
 
-    test('Can load admin planning page', async ({page}) => {
-        await page.goto(adminPlanningUrl)
-
-        // Wait for the header actions to be visible (poll for store init)
-        await pollUntil(
-            async () => await page.getByTestId('create-season').isVisible(),
-            (isVisible) => isVisible === true,
-            10
-        )
-        await expect(page.getByTestId('season-selector')).toBeVisible()
-        await expect(page.getByTestId('create-season')).toBeVisible()
-        await expect(page.getByTestId('edit-season')).toBeVisible()
-    })
-
     test('GIVEN user in create mode WHEN filling and submitting form THEN season is created AND dinner events are generated',
         async ({page, browser}) => {
             const context = await validatedBrowserContext(browser)
@@ -119,9 +74,9 @@ test.describe('AdminPlanningSeason Form UI', () => {
             await expect(page.locator('form#seasonForm')).toBeVisible()
 
             // WHEN: Fill and submit form
-            const {startDate, endDate} = generateUniqueSeasonDates()
-            await fillDateField(page.locator('[name="seasonDates"]'), 'start', startDate)
-            await fillDateField(page.locator('[name="seasonDates"]'), 'end', endDate)
+            const {seasonDates} = SeasonFactory.generateUniqueSeasonDates()
+            await fillDateField(page.locator('[name="seasonDates"]'), 'start', formatDate(seasonDates.start))
+            await fillDateField(page.locator('[name="seasonDates"]'), 'end', formatDate(seasonDates.end))
             const createdSeason = await submitNewSeason(page, createdSeasonIds)
 
             // THEN: Switches to view mode
@@ -138,30 +93,6 @@ test.describe('AdminPlanningSeason Form UI', () => {
             expect(dinnerEvents.length).toBe(expectedEventCount)
         })
 
-    test('GIVEN season exists WHEN user switches to edit mode THEN form shows season data',
-        async ({page, browser}) => {
-            const context = await validatedBrowserContext(browser)
-
-            // GIVEN: Get singleton active season (created in beforeAll, read-only test)
-            const allSeasons = await SeasonFactory.getAllSeasons(context)
-            const season = allSeasons.find(s => s.shortName === SeasonFactory.E2E_SINGLETON_NAME)
-            expect(season, 'Singleton active season should exist').toBeDefined()
-
-            // Navigate directly to season in edit mode (no need to test dropdown here)
-            await page.goto(`${adminPlanningUrl}?season=${encodeURIComponent(season!.shortName)}&mode=edit`)
-
-            // WHEN/THEN: Form in edit mode with season data
-            // WHEN/THEN: Form in edit mode with season data
-            await pollUntil(
-                async () => await page.locator('form#seasonForm').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
-            await expect(page.locator('form#seasonForm')).toBeVisible()
-            await expect(page.getByTestId('season-selector')).toContainText(season!.shortName)
-            await expect(page.getByTestId('submit-season')).toHaveText(/Gem/)
-        })
-
     test('GIVEN user in create mode WHEN adding holiday period THEN holiday is added to list',
         async ({page, browser}) => {
             const context = await validatedBrowserContext(browser)
@@ -175,12 +106,11 @@ test.describe('AdminPlanningSeason Form UI', () => {
             )
             await expect(page.locator('form#seasonForm')).toBeVisible()
 
-            const {
-                startDate, endDate, holidayStart, holidayEnd,
-                earlierHolidayStart, earlierHolidayEnd
-            } = generateUniqueSeasonDates()
-            await fillDateField(page.locator('[name="seasonDates"]'), 'start', startDate)
-            await fillDateField(page.locator('[name="seasonDates"]'), 'end', endDate)
+            const {seasonDates, holiday} = SeasonFactory.generateUniqueSeasonDates()
+            // The second holiday is the season's first day, before the first holiday - no overlap
+            const earlierHoliday = {start: seasonDates.start, end: seasonDates.start}
+            await fillDateField(page.locator('[name="seasonDates"]'), 'start', formatDate(seasonDates.start))
+            await fillDateField(page.locator('[name="seasonDates"]'), 'end', formatDate(seasonDates.end))
 
             // THEN: the season picker grid never renders a date twice - adjacent-month days
             // are disabled and hidden by the shared COMPONENTS.calendarGrid token
@@ -205,8 +135,8 @@ test.describe('AdminPlanningSeason Form UI', () => {
             )
 
             // WHEN: Add holiday period
-            await fillDateField(page.locator('div[name="holidayRangeList"]'), 'start', holidayStart)
-            await fillDateField(page.locator('div[name="holidayRangeList"]'), 'end', holidayEnd)
+            await fillDateField(page.locator('div[name="holidayRangeList"]'), 'start', formatDate(holiday.start))
+            await fillDateField(page.locator('div[name="holidayRangeList"]'), 'end', formatDate(holiday.end))
             await page.getByTestId('holiday-range-add').click()
 
             // THEN: Holiday appears in list (use pollUntil for reliable visibility check)
@@ -220,8 +150,8 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
             // WHEN: Add a second holiday period starting BEFORE the first one
             const rowCountBefore = (await holidayRowStartDates(page)).length
-            await fillDateField(page.locator('div[name="holidayRangeList"]'), 'start', earlierHolidayStart)
-            await fillDateField(page.locator('div[name="holidayRangeList"]'), 'end', earlierHolidayEnd)
+            await fillDateField(page.locator('div[name="holidayRangeList"]'), 'start', formatDate(earlierHoliday.start))
+            await fillDateField(page.locator('div[name="holidayRangeList"]'), 'end', formatDate(earlierHoliday.end))
             await page.getByTestId('holiday-range-add').click()
 
             // THEN: The list is chronological (create mode may seed default holidays, so assert order, not indexes)
@@ -246,11 +176,8 @@ test.describe('AdminPlanningSeason Form UI', () => {
             const context = await validatedBrowserContext(browser)
 
             // GIVEN: Create season with holiday
-            const {seasonStartDate, seasonEndDate, holidayPeriod} = generateUniqueSeasonDates()
-            const season = await SeasonFactory.createSeason(context, {
-                seasonDates: {start: seasonStartDate, end: seasonEndDate},
-                holidays: [holidayPeriod]
-            })
+            const {seasonDates, holiday} = SeasonFactory.generateUniqueSeasonDates()
+            const season = await SeasonFactory.createSeason(context, {seasonDates, holidays: [holiday]})
             createdSeasonIds.push(season.id!)
 
             // Navigate directly to season in edit mode (no need to test dropdown here)
@@ -264,6 +191,8 @@ test.describe('AdminPlanningSeason Form UI', () => {
             )
             await expect(page).toHaveURL(/.*mode=edit/)
             await expect(page.locator('form#seasonForm')).toBeVisible()
+            await expect(page.getByTestId('season-selector')).toContainText(season.shortName)
+            await expect(page.getByTestId('submit-season')).toHaveText(/Gem/)
 
             const holidayItem = page.locator('div[name^="holidayRangeList-0"]')
             await pollUntil(
@@ -304,11 +233,8 @@ test.describe('AdminPlanningSeason Form UI', () => {
             const context = await validatedBrowserContext(browser)
 
             // GIVEN: Season with one holiday, open in edit mode
-            const {seasonStartDate, seasonEndDate, holidayPeriod} = generateUniqueSeasonDates()
-            const season = await SeasonFactory.createSeason(context, {
-                seasonDates: {start: seasonStartDate, end: seasonEndDate},
-                holidays: [holidayPeriod]
-            })
+            const {seasonDates, holiday} = SeasonFactory.generateUniqueSeasonDates()
+            const season = await SeasonFactory.createSeason(context, {seasonDates, holidays: [holiday]})
             createdSeasonIds.push(season.id!)
 
             await gotoHydrated(page, `${adminPlanningUrl}?season=${encodeURIComponent(season.shortName)}&mode=edit`)
@@ -318,8 +244,8 @@ test.describe('AdminPlanningSeason Form UI', () => {
                 10
             )
 
-            // WHEN: Extending the holiday by one day in the row picker
-            const newHolidayEnd = addDays(holidayPeriod.end, 1)
+            // WHEN: Extending the holiday to the season's last day in the row picker
+            const newHolidayEnd = seasonDates.end
             await fillDateField(page.locator('div[name="holidayRangeList-0"]'), 'end', formatDate(newHolidayEnd))
             await page.getByTestId('submit-season').click()
 

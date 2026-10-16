@@ -56,12 +56,6 @@ protectedPages.forEach(pageName => {
 test.describe('Pages with logged in user can load', () => {
     test.use({ storageState: adminFile })
 
-    protectedPages.forEach(pageName => {
-        test(`Protected page can load when Logged in as admin - /${pageName}`, async ({page: _page}) => {
-            // page is authenticated as a user
-        })
-    })
-
     test('Dashboard is shown after login with action cards', async ({page}) => {
         await page.goto('/login')
 
