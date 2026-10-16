@@ -66,7 +66,7 @@ I appen bruges følgende symboler til at vise spisningsform og status:
 
 Kalenderne har også en **Forklaring** nederst, der viser symbolerne for netop den visning.
 
-På middagskalenderen bærer en lukket middag en lille prik med et tal, der siger hvor mange billetter der er til salg – og sidder der et lille **timeglas** i prikken i stedet, er alt udsolgt, og der står allerede sultne naboer på ventelisten. Du kan stadig stille dig i køen.
+På middagskalenderen bærer en lukket middag en lille prik med et tal, der siger hvor mange billetter der er til salg – og sidder der et lille **timeglas** i prikken i stedet, er alt udsolgt, og der står allerede sultne naboer på ventelisten. Du kan stadig skrive dig på – din plads står ud for dit navn, fx **#2 i kø**, og billetten ved siden af viser hvilken kø (voksen, barn eller baby) du står i.
 
 ---
 

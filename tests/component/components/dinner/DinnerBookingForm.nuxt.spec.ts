@@ -314,7 +314,7 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
   it('GIVEN a queued member THEN the row shows the position badge and the ticket shows the wished mode ghosted', async () => {
     const wrapper = await mountClosed({waitlistEntries: [boQueued]})
 
-    expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(bo!.id)).text()).toContain('#2 i køen')
+    expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(bo!.id)).text()).toContain('#2 i kø')
     const queuedTickets = wrapper.findAllComponents(DinnerTicket).filter(ticket => ticket.props('isQueued'))
     expect(queuedTickets.length).toBeGreaterThan(0)
     queuedTickets.forEach(ticket => expect(ticket.props('dinnerMode')).toBe(DinnerMode.TAKEAWAY))
@@ -389,7 +389,7 @@ describe('DinnerBookingForm on a queued guest row', () => {
   it('renders the marks of a queued inhabitant: the position badge, the hourglass ticket with the guest glyph and the ghosted wish', async () => {
     const wrapper = await mountQueuedGuest()
 
-    expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(guestRowId)).text()).toContain('#3 i køen')
+    expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(guestRowId)).text()).toContain('#3 i kø')
     const ticket = wrapper.findAllComponents(DinnerTicket).find(candidate => candidate.props('isQueued') && candidate.props('guestCount') !== undefined)
     expect(ticket?.props()).toMatchObject({dinnerMode: DinnerMode.DINEIN, guestCount: 1})
   })
@@ -490,7 +490,7 @@ describe('DinnerBookingForm previews a requeue', () => {
     await clickByTestId(wrapper, `inhabitant-${bo.id}-mode-edit-${DinnerModeSchema.enum.DINEINLATE}`)
 
     expect(findByTestId(wrapper, `inhabitant-${bo.id}-save`).text()).toContain(bookingSaveLabel(Action.REQUEUE))
-    expect(wrapper.text()).toContain(`ændrer ønsket tilmelding til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label}, beholder plads #${boQueued.position} i køen`)
+    expect(wrapper.text()).toContain(`ændrer ønsket tilmelding til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label}, beholder pladsen Voksen: #${boQueued.position} i kø`)
   })
 })
 
@@ -503,13 +503,13 @@ describe('DinnerBookingForm on a closed dinner: the "Har du brug for flere bille
 
   it.each([
     {desc: 'tickets for sale only', counts: supply(4, '4V', 0, '-'), icon: ICONS.claim, absent: [WAITING],
-      lines: ['Lukket for ændringer, men der er 4 ledige billetter til salg (4V).']},
+      lines: ['Lukket for ændringer, men der er 4 billetter til salg (4V).']},
     {desc: 'one ticket for sale', counts: supply(1, '1V', 0, '-'), icon: ICONS.claim, absent: [WAITING],
-      lines: ['Lukket for ændringer, men der er 1 ledig billet til salg (1V).']},
+      lines: ['Lukket for ændringer, men der er 1 billet til salg (1V).']},
     {desc: 'the waiting list only', counts: supply(0, '-', 6, '2V 3B 1b'), icon: ICONS.waitlist, absent: [FOR_SALE],
       lines: ['Lukket for ændringer, men du kan få en plads på ventelisten. Pt står 2V 3B 1b på ventelisten.']},
     {desc: 'tickets for sale and a waiting list', counts: supply(4, '4V', 1, '1B'), icon: ICONS.claim, absent: [],
-      lines: ['Lukket for ændringer, men der er 4 ledige billetter til salg (4V).', 'Du kan også få en plads på ventelisten. Pt står 1B på ventelisten.']}
+      lines: ['Lukket for ændringer, men der er 4 billetter til salg (4V).', 'Du kan også få en plads på ventelisten. Pt står 1B på ventelisten.']}
   ])('GIVEN $desc THEN one bar reads a line per supply', async ({counts, icon, absent, lines}) => {
     const wrapper = await mountMemberForm(false, {releasedTicketCounts: counts})
 

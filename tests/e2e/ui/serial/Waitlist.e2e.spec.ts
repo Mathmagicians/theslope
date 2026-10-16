@@ -90,7 +90,7 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
         await memberPage.getByTestId(`inhabitant-${inhabitantId}-mode-edit-${DinnerMode.DINEIN}`).click()
         await memberPage.getByTestId(`inhabitant-${inhabitantId}-save`).click()
 
-        await expect(memberPage.getByTestId(WAITLIST_TEST_IDS.position(inhabitantId))).toContainText('#1 i køen', {timeout: 15000})
+        await expect(memberPage.getByTestId(WAITLIST_TEST_IDS.position(inhabitantId))).toContainText('#1 i kø', {timeout: 15000})
 
         const chefPage = await (await browser.newContext({storageState: adminUIFile})).newPage()
         await gotoHydrated(chefPage, `/chef?team=${teamId}&date=${formatDate(dinnerDate)}`)

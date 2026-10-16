@@ -217,19 +217,37 @@ const queue = computed(() => {
 const hasQueue = (key: string) => key === OrderState.RELEASED && queue.value !== null
 const canOpen = (key: string) => getOrdersForMode(key).length > 0 || hasQueue(key)
 
-// A place in its line: the household and the person, as the booking form numbers it
-const placeOf = (entry: TicketWaitlistDisplay, place: number): string[] => {
-  const household = getHouseholdForInhabitant(entry.inhabitantId)
-  const name = household?.inhabitants.find(inhabitant => inhabitant.id === entry.inhabitantId)?.name
-  return household && name ? [`#${place} ${getHouseholdShortName(household.address)} · ${name}`] : []
+// The waiting list by household, like the other boxes' rows: households in the order their first member joined, each
+// person with the place in the line of the ticket type, as the booking form numbers it
+interface QueuedPerson {
+  entry: TicketWaitlistDisplay
+  ticketType: TicketType
+  place: number
 }
-const selectedQueueLines = computed(() => selectedPanel.value && hasQueue(selectedPanel.value)
-  ? queue.value!.lines.map(({ticketType, entries}) => ({
-      ticketType,
-      presentation: ticketTypePresentation(ticketType),
-      places: entries.flatMap((entry, index) => placeOf(entry, index + 1)).join(', ')
-    }))
-  : [])
+const selectedQueueRows = computed(() => {
+  if (!selectedPanel.value || !hasQueue(selectedPanel.value)) return []
+  const people: QueuedPerson[] = queue.value!.lines
+    .flatMap(({ticketType, entries}) => entries.map((entry, index) => ({entry, ticketType, place: index + 1})))
+    .sort((a, b) => a.entry.createdAt.getTime() - b.entry.createdAt.getTime())
+
+  const byHousehold = new Map<number, { household: HouseholdDisplay, people: QueuedPerson[] }>()
+  for (const person of people) {
+    const household = getHouseholdForInhabitant(person.entry.inhabitantId)
+    if (!household) continue
+    if (!byHousehold.has(household.id)) {
+      byHousehold.set(household.id, { household, people: [] })
+    }
+    byHousehold.get(household.id)!.people.push(person)
+  }
+
+  return Array.from(byHousehold.values()).map(({ household, people }) => ({
+    id: household.id,
+    shortName: getHouseholdShortName(household.address),
+    ticketCounts: formatTicketCounts(people),
+    places: people.map(({entry, ticketType, place}) =>
+      `${household.inhabitants.find(inhabitant => inhabitant.id === entry.inhabitantId)?.name ?? ''} (${ticketTypeWords[ticketType].compactLabel} #${place})`).join(', ')
+  }))
+})
 
 const selectedPanelAllergies = computed(() =>
   diningModeStats.value.find(mode => mode.key === selectedPanel.value)?.allergies ?? null
@@ -240,7 +258,7 @@ const allergensByOrder = computed(() => new Map(
 ))
 
 // Use design system for kitchen panel colors
-const { getKitchenPanelClasses, COMPONENTS, ICONS, TYPOGRAPHY, NOISE, SIZES } = useTheSlopeDesignSystem()
+const { getKitchenPanelClasses, COMPONENTS, ICONS, TYPOGRAPHY } = useTheSlopeDesignSystem()
 
 // Get background color classes for each dining mode
 const getModeClasses = (key: string) => {
@@ -323,7 +341,7 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
 
     <!-- Household breakdown (shown when panel selected) -->
     <div
-      v-if="selectedPanel && (selectedPanelBreakdown.length > 0 || selectedQueueLines.length > 0)"
+      v-if="selectedPanel && (selectedPanelBreakdown.length > 0 || selectedQueueRows.length > 0)"
       data-testid="kitchen-household-list"
       :class="[getModeClasses(selectedPanel), COMPONENTS.kitchen.householdList]"
     >
@@ -352,14 +370,17 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
           <span v-if="index < entry.orders.length - 1">,</span>
         </span>
       </div>
-      <div v-if="selectedQueueLines.length > 0" data-testid="kitchen-waitlist-lines" :class="COMPONENTS.kitchen.queue">
+      <div v-if="selectedQueueRows.length > 0" data-testid="kitchen-waitlist-lines" :class="COMPONENTS.kitchen.queue">
         <div :class="COMPONENTS.kitchen.queueHeading">
           <UIcon :name="ICONS.waitlist" :class="COMPONENTS.kitchen.glyph" />
           VENTELISTE
         </div>
-        <div v-for="line in selectedQueueLines" :key="line.ticketType" :class="COMPONENTS.kitchen.household">
-          <UBadge :color="line.presentation.color" :variant="NOISE.loud" :size="SIZES.small">{{ line.presentation.label }}</UBadge>
-          <span>{{ line.places }}</span>
+        <div v-for="row in selectedQueueRows" :key="row.id" data-testid="kitchen-waitlist-household" :class="COMPONENTS.kitchen.household">
+          <span :class="COMPONENTS.kitchen.householdName">{{ row.shortName }}</span>
+          <span>·</span>
+          <span>{{ row.ticketCounts }}</span>
+          <span>·</span>
+          <span>{{ row.places }}</span>
         </div>
       </div>
     </div>

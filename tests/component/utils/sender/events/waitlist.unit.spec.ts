@@ -13,7 +13,7 @@ const seller = 'PL_4_4_3'
 const buyer = 'AR_1_2'
 
 const events = [
-    {kind: 'WAITLIST_JOINED', send: (channel: EmailChannel) => emitWaitlistJoined(channel, to, 'Anna', dinner, 2)},
+    {kind: 'WAITLIST_JOINED', send: (channel: EmailChannel) => emitWaitlistJoined(channel, to, 'Anna', dinner, 2, 'Barn')},
     {kind: 'WAITLIST_TICKET_ASSIGNED', send: (channel: EmailChannel) => emitWaitlistTicketAssigned(channel, to, 'Anna', dinner, 'Voksen', seller, buyer)},
     {kind: 'WAITLIST_EXTRA_PORTION', send: (channel: EmailChannel) => emitWaitlistExtraPortion(channel, to, 'Anna', dinner, 'Voksen', buyer)},
     {kind: 'WAITLIST_BUILDUP', send: (channel: EmailChannel) => emitWaitlistBuildup(channel, to, 'Anna', dinner, 5, 4.5)},
@@ -64,6 +64,16 @@ describe('booking mails', () => {
 
         expect(sentMessages(queue)[0]!.text).toContain(buyer)
     })
+
+    it('WAITLIST_JOINED names the place and the ticket type of the line', async () => {
+        const queue = fakeQueue()
+
+        await emitWaitlistJoined(NotificationFactory.channel(queue), to, 'Anna', dinner, 2, 'Barn')
+
+        const [message] = sentMessages(queue)
+        expect(message!.text).toContain('#2 i kø')
+        expect(message!.text).toContain('Billettype: Barn')
+    })
 })
 
 describe('bookingMails', () => {
@@ -72,7 +82,7 @@ describe('bookingMails', () => {
     afterEach(() => Object.values(logs).forEach(spy => spy.mockClear()))
 
     const mails: BookingMails = {
-        joined: [{to, name: 'Anna', dinner, position: 3}],
+        joined: [{to, name: 'Anna', dinner, position: 3, ticketType: 'Voksen'}],
         buildups: [{to: 'chef@example.com', name: 'Kok', dinner, entries: 3, portions: 2.5}],
         sold: [{to: 'seller@example.com', name: 'Lene', dinner, seller, buyer}, {to: 'seller2@example.com', name: 'Knud', dinner, seller, buyer}],
         assigned: [{to, name: 'Anna', dinner, ticket: 'Voksen', seller, buyer}],

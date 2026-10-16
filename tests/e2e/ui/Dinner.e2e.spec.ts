@@ -6,6 +6,7 @@ import {AllergyFactory} from '../testDataFactories/allergyFactory'
 import {OrderFactory} from '../testDataFactories/orderFactory'
 import testHelpers from '../testHelpers'
 import {formatDate} from '~/utils/date'
+import {dateToWeekDay} from '~/utils/season'
 import {addDays} from 'date-fns/addDays'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 
@@ -21,6 +22,7 @@ const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
  */
 test.describe('Dinner Page URL Navigation', () => {
     const dinnerPageUrl = '/dinner'
+    let seasonId: number
     let testData: {
         events: Array<{id: number, date: Date, menuTitle: string}>,
         dates: {
@@ -36,15 +38,17 @@ test.describe('Dinner Page URL Navigation', () => {
 
         // Use singleton active season (factory provides it with dinner events already created)
         const season = await SeasonFactory.createActiveSeason(adminContext)
+        seasonId = season.id!
 
-        // Poll for FUTURE dinner events - UI auto-syncs to next future dinner, not past events
+        // Poll for FUTURE dinner events - UI auto-syncs to next future dinner, not past events.
+        // The season's own dinners only: parallel specs add and remove dinners on its free days (createDinnerEventOnFreeDay)
         const today = new Date()
         today.setHours(0, 0, 0, 0)
         const events = await pollUntil(
             async () => {
                 const allEvents = await DinnerEventFactory.getDinnerEventsForSeason(adminContext, season.id!)
                 const futureEvents = allEvents
-                    .filter(e => new Date(e.date) >= today)
+                    .filter(e => new Date(e.date) >= today && season.cookingDays[dateToWeekDay(new Date(e.date))])
                     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
                 return futureEvents.slice(0, 3)
             },
@@ -75,16 +79,15 @@ test.describe('Dinner Page URL Navigation', () => {
         // WHEN: Navigate to dinner page without date parameter
         await gotoHydrated(page, dinnerPageUrl)
 
-        // THEN: URL should auto-sync to a valid dinner date (component calculates "next" at runtime)
-        await pollUntil(
-            async () => page.url(),
-            (url) => {
-                const urlObj = new URL(url)
-                const dateParam = urlObj.searchParams.get('date')
-                return dateParam === testData.dates.first || dateParam === testData.dates.second || dateParam === testData.dates.third
-            },
+        // THEN: URL should auto-sync to a valid dinner date (component calculates "next" at runtime);
+        // checked against the season's dinners now, since a parallel spec's dinner may be the next one
+        const syncedDate = await pollUntil(
+            async () => new URL(page.url()).searchParams.get('date'),
+            (date) => date !== null,
             10
         )
+        const dinners = await DinnerEventFactory.getDinnerEventsForSeason(await validatedBrowserContext(browser), seasonId)
+        expect(dinners.map(dinner => formatDate(dinner.date)), 'the synced date is one of the season\'s dinners').toContain(syncedDate)
 
         // Wait for dinner detail panel to load (always present when event is displayed)
         await pollUntil(

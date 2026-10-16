@@ -15,6 +15,7 @@ import {mountWithTooltipProvider, findByTestId, clickByTestId} from '~~/tests/co
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
+import {ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {OrderDetail} from '~/composables/useBookingValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
@@ -39,9 +40,11 @@ const ORDERS: OrderDetail[] = [
     OrderFactory.defaultOrderDetailWithAllergies(3, 'Per', [], {dinnerMode: DinnerMode.TAKEAWAY, ticketType: TicketType.ADULT})
 ]
 
-// A released ticket for sale, and the people on the waiting list, all in the diners' household
+// A released ticket for sale; on the waiting list two children of the diners' household and an adult of a neighbour
 const SALE_ORDER = OrderFactory.defaultOrderDetailWithAllergies(4, 'Maria', [], {dinnerMode: DinnerMode.DINEIN, ticketType: TicketType.ADULT, state: OrderState.RELEASED})
-const QUEUED = {knud: {id: 11, name: 'Knud'}, emil: {id: 12, name: 'Emil'}, liva: {id: 13, name: 'Liva'}}
+const QUEUED = {knud: {id: 11, name: 'Knud', householdId: 2}, emil: {id: 12, name: 'Emil', householdId: 1}, liva: {id: 13, name: 'Liva', householdId: 1}}
+const queuedIn = (householdId: number) => Object.values(QUEUED).filter(person => person.householdId === householdId)
+    .map(({id, name}) => ({...HouseholdFactory.defaultInhabitantData(`kitchen-${id}`), id, name, householdId}))
 
 const HOUSEHOLDS: HouseholdDisplay[] = [{
     ...HouseholdFactory.defaultHouseholdData('kitchen'),
@@ -49,8 +52,14 @@ const HOUSEHOLDS: HouseholdDisplay[] = [{
     shortName: 'S_31',
     inhabitants: [
         ...[...ORDERS, SALE_ORDER].map(order => ({...HouseholdFactory.defaultInhabitantData(`kitchen-${order.inhabitantId}`), id: order.inhabitantId, householdId: 1})),
-        ...Object.values(QUEUED).map(({id, name}) => ({...HouseholdFactory.defaultInhabitantData(`kitchen-${id}`), id, name, householdId: 1}))
+        ...queuedIn(1)
     ]
+}, {
+    ...HouseholdFactory.defaultHouseholdData('kitchen-neighbour'),
+    id: 2,
+    address: 'Nørrevang 12',
+    shortName: 'N_12',
+    inhabitants: queuedIn(2)
 }] as HouseholdDisplay[]
 
 registerEndpoint('/api/admin/household', () => HOUSEHOLDS)
@@ -158,8 +167,7 @@ describe('KitchenPreparation TIL SALG box', () => {
     const FOR_SALE = PANEL(OrderState.RELEASED)
     const WAITLIST_PART = 'kitchen-waitlist-part'
     const WAITLIST_LINES = 'kitchen-waitlist-lines'
-    const SHORT_NAME = getHouseholdShortName(HOUSEHOLDS[0]!.address)
-    const placeOf = (place: number, name: string) => `#${place} ${SHORT_NAME} · ${name}`
+    const [OWN, NEIGHBOUR] = HOUSEHOLDS.map(household => getHouseholdShortName(household.address))
     const entryOf = (inhabitantId: number, minute: number) =>
         WaitlistFactory.defaultEntry({id: inhabitantId, inhabitantId, createdAt: new Date(2026, 9, 19, 12, minute)})
     // One adult and two children waiting, the lines in ticket type order and each in join order
@@ -179,46 +187,60 @@ describe('KitchenPreparation TIL SALG box', () => {
         return wrapper
     }
 
-    it('GIVEN one adult and two children waiting THEN TIL SALG carries the KØ part with the queue\'s kuverter and its ticket count', async () => {
+    // A waiting-list row as the other boxes' household rows read: household, ticket count, each person with the place in its line
+    const householdRowsIn = (lines: ReturnType<typeof findByTestId>) =>
+        lines.findAll('[data-testid="kitchen-waitlist-household"]').map(row => row.findAll('span').map(segment => segment.text()))
+    const iconsIn = (element: ReturnType<typeof findByTestId>) =>
+        element.findAllComponents({name: 'UIcon'}).map((icon: VueWrapper) => icon.props('name'))
+
+    it('GIVEN one adult and two children waiting THEN TIL SALG carries the waiting-list part with the queue\'s kuverter and its ticket count', async () => {
         const wrapper = await mountWith(QUEUE)
 
         const box = findByTestId(wrapper, FOR_SALE)
         expect(box.text()).toContain('TIL SALG')
         const part = findByTestId(box, WAITLIST_PART)
-        for (const text of ['KØ', '2 kuv.', 'Voksen: 1', 'Barn: 2', 'Baby: 0', '# 3']) expect(part.text()).toContain(text)
+        for (const text of ['VENTELISTE', '2 kuv.', 'Voksen: 1', 'Barn: 2', 'Baby: 0', '# 3']) expect(part.text()).toContain(text)
         expect(part.text()).not.toContain('%')
+    })
+
+    it('GIVEN a queue THEN each part of TIL SALG is headed by its icon: the released icon on the box, the hourglass on the waiting list', async () => {
+        const wrapper = await mountWith(QUEUE)
+
+        const box = findByTestId(wrapper, FOR_SALE)
+        expect(iconsIn(box)).toEqual(expect.arrayContaining([ICONS.released, ICONS.waitlist]))
+        expect(iconsIn(findByTestId(box, WAITLIST_PART))).toEqual([ICONS.waitlist])
     })
 
     it.each([
         {desc: 'an empty queue', waitlist: WaitlistFactory.defaultQueueSummary({entries: 0, portions: 0, lines: []})},
         {desc: 'no queue read', waitlist: null}
-    ])('GIVEN $desc THEN TIL SALG has no KØ part', async ({waitlist}) => {
+    ])('GIVEN $desc THEN TIL SALG has no waiting-list part', async ({waitlist}) => {
         const wrapper = await mountWith(waitlist)
 
         expect(findByTestId(wrapper, FOR_SALE).text()).toContain('TIL SALG')
         expect(findByTestId(wrapper, WAITLIST_PART).exists()).toBe(false)
     })
 
-    it('GIVEN a ticket for sale and children waiting WHEN TIL SALG opens THEN the seller\'s row comes first, then the KØ heading and the child line in join order', async () => {
+    it('GIVEN a ticket for sale and children waiting WHEN TIL SALG opens THEN the TIL SALG heading and the seller\'s row come first, then the VENTELISTE heading and the household\'s children in join order', async () => {
         const wrapper = await mountWith(CHILD_QUEUE, [...ORDERS, SALE_ORDER])
         await clickByTestId(wrapper, FOR_SALE)
 
         const list = findByTestId(wrapper, HOUSEHOLD_LIST)
         const lines = findByTestId(list, WAITLIST_LINES)
-        expect(lines.text()).toContain('KØ')
-        expect(lines.text()).toContain(`Barn: ${placeOf(1, QUEUED.emil.name)}, ${placeOf(2, QUEUED.liva.name)}`)
-        expect(list.text().indexOf(SALE_ORDER.inhabitant.name)).toBeLessThan(list.text().indexOf('KØ'))
+        expect(iconsIn(list)).toEqual([ICONS.released, ICONS.waitlist])
+        expect(householdRowsIn(lines)).toEqual([[OWN, '·', '2B', '·', `${QUEUED.emil.name} (B #1), ${QUEUED.liva.name} (B #2)`]])
+        expect(list.text().indexOf(SALE_ORDER.inhabitant.name)).toBeLessThan(list.text().indexOf('VENTELISTE'))
     })
 
-    it('GIVEN nothing for sale and a queue WHEN TIL SALG opens THEN the list holds the KØ lines only, adults first', async () => {
+    it('GIVEN nothing for sale and a queue across two households WHEN TIL SALG opens THEN the list holds one row per household, in the order their first member joined', async () => {
         const wrapper = await mountWith(QUEUE)
         await clickByTestId(wrapper, FOR_SALE)
 
         const list = findByTestId(wrapper, HOUSEHOLD_LIST)
-        const text = findByTestId(list, WAITLIST_LINES).text()
-        expect(text).toContain(`Voksen: ${placeOf(1, QUEUED.knud.name)}`)
-        expect(text).toContain(`Barn: ${placeOf(1, QUEUED.emil.name)}, ${placeOf(2, QUEUED.liva.name)}`)
-        expect(text.indexOf('Voksen')).toBeLessThan(text.indexOf('Barn'))
+        expect(householdRowsIn(findByTestId(list, WAITLIST_LINES))).toEqual([
+            [OWN, '·', '2B', '·', `${QUEUED.emil.name} (B #1), ${QUEUED.liva.name} (B #2)`],
+            [NEIGHBOUR, '·', '1V', '·', `${QUEUED.knud.name} (V #1)`]
+        ])
         expect(list.text()).not.toContain('Anna')
     })
 })
