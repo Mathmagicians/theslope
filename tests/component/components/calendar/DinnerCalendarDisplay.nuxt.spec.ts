@@ -15,7 +15,7 @@ describe('DinnerCalendarDisplay lock chips', () => {
     const MONTH = startOfMonth(addMonths(new Date(), 2))
     const dinnerOn = (id: number, dayOfMonth: number) =>
         ({...DinnerEventFactory.defaultDinnerEventDisplay(), id, date: addDays(MONTH, dayOfMonth - 1)})
-    const supply = (total: number, queued: number): ReleasedTicketCounts => ({total, formatted: total > 0 ? `${total}V` : '-', queued})
+    const supply = (total: number, queued: number): ReleasedTicketCounts => ({total, formatted: total > 0 ? `${total}V` : '-', queued, queuedFormatted: queued > 0 ? `${queued}V` : '-'})
 
     const FOR_SALE = dinnerOn(1, 10)
     const QUEUED = dinnerOn(2, 11)

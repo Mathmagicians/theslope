@@ -328,6 +328,8 @@ export const TEXT = {
 export const BORDER = {
     gray: {
         200: 'border-gray-200',
+        // Admin economy - the invoice breakdown box
+        frame: 'border-gray-200 dark:border-gray-800',
         300: 'border-gray-300',    // Poster - QR frame
         500: 'border-gray-500',
         600: 'border-gray-600',
@@ -833,6 +835,86 @@ export const COMPONENTS = {
         stickyDetail: 'min-w-0 flex justify-center items-start md:sticky md:top-4 self-start'
     },
 
+    // The admin economy page (AdminEconomy): its sections, the admin's correction under a dinner, the invoice breakdown
+    adminEconomy: {
+        page: 'space-y-6',
+        cardTitleRow: 'flex items-center gap-2',
+        panel: 'p-4',
+        periodPanel: 'p-4 space-y-4',
+        nestedList: 'p-2 space-y-1',
+        invoicePanel: 'p-2',
+        correction: 'p-4 space-y-4 bg-success-50 dark:bg-success-900/20 border-b border-success-200 dark:border-success-800',
+        correctionRow: 'flex items-center gap-4',
+        householdSelect: 'w-80',
+        totalRow: 'flex justify-end items-center gap-2',
+        invoiceHeader: 'flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4',
+        invoiceTitle: 'md:mr-8',
+        statBoxes: 'flex flex-wrap gap-2',
+        statBox: 'flex items-center gap-2 px-3 py-2',
+        statText: 'text-center',
+        statValue: 'font-semibold',
+        periodFooter: 'flex justify-between items-center',
+        periodFigures: 'flex items-center gap-4',
+        controlSumValid: 'text-success-700 dark:text-success-400 flex items-center gap-1',
+        controlSumInvalid: 'text-error-700 dark:text-error-400 flex items-center gap-1',
+        loadingLine: 'flex items-center gap-2',
+        loadingSpinner: MOTION_SPIN,
+        invoiceFrame: 'rounded-lg overflow-hidden border',
+        shareRow: 'flex items-center gap-2 border-t pt-4'
+    },
+
+    // The season form's ticket price editor (TicketPriceListEditor): the card that adds a price and the list of prices
+    ticketPriceEditor: {
+        addCard: 'mb-4',
+        addTitle: 'text-sm font-semibold',
+        addStack: 'flex flex-col gap-6 w-full',
+        addRow: 'flex gap-4 w-full',
+        addField: 'flex-1 min-w-0',
+        descriptionField: 'w-full',
+        typeSelectUi: {content: 'min-w-fit'},
+        descriptionUi: {root: 'w-full'},
+        addFooter: 'flex justify-end',
+        list: 'mt-4 space-y-2',
+        empty: 'text-md mx-auto'
+    },
+
+    // The allergy type card (AllergyTypeCard): its edit form, its compact catalog row and its full detail
+    allergyTypeCard: {
+        form: 'w-full max-w-2xl space-y-4',
+        formTitle: 'text-md font-semibold',
+        field: 'w-full',
+        compact: 'flex items-center gap-3 p-3',
+        compactGlyph: 'flex items-center justify-center w-10 h-10 rounded-full ring-1 md:ring-2 flex-shrink-0',
+        compactIcon: 'text-xl',
+        content: 'flex-1 min-w-0',
+        titleRow: 'flex items-center gap-2',
+        compactName: 'font-medium text-sm',
+        full: 'space-y-4',
+        header: 'flex items-start gap-4',
+        fullGlyph: 'flex items-center justify-center w-16 h-16 rounded-full ring-1 md:ring-2 flex-shrink-0',
+        fullIcon: 'text-3xl',
+        fullName: 'text-lg font-semibold break-words',
+        description: 'mt-1 break-words',
+        inhabitantSection: 'space-y-3',
+        inhabitantList: 'space-y-3',
+        inhabitant: 'space-y-2',
+        badges: 'flex items-center gap-1',
+        details: 'pl-14 space-y-1',
+        comment: 'italic'
+    },
+
+    // The allergy catalog's detail panel (AllergyDetailPanel): its delete confirm, its detail face and its no-selection prompt
+    allergyDetailPanel: {
+        face: 'w-full max-w-2xl space-y-4',
+        consequences: 'mt-2 space-y-1',
+        consequence: 'flex items-center gap-2',
+        consequenceIcon: 'mr-1',
+        header: 'flex flex-wrap items-center justify-between gap-2',
+        actions: 'flex items-center gap-2',
+        noSelection: 'flex flex-col items-center justify-center py-12',
+        noSelectionIcon: 'w-8 h-8 mb-2'
+    },
+
     // Responsive row icon sizing (matches birthday cake pattern)
     rowIconClass: 'size-4 md:size-6',
 
@@ -1094,7 +1176,7 @@ export const COMPONENTS = {
      * `watermark` layer and its `watermarkIcon`, the `content` stack, and row 1 in three slots: the `special` slot of
      * three fixed `cell`s (state | guest | allergy) whose state glyph takes the state colour (`stateIcon`) and whose
      * guest and allergy glyphs take the type badge's colour (`infoIcon`), the type `badge`, and `modeSlot` (how you
-     * eat, right-aligned); `subRow` starts row 2 under the badge with its `provenance` line. A queued ticket keeps
+     * eat, right-aligned); `subRow` starts row 2 under the badge with its `provenance` line or a ticket price's `note`. A queued ticket keeps
      * the normal face: its glyph (`stateIcon.queued`) takes the toned ink, not a state colour
      */
     ticket: {
@@ -1125,7 +1207,8 @@ export const COMPONENTS = {
         modeSlot: 'ms-auto flex items-center',
         // The special slot (three 20px cells, two gap-1) and the row's gap-2: 4.75rem
         subRow: 'flex items-center gap-2 pl-19',
-        provenance: `${TYPOGRAPHY.finePrint} ${TEXT.gray[500]}`
+        provenance: `${TYPOGRAPHY.finePrint} ${TEXT.gray[500]}`,
+        note: `${TYPOGRAPHY.finePrint} ${TEXT.gray[500]}`
     },
 
     /**
@@ -1389,6 +1472,13 @@ export const COMPONENTS = {
     // Economy table hierarchy - ready-to-grab classes for each nesting level
     // Used by AdminEconomy and HouseholdEconomy for consistent stat headers
     economyTable: {
+        // The table's frame: the date search and the sort above the table, the pagination beside them
+        frame: {
+            stack: 'space-y-2',
+            toolbar: 'flex justify-between items-center gap-2',
+            search: 'flex items-center gap-1',
+            searchInput: 'w-28 md:w-36'
+        },
         level1: {
             header: 'bg-ocean-50 dark:bg-ocean-800',
             icon: 'text-xl text-ocean-600 dark:text-ocean-400',
@@ -1771,6 +1861,11 @@ export const ICONS = {
     agenda: 'i-heroicons-list-bullet',
     calendarDays: 'i-heroicons-calendar-days',
     user: 'i-heroicons-user',
+    search: 'i-heroicons-magnifying-glass',
+    /** The child ticket type */
+    userCircle: 'i-heroicons-user-circle',
+    /** The baby ticket type */
+    faceSmile: 'i-heroicons-face-smile',
     userPlus: 'i-heroicons-user-plus',
     users: 'i-heroicons-users',
     userGroup: 'i-heroicons-user-group',
@@ -1889,6 +1984,13 @@ export const ICONS = {
     // External links
     github: 'i-hugeicons-github-01',
     book: 'i-heroicons-book-open'
+} as const
+
+/** Ticket type glyphs, keyed like TICKET_TYPE_COLORS */
+export const TICKET_TYPE_ICONS = {
+    ADULT: ICONS.user,
+    CHILD: ICONS.userCircle,
+    BABY: ICONS.faceSmile
 } as const
 
 /**
@@ -2949,6 +3051,7 @@ export const useTheSlopeDesignSystem = () => {
         COLOR,
         NOISE,
         TICKET_TYPE_COLORS,
+        TICKET_TYPE_ICONS,
         ROLE_ICONS,
         DINNER_STATE_BADGES,
         CALENDAR,

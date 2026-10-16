@@ -5,7 +5,7 @@ import {isSameDay, isWithinInterval, isBefore, subDays, subMinutes} from "date-f
 import {type Season, useSeasonValidation} from '~/composables/useSeasonValidation'
 import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderAuditAction, OrderAuditAction as OrderAuditActionEnum, useBookingValidation} from '~/composables/useBookingValidation'
 import {useCookingTeamValidation, type CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
-import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
     findFirstCookingDayInDates, getNextDinnerDate, getAdjacentDinner, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
@@ -80,8 +80,7 @@ export const useSeason = () => {
     // Get app configuration
     const appConfig = useAppConfig()
     const {theslope} = appConfig
-    const {createTicketPrice, TicketTypeSchema} = useTicketPriceValidation()
-    const TicketType = TicketTypeSchema.enum
+    const {createTicketPrice} = useTicketPriceValidation()
 
     /**
      * Create a default season based on app configuration.
@@ -94,12 +93,8 @@ export const useSeason = () => {
             end: calculateDayFromWeekNumber(4, theslope.defaultSeason.endWeek, thisYear + 1)
         }
 
-        const ticketPrices = theslope.defaultSeason.ticketPrices?.map((
-            // Explicit shape: app.config types resolve to `any` under the server tsconfig
-            {ticketType, price, description, maximumAgeLimit}: {ticketType: string; price: number; description?: string; maximumAgeLimit?: number}
-        ) => createTicketPrice(
-                ticketType, price, undefined, description, maximumAgeLimit)) ??
-            [createTicketPrice(TicketType.ADULT, 4000)]
+        // Explicit type: app.config types resolve to `any` under the server tsconfig
+        const ticketPrices = theslope.defaultSeason.ticketPrices.map((defaultPrice: TicketPrice) => createTicketPrice(defaultPrice))
 
         return {
             shortName: createSeasonName(dateRange),

@@ -1,6 +1,5 @@
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
-import type {TicketPrice} from '~/composables/useTicketPriceValidation'
-import {getPortionsForTicketType} from '~/utils/portions'
+import type {PricePortions} from '~/composables/useTicketPriceValidation'
 import {sumBy} from '~/utils/ledger'
 
 // Ascending by time; the id breaks a tie between rows stamped in the same instant
@@ -35,11 +34,9 @@ export const useWaitlist = () => {
         return index === -1 ? null : index + 1
     }
 
-    // An entry weighs what its ticket type weighs on the kitchen's count; the price the entry holds names the type
-    const portionsOfEntryFor = (ticketPrices: Pick<TicketPrice, 'id' | 'ticketType'>[]): PortionsOf => (entry: TicketWaitlistDisplay): number => {
-        const ticketPrice = ticketPrices.find(price => price.id === entry.order.ticketPriceId)
-        return ticketPrice ? getPortionsForTicketType(ticketPrice.ticketType) : 0
-    }
+    // An entry weighs on the kitchen's count what a ticket at the price it holds weighs
+    const portionsOfEntryFor = (ticketPrices: PricePortions[]): PortionsOf => (entry: TicketWaitlistDisplay): number =>
+        ticketPrices.find(price => price.id === entry.order.ticketPriceId)?.portions ?? 0
 
     const portionNeed = (entries: TicketWaitlistDisplay[], portionsOf: PortionsOf): number =>
         sumBy(entries, portionsOf)

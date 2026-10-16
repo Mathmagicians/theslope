@@ -14,7 +14,7 @@ import type {DinnerEventDisplay, DinnerMode, DesiredOrder, GuestBookingFormData}
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
-import type {TicketPriceSelectItem} from '~/composables/useTicket'
+import type {TicketPriceSelectItem} from '~/composables/useBookingUi'
 import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import type {FormSubmitEvent} from '@nuxt/ui'
 import {FORM_MODES} from '~/types/form'
@@ -42,7 +42,6 @@ const {SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, LAYOUTS, NOI
 const guestForm = COMPONENTS.guestBookingForm
 
 // Ticket type config for styled badges
-const {getTicketPriceSelectItems} = useTicket()
 
 // Empty state message when no booking action available
 const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets'))
@@ -245,7 +244,7 @@ const handleCancel = () => emit('cancel')
           <UFormField label="Billettype" name="ticketPriceId" :size="SIZES.small">
             <USelectMenu
               v-model="formState.ticketPriceId"
-              :items="getTicketPriceSelectItems(ticketPrices).toReversed()"
+              :items="ticketPriceSelectItems(ticketPrices).toReversed()"
               value-key="id"
               placeholder="Vælg billettype..."
               :class="guestForm.select"
@@ -253,7 +252,7 @@ const handleCancel = () => emit('cancel')
             >
               <template #item="{ item }">
                 <div :class="guestForm.option">
-                  <UBadge :color="(item as TicketPriceSelectItem).config.color" :variant="NOISE.loud" :size="SIZES.sm" :class="guestForm.optionBadge">
+                  <UBadge :color="(item as TicketPriceSelectItem).presentation.color" :variant="NOISE.loud" :size="SIZES.sm" :class="guestForm.optionBadge">
                     {{ (item as TicketPriceSelectItem).label }}
                   </UBadge>
                   <span v-if="(item as TicketPriceSelectItem).description" :class="guestForm.optionNote">{{ (item as TicketPriceSelectItem).description }}</span>

@@ -28,7 +28,7 @@ const FAR_FUTURE_DAYS = appConfig.theslope.defaultSeason.ticketIsCancellableDays
 const farFutureDinner = (overrides = {}) =>
     ({...DinnerEventFactory.defaultDinnerEventDisplay(), date: addDays(new Date(), FAR_FUTURE_DAYS), ...overrides})
 
-const released = (total: number, formatted = `${total}V`, queued = 0): ReleasedTicketCounts => ({total, formatted, queued})
+const released = (total: number, formatted = `${total}V`, queued = 0): ReleasedTicketCounts => ({total, formatted, queued, queuedFormatted: queued > 0 ? `${queued}V` : '-'})
 
 describe('spending fragments', () => {
     const dinner = (id: number, isCurrent: boolean): CookingRoundRow => ({dinnerEventId: id, date: new Date(2026, 3, 10 + id), menuTitle: `Ret ${id}`, isCurrent, budgetGross: 1000 * id, spentGross: 100 * id})

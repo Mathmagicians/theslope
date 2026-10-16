@@ -8,7 +8,7 @@
  */
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
 import type {DesiredOrder} from '~/composables/useBookingValidation'
-import type {BookingChanges} from '~/composables/useBooking'
+import {EMPTY_RELEASED_TICKET_COUNTS, type BookingChanges} from '~/composables/useBooking'
 import {useQueryParam} from '~/composables/useQueryParam'
 import {useDinnerDateParam, useCalendarOpenParam, BookingViewSchema, type BookingView} from '~/composables/useBookingView'
 
@@ -219,7 +219,7 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
               :orders="orders"
               :ticket-prices="ticketPrices"
               :deadlines="deadlines"
-              :released-ticket-counts="lockStatus.get(selectedDinnerEvent.id) ?? { total: 0, formatted: '-' }"
+              :released-ticket-counts="lockStatus.get(selectedDinnerEvent.id) ?? EMPTY_RELEASED_TICKET_COUNTS"
               :can-edit-admin-override="adminBypass ? () => canEdit : undefined"
               :waitlist-entries="householdWaitlist"
               @save-bookings="handleDayViewSave"

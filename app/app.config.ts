@@ -16,11 +16,12 @@ export default defineAppConfig({
             menuIsAnnouncedDaysBefore: 10,
             ticketIsCancellableDaysBefore: 8,
             diningModeIsEditableMinutesBefore: 90,
+            // A ticket weighs the portions of the default price with its type and price, else of its type's first default price
             ticketPrices: [
-                { ticketType: TicketType.BABY, description: 'Spiser gratis smagsprøver fra forældrene', price: 0, maximumAgeLimit: 2 },
-                { ticketType: TicketType.BABY, description: 'Sulten baby - 1/4 kuvert', price: 900, maximumAgeLimit: 2 },
-                { ticketType: TicketType.CHILD, description: 'Barn', price: 1700, maximumAgeLimit: 12 },
-                { ticketType: TicketType.ADULT, description: 'Voksen', price: 4000 }],
+                { ticketType: TicketType.BABY, description: 'Spiser gratis smagsprøver fra forældrene', price: 0, maximumAgeLimit: 2, portions: 0 },
+                { ticketType: TicketType.BABY, description: 'Sulten baby - 1/4 kuvert', price: 900, maximumAgeLimit: 2, portions: 0.25 },
+                { ticketType: TicketType.CHILD, description: 'Barn', price: 1700, maximumAgeLimit: 12, portions: 0.5 },
+                { ticketType: TicketType.ADULT, description: 'Voksen', price: 4000, portions: 1 }],
             consecutiveCookingDays: 2
         },
         defaultDinnerStartTime: 18,

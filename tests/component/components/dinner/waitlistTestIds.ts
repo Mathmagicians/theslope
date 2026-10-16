@@ -8,6 +8,8 @@ export const WAITLIST_TEST_IDS = {
     extraPortionsForm: 'chef-extra-portions-form',
     extraPortionsSubmit: 'chef-extra-portions-submit',
     extraPortionsCancel: 'chef-extra-portions-cancel',
-    // DinnerBookingForm - the position badge of a queued row, keyed by the row id
-    position: (rowId: number | string) => `waitlist-position-${rowId}`
+    // DinnerBookingForm - the position badge of a queued row, keyed by the row id, and the closed dinner's
+    // "Har du brug for flere billetter?" bar with the tickets for sale and the waiting list
+    position: (rowId: number | string) => `waitlist-position-${rowId}`,
+    moreTickets: 'more-tickets-alert'
 } as const

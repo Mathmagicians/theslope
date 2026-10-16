@@ -5,6 +5,8 @@
  * Real component and children, real design system (testing.md Rule 6).
  */
 import {describe, it, expect, beforeAll} from 'vitest'
+import {h} from 'vue'
+import {mountSuspended} from '@nuxt/test-utils/runtime'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
 import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
@@ -170,5 +172,19 @@ describe('DinnerTicket for a queued guest', () => {
 
         expect(iconNamesIn(wrapper, 'ticket-state-cell')).toEqual([ICONS.waitlist])
         expect(iconNamesIn(wrapper, 'ticket-guest-cell')).toEqual([ICONS.userPlus])
+    })
+})
+
+describe('DinnerTicket for a ticket price', () => {
+    it('GIVEN a note and no dinner mode THEN the second row shows the note and the end slot takes the mode slot', async () => {
+        const {TicketTypeSchema} = useBookingValidation()
+        const wrapper = await mountSuspended(DinnerTicket, {
+            props: {ticketConfig: ticketTypePresentation(TicketTypeSchema.enum.CHILD), price: 1700, note: 'Under 12 år · Barn'},
+            slots: {end: () => h('button', {'data-testid': 'ticket-end'}, 'Fjern')}
+        })
+
+        expect(wrapper.text()).toContain('Under 12 år · Barn')
+        expect(findByTestId(wrapper, 'ticket-mode-slot').find('[data-testid="ticket-end"]').exists()).toBe(true)
+        expect(wrapper.findComponent({name: 'DinnerModeSelector'}).exists()).toBe(false)
     })
 })

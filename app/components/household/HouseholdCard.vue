@@ -77,7 +77,6 @@ const planStore = usePlanStore()
 const {activeSeason} = storeToRefs(planStore)
 
 // Ticket business logic
-const {getTicketTypeConfig} = useTicket()
 
 // Household business logic
 const {computeAggregatedPreferences} = useHousehold()
@@ -93,7 +92,7 @@ const { powerMode } = COMPONENTS
 const tableData = computed(() => {
   const inhabitants = props.household.inhabitants.map(inhabitant => ({
     ...inhabitant,
-    ticketConfig: getTicketTypeConfig(inhabitant.birthDate ?? null, activeSeason.value?.ticketPrices),
+    ticketConfig: resolveTicketTypePresentation(inhabitant.birthDate ?? null, activeSeason.value?.ticketPrices),
     isSynthetic: false,
     consensus: undefined  // Only power row has consensus
   }))

@@ -13,7 +13,6 @@ import {calculateCountdown, formatDate, DATE_SETTINGS} from '~/utils/date'
 import {dateToWeekDay} from '~/utils/season'
 import {chunkArray, groupBy} from '~/utils/batchUtils'
 import {sumBy} from '~/utils/ledger'
-import {getPortionsForTicketType} from '~/utils/portions'
 import {differenceInCalendarDays} from 'date-fns'
 
 const {BookingRowActionSchema, OrderBucketSchema, BookingActionSchema, ScaffoldResultFormatSchema} = useBookingValidation()
@@ -599,13 +598,21 @@ export const DEADLINE_LABELS = {
 // ============================================================================
 
 /**
- * Released ticket counts with pre-formatted breakdown
- * Used for deadline badges to show "2V 1B" format
+ * A locked dinner's supply: the released tickets and the waiting list, each with its pre-formatted breakdown
+ * ("2V 1B") for the deadline badges and the booking form's bar
  */
 export interface ReleasedTicketCounts {
     total: number
     formatted: string  // Pre-computed by formatTicketCounts, e.g., "2V 1B"
+    queued: number
+    queuedFormatted: string  // The waiting list by ticket type, in the style of formatted
 }
+
+/** A locked dinner's waiting list: its size and its breakdown by ticket type */
+export type WaitlistCounts = Pick<ReleasedTicketCounts, 'queued' | 'queuedFormatted'>
+
+/** A locked dinner with nothing for sale and nobody on its waiting list */
+export const EMPTY_RELEASED_TICKET_COUNTS: ReleasedTicketCounts = {total: 0, formatted: '-', queued: 0, queuedFormatted: '-'}
 
 // ============================================================================
 // Daily Maintenance - State Constants (ADR-015: Idempotent operations)
@@ -1447,20 +1454,25 @@ export const useBooking = () => {
      * @param dinnerEvents - Dinner events to check
      * @param deadlines - Season deadlines from deadlinesForSeason()
      * @param releasedCountsByDinnerId - Map of dinner ID → released ticket counts with breakdown
-     * @returns Map of dinner ID → released ticket counts (null = not locked, {total:0} = locked no tickets)
+     * @param waitlistByDinnerId - Map of dinner ID → its waiting list: size and breakdown by ticket type
+     * @returns Map of dinner ID → the dinner's supply (absent = not locked, EMPTY_RELEASED_TICKET_COUNTS = locked,
+     * nothing for sale and nobody waiting)
      */
     const computeLockStatus = (
         dinnerEvents: Array<{ id: number; date: Date }>,
         deadlines: { canModifyOrders: (date: Date) => boolean },
-        releasedCountsByDinnerId?: Map<number, ReleasedTicketCounts>
+        releasedCountsByDinnerId?: Map<number, Omit<ReleasedTicketCounts, keyof WaitlistCounts>>,
+        waitlistByDinnerId?: Map<number, WaitlistCounts>
     ): Map<number, ReleasedTicketCounts | null> => {
         const result = new Map<number, ReleasedTicketCounts | null>()
-        const emptyCount: ReleasedTicketCounts = { total: 0, formatted: '-' }
-
         for (const dinner of dinnerEvents) {
             const isLocked = !deadlines.canModifyOrders(dinner.date)
             if (isLocked) {
-                result.set(dinner.id, releasedCountsByDinnerId?.get(dinner.id) ?? emptyCount)
+                result.set(dinner.id, {
+                    ...EMPTY_RELEASED_TICKET_COUNTS,
+                    ...releasedCountsByDinnerId?.get(dinner.id),
+                    ...waitlistByDinnerId?.get(dinner.id)
+                })
             }
         }
 
@@ -1479,7 +1491,7 @@ export const useBooking = () => {
         countsBy(type => op(a[type], b[type]))
 
     // The tickets a dinner holds after a history row; counts, kuverter and revenue are read off this set
-    type HeldTicket = Readonly<{key: number, inhabitantId: number | null, type: TicketType | null, price: number, eating: boolean, householdId: number | null, householdShortname: string | null}>
+    type HeldTicket = Readonly<{key: number, inhabitantId: number | null, type: TicketType | null, price: number, portions: number, eating: boolean, householdId: number | null, householdShortname: string | null}>
     type HeldTickets = ReadonlyMap<number, HeldTicket>
 
     const sumOver = (held: HeldTickets, weigh: (ticket: HeldTicket) => number): number => sumBy([...held.values()], weigh)
@@ -1487,7 +1499,7 @@ export const useBooking = () => {
         [...held.values()].reduce((counts, ticket) => ticket.type ? {...counts, [ticket.type]: counts[ticket.type] + 1} : counts, emptyCounts())
     // A ticket released after the booking deadline stays paid and leaves the table: revenue keeps it, kuverter drop it
     const portionsOf = (held: HeldTickets): number =>
-        sumOver(held, ticket => ticket.eating && ticket.type ? getPortionsForTicketType(ticket.type) : 0)
+        sumOver(held, ticket => ticket.eating ? ticket.portions : 0)
     const revenueOf = (held: HeldTickets): number => sumOver(held, ticket => ticket.price)
     const countsPlus = foldCounts((a, b) => a + b)
     const countsMinus = foldCounts((a, b) => a - b)
@@ -1510,12 +1522,12 @@ export const useBooking = () => {
      */
     const replayTicketChanges = (
         history: OrderHistoryDisplay[],
-        ticketTypeOf: (ticketPriceId: number) => TicketType | null,
+        ticketPriceOf: (ticketPriceId: number) => Pick<TicketPrice, 'ticketType' | 'portions'> | null,
         householdShortnameOf: (householdId: number) => string | null = () => null
     ): TicketChange[] => {
         const {readAuditTicket, OrderAuditActionSchema, OrderStateSchema} = useBookingValidation()
         const Action = OrderAuditActionSchema.enum
-        const typeOf = (ticket: AuditTicket): TicketType | null => ticket.ticketPriceId === null ? null : ticketTypeOf(ticket.ticketPriceId)
+        const priceOf = (ticket: AuditTicket) => ticket.ticketPriceId === null ? null : ticketPriceOf(ticket.ticketPriceId)
 
         const step = (held: HeldTickets, action: OrderAuditAction, rowId: number, ticket: AuditTicket): HeldTickets => {
             const current = findHeld(held, ticket.orderId, ticket.inhabitantId)
@@ -1524,7 +1536,7 @@ export const useBooking = () => {
                 case Action.SYSTEM_CREATED:
                     return current
                         ? withEating(held, current, true)
-                        : withTicket(held, {key: ticket.orderId ?? -rowId, inhabitantId: ticket.inhabitantId, type: typeOf(ticket), price: ticket.priceAtBooking, eating: true, householdId: ticket.householdId, householdShortname: ticket.householdShortname})
+                        : withTicket(held, {key: ticket.orderId ?? -rowId, inhabitantId: ticket.inhabitantId, type: priceOf(ticket)?.ticketType ?? null, price: ticket.priceAtBooking, portions: priceOf(ticket)?.portions ?? 0, eating: true, householdId: ticket.householdId, householdShortname: ticket.householdShortname})
                 case Action.USER_CANCELLED:
                     if (!current) return held
                     return ticket.state === OrderStateSchema.enum.RELEASED ? withEating(held, current, false) : withoutTicket(held, current.key)
@@ -1546,7 +1558,7 @@ export const useBooking = () => {
                 timestamp: row.timestamp,
                 action: row.action,
                 householdShortname: ticket.householdShortname ?? moved?.householdShortname ?? (householdId === null ? null : householdShortnameOf(householdId)),
-                ticketType: typeOf(ticket) ?? moved?.type ?? null,
+                ticketType: priceOf(ticket)?.ticketType ?? moved?.type ?? null,
                 delta: countsMinus(countsOf(after), countsOf(before)),
                 counts: countsOf(after),
                 portions: portionsOf(after),

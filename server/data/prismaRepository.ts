@@ -8,6 +8,7 @@ import type {PreferenceUpdate} from '~/composables/useSeason'
 import type {Season} from "~/composables/useSeasonValidation"
 import {useSeasonValidation} from "~/composables/useSeasonValidation"
 import {useTicketPriceValidation} from "~/composables/useTicketPriceValidation"
+import {useTicket} from "~/composables/useTicket"
 import type {
     InhabitantCreate,
     InhabitantUpdate,
@@ -937,7 +938,7 @@ export async function fetchSeasonForRange(d1Client: D1Database, start: string, e
 
         if (season) {
             console.info(`🌞 > SEASON > [GET] Found season ${season.shortName} (ID: ${season.id}) for range`)
-            return deserializeSeason(season)
+            return deserializeSeason(season, useTicket().withPortions)
         } else {
             console.info(`🌞 > SEASON > [GET] No season found for range ${start} to ${end}`)
             return null
@@ -1056,7 +1057,7 @@ export async function activateSeason(d1Client: D1Database, seasonId: number): Pr
         })
 
         console.info(`🌞 > SEASON > [POST] Activated season ${activatedSeason.shortName} (ID: ${seasonId})`)
-        return deserializeSeason({...activatedSeason, CookingTeams: activatedSeason.CookingTeams.map(withTeamCounts)})
+        return deserializeSeason({...activatedSeason, CookingTeams: activatedSeason.CookingTeams.map(withTeamCounts)}, useTicket().withPortions)
     } catch (error) {
         return throwH3Error(' > SEASON > [POST]: Error activating season', error)
     }
@@ -1074,7 +1075,7 @@ export async function fetchSeason(d1Client: D1Database, id: number): Promise<Sea
 
         if (season) {
             console.info(`🌞 > SEASON > [GET] Found season ${season.shortName} (ID: ${season.id})`)
-            return deserializeSeason({...season, CookingTeams: season.CookingTeams.map(withTeamCounts)})
+            return deserializeSeason({...season, CookingTeams: season.CookingTeams.map(withTeamCounts)}, useTicket().withPortions)
         } else {
             console.info(`🌞 > SEASON > [GET] No season found with ID ${id}`)
             return null
@@ -1103,7 +1104,7 @@ export async function fetchSeasons(d1Client: D1Database): Promise<Season[]> {
 
         // Validate each season after deserialization
         return seasons.map(season => {
-            const deserialized = deserializeSeason(season)
+            const deserialized = deserializeSeason(season, useTicket().withPortions)
             return SeasonSchema.parse(deserialized)
         })
     } catch (error) {
@@ -1152,7 +1153,7 @@ export async function deleteSeason(
 
         console.info(`🌞 > SEASON > [DELETE] Successfully deleted season ${deletedSeason.shortName}`)
         // ADR-010: Repository MUST validate returned data
-        const deserialized = deserializeSeason(deletedSeason)
+        const deserialized = deserializeSeason(deletedSeason, useTicket().withPortions)
         return SeasonSchema.parse(deserialized)
     } catch (error) {
         return throwH3Error(`🌞 > SEASON > [DELETE]: Error deleting season with ID ${id}`, error)
@@ -1195,7 +1196,7 @@ export async function createSeason(d1Client: D1Database, seasonData: Season): Pr
         console.info(`🌞 > SEASON > [CREATE] Successfully created season ${newSeason.shortName} with ID ${newSeason.id} and ${newSeason.ticketPrices.length} ticket prices`)
 
         // ADR-010: Validate output BEFORE returning (ensure DB returned valid data)
-        const deserialized = deserializeSeason(newSeason)
+        const deserialized = deserializeSeason(newSeason, useTicket().withPortions)
         return SeasonSchema.parse(deserialized)
     } catch (error) {
         return throwH3Error(`🌞 > SEASON > [CREATE]: Error creating season ${seasonData?.shortName}`, error)
@@ -1224,7 +1225,7 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
                 where: { seasonId: validatedSeasonData.id! }
             })
 
-            const { create, update } = reconcileTicketPrices(existingPrices)(ticketPrices)
+            const { create, update } = reconcileTicketPrices(existingPrices.map(useTicket().withPortions))(ticketPrices)
 
             for (const tp of create) {
                 await prisma.ticketPrice.create({
@@ -1239,7 +1240,8 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
             }
 
             for (const tp of update) {
-                const { id: tpId, seasonId: _seasonId, ...priceData } = tp
+                // The price row stores no portions
+                const { id: tpId, seasonId: _seasonId, portions: _portions, ...priceData } = tp
                 if (tpId) await prisma.ticketPrice.update({ where: { id: tpId }, data: priceData })
             }
         }
@@ -1255,7 +1257,7 @@ export async function updateSeason(d1Client: D1Database, seasonData: Season): Pr
         console.info(`🌞 > SEASON > [UPDATE] Successfully updated season ${updatedSeason.shortName} (ID: ${updatedSeason.id}) with ${updatedSeason.ticketPrices.length} ticket prices`)
 
         // ADR-010: Validate output BEFORE returning (ensure DB returned valid data)
-        const deserialized = deserializeSeason(updatedSeason)
+        const deserialized = deserializeSeason(updatedSeason, useTicket().withPortions)
         return SeasonSchema.parse(deserialized)
     } catch (error) {
         return throwH3Error(`🌞 > SEASON > [UPDATE]: Error updating season with ID ${id}`, error)

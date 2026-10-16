@@ -6,6 +6,7 @@ import {findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
 import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTestIds'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import TicketPriceListEditor from '~/components/admin/planning/TicketPriceListEditor.vue'
+import {ticketPriceSelectItems} from '~/composables/useBookingUi'
 
 describe('TicketPriceListEditor', () => {
 
@@ -21,6 +22,17 @@ describe('TicketPriceListEditor', () => {
         const addButton = findByTestId(wrapper, PLANNING_TEST_IDS.ticketAdd)
         expect(addButton.exists()).toBe(true)
         expect(addButton.text()).toContain('Tilføj billet')
+    })
+
+    it('each price shows its ticket type and price on the badge and its age limit and description beside it', async () => {
+        const {wrapper, modelValue} = await mount()
+        const rows = wrapper.findAll('li')
+
+        expect(rows).toHaveLength(modelValue.length)
+        ticketPriceSelectItems(modelValue).forEach((item, index) => {
+            expect(rows[index]!.text()).toContain(item.label)
+            expect(rows[index]!.text()).toContain(item.description)
+        })
     })
 
     it('renders a remove control per ticket price', async () => {

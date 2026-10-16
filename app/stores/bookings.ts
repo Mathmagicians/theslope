@@ -2,7 +2,7 @@ import type {OrderDisplay, OrderDetail, OrderState, DinnerEventDetail, DinnerEve
 import type {MonthlyBillingResponse, Expense, ExpenseCreate} from '~/composables/useBillingValidation'
 import type {WaitlistAssignmentResult, TicketWaitlistDisplay, TicketWaitlistDetail, WaitlistQueueSummary} from '~/composables/useWaitlistValidation'
 import {useWaitlist} from '~/composables/useWaitlist'
-import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import type {ReleasedTicketCounts, WaitlistCounts} from '~/composables/useBooking'
 import {useBilling} from '~/composables/useBilling'
 import {isSameDay} from 'date-fns'
 
@@ -206,28 +206,33 @@ export const useBookingsStore = defineStore("Bookings", () => {
             // Group orders by dinnerEventId
             schema: OrderDisplaySchema.array().transform(released => {
                 const grouped = groupBy<OrderDisplay, number>(o => o.dinnerEventId)(released)
-                const counts = new Map<number, Omit<ReleasedTicketCounts, 'queued'>>()
+                const counts = new Map<number, Omit<ReleasedTicketCounts, keyof WaitlistCounts>>()
                 for (const [dinnerEventId, orders] of grouped) {
                     counts.set(dinnerEventId, { total: orders.length, formatted: formatTicketCounts(orders) })
                 }
                 return counts
             }),
-            default: () => new Map<number, Omit<ReleasedTicketCounts, 'queued'>>(),
+            default: () => new Map<number, Omit<ReleasedTicketCounts, keyof WaitlistCounts>>(),
             enabled: () => lockedDinnerIds.value.length > 0,
             dependsOn: [planStore.selectedSeasonDataset]
         }
     )
 
-    // Every household's entries on the locked dinners, counted per dinner
-    const {data: queueSizes, refresh: refreshQueueSizes} = storeAsyncData(
+    // Every household's entries on the locked dinners, per dinner: the queue's size and its breakdown by ticket type,
+    // read off the season price each entry holds
+    const {data: waitlistCounts, refresh: refreshWaitlistCounts} = storeAsyncData(
         'bookings-store-queue-sizes',
         () => `/api/order/waitlist?${orderQuery({dinnerEventIds: lockedDinnerIds.value})}`,
         {
-            schema: TicketWaitlistDisplaySchema.array().transform(entries => new Map(
-                [...groupBy<TicketWaitlistDisplay, number>(entry => entry.dinnerEventId)(entries)]
-                    .map(([dinnerEventId, queue]) => [dinnerEventId, queue.length] as const)
-            )),
-            default: () => new Map<number, number>(),
+            schema: TicketWaitlistDisplaySchema.array().transform(entries => {
+                const ticketPrices = planStore.selectedSeason?.ticketPrices ?? []
+                const ticketTypeOf = (entry: TicketWaitlistDisplay) =>
+                    ({ticketType: ticketPrices.find(price => price.id === entry.order.ticketPriceId)?.ticketType ?? null})
+                return new Map([...groupBy<TicketWaitlistDisplay, number>(entry => entry.dinnerEventId)(entries)]
+                    .map(([dinnerEventId, queue]): [number, WaitlistCounts] =>
+                        [dinnerEventId, {queued: queue.length, queuedFormatted: formatTicketCounts(queue.map(ticketTypeOf))}]))
+            }),
+            default: () => new Map<number, WaitlistCounts>(),
             enabled: () => lockedDinnerIds.value.length > 0,
             dependsOn: [planStore.selectedSeasonDataset]
         }
@@ -237,7 +242,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const lockStatus = computed(() => {
         const season = planStore.selectedSeason
         if (!season?.dinnerEvents) return new Map<number, ReleasedTicketCounts | null>()
-        return computeLockStatus(season.dinnerEvents, deadlinesForSeason(season), releasedCounts.value, queueSizes.value)
+        return computeLockStatus(season.dinnerEvents, deadlinesForSeason(season), releasedCounts.value, waitlistCounts.value)
     })
 
 
@@ -267,7 +272,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 schema: ScaffoldOrdersResponseSchema,
                 action: 'processBookings', errorMessage: 'Kunne ikke gemme bookinger'
             })
-            await Promise.all([refreshOrders(), refreshReleasedCounts(), refreshQueueSizes(), refreshWaitlistEntries()])
+            await Promise.all([refreshOrders(), refreshReleasedCounts(), refreshWaitlistCounts(), refreshWaitlistEntries()])
             console.info(CTX, `${label}: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
             if (report) toast.add({
                 title: report.title,
@@ -444,7 +449,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             action: 'addExtraPortions', errorMessage: 'Kunne ikke frigive portionerne'
         })
         console.info(CTX, `Released ${portions} portions on dinner ${dinnerEventId}: ${result.assigned.length} assigned, ${result.waiting} waiting`)
-        await Promise.all([refreshWaitlistEntries(), refreshOrders(), refreshReleasedCounts(), refreshQueueSizes(), refreshDinnerIfSelected(dinnerEventId)])
+        await Promise.all([refreshWaitlistEntries(), refreshOrders(), refreshReleasedCounts(), refreshWaitlistCounts(), refreshDinnerIfSelected(dinnerEventId)])
         toast.add({
             title: 'Portioner frigivet',
             description: `${result.assigned.length} fik billet, ${result.waiting} venter stadig`,

@@ -2,7 +2,7 @@
 import {formatDate} from '~/utils/date'
 
 // Age categories - the active season's ticket prices carry the age limits
-const {groupInhabitantsByTicketCategory, ticketTypeConfig} = useTicket()
+const {groupInhabitantsByTicketCategory, ticketTypeWords} = useTicket()
 const {formatTicketCounts} = useBilling()
 const {TYPOGRAPHY, BUTTONS, COLOR, ICONS, TEXT, BG, BORDER} = useTheSlopeDesignSystem()
 
@@ -112,7 +112,7 @@ const printPage = () => {
                     <!-- List inhabitants with compact category marker (V/B/b) -->
                     <div>
                       <span v-for="(person, idx) in allergy.members" :key="person.id">
-                        {{ person.name }} ({{ ticketTypeConfig[person.ticketType].compactLabel }})
+                        {{ person.name }} ({{ ticketTypeWords[person.ticketType].compactLabel }})
                         <span
                             v-if="person.inhabitantComment"
                             :class="`${TYPOGRAPHY.finePrint} ${TEXT.gray[600]}`">

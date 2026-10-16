@@ -5,6 +5,7 @@
 import type {AllergyTypeDetail, AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {OrderDetail} from '~/composables/useBookingValidation'
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
+import {useOrder} from '~/composables/useOrder'
 
 // Affected diner with their matching allergens and the tickets they eat on
 export interface AffectedDiner {
@@ -36,7 +37,7 @@ export interface AllergenOverview {
 }
 
 export const useAllergy = () => {
-  const {calculateTotalPortionsFromPrices} = useOrder()
+  const {calculateTotalPortions} = useOrder()
 
   /**
    * The allergies one ticket's diner carries, one per allergy type. A guest ticket books on its booker's inhabitant, so
@@ -100,10 +101,10 @@ export const useAllergy = () => {
 
     return {
       totalAffected: affectedDiners.size,
-      totalPortions: calculateTotalPortionsFromPrices(affectedOrders),
+      totalPortions: calculateTotalPortions(affectedOrders),
       affectedList: Array.from(affectedDiners.values()),
       breakdownByAllergen: Array.from(ordersByAllergen.values())
-        .map(({id, name, icon, orders}) => ({id, name, icon, count: orders.length, portions: calculateTotalPortionsFromPrices(orders)}))
+        .map(({id, name, icon, orders}) => ({id, name, icon, count: orders.length, portions: calculateTotalPortions(orders)}))
         .sort((a, b) => b.portions - a.portions || b.count - a.count)
     }
   }

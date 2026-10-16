@@ -19,7 +19,7 @@ export const useBilling = () => {
     const {getBillingCutoffDay} = useSeason()
     const {TicketTypeSchema} = useBookingValidation()
     const TicketType = TicketTypeSchema.enum
-    const {ticketTypeConfig} = useTicket()
+    const {ticketTypeWords} = useTicket()
 
     /**
      * Format ticket counts for display (e.g., "2V 1B")
@@ -40,7 +40,7 @@ export const useBilling = () => {
 
         const parts = [TicketType.ADULT, TicketType.CHILD, TicketType.BABY]
             .filter(type => counts[type])
-            .map(type => `${counts[type]}${ticketTypeConfig[type].compactLabel}`)
+            .map(type => `${counts[type]}${ticketTypeWords[type].compactLabel}`)
         return parts.join(' ') || '-'
     }
 

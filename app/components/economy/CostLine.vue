@@ -1,5 +1,5 @@
 <script setup lang="ts" generic="T extends CostLineItem">
-import type {DinnerMode} from '~/composables/useBookingValidation'
+import type {DinnerMode, OrderDisplay, TicketType} from '~/composables/useBookingValidation'
 
 /**
  * CostLine - Individual line item in economy views
@@ -16,11 +16,11 @@ import type {DinnerMode} from '~/composables/useBookingValidation'
 export interface CostLineItem {
     id: number
     inhabitant: { name: string }
-    ticketType: string | null
+    ticketType: TicketType | null
     dinnerMode?: DinnerMode      // DinnerMode for display (DINEIN/TAKEAWAY/DINEINLATE)
     orderId?: number | null      // For history lookup (transactions have this)
     isGuestTicket?: boolean      // For guest badge
-    state?: string               // OrderState for live orders
+    state?: OrderDisplay['state'] // Live orders carry their state
     provenanceHousehold?: string | null  // Source household if claimed from marketplace
     // Amount fields - one of these will be present
     amount?: number              // TransactionDisplay
@@ -44,7 +44,7 @@ const emit = defineEmits<{
     'toggle-history': [orderId: number | null]
 }>()
 
-const {formatPrice, ticketTypeConfig} = useTicket()
+const {formatPrice} = useTicket()
 const {formatOrder} = useBookingUi()
 const {TYPOGRAPHY, SIZES, COMPONENTS, NOISE, BUTTONS, COLOR} = useTheSlopeDesignSystem()
 const {OrderStateSchema} = useBookingValidation()
@@ -59,8 +59,7 @@ const orderId = computed(() => {
     return props.item.id  // orders - use own id for history
 })
 const isHistoryExpanded = computed(() => orderId.value !== null && props.historyOrderId === orderId.value)
-const ticketLabel = computed(() => props.item.ticketType ? ticketTypeConfig[props.item.ticketType as keyof typeof ticketTypeConfig]?.label : 'Ukendt')
-const ticketColor = computed(() => props.item.ticketType ? ticketTypeConfig[props.item.ticketType as keyof typeof ticketTypeConfig]?.color : COLOR.neutral)
+const ticketPresentation = computed(() => props.item.ticketType ? ticketTypePresentation(props.item.ticketType) : null)
 // DinnerModeSelector accepts string | undefined, handles type validation internally
 const dinnerModeValue = computed(() => props.item.dinnerMode)
 // Show dinner mode icon for all modes including NONE (X icon) - only hide if dinnerMode is undefined
@@ -75,9 +74,9 @@ const formatted = computed(() => {
     const state = props.item.state ?? OrderState.CLOSED
     return formatOrder({
         state,
-        provenanceHousehold: props.item.provenanceHousehold ?? null,
+        provenanceHousehold: props.item.provenanceHousehold ?? undefined,
         isGuestTicket: props.item.isGuestTicket ?? false
-    } as Parameters<typeof formatOrder>[0])
+    })
 })
 </script>
 
@@ -97,8 +96,8 @@ const formatted = computed(() => {
       <span :class="COMPONENTS.costLine.nameSlot">{{ item.inhabitant.name }}</span>
       <!-- Ticket type -->
       <div>
-        <UBadge :color="ticketColor" :variant="NOISE.soft" :size="SIZES.small">
-          {{ ticketLabel }}
+        <UBadge :color="ticketPresentation?.color ?? COLOR.neutral" :variant="NOISE.soft" :size="SIZES.small">
+          {{ ticketPresentation?.label ?? 'Ukendt' }}
         </UBadge>
       </div>
       <!-- Dinner mode -->

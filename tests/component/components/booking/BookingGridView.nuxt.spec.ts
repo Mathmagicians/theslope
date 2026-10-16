@@ -6,7 +6,7 @@ import BookingGridView from '~/components/booking/BookingGridView.vue'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
 import {useBookingValidation, type DinnerEventDisplay, type DinnerMode, type OrderDisplay, type OrderState} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
-import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import {EMPTY_RELEASED_TICKET_COUNTS, type ReleasedTicketCounts} from '~/composables/useBooking'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -327,7 +327,7 @@ describe('BookingGridView', () => {
   // The column header counts the household's own released tickets on a locked dinner: the household pays for them until they are sold
   describe('lock chip in the column header', () => {
     const {OrderStateSchema} = useBookingValidation()
-    const supply = (total: number): ReleasedTicketCounts => ({total, formatted: total > 0 ? `${total}V` : '-', queued: 0})
+    const supply = (total: number): ReleasedTicketCounts => ({...EMPTY_RELEASED_TICKET_COUNTS, total, formatted: total > 0 ? `${total}V` : '-'})
     const released = (id: number, dinnerEventId: number): OrderDisplay =>
       OrderFactory.defaultOrder(undefined, {id, inhabitantId: 1, dinnerEventId, state: OrderStateSchema.enum.RELEASED})
     const mountWeekOf = (dinnerEvent: DinnerEventDisplay, orders: OrderDisplay[], lockStatus: Map<number, ReleasedTicketCounts | null>) => mount({

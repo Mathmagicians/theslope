@@ -86,6 +86,11 @@ const selectSeason = (dinnerEvents: DinnerEventDisplay[] = []) => {
     activeSeasonIdEndpoint.mockReturnValue(SEASON_ID)
     seasonByIdEndpoint.mockReturnValue({...SEASON, dinnerEvents})
 }
+const {TicketTypeSchema} = useBookingValidation()
+const TicketType = TicketTypeSchema.enum
+// Ids on the season's prices: a waiting-list entry names its price by id, the store reads the ticket type off it
+const ticketPrices = SEASON.ticketPrices.map((price, index) => ({...price, id: index + 1}))
+const priceOf = (ticketType: typeof TicketType[keyof typeof TicketType]) => ticketPrices.find(price => price.ticketType === ticketType)!.id!
 // The session user's household is the households store's default selection
 const MY_HOUSEHOLD_ID = UserFactory.defaultUserWithInhabitant('bookings-store').Inhabitant!.household!.id
 registerEndpoint(`/api/admin/household/${MY_HOUSEHOLD_ID}`, () => ({...HouseholdFactory.defaultHouseholdDetail('bookings-store'), id: MY_HOUSEHOLD_ID}))
@@ -655,12 +660,16 @@ describe('Bookings store — tickets for sale and waiting lists on locked dinner
         expect(lastQuery(ordersEndpoint)).toMatchObject({dinnerEventIds: String(lockedDinner.id), allHouseholds: 'true'})
     })
 
-    it('sizes the waiting lists of the selected season\'s locked dinners', async () => {
+    it('sizes the waiting lists of the selected season\'s locked dinners and counts each by ticket type', async () => {
         ordersEndpoint.mockImplementation(() => [])
-        waitlistEntriesEndpoint.mockImplementation(() => [21, 22].map(id => WaitlistFactory.defaultEntry({id, dinnerEventId: lockedDinner.id})))
+        seasonByIdEndpoint.mockReturnValue({...SEASON, ticketPrices, dinnerEvents: [lockedDinner]})
+        const queue = [TicketType.ADULT, TicketType.ADULT, TicketType.CHILD]
+        waitlistEntriesEndpoint.mockImplementation(() => queue.map((ticketType, index) =>
+            WaitlistFactory.defaultEntry({id: 21 + index, dinnerEventId: lockedDinner.id, ticketPriceId: priceOf(ticketType)})))
         const store = useBookingsStore()
+        const queuedFormatted = useBilling().formatTicketCounts({[TicketType.ADULT]: 2, [TicketType.CHILD]: 1})
 
-        await vi.waitFor(() => expect(store.lockStatus.get(lockedDinner.id)).toMatchObject({total: 0, queued: 2}))
+        await vi.waitFor(() => expect(store.lockStatus.get(lockedDinner.id)).toMatchObject({total: 0, queued: 3, queuedFormatted}))
         expect(lastQuery(waitlistEntriesEndpoint)).toEqual({dinnerEventIds: String(lockedDinner.id)})
     })
 })
@@ -743,15 +752,11 @@ describe('Bookings store — waiting list', () => {
     const ENTRIES_KEY = 'bookings-store-waitlist-entries'
     // Open for booking: the season's queue sizes stay idle, so the endpoint answers the page's entries alone
     const queuedDinner = {...DinnerEventFactory.defaultDinnerEventDisplay('waitlist'), id: WAITLIST_DINNER_ID, date: addDays(new Date(), SEASON.ticketIsCancellableDaysBefore + 20)}
-    const {TicketTypeSchema} = useBookingValidation()
-    // Ids on the season's prices: an entry names its price by id, the portion need weighs it by type
-    const ticketPrices = SEASON.ticketPrices.map((price, index) => ({...price, id: index + 1}))
-    const priceOf = (ticketType: typeof TicketTypeSchema.enum[keyof typeof TicketTypeSchema.enum]) => ticketPrices.find(price => price.ticketType === ticketType)!.id!
     const OTHER_HOUSEHOLD_ID = MY_HOUSEHOLD_ID + 1
     // The dinner's queue: another household's adult first, then this household's child
     const QUEUE = [
-        WaitlistFactory.defaultEntry({id: 21, dinnerEventId: WAITLIST_DINNER_ID, householdId: OTHER_HOUSEHOLD_ID, ticketPriceId: priceOf(TicketTypeSchema.enum.ADULT), createdAt: new Date('2026-10-01T10:00:00Z')}),
-        WaitlistFactory.defaultEntry({id: 22, dinnerEventId: WAITLIST_DINNER_ID, householdId: MY_HOUSEHOLD_ID, ticketPriceId: priceOf(TicketTypeSchema.enum.CHILD), createdAt: new Date('2026-10-01T11:00:00Z')})
+        WaitlistFactory.defaultEntry({id: 21, dinnerEventId: WAITLIST_DINNER_ID, householdId: OTHER_HOUSEHOLD_ID, ticketPriceId: priceOf(TicketType.ADULT), createdAt: new Date('2026-10-01T10:00:00Z')}),
+        WaitlistFactory.defaultEntry({id: 22, dinnerEventId: WAITLIST_DINNER_ID, householdId: MY_HOUSEHOLD_ID, ticketPriceId: priceOf(TicketType.CHILD), createdAt: new Date('2026-10-01T11:00:00Z')})
     ]
     const releasedBodies: unknown[] = []
 

@@ -20,6 +20,7 @@
 
 import {FORM_MODES} from '~/types/form'
 import type {DesiredOrder} from '~/composables/useBookingValidation'
+import {EMPTY_RELEASED_TICKET_COUNTS} from '~/composables/useBooking'
 import {useDinnerDateParam, useBookingView, useCalendarOpenParam} from '~/composables/useBookingView'
 
 // Design system
@@ -220,7 +221,7 @@ useHead({
             :orders="householdOrders"
             :ticket-prices="selectedSeason?.ticketPrices ?? []"
             :deadlines="deadlinesForSeason(selectedSeason)"
-            :released-ticket-counts="lockStatus.get(dinnerEventDetail.id) ?? { total: 0, formatted: '-' }"
+            :released-ticket-counts="lockStatus.get(dinnerEventDetail.id) ?? EMPTY_RELEASED_TICKET_COUNTS"
             :waitlist-entries="householdWaitlist"
             @save-bookings="handleSaveBookings"
           />

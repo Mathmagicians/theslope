@@ -44,11 +44,11 @@ export default defineEventHandler(async (event): Promise<TicketChangesResponse> 
         const unnamedHouseholdIds = history.map(readAuditTicket)
             .flatMap(ticket => ticket?.householdId && !ticket.householdShortname ? [ticket.householdId] : [])
         const households = await fetchHouseholdsByIds(d1Client, unnamedHouseholdIds)
-        const ticketTypeOf = (ticketPriceId: number) => season?.ticketPrices.find(price => price.id === ticketPriceId)?.ticketType ?? null
+        const ticketPriceOf = (ticketPriceId: number) => season?.ticketPrices.find(price => price.id === ticketPriceId) ?? null
         const shortNames = new Map(households.map(household => [household.id, household.shortName]))
         const householdShortnameOf = (householdId: number) => shortNames.get(householdId) ?? null
 
-        const all = replayTicketChanges(history, ticketTypeOf, householdShortnameOf).reverse()
+        const all = replayTicketChanges(history, ticketPriceOf, householdShortnameOf).reverse()
         const changes = since ? all.filter(change => change.timestamp >= since) : all
         setResponseStatus(event, 200)
         return TicketChangesResponseSchema.parse({dinnerEventId: id, since: since ?? null, changes, olderCount: all.length - changes.length})

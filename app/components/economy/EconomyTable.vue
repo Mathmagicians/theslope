@@ -125,15 +125,15 @@ const toggleSort = () => {
 </script>
 
 <template>
-  <div class="space-y-2">
+  <div :class="COMPONENTS.economyTable.frame.stack">
     <!-- Header: search/sort + pagination -->
-    <div class="flex justify-between items-center gap-2">
-      <div class="flex items-center gap-1">
+    <div :class="COMPONENTS.economyTable.frame.toolbar">
+      <div :class="COMPONENTS.economyTable.frame.search">
         <UInput
             v-model="search"
             :placeholder="searchPlaceholder"
             :size="SIZES.small"
-            class="w-28 md:w-36"
+            :class="COMPONENTS.economyTable.frame.searchInput"
         />
         <UButton
             :variant="NOISE.quiet"

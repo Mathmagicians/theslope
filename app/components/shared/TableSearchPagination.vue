@@ -78,7 +78,7 @@ const handlePageChange = (page: number) => {
     <!-- Search -->
     <UInput
         v-model="searchQuery"
-        trailing-icon="i-heroicons-magnifying-glass"
+        :trailing-icon="ICONS.search"
         :placeholder="placeholder"
         :data-testid="testId"
         class="flex-1 md:max-w-md"

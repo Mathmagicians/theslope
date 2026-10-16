@@ -33,7 +33,7 @@
  * - ADR-001: Types from validation composables, business logic in useOrder
  * - ADR-018: every class binds COMPONENTS.dinnerBudget
  */
-import type { OrderDetail } from '~/composables/useBookingValidation'
+import type { OrderDetail, TicketType } from '~/composables/useBookingValidation'
 import type { Expense } from '~/composables/useBillingValidation'
 import type { SpendingFragment } from '~/composables/useBookingUi'
 import type {TableColumn} from '@nuxt/ui'
@@ -62,12 +62,11 @@ const noTicketsSold = getRandomEmptyMessageText('noTicketsSold')
 
 // Kitchen config from app.config.ts
 const appConfig = useAppConfig()
-const kitchenBaseRatePercent = appConfig.theslope?.kitchen?.baseRatePercent ?? 5
-const vatPercent = appConfig.theslope?.kitchen?.vatPercent ?? 25
+const {baseRatePercent: kitchenBaseRatePercent, vatPercent} = appConfig.theslope.kitchen
 
 // Business logic from useOrder and useTicket
-const { getActiveOrders, groupByTicketType, calculateBudget, calculateTotalPortionsFromPrices, spendingLeft, spendingAwaitsTickets } = useOrder()
-const { formatPrice, ticketTypeConfig } = useTicket()
+const { getActiveOrders, groupByTicketType, calculateBudget, calculateTotalPortions, spendingLeft, spendingAwaitsTickets } = useOrder()
+const { formatPrice, ticketTypeWords } = useTicket()
 
 // Expandable details state
 const showDetails = ref(false)
@@ -78,11 +77,11 @@ const activeOrders = computed(() => getActiveOrders(props.orders))
 // Budget calculations from composable (business logic)
 const budget = computed(() => calculateBudget(props.orders, kitchenBaseRatePercent, vatPercent))
 
-const totalPortions = computed(() => calculateTotalPortionsFromPrices(props.orders))
+const totalPortions = computed(() => calculateTotalPortions(props.orders))
 
 // Revenue by ticket type (for expanded details table)
 const revenueByType = computed(() => groupByTicketType(activeOrders.value))
-const ticketLabel = (ticketType: string) => ticketTypeConfig[ticketType as keyof typeof ticketTypeConfig]?.label ?? ticketType
+const ticketLabel = (ticketType: TicketType) => ticketTypeWords[ticketType].label
 
 // The grocery lines against the allowance
 const spent = computed(() => sumAmounts(props.expenses))

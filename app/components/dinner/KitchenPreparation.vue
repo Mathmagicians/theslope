@@ -79,7 +79,7 @@ const props = withDefaults(defineProps<Props>(), {
 const {
   getActiveOrders,
   getReleasedOrders,
-  calculateTotalPortionsFromPrices,
+  calculateTotalPortions,
   calculateDiningModeStats,
   calculateNormalizedWidths
 } = useOrder()
@@ -137,7 +137,7 @@ const ticketTypeBreakdown = computed(() => {
 
 // Calculate total portions using business logic (dynamic based on ticket prices)
 // Includes ALL orders (active + released) so it matches sum of all 4 bottom panels
-const totalPortions = computed(() => calculateTotalPortionsFromPrices(props.orders))
+const totalPortions = computed(() => calculateTotalPortions(props.orders))
 
 // Helper to calculate ticket breakdown for dine-in modes
 const calculateTicketBreakdown = (orders: OrderDetail[]): TicketBreakdown => {

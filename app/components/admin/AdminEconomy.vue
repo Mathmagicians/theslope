@@ -27,7 +27,7 @@ const props = withDefaults(defineProps<{
 
 const {formatPrice} = useTicket()
 const {groupByCostEntry, groupByHouseholdEntry, calculateCurrentBillingPeriod, controlInvoices, formatTicketCounts} = useBilling()
-const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG, NOISE} = useTheSlopeDesignSystem()
+const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG, BORDER, NOISE} = useTheSlopeDesignSystem()
 
 // Plan store for future dinners
 const planStore = usePlanStore()
@@ -455,14 +455,14 @@ const dinnerBreakdownStats = computed(() => {
 </script>
 
 <template>
-  <div data-testid="admin-economy" class="space-y-6">
+  <div data-testid="admin-economy" :class="COMPONENTS.adminEconomy.page">
     <ViewError v-if="isBillingPeriodsErrored" :error="billingPeriodsError?.statusCode" message="Kunne ikke hente økonomioversigt"/>
 
     <template v-else>
       <!-- SECTION 1: Fremtidige bestillinger -->
       <UCard>
         <template #header>
-          <div class="flex items-center gap-2">
+          <div :class="COMPONENTS.adminEconomy.cardTitleRow">
             <UIcon :name="ICONS.shoppingCart" :size="SIZES.standardIconSize"/>
             <h3 :class="TYPOGRAPHY.cardTitle">Fremtidige bestillinger</h3>
           </div>
@@ -493,7 +493,7 @@ const dinnerBreakdownStats = computed(() => {
           <template #totalAmount-cell="{ row }">{{ formatPrice(row.original.totalAmount) }} kr</template>
           <template #expanded="{ row }">
             <!-- Group orders by household within this dinner -->
-            <div :class="['p-4', BG.panel]">
+            <div :class="[COMPONENTS.adminEconomy.panel, BG.panel]">
               <CostEntry
                   :entry="row.original"
                   :level="2"
@@ -519,14 +519,14 @@ const dinnerBreakdownStats = computed(() => {
                 </template>
                 <template #default>
                   <!-- Admin Correction UI (when editing this dinner) -->
-                  <div v-if="editingDinnerId === row.original.dinnerEvent.id" class="p-4 space-y-4 bg-success-50 dark:bg-success-900/20 border-b border-success-200 dark:border-success-800">
-                    <div class="flex items-center gap-4">
+                  <div v-if="editingDinnerId === row.original.dinnerEvent.id" :class="COMPONENTS.adminEconomy.correction">
+                    <div :class="COMPONENTS.adminEconomy.correctionRow">
                       <label :class="TYPOGRAPHY.bodyTextMedium">Vælg husstand:</label>
                       <USelectMenu
                           v-model="selectedHouseholdOption"
                           :items="householdOptions"
                           placeholder="Vælg husstand..."
-                          class="w-80"
+                          :class="COMPONENTS.adminEconomy.householdSelect"
                           data-testid="admin-correction-household-select"
                       />
                       <UButton
@@ -540,8 +540,8 @@ const dinnerBreakdownStats = computed(() => {
                     </div>
 
                     <!-- Loading indicator while fetching household -->
-                    <div v-if="isLoadingHousehold" class="flex items-center gap-2 text-muted">
-                      <UIcon :name="ICONS.sync" class="animate-spin" />
+                    <div v-if="isLoadingHousehold" :class="[COMPONENTS.adminEconomy.loadingLine, TEXT.muted]">
+                      <UIcon :name="ICONS.sync" :class="COMPONENTS.adminEconomy.loadingSpinner" />
                       <span>Henter husstand...</span>
                     </div>
 
@@ -570,7 +570,7 @@ const dinnerBreakdownStats = computed(() => {
                       <UInput
                           :model-value="getHouseholdSearch(row.original.dinnerEvent.id)"
                           placeholder="Søg adresse eller navn..."
-                          trailing-icon="i-heroicons-magnifying-glass"
+                          :trailing-icon="ICONS.search"
                           :size="SIZES.small"
                           @update:model-value="setHouseholdSearch(row.original.dinnerEvent.id, $event)"
                       />
@@ -592,7 +592,7 @@ const dinnerBreakdownStats = computed(() => {
 
                     <!-- Expanded household: individual order line items -->
                     <template #expanded="{ row: householdRow }">
-                      <div :class="['p-2 space-y-1', BG.panelNested]">
+                      <div :class="[COMPONENTS.adminEconomy.nestedList, BG.panelNested]">
                         <CostLine
                             v-for="order in householdRow.original.items"
                             :key="order.id"
@@ -618,7 +618,7 @@ const dinnerBreakdownStats = computed(() => {
         </EconomyTable>
 
         <template v-if="upcomingOrdersGrouped.length > 0" #footer>
-          <div class="flex justify-end items-center gap-2">
+          <div :class="COMPONENTS.adminEconomy.totalRow">
             <span :class="TYPOGRAPHY.bodyTextMedium">Total:</span>
             <span :class="TYPOGRAPHY.cardTitle">{{ formatPrice(upcomingOrdersTotal) }} kr</span>
           </div>
@@ -628,7 +628,7 @@ const dinnerBreakdownStats = computed(() => {
       <!-- SECTION 2: Faktureringsperioder (unified: virtual + closed) -->
       <UCard>
         <template #header>
-          <div class="flex items-center gap-2">
+          <div :class="COMPONENTS.adminEconomy.cardTitleRow">
             <UIcon :name="ICONS.clipboard" :size="SIZES.standardIconSize"/>
             <h3 :class="TYPOGRAPHY.cardTitle">Faktureringsperioder</h3>
           </div>
@@ -688,7 +688,7 @@ const dinnerBreakdownStats = computed(() => {
 
           <!-- Expanded: Virtual row shows current period transactions, closed rows show invoices -->
           <template #expanded="{ row }">
-            <div :class="['p-4 space-y-4', BG.panel]">
+            <div :class="[COMPONENTS.adminEconomy.periodPanel, BG.panel]">
               <!-- VIRTUAL ROW: Same structure as closed - header + household table -->
               <template v-if="row.original.isVirtual">
                 <CostEntry
@@ -727,7 +727,7 @@ const dinnerBreakdownStats = computed(() => {
 
                       <!-- Expanded household: transactions list -->
                       <template #expanded="{ row: householdRow }">
-                        <div :class="['p-2 space-y-1', BG.panelNested]">
+                        <div :class="[COMPONENTS.adminEconomy.nestedList, BG.panelNested]">
                           <CostLine
                               v-for="tx in householdRow.original.items"
                               :key="tx.id"
@@ -795,35 +795,35 @@ const dinnerBreakdownStats = computed(() => {
 
                     <!-- Expanded invoice: transactions table grouped by dinner -->
                     <template #expanded="{ row: invoiceRow }">
-                      <div :class="['p-2', BG.panelNested]">
+                      <div :class="[COMPONENTS.adminEconomy.invoicePanel, BG.panelNested]">
                         <!-- Level 2: Dinner breakdown with stat box header (Peach palette) -->
-                        <div v-if="invoiceTransactionsGrouped.length > 0 || isInvoiceTransactionsLoading" class="rounded-lg overflow-hidden border border-default">
+                        <div v-if="invoiceTransactionsGrouped.length > 0 || isInvoiceTransactionsLoading" :class="[COMPONENTS.adminEconomy.invoiceFrame, BORDER.gray.frame]">
                           <!-- Header row: title + stat boxes -->
-                          <div :class="['flex flex-col md:flex-row md:items-center md:justify-between gap-4 p-4', COMPONENTS.economyTable.level2.header]">
-                            <div class="md:mr-8">
+                          <div :class="[COMPONENTS.adminEconomy.invoiceHeader, COMPONENTS.economyTable.level2.header]">
+                            <div :class="COMPONENTS.adminEconomy.invoiceTitle">
                               <h4 :class="TYPOGRAPHY.cardTitle">PBS Faktura for {{ formatDate(selectedBillingPeriodDetail.paymentDate, 'MMMM yyyy') }}</h4>
                               <p :class="TYPOGRAPHY.bodyTextMuted">{{ invoiceRow.original.address }} · PBS {{ invoiceRow.original.pbsId }}</p>
                             </div>
-                            <div class="flex flex-wrap gap-2">
-                              <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level2.statBox]">
+                            <div :class="COMPONENTS.adminEconomy.statBoxes">
+                              <div :class="[COMPONENTS.adminEconomy.statBox, COMPONENTS.economyTable.level2.statBox]">
                                 <UIcon :name="ICONS.calendar" :class="COMPONENTS.economyTable.level2.icon"/>
-                                <div class="text-center">
-                                  <p class="font-semibold">{{ dinnerBreakdownStats.dinnerCount }}</p>
-                                  <p class="text-xs text-muted">Middage</p>
+                                <div :class="COMPONENTS.adminEconomy.statText">
+                                  <p :class="COMPONENTS.adminEconomy.statValue">{{ dinnerBreakdownStats.dinnerCount }}</p>
+                                  <p :class="TYPOGRAPHY.finePrintMuted">Middage</p>
                                 </div>
                               </div>
-                              <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level2.statBox]">
+                              <div :class="[COMPONENTS.adminEconomy.statBox, COMPONENTS.economyTable.level2.statBox]">
                                 <UIcon :name="ICONS.dinner" :class="COMPONENTS.economyTable.level2.icon"/>
-                                <div class="text-center">
-                                  <p class="font-semibold">{{ dinnerBreakdownStats.ticketCounts }}</p>
-                                  <p class="text-xs text-muted">Kuverter</p>
+                                <div :class="COMPONENTS.adminEconomy.statText">
+                                  <p :class="COMPONENTS.adminEconomy.statValue">{{ dinnerBreakdownStats.ticketCounts }}</p>
+                                  <p :class="TYPOGRAPHY.finePrintMuted">Kuverter</p>
                                 </div>
                               </div>
-                              <div :class="['flex items-center gap-2 px-3 py-2', COMPONENTS.economyTable.level2.statBox]">
+                              <div :class="[COMPONENTS.adminEconomy.statBox, COMPONENTS.economyTable.level2.statBox]">
                                 <UIcon :name="ICONS.shoppingCart" :class="COMPONENTS.economyTable.level2.icon"/>
-                                <div class="text-center">
-                                  <p class="font-semibold">{{ formatPrice(dinnerBreakdownStats.total) }} kr</p>
-                                  <p class="text-xs text-muted">Total</p>
+                                <div :class="COMPONENTS.adminEconomy.statText">
+                                  <p :class="COMPONENTS.adminEconomy.statValue">{{ formatPrice(dinnerBreakdownStats.total) }} kr</p>
+                                  <p :class="TYPOGRAPHY.finePrintMuted">Total</p>
                                 </div>
                               </div>
                             </div>
@@ -859,7 +859,7 @@ const dinnerBreakdownStats = computed(() => {
 
                           <!-- Expanded dinner: individual transactions with history -->
                           <template #expanded="{ row: dinnerRow }">
-                            <div :class="['p-2 space-y-1', BG.panel]">
+                            <div :class="[COMPONENTS.adminEconomy.nestedList, BG.panel]">
                               <CostLine
                                   v-for="tx in dinnerRow.original.items"
                                   :key="tx.id"
@@ -883,19 +883,19 @@ const dinnerBreakdownStats = computed(() => {
 
                     <!-- Footer with total and control sum -->
                     <template #footer>
-                      <div class="flex justify-between items-center">
+                      <div :class="COMPONENTS.adminEconomy.periodFooter">
                         <span :class="TYPOGRAPHY.bodyTextMedium">
                           Total: {{ selectedBillingPeriodDetail.invoices.length }} husstande
                         </span>
-                        <div class="flex items-center gap-4">
+                        <div :class="COMPONENTS.adminEconomy.periodFigures">
                           <span :class="TYPOGRAPHY.cardTitle">
                             {{ formatPrice(selectedBillingPeriodDetail.totalAmount) }} kr
                           </span>
-                          <span v-if="billingPeriodControlSum?.isValid" class="text-success-600 dark:text-success-400 flex items-center gap-1">
+                          <span v-if="billingPeriodControlSum?.isValid" :class="COMPONENTS.adminEconomy.controlSumValid">
                             <UIcon :name="ICONS.robotHappy" :class="SIZES.smallBadgeIcon"/>
                             {{ formatPrice(billingPeriodControlSum.computed) }} kr
                           </span>
-                          <span v-else-if="billingPeriodControlSum" class="text-error-600 dark:text-error-400 flex items-center gap-1">
+                          <span v-else-if="billingPeriodControlSum" :class="COMPONENTS.adminEconomy.controlSumInvalid">
                             <UIcon :name="ICONS.robotDead" :class="SIZES.smallBadgeIcon"/>
                             {{ formatPrice(billingPeriodControlSum.computed) }} kr
                           </span>
@@ -907,7 +907,7 @@ const dinnerBreakdownStats = computed(() => {
                   </CostEntry>
 
                   <!-- Share & Download actions (closed periods only) -->
-                  <div class="flex items-center gap-2 border-t pt-4">
+                  <div :class="COMPONENTS.adminEconomy.shareRow">
                     <span :class="TYPOGRAPHY.bodyTextMuted">Del med bogholder:</span>
                     <ShareLinksPopover :share-token="selectedBillingPeriodDetail.shareToken"/>
                   </div>

@@ -36,6 +36,7 @@ box, from the same Setting row, that the poster prints. The pencil edits it in p
 ├─ toolbar + master/detail ───────────────────────┤
 -->
 <script setup lang="ts">
+import type {AllergyTypeCreate} from '~/composables/useAllergyValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 // Props - canEdit from parent for authorization (Admin OR AllergyManager)
@@ -142,7 +143,7 @@ const cancelEdit = () => {
   onModeChange(FORM_MODES.VIEW)
 }
 
-const handleSubmit = async (data: { name: string, description: string, icon?: string }) => {
+const handleSubmit = async (data: AllergyTypeCreate) => {
   try {
     if (formMode.value === FORM_MODES.CREATE) {
       await createAllergyType(data)
@@ -170,12 +171,7 @@ const cancelDelete = () => {
 }
 
 // The panel face - delete confirm wins over form (edit/create) over view
-const panelMode = computed(() => {
-  if (isConfirmingDelete.value) return 'confirm-delete' as const
-  if (formMode.value === FORM_MODES.CREATE) return 'create' as const
-  if (formMode.value === FORM_MODES.EDIT) return 'edit' as const
-  return 'view' as const
-})
+const panelMode = computed(() => isConfirmingDelete.value ? 'confirm-delete' as const : formMode.value)
 
 const confirmDelete = async () => {
   const allergyType = selectedAllergyType.value
@@ -223,7 +219,7 @@ const handleSelect = (id: number | number[] | null) => {
 // panel under the toolbar is the single live mount.
 const expanded = computed({
   get: (): Record<number, boolean> => {
-    if (COMPONENTS.masterDetail.detailAsPane || panelMode.value === 'create' || selectedAllergyTypeId.value === null) return {}
+    if (COMPONENTS.masterDetail.detailAsPane || panelMode.value === FORM_MODES.CREATE || selectedAllergyTypeId.value === null) return {}
     const index = sortedAllergyTypes.value.findIndex(at => at.id === selectedAllergyTypeId.value)
     return index === -1 ? {} : {[index]: true}
   },
@@ -239,7 +235,7 @@ const expanded = computed({
 // ONE panel, three guarded mount points (desktop pane / mobile expanded row /
 // mobile create under the toolbar) - shared bindings keep them DRY
 const panelProps = computed(() => ({
-  allergyType: panelMode.value === 'create' ? undefined : (selectedAllergyType.value ?? undefined),
+  allergyType: panelMode.value === FORM_MODES.CREATE ? undefined : (selectedAllergyType.value ?? undefined),
   panelMode: panelMode.value,
   canEdit: props.canEdit,
   householdShortNames: householdShortNames.value,
@@ -371,7 +367,7 @@ const catalogEmptyState = {
            The detail panel docks in the expanded row on mobile, in the sticky pane on md+ -->
       <div v-else :class="LAYOUTS.masterDetailPage.root">
         <!-- CREATE (mobile) - docks under the toolbar, adjacent to the button that opened it -->
-        <div v-if="!COMPONENTS.masterDetail.detailAsPane && panelMode === 'create'" :class="COMPONENTS.allergyCatalogPage.createDock">
+        <div v-if="!COMPONENTS.masterDetail.detailAsPane && panelMode === FORM_MODES.CREATE" :class="COMPONENTS.allergyCatalogPage.createDock">
           <AllergyDetailPanel v-bind="panelProps" v-on="panelEvents"/>
         </div>
 

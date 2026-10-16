@@ -5,21 +5,26 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
+import {useTicket} from '~/composables/useTicket'
 import {formatDate} from '~/utils/date'
+import {WAITLIST_TEST_IDS} from '~~/tests/component/components/dinner/waitlistTestIds'
 
 const {memberUIFile, adminUIFile} = authFiles
 const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, gotoHydrated, pollUntil, salt, temporaryAndRandom} = testHelpers
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const {TeamRoleSchema} = useCookingTeamValidation()
 const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
+const {ticketTypeWords} = useTicket()
 const DinnerMode = DinnerModeSchema.enum
 
 /**
  * The waiting list through the one booking path: a member saves a mode on a closed, sold-out dinner and lands in the
- * queue, the dinner calendar counts the queue on the dinner's day; the chef releases portions and the member holds a ticket.
+ * queue, the dinner calendar counts the queue on the dinner's day and the booking form's bar names it by ticket type; the
+ * chef releases portions and the member holds a ticket.
  *
  * SERIAL: activates its own season. A two-day booking deadline closes tomorrow's dinner; no ticket is released, so the
  * dinner is sold out. The admin is the chef of the dinner's team.
@@ -78,7 +83,7 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
         await memberPage.getByTestId(`inhabitant-${inhabitantId}-mode-edit-${DinnerMode.DINEIN}`).click()
         await memberPage.getByTestId(`inhabitant-${inhabitantId}-save`).click()
 
-        await expect(memberPage.getByTestId(`waitlist-position-${inhabitantId}`)).toContainText('#1 i køen', {timeout: 15000})
+        await expect(memberPage.getByTestId(WAITLIST_TEST_IDS.position(inhabitantId))).toContainText('#1 i køen', {timeout: 15000})
 
         const chefPage = await (await browser.newContext({storageState: adminUIFile})).newPage()
         await gotoHydrated(chefPage, `/chef?team=${teamId}&date=${formatDate(dinnerDate)}`)
@@ -92,6 +97,19 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
         // UChip hands its test id to the day circle; the chip's number sits beside the circle
         const dayChip = memberPage.getByTestId(`calendar-dinner-date-${dinnerDate.getDate()}`).locator('xpath=..').locator('[data-slot="base"]')
         await expect(dayChip).toHaveText('-1', {timeout: 15000})
+    })
+
+    test('GIVEN the locked dinner with one entry on its waiting list WHEN the member opens its booking form on /dinner THEN the info bar reads the waiting list with the entry\'s ticket type', async ({browser}) => {
+        const entries = await WaitlistFactory.entries(adminContext, [dinnerEventId])
+        expect(entries).toHaveLength(1)
+        const {ticketPrices} = await SeasonFactory.getSeason(adminContext, seasonId)
+        const ticketType = ticketPrices.find(price => price.id === entries[0]!.order.ticketPriceId)!.ticketType
+
+        const memberPage = await (await browser.newContext({storageState: memberUIFile})).newPage()
+        await memberPage.goto(`/dinner?date=${formatDate(dinnerDate)}`)
+
+        await expect(memberPage.getByTestId(WAITLIST_TEST_IDS.moreTickets))
+            .toContainText(`1 står på ventelisten (1${ticketTypeWords[ticketType].compactLabel})`, {timeout: 15000})
     })
 
     test('GIVEN the member in the queue WHEN the chef releases a portion THEN the member holds a ticket and the queue is empty', async ({browser}) => {
@@ -111,6 +129,6 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
 
         const memberPage = await (await browser.newContext({storageState: memberUIFile})).newPage()
         await gotoHydrated(memberPage, `/dinner?date=${formatDate(dinnerDate)}`)
-        await expect(memberPage.getByTestId(`waitlist-position-${inhabitantId}`)).toBeHidden({timeout: 15000})
+        await expect(memberPage.getByTestId(WAITLIST_TEST_IDS.position(inhabitantId))).toBeHidden({timeout: 15000})
     })
 })

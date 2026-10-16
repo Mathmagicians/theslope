@@ -33,7 +33,7 @@ const changeColumns: TableColumn<TicketChange>[] = [
   {accessorKey: 'revenue', header: 'Indtægter', meta: COMPONENTS.table.amountColumn}
 ]
 const {TicketTypeSchema} = useBookingValidation()
-const {ticketTypeConfig, formatPrice} = useTicket()
+const {formatPrice} = useTicket()
 const {formatMoment} = useBooking()
 const bookingsStore = useBookingsStore()
 
@@ -62,7 +62,7 @@ const moreCount = computed(() => beforeDeadline.value && !showAll.value ? Math.m
 
 const TICKET_TYPES = [TicketTypeSchema.enum.ADULT, TicketTypeSchema.enum.CHILD, TicketTypeSchema.enum.BABY] as const
 type TicketTypeKey = typeof TICKET_TYPES[number]
-const chip = (type: TicketTypeKey) => ticketTypeConfig[type]
+const chip = (type: TicketTypeKey) => ticketTypePresentation(type)
 const movedTypes = (delta: TicketCounts) => TICKET_TYPES.filter(type => delta[type] !== 0)
 const heldTypes = (counts: TicketCounts) => TICKET_TYPES.filter(type => counts[type] > 0)
 const signed = (count: number) => `${count > 0 ? '+' : ''}${count}`

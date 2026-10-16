@@ -9,6 +9,7 @@ import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
 import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {MODE_WORDS, bookingSaveLabel} from '~/composables/useBookingUi'
+import {EMPTY_RELEASED_TICKET_COUNTS} from '~/composables/useBooking'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
 import type {DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
 import type {HouseholdDetail, UserDetail} from '~/composables/useCoreValidation'
@@ -71,6 +72,13 @@ registerEndpoint(`/api/admin/household/${householdWithInhabitants.id}`, () => ho
 registerEndpoint(`/api/admin/household/${strangerHousehold.id}`, () => strangerHousehold)
 
 const mountForm = (props: Record<string, unknown>, isMd?: boolean) => mountWithTooltipProvider(DinnerBookingForm, {props, isMd})
+
+/** A member of the household on a dinner open or closed for changes; the dining mode stays editable */
+const mountMemberForm = (canModify: boolean, props: Record<string, unknown> = {}) => {
+  session.user.value = member
+  const deadlines = {...baseDeadlines, canModifyOrders: () => canModify, canEditDiningMode: () => true}
+  return mountForm({...baseProps, household: householdWithInhabitants, deadlines, ...props})
+}
 
 // The next test's resetStores drops the datasets a still-mounted form reads
 enableAutoUnmount(afterEach)
@@ -146,11 +154,7 @@ describe('DinnerBookingForm', () => {
       state: OrderStateSchema.enum.BOOKED
     }))
 
-    const mountMember = (orders: OrderDisplay[]) => {
-      session.user.value = member
-      const deadlines = {...baseDeadlines, canModifyOrders: () => true, canEditDiningMode: () => true}
-      return mountForm({...baseProps, household: householdWithInhabitants, orders, deadlines})
-    }
+    const mountMember = (orders: OrderDisplay[]) => mountMemberForm(true, {orders})
 
     const saveRow = async (wrapper: Awaited<ReturnType<typeof mountMember>>, rowId: string, dinnerMode: DinnerMode) => {
       await clickByTestId(wrapper, `${rowId}-toggle`)
@@ -190,12 +194,8 @@ describe('DinnerBookingForm', () => {
         }))
       }
 
-      const mountBooked = () => {
-        session.user.value = member
-        const deadlines = {...baseDeadlines, canModifyOrders: () => true, canEditDiningMode: () => true}
-        const orders = [...familyOrders(DinnerMode.DINEIN), ...guestOrders]
-        return mountForm({...baseProps, household: householdWithAllergies, orders, deadlines})
-      }
+      const mountBooked = () =>
+        mountMemberForm(true, {household: householdWithAllergies, orders: [...familyOrders(DinnerMode.DINEIN), ...guestOrders]})
 
       const ticketAllergies = (wrapper: Awaited<ReturnType<typeof mountBooked>>) =>
         wrapper.findAllComponents(DinnerTicket).map(ticket => ticket.props('allergies') as {name: string}[] | undefined)
@@ -286,11 +286,8 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
   const dinnerEventId = baseProps.dinnerEvent.id
   const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo!.id, dinnerEventId, position: 2, dinnerMode: DinnerMode.TAKEAWAY})
 
-  const mountClosed = (props: {orders?: OrderDisplay[], waitlistEntries?: ReturnType<typeof WaitlistFactory.defaultEntry>[]} = {}) => {
-    session.user.value = member
-    const deadlines = {...baseDeadlines, canModifyOrders: () => false, canEditDiningMode: () => true}
-    return mountForm({...baseProps, household: householdWithInhabitants, deadlines, ...props})
-  }
+  const mountClosed = (props: {orders?: OrderDisplay[], waitlistEntries?: ReturnType<typeof WaitlistFactory.defaultEntry>[]} = {}) =>
+    mountMemberForm(false, props)
   const emittedSaves = (wrapper: Awaited<ReturnType<typeof mountClosed>>) => wrapper.emitted('saveBookings')
   const editSelector = (wrapper: Awaited<ReturnType<typeof mountClosed>>, inhabitantId: number) =>
     wrapper.findAllComponents({name: 'DinnerModeSelector'}).find(selector => selector.props('name') === `inhabitant-${inhabitantId}-mode-edit`)!
@@ -363,9 +360,7 @@ describe('DinnerBookingForm on a queued row', () => {
     {intent: 'leaves the queue', dinnerMode: DinnerMode.NONE},
     {intent: 'requeues the wish', dinnerMode: DinnerMode.DINEINLATE}
   ])('WHEN the member picks $dinnerMode and saves THEN the order names the entry and $intent', async ({dinnerMode}) => {
-    session.user.value = member
-    const deadlines = {...baseDeadlines, canModifyOrders: () => false, canEditDiningMode: () => true}
-    const wrapper = await mountForm({...baseProps, household: householdWithInhabitants, deadlines, waitlistEntries: [boQueued]})
+    const wrapper = await mountMemberForm(false, {waitlistEntries: [boQueued]})
     await clickByTestId(wrapper, `inhabitant-${bo.id}-toggle`)
     await clickByTestId(wrapper, `inhabitant-${bo.id}-mode-edit-${dinnerMode}`)
     await clickByTestId(wrapper, `inhabitant-${bo.id}-save`)
@@ -388,11 +383,7 @@ describe('DinnerBookingForm on a queued guest row', () => {
   const guestRowId = `guest-entry-${GUEST_ENTRY_ID}`
   const rowId = `guest-order-${guestRowId}`
 
-  const mountQueuedGuest = () => {
-    session.user.value = member
-    const deadlines = {...baseDeadlines, canModifyOrders: () => false, canEditDiningMode: () => true}
-    return mountForm({...baseProps, household: householdWithInhabitants, deadlines, waitlistEntries: [guestQueued]})
-  }
+  const mountQueuedGuest = () => mountMemberForm(false, {waitlistEntries: [guestQueued]})
 
   it('renders the marks of a queued inhabitant: the position badge, the hourglass ticket with the guest glyph and the ghosted wish', async () => {
     const wrapper = await mountQueuedGuest()
@@ -421,14 +412,8 @@ describe('DinnerBookingForm previews the outcome of a save by the supply', () =>
   const {DinnerModeSchema} = useBookingValidation()
   const anna = householdWithInhabitants.inhabitants[0]!
 
-  const mountRow = (canModify: boolean, ticketsForSale: number) => {
-    session.user.value = member
-    const deadlines = {...baseDeadlines, canModifyOrders: () => canModify, canEditDiningMode: () => true}
-    return mountForm({
-      ...baseProps, household: householdWithInhabitants, deadlines,
-      releasedTicketCounts: {total: ticketsForSale, formatted: `${ticketsForSale}V`}
-    })
-  }
+  const mountRow = (canModify: boolean, ticketsForSale: number) =>
+    mountMemberForm(canModify, {releasedTicketCounts: {...EMPTY_RELEASED_TICKET_COUNTS, total: ticketsForSale, formatted: `${ticketsForSale}V`}})
 
   it.each([
     {desc: 'before the deadline', canModify: true, ticketsForSale: 0, label: 'Book'},
@@ -459,13 +444,47 @@ describe('DinnerBookingForm previews a requeue', () => {
   const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo.id, dinnerEventId: baseProps.dinnerEvent.id, position: 2, dinnerMode: DinnerModeSchema.enum.TAKEAWAY})
 
   it('WHEN a queued member picks another mode THEN the save reads Opdater and the preview names the new mode and the kept place', async () => {
-    session.user.value = member
-    const deadlines = {...baseDeadlines, canModifyOrders: () => false, canEditDiningMode: () => true}
-    const wrapper = await mountForm({...baseProps, household: householdWithInhabitants, deadlines, waitlistEntries: [boQueued]})
+    const wrapper = await mountMemberForm(false, {waitlistEntries: [boQueued]})
     await clickByTestId(wrapper, `inhabitant-${bo.id}-toggle`)
     await clickByTestId(wrapper, `inhabitant-${bo.id}-mode-edit-${DinnerModeSchema.enum.DINEINLATE}`)
 
     expect(findByTestId(wrapper, `inhabitant-${bo.id}-save`).text()).toContain(bookingSaveLabel(Action.REQUEUE))
     expect(wrapper.text()).toContain(`ændrer ønsket tilmelding til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label}, beholder plads #${boQueued.position} i køen`)
+  })
+})
+
+describe('DinnerBookingForm on a closed dinner: the "Har du brug for flere billetter?" bar', () => {
+  const TITLE = 'Har du brug for flere billetter?'
+  const FOR_SALE = 'til salg'
+  const WAITING = 'står på ventelisten'
+  const supply = (total: number, formatted: string, queued: number, queuedFormatted: string) =>
+    ({...EMPTY_RELEASED_TICKET_COUNTS, total, formatted, queued, queuedFormatted})
+
+  it.each([
+    {desc: 'tickets for sale only', counts: supply(4, '4V', 0, '-'), icon: ICONS.claim, absent: [WAITING],
+      lines: ['Lukket for ændringer, men der er 4 ledige billetter til salg (4V).']},
+    {desc: 'one ticket for sale', counts: supply(1, '1V', 0, '-'), icon: ICONS.claim, absent: [WAITING],
+      lines: ['Lukket for ændringer, men der er 1 ledig billet til salg (1V).']},
+    {desc: 'the waiting list only', counts: supply(0, '-', 3, '2V 1B'), icon: ICONS.waitlist, absent: [FOR_SALE],
+      lines: ['Lukket for ændringer, men 3 står på ventelisten (2V 1B). Du kan få en plads på ventelisten.']},
+    {desc: 'tickets for sale and a waiting list', counts: supply(4, '4V', 1, '1B'), icon: ICONS.claim, absent: [],
+      lines: ['Lukket for ændringer, men der er 4 ledige billetter til salg (4V).', '1 står på ventelisten (1B). Du kan få en plads på ventelisten.']}
+  ])('GIVEN $desc THEN one bar reads a line per supply', async ({counts, icon, absent, lines}) => {
+    const wrapper = await mountMemberForm(false, {releasedTicketCounts: counts})
+
+    const bar = findByTestId(wrapper, WAITLIST_TEST_IDS.moreTickets)
+    expect(bar.text()).toContain(TITLE)
+    lines.forEach(line => expect(bar.text()).toContain(line))
+    absent.forEach(words => expect(bar.text()).not.toContain(words))
+    expect(wrapper.findAllComponents({name: 'UAlert'}).find(alert => alert.element === bar.element)?.props('icon')).toBe(icon)
+  })
+
+  it.each([
+    {desc: 'a closed dinner with nothing for sale and nobody waiting', canModify: false, counts: EMPTY_RELEASED_TICKET_COUNTS},
+    {desc: 'a dinner open for booking', canModify: true, counts: supply(4, '4V', 1, '1B')}
+  ])('GIVEN $desc THEN no bar shows', async ({canModify, counts}) => {
+    const wrapper = await mountMemberForm(canModify, {releasedTicketCounts: counts})
+
+    expect(wrapper.text()).not.toContain(TITLE)
   })
 })

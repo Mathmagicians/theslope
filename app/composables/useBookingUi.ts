@@ -2,9 +2,9 @@
  * Pure UI composable for the Bookings domain (ADR-017)
  *
  * Client-only presentation of booking/dinner state: deadline badges, chef step
- * icons and the action preview shown before a booking is saved. Never imported
- * by server code — it depends on the design system and on useOrder, which rely
- * on Nuxt app auto-imports that do not exist in the Nitro bundle.
+ * icons, order state badges and the action preview shown before a booking is
+ * saved. Never imported by server code — it depends on the design system, which
+ * is client-only.
  *
  * Domain logic (step machine, deadlines, bucket resolution) stays in useBooking.
  */
@@ -24,8 +24,10 @@ import {
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
 import {useOrder, type SpendingFigures} from '~/composables/useOrder'
 import type {Expense} from '~/composables/useBillingValidation'
-import {useBookingValidation, DinnerMode as DinnerModeEnum, type DinnerMode, type DinnerEventDisplay, type OrderDisplay, type DesiredOrder, type OrderAuditAction, type BookingAction, type BookingOutcome} from '~/composables/useBookingValidation'
-import {ICONS, COLOR, ALARM_TO_BADGE, type NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+import {useBookingValidation, DinnerMode as DinnerModeEnum, OrderState as OrderStateEnum, type OrderState, type DinnerMode, type DinnerEventDisplay, type OrderDisplay, type DesiredOrder, type OrderAuditAction, type BookingAction, type BookingOutcome, type TicketType} from '~/composables/useBookingValidation'
+import {useTicket, type TicketTypeWords} from '~/composables/useTicket'
+import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+import {ICONS, COLOR, ALARM_TO_BADGE, BOOKING_LOCK_STATUS, TICKET_TYPE_COLORS, TICKET_TYPE_ICONS, type NuxtUIColor, type TicketTypeColor} from '~/composables/useTheSlopeDesignSystem'
 import {calculateCountdown, formatDate, formatDateRange} from '~/utils/date'
 
 // ============================================================================
@@ -53,6 +55,73 @@ export const ORDER_ACTION_LABELS: Record<OrderAuditAction, OrderActionLabel> = {
     SYSTEM_DELETED: {icon: ICONS.xMark, color: COLOR.error, label: 'Slettet'},
     SYSTEM_UPDATED: {icon: ICONS.edit, color: COLOR.neutral, label: 'Opdateret'}
 }
+
+// One label, icon and colour per order state (CostLine, the action preview); a booked ticket claimed from another
+// household shows as bought
+export interface OrderDisplayConfig {
+    label: string
+    color: typeof COLOR.primary | typeof COLOR.error | typeof COLOR.info | typeof COLOR.neutral
+    icon: string
+}
+export const ORDER_STATE_LABELS: Record<OrderState | 'claimed', OrderDisplayConfig> = {
+    [OrderStateEnum.BOOKED]: {label: 'Bestilt', color: COLOR.primary, icon: ICONS.clipboard},
+    [OrderStateEnum.RELEASED]: {label: 'Frigivet', color: COLOR.error, icon: ICONS.released},
+    [OrderStateEnum.CLOSED]: {label: 'Lukket', color: COLOR.neutral, icon: ICONS.archive},
+    [OrderStateEnum.CANCELLED]: {label: 'Annulleret', color: COLOR.error, icon: ICONS.xMark},
+    claimed: {label: 'Købt fra anden', color: COLOR.info, icon: ICONS.claim}
+}
+
+// An order's state badge and, on a guest ticket, its guest badge (formatOrder)
+export interface FormattedOrder {
+    guest: OrderDisplayConfig | null
+    stateText: string
+    stateColor: OrderDisplayConfig['color']
+    stateIcon: string
+    isClaimed: boolean
+}
+
+// How a ticket shows: its label, a colour and a glyph (a ticket type's from the design system, or power mode's own)
+export interface TicketPresentation {
+    label: string
+    color: NuxtUIColor
+    icon: string
+}
+
+// A ticket type's words with the design system's colour and glyph for it
+export type TicketTypePresentation = TicketTypeWords & TicketPresentation & {color: TicketTypeColor}
+export const ticketTypePresentation = (ticketType: TicketType): TicketTypePresentation => ({
+    ...useTicket().ticketTypeWords[ticketType],
+    color: TICKET_TYPE_COLORS[ticketType],
+    icon: TICKET_TYPE_ICONS[ticketType]
+})
+
+// The presentation of the ticket type a person or an order resolves to (useTicket.resolveTicketType)
+export const resolveTicketTypePresentation = (...args: Parameters<ReturnType<typeof useTicket>['resolveTicketType']>) =>
+    ticketTypePresentation(useTicket().resolveTicketType(...args))
+
+// A ticket price as a select menu item: the type's presentation for its badge, the price, and the age limit with the description
+export interface TicketPriceSelectItem {
+    id: number | undefined
+    ticketType: TicketType
+    price: number
+    presentation: TicketPresentation
+    label: string
+    description?: string
+}
+export const ticketPriceSelectItems = (ticketPrices: TicketPrice[], compact = false): TicketPriceSelectItem[] =>
+    ticketPrices.map(ticketPrice => {
+        const presentation = ticketTypePresentation(ticketPrice.ticketType)
+        const ageLimit = ticketPrice.maximumAgeLimit ? `Under ${ticketPrice.maximumAgeLimit} år` : undefined
+        const description = compact ? undefined : [ageLimit, ticketPrice.description].filter(Boolean).join(' · ') || undefined
+        return {
+            id: ticketPrice.id,
+            ticketType: ticketPrice.ticketType,
+            price: ticketPrice.price,
+            presentation,
+            label: `${presentation.label} · ${useTicket().formatPrice(ticketPrice.price)} kr`,
+            description
+        }
+    })
 
 // One dinner of the team's cooking round (CookingRoundSpending): its allowance and spending in gross øre
 export interface CookingRoundRow {
@@ -178,6 +247,19 @@ export const createBookingBadges = (
     }
 }
 
+/**
+ * The lock chip of a dinner past its booking deadline: the tickets for sale, else the waiting list with a minus, else
+ * the closed chip alone. A released ticket goes to the first waiting for its ticket type, so a dinner can hold both;
+ * the chip then shows the tickets for sale.
+ * Null without supply: the dinner is open for booking.
+ */
+export const lockChip = (supply: ReleasedTicketCounts | null | undefined): {color: NuxtUIColor, text: string | undefined} | null => {
+    if (!supply) return null
+    if (supply.total > 0) return {color: BOOKING_LOCK_STATUS.lockedWithTickets.color, text: String(supply.total)}
+    if (supply.queued > 0) return {color: BOOKING_LOCK_STATUS.lockedWithQueue.color, text: `-${supply.queued}`}
+    return {color: BOOKING_LOCK_STATUS.locked.color, text: undefined}
+}
+
 /** The words of a dinner mode, once: DinnerModeSelector's glyph and label, and the mode a preview line names */
 export const MODE_WORDS: Record<DinnerMode, {label: string, icon: string}> = {
     [DinnerModeEnum.DINEIN]: {label: 'Spisesal', icon: ICONS.dinner},
@@ -254,15 +336,27 @@ export interface ActionPreviewItem {
     name: string
     action: BookingAction
     icon: string
-    color: typeof COLOR.primary | typeof COLOR.error | typeof COLOR.info | typeof COLOR.neutral
+    color: OrderDisplayConfig['color']
     text: string
 }
 
 export const useBookingUi = () => {
     const {DinnerStateSchema, OrderStateSchema} = useBookingValidation()
     const DinnerState = DinnerStateSchema.enum
-    const {orderStateConfig, formatGuestLabel} = useOrder()
+    const {formatGuestLabel} = useOrder()
     const {getCookingDeadlineThresholds} = useSeason()
+
+    const formatOrder = (order: Pick<OrderDisplay, 'state' | 'provenanceHousehold' | 'isGuestTicket'>, bookerName?: string): FormattedOrder => {
+        const isClaimed = !!order.provenanceHousehold
+        const shown = order.state === OrderStateEnum.BOOKED && isClaimed ? ORDER_STATE_LABELS.claimed : ORDER_STATE_LABELS[order.state]
+        return {
+            guest: order.isGuestTicket ? {label: formatGuestLabel(bookerName), color: COLOR.info, icon: ICONS.userPlus} : null,
+            stateText: shown.label,
+            stateColor: shown.color,
+            stateIcon: shown.icon,
+            isClaimed
+        }
+    }
 
     const formatActionPreview = (
         buckets: OrderBucketResult<DesiredOrder>,
@@ -288,7 +382,7 @@ export const useBookingUi = () => {
             [Action.CHANGE_PRICE]: OrderStateEnum.CLOSED
         } as const
 
-        const getActionColor = (action: BookingAction) => orderStateConfig[ACTION_TO_STATE[action]].color
+        const getActionColor = (action: BookingAction) => ORDER_STATE_LABELS[ACTION_TO_STATE[action]].color
 
         const toItem = (order: DesiredOrder, action: BookingAction): ActionPreviewItem => {
             // For guests: "Gæst af {bookerName}", for regular: inhabitant name
@@ -371,11 +465,14 @@ export const useBookingUi = () => {
         createDiningModeBadge,
         createBookingBadges,
         createWaitlistBadge,
+        lockChip,
         bookingSaveLabel,
         waitlistPositionOf,
         guestSaveLabel,
         previewOutcome,
         createChefBadges,
+        // Order badges
+        formatOrder,
         // Action preview
         formatActionPreview
     }

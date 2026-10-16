@@ -2,7 +2,7 @@ import {z} from 'zod'
 import {dateRangeSchema} from '~/composables/useDateRangeValidation'
 import {formatDate, parseDate, isDateRangeInside, areRangesOverlapping, sortDateRanges, formatDateRange, DATE_SETTINGS} from '~/utils/date'
 import {useBookingValidation} from '~/composables/useBookingValidation'
-import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {useTicketPriceValidation, type PortionTicket} from '~/composables/useTicketPriceValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {IdSchema} from '~/composables/useCoreValidation'
@@ -111,7 +111,11 @@ export const useSeasonValidation = () => {
     // Serialization and deserialization functions
     const serializeSeason = (season: Season): SerializedSeason => SerializedSeasonSchema.parse(season)
 
-    const deserializeSeason = (serialized: Record<string, unknown>): Season => {
+    // The price rows hold no portions; withPortions adds what a ticket at each price weighs
+    const deserializeSeason = (
+        serialized: Record<string, unknown>,
+        withPortions: (ticketPrice: PortionTicket) => PortionTicket & {portions: number}
+    ): Season => {
         const parsedSeasonDates = JSON.parse(serialized.seasonDates as string) as { start: string; end: string }
 
         const baseSeason = {
@@ -142,7 +146,7 @@ export const useSeasonValidation = () => {
                 dinnerEvents: dinnerEvents?.map((event) => deserializeDinnerEvent(event as Record<string, unknown>)),
                 // Deserialize nested CookingTeams (including affinity fields)
                 CookingTeams: CookingTeams?.map((team) => deserializeCookingTeamDisplay(team)),
-                ticketPrices: serialized.ticketPrices as Season['ticketPrices']
+                ticketPrices: (serialized.ticketPrices as PortionTicket[] | undefined)?.map(withPortions) as Season['ticketPrices']
             } as Season
         }
         return baseSeason as Season

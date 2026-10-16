@@ -24,6 +24,7 @@ import type {
     OrderAuditAction
 } from '~/composables/useBookingValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useTicket} from '~/composables/useTicket'
 import {useBooking} from '~/composables/useBooking'
 import {byTimeThenId} from '~/composables/useWaitlist'
 import {useHousehold} from '~/composables/useHousehold'
@@ -89,6 +90,7 @@ const toOrderDetail = (order: OrderDetailPayload): OrderDetail => useBookingVali
     ...order,
     dinnerEvent: embeddedDinnerEvent(order.dinnerEvent),
     ticketType: order.ticketPrice?.ticketType ?? null,
+    ticketPrice: order.ticketPrice ? useTicket().withPortions(order.ticketPrice) : null,
     history: order.orderHistory
 })
 
@@ -964,7 +966,7 @@ export async function fetchDinnerEvent(d1Client: D1Database, id: number): Promis
             // - chef: Inhabitant with dinnerPreferences JSON string
             // - cookingTeam: CookingTeam with affinity and assignments JSON strings
             // - tickets: flatten ticketType, add dinnerEvent ref, deserialize inhabitant
-            const dinnerEventToValidate = deserializeDinnerEventDetail(dinnerEvent)
+            const dinnerEventToValidate = deserializeDinnerEventDetail(dinnerEvent, useTicket().withPortions)
 
             console.info(`🍽️ > DINNER_EVENT > [GET] Found dinner event ${dinnerEvent.menuTitle} (ID: ${dinnerEvent.id})`)
             return DinnerEventDetailSchema.parse(dinnerEventToValidate)
@@ -994,7 +996,7 @@ export async function updateDinnerEvent(d1Client: D1Database, id: number, dinner
         })
 
         // ADR-010: Deserialize handles all transformations (same as fetchDinnerEvent)
-        const dinnerEventToValidate = deserializeDinnerEventDetail(updatedDinnerEvent)
+        const dinnerEventToValidate = deserializeDinnerEventDetail(updatedDinnerEvent, useTicket().withPortions)
 
         console.info(`🍽️ > DINNER_EVENT > [UPDATE] Successfully updated dinner event ${updatedDinnerEvent.menuTitle} (ID: ${updatedDinnerEvent.id})`)
         return DinnerEventDetailSchema.parse(dinnerEventToValidate)

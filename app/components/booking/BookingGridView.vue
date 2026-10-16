@@ -62,10 +62,10 @@ import type {DinnerEventDisplay, OrderDisplay, DinnerMode, DesiredOrder} from '~
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
+import type {TicketPresentation} from '~/composables/useBookingUi'
 import type {BookingView} from '~/composables/useBookingView'
 import type {DateRange} from '~/types/dateTypes'
-import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
-import type {BookingChanges, GuestBookingIntent, ReleasedTicketCounts} from '~/composables/useBooking'
+import {EMPTY_RELEASED_TICKET_COUNTS, type BookingChanges, type GuestBookingIntent, type ReleasedTicketCounts} from '~/composables/useBooking'
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
@@ -73,10 +73,6 @@ import {FORM_MODES, type FormMode} from '~/types/form'
 type RowType = 'power' | 'inhabitant' | 'guest-order' | 'guest-add'
 
 // Ticket config type (same as DinnerBookingForm)
-type TicketConfig = {label: string; color: NuxtUIColor; icon: string} | null
-
-// Lock status config type (from design system BOOKING_LOCK_STATUS)
-type LockStatusConfig = {color: NuxtUIColor; icon: string}
 
 interface GridRow {
   rowType: RowType
@@ -85,7 +81,7 @@ interface GridRow {
   inhabitant?: InhabitantDisplay // For inhabitant row, or booker for guest-order
   inhabitants?: InhabitantDisplay[] // For power mode
   guestOrders?: OrderDisplay[] // For grouped guest bookings (by booker+ticketType+event)
-  ticketConfig?: TicketConfig // For guest rows - ticket type config with color
+  ticketConfig?: TicketPresentation | null // Guest rows show their ticket type
   guestCount?: number // Number of guest tickets in group
   isSynthetic: boolean
 }
@@ -133,15 +129,15 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEmptyMessage, getOrderStateColor, getLockStatusConfig, getResidencyDisplay, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
+const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEmptyMessage, getOrderStateColor, getResidencyDisplay, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
 const emptyState = getRandomEmptyMessage('noDinners')
 
 // Ticket price formatting
-const {formatPrice, getTicketTypeConfig, resolveTicketPrice, ticketTypeConfig} = useTicket()
+const {formatPrice, resolveTicketPrice} = useTicket()
 
 // Booking helpers (shared with DinnerBookingForm)
 const {groupGuestOrders, partitionGuestOrders, getDayBillSummary, resolveUserBookingBuckets, getBookingOptions, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
-const {formatActionPreview, waitlistPositionOf} = useBookingUi()
+const {formatActionPreview, waitlistPositionOf, lockChip} = useBookingUi()
 
 // Inhabitant name lookup (used by actionPreviewItems)
 const getInhabitantName = (id: number) =>
@@ -415,7 +411,7 @@ const tableData = computed((): GridRow[] => {
       name: 'Gæst',
       inhabitant: booker, // The booker
       guestOrders: orders,
-      ticketConfig: resolvedTicketPrice ? ticketTypeConfig[resolvedTicketPrice.ticketType] : null,
+      ticketConfig: resolvedTicketPrice ? ticketTypePresentation(resolvedTicketPrice.ticketType) : null,
       guestCount: orders.length,
       isSynthetic: false
     })
@@ -511,16 +507,13 @@ const getPowerDisabledModes = (event: DinnerEventDisplay): DinnerMode[] => {
   return getCellDisabledModes(firstInhabitant.id, event)
 }
 
-// Lock status for column header chips (reuse calendar pattern)
-const getEventLockStatus = (event: DinnerEventDisplay): { config: LockStatusConfig, count: number } | null => {
-  if (canBookEvent(event)) return null // Not locked
-  if (isDinnerPast(event.date)) return null
-  // Count released orders for this event
+// The column header's lock chip on a locked dinner counts the household's own released tickets
+const getEventLockChip = (event: DinnerEventDisplay) => {
+  if (canBookEvent(event) || isDinnerPast(event.date)) return null
   const releasedCount = props.orders.filter(o =>
     o.dinnerEventId === event.id && o.state === OrderStateEnum.RELEASED
   ).length
-  const config = getLockStatusConfig(releasedCount)
-  return config ? { config, count: releasedCount } : null
+  return lockChip({...EMPTY_RELEASED_TICKET_COUNTS, total: releasedCount})
 }
 
 // ============================================================================
@@ -630,10 +623,10 @@ const getEventSummary = (eventId: number) => {
           <!-- Fixed height slot for chip: 🟠=locked, 🟡N=locked with N tickets -->
           <div :class="COMPONENTS.bookingGrid.chipSlot">
             <UChip
-              v-if="getEventLockStatus(event)"
+              v-if="getEventLockChip(event)"
               v-bind="COMPONENTS.bookingGrid.lockChip"
-              :color="getEventLockStatus(event)!.config.color"
-              :text="getEventLockStatus(event)!.count > 0 ? String(getEventLockStatus(event)!.count) : undefined"
+              :color="getEventLockChip(event)!.color"
+              :text="getEventLockChip(event)!.text"
             />
           </div>
         </div>
@@ -657,12 +650,12 @@ const getEventSummary = (eventId: number) => {
           >
             <template #badge>
               <UBadge
-                v-if="getTicketTypeConfig(row.original.inhabitant.birthDate ?? null, ticketPrices)"
-                :color="getTicketTypeConfig(row.original.inhabitant.birthDate ?? null, ticketPrices)!.color"
+                v-if="resolveTicketTypePresentation(row.original.inhabitant.birthDate ?? null, ticketPrices)"
+                :color="resolveTicketTypePresentation(row.original.inhabitant.birthDate ?? null, ticketPrices)!.color"
                 :variant="NOISE.subtle"
                 :size="SIZES.xs"
               >
-                {{ getTicketTypeConfig(row.original.inhabitant.birthDate ?? null, ticketPrices)!.label }}
+                {{ resolveTicketTypePresentation(row.original.inhabitant.birthDate ?? null, ticketPrices)!.label }}
               </UBadge>
             </template>
           </UserListItem>
@@ -806,7 +799,7 @@ const getEventSummary = (eventId: number) => {
           :deadlines="props.deadlines"
           :booker-id="props.bookerId"
           :booker-name="props.household.inhabitants.find(i => i.id === props.bookerId)?.name ?? 'Ukendt'"
-          :released-ticket-counts="props.lockStatus.get(activeGuestEvent.id) ?? { total: 0, formatted: '-' }"
+          :released-ticket-counts="props.lockStatus.get(activeGuestEvent.id) ?? EMPTY_RELEASED_TICKET_COUNTS"
           :is-household-in-residency="isHouseholdInResidency(activeGuestEvent.date)"
           @save="handleGuestSave"
           @cancel="expanded = {}"

@@ -13,6 +13,8 @@
  * ┃                fra Hansen                                        ░░░░░░░░┃
  * ┃  [cl][gu][al]  [BARN · 35kr · 2 Gæster]       [mode] Spisesal   ░░[tk]░░┃  claimed guest, allergic   gu + al green
  * ┃  [wl][  ][  ]  [VOKSEN · 55kr]                (mode) Spisesal   ░░[tk]░░┃  queued   wl toned, edge normal, (mode) the wish ghosted
+ * ┃  [  ][  ][  ]  [BARN · 17kr]                  [remove]          ░░[tk]░░┃  a season's ticket price (TicketPriceListEditor)
+ * ┃                Under 12 år · Barn                                ░░░░░░░░┃
  *
  * special = ticket.special: three ticket.cell (state | guest | allergy), an empty cell keeps its width
  *   [rl] ICONS.released, [cl] ICONS.claim at ticket.stateIcon[state]; [wl] ICONS.waitlist at ticket.stateIcon.queued
@@ -20,7 +22,8 @@
  * type = the badge (ticket.badge) in the ticket type's colour
  * how you eat = ticket.modeSlot: DinnerModeSelector in view mode, right-aligned; a queued ticket shows the wished mode as
  *   its ghost (COMPONENTS.waitlist)
- * row 2 = ticket.subRow, starting under the badge
+ *   or the caller's control through the end slot (a ticket price's remove button)
+ * row 2 = ticket.subRow, starting under the badge: the household a claimed ticket came from, or a ticket price's note
  * [tk] = ICONS.ticketSolid at ticket.watermarkIcon
  *
  * Two hues per card: the state colour paints the edge (ticket.face[state]) and the state glyph, the type colour
@@ -29,18 +32,13 @@
  */
 import type {DinnerMode} from '~/composables/useBookingValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
+import type {TicketPresentation} from '~/composables/useBookingUi'
 import type {NuxtUIColor, TicketTypeColor} from '~/composables/useTheSlopeDesignSystem'
 
-interface TicketConfig {
-  label: string
-  color: NuxtUIColor
-  icon: string
-}
-
 interface Props {
-  ticketConfig: TicketConfig | null
+  ticketConfig: TicketPresentation | null
   price: number
-  dinnerMode: DinnerMode
+  dinnerMode?: DinnerMode
   isReleased?: boolean
   isClaimed?: boolean
   guestCount?: number // undefined = not guest, 1+ = guest ticket(s)
@@ -49,9 +47,11 @@ interface Props {
   allergies?: AllergyTypeDisplay[] // The eater's allergy types; the card shows the glyph only
   provenanceHousehold?: string // Source household if claimed
   isQueued?: boolean // On the waiting list: dinnerMode is the wish, not a booking
+  note?: string // A ticket price: its age limit and description
 }
 
 const props = withDefaults(defineProps<Props>(), {
+  dinnerMode: undefined,
   isReleased: false,
   isClaimed: false,
   guestCount: undefined,
@@ -59,7 +59,8 @@ const props = withDefaults(defineProps<Props>(), {
   consensus: undefined,
   allergies: () => [],
   provenanceHousehold: undefined,
-  isQueued: false
+  isQueued: false,
+  note: undefined
 })
 
 const isGuest = computed(() => props.guestCount !== undefined)
@@ -141,20 +142,24 @@ const badgeText = computed(() => {
 
         <!-- How you eat: DinnerModeSelector in VIEW mode -->
         <div :class="ticket.modeSlot" data-testid="ticket-mode-slot">
-          <DinnerModeSelector
-            :model-value="dinnerMode"
-            :consensus="consensus"
-            :ghost="isQueued"
-            show-label
-          />
+          <slot name="end">
+            <DinnerModeSelector
+              v-if="dinnerMode"
+              :model-value="dinnerMode"
+              :consensus="consensus"
+              :ghost="isQueued"
+              show-label
+            />
+          </slot>
         </div>
       </div>
 
-      <!-- ROW 2 (optional): provenance household, under the badge -->
-      <div v-if="provenanceHousehold" :class="ticket.subRow">
-        <span :class="ticket.provenance">
+      <!-- ROW 2 (optional): provenance household or a ticket price's note, under the badge -->
+      <div v-if="provenanceHousehold || note" :class="ticket.subRow">
+        <span v-if="provenanceHousehold" :class="ticket.provenance">
           fra {{ provenanceHousehold }}
         </span>
+        <span v-if="note" :class="ticket.note">{{ note }}</span>
       </div>
     </div>
   </div>

@@ -407,12 +407,14 @@ const INK_ON_FILL: Record<string, PlacedInk[]> = {
  * | `COMPONENTS.bookingGrid.nav` / `.actionCell` | The rule under the grid's date navigation and above its save row; the table's own header and the buttons separate them |
  * | `COMPONENTS.economyTable.level{1,2,3}.border` | The nesting tint of a tree row, alongside the row's indentation, icon and heading |
  * | `COMPONENTS.economyTable.level{1,2,3}.header` / `.footer` / `.statBox` / `.tableHead` | Banding of a table's own header, footer and stat boxes - a surface, measured for its ink in the text groups |
+ * | `BORDER.gray.frame` | The frame of the admin economy's invoice breakdown; its header band and the table inside group it |
  *
  * The edges that stay: input and card borders, the green holiday ring, the amber and red
  * deadline rings, the segmented-control ring, the calendar selection outlines - each is the
  * only thing that says where a control is or what a day means.
  */
 const DECORATIVE_EDGES = [
+    'BORDER.gray.frame',
     'LAYOUTS.sectionDivider',
     'LAYOUTS.panelDivider',
     'COMPONENTS.bookingForm.dayBill',

@@ -31,14 +31,13 @@
 <script setup lang="ts">
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
 import type {AllergyDisplay, AllergyTypeDisplay} from '~/composables/useAllergyValidation'
-import type {TicketTypeConfig} from '~/composables/useTicket'
+import type {TicketPresentation} from '~/composables/useBookingUi'
 
 // Design system
 const {SIZES, COLOR, COMPONENTS, NOISE, TYPOGRAPHY} = useTheSlopeDesignSystem()
 const display = COMPONENTS.householdAllergies
 
 // Ticket type config for display (label, color, icon); active season prices carry the age limits
-const {getTicketTypeConfig} = useTicket()
 const {activeSeason} = storeToRefs(usePlanStore())
 
 interface Props {
@@ -132,7 +131,7 @@ interface TableDataRow {
   lastName: string
   pictureUrl: string | null | undefined
   birthDate: Date | null | undefined
-  ticketConfig: TicketTypeConfig
+  ticketConfig: TicketPresentation
   allergies: AllergyDisplay[]
 }
 
@@ -167,7 +166,7 @@ const tableData = computed((): TableDataRow[] => {
       lastName: inhabitant.lastName,
       pictureUrl: inhabitant.pictureUrl,
       birthDate: inhabitant.birthDate,
-      ticketConfig: getTicketTypeConfig(inhabitant.birthDate ?? null, activeSeason.value?.ticketPrices),
+      ticketConfig: resolveTicketTypePresentation(inhabitant.birthDate ?? null, activeSeason.value?.ticketPrices),
       allergies: inhabitantAllergies
     }
   })

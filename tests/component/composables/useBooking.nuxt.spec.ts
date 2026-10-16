@@ -1674,7 +1674,8 @@ describe('Lock Status Utilities', () => {
     describe('computeLockStatus', () => {
         // The released counts the store reads, and the ReleasedTicketCounts a locked dinner carries
         const released = (total: number, formatted: string) => ({ total, formatted })
-        const counts = (total: number, formatted: string, queued = 0) => ({ total, formatted, queued })
+        const queue = (queued: number, queuedFormatted: string) => ({ queued, queuedFormatted })
+        const counts = (total: number, formatted: string, queued = 0, queuedFormatted = '-') => ({ total, formatted, queued, queuedFormatted })
         const emptyCount = counts(0, '-')
 
         describe.each([
@@ -1683,7 +1684,7 @@ describe('Lock Status Utilities', () => {
                 dinnerEvents: [makeEvent(1, 2), makeEvent(2, 5), makeEvent(3, 10)],
                 lockedDays: 7,
                 releasedCounts: new Map([[1, released(3, '3V')], [2, released(1, '1B')]]),
-                queueSizes: undefined,
+                queues: undefined,
                 expected: new Map([[1, counts(3, '3V')], [2, counts(1, '1B')]])
             },
             {
@@ -1691,7 +1692,7 @@ describe('Lock Status Utilities', () => {
                 dinnerEvents: [makeEvent(1, 2), makeEvent(2, 5)],
                 lockedDays: 7,
                 releasedCounts: undefined,
-                queueSizes: undefined,
+                queues: undefined,
                 expected: new Map([[1, emptyCount], [2, emptyCount]])
             },
             {
@@ -1699,21 +1700,29 @@ describe('Lock Status Utilities', () => {
                 dinnerEvents: [makeEvent(1, 2), makeEvent(2, 10)],
                 lockedDays: 5,
                 releasedCounts: new Map([[1, released(2, '2V')], [2, released(5, '5V')]]),
-                queueSizes: undefined,
+                queues: undefined,
                 expected: new Map([[1, counts(2, '2V')]])
             },
             {
-                name: 'carries the waiting list size of a locked dinner',
+                name: 'carries the waiting list of a locked dinner, counted by ticket type',
                 dinnerEvents: [makeEvent(1, 2), makeEvent(2, 5), makeEvent(3, 10)],
                 lockedDays: 7,
                 releasedCounts: undefined,
-                queueSizes: new Map([[1, 3], [3, 4]]),
-                expected: new Map([[1, counts(0, '-', 3)], [2, emptyCount]])
+                queues: new Map([[1, queue(3, '2V 1B')], [3, queue(4, '4V')]]),
+                expected: new Map([[1, counts(0, '-', 3, '2V 1B')], [2, emptyCount]])
+            },
+            {
+                name: 'carries the tickets for sale and the waiting list of a locked dinner side by side',
+                dinnerEvents: [makeEvent(1, 2)],
+                lockedDays: 7,
+                releasedCounts: new Map([[1, released(4, '4V')]]),
+                queues: new Map([[1, queue(1, '1B')]]),
+                expected: new Map([[1, counts(4, '4V', 1, '1B')]])
             }
-        ])('$name', ({dinnerEvents, lockedDays, releasedCounts, queueSizes, expected}) => {
+        ])('$name', ({dinnerEvents, lockedDays, releasedCounts, queues, expected}) => {
             it('returns correct lock status map', () => {
                 const deadlines = makeDeadlines(lockedDays)
-                const result = computeLockStatus(dinnerEvents, deadlines, releasedCounts, queueSizes)
+                const result = computeLockStatus(dinnerEvents, deadlines, releasedCounts, queues)
                 expect(result).toEqual(expected)
             })
         })

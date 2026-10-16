@@ -9,7 +9,7 @@ import {
 } from '~~/prisma/generated/zod'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {useCoreValidation, IdSchema} from '~/composables/useCoreValidation'
-import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {useTicketPriceValidation, type PortionTicket} from '~/composables/useTicketPriceValidation'
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
 import {chunkArray, ReconciliationBucketSchema} from '~/utils/batchUtils'
 import {sumAmounts} from '~/utils/ledger'
@@ -37,7 +37,7 @@ export const OrderAuditAction = OrderAuditActionSchema.enum
 export const useBookingValidation = () => {
     const {CookingTeamDisplaySchema, deserializeCookingTeamDisplay} = useCookingTeamValidation()
     const {InhabitantDisplaySchema, deserializeInhabitantDisplay} = useCoreValidation()
-    const {TicketPriceSchema: _TicketPriceSchema} = useTicketPriceValidation()
+    const {TicketPriceSchema} = useTicketPriceValidation()
     const {AllergyTypeDisplaySchema, InhabitantWithAllergiesSchema, deserializeInhabitantWithAllergies} = useAllergyValidation()
 
     // ============================================================================
@@ -171,13 +171,8 @@ export const useBookingValidation = () => {
             id: IdSchema,
             email: z.string()
         }).nullable(),
-        // TicketPrice relation - nullable when TicketPrice deleted (priceAtBooking preserved)
-        ticketPrice: z.object({
-            id: IdSchema,
-            ticketType: TicketTypeSchema,
-            price: z.number().int(),
-            description: z.string().nullable()
-        }).nullable(),
+        // TicketPrice relation - nullable when TicketPrice deleted (priceAtBooking preserved); the price carries its portions
+        ticketPrice: TicketPriceSchema.pick({ticketType: true, price: true, description: true, portions: true}).extend({id: IdSchema}).nullable(),
         // Order history - audit trail (ADR-011), optional for backwards compatibility
         // Populated by fetchOrder() for detail endpoint, not included in DinnerEventDetail.tickets
         history: z.array(OrderHistoryDisplaySchema).optional()
@@ -510,7 +505,10 @@ export const useBookingValidation = () => {
      * - cookingTeam: Deserialize CookingTeam with affinity and assignments
      * - tickets: Transform to include ticketType (flattened from ticketPrice) and dinnerEvent reference
      */
-    function deserializeDinnerEventDetail(prismaEvent: Record<string, unknown>): Record<string, unknown> {
+    function deserializeDinnerEventDetail(
+        prismaEvent: Record<string, unknown>,
+        withPortions: (ticketPrice: PortionTicket) => PortionTicket & {portions: number}
+    ): Record<string, unknown> {
         const {allergens, expenses: expenseRows, ...event} = prismaEvent as DinnerEventRow
         const totalCost = sumAmounts(expenseRows)
         const chef = prismaEvent.chef as Record<string, unknown> | null | undefined
@@ -542,11 +540,12 @@ export const useBookingValidation = () => {
             chef: chef ? deserializeInhabitantDisplay(chef) : null,
             cookingTeam: cookingTeam ? deserializeCookingTeamDisplay(cookingTeam) : null,
             tickets: tickets?.map(ticket => {
-                const ticketPrice = ticket.ticketPrice as Record<string, unknown> | undefined
+                const ticketPrice = ticket.ticketPrice as (PortionTicket & Record<string, unknown>) | null | undefined
                 return {
                     ...ticket,
                     // Flatten ticketType from ticketPrice relation (null when TicketPrice deleted)
                     ticketType: ticketPrice?.ticketType ?? null,
+                    ticketPrice: ticketPrice ? withPortions(ticketPrice) : ticketPrice,
                     // Add parent dinnerEvent reference
                     dinnerEvent: dinnerEventForTickets,
                     inhabitant: ticket.inhabitant

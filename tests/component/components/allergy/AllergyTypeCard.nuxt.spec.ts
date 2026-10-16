@@ -2,6 +2,7 @@
 import {describe, it, expect} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {nextTick} from 'vue'
+import {flushPromises} from '@vue/test-utils'
 import AllergyTypeCard from '~/components/allergy/AllergyTypeCard.vue'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ALLERGY_TEST_IDS} from './allergyTestIds'
@@ -18,6 +19,13 @@ const mountCard = (props: Record<string, unknown>) =>
     mountWithTooltipProvider(AllergyTypeCard, {props, isMd: false})
 
 type Wrapper = Awaited<ReturnType<typeof mountCard>>
+
+// Gem submits the UForm; its schema validates asynchronously
+const submit = async (wrapper: Wrapper) => {
+    await clickByTestId(wrapper, ALLERGY_TEST_IDS.save)
+    await flushPromises()
+    await nextTick()
+}
 
 const fillField = async (wrapper: Wrapper, name: string, value: string) => {
     const field = wrapper.find(`[name="${name}"]`)
@@ -53,7 +61,7 @@ describe('AllergyTypeCard', () => {
 
             await fillField(wrapper, 'allergy-name', 'Sesam')
             await fillField(wrapper, 'allergy-description', 'Sesamallergi')
-            await clickByTestId(wrapper, ALLERGY_TEST_IDS.save)
+            await submit(wrapper)
 
             expect(wrapper.emitted('save')).toBeTruthy()
             expect(wrapper.emitted('save')![0]![0]).toMatchObject({
@@ -62,13 +70,16 @@ describe('AllergyTypeCard', () => {
             })
         })
 
-        it('cannot save while required fields are empty', async () => {
+        it('an empty name and description block the save and show the schema message on each field', async () => {
             const wrapper = await mountCard(props)
+            const issues = useAllergyValidation().AllergyTypeCreateSchema.safeParse({name: '', description: ''}).error!.issues
 
             await fillField(wrapper, 'allergy-name', '')
             await fillField(wrapper, 'allergy-description', '')
+            await submit(wrapper)
 
-            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.save).attributes('disabled')).toBeDefined()
+            expect(wrapper.emitted('save')).toBeFalsy()
+            issues.forEach(issue => expect(wrapper.text()).toContain(issue.message))
         })
 
         it('emits cancel', async () => {
