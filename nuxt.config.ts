@@ -62,7 +62,6 @@ export default defineNuxtConfig({
     },
 
     modules: [
-        "nitro-cloudflare-dev",
         '@pinia/nuxt',
         "@nuxt/ui",
         '@nuxt/test-utils/module',
