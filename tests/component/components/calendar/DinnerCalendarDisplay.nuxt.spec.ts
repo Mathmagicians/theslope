@@ -73,8 +73,8 @@ describe('DinnerCalendarDisplay lock chips', () => {
 
     it.each([
         {label: 'Lukket for framelding', text: '', glyphs: []},
-        {label: 'Ledige billetter', text: '1', glyphs: []},
-        {label: 'Venteliste, ingen ledige billetter', text: '', glyphs: [ICONS.waitlist]}
+        {label: 'Billetter til salg', text: '1', glyphs: []},
+        {label: 'Venteliste, ingen billetter til salg', text: '', glyphs: [ICONS.waitlist]}
     ])('the legend explains the chip: $label', async ({label, text, glyphs}) => {
         const wrapper = await mountCalendar()
         const entry = findAllByTestId(wrapper, 'calendar-legend-entry').find(candidate => candidate.text().includes(label))

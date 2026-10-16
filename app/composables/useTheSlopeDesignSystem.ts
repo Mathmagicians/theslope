@@ -715,7 +715,7 @@ export const COMPONENTS = {
      * row, a panel's head lines and allergy line, and the household list a selected panel opens
      * below the row on that panel's surface (the list's padding and alignment win over the box's);
      * `allergyOverview` sets the kitchen type size on the shared `allergyOverview` line. The TIL SALG
-     * box's KØ part follows its gap (`queue`), in the box and in its list; the list's KØ heading
+     * box's waiting-list part follows its gap (`queue`), in the box and in its list; the list's VENTELISTE heading
      * sits on the left
      */
     kitchen: {

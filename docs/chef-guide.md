@@ -94,13 +94,14 @@ Klik **Bliv chefkok**, bekræft — og dit ansigt pryder portrættet. Tjansen er
 | **Takeaway** | Antal og procentdel der henter mad |
 | **Spisesal** | Antal og procentdel der spiser i salen |
 | **Spis sent** | Antal og procentdel der kommer sent |
-| **Til salg** | Frigivne billetter der kan overtages |
+| **Til salg** | Frigivne billetter der kan overtages. Står der naboer i kø, får boksen et **timeglas** med **KØ**: hvor mange kuverter køen mangler, og hvilke billettyper de venter på |
 | **Allergier** | Under hver kategori: hvor mange kuverter der har et af menuens allergener |
 
 **Klik på en kategori** for at se detaljeret opdeling:
 - Allergenerne øverst, med antal kuverter for hvert
 - Hvilke husstande der har tilmeldt sig, og billettyper per husstand (voksen/barn/baby)
 - Hvem der har et af menuens allergener - allergenets ikon står ud for navnet
+- Under **Til salg**: køen, én linje per billettype, i den rækkefølge naboerne stillede sig op (#1 får den næste billet)
 
 > **Tip:** Brug husstandsoversigten til at planlægge portionsstørrelser og allergihensyn.
 

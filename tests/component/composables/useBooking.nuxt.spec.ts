@@ -1941,7 +1941,7 @@ describe('Action Preview', () => {
     describe('ACTION_WORDS', () => {
         it.each([
             {action: Action.BOOK, expectedText: 'Anna tilmeldes'},
-            {action: Action.BUY, expectedText: 'Anna køber en ledig billet'},
+            {action: Action.BUY, expectedText: 'Anna køber en billet til salg'},
             {action: Action.QUEUE, expectedText: 'Anna skrives på ventelisten'},
             {action: Action.LEAVE, expectedText: 'Anna forlader ventelisten'},
             {action: Action.REQUEUE, expectedText: `Anna ændrer ønsket tilmelding til ${MODE_WORDS[DM.DINEIN].label}`},
@@ -1966,7 +1966,7 @@ describe('Action Preview', () => {
         it.each([
             {bucket: Bucket.create, ticketsForSale: 0, action: Action.BOOK, textContains: 'tilmeldes'},
             {bucket: Bucket.delete, ticketsForSale: 0, action: Action.CANCEL, textContains: 'frameldes'},
-            {bucket: Bucket.claim, ticketsForSale: 1, action: Action.BUY, textContains: 'køber en ledig billet'},
+            {bucket: Bucket.claim, ticketsForSale: 1, action: Action.BUY, textContains: 'køber en billet til salg'},
             {bucket: Bucket.claim, ticketsForSale: 0, action: Action.QUEUE, textContains: 'skrives på ventelisten'},
             {bucket: Bucket.leave, ticketsForSale: 0, action: Action.LEAVE, textContains: 'forlader ventelisten'},
             {bucket: Bucket.requeue, ticketsForSale: 0, action: Action.REQUEUE, textContains: 'ændrer ønsket tilmelding til'}

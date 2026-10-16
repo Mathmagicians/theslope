@@ -2,7 +2,7 @@ import {fetchOrders, createOrders, deleteOrder, updateOrdersBatch, claimOrder, c
 import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/prismaRepository"
 import {useSeason, type BookingDeadlines} from "~/composables/useSeason"
 import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, type QueuePosition, type BookingOutcomes, type BookingAction, type BookingResult, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
-import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets, bookingOutcome, actionOfUpdate, countTotals} from "~/composables/useBooking"
+import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets, bookingOutcomes, actionOfUpdate, countTotals} from "~/composables/useBooking"
 import {writeBatchOrEach} from "~/utils/batchUtils"
 import {sellTicketsToWaitlist, joinWaitlist} from "~~/server/utils/waitlistAssignment"
 import {fetchWaitlistForHousehold, fetchWaitlistForDinners, deleteWaitlistEntry, updateWaitlistEntryOrder} from "~~/server/data/waitlistRepository"
@@ -321,7 +321,7 @@ export async function scaffoldPrebookings(
                     landedAs(Action.CANCEL), failedAs(() => Action.CANCEL))
             }
 
-            // Claims act on bookingOutcome over the supply read at this instant: a ticket of the claim's type is bought
+            // Claims act on bookingOutcomes over the supply read at this instant: a ticket of the claim's type is bought
             // while nobody waits in its line, else the wish joins the line
             for (const toClaim of result.claim) {
                 let bought = false
@@ -331,7 +331,7 @@ export async function scaffoldPrebookings(
                     const nobodyWaits = !waitingLines(await fetchWaitlistForDinners(d1Client, [toClaim.dinnerEventId]), ticketTypeOf).has(ticketType)
                     for (let round = 0; nobodyWaits && round < CLAIM_ROUNDS && !bought; round++) {
                         const ticketsForSale = await countReleasedTickets(d1Client, toClaim.dinnerEventId, ticketType)
-                        if (bookingOutcome(Bucket.claim, {ticketsForSale}) !== Action.BUY) break
+                        if (bookingOutcomes(Bucket.claim, toClaim, () => ({ticketsForSale}))[0]?.outcome !== Action.BUY) break
                         const claimed = await claimOrder(
                             d1Client,
                             toClaim.dinnerEventId,

@@ -664,6 +664,7 @@ export const useBookingValidation = () => {
         inhabitantId: IdSchema,
         bookedByUserId: IdSchema,
         position: z.number().int().positive(),
+        ticketType: TicketTypeSchema.nullable(),
         queueSize: z.number().int().positive(),
         portionNeed: z.number().nonnegative()
     })

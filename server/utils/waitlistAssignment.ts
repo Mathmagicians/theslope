@@ -58,7 +58,8 @@ export async function joinWaitlist(
     console.info(`${LOG} Inhabitant ${request.inhabitantId} is #${position} in its ticket type's line on dinner ${request.dinnerEventId}`)
     const joined: WaitlistJoined = {
         dinnerEventId: request.dinnerEventId, inhabitantId: request.inhabitantId, bookedByUserId,
-        position, queueSize: queue.length, portionNeed: portionNeed(queue, portionsOfEntryFor(dinner.ticketPrices))
+        position, ticketType: ticketTypeOfEntry(dinner.ticketPrices)(entry) ?? null,
+        queueSize: queue.length, portionNeed: portionNeed(queue, portionsOfEntryFor(dinner.ticketPrices))
     }
     return {entry, position, joined}
 }

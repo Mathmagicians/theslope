@@ -12,7 +12,7 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import appConfig from '~/app.config'
 
-const {DinnerStateSchema, DinnerModeSchema, BookingActionSchema, OrderStateSchema} = useBookingValidation()
+const {DinnerStateSchema, DinnerModeSchema, BookingActionSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
 const Action = BookingActionSchema.enum
 const DinnerState = DinnerStateSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -83,11 +83,11 @@ describe('useBookingUi', () => {
             {desc: 'open', isOpen: true, counts: undefined, look: 'open', value: 'Åben', helpText: openText},
             {desc: 'closed, no supply counted', isOpen: false, counts: undefined, look: 'closed', value: 'Lukket', helpText: closedText},
             {desc: 'closed, neither tickets for sale nor a waiting list', isOpen: false, counts: released(0, '-'), look: 'closed', value: 'Lukket', helpText: closedText},
-            {desc: 'closed, one ticket for sale', isOpen: false, counts: released(1), look: 'forSale', value: '1V ledig', helpText: availableText(1)},
-            {desc: 'closed, tickets for sale only', isOpen: false, counts: released(4, '3V 1B'), look: 'forSale', value: '3V 1B ledige', helpText: availableText(4)},
+            {desc: 'closed, one ticket for sale', isOpen: false, counts: released(1), look: 'forSale', value: '1V til salg', helpText: availableText(1)},
+            {desc: 'closed, tickets for sale only', isOpen: false, counts: released(4, '3V 1B'), look: 'forSale', value: '3V 1B til salg', helpText: availableText(4)},
             // The tooltip reads the waiting list in the sentence of the booking form's bar
-            {desc: 'closed, a waiting list only', isOpen: false, counts: released(0, '-', 3, '2V 1B'), look: 'waitlist', value: '2V 1B venter', helpText: SUPPLY_WORDS.waitlist(released(0, '-', 3, '2V 1B'))},
-            {desc: 'closed, tickets for sale and a waiting list', isOpen: false, counts: released(4, '4V', 1, '1B'), look: 'forSale', value: '4V ledige, 1B venter', helpText: `${availableText(4)}. ${SUPPLY_WORDS.waitlist(released(4, '4V', 1, '1B'))}`}
+            {desc: 'closed, a waiting list only', isOpen: false, counts: released(0, '-', 3, '2V 1B'), look: 'waitlist', value: '2V 1B på venteliste', helpText: SUPPLY_WORDS.waitlist(released(0, '-', 3, '2V 1B'))},
+            {desc: 'closed, tickets for sale and a waiting list', isOpen: false, counts: released(4, '4V', 1, '1B'), look: 'forSale', value: '4V til salg, 1B på venteliste', helpText: `${availableText(4)}. ${SUPPLY_WORDS.waitlist(released(4, '4V', 1, '1B'))}`}
         ] as const)('$desc → $value', ({isOpen, counts, look, value, helpText}) => {
             const {icon, color} = LOOKS[look]
             expect(createBookingBadge(isOpen, counts)).toEqual({label: DEADLINE_LABELS.BOOKING_CLOSED.label, icon, color, value, helpText})
@@ -108,7 +108,7 @@ describe('useBookingUi', () => {
     describe('createWaitlistBadge', () => {
         it.each([1, 3])('names queue position %i in the glyph and colour of the queued order state', (position) => {
             const {icon, color} = ORDER_STATE_LABELS.queued
-            expect(createWaitlistBadge(position)).toMatchObject({icon, color, value: `#${position} i køen`})
+            expect(createWaitlistBadge(position)).toMatchObject({icon, color, value: `#${position} i kø`})
         })
     })
 
@@ -126,8 +126,8 @@ describe('useBookingUi', () => {
 
     describe('SUPPLY_WORDS', () => {
         it.each([
-            {desc: 'tickets for sale', counts: released(4, '4V'), line: 'Lukket for ændringer, men der er 4 ledige billetter til salg (4V).'},
-            {desc: 'one ticket for sale', counts: released(1, '1V'), line: 'Lukket for ændringer, men der er 1 ledig billet til salg (1V).'},
+            {desc: 'tickets for sale', counts: released(4, '4V'), line: 'Lukket for ændringer, men der er 4 billetter til salg (4V).'},
+            {desc: 'one ticket for sale', counts: released(1, '1V'), line: 'Lukket for ændringer, men der er 1 billet til salg (1V).'},
             {desc: 'nothing for sale', counts: released(0, '-', 3), line: null}
         ])('the tickets for sale: $desc', ({counts, line}) => {
             expect(SUPPLY_WORDS.forSale(counts)).toBe(line)
@@ -166,14 +166,14 @@ describe('useBookingUi', () => {
     })
 
     describe('outcome words', () => {
-        // The words a requeue names: the mode, from the one mode-words table, and the queue place it keeps
-        const LATE_AT_TWO = {mode: MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label, position: 2}
+        // The words a requeue names: the mode, from the one mode-words table, and the queue place it keeps in its ticket type's line
+        const LATE_AT_TWO = {mode: MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label, position: 2, ticketType: TicketTypeSchema.enum.CHILD}
         it.each([
             {outcome: Action.BOOK, save: 'Book', preview: 'Anna tilmeldes'},
-            {outcome: Action.BUY, save: 'Køb billet', preview: 'Anna køber en ledig billet'},
+            {outcome: Action.BUY, save: 'Køb billet', preview: 'Anna køber en billet til salg'},
             {outcome: Action.QUEUE, save: 'Skriv på venteliste', preview: 'Anna skrives på ventelisten'},
             {outcome: Action.LEAVE, save: 'Forlad ventelisten', preview: 'Anna forlader ventelisten'},
-            {outcome: Action.REQUEUE, save: 'Opdater', preview: `Anna ændrer ønsket tilmelding til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label}, beholder plads #2 i køen`},
+            {outcome: Action.REQUEUE, save: 'Opdater', preview: `Anna ændrer ønsket tilmelding til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label}, beholder pladsen Barn: #2 i kø`},
             {outcome: Action.CHANGE_MODE, save: 'Opdater', preview: 'Anna opdaterer spisning'}
         ])('$outcome → save "$save", preview "$preview"', ({outcome, save, preview}) => {
             expect(bookingSaveLabel(outcome)).toBe(save)
@@ -226,7 +226,7 @@ describe('useBookingUi', () => {
             const yesterday = {...DinnerEventFactory.defaultDinnerEventDisplay(), date: addDays(new Date(), -1)}
             const badge = createChefBadges(yesterday, deadlines, released(2, '2V')).get(2)!
             expect(badge.alarm).toBe(-1)
-            expect(badge.value).toBe('2V ledige')
+            expect(badge.value).toBe('2V til salg')
         })
     })
 
@@ -270,7 +270,6 @@ describe('previewOutcome', () => {
 })
 
 describe('ticket type presentation', () => {
-    const {TicketTypeSchema} = useBookingValidation()
     const {TICKET_TYPE_COLORS, TICKET_TYPE_ICONS} = useTheSlopeDesignSystem()
     const prices = TicketFactory.defaultTicketPrices()
 

@@ -127,8 +127,8 @@ Each point is presented with its files and code, and signed off on its own.
 | 2. Notification after the action | The scaffold and the waiting-list steps send nothing and return outcomes that carry what a notification needs; the caller passes them to the notification service | ✅ signed off 2026-10-14, implemented |
 | 3. The scaffold survives a partial failure | A failed write batch is retried order by order; the rest of the household runs on; the reply counts the orders per action, lists them per person for a household run and lists the failed orders; the preview and the reply name the action through one function (`actionOfUpdate`) | ✅ signed off 2026-10-15, implemented |
 | 4. The waiting list catches up | A dinner's waiting list is one first-come-first-served line per ticket type; every save and every nightly run ends by selling the tickets for sale to the first in their type's line (`sellTicketsToWaitlist`), idempotent (ADR-015); a claim buys while nobody waits in its type's line; a place counts within its line; the save preview counts the tickets for sale of the row's type | ✅ signed off 2026-10-16, implemented |
-| 4b. The views show each line | The chef's alert, the booking form and the kitchen box name the waiting list per ticket type; the kitchen box holds the tickets for sale and the waiting list together | kitchen box ✅ signed off 2026-10-16 (§ Mockup — kitchen box); the chef's alert ⏳ mockup pending |
-| 4c. The preview sells each ticket once | The save preview settles the claims in order as the save does: the first claims of a ticket type buy that type's tickets for sale, the rest join its waiting list (`plannedActions`, `supplyOfType`) | ⏳ awaiting signoff; OPEN: the guest form's label for a mixed outcome, A the first guest's outcome, B both counts ("Køb 3 billetter, skriv 7 gæster på venteliste") |
+| 4b. The views show each line | The chef's alert, the booking form and the kitchen box name the waiting list per ticket type; the kitchen box holds the tickets for sale and the waiting list together | kitchen box ✅ signed off 2026-10-16, implemented (§ Mockup — kitchen box); the chef's alert ⏳ mockup pending |
+| 4c. The preview sells each ticket once | The save preview settles the claims in order as the save does: the first claims of a ticket type buy that type's tickets for sale, the rest join its waiting list (`bookingOutcomes` takes one order or a list, `supplyOfType`); the guest form opens on Voksen and its button names the guests | ✅ signed off 2026-10-16, implemented |
 | 5. One client write | Every booking write goes through one bookings-store action that refreshes orders, released tickets, the waiting list and the household | ⏳ awaiting signoff |
 | 6. Preview and toast from one word table | Future words in the preview, past words in the toast, grouped per person; the toast is red as soon as one item failed, green otherwise | toast look implemented 2026-10-16 (`scaffoldToastLook`: the ticket, red on a failed order); the word table ⏳ awaiting signoff |
 | 7. The ticket history follows kuverter | Every audit row replays, system or member alike; a line for each change of kuverter; a system run and the nightly close are one line for the dinner; the replay ends equal to state | ⏳ awaiting signoff |
@@ -174,56 +174,9 @@ One dinner: a count of 1 drops
 
 ### Mockup — kitchen box ✅ signed off 2026-10-16
 
-One box, TIL SALG. The KØ part follows after a gap while someone waits: the portions that serve the waiting list and
-its ticket count, no share. The open list adds the KØ heading and one row per ticket type in line order, each place as
-the booking form numbers it.
-
-```
-Desktop, the box open
-┌────────────┬────────────┬────────────┬─────────────────────┐
-│  TAKEAWAY  │  SPISESAL  │ SPIS SENT  │      TIL SALG       │
-│    38%     │    33%     │    19%     │         10%         │
-│  40 kuv.   │  35 kuv.   │  20 kuv.   │       4 kuv.        │
-│    ...     │    ...     │    ...     │ Voksen: 4 | Barn: 0 │
-│            │            │            │ | Baby: 0  # 4      │
-│            │            │            │ (allergy) 1 kuv.    │
-│            │            │            │                     │
-│            │            │            │   (hourglass) KØ    │
-│            │            │            │       1 kuv.        │
-│            │            │            │ Voksen: 0 | Barn: 2 │
-│            │            │            │ | Baby: 0  # 2      │
-├────────────┴────────────┴────────────┴─────────────────────┤
-│  (allergy) 1 kuv. | (milk) Mælk · 1                        │
-│  S_31 · 2V · Anna (milk) Mælk, Bo                          │
-│  N_12 · 2V · Maria, Jens                                   │
-│                                                            │
-│  (hourglass) KØ                                            │
-│  Barn: #1 T_04 · Emil, #2 S_12 · Liva                      │
-└────────────────────────────────────────────────────────────┘
-
-Phone, the box open
-┌─────────────────────────────────────┐
-│  TAKEAWAY · SPISESAL · SPIS SENT    │
-├─────────────────────────────────────┤
-│              TIL SALG               │
-│                 10%                 │
-│               4 kuv.                │
-│  Voksen: 4 | Barn: 0 | Baby: 0 # 4  │
-│          (allergy) 1 kuv.           │
-│                                     │
-│           (hourglass) KØ            │
-│               1 kuv.                │
-│  Voksen: 0 | Barn: 2 | Baby: 0 # 2  │
-├─────────────────────────────────────┤
-│ (allergy) 1 kuv. | (milk) Mælk · 1  │
-│ S_31 · 2V · Anna (milk) Mælk, Bo    │
-│ N_12 · 2V · Maria, Jens             │
-│                                     │
-│ (hourglass) KØ                      │
-│ Barn: #1 T_04 · Emil,               │
-│       #2 S_12 · Liva                │
-└─────────────────────────────────────┘
-```
+The mockup lives in the `KitchenPreparation.vue` header. Code: `WaitlistQueueSummarySchema.lines`, the bookings store's
+`selectedDinnerWaitlist`, `COMPONENTS.kitchen.queue`. Specs: `KitchenPreparation.nuxt.spec` (TIL SALG box),
+`bookings.nuxt.spec` (the queue's lines).
 
 ## Waitlist notifications
 
@@ -327,8 +280,14 @@ crosses the buildup threshold and asserts each event writes its Delivery row.
   waiting, whoever waits in the adult line. The sale is `sellTicketsToWaitlist`; a line without supply logs info.
 - A sold ticket keeps its price row: the buyer pays its price and eats its portions.
 - The kitchen box holds the tickets for sale and the waiting list together (point 4b).
-- The kitchen box is one box under the title TIL SALG: the waiting list buys what is for sale. Its KØ part carries the
-  hourglass and the word KØ, its portions and its ticket count, without a share.
+- The kitchen box is one box under the title TIL SALG: the waiting list buys what is for sale. Its waiting-list part
+  carries the hourglass and the word VENTELISTE, its portions and its ticket count, without a share.
+- One vocabulary across the views: a household frigiver a ticket, the ticket is til salg, someone køber it, the people
+  waiting stand på ventelisten. A place is "#n i kø" ("#" throughout); the ticket type names the line: the ticket type
+  badge in the kitchen line-up, the word in a sentence ("Barn: #1 i kø"), "Billettype: Barn" in the mail, and the row's
+  ticket beside the place badge in the booking form. A count after a number uses the shorthands (4V, 1B).
+- The guest form's button names the guests ("Tilmeld gæst", "Tilmeld gæster"); its preview lines name each guest's
+  outcome. The guest form opens on Voksen.
 
 ## Coverage
 

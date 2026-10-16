@@ -13,6 +13,7 @@ import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {fetchHousehold, fetchInhabitant, fetchUser} from '~~/server/data/prismaRepository'
 import {loadDinner, type DinnerForWaitlist} from '~~/server/utils/waitlistAssignment'
 import {formatDate} from '~/utils/date'
+import {useTicket} from '~/composables/useTicket'
 
 const LOG = '📮 > SENDER > [EVENT booking]'
 
@@ -26,14 +27,14 @@ export interface WaitlistDinnerContext {
 const dinnerLabel = ({date, menuTitle}: WaitlistDinnerContext): string => `${formatDate(date)} · ${menuTitle}`
 
 export const emitWaitlistJoined = (
-    channel: EmailChannel, to: string | null, name: string, dinner: WaitlistDinnerContext, position: number
+    channel: EmailChannel, to: string | null, name: string, dinner: WaitlistDinnerContext, position: number, ticketType: string
 ): Promise<SenderEmitResult> => {
     if (!channel.on) return channelOff('WAITLIST_JOINED', channel.missing, `${dinner.dinnerEventId}`)
     if (!to) return notSent('WAITLIST_JOINED', 'unaddressed', `${dinner.dinnerEventId}`)
     return emit(channel.queue, composeEmail(channel.config, {
         kind: 'WAITLIST_JOINED',
         to,
-        values: {name, dinner: dinnerLabel(dinner), position: String(position)},
+        values: {name, dinner: dinnerLabel(dinner), position: String(position), ticketType},
         correlationId: `dinner ${dinner.dinnerEventId}`
     }))
 }
@@ -100,7 +101,7 @@ export const emitTicketSold = (
 
 /** The booking mails of one operation, with recipients, names and household shortnames resolved */
 export interface BookingMails {
-    joined: {to: string | null, name: string, dinner: WaitlistDinnerContext, position: number}[]
+    joined: {to: string | null, name: string, dinner: WaitlistDinnerContext, position: number, ticketType: string}[]
     buildups: {to: string | null, name: string, dinner: WaitlistDinnerContext, entries: number, portions: number}[]
     sold: {to: string, name: string, dinner: WaitlistDinnerContext, seller: string, buyer: string}[]
     assigned: {to: string | null, name: string, dinner: WaitlistDinnerContext, ticket: string, seller: string, buyer: string}[]
@@ -110,7 +111,7 @@ export interface BookingMails {
 export const NO_BOOKING_MAILS: BookingMails = {joined: [], buildups: [], sold: [], assigned: [], extraPortions: []}
 
 export const bookingMails = (channel: EmailChannel, mails: BookingMails): Promise<SenderEmitResult[]> => Promise.all([
-    ...mails.joined.map(mail => emitWaitlistJoined(channel, mail.to, mail.name, mail.dinner, mail.position)),
+    ...mails.joined.map(mail => emitWaitlistJoined(channel, mail.to, mail.name, mail.dinner, mail.position, mail.ticketType)),
     ...mails.buildups.map(mail => emitWaitlistBuildup(channel, mail.to, mail.name, mail.dinner, mail.entries, mail.portions)),
     ...mails.sold.map(mail => emitTicketSold(channel, mail.to, mail.name, mail.dinner, mail.seller, mail.buyer)),
     ...mails.assigned.map(mail => emitWaitlistTicketAssigned(channel, mail.to, mail.name, mail.dinner, mail.ticket, mail.seller, mail.buyer)),
@@ -157,7 +158,7 @@ export const notifyBookingOutcomes = async (d1Client: D1Database, channel: Email
 
     const joined = await Promise.all(outcomes.joined.map(async event => {
         const [dinner, to, {name}] = await Promise.all([dinnerOf(event.dinnerEventId), emailOf(d1Client, event.bookedByUserId), addressOf(d1Client, event.inhabitantId)])
-        return {to, name, dinner: dinner.context, position: event.position}
+        return {to, name, dinner: dinner.context, position: event.position, ticketType: event.ticketType ? useTicket().ticketTypeWords[event.ticketType].label : '-'}
     }))
     const buildups = await Promise.all(outcomes.joined.filter(event => event.queueSize === threshold).map(async event => {
         const dinner = await dinnerOf(event.dinnerEventId)
