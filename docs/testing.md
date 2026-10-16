@@ -667,19 +667,26 @@ Some E2E tests must run serially due to shared state. Two categories:
 | **API Serial** | `tests/e2e/api/serial/` | Process ALL entities (scaffold, maintenance) |
 | **UI Serial** | `tests/e2e/ui/serial/` | Need independent ACTIVE season |
 
-**Project dependency:** Playwright config sets serial projects to depend on parallel projects, ensuring isolation.
+**Project dependency:** each serial project depends on its parallel project (`chromium-api-serial` on `chromium-api`, `chromium-ui-serial` on `chromium-ui`). `npm run test:e2e` runs the suites one after another, in the order of the CI steps.
 
-**Running serial tests:**
+**Running the suites:**
 
 ```bash
-# Full suite (parallel first, then serial) - DEFAULT
+# Full suite: API (parallel, then serial), UI parallel, UI serial
+npm run test:e2e
+
+# API suite (parallel, then serial)
 npm run test:e2e:api
 
-# Serial tests only (skip parallel dependency)
-npm run test:e2e:api:seq
+# UI suite (parallel)
+npm run test:e2e:ui
 
-# Single test independently (bypass all dependencies)
-npx playwright test tests/e2e/api/serial/admin/scaffold-prebookings.e2e.spec.ts --no-deps --reporter=line
+# Serial suites without their parallel dependency
+npm run test:e2e:api:seq
+npm run test:e2e:ui:serial
+
+# One serial spec
+npx playwright test tests/e2e/api/serial/admin/scaffold-prebookings.e2e.spec.ts --project=chromium-api-serial --no-deps --reporter=line
 npx playwright test tests/e2e/ui/serial/HouseholdScaffolding.e2e.spec.ts --project=chromium-ui-serial --no-deps --reporter=line
 ```
 
@@ -885,7 +892,13 @@ TZ=UTC npx vitest run tests/component/utils/season.unit.spec.ts
 # Unit/Component
 npx vitest run tests/component/path/file.spec.ts --reporter=verbose
 
-# E2E (ALWAYS verify parallel isolation)
+# E2E suites (Serial Tests above)
+npm run test:e2e
+npm run test:e2e:api
+npm run test:e2e:ui
+npm run test:e2e:ui:serial
+
+# E2E, one spec (ALWAYS verify parallel isolation)
 npx playwright test tests/e2e/path/file.e2e.spec.ts --workers=4 --reporter=line
 
 # Watch mode

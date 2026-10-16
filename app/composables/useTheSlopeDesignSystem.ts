@@ -715,8 +715,8 @@ export const COMPONENTS = {
      * row, a panel's head lines and allergy line, and the household list a selected panel opens
      * below the row on that panel's surface (the list's padding and alignment win over the box's);
      * `allergyOverview` sets the kitchen type size on the shared `allergyOverview` line. The TIL SALG
-     * box's waiting-list part follows its gap (`queue`), in the box and in its list; the list's VENTELISTE heading
-     * sits on the left
+     * box's waiting-list part follows its gap (`queue`), in the box and in its list; in the list each part's heading
+     * (`partHeading`) sits on the left
      */
     kitchen: {
         totals: 'text-center',
@@ -739,7 +739,7 @@ export const COMPONENTS = {
         diner: 'inline-flex items-center',
         allergyOverview: `${TYPOGRAPHY.kitchenDetail} py-1`,
         queue: 'pt-4 first:pt-0',
-        queueHeading: `${TYPOGRAPHY.kitchenLabel} py-1 flex items-center gap-1`
+        partHeading: `${TYPOGRAPHY.kitchenLabel} py-1 flex items-center gap-1`
     },
 
     /**
@@ -1961,7 +1961,7 @@ export const ICONS = {
     released: 'i-heroicons-arrow-up-tray',
     claim: 'i-heroicons-arrows-right-left',
     /** A place in the queue for a sold-out dinner */
-    waitlist: 'i-lucide-hourglass',
+    waitlist: 'i-mdi-timer-sand',
     archive: 'i-heroicons-archive-box',
     holiday: 'i-heroicons-sun',
     /** A household member without allergies */

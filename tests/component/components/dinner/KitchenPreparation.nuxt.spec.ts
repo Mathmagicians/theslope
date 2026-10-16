@@ -191,7 +191,7 @@ describe('KitchenPreparation TIL SALG box', () => {
     const householdRowsIn = (lines: ReturnType<typeof findByTestId>) =>
         lines.findAll('[data-testid="kitchen-waitlist-household"]').map(row => row.findAll('span').map(segment => segment.text()))
     const iconsIn = (element: ReturnType<typeof findByTestId>) =>
-        element.findAllComponents({name: 'UIcon'}).map((icon: VueWrapper) => icon.props('name'))
+        (element.findAllComponents({name: 'UIcon'}) as VueWrapper<ComponentPublicInstance<{name: string}>>[]).map(icon => icon.props('name'))
 
     it('GIVEN one adult and two children waiting THEN TIL SALG carries the waiting-list part with the queue\'s kuverter and its ticket count', async () => {
         const wrapper = await mountWith(QUEUE)

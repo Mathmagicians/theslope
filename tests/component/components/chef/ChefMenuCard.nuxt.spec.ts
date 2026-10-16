@@ -17,6 +17,7 @@ import {formatPortions} from '~/utils/utils'
 import {FORM_MODES} from '~/types/form'
 import {ICONS, getRandomEmptyMessage} from '~/composables/useTheSlopeDesignSystem'
 import {WAITLIST_TEST_IDS} from '../dinner/waitlistTestIds'
+import {SUPPLY_WORDS} from '~/composables/useBookingUi'
 
 /**
  * ChefMenuCard: the allergen line and its editor over the dinner's allergens (the catalog's `id`, not a join row's
@@ -310,10 +311,19 @@ describe('ChefMenuCard — release portions', () => {
         expect(findByTestId(wrapper, WAITLIST_TEST_IDS.extraPortionsCta).exists()).toBe(cta)
     })
 
-    it('GIVEN a queue THEN the CTA names its size', async () => {
-        const wrapper = await mountChefCard(QUEUE)
+    it('GIVEN two adults and two children waiting THEN the alert names the waiting list per ticket type with its portions', async () => {
+        const {TicketTypeSchema} = useBookingValidation()
+        const lineOf = (ticketType: typeof TicketTypeSchema.enum[keyof typeof TicketTypeSchema.enum], ids: number[]) =>
+            ({ticketType, entries: ids.map(id => WaitlistFactory.defaultEntry({id}))})
+        const queue = WaitlistFactory.defaultQueueSummary({entries: 4, portions: 3, lines: [
+            lineOf(TicketTypeSchema.enum.ADULT, [1, 3]), lineOf(TicketTypeSchema.enum.CHILD, [2, 4])
+        ]})
+        const queuedFormatted = useBilling().formatTicketCounts({[TicketTypeSchema.enum.ADULT]: 2, [TicketTypeSchema.enum.CHILD]: 2})
 
-        expect(findByTestId(wrapper, WAITLIST_TEST_IDS.chefAlert).text()).toContain(String(QUEUE.entries))
+        const wrapper = await mountChefCard(queue)
+
+        expect(findByTestId(wrapper, WAITLIST_TEST_IDS.chefAlert).text())
+            .toContain(`${SUPPLY_WORDS.queuedCount({queuedFormatted})} · ${formatPortions(queue.portions)} portioner`)
     })
 
     it.each([

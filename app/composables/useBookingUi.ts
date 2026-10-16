@@ -202,7 +202,7 @@ export const SUPPLY_WORDS = {
         ? `Lukket for ændringer, men der er ${ticketCount(total)} til salg (${formatted}).`
         : null,
     forSaleCount: ({formatted}: ReleasedTicketCounts) => `${formatted} til salg`,
-    queuedCount: ({queuedFormatted}: ReleasedTicketCounts) => `${queuedFormatted} på venteliste`,
+    queuedCount: ({queuedFormatted}: Pick<ReleasedTicketCounts, 'queuedFormatted'>) => `${queuedFormatted} på venteliste`,
     // A place in the line of its ticket type; the type is named where nothing beside the place shows it
     place: (position: number, ticketType?: TicketType) =>
         `${ticketType ? `${useTicket().ticketTypeWords[ticketType].label}: ` : ''}#${position} i kø`,

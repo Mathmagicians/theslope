@@ -4,6 +4,7 @@ import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import testHelpers from '../testHelpers'
 import {formatDate} from '~/utils/date'
+import {addDays} from 'date-fns/addDays'
 import {useSeasonValidation} from '~/composables/useSeasonValidation'
 
 const {adminUIFile} = authFiles
@@ -244,8 +245,9 @@ test.describe('AdminPlanningSeason Form UI', () => {
                 10
             )
 
-            // WHEN: Extending the holiday to the season's last day in the row picker
-            const newHolidayEnd = seasonDates.end
+            // WHEN: Extending the holiday by one day in the row picker. Inside the season, not on its last day: the
+            // picker commits UTC midnight like the Workers server, while the local dev server returns local midnight
+            const newHolidayEnd = addDays(holiday.end, 1)
             await fillDateField(page.locator('div[name="holidayRangeList-0"]'), 'end', formatDate(newHolidayEnd))
             await page.getByTestId('submit-season').click()
 

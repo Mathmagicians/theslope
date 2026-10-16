@@ -76,7 +76,7 @@
  *   [Rediger menu] [Annoncer] [Flere v]
  *                              +- Frigiv portioner          permanent entry in the Flere panel
  *   +----------------------------------------------------------------+
- *   | (i) 4 på venteliste · 2,5 portioner                            |  ALERTS.info + withActions, only while
+ *   | [hourglass] 2V 2B på venteliste · 2,5 portioner                |  ALERTS.info + withActions, only while
  *   |     Mange skrånere mangler en billet til din middag — har du   |  the queue has entries
  *   |     mulighed for at mætte flere munde?    [Frigiv portioner]   |
  *   +----------------------------------------------------------------+
@@ -92,7 +92,7 @@
  */
 import type { DinnerEventDetail, ChefMenuForm } from '~/composables/useBookingValidation'
 import type { ExpenseCreate } from '~/composables/useBillingValidation'
-import {cookingRoundWords, dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
+import {cookingRoundWords, dinnerSpendingFragment, teamSpendingFragment, SUPPLY_WORDS, type CookingRoundRow} from '~/composables/useBookingUi'
 import type { AllergyTypeDisplay } from '~/composables/useAllergyValidation'
 import type { SeasonDeadlines } from '~/composables/useSeason'
 import type { NuxtUIColor } from '~/composables/useTheSlopeDesignSystem'
@@ -307,6 +307,9 @@ const isMoreOpen = ref(false)
 
 const { ExtraPortionsRequestSchema } = useWaitlistValidation()
 const hasQueue = computed(() => (props.waitlist?.entries ?? 0) > 0)
+// The waiting list by ticket type, from its lines: "2V 2B"
+const queuedFormatted = computed(() => useBilling().formatTicketCounts(
+  Object.fromEntries((props.waitlist?.lines ?? []).map(line => [line.ticketType, line.entries.length]))))
 // The Flere entry and the CTA open one form; the draft starts on the open, prefilled with the queue's portion need
 const isAddingExtraPortions = ref(false)
 const extraPortionsDraft = ref<Partial<ExtraPortionsRequest>>({})
@@ -597,7 +600,7 @@ const handleCardClick = () => {
           v-if="isEditing && hasQueue && !isAddingExtraPortions && canCancelDinner(dinnerEvent)"
           v-bind="{...ALERTS.info, ...ALERTS.withActions}"
           :icon="ICONS.waitlist"
-          :title="`${waitlist!.entries} på venteliste · ${formatPortions(waitlist!.portions)} portioner`"
+          :title="`${SUPPLY_WORDS.queuedCount({queuedFormatted})} · ${formatPortions(waitlist!.portions)} portioner`"
           description="Mange skrånere mangler en billet til din middag — har du mulighed for at mætte flere munde?"
           :class="COMPONENTS.chefMenuCard.alertGap"
           data-testid="chef-waitlist-alert"
