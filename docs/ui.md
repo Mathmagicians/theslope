@@ -158,7 +158,7 @@ name; the header also names the visual check.
 | WCAG 2.1 1.4.3 (AA) | 4.5:1 body text, 3:1 large text (24px, or 18.66px bold) | every face a token renders; the smallest sets the bar |
 | 1.4.3 for a fill | the bar of the text a component places on it | `INK_ON_FILL` in `designSystemPairs.ts`, one row per surface with the component that draws it |
 | 1.4.6 (AAA) | 7:1 body text, 4.5:1 large text | Høj kontrast |
-| 1.4.11 | 3:1 | edges that identify a control or carry meaning; `LAYOUTS.sectionDivider`, `LAYOUTS.panelDivider` and the economy-tree banding sit outside it |
+| 1.4.11 | 3:1 | edges that identify a control or carry meaning; `LAYOUTS.sectionDivider`, `LAYOUTS.panelDivider`, the economy-tree banding and its invoice frame sit outside it |
 
 A surface that changes what it carries updates `INK_ON_FILL` in the same commit.
 

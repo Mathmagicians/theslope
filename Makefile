@@ -65,7 +65,7 @@ help: ## Show this help
 .PHONY: palettes
 
 palettes: ## Regenerate the palette presets from the design system (rerun after a change to main.css scales, app.config ui.colors or a fill/ink token)
-	@npx jiti scripts/palettes/generate.ts
+	@JITI_ALIAS='{"~~":"$(CURDIR)","~":"$(CURDIR)/app"}' npx jiti scripts/palettes/generate.ts
 
 # --- Schema → migration files → Prisma client + zod (prisma/generated, committed)
 .PHONY: d1-prisma-zod d1-prisma d1-prisma-check d1-create-migration d1-flatten-migrations
