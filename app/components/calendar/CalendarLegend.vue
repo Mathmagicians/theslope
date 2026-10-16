@@ -4,7 +4,7 @@ import type {NuxtUIChipSize, NuxtUIColor} from '~/composables/useTheSlopeDesignS
 /** One legend entry: the sample a calendar paints a day as, and its name */
 export type CalendarLegendItem =
   | {label: string, kind: 'circle', circleClass: string[]}
-  | {label: string, kind: 'chip', chipColor: NuxtUIColor, circleClass: string[], count?: string, chipSize?: NuxtUIChipSize}
+  | {label: string, kind: 'chip', chipColor: NuxtUIColor, circleClass: string[], count?: string, icon?: string, chipSize?: NuxtUIChipSize}
   | {label: string, kind: 'badge', badgeClass: string}
 </script>
 
@@ -12,13 +12,14 @@ export type CalendarLegendItem =
 /**
  * CalendarLegend - the one "Forklaring" panel
  *
- * ┌ ⓘ Forklaring ──────────────────────────────────────────────┐
- * │  (1) Næste fællesspisning   (1)* Ledige billetter   [1] Madhold 1 │
- * │  <default slot: a surface's own entries>                          │
- * │  hint                                                             │
- * └────────────────────────────────────────────────────────────┘
+ * ┌ ⓘ Forklaring ──────────────────────────────────────────────────────────────────────────┐
+ * │  (1) Næste fællesspisning   (1)* Ledige billetter   (1)[wl] Venteliste   [1] Madhold 1 │
+ * │  <default slot: a surface's own entries>                                               │
+ * │  hint                                                                                  │
+ * └────────────────────────────────────────────────────────────────────────────────────────┘
  *   circle: a day circle in the variant's classes
- *   chip:   that circle wrapped in a chip, reading the item's count when it has one
+ *   chip:   that circle wrapped in a chip, reading the item's count, or carrying the item's glyph [wl] inset
+ *           in a chip a size up (COMPONENTS.legend.iconChip)
  *   badge:  the team's rainbow band
  *
  * The calendars pass `items` and render it in BaseCalendar's #legend slot. DinnerModeLegend fills the
@@ -47,8 +48,12 @@ const {ALERTS, ICONS, COMPONENTS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
             :size="item.chipSize ?? SIZES.md"
             :color="item.chipColor"
             :text="item.count"
+            :ui="item.icon ? COMPONENTS.legend.iconChip.ui : undefined"
           >
             <div :class="item.circleClass">1</div>
+            <template v-if="item.icon" #content>
+              <UIcon :name="item.icon" :class="COMPONENTS.legend.iconChip.icon" />
+            </template>
           </UChip>
           <UBadge
             v-else-if="item.kind === 'badge'"

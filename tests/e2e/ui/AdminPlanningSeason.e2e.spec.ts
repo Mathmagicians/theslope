@@ -3,26 +3,13 @@ import {authFiles} from '../config'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import testHelpers from '../testHelpers'
-import {formatDate, getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
-import type {Season} from '~/composables/useSeasonValidation'
+import {formatDate} from '~/utils/date'
+import {useSeasonValidation} from '~/composables/useSeasonValidation'
 import {addDays} from 'date-fns/addDays'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, gotoHydrated, fillDateField, readDateField} = testHelpers
-
-/**
- * Calculate expected dinner event count for a season
- * Mirrors server logic in generateDinnerEventDataForSeason
- */
-const calculateExpectedEventCount = (season: Season): number => {
-    const allCookingDates = getEachDayOfIntervalWithSelectedWeekdays(
-        season.seasonDates.start,
-        season.seasonDates.end,
-        season.cookingDays
-    )
-    const validDates = excludeDatesFromInterval(allCookingDates, season.holidays)
-    return validDates.length
-}
+const {validatedBrowserContext, pollUntil, gotoHydrated, fillDateField, readDateField, waitForApi} = testHelpers
+const {SeasonSchema} = useSeasonValidation()
 
 /**
  * Generate unique test data for UI form submissions
@@ -41,9 +28,6 @@ const generateUniqueSeasonDates = () => {
     const earlierHolidayDate1 = date1
     const earlierHolidayDate2 = addDays(date1, 1)
 
-    // Search pattern based on start date: MM/yy
-    const searchPattern = `${String(date1.getMonth() + 1).padStart(2, '0')}/${String(date1.getFullYear()).slice(-2)}`
-
     return {
         startDate: formatDate(date1),
         endDate: formatDate(date2),
@@ -53,9 +37,19 @@ const generateUniqueSeasonDates = () => {
         earlierHolidayEnd: formatDate(earlierHolidayDate2),
         seasonStartDate: date1,  // Raw Date for API
         seasonEndDate: date2,    // Raw Date for API
-        holidayPeriod: {start: holidayDate1, end: holidayDate2}, // Single-day holiday on start
-        searchPattern
+        holidayPeriod: {start: holidayDate1, end: holidayDate2} // Single-day holiday on start
     }
+}
+
+/** Submits the season form and returns the season the create request saved; attach before the click lands */
+const submitNewSeason = async (page: Page, createdSeasonIds: number[]) => {
+    const saved = waitForApi(page, '/api/admin/season', 'PUT')
+    await page.getByTestId('submit-season').click()
+    const response = await saved
+    const season = SeasonSchema.parse(await response.json())
+    createdSeasonIds.push(season.id!)
+    expect(response.status()).toBe(201)
+    return season
 }
 
 /**
@@ -125,32 +119,20 @@ test.describe('AdminPlanningSeason Form UI', () => {
             await expect(page.locator('form#seasonForm')).toBeVisible()
 
             // WHEN: Fill and submit form
-            const {startDate, endDate, searchPattern} = generateUniqueSeasonDates()
+            const {startDate, endDate} = generateUniqueSeasonDates()
             await fillDateField(page.locator('[name="seasonDates"]'), 'start', startDate)
             await fillDateField(page.locator('[name="seasonDates"]'), 'end', endDate)
-            await page.getByTestId('submit-season').click()
+            const createdSeason = await submitNewSeason(page, createdSeasonIds)
 
             // THEN: Switches to view mode
             // (the DOM after the save is covered by AdminPlanning.e2e: pencil -> Annuller -> pencil)
             await expect(page).toHaveURL(/.*mode=view/)
 
-            // Verify season created via API
-            const createdSeason = await pollUntil(
-                () => SeasonFactory.getAllSeasons(context).then(seasons =>
-                    seasons.find(s => s.shortName?.includes(searchPattern))
-                ),
-                (season) => season !== undefined
-            )
-
-            expect(createdSeason).toBeDefined()
-            // Track immediately for cleanup (even if test fails later)
-            createdSeasonIds.push(createdSeason!.id!)
-
             // Verify dinner events auto-generated
-            const expectedEventCount = calculateExpectedEventCount(createdSeason!)
+            const expectedEventCount = SeasonFactory.calculateExpectedEventCount(createdSeason)
             const dinnerEvents = await DinnerEventFactory.waitForDinnerEventsGeneration(
                 context,
-                createdSeason!.id!,
+                createdSeason.id!,
                 expectedEventCount
             )
             expect(dinnerEvents.length).toBe(expectedEventCount)
@@ -195,7 +177,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
             const {
                 startDate, endDate, holidayStart, holidayEnd,
-                earlierHolidayStart, earlierHolidayEnd, searchPattern
+                earlierHolidayStart, earlierHolidayEnd
             } = generateUniqueSeasonDates()
             await fillDateField(page.locator('[name="seasonDates"]'), 'start', startDate)
             await fillDateField(page.locator('[name="seasonDates"]'), 'end', endDate)
@@ -251,22 +233,12 @@ test.describe('AdminPlanningSeason Form UI', () => {
             expect(rowStartDates).toEqual(ascending(rowStartDates))
 
             // Submit and verify via API
-            await page.getByTestId('submit-season').click()
+            const createdSeason = await submitNewSeason(page, createdSeasonIds)
+            const savedSeason = await SeasonFactory.getSeason(context, createdSeason.id!)
 
-            const createdSeason = await pollUntil(
-                () => SeasonFactory.getAllSeasons(context).then(seasons =>
-                    seasons.find(s => s.shortName?.includes(searchPattern))
-                ),
-                (season) => season !== undefined
-            )
-
-            expect(createdSeason).toBeDefined()
-            if (createdSeason) {
-                expect(createdSeason.holidays.length).toBeGreaterThanOrEqual(2)
-                const savedStartDates = createdSeason.holidays.map(holiday => holiday.start.getTime())
-                expect(savedStartDates).toEqual(ascending(savedStartDates))
-                createdSeasonIds.push(createdSeason.id!)
-            }
+            expect(savedSeason.holidays.length).toBeGreaterThanOrEqual(2)
+            const savedStartDates = savedSeason.holidays.map(holiday => holiday.start.getTime())
+            expect(savedStartDates).toEqual(ascending(savedStartDates))
         })
 
     test('GIVEN season with holiday WHEN removing holiday via UI THEN holiday is removed from list',

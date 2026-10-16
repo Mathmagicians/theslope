@@ -402,27 +402,16 @@ export class DinnerEventFactory {
      *
      * @param context - Browser context for API requests
      * @param heynaboEventIds - Array of Heynabo event IDs to delete
-     * @throws Error if cleanup fails (logged but doesn't fail tests)
      */
     static readonly cleanupHeynaboEvents = async (
         context: BrowserContext,
         heynaboEventIds: number[] = []
     ): Promise<void> => {
-        console.info(`Cleaning up Heynabo events (${heynaboEventIds.length} explicit + nuke)...`)
-
         const response = await context.request.post('/api/test/heynabo/cleanup', {
             headers: headers,
             data: { eventIds: heynaboEventIds, nuke: true }
         })
-
-        const status = response.status()
-        if (status !== 200) {
-            const errorBody = await response.text()
-            console.warn(`Heynabo cleanup failed with status ${status}: ${errorBody}`)
-        } else {
-            const result = await response.json()
-            console.info(`Heynabo cleanup successful: ${JSON.stringify(result)}`)
-        }
+        expect(response.status(), `Unexpected status cleaning up Heynabo events: ${await response.text()}`).toBe(200)
     }
 
     /**

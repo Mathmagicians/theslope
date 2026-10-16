@@ -21,7 +21,8 @@ import type {
     OrderForTransaction,
     DinnerMode,
     OrderState,
-    OrderAuditAction
+    OrderAuditAction,
+    TicketType
 } from '~/composables/useBookingValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
@@ -411,32 +412,32 @@ export async function fetchOrder(d1Client: D1Database, id: number): Promise<Orde
     }
 }
 
-// The released tickets for sale at a price on a dinner, at this instant
-export async function countReleasedTickets(d1Client: D1Database, dinnerEventId: number, ticketPriceId: number): Promise<number> {
+// The released tickets of a ticket type for sale on a dinner, at this instant
+export async function countReleasedTickets(d1Client: D1Database, dinnerEventId: number, ticketType: TicketType): Promise<number> {
     const {OrderStateSchema} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
     try {
-        return await prisma.order.count({where: {dinnerEventId, ticketPriceId, state: OrderStateSchema.enum.RELEASED}})
+        return await prisma.order.count({where: {dinnerEventId, ticketPrice: {ticketType}, state: OrderStateSchema.enum.RELEASED}})
     } catch (error) {
-        return throwH3Error(`🎟️ > ORDER > [SUPPLY] Error counting released tickets of dinner ${dinnerEventId} at price ${ticketPriceId}`, error)
+        return throwH3Error(`🎟️ > ORDER > [SUPPLY] Error counting released ${ticketType} tickets of dinner ${dinnerEventId}`, error)
     }
 }
 
-/** A claimed order and the household whose released ticket it was */
-export type ClaimedOrder = {order: OrderDetail, sellerHouseholdId: number}
+/** A claimed order, the price row its ticket keeps and the household whose released ticket it was */
+export type ClaimedOrder = {order: OrderDetail, ticketPriceId: number, sellerHouseholdId: number}
 
 /**
  * Claim a released ticket for an inhabitant.
  *
- * Finds the first RELEASED order matching dinnerEventId + ticketPriceId (FIFO by releasedAt)
- * and transfers ownership to the new inhabitant. Original price is preserved.
+ * Finds the first RELEASED order of the ticket type on the dinner (FIFO by releasedAt) and transfers ownership to
+ * the new inhabitant. The ticket keeps its price row: the buyer pays its price and eats its portions.
  *
  * Race-safe: Uses atomic WHERE clause (id + state=RELEASED) so concurrent
  * claims will fail if someone else claims first.
  *
  * @param d1Client - D1 database client
  * @param dinnerEventId - Dinner event to claim ticket for
- * @param ticketPriceId - Ticket price tier to match
+ * @param ticketType - Ticket type to match
  * @param newInhabitantId - Inhabitant claiming the ticket
  * @param claimedByUserId - User performing the claim
  * @returns Claimed order with the household that sold it, or null if no matching ticket available
@@ -446,7 +447,7 @@ export type ClaimedOrder = {order: OrderDetail, sellerHouseholdId: number}
 export async function claimOrder(
     d1Client: D1Database,
     dinnerEventId: number,
-    ticketPriceId: number,
+    ticketType: TicketType,
     newInhabitantId: number,
     claimedByUserId: number | null,
     dinnerMode: DinnerMode,
@@ -459,13 +460,13 @@ export async function claimOrder(
     const prisma = await getPrismaClientConnection(d1Client)
 
     const attemptClaim = async (attempt: number): Promise<ClaimedOrder | null> => {
-        console.info(`${LOG} Attempt ${attempt}: claiming ticket (dinner=${dinnerEventId}, ticketPrice=${ticketPriceId}) for inhabitant ${newInhabitantId}`)
+        console.info(`${LOG} Attempt ${attempt}: claiming a ${ticketType} ticket (dinner=${dinnerEventId}) for inhabitant ${newInhabitantId}`)
 
         // Find first RELEASED order matching criteria (FIFO by releasedAt)
         const existingOrder = await prisma.order.findFirst({
             where: {
                 dinnerEventId,
-                ticketPriceId,
+                ticketPrice: {ticketType},
                 state: OrderStateSchema.enum.RELEASED
             },
             orderBy: {releasedAt: 'asc'},
@@ -482,8 +483,8 @@ export async function claimOrder(
         })
 
         // No ticket available - stop (don't retry)
-        if (!existingOrder) {
-            console.warn(`${LOG} No RELEASED ticket available (dinner=${dinnerEventId}, ticketPrice=${ticketPriceId})`)
+        if (!existingOrder?.ticketPriceId) {
+            console.info(`${LOG} No released ${ticketType} ticket for sale (dinner=${dinnerEventId})`)
             return null
         }
 
@@ -531,7 +532,7 @@ export async function claimOrder(
 
             console.info(`${LOG} Successfully claimed order ${orderId}`)
 
-            return {order: toOrderDetail(claimedOrder), sellerHouseholdId: existingOrder.inhabitant.householdId}
+            return {order: toOrderDetail(claimedOrder), ticketPriceId: existingOrder.ticketPriceId, sellerHouseholdId: existingOrder.inhabitant.householdId}
         } catch (error) {
             // P2025: Race lost - someone else claimed this ticket
             if (isPrismaNotFound(error)) {

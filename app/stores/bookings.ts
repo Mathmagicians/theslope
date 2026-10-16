@@ -62,7 +62,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // The queues of the dinners the page shows, every household's entries in queue order; the rows, the positions,
     // the queue size and the portion need derive from them
     const {TicketWaitlistDisplaySchema, WaitlistAssignmentResultSchema} = useWaitlistValidation()
-    const {inQueueOrder, positionOf, portionNeed, portionsOfEntryFor} = useWaitlist()
+    const {inQueueOrder, ticketTypeOfEntry, positionOf, portionNeed, portionsOfEntryFor} = useWaitlist()
+    // The ticket type each entry waits for, read off the selected season's prices
+    const entryTicketType = computed(() => ticketTypeOfEntry(planStore.selectedSeason?.ticketPrices ?? []))
 
     const {
         data: waitlistEntries, isLoading: isWaitlistEntriesLoading, isErrored: isWaitlistEntriesErrored, isInitialized: isWaitlistEntriesInitialized,
@@ -82,11 +84,11 @@ export const useBookingsStore = defineStore("Bookings", () => {
     const waitlistOf = (dinnerEventId: number): TicketWaitlistDisplay[] =>
         inQueueOrder(waitlistEntries.value.filter(entry => entry.dinnerEventId === dinnerEventId))
 
-    // The household the page names, else the selected one: its entries with their place in their dinner's queue
+    // The household the page names, else the selected one: its entries with their place in their ticket type's line
     const waitlistHouseholdId = computed(() => ordersFilter.value().householdId ?? householdsStore.selectedHouseholdId)
     const householdWaitlist = computed((): TicketWaitlistDetail[] => waitlistEntries.value
         .filter(entry => entry.order.householdId === waitlistHouseholdId.value)
-        .map(entry => ({...entry, position: positionOf(waitlistOf(entry.dinnerEventId), entry.id) ?? 1})))
+        .map(entry => ({...entry, position: positionOf(waitlistOf(entry.dinnerEventId), entry.id, entryTicketType.value) ?? 1})))
 
     // The queue on the dinner on view: its size and its portion need (the chef card, the kitchen box)
     const selectedDinnerWaitlist = computed((): WaitlistQueueSummary | null => {
@@ -197,7 +199,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         const {nextDinner, futureDinners} = splitDinnerEvents(season.dinnerEvents)
         return getLockedFutureDinnerIds(nextDinner, futureDinners, deadlinesForSeason(season))
     })
-    const {formatTicketCounts} = useBilling()
+    const {countTicketTypes, formatTicketCounts} = useBilling()
 
     const {data: releasedCounts, isLoading: isReleasedCountsLoading, refresh: refreshReleasedCounts} = storeAsyncData(
         'bookings-store-released-counts',
@@ -208,7 +210,8 @@ export const useBookingsStore = defineStore("Bookings", () => {
                 const grouped = groupBy<OrderDisplay, number>(o => o.dinnerEventId)(released)
                 const counts = new Map<number, Omit<ReleasedTicketCounts, keyof WaitlistCounts>>()
                 for (const [dinnerEventId, orders] of grouped) {
-                    counts.set(dinnerEventId, { total: orders.length, formatted: formatTicketCounts(orders) })
+                    const byType = countTicketTypes(orders)
+                    counts.set(dinnerEventId, {total: orders.length, formatted: formatTicketCounts(byType), byType})
                 }
                 return counts
             }),
@@ -225,9 +228,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         () => `/api/order/waitlist?${orderQuery({dinnerEventIds: lockedDinnerIds.value})}`,
         {
             schema: TicketWaitlistDisplaySchema.array().transform(entries => {
-                const ticketPrices = planStore.selectedSeason?.ticketPrices ?? []
-                const ticketTypeOf = (entry: TicketWaitlistDisplay) =>
-                    ({ticketType: ticketPrices.find(price => price.id === entry.order.ticketPriceId)?.ticketType ?? null})
+                const ticketTypeOf = (entry: TicketWaitlistDisplay) => ({ticketType: entryTicketType.value(entry) ?? null})
                 return new Map([...groupBy<TicketWaitlistDisplay, number>(entry => entry.dinnerEventId)(entries)]
                     .map(([dinnerEventId, queue]): [number, WaitlistCounts] =>
                         [dinnerEventId, {queued: queue.length, queuedFormatted: formatTicketCounts(queue.map(ticketTypeOf))}]))
@@ -277,7 +278,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
             if (report) toast.add({
                 title: report.title,
                 description: describeScaffoldResult(result.scaffoldResult, report.suffix),
-                color: result.scaffoldResult.errored > 0 ? COLOR.error : COLOR.success
+                ...scaffoldToastLook(result.scaffoldResult)
             })
             return result
         } finally {

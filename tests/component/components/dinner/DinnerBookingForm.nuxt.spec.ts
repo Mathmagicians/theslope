@@ -8,7 +8,7 @@ import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
 import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
-import {MODE_WORDS, bookingSaveLabel} from '~/composables/useBookingUi'
+import {MODE_WORDS, SUPPLY_WORDS, bookingSaveLabel} from '~/composables/useBookingUi'
 import {EMPTY_RELEASED_TICKET_COUNTS} from '~/composables/useBooking'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
 import type {DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
@@ -19,7 +19,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
-import {ICONS, createTableColumns} from '~/composables/useTheSlopeDesignSystem'
+import {ICONS, createTableColumns, useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {WAITLIST_TEST_IDS} from './waitlistTestIds'
 import {useBookingValidation as useActionValidation} from '~/composables/useBookingValidation'
 const Action = useActionValidation().BookingActionSchema.enum
@@ -409,11 +409,13 @@ describe('DinnerBookingForm on a queued guest row', () => {
 })
 
 describe('DinnerBookingForm previews the outcome of a save by the supply', () => {
-  const {DinnerModeSchema} = useBookingValidation()
+  const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
   const anna = householdWithInhabitants.inhabitants[0]!
 
-  const mountRow = (canModify: boolean, ticketsForSale: number) =>
-    mountMemberForm(canModify, {releasedTicketCounts: {...EMPTY_RELEASED_TICKET_COUNTS, total: ticketsForSale, formatted: `${ticketsForSale}V`}})
+  // Anna is an adult: the tickets for sale are adult tickets
+  const mountRow = (canModify: boolean, ticketsForSale: number) => mountMemberForm(canModify, {releasedTicketCounts: {
+    ...EMPTY_RELEASED_TICKET_COUNTS, total: ticketsForSale, formatted: `${ticketsForSale}V`, byType: {[TicketTypeSchema.enum.ADULT]: ticketsForSale}
+  }})
 
   it.each([
     {desc: 'before the deadline', canModify: true, ticketsForSale: 0, label: 'Book'},
@@ -438,6 +440,28 @@ describe('DinnerBookingForm previews the outcome of a save by the supply', () =>
   })
 })
 
+describe('DinnerBookingForm settles a claim against the tickets for sale of the row\'s ticket type', () => {
+  const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
+  const TicketType = TicketTypeSchema.enum
+  const anna = householdWithInhabitants.inhabitants[0]!
+  // Anna is a child on the dinner's day: her row claims a child ticket
+  const household = {
+    ...householdWithInhabitants,
+    inhabitants: [{...anna, birthDate: TicketFactory.birthDateForTicketType(TicketType.CHILD, baseProps.dinnerEvent.date)}, ...householdWithInhabitants.inhabitants.slice(1)]
+  }
+
+  it.each([
+    {desc: 'only an adult ticket', ticketType: TicketType.ADULT, label: 'Skriv på venteliste'},
+    {desc: 'a child ticket', ticketType: TicketType.CHILD, label: 'Køb billet'}
+  ])('GIVEN $desc for sale WHEN a child row picks a mode THEN it saves as "$label"', async ({ticketType, label}) => {
+    const wrapper = await mountMemberForm(false, {household, releasedTicketCounts: {...EMPTY_RELEASED_TICKET_COUNTS, total: 1, byType: {[ticketType]: 1}}})
+    await clickByTestId(wrapper, `inhabitant-${anna.id}-toggle`)
+    await clickByTestId(wrapper, `inhabitant-${anna.id}-mode-edit-${DinnerModeSchema.enum.DINEIN}`)
+
+    expect(findByTestId(wrapper, `inhabitant-${anna.id}-save`).text()).toContain(label)
+  })
+})
+
 describe('DinnerBookingForm previews a requeue', () => {
   const {DinnerModeSchema} = useBookingValidation()
   const bo = householdWithInhabitants.inhabitants[1]!
@@ -456,7 +480,7 @@ describe('DinnerBookingForm previews a requeue', () => {
 describe('DinnerBookingForm on a closed dinner: the "Har du brug for flere billetter?" bar', () => {
   const TITLE = 'Har du brug for flere billetter?'
   const FOR_SALE = 'til salg'
-  const WAITING = 'står på ventelisten'
+  const WAITING = 'ventelisten'
   const supply = (total: number, formatted: string, queued: number, queuedFormatted: string) =>
     ({...EMPTY_RELEASED_TICKET_COUNTS, total, formatted, queued, queuedFormatted})
 
@@ -465,16 +489,16 @@ describe('DinnerBookingForm on a closed dinner: the "Har du brug for flere bille
       lines: ['Lukket for ændringer, men der er 4 ledige billetter til salg (4V).']},
     {desc: 'one ticket for sale', counts: supply(1, '1V', 0, '-'), icon: ICONS.claim, absent: [WAITING],
       lines: ['Lukket for ændringer, men der er 1 ledig billet til salg (1V).']},
-    {desc: 'the waiting list only', counts: supply(0, '-', 3, '2V 1B'), icon: ICONS.waitlist, absent: [FOR_SALE],
-      lines: ['Lukket for ændringer, men 3 står på ventelisten (2V 1B). Du kan få en plads på ventelisten.']},
+    {desc: 'the waiting list only', counts: supply(0, '-', 6, '2V 3B 1b'), icon: ICONS.waitlist, absent: [FOR_SALE],
+      lines: ['Lukket for ændringer, men du kan få en plads på ventelisten. Pt står 2V 3B 1b på ventelisten.']},
     {desc: 'tickets for sale and a waiting list', counts: supply(4, '4V', 1, '1B'), icon: ICONS.claim, absent: [],
-      lines: ['Lukket for ændringer, men der er 4 ledige billetter til salg (4V).', '1 står på ventelisten (1B). Du kan få en plads på ventelisten.']}
+      lines: ['Lukket for ændringer, men der er 4 ledige billetter til salg (4V).', 'Du kan også få en plads på ventelisten. Pt står 1B på ventelisten.']}
   ])('GIVEN $desc THEN one bar reads a line per supply', async ({counts, icon, absent, lines}) => {
     const wrapper = await mountMemberForm(false, {releasedTicketCounts: counts})
 
     const bar = findByTestId(wrapper, WAITLIST_TEST_IDS.moreTickets)
     expect(bar.text()).toContain(TITLE)
-    lines.forEach(line => expect(bar.text()).toContain(line))
+    expect(bar.findAll('p').map(line => line.text())).toEqual(lines)
     absent.forEach(words => expect(bar.text()).not.toContain(words))
     expect(wrapper.findAllComponents({name: 'UAlert'}).find(alert => alert.element === bar.element)?.props('icon')).toBe(icon)
   })
@@ -486,5 +510,44 @@ describe('DinnerBookingForm on a closed dinner: the "Har du brug for flere bille
     const wrapper = await mountMemberForm(canModify, {releasedTicketCounts: counts})
 
     expect(wrapper.text()).not.toContain(TITLE)
+  })
+})
+
+describe('DinnerBookingForm on a closed dinner: the household\'s own places on the waiting list', () => {
+  const {OrderStateSchema} = useBookingValidation()
+  const [anna, bo] = householdWithInhabitants.inhabitants
+  const dinnerEventId = baseProps.dinnerEvent.id
+  const entryFor = (id: number, inhabitantId: number, onDinner = dinnerEventId) =>
+    WaitlistFactory.defaultEntry({id, inhabitantId, dinnerEventId: onDinner})
+  const noteOf = (wrapper: Awaited<ReturnType<typeof mountMemberForm>>) => findByTestId(wrapper, WAITLIST_TEST_IDS.householdQueued)
+
+  it.each([
+    {count: 1, entries: [entryFor(41, bo!.id)]},
+    {count: 2, entries: [entryFor(41, anna!.id), entryFor(42, bo!.id)]}
+  ])('GIVEN $count entries THEN the warning note counts them and says when the household pays', async ({count, entries}) => {
+    const wrapper = await mountMemberForm(false, {waitlistEntries: entries})
+
+    const {title, description} = SUPPLY_WORDS.householdQueued(count)
+    expect(noteOf(wrapper).text()).toContain(title)
+    expect(noteOf(wrapper).text()).toContain(description)
+    const note = wrapper.findAllComponents({name: 'UAlert'}).find(alert => alert.element === noteOf(wrapper).element)!
+    expect(note.props()).toMatchObject({icon: ICONS.waitlist, color: useTheSlopeDesignSystem().ALERTS.warning.color})
+  })
+
+  it.each([
+    {desc: 'no entry', entries: []},
+    {desc: 'an entry on another dinner only', entries: [entryFor(41, bo!.id, dinnerEventId + 1)]}
+  ])('GIVEN $desc THEN no note shows', async ({entries}) => {
+    const wrapper = await mountMemberForm(false, {waitlistEntries: entries})
+
+    expect(noteOf(wrapper).exists()).toBe(false)
+  })
+
+  it('GIVEN a released ticket and an entry THEN both household notes show', async () => {
+    const released = OrderFactory.defaultOrder('released', {inhabitantId: anna!.id, dinnerEventId, state: OrderStateSchema.enum.RELEASED})
+    const wrapper = await mountMemberForm(false, {orders: [released], waitlistEntries: [entryFor(41, bo!.id)]})
+
+    expect(wrapper.text()).toContain(SUPPLY_WORDS.householdReleased(1).title)
+    expect(noteOf(wrapper).text()).toContain(SUPPLY_WORDS.householdQueued(1).title)
   })
 })

@@ -17,6 +17,7 @@ import {
     plannedActions,
     OUTCOME_BUCKETS,
     NOTHING_FOR_SALE,
+    EMPTY_RELEASED_TICKET_COUNTS,
     type PreviewSupply,
     type OrderBucketResult,
     type ReleasedTicketCounts
@@ -24,10 +25,10 @@ import {
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
 import {useOrder, type SpendingFigures} from '~/composables/useOrder'
 import type {Expense} from '~/composables/useBillingValidation'
-import {useBookingValidation, DinnerMode as DinnerModeEnum, OrderState as OrderStateEnum, type OrderState, type DinnerMode, type DinnerEventDisplay, type OrderDisplay, type DesiredOrder, type OrderAuditAction, type BookingAction, type BookingOutcome, type TicketType} from '~/composables/useBookingValidation'
+import {useBookingValidation, DinnerMode as DinnerModeEnum, OrderState as OrderStateEnum, type OrderState, type DinnerMode, type DinnerEventDisplay, type OrderDisplay, type DesiredOrder, type OrderAuditAction, type BookingAction, type BookingOutcome, type ScaffoldResult, type TicketType} from '~/composables/useBookingValidation'
 import {useTicket, type TicketTypeWords} from '~/composables/useTicket'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
-import {ICONS, COLOR, ALARM_TO_BADGE, BOOKING_LOCK_STATUS, TICKET_TYPE_COLORS, TICKET_TYPE_ICONS, type NuxtUIColor, type TicketTypeColor} from '~/composables/useTheSlopeDesignSystem'
+import {ICONS, COLOR, ALARM_TO_BADGE, BOOKING_LOCK_STATUS, ORDER_STATE_COLORS, TICKET_TYPE_COLORS, TICKET_TYPE_ICONS, type NuxtUIColor, type TicketState, type TicketTypeColor} from '~/composables/useTheSlopeDesignSystem'
 import {calculateCountdown, formatDate, formatDateRange} from '~/utils/date'
 
 // ============================================================================
@@ -57,19 +58,20 @@ export const ORDER_ACTION_LABELS: Record<OrderAuditAction, OrderActionLabel> = {
 }
 
 // One label, icon and colour per order state (CostLine, the action preview); a booked ticket claimed from another
-// household shows as bought
+// household shows as bought, a place on the waiting list as queued. A state a ticket shows wears the ticket's colour
 export interface OrderDisplayConfig {
     label: string
-    color: typeof COLOR.primary | typeof COLOR.error | typeof COLOR.info | typeof COLOR.neutral
+    color: typeof ORDER_STATE_COLORS[TicketState]
     icon: string
 }
-export const ORDER_STATE_LABELS: Record<OrderState | 'claimed', OrderDisplayConfig> = {
-    [OrderStateEnum.BOOKED]: {label: 'Bestilt', color: COLOR.primary, icon: ICONS.clipboard},
-    [OrderStateEnum.RELEASED]: {label: 'Frigivet', color: COLOR.error, icon: ICONS.released},
+export const ORDER_STATE_LABELS = {
+    [OrderStateEnum.BOOKED]: {label: 'Bestilt', color: ORDER_STATE_COLORS.normal, icon: ICONS.clipboard},
+    [OrderStateEnum.RELEASED]: {label: 'Frigivet', color: ORDER_STATE_COLORS.released, icon: ICONS.released},
     [OrderStateEnum.CLOSED]: {label: 'Lukket', color: COLOR.neutral, icon: ICONS.archive},
     [OrderStateEnum.CANCELLED]: {label: 'Annulleret', color: COLOR.error, icon: ICONS.xMark},
-    claimed: {label: 'Købt fra anden', color: COLOR.info, icon: ICONS.claim}
-}
+    claimed: {label: 'Købt fra anden', color: ORDER_STATE_COLORS.claimed, icon: ICONS.claim},
+    queued: {label: 'På venteliste', color: ORDER_STATE_COLORS.queued, icon: ICONS.waitlist}
+} as const satisfies Record<OrderState | 'claimed' | 'queued', OrderDisplayConfig>
 
 // An order's state badge and, on a guest ticket, its guest badge (formatOrder)
 export interface FormattedOrder {
@@ -187,22 +189,55 @@ export const STEP_ICONS: Record<DinnerStepState, string> = {
     [DinnerStepState.CONSUMED]: ICONS.checkCircle
 }
 
+const ticketCount = (count: number) => `${count} billet${count === 1 ? '' : 'ter'}`
+
 /**
- * Create booking deadline badge data
- * @param isOpen - Whether booking is still open (canModifyOrders)
- * @param releasedCounts - Released ticket counts with formatted breakdown (optional)
+ * The words of a closed dinner's supply, once: the booking form's bar (the tickets for sale, then the waiting list),
+ * the Framelding tooltip (the same waiting list sentence) and the household's notes on the tickets it released and its
+ * places on the waiting list. The first line of the bar names the closure. A queue entry is booked at its frozen price
+ * when a ticket is assigned, so the household pays then
  */
-export const createBookingBadge = (isOpen: boolean, releasedCounts?: ReleasedTicketCounts): DeadlineBadgeData => {
-    const hasTickets = !isOpen && releasedCounts !== undefined && releasedCounts.total > 0
-    return {
-        label: DEADLINE_LABELS.BOOKING_CLOSED.label,
-        icon: isOpen ? ICONS.lockOpen : (hasTickets ? ICONS.released : ICONS.lockClosed),
-        color: isOpen ? COLOR.success : (hasTickets ? COLOR.warning : COLOR.error),
-        value: isOpen ? 'Åben' : (hasTickets ? `${releasedCounts!.formatted} ledig${releasedCounts!.total === 1 ? '' : 'e'}` : 'Lukket'),
-        helpText: isOpen
-            ? DEADLINE_LABELS.BOOKING_CLOSED.openText
-            : (hasTickets ? DEADLINE_LABELS.BOOKING_CLOSED.availableText(releasedCounts!.total) : DEADLINE_LABELS.BOOKING_CLOSED.closedText)
+export const SUPPLY_WORDS = {
+    forSale: ({total, formatted}: ReleasedTicketCounts): string | null => total > 0
+        ? `Lukket for ændringer, men der er ${total} ledig${total === 1 ? ' billet' : 'e billetter'} til salg (${formatted}).`
+        : null,
+    waitlist: ({total, queued, queuedFormatted}: ReleasedTicketCounts): string | null => queued > 0
+        ? `${total > 0 ? 'Du kan også få' : 'Lukket for ændringer, men du kan få'} en plads på ventelisten. Pt står ${queuedFormatted} på ventelisten.`
+        : null,
+    householdReleased: (count: number) =>
+        ({title: `Husstanden har frigivet ${ticketCount(count)}`, description: 'Du betaler, medmindre andre køber'}),
+    householdQueued: (count: number) =>
+        ({title: `Husstanden står på ventelisten med ${ticketCount(count)}`, description: 'Du betaler, når du får en billet fra ventelisten.'})
+}
+
+/**
+ * The Framelding badge: open while bookings can change; once closed, the tickets for sale lead with the waiting list
+ * after them, a waiting list alone wears the queued order state, and a dinner with neither reads closed
+ * @param isOpen - Whether booking is still open (canModifyOrders)
+ * @param releasedCounts - The locked dinner's supply with its formatted breakdowns
+ */
+export const createBookingBadge = (isOpen: boolean, releasedCounts: ReleasedTicketCounts = EMPTY_RELEASED_TICKET_COUNTS): DeadlineBadgeData => {
+    const {label, openText, closedText, availableText} = DEADLINE_LABELS.BOOKING_CLOSED
+    if (isOpen) return {label, icon: ICONS.lockOpen, color: COLOR.success, value: 'Åben', helpText: openText}
+
+    const {total, formatted, queuedFormatted} = releasedCounts
+    const waitlist = SUPPLY_WORDS.waitlist(releasedCounts)
+    const waiting = `${queuedFormatted} venter`
+    if (total > 0) {
+        const forSale = `${formatted} ledig${total === 1 ? '' : 'e'}`
+        return {
+            label,
+            icon: ICONS.released,
+            color: COLOR.warning,
+            value: waitlist ? `${forSale}, ${waiting}` : forSale,
+            helpText: waitlist ? `${availableText(total)}. ${waitlist}` : availableText(total)
+        }
     }
+    if (waitlist) {
+        const {icon, color} = ORDER_STATE_LABELS.queued
+        return {label, icon, color, value: waiting, helpText: waitlist}
+    }
+    return {label, icon: ICONS.lockClosed, color: COLOR.error, value: 'Lukket', helpText: closedText}
 }
 
 /**
@@ -248,16 +283,16 @@ export const createBookingBadges = (
 }
 
 /**
- * The lock chip of a dinner past its booking deadline: the tickets for sale, else the waiting list with a minus, else
- * the closed chip alone. A released ticket goes to the first waiting for its ticket type, so a dinner can hold both;
- * the chip then shows the tickets for sale.
+ * The lock chip of a dinner past its booking deadline: the tickets for sale as a number, else the waiting list's
+ * hourglass, else the closed chip alone. A released ticket goes to the first waiting for its ticket type, so a dinner
+ * can hold both; the chip then shows the tickets for sale.
  * Null without supply: the dinner is open for booking.
  */
-export const lockChip = (supply: ReleasedTicketCounts | null | undefined): {color: NuxtUIColor, text: string | undefined} | null => {
+export const lockChip = (supply: ReleasedTicketCounts | null | undefined): {color: NuxtUIColor, text?: string, icon?: string} | null => {
     if (!supply) return null
     if (supply.total > 0) return {color: BOOKING_LOCK_STATUS.lockedWithTickets.color, text: String(supply.total)}
-    if (supply.queued > 0) return {color: BOOKING_LOCK_STATUS.lockedWithQueue.color, text: `-${supply.queued}`}
-    return {color: BOOKING_LOCK_STATUS.locked.color, text: undefined}
+    if (supply.queued > 0) return {...BOOKING_LOCK_STATUS.lockedWithQueue}
+    return {...BOOKING_LOCK_STATUS.locked}
 }
 
 /** The words of a dinner mode, once: DinnerModeSelector's glyph and label, and the mode a preview line names */
@@ -319,11 +354,17 @@ export const bookingSaveLabel = (outcome: BookingOutcome): string => OUTCOME_WOR
 /** The guest form's button label for an outcome */
 export const guestSaveLabel = (outcome: BookingOutcome): string => OUTCOME_WORDS[outcome].guestSave
 
+/** The look of a toast that reports a booking result: the ticket, red as soon as one order failed, green otherwise */
+export const scaffoldToastLook = (result: Pick<ScaffoldResult, 'errored'>) => ({
+    color: result.errored > 0 ? COLOR.error : COLOR.success,
+    icon: ICONS.ticket
+})
+
 /** A member's place in the queue of a sold-out dinner, rendered compact beside the name */
 export const createWaitlistBadge = (position: number): DeadlineBadgeData => ({
     label: 'Venteliste',
-    icon: ICONS.waitlist,
-    color: COLOR.neutral,
+    icon: ORDER_STATE_LABELS.queued.icon,
+    color: ORDER_STATE_LABELS.queued.color,
     value: `#${position} i køen`,
     helpText: 'Du får en billet, når en bliver ledig eller kokken frigiver portioner'
 })

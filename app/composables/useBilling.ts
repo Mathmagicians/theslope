@@ -21,6 +21,13 @@ export const useBilling = () => {
     const TicketType = TicketTypeSchema.enum
     const {ticketTypeWords} = useTicket()
 
+    // How many items carry each ticket type
+    const countTicketTypes = <T extends { ticketType: TicketType | null }>(items: T[]): Partial<Record<TicketType, number>> =>
+        items.reduce((acc, item) => {
+            if (item.ticketType) acc[item.ticketType] = (acc[item.ticketType] ?? 0) + 1
+            return acc
+        }, {} as Partial<Record<TicketType, number>>)
+
     /**
      * Format ticket counts for display (e.g., "2V 1B")
      * Accepts either:
@@ -30,13 +37,7 @@ export const useBilling = () => {
     const formatTicketCounts = <T extends { ticketType: TicketType | null }>(
         input: T[] | Partial<Record<TicketType, number>>
     ): string => {
-        // Build counts map from array, or use directly if already a map
-        const counts: Partial<Record<TicketType, number>> = Array.isArray(input)
-            ? input.reduce((acc, item) => {
-                if (item.ticketType) acc[item.ticketType] = (acc[item.ticketType] ?? 0) + 1
-                return acc
-            }, {} as Partial<Record<TicketType, number>>)
-            : input
+        const counts = Array.isArray(input) ? countTicketTypes(input) : input
 
         const parts = [TicketType.ADULT, TicketType.CHILD, TicketType.BABY]
             .filter(type => counts[type])
@@ -349,6 +350,7 @@ export const useBilling = () => {
         getBillingPeriodForDate,
         groupByCostEntry,
         groupByHouseholdEntry,
+        countTicketTypes,
         formatTicketCounts,
         chunkTransactionIds,
         // Control sums

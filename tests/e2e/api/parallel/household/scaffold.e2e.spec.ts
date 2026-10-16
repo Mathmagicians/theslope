@@ -43,6 +43,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
   const createdSeasonIds: number[] = []
   const createdHouseholdIds: number[] = []
   const createdInhabitantIds: number[] = []
+  const createdAllergyTypeIds: number[] = []
 
   test.beforeAll(async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
@@ -73,13 +74,10 @@ test.describe('Household Scaffold API (ADR-016)', () => {
   test.afterAll(async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
     // Cleanup in reverse order of creation
-    for (const id of createdInhabitantIds) {
-      await HouseholdFactory.deleteInhabitant(context, id).catch(() => {})
-    }
-    for (const id of createdHouseholdIds) {
-      await HouseholdFactory.deleteHousehold(context, id).catch(() => {})
-    }
-    await SeasonFactory.cleanupSeasons(context, createdSeasonIds).catch(() => {})
+    for (const id of createdInhabitantIds) await HouseholdFactory.deleteInhabitant(context, id)
+    await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
+    await AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
+    await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
   })
 
   // ============================================================================
@@ -87,21 +85,6 @@ test.describe('Household Scaffold API (ADR-016)', () => {
   // ============================================================================
 
   test.describe('Authorization', () => {
-    test('GIVEN admin user WHEN scaffolding for own household THEN succeeds', async ({ browser }) => {
-      const context = await validatedBrowserContext(browser)
-
-      const result = await OrderFactory.scaffoldOrders(context, {
-        householdId: testHouseholdId,
-        seasonId: testSeason.id!,
-        dinnerEventIds: [testDinnerEventIds[0]!],
-        orders: [OrderFactory.createBookingOrder(testInhabitantId, testDinnerEventIds[0]!, testAdultTicketPriceId)]
-      })
-
-      expect(result).not.toBeNull()
-      expect(result!.householdId).toBe(testHouseholdId)
-      expect(result!.scaffoldResult.totals[Action.BOOK]).toBeGreaterThanOrEqual(0)
-    })
-
     test('GIVEN admin user WHEN scaffolding for different household THEN returns 403', async ({ browser }) => {
       const context = await validatedBrowserContext(browser)
       const testSalt = temporaryAndRandom()
@@ -142,38 +125,32 @@ test.describe('Household Scaffold API (ADR-016)', () => {
   // ============================================================================
 
   test.describe('Booking Flows', () => {
-    const bookingModes = [
-      { mode: 'DINEIN' as const, description: 'DINEIN mode' },
-      { mode: 'TAKEAWAY' as const, description: 'TAKEAWAY mode' }
-    ]
+    test('GIVEN single inhabitant WHEN booking THEN order created', async ({ browser }) => {
+      const context = await validatedBrowserContext(browser)
 
-    for (const { mode, description } of bookingModes) {
-      test(`GIVEN single inhabitant WHEN booking with ${description} THEN order created`, async ({ browser }) => {
-        const context = await validatedBrowserContext(browser)
-
-        // Event 15 days from now = BEFORE 8-day deadline = scaffold can create
-        const event = await DinnerEventFactory.createDinnerEvent(context, {
-          seasonId: testSeason.id!,
-          date: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
-          menuTitle: salt(`Test Booking ${mode}`, temporaryAndRandom())
-        })
-
-        const result = await OrderFactory.scaffoldOrders(context, {
-          householdId: testHouseholdId,
-          seasonId: testSeason.id!,
-          dinnerEventIds: [event.id],
-          orders: [OrderFactory.createBookingOrder(testInhabitantId, event.id, testAdultTicketPriceId, mode)]
-        })
-
-        expect(result).not.toBeNull()
-        expect(result!.scaffoldResult.totals[Action.BOOK]).toBeGreaterThanOrEqual(1)
-
-        // Verify order exists with correct mode
-        const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, event.id)
-        const myOrder = orders.find(o => o.inhabitantId === testInhabitantId && o.dinnerMode === DinnerModeSchema.enum[mode])
-        expect(myOrder, `Order with ${mode} should exist`).toBeDefined()
+      // Event 15 days from now = BEFORE 8-day deadline = scaffold can create
+      const event = await DinnerEventFactory.createDinnerEvent(context, {
+        seasonId: testSeason.id!,
+        date: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000),
+        menuTitle: salt('Test Booking', temporaryAndRandom())
       })
-    }
+
+      const result = await OrderFactory.scaffoldOrders(context, {
+        householdId: testHouseholdId,
+        seasonId: testSeason.id!,
+        dinnerEventIds: [event.id],
+        orders: [OrderFactory.createBookingOrder(testInhabitantId, event.id, testAdultTicketPriceId, DinnerMode.DINEIN)]
+      })
+
+      expect(result).not.toBeNull()
+      expect(result!.householdId).toBe(testHouseholdId)
+      expect(result!.scaffoldResult.totals[Action.BOOK]).toBeGreaterThanOrEqual(1)
+
+      // Verify order exists with correct mode
+      const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, event.id)
+      const myOrder = orders.find(o => o.inhabitantId === testInhabitantId && o.dinnerMode === DinnerMode.DINEIN)
+      expect(myOrder, 'Order with DINEIN should exist').toBeDefined()
+    })
 
     test('GIVEN multiple dinner events WHEN grid booking THEN orders created for all events', async ({ browser }) => {
       const context = await validatedBrowserContext(browser)
@@ -311,7 +288,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       expect(orderAfter?.dinnerMode).toBe(DinnerModeSchema.enum.TAKEAWAY)
     })
 
-    test('GIVEN existing order WHEN releasing via scaffold THEN order released', async ({ browser }) => {
+    test('GIVEN an admin booking its own household with adminBypass=false WHEN releasing past the cancellation deadline THEN order released', async ({ browser }) => {
       const context = await validatedBrowserContext(browser)
 
       // Event 3 days from now = AFTER deadline (release not delete)
@@ -333,13 +310,13 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       expect(createResult).not.toBeNull()
       const orderId = createResult!.createdIds[0]!
 
-      // Release via scaffold (dinnerMode: NONE after deadline → RELEASED)
+      // Release via scaffold (dinnerMode: NONE after deadline → RELEASED); an explicit false keeps the deadlines
       const result = await OrderFactory.scaffoldOrders(context, {
         householdId: testHouseholdId,
         seasonId: testSeason.id!,
         dinnerEventIds: [event.id],
         orders: [OrderFactory.createReleaseOrder(testInhabitantId, event.id, testAdultTicketPriceId, orderId)]
-      })
+      }, 200, false)
 
       expect(result).not.toBeNull()
       expect(result!.scaffoldResult.totals[Action.RELEASE]).toBeGreaterThanOrEqual(1)
@@ -505,20 +482,17 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       const context = await validatedBrowserContext(browser)
       const dinnerEventId = await closedDinner(context, 'Queue guest')
       const allergyType = await AllergyFactory.createAllergyType(context)
-      try {
-        const result = await WaitlistFactory.queue(context, testHouseholdId, testSeason.id!,
-          OrderFactory.createGuestOrder(testInhabitantId, dinnerEventId, testChildTicketPriceId, 'TAKEAWAY', [allergyType.id]))
+      createdAllergyTypeIds.push(allergyType.id)
 
-        expect(result).toMatchObject({ totals: { [Action.QUEUE]: 1 }, positions: [{ inhabitantId: testInhabitantId, isGuestTicket: true, position: 1 }] })
-        const [entry] = await WaitlistFactory.entries(context, [dinnerEventId])
-        expect(entry).toMatchObject({
-          isGuestTicket: true,
-          order: { ticketPriceId: testChildTicketPriceId, dinnerMode: DinnerMode.TAKEAWAY, allergyTypeIds: [allergyType.id] }
-        })
-      } finally {
-        await WaitlistFactory.cleanupEntries(context, testSeason.id!, [dinnerEventId])
-        await AllergyFactory.deleteAllergyType(context, allergyType.id).catch(() => {})
-      }
+      const result = await WaitlistFactory.queue(context, testHouseholdId, testSeason.id!,
+        OrderFactory.createGuestOrder(testInhabitantId, dinnerEventId, testChildTicketPriceId, DinnerMode.TAKEAWAY, [allergyType.id]))
+
+      expect(result).toMatchObject({ totals: { [Action.QUEUE]: 1 }, positions: [{ inhabitantId: testInhabitantId, isGuestTicket: true, position: 1 }] })
+      const [entry] = await WaitlistFactory.entries(context, [dinnerEventId])
+      expect(entry).toMatchObject({
+        isGuestTicket: true,
+        order: { ticketPriceId: testChildTicketPriceId, dinnerMode: DinnerMode.TAKEAWAY, allergyTypeIds: [allergyType.id] }
+      })
     })
 
     test('GIVEN a queued guest entry WHEN NONE is sent on that entry THEN the guest leaves the queue', async ({ browser }) => {
@@ -641,28 +615,6 @@ test.describe('Household Scaffold API (ADR-016)', () => {
 
       expect(result!.scaffoldResult.totals[Action.CHANGE_MODE]).toBe(1)
       expect((await OrderFactory.getOrder(context, booked.orderId))!.dinnerMode).toBe(DinnerMode.TAKEAWAY)
-    })
-
-    test('GIVEN an admin booking its own household with adminBypass=false WHEN NONE past the cancellation deadline THEN the order is released', async ({ browser }) => {
-      const context = await validatedBrowserContext(browser)
-      const dinner = await DinnerEventFactory.createDinnerEvent(context, {
-        seasonId: testSeason.id!, date: daysFromNow(3), menuTitle: salt('Correction off', temporaryAndRandom())
-      })
-      const created = await OrderFactory.createOrder(context, {
-        householdId: testHouseholdId, dinnerEventId: dinner.id,
-        orders: [OrderFactory.defaultOrderItem({ inhabitantId: testInhabitantId, ticketPriceId: testAdultTicketPriceId })]
-      })
-      const orderId = created!.createdIds[0]!
-
-      const response = await context.request.post('/api/household/order/scaffold?adminBypass=false', {
-        data: {
-          householdId: testHouseholdId, seasonId: testSeason.id!, dinnerEventIds: [dinner.id],
-          orders: [OrderFactory.createBookingOrder(testInhabitantId, dinner.id, testAdultTicketPriceId, DinnerMode.NONE, orderId)]
-        }
-      })
-
-      expect(response.status()).toBe(200)
-      expect((await OrderFactory.getOrder(context, orderId))!.state).toBe(OrderStateSchema.enum.RELEASED)
     })
 
     test('GIVEN a member WHEN sending a correction with adminBypass for another household THEN 403', async ({ browser }) => {

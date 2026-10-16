@@ -35,54 +35,6 @@ test.describe('AdminPlanning UI', () => {
     await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
   })
 
-  test('Can load admin planning page with season selector and create action', async ({ page }) => {
-    await openPlanning(page, adminPlanningUrl)
-
-    await doScreenshot(page, 'admin/admin-planning-loaded', true)
-
-    await expect(page.getByTestId('season-selector')).toBeVisible()
-    await expect(page.getByTestId('create-season')).toBeVisible()
-  })
-
-  test('GIVEN season exists WHEN navigating with season param THEN season is displayed', async ({ page, browser }) => {
-    const context = await validatedBrowserContext(browser)
-    const season = await SeasonFactory.createSeason(context, { holidays: [] })
-    createdSeasonIds.push(season.id!)
-
-    await page.goto(`${adminPlanningUrl}?season=${season.shortName}`)
-
-    expect(page.url()).toContain(`season=${season.shortName}`)
-  })
-
-  test('GIVEN season exists WHEN navigating to edit mode THEN form shows in edit mode', async ({ page, browser }) => {
-    const context = await validatedBrowserContext(browser)
-    const season = await SeasonFactory.createSeason(context, { holidays: [] })
-    createdSeasonIds.push(season.id!)
-
-    await page.goto(`${adminPlanningUrl}?season=${season.shortName}&mode=edit`)
-
-    expect(page.url()).toContain(`season=${season.shortName}`)
-    expect(page.url()).toContain('mode=edit')
-
-    await pollUntil(
-      async () => await page.locator('form#seasonForm').isVisible(),
-      (isVisible) => isVisible,
-      10
-    )
-  })
-
-  test('WHEN navigating to create mode THEN form shows in create mode', async ({ page }) => {
-    await page.goto(`${adminPlanningUrl}?mode=create`)
-
-    expect(page.url()).toContain('mode=create')
-
-    await pollUntil(
-      async () => await page.locator('form#seasonForm').isVisible(),
-      (isVisible) => isVisible,
-      10
-    )
-  })
-
   test('GIVEN season in view mode WHEN using the pencil, Annuller and Opret THEN the form follows without page reload', async ({ page, browser }) => {
     const context = await validatedBrowserContext(browser)
     const season = await SeasonFactory.createSeason(context)
@@ -91,6 +43,7 @@ test.describe('AdminPlanning UI', () => {
     // GIVEN: view mode with the season loaded (full page load happens only here)
     await openPlanning(page, `${adminPlanningUrl}?season=${encodeURIComponent(season.shortName)}`)
     await expect(page.getByTestId('edit-season')).toBeVisible()
+    await doScreenshot(page, 'admin/admin-planning-loaded', true)
 
     // WHEN: opening the form from the pencil (client-side navigation, no reload)
     await page.getByTestId('edit-season').click()

@@ -800,13 +800,13 @@ describe('Bookings store — waiting list', () => {
         expect(waitlistEntriesEndpoint).not.toHaveBeenCalled()
     })
 
-    it('derives the household\'s places from the dinner\'s queue order', async () => {
+    it('derives the household\'s place within its ticket type\'s line: the adult ahead waits in another line', async () => {
         const store = useBookingsStore()
 
         store.loadOrdersForDinners({dinnerEventIds: [WAITLIST_DINNER_ID]})
 
         await vi.waitFor(() => expect(store.householdWaitlist).toHaveLength(1))
-        expect(store.householdWaitlist[0]).toMatchObject({id: 22, position: 2})
+        expect(store.householdWaitlist[0]).toMatchObject({id: 22, position: 1})
     })
 
     it('derives the queue on the dinner on view: its size and its portion need', async () => {

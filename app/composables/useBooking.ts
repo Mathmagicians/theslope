@@ -78,8 +78,8 @@ export const getNewOrderAction = (canModifyOrders: boolean): BookingRowAction =>
     canModifyOrders ? ROW_ACTION.process : ROW_ACTION.claim
 
 /**
- * The outcome of a bucket at the instant it executes. The claim bucket settles by supply: a released ticket at the
- * price is bought, none queues the wish. A bucket that changes no supply (update, delete, idempotent, skip) changes the mode.
+ * The outcome of a bucket at the instant it executes. The claim bucket settles by supply: a released ticket of the
+ * ticket type is bought, none queues the wish. A bucket that changes no supply (update, delete, idempotent, skip) changes the mode.
  */
 export const bookingOutcome = (bucket: OrderBucket | null, supply: {ticketsForSale: number}): BookingOutcome => {
     switch (bucket) {
@@ -94,6 +94,16 @@ export const bookingOutcome = (bucket: OrderBucket | null, supply: {ticketsForSa
 /** What a save would find for sale at an order's dinner and price */
 export type PreviewSupply = (order: DesiredOrder) => {ticketsForSale: number}
 export const NOTHING_FOR_SALE: PreviewSupply = () => ({ticketsForSale: 0})
+
+/** The tickets for sale a claim can buy: its dinner's released tickets of the ticket type its price names */
+export const ticketsForSaleOf = (
+    counts: Pick<ReleasedTicketCounts, 'byType'> | null | undefined,
+    ticketPrices: Pick<TicketPrice, 'id' | 'ticketType'>[],
+    ticketPriceId: number
+): number => {
+    const ticketType = ticketPrices.find(price => price.id === ticketPriceId)?.ticketType
+    return ticketType ? counts?.byType[ticketType] ?? 0 : 0
+}
 
 /** What an update does to the order it names; without the order at hand, a release or a mode change */
 export const actionOfUpdate = (incoming: DesiredOrder, existing: OrderDisplay | undefined): BookingAction => {
@@ -604,6 +614,7 @@ export const DEADLINE_LABELS = {
 export interface ReleasedTicketCounts {
     total: number
     formatted: string  // Pre-computed by formatTicketCounts, e.g., "2V 1B"
+    byType: Partial<Record<TicketType, number>>  // A claim buys from its own ticket type
     queued: number
     queuedFormatted: string  // The waiting list by ticket type, in the style of formatted
 }
@@ -612,7 +623,7 @@ export interface ReleasedTicketCounts {
 export type WaitlistCounts = Pick<ReleasedTicketCounts, 'queued' | 'queuedFormatted'>
 
 /** A locked dinner with nothing for sale and nobody on its waiting list */
-export const EMPTY_RELEASED_TICKET_COUNTS: ReleasedTicketCounts = {total: 0, formatted: '-', queued: 0, queuedFormatted: '-'}
+export const EMPTY_RELEASED_TICKET_COUNTS: ReleasedTicketCounts = {total: 0, formatted: '-', byType: {}, queued: 0, queuedFormatted: '-'}
 
 // ============================================================================
 // Daily Maintenance - State Constants (ADR-015: Idempotent operations)

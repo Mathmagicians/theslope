@@ -17,17 +17,28 @@
  * │  │  M   T   O   T   F   L   S              │                │
  * │  │  1   2   3   4   5   6   7              │                │
  * │  │  8  [9] 10  11  12  13  14              │                │
- * │  │ 15  16 [17] 18  19  20  21              │                │
+ * │  │ 15  16 [17]n 18w 19* 20  21             │                │
  * │  └─────────────────────────────────────────┘                │
+ * │  Forklaring                                                 │
+ * │  (1) Næste fællesspisning   (1) Valgt dato                  │
+ * │  (1) Planlagt fællesspisning   (1) Tidligere fællesspisning │
+ * │  (1) Ferie                                                  │
+ * │  (1)*  Lukket for framelding                                │
+ * │  (1)n  Ledige billetter                                     │
+ * │  (1)w  Venteliste, ingen ledige billetter                   │
  * └─────────────────────────────────────────────────────────────┘
+ *
+ * Lock chips (SIZES.lockChip), on an upcoming dinner past its booking deadline (`lockChip`):
+ *   n = yellow, reading the tickets for sale
+ *   w = yellow, the hourglass ICONS.waitlist inset in a chip a size up (COMPONENTS.dinnerCalendar.queueChip): a waiting list, nothing for sale
+ *   * = peach, no number: closed, nothing for sale and nobody waiting
+ * The legend (CalendarLegend) draws each chip on a planned-day circle, the hourglass chip at COMPONENTS.legend.iconChip.
  *
  * Displays:
  * - Countdown timer (train station style with configurable colors from event list)
  * - Holidays (green rings)
  * - Generated dinner events (pink filled) - actual events created for the season
  * - Next dinner (special highlight) - uses color from 'next-dinner' event list
- * - Lock chips (optional) on an upcoming dinner past its booking deadline (`lockChip`): the tickets for sale as n in
- *   yellow, else the waiting list as -n in yellow, else peach without a number (closed, nothing for sale)
  *
  * Uses BaseCalendar for consistent calendar structure and event management.
  * Domain-specific rendering via slots (rings for holidays, filled for actual).
@@ -65,7 +76,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const {getHolidayDatesFromDateRangeList} = useSeason()
 const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
-const {CALENDAR, DINNER_CALENDAR, SIZES, ICONS, BOOKING_LOCK_STATUS, dayCircleClasses} = useTheSlopeDesignSystem()
+const {CALENDAR, DINNER_CALENDAR, COMPONENTS, SIZES, ICONS, BOOKING_LOCK_STATUS, dayCircleClasses} = useTheSlopeDesignSystem()
 const {lockChip} = useBookingUi()
 
 const holidayDates = computed(() => getHolidayDatesFromDateRangeList(props.holidays))
@@ -131,7 +142,7 @@ const legendItems = computed((): CalendarLegendItem[] => {
     items.push(
       { label: 'Lukket for framelding', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.locked.color, circleClass: chipCircle, chipSize: SIZES.lockChip },
       { label: 'Ledige billetter', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithTickets.color, circleClass: chipCircle, chipSize: SIZES.lockChip, count: '1' },
-      { label: '3 på venteliste, ingen ledige billetter', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithQueue.color, circleClass: chipCircle, chipSize: SIZES.lockChip, count: '-3' }
+      { label: 'Venteliste, ingen ledige billetter', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithQueue.color, circleClass: chipCircle, chipSize: SIZES.lockChip, icon: BOOKING_LOCK_STATUS.lockedWithQueue.icon }
     )
   }
 
@@ -171,7 +182,7 @@ const isSelected = (day: DateValue): boolean => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div :class="COMPONENTS.dinnerCalendar.root">
     <!-- Countdown Timer (Train Station Style) -->
     <CountdownTimer
       v-if="showCountdown"
@@ -186,16 +197,16 @@ const isSelected = (day: DateValue): boolean => {
     />
 
     <!-- Calendar Accordion with custom leading slot -->
-    <UAccordion v-model="accordionValue" :items="accordionItems" class="flex-1">
+    <UAccordion v-model="accordionValue" :items="accordionItems" :class="COMPONENTS.dinnerCalendar.accordion">
       <template #leading>
-        <div class="flex items-center gap-2">
+        <div :class="COMPONENTS.dinnerCalendar.leading">
           <UIcon :name="ICONS.calendarDays" />
           <span>Fællesspisninger</span>
         </div>
       </template>
       <template #calendar-content>
         <!-- Calendar Display -->
-        <div class="flex-1">
+        <div :class="COMPONENTS.dinnerCalendar.calendar">
           <BaseCalendar :season-dates="seasonDates" :event-lists="allEventLists" :number-of-months="numberOfMonths" :focus-date="selectedDate">
             <template #day="{ day, eventLists }">
               <!-- Holiday takes precedence (green ring) -->
@@ -213,6 +224,7 @@ const isSelected = (day: DateValue): boolean => {
                 :size="SIZES.lockChip"
                 :color="getLockChipForDay(day)!.color"
                 :text="getLockChipForDay(day)!.text"
+                :ui="getLockChipForDay(day)!.icon ? COMPONENTS.dinnerCalendar.queueChip.ui : undefined"
                 :data-testid="`calendar-dinner-date-${day.day}`"
               >
                 <div
@@ -221,6 +233,13 @@ const isSelected = (day: DateValue): boolean => {
                 >
                   {{ day.day }}
                 </div>
+                <template v-if="getLockChipForDay(day)!.icon" #content>
+                  <UIcon
+                    :name="getLockChipForDay(day)!.icon!"
+                    :class="COMPONENTS.dinnerCalendar.queueChip.icon"
+                    :data-testid="`calendar-dinner-waitlist-${day.day}`"
+                  />
+                </template>
               </UChip>
 
               <!-- Regular dinner event (next/future/past) - no lock -->
@@ -234,7 +253,7 @@ const isSelected = (day: DateValue): boolean => {
               </div>
 
               <!-- Regular day -->
-              <span v-else class="text-sm">{{ day.day }}</span>
+              <span v-else :class="COMPONENTS.dinnerCalendar.plainDay">{{ day.day }}</span>
             </template>
 
             <template #legend>

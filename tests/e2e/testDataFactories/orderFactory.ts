@@ -586,18 +586,18 @@ export class OrderFactory {
    * @param context - Browser context for API requests
    * @param request - ScaffoldOrdersRequest with householdId, dinnerEventIds, orders
    * @param expectedStatus - Expected HTTP status (default 200)
-   * @param adminBypass - Admin acts for a household that is not its own
+   * @param adminBypass - Admin acts for a household that is not its own; omitted sends no query, a boolean is sent as given
    * @returns ScaffoldOrdersResponse with householdId and scaffoldResult
    */
   static readonly scaffoldOrders = async (
     context: BrowserContext,
     request: ScaffoldOrdersRequest,
     expectedStatus: number = 200,
-    adminBypass: boolean = false
+    adminBypass?: boolean
   ): Promise<ScaffoldOrdersResponse | null> => {
     const { ScaffoldOrdersResponseSchema } = useBookingValidation()
 
-    const response = await context.request.post(`${HOUSEHOLD_SCAFFOLD_ENDPOINT}${adminBypass ? '?adminBypass=true' : ''}`, {
+    const response = await context.request.post(`${HOUSEHOLD_SCAFFOLD_ENDPOINT}${adminBypass === undefined ? '' : `?adminBypass=${adminBypass}`}`, {
       headers,
       data: request
     })

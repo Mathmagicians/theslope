@@ -535,7 +535,7 @@ export class SeasonFactory {
      * Clean up the cached active season singleton
      * Deletes the test season from database, clears the cache, and restores appropriate active season
      * Uses selectMostAppropriateActiveSeason to find the best season to activate (DB lookup, not in-memory)
-     * Gracefully handles parallel workers trying to delete the same singleton (ignores 404)
+     * A singleton another worker already deleted counts as removed
      * @param context BrowserContext for API requests
      */
     static readonly cleanupActiveSeason = async (context: BrowserContext): Promise<void> => {
@@ -543,16 +543,7 @@ export class SeasonFactory {
         const allSeasons = await this.getAllSeasons(context)
         const singleton = allSeasons.find(s => s.shortName === this.E2E_SINGLETON_NAME)
 
-        if (singleton) {
-            console.info('🌞 > SEASON_FACTORY > Cleaning up singleton season:', singleton.shortName)
-            try {
-                await this.deleteSeason(context, singleton.id!)
-                console.info('🌞 > SEASON_FACTORY > Singleton season deleted')
-            } catch {
-                // Ignore 404 errors - another worker already deleted the singleton
-                console.info('🌞 > SEASON_FACTORY > Season already deleted (by another worker), skipping')
-            }
-        }
+        if (singleton) await this.deleteSeason(context, singleton.id!)
 
         // Clear in-memory cache (may be null if global teardown process)
         this.activeSeason = null
@@ -568,21 +559,12 @@ export class SeasonFactory {
         const seasonToActivate = selectMostAppropriateActiveSeason(nonTestSeasons)
         const activeSeasonId = await this.getActiveSeasonId(context)
 
-        if (seasonToActivate && seasonToActivate.id === activeSeasonId) {
-            console.info('🌞 > SEASON_FACTORY > Most appropriate season already active:', seasonToActivate.shortName)
-        } else if (seasonToActivate) {
-            console.info('🌞 > SEASON_FACTORY > Activating most appropriate season:', seasonToActivate.shortName)
+        if (seasonToActivate && seasonToActivate.id !== activeSeasonId) {
             const response = await context.request.post('/api/admin/season/active', {
                 headers: headers,
                 data: { seasonId: seasonToActivate.id }
             })
-            if (response.status() === 200) {
-                console.info('🌞 > SEASON_FACTORY > Season activated successfully')
-            } else {
-                console.warn('🌞 > SEASON_FACTORY > Failed to activate season:', response.status())
-            }
-        } else {
-            console.info('🌞 > SEASON_FACTORY > No eligible non-test seasons to activate')
+            expect(response.status(), `Unexpected status activating season ${seasonToActivate.shortName}: ${await response.text()}`).toBe(200)
         }
     }
 
@@ -629,37 +611,27 @@ export class SeasonFactory {
         return result.data!
     }
 
+    /**
+     * Delete a season, returns the deleted season
+     * Cleanup (afterAll): no expectedStatus - a season already gone counts as removed, any other status fails
+     * API tests: pass expectedStatus - the deletion answers it
+     */
     static readonly deleteSeason = async (
         context: BrowserContext,
         id: number,
-        expectedStatus: number = 200
-    ): Promise<Season |number | null> => {
-        try {
-            const deleteResponse = await context.request.delete(`/api/admin/season/${id}`)
-
-            if (deleteResponse.status() === expectedStatus) {
-                if (expectedStatus === 200) {
-                    return await deleteResponse.json()
-                }
-                return null
-            } else if (deleteResponse.status() === 404 && expectedStatus === 200) {
-                return null
-            } else {
-                const errorBody = await deleteResponse.text()
-                console.warn(`❌ Cleanup failed: Season ${id} deletion returned ${deleteResponse.status()} (expected ${expectedStatus}):`, errorBody)
-                return null
-            }
-        } catch (deleteError) {
-            console.warn(`❌ Cleanup failed: Exception deleting season ${id}:`, deleteError)
-            return null
-        }
+        expectedStatus?: number
+    ): Promise<Season | null> => {
+        const response = await context.request.delete(`/api/admin/season/${id}`)
+        const status = response.status()
+        const body = await response.text()
+        expect(expectedStatus === undefined ? [200, 404] : [expectedStatus], `Unexpected status deleting season ${id}: ${body}`).toContain(status)
+        return status === 200 ? JSON.parse(body) : null
     }
 
     /**
      * Cleanup multiple seasons by ID (for test afterAll hooks)
      * NOTE: Does NOT delete singleton active season - that's cleaned up by global teardown
      * Worker-safe: Filters out singleton by name (E2E_SINGLETON_NAME) not by ID
-     * Gracefully handles 404 errors for already-deleted seasons
      */
     static readonly cleanupSeasons = async (
         context: BrowserContext,
@@ -671,26 +643,9 @@ export class SeasonFactory {
         const allSeasons = await this.getAllSeasons(context)
         const singletonId = allSeasons.find(s => s.shortName === this.E2E_SINGLETON_NAME)?.id
 
-        // Filter out singleton season ID if present
-        const filteredIds = seasonIds.filter(id => id !== singletonId)
-
-        if (filteredIds.length === 0) {
-            console.info('🌞 > SEASON_FACTORY > No seasons to cleanup (singleton excluded)')
-            return
-        }
-
-        console.info(`🌞 > SEASON_FACTORY > Cleaning up ${filteredIds.length} test season(s)`)
-
-        // Delete all seasons in parallel
-        await Promise.all(
-            filteredIds.map(async (id) => {
-                try {
-                    await this.deleteSeason(context, id)
-                } catch (error) {
-                    console.error(`Failed to delete test season with ID ${id}:`, error)
-                }
-            })
-        )
+        await Promise.all(seasonIds
+            .filter(id => id !== singletonId)
+            .map(id => this.deleteSeason(context, id)))
     }
 
     static readonly createSeasonWithTeams = async (

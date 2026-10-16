@@ -161,8 +161,7 @@ const savePreferences = async () => {
     toast.add({
       title: isPowerMode ? 'Alle præferencer opdateret' : 'Præferencer opdateret',
       description: formatScaffoldResult(result, 'past'),
-      icon: ICONS.checkCircle,
-      color: COLOR.success
+      ...scaffoldToastLook(result)
     })
 
     // Close the row after save

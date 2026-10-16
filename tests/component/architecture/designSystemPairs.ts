@@ -438,6 +438,14 @@ const DECORATIVE_EDGES = [
 
 export const isDecorativeEdge = (path: string) => DECORATIVE_EDGES.includes(path)
 
+/**
+ * Tokens that bring their own fill and an edge that carries meaning: a dinner ticket's edge names its order state.
+ * The edge meets the token's fill inside and the surface the card sits on outside, so it is measured against both.
+ */
+const MEANINGFUL_EDGES_ON_FILL = ['COMPONENTS.ticket.face']
+
+const isMeaningfulEdgeOnFill = (path: string) => MEANINGFUL_EDGES_ON_FILL.some(prefix => path.startsWith(`${prefix}.`))
+
 export type Level = 'AA' | 'AAA'
 
 /**
@@ -602,6 +610,17 @@ export const buildPairs = (override: PaletteOverride, level: Level): Pair[] => {
                     add('edge on surface', `${leaf.path} (${channel}) on ${surface.name}`,
                         `${mode}|${leaf.path}|${channel}|${surface.name}`, edge, surface, EDGE_THRESHOLD)
                 }
+            }
+        }
+
+        // 2a - an edge that carries meaning on a token with its own fill, against that fill and the edge surfaces
+        for (const leaf of LEAVES.filter(candidate => isMeaningfulEdgeOnFill(candidate.path))) {
+            const edge = pick(leaf.classes, 'border', mode)
+            const own = surfaceOf(leaf.classes, mode)
+            if (!edge || !own) continue
+            for (const surface of [{name: 'own fill', ...own}, ...edgeSurfaces]) {
+                add('edge on surface', `${leaf.path} (border) on ${surface.name}`,
+                    `${mode}|${leaf.path}|border|${surface.name}`, edge, surface, EDGE_THRESHOLD)
             }
         }
 

@@ -148,11 +148,12 @@ describe('DinnerTicket', () => {
 })
 
 describe('DinnerTicket on the waiting list', () => {
-    it('GIVEN a queued ticket THEN the hourglass sits in the state cell and the edge keeps the normal face', async () => {
+    it('GIVEN a queued ticket THEN the hourglass sits in the state cell and the card wears the queued face, apart from the normal one', async () => {
         const wrapper = await mountTicket({isQueued: true})
 
         expect(iconNamesIn(wrapper, 'ticket-state-cell')).toEqual([ICONS.waitlist])
-        expect(wrapper.classes()).toEqual(COMPONENTS.ticket.face.normal.split(' '))
+        expect(wrapper.classes()).toEqual(COMPONENTS.ticket.face.queued.split(' '))
+        expect(wrapper.classes()).not.toEqual(COMPONENTS.ticket.face.normal.split(' '))
     })
 
     it.each([

@@ -12,12 +12,12 @@
  * ┃  [cl][  ][al]  [VOKSEN · 55kr]                [mode] Spisesal   ░░[tk]░░┃  claimed, allergic   cl violet, al amber
  * ┃                fra Hansen                                        ░░░░░░░░┃
  * ┃  [cl][gu][al]  [BARN · 35kr · 2 Gæster]       [mode] Spisesal   ░░[tk]░░┃  claimed guest, allergic   gu + al green
- * ┃  [wl][  ][  ]  [VOKSEN · 55kr]                (mode) Spisesal   ░░[tk]░░┃  queued   wl toned, edge normal, (mode) the wish ghosted
+ * ┃  [wl][  ][  ]  [VOKSEN · 55kr]                (mode) Spisesal   ░░[tk]░░┃  queued   wl toned, edge neutral, (mode) the wish ghosted
  * ┃  [  ][  ][  ]  [BARN · 17kr]                  [remove]          ░░[tk]░░┃  a season's ticket price (TicketPriceListEditor)
  * ┃                Under 12 år · Barn                                ░░░░░░░░┃
  *
  * special = ticket.special: three ticket.cell (state | guest | allergy), an empty cell keeps its width
- *   [rl] ICONS.released, [cl] ICONS.claim at ticket.stateIcon[state]; [wl] ICONS.waitlist at ticket.stateIcon.queued
+ *   [rl] ICONS.released, [cl] ICONS.claim, [wl] ICONS.waitlist at ticket.stateIcon[state]
  *   [gu] ICONS.userPlus, [al] ICONS.allergy at ticket.infoIcon[ticketConfig.color]
  * type = the badge (ticket.badge) in the ticket type's colour
  * how you eat = ticket.modeSlot: DinnerModeSelector in view mode, right-aligned; a queued ticket shows the wished mode as
@@ -27,7 +27,8 @@
  * [tk] = ICONS.ticketSolid at ticket.watermarkIcon
  *
  * Two hues per card: the state colour paints the edge (ticket.face[state]) and the state glyph, the type colour
- * paints the badge and the guest and allergy glyphs. A queued ticket has no order yet: the edge keeps the normal face
+ * paints the badge and the guest and allergy glyphs. A queued ticket's edge takes the waiting list's neutral
+ * (ORDER_STATE_COLORS.queued); its hourglass takes the toned ink
  * Mode labels: Spisesal | Sen | Takeaway | Ingen
  */
 import type {DinnerMode} from '~/composables/useBookingValidation'
@@ -69,12 +70,12 @@ const {COMPONENTS, ICONS, SIZES, NOISE, getTicketState} = useTheSlopeDesignSyste
 const {formatPrice} = useTicket()
 const ticket = COMPONENTS.ticket
 
-const ticketState = computed(() => getTicketState(props.isReleased, props.isClaimed))
+const ticketState = computed(() => getTicketState(props.isReleased, props.isClaimed, props.isQueued))
 
-const STATE_GLYPHS = {released: ICONS.released, claimed: ICONS.claim} as const
+const STATE_GLYPHS = {released: ICONS.released, claimed: ICONS.claim, queued: ICONS.waitlist} as const satisfies Record<keyof typeof ticket.stateIcon, string>
 const stateGlyph = computed(() => {
-  if (props.isQueued) return {name: ICONS.waitlist, class: ticket.stateIcon.queued}
-  return ticketState.value === 'normal' ? null : {name: STATE_GLYPHS[ticketState.value], class: ticket.stateIcon[ticketState.value]}
+  const state = ticketState.value
+  return state === 'normal' ? null : {name: STATE_GLYPHS[state], class: ticket.stateIcon[state]}
 })
 
 const hasAllergies = computed(() => props.allergies.length > 0)

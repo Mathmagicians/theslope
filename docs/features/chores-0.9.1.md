@@ -552,6 +552,27 @@ One component renders the chip with a slot for the ghosted wish; the grid cell a
 
 `app/components/booking/BookingGridView.vue`, `app/components/dinner/DinnerModeLegend.vue`, their component specs.
 
+### Hand-written types in the design system
+
+#### Problem
+
+`useTheSlopeDesignSystem.ts` still spells types by hand: `ResidencyAlertKind` extracts a hand-written union of alert
+kinds, `RESIDENCY_CONFIG` declares an inline shape naming the domain fields `'movedInDate' | 'moveOutDate'`, and
+`AlertUi` / `AlertKindConfig` restate Nuxt UI's alert props. The sentences of a closed dinner's supply live in two
+homes: `DEADLINE_LABELS.BOOKING_CLOSED.availableText` in `useBooking.ts` and `SUPPLY_WORDS` in `useBookingUi.ts`; the
+"ledig / ledige" plural rule is written in `createBookingBadge` and in `GuestBookingForm.vue`.
+
+#### Solution
+
+A key type derives from its token (`keyof typeof`), a domain field name from the validation composable's schema
+(`HouseholdSchema.keyof()`), a Nuxt UI shape from the library's prop types (`AlertProps`). The supply sentences and
+the plural rule live once, in `useBookingUi`, and both badges and the guest form read them.
+
+#### Affected
+
+`app/composables/useTheSlopeDesignSystem.ts`, `app/composables/useBookingUi.ts`, `app/composables/useBooking.ts`
+(`DEADLINE_LABELS`), `app/components/booking/GuestBookingForm.vue`, their specs.
+
 ## Dependency clusters
 
 ### Problem

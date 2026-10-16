@@ -23,7 +23,8 @@ const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 /**
  * The chef releases portions on a sold-out dinner of the active season: the queue is served in strict FIFO, each
  * entry's order lands at the price written at join, a second release assigns the rest, and a consumed dinner's
- * queue is cleared by the daily maintenance. Serial: it books on the active season and runs the maintenance job.
+ * queue is cleared by the daily maintenance. A released ticket goes to the first in the line of its ticket type.
+ * Serial: it books on the active season and runs the maintenance job.
  */
 test.describe('Waiting list assignment', () => {
     let teamId: number
@@ -33,7 +34,8 @@ test.describe('Waiting list assignment', () => {
     let adminInhabitantId: number
     const dinnerIds: number[] = []
     let householdId: number
-    let inhabitants: InhabitantDisplay[]
+    const inhabitants: InhabitantDisplay[] = []
+    const teamIds: number[] = []
     let adultPrice: TicketPrice
     let childPrice: TicketPrice
     // Four inhabitants of the admin's household queue on dinners past their booking deadline
@@ -43,6 +45,22 @@ test.describe('Waiting list assignment', () => {
         (await WaitlistFactory.entries(context, [dinnerId])).filter(entry => entry.order.householdId === householdId)
     const orderIds: number[] = []
     const sellerHouseholdIds: number[] = []
+    // A dinner of the active season past its booking deadline
+    const dinnerPastDeadline = async (context: Parameters<typeof WaitlistFactory.queue>[0], title: string) => {
+        const dinner = await DinnerEventFactory.createDinnerEvent(context, {
+            date: daysFromNow(3), menuTitle: salt(title, temporaryAndRandom()), seasonId: activeSeasonId, cookingTeamId: teamId, chefId: adminInhabitantId
+        })
+        dinnerIds.push(dinner.id!)
+        return dinner.id!
+    }
+    // A ticket held on a closed dinner: the admin's bypass books it past the deadline
+    const holdTicket = async (context: Parameters<typeof WaitlistFactory.queue>[0], inhabitantId: number, dinnerId: number, price: TicketPrice) => {
+        const booked = await WaitlistFactory.queue(context, householdId, activeSeasonId, OrderFactory.createBookingOrder(inhabitantId, dinnerId, price.id!), true)
+        expect(booked.totals[Action.BOOK]).toBe(1)
+        const orders = await OrderFactory.getOrders(context, {dinnerEventIds: dinnerId, householdId})
+        return orders.find(order => order.inhabitantId === inhabitantId)!
+    }
+    let childSaleDinnerId: number
 
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
@@ -53,6 +71,7 @@ test.describe('Waiting list assignment', () => {
         activeSeasonId = activeSeason.id!
         ;({inhabitantId: adminInhabitantId, householdId} = await getSessionUserInfo(context))
         const team = await SeasonFactory.createCookingTeamForSeason(context, activeSeason.id!, salt('Ventelistehold', testSalt))
+        teamIds.push(team.id!)
         teamId = team.id!
         await SeasonFactory.assignMemberToTeam(context, teamId, adminInhabitantId, TeamRoleSchema.enum.CHEF)
         const dinner = await DinnerEventFactory.createDinnerEvent(context, {
@@ -60,7 +79,6 @@ test.describe('Waiting list assignment', () => {
         })
         dinnerEventId = dinner.id!
         dinnerIds.push(dinnerEventId)
-        inhabitants = []
         for (const name of ['Et', 'To', 'Tre', 'Fire']) {
             inhabitants.push(await HouseholdFactory.createInhabitantForHousehold(context, householdId, salt(`Venter ${name}`, testSalt)))
         }
@@ -71,17 +89,18 @@ test.describe('Waiting list assignment', () => {
         await WaitlistFactory.cleanupEntries(context, activeSeasonId, dinnerIds)
         await OrderFactory.cleanupOrders(context, orderIds)
         for (const inhabitant of inhabitants) await HouseholdFactory.deleteInhabitant(context, inhabitant.id!)
-        if (sellerHouseholdIds.length > 0) await HouseholdFactory.deleteHousehold(context, sellerHouseholdIds)
-        for (const id of dinnerIds) await DinnerEventFactory.deleteDinnerEvent(context, id).catch(() => undefined)
-        await SeasonFactory.deleteCookingTeam(context, teamId).catch(() => undefined)
+        await HouseholdFactory.deleteHousehold(context, sellerHouseholdIds)
+        for (const id of dinnerIds) await DinnerEventFactory.deleteDinnerEvent(context, id)
+        for (const id of teamIds) await SeasonFactory.deleteCookingTeam(context, id)
     })
 
     test('GIVEN voksen, barn, voksen, barn in the queue WHEN the chef releases 2.5 portions THEN the first three get their tickets and the last barn waits', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        const types = [adultPrice, childPrice, adultPrice, childPrice]
-        for (const [index, price] of types.entries()) {
+        // Each ticket type waits in its own line: the place counts within it
+        const joins = [{price: adultPrice, position: 1}, {price: childPrice, position: 1}, {price: adultPrice, position: 2}, {price: childPrice, position: 2}]
+        for (const [index, {price, position}] of joins.entries()) {
             const result = await queue(context, OrderFactory.createBookingOrder(inhabitants[index]!.id!, dinnerEventId, price.id!))
-            expect(result.positions.map(queued => queued.position)).toEqual([index + 1])
+            expect(result.positions.map(queued => queued.position)).toEqual([position])
         }
 
         const result = await WaitlistFactory.addExtraPortions(context, dinnerEventId, 2.5)
@@ -143,15 +162,68 @@ test.describe('Waiting list assignment', () => {
         expect(await householdEntries(context, pastDinner.id!)).toEqual([])
     })
 
+    test('GIVEN an adult then a child waiting WHEN a child ticket is released THEN the child holds it and the adult still waits', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const [holder, adult, child] = inhabitants as [InhabitantDisplay, InhabitantDisplay, InhabitantDisplay]
+        childSaleDinnerId = await dinnerPastDeadline(context, 'Barnebillet')
+        const held = await holdTicket(context, holder.id!, childSaleDinnerId, childPrice)
+        await queue(context, OrderFactory.createBookingOrder(adult.id!, childSaleDinnerId, adultPrice.id!))
+        await queue(context, OrderFactory.createBookingOrder(child.id!, childSaleDinnerId, childPrice.id!))
+
+        const released = await queue(context, OrderFactory.createBookingOrder(holder.id!, childSaleDinnerId, childPrice.id!, DinnerModeSchema.enum.NONE, held.id))
+
+        expect(released.totals[Action.RELEASE]).toBe(1)
+        expect(released.outcomes.waitlistTicketsSold).toEqual([{
+            dinnerEventId: childSaleDinnerId, ticketPriceId: childPrice.id,
+            buyerInhabitantId: child.id, buyerHouseholdId: householdId, sellerHouseholdId: householdId
+        }])
+        const bought = (await OrderFactory.getOrdersForDinnerEvent(context, childSaleDinnerId)).filter(order => order.inhabitantId === child.id)
+        expect(bought.map(order => order.state)).toEqual([OrderStateSchema.enum.BOOKED])
+        expect((await householdEntries(context, childSaleDinnerId)).map(entry => entry.inhabitantId)).toEqual([adult.id])
+    })
+
+    test('GIVEN that sale WHEN daily maintenance runs THEN it sells nothing more on that dinner', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const adult = inhabitants[1]!
+
+        const maintenance = await SeasonFactory.runDailyMaintenance(context)
+
+        expect(maintenance.scaffold?.outcomes.waitlistTicketsSold.filter(sale => sale.dinnerEventId === childSaleDinnerId)).toEqual([])
+        expect((await householdEntries(context, childSaleDinnerId)).map(entry => entry.inhabitantId)).toEqual([adult.id])
+    })
+
+    test('GIVEN a child waiting WHEN a household releases one child\'s ticket and claims one for its other child in one save THEN the waiting child holds the released ticket and the claimer joins the child line', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const [, waiting, holder, claimer] = inhabitants as [InhabitantDisplay, InhabitantDisplay, InhabitantDisplay, InhabitantDisplay]
+        const dinnerId = await dinnerPastDeadline(context, 'Barnekø')
+        const held = await holdTicket(context, holder.id!, dinnerId, childPrice)
+        await queue(context, OrderFactory.createBookingOrder(waiting.id!, dinnerId, childPrice.id!))
+
+        const response = await OrderFactory.scaffoldOrders(context, {householdId, seasonId: activeSeasonId, dinnerEventIds: [dinnerId], orders: [
+            OrderFactory.createBookingOrder(holder.id!, dinnerId, childPrice.id!, DinnerModeSchema.enum.NONE, held.id),
+            OrderFactory.createBookingOrder(claimer.id!, dinnerId, childPrice.id!)
+        ]})
+        const result = response!.scaffoldResult
+
+        expect(result.totals[Action.RELEASE]).toBe(1)
+        expect(result.totals[Action.QUEUE]).toBe(1)
+        expect(result.totals[Action.BUY]).toBe(0)
+        expect(result.outcomes.waitlistTicketsSold.map(sale => sale.buyerInhabitantId)).toEqual([waiting.id])
+        expect((await householdEntries(context, dinnerId)).map(entry => entry.inhabitantId)).toEqual([claimer.id])
+    })
+
     test('GIVEN a household holding a ticket past the deadline and a waiting entry at its price WHEN an admin sets the household\'s preferences to Ingen THEN the first in the waiting list holds the ticket and the household\'s open orders are cancelled', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
-        const dinnerAt = (days: number, title: string) => DinnerEventFactory.createDinnerEvent(context, {
-            date: daysFromNow(days), menuTitle: salt(title, testSalt), seasonId: activeSeasonId, cookingTeamId: teamId, chefId: adminInhabitantId
-        })
+        const dinnerAt = async (days: number, title: string) => {
+            const dinner = await DinnerEventFactory.createDinnerEvent(context, {
+                date: daysFromNow(days), menuTitle: salt(title, testSalt), seasonId: activeSeasonId, cookingTeamId: teamId, chefId: adminInhabitantId
+            })
+            dinnerIds.push(dinner.id!)
+            return dinner
+        }
         const closedDinner = await dinnerAt(3, 'Frigivet billet')
         const openDinner = await dinnerAt(20, 'Åben middag')
-        dinnerIds.push(closedDinner.id!, openDinner.id!)
         const {household: seller, inhabitants: [sellerInhabitant]} = await HouseholdFactory.createHouseholdWithInhabitants(context, HouseholdFactory.defaultHouseholdData(testSalt), 1)
         sellerHouseholdIds.push(seller.id)
         const preferences = (mode: DinnerMode) => HouseholdFactory.updateInhabitantPreferences(
@@ -173,7 +245,9 @@ test.describe('Waiting list assignment', () => {
             expect.objectContaining({inhabitantId: sellerInhabitant!.id, dinnerEventId: closedDinner.id, action: Action.RELEASE}),
             expect.objectContaining({inhabitantId: sellerInhabitant!.id, dinnerEventId: openDinner.id, action: Action.CANCEL})
         ]))
-        expect(response!.scaffoldResult.outcomes.waitlistTicketsSold).toEqual([{
+        // The seller holds a ticket on every dinner of the season, so its release also serves the lines the earlier cases leave
+        const salesOnDinner = response!.scaffoldResult.outcomes.waitlistTicketsSold.filter(sale => sale.dinnerEventId === closedDinner.id)
+        expect(salesOnDinner).toEqual([{
             dinnerEventId: closedDinner.id, ticketPriceId: adultPrice.id,
             buyerInhabitantId: waiting.id, buyerHouseholdId: householdId, sellerHouseholdId: seller.id
         }])

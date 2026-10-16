@@ -1,6 +1,6 @@
 import {describe, it, expect, afterEach} from 'vitest'
 import {ref} from 'vue'
-import {getRandomEmptyMessage, EMPTY_STATE_MESSAGES, createResponsiveAlerts, createColumnVisibility, createBreakpoint, createMasterDetail} from '~/composables/useTheSlopeDesignSystem'
+import {getRandomEmptyMessage, EMPTY_STATE_MESSAGES, createResponsiveAlerts, createColumnVisibility, createBreakpoint, createMasterDetail, getTicketState, getOrderStateColor, ORDER_STATE_COLORS, COMPONENTS} from '~/composables/useTheSlopeDesignSystem'
 
 const contexts = Object.keys(EMPTY_STATE_MESSAGES) as Array<keyof typeof EMPTY_STATE_MESSAGES>
 
@@ -73,6 +73,31 @@ describe('createBreakpoint', () => {
         [true, true]
     ] as const)('isMd=%s → measured %s', (md, measured) => {
         expect(createBreakpoint(ref(md)).measured.value).toBe(measured)
+    })
+})
+
+describe('getTicketState', () => {
+    // A released ticket reads released even when claimed; the waiting list shows on a ticket in neither state
+    it.each([
+        {isReleased: false, isClaimed: false, isQueued: false, state: 'normal'},
+        {isReleased: true, isClaimed: false, isQueued: false, state: 'released'},
+        {isReleased: false, isClaimed: true, isQueued: false, state: 'claimed'},
+        {isReleased: true, isClaimed: true, isQueued: false, state: 'released'},
+        {isReleased: false, isClaimed: false, isQueued: true, state: 'queued'},
+        {isReleased: true, isClaimed: false, isQueued: true, state: 'released'},
+        {isReleased: false, isClaimed: true, isQueued: true, state: 'claimed'}
+    ] as const)('released $isReleased, claimed $isClaimed, queued $isQueued → $state', ({isReleased, isClaimed, isQueued, state}) => {
+        expect(getTicketState(isReleased, isClaimed, isQueued)).toBe(state)
+    })
+
+    it.each([[false, false], [true, false], [false, true], [true, true]] as const)(
+        'released %s, claimed %s → the order state colour of that ticket state', (isReleased, isClaimed) => {
+            expect(getOrderStateColor(isReleased, isClaimed)).toBe(ORDER_STATE_COLORS[getTicketState(isReleased, isClaimed)])
+        })
+
+    it('the waiting list ghost badge and chip wear the queued state colour', () => {
+        expect([COMPONENTS.waitlist.ghostBadge.color, COMPONENTS.waitlist.chip.color])
+            .toEqual([ORDER_STATE_COLORS.queued, ORDER_STATE_COLORS.queued])
     })
 })
 

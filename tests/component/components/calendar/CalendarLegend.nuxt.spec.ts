@@ -5,6 +5,7 @@ import {mountSuspended} from '@nuxt/test-utils/runtime'
 import CalendarLegend from '~/components/calendar/CalendarLegend.vue'
 import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
 import {mountWithTooltipProvider, findAllByTestId, findByTestId} from '~~/tests/component/testHelpers'
+import {ICONS} from '~/composables/useTheSlopeDesignSystem'
 
 /**
  * The one legend every calendar renders: a row per item, and the item's kind decides the
@@ -15,7 +16,7 @@ import {mountWithTooltipProvider, findAllByTestId, findByTestId} from '~~/tests/
 describe('CalendarLegend', () => {
     const chips = [
         {label: 'Ledige billetter', kind: 'chip', chipColor: 'yellow', circleClass: ['circle-future'], count: '1'},
-        {label: '3 på venteliste, ingen ledige billetter', kind: 'chip', chipColor: 'yellow', circleClass: ['circle-future'], count: '-3'},
+        {label: 'Venteliste, ingen ledige billetter', kind: 'chip', chipColor: 'yellow', circleClass: ['circle-future'], icon: ICONS.waitlist},
         {label: 'Lukket for framelding', kind: 'chip', chipColor: 'error', circleClass: ['circle-future']}
     ] satisfies CalendarLegendItem[]
     const items: CalendarLegendItem[] = [
@@ -46,13 +47,16 @@ describe('CalendarLegend', () => {
         expect(findByTestId(wrapper, 'calendar-legend-circle').classes()).toContain('circle-planned')
     })
 
-    it.each(chips.map(({label, count}) => ({label, text: count ?? ''})))('the chip item "$label" wraps its day circle in a chip reading "$text"', async ({label, text}) => {
-        const wrapper = await mount()
-        const entry = findAllByTestId(wrapper, 'calendar-legend-entry').find(candidate => candidate.text().includes(label))!
-        expect(entry.find('.circle-future').exists()).toBe(true)
-        // UChip passes attrs through to the slot, so the indicator is reached by its slot name
-        expect(entry.find('[data-slot="base"]').text()).toBe(text)
-    })
+    it.each(chips.map(chip => ({label: chip.label, text: 'count' in chip ? chip.count : '', glyphs: 'icon' in chip ? [chip.icon] : []})))(
+        'the chip item "$label" wraps its day circle in a chip reading "$text" with the glyphs $glyphs', async ({label, text, glyphs}) => {
+            const wrapper = await mount()
+            const entry = findAllByTestId(wrapper, 'calendar-legend-entry').find(candidate => candidate.text().includes(label))!
+            expect(entry.find('.circle-future').exists()).toBe(true)
+            // UChip passes attrs through to the slot, so the indicator is reached by its slot name
+            const chip = entry.find('[data-slot="base"]')
+            expect(chip.text()).toBe(text)
+            expect(wrapper.findAllComponents({name: 'UIcon'}).filter(icon => chip.element.contains(icon.element)).map(icon => icon.props('name'))).toEqual(glyphs)
+        })
 
     it('a badge item renders the badge with its band', async () => {
         const wrapper = await mount()

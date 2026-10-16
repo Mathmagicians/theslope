@@ -1,6 +1,6 @@
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, addYears, differenceInDays, nextDay, type Day} from 'date-fns'
-import {useBooking, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcome, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
+import {useBooking, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcome, ticketsForSaleOf, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {MODE_WORDS, ACTION_WORDS, ORDER_STATE_LABELS} from '~/composables/useBookingUi'
 import {useBookingValidation, type OrderDisplay, type DinnerMode, type DesiredOrder} from '~/composables/useBookingValidation'
@@ -498,6 +498,26 @@ describe('bookingOutcome', () => {
         {bucket: null, ticketsForSale: 1, expected: Action.CHANGE_MODE}
     ])('$bucket with $ticketsForSale for sale → $expected', ({bucket, ticketsForSale, expected}) => {
         expect(bookingOutcome(bucket, {ticketsForSale})).toBe(expected)
+    })
+})
+
+// A claim buys from the dinner's tickets for sale of the ticket type its price names
+describe('ticketsForSaleOf', () => {
+    const TicketType = TicketTypes
+    const ticketPrices = TicketFactory.defaultTicketPrices()
+    const priceIdOf = (ticketType: typeof TicketType[keyof typeof TicketType]) => ticketPrices.find(price => price.ticketType === ticketType)!.id!
+    const counts = {...EMPTY_RELEASED_TICKET_COUNTS, total: 3, byType: {[TicketType.ADULT]: 2, [TicketType.CHILD]: 1}}
+
+    it.each([
+        {ticketType: TicketType.ADULT, forSale: 2},
+        {ticketType: TicketType.CHILD, forSale: 1},
+        {ticketType: TicketType.BABY, forSale: 0}
+    ])('a claim at a $ticketType price finds the $forSale tickets for sale of its type', ({ticketType, forSale}) => {
+        expect(ticketsForSaleOf(counts, ticketPrices, priceIdOf(ticketType))).toBe(forSale)
+    })
+
+    it('a claim at a price outside the season finds nothing for sale', () => {
+        expect(ticketsForSaleOf(counts, ticketPrices, 99)).toBe(0)
     })
 })
 
@@ -1672,20 +1692,23 @@ describe('Lock Status Utilities', () => {
     })
 
     describe('computeLockStatus', () => {
-        // The released counts the store reads, and the ReleasedTicketCounts a locked dinner carries
-        const released = (total: number, formatted: string) => ({ total, formatted })
+        // The released counts the store reads, and the ReleasedTicketCounts a locked dinner carries: its tickets for sale
+        // beside its waiting list
+        const released = (total: number, formatted: string, byType: Partial<Record<typeof TicketTypes[keyof typeof TicketTypes], number>>) => ({ total, formatted, byType })
         const queue = (queued: number, queuedFormatted: string) => ({ queued, queuedFormatted })
-        const counts = (total: number, formatted: string, queued = 0, queuedFormatted = '-') => ({ total, formatted, queued, queuedFormatted })
-        const emptyCount = counts(0, '-')
+        const counts = (supply = released(0, '-', {}), waitlist = queue(0, '-')) => ({ ...supply, ...waitlist })
+        const emptyCount = counts()
+        const adults = (count: number) => released(count, `${count}V`, {[TicketTypes.ADULT]: count})
+        const oneChild = released(1, '1B', {[TicketTypes.CHILD]: 1})
 
         describe.each([
             {
                 name: 'marks locked dinners with released count',
                 dinnerEvents: [makeEvent(1, 2), makeEvent(2, 5), makeEvent(3, 10)],
                 lockedDays: 7,
-                releasedCounts: new Map([[1, released(3, '3V')], [2, released(1, '1B')]]),
+                releasedCounts: new Map([[1, adults(3)], [2, oneChild]]),
                 queues: undefined,
-                expected: new Map([[1, counts(3, '3V')], [2, counts(1, '1B')]])
+                expected: new Map([[1, counts(adults(3))], [2, counts(oneChild)]])
             },
             {
                 name: 'defaults to empty count when no released count provided',
@@ -1699,9 +1722,9 @@ describe('Lock Status Utilities', () => {
                 name: 'excludes non-locked dinners',
                 dinnerEvents: [makeEvent(1, 2), makeEvent(2, 10)],
                 lockedDays: 5,
-                releasedCounts: new Map([[1, released(2, '2V')], [2, released(5, '5V')]]),
+                releasedCounts: new Map([[1, adults(2)], [2, adults(5)]]),
                 queues: undefined,
-                expected: new Map([[1, counts(2, '2V')]])
+                expected: new Map([[1, counts(adults(2))]])
             },
             {
                 name: 'carries the waiting list of a locked dinner, counted by ticket type',
@@ -1709,15 +1732,15 @@ describe('Lock Status Utilities', () => {
                 lockedDays: 7,
                 releasedCounts: undefined,
                 queues: new Map([[1, queue(3, '2V 1B')], [3, queue(4, '4V')]]),
-                expected: new Map([[1, counts(0, '-', 3, '2V 1B')], [2, emptyCount]])
+                expected: new Map([[1, counts(undefined, queue(3, '2V 1B'))], [2, emptyCount]])
             },
             {
                 name: 'carries the tickets for sale and the waiting list of a locked dinner side by side',
                 dinnerEvents: [makeEvent(1, 2)],
                 lockedDays: 7,
-                releasedCounts: new Map([[1, released(4, '4V')]]),
+                releasedCounts: new Map([[1, adults(4)]]),
                 queues: new Map([[1, queue(1, '1B')]]),
-                expected: new Map([[1, counts(4, '4V', 1, '1B')]])
+                expected: new Map([[1, counts(adults(4), queue(1, '1B'))]])
             }
         ])('$name', ({dinnerEvents, lockedDays, releasedCounts, queues, expected}) => {
             it('returns correct lock status map', () => {

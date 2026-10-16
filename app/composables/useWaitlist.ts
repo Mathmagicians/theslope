@@ -1,5 +1,6 @@
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
-import type {PricePortions} from '~/composables/useTicketPriceValidation'
+import type {PricePortions, TicketPrice} from '~/composables/useTicketPriceValidation'
+import type {TicketType} from '~/composables/useBookingValidation'
 import {sumBy} from '~/utils/ledger'
 
 // Ascending by time; the id breaks a tie between rows stamped in the same instant
@@ -7,6 +8,7 @@ export const byTimeThenId = <T extends {id: number}>(getTime: (item: T) => numbe
     getTime(a) - getTime(b) || a.id - b.id
 
 type PortionsOf = (entry: TicketWaitlistDisplay) => number
+type TicketTypeOf = (entry: TicketWaitlistDisplay) => TicketType | undefined
 
 interface WaitlistTake {
     entry: TicketWaitlistDisplay
@@ -28,10 +30,26 @@ export const useWaitlist = () => {
     const inQueueOrder = (entries: TicketWaitlistDisplay[]): TicketWaitlistDisplay[] =>
         [...entries].sort(byTimeThenId(entry => entry.createdAt.getTime()))
 
-    // 1-based place in the queue, null when the entry is not in it
-    const positionOf = (entries: TicketWaitlistDisplay[], entryId: number): number | null => {
-        const index = inQueueOrder(entries).findIndex(entry => entry.id === entryId)
-        return index === -1 ? null : index + 1
+    // The ticket type an entry waits for: the type of the season price it holds
+    const ticketTypeOfEntry = (ticketPrices: Pick<TicketPrice, 'id' | 'ticketType'>[]): TicketTypeOf => (entry: TicketWaitlistDisplay) =>
+        ticketPrices.find(price => price.id === entry.order.ticketPriceId)?.ticketType
+
+    // One first-come-first-served line per ticket type, each in join order
+    const waitingLines = (entries: TicketWaitlistDisplay[], ticketTypeOf: TicketTypeOf): Map<TicketType, TicketWaitlistDisplay[]> => {
+        const lines = new Map<TicketType, TicketWaitlistDisplay[]>()
+        for (const entry of inQueueOrder(entries)) {
+            const ticketType = ticketTypeOf(entry)
+            if (ticketType) lines.set(ticketType, [...(lines.get(ticketType) ?? []), entry])
+        }
+        return lines
+    }
+
+    // 1-based place in the line of the entry's ticket type, null when the entry is not in the queue
+    const positionOf = (entries: TicketWaitlistDisplay[], entryId: number, ticketTypeOf: TicketTypeOf): number | null => {
+        const entry = entries.find(candidate => candidate.id === entryId)
+        const ticketType = entry && ticketTypeOf(entry)
+        if (!ticketType) return null
+        return waitingLines(entries, ticketTypeOf).get(ticketType)!.findIndex(candidate => candidate.id === entryId) + 1
     }
 
     // An entry weighs on the kitchen's count what a ticket at the price it holds weighs
@@ -62,5 +80,5 @@ export const useWaitlist = () => {
         return {take, portionsUsed: supplyPortions - remaining, waiting: queue.slice(index)}
     }
 
-    return {inQueueOrder, positionOf, portionsOfEntryFor, portionNeed, resolveWaitlistAssignment}
+    return {inQueueOrder, ticketTypeOfEntry, waitingLines, positionOf, portionsOfEntryFor, portionNeed, resolveWaitlistAssignment}
 }

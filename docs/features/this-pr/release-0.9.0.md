@@ -126,9 +126,11 @@ Each point is presented with its files and code, and signed off on its own.
 | 1. Mail is configured or off | The notification service decides its channels from the environment; `DEPLOY_URL` unset means e-mail is off, a channel that is off logs the kind and the missing setting and reports not sent; the request fallback goes; `npm run dev` sets `DEPLOY_URL` locally | ✅ signed off 2026-10-14, implemented |
 | 2. Notification after the action | The scaffold and the waiting-list steps send nothing and return outcomes that carry what a notification needs; the caller passes them to the notification service | ✅ signed off 2026-10-14, implemented |
 | 3. The scaffold survives a partial failure | A failed write batch is retried order by order; the rest of the household runs on; the reply counts the orders per action, lists them per person for a household run and lists the failed orders; the preview and the reply name the action through one function (`actionOfUpdate`) | ✅ signed off 2026-10-15, implemented |
-| 4. The waiting list catches up | A ticket for sale at a waiting entry's price goes to the first in the waiting list at release, after each scaffold run on its dinners and in daily maintenance; idempotent (ADR-015) | ⏳ awaiting signoff |
+| 4. The waiting list catches up | A dinner's waiting list is one first-come-first-served line per ticket type; every save and every nightly run ends by selling the tickets for sale to the first in their type's line (`sellTicketsToWaitlist`), idempotent (ADR-015); a claim buys while nobody waits in its type's line; a place counts within its line; the save preview counts the tickets for sale of the row's type | ✅ signed off 2026-10-16, implemented |
+| 4b. The views show each line | The chef's alert, the booking form and the kitchen box name the waiting list per ticket type; the kitchen box holds the tickets for sale and the waiting list together | ⏳ mockups pending |
+| 4c. The preview sells each ticket once | The save preview settles the claims in order as the save does: the first claims of a ticket type buy that type's tickets for sale, the rest join its waiting list (`plannedActions`, `supplyOfType`) | ⏳ awaiting signoff; OPEN: the guest form's label for a mixed outcome, A the first guest's outcome, B both counts ("Køb 3 billetter, skriv 7 gæster på venteliste") |
 | 5. One client write | Every booking write goes through one bookings-store action that refreshes orders, released tickets, the waiting list and the household | ⏳ awaiting signoff |
-| 6. Preview and toast from one word table | Future words in the preview, past words in the toast, grouped per person; the toast is red as soon as one item failed, green otherwise | ⏳ awaiting signoff |
+| 6. Preview and toast from one word table | Future words in the preview, past words in the toast, grouped per person; the toast is red as soon as one item failed, green otherwise | toast look implemented 2026-10-16 (`scaffoldToastLook`: the ticket, red on a failed order); the word table ⏳ awaiting signoff |
 | 7. The ticket history follows kuverter | Every audit row replays, system or member alike; a line for each change of kuverter; a system run and the nightly close are one line for the dinner; the replay ends equal to state | ⏳ awaiting signoff |
 
 ### Coverage
@@ -142,6 +144,10 @@ cases release through the member's booking route. The package adds the case that
 | GIVEN a dinner past its booking deadline with a waiting entry at a household's ticket price WHEN an admin sets the household's preferences to Ingen THEN the first in the waiting list holds the ticket, the household's orders on open dinners are cancelled, and the reply lists the release and the cancellation with no failure | serial API e2e, `waitlistAssignment.e2e.spec.ts` |
 | The same with e-mail off: the booking work completes and the reply carries the outcomes | unit, the scaffold with no `DEPLOY_URL` |
 | GIVEN a batch write that fails WHEN it is retried order by order THEN the orders that land are reported and only the failing order is listed as failed | unit, `batchUtils.unit.spec.ts` |
+| GIVEN an adult then a child waiting WHEN a child ticket is released THEN the child holds it and the adult still waits; daily maintenance then sells nothing more on that dinner | serial API e2e, `waitlistAssignment.e2e.spec.ts` |
+| GIVEN a child waiting WHEN a household releases one child's ticket and claims one for its other child in one save THEN the waiting child holds the released ticket and the claimer joins the child line | serial API e2e, `waitlistAssignment.e2e.spec.ts` |
+| One line per ticket type in join order; a place counts within its line | unit, `useWaitlist.unit.spec.ts` |
+| A child row on a dinner with only an adult ticket for sale saves as "Skriv på venteliste", with a child ticket as "Køb billet" | component, `DinnerBookingForm.nuxt.spec.ts` |
 
 ### Mockup — toast and preview ⏳ awaiting signoff
 
@@ -262,6 +268,12 @@ crosses the buildup threshold and asserts each event writes its Delivery row.
   a second meaning; the claim returns the selling household, so the sold mail reaches the household whose ticket it was.
 - The ticket history replays system updates; a change between eating modes stays out of it (option A); the nightly
   close is one line for the dinner.
+
+**2026-10-16** (one booking path, end to end)
+- The waiting list is one first-come-first-served line per ticket type: a released child ticket goes to the first child
+  waiting, whoever waits in the adult line. The sale is `sellTicketsToWaitlist`; a line without supply logs info.
+- A sold ticket keeps its price row: the buyer pays its price and eats its portions.
+- The kitchen box holds the tickets for sale and the waiting list together (point 4b).
 
 ## Coverage
 

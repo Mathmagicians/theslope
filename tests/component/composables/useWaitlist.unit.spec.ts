@@ -11,8 +11,9 @@ const TicketType = TicketTypeSchema.enum
 // Ticket price ids stand for a type; the season's prices carry each price's portions
 const PRICE_ID = {[TicketType.ADULT]: 1, [TicketType.CHILD]: 2, [TicketType.BABY]: 3} as const
 const PORTIONS = {[TicketType.ADULT]: 1, [TicketType.CHILD]: 0.5, [TicketType.BABY]: 0} as const
-const TICKET_PRICES = Object.values(TicketType).map(ticketType => ({id: PRICE_ID[ticketType], portions: PORTIONS[ticketType]}))
+const TICKET_PRICES = Object.values(TicketType).map(ticketType => ({id: PRICE_ID[ticketType], ticketType, portions: PORTIONS[ticketType]}))
 const portionsOf = useWaitlist().portionsOfEntryFor(TICKET_PRICES)
+const ticketTypeOf = useWaitlist().ticketTypeOfEntry(TICKET_PRICES)
 
 const entry = (id: number, ticketType: keyof typeof PRICE_ID, minute: number, isGuestTicket = false): TicketWaitlistDisplay => ({
     id,
@@ -34,7 +35,7 @@ const entry = (id: number, ticketType: keyof typeof PRICE_ID, minute: number, is
 })
 
 describe('useWaitlist', () => {
-    const {inQueueOrder, positionOf, portionNeed, resolveWaitlistAssignment} = useWaitlist()
+    const {inQueueOrder, waitingLines, positionOf, portionNeed, resolveWaitlistAssignment} = useWaitlist()
     // Joined in the order voksen, barn, voksen, barn
     const queue = [entry(1, TicketType.ADULT, 0), entry(2, TicketType.CHILD, 1), entry(3, TicketType.ADULT, 2), entry(4, TicketType.CHILD, 3)]
 
@@ -43,9 +44,21 @@ describe('useWaitlist', () => {
         expect(inQueueOrder(shuffled).map(e => e.id)).toEqual([1, 2, 3, 4])
     })
 
-    it('gives a 1-based position and null for an entry outside the queue', () => {
-        expect(positionOf(queue, 3)).toBe(3)
-        expect(positionOf(queue, 99)).toBeNull()
+    it('splits the queue into one line per ticket type, each in join order', () => {
+        const lines = waitingLines([queue[3]!, queue[2]!, queue[1]!, queue[0]!], ticketTypeOf)
+
+        expect(lines.get(TicketType.ADULT)?.map(e => e.id)).toEqual([1, 3])
+        expect(lines.get(TicketType.CHILD)?.map(e => e.id)).toEqual([2, 4])
+        expect(lines.has(TicketType.BABY)).toBe(false)
+    })
+
+    it.each([
+        {entryId: 1, position: 1, description: 'the first adult is first in the adult line'},
+        {entryId: 3, position: 2, description: 'the second adult is second in the adult line'},
+        {entryId: 4, position: 2, description: 'the second child is second in the child line'},
+        {entryId: 99, position: null, description: 'an entry outside the queue has no place'}
+    ])('$description', ({entryId, position}) => {
+        expect(positionOf(queue, entryId, ticketTypeOf)).toBe(position)
     })
 
     it.each(Object.values(TicketType))('weighs a %s entry at the portions its price carries', (ticketType) => {

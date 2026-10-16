@@ -150,7 +150,7 @@ const resolver = (d1Client: D1Database) => {
     return {dinnerOf, shortnameOf, soldMails}
 }
 
-/** The mails for what a scaffold run did: joined, sold, and sold to the first in the waiting list */
+/** The mails for what a scaffold run did: joined, sold, and sold to the first in a ticket type's line */
 export const notifyBookingOutcomes = async (d1Client: D1Database, channel: EmailChannel, outcomes: BookingOutcomes): Promise<SenderEmitResult[]> => {
     const {dinnerOf, shortnameOf, soldMails} = resolver(d1Client)
     const threshold = useAppConfig().theslope.waitlistBuildupThreshold

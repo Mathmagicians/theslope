@@ -65,7 +65,7 @@ import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {TicketPresentation} from '~/composables/useBookingUi'
 import type {BookingView} from '~/composables/useBookingView'
 import type {DateRange} from '~/types/dateTypes'
-import {EMPTY_RELEASED_TICKET_COUNTS, type BookingChanges, type GuestBookingIntent, type ReleasedTicketCounts} from '~/composables/useBooking'
+import {EMPTY_RELEASED_TICKET_COUNTS, ticketsForSaleOf, type BookingChanges, type GuestBookingIntent, type ReleasedTicketCounts} from '~/composables/useBooking'
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
@@ -81,7 +81,7 @@ interface GridRow {
   inhabitant?: InhabitantDisplay // For inhabitant row, or booker for guest-order
   inhabitants?: InhabitantDisplay[] // For power mode
   guestOrders?: OrderDisplay[] // For grouped guest bookings (by booker+ticketType+event)
-  ticketConfig?: TicketPresentation | null // Guest rows show their ticket type
+  ticketConfig?: TicketPresentation | null // The row's ticket type: an inhabitant's by age, a guest group's by its price
   guestCount?: number // Number of guest tickets in group
   isSynthetic: boolean
 }
@@ -186,7 +186,7 @@ const actionPreviewItems = computed(() => {
   )
 
   // Each dinner settles a claim against its own tickets for sale (the lock status)
-  return formatActionPreview(buckets, props.orders, getInhabitantName, order => ({ticketsForSale: props.lockStatus.get(order.dinnerEventId)?.total ?? 0}), waitlistPositionOf(props.waitlistEntries))
+  return formatActionPreview(buckets, props.orders, getInhabitantName, order => ({ticketsForSale: ticketsForSaleOf(props.lockStatus.get(order.dinnerEventId), props.ticketPrices, order.ticketPriceId)}), waitlistPositionOf(props.waitlistEntries))
 })
 
 // Effective form mode - VIEW when saving to prevent cell edits
@@ -393,6 +393,7 @@ const tableData = computed((): GridRow[] => {
       id: inhabitant.id,
       name: inhabitant.name,
       inhabitant,
+      ticketConfig: resolveTicketTypePresentation(inhabitant.birthDate ?? null, props.ticketPrices),
       isSynthetic: false
     })
   })
@@ -650,12 +651,12 @@ const getEventSummary = (eventId: number) => {
           >
             <template #badge>
               <UBadge
-                v-if="resolveTicketTypePresentation(row.original.inhabitant.birthDate ?? null, ticketPrices)"
-                :color="resolveTicketTypePresentation(row.original.inhabitant.birthDate ?? null, ticketPrices)!.color"
+                v-if="row.original.ticketConfig"
+                :color="row.original.ticketConfig.color"
                 :variant="NOISE.subtle"
                 :size="SIZES.xs"
               >
-                {{ resolveTicketTypePresentation(row.original.inhabitant.birthDate ?? null, ticketPrices)!.label }}
+                {{ row.original.ticketConfig.label }}
               </UBadge>
             </template>
           </UserListItem>

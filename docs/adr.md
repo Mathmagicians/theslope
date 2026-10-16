@@ -107,7 +107,7 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 
 ## ADR-016: Unified Booking Through Scaffold
 
-**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-10-15
+**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-10-16
 
 ### Context
 
@@ -125,7 +125,7 @@ Abstract composite keys (`inhabitantId-dinnerEventId`) caused bugs:
 | Stage | File | Role |
 |-------|------|------|
 | **Generator** | `useBooking.ts` | `decideOrderAction(input) → { bucket, order } \| null` — pure function, returns bucket `create \| update \| delete \| idempotent \| claim \| leave \| requeue`, sets `state` (BOOKED/RELEASED) and `dinnerMode`. Entry points: `resolveDesiredOrdersToBuckets` (user mode, with the household's queue entries), `resolveOrdersFromPreferencesToBuckets` (system mode) |
-| **Scaffolder** | `scaffoldPrebookings.ts` | Transforms `DesiredOrder → OrderCreateWithPrice` (adds `bookedByUserId`, `priceAtBooking`, `householdId`) and executes the buckets: `createOrders()`, `updateOrdersBatch()` + `releasedAt` for releases, `deleteOrder()`, `claimOrder()` else `joinWaitlist()` for claims, `deleteWaitlistEntry()` for leave, `updateWaitlistEntryOrder()` for requeue, skip idempotent |
+| **Scaffolder** | `scaffoldPrebookings.ts` | Transforms `DesiredOrder → OrderCreateWithPrice` (adds `bookedByUserId`, `priceAtBooking`, `householdId`) and executes the buckets: `createOrders()`, `updateOrdersBatch()` + `releasedAt` for releases, `deleteOrder()`, `claimOrder()` else `joinWaitlist()` for claims, `deleteWaitlistEntry()` for leave, `updateWaitlistEntryOrder()` for requeue, skip idempotent; after the households, `sellTicketsToWaitlist()` |
 
 ### Decision Matrix
 
@@ -141,9 +141,11 @@ Abstract composite keys (`inhabitantId-dinnerEventId`) caused bugs:
 | present | ≠ NONE | diff | any | **UPDATE** (mode/price change) |
 | present | any | not found | any | SKIP (stale) |
 
-The claim bucket executes by supply at that instant: a released ticket at the price, FIFO by `releasedAt`, else a queue
-entry at the frozen price with the wish (mode, guest flag, allergy ids); the result reports the entry's position. A lost
-claim race queues.
+A dinner's waiting list is one first-come-first-served line per ticket type. The claim bucket executes by supply at that
+instant: a released ticket of the claim's ticket type, FIFO by `releasedAt`, while nobody waits in that type's line;
+else a queue entry at the frozen price with the wish (mode, guest flag, allergy ids), and the result reports the entry's
+place in its line. A lost claim race queues. Every run ends by selling the tickets for sale to the first in each line;
+a sold ticket keeps its price row.
 
 A desired order targets a queue entry by `waitlistEntryId`; a regular desired order without ids targets the inhabitant's
 own regular entry on the dinner.
@@ -202,6 +204,7 @@ endpoint hands the scaffolder its deadlines: the season's (`deadlinesForSeason`)
 8. UI MUST include `waitlistEntryId` from the household's queue entries to leave or requeue
 9. The scaffold and the waiting-list steps send no notification: they return their outcomes (joined, sold, sold to the waiting list, the chef's extra portions), and the caller hands them to the notification service after the action (`notifyBookingOutcomes`, `notifyExtraPortions`)
 10. A failed write batch is retried order by order; the reply counts the orders that landed per action (`totals`), lists them per person for a run scoped to one household (`results`) and lists the orders that failed (`failed`)
+11. A claim buys a released ticket of its type only while nobody waits in that type's line; every run ends with `sellTicketsToWaitlist` on its dinners
 
 ### Key Files
 
@@ -212,7 +215,7 @@ endpoint hands the scaffolder its deadlines: the season's (`deadlinesForSeason`)
 | `app/composables/useSeason.ts` | `deadlinesForSeason`, `OPEN_DEADLINES` |
 | `app/composables/useHousehold.ts` | `isHouseholdActiveOnDay` residency predicate |
 | `server/utils/scaffoldPrebookings.ts` | Scaffolder: transforms, executes, `rescaffoldOnFieldChange` |
-| `server/utils/waitlistAssignment.ts` | `joinWaitlist`; `assignReleasedTicket`, a released ticket to the first in the waiting list; `assignWaitlistPortions`, the chef's extra portions |
+| `server/utils/waitlistAssignment.ts` | `joinWaitlist`; `sellTicketsToWaitlist`, the tickets for sale to the first in each ticket type's line; `assignWaitlistPortions`, the chef's extra portions |
 | `server/utils/sender/events/waitlist.ts` | `notifyBookingOutcomes`, `notifyExtraPortions`: the booking mails after the action |
 
 ### Related ADRs
@@ -225,7 +228,7 @@ endpoint hands the scaffolder its deadlines: the season's (`deadlinesForSeason`)
 
 ## ADR-015: Idempotent Automated Jobs with Rolling Window
 
-**Status:** Accepted | **Date:** 2025-12-12 | **Updated:** 2026-10-13
+**Status:** Accepted | **Date:** 2025-12-12 | **Updated:** 2026-10-16
 
 ### Context
 
@@ -244,7 +247,7 @@ Automated jobs (daily cron, season activation, billing imports) run on Cloudflar
 
 ### Rolling Window Pattern
 
-Daily maintenance consumes past dinners (SCHEDULED/ANNOUNCED → CONSUMED), closes orders on consumed dinners (BOOKED/RELEASED → CLOSED), creates transactions for closed orders without one, clears the waiting-list entries of consumed dinners (`deleteWaitlistForConsumedDinners`, reported as `clearWaitlist.cleared`), then scaffolds pre-bookings for `today → today + 60 days`. A re-run after an outage catches up by itself: each step processes all qualifying records and the scaffold window starts from the current day. Users book manually beyond the window.
+Daily maintenance consumes past dinners (SCHEDULED/ANNOUNCED → CONSUMED), closes orders on consumed dinners (BOOKED/RELEASED → CLOSED), creates transactions for closed orders without one, clears the waiting-list entries of consumed dinners (`deleteWaitlistForConsumedDinners`, reported as `clearWaitlist.cleared`), then scaffolds pre-bookings for `today → today + 60 days`, ending with the sale of the tickets for sale to the waiting list. A re-run after an outage catches up by itself: each step processes all qualifying records and the scaffold window starts from the current day. Users book manually beyond the window.
 
 ### Idempotency Patterns
 
@@ -255,6 +258,7 @@ Daily maintenance consumes past dinners (SCHEDULED/ANNOUNCED → CONSUMED), clos
 | **closeOrders** | Only updates orders with `state IN (BOOKED, RELEASED)` on CONSUMED dinners (already closed = no-op) |
 | **createTransactions** | Only creates for orders with `Transaction: null` (existing transaction = skipped) |
 | **generateDinnerEvents** | Uses `pruneAndCreate` to reconcile by date key |
+| **sellTicketsToWaitlist** | A placed entry leaves its line; a line without a ticket of its type for sale stops at its first miss |
 
 ### Configuration
 

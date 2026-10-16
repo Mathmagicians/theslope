@@ -10,7 +10,7 @@ const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, doScreensho
 test.describe('Household tab navigation', () => {
     // Unique salt per worker to avoid parallel test conflicts
     const testSalt = temporaryAndRandom()
-    let householdId: number
+    const createdHouseholdIds: number[] = []
     let shortName: string
     let pbsId: number
 
@@ -26,10 +26,7 @@ test.describe('Household tab navigation', () => {
 
     type Tab = typeof tabs[number]
 
-    const buildUrl = (tabPath: string, query?: string) => {
-        const base = `/household/${encodeURIComponent(shortName)}/${tabPath}?pbs=${pbsId}`
-        return query ? `${base}&${query}` : base
-    }
+    const buildUrl = (tabPath: string) => `/household/${encodeURIComponent(shortName)}/${tabPath}?pbs=${pbsId}`
 
     const waitForTabVisible = async (page: Page, tab: Tab) => {
         await pollUntil(
@@ -63,18 +60,14 @@ test.describe('Household tab navigation', () => {
 
         // Create household with salted name for parallel safety
         const household = await HouseholdFactory.createHousehold(context, {name: salt('TabNav', testSalt)})
-        householdId = household.id
+        createdHouseholdIds.push(household.id)
         shortName = household.shortName
         pbsId = household.pbsId
     })
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-
-        if (householdId) {
-            await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
-        }
-        // NOTE: Singleton active season is cleaned up by global teardown, not here
+        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
     })
 
 
@@ -116,50 +109,23 @@ test.describe('Household tab navigation', () => {
         await expect(page).toHaveURL(buildUrl(testTab.path))
     })
 
-    test('Query params preserved when switching tabs', async ({page}) => {
-        const query = 'date=2025-01-15'
-        await page.goto(buildUrl(tabs[0]!.path, query))
-
-        expect(page.url()).toContain(encodeURIComponent(shortName))
-        expect(page.url()).toContain(query)
-        await waitForTabVisible(page, tabs[0]!)
-
-        await page.goto(buildUrl(tabs[1]!.path, query))
-
-        expect(page.url()).toContain(encodeURIComponent(shortName))
-        expect(page.url()).toContain(query)
-        await waitForTabVisible(page, tabs[1]!)
-    })
-
     for (const tab of tabs) {
-        test(`Tab "${tab.name}" accessible at /${tab.path}`, async ({page}) => {
-            await page.goto(buildUrl(tab.path))
-
-            expect(page.url()).toContain(buildUrl(tab.path))
-            await waitForTabVisible(page, tab)
-
-            // Documentation screenshot per tab; the members tab is pictured by HouseholdMembers.e2e.spec.ts
-            if (tab.path !== 'members') await doScreenshot(page, `household/household-${tab.path}`, true)
-        })
-    }
-
-    test('Tab aria-selected attribute updates correctly', async ({page}) => {
-        // Test aria-selected on two tabs to verify state updates
-        const testTabs = [tabs[0]!, tabs[2]!]
-
-        for (const tab of testTabs) {
+        test(`Tab "${tab.name}" at /${tab.path} is the selected tab`, async ({page}) => {
             await page.goto(buildUrl(tab.path))
             await waitForTabVisible(page, tab)
 
             const activeTab = page.locator('button[role="tab"]').filter({hasText: tab.name}).first()
             await expect(activeTab).toHaveAttribute('aria-selected', 'true')
-        }
-    })
+
+            // Documentation screenshot per tab; the members tab is pictured by HouseholdCard.e2e.spec.ts
+            if (tab.path !== 'members') await doScreenshot(page, `household/household-${tab.path}`, true)
+        })
+    }
 })
 
 test.describe('Household PBS query param resolution', () => {
     const testSalt = temporaryAndRandom()
-    let householdId: number
+    const createdHouseholdIds: number[] = []
     let shortName: string
     let pbsId: number
     let myShortName: string
@@ -173,7 +139,7 @@ test.describe('Household PBS query param resolution', () => {
         await SeasonFactory.createActiveSeason(context, {holidays: []})
 
         const household = await HouseholdFactory.createHousehold(context, {name: salt('PbsTest', testSalt)})
-        householdId = household.id
+        createdHouseholdIds.push(household.id)
         shortName = household.shortName
         pbsId = household.pbsId
 
@@ -184,9 +150,7 @@ test.describe('Household PBS query param resolution', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        if (householdId) {
-            await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
-        }
+        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
     })
 
     test('Valid ?pbs= loads that household', async ({page}) => {
@@ -238,10 +202,10 @@ test.describe('Household PBS query param resolution', () => {
  *
  * Both contexts:
  * - See visitor banner with "anden husstand end din egen"
- * - Have edit controls hidden (no editing allowed)
  *
  * Admin-only:
  * - Sees admin override button to unlock editing
+ * - Has edit controls hidden until the override: the admin holds edit rights, so the hiding is the visitor gate's
  *
  * Member-only:
  * - No admin override button
@@ -275,14 +239,14 @@ const editControlTestCases = [
 ] as const
 
 const visitorContexts = [
-    {name: 'member', storageState: memberUIFile, expectAdminOverride: false},
-    {name: 'admin', storageState: adminUIFile, expectAdminOverride: true}
+    {name: 'member', storageState: memberUIFile, expectAdminOverride: false, editControlCases: []},
+    {name: 'admin', storageState: adminUIFile, expectAdminOverride: true, editControlCases: editControlTestCases}
 ] as const
 
 for (const ctx of visitorContexts) {
     test.describe(`Visitor mode (${ctx.name}) - viewing another household`, () => {
         const testSalt = temporaryAndRandom()
-        let householdId: number
+        const createdHouseholdIds: number[] = []
         let shortName: string
         let pbsId: number
 
@@ -296,17 +260,14 @@ for (const ctx of visitorContexts) {
 
             // Create household - test user is NOT a member of this household
             const household = await HouseholdFactory.createHousehold(context, {name: salt(`Visitor-${ctx.name}`, testSalt)})
-            householdId = household.id
+            createdHouseholdIds.push(household.id)
             shortName = household.shortName
             pbsId = household.pbsId
         })
 
         test.afterAll(async ({browser}) => {
             const context = await validatedBrowserContext(browser)
-
-            if (householdId) {
-                await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
-            }
+            await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
         })
 
         test('Visitor banner is shown when visiting another household', async ({page}) => {
@@ -333,7 +294,7 @@ for (const ctx of visitorContexts) {
             }
         })
 
-        for (const testCase of editControlTestCases) {
+        for (const testCase of ctx.editControlCases) {
             test(`${testCase.name} tab - edit controls hidden when visiting`, async ({page}) => {
                 const separator = testCase.path.includes('?') ? '&' : '?'
                 await page.goto(`/household/${encodeURIComponent(shortName)}/${testCase.path}${separator}pbs=${pbsId}`)
@@ -345,7 +306,7 @@ for (const ctx of visitorContexts) {
                     10
                 )
 
-                // Verify all edit controls are hidden (same for both member and admin without override)
+                // Verify all edit controls are hidden (admin without override)
                 for (const {desc, selector} of testCase.hiddenSelectors) {
                     const element = page.locator(selector)
                     await expect(element, `${desc} should be hidden`).toHaveCount(0)

@@ -106,11 +106,10 @@ export class UserFactory {
         context: BrowserContext,
         userIds: number[]
     ): Promise<void> => {
+        // A user already gone counts as removed
         await Promise.all(userIds.map(async (id) => {
             const response = await context.request.delete(`/api/admin/users/${id}`)
-            if (response.status() !== 200 && response.status() !== 404) {
-                console.warn(`Failed to cleanup user ${id}: status ${response.status()}`)
-            }
+            expect([200, 404], `Unexpected status cleaning up user ${id}: ${await response.text()}`).toContain(response.status())
         }))
     }
 

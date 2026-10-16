@@ -104,8 +104,7 @@ const setMoveOutDate = async () => {
     toast.add({
       title: 'Fraflytningsdato sat',
       description: formatScaffoldResult(result, 'past'),
-      icon: ICONS.checkCircle,
-      color: 'success'
+      ...scaffoldToastLook(result)
     })
   } catch (error) {
     console.error('Failed to set move-out date:', error)
@@ -127,8 +126,7 @@ const clearMoveOutDate = async () => {
     toast.add({
       title: 'Fraflytning fortrudt',
       description: formatScaffoldResult(result, 'past'),
-      icon: ICONS.checkCircle,
-      color: 'success'
+      ...scaffoldToastLook(result)
     })
   } catch (error) {
     console.error('Failed to clear move-out date:', error)

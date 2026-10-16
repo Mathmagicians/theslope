@@ -154,7 +154,7 @@ Status.
 | `DinnerModeLegend.vue` | `/household/[shortname]/bookings`, `/dinner`, `/admin/economy` | none | ✅ | ✅ parent | ✅ renders through `CalendarLegend` |
 | `DinnerModeSelector.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ✅ parent | ✅ parent | ✅ |
 | `DinnerEvent.vue` | `/household/[shortname]/bookings`, `/dinner` | none | ❌ | ✅ parent | ⚠️ missing unit |
-| `DinnerTicket.vue` | `/dinner`, `/household/[shortname]/bookings` | none | ✅ | ✅ parent | ✅ |
+| `DinnerTicket.vue` | `/dinner`, `/household/[shortname]/bookings`, `/admin/planning` | none | ✅ | ✅ parent | ✅ |
 | `OrderHistoryDisplay.vue` | `/admin/economy`, `/household/[shortname]/economy` | bookings | ✅ | ✅ parent | ✅ |
 | `KitchenPreparation.vue` | `/dinner`, `/chef` | households | ✅ | ✅ parent | ✅ |
 | `DinnerDetailHeader.vue` | `/chef`, `/dinner` | none | ✅ | ✅ serial | ✅ |
@@ -258,7 +258,7 @@ Status.
 | `useTemporalCalendar()` | client | N/A | N/A | ✅ | ✅ | ✅ |
 | `useCalendarEvents()` | client | N/A | N/A | N/A | ✅ | ✅ |
 | `useExpandableRow()` | client | N/A | N/A | N/A | ❌ | ⚠️ missing unit |
-| `useTheSlopeDesignSystem()` | design system (ADR-018) | N/A | N/A | N/A | ✅ architecture specs | ✅ |
+| `useTheSlopeDesignSystem()` | design system (ADR-018) | N/A | N/A | N/A | ✅ architecture specs, unit | ✅ |
 
 ## Checklist
 

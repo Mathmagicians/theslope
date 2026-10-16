@@ -4,6 +4,7 @@ import {useBookingValidation, type DinnerEventDetail, type TicketSale, type Wait
 import type {TicketWaitlistCreate, TicketWaitlistDisplay, WaitlistAssigned, WaitlistAssignmentResult} from '~/composables/useWaitlistValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {createOrders, claimOrder, fetchDinnerEvent} from '~~/server/data/financesRepository'
+import {groupBy} from '~/utils/batchUtils'
 import {fetchSeason} from '~~/server/data/prismaRepository'
 import {fetchWaitlistForDinners, deleteWaitlistEntry, createWaitlistEntry} from '~~/server/data/waitlistRepository'
 import type {WaitlistDinnerContext} from '~~/server/utils/sender/events/waitlist'
@@ -39,7 +40,7 @@ export const loadDinner = async (d1Client: D1Database, dinnerEventId: number): P
 export async function joinWaitlist(
     d1Client: D1Database, request: TicketWaitlistCreate
 ): Promise<{entry: TicketWaitlistDisplay, position: number, joined: WaitlistJoined}> {
-    const {positionOf, portionNeed, portionsOfEntryFor} = useWaitlist()
+    const {positionOf, portionNeed, portionsOfEntryFor, ticketTypeOfEntry} = useWaitlist()
     const {DinnerStateSchema} = useBookingValidation()
     const dinner = await loadDinner(d1Client, request.dinnerEventId)
     // A queue exists for a dinner still to come
@@ -52,9 +53,9 @@ export async function joinWaitlist(
     }
     const entry = await createWaitlistEntry(d1Client, request)
     const queue = await fetchWaitlistForDinners(d1Client, [request.dinnerEventId])
-    const position = positionOf(queue, entry.id) ?? queue.length
+    const position = positionOf(queue, entry.id, ticketTypeOfEntry(dinner.ticketPrices)) ?? queue.length
 
-    console.info(`${LOG} Inhabitant ${request.inhabitantId} is #${position} in the queue of dinner ${request.dinnerEventId}`)
+    console.info(`${LOG} Inhabitant ${request.inhabitantId} is #${position} in its ticket type's line on dinner ${request.dinnerEventId}`)
     const joined: WaitlistJoined = {
         dinnerEventId: request.dinnerEventId, inhabitantId: request.inhabitantId, bookedByUserId,
         position, queueSize: queue.length, portionNeed: portionNeed(queue, portionsOfEntryFor(dinner.ticketPrices))
@@ -103,23 +104,31 @@ export async function assignWaitlistPortions(
 }
 
 /**
- * A ticket released after the deadline goes to the head of the queue when the head waits for that ticket type: the claim
- * moves the oldest released ticket at that price to the waiting inhabitant and the entry leaves the queue. A head waiting
- * for another type keeps the ticket on the marketplace; nobody overtakes.
+ * The tickets for sale go to the waiting list: each ticket type's line, in join order, buys the oldest released tickets
+ * of its type until the line or that supply runs out. A sold ticket keeps its price row. Idempotent: a placed entry
+ * leaves its line, and a line without supply stops at its first miss (ADR-015).
  */
-export async function assignReleasedTicket(
-    d1Client: D1Database, dinnerEventId: number, ticketPriceId: number
-): Promise<TicketSale | null> {
-    const {inQueueOrder} = useWaitlist()
-    const entries = inQueueOrder(await fetchWaitlistForDinners(d1Client, [dinnerEventId]))
-    const head = entries[0]
-    if (!head || head.order.ticketPriceId !== ticketPriceId) return null
-    const claimed = await claimOrder(d1Client, dinnerEventId, ticketPriceId, head.inhabitantId, head.order.bookedByUserId ?? null, head.order.dinnerMode, head.isGuestTicket)
-    if (!claimed) return null
-    await deleteWaitlistEntry(d1Client, head.id)
-    console.info(`${LOG} Dinner ${dinnerEventId}: released ticket ${ticketPriceId} went to the head of the queue (inhabitant ${head.inhabitantId})`)
-    return {
-        dinnerEventId, ticketPriceId,
-        buyerInhabitantId: head.inhabitantId, buyerHouseholdId: head.order.householdId, sellerHouseholdId: claimed.sellerHouseholdId
+export async function sellTicketsToWaitlist(
+    d1Client: D1Database, dinnerEventIds: number[], ticketPrices: Pick<TicketPrice, 'id' | 'ticketType'>[]
+): Promise<TicketSale[]> {
+    const {waitingLines, ticketTypeOfEntry} = useWaitlist()
+    if (dinnerEventIds.length === 0) return []
+    const ticketTypeOf = ticketTypeOfEntry(ticketPrices)
+    const sales: TicketSale[] = []
+    const queues = groupBy<TicketWaitlistDisplay, number>(entry => entry.dinnerEventId)(await fetchWaitlistForDinners(d1Client, dinnerEventIds))
+    for (const [dinnerEventId, queue] of queues) {
+        for (const [ticketType, line] of waitingLines(queue, ticketTypeOf)) {
+            for (const entry of line) {
+                const claimed = await claimOrder(d1Client, dinnerEventId, ticketType, entry.inhabitantId, entry.order.bookedByUserId ?? null, entry.order.dinnerMode, entry.isGuestTicket)
+                if (!claimed) break
+                await deleteWaitlistEntry(d1Client, entry.id)
+                console.info(`${LOG} Dinner ${dinnerEventId}: a released ${ticketType} ticket went to the first in its line (inhabitant ${entry.inhabitantId})`)
+                sales.push({
+                    dinnerEventId, ticketPriceId: claimed.ticketPriceId,
+                    buyerInhabitantId: entry.inhabitantId, buyerHouseholdId: entry.order.householdId, sellerHouseholdId: claimed.sellerHouseholdId
+                })
+            }
+        }
     }
+    return sales
 }

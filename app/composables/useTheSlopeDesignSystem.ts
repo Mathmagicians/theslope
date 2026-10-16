@@ -670,6 +670,25 @@ const MOTION_SPIN = 'animate-spin motion-reduce:animate-none'
 // The row over a collapsible: its title or tabs left, the chevron right
 const COLLAPSIBLE_HEADER_ROW = 'flex items-center justify-between gap-2'
 
+/**
+ * The colour of a ticket's state: the ticket's edge and state glyph (DinnerTicket), the order state labels
+ * (`ORDER_STATE_LABELS` in useBookingUi) and the waiting list surfaces (`COMPONENTS.waitlist`)
+ */
+export const ORDER_STATE_COLORS = {
+    normal: COLOR.primary,
+    released: COLOR.error,
+    claimed: COLOR.info,
+    queued: COLOR.neutral
+} as const satisfies Record<string, NuxtUIBadgeColor>
+
+export type TicketState = keyof typeof ORDER_STATE_COLORS
+
+// A dinner ticket's card; each face adds the edge its state colours (`COMPONENTS.ticket.face`)
+const TICKET_FACE = `relative overflow-hidden rounded-lg ${BG.ticket} p-2 md:p-3 w-full border-x-4 md:border-x-8`
+
+// The lock chip that carries the waiting-list hourglass: a step above SIZES.lockChip, so the glyph sits with a small inset
+const QUEUE_LOCK_CHIP = {ui: {base: 'h-3.5 min-w-3.5 md:h-4.5 md:min-w-4.5'}, icon: 'size-2.5 md:size-3.5'} as const
+
 export const COMPONENTS = {
     // The turn of an open-panel chevron on a button whose own icon carries it; BUTTONS.flipOpen turns a trailing chevron
     openTurn: flipOpenTurn,
@@ -1148,6 +1167,20 @@ export const COMPONENTS = {
         plainDay: 'text-sm'
     },
 
+    /**
+     * DinnerCalendarDisplay: the column under the countdown, the `accordion` that folds the calendar with its
+     * `leading` title row, the `calendar` body, a day without a dinner (`plainDay`), and the lock chip that carries
+     * the waiting-list hourglass (`queueChip`)
+     */
+    dinnerCalendar: {
+        root: 'flex flex-col h-full',
+        accordion: 'flex-1',
+        leading: 'flex items-center gap-2',
+        calendar: 'flex-1',
+        plainDay: 'text-sm',
+        queueChip: QUEUE_LOCK_CHIP
+    },
+
     // Power mode - family-wide bulk editing pattern
     powerMode: {
         color: 'warning' as const,
@@ -1176,15 +1209,17 @@ export const COMPONENTS = {
      * `watermark` layer and its `watermarkIcon`, the `content` stack, and row 1 in three slots: the `special` slot of
      * three fixed `cell`s (state | guest | allergy) whose state glyph takes the state colour (`stateIcon`) and whose
      * guest and allergy glyphs take the type badge's colour (`infoIcon`), the type `badge`, and `modeSlot` (how you
-     * eat, right-aligned); `subRow` starts row 2 under the badge with its `provenance` line or a ticket price's `note`. A queued ticket keeps
-     * the normal face: its glyph (`stateIcon.queued`) takes the toned ink, not a state colour
+     * eat, right-aligned); `subRow` starts row 2 under the badge with its `provenance` line or a ticket price's `note`. A queued
+     * ticket's edge takes the waiting list's colour (`ORDER_STATE_COLORS.queued`); its glyph (`stateIcon.queued`) takes the toned ink
      */
     ticket: {
+        // The edge is the Nuxt UI slot utility of `ORDER_STATE_COLORS[state]`, spelled out for the Tailwind scanner
         face: {
-            normal: `relative overflow-hidden rounded-lg ${BG.ticket} p-2 md:p-3 w-full border-x-4 md:border-x-8 border-primary`,
-            released: `relative overflow-hidden rounded-lg ${BG.ticket} p-2 md:p-3 w-full border-x-4 md:border-x-8 border-error`,
-            claimed: `relative overflow-hidden rounded-lg ${BG.ticket} p-2 md:p-3 w-full border-x-4 md:border-x-8 border-info`
-        },
+            normal: `${TICKET_FACE} border-primary`,
+            released: `${TICKET_FACE} border-error`,
+            claimed: `${TICKET_FACE} border-info`,
+            queued: `${TICKET_FACE} border-neutral`
+        } satisfies Record<TicketState, string>,
         watermark: 'absolute inset-0 flex items-center justify-center pointer-events-none',
         watermarkIcon: `w-full h-[140%] opacity-[0.12] ${TEXT.dimmed}`,
         content: 'relative z-10 space-y-1',
@@ -1196,7 +1231,7 @@ export const COMPONENTS = {
             released: `size-5 ${TEXT.error}`,
             claimed: 'size-5 text-info',
             queued: `size-5 ${TEXT.toned}`
-        },
+        } satisfies Record<Exclude<TicketState, 'normal'>, string>,
         // Keyed by the ticket type colours (TICKET_TYPE_COLORS)
         infoIcon: {
             [COLOR.primary]: 'size-5 text-primary-800 dark:text-primary-300',
@@ -1360,9 +1395,9 @@ export const COMPONENTS = {
      * and the grid; a queued grid cell and its legend sample carry the hourglass in a corner `chip` (`chipIcon`)
      */
     waitlist: {
-        ghostBadge: {color: COLOR.neutral, variant: NOISE.medium},
+        ghostBadge: {color: ORDER_STATE_COLORS.queued, variant: NOISE.medium},
         ghostInk: TEXT.muted,
-        chip: {color: COLOR.neutral, size: '3xl', position: 'top-right'},
+        chip: {color: ORDER_STATE_COLORS.queued, size: '3xl', position: 'top-right'},
         chipIcon: 'size-3'
     },
 
@@ -1465,6 +1500,8 @@ export const COMPONENTS = {
         // A sample with its name under it (the booking grid's modified-cell marker)
         stackedEntry: 'flex flex-col items-center gap-0.5',
         badge: 'w-8 h-8 flex items-center justify-center shrink-0',
+        // A chip sample with a glyph mirrors the dinner calendar's waiting-list lock chip
+        iconChip: QUEUE_LOCK_CHIP,
         // The operating hint under the entries, in the design system's muted text (AA on every surface)
         hint: `mt-2 ${TEXT.muted}`
     },
@@ -1820,22 +1857,17 @@ export const TICKET_TYPE_COLORS = {
 export type TicketTypeColor = typeof TICKET_TYPE_COLORS[keyof typeof TICKET_TYPE_COLORS]
 
 // ============================================================================
-// PART 5: Order State Display (for DinnerTicket accent colors)
+// PART 5: Order State Display (ORDER_STATE_COLORS sits above COMPONENTS, its first reader)
 // ============================================================================
 
-export type TicketState = 'normal' | 'released' | 'claimed'
-
-/** Order state to accent color mapping for ticket display */
-export const ORDER_STATE_COLORS: Record<TicketState, NuxtUIBadgeColor> = {
-    normal: 'primary',
-    released: 'error',
-    claimed: 'info'
-}
-
-/** The ticket state from isReleased/isClaimed flags; a released ticket reads released even when claimed */
-export const getTicketState = (isReleased: boolean, isClaimed: boolean): TicketState => {
+/**
+ * The ticket state from its flags; a released ticket reads released even when claimed, and a queued ticket holds
+ * no order, so it reads queued only in neither state
+ */
+export const getTicketState = (isReleased: boolean, isClaimed: boolean, isQueued = false): TicketState => {
     if (isReleased) return 'released'
     if (isClaimed) return 'claimed'
+    if (isQueued) return 'queued'
     return 'normal'
 }
 
@@ -2920,12 +2952,12 @@ export const URGENCY_TO_CHIP_COLOR = {
  * The chip shows the dinner's supply (`lockChip` in useBookingUi):
  * - locked: nothing for sale, no waiting list - peach chip (matches selection ring)
  * - lockedWithTickets: tickets for sale - yellow chip reading the count
- * - lockedWithQueue: a waiting list - yellow chip reading the count with a minus
+ * - lockedWithQueue: a waiting list - yellow chip carrying the hourglass
  */
 export const BOOKING_LOCK_STATUS = {
     locked: {color: 'peach' as NuxtUIColor},
     lockedWithTickets: {color: 'yellow' as NuxtUIColor},
-    lockedWithQueue: {color: 'yellow' as NuxtUIColor}
+    lockedWithQueue: {color: 'yellow' as NuxtUIColor, icon: ICONS.waitlist}
 } as const
 
 // ============================================================================

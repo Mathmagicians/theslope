@@ -65,14 +65,14 @@ export class WaitlistFactory {
 
     // A desired order on a closed dinner through the scaffold: a released ticket at the price, else a queue entry
     static readonly queue = async (
-        context: BrowserContext, householdId: number, seasonId: number, order: DesiredOrder, adminBypass = false
+        context: BrowserContext, householdId: number, seasonId: number, order: DesiredOrder, adminBypass?: boolean
     ): Promise<ScaffoldResult> => {
         const response = await OrderFactory.scaffoldOrders(context, {householdId, seasonId, dinnerEventIds: [order.dinnerEventId], orders: [order]}, 200, adminBypass)
         return response!.scaffoldResult
     }
 
     // NONE on the entry through the scaffold
-    static readonly leave = (context: BrowserContext, seasonId: number, entry: TicketWaitlistDisplay, adminBypass = false): Promise<ScaffoldResult> =>
+    static readonly leave = (context: BrowserContext, seasonId: number, entry: TicketWaitlistDisplay, adminBypass?: boolean): Promise<ScaffoldResult> =>
         WaitlistFactory.queue(context, entry.order.householdId, seasonId, WaitlistFactory.wishOf(entry, {dinnerMode: DinnerModeSchema.enum.NONE}), adminBypass)
 
     // Every entry of the dinners in queue order

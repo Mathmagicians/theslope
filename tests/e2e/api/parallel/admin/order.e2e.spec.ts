@@ -51,11 +51,7 @@ test.describe('Order API', () => {
   test.afterAll(async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
-    if (testSeasonId) {
-      await SeasonFactory.deleteSeason(context, testSeasonId).catch(() => {
-        console.warn(`Failed to cleanup season ${testSeasonId}`)
-      })
-    }
+    if (testSeasonId) await SeasonFactory.deleteSeason(context, testSeasonId)
     // Don't delete testHouseholdId - it's the user's real household, not a test one
   })
 
@@ -70,12 +66,11 @@ test.describe('Order API', () => {
         ticketPriceId: testAdultTicketPriceId
       })]
     })
+    testOrderIds.push(...result!.createdIds)
 
-    expect(result).not.toBeNull()
     expect(result!.householdId).toBe(testHouseholdId)
     expect(result!.createdIds).toHaveLength(1)
     const orderId = result!.createdIds[0]!
-    testOrderIds.push(orderId)
 
     const retrievedOrder = await OrderFactory.getOrder(context, orderId)
 
@@ -106,8 +101,8 @@ test.describe('Order API', () => {
         ticketPriceId: testAdultTicketPriceId
       })]
     })
+    testOrderIds.push(...result!.createdIds)
     const orderId = result!.createdIds[0]!
-    testOrderIds.push(orderId)
 
     // Release the order
     await OrderFactory.updateOrder(context, orderId, { dinnerMode: DinnerModeSchema.enum.NONE })
@@ -144,7 +139,7 @@ test.describe('Order API', () => {
         ticketPriceId: testAdultTicketPriceId
       })]
     })
-    testOrderIds.push(myResult!.createdIds[0]!)
+    testOrderIds.push(...myResult!.createdIds)
     const myOrderId = myResult!.createdIds[0]!
 
     // GET without householdId → returns session user's household orders (default behavior)
@@ -162,14 +157,12 @@ test.describe('Order API', () => {
     const myOrderInFiltered = filteredOrders.find(o => o.id === myOrderId)
     expect(myOrderInFiltered, 'householdId filter should include our order').toBeDefined()
 
-    // GET with different householdId → should NOT include our order
-    // Use a non-existent household ID to verify filtering excludes our order
+    // GET with a household that holds no orders → empty, our order excluded
     const otherHouseholdOrders = await OrderFactory.getOrders(context, {
       dinnerEventIds: testDinnerEventId,
       householdId: 999999  // Non-existent household
     })
-    const myOrderInOther = otherHouseholdOrders.find(o => o.id === myOrderId)
-    expect(myOrderInOther, 'Different householdId should NOT include our order').toBeUndefined()
+    expect(otherHouseholdOrders, 'Different householdId should NOT include our order').toEqual([])
   })
 
   test('GET with both householdId and allHouseholds=true returns 400', async ({ browser }) => {
@@ -183,19 +176,7 @@ test.describe('Order API', () => {
     }, 400)
   })
 
-  test('GET with householdId for non-existent household returns empty array', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
-
-    // Non-existent household ID should return empty array
-    const orders = await OrderFactory.getOrders(context, {
-      dinnerEventIds: testDinnerEventId,
-      householdId: 999999
-    })
-
-    expect(orders).toEqual([])
-  })
-
-  test('GET with upcomingForSeason returns orders for upcoming dinners only', async ({ browser }) => {
+  test('GET with upcomingForSeason and includeDinnerContext returns the orders of upcoming dinners with their dinner', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
     // Create order for the test dinner event
@@ -207,36 +188,19 @@ test.describe('Order API', () => {
         ticketPriceId: testAdultTicketPriceId
       })]
     })
-    testOrderIds.push(result!.createdIds[0]!)
+    testOrderIds.push(...result!.createdIds)
 
-    // Fetch with upcomingForSeason
-    const orders = await OrderFactory.getOrders(context, {
-      upcomingForSeason: testSeasonId,
-      allHouseholds: true
-    })
-
-    // Should return orders (server computes upcoming dinner IDs from season)
-    expect(orders.length).toBeGreaterThan(0)
-    // All returned orders should be for dinner events in the test season
-    // (We can't verify exact dinner IDs without knowing what's "upcoming", but orders should exist)
-  })
-
-  test('GET with upcomingForSeason and includeDinnerContext returns dinnerEvent data', async ({ browser }) => {
-    const context = await validatedBrowserContext(browser)
-
+    // Fetch with upcomingForSeason (server computes upcoming dinner IDs from season)
     const orders = await OrderFactory.getOrders(context, {
       upcomingForSeason: testSeasonId,
       allHouseholds: true,
       includeDinnerContext: true
     })
 
-    // If there are orders, they should have dinnerEvent embedded
-    if (orders.length > 0) {
-      const order = orders[0]!
-      expect(order.dinnerEvent).toBeDefined()
-      expect(order.dinnerEvent!.id).toBeDefined()
-      expect(order.dinnerEvent!.date).toBeDefined()
-    }
+    const order = orders.find(o => o.id === result!.createdIds[0])
+    expect(order, 'The order on an upcoming dinner is returned').toBeDefined()
+    expect(order!.dinnerEvent).toMatchObject({id: testDinnerEventId})
+    expect(order!.dinnerEvent!.date).toBeDefined()
   })
 
   test('GET with upcomingForSeason for non-existent season returns 404', async ({ browser }) => {

@@ -121,8 +121,7 @@ const handleSaveBookings = async (orders: DesiredOrder[]) => {
     toast.add({
       title: toastTitle,
       description: formatScaffoldResult(response.scaffoldResult, 'past'),
-      color: COLOR.success,
-      icon: ICONS.checkCircle
+      ...scaffoldToastLook(response.scaffoldResult)
     })
   } catch (e) {
     console.error('Failed to process bookings:', e)

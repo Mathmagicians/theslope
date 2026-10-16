@@ -55,9 +55,21 @@
  * │ └──────────────────────────────────────────────────────┘ │
  * └──────────────────────────────────────────────────────────┘
  *
- * AFTER THE DEADLINE - the bar above the table (ALERTS.info), one line per supply that exists; with neither, no bar.
+ * AFTER THE DEADLINE - the household's own notes (ALERTS.warning), each while it counts a ticket, both can show:
+ * ┌──────────────────────────────────────────────────────────────────┐
+ * │ [released] Husstanden har frigivet 2 billetter                   │
+ * │            Du betaler, medmindre andre køber                     │
+ * └──────────────────────────────────────────────────────────────────┘
+ * ┌──────────────────────────────────────────────────────────────────┐
+ * │ [waitlist] Husstanden står på ventelisten med 1 billet           │
+ * │            Du betaler, når du får en billet fra ventelisten.     │
+ * └──────────────────────────────────────────────────────────────────┘
+ *
+ * Under them the bar (ALERTS.info), one line per supply that exists; with neither, no bar.
  * A dinner can hold both: a released ticket goes only to someone waiting for the same ticket type.
- * [claim] = ICONS.claim while tickets are for sale, [waitlist] = ICONS.waitlist for the waiting list alone.
+ * [claim] = ICONS.claim while tickets are for sale, [waitlist] = ICONS.waitlist for the waiting list alone,
+ * [released] = ICONS.released. The notes and the bar read their words from SUPPLY_WORDS (useBookingUi); the
+ * Framelding badge's tooltip reads the same waiting list sentence.
  *
  * TICKETS FOR SALE:
  * ┌──────────────────────────────────────────────────────────────────┐
@@ -69,8 +81,8 @@
  * WAITING LIST:
  * ┌──────────────────────────────────────────────────────────────────┐
  * │ [waitlist] Har du brug for flere billetter?                      │
- * │            Lukket for ændringer, men 3 står på ventelisten       │
- * │            (2V 1B). Du kan få en plads på ventelisten.           │
+ * │            Lukket for ændringer, men du kan få en plads på       │
+ * │            ventelisten. Pt står 2V 3B 1b på ventelisten.         │
  * └──────────────────────────────────────────────────────────────────┘
  *
  * BOTH:
@@ -78,7 +90,7 @@
  * │ [claim] Har du brug for flere billetter?                         │
  * │         Lukket for ændringer, men der er 4 ledige billetter til  │
  * │         salg (4V).                                               │
- * │         1 står på ventelisten (1B). Du kan få en plads på        │
+ * │         Du kan også få en plads på ventelisten. Pt står 1B på    │
  * │         ventelisten.                                             │
  * └──────────────────────────────────────────────────────────────────┘
  *
@@ -107,7 +119,7 @@ import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {TicketPresentation} from '~/composables/useBookingUi'
-import {EMPTY_RELEASED_TICKET_COUNTS, type ReleasedTicketCounts} from '~/composables/useBooking'
+import {EMPTY_RELEASED_TICKET_COUNTS, ticketsForSaleOf, type PreviewSupply, type ReleasedTicketCounts} from '~/composables/useBooking'
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES} from '~/types/form'
 
@@ -297,15 +309,12 @@ const householdReleasedTickets = computed(() =>
 
 // Released tickets and the waiting list from all households (passed from store's lockStatus)
 const hasReleasedTickets = computed(() => props.releasedTicketCounts.total > 0)
-const hasWaitlist = computed(() => props.releasedTicketCounts.queued > 0)
 
-// One line per supply on a closed dinner; the first line names the closure
-const moreTicketsLines = computed(() => {
-  const {total, formatted, queued, queuedFormatted} = props.releasedTicketCounts
-  const forSale = hasReleasedTickets.value ? [`der er ${total} ledig${total === 1 ? ' billet' : 'e billetter'} til salg (${formatted}).`] : []
-  const waiting = hasWaitlist.value ? [`${queued} står på ventelisten (${queuedFormatted}). Du kan få en plads på ventelisten.`] : []
-  return [...forSale, ...waiting].map((line, index) => index === 0 ? `Lukket for ændringer, men ${line}` : line)
-})
+// One line per supply on a closed dinner
+const moreTicketsLines = computed(() =>
+  [SUPPLY_WORDS.forSale(props.releasedTicketCounts), SUPPLY_WORDS.waitlist(props.releasedTicketCounts)]
+    .filter((line): line is string => line !== null)
+)
 
 // ============================================================================
 // ORDER PARTITIONING (uses useBooking helpers)
@@ -318,6 +327,12 @@ const partitionedOrders = computed(() => partitionGuestOrders(eventOrders.value)
 const guestOrders = computed(() => partitionedOrders.value.guestOrders)
 const regularOrders = computed(() => partitionedOrders.value.regularOrders)
 const eventWaitlistEntries = computed(() => props.waitlistEntries.filter(entry => entry.dinnerEventId === props.dinnerEvent.id))
+
+// The household's own notes on a closed dinner: the tickets it released and its places on the waiting list
+const householdReleasedNote = computed(() =>
+  householdReleasedTickets.value.length > 0 ? SUPPLY_WORDS.householdReleased(householdReleasedTickets.value.length) : null)
+const householdQueuedNote = computed(() =>
+  eventWaitlistEntries.value.length > 0 ? SUPPLY_WORDS.householdQueued(eventWaitlistEntries.value.length) : null)
 
 // ============================================================================
 // TABLE CONFIGURATION
@@ -582,8 +597,8 @@ const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadl
 // Day bill summary (ticket counts + total price)
 const dayBillSummary = computed(() => getDayBillSummary(eventOrders.value))
 
-// The client settles a claim against the tickets for sale on this dinner (the lock status)
-const supply = () => ({ticketsForSale: props.releasedTicketCounts.total})
+// The client settles a claim against the tickets for sale of the order's ticket type on this dinner (the lock status)
+const supply: PreviewSupply = order => ({ticketsForSale: ticketsForSaleOf(props.releasedTicketCounts, props.ticketPrices, order.ticketPriceId)})
 
 // What saving the expanded row does: its buckets feed the preview lines and the save label
 const editingBuckets = computed(() => {
@@ -641,18 +656,23 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
       </div>
     </div>
 
-    <!-- Released Ticket Warnings -->
+    <!-- The household's own notes and the supply bar -->
     <div v-if="!canBook" :class="COMPONENTS.bookingForm.releasedAlerts">
       <UAlert
-        v-if="householdReleasedTickets.length > 0"
+        v-if="householdReleasedNote"
         v-bind="ALERTS.warning"
         :icon="ICONS.released"
-      >
-        <template #title>
-          Husstanden har frigivet {{ householdReleasedTickets.length }} billet{{ householdReleasedTickets.length === 1 ? '' : 'ter' }}
-        </template>
-        <template #description>Du betaler, medmindre andre køber</template>
-      </UAlert>
+        :title="householdReleasedNote.title"
+        :description="householdReleasedNote.description"
+      />
+      <UAlert
+        v-if="householdQueuedNote"
+        v-bind="ALERTS.warning"
+        :icon="ICONS.waitlist"
+        :title="householdQueuedNote.title"
+        :description="householdQueuedNote.description"
+        data-testid="household-waitlist-alert"
+      />
       <UAlert
         v-if="moreTicketsLines.length > 0"
         v-bind="ALERTS.info"

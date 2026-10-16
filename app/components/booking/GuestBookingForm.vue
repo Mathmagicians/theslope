@@ -14,8 +14,7 @@ import type {DinnerEventDisplay, DinnerMode, DesiredOrder, GuestBookingFormData}
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
-import type {TicketPriceSelectItem} from '~/composables/useBookingUi'
-import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import {ticketsForSaleOf, type PreviewSupply, type ReleasedTicketCounts} from '~/composables/useBooking'
 import type {FormSubmitEvent} from '@nuxt/ui'
 import {FORM_MODES} from '~/types/form'
 
@@ -93,8 +92,12 @@ const validateForm = () => {
 // Deadline badges using existing factory
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))
 
-// The client settles a claim against the tickets for sale on this dinner (the lock status)
-const supply = () => ({ticketsForSale: props.releasedTicketCounts.total})
+// The client settles a claim against the tickets for sale of the guest's ticket type on this dinner (the lock status)
+const supply: PreviewSupply = order => ({ticketsForSale: ticketsForSaleOf(props.releasedTicketCounts, props.ticketPrices, order.ticketPriceId)})
+// The save label reads any ticket for sale until a ticket type is picked, then that type's
+const ticketsForSale = computed(() => formState.ticketPriceId === undefined
+  ? props.releasedTicketCounts.total
+  : ticketsForSaleOf(props.releasedTicketCounts, props.ticketPrices, formState.ticketPriceId))
 
 // Action preview: show what the server will do when saving (uses same resolver)
 const actionPreviewItems = computed(() => {
@@ -126,7 +129,7 @@ const actionPreviewItems = computed(() => {
 // The button previews the outcome: before the deadline the guest is booked; after it the claim buys a ticket for
 // sale, else queues the guest
 const saveLabel = computed(() =>
-  guestSaveLabel(bookingOutcome(bookingOptions.value.action === BookingRowActionSchema.enum.claim ? Bucket.claim : Bucket.create, supply())))
+  guestSaveLabel(bookingOutcome(bookingOptions.value.action === BookingRowActionSchema.enum.claim ? Bucket.claim : Bucket.create, {ticketsForSale: ticketsForSale.value})))
 
 // Enabled modes for guest: filter out NONE (can't add a guest who won't eat)
 const enabledModesForGuest = computed((): DinnerMode[] =>
@@ -252,10 +255,10 @@ const handleCancel = () => emit('cancel')
             >
               <template #item="{ item }">
                 <div :class="guestForm.option">
-                  <UBadge :color="(item as TicketPriceSelectItem).presentation.color" :variant="NOISE.loud" :size="SIZES.sm" :class="guestForm.optionBadge">
-                    {{ (item as TicketPriceSelectItem).label }}
+                  <UBadge :color="item.presentation.color" :variant="NOISE.loud" :size="SIZES.sm" :class="guestForm.optionBadge">
+                    {{ item.label }}
                   </UBadge>
-                  <span v-if="(item as TicketPriceSelectItem).description" :class="guestForm.optionNote">{{ (item as TicketPriceSelectItem).description }}</span>
+                  <span v-if="item.description" :class="guestForm.optionNote">{{ item.description }}</span>
                 </div>
               </template>
             </USelectMenu>

@@ -668,7 +668,7 @@ export const useBookingValidation = () => {
         portionNeed: z.number().nonnegative()
     })
 
-    // A released ticket got a new owner: a member bought it, or the first in the waiting list got it
+    // A released ticket got a new owner: a member bought it, or the first in its ticket type's line got it
     const TicketSaleSchema = z.object({
         dinnerEventId: IdSchema,
         ticketPriceId: IdSchema,
