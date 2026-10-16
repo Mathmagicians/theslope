@@ -141,8 +141,8 @@ const legendItems = computed((): CalendarLegendItem[] => {
     const chipCircle = dayCircleClasses(DINNER_CALENDAR.day.future)
     items.push(
       { label: 'Lukket for framelding', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.locked.color, circleClass: chipCircle, chipSize: SIZES.lockChip },
-      { label: 'Ledige billetter', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithTickets.color, circleClass: chipCircle, chipSize: SIZES.lockChip, count: '1' },
-      { label: 'Venteliste, ingen ledige billetter', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithQueue.color, circleClass: chipCircle, chipSize: SIZES.lockChip, icon: BOOKING_LOCK_STATUS.lockedWithQueue.icon }
+      { label: 'Billetter til salg', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithTickets.color, circleClass: chipCircle, chipSize: SIZES.lockChip, count: '1' },
+      { label: 'Venteliste, ingen billetter til salg', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithQueue.color, circleClass: chipCircle, chipSize: SIZES.lockChip, icon: BOOKING_LOCK_STATUS.lockedWithQueue.icon }
     )
   }
 

@@ -7,7 +7,7 @@ import {IdSchema} from '~/composables/useCoreValidation'
  * and the operation results report what a release or a sweep did (ADR-009 operation result types).
  */
 export const useWaitlistValidation = () => {
-    const {OrderCreateWithPriceSchema} = useBookingValidation()
+    const {OrderCreateWithPriceSchema, TicketTypeSchema} = useBookingValidation()
 
     // The order an entry holds: the shape `createOrders` places, plus the guest's allergies
     const WaitlistOrderSchema = OrderCreateWithPriceSchema.extend({
@@ -44,10 +44,15 @@ export const useWaitlistValidation = () => {
         portions: z.number().positive().max(100)
     })
 
+    // A dinner's queue: its size, its portion need and its lines, one per ticket type in ticket type order, each in join order
     const WaitlistQueueSummarySchema = z.object({
         dinnerEventId: IdSchema,
         entries: z.number().int().nonnegative(),
-        portions: z.number().nonnegative()
+        portions: z.number().nonnegative(),
+        lines: z.object({
+            ticketType: TicketTypeSchema,
+            entries: TicketWaitlistDisplaySchema.array()
+        }).array()
     })
 
     const WaitlistAssignedSchema = z.object({

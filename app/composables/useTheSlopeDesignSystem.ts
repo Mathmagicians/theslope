@@ -700,22 +700,23 @@ export const COMPONENTS = {
      * The dining modes walk `RAINBOW` from its first stop, so a panel is the same brand surface
      * the landing band paints and the panel owns only its edge and its box. Each divider is its
      * own family one rung deeper. TIL SALG stays grey: it is a ticket on offer, not a dining
-     * mode, and the neutral fill is what says so. Dark ink reads 8.07:1 on it. VENTELISTE takes
-     * the fourth box while the queue has entries, on the same grey.
+     * mode, and the neutral fill is what says so. Dark ink reads 8.07:1 on it. The waiting list
+     * shares the box: its people buy what is for sale.
      */
     kitchenPanel: {
         TAKEAWAY: `${getRainbowBand(0)} ${BORDER.pink[600]} ${KITCHEN_PANEL_BOX}`,
         DINEIN: `${getRainbowBand(1)} ${BORDER.orange[600]} ${KITCHEN_PANEL_BOX}`,
         DINEINLATE: `${getRainbowBand(2)} ${BORDER.ocean[600]} ${KITCHEN_PANEL_BOX}`,
-        RELEASED: `${BG.gray[400]} ${TEXT.black} ${BORDER.gray[500]} ${KITCHEN_PANEL_BOX}`,
-        WAITLIST: `${BG.gray[400]} ${TEXT.black} ${BORDER.gray[500]} ${KITCHEN_PANEL_BOX}`
+        RELEASED: `${BG.gray[400]} ${TEXT.black} ${BORDER.gray[500]} ${KITCHEN_PANEL_BOX}`
     },
 
     /**
      * KitchenPreparation's layout on the kitchen surfaces: the totals in the stats bar, the panel
      * row, a panel's head lines and allergy line, and the household list a selected panel opens
      * below the row on that panel's surface (the list's padding and alignment win over the box's);
-     * `allergyOverview` sets the kitchen type size on the shared `allergyOverview` line
+     * `allergyOverview` sets the kitchen type size on the shared `allergyOverview` line. The TIL SALG
+     * box's KØ part follows its gap (`queue`), in the box and in its list; the list's KØ heading
+     * sits on the left
      */
     kitchen: {
         totals: 'text-center',
@@ -736,7 +737,9 @@ export const COMPONENTS = {
         household: `${TYPOGRAPHY.kitchenDetail} py-1 flex flex-wrap items-center gap-x-1`,
         householdName: 'font-semibold',
         diner: 'inline-flex items-center',
-        allergyOverview: `${TYPOGRAPHY.kitchenDetail} py-1`
+        allergyOverview: `${TYPOGRAPHY.kitchenDetail} py-1`,
+        queue: 'pt-4 first:pt-0',
+        queueHeading: `${TYPOGRAPHY.kitchenLabel} py-1 flex items-center gap-1`
     },
 
     /**

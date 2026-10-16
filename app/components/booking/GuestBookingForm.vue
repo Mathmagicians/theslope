@@ -14,7 +14,7 @@ import type {DinnerEventDisplay, DinnerMode, DesiredOrder, GuestBookingFormData}
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
-import {ticketsForSaleOf, type PreviewSupply, type ReleasedTicketCounts} from '~/composables/useBooking'
+import {supplyOfType, type PreviewSupply, type ReleasedTicketCounts} from '~/composables/useBooking'
 import type {FormSubmitEvent} from '@nuxt/ui'
 import {FORM_MODES} from '~/types/form'
 
@@ -40,8 +40,6 @@ const emit = defineEmits<{
 const {SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, LAYOUTS, NOISE, COMPONENTS, ORIENTATIONS} = useTheSlopeDesignSystem()
 const guestForm = COMPONENTS.guestBookingForm
 
-// Ticket type config for styled badges
-
 // Empty state message when no booking action available
 const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets'))
 
@@ -51,10 +49,9 @@ const {createBookingBadges, formatActionPreview, guestSaveLabel} = useBookingUi(
 const {canModifyOrders, canEditDiningMode} = props.deadlines
 
 // Validation schemas
-const {DinnerModeSchema, OrderStateSchema, GuestBookingFormSchema, BookingRowActionSchema, OrderBucketSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema, GuestBookingFormSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
 const OrderStateEnum = OrderStateSchema.enum
-const Bucket = OrderBucketSchema.enum
 
 // Booking options using getBookingOptions utility (orderState = null for new guest)
 const bookingOptions = computed(() => getBookingOptions(
@@ -65,12 +62,16 @@ const bookingOptions = computed(() => getBookingOptions(
   props.isHouseholdInResidency
 ))
 
+// The guests a save books: how many, at which ticket price, how they eat and their allergies
+type GuestDraft = Pick<DesiredOrder, 'dinnerMode'> & {count: number, ticketPriceId: number, allergyTypeIds: number[]}
+
 // Form state - reactive object for UForm binding
-const formState = reactive({
+const formState = reactive<Omit<GuestDraft, 'ticketPriceId'> & {ticketPriceId: number | undefined}>({
   count: 1,
-  ticketPriceId: undefined as number | undefined,
-  allergyTypeIds: [] as number[],
-  dinnerMode: DinnerModeEnum.DINEIN as DinnerMode
+  // The form opens on the adult ticket
+  ticketPriceId: props.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)?.id,
+  allergyTypeIds: [],
+  dinnerMode: DinnerModeEnum.DINEIN
 })
 const isSaving = ref(false)
 
@@ -92,31 +93,29 @@ const validateForm = () => {
 // Deadline badges using existing factory
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))
 
-// The client settles a claim against the tickets for sale of the guest's ticket type on this dinner (the lock status)
-const supply: PreviewSupply = order => ({ticketsForSale: ticketsForSaleOf(props.releasedTicketCounts, props.ticketPrices, order.ticketPriceId)})
-// The save label reads any ticket for sale until a ticket type is picked, then that type's
-const ticketsForSale = computed(() => formState.ticketPriceId === undefined
-  ? props.releasedTicketCounts.total
-  : ticketsForSaleOf(props.releasedTicketCounts, props.ticketPrices, formState.ticketPriceId))
+// The client settles the guests' claims against the tickets for sale of their ticket type on this dinner (the lock status)
+const supply: PreviewSupply = order => supplyOfType(props.releasedTicketCounts, props.ticketPrices, order.ticketPriceId)
 
-// Action preview: show what the server will do when saving (uses same resolver)
-const actionPreviewItems = computed(() => {
-  if (!formState.ticketPriceId || !bookingOptions.value.action) return []
-
-  // Build desired orders from form state (same structure as handleSubmit)
-  const desiredOrders: DesiredOrder[] = Array.from({length: formState.count}, () => ({
+// The guests the form books: count orders at the picked ticket price, booked by the booker
+const guestOrdersOf = ({count, ticketPriceId, dinnerMode, allergyTypeIds}: GuestDraft): DesiredOrder[] =>
+  Array.from({length: count}, () => ({
     inhabitantId: props.bookerId,
     dinnerEventId: props.dinnerEvent.id,
-    dinnerMode: formState.dinnerMode,
-    ticketPriceId: formState.ticketPriceId!,
+    dinnerMode,
+    ticketPriceId,
     isGuestTicket: true,
-    allergyTypeIds: formState.allergyTypeIds.length > 0 ? formState.allergyTypeIds : undefined,
+    allergyTypeIds: allergyTypeIds.length > 0 ? allergyTypeIds : undefined,
     state: OrderStateEnum.BOOKED
   }))
 
+// Action preview: the guests' orders settled against the supply as the save settles them
+const actionPreviewItems = computed(() => {
+  const {ticketPriceId} = formState
+  if (!ticketPriceId || !bookingOptions.value.action) return []
+
   // Resolve buckets using same logic as server; a new guest has no order and no queue entry
   const buckets = resolveUserBookingBuckets(
-    desiredOrders,
+    guestOrdersOf({...formState, ticketPriceId}),
     [],
     [props.dinnerEvent],
     props.deadlines
@@ -126,10 +125,8 @@ const actionPreviewItems = computed(() => {
   return formatActionPreview(buckets, [], () => props.bookerName, supply)
 })
 
-// The button previews the outcome: before the deadline the guest is booked; after it the claim buys a ticket for
-// sale, else queues the guest
-const saveLabel = computed(() =>
-  guestSaveLabel(bookingOutcome(bookingOptions.value.action === BookingRowActionSchema.enum.claim ? Bucket.claim : Bucket.create, {ticketsForSale: ticketsForSale.value})))
+// The button names the guests; the preview lines name what saving does for each
+const saveLabel = computed(() => guestSaveLabel(formState.count))
 
 // Enabled modes for guest: filter out NONE (can't add a guest who won't eat)
 const enabledModesForGuest = computed((): DinnerMode[] =>
@@ -154,24 +151,12 @@ watch(enabledModesForGuest, (modes) => {
 
 // UForm submit handler - receives validated data from FormSubmitEvent
 const handleSubmit = async (event: FormSubmitEvent<GuestBookingFormData>) => {
-  const {ticketPriceId, allergyTypeIds, count, dinnerMode} = event.data
-
-  if (!ticketPriceId || !bookingOptions.value.action) return
+  if (!event.data.ticketPriceId || !bookingOptions.value.action) return
 
   isSaving.value = true
 
   try {
-    const orders: DesiredOrder[] = Array.from({length: count}, () => ({
-      inhabitantId: props.bookerId,
-      dinnerEventId: props.dinnerEvent.id,
-      dinnerMode,
-      ticketPriceId,
-      isGuestTicket: true,
-      allergyTypeIds: allergyTypeIds.length > 0 ? allergyTypeIds : undefined,
-      state: OrderStateEnum.BOOKED
-    }))
-
-    emit('save', orders)
+    emit('save', guestOrdersOf(event.data))
   } finally {
     isSaving.value = false
   }
@@ -208,7 +193,7 @@ const handleCancel = () => emit('cancel')
           <UIcon :name="ICONS.userPlus" :class="guestForm.headerIcon" />
           <h4 :class="guestForm.title">Tilføj gæst</h4>
           <UBadge v-if="props.releasedTicketCounts.total > 0" :color="COLOR.info" :icon="ICONS.claim" :variant="NOISE.subtle" :size="SIZES.small">
-            {{ props.releasedTicketCounts.formatted }} Ledig{{ props.releasedTicketCounts.total === 1 ? '' : 'e' }}
+            {{ SUPPLY_WORDS.forSaleCount(props.releasedTicketCounts) }}
           </UBadge>
         </div>
       </template>

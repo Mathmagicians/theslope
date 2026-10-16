@@ -77,33 +77,50 @@ export type OrderDecisionInput = {
 export const getNewOrderAction = (canModifyOrders: boolean): BookingRowAction =>
     canModifyOrders ? ROW_ACTION.process : ROW_ACTION.claim
 
-/**
- * The outcome of a bucket at the instant it executes. The claim bucket settles by supply: a released ticket of the
- * ticket type is bought, none queues the wish. A bucket that changes no supply (update, delete, idempotent, skip) changes the mode.
- */
-export const bookingOutcome = (bucket: OrderBucket | null, supply: {ticketsForSale: number}): BookingOutcome => {
+// The outcome of one order of a bucket at a supply: a claim buys while a ticket is for sale, else queues; a bucket
+// that changes no supply (update, delete, idempotent, skip) changes the mode
+const outcomeOf = (bucket: OrderBucket | null, ticketsForSale: number): BookingOutcome => {
     switch (bucket) {
         case Bucket.create: return Action.BOOK
-        case Bucket.claim: return supply.ticketsForSale > 0 ? Action.BUY : Action.QUEUE
+        case Bucket.claim: return ticketsForSale > 0 ? Action.BUY : Action.QUEUE
         case Bucket.leave: return Action.LEAVE
         case Bucket.requeue: return Action.REQUEUE
         default: return Action.CHANGE_MODE
     }
 }
 
-/** What a save would find for sale at an order's dinner and price */
-export type PreviewSupply = (order: DesiredOrder) => {ticketsForSale: number}
+/** What a save would find for sale for an order: the released tickets of its ticket type on its dinner */
+export type PreviewSupply = (order: DesiredOrder) => {ticketsForSale: number, ticketType?: TicketType}
 export const NOTHING_FOR_SALE: PreviewSupply = () => ({ticketsForSale: 0})
 
-/** The tickets for sale a claim can buy: its dinner's released tickets of the ticket type its price names */
-export const ticketsForSaleOf = (
+/** The supply a claim finds: its dinner's released tickets of the ticket type its price names */
+export const supplyOfType = (
     counts: Pick<ReleasedTicketCounts, 'byType'> | null | undefined,
     ticketPrices: Pick<TicketPrice, 'id' | 'ticketType'>[],
     ticketPriceId: number
-): number => {
+): ReturnType<PreviewSupply> => {
     const ticketType = ticketPrices.find(price => price.id === ticketPriceId)?.ticketType
-    return ticketType ? counts?.byType[ticketType] ?? 0 : 0
+    return {ticketType, ticketsForSale: ticketType ? counts?.byType[ticketType] ?? 0 : 0}
 }
+
+type SettledOrder = {order: DesiredOrder, outcome: BookingOutcome}
+
+/**
+ * The outcome of each order of a bucket, in the order given, which is the order of purchase: a claim buys while the
+ * claims before it left a ticket of its type on its dinner, else queues. One order or a list.
+ */
+export const bookingOutcomes = (
+    bucket: OrderBucket | null,
+    orders: DesiredOrder | DesiredOrder[],
+    supply: PreviewSupply = NOTHING_FOR_SALE
+): SettledOrder[] =>
+    [orders].flat().reduce<{left: Partial<Record<string, number>>, settled: SettledOrder[]}>(({left, settled}, order) => {
+        const {ticketsForSale, ticketType} = supply(order)
+        const pool = `${order.dinnerEventId}:${ticketType}`
+        const available = left[pool] ?? ticketsForSale
+        const outcome = outcomeOf(bucket, available)
+        return {left: {...left, [pool]: outcome === Action.BUY ? available - 1 : available}, settled: [...settled, {order, outcome}]}
+    }, {left: {}, settled: []}).settled
 
 /** What an update does to the order it names; without the order at hand, a release or a mode change */
 export const actionOfUpdate = (incoming: DesiredOrder, existing: OrderDisplay | undefined): BookingAction => {
@@ -119,13 +136,13 @@ export const actionOfUpdate = (incoming: DesiredOrder, existing: OrderDisplay | 
 /** The buckets whose execution has a supply outcome, in the order a preview reads them */
 export const OUTCOME_BUCKETS = [Bucket.claim, Bucket.create, Bucket.leave, Bucket.requeue] as const
 
-/** Every order of the buckets with its action, the plan the preview shows and the scaffold executes; a claim settles by the supply */
+/** Every order of the buckets with its action, the plan the preview shows and the scaffold executes; the claims settle in order against the supply */
 export const plannedActions = (
     buckets: OrderBucketResult,
     existingById: Map<number, OrderDisplay>,
     supply: PreviewSupply = NOTHING_FOR_SALE
 ): {order: DesiredOrder, action: BookingAction}[] => [
-    ...OUTCOME_BUCKETS.flatMap(bucket => buckets[bucket].map(order => ({order, action: bookingOutcome(bucket, supply(order)) as BookingAction}))),
+    ...OUTCOME_BUCKETS.flatMap(bucket => bookingOutcomes(bucket, buckets[bucket], supply).map(({order, outcome}) => ({order, action: outcome}))),
     ...buckets.delete.map(order => ({order, action: Action.CANCEL})),
     ...buckets.update.map(order => ({order, action: actionOfUpdate(order, order.orderId ? existingById.get(order.orderId) : undefined)}))
 ]

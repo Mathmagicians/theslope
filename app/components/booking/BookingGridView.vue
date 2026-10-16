@@ -65,7 +65,7 @@ import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {TicketPresentation} from '~/composables/useBookingUi'
 import type {BookingView} from '~/composables/useBookingView'
 import type {DateRange} from '~/types/dateTypes'
-import {EMPTY_RELEASED_TICKET_COUNTS, ticketsForSaleOf, type BookingChanges, type GuestBookingIntent, type ReleasedTicketCounts} from '~/composables/useBooking'
+import {EMPTY_RELEASED_TICKET_COUNTS, supplyOfType, type BookingChanges, type GuestBookingIntent, type ReleasedTicketCounts} from '~/composables/useBooking'
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
@@ -186,7 +186,7 @@ const actionPreviewItems = computed(() => {
   )
 
   // Each dinner settles a claim against its own tickets for sale (the lock status)
-  return formatActionPreview(buckets, props.orders, getInhabitantName, order => ({ticketsForSale: ticketsForSaleOf(props.lockStatus.get(order.dinnerEventId), props.ticketPrices, order.ticketPriceId)}), waitlistPositionOf(props.waitlistEntries))
+  return formatActionPreview(buckets, props.orders, getInhabitantName, order => supplyOfType(props.lockStatus.get(order.dinnerEventId), props.ticketPrices, order.ticketPriceId), waitlistPositionOf(props.waitlistEntries))
 })
 
 // Effective form mode - VIEW when saving to prevent cell edits

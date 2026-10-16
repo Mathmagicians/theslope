@@ -13,7 +13,7 @@ import {
     DinnerStepState,
     DEADLINE_LABELS,
     type AlarmLevel,
-    bookingOutcome,
+    bookingOutcomes,
     plannedActions,
     OUTCOME_BUCKETS,
     NOTHING_FOR_SALE,
@@ -199,8 +199,13 @@ const ticketCount = (count: number) => `${count} billet${count === 1 ? '' : 'ter
  */
 export const SUPPLY_WORDS = {
     forSale: ({total, formatted}: ReleasedTicketCounts): string | null => total > 0
-        ? `Lukket for ændringer, men der er ${total} ledig${total === 1 ? ' billet' : 'e billetter'} til salg (${formatted}).`
+        ? `Lukket for ændringer, men der er ${ticketCount(total)} til salg (${formatted}).`
         : null,
+    forSaleCount: ({formatted}: ReleasedTicketCounts) => `${formatted} til salg`,
+    queuedCount: ({queuedFormatted}: ReleasedTicketCounts) => `${queuedFormatted} på venteliste`,
+    // A place in the line of its ticket type; the type is named where nothing beside the place shows it
+    place: (position: number, ticketType?: TicketType) =>
+        `${ticketType ? `${useTicket().ticketTypeWords[ticketType].label}: ` : ''}#${position} i kø`,
     waitlist: ({total, queued, queuedFormatted}: ReleasedTicketCounts): string | null => queued > 0
         ? `${total > 0 ? 'Du kan også få' : 'Lukket for ændringer, men du kan få'} en plads på ventelisten. Pt står ${queuedFormatted} på ventelisten.`
         : null,
@@ -220,11 +225,11 @@ export const createBookingBadge = (isOpen: boolean, releasedCounts: ReleasedTick
     const {label, openText, closedText, availableText} = DEADLINE_LABELS.BOOKING_CLOSED
     if (isOpen) return {label, icon: ICONS.lockOpen, color: COLOR.success, value: 'Åben', helpText: openText}
 
-    const {total, formatted, queuedFormatted} = releasedCounts
+    const {total} = releasedCounts
     const waitlist = SUPPLY_WORDS.waitlist(releasedCounts)
-    const waiting = `${queuedFormatted} venter`
+    const waiting = SUPPLY_WORDS.queuedCount(releasedCounts)
     if (total > 0) {
-        const forSale = `${formatted} ledig${total === 1 ? '' : 'e'}`
+        const forSale = SUPPLY_WORDS.forSaleCount(releasedCounts)
         return {
             label,
             icon: ICONS.released,
@@ -303,8 +308,8 @@ export const MODE_WORDS: Record<DinnerMode, {label: string, icon: string}> = {
     [DinnerModeEnum.NONE]: {label: 'Ingen', icon: ICONS.noDinner}
 }
 
-/** What a preview line names beside the person: the mode's word, and the queue place a requeue keeps */
-export type PreviewWords = {mode: string, position?: number}
+/** What a preview line names beside the person: the mode's word, and the queue place a requeue keeps in its ticket type's line */
+export type PreviewWords = {mode: string, position?: number, ticketType?: TicketType}
 type PreviewTemplate = (name: string, words: PreviewWords) => string
 
 const {BookingActionSchema} = useBookingValidation()
@@ -313,13 +318,13 @@ const Action = BookingActionSchema.enum
 /** The words of each booking action, once: the preview line's glyph and sentence */
 export const ACTION_WORDS: Record<BookingAction, {icon: string, template: PreviewTemplate}> = {
     [Action.BOOK]: {icon: ICONS.plusCircle, template: name => `${name} tilmeldes`},
-    [Action.BUY]: {icon: ICONS.claim, template: name => `${name} køber en ledig billet`},
+    [Action.BUY]: {icon: ICONS.claim, template: name => `${name} køber en billet til salg`},
     [Action.QUEUE]: {icon: ICONS.waitlist, template: name => `${name} skrives på ventelisten`},
     [Action.LEAVE]: {icon: ICONS.xMark, template: name => `${name} forlader ventelisten`},
     [Action.REQUEUE]: {
         icon: ICONS.waitlist,
-        template: (name, {mode, position}) =>
-            `${name} ændrer ønsket tilmelding til ${mode}${position ? `, beholder plads #${position} i køen` : ''}`
+        template: (name, {mode, position, ticketType}) =>
+            `${name} ændrer ønsket tilmelding til ${mode}${position ? `, beholder pladsen ${SUPPLY_WORDS.place(position, ticketType)}` : ''}`
     },
     [Action.CANCEL]: {icon: ICONS.xMark, template: name => `${name} frameldes`},
     [Action.RELEASE]: {icon: ICONS.released, template: name => `${name}s billet frigives`},
@@ -328,31 +333,29 @@ export const ACTION_WORDS: Record<BookingAction, {icon: string, template: Previe
     [Action.CHANGE_PRICE]: {icon: ICONS.edit, template: name => `${name} opdaterer spisning`}
 }
 
-/** The save button's words for each outcome: the booking form's and the guest form's */
-export const OUTCOME_WORDS: Record<BookingOutcome, {save: string, guestSave: string}> = {
-    [Action.BOOK]: {save: 'Book', guestSave: 'Tilføj gæst'},
-    [Action.BUY]: {save: 'Køb billet', guestSave: 'Køb billet til gæst'},
-    [Action.QUEUE]: {save: 'Skriv på venteliste', guestSave: 'Skriv gæst på venteliste'},
-    [Action.LEAVE]: {save: 'Forlad ventelisten', guestSave: 'Forlad ventelisten'},
-    [Action.REQUEUE]: {save: 'Opdater', guestSave: 'Opdater'},
-    [Action.CHANGE_MODE]: {save: 'Opdater', guestSave: 'Tilføj gæst'}
+/** The booking form's save button words for each outcome */
+export const OUTCOME_WORDS: Record<BookingOutcome, {save: string}> = {
+    [Action.BOOK]: {save: 'Book'},
+    [Action.BUY]: {save: 'Køb billet'},
+    [Action.QUEUE]: {save: 'Skriv på venteliste'},
+    [Action.LEAVE]: {save: 'Forlad ventelisten'},
+    [Action.REQUEUE]: {save: 'Opdater'},
+    [Action.CHANGE_MODE]: {save: 'Opdater'}
 }
 
 /** The queue place lookup a preview takes: the place of the household entry a desired order names */
 export const waitlistPositionOf = (entries: {id: number, position: number}[]) =>
     (order: DesiredOrder): number | undefined => entries.find(entry => entry.id === order.waitlistEntryId)?.position
 
-/** What saving the previewed buckets does: the first bucket with a supply outcome, settled against the supply; else a mode change */
-export const previewOutcome = (buckets: OrderBucketResult<DesiredOrder>, supply: PreviewSupply = NOTHING_FOR_SALE): BookingOutcome => {
-    const bucket = OUTCOME_BUCKETS.find(key => buckets[key].length > 0)
-    return bucket ? bookingOutcome(bucket, supply(buckets[bucket][0]!)) : Action.CHANGE_MODE
-}
+/** What saving the previewed buckets does: the plan's first supply outcome; else a mode change */
+export const previewOutcome = (buckets: OrderBucketResult<DesiredOrder>, supply: PreviewSupply = NOTHING_FOR_SALE): BookingOutcome =>
+    OUTCOME_BUCKETS.flatMap(bucket => bookingOutcomes(bucket, buckets[bucket], supply))[0]?.outcome ?? Action.CHANGE_MODE
 
 /** The save button's label for an outcome */
 export const bookingSaveLabel = (outcome: BookingOutcome): string => OUTCOME_WORDS[outcome].save
 
-/** The guest form's button label for an outcome */
-export const guestSaveLabel = (outcome: BookingOutcome): string => OUTCOME_WORDS[outcome].guestSave
+/** The guest form's button names the guests; its preview lines name each guest's outcome */
+export const guestSaveLabel = (count: number): string => count === 1 ? 'Tilmeld gæst' : 'Tilmeld gæster'
 
 /** The look of a toast that reports a booking result: the ticket, red as soon as one order failed, green otherwise */
 export const scaffoldToastLook = (result: Pick<ScaffoldResult, 'errored'>) => ({
@@ -365,8 +368,8 @@ export const createWaitlistBadge = (position: number): DeadlineBadgeData => ({
     label: 'Venteliste',
     icon: ORDER_STATE_LABELS.queued.icon,
     color: ORDER_STATE_LABELS.queued.color,
-    value: `#${position} i køen`,
-    helpText: 'Du får en billet, når en bliver ledig eller kokken frigiver portioner'
+    value: SUPPLY_WORDS.place(position),
+    helpText: 'Du får en billet, når en kommer til salg, eller kokken frigiver portioner'
 })
 
 // ============================================================================
@@ -430,8 +433,9 @@ export const useBookingUi = () => {
             const bookerName = getInhabitantName(order.inhabitantId)
             const name = order.isGuestTicket ? formatGuestLabel(bookerName) : bookerName
             const config = ACTION_WORDS[action]
-            // Only a requeue keeps a queue place to name
-            const words = {mode: MODE_WORDS[order.dinnerMode].label, position: action === Action.REQUEUE ? positionOf(order) : undefined}
+            // Only a requeue keeps a queue place to name, in its ticket type's line
+            const isRequeue = action === Action.REQUEUE
+            const words = {mode: MODE_WORDS[order.dinnerMode].label, position: isRequeue ? positionOf(order) : undefined, ticketType: isRequeue ? supply(order).ticketType : undefined}
             return { name, action, icon: config.icon, color: getActionColor(action), text: config.template(name, words) }
         }
 

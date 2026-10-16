@@ -9,7 +9,7 @@ import {isSameDay} from 'date-fns'
 export const useBookingsStore = defineStore("Bookings", () => {
     // DEPENDENCIES
     const {storeAsyncData, apiRequest, runJob} = useApiHandler()
-    const {OrderDisplaySchema, OrderDetailSchema, OrderStateSchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema, TicketChangesResponseSchema} = useBookingValidation()
+    const {OrderDisplaySchema, OrderDetailSchema, OrderStateSchema, DinnerStateSchema, DinnerEventDetailSchema, DailyMaintenanceResultSchema, ScaffoldOrdersResponseSchema, TicketChangesResponseSchema, TicketTypeSchema} = useBookingValidation()
     const {formatScaffoldResult} = useBooking()
     const {formatDailyMaintenanceStats} = useMaintenance()
     const DinnerState = DinnerStateSchema.enum
@@ -62,7 +62,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // The queues of the dinners the page shows, every household's entries in queue order; the rows, the positions,
     // the queue size and the portion need derive from them
     const {TicketWaitlistDisplaySchema, WaitlistAssignmentResultSchema} = useWaitlistValidation()
-    const {inQueueOrder, ticketTypeOfEntry, positionOf, portionNeed, portionsOfEntryFor} = useWaitlist()
+    const {inQueueOrder, ticketTypeOfEntry, waitingLines, positionOf, portionNeed, portionsOfEntryFor} = useWaitlist()
     // The ticket type each entry waits for, read off the selected season's prices
     const entryTicketType = computed(() => ticketTypeOfEntry(planStore.selectedSeason?.ticketPrices ?? []))
 
@@ -90,12 +90,19 @@ export const useBookingsStore = defineStore("Bookings", () => {
         .filter(entry => entry.order.householdId === waitlistHouseholdId.value)
         .map(entry => ({...entry, position: positionOf(waitlistOf(entry.dinnerEventId), entry.id, entryTicketType.value) ?? 1})))
 
-    // The queue on the dinner on view: its size and its portion need (the chef card, the kitchen box)
+    // The queue on the dinner on view: its size and its portion need (the chef card, the kitchen box), and its lines in
+    // ticket type order (the kitchen box)
     const selectedDinnerWaitlist = computed((): WaitlistQueueSummary | null => {
         const dinnerEventId = selectedDinnerEventId.value
         if (!dinnerEventId) return null
         const queue = waitlistOf(dinnerEventId)
-        return {dinnerEventId, entries: queue.length, portions: portionNeed(queue, portionsOfEntryFor(planStore.selectedSeason?.ticketPrices ?? []))}
+        const lines = waitingLines(queue, entryTicketType.value)
+        return {
+            dinnerEventId,
+            entries: queue.length,
+            portions: portionNeed(queue, portionsOfEntryFor(planStore.selectedSeason?.ticketPrices ?? [])),
+            lines: TicketTypeSchema.options.flatMap(ticketType => lines.has(ticketType) ? [{ticketType, entries: lines.get(ticketType)!}] : [])
+        }
     })
 
     // ========================================
@@ -181,7 +188,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         const released = await apiRequest('/api/order', {
             query: {dinnerEventIds: dinnerEventId, state: 'RELEASED', allHouseholds: true, sortBy: 'releasedAt'},
             schema: OrderDisplaySchema.array(),
-            action: 'fetchReleasedOrders', errorMessage: 'Kunne ikke hente ledige billetter'
+            action: 'fetchReleasedOrders', errorMessage: 'Kunne ikke hente billetterne til salg'
         })
         console.info(CTX, `Fetched ${released.length} released orders for dinner ${dinnerEventId}`)
         return released
@@ -453,7 +460,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         await Promise.all([refreshWaitlistEntries(), refreshOrders(), refreshReleasedCounts(), refreshWaitlistCounts(), refreshDinnerIfSelected(dinnerEventId)])
         toast.add({
             title: 'Portioner frigivet',
-            description: `${result.assigned.length} fik billet, ${result.waiting} venter stadig`,
+            description: `${result.assigned.length} fik billet, ${result.waiting} står stadig på ventelisten`,
             color: COLOR.success,
             icon: ICONS.waitlist
         })

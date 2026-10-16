@@ -119,7 +119,7 @@ import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
 import type {TicketPresentation} from '~/composables/useBookingUi'
-import {EMPTY_RELEASED_TICKET_COUNTS, ticketsForSaleOf, type PreviewSupply, type ReleasedTicketCounts} from '~/composables/useBooking'
+import {EMPTY_RELEASED_TICKET_COUNTS, supplyOfType, type PreviewSupply, type ReleasedTicketCounts} from '~/composables/useBooking'
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES} from '~/types/form'
 
@@ -598,7 +598,7 @@ const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadl
 const dayBillSummary = computed(() => getDayBillSummary(eventOrders.value))
 
 // The client settles a claim against the tickets for sale of the order's ticket type on this dinner (the lock status)
-const supply: PreviewSupply = order => ({ticketsForSale: ticketsForSaleOf(props.releasedTicketCounts, props.ticketPrices, order.ticketPriceId)})
+const supply: PreviewSupply = order => supplyOfType(props.releasedTicketCounts, props.ticketPrices, order.ticketPriceId)
 
 // What saving the expanded row does: its buckets feed the preview lines and the save label
 const editingBuckets = computed(() => {
@@ -741,7 +741,7 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
             >
               <template #badge>
                 <UBadge v-if="hasReleasedTickets" :color="COLOR.info" :icon="ICONS.claim" :variant="NOISE.subtle" :size="SIZES.small">
-                  {{ props.releasedTicketCounts.formatted }} Ledig{{ props.releasedTicketCounts.total === 1 ? '' : 'e' }}
+                  {{ SUPPLY_WORDS.forSaleCount(props.releasedTicketCounts) }}
                 </UBadge>
               </template>
             </UserListItem>
