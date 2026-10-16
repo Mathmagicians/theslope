@@ -82,7 +82,6 @@
     "eslint": "~10.12.0",
     "h3": "~1.15.11",
     "happy-dom": "~20.14.5",
-    "nitro-cloudflare-dev": "~0.2.2",
     "prisma": "~7.10.1",
     "tailwindcss": "~4.3.3",
     "typescript": "~5.9.3",
