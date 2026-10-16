@@ -19,7 +19,7 @@ const DinnerMode = DinnerModeSchema.enum
 
 /**
  * The waiting list through the one booking path: a member saves a mode on a closed, sold-out dinner and lands in the
- * queue; the chef releases portions and the member holds a ticket.
+ * queue, the dinner calendar counts the queue on the dinner's day; the chef releases portions and the member holds a ticket.
  *
  * SERIAL: activates its own season. A two-day booking deadline closes tomorrow's dinner; no ticket is released, so the
  * dinner is sold out. The admin is the chef of the dinner's team.
@@ -83,6 +83,15 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
         const chefPage = await (await browser.newContext({storageState: adminUIFile})).newPage()
         await gotoHydrated(chefPage, `/chef?team=${teamId}&date=${formatDate(dinnerDate)}`)
         await expect(chefPage.getByTestId('chef-waitlist-alert')).toBeVisible({timeout: 15000})
+    })
+
+    test('GIVEN a locked dinner with no tickets for sale and one entry on its waiting list WHEN a member opens /dinner THEN the dinner\'s calendar day chip reads -1', async ({browser}) => {
+        const memberPage = await (await browser.newContext({storageState: memberUIFile})).newPage()
+        await memberPage.goto(`/dinner?date=${formatDate(dinnerDate)}`)
+
+        // UChip hands its test id to the day circle; the chip's number sits beside the circle
+        const dayChip = memberPage.getByTestId(`calendar-dinner-date-${dinnerDate.getDate()}`).locator('xpath=..').locator('[data-slot="base"]')
+        await expect(dayChip).toHaveText('-1', {timeout: 15000})
     })
 
     test('GIVEN the member in the queue WHEN the chef releases a portion THEN the member holds a ticket and the queue is empty', async ({browser}) => {

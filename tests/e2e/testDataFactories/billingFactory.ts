@@ -13,8 +13,10 @@ import {
     type MonthlyBillingResponse,
     type TransactionDisplay
 } from '~/composables/useBillingValidation'
+import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
 
 const {headers, salt} = testHelpers
+const {createTicketPrice} = useTicketPriceValidation()
 const BILLING_IMPORT_ENDPOINT = '/api/admin/billing/import'
 const BILLING_PERIODS_ENDPOINT = '/api/admin/billing/periods'
 const BILLING_INVOICES_ENDPOINT = '/api/admin/billing/invoices'
@@ -36,10 +38,10 @@ export class BillingFactory {
      * Mock ticket prices for resolving ticketTypes in test data
      * Used by deserializeBillingPeriodDetail when computing stats from snapshots
      */
-    private static readonly mockTicketPrices = [
-        {price: 4000, ticketType: TicketType.ADULT},
-        {price: 1700, ticketType: TicketType.CHILD},
-        {price: 0, ticketType: TicketType.BABY}
+    static readonly mockTicketPrices: TicketPrice[] = [
+        createTicketPrice({price: 4000, ticketType: TicketType.ADULT, portions: 1}),
+        createTicketPrice({price: 1700, ticketType: TicketType.CHILD, portions: 0.5}),
+        createTicketPrice({price: 0, ticketType: TicketType.BABY, portions: 0})
     ]
 
     /**

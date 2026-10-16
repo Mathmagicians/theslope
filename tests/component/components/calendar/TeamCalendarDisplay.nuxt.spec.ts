@@ -34,12 +34,11 @@ describe('TeamCalendarDisplay legend', () => {
         expect(findAllByTestId(wrapper, 'calendar-legend-entry')).toHaveLength(teams.length)
     })
 
-    it.each(teams.map((team, position) => ({position, number: teams.length - position, name: team.name})))(
-        '$name, listed at $position, wears the stop of its number', async ({position, number}) => {
-            const wrapper = await mount(teams)
-            const badge = findAllByTestId(wrapper, 'calendar-legend-badge')[position]!
-            expect(badge.classes()).toEqual(expect.arrayContaining(bandOf(number)))
-        })
+    it('every team, listed from the highest number down, wears the stop of its number', async () => {
+        const wrapper = await mount(teams)
+        const badges = findAllByTestId(wrapper, 'calendar-legend-badge')
+        teams.forEach((_team, position) => expect(badges[position]!.classes()).toEqual(expect.arrayContaining(bandOf(teams.length - position))))
+    })
 
     it(`the stops a season of teams renders are all different, and team ${RAINBOW.length + 1} wraps`, async () => {
         const wrapper = await mount(teams)

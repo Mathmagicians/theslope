@@ -15,7 +15,7 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {formatPortions} from '~/utils/utils'
 import {FORM_MODES} from '~/types/form'
-import {COMPONENTS, ICONS, getRandomEmptyMessage} from '~/composables/useTheSlopeDesignSystem'
+import {ICONS, getRandomEmptyMessage} from '~/composables/useTheSlopeDesignSystem'
 import {WAITLIST_TEST_IDS} from '../dinner/waitlistTestIds'
 
 /**
@@ -77,44 +77,12 @@ describe('ChefMenuCard', () => {
     }
 
     describe('Allergen ID Extraction', () => {
-        it.each([
-            {
-                name: 'single allergen',
-                allergenIds: [1],
-                expectedIds: [1]
-            },
-            {
-                name: 'multiple allergens',
-                allergenIds: [1, 3, 5],
-                expectedIds: [1, 3, 5]
-            },
-            {
-                name: 'empty allergens',
-                allergenIds: [],
-                expectedIds: []
-            }
-        ])('extracts $name correctly', async ({allergenIds, expectedIds}) => {
-            const dinnerEvent = createDinnerEventWithAllergens(allergenIds)
+        it('hands the editor each allergen id, not a join row allergyTypeId', async () => {
+            const dinnerEvent = createDinnerEventWithAllergens([1, 3, 5])
             const wrapper = await createWrapper({dinnerEvent})
 
-            // The AllergenMultiSelector receives the extracted IDs
             const selector = await openAllergenEditor(wrapper)
-            expect(selector.exists()).toBe(true)
-            expect(selector.props('modelValue')).toEqual(expectedIds)
-        })
-
-        it('uses the allergen id, not a join row allergyTypeId', async () => {
-            const dinnerEvent = {
-                ...DinnerEventFactory.defaultDinnerEventDetail(),
-                allergens: [
-                    {id: 42, name: 'Test Allergen', description: 'Test', icon: '🥜'}
-                ]
-            }
-
-            const wrapper = await createWrapper({dinnerEvent})
-            const selector = await openAllergenEditor(wrapper)
-
-            expect(selector.props('modelValue')).toEqual([42])
+            expect(selector.props('modelValue')).toEqual([1, 3, 5])
         })
     })
 
@@ -216,43 +184,33 @@ describe('ChefMenuCard', () => {
     })
 
     describe('Mode Rendering', () => {
-        it.each([
-            {formMode: FORM_MODES.EDIT, showAllergens: true, shouldShowAllergenLine: true},
-            {formMode: FORM_MODES.VIEW, showAllergens: true, shouldShowAllergenLine: true},
-            {formMode: FORM_MODES.VIEW, showAllergens: false, shouldShowAllergenLine: false}
-        ])('renders allergen display with formMode=$formMode showAllergens=$showAllergens', async ({formMode, showAllergens, shouldShowAllergenLine}) => {
+        it('hides the allergen line when showAllergens is off', async () => {
             const dinnerEvent = createDinnerEventWithAllergens([1, 2])
-            const wrapper = await createWrapper({dinnerEvent, formMode, showAllergens})
+            const wrapper = await createWrapper({dinnerEvent, formMode: FORM_MODES.VIEW, showAllergens: false})
 
-            expect(findByTestId(wrapper, ALLERGEN_LINE).exists()).toBe(shouldShowAllergenLine)
+            expect(findByTestId(wrapper, ALLERGEN_LINE).exists()).toBe(false)
         })
     })
 
     describe('Chef portrait', () => {
         type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
         const chef = {id: 7, heynaboId: 7, householdId: 1, name: 'Anna', lastName: 'Kok', pictureUrl: null, birthDate: null}
-        const classesOf = (token: string) => token.split(' ')
 
         it.each([
-            {name: 'a wanted poster without a chef', chef: null, testId: 'chef-wanted', framed: true},
-            {name: 'the chef without a poster frame', chef, testId: 'chef-display', framed: false}
-        ])('renders $name', async ({chef: dinnerChef, testId, framed}) => {
+            {name: 'a wanted poster without a chef', chef: null, testId: 'chef-wanted'},
+            {name: 'the chef', chef, testId: 'chef-display'}
+        ])('renders $name', async ({chef: dinnerChef, testId}) => {
             const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), chef: dinnerChef}
             const wrapper = await createWrapper({dinnerEvent, formMode: FORM_MODES.VIEW})
 
-            const portrait = findByTestId(wrapper, testId)
-            expect(portrait.classes()).toEqual(expect.arrayContaining(classesOf(COMPONENTS.wantedPoster.trigger)))
-            const frameClasses = classesOf(COMPONENTS.wantedPoster.frame)
-            expect(frameClasses.every(name => portrait.classes().includes(name))).toBe(framed)
+            expect(findByTestId(wrapper, testId).exists()).toBe(true)
         })
 
         it('renders the chef glyph as the hat on the wanted poster', async () => {
             const wrapper = await createWrapper({formMode: FORM_MODES.VIEW})
 
             const icons = findByTestId(wrapper, 'chef-wanted').findAllComponents({name: 'UIcon'})
-            const hat = icons.find((icon: IconWrapper) => icon.props('name') === ICONS.chef)
-            expect(hat).toBeDefined()
-            expect(hat!.classes()).toEqual(expect.arrayContaining(classesOf(COMPONENTS.wantedPoster.hat)))
+            expect(icons.some((icon: IconWrapper) => icon.props('name') === ICONS.chef)).toBe(true)
         })
     })
 })

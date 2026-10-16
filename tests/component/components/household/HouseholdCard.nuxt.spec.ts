@@ -33,22 +33,12 @@ describe.each(VIEWPORTS)('HouseholdCard on $viewport', ({isMd}) => {
         resetStores()
     })
 
-    it.each([
-        {id: 'name', token: 'householdMemberName'},
-        {id: 'ticketType', token: 'householdTicketType'}
-    ] as const)('the $id column binds its column token', async ({id, token}) => {
+    it('the name and ticket type columns bind their column tokens', async () => {
         const wrapper = await mountCard(isMd)
         const columns = wrapper.findComponent({name: 'UTable'}).props('columns') as Array<{id: string}>
-        expect(columns.find(column => column.id === id)).toEqual({id, ...createTableColumns(ref(isMd))[token]})
-    })
-
-    it('the ticket type column renders its header and cells from md through its column meta', async () => {
-        const wrapper = await mountCard(isMd)
-        const columns = wrapper.findComponent({name: 'UTable'}).props('columns') as Array<{id: string}>
-        const index = columns.findIndex(column => column.id === 'ticketType')
-        const {meta} = createTableColumns(ref(isMd)).householdTicketType
-        expect(wrapper.findAll('thead th')[index]!.classes()).toEqual(expect.arrayContaining(meta.class.th.split(' ')))
-        expect(wrapper.findAll('tbody tr')[0]!.findAll('td')[index]!.classes()).toEqual(expect.arrayContaining(meta.class.td.split(' ')))
+        const tokens = createTableColumns(ref(isMd))
+        expect(columns.find(column => column.id === 'name')).toEqual({id: 'name', ...tokens.householdMemberName})
+        expect(columns.find(column => column.id === 'ticketType')).toEqual({id: 'ticketType', ...tokens.householdTicketType})
     })
 
     it('an open member row groups its actions at the card field group size', async () => {

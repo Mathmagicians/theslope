@@ -2,6 +2,7 @@ import {describe, it, expect} from 'vitest'
 import {TicketFactory} from '../../e2e/testDataFactories/ticketFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+import appConfig from '~/app.config'
 
 describe('useTicket', () => {
     const referenceDate = new Date('2025-01-15')
@@ -9,21 +10,14 @@ describe('useTicket', () => {
     const {TicketTypeSchema} = useBookingValidation()
     const TicketType = TicketTypeSchema.enum
 
-    describe('ticketTypeConfig', () => {
+    describe('ticketTypeWords', () => {
         it.each([
-            ['ADULT', 'Voksen', 'primary', 'i-heroicons-user', 'V'],
-            ['CHILD', 'Barn', 'success', 'i-heroicons-user-circle', 'B'],
-            ['BABY', 'Baby', 'neutral', 'i-heroicons-face-smile', 'b']
-        ] as const)('GIVEN %s THEN has label=%s color=%s icon=%s compactLabel=%s',
-            (type, expectedLabel, expectedColor, expectedIcon, expectedCompactLabel) => {
-                const {ticketTypeConfig} = useTicket()
-                const config = ticketTypeConfig[type]
-                expect(config.label).toBe(expectedLabel)
-                expect(config.color).toBe(expectedColor)
-                expect(config.icon).toBe(expectedIcon)
-                expect(config.compactLabel).toBe(expectedCompactLabel)
-            }
-        )
+            [TicketType.ADULT, 'Voksen', 'V'],
+            [TicketType.CHILD, 'Barn', 'B'],
+            [TicketType.BABY, 'Baby', 'b']
+        ] as const)('GIVEN %s THEN it goes by %s and the letter %s', (type, label, compactLabel) => {
+            expect(useTicket().ticketTypeWords[type]).toEqual({label, compactLabel})
+        })
     })
 
     describe('determineTicketType', () => {
@@ -91,59 +85,41 @@ describe('useTicket', () => {
         })
     })
 
-    describe('getTicketTypeConfig', () => {
+    describe('resolveTicketType', () => {
         it.each([
-            ['1 year old', new Date('2024-01-01'), 'Baby', 'neutral', 'i-heroicons-face-smile'],
-            ['8 years old', new Date('2017-01-01'), 'Barn', 'success', 'i-heroicons-user-circle'],
-            ['25 years old', new Date('2000-01-01'), 'Voksen', 'primary', 'i-heroicons-user'],
-            ['no birthDate', null, 'Voksen', 'primary', 'i-heroicons-user']
-        ])('GIVEN %s THEN returns label=%s color=%s icon=%s',
-            (_, birthDate, expectedLabel, expectedColor, expectedIcon) => {
-                const {getTicketTypeConfig} = useTicket()
-                const config = getTicketTypeConfig(birthDate, ticketPrices, referenceDate)
-                expect(config.label).toBe(expectedLabel)
-                expect(config.color).toBe(expectedColor)
-                expect(config.icon).toBe(expectedIcon)
-            }
-        )
+            ['1 year old', new Date('2024-01-01'), TicketType.BABY],
+            ['8 years old', new Date('2017-01-01'), TicketType.CHILD],
+            ['25 years old', new Date('2000-01-01'), TicketType.ADULT],
+            ['no birthDate', null, TicketType.ADULT]
+        ])('GIVEN %s THEN resolves to %s', (_, birthDate, expected) => {
+            expect(useTicket().resolveTicketType(birthDate, ticketPrices, referenceDate)).toBe(expected)
+        })
 
         it.each([
             // priceAtBooking fallback when no birthDate (guest/orphan orders)
-            ['priceAtBooking 0 (baby)', 0, 'Baby', 'neutral'],
-            ['priceAtBooking 1500 (hungry baby)', 1500, 'Baby', 'neutral'],
-            ['priceAtBooking 3000 (child)', 3000, 'Barn', 'success'],
-            ['priceAtBooking 5000 (adult)', 5000, 'Voksen', 'primary'],
-            ['priceAtBooking unmatched', 9999, 'Voksen', 'primary']  // Falls back to ADULT
-        ])('GIVEN no birthDate with %s THEN returns label=%s color=%s',
-            (_, priceAtBooking, expectedLabel, expectedColor) => {
-                const {getTicketTypeConfig} = useTicket()
-                const config = getTicketTypeConfig(null, ticketPrices, referenceDate, priceAtBooking)
-                expect(config.label).toBe(expectedLabel)
-                expect(config.color).toBe(expectedColor)
-            }
-        )
+            ['priceAtBooking 0 (baby)', 0, TicketType.BABY],
+            ['priceAtBooking 1500 (hungry baby)', 1500, TicketType.BABY],
+            ['priceAtBooking 3000 (child)', 3000, TicketType.CHILD],
+            ['priceAtBooking 5000 (adult)', 5000, TicketType.ADULT],
+            ['priceAtBooking unmatched', 9999, TicketType.ADULT]  // Falls back to ADULT
+        ])('GIVEN no birthDate with %s THEN resolves to %s', (_, priceAtBooking, expected) => {
+            expect(useTicket().resolveTicketType(null, ticketPrices, referenceDate, priceAtBooking)).toBe(expected)
+        })
 
         it('GIVEN birthDate takes priority over priceAtBooking', () => {
-            const {getTicketTypeConfig} = useTicket()
             // 25yo = ADULT, but priceAtBooking is 0 (baby price) - birthDate wins
-            const config = getTicketTypeConfig(new Date('2000-01-01'), ticketPrices, referenceDate, 0)
-            expect(config.label).toBe('Voksen')
-            expect(config.color).toBe('primary')
+            expect(useTicket().resolveTicketType(new Date('2000-01-01'), ticketPrices, referenceDate, 0)).toBe(TicketType.ADULT)
         })
 
         it.each([
             // No ticket prices: default age limits classify - children must not become Voksen
-            ['1 year old', new Date('2024-01-01'), 'Baby'],
-            ['8 years old', new Date('2017-01-01'), 'Barn'],
-            ['25 years old', new Date('2000-01-01'), 'Voksen'],
-            ['no birthDate', null, 'Voksen']
-        ])('GIVEN %s WITHOUT ticket prices THEN classifies by default age limits as %s',
-            (_, birthDate, expectedLabel) => {
-                const {getTicketTypeConfig} = useTicket()
-                const config = getTicketTypeConfig(birthDate, undefined, referenceDate)
-                expect(config.label).toBe(expectedLabel)
-            }
-        )
+            ['1 year old', new Date('2024-01-01'), TicketType.BABY],
+            ['8 years old', new Date('2017-01-01'), TicketType.CHILD],
+            ['25 years old', new Date('2000-01-01'), TicketType.ADULT],
+            ['no birthDate', null, TicketType.ADULT]
+        ])('GIVEN %s WITHOUT ticket prices THEN classifies by default age limits as %s', (_, birthDate, expected) => {
+            expect(useTicket().resolveTicketType(birthDate, undefined, referenceDate)).toBe(expected)
+        })
     })
 
     describe('groupInhabitantsByTicketCategory', () => {
@@ -172,34 +148,6 @@ describe('useTicket', () => {
             const {groupInhabitantsByTicketCategory} = useTicket()
             const groups = groupInhabitantsByTicketCategory([inhabitantWithAge(null, 'unknown1')], ticketPrices, referenceDate)
             expect(groups.map(g => g.count)).toEqual([1, 0, 0])
-        })
-
-        it('GIVEN groups THEN each exposes the shared ticketTypeConfig for display', () => {
-            const {groupInhabitantsByTicketCategory, ticketTypeConfig} = useTicket()
-            const groups = groupInhabitantsByTicketCategory(mixedInhabitants, ticketPrices, referenceDate)
-            groups.forEach(g => expect(g.config).toBe(ticketTypeConfig[g.ticketType]))
-        })
-    })
-
-    describe('getTicketPriceForInhabitant', () => {
-        it.each([
-            ['1 year old', new Date('2024-01-01'), 'BABY', 0],
-            ['8 years old', new Date('2017-01-01'), 'CHILD', 3000],
-            ['25 years old', new Date('2000-01-01'), 'ADULT', 5000],
-            ['no birthDate', null, 'ADULT', 5000]
-        ])('GIVEN %s THEN returns ticketType=%s price=%i',
-            (_, birthDate, expectedType, expectedPrice) => {
-                const {getTicketPriceForInhabitant} = useTicket()
-                const result = getTicketPriceForInhabitant(birthDate, ticketPrices, referenceDate)
-                expect(result).toBeDefined()
-                expect(result!.ticketType).toBe(expectedType)
-                expect(result!.price).toBe(expectedPrice)
-            }
-        )
-
-        it('GIVEN no ticket prices THEN returns undefined', () => {
-            const {getTicketPriceForInhabitant} = useTicket()
-            expect(getTicketPriceForInhabitant(new Date('2020-01-01'), undefined, referenceDate)).toBeUndefined()
         })
     })
 
@@ -259,6 +207,27 @@ describe('useTicket', () => {
             const result = resolveTicketPrice(new Date('2000-01-01'), 0, sortedPrices, referenceDate)
             expect(result!.ticketType).toBe('ADULT')
             expect(result!.price).toBe(5000)
+        })
+    })
+
+    describe('portionsOf', () => {
+        // The config's default prices hold the weight of their tickets; a price matches on its type and amount
+        const defaults = appConfig.theslope.defaultSeason.ticketPrices
+        const firstOfType = (ticketType: typeof TicketType[keyof typeof TicketType]) => defaults.find(price => price.ticketType === ticketType)!
+
+        it.each(defaults.map(price => ({...price, label: `${price.ticketType} at ${price.price} øre`})))(
+            'a ticket priced as the default $label weighs its portions', ({ticketType, price, portions}) => {
+                expect(useTicket().portionsOf({ticketType, price})).toBe(portions)
+            })
+
+        it('a ticket at a price no default names weighs the first default price of its type', () => {
+            const {ticketType, price} = defaults.find(candidate => candidate.ticketType === TicketType.BABY && candidate.portions > 0)!
+            expect(useTicket().portionsOf({ticketType, price: price + 1})).toBe(firstOfType(TicketType.BABY).portions)
+        })
+
+        it('two prices of one type weigh apart', () => {
+            const babies = defaults.filter(price => price.ticketType === TicketType.BABY)
+            expect(new Set(babies.map(price => useTicket().portionsOf(price))).size).toBe(babies.length)
         })
     })
 

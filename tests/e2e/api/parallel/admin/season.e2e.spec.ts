@@ -5,12 +5,14 @@ import type {CookingTeamDetail} from '~~/app/composables/useCookingTeamValidatio
 import {useCoreValidation} from '~~/app/composables/useCoreValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 import {WEEKDAYS} from '~~/app/types/dateTypes'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
-const {DinnerStateSchema, DinnerModeSchema} = useBookingValidation()
+const {DinnerStateSchema, DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
+const TicketType = TicketTypeSchema.enum
 const DinnerState = DinnerStateSchema.enum
 const DinnerMode = DinnerModeSchema.enum
 // Get DinnerMode-typed createDefaultWeekdayMap for inhabitant preferences
@@ -87,6 +89,21 @@ test.describe('Season API Tests', () => {
 
             // AND: ticketPrices should match the created data
             expect(foundSeason!.ticketPrices).toEqual(created.ticketPrices)
+        })
+
+        test("GIVEN a season priced at the default prices WHEN reading it THEN each price carries what a ticket at it weighs, and an update sending those prices saves", async ({browser}) => {
+            const context = await validatedBrowserContext(browser)
+            const ticketPrices = TicketFactory.defaultTicketPricesWithoutIds({hungryBabyPrice: 900, childPrice: 1700, adultPrice: 4000})
+            const created = await SeasonFactory.createSeason(context, {...SeasonFactory.defaultSeason(), ticketPrices})
+            trackSeason(created.id!)
+
+            const read = await SeasonFactory.getSeason(context, created.id!)
+            expect(read.ticketPrices.map(price => [price.ticketType, price.price, price.portions])).toEqual([
+                [TicketType.BABY, 0, 0], [TicketType.BABY, 900, 0.25], [TicketType.CHILD, 1700, 0.5], [TicketType.ADULT, 4000, 1]
+            ])
+
+            const updated = await SeasonFactory.updateSeason(context, read)
+            expect(updated.ticketPrices).toEqual(read.ticketPrices)
         })
 
         test("GET /api/admin/season/[id] (detail) should include dinnerEvents and cookingTeams", async ({browser}) => {

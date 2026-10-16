@@ -1,14 +1,16 @@
 import {describe, it, expect} from 'vitest'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
+import type {PortionTicket} from '~/composables/useTicketPriceValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {DinnerStateSchema, DinnerModeSchema, OrderStateSchema, TicketTypeSchema, OrderAuditActionSchema} from '~~/prisma/generated/zod'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import type {ZodSafeParseResult} from 'zod'
+
+const {DinnerStateSchema, DinnerModeSchema, OrderStateSchema, TicketTypeSchema, OrderAuditActionSchema} = useBookingValidation()
 
 const getValidationError = <T>(result: ZodSafeParseResult<T>) =>
   !result.success ? `Validation errors: ${JSON.stringify(result.error.format())}` : ''
@@ -42,12 +44,12 @@ describe('useBookingValidation', () => {
 
   describe('Enum Validation', () => {
     it.each([
-      ...DinnerStateSchema.options.map(s => ({enum: 'DinnerState', value: s, schema: ExportedDinnerStateSchema})),
-      ...DinnerModeSchema.options.map(s => ({enum: 'DinnerMode', value: s, schema: ExportedDinnerModeSchema})),
-      ...OrderStateSchema.options.map(s => ({enum: 'OrderState', value: s, schema: ExportedOrderStateSchema})),
-      ...TicketTypeSchema.options.map(s => ({enum: 'TicketType', value: s, schema: ExportedTicketTypeSchema}))
-    ])('GIVEN valid $enum value $value WHEN parsing THEN succeeds', ({value, schema}) => {
-      expect(() => schema.parse(value)).not.toThrow()
+      {enum: 'DinnerState', values: DinnerStateSchema.options, schema: ExportedDinnerStateSchema},
+      {enum: 'DinnerMode', values: DinnerModeSchema.options, schema: ExportedDinnerModeSchema},
+      {enum: 'OrderState', values: OrderStateSchema.options, schema: ExportedOrderStateSchema},
+      {enum: 'TicketType', values: TicketTypeSchema.options, schema: ExportedTicketTypeSchema}
+    ])('GIVEN every generated $enum value WHEN parsing THEN succeeds', ({values, schema}) => {
+      values.forEach(value => expect(() => schema.parse(value)).not.toThrow())
     })
 
     it.each([
@@ -69,12 +71,10 @@ describe('useBookingValidation', () => {
         expect(result).toMatchObject(validDisplay)
       })
 
-      it.each(DinnerStateSchema.options.map(state => ({state})))(
-        'GIVEN state $state WHEN parsing THEN succeeds',
-        ({state}) => {
-          expect(() => DinnerEventDisplaySchema.parse({...validDisplay, state})).not.toThrow()
-        }
-      )
+      it('GIVEN every state WHEN parsing THEN succeeds', () => {
+        DinnerStateSchema.options.forEach(state =>
+          expect(() => DinnerEventDisplaySchema.parse({...validDisplay, state})).not.toThrow())
+      })
 
       it.each([
         {desc: 'missing id', override: {id: undefined}},
@@ -168,14 +168,12 @@ describe('useBookingValidation', () => {
         expect(result.success, getValidationError(result)).toBe(true)
       })
 
-      it.each(OrderStateSchema.options.map(state => ({state})))(
-        'GIVEN state $state WHEN parsing THEN succeeds',
-        ({state}) => {
-          const order = OrderFactory.defaultOrder(undefined, {state})
-          const result = OrderDisplaySchema.safeParse(order)
+      it('GIVEN every state WHEN parsing THEN succeeds', () => {
+        OrderStateSchema.options.forEach(state => {
+          const result = OrderDisplaySchema.safeParse(OrderFactory.defaultOrder(undefined, {state}))
           expect(result.success, getValidationError(result)).toBe(true)
-        }
-      )
+        })
+      })
 
       it.each([
         {field: 'bookedByUserId', value: null},
@@ -187,14 +185,14 @@ describe('useBookingValidation', () => {
         expect(result.success, getValidationError(result)).toBe(true)
       })
 
-      it.each([
-        'id', 'dinnerEventId', 'inhabitantId', 'ticketPriceId',
-        'priceAtBooking', 'dinnerMode', 'state', 'createdAt', 'updatedAt', 'ticketType'
-      ].map(field => ({field})))('GIVEN missing $field WHEN parsing THEN throws', ({field}) => {
-        const order = OrderFactory.defaultOrder() as Record<string, unknown>
-        Reflect.deleteProperty(order, field)
-        const result = OrderDisplaySchema.safeParse(order)
-        expect(result.success).toBe(false)
+      it('GIVEN any required field missing WHEN parsing THEN throws', () => {
+        const required = ['id', 'dinnerEventId', 'inhabitantId', 'ticketPriceId',
+          'priceAtBooking', 'dinnerMode', 'state', 'createdAt', 'updatedAt', 'ticketType']
+        required.forEach(field => {
+          const order = OrderFactory.defaultOrder() as Record<string, unknown>
+          Reflect.deleteProperty(order, field)
+          expect(OrderDisplaySchema.safeParse(order).success, field).toBe(false)
+        })
       })
 
     })
@@ -243,13 +241,12 @@ describe('useBookingValidation', () => {
         expect(result.success, getValidationError(result)).toBe(true)
       })
 
-      it.each(OrderAuditActionSchema.options.map(action => ({action})))(
-        'GIVEN action $action WHEN parsing THEN succeeds',
-        ({action}) => {
+      it('GIVEN every action WHEN parsing THEN succeeds', () => {
+        OrderAuditActionSchema.options.forEach(action => {
           const result = schema.safeParse({...factory(), action})
           expect(result.success, getValidationError(result)).toBe(true)
-        }
-      )
+        })
+      })
     })
 
     describe('OrderHistoryDetailSchema nullable order', () => {
@@ -265,13 +262,12 @@ describe('useBookingValidation', () => {
         expect(result.success, getValidationError(result)).toBe(true)
       })
 
-      it.each(OrderStateSchema.options.map(state => ({state})))(
-        'GIVEN state $state WHEN parsing THEN succeeds',
-        ({state}) => {
+      it('GIVEN every state WHEN parsing THEN succeeds', () => {
+        OrderStateSchema.options.forEach(state => {
           const result = OrderSnapshotSchema.safeParse(OrderFactory.defaultOrderSnapshot({state}))
           expect(result.success, getValidationError(result)).toBe(true)
-        }
-      )
+        })
+      })
     })
 
     describe('createOrderAuditData', () => {
@@ -296,10 +292,9 @@ describe('useBookingValidation', () => {
     } = useBookingValidation()
 
     describe('OrderAuditActionSchema', () => {
-      it.each(OrderAuditActionSchema.options.map(a => ({action: a})))(
-        'GIVEN $action WHEN parsing THEN succeeds',
-        ({action}) => expect(() => OrderAuditActionSchema.parse(action)).not.toThrow()
-      )
+      it('GIVEN every action WHEN parsing THEN succeeds', () => {
+        OrderAuditActionSchema.options.forEach(action => expect(() => OrderAuditActionSchema.parse(action)).not.toThrow())
+      })
 
       it('GIVEN invalid action WHEN parsing THEN throws', () => {
         expect(() => OrderAuditActionSchema.parse('INVALID')).toThrow()
@@ -496,6 +491,15 @@ describe('useBookingValidation', () => {
     })
 
     describe('deserializeDinnerEventDetail', () => {
+      // The server weighs a price row through useTicket; the deserializer only places what the lookup gives
+      const withPortions = <T extends PortionTicket>(ticketPrice: T) => ({...ticketPrice, portions: 0.5})
+
+      it('GIVEN a ticket with its price row WHEN deserializing THEN the row carries the portions the lookup gives it', () => {
+        const ticket = {...OrderFactory.defaultOrderDetail(), inhabitant: null}
+        const result = deserializeDinnerEventDetail(DinnerEventFactory.defaultSerializedDinnerEventDetail({tickets: [ticket]}), withPortions)
+        expect((result.tickets as Array<{ticketPrice: {portions: number}}>)[0]!.ticketPrice.portions).toBe(0.5)
+      })
+
       it('GIVEN expense rows WHEN deserializing THEN the lines are domain rows, the cost is their sum and the ticket reference carries it', () => {
         const {serializeExpense} = useBillingValidation()
         const rows = [
@@ -507,7 +511,7 @@ describe('useBookingValidation', () => {
           ...DinnerEventFactory.defaultSerializedDinnerEventDetail({tickets: [ticket]}),
           totalCost: 99,
           expenses: rows.map(serializeExpense)
-        })
+        }, withPortions)
         expect(result.totalCost).toBe(131000)
         expect(result.expenses).toEqual(rows)
         expect((result.tickets as Array<{dinnerEvent: {totalCost: number}}>)[0]!.dinnerEvent.totalCost).toBe(131000)
@@ -572,7 +576,7 @@ describe('useBookingValidation', () => {
           }
         }
       ])('GIVEN $desc WHEN deserializing THEN converts JSON strings to objects', ({input, assertion}) => {
-        const result = deserializeDinnerEventDetail(input())
+        const result = deserializeDinnerEventDetail(input(), withPortions)
         assertion(result)
       })
 
@@ -580,7 +584,7 @@ describe('useBookingValidation', () => {
         const allergies = AllergyFactory.serializedAllergies(2)
         const result = deserializeDinnerEventDetail(DinnerEventFactory.defaultSerializedDinnerEventDetail({
           tickets: [{id: 1, inhabitant: {...DinnerEventFactory.serializedInhabitant(SERIALIZED_PREFERENCES), allergies}}]
-        }))
+        }), withPortions)
         const tickets = result.tickets as Array<{inhabitant: {allergies: Array<{allergyType: unknown}>}}>
         expect(tickets[0]!.inhabitant.allergies.map(a => a.allergyType)).toEqual(allergies.map(a => a.allergyType))
       })

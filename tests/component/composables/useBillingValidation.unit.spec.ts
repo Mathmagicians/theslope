@@ -223,11 +223,7 @@ describe('useBillingValidation', () => {
     })
 
     // Mock ticket prices for resolving null ticketTypes
-    const mockTicketPrices = [
-        {price: 4000, ticketType: TicketType.ADULT},
-        {price: 1700, ticketType: TicketType.CHILD},
-        {price: 0, ticketType: TicketType.BABY}
-    ]
+    const mockTicketPrices = BillingFactory.mockTicketPrices
 
     describe('computeStatsFromSnapshots', () => {
         it.each([

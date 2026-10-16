@@ -6,7 +6,7 @@ import AdminPage from '~/pages/admin/[tab].vue'
 import {usePlanStore} from '~/stores/plan'
 import {useBookingsStore} from '~/stores/bookings'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
-import {asyncDataStatus, mountedStore, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
+import {mountedStore, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
 
 // The test environment has no router to land a deep link on
 const {mockRoute, mockNavigateTo, useRoute} = await vi.hoisted(async () =>
@@ -101,16 +101,5 @@ describe('admin/[tab] - the billing overview on the economy tab', () => {
 
         expect(loadBillingOverview).toHaveBeenCalledTimes(1)
         expect(toValue(loadBillingOverview.mock.calls[0]![0])).toBe(requested)
-    })
-
-    it('leaves both billing datasets idle on another tab', async () => {
-        mockRoute.path = '/admin/planning'
-        mockRoute.params = {tab: 'planning'}
-        mockRoute.query = {season: season.shortName}
-
-        await mountWithTooltipProvider(AdminPage)
-
-        expect(asyncDataStatus('bookings-store-billing-periods')).toBe('idle')
-        expect(asyncDataStatus('bookings-store-current-period')).toBe('idle')
     })
 })

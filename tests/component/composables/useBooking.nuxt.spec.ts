@@ -2,7 +2,7 @@ import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, addYears, differenceInDays, nextDay, type Day} from 'date-fns'
 import {useBooking, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcome, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
-import {MODE_WORDS, ACTION_WORDS} from '~/composables/useBookingUi'
+import {MODE_WORDS, ACTION_WORDS, ORDER_STATE_LABELS} from '~/composables/useBookingUi'
 import {useBookingValidation, type OrderDisplay, type DinnerMode, type DesiredOrder} from '~/composables/useBookingValidation'
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -16,9 +16,13 @@ import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
 import appConfig from '~/app.config'
 
 // Shared test constant: days offset for dinners before cancellation deadline
-const {OrderBucketSchema, BookingActionSchema} = useBookingValidation()
+const {OrderBucketSchema, BookingActionSchema, DinnerStateSchema: DinnerStateEnumSchema, OrderStateSchema: OrderStateEnumSchema, DinnerModeSchema: DinnerModeEnumSchema, TicketTypeSchema: TicketTypeEnumSchema} = useBookingValidation()
 const Bucket = OrderBucketSchema.enum
 const Action = BookingActionSchema.enum
+const DinnerStates = DinnerStateEnumSchema.enum
+const OrderStates = OrderStateEnumSchema.enum
+const DinnerModes = DinnerModeEnumSchema.enum
+const TicketTypes = TicketTypeEnumSchema.enum
 
 const FAR_FUTURE_DAYS = appConfig.theslope.defaultSeason.ticketIsCancellableDaysBefore + 20
 
@@ -148,25 +152,23 @@ describe('useBooking', () => {
                 expect(payload.name).toBe('Fællesspisning - Pasta Carbonara')
             })
 
-            it.each([
-                {field: 'status', expected: 'PUBLISHED'},
-                {field: 'public', expected: false},
-                {field: 'locationText', expected: 'Fælleshuset'},
-                {field: 'guestsAllowed', expected: true},
-                {field: 'takeAwayAllowed', expected: true},
-                {field: 'commentsAllowed', expected: true},
-                {field: 'visibleToEveryone', expected: true},
-                {field: 'vegetarian', expected: false}
-            ])('sets $field to $expected', ({field, expected}) => {
+            it('sets the constant event fields', () => {
                 const payload = createHeynaboEventPayload(futureDinnerEvent(), baseUrl)
-                expect(payload[field as keyof typeof payload]).toBe(expected)
-            })
-
-            it.each([
-                'type', 'groupId', 'locationId', 'minParticipants', 'maxParticipants'
-            ])('sets %s to null', (field) => {
-                const payload = createHeynaboEventPayload(futureDinnerEvent(), baseUrl)
-                expect(payload[field as keyof typeof payload]).toBeNull()
+                expect(payload).toMatchObject({
+                    status: 'PUBLISHED',
+                    public: false,
+                    locationText: 'Fælleshuset',
+                    guestsAllowed: true,
+                    takeAwayAllowed: true,
+                    commentsAllowed: true,
+                    visibleToEveryone: true,
+                    vegetarian: false,
+                    type: null,
+                    groupId: null,
+                    locationId: null,
+                    minParticipants: null,
+                    maxParticipants: null
+                })
             })
 
             it('sets price to zero for all categories', () => {
@@ -255,10 +257,10 @@ describe('useBooking', () => {
 
     describe('canCancelDinner', () => {
         it.each([
-            {state: 'SCHEDULED', expected: true, description: 'can cancel SCHEDULED dinners'},
-            {state: 'ANNOUNCED', expected: true, description: 'can cancel ANNOUNCED dinners'},
-            {state: 'CANCELLED', expected: false, description: 'cannot cancel already CANCELLED dinners'},
-            {state: 'CONSUMED', expected: false, description: 'cannot cancel CONSUMED dinners'}
+            {state: DinnerStates.SCHEDULED, expected: true, description: 'can cancel SCHEDULED dinners'},
+            {state: DinnerStates.ANNOUNCED, expected: true, description: 'can cancel ANNOUNCED dinners'},
+            {state: DinnerStates.CANCELLED, expected: false, description: 'cannot cancel already CANCELLED dinners'},
+            {state: DinnerStates.CONSUMED, expected: false, description: 'cannot cancel CONSUMED dinners'}
         ])('$description', ({state, expected}) => {
             const dinnerEvent = {state: state as keyof typeof DinnerState}
             expect(canCancelDinner(dinnerEvent)).toBe(expected)
@@ -283,35 +285,35 @@ describe('useBooking', () => {
         it.each([
             {
                 description: 'returns SCHEDULED for SCHEDULED state',
-                state: 'SCHEDULED',
+                state: DinnerStates.SCHEDULED,
                 date: futureDate(),
                 totalCost: 0,
                 expected: DinnerStepState.SCHEDULED
             },
             {
                 description: 'returns ANNOUNCED for ANNOUNCED with open booking',
-                state: 'ANNOUNCED',
+                state: DinnerStates.ANNOUNCED,
                 date: futureDate(),
                 totalCost: 0,
                 expected: DinnerStepState.ANNOUNCED
             },
             {
                 description: 'returns BOOKING_CLOSED for ANNOUNCED with closed booking',
-                state: 'ANNOUNCED',
+                state: DinnerStates.ANNOUNCED,
                 date: pastDate(),
                 totalCost: 0,
                 expected: DinnerStepState.BOOKING_CLOSED
             },
             {
                 description: 'returns GROCERIES_DONE for ANNOUNCED with closed booking and groceries done',
-                state: 'ANNOUNCED',
+                state: DinnerStates.ANNOUNCED,
                 date: pastDate(),
                 totalCost: 10000,
                 expected: DinnerStepState.GROCERIES_DONE
             },
             {
                 description: 'returns CONSUMED for CONSUMED state',
-                state: 'CONSUMED',
+                state: DinnerStates.CONSUMED,
                 date: pastDate(),
                 totalCost: 10000,
                 expected: DinnerStepState.CONSUMED
@@ -335,15 +337,15 @@ describe('useBooking', () => {
             const futureDate = new Date()
             futureDate.setDate(futureDate.getDate() + 14)
 
-            const dinnerEvent = {state: 'SCHEDULED' as const, date: futureDate, totalCost: 0}
+            const dinnerEvent = {state: DinnerStates.SCHEDULED, date: futureDate, totalCost: 0}
             expect(getStepConfig(dinnerEvent, defaultDeadlines).step).toBe(0)
         })
     })
 
     describe('State Constants', () => {
         it.each([
-            {constant: CONSUMABLE_DINNER_STATES, included: ['SCHEDULED', 'ANNOUNCED'], excluded: ['CANCELLED', 'CONSUMED']},
-            {constant: CLOSABLE_ORDER_STATES, included: ['BOOKED', 'RELEASED'], excluded: ['CANCELLED', 'CLOSED']}
+            {constant: CONSUMABLE_DINNER_STATES, included: [DinnerStates.SCHEDULED, DinnerStates.ANNOUNCED], excluded: [DinnerStates.CANCELLED, DinnerStates.CONSUMED]},
+            {constant: CLOSABLE_ORDER_STATES, included: [OrderStates.BOOKED, OrderStates.RELEASED], excluded: [OrderStates.CANCELLED, OrderStates.CLOSED]}
         ])('$constant includes correct states and excludes others', ({constant, included, excluded}) => {
             expect(constant).toHaveLength(2)
             included.forEach(s => expect(constant).toContain(s))
@@ -416,8 +418,8 @@ describe('useBooking', () => {
             expect(snapshot.dinnerEventId).toBe(5)
             expect(snapshot.ticketPriceId).toBe(1)
             expect(snapshot.priceAtBooking).toBe(5500)
-            expect(snapshot.dinnerMode).toBe('DINEIN')
-            expect(snapshot.state).toBe('BOOKED')
+            expect(snapshot.dinnerMode).toBe(DinnerModes.DINEIN)
+            expect(snapshot.state).toBe(OrderStates.BOOKED)
         })
 
         it('formats inhabitantNameWithInitials using formatNameWithInitials', () => {
@@ -454,9 +456,9 @@ describe('useBooking', () => {
         })
 
         it.each([
-            {state: 'BOOKED' as const},
-            {state: 'RELEASED' as const},
-            {state: 'CLOSED' as const}
+            {state: OrderStates.BOOKED},
+            {state: OrderStates.RELEASED},
+            {state: OrderStates.CLOSED}
         ])('preserves order state $state', ({state}) => {
             const order = {...baseOrder(), state}
             const snapshot = buildOrderSnapshot(order, 'AR_7')
@@ -1670,8 +1672,9 @@ describe('Lock Status Utilities', () => {
     })
 
     describe('computeLockStatus', () => {
-        // Helper to create ReleasedTicketCounts
-        const counts = (total: number, formatted: string) => ({ total, formatted })
+        // The released counts the store reads, and the ReleasedTicketCounts a locked dinner carries
+        const released = (total: number, formatted: string) => ({ total, formatted })
+        const counts = (total: number, formatted: string, queued = 0) => ({ total, formatted, queued })
         const emptyCount = counts(0, '-')
 
         describe.each([
@@ -1679,7 +1682,8 @@ describe('Lock Status Utilities', () => {
                 name: 'marks locked dinners with released count',
                 dinnerEvents: [makeEvent(1, 2), makeEvent(2, 5), makeEvent(3, 10)],
                 lockedDays: 7,
-                releasedCounts: new Map([[1, counts(3, '3V')], [2, counts(1, '1B')]]),
+                releasedCounts: new Map([[1, released(3, '3V')], [2, released(1, '1B')]]),
+                queueSizes: undefined,
                 expected: new Map([[1, counts(3, '3V')], [2, counts(1, '1B')]])
             },
             {
@@ -1687,19 +1691,29 @@ describe('Lock Status Utilities', () => {
                 dinnerEvents: [makeEvent(1, 2), makeEvent(2, 5)],
                 lockedDays: 7,
                 releasedCounts: undefined,
+                queueSizes: undefined,
                 expected: new Map([[1, emptyCount], [2, emptyCount]])
             },
             {
                 name: 'excludes non-locked dinners',
                 dinnerEvents: [makeEvent(1, 2), makeEvent(2, 10)],
                 lockedDays: 5,
-                releasedCounts: new Map([[1, counts(2, '2V')], [2, counts(5, '5V')]]),
+                releasedCounts: new Map([[1, released(2, '2V')], [2, released(5, '5V')]]),
+                queueSizes: undefined,
                 expected: new Map([[1, counts(2, '2V')]])
+            },
+            {
+                name: 'carries the waiting list size of a locked dinner',
+                dinnerEvents: [makeEvent(1, 2), makeEvent(2, 5), makeEvent(3, 10)],
+                lockedDays: 7,
+                releasedCounts: undefined,
+                queueSizes: new Map([[1, 3], [3, 4]]),
+                expected: new Map([[1, counts(0, '-', 3)], [2, emptyCount]])
             }
-        ])('$name', ({dinnerEvents, lockedDays, releasedCounts, expected}) => {
+        ])('$name', ({dinnerEvents, lockedDays, releasedCounts, queueSizes, expected}) => {
             it('returns correct lock status map', () => {
                 const deadlines = makeDeadlines(lockedDays)
-                const result = computeLockStatus(dinnerEvents, deadlines, releasedCounts)
+                const result = computeLockStatus(dinnerEvents, deadlines, releasedCounts, queueSizes)
                 expect(result).toEqual(expected)
             })
         })
@@ -1761,7 +1775,7 @@ describe('getBookingOptions', () => {
 describe('groupGuestOrders', () => {
 
     const order = (overrides: {id?: number, allergies?: string[] | null, provenance?: string | null} = {}) => ({
-        inhabitantId: 1, ticketType: 'ADULT', dinnerEventId: 101,
+        inhabitantId: 1, ticketType: TicketTypes.ADULT, dinnerEventId: 101,
         provenanceAllergies: overrides.allergies ?? null,
         provenanceHousehold: overrides.provenance ?? null
     })
@@ -1802,8 +1816,8 @@ describe('getDayBillSummary', () => {
         {name: 'empty array', orders: [], expectedCounts: '-', expectedPrice: 0},
         {name: 'all CLOSED', orders: [o({state: OS.CLOSED})], expectedCounts: '-', expectedPrice: 0},
         {name: 'BOOKED counted', orders: [o({state: OS.BOOKED, priceAtBooking: 37}), o({state: OS.BOOKED, priceAtBooking: 37})], expectedCounts: '2V', expectedPrice: 74},
-        {name: 'RELEASED counted', orders: [o({state: OS.RELEASED, priceAtBooking: 37}), o({state: OS.RELEASED, priceAtBooking: 20, ticketType: 'CHILD'})], expectedCounts: '1V 1B', expectedPrice: 57},
-        {name: 'BOOKED + RELEASED', orders: [o({state: OS.BOOKED, priceAtBooking: 37}), o({state: OS.RELEASED, priceAtBooking: 37}), o({state: OS.BOOKED, priceAtBooking: 20, ticketType: 'CHILD'})], expectedCounts: '2V 1B', expectedPrice: 94},
+        {name: 'RELEASED counted', orders: [o({state: OS.RELEASED, priceAtBooking: 37}), o({state: OS.RELEASED, priceAtBooking: 20, ticketType: TicketTypes.CHILD})], expectedCounts: '1V 1B', expectedPrice: 57},
+        {name: 'BOOKED + RELEASED', orders: [o({state: OS.BOOKED, priceAtBooking: 37}), o({state: OS.RELEASED, priceAtBooking: 37}), o({state: OS.BOOKED, priceAtBooking: 20, ticketType: TicketTypes.CHILD})], expectedCounts: '2V 1B', expectedPrice: 94},
         {name: 'excludes CLOSED', orders: [o({state: OS.BOOKED, priceAtBooking: 37}), o({state: OS.CLOSED, priceAtBooking: 37})], expectedCounts: '1V', expectedPrice: 37},
         {name: 'excludes CANCELLED', orders: [o({state: OS.BOOKED, priceAtBooking: 37}), o({state: OS.CANCELLED, priceAtBooking: 37})], expectedCounts: '1V', expectedPrice: 37},
         {name: 'RELEASED with NONE mode counts', orders: [o({state: OS.RELEASED, dinnerMode: DM.NONE, priceAtBooking: 37})], expectedCounts: '1V', expectedPrice: 37},
@@ -1820,7 +1834,6 @@ describe('getDayBillSummary', () => {
 // =============================================================================
 
 describe('Action Preview', () => {
-    const {orderStateConfig} = useOrder()
     const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
     const DM = DinnerModeSchema.enum
     const OS = OrderStateSchema.enum
@@ -1839,9 +1852,9 @@ describe('Action Preview', () => {
         [Action.CHANGE_PRICE]: OS.CLOSED
     } as const
 
-    // Get expected color from orderStateConfig (DRY - same source as implementation)
+    // Get expected color from ORDER_STATE_LABELS (DRY - same source as implementation)
     const getExpectedColor = (action: keyof typeof ACTION_TO_STATE) =>
-        orderStateConfig[ACTION_TO_STATE[action]].color
+        ORDER_STATE_LABELS[ACTION_TO_STATE[action]].color
 
     // Helper to create DesiredOrder
     const desired = (overrides: Partial<DesiredOrder> = {}): DesiredOrder => ({
@@ -2037,7 +2050,11 @@ describe('replayTicketChanges', () => {
     const Action = OrderAuditActionSchema.enum
     const TicketType = TicketTypeSchema.enum
     // Ticket price ids: 1 adult, 2 child, 3 baby; 9 is a price the season no longer names
-    const typeOf = (ticketPriceId: number) => ({1: TicketType.ADULT, 2: TicketType.CHILD, 3: TicketType.BABY} as Record<number, typeof TicketType[keyof typeof TicketType]>)[ticketPriceId] ?? null
+    const ticketPriceOf = (ticketPriceId: number) => ({
+        1: {ticketType: TicketType.ADULT, portions: 1},
+        2: {ticketType: TicketType.CHILD, portions: 0.5},
+        3: {ticketType: TicketType.BABY, portions: 0}
+    } as Record<number, {ticketType: typeof TicketType[keyof typeof TicketType], portions: number}>)[ticketPriceId] ?? null
     const prices: Record<number, number> = {1: 5000, 2: 2500, 3: 0, 9: 4000}
     const at = (minutes: number) => new Date(2026, 3, 2, 20, minutes)
 
@@ -2062,15 +2079,15 @@ describe('replayTicketChanges', () => {
             row(Action.USER_CANCELLED, 2, 2, 'S_22', at(2), OrderStateSchema.enum.RELEASED),
             row(Action.USER_CLAIMED, 2, 2, 'S_22', at(3))
         ]
-        const changes = replayTicketChanges(history, typeOf)
+        const changes = replayTicketChanges(history, ticketPriceOf)
         expect(changes.map(change => [change.action, change.counts.ADULT, change.counts.CHILD, change.portions, change.revenue])).toEqual([
             [Action.USER_BOOKED, 1, 0, 1, 5000],
             [Action.USER_BOOKED, 1, 1, 1.5, 7500],
             [Action.USER_CANCELLED, 1, 1, 1, 7500],
             [Action.USER_CLAIMED, 1, 1, 1.5, 7500]
         ])
-        expect(changes[1]!.delta).toEqual({ADULT: 0, CHILD: 1, BABY: 0})
-        expect(changes[2]!.delta).toEqual({ADULT: 0, CHILD: 0, BABY: 0})
+        expect(changes[1]!.delta).toEqual(OrderFactory.ticketCounts(0, 1, 0))
+        expect(changes[2]!.delta).toEqual(OrderFactory.ticketCounts(0, 0, 0))
         expect(changes[2]!.householdShortname).toBe('S_22')
         expect(changes[2]!.ticketType).toBe(TicketType.CHILD)
     })
@@ -2081,8 +2098,8 @@ describe('replayTicketChanges', () => {
             id: ++seq, orderId: 2, inhabitantId: 2, action: Action.USER_CANCELLED, timestamp: at(2),
             auditData: JSON.stringify({state: OrderStateSchema.enum.RELEASED, dinnerMode: DinnerModeSchema.enum.NONE, ticketPriceId: null, priceAtBooking: null})
         })
-        const changes = replayTicketChanges([row(Action.USER_BOOKED, 2, 2, 'S_22', at(1)), batchRelease], typeOf)
-        expect(changes.at(-1)).toMatchObject({action: Action.USER_CANCELLED, ticketType: TicketType.CHILD, householdShortname: 'S_22', counts: {ADULT: 0, CHILD: 1, BABY: 0}, portions: 0, revenue: 2500})
+        const changes = replayTicketChanges([row(Action.USER_BOOKED, 2, 2, 'S_22', at(1)), batchRelease], ticketPriceOf)
+        expect(changes.at(-1)).toMatchObject({action: Action.USER_CANCELLED, ticketType: TicketType.CHILD, householdShortname: 'S_22', counts: OrderFactory.ticketCounts(0, 1, 0), portions: 0, revenue: 2500})
     })
 
     it.each([
@@ -2090,8 +2107,8 @@ describe('replayTicketChanges', () => {
         {desc: 'a system deletion', action: Action.SYSTEM_DELETED}
     ])('GIVEN a booked ticket and $desc WHEN replaying THEN the ticket, its kuverter and its revenue leave', ({action}) => {
         const {replayTicketChanges} = useBooking()
-        const changes = replayTicketChanges([row(Action.USER_BOOKED, 1, 1, 'S_31', at(0)), row(action, 1, 1, 'S_31', at(5))], typeOf)
-        expect(changes.at(-1)).toMatchObject({action, delta: {ADULT: -1, CHILD: 0, BABY: 0}, counts: {ADULT: 0, CHILD: 0, BABY: 0}, portions: 0, revenue: 0})
+        const changes = replayTicketChanges([row(Action.USER_BOOKED, 1, 1, 'S_31', at(0)), row(action, 1, 1, 'S_31', at(5))], ticketPriceOf)
+        expect(changes.at(-1)).toMatchObject({action, delta: OrderFactory.ticketCounts(-1, 0, 0), counts: OrderFactory.ticketCounts(0, 0, 0), portions: 0, revenue: 0})
     })
 
     it('GIVEN rows of one household and event within one minute WHEN replaying THEN they are one change with the summed delta, and another household or minute starts a row', () => {
@@ -2103,15 +2120,15 @@ describe('replayTicketChanges', () => {
             row(Action.SYSTEM_CREATED, 4, 1, 'S_22', at(5), OrderStateSchema.enum.BOOKED, true),
             row(Action.USER_BOOKED, 5, 1, 'S_07', at(30))
         ]
-        const changes = replayTicketChanges(history, typeOf)
+        const changes = replayTicketChanges(history, ticketPriceOf)
         expect(changes.map(change => [change.action, change.householdShortname, change.delta])).toEqual([
-            [Action.SYSTEM_CREATED, 'S_31', {ADULT: 1, CHILD: 1, BABY: 0}],
-            [Action.SYSTEM_CREATED, 'S_22', {ADULT: 1, CHILD: 0, BABY: 0}],
-            [Action.SYSTEM_CREATED, 'S_22', {ADULT: 1, CHILD: 0, BABY: 0}],
-            [Action.USER_BOOKED, 'S_07', {ADULT: 1, CHILD: 0, BABY: 0}]
+            [Action.SYSTEM_CREATED, 'S_31', OrderFactory.ticketCounts(1, 1, 0)],
+            [Action.SYSTEM_CREATED, 'S_22', OrderFactory.ticketCounts(1, 0, 0)],
+            [Action.SYSTEM_CREATED, 'S_22', OrderFactory.ticketCounts(1, 0, 0)],
+            [Action.USER_BOOKED, 'S_07', OrderFactory.ticketCounts(1, 0, 0)]
         ])
-        expect(changes[0]).toMatchObject({ticketType: null, counts: {ADULT: 1, CHILD: 1, BABY: 0}, portions: 1.5, revenue: 7500})
-        expect(changes[3]).toMatchObject({counts: {ADULT: 4, CHILD: 1, BABY: 0}})
+        expect(changes[0]).toMatchObject({ticketType: null, counts: OrderFactory.ticketCounts(1, 1, 0), portions: 1.5, revenue: 7500})
+        expect(changes[3]).toMatchObject({counts: OrderFactory.ticketCounts(4, 1, 0)})
     })
 
     it('GIVEN rows out of order and a dining mode update WHEN replaying THEN time order rules and the update is no change', () => {
@@ -2120,14 +2137,14 @@ describe('replayTicketChanges', () => {
             row(Action.SYSTEM_UPDATED, 1, 1, 'S_31', at(2)),
             row(Action.USER_BOOKED, 1, 1, 'S_31', at(0))
         ]
-        const changes = replayTicketChanges(history, typeOf)
+        const changes = replayTicketChanges(history, ticketPriceOf)
         expect(changes.map(change => change.action)).toEqual([Action.USER_BOOKED])
     })
 
     it('GIVEN a ticket price the season no longer names WHEN replaying THEN the change carries revenue but no type or kuverter', () => {
         const {replayTicketChanges} = useBooking()
-        const changes = replayTicketChanges([row(Action.USER_BOOKED, 1, 9, 'S_31', at(0))], typeOf)
-        expect(changes[0]).toMatchObject({ticketType: null, counts: {ADULT: 0, CHILD: 0, BABY: 0}, portions: 0, revenue: 4000})
+        const changes = replayTicketChanges([row(Action.USER_BOOKED, 1, 9, 'S_31', at(0))], ticketPriceOf)
+        expect(changes[0]).toMatchObject({ticketType: null, counts: OrderFactory.ticketCounts(0, 0, 0), portions: 0, revenue: 4000})
     })
 })
 
@@ -2150,7 +2167,7 @@ describe('consecutiveDinnerRun', () => {
 describe('replayTicketChanges reads every audit shape', () => {
     const {OrderAuditActionSchema, OrderStateSchema, TicketTypeSchema, DinnerModeSchema, createOrderAuditData} = useBookingValidation()
     const Action = OrderAuditActionSchema.enum
-    const typeOf = (ticketPriceId: number) => ticketPriceId === 1 ? TicketTypeSchema.enum.ADULT : null
+    const ticketPriceOf = (ticketPriceId: number) => ticketPriceId === 1 ? {ticketType: TicketTypeSchema.enum.ADULT, portions: 1} : null
     const at = (minutes: number) => new Date(2026, 3, 2, 20, minutes)
     const shortNameOf = (householdId: number) => householdId === 7 ? 'S_07' : null
 
@@ -2166,13 +2183,13 @@ describe('replayTicketChanges reads every audit shape', () => {
 
     it('GIVEN a creation row WHEN replaying THEN the household comes from the id and the ticket counts', () => {
         const {replayTicketChanges} = useBooking()
-        const changes = replayTicketChanges([creationRow(1, 10, 100)], typeOf, shortNameOf)
-        expect(changes[0]).toMatchObject({householdShortname: 'S_07', ticketType: TicketTypeSchema.enum.ADULT, counts: {ADULT: 1, CHILD: 0, BABY: 0}, revenue: 5000})
+        const changes = replayTicketChanges([creationRow(1, 10, 100)], ticketPriceOf, shortNameOf)
+        expect(changes[0]).toMatchObject({householdShortname: 'S_07', ticketType: TicketTypeSchema.enum.ADULT, counts: OrderFactory.ticketCounts(1, 0, 0), revenue: 5000})
     })
 
     it('GIVEN an order deleted later, its creation row without an order id WHEN replaying THEN the deletion finds it by inhabitant', () => {
         const {replayTicketChanges} = useBooking()
-        const changes = replayTicketChanges([creationRow(1, null, 100), deletionRow(2, 10, 100)], typeOf, shortNameOf)
+        const changes = replayTicketChanges([creationRow(1, null, 100), deletionRow(2, 10, 100)], ticketPriceOf, shortNameOf)
         expect(changes.map(change => [change.action, change.counts.ADULT, change.revenue])).toEqual([[Action.USER_BOOKED, 1, 5000], [Action.USER_CANCELLED, 0, 0]])
     })
 
@@ -2182,7 +2199,7 @@ describe('replayTicketChanges reads every audit shape', () => {
             id: 2, orderId: 10, inhabitantId: 100, action: Action.SYSTEM_UPDATED, timestamp: at(2),
             auditData: JSON.stringify({state: OrderStateSchema.enum.CLOSED, dinnerMode: DinnerModeSchema.enum.DINEIN, ticketPriceId: 1, priceAtBooking: 5000})
         })
-        const changes = replayTicketChanges([creationRow(1, 10, 100), close], typeOf, shortNameOf)
+        const changes = replayTicketChanges([creationRow(1, 10, 100), close], ticketPriceOf, shortNameOf)
         expect(changes).toHaveLength(1)
     })
 })

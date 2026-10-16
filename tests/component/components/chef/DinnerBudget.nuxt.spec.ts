@@ -15,7 +15,7 @@ import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, 
  * one chevron the ticket table named by type, the summary, the ticket changes and the team's round.
  */
 const {calculateBudget} = useOrder()
-const {formatPrice, ticketTypeConfig} = useTicket()
+const {formatPrice, ticketTypeWords} = useTicket()
 const {TicketTypeSchema, OrderStateSchema} = useBookingValidation()
 
 let baseRate: number
@@ -25,7 +25,7 @@ beforeAll(() => {
 })
 
 const ticket = (id: number, ticketType: TicketType, price: number, state: OrderState = OrderStateSchema.enum.BOOKED): OrderDetail =>
-    ({...OrderFactory.defaultOrderDetail(), id, ticketType, priceAtBooking: price, state, ticketPrice: {...OrderFactory.defaultOrderDetail().ticketPrice!, ticketType, price}})
+    ({...OrderFactory.defaultOrderDetail(), id, ticketType, priceAtBooking: price, state, ticketPrice: {...OrderFactory.ticketPriceRow(ticketType), price}})
 
 const orders = [
     ticket(1, TicketTypeSchema.enum.ADULT, 5000),
@@ -83,7 +83,7 @@ describe('DinnerBudget', () => {
         await wrapper.vm.$nextTick()
 
         const rows = findByTestId(wrapper, 'budget-ticket-table').findAll('tbody tr').filter(tr => tr.attributes('data-testid') === undefined && !tr.text().includes('Køkkenbidrag'))
-        expect(rows.map(row => row.find('td').text())).toEqual([ticketTypeConfig.ADULT.label, ticketTypeConfig.CHILD.label])
+        expect(rows.map(row => row.find('td').text())).toEqual([ticketTypeWords[TicketTypeSchema.enum.ADULT].label, ticketTypeWords[TicketTypeSchema.enum.CHILD].label])
         expect(findByTestId(wrapper, 'budget-summary-left').exists()).toBe(false)
         expect(findByTestId(wrapper, 'budget-summary-available').exists()).toBe(true)
         expect(findAllByTestId(wrapper, 'cooking-round')).toHaveLength(2)

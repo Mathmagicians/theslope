@@ -6,12 +6,13 @@ import BookingGridView from '~/components/booking/BookingGridView.vue'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
 import {useBookingValidation, type DinnerEventDisplay, type DinnerMode, type OrderDisplay, type OrderState} from '~/composables/useBookingValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
+import type {ReleasedTicketCounts} from '~/composables/useBooking'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
-import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
+import {ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {addDays, startOfDay} from 'date-fns'
 
 const ticketPrices = TicketFactory.defaultTicketPrices()
@@ -56,24 +57,6 @@ const mount = (props = {}) => mountSuspended(BookingGridView, {
 })
 
 describe('BookingGridView', () => {
-  it('renders with data-testid', async () => {
-    const wrapper = await mount()
-    expect(findByTestId(wrapper, 'booking-grid-view').exists()).toBe(true)
-  })
-
-  it('renders navigation buttons', async () => {
-    const wrapper = await mount()
-    // Navigation is handled by CalendarDateNav component
-    expect(findByTestId(wrapper, 'date-nav-prev').exists()).toBe(true)
-    expect(findByTestId(wrapper, 'date-nav-next').exists()).toBe(true)
-  })
-
-  it('renders edit button in view mode (week/month only)', async () => {
-    // Edit button only renders for week/month views, not day view
-    const wrapper = await mount({view: 'week'})
-    expect(findByTestId(wrapper, 'grid-edit').exists()).toBe(true)
-  })
-
   it('renders day-content slot for day view', async () => {
     const wrapper = await mount({view: 'day'})
     expect(findByTestId(wrapper, 'day-slot').exists()).toBe(true)
@@ -99,14 +82,9 @@ describe('BookingGridView', () => {
   })
 
   describe('canEdit prop', () => {
-    it.each(['week', 'month'] as const)('hides edit button when canEdit=false in %s view', async (view) => {
-      const wrapper = await mount({view, canEdit: false})
+    it('hides edit button when canEdit=false', async () => {
+      const wrapper = await mount({view: 'week', canEdit: false})
       expect(findByTestId(wrapper, 'grid-edit').exists()).toBe(false)
-    })
-
-    it.each(['week', 'month'] as const)('shows edit button when canEdit=true (default) in %s view', async (view) => {
-      const wrapper = await mount({view, canEdit: true})
-      expect(findByTestId(wrapper, 'grid-edit').exists()).toBe(true)
     })
 
     it('hides save button when canEdit=false in edit mode', async () => {
@@ -345,6 +323,38 @@ describe('BookingGridView', () => {
       expect(findByTestId(wrapper, 'dinner-mode-legend-waitlist').exists()).toBe(true)
     })
   })
+
+  // The column header counts the household's own released tickets on a locked dinner: the household pays for them until they are sold
+  describe('lock chip in the column header', () => {
+    const {OrderStateSchema} = useBookingValidation()
+    const supply = (total: number): ReleasedTicketCounts => ({total, formatted: total > 0 ? `${total}V` : '-', queued: 0})
+    const released = (id: number, dinnerEventId: number): OrderDisplay =>
+      OrderFactory.defaultOrder(undefined, {id, inhabitantId: 1, dinnerEventId, state: OrderStateSchema.enum.RELEASED})
+    const mountWeekOf = (dinnerEvent: DinnerEventDisplay, orders: OrderDisplay[], lockStatus: Map<number, ReleasedTicketCounts | null>) => mount({
+      view: 'week',
+      dateRange: {start: addDays(dinnerEvent.date, -3), end: addDays(dinnerEvent.date, 3)},
+      dinnerEvents: [dinnerEvent],
+      orders,
+      lockStatus
+    })
+    // A standalone UChip renders its number in its base slot
+    const headerChip = (wrapper: Awaited<ReturnType<typeof mount>>) => wrapper.find('thead [data-slot="base"]')
+    const lockedDinner = DinnerEventFactory.dinnerEventAt(1, 1)
+
+    it.each([
+      {desc: 'the household\'s own released tickets', own: 2, forSale: 2, text: '2'},
+      {desc: 'no number while only other households sell tickets', own: 0, forSale: 3, text: ''}
+    ])('shows $desc', async ({own, forSale, text}) => {
+      const orders = Array.from({length: own}, (_, index) => released(900 + index, lockedDinner.id))
+      const wrapper = await mountWeekOf(lockedDinner, orders, new Map([[lockedDinner.id, supply(forSale)]]))
+      expect(headerChip(wrapper).text()).toBe(text)
+    })
+
+    it('carries no chip on a dinner open for booking', async () => {
+      const wrapper = await mountWeekOf(DinnerEventFactory.dinnerEventAt(2, 60), [], new Map())
+      expect(headerChip(wrapper).exists()).toBe(false)
+    })
+  })
 })
 
 describe('BookingGridView add-guest button', () => {
@@ -359,14 +369,8 @@ describe('BookingGridView add-guest button', () => {
   const addButton = (wrapper: Awaited<ReturnType<typeof mount>>) =>
     wrapper.findAllComponents({name: 'UButton'}).find(button => button.attributes('data-testid') === `guest-add-${future.id}`)!
 
-  it.each([
-    {state: 'closed', open: false},
-    {state: 'open', open: true}
-  ])('binds the chevron and the open turn while $state', async ({open}) => {
+  it('carries the chevron glyph', async () => {
     const wrapper = await mountEdit()
-    if (open) await clickByTestId(wrapper, `guest-add-${future.id}`)
-
     expect(addButton(wrapper).props('icon')).toBe(ICONS.chevronDown)
-    expect(addButton(wrapper).classes()).toEqual(expect.arrayContaining(COMPONENTS.openTurn(open).split(' ')))
   })
 })

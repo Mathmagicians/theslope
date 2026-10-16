@@ -3,9 +3,8 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
-import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
-import {getPortionsForTicketType} from '~/utils/portions'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
 /**
@@ -25,8 +24,14 @@ test.describe('Chef dinner order history', () => {
     let seasonId: number
     let dinnerEventId: number
     const orderIds: number[] = []
-    let adultPrice: {id: number, price: number}
-    let childPrice: {id: number, price: number}
+    // A saved season price: its id is set
+    type SavedPrice = TicketPrice & {id: number}
+    const saved = (price: TicketPrice | undefined): SavedPrice => {
+        if (!price?.id) throw new Error('Test setup: the season holds no saved price of that type')
+        return {...price, id: price.id}
+    }
+    let adultPrice: SavedPrice
+    let childPrice: SavedPrice
 
     test.beforeAll(async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
@@ -34,8 +39,8 @@ test.describe('Chef dinner order history', () => {
         const testSalt = temporaryAndRandom()
         const season = await SeasonFactory.createSeason(adminContext)
         seasonId = season.id!
-        adultPrice = season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)! as {id: number, price: number}
-        childPrice = season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.CHILD)! as {id: number, price: number}
+        adultPrice = saved(season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT))
+        childPrice = saved(season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.CHILD))
 
         const member = await getSessionUserInfo(memberContext)
         const team = await SeasonFactory.createCookingTeamForSeason(adminContext, seasonId, salt('Historikhold', testSalt))
@@ -79,17 +84,17 @@ test.describe('Chef dinner order history', () => {
         expect(claimed!.scaffoldResult.totals[useBookingValidation().BookingActionSchema.enum.BUY]).toBe(1)
 
         const response = (await OrderFactory.getTicketChanges(memberContext, dinnerEventId))!
-        const adultPortions = getPortionsForTicketType(TicketTypeSchema.enum.ADULT)
-        const childPortions = getPortionsForTicketType(TicketTypeSchema.enum.CHILD)
+        const adultPortions = adultPrice.portions
+        const childPortions = childPrice.portions
         const revenue = adultPrice.price + childPrice.price
 
         expect(response.olderCount).toBe(0)
         // The two bookings of one household within one minute are one row
         expect(response.changes.map(change => change.action)).toEqual([Action.USER_CLAIMED, Action.USER_CANCELLED, Action.USER_BOOKED])
         const [claim, release, booking] = response.changes
-        expect(claim).toMatchObject({ticketType: TicketTypeSchema.enum.CHILD, counts: {ADULT: 1, CHILD: 1, BABY: 0}, portions: adultPortions + childPortions, revenue})
-        expect(release).toMatchObject({ticketType: TicketTypeSchema.enum.CHILD, delta: {ADULT: 0, CHILD: 0, BABY: 0}, counts: {ADULT: 1, CHILD: 1, BABY: 0}, portions: adultPortions, revenue})
-        expect(booking).toMatchObject({delta: {ADULT: 1, CHILD: 1, BABY: 0}, counts: {ADULT: 1, CHILD: 1, BABY: 0}})
+        expect(claim).toMatchObject({ticketType: TicketTypeSchema.enum.CHILD, counts: OrderFactory.ticketCounts(1, 1, 0), portions: adultPortions + childPortions, revenue})
+        expect(release).toMatchObject({ticketType: TicketTypeSchema.enum.CHILD, delta: OrderFactory.ticketCounts(0, 0, 0), counts: OrderFactory.ticketCounts(1, 1, 0), portions: adultPortions, revenue})
+        expect(booking).toMatchObject({delta: OrderFactory.ticketCounts(1, 1, 0), counts: OrderFactory.ticketCounts(1, 1, 0)})
         expect(response.changes.every(change => change.householdShortname !== null)).toBe(true)
 
         const sinceRelease = await OrderFactory.getTicketChanges(memberContext, dinnerEventId, release!.timestamp)

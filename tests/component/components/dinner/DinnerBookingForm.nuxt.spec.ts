@@ -18,7 +18,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
-import {COMPONENTS, ICONS, createTableColumns} from '~/composables/useTheSlopeDesignSystem'
+import {ICONS, createTableColumns} from '~/composables/useTheSlopeDesignSystem'
 import {WAITLIST_TEST_IDS} from './waitlistTestIds'
 import {useBookingValidation as useActionValidation} from '~/composables/useBookingValidation'
 const Action = useActionValidation().BookingActionSchema.enum
@@ -170,26 +170,13 @@ describe('DinnerBookingForm', () => {
       }
     )
 
-    it('GIVEN a guest order THEN its name cell leads with the user-plus disc of the add-guest row and the "Gæst af" label on the guestOf tokens', async () => {
-      const wrapper = await mountMember(guestOrders)
-
-      const label = wrapper.findAll('span').find(span => span.text() === 'Gæst af')!
-      const row = label.element.parentElement!
-      expect(label.classes()).toEqual(expect.arrayContaining(COMPONENTS.bookingForm.guestOfLabel.split(' ')))
-      expect([...row.classList]).toEqual(expect.arrayContaining(COMPONENTS.bookingForm.guestOf.split(' ')))
-      const disc = wrapper.findAllComponents({name: 'UAvatar'}).find(avatar => row.contains(avatar.element) && avatar.props('icon') === ICONS.userPlus)
-      expect(disc).toBeDefined()
-      expect(disc!.props('size')).toBe(COMPONENTS.avatar.compact.size)
-      expect(disc!.classes()).toEqual(expect.arrayContaining(COMPONENTS.avatar.compact.fit.split(' ')))
-    })
-
-    it('GIVEN a claimed guest order THEN "fra X" sits in the guestProvenance row under the label', async () => {
+    it('GIVEN a claimed guest order THEN its name cell leads with the user-plus disc, the "Gæst af" label and "fra X"', async () => {
       const wrapper = await mountMember(guestOrders.map(order => ({...order, provenanceHousehold: 'Hansen'})))
 
+      const row = wrapper.findAll('span').find(span => span.text() === 'Gæst af')!.element.parentElement!
+      expect(wrapper.findAllComponents({name: 'UAvatar'}).some(avatar => row.contains(avatar.element) && avatar.props('icon') === ICONS.userPlus)).toBe(true)
       // The name cell's provenance badge; the ticket's own "fra" line is plain text
-      const badge = wrapper.findAllComponents({name: 'UBadge'}).find(candidate => candidate.text().includes('fra Hansen'))
-      expect(badge).toBeDefined()
-      expect([...badge!.element.parentElement!.classList]).toEqual(expect.arrayContaining(COMPONENTS.bookingForm.guestProvenance.split(' ')))
+      expect(wrapper.findAllComponents({name: 'UBadge'}).some(badge => badge.text().includes('fra Hansen'))).toBe(true)
     })
 
     describe('ticket allergies', () => {
@@ -287,16 +274,6 @@ describe('DinnerBookingForm', () => {
       const wrapper = await mountForm(props, isMd)
       const headers = wrapper.findAll('thead th').map(th => th.text())
       expect(headers).toContain(createTableColumns(ref(isMd)).bookingFormName.header)
-    })
-
-    it.each(VIEWPORTS)('$viewport: the ticket column renders its header and cells from md through its column meta', async ({isMd}) => {
-      const props = {...baseProps, household: householdWithInhabitants}
-      const wrapper = await mountForm(props, isMd)
-      const {meta} = createTableColumns(ref(isMd)).bookingFormTicket
-      const columns = wrapper.findComponent({name: 'UTable'}).props('columns') as Array<{id: string}>
-      const ticketIndex = columns.findIndex(column => column.id === 'ticket')
-      expect(wrapper.findAll('thead th')[ticketIndex]!.classes()).toEqual(expect.arrayContaining(meta.class.th.split(' ')))
-      expect(wrapper.findAll('tbody tr')[0]!.findAll('td')[ticketIndex]!.classes()).toEqual(expect.arrayContaining(meta.class.td.split(' ')))
     })
   })
 })

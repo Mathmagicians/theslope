@@ -9,19 +9,16 @@ import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
 import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {findByTestId, mountWithTooltipProvider, VIEWPORTS} from '~~/tests/component/testHelpers'
-import {TicketTypeSchema} from '~~/prisma/generated/zod'
 
 const ALLERGY_TYPES = AllergyFactory.createMockAllergyTypes()
-const TICKET_TYPES = TicketTypeSchema.options
+const TICKET_TYPES = useBookingValidation().TicketTypeSchema.options
 const CELLS = ['ticket-state-cell', 'ticket-guest-cell', 'ticket-allergy-cell']
 
-let ticketTypeConfig: ReturnType<typeof useTicket>['ticketTypeConfig']
 let baseProps: Record<string, unknown>
 beforeAll(() => {
     const {TicketTypeSchema, DinnerModeSchema} = useBookingValidation()
-    ticketTypeConfig = useTicket().ticketTypeConfig
     baseProps = {
-        ticketConfig: ticketTypeConfig[TicketTypeSchema.enum.ADULT],
+        ticketConfig: ticketTypePresentation(TicketTypeSchema.enum.ADULT),
         price: 5500,
         dinnerMode: DinnerModeSchema.enum.DINEIN
     }
@@ -85,7 +82,7 @@ describe('DinnerTicket', () => {
         })
 
         it.each(TICKET_TYPES)('GIVEN a %s guest ticket with allergies THEN both info glyphs bind the infoIcon token of the badge colour', async (ticketType) => {
-            const ticketConfig = ticketTypeConfig[ticketType]
+            const ticketConfig = ticketTypePresentation(ticketType)
             const wrapper = await mountTicket({ticketConfig, guestCount: 1, allergies: ALLERGY_TYPES})
             const token = COMPONENTS.ticket.infoIcon[ticketConfig.color]
 

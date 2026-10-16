@@ -14,6 +14,7 @@ let testHouseholdId: number
 let testInhabitantId: number
 let testDinnerEventId: number
 let testAdultTicketPriceId: number
+let testAdultTicketPortions: number
 
 test.describe('Order API', () => {
 
@@ -35,6 +36,7 @@ test.describe('Order API', () => {
     }
 
     testAdultTicketPriceId = adultTicketPrice.id
+    testAdultTicketPortions = adultTicketPrice.portions
 
     const generatedEvents = await SeasonFactory.generateDinnerEventsForSeason(context, season.id!)
     testDinnerEventId = generatedEvents.events[0]!.id
@@ -57,7 +59,7 @@ test.describe('Order API', () => {
     // Don't delete testHouseholdId - it's the user's real household, not a test one
   })
 
-  test('GIVEN an order booked through the scaffold WHEN reading it by id THEN it carries its dinner, inhabitant and ticket type', async ({ browser }) => {
+  test('GIVEN an order booked through the scaffold WHEN reading it by id THEN it carries its dinner, inhabitant, ticket type and its price row with the portions a ticket at it weighs', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
     const result = await OrderFactory.createOrder(context, {
@@ -82,6 +84,7 @@ test.describe('Order API', () => {
     expect(retrievedOrder!.dinnerEventId).toBe(testDinnerEventId)
     expect(retrievedOrder!.inhabitantId).toBe(testInhabitantId)
     expect(retrievedOrder!.ticketType).toBe(TicketTypeSchema.enum.ADULT)
+    expect(retrievedOrder!.ticketPrice).toMatchObject({id: testAdultTicketPriceId, portions: testAdultTicketPortions})
     expect(retrievedOrder!.createdAt).toBeDefined()
   })
 

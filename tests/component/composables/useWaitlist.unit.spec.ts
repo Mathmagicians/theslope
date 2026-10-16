@@ -8,9 +8,10 @@ const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const {TicketTypeSchema} = useTicketPriceValidation()
 const TicketType = TicketTypeSchema.enum
 
-// Ticket price ids stand for a type; the season's prices name each id's type
+// Ticket price ids stand for a type; the season's prices carry each price's portions
 const PRICE_ID = {[TicketType.ADULT]: 1, [TicketType.CHILD]: 2, [TicketType.BABY]: 3} as const
-const TICKET_PRICES = Object.values(TicketType).map(ticketType => ({id: PRICE_ID[ticketType], ticketType}))
+const PORTIONS = {[TicketType.ADULT]: 1, [TicketType.CHILD]: 0.5, [TicketType.BABY]: 0} as const
+const TICKET_PRICES = Object.values(TicketType).map(ticketType => ({id: PRICE_ID[ticketType], portions: PORTIONS[ticketType]}))
 const portionsOf = useWaitlist().portionsOfEntryFor(TICKET_PRICES)
 
 const entry = (id: number, ticketType: keyof typeof PRICE_ID, minute: number, isGuestTicket = false): TicketWaitlistDisplay => ({
@@ -47,12 +48,8 @@ describe('useWaitlist', () => {
         expect(positionOf(queue, 99)).toBeNull()
     })
 
-    it.each([
-        {ticketType: TicketType.ADULT, portions: 1},
-        {ticketType: TicketType.CHILD, portions: 0.5},
-        {ticketType: TicketType.BABY, portions: 0}
-    ])('weighs a $ticketType entry at $portions portions by the type its price names', ({ticketType, portions}) => {
-        expect(portionsOf(entry(1, ticketType, 0))).toBe(portions)
+    it.each(Object.values(TicketType))('weighs a %s entry at the portions its price carries', (ticketType) => {
+        expect(portionsOf(entry(1, ticketType, 0))).toBe(PORTIONS[ticketType])
     })
 
     it('weighs an entry whose price is outside the season at nothing', () => {

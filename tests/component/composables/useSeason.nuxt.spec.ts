@@ -206,7 +206,7 @@ describe('getDefaultSeason', () => {
 
         // Test serialization schema
         const serialized = serializeSeason(defaultSeason)
-        const deserialized = deserializeSeason(serialized)
+        const deserialized = deserializeSeason(serialized, useTicket().withPortions)
         const serializedResult = SeasonSchema.safeParse(deserialized)
 
         expect(serializedResult.success).toBe(true)

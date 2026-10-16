@@ -68,13 +68,14 @@ test.describe('POST /api/admin/season/[id] on the active season', () => {
         await SeasonFactory.createActiveSeason(context)
     })
 
-    test('GIVEN the active season WHEN a holiday is added and the season extended THEN orders are reconciled and re-scaffolded', async ({browser}) => {
+    test('GIVEN the active season WHEN a holiday is added and the season extended THEN orders are reconciled, the other bookings survive and the new dinner is scaffolded', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
         // GIVEN: a scaffolded dinner far enough out to be removable, and the event count before the save
         const before = await SeasonFactory.getSeason(context, season.id!)
         const eventsByDate = [...before.dinnerEvents!].sort((a, b) => a.date.getTime() - b.date.getTime())
         const holidayEvent = eventsByDate[4]!
+        const keptEvent = eventsByDate[5]!
         const ordersBefore = await OrderFactory.getAllOrdersForEvents(context, holidayEvent.id)
         expect(ordersBefore.filter(o => o.inhabitantId === inhabitantId).length,
             'Scaffolding should have booked the inhabitant on the holiday date').toBeGreaterThan(0)
@@ -95,6 +96,10 @@ test.describe('POST /api/admin/season/[id] on the active season', () => {
         // AND: the orders on the removed dinner are gone (CASCADE, ADR-011)
         const ordersAfter = await OrderFactory.getAllOrdersForEvents(context, holidayEvent.id)
         expect(ordersAfter).toHaveLength(0)
+
+        // AND: the next dinner keeps its bookings
+        const ordersKept = await OrderFactory.getAllOrdersForEvents(context, keptEvent.id)
+        expect(ordersKept.filter(o => o.inhabitantId === inhabitantId).length).toBeGreaterThan(0)
 
         // AND: the same request scaffolded pre-bookings for the new dinner (ADR-015)
         expect(result.scaffold).not.toBeNull()

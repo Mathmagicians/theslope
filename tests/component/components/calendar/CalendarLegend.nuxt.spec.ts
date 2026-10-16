@@ -13,10 +13,14 @@ import {mountWithTooltipProvider, findAllByTestId, findByTestId} from '~~/tests/
  * given, never what a design-system token is worth.
  */
 describe('CalendarLegend', () => {
+    const chips = [
+        {label: 'Ledige billetter', kind: 'chip', chipColor: 'yellow', circleClass: ['circle-future'], count: '1'},
+        {label: '3 på venteliste, ingen ledige billetter', kind: 'chip', chipColor: 'yellow', circleClass: ['circle-future'], count: '-3'},
+        {label: 'Lukket for framelding', kind: 'chip', chipColor: 'error', circleClass: ['circle-future']}
+    ] satisfies CalendarLegendItem[]
     const items: CalendarLegendItem[] = [
         {label: 'Planlagt fællesspisning', kind: 'circle', circleClass: ['circle-planned']},
-        {label: 'Ledige billetter', kind: 'chip', chipColor: 'yellow', circleClass: ['circle-future'], showCount: true},
-        {label: 'Lukket for framelding', kind: 'chip', chipColor: 'error', circleClass: ['circle-future']},
+        ...chips,
         {label: 'Madhold 1', kind: 'badge', badgeClass: 'band-one'}
     ]
 
@@ -42,15 +46,12 @@ describe('CalendarLegend', () => {
         expect(findByTestId(wrapper, 'calendar-legend-circle').classes()).toContain('circle-planned')
     })
 
-    it('a chip item wraps its day circle in a chip, counting only when asked', async () => {
+    it.each(chips.map(({label, count}) => ({label, text: count ?? ''})))('the chip item "$label" wraps its day circle in a chip reading "$text"', async ({label, text}) => {
         const wrapper = await mount()
-        const entries = findAllByTestId(wrapper, 'calendar-legend-entry')
+        const entry = findAllByTestId(wrapper, 'calendar-legend-entry').find(candidate => candidate.text().includes(label))!
+        expect(entry.find('.circle-future').exists()).toBe(true)
         // UChip passes attrs through to the slot, so the indicator is reached by its slot name
-        const chipIndicator = (entry: NonNullable<typeof entries[number]>) => entry.find('[data-slot="base"]')
-        expect(entries[1]!.find('.circle-future').exists()).toBe(true)
-        expect(chipIndicator(entries[1]!).text()).toBe('1')
-        expect(entries[2]!.find('.circle-future').exists()).toBe(true)
-        expect(chipIndicator(entries[2]!).text()).toBe('')
+        expect(entry.find('[data-slot="base"]').text()).toBe(text)
     })
 
     it('a badge item renders the badge with its band', async () => {

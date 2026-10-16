@@ -12,6 +12,7 @@ import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import { AllergyFactory } from '~~/tests/e2e/testDataFactories/allergyFactory'
+import { TicketFactory } from '~~/tests/e2e/testDataFactories/ticketFactory'
 import type { AllergyTypeDisplay } from '~/composables/useAllergyValidation'
 
 const { headers, salt, temporaryAndRandom, getSessionUserInfo } = testHelpers
@@ -74,6 +75,16 @@ export class OrderFactory {
     ...overrides
   })
 
+  /** A ticket count per type, in the order adult, child, baby */
+  static readonly ticketCounts = (adult: number, child: number, baby: number) =>
+    ({[TicketTypeSchema.enum.ADULT]: adult, [TicketTypeSchema.enum.CHILD]: child, [TicketTypeSchema.enum.BABY]: baby})
+
+  /** An order's price row: the default row of its type, carrying the portions a ticket at it weighs */
+  static readonly ticketPriceRow = (ticketType: OrderDetail['ticketType'] = TicketTypeSchema.enum.ADULT): NonNullable<OrderDetail['ticketPrice']> => {
+    const row = TicketFactory.defaultTicketPricesData.find(price => price.ticketType === ticketType)!
+    return {id: 1, ticketType: row.ticketType, price: 45, description: row.description ?? null, portions: row.portions}
+  }
+
   static readonly defaultOrderDetail = (testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderDetail>): OrderDetail => ({
     ...OrderFactory.defaultOrder(testSalt),
     dinnerEvent: {
@@ -104,12 +115,7 @@ export class OrderFactory {
       id: 1,
       email: salt('daisy', testSalt) + '@andeby.dk'
     },
-    ticketPrice: {
-      id: 1,
-      ticketType: TicketTypeSchema.enum.ADULT,
-      price: 45,
-      description: 'Adult ticket'
-    },
+    ticketPrice: OrderFactory.ticketPriceRow(overrides?.ticketType ?? TicketTypeSchema.enum.ADULT),
     ...overrides
   })
 

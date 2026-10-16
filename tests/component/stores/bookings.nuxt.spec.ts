@@ -423,7 +423,8 @@ describe('Bookings store — gated reads', () => {
 
     it.each([
         ...gatedReads.map(({dataset, idleKey, endpoint}) => ({dataset, idleKey, endpoint})),
-        {dataset: 'released counts', idleKey: 'bookings-store-released-counts', endpoint: ordersEndpoint}
+        {dataset: 'released counts', idleKey: 'bookings-store-released-counts', endpoint: ordersEndpoint},
+        {dataset: 'queue sizes', idleKey: 'bookings-store-queue-sizes', endpoint: waitlistEntriesEndpoint}
     ])('$dataset is idle and unrequested while its condition is false', async ({idleKey, endpoint}) => {
         const store = useBookingsStore()
         await vi.waitFor(() => expect(usePlanStore().isPlanStoreReady).toBe(true))
@@ -631,7 +632,7 @@ describe('Bookings store — the billing selection a getter names', () => {
     })
 })
 
-describe('Bookings store — released tickets on locked dinners', () => {
+describe('Bookings store — tickets for sale and waiting lists on locked dinners', () => {
     const lockedDinner = DinnerEventFactory.defaultDinnerEventDisplay('locked')
 
     beforeEach(() => {
@@ -643,11 +644,24 @@ describe('Bookings store — released tickets on locked dinners', () => {
         ])
     })
 
+    afterEach(() => {
+        waitlistEntriesEndpoint.mockImplementation(() => [])
+    })
+
     it('counts the released tickets of the selected season\'s locked dinners', async () => {
         const store = useBookingsStore()
 
         await vi.waitFor(() => expect(store.lockStatus.get(lockedDinner.id)?.total).toBe(1))
         expect(lastQuery(ordersEndpoint)).toMatchObject({dinnerEventIds: String(lockedDinner.id), allHouseholds: 'true'})
+    })
+
+    it('sizes the waiting lists of the selected season\'s locked dinners', async () => {
+        ordersEndpoint.mockImplementation(() => [])
+        waitlistEntriesEndpoint.mockImplementation(() => [21, 22].map(id => WaitlistFactory.defaultEntry({id, dinnerEventId: lockedDinner.id})))
+        const store = useBookingsStore()
+
+        await vi.waitFor(() => expect(store.lockStatus.get(lockedDinner.id)).toMatchObject({total: 0, queued: 2}))
+        expect(lastQuery(waitlistEntriesEndpoint)).toEqual({dinnerEventIds: String(lockedDinner.id)})
     })
 })
 
@@ -727,7 +741,8 @@ describe('Bookings store — ticket changes', () => {
 
 describe('Bookings store — waiting list', () => {
     const ENTRIES_KEY = 'bookings-store-waitlist-entries'
-    const queuedDinner = {...DinnerEventFactory.defaultDinnerEventDisplay('waitlist'), id: WAITLIST_DINNER_ID}
+    // Open for booking: the season's queue sizes stay idle, so the endpoint answers the page's entries alone
+    const queuedDinner = {...DinnerEventFactory.defaultDinnerEventDisplay('waitlist'), id: WAITLIST_DINNER_ID, date: addDays(new Date(), SEASON.ticketIsCancellableDaysBefore + 20)}
     const {TicketTypeSchema} = useBookingValidation()
     // Ids on the season's prices: an entry names its price by id, the portion need weighs it by type
     const ticketPrices = SEASON.ticketPrices.map((price, index) => ({...price, id: index + 1}))

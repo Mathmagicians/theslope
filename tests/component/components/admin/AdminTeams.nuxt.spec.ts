@@ -108,22 +108,15 @@ describe('AdminTeams master table', () => {
     })
 
     // The Madhold column takes the row's slack, so the badges stay on one line while the weekdays fit their letters
-    it.each([
-        {header: 'Madhold', column: 'primaryColumn'},
-        {header: 'Madlavningsdage', column: 'compactColumn'}
-    ] as const)('the $header header and cells bind COMPONENTS.masterDetail.$column', async ({header, column}) => {
+    it('the Madhold and Madlavningsdage columns bind COMPONENTS.masterDetail.primaryColumn and compactColumn', async () => {
         const team = SeasonFactory.defaultCookingTeamDisplay({id: 23, name: 'Hold 1'})
         seasonByIdEndpoint.mockReturnValue({...season, CookingTeams: [team]})
-        const token = COMPONENTS.masterDetail[column]
 
         const wrapper = await mountTeams()
 
-        const headers = wrapper.findAll('th')
-        const th = headers.find(cell => cell.text() === header)!
-        expect(th.classes()).toEqual(expect.arrayContaining(token.th.split(' ')))
-        const row = wrapper.find(`[data-testid="team-row-${team.id}"]`).element.closest('tr')!
-        const td = row.children[headers.indexOf(th)]!
-        expect([...td.classList]).toEqual(expect.arrayContaining(token.td.split(' ')))
+        const columns = wrapper.findComponent({name: 'UTable'}).props('columns') as Array<{header?: string, meta?: {class?: unknown}}>
+        expect(columns.find(column => column.header === 'Madhold')?.meta?.class).toEqual(COMPONENTS.masterDetail.primaryColumn)
+        expect(columns.find(column => column.header === 'Madlavningsdage')?.meta?.class).toEqual(COMPONENTS.masterDetail.compactColumn)
     })
 })
 
@@ -186,7 +179,8 @@ describe('AdminTeams team colours', () => {
         SeasonFactory.defaultCookingTeamDisplay({id: 42, name: 'Holdet uden tal'}),
         SeasonFactory.defaultCookingTeamDisplay({id: 43, name: 'Madhold 1 - S1'})
     ]
-    const numbered = seasonTeams.map((team, position) => ({id: team.id!, name: team.name, number: [3, 2, 1][position]!}))
+    // Madhold 3 takes its number from its name, the unnumbered team from its position; Madhold 1 only fills the third position
+    const numbered = seasonTeams.slice(0, 2).map((team, position) => ({id: team.id!, name: team.name, number: [3, 2][position]!}))
     seasonTeams.forEach(team =>
         registerEndpoint(`/api/admin/team/${team.id}`, () => SeasonFactory.defaultCookingTeamDetail({id: team.id, name: team.name})))
 

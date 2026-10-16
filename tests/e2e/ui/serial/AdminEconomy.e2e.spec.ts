@@ -74,10 +74,18 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         }
     })
 
-    test('GIVEN an order on the active season WHEN the admin economy page is server-rendered THEN its HTML carries the upcoming orders', async () => {
-        const html = await adminContext.request.get('/admin/economy').then(r => r.text())
+    test('GIVEN an upcoming order WHEN /admin/economy is server-rendered THEN the future orders table shows its loading state, and once hydrated the order row appears', async ({browser, page}) => {
+        // The economy data loads in the browser only: a context without JavaScript sees the page as the server sent it
+        const serverContext = await browser.newContext({storageState: adminUIFile, javaScriptEnabled: false})
+        const serverPage = await serverContext.newPage()
+        await serverPage.goto('/admin/economy')
+        const serverTable = serverPage.getByTestId('future-orders-table')
+        await expect(serverPage.getByTestId('admin-economy')).not.toContainText('Ingen fremtidige bestillinger')
+        await expect(serverTable.locator('[data-slot="loading"]')).toHaveCount(1)
+        await serverContext.close()
 
-        expect(html).toContain(`data-testid="future-orders-expand-${testDinnerEventId}"`)
+        await gotoHydrated(page, '/admin/economy')
+        await expect.poll(() => page.getByTestId(`future-orders-expand-${testDinnerEventId}`).count(), {timeout: 15_000}).toBe(1)
     })
 
     test('GIVEN an order of the household WHEN its economy page is server-rendered THEN its HTML carries the billing and the upcoming orders', async () => {
@@ -104,9 +112,9 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         await doScreenshot(page, 'admin-planning-season-selected')
 
         // Use tab navigation (client-side) to preserve season selection
-        // Wait for the order fetch that will happen when the season's dinnerEvents load
+        // Wait for the upcoming orders the economy tab requests for the season
         const orderFetchPromise = page.waitForResponse(
-            (r) => r.url().includes('/api/order') && r.url().includes('dinnerEventIds'),
+            (r) => r.url().includes('/api/order') && r.url().includes('upcomingForSeason'),
             {timeout: 15000}
         )
         await page.getByRole('tab', {name: 'Økonomi'}).click()
@@ -115,7 +123,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
             (isVisible) => isVisible
         )
 
-        // Wait for the order fetch to complete (happens after season dinnerEvents load)
+        // Wait for the upcoming orders to arrive
         await orderFetchPromise
         await doScreenshot(page, 'admin-economy-after-order-fetch')
 

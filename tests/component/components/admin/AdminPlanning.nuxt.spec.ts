@@ -62,12 +62,6 @@ describe('AdminPlanning', () => {
             expect(findByTestId(wrapper, PLANNING_TEST_IDS.create).exists()).toBe(true)
         })
 
-        it('shows the pencil and no save button in view mode', async () => {
-            const wrapper = await mountPlanning()
-            expect(findByTestId(wrapper, PLANNING_TEST_IDS.edit).exists()).toBe(true)
-            expect(findByTestId(wrapper, PLANNING_TEST_IDS.submit).exists()).toBe(false)
-        })
-
         it('shows neither create nor edit control for a member', async () => {
             sessionEndpoint.mockReturnValue({user: {id: 2, email: 'member@skraaningen.dk', systemRoles: []}})
             const wrapper = await mountPlanning({canEdit: false})

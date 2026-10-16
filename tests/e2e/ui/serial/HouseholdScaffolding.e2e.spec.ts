@@ -12,7 +12,7 @@ import {isBeforeDeadline, getDinnerTimeRange} from '~/utils/season'
 const DEFAULT_DINNER_START_HOUR = 18
 
 const {memberUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo, gotoHydrated} = testHelpers
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -55,7 +55,7 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
 
     // Helper to navigate to household members page
     const goToHouseholdMembers = async (page: import('@playwright/test').Page) => {
-        await page.goto(`/household/${encodeURIComponent(shortName)}/members?pbs=${pbsId}`)
+        await gotoHydrated(page, `/household/${encodeURIComponent(shortName)}/members?pbs=${pbsId}`)
         await pollUntil(
             async () => await page.locator('[data-testid="household-members"]').isVisible(),
             (isVisible) => isVisible
@@ -203,34 +203,12 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         const afterDeadlineEvents = dinnerEvents.filter(de => !canModifyOrders(de.date))
         const beforeDeadlineEvents = dinnerEvents.filter(de => canModifyOrders(de.date))
 
-        // Trigger scaffold by calling preferences API with explicit seasonId
-        // This creates orders for BEFORE-deadline events using the test season's deadline config
-        await HouseholdFactory.updateInhabitantPreferences(
-            adminContext,
-            inhabitant.id,
-            dineInPrefs,
-            200,
-            testSeason.season.id!  // Explicit seasonId ensures correct deadline calculation
-        )
-
-        // GIVEN: Manually create orders for AFTER-deadline events (scaffold can't create these)
-        // Simulates orders created when events were still before deadline
-        const ticketPrice = testSeason.season.ticketPrices.find(tp => tp.ticketType === 'ADULT')
-        if (!ticketPrice?.id) throw new Error('Test setup: missing ADULT ticket price')
-        const ticketPriceId = ticketPrice.id
-
-        for (const afterDeadlineEvent of afterDeadlineEvents) {
-            await OrderFactory.createOrder(adminContext, {
-                householdId,
-                dinnerEventId: afterDeadlineEvent.id,
-                orders: [{
-                    inhabitantId: inhabitant.id,
-                    ticketPriceId,
-                    dinnerMode: DinnerMode.DINEIN,
-                    isGuestTicket: false
-                }]
-            })
-        }
+        // GIVEN: The preference scaffold books every dinner while all are open, as the nightly run did before the
+        // deadline passed: the season's deadline drops to 0 for that run and is restored, which closes the near dinners.
+        // An order booked by hand is the user's own and the preference scaffold leaves it as it is
+        await SeasonFactory.updateSeason(adminContext, {...testSeason.season, ticketIsCancellableDaysBefore: 0})
+        await HouseholdFactory.updateInhabitantPreferences(adminContext, inhabitant.id, dineInPrefs, 200, testSeason.season.id!)
+        await SeasonFactory.updateSeason(adminContext, testSeason.season)
 
         // Verify orders exist initially for all events (before + after deadline)
         const initialOrders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, dinnerEvents.map(e => e.id))

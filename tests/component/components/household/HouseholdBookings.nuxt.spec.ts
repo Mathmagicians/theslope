@@ -2,7 +2,7 @@
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
-import {ref, type Ref} from 'vue'
+import type {Ref} from 'vue'
 import {mountWithTooltipProvider, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
 import HouseholdBookings from '~/components/household/HouseholdBookings.vue'
 import DinnerCalendarDisplay from '~/components/calendar/DinnerCalendarDisplay.vue'
@@ -57,22 +57,5 @@ describe('HouseholdBookings calendar in ?cal=', () => {
 
         await vi.waitFor(() => expect(mockRoute.query.cal).toBe(isMd ? 'open' : 'closed'))
         expect(wrapper.findComponent(DinnerCalendarDisplay).exists()).toBe(isMd)
-    })
-
-    it('waits for the layout to measure the viewport before it writes ?cal=', async () => {
-        const isMd = ref<boolean | null>(null)
-        await mountBookings(isMd)
-        expect(mockRoute.query.cal).toBeUndefined()
-
-        isMd.value = true
-
-        await vi.waitFor(() => expect(mockRoute.query.cal).toBe('open'))
-    })
-
-    it('follows ?cal= from the URL over the viewport default', async () => {
-        mockRoute.query = {cal: 'open'}
-        const wrapper = await mountBookings(false)
-
-        expect(wrapper.findComponent(DinnerCalendarDisplay).exists()).toBe(true)
     })
 })

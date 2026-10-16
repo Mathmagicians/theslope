@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewOutcome, dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, ORDER_STATE_LABELS, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewOutcome, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, emptyOrderBuckets, type OrderBucketResult, type ReleasedTicketCounts} from '~/composables/useBooking'
@@ -9,12 +9,14 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import appConfig from '~/app.config'
 
-const {DinnerStateSchema, DinnerModeSchema, BookingActionSchema} = useBookingValidation()
+const {DinnerStateSchema, DinnerModeSchema, BookingActionSchema, OrderStateSchema} = useBookingValidation()
 const Action = BookingActionSchema.enum
 const DinnerState = DinnerStateSchema.enum
-const {ICONS} = useTheSlopeDesignSystem()
+const OrderState = OrderStateSchema.enum
+const {ICONS, COLOR, BOOKING_LOCK_STATUS} = useTheSlopeDesignSystem()
 // @nuxt/test-utils 4 starts Nuxt in beforeAll: useSeason runs there, not at module level
 let deadlines: ReturnType<ReturnType<typeof useSeason>['deadlinesForSeason']>
 beforeAll(() => {
@@ -26,7 +28,7 @@ const FAR_FUTURE_DAYS = appConfig.theslope.defaultSeason.ticketIsCancellableDays
 const farFutureDinner = (overrides = {}) =>
     ({...DinnerEventFactory.defaultDinnerEventDisplay(), date: addDays(new Date(), FAR_FUTURE_DAYS), ...overrides})
 
-const released = (total: number, formatted = `${total}V`): ReleasedTicketCounts => ({total, formatted})
+const released = (total: number, formatted = `${total}V`, queued = 0): ReleasedTicketCounts => ({total, formatted, queued})
 
 describe('spending fragments', () => {
     const dinner = (id: number, isCurrent: boolean): CookingRoundRow => ({dinnerEventId: id, date: new Date(2026, 3, 10 + id), menuTitle: `Ret ${id}`, isCurrent, budgetGross: 1000 * id, spentGross: 100 * id})
@@ -95,6 +97,19 @@ describe('useBookingUi', () => {
         })
     })
 
+    // A locked dinner holds tickets for sale or a waiting list, never both
+    describe('lockChip', () => {
+        it.each([
+            {desc: 'tickets for sale count up', supply: released(2), chip: {color: BOOKING_LOCK_STATUS.lockedWithTickets.color, text: '2'}},
+            {desc: 'a waiting list counts down', supply: released(0, '-', 3), chip: {color: BOOKING_LOCK_STATUS.lockedWithQueue.color, text: '-3'}},
+            {desc: 'neither leaves the closed chip without a number', supply: released(0, '-'), chip: {color: BOOKING_LOCK_STATUS.locked.color, text: undefined}},
+            {desc: 'an open dinner has no chip', supply: null, chip: null},
+            {desc: 'a dinner outside the lock map has no chip', supply: undefined, chip: null}
+        ])('$desc', ({supply, chip}) => {
+            expect(lockChip(supply)).toEqual(chip)
+        })
+    })
+
     describe('outcome words', () => {
         // The words a requeue names: the mode, from the one mode-words table, and the queue place it keeps
         const LATE_AT_TWO = {mode: MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label, position: 2}
@@ -152,6 +167,27 @@ describe('useBookingUi', () => {
             expect(badge.value).toBe('2V ledige')
         })
     })
+
+    describe('formatOrder', () => {
+        let formatOrder: ReturnType<typeof useBookingUi>['formatOrder']
+        beforeAll(() => {
+            ({formatOrder} = useBookingUi())
+        })
+
+        it.each([
+            {desc: 'a booked ticket reads its state', overrides: {state: OrderState.BOOKED}, shown: ORDER_STATE_LABELS[OrderState.BOOKED]},
+            {desc: 'a booked ticket claimed from another household reads as bought', overrides: {state: OrderState.BOOKED, provenanceHousehold: 'S31'}, shown: ORDER_STATE_LABELS.claimed},
+            {desc: 'a released ticket reads its state, claimed or not', overrides: {state: OrderState.RELEASED, provenanceHousehold: 'S31'}, shown: ORDER_STATE_LABELS[OrderState.RELEASED]}
+        ])('$desc', ({overrides, shown}) => {
+            expect(formatOrder(OrderFactory.defaultOrder(undefined, overrides)))
+                .toMatchObject({stateText: shown.label, stateColor: shown.color, stateIcon: shown.icon, guest: null})
+        })
+
+        it('badges a guest ticket with its booker', () => {
+            const formatted = formatOrder(OrderFactory.defaultOrder(undefined, {isGuestTicket: true}), 'Anna')
+            expect(formatted.guest).toEqual({label: 'Gæst af Anna', color: COLOR.info, icon: ICONS.userPlus})
+        })
+    })
 })
 
 describe('previewOutcome', () => {
@@ -168,5 +204,31 @@ describe('previewOutcome', () => {
         {desc: 'a mode change on a held ticket', filled: {update: [desired]}, ticketsForSale: 0, outcome: Action.CHANGE_MODE}
     ])('$desc → $outcome', ({filled, ticketsForSale, outcome}) => {
         expect(previewOutcome(buckets(filled), () => ({ticketsForSale}))).toBe(outcome)
+    })
+})
+
+describe('ticket type presentation', () => {
+    const {TicketTypeSchema} = useBookingValidation()
+    const {TICKET_TYPE_COLORS, TICKET_TYPE_ICONS} = useTheSlopeDesignSystem()
+    const prices = TicketFactory.defaultTicketPrices()
+
+    it.each(TicketTypeSchema.options)('%s shows its words with the design system colour and glyph of its type', (ticketType) => {
+        expect(ticketTypePresentation(ticketType)).toEqual({
+            ...useTicket().ticketTypeWords[ticketType], color: TICKET_TYPE_COLORS[ticketType], icon: TICKET_TYPE_ICONS[ticketType]
+        })
+    })
+
+    it('a person shows the presentation of the ticket type they resolve to', () => {
+        expect(resolveTicketTypePresentation(new Date('2017-01-01'), prices, new Date('2025-01-15')))
+            .toEqual(ticketTypePresentation(TicketTypeSchema.enum.CHILD))
+    })
+
+    it('a price as a select item carries its type presentation, its label with the price, and its age limit with its description', () => {
+        const child = prices.find(price => price.ticketType === TicketTypeSchema.enum.CHILD)!
+        const item = ticketPriceSelectItems([child])[0]!
+        expect(item.presentation).toEqual(ticketTypePresentation(TicketTypeSchema.enum.CHILD))
+        expect(item.label).toBe(`${useTicket().ticketTypeWords[TicketTypeSchema.enum.CHILD].label} · ${useTicket().formatPrice(child.price)} kr`)
+        expect(item.description).toBe(`Under ${child.maximumAgeLimit} år · ${child.description}`)
+        expect(ticketPriceSelectItems([child], true)[0]!.description).toBeUndefined()
     })
 })

@@ -71,8 +71,7 @@ describe('AdminPlanningSeason', () => {
         const editCases = [
             {mode: FORM_MODES.VIEW, canEdit: true, expected: true},
             {mode: FORM_MODES.VIEW, canEdit: false, expected: false},
-            {mode: FORM_MODES.EDIT, canEdit: true, expected: false},
-            {mode: FORM_MODES.CREATE, canEdit: true, expected: false}
+            {mode: FORM_MODES.EDIT, canEdit: true, expected: false}
         ] as const
 
         it.each(editCases)('mode=$mode canEdit=$canEdit → edit control exists=$expected', async ({mode, canEdit, expected}) => {
@@ -95,20 +94,14 @@ describe('AdminPlanningSeason', () => {
     })
 
     describe('footer', () => {
-        const footerCases = [
-            {mode: FORM_MODES.VIEW, expected: false},
-            {mode: FORM_MODES.EDIT, expected: true},
-            {mode: FORM_MODES.CREATE, expected: true}
-        ] as const
-
-        it.each(footerCases)('mode=$mode → footer buttons exist=$expected', async ({mode, expected}) => {
-            const wrapper = await mount(mode)
-            expect(findByTestId(wrapper, PLANNING_TEST_IDS.submit).exists()).toBe(expected)
-            expect(findByTestId(wrapper, PLANNING_TEST_IDS.cancel).exists()).toBe(expected)
+        it('mode=view → no footer buttons', async () => {
+            const wrapper = await mount(FORM_MODES.VIEW)
+            expect(findByTestId(wrapper, PLANNING_TEST_IDS.submit).exists()).toBe(false)
+            expect(findByTestId(wrapper, PLANNING_TEST_IDS.cancel).exists()).toBe(false)
         })
 
-        it.each([FORM_MODES.EDIT, FORM_MODES.CREATE])('mode=%s labels the footer Annuller / Gem', async (mode) => {
-            const wrapper = await mount(mode)
+        it('mode=edit labels the footer Annuller / Gem', async () => {
+            const wrapper = await mount(FORM_MODES.EDIT)
             expect(findByTestId(wrapper, PLANNING_TEST_IDS.cancel).text()).toBe('Annuller')
             expect(findByTestId(wrapper, PLANNING_TEST_IDS.submit).text()).toBe('Gem')
         })

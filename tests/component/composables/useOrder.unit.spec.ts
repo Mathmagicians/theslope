@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { useOrder } from '~/composables/useOrder'
-import { getPortionsForTicketPrice } from '~/utils/portions'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { OrderFactory } from '../../e2e/testDataFactories/orderFactory'
 
@@ -25,8 +24,7 @@ const createTestOrder = (overrides: {
     state: overrides.state ?? OrderState.BOOKED,
     ticketType: overrides.ticketType ?? TicketType.ADULT,
     ticketPrice: {
-      id: 1,
-      ticketType: overrides.ticketType ?? TicketType.ADULT,
+      ...OrderFactory.ticketPriceRow(overrides.ticketType ?? TicketType.ADULT),
       description: overrides.description ?? null,
       price: 5000
     }
@@ -158,24 +156,6 @@ describe('useOrder', () => {
       expect(released).toHaveLength(1)
       expect(released.every(o => o.state === OrderState.RELEASED)).toBe(true)
     })
-  })
-
-  describe('getPortionsForTicketPrice', () => {
-    it.each([
-      [TicketType.ADULT, null, 1],
-      [TicketType.CHILD, null, 0.5],
-      [TicketType.BABY, null, 0],
-      [TicketType.BABY, 'Sulten baby', 0],
-      [TicketType.BABY, 'hungry baby', 0],
-      [TicketType.CHILD, 'Hungry child', 0.5],
-      [TicketType.CHILD, 'sulten barn', 0.5]
-    ])('GIVEN %s with description "%s" WHEN getting portions THEN the type decides: %s',
-      (ticketType, description, expectedPortions) => {
-        const ticketPrice = { ticketType, description }
-
-        expect(getPortionsForTicketPrice(ticketPrice)).toBe(expectedPortions)
-      }
-    )
   })
 
   describe('requiresChair', () => {

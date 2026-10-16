@@ -133,16 +133,6 @@ describe('AdminAllergies', () => {
         })
 
         describe('actions', () => {
-            it.each([
-                {control: 'edit', testId: ALLERGY_TEST_IDS.edit},
-                {control: 'delete', testId: ALLERGY_TEST_IDS.delete}
-            ])('exposes the $control control once the detail is open', async ({testId}) => {
-                const wrapper = await mount()
-                await openDetail(wrapper)
-
-                expect(findByTestId(wrapper, testId).exists()).toBe(true)
-            })
-
             it('exposes the sort control', async () => {
                 const wrapper = await mount()
 
@@ -203,6 +193,7 @@ describe('AdminAllergies', () => {
                 const confirmPanel = findByTestId(wrapper, ALLERGY_TEST_IDS.deleteConfirm)
                 expect(confirmPanel.exists()).toBe(true)
                 expect(confirmPanel.text()).toContain(firstType!.name)
+                expect(findByTestId(wrapper, ALLERGY_TEST_IDS.confirmDelete).exists()).toBe(true)
             })
 
             it('warns how many inhabitants lose their registration', async () => {
@@ -224,15 +215,6 @@ describe('AdminAllergies', () => {
 
                 expect(findByTestId(wrapper, ALLERGY_TEST_IDS.deleteConfirm).exists()).toBe(false)
                 expect(findByTestId(wrapper, ALLERGY_TEST_IDS.edit).exists()).toBe(true)
-            })
-
-            it('exposes a confirm action', async () => {
-                const wrapper = await mount()
-                await openDetail(wrapper)
-
-                await clickByTestId(wrapper, ALLERGY_TEST_IDS.delete)
-
-                expect(findByTestId(wrapper, ALLERGY_TEST_IDS.confirmDelete).exists()).toBe(true)
             })
         })
 
