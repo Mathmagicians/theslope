@@ -52,7 +52,7 @@ The schema defines entity relationships, onDelete behaviors (CASCADE vs SET NULL
 - **Typecheck**: `npm run ts` (root/app project), `npm run ts:server` (Nitro server project - catches bare auto-imports in composables the server imports, ADR-017), `npm run ts:node` (build-time project)
 - **Pre-ship gate**: `npm run pre:all` - lint + all three typechecks; identical to the CI "Lint and typecheck" step
 - **Test**: 
-  - All tests: `npm run test` - Run all Vitest tests
+  - All unit and component tests: `npm run test:unit` - Run all Vitest tests
   - E2E tests: `npm run test:e2e` - Run Playwright tests
   - Single test: `npx vitest tests/component/path/file.unit.spec.ts`
   - Single E2E test: `npx playwright test tests/e2e/path/file.e2e.spec.ts --reporter=line` - Run specific Playwright test with simplified output

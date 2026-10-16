@@ -44,7 +44,7 @@ gh run list                                          # List workflow runs
 ### Quality Assurance (View Only)
 ```bash
 npm run lint            # Run ESLint (CI/CD only)
-npm run test            # Run all tests (CI/CD only)
+npm run test:all        # Unit, API and UI suites (CI/CD only)
 npm run test:e2e        # Run E2E tests (CI/CD only)
 ```
 

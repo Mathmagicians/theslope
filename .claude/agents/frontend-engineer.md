@@ -29,7 +29,8 @@ brief and signed mockup, and nothing wider. The user is the architect of record 
 3. Implement with tokens only. A value the design system lacks becomes a token (one value, named by where it is used), with an
    entry in `docs/ui.md` and, for a new component family, an architecture rule under `tests/component/architecture/`.
 4. Extracting means sweeping: every old occurrence goes, in `app/` and inside the design system, in the same change.
-5. Gates: the affected specs, `npx vitest run tests/component/architecture/`, `npm run pre:all`. A red gate is fixed at the
+5. Gates: the affected specs, `make palettes` after a change to the `main.css` scales, `ui.colors` or a fill or ink token,
+   `npx vitest run tests/component/architecture/`, `npm run pre:all`. A red gate is fixed at the
    token, never at the threshold; a new colour that fails contrast is reported with its ratios and the token that passes.
 6. Update `docs/adr-compliance-frontend.md`; ship a test-id contract table when an id changes.
 7. Report: red output, green output, the gate results, the files, the test-id table, the visual check table

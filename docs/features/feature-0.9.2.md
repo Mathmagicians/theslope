@@ -10,20 +10,20 @@
 
 ### Problem
 
-Release 0.9 weighs a ticket through `useTicket().portionsOf`: the config's default ticket price with the ticket's type
-and price at booking gives its portions, else the first default price of its type. A season price an admin sets away
-from the defaults weighs as its type's first default price, so a hungry baby at another price weighs 0 instead of a
-quarter.
+Release 0.9 fills `TicketPrice.portions` on read (ADR-010 rule 7): `useTicket().withPortions` gives a price row the
+portions of the config's default price with its type and price, else of its type's first default price. A season price
+an admin sets away from the defaults weighs as its type's first default price, so a hungry baby at another price weighs
+0 instead of a quarter.
 
 ### Solution
 
-`TicketPrice` holds `portions`. A new season takes each price's portions from the config's default ticket prices, the
-migration fills the existing rows from the same defaults, and `portionsOf` reads the price row the order points to. The
-config's default prices keep their portions as the seed for a new season.
+`TicketPrice` stores `portions`. A new season takes each price's portions from the config's default ticket prices, the
+migration fills the existing rows from the same defaults, and the reads return the stored value in place of
+`withPortions`. The config's default prices keep their portions as the seed for a new season.
 
 ### TDD
 
-- `useTicket` unit spec: a ticket weighs its price row's portions.
+- `useTicket` spec: `withPortions` gives way to the stored value.
 - `PUT /api/admin/season` API spec: the created prices carry the default portions.
 - The migration's backfill: each existing price gets the portions of the default price with its type and price, else
   the first default price of its type.
@@ -31,5 +31,6 @@ config's default prices keep their portions as the seed for a new season.
 ### Affected areas
 
 `prisma/schema.prisma` (`TicketPrice.portions`), `useTicketPriceValidation`, `useSeason` (default season prices),
-`useTicket.portionsOf`, the season form's price rows, one migration through `.claude/skills/prisma/SKILL.md` with the
-model signed off first.
+`useTicket.portionsOf` and `withPortions`, the reads that fill a price row (`prismaRepository` season reads,
+`financesRepository` order detail and dinner tickets), the season form's price rows, one migration through
+`.claude/skills/prisma/SKILL.md` with the model signed off first.

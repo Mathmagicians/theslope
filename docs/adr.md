@@ -15,7 +15,7 @@ Shared UI values had drifted into per-component colour, variant and `:ui` patche
 
 | Pattern | Token | Bind |
 |---|---|---|
-| Colour | `COLOR`, `BG`, `TEXT`, `BORDER`, `RING`; surface palettes `CHEF_CALENDAR`, `DINNER_CALENDAR`, `PLANNING_CALENDAR`, `TICKET_TYPE_COLORS`, `ORDER_STATE_COLORS`, `PANTONE_CHIPS` | `:class="TEXT.muted"`, `:color="COLOR.primary"` |
+| Colour | `COLOR`, `BG`, `TEXT`, `BORDER`, `RING`; surface palettes `CHEF_CALENDAR`, `DINNER_CALENDAR`, `PLANNING_CALENDAR`, `TICKET_TYPE_COLORS` (with the ticket type glyphs `TICKET_TYPE_ICONS`), `ORDER_STATE_COLORS`, `PANTONE_CHIPS` | `:class="TEXT.muted"`, `:color="COLOR.primary"` |
 | Alerts | `ALERTS.<kind>` — `info`, `neutral`, `success`, `warning`, `error`, `legend`, `emptyState`, `emptyStateCompact` — plus the `withActions` modifier | `v-bind="ALERTS.warning"`, `v-bind="{...ALERTS.info, ...ALERTS.withActions}"` |
 | Buttons | `BUTTONS.<kind>` with `ICONS` | `v-bind="BUTTONS.secondaryAction" :color="COLOR.primary" :icon="ICONS.edit"` |
 | Calendars | `COMPONENTS.calendarGrid`, `CALENDAR.picker`, `dayCircleClasses(variant)` | `v-bind="COMPONENTS.calendarGrid"`; every day circle renders through the helper |
@@ -90,7 +90,7 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 
 | File | Role |
 |------|------|
-| `app/composables/useBookingUi.ts` | Deadline badges, `STEP_ICONS`, action preview |
+| `app/composables/useBookingUi.ts` | Deadline badges, `STEP_ICONS`, action preview, ticket type presentation (`ticketTypePresentation`) |
 | `app/composables/useUserRolesUi.ts` | Role labels/icons/visibility (auth store) |
 | `app/composables/useUserRoles.ts` | Server-safe role reconciliation |
 | `shared/types/cloudflare.d.ts` | `H3EventContext.cloudflare`, Nitro `TaskContext.cloudflare` |
@@ -491,7 +491,7 @@ where: { ...(householdId && { id: householdId }) }
 
 ## ADR-010: Domain-Driven Serialization Architecture
 
-**Status:** Accepted | **Date:** 2025-10-15
+**Status:** Accepted | **Date:** 2025-10-15 | **Updated:** 2026-10-16
 
 ### Decision
 
@@ -523,6 +523,7 @@ export const deserializeSeason = (s: SerializedSeason) => ({ ...s, holidays: JSO
 4. Tests MUST use domain types (no manual serialization)
 5. Repository WHERE clauses MUST use unique fields (`id` or `@unique` constraints). Non-unique lookups MUST be resolved by caller before reaching the repository.
 6. A deprecated column's value never leaves the repository: the deserializer replaces it with the value computed from the rows that own it (`DinnerEvent.totalCost` from the dinner's `expenses` amounts); the write schemas omit the column and reject a body carrying it, and clients receive the computed value without deriving it
+7. A field the domain carries before its column exists is filled on read and left out of every write: wherever the repository reads a ticket price row (a season's prices, an order's price row), `useTicket().withPortions` adds `portions` from the config's default prices, and the create schema and the update write drop it
 
 ---
 

@@ -58,10 +58,10 @@ passes domain props. Read `docs/ui.md` before the first edit; it names every tok
   palette shade (`gray-500`) or a Nuxt UI semantic utility (`text-muted`, `bg-elevated`) is a breach in a `.vue` and in a token:
   the contrast gate measures only what the design system owns.
 - **The contrast gate** (`tests/component/architecture/designSystemContrast.unit.spec.ts`) walks the design system, measures every
-  text-on-surface and boundary pair at the palette's level (AA for the base, AAA for the preset) and checks the generated palette
-  files against the inventory. A new colour-bearing token is measured on every surface the day it lands. Fix the token, never the
-  threshold; `PRESET_FINDINGS` holds no tolerated miss. When the inventory changes, `make palettes` regenerates
-  `app/assets/css/palettes/*.css`, and the user commits the result.
+  text-on-surface and boundary pair at the palette's level (AA for the base, AAA for the preset) in the committed palette
+  files. A new colour-bearing token is measured on every surface the day it lands. Fix the token, never the
+  threshold; `PRESET_FINDINGS` holds no tolerated miss. After a change to the `main.css` scales, `ui.colors` or a token that adds a
+  fill or an ink, `make palettes` regenerates `app/assets/css/palettes/*.css` before the gate runs, and the user commits the result.
 
 ## DRY
 
