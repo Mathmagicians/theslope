@@ -4,7 +4,7 @@
  *
  * Layout (Monitor Style):
  * ┌─────────────────────────────────────────────────────────────┐
- * │  | { label: string; type: 'circle'; circleClass: string[] }            COUNTDOWN TIMER (Train Station Style)          │
+ * │              COUNTDOWN TIMER (Train Station Style)          │
  * │  ┌───────────────────────────────────────────────────────┐  │
  * │  │         DAGENS FÆLLESSPISNING                         │  │
  * │  │              MAN 15/11                                │  │
@@ -26,7 +26,8 @@
  * - Holidays (green rings)
  * - Generated dinner events (pink filled) - actual events created for the season
  * - Next dinner (special highlight) - uses color from 'next-dinner' event list
- * - Lock chips (optional) - red for locked, yellow for locked with tickets available
+ * - Lock chips (optional) on an upcoming dinner past its booking deadline (`lockChip`): the tickets for sale as n in
+ *   yellow, else the waiting list as -n in yellow, else peach without a number (closed, nothing for sale)
  *
  * Uses BaseCalendar for consistent calendar structure and event management.
  * Domain-specific rendering via slots (rings for holidays, filled for actual).
@@ -64,7 +65,8 @@ const props = withDefaults(defineProps<Props>(), {
 
 const {getHolidayDatesFromDateRangeList} = useSeason()
 const {useTemporalSplit, createTemporalEventLists} = useTemporalCalendar()
-const {CALENDAR, DINNER_CALENDAR, SIZES, ICONS, BOOKING_LOCK_STATUS, getLockStatusConfig, dayCircleClasses} = useTheSlopeDesignSystem()
+const {CALENDAR, DINNER_CALENDAR, SIZES, ICONS, BOOKING_LOCK_STATUS, dayCircleClasses} = useTheSlopeDesignSystem()
+const {lockChip} = useBookingUi()
 
 const holidayDates = computed(() => getHolidayDatesFromDateRangeList(props.holidays))
 
@@ -93,16 +95,11 @@ const getDinnerForDay = (day: DateValue): DinnerEventDisplay | undefined => {
   )
 }
 
-// Get lock status config for a day (null if not locked or no lockStatus provided)
-// Returns both config and count (same pattern as BookingGridView.getEventLockStatus)
-const getLockStatusForDay = (day: DateValue): { config: NonNullable<ReturnType<typeof getLockStatusConfig>>, count: number } | null => {
+// The lock chip of the day's dinner; null without a lock status or a locked dinner on the day
+const getLockChipForDay = (day: DateValue) => {
   if (!props.lockStatus) return null
   const dinner = getDinnerForDay(day)
-  if (!dinner) return null
-  const released = props.lockStatus.get(dinner.id) ?? null
-  if (released === null) return null
-  const config = getLockStatusConfig(released.total)
-  return config ? { config, count: released.total } : null
+  return dinner ? lockChip(props.lockStatus.get(dinner.id)) : null
 }
 
 // Day type detection - returns 'next' | 'future' | 'past' | null
@@ -133,7 +130,8 @@ const legendItems = computed((): CalendarLegendItem[] => {
     const chipCircle = dayCircleClasses(DINNER_CALENDAR.day.future)
     items.push(
       { label: 'Lukket for framelding', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.locked.color, circleClass: chipCircle, chipSize: SIZES.lockChip },
-      { label: 'Ledige billetter', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithTickets.color, circleClass: chipCircle, chipSize: SIZES.lockChip, showCount: true }
+      { label: 'Ledige billetter', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithTickets.color, circleClass: chipCircle, chipSize: SIZES.lockChip, count: '1' },
+      { label: '3 på venteliste, ingen ledige billetter', kind: 'chip', chipColor: BOOKING_LOCK_STATUS.lockedWithQueue.color, circleClass: chipCircle, chipSize: SIZES.lockChip, count: '-3' }
     )
   }
 
@@ -210,11 +208,11 @@ const isSelected = (day: DateValue): boolean => {
 
               <!-- Locked dinner with chip (next/future, not past) -->
               <UChip
-                v-else-if="getLockStatusForDay(day) && getDayType(eventLists) !== 'past'"
+                v-else-if="getLockChipForDay(day) && getDayType(eventLists) !== 'past'"
                 show
                 :size="SIZES.lockChip"
-                :color="getLockStatusForDay(day)!.config.color"
-                :text="getLockStatusForDay(day)!.count > 0 ? String(getLockStatusForDay(day)!.count) : undefined"
+                :color="getLockChipForDay(day)!.color"
+                :text="getLockChipForDay(day)!.text"
                 :data-testid="`calendar-dinner-date-${day.day}`"
               >
                 <div

@@ -55,6 +55,33 @@
  * │ └──────────────────────────────────────────────────────┘ │
  * └──────────────────────────────────────────────────────────┘
  *
+ * AFTER THE DEADLINE - the bar above the table (ALERTS.info), one line per supply that exists; with neither, no bar.
+ * A dinner can hold both: a released ticket goes only to someone waiting for the same ticket type.
+ * [claim] = ICONS.claim while tickets are for sale, [waitlist] = ICONS.waitlist for the waiting list alone.
+ *
+ * TICKETS FOR SALE:
+ * ┌──────────────────────────────────────────────────────────────────┐
+ * │ [claim] Har du brug for flere billetter?                         │
+ * │         Lukket for ændringer, men der er 4 ledige billetter til  │
+ * │         salg (4V).                                               │
+ * └──────────────────────────────────────────────────────────────────┘
+ *
+ * WAITING LIST:
+ * ┌──────────────────────────────────────────────────────────────────┐
+ * │ [waitlist] Har du brug for flere billetter?                      │
+ * │            Lukket for ændringer, men 3 står på ventelisten       │
+ * │            (2V 1B). Du kan få en plads på ventelisten.           │
+ * └──────────────────────────────────────────────────────────────────┘
+ *
+ * BOTH:
+ * ┌──────────────────────────────────────────────────────────────────┐
+ * │ [claim] Har du brug for flere billetter?                         │
+ * │         Lukket for ændringer, men der er 4 ledige billetter til  │
+ * │         salg (4V).                                               │
+ * │         1 står på ventelisten (1B). Du kan få en plads på        │
+ * │         ventelisten.                                             │
+ * └──────────────────────────────────────────────────────────────────┘
+ *
  * AFTER THE DEADLINE, SOLD OUT - the waiting list (a row without a ticket):
  *   Anna    [  ][  ][  ] [VOKSEN · 55kr]   [mode] Spisesal   [Skriv på venteliste]   picks the mode, then saves
  *   Bo      [wl][  ][  ] [VOKSEN · 55kr]   (mode) Spisesal   [hourglass #2 i køen]    the wish, ghosted
@@ -79,8 +106,8 @@ import type {DinnerEventDisplay, OrderDisplay, DinnerMode, OrderState, DesiredOr
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
-import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
-import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import type {TicketPresentation} from '~/composables/useBookingUi'
+import {EMPTY_RELEASED_TICKET_COUNTS, type ReleasedTicketCounts} from '~/composables/useBooking'
 import type {TicketWaitlistDetail} from '~/composables/useWaitlistValidation'
 import {FORM_MODES} from '~/types/form'
 
@@ -88,7 +115,6 @@ import {FORM_MODES} from '~/types/form'
 type RowType = 'inhabitant' | 'power' | 'guest' | 'guest-order'
 
 // Ticket config type
-type TicketConfig = {label: string; color: NuxtUIColor; icon: string} | null
 
 interface TableRow {
   rowType: RowType
@@ -98,7 +124,7 @@ interface TableRow {
   birthDate?: Date | null
   inhabitant?: InhabitantDisplay // For UserListItem in single mode
   inhabitants?: InhabitantDisplay[] // For UserListItem in group mode (power)
-  ticketConfig: TicketConfig
+  ticketConfig: TicketPresentation | null
   order: OrderDisplay | null
   orders?: OrderDisplay[] // For grouped guest orders
   orderState: OrderState | undefined
@@ -133,7 +159,7 @@ const props = withDefaults(defineProps<Props>(), {
   household: undefined,
   orders: () => [],
   ticketPrices: () => [],
-  releasedTicketCounts: () => ({ total: 0, formatted: '-' }),
+  releasedTicketCounts: () => EMPTY_RELEASED_TICKET_COUNTS,
   canEditAdminOverride: undefined,
   waitlistEntries: () => []
 })
@@ -162,7 +188,7 @@ const {COMPONENTS, SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, 
 const emptyStateMessage = getRandomEmptyMessage('household')
 
 // Ticket business logic
-const {resolveTicketPrice, ticketTypeConfig, formatPrice} = useTicket()
+const {resolveTicketPrice, formatPrice} = useTicket()
 
 // Season business logic
 const {isDinnerPast} = useSeason()
@@ -269,8 +295,17 @@ const householdReleasedTickets = computed(() =>
   )
 )
 
-// Released tickets from all households (passed from store's lockStatus)
+// Released tickets and the waiting list from all households (passed from store's lockStatus)
 const hasReleasedTickets = computed(() => props.releasedTicketCounts.total > 0)
+const hasWaitlist = computed(() => props.releasedTicketCounts.queued > 0)
+
+// One line per supply on a closed dinner; the first line names the closure
+const moreTicketsLines = computed(() => {
+  const {total, formatted, queued, queuedFormatted} = props.releasedTicketCounts
+  const forSale = hasReleasedTickets.value ? [`der er ${total} ledig${total === 1 ? ' billet' : 'e billetter'} til salg (${formatted}).`] : []
+  const waiting = hasWaitlist.value ? [`${queued} står på ventelisten (${queuedFormatted}). Du kan få en plads på ventelisten.`] : []
+  return [...forSale, ...waiting].map((line, index) => index === 0 ? `Lukket for ændringer, men ${line}` : line)
+})
 
 // ============================================================================
 // ORDER PARTITIONING (uses useBooking helpers)
@@ -315,7 +350,7 @@ const tableData = computed((): TableRow[] => {
     // An order supersedes a queue entry: the assignment deletes the entry it placed
     const waitlistEntry = order ? undefined : findRegularOrder(eventWaitlistEntries.value, inhabitant.id, props.dinnerEvent.id)
 
-    // Single DRY code path: resolveTicketPrice → ticketTypeConfig lookup
+    // Single DRY code path: resolveTicketPrice → ticketTypePresentation
     const ticketPrice = resolveTicketPrice(
       inhabitant.birthDate ?? null,
       order?.priceAtBooking,
@@ -329,7 +364,7 @@ const tableData = computed((): TableRow[] => {
       lastName: inhabitant.lastName,
       birthDate: inhabitant.birthDate,
       inhabitant,
-      ticketConfig: ticketPrice ? ticketTypeConfig[ticketPrice.ticketType] : null,
+      ticketConfig: ticketPrice ? ticketTypePresentation(ticketPrice.ticketType) : null,
       order,
       orderState,
       waitlistEntry,
@@ -369,7 +404,7 @@ const tableData = computed((): TableRow[] => {
       name: 'Gæst',
       lastName: '',
       inhabitant: booker,
-      ticketConfig: resolvedTicketPrice ? ticketTypeConfig[resolvedTicketPrice.ticketType] : null,
+      ticketConfig: resolvedTicketPrice ? ticketTypePresentation(resolvedTicketPrice.ticketType) : null,
       order: firstOrder,
       orders,
       orderState,
@@ -618,9 +653,16 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
         </template>
         <template #description>Du betaler, medmindre andre køber</template>
       </UAlert>
-      <UAlert v-if="hasReleasedTickets" v-bind="ALERTS.info" :icon="ICONS.claim">
+      <UAlert
+        v-if="moreTicketsLines.length > 0"
+        v-bind="ALERTS.info"
+        :icon="hasReleasedTickets ? ICONS.claim : ICONS.waitlist"
+        data-testid="more-tickets-alert"
+      >
         <template #title>Har du brug for flere billetter?</template>
-        <template #description>Lukket for ændringer, men der er {{ props.releasedTicketCounts.total }} ledig{{ props.releasedTicketCounts.total === 1 ? ' billet' : 'e billetter' }} til salg.</template>
+        <template #description>
+          <p v-for="line in moreTicketsLines" :key="line">{{ line }}</p>
+        </template>
       </UAlert>
     </div>
 

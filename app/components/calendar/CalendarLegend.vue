@@ -4,7 +4,7 @@ import type {NuxtUIChipSize, NuxtUIColor} from '~/composables/useTheSlopeDesignS
 /** One legend entry: the sample a calendar paints a day as, and its name */
 export type CalendarLegendItem =
   | {label: string, kind: 'circle', circleClass: string[]}
-  | {label: string, kind: 'chip', chipColor: NuxtUIColor, circleClass: string[], showCount?: boolean, chipSize?: NuxtUIChipSize}
+  | {label: string, kind: 'chip', chipColor: NuxtUIColor, circleClass: string[], count?: string, chipSize?: NuxtUIChipSize}
   | {label: string, kind: 'badge', badgeClass: string}
 </script>
 
@@ -18,7 +18,7 @@ export type CalendarLegendItem =
  * │  hint                                                             │
  * └────────────────────────────────────────────────────────────┘
  *   circle: a day circle in the variant's classes
- *   chip:   that circle wrapped in a chip, with a count when asked
+ *   chip:   that circle wrapped in a chip, reading the item's count when it has one
  *   badge:  the team's rainbow band
  *
  * The calendars pass `items` and render it in BaseCalendar's #legend slot. DinnerModeLegend fills the
@@ -46,7 +46,7 @@ const {ALERTS, ICONS, COMPONENTS, SIZES, TYPOGRAPHY} = useTheSlopeDesignSystem()
             show
             :size="item.chipSize ?? SIZES.md"
             :color="item.chipColor"
-            :text="item.showCount ? '1' : undefined"
+            :text="item.count"
           >
             <div :class="item.circleClass">1</div>
           </UChip>
