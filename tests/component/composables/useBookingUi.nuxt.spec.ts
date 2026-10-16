@@ -169,16 +169,23 @@ describe('useBookingUi', () => {
         // The words a requeue names: the mode, from the one mode-words table, and the queue place it keeps
         const LATE_AT_TWO = {mode: MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label, position: 2}
         it.each([
-            {outcome: Action.BOOK, save: 'Book', guestSave: 'Tilføj gæst', preview: 'Anna tilmeldes'},
-            {outcome: Action.BUY, save: 'Køb billet', guestSave: 'Køb billet til gæst', preview: 'Anna køber en ledig billet'},
-            {outcome: Action.QUEUE, save: 'Skriv på venteliste', guestSave: 'Skriv gæst på venteliste', preview: 'Anna skrives på ventelisten'},
-            {outcome: Action.LEAVE, save: 'Forlad ventelisten', guestSave: 'Forlad ventelisten', preview: 'Anna forlader ventelisten'},
-            {outcome: Action.REQUEUE, save: 'Opdater', guestSave: 'Opdater', preview: `Anna ændrer ønsket tilmelding til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label}, beholder plads #2 i køen`},
-            {outcome: Action.CHANGE_MODE, save: 'Opdater', guestSave: 'Tilføj gæst', preview: 'Anna opdaterer spisning'}
-        ])('$outcome → save "$save", guest "$guestSave", preview "$preview"', ({outcome, save, guestSave, preview}) => {
+            {outcome: Action.BOOK, save: 'Book', preview: 'Anna tilmeldes'},
+            {outcome: Action.BUY, save: 'Køb billet', preview: 'Anna køber en ledig billet'},
+            {outcome: Action.QUEUE, save: 'Skriv på venteliste', preview: 'Anna skrives på ventelisten'},
+            {outcome: Action.LEAVE, save: 'Forlad ventelisten', preview: 'Anna forlader ventelisten'},
+            {outcome: Action.REQUEUE, save: 'Opdater', preview: `Anna ændrer ønsket tilmelding til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label}, beholder plads #2 i køen`},
+            {outcome: Action.CHANGE_MODE, save: 'Opdater', preview: 'Anna opdaterer spisning'}
+        ])('$outcome → save "$save", preview "$preview"', ({outcome, save, preview}) => {
             expect(bookingSaveLabel(outcome)).toBe(save)
-            expect(guestSaveLabel(outcome)).toBe(guestSave)
             expect(ACTION_WORDS[outcome].template('Anna', LATE_AT_TWO)).toBe(preview)
+        })
+
+        // The guest form's button names the guests; its preview lines name each guest's outcome
+        it.each([
+            {count: 1, label: 'Tilmeld gæst'},
+            {count: 3, label: 'Tilmeld gæster'}
+        ])('the guest form saves $count as "$label"', ({count, label}) => {
+            expect(guestSaveLabel(count)).toBe(label)
         })
     })
 

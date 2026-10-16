@@ -20,13 +20,12 @@ const {TeamRoleSchema} = useCookingTeamValidation()
 type Context = Awaited<ReturnType<typeof validatedBrowserContext>>
 type DinnerLines = {dinnerEventId: number, expenseIds: number[]}
 
-const UNKNOWN_ID = 999999999
-
 test.describe('Chef dinner expenses', () => {
     let seasonId: number
     let teamId: number
     let sharedDinnerId: number
     let chef: {userId: number, userEmail: string}
+    const seasonIds: number[] = []
     const cleanup: DinnerLines[] = []
 
     test.beforeAll(async ({browser}) => {
@@ -34,6 +33,7 @@ test.describe('Chef dinner expenses', () => {
         const memberContext = await memberValidatedBrowserContext(browser)
         const season = await SeasonFactory.createSeason(adminContext)
         seasonId = season.id!
+        seasonIds.push(seasonId)
         const team = await SeasonFactory.createCookingTeamForSeason(adminContext, seasonId, salt('Udgiftshold', temporaryAndRandom()))
         teamId = team.id!
         const member = await getSessionUserInfo(memberContext)
@@ -47,7 +47,7 @@ test.describe('Chef dinner expenses', () => {
         const memberContext = await memberValidatedBrowserContext(browser)
         // An expense row outlives its dinner (SetNull), so the lines go before the season cascade
         for (const {dinnerEventId, expenseIds} of cleanup) await ExpenseFactory.cleanupExpenses(memberContext, dinnerEventId, expenseIds)
-        await SeasonFactory.cleanupSeasons(adminContext, [seasonId])
+        await SeasonFactory.cleanupSeasons(adminContext, seasonIds)
     })
 
     // A dinner of the chef's team; the lines a test adds to it are registered for cleanup
@@ -100,17 +100,7 @@ test.describe('Chef dinner expenses', () => {
         expect((await ExpenseFactory.list(memberContext, dinner.dinnerEventId))[0]?.description).toBe('Mejeri')
     })
 
-    test('GIVEN two lines WHEN reading the team THEN its dinner carries the sum as its cost', async ({browser}) => {
-        const adminContext = await validatedBrowserContext(browser)
-        const memberContext = await memberValidatedBrowserContext(browser)
-        const dinner = await createDinner(adminContext)
-        await addTwoLines(memberContext, dinner)
-
-        const team = (await SeasonFactory.getCookingTeamById(adminContext, teamId))!
-        expect(team.dinnerEvents.find(event => event.id === dinner.dinnerEventId)?.totalCost).toBe(131000)
-    })
-
-    test('GIVEN two lines WHEN reading the dinner THEN Display carries the sum alone and Detail the sum with the lines', async ({browser}) => {
+    test('GIVEN two lines WHEN reading the dinner THEN Display carries the sum alone, Detail the sum with the lines, and the team its dinner with the sum', async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
         const memberContext = await memberValidatedBrowserContext(browser)
         const dinner = await createDinner(adminContext)
@@ -123,6 +113,9 @@ test.describe('Chef dinner expenses', () => {
         const detail = (await DinnerEventFactory.getDinnerEvent(adminContext, dinner.dinnerEventId))!
         expect(detail.totalCost).toBe(131000)
         expect(detail.expenses.map(expense => expense.amount)).toEqual([101200, 29800])
+
+        const team = (await SeasonFactory.getCookingTeamById(adminContext, teamId))!
+        expect(team.dinnerEvents.find(event => event.id === dinner.dinnerEventId)?.totalCost).toBe(131000)
     })
 
     test('GIVEN two lines WHEN the chef removes one THEN the cost drops and a second removal is 404', async ({browser}) => {
@@ -149,19 +142,11 @@ test.describe('Chef dinner expenses', () => {
         expect((await DinnerEventFactory.getDinnerEvent(adminContext, dinner.dinnerEventId))!.totalCost).toBe(101200)
     })
 
-    for (const {desc, body} of [
-        {desc: 'an amount of zero', body: {amount: 0}},
-        {desc: 'a negative amount', body: {amount: -100}},
-        {desc: 'a fractional amount', body: {amount: 10.5}},
-        {desc: 'a note that is not text', body: {description: 7}},
-        {desc: 'a totalCost key', body: {totalCost: 100}},
-        {desc: 'a payer key', body: {paidByUserId: 7}}
-    ]) {
-        test(`GIVEN ${desc} WHEN adding THEN 400`, async ({browser}) => {
-            const memberContext = await memberValidatedBrowserContext(browser)
-            await ExpenseFactory.add(memberContext, sharedDinnerId, {...ExpenseFactory.defaultExpenseCreate(), ...body}, 400)
-        })
-    }
+    // One 400 for the endpoint; the schema's field rules are proven in the useBillingValidation unit spec (ExpenseCreateSchema)
+    test('GIVEN a payer key WHEN adding THEN 400', async ({browser}) => {
+        const memberContext = await memberValidatedBrowserContext(browser)
+        await ExpenseFactory.add(memberContext, sharedDinnerId, {...ExpenseFactory.defaultExpenseCreate(), paidByUserId: 7}, 400)
+    })
 
     test('GIVEN the admin, who is not on the team WHEN adding or listing THEN 403', async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
@@ -169,8 +154,13 @@ test.describe('Chef dinner expenses', () => {
         await ExpenseFactory.list(adminContext, sharedDinnerId, 403)
     })
 
-    test('GIVEN an unknown dinner WHEN listing THEN 404', async ({browser}) => {
+    test('GIVEN a removed dinner WHEN listing THEN 404', async ({browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
         const memberContext = await memberValidatedBrowserContext(browser)
-        await ExpenseFactory.list(memberContext, UNKNOWN_ID, 404)
+        const removed = await DinnerEventFactory.createDinnerEvent(adminContext, {
+            ...DinnerEventFactory.defaultDinnerEvent(temporaryAndRandom()), seasonId, cookingTeamId: teamId
+        })
+        await DinnerEventFactory.deleteDinnerEvent(adminContext, removed.id!, 200)
+        await ExpenseFactory.list(memberContext, removed.id!, 404)
     })
 })

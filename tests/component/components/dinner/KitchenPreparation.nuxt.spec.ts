@@ -15,20 +15,20 @@ import {mountWithTooltipProvider, findByTestId, clickByTestId} from '~~/tests/co
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
-import {COMPONENTS} from '~/composables/useTheSlopeDesignSystem'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {OrderDetail} from '~/composables/useBookingValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
-import type {HouseholdDisplay} from '~/composables/useCoreValidation'
+import {getHouseholdShortName, type HouseholdDisplay} from '~/composables/useCoreValidation'
 
 // nuxt-auth-utils has no session in the test environment; the households store reads only while logged in
 const {session, useUserSession} = await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).mockSession())
 mockNuxtImport('useUserSession', () => useUserSession)
 session.loggedIn.value = true
 
-const {TicketTypeSchema, DinnerModeSchema} = useBookingValidation()
+const {TicketTypeSchema, DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
 const DinnerMode = DinnerModeSchema.enum
+const OrderState = OrderStateSchema.enum
 
 const GLUTEN: AllergyTypeDisplay = {id: 1, name: 'Gluten', description: 'Cøliaki', icon: '🌾'}
 const MILK: AllergyTypeDisplay = {id: 2, name: 'Mælk', description: 'Laktoseintolerans', icon: '🥛'}
@@ -39,11 +39,18 @@ const ORDERS: OrderDetail[] = [
     OrderFactory.defaultOrderDetailWithAllergies(3, 'Per', [], {dinnerMode: DinnerMode.TAKEAWAY, ticketType: TicketType.ADULT})
 ]
 
+// A released ticket for sale, and the people on the waiting list, all in the diners' household
+const SALE_ORDER = OrderFactory.defaultOrderDetailWithAllergies(4, 'Maria', [], {dinnerMode: DinnerMode.DINEIN, ticketType: TicketType.ADULT, state: OrderState.RELEASED})
+const QUEUED = {knud: {id: 11, name: 'Knud'}, emil: {id: 12, name: 'Emil'}, liva: {id: 13, name: 'Liva'}}
+
 const HOUSEHOLDS: HouseholdDisplay[] = [{
     ...HouseholdFactory.defaultHouseholdData('kitchen'),
     id: 1,
     shortName: 'S_31',
-    inhabitants: ORDERS.map(order => ({...HouseholdFactory.defaultInhabitantData(`kitchen-${order.inhabitantId}`), id: order.inhabitantId, householdId: 1}))
+    inhabitants: [
+        ...[...ORDERS, SALE_ORDER].map(order => ({...HouseholdFactory.defaultInhabitantData(`kitchen-${order.inhabitantId}`), id: order.inhabitantId, householdId: 1})),
+        ...Object.values(QUEUED).map(({id, name}) => ({...HouseholdFactory.defaultInhabitantData(`kitchen-${id}`), id, name, householdId: 1}))
+    ]
 }] as HouseholdDisplay[]
 
 registerEndpoint('/api/admin/household', () => HOUSEHOLDS)
@@ -147,32 +154,71 @@ describe('KitchenPreparation allergy line', () => {
     })
 })
 
-describe('KitchenPreparation fourth box', () => {
-    const WAITLIST_BOX = 'kitchen-box-waitlist'
-    const mountWith = async (waitlist: ReturnType<typeof WaitlistFactory.defaultQueueSummary> | null) => {
-        const wrapper = await mountWithTooltipProvider(KitchenPreparation, {props: {orders: ORDERS, allergens: [], waitlist}, isMd: true})
+describe('KitchenPreparation TIL SALG box', () => {
+    const FOR_SALE = PANEL(OrderState.RELEASED)
+    const WAITLIST_PART = 'kitchen-waitlist-part'
+    const WAITLIST_LINES = 'kitchen-waitlist-lines'
+    const SHORT_NAME = getHouseholdShortName(HOUSEHOLDS[0]!.address)
+    const placeOf = (place: number, name: string) => `#${place} ${SHORT_NAME} · ${name}`
+    const entryOf = (inhabitantId: number, minute: number) =>
+        WaitlistFactory.defaultEntry({id: inhabitantId, inhabitantId, createdAt: new Date(2026, 9, 19, 12, minute)})
+    // One adult and two children waiting, the lines in ticket type order and each in join order
+    const QUEUE = WaitlistFactory.defaultQueueSummary({
+        entries: 3,
+        portions: 2,
+        lines: [
+            {ticketType: TicketType.ADULT, entries: [entryOf(QUEUED.knud.id, 3)]},
+            {ticketType: TicketType.CHILD, entries: [entryOf(QUEUED.emil.id, 1), entryOf(QUEUED.liva.id, 2)]}
+        ]
+    })
+    const CHILD_QUEUE = WaitlistFactory.defaultQueueSummary({entries: 2, portions: 1, lines: QUEUE.lines.filter(line => line.ticketType === TicketType.CHILD)})
+
+    const mountWith = async (waitlist: ReturnType<typeof WaitlistFactory.defaultQueueSummary> | null, orders: OrderDetail[] = ORDERS) => {
+        const wrapper = await mountWithTooltipProvider(KitchenPreparation, {props: {orders, allergens: [], waitlist}, isMd: true})
         await flushPromises()
         return wrapper
     }
 
-    it('GIVEN a queue with entries THEN the box reads VENTELISTE with the queue size, on the TIL SALG surface, and TIL SALG is gone', async () => {
-        const queue = WaitlistFactory.defaultQueueSummary({entries: 4, portions: 2.5})
-        const wrapper = await mountWith(queue)
+    it('GIVEN one adult and two children waiting THEN TIL SALG carries the KØ part with the queue\'s kuverter and its ticket count', async () => {
+        const wrapper = await mountWith(QUEUE)
 
-        const box = findByTestId(wrapper, WAITLIST_BOX)
-        expect(box.text()).toContain('VENTELISTE')
-        expect(box.text()).toContain(String(queue.entries))
-        expect(box.classes()).toEqual(expect.arrayContaining(COMPONENTS.kitchenPanel.WAITLIST.split(' ')))
-        expect(findByTestId(wrapper, PANEL('RELEASED')).exists()).toBe(false)
+        const box = findByTestId(wrapper, FOR_SALE)
+        expect(box.text()).toContain('TIL SALG')
+        const part = findByTestId(box, WAITLIST_PART)
+        for (const text of ['KØ', '2 kuv.', 'Voksen: 1', 'Barn: 2', 'Baby: 0', '# 3']) expect(part.text()).toContain(text)
+        expect(part.text()).not.toContain('%')
     })
 
     it.each([
-        {desc: 'an empty queue', waitlist: WaitlistFactory.defaultQueueSummary({entries: 0, portions: 0})},
+        {desc: 'an empty queue', waitlist: WaitlistFactory.defaultQueueSummary({entries: 0, portions: 0, lines: []})},
         {desc: 'no queue read', waitlist: null}
-    ])('GIVEN $desc THEN the box reads TIL SALG', async ({waitlist}) => {
+    ])('GIVEN $desc THEN TIL SALG has no KØ part', async ({waitlist}) => {
         const wrapper = await mountWith(waitlist)
 
-        expect(findByTestId(wrapper, PANEL('RELEASED')).text()).toContain('TIL SALG')
-        expect(findByTestId(wrapper, WAITLIST_BOX).exists()).toBe(false)
+        expect(findByTestId(wrapper, FOR_SALE).text()).toContain('TIL SALG')
+        expect(findByTestId(wrapper, WAITLIST_PART).exists()).toBe(false)
+    })
+
+    it('GIVEN a ticket for sale and children waiting WHEN TIL SALG opens THEN the seller\'s row comes first, then the KØ heading and the child line in join order', async () => {
+        const wrapper = await mountWith(CHILD_QUEUE, [...ORDERS, SALE_ORDER])
+        await clickByTestId(wrapper, FOR_SALE)
+
+        const list = findByTestId(wrapper, HOUSEHOLD_LIST)
+        const lines = findByTestId(list, WAITLIST_LINES)
+        expect(lines.text()).toContain('KØ')
+        expect(lines.text()).toContain(`Barn: ${placeOf(1, QUEUED.emil.name)}, ${placeOf(2, QUEUED.liva.name)}`)
+        expect(list.text().indexOf(SALE_ORDER.inhabitant.name)).toBeLessThan(list.text().indexOf('KØ'))
+    })
+
+    it('GIVEN nothing for sale and a queue WHEN TIL SALG opens THEN the list holds the KØ lines only, adults first', async () => {
+        const wrapper = await mountWith(QUEUE)
+        await clickByTestId(wrapper, FOR_SALE)
+
+        const list = findByTestId(wrapper, HOUSEHOLD_LIST)
+        const text = findByTestId(list, WAITLIST_LINES).text()
+        expect(text).toContain(`Voksen: ${placeOf(1, QUEUED.knud.name)}`)
+        expect(text).toContain(`Barn: ${placeOf(1, QUEUED.emil.name)}, ${placeOf(2, QUEUED.liva.name)}`)
+        expect(text.indexOf('Voksen')).toBeLessThan(text.indexOf('Barn'))
+        expect(list.text()).not.toContain('Anna')
     })
 })

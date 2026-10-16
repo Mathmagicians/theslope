@@ -16,6 +16,7 @@ const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
 // Variables to store for cleanup and test data
 let testSeasonId: number
 let testSeason: Season
+const testSeasonIds: number[] = []
 const testHouseholdIds: number[] = []
 const testAllergyTypeIds: number[] = []
 
@@ -26,7 +27,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         const context = await validatedBrowserContext(browser)
         testSeason = await SeasonFactory.createSeason(context)
         testSeasonId = testSeason.id as number
-        console.info(`Created test season ${testSeason.shortName} with ID ${testSeasonId}`)
+        testSeasonIds.push(testSeasonId)
     })
 
     test('PUT can create and GET can retrieve with status 200', async ({browser}) => {
@@ -224,7 +225,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(createdDinnerEvent.id).toBeDefined()
 
         // WHEN: Deleting the dinner event
-        const deletedDinnerEvent = await DinnerEventFactory.deleteDinnerEvent(context, createdDinnerEvent.id!)
+        const deletedDinnerEvent = await DinnerEventFactory.deleteDinnerEvent(context, createdDinnerEvent.id!, 200)
 
         // THEN: Delete succeeds and returns the deleted event
         expect(deletedDinnerEvent?.id).toBe(createdDinnerEvent.id)
@@ -242,13 +243,6 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         await AllergyFactory.cleanupAllergyTypes(context, testAllergyTypeIds)
 
         // Clean up the test season (CASCADE deletes all dinner events automatically per ADR-005)
-        if (testSeasonId) {
-            try {
-                await SeasonFactory.deleteSeason(context, testSeasonId)
-                console.info(`Cleaned up test season ${testSeasonId} (cascade deleted all dinner events)`)
-            } catch (error) {
-                console.warn(`Failed to cleanup test season ${testSeasonId}:`, error)
-            }
-        }
+        await SeasonFactory.cleanupSeasons(context, testSeasonIds)
     })
 })

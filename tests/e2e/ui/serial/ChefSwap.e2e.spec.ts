@@ -69,11 +69,11 @@ test.describe('Chef Swap — volunteer flow', () => {
         await SeasonFactory.assignMemberToTeam(adminCtx, teamId, memberInhabitantId, TeamRole.CHEF)
     })
 
-    // Runs on failure too — the shared date must be free before the next test
+    // Runs on failure too — the shared date must be free before the next test; cleanup accepts a dinner already gone
     test.afterEach(async ({browser}) => {
         const adminCtx = await validatedBrowserContext(browser)
         for (const id of createdDinnerIds.splice(0)) {
-            await DinnerEventFactory.deleteDinnerEvent(adminCtx, id).catch(() => null)
+            await DinnerEventFactory.deleteDinnerEvent(adminCtx, id)
         }
     })
 

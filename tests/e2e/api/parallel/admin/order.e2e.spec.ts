@@ -9,6 +9,7 @@ const { validatedBrowserContext, getSessionUserInfo } = testHelpers
 const { TicketTypeSchema, DinnerModeSchema, OrderStateSchema } = useBookingValidation()
 
 const testOrderIds: number[] = []
+const testSeasonIds: number[] = []
 let testSeasonId: number
 let testHouseholdId: number
 let testInhabitantId: number
@@ -28,6 +29,7 @@ test.describe('Order API', () => {
 
     const season = await SeasonFactory.createSeason(context)
     testSeasonId = season.id!
+    testSeasonIds.push(testSeasonId)
 
     const adultTicketPrice = season.ticketPrices?.find((tp: TicketPrice) => tp.ticketType === TicketTypeSchema.enum.ADULT)
 
@@ -51,7 +53,7 @@ test.describe('Order API', () => {
   test.afterAll(async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
 
-    if (testSeasonId) await SeasonFactory.deleteSeason(context, testSeasonId)
+    await SeasonFactory.cleanupSeasons(context, testSeasonIds)
     // Don't delete testHouseholdId - it's the user's real household, not a test one
   })
 
@@ -83,10 +85,21 @@ test.describe('Order API', () => {
     expect(retrievedOrder!.createdAt).toBeDefined()
   })
 
-  test('GET should return 404 for non-existent order', async ({ browser }) => {
+  test('GET should return 404 for a removed order', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
-    const nonExistentId = 999999
-    await OrderFactory.getOrder(context, nonExistentId, 404)
+    const result = await OrderFactory.createOrder(context, {
+      householdId: testHouseholdId,
+      dinnerEventId: testDinnerEventId,
+      orders: [OrderFactory.defaultOrderItem({
+        inhabitantId: testInhabitantId,
+        ticketPriceId: testAdultTicketPriceId
+      })]
+    })
+    testOrderIds.push(...result!.createdIds)
+    const removedId = result!.createdIds[0]!
+    await OrderFactory.deleteOrder(context, removedId)
+
+    await OrderFactory.getOrder(context, removedId, 404)
   })
 
   test('GET with allHouseholds=true returns orders from all households', async ({ browser }) => {
@@ -203,11 +216,13 @@ test.describe('Order API', () => {
     expect(order!.dinnerEvent!.date).toBeDefined()
   })
 
-  test('GET with upcomingForSeason for non-existent season returns 404', async ({ browser }) => {
+  test('GET with upcomingForSeason for a removed season returns 404', async ({ browser }) => {
     const context = await validatedBrowserContext(browser)
+    const removedSeason = await SeasonFactory.createSeason(context)
+    await SeasonFactory.deleteSeason(context, removedSeason.id!, 200)
 
     await OrderFactory.getOrders(context, {
-      upcomingForSeason: 999999,
+      upcomingForSeason: removedSeason.id!,
       allHouseholds: true
     }, 404)
   })

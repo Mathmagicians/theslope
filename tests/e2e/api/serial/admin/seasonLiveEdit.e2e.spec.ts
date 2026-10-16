@@ -6,6 +6,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
+import {WEEKDAYS} from '~~/app/types/dateTypes'
 import {useBookingValidation as useActionValidation} from '~/composables/useBookingValidation'
 const Action = useActionValidation().BookingActionSchema.enum
 
@@ -109,5 +110,44 @@ test.describe('POST /api/admin/season/[id] on the active season', () => {
         expect(newEvent, 'The extended season should have a dinner on the new end date').toBeDefined()
         const ordersOnNewEvent = await OrderFactory.getAllOrdersForEvents(context, newEvent!.id)
         expect(ordersOnNewEvent.filter(o => o.inhabitantId === inhabitantId).length).toBeGreaterThan(0)
+    })
+})
+
+// Serial for the same reason: activation re-books every household and clips every inhabitant's preferences
+test.describe('POST /api/admin/season/active', () => {
+    const createdHouseholdIds: number[] = []
+    const testSalt = temporaryAndRandom()
+
+    test.afterAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
+    })
+
+    test('GIVEN an inhabitant with DINEIN on every day WHEN the active season is re-activated THEN the preferences are clipped to its cooking days', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        // GIVEN: The active season singleton (Mon/Wed/Fri cooking days)
+        const activeSeason = await SeasonFactory.createActiveSeason(context)
+        const cookingDays = activeSeason.cookingDays
+
+        // AND: A household with an inhabitant having DINEIN on ALL days
+        const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+            context, HouseholdFactory.defaultHouseholdData(testSalt), 1
+        )
+        createdHouseholdIds.push(household.id)
+        const clippedInhabitantId = inhabitants[0]!.id
+        await HouseholdFactory.updateInhabitant(
+            context, clippedInhabitantId, {dinnerPreferences: createDefaultDinnerModeMap(DinnerMode.DINEIN)}, 200, activeSeason.id!
+        )
+
+        // WHEN: Season is re-activated (idempotent, triggers clipping)
+        await SeasonFactory.activateSeason(context, activeSeason.id!)
+
+        // THEN: Cooking days retain DINEIN, non-cooking days clipped to NONE
+        const after = await HouseholdFactory.getInhabitantById(context, clippedInhabitantId)
+        for (const day of WEEKDAYS) {
+            const expected = cookingDays[day] ? DinnerMode.DINEIN : DinnerMode.NONE
+            expect(after?.dinnerPreferences?.[day], `${day} cooking: ${cookingDays[day]}`).toBe(expected)
+        }
     })
 })

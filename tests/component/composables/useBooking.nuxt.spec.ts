@@ -1,6 +1,6 @@
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, addYears, differenceInDays, nextDay, type Day} from 'date-fns'
-import {useBooking, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcome, ticketsForSaleOf, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
+import {useBooking, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcomes, supplyOfType, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {MODE_WORDS, ACTION_WORDS, ORDER_STATE_LABELS} from '~/composables/useBookingUi'
 import {useBookingValidation, type OrderDisplay, type DinnerMode, type DesiredOrder} from '~/composables/useBookingValidation'
@@ -483,11 +483,36 @@ describe('getNewOrderAction', () => {
     })
 })
 
+
 // =============================================================================
-// bookingOutcome - what a bucket does to the supply at the instant it executes
+// bookingOutcomes - what a bucket's orders do to the supply, in the order they execute
 // =============================================================================
 
-describe('bookingOutcome', () => {
+// The season's default prices: an order at a ticket type holds that type's price
+const SEASON_PRICES = TicketFactory.defaultTicketPrices()
+const priceIdOf = (ticketType: typeof TicketTypes[keyof typeof TicketTypes]) => SEASON_PRICES.find(price => price.ticketType === ticketType)!.id!
+
+// A claim buys from the dinner's tickets for sale of the ticket type its price names
+describe('supplyOfType', () => {
+    const TicketType = TicketTypes
+    const counts = {...EMPTY_RELEASED_TICKET_COUNTS, total: 3, byType: {[TicketType.ADULT]: 2, [TicketType.CHILD]: 1}}
+
+    it.each([
+        {ticketType: TicketType.ADULT, forSale: 2},
+        {ticketType: TicketType.CHILD, forSale: 1},
+        {ticketType: TicketType.BABY, forSale: 0}
+    ])('a claim at a $ticketType price finds the $forSale tickets for sale of its type', ({ticketType, forSale}) => {
+        expect(supplyOfType(counts, SEASON_PRICES, priceIdOf(ticketType))).toEqual({ticketType, ticketsForSale: forSale})
+    })
+
+    it('a claim at a price outside the season finds nothing for sale', () => {
+        expect(supplyOfType(counts, SEASON_PRICES, 99).ticketsForSale).toBe(0)
+    })
+})
+
+describe('bookingOutcomes', () => {
+    const order = OrderFactory.defaultDesiredOrder()
+
     it.each([
         {bucket: Bucket.create, ticketsForSale: 0, expected: Action.BOOK},
         {bucket: Bucket.claim, ticketsForSale: 2, expected: Action.BUY},
@@ -496,28 +521,24 @@ describe('bookingOutcome', () => {
         {bucket: Bucket.requeue, ticketsForSale: 1, expected: Action.REQUEUE},
         {bucket: Bucket.idempotent, ticketsForSale: 1, expected: Action.CHANGE_MODE},
         {bucket: null, ticketsForSale: 1, expected: Action.CHANGE_MODE}
-    ])('$bucket with $ticketsForSale for sale → $expected', ({bucket, ticketsForSale, expected}) => {
-        expect(bookingOutcome(bucket, {ticketsForSale})).toBe(expected)
+    ])('one order: $bucket with $ticketsForSale for sale → $expected', ({bucket, ticketsForSale, expected}) => {
+        expect(bookingOutcomes(bucket, order, () => ({ticketsForSale}))).toEqual([{order, outcome: expected}])
     })
-})
 
-// A claim buys from the dinner's tickets for sale of the ticket type its price names
-describe('ticketsForSaleOf', () => {
+    // 3V 1B for sale on the dinner: each claim takes from what the claims before it left of its ticket type
     const TicketType = TicketTypes
-    const ticketPrices = TicketFactory.defaultTicketPrices()
-    const priceIdOf = (ticketType: typeof TicketType[keyof typeof TicketType]) => ticketPrices.find(price => price.ticketType === ticketType)!.id!
-    const counts = {...EMPTY_RELEASED_TICKET_COUNTS, total: 3, byType: {[TicketType.ADULT]: 2, [TicketType.CHILD]: 1}}
+    const counts = {...EMPTY_RELEASED_TICKET_COUNTS, total: 4, byType: {[TicketType.ADULT]: 3, [TicketType.CHILD]: 1}}
+    const claimAt = (ticketType: typeof TicketType[keyof typeof TicketType]) =>
+        OrderFactory.defaultDesiredOrder({ticketPriceId: priceIdOf(ticketType), isGuestTicket: true})
 
     it.each([
-        {ticketType: TicketType.ADULT, forSale: 2},
-        {ticketType: TicketType.CHILD, forSale: 1},
-        {ticketType: TicketType.BABY, forSale: 0}
-    ])('a claim at a $ticketType price finds the $forSale tickets for sale of its type', ({ticketType, forSale}) => {
-        expect(ticketsForSaleOf(counts, ticketPrices, priceIdOf(ticketType))).toBe(forSale)
-    })
-
-    it('a claim at a price outside the season finds nothing for sale', () => {
-        expect(ticketsForSaleOf(counts, ticketPrices, 99)).toBe(0)
+        {desc: 'ten adult guests: three buy the adult tickets, seven queue', claims: Array.from({length: 10}, () => TicketType.ADULT),
+            expected: [...Array.from({length: 3}, () => Action.BUY), ...Array.from({length: 7}, () => Action.QUEUE)]},
+        {desc: 'two adults and a child all buy', claims: [TicketType.ADULT, TicketType.CHILD, TicketType.ADULT], expected: [Action.BUY, Action.BUY, Action.BUY]},
+        {desc: 'two children share the one child ticket: the first buys, the second queues', claims: [TicketType.CHILD, TicketType.CHILD], expected: [Action.BUY, Action.QUEUE]}
+    ])('a list of claims, in order: $desc', ({claims, expected}) => {
+        const outcomes = bookingOutcomes(Bucket.claim, claims.map(claimAt), order => supplyOfType(counts, SEASON_PRICES, order.ticketPriceId))
+        expect(outcomes.map(({outcome}) => outcome)).toEqual(expected)
     })
 })
 

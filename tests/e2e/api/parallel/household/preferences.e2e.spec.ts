@@ -9,17 +9,29 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 const Action = useBookingValidation().BookingActionSchema.enum
 
 const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, salt} = testHelpers
-const {DinnerModeSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const {createDefaultWeekdayMap} = useWeekDayMapValidation({valueSchema: DinnerModeSchema, defaultValue: DinnerMode.NONE})
 
 // Cleanup tracking
 const createdHouseholdIds: number[] = []
+const createdInhabitantIds: number[] = []
 
 test.describe('Household Preferences API', () => {
+    // The member edits a test inhabitant of their own household, never their own row: other specs book for that household
+    let ownHouseholdInhabitantId: number
+
+    test.beforeAll(async ({browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
+        const {householdId} = await getSessionUserInfo(await memberValidatedBrowserContext(browser))
+        const inhabitant = await HouseholdFactory.createInhabitantForHousehold(adminContext, householdId, salt('Preferences', temporaryAndRandom()))
+        createdInhabitantIds.push(inhabitant.id)
+        ownHouseholdInhabitantId = inhabitant.id
+    })
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
+        for (const id of createdInhabitantIds) await HouseholdFactory.deleteInhabitant(context, id)
         await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
     })
 
@@ -29,13 +41,12 @@ test.describe('Household Preferences API', () => {
     dinnerModes.forEach((mode) => {
         test(`GIVEN member WHEN updating preferences to ${mode} THEN succeeds`, async ({browser}) => {
             const memberContext = await memberValidatedBrowserContext(browser)
-            const {inhabitantId} = await getSessionUserInfo(memberContext)
             const preferences = createDefaultWeekdayMap(mode)
 
-            const result = await HouseholdFactory.updateInhabitantPreferences(memberContext, inhabitantId, preferences)
+            const result = await HouseholdFactory.updateInhabitantPreferences(memberContext, ownHouseholdInhabitantId, preferences)
 
             expect(result).not.toBeNull()
-            expect(result!.inhabitant.id).toBe(inhabitantId)
+            expect(result!.inhabitant.id).toBe(ownHouseholdInhabitantId)
             expect(result!.inhabitant.dinnerPreferences).toEqual(preferences)
             expect(result!.scaffoldResult).toBeDefined()
         })
@@ -56,10 +67,17 @@ test.describe('Household Preferences API', () => {
         )
     })
 
-    test('GIVEN non-existent inhabitant WHEN updating preferences THEN returns 404', async ({browser}) => {
+    test('GIVEN removed inhabitant WHEN updating preferences THEN returns 404', async ({browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
+        const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+            adminContext, {name: salt('Removed-Inhabitant', temporaryAndRandom())}, 1
+        )
+        createdHouseholdIds.push(household.id)
+        await HouseholdFactory.deleteInhabitant(adminContext, inhabitants[0]!.id, 200)
+
         const memberContext = await memberValidatedBrowserContext(browser)
         await HouseholdFactory.updateInhabitantPreferences(
-            memberContext, 999999, createDefaultWeekdayMap(DinnerMode.DINEIN), 404
+            memberContext, inhabitants[0]!.id, createDefaultWeekdayMap(DinnerMode.DINEIN), 404
         )
     })
 })
@@ -77,6 +95,7 @@ test.describe('Preference Transition Scaffold Counts', () => {
     let testInhabitantId: number
     const testSalt = temporaryAndRandom()
     const scaffoldSeasonIds: number[] = []
+    const scaffoldHouseholdIds: number[] = []
 
     // Short deadline means all events are BEFORE deadline (scaffold can create)
     const SHORT_CANCEL_PERIOD = 0
@@ -98,6 +117,7 @@ test.describe('Preference Transition Scaffold Counts', () => {
             1
         )
         testHouseholdId = household.id
+        scaffoldHouseholdIds.push(testHouseholdId)
         testInhabitantId = inhabitants[0]!.id
 
         // Set initial preferences to NONE
@@ -108,7 +128,7 @@ test.describe('Preference Transition Scaffold Counts', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        await HouseholdFactory.deleteHousehold(context, testHouseholdId)
+        await HouseholdFactory.deleteHousehold(context, scaffoldHouseholdIds)
         await SeasonFactory.cleanupSeasons(context, scaffoldSeasonIds)
     })
 
@@ -169,7 +189,7 @@ test.describe('Preference Transition Scaffold Counts', () => {
         // Verify orders are removed (no more BOOKED orders for this inhabitant)
         const dinnerEventIds = dinnerEvents.map(de => de.id)
         const orders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(context, dinnerEventIds)
-        const bookedOrders = orders.filter(o => o.inhabitantId === testInhabitantId && o.state === 'BOOKED')
+        const bookedOrders = orders.filter(o => o.inhabitantId === testInhabitantId && o.state === OrderStateSchema.enum.BOOKED)
 
         expect(bookedOrders.length, 'Should have no BOOKED orders').toBe(0)
     })

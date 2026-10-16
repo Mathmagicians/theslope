@@ -28,6 +28,7 @@ const Role = TeamRoleSchema.enum
 
 let testSeasonId: number
 let chefTeamId: number
+const createdSeasonIds: number[] = []
 const createdAllergyTypeIds: number[] = []
 
 test.describe('Chef Dinner Endpoint', () => {
@@ -38,6 +39,7 @@ test.describe('Chef Dinner Endpoint', () => {
 
         const season = await SeasonFactory.createSeason(adminContext)
         testSeasonId = season.id!
+        createdSeasonIds.push(testSeasonId)
 
         const team = await SeasonFactory.createCookingTeamForSeason(
             adminContext, testSeasonId, salt('ChefTeam', temporaryAndRandom())
@@ -50,7 +52,7 @@ test.describe('Chef Dinner Endpoint', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        if (testSeasonId) await SeasonFactory.cleanupSeasons(context, [testSeasonId])
+        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
         await AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
     })
 
@@ -83,12 +85,12 @@ test.describe('Chef Dinner Endpoint', () => {
 
     // ---------- Heynabo synchronisation ----------
 
-    test('GIVEN scheduled dinner WHEN member announces THEN heynaboEventId stored with correct time', async ({browser}) => {
+    test('GIVEN scheduled dinner without picture WHEN member announces THEN heynaboEventId stored with correct time, and the dinner reads back', async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
         const memberContext = await memberValidatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
 
-        const scheduledDinner = await createDinner(adminContext, testSalt)
+        const scheduledDinner = await createDinner(adminContext, testSalt, {menuPictureUrl: null})
         expect(scheduledDinner.state).toBe(DinnerState.SCHEDULED)
         expect(scheduledDinner.heynaboEventId).toBeNull()
 
@@ -97,6 +99,7 @@ test.describe('Chef Dinner Endpoint', () => {
         )
         expect(announcedDinner!.state).toBe(DinnerState.ANNOUNCED)
         expect(typeof announcedDinner!.heynaboEventId).toBe('number')
+        expect(announcedDinner!.menuPictureUrl).toBeNull()
 
         const heynaboEvent = await DinnerEventFactory.getHeynaboEvent(memberContext, announcedDinner!.heynaboEventId!)
         const expectedStart = getDinnerTimeRange(new Date(scheduledDinner.date), DEFAULT_DINNER_START_TIME, 0).start
@@ -105,6 +108,9 @@ test.describe('Chef Dinner Endpoint', () => {
         expect(heynaboStart.getMonth()).toBe(expectedStart.getMonth())
         expect(heynaboStart.getDate()).toBe(expectedStart.getDate())
         expect(heynaboStart.getHours()).toBe(expectedStart.getHours())
+
+        // AND: The member's GET of the announced dinner without a picture (the lazy picture sync) answers the dinner
+        await DinnerEventFactory.getDinnerEvent(memberContext, announcedDinner!.id)
     })
 
     test('GIVEN announced dinner WHEN update menu THEN Heynabo event updated', async ({browser}) => {
@@ -144,24 +150,9 @@ test.describe('Chef Dinner Endpoint', () => {
         expect(cancelledDinner!.heynaboEventId).toBe(announcedDinner!.heynaboEventId)
     })
 
-    test('GIVEN announced dinner without picture WHEN fetch THEN picture URL lazy-synced', async ({browser}) => {
-        const adminContext = await validatedBrowserContext(browser)
-        const memberContext = await memberValidatedBrowserContext(browser)
-        const testSalt = temporaryAndRandom()
-
-        const scheduledDinner = await createDinner(adminContext, testSalt, {menuPictureUrl: null})
-        const announcedDinner = await DinnerEventFactory.updateDinnerEvent(
-            memberContext, scheduledDinner.id, {state: DinnerState.ANNOUNCED}
-        )
-        expect(announcedDinner!.menuPictureUrl).toBeNull()
-
-        const fetchedDinner = await DinnerEventFactory.getDinnerEvent(memberContext, announcedDinner!.id)
-        expect(fetchedDinner).toBeDefined()
-    })
-
     // ---------- Allergens ----------
 
-    test('GIVEN dinner event WHEN member sets allergens THEN response allergens have id (not allergyTypeId)', async ({browser}) => {
+    test('GIVEN dinner event WHEN member sets allergens THEN response allergens are the allergy types, by id (not allergyTypeId)', async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
         const memberContext = await memberValidatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
@@ -174,26 +165,12 @@ test.describe('Chef Dinner Endpoint', () => {
         )
 
         expect(updated.allergens!.length).toBe(allergyTypeIds.length)
+        expect(updated.allergens!.map(allergen => allergen.id).sort()).toEqual([...allergyTypeIds].sort())
         updated.allergens!.forEach((allergen: Record<string, unknown>) => {
             expect(typeof allergen.id).toBe('number')
             expect(allergen.allergyTypeId).toBeUndefined()
             expect(allergen.name).toBeDefined()
         })
-    })
-
-    test('GIVEN single allergen WHEN member sets THEN returns correct allergen', async ({browser}) => {
-        const adminContext = await validatedBrowserContext(browser)
-        const memberContext = await memberValidatedBrowserContext(browser)
-        const testSalt = temporaryAndRandom()
-
-        const dinnerEvent = await createDinner(adminContext, testSalt)
-        const [single] = await createAllergyTypes(adminContext, 1)
-
-        const updated = await DinnerEventFactory.updateDinnerEventAllergens(
-            memberContext, dinnerEvent.id, [single!.id]
-        )
-        expect(updated.allergens!.length).toBe(1)
-        expect(updated.allergens![0]!.id).toBe(single!.id)
     })
 
     test('GIVEN allergens WHEN member clears THEN returns empty array', async ({browser}) => {
@@ -227,13 +204,15 @@ test.describe('Chef Dinner Endpoint', () => {
         })
     })
 
-    test('GIVEN non-existent allergen IDs WHEN member sets allergens THEN 404', async ({browser}) => {
+    test('GIVEN removed allergen ID WHEN member sets allergens THEN 404', async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
         const memberContext = await memberValidatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
 
         const dinnerEvent = await createDinner(adminContext, testSalt)
-        await DinnerEventFactory.updateDinnerEventAllergens(memberContext, dinnerEvent.id, [999998, 999999], 404)
+        const [removed] = await createAllergyTypes(adminContext, 1)
+        await AllergyFactory.deleteAllergyType(adminContext, removed!.id)
+        await DinnerEventFactory.updateDinnerEventAllergens(memberContext, dinnerEvent.id, [removed!.id], 404)
     })
 
     // ---------- Permissions ----------
@@ -269,9 +248,12 @@ test.describe('Chef Dinner Endpoint', () => {
         await DinnerEventFactory.updateDinnerEvent(memberContext, dinner.id, {menuTitle: 'No team'}, 404)
     })
 
-    test('GIVEN non-existent dinner event WHEN member POSTs THEN 404', async ({browser}) => {
+    test('GIVEN removed dinner event WHEN member POSTs THEN 404', async ({browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
         const memberContext = await memberValidatedBrowserContext(browser)
-        await DinnerEventFactory.updateDinnerEvent(memberContext, 999999, {menuTitle: 'Ghost'}, 404)
+        const removed = await createDinner(adminContext, temporaryAndRandom())
+        await DinnerEventFactory.deleteDinnerEvent(adminContext, removed.id, 200)
+        await DinnerEventFactory.updateDinnerEvent(memberContext, removed.id, {menuTitle: 'Ghost'}, 404)
     })
 
     // ---------- HN missing — reconciliation (ADR-013 best-effort sync) ----------

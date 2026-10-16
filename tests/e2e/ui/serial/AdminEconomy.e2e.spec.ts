@@ -8,7 +8,7 @@ import {getHouseholdUrl} from '~/utils/household'
 
 const {adminUIFile} = authFiles
 const {validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot, gotoHydrated} = testHelpers
-const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
 
@@ -26,6 +26,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
     let householdAddress: string
     let householdEconomyUrl: string
     const testSalt = `admin-economy-${Date.now()}`
+    const createdSeasonIds: number[] = []
 
     test.use({storageState: adminUIFile})
 
@@ -37,6 +38,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
 
         // Create dedicated season with future dinner events
         testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 14})
+        createdSeasonIds.push(testSeason.season.id!)
 
         expect(testSeason.dinnerEvents.length, 'Test season should have dinner events').toBeGreaterThan(0)
 
@@ -49,7 +51,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
 
         expect(futureDinners.length).toBeGreaterThan(0)
         testDinnerEventId = futureDinners[0]!.id
-        const testTicketPriceId = testSeason.season.ticketPrices!.find(tp => tp.ticketType === 'ADULT')!.id!
+        const testTicketPriceId = testSeason.season.ticketPrices!.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!.id!
 
         const households = await adminContext.request.get('/api/admin/household').then(r => r.json())
         const household = households.find((h: { id: number }) => h.id === testHouseholdId)
@@ -68,10 +70,9 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         testOrderId = result!.createdIds[0]!
     })
 
-    test.afterAll(async () => {
-        if (testSeason?.season?.id) {
-            await SeasonFactory.deleteSeason(adminContext, testSeason.season.id)
-        }
+    test.afterAll(async ({browser}) => {
+        // Deleting the season cascades its dinners and the order on them
+        await SeasonFactory.cleanupSeasons(await validatedBrowserContext(browser), createdSeasonIds)
     })
 
     test('GIVEN an upcoming order WHEN /admin/economy is server-rendered THEN the future orders table shows its loading state, and once hydrated the order row appears', async ({browser, page}) => {

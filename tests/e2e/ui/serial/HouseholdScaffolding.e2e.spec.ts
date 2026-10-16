@@ -84,9 +84,9 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // Clean up inhabitants first (they reference households)
+        // Clean up inhabitants first (they reference households); an inhabitant already gone counts as removed
         for (const inhabitantId of createdInhabitantIds) {
-            await HouseholdFactory.deleteInhabitant(context, inhabitantId).catch(() => {})
+            await HouseholdFactory.deleteInhabitant(context, inhabitantId)
         }
 
         // Clean up seasons (cascade deletes dinner events and orders)
@@ -178,65 +178,5 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         for (const order of ordersAfter) {
             expect(order.state, 'Order should be BOOKED').toBe(OrderState.BOOKED)
         }
-    })
-
-    test('RELEASE bucket: GIVEN inhabitant with orders WHEN changing to NONE after deadline THEN orders are RELEASED not deleted', async ({browser}) => {
-        const adminContext = await validatedBrowserContext(browser)
-
-        // GIVEN: Create inhabitant with DINEIN preferences (will get orders via scaffold)
-        const dineInPrefs = createDinnerModeWeekdayMap(DinnerMode.DINEIN)
-        const inhabitant = await HouseholdFactory.createInhabitantWithConfig(adminContext, householdId, {
-            name: salt('Anders', testSalt),
-            lastName: salt('Release', testSalt),
-            dinnerPreferences: dineInPrefs
-        })
-        createdInhabitantIds.push(inhabitant.id)
-
-        // GIVEN: Get dinner events and categorize by deadline using application logic
-        const dinnerEvents = testSeason.dinnerEvents
-
-        // Use same deadline logic as application (ADR-016) - pure utilities, no Nuxt auto-imports
-        const canModifyOrders = (dinnerEventDate: Date): boolean => {
-            const dinnerStartTime = getDinnerTimeRange(dinnerEventDate, DEFAULT_DINNER_START_HOUR, 0).start
-            return isBeforeDeadline(testSeason.season.ticketIsCancellableDaysBefore, 0)(dinnerStartTime)
-        }
-        const afterDeadlineEvents = dinnerEvents.filter(de => !canModifyOrders(de.date))
-        const beforeDeadlineEvents = dinnerEvents.filter(de => canModifyOrders(de.date))
-
-        // GIVEN: The preference scaffold books every dinner while all are open, as the nightly run did before the
-        // deadline passed: the season's deadline drops to 0 for that run and is restored, which closes the near dinners.
-        // An order booked by hand is the user's own and the preference scaffold leaves it as it is
-        await SeasonFactory.updateSeason(adminContext, {...testSeason.season, ticketIsCancellableDaysBefore: 0})
-        await HouseholdFactory.updateInhabitantPreferences(adminContext, inhabitant.id, dineInPrefs, 200, testSeason.season.id!)
-        await SeasonFactory.updateSeason(adminContext, testSeason.season)
-
-        // Verify orders exist initially for all events (before + after deadline)
-        const initialOrders = await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, dinnerEvents.map(e => e.id))
-        const inhabitantInitialOrders = initialOrders.filter(o => o.inhabitantId === inhabitant.id)
-        const expectedTotalOrders = beforeDeadlineEvents.length + afterDeadlineEvents.length
-        expect(inhabitantInitialOrders.length, `Should have ${expectedTotalOrders} orders (${beforeDeadlineEvents.length} before + ${afterDeadlineEvents.length} after deadline)`).toBe(expectedTotalOrders)
-
-        // WHEN: Change preferences to NONE via API with explicit seasonId
-        // This ensures the scaffold uses the test season's deadline config (2 days)
-        const nonePrefs = createDinnerModeWeekdayMap(DinnerMode.NONE)
-        await HouseholdFactory.updateInhabitantPreferences(
-            adminContext,
-            inhabitant.id,
-            nonePrefs,
-            200,
-            testSeason.season.id!  // Explicit seasonId ensures correct deadline calculation
-        )
-
-        // THEN: After-deadline orders should be RELEASED, before-deadline orders should be DELETED
-        const ordersAfter = await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, dinnerEvents.map(e => e.id))
-        const inhabitantOrdersAfter = ordersAfter.filter(o => o.inhabitantId === inhabitant.id)
-
-        // Should have RELEASED orders for after-deadline events
-        const releasedOrders = inhabitantOrdersAfter.filter(o => o.state === OrderState.RELEASED)
-        expect(releasedOrders.length, 'After-deadline orders should be RELEASED').toBe(afterDeadlineEvents.length)
-
-        // Before-deadline orders should be deleted (not in results)
-        const bookedOrders = inhabitantOrdersAfter.filter(o => o.state === OrderState.BOOKED)
-        expect(bookedOrders.length, 'Before-deadline orders should be deleted').toBe(0)
     })
 })

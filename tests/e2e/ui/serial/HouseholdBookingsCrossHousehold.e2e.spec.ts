@@ -69,9 +69,8 @@ test.describe('Cross-Household Bookings - Serial UI Tests', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        for (const householdId of createdHouseholdIds) {
-            await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
-        }
+        // Cleanup accepts a household already gone
+        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
         await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
     })
 

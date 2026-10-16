@@ -4,6 +4,7 @@ import {
     type DinnerEventDetail,
     type DinnerEventCreate,
     type HeynaboEventResponse,
+    type MenuSwapStrategy,
     useBookingValidation
 } from "~/composables/useBookingValidation"
 import type { TeamRole } from "~/composables/useCookingTeamValidation"
@@ -319,7 +320,7 @@ export class DinnerEventFactory {
         inhabitantId: number,
         role: TeamRole,
         expectedStatus: number = 200,
-        menuStrategy?: 'PRESERVE' | 'CLEAR'
+        menuStrategy?: MenuSwapStrategy
     ): Promise<DinnerEventDetail | null> => {
         const {DinnerEventDetailSchema} = useBookingValidation()
         const response = await context.request.post(

@@ -21,10 +21,7 @@ test.describe('Billing Import API', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-
-        for (const householdId of testHouseholdIds) {
-            await HouseholdFactory.deleteHousehold(context, householdId).catch(() => {})
-        }
+        await HouseholdFactory.deleteHousehold(context, testHouseholdIds)
     })
 
     test('all CSV files in order-import folder can be parsed', () => {

@@ -5,7 +5,8 @@ import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFact
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useWeekDayMapValidation} from '~~/app/composables/useWeekDayMapValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
-import {format, addDays, getISODay} from 'date-fns'
+import type {DateRange} from '~~/app/types/dateTypes'
+import {format, addDays, isWithinInterval} from 'date-fns'
 
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 
@@ -13,11 +14,11 @@ const {validatedBrowserContext, assertNoOrdersWithOrphanPrices} = testHelpers
 const MINIMAL_TEAMS_CSV = 'Hold,Rolle,Navn\n1,CHEF,Nobody'
 const WEEKDAY_NAMES = ['mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag']
 
-/** Build Mon-Fri calendar CSV. holidayIsoDay (3=Wed) marks that day as holiday. */
-const buildCalendarCsv = (monday: Date, holidayIsoDay?: number): string => {
+/** Build Mon-Fri calendar CSV. The days inside `holiday` are marked as holiday. */
+const buildCalendarCsv = (monday: Date, holiday?: DateRange): string => {
     const rows = Array.from({length: 5}, (_, i) => {
         const d = addDays(monday, i)
-        const team = holidayIsoDay === getISODay(d) ? 'Ferie' : '1'
+        const team = holiday && isWithinInterval(d, holiday) ? 'Ferie' : '1'
         return `${format(d, 'dd-MM-yyyy')},${WEEKDAY_NAMES[i]},${team}`
     })
     return ['Dato,Ugedag,Hold', ...rows].join('\n')
@@ -32,7 +33,8 @@ test.afterAll(async ({browser}) => {
 
 test('Re-importing season with holidays should remove dinner events on holiday dates', async ({browser}) => {
     const context = await validatedBrowserContext(browser)
-    const monday = addDays(SeasonFactory.nextWeekday(1), 7)
+    // A unique week of this run's own, so the shortName the import computes from the dates is unique too
+    const {seasonDates: {start: monday}, holiday} = SeasonFactory.generateUniqueSeasonDates()
     const friday = addDays(monday, 4)
 
     // GIVEN: Create season with shortName matching import's computed name (MM/yy-MM/yy)
@@ -46,14 +48,14 @@ test('Re-importing season with holidays should remove dinner events on holiday d
     createdSeasonIds.push(season.id!)
     expect(season.dinnerEvents!.length).toBe(5)
 
-    // WHEN: Import CSV with Wednesday as holiday (finds existing season by shortName)
-    const resp = await SeasonImportFactory.importSeason(context, buildCalendarCsv(monday, 3), MINIMAL_TEAMS_CSV)
+    // WHEN: Import CSV with Wednesday to Friday as holiday (finds existing season by shortName)
+    const resp = await SeasonImportFactory.importSeason(context, buildCalendarCsv(monday, holiday), MINIMAL_TEAMS_CSV)
     expect(resp.status()).toBe(200)
 
-    // THEN: Wednesday event should be removed, 4 events remain
+    // THEN: The holiday events are removed, Monday and Tuesday remain
     const eventsAfter = await DinnerEventFactory.getDinnerEventsForSeason(context, season.id!)
-    expect(eventsAfter.filter(de => getISODay(new Date(de.date)) === 3)).toHaveLength(0)
-    expect(eventsAfter.length).toBe(4)
+    expect(eventsAfter.filter(de => isWithinInterval(new Date(de.date), holiday))).toHaveLength(0)
+    expect(eventsAfter.length).toBe(2)
 })
 
 test.describe('Season Import API', () => {

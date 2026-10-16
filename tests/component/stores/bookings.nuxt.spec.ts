@@ -809,13 +809,15 @@ describe('Bookings store — waiting list', () => {
         expect(store.householdWaitlist[0]).toMatchObject({id: 22, position: 1})
     })
 
-    it('derives the queue on the dinner on view: its size and its portion need', async () => {
+    it('derives the queue on the dinner on view: its size, its portion need and one line per ticket type', async () => {
         const store = useBookingsStore()
 
         store.loadOrdersForDinners({dinnerEventIds: [WAITLIST_DINNER_ID]})
         store.selectDinnerDate(() => new Date(queuedDinner.date))
 
-        await vi.waitFor(() => expect(store.selectedDinnerWaitlist).toEqual({dinnerEventId: WAITLIST_DINNER_ID, entries: 2, portions: 1.5}))
+        await vi.waitFor(() => expect(store.selectedDinnerWaitlist).toMatchObject({dinnerEventId: WAITLIST_DINNER_ID, entries: 2, portions: 1.5}))
+        expect(store.selectedDinnerWaitlist!.lines.map(({ticketType, entries}) => [ticketType, entries.map(entry => entry.id)]))
+            .toEqual([[TicketType.ADULT, [21]], [TicketType.CHILD, [22]]])
     })
 
     it('releases portions, toasts the tickets handed out and the entries still waiting, and re-reads the queue', async () => {

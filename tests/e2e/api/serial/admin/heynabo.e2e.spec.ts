@@ -8,6 +8,7 @@ import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFact
 import {isAdmin, isAllergyManager} from '~/composables/usePermissions'
 import type {UserDisplay, InhabitantDisplay, HouseholdDetail} from '~/composables/useCoreValidation'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 
 const {validatedBrowserContext, saltedId, salt, headers} = testHelpers
 const {HeynaboImportResponseSchema} = useHeynaboValidation()
@@ -484,7 +485,7 @@ test.describe.serial('Heynabo Integration API', () => {
         const context = await validatedBrowserContext(browser)
 
         // Delete Babyyoda from seed household
-        await HouseholdFactory.deleteInhabitant(context, testData.inhabitant.babyyodaId)
+        await HouseholdFactory.deleteInhabitant(context, testData.inhabitant.babyyodaId, 200)
 
         // Run import — Heynabo still has Babyyoda at heynaboId=2
         const result = await HouseholdFactory.runHeynaboImport(context)
@@ -570,27 +571,7 @@ test.describe.serial('Heynabo Integration API', () => {
             return oldHousehold
         }
 
-        test('deletes an inhabitant of the old household when deleted in Heynabo', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const oldHousehold = getOldHousehold()
-
-            // GIVEN: an inhabitant in the old household that Heynabo does not have
-            const inhabitant = await HouseholdFactory.createInhabitantForHousehold(
-                context, oldHousehold.id, `Departed-${Date.now()}`
-            )
-            expect(inhabitant.householdId, 'Setup: inhabitant is in the old household').toBe(oldHousehold.id)
-
-            // WHEN: import runs
-            const result = await HouseholdFactory.runHeynaboImport(context)
-
-            // THEN: the inhabitant is gone from TheSlope
-            const response = await context.request.get(`/api/admin/household/inhabitants/${inhabitant.id}`)
-            expect(response.status(), 'Inhabitant deleted').toBe(404)
-            expect(result.inhabitantsDeleted, 'Deletion reported in import result').toBeGreaterThanOrEqual(1)
-            expect(result.sanityCheck.passed, 'No count drift between TheSlope and Heynabo').toBe(true)
-        })
-
-        test('deletes a user of the old household when deleted in Heynabo', async ({browser}) => {
+        test('deletes an inhabitant of the old household and its user when deleted in Heynabo', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const oldHousehold = getOldHousehold()
             const testSalt = Date.now().toString()
@@ -599,6 +580,7 @@ test.describe.serial('Heynabo Integration API', () => {
             const inhabitant = await HouseholdFactory.createInhabitantForHousehold(
                 context, oldHousehold.id, `DepartedUser-${testSalt}`
             )
+            expect(inhabitant.householdId, 'Setup: inhabitant is in the old household').toBe(oldHousehold.id)
             const email = `departed-${testSalt}@test.dk`
             const userResponse = await context.request.put('/api/admin/users', {
                 headers,
@@ -610,9 +592,15 @@ test.describe.serial('Heynabo Integration API', () => {
             await HouseholdFactory.updateInhabitant(context, inhabitant.id, {userId: user.id})
 
             // WHEN: import runs
-            await HouseholdFactory.runHeynaboImport(context)
+            const result = await HouseholdFactory.runHeynaboImport(context)
 
-            // THEN: the user is gone from TheSlope
+            // THEN: the inhabitant is gone from TheSlope
+            const response = await context.request.get(`/api/admin/household/inhabitants/${inhabitant.id}`)
+            expect(response.status(), 'Inhabitant deleted').toBe(404)
+            expect(result.inhabitantsDeleted, 'Deletion reported in import result').toBeGreaterThanOrEqual(1)
+            expect(result.sanityCheck.passed, 'No count drift between TheSlope and Heynabo').toBe(true)
+
+            // AND: so is its user
             const usersResponse = await context.request.get('/api/admin/users')
             const users: UserDisplay[] = await usersResponse.json()
             expect(users.find(u => u.email === email), 'User deleted').toBeUndefined()
@@ -648,7 +636,7 @@ test.describe.serial('Heynabo Integration API', () => {
             const babyyoda = await findInhabitantAtHeynaboAddress(context, TEST_HOUSEHOLD_HEYNABO_ID, INHABITANTS.BABYYODA.heynaboId)
             expect(babyyoda, 'Setup: Babyyoda starts at their Heynabo address').toBeDefined()
 
-            await HouseholdFactory.deleteInhabitant(context, babyyoda!.id)
+            await HouseholdFactory.deleteInhabitant(context, babyyoda!.id, 200)
             const driftedInhabitant = await HouseholdFactory.createInhabitantWithConfig(context, householdAtDifferentAddress!.id, {
                 heynaboId: INHABITANTS.BABYYODA.heynaboId,
                 name: `Drifted-${Date.now()}`
@@ -674,11 +662,11 @@ test.describe.serial('Heynabo Integration API', () => {
      * deleted member was chef on, so the dinner is ready for a new chef.
      */
     test.describe('member deleted in Heynabo while chef on an upcoming dinner', () => {
-        let chefLossSeasonId: number
+        const chefLossSeasonIds: number[] = []
 
         test.afterAll(async ({browser}) => {
             const context = await validatedBrowserContext(browser)
-            if (chefLossSeasonId) await SeasonFactory.cleanupSeasons(context, [chefLossSeasonId])
+            await SeasonFactory.cleanupSeasons(context, chefLossSeasonIds)
         })
 
         test('reverts the dinner to a clean SCHEDULED state', async ({browser}) => {
@@ -690,9 +678,9 @@ test.describe.serial('Heynabo Integration API', () => {
                 context, testData.householdId, `DepartingChef-${testSalt}`
             )
             const season = await SeasonFactory.createSeason(context)
-            chefLossSeasonId = season.id!
+            chefLossSeasonIds.push(season.id!)
             const dinner = await DinnerEventFactory.createDinnerEvent(context, {
-                seasonId: chefLossSeasonId,
+                seasonId: season.id!,
                 state: DinnerState.ANNOUNCED,
                 menuTitle: salt('Chef-loss menu', testSalt),
                 chefId: departingChef.id
@@ -712,16 +700,10 @@ test.describe.serial('Heynabo Integration API', () => {
         })
     })
 
-    // Cleanup: Remove test data if tests fail before import can reconcile
+    // Cleanup: Remove test data if tests fail before import can reconcile; an entity the import already deleted counts as removed
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-
-        // Best-effort cleanup — entities may already be deleted by import
-        await Promise.all(createdHouseholdIds.map(id =>
-            HouseholdFactory.deleteHousehold(context, id).catch(() => {})
-        ))
-        await Promise.all(createdUserIds.map(id =>
-            context.request.delete(`/api/admin/users/${id}`).catch(() => {})
-        ))
+        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
+        await UserFactory.cleanupUsers(context, createdUserIds)
     })
 })

@@ -18,11 +18,11 @@ const {OrderAuditActionSchema, OrderStateSchema, DinnerModeSchema} = useBookingV
 const {TicketTypeSchema} = useTicketPriceValidation()
 const {TeamRoleSchema} = useCookingTeamValidation()
 const Action = OrderAuditActionSchema.enum
-const UNKNOWN_ID = 999999999
 
 test.describe('Chef dinner order history', () => {
     let seasonId: number
     let dinnerEventId: number
+    const seasonIds: number[] = []
     const orderIds: number[] = []
     // A saved season price: its id is set
     type SavedPrice = TicketPrice & {id: number}
@@ -39,6 +39,7 @@ test.describe('Chef dinner order history', () => {
         const testSalt = temporaryAndRandom()
         const season = await SeasonFactory.createSeason(adminContext)
         seasonId = season.id!
+        seasonIds.push(seasonId)
         adultPrice = saved(season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT))
         childPrice = saved(season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.CHILD))
 
@@ -65,7 +66,7 @@ test.describe('Chef dinner order history', () => {
     test.afterAll(async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
         await OrderFactory.cleanupOrders(adminContext, orderIds)
-        await SeasonFactory.cleanupSeasons(adminContext, [seasonId])
+        await SeasonFactory.cleanupSeasons(adminContext, seasonIds)
     })
 
     test('GIVEN two bookings, a release and a claim WHEN reading the changes THEN they come newest first with the tickets, kuverter and revenue after each', async ({browser}) => {
@@ -102,8 +103,13 @@ test.describe('Chef dinner order history', () => {
         expect(sinceRelease!.olderCount).toBe(1)
     })
 
-    test('GIVEN an unknown dinner WHEN reading the changes THEN 404', async ({browser}) => {
+    test('GIVEN a removed dinner WHEN reading the changes THEN 404', async ({browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
         const memberContext = await memberValidatedBrowserContext(browser)
-        await OrderFactory.getTicketChanges(memberContext, UNKNOWN_ID, undefined, 404)
+        const removed = await DinnerEventFactory.createDinnerEvent(adminContext, {
+            ...DinnerEventFactory.defaultDinnerEvent(temporaryAndRandom()), seasonId
+        })
+        await DinnerEventFactory.deleteDinnerEvent(adminContext, removed.id!, 200)
+        await OrderFactory.getTicketChanges(memberContext, removed.id!, undefined, 404)
     })
 })

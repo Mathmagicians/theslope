@@ -35,6 +35,7 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
     let testSeason: Awaited<ReturnType<typeof SeasonFactory.createSeasonWithDinnerEvents>>
     let adminContext: BrowserContext
     const testSalt = `booking-form-${Date.now()}`
+    const createdSeasonIds: number[] = []
 
     test.use({storageState: memberUIFile})
 
@@ -51,15 +52,15 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
 
         // Create dedicated season with SHORT deadline so all events are bookable
         testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 14, deadline: 0})
+        createdSeasonIds.push(testSeason.season.id!)
 
         // Verify dinner events were created
         expect(testSeason.dinnerEvents.length, 'Test season should have dinner events').toBeGreaterThan(0)
     })
 
-    test.afterAll(async () => {
-        if (testSeason?.season?.id) {
-            await SeasonFactory.deleteSeason(adminContext, testSeason.season.id)
-        }
+    test.afterAll(async ({browser}) => {
+        // Cleanup accepts a season already gone (the admin case deletes its own)
+        await SeasonFactory.cleanupSeasons(await validatedBrowserContext(browser), createdSeasonIds)
     })
 
     const getFutureDinnerEvent = async (eventIndex: number = 0) => {
@@ -247,7 +248,7 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
             await expect(page.getByTestId('dinner-detail-header')).toBeVisible()
             await page.evaluate(() => Object.assign(window, {sameDocument: true}))
 
-            await DinnerEventFactory.deleteDinnerEvent(adminContext, gone.id)
+            await DinnerEventFactory.deleteDinnerEvent(adminContext, gone.id, 200)
             const nextShown = dinnerResponse(page, next.id)
             await page.getByTestId('date-nav-next').click()
 
@@ -276,10 +277,11 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
 
             test('GIVEN /admin/planning WHEN a listed season is deleted and then chosen THEN a toast names it and the default season loads', async ({page}) => {
                 const goneSeason = await SeasonFactory.createSeason(adminContext, SeasonFactory.defaultSeason(`${testSalt}-gone`))
+                createdSeasonIds.push(goneSeason.id!)
                 await gotoHydrated(page, '/admin/planning')
                 await expect(page.getByTestId('season-selector')).toContainText(testSeason.season.shortName)
 
-                await SeasonFactory.deleteSeason(adminContext, goneSeason.id!)
+                await SeasonFactory.deleteSeason(adminContext, goneSeason.id!, 200)
                 const goneRequested = page.waitForResponse(r => r.url().endsWith(`/api/admin/season/${goneSeason.id}`))
                 await selectDropdownOption(page, 'season-selector', goneSeason.shortName)
 

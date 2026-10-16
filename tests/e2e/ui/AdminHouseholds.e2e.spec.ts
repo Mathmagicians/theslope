@@ -70,11 +70,6 @@ test.describe('AdminHouseholds View', () => {
         await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
     })
 
-    test('Can load admin households page', async ({page}) => {
-        await navigateToHouseholds(page)
-        await expect(page.locator('[data-testid="admin-households"]')).toBeVisible()
-    })
-
     test('admin creates a new household at an existing address via the inline form', async ({page, browser}) => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()

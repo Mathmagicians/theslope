@@ -7,6 +7,7 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
 import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
+import ActionPreview from '~/components/booking/ActionPreview.vue'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {MODE_WORDS, SUPPLY_WORDS, bookingSaveLabel} from '~/composables/useBookingUi'
 import {EMPTY_RELEASED_TICKET_COUNTS} from '~/composables/useBooking'
@@ -429,14 +430,30 @@ describe('DinnerBookingForm previews the outcome of a save by the supply', () =>
     expect(findByTestId(wrapper, `inhabitant-${anna.id}-save`).text()).toContain(label)
   })
 
+  // The guest form opens on Voksen; its preview lines name each guest's outcome and its button names the guests
+  const guestPreview = (wrapper: Awaited<ReturnType<typeof mountRow>>) =>
+    wrapper.findComponent(GuestBookingForm).findComponent(ActionPreview).props('items').map(item => item.action)
+
   it.each([
-    {desc: 'nothing for sale', ticketsForSale: 0, label: 'Skriv gæst på venteliste'},
-    {desc: 'a ticket for sale', ticketsForSale: 1, label: 'Køb billet til gæst'}
-  ])('after the deadline with $desc: the guest form saves as "$label"', async ({ticketsForSale, label}) => {
+    {desc: 'nothing for sale', ticketsForSale: 0, action: Action.QUEUE},
+    {desc: 'an adult ticket for sale', ticketsForSale: 1, action: Action.BUY}
+  ])('after the deadline with $desc: the guest form opens on Voksen, previews $action and saves as "Tilmeld gæst"', async ({ticketsForSale, action}) => {
     const wrapper = await mountRow(false, ticketsForSale)
     await clickByTestId(wrapper, 'guest-add-guest-toggle')
 
-    expect(findByTestId(wrapper, 'guest-form-save').text()).toContain(label)
+    expect(guestPreview(wrapper)).toEqual([action])
+    expect(findByTestId(wrapper, 'guest-form-save').text()).toContain('Tilmeld gæst')
+  })
+
+  it('after the deadline with 3V 1B for sale: ten adult guests preview three buys and seven on the waiting list, and save as "Tilmeld gæster"', async () => {
+    const wrapper = await mountMemberForm(false, {releasedTicketCounts: {
+      ...EMPTY_RELEASED_TICKET_COUNTS, total: 4, formatted: '3V 1B', byType: {[TicketTypeSchema.enum.ADULT]: 3, [TicketTypeSchema.enum.CHILD]: 1}
+    }})
+    await clickByTestId(wrapper, 'guest-add-guest-toggle')
+    await wrapper.findComponent(GuestBookingForm).find('input[name="count"]').setValue(10)
+
+    expect(guestPreview(wrapper)).toEqual([...Array.from({length: 3}, () => Action.BUY), ...Array.from({length: 7}, () => Action.QUEUE)])
+    expect(findByTestId(wrapper, 'guest-form-save').text()).toContain('Tilmeld gæster')
   })
 })
 

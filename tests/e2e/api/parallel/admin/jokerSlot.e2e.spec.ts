@@ -8,6 +8,7 @@ const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 
 // Deleting the season cascades to its teams and their joker slots
 let testSeasonId: number
+const createdSeasonIds: number[] = []
 
 test.describe('Admin Joker Slot API', () => {
 
@@ -15,6 +16,7 @@ test.describe('Admin Joker Slot API', () => {
         const context = await validatedBrowserContext(browser)
         const season = await SeasonFactory.createSeason(context)
         testSeasonId = season.id as number
+        createdSeasonIds.push(testSeasonId)
     })
 
     test('GIVEN a team WHEN a joker slot is created THEN the API returns the slot and the team Detail carries it', async ({browser}) => {
@@ -43,24 +45,16 @@ test.describe('Admin Joker Slot API', () => {
         expect(fetched!.jokerSlots).toEqual([])
     })
 
-    const slot = SeasonFactory.defaultJokerSlot()
-    const invalidSlots = [
-        {name: 'an empty weekday map', invalid: {...slot, affinity: createDefaultWeekdayMap(false)}},
-        {name: 'an end before the start', invalid: {...slot, endDate: new Date(slot.startDate.getTime() - 86_400_000)}},
-        {name: 'an allocation of 0', invalid: {...slot, allocationPercentage: 0}},
-        {name: 'an allocation above 100', invalid: {...slot, allocationPercentage: 101}}
-    ]
-    for (const {name, invalid} of invalidSlots) {
-        test(`GIVEN ${name} WHEN the slot is created THEN the API answers 400 and the team keeps no slots`, async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const team = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId)
+    // One 400 for the endpoint; the schema's field rules are proven in the useDutyValidation unit spec (JokerSlotCreateSchema)
+    test('GIVEN an empty weekday map WHEN the slot is created THEN the API answers 400 and the team keeps no slots', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        const team = await SeasonFactory.createCookingTeamForSeason(context, testSeasonId)
 
-            await SeasonFactory.createJokerSlot(context, team.id!, invalid, 400)
+        await SeasonFactory.createJokerSlot(context, team.id!, {...SeasonFactory.defaultJokerSlot(), affinity: createDefaultWeekdayMap(false)}, 400)
 
-            const fetched = await SeasonFactory.getCookingTeamById(context, team.id!)
-            expect(fetched!.jokerSlotCount).toBe(0)
-        })
-    }
+        const fetched = await SeasonFactory.getCookingTeamById(context, team.id!)
+        expect(fetched!.jokerSlotCount).toBe(0)
+    })
 
     test('GIVEN a joker slot on another team WHEN it is deleted through this team THEN the API answers 404 and the slot stays', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
@@ -77,6 +71,6 @@ test.describe('Admin Joker Slot API', () => {
 
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        await SeasonFactory.cleanupSeasons(context, [testSeasonId])
+        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
     })
 })

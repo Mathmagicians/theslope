@@ -51,6 +51,7 @@ export class WaitlistFactory {
         dinnerEventId: 1,
         entries: 4,
         portions: 2.5,
+        lines: [],
         ...overrides
     })
 
