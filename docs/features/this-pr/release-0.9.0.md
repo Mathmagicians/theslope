@@ -293,8 +293,9 @@ crosses the buildup threshold and asserts each event writes its Delivery row.
 **2026-10-17** (one booking path, end to end)
 - The kitchen box's waiting list reads like the other boxes' rows: one row per household, in the order its first member
   joined, each person with the place in the line of the ticket type.
-- The waiting list's glyph is the Material Design hourglass, the set of the allergy glyph. Icon use is symmetric: each
-  part of the TIL SALG box is headed by its glyph, the released glyph and the hourglass, in the box and in its list.
+- The waiting list's glyph is the Hugeicons hourglass, the set of the role icons: an outline that fills its box like the
+  glyphs beside it. Icon use is symmetric: each part of the TIL SALG box carries its glyph beside its kuverter, as the
+  allergy line does, the released glyph and the hourglass; the titles and the list headings carry none.
 
 ## Coverage
 

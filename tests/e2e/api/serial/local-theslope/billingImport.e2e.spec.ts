@@ -28,7 +28,7 @@ test.describe('Billing Import API', () => {
         const csvFiles = BillingFactory.getCSVFiles()
 
         // Skip in CI/CD where .theslope is gitignored and empty
-        test.skip(csvFiles.length === 0, '.theslope/order-import is empty (gitignored, local-only test)')
+        test.skip(csvFiles.length === 0, '.theslope/order-import/2026-import is empty (gitignored, local-only test)')
 
         for (const filePath of csvFiles) {
             BillingFactory.validateCSVFile(filePath)

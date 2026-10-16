@@ -561,22 +561,6 @@ theslope-export-teams: ## Export the active season's team members as a teams CSV
 	@echo "$$(($$(wc -l < $(out)) - 1)) members → $(out)"
 
 # ============================================================================
-# HEAL USER BOOKINGS (bugfix - one-time healing)
-# ============================================================================
-# Usage: make heal-local hid=123 dryrun=false
-# Default: dryrun=true (preview mode)
-.PHONY: heal-local heal-dev heal-prod
-
-heal-local: ## Heal user bookings (local) - hid=householdId dryrun=true|false
-	$(call theslope_call,$(ENV_local),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
-
-heal-dev: ## Heal user bookings (dev) - hid=householdId dryrun=true|false
-	$(call theslope_call,$(ENV_dev),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
-
-heal-prod: ## Heal user bookings (prod) - hid=householdId dryrun=true|false
-	$(call theslope_call,$(ENV_prod),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
-
-# ============================================================================
 # REGENERATE DINNER EVENTS (reconcile with season config - fixes stale holiday events)
 # ============================================================================
 # Usage: make regen-dinner-events-prod sid=2

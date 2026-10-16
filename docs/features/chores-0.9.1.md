@@ -604,7 +604,6 @@ step once its run time on CI is known; `server/tsconfig.json` stays until then.
 | Billing delivery report and interrupted runs | `bug-fix-billing-delivery-report.md` | three open decisions |
 | Re-login with Face ID (S5) | `feature-proposal-relogin-faceid.md` | parked proposal; the PRF spike is complete |
 | Chef allergen selector: the selector counts a population through a ticket allergies map | § Ticket allergies on the order | brief halted 2026-10-10; presented again with the ticket allergies design |
-| Heal user bookings: a one-off recovery endpoint; its serial e2e case is skipped (`heal-user-bookings.e2e.spec.ts`) | `server/routes/api/admin/maintenance/heal-user-bookings.post.ts` | **OPEN**: retire the endpoint or repair the case |
 
 ### Decisions carried from release 0.9
 

@@ -28,28 +28,28 @@
  * │  N_12 · 1V · Maria (milk) Mælk                                              │
  *
  * TIL SALG while anyone waits: the waiting-list part follows a gap, its portions and its ticket count
- * without a share. Each part is headed by its icon, in the box and in its list; the list's waiting-list
- * rows read like the other boxes' household rows, each person with the place in the line of the ticket
- * type, as the booking form numbers it:
+ * without a share. Each part's kuverter carry its icon, as the allergy line does; in the list each part
+ * has its heading, and the waiting-list rows read like the other boxes' household rows, each person with
+ * the place in the line of the ticket type, as the booking form numbers it:
  * ┌────────────┬────────────┬────────────┬────────────────────────┐
- * │  TAKEAWAY  │  SPISESAL  │ SPIS SENT  │  (released) TIL SALG   │
+ * │  TAKEAWAY  │  SPISESAL  │ SPIS SENT  │        TIL SALG        │
  * │    38%     │    33%     │    19%     │          10%           │
- * │  40 kuv.   │  35 kuv.   │  20 kuv.   │         4 kuv.         │
+ * │  40 kuv.   │  35 kuv.   │  20 kuv.   │   (released) 4 kuv.    │
  * │    ...     │    ...     │    ...     │  Voksen: 4 | Barn: 0   │
  * │            │            │            │  | Baby: 0  # 4        │
  * │            │            │            │  (allergy) 1 kuv.      │
  * │            │            │            │                        │
- * │            │            │            │ (hourglass) VENTELISTE │
- * │            │            │            │         1 kuv.         │
+ * │            │            │            │       VENTELISTE       │
+ * │            │            │            │   (hourglass) 1 kuv.   │
  * │            │            │            │  Voksen: 0 | Barn: 2   │
  * │            │            │            │  | Baby: 0  # 2        │
  * ├────────────┴────────────┴────────────┴────────────────────────┤
- * │  (released) TIL SALG                                          │
+ * │  TIL SALG                                                     │
  * │  (allergy) 1 kuv. | (milk) Mælk · 1                           │
  * │  S_31 · 2V · Anna (milk) Mælk, Bo                             │
  * │  N_12 · 2V · Maria, Jens                                      │
  * │                                                               │
- * │  (hourglass) VENTELISTE                                       │
+ * │  VENTELISTE                                                   │
  * │  T_04 · 1V 1B · Knud (V #1), Emil (B #1)                      │
  * │  S_12 · 1B · Liva (B #2)                                      │
  * └───────────────────────────────────────────────────────────────┘
@@ -58,22 +58,22 @@
  * ┌─────────────────────────────────────┐
  * │  TAKEAWAY · SPISESAL · SPIS SENT    │
  * ├─────────────────────────────────────┤
- * │         (released) TIL SALG         │
+ * │              TIL SALG               │
  * │                 10%                 │
- * │               4 kuv.                │
+ * │          (released) 4 kuv.          │
  * │  Voksen: 4 | Barn: 0 | Baby: 0 # 4  │
  * │          (allergy) 1 kuv.           │
  * │                                     │
- * │       (hourglass) VENTELISTE        │
- * │               1 kuv.                │
+ * │             VENTELISTE              │
+ * │         (hourglass) 1 kuv.          │
  * │  Voksen: 0 | Barn: 2 | Baby: 0 # 2  │
  * ├─────────────────────────────────────┤
- * │ (released) TIL SALG                 │
+ * │ TIL SALG                            │
  * │ (allergy) 1 kuv. | (milk) Mælk · 1  │
  * │ S_31 · 2V · Anna (milk) Mælk, Bo    │
  * │ N_12 · 2V · Maria, Jens             │
  * │                                     │
- * │ (hourglass) VENTELISTE              │
+ * │ VENTELISTE                          │
  * │ T_04 · 1V 1B · Knud (V #1),         │
  * │                Emil (B #1)          │
  * │ S_12 · 1B · Liva (B #2)             │
@@ -305,7 +305,6 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
       >
         <!-- Header with label, percentage, and chevron (only if content exists) -->
         <div :class="COMPONENTS.kitchen.label">
-          <UIcon v-if="mode.key === OrderState.RELEASED" :name="ICONS.released" :class="COMPONENTS.kitchen.glyph" />
           {{ mode.label }}
           <UIcon v-if="canOpen(mode.key)" :name="selectedPanel === mode.key ? ICONS.chevronUp : ICONS.chevronDown" :class="COMPONENTS.kitchen.glyph" />
         </div>
@@ -313,8 +312,9 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
           {{ mode.percentage }}%
         </div>
 
-        <!-- Portions (main number) -->
-        <div :class="TYPOGRAPHY.kitchenMain">
+        <!-- Portions (main number); the tickets for sale carry the released icon, as the allergy line carries its icon -->
+        <div :class="mode.key === OrderState.RELEASED ? COMPONENTS.kitchen.mainWithGlyph : TYPOGRAPHY.kitchenMain">
+          <UIcon v-if="mode.key === OrderState.RELEASED" :name="ICONS.released" :class="COMPONENTS.kitchen.glyph" />
           {{ formatPortions(mode.portions) }} kuv.
         </div>
 
@@ -332,10 +332,10 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
         <!-- The waiting-list part: the waiting list buys what is for sale -->
         <div v-if="hasQueue(mode.key)" data-testid="kitchen-waitlist-part" :class="COMPONENTS.kitchen.queue">
           <div :class="COMPONENTS.kitchen.label">
-            <UIcon :name="ICONS.waitlist" :class="COMPONENTS.kitchen.glyph" />
             VENTELISTE
           </div>
-          <div :class="TYPOGRAPHY.kitchenMain">
+          <div :class="COMPONENTS.kitchen.mainWithGlyph">
+            <UIcon :name="ICONS.waitlist" :class="COMPONENTS.kitchen.glyph" />
             {{ formatPortions(queue!.portions) }} kuv.
           </div>
           <div :class="COMPONENTS.kitchen.breakdown">
@@ -353,7 +353,6 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
       :class="[getModeClasses(selectedPanel), COMPONENTS.kitchen.householdList]"
     >
       <div v-if="selectedPanel === OrderState.RELEASED && selectedPanelBreakdown.length > 0" :class="COMPONENTS.kitchen.partHeading">
-        <UIcon :name="ICONS.released" :class="COMPONENTS.kitchen.glyph" />
         {{ selectedPanelLabel }}
       </div>
       <AllergyOverviewLine
@@ -383,7 +382,6 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
       </div>
       <div v-if="selectedQueueRows.length > 0" data-testid="kitchen-waitlist-lines" :class="COMPONENTS.kitchen.queue">
         <div :class="COMPONENTS.kitchen.partHeading">
-          <UIcon :name="ICONS.waitlist" :class="COMPONENTS.kitchen.glyph" />
           VENTELISTE
         </div>
         <div v-for="row in selectedQueueRows" :key="row.id" data-testid="kitchen-waitlist-household" :class="COMPONENTS.kitchen.household">

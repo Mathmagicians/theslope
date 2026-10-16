@@ -62,7 +62,7 @@ test.describe('Season Import API', () => {
 
     test('GIVEN valid CSV files WHEN importing THEN creates season with teams AND second import is idempotent (ADR-015)', async ({browser}) => {
         // Skip if CSV files don't exist (gitignored, local-only test)
-        test.skip(!SeasonImportFactory.hasTestFiles(), '.theslope/team-import files missing (gitignored, local-only test)')
+        test.skip(!SeasonImportFactory.hasTestFiles(), '.theslope/team-import/2026-import files missing (gitignored, local-only test)')
 
         const context = await validatedBrowserContext(browser)
 

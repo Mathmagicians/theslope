@@ -94,7 +94,6 @@ function and the spec hold the detail; a row names a gap in a few words.
 | **Admin - maintenance and jobs** | | | | | |
 | `/api/admin/maintenance/daily.post.ts` | ✅ | ⚠️ | ❓ | ✅ serial | ⚠️ raw body read |
 | `/api/admin/maintenance/monthly.post.ts` | ✅ | ⚠️ | ✅ | ✅ serial | ⚠️ raw body read |
-| `/api/admin/maintenance/heal-user-bookings.post.ts` | ✅ | ⚠️ | ❓ | ✅ serial | ⚠️ raw body read |
 | `/api/admin/maintenance/job-run/index.get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
 | `/api/admin/maintenance/job-run/[id].get.ts` | ✅ | ✅ | ❓ | ❓ | ❓ audit needed |
 | `/api/admin/heynabo/import.get.ts` | ✅ | ⚠️ | ✅ | ✅ serial | ⚠️ raw query read |

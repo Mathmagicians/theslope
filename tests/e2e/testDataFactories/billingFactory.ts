@@ -23,7 +23,7 @@ const BILLING_INVOICES_ENDPOINT = '/api/admin/billing/invoices'
 const BILLING_CURRENT_PERIOD_ENDPOINT = '/api/admin/billing/current-period'
 const PUBLIC_BILLING_ENDPOINT = '/api/public/billing'
 const MONTHLY_BILLING_ENDPOINT = '/api/admin/maintenance/monthly'
-const ORDER_IMPORT_DIR = join(process.cwd(), '.theslope', 'order-import')
+const ORDER_IMPORT_DIR = join(process.cwd(), '.theslope', 'order-import', '2026-import')
 const HOUSEHOLD_BILLING_ENDPOINT = '/api/billing'
 const {BillingImportResponseSchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema, HouseholdBillingResponseSchema, MonthlyBillingResponseSchema, TransactionDisplaySchema, parseCSV, deserializeBillingPeriodDetail, serializeTransaction, TicketType} = useBillingValidation()
 
@@ -194,7 +194,7 @@ export class BillingFactory {
     // ============================================================================
 
     /**
-     * Get all CSV files in .theslope/order-import folder
+     * Get all CSV files in .theslope/order-import/2026-import
      * Returns empty array if directory doesn't exist (gitignored, local-only)
      */
     static readonly getCSVFiles = (): string[] => {

@@ -203,12 +203,15 @@ describe('KitchenPreparation TIL SALG box', () => {
         expect(part.text()).not.toContain('%')
     })
 
-    it('GIVEN a queue THEN each part of TIL SALG is headed by its icon: the released icon on the box, the hourglass on the waiting list', async () => {
+    it('GIVEN a queue THEN each part of TIL SALG carries its icon beside its kuverter, as the allergy line does: the released icon, the hourglass', async () => {
         const wrapper = await mountWith(QUEUE)
 
+        // The line that reads exactly the kuverter: an icon renders no text
+        const kuverterLine = (element: ReturnType<typeof findByTestId>, kuverter: string) =>
+            element.findAll('div').find(line => line.text() === kuverter)!
         const box = findByTestId(wrapper, FOR_SALE)
-        expect(iconsIn(box)).toEqual(expect.arrayContaining([ICONS.released, ICONS.waitlist]))
-        expect(iconsIn(findByTestId(box, WAITLIST_PART))).toEqual([ICONS.waitlist])
+        expect(iconsIn(kuverterLine(box, '0 kuv.'))).toEqual([ICONS.released])
+        expect(iconsIn(kuverterLine(findByTestId(box, WAITLIST_PART), '2 kuv.'))).toEqual([ICONS.waitlist])
     })
 
     it.each([
@@ -227,9 +230,10 @@ describe('KitchenPreparation TIL SALG box', () => {
 
         const list = findByTestId(wrapper, HOUSEHOLD_LIST)
         const lines = findByTestId(list, WAITLIST_LINES)
-        expect(iconsIn(list)).toEqual([ICONS.released, ICONS.waitlist])
         expect(householdRowsIn(lines)).toEqual([[OWN, '·', '2B', '·', `${QUEUED.emil.name} (B #1), ${QUEUED.liva.name} (B #2)`]])
-        expect(list.text().indexOf(SALE_ORDER.inhabitant.name)).toBeLessThan(list.text().indexOf('VENTELISTE'))
+        const text = list.text()
+        expect(text.indexOf('TIL SALG')).toBeLessThan(text.indexOf(SALE_ORDER.inhabitant.name))
+        expect(text.indexOf(SALE_ORDER.inhabitant.name)).toBeLessThan(text.indexOf('VENTELISTE'))
     })
 
     it('GIVEN nothing for sale and a queue across two households WHEN TIL SALG opens THEN the list holds one row per household, in the order their first member joined', async () => {
