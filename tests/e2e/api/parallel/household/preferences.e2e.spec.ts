@@ -3,6 +3,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
@@ -261,30 +262,48 @@ test.describe('Preferences and guest tickets', () => {
         await SeasonFactory.cleanupSeasons(context, seasonIds)
     })
 
-    test('GIVEN a person\'s own ticket and a guest ticket booked on them on a closed dinner WHEN the preference turns Ingen THEN the own ticket is released and the guest ticket stays', async ({browser}) => {
-        const adminContext = await validatedBrowserContext(browser)
-        const memberContext = await memberValidatedBrowserContext(browser)
-        const testSalt = temporaryAndRandom()
-        const {householdId} = await getSessionUserInfo(memberContext)
-        const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(adminContext, testSalt, {ticketIsCancellableDaysBefore: 0})
-        seasonIds.push(season.id!)
-        const inhabitant = await HouseholdFactory.createInhabitantForHousehold(adminContext, householdId, salt('Guest-Booker', testSalt))
-        inhabitantIds.push(inhabitant.id)
-        const dinner = dinnerEvents.find(de => differenceInCalendarDays(de.date, new Date()) >= 1)!
-        const adultPrice = season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)!
+    // The queued guests wait in the adult line; the released own ticket goes to the first of them
+    const examples = [
+        {queuedGuests: 1, sold: 1, outcome: 'is sold to the queued guest'},
+        {queuedGuests: 2, sold: 1, outcome: 'is sold to the first queued guest while the second waits'}
+    ]
 
-        // While the dinner is open: the preference books the person, the member books a guest on them
-        await HouseholdFactory.updateInhabitantPreferences(memberContext, inhabitant.id, createDefaultWeekdayMap(DinnerMode.DINEIN), 200, season.id)
-        await OrderFactory.scaffoldOrders(memberContext, {householdId, seasonId: season.id!, dinnerEventIds: [dinner.id], orders: [
-            OrderFactory.defaultDesiredOrder({inhabitantId: inhabitant.id, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id!, dinnerMode: DinnerMode.DINEIN, isGuestTicket: true})
-        ]})
-        await SeasonFactory.updateSeason(adminContext, {...season, ticketIsCancellableDaysBefore: CLOSED_PERIOD})
+    examples.forEach(({queuedGuests, sold, outcome}) => {
+        test(`GIVEN a person's own ticket, a guest ticket on them and ${queuedGuests} queued guest(s) on a closed dinner WHEN the preference turns Ingen THEN the own ticket ${outcome} and the guest ticket stays`, async ({browser}) => {
+            const adminContext = await validatedBrowserContext(browser)
+            const memberContext = await memberValidatedBrowserContext(browser)
+            const testSalt = temporaryAndRandom()
+            const {householdId} = await getSessionUserInfo(memberContext)
+            const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(adminContext, testSalt, {ticketIsCancellableDaysBefore: 0})
+            seasonIds.push(season.id!)
+            const inhabitant = await HouseholdFactory.createInhabitantForHousehold(adminContext, householdId, salt('Guest-Booker', testSalt))
+            inhabitantIds.push(inhabitant.id)
+            const dinner = dinnerEvents.find(de => differenceInCalendarDays(de.date, new Date()) >= 1)!
+            const adultPrice = season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)!
+            const guestOn = () => OrderFactory.defaultDesiredOrder({
+                inhabitantId: inhabitant.id, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id!, dinnerMode: DinnerMode.DINEIN, isGuestTicket: true
+            })
+            const bookGuests = (count: number) => OrderFactory.scaffoldOrders(memberContext, {
+                householdId, seasonId: season.id!, dinnerEventIds: [dinner.id], orders: Array.from({length: count}, guestOn)
+            })
 
-        const result = await HouseholdFactory.updateInhabitantPreferences(memberContext, inhabitant.id, createDefaultWeekdayMap(DinnerMode.NONE), 200, season.id)
+            // While the dinner is open: the preference books the person, the member books a guest on them
+            await HouseholdFactory.updateInhabitantPreferences(memberContext, inhabitant.id, createDefaultWeekdayMap(DinnerMode.DINEIN), 200, season.id)
+            await bookGuests(1)
+            await SeasonFactory.updateSeason(adminContext, {...season, ticketIsCancellableDaysBefore: CLOSED_PERIOD})
+            // Past the deadline nothing is for sale yet: the guests join the adult line
+            await bookGuests(queuedGuests)
 
-        expect(result!.scaffoldResult.failed).toEqual([])
-        const orders = (await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, [dinner.id])).filter(order => order.inhabitantId === inhabitant.id)
-        expect(orders.filter(order => !order.isGuestTicket).map(order => order.state)).toEqual([OrderStateSchema.enum.RELEASED])
-        expect(orders.filter(order => order.isGuestTicket).map(order => order.state)).toEqual([OrderStateSchema.enum.BOOKED])
+            const result = await HouseholdFactory.updateInhabitantPreferences(memberContext, inhabitant.id, createDefaultWeekdayMap(DinnerMode.NONE), 200, season.id)
+
+            expect(result!.scaffoldResult.failed).toEqual([])
+            expect(result!.scaffoldResult.outcomes.waitlistTicketsSold.map(sale => sale.buyerInhabitantId)).toEqual(Array.from({length: sold}, () => inhabitant.id))
+            const orders = (await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, [dinner.id])).filter(order => order.inhabitantId === inhabitant.id)
+            // A sold own ticket becomes the queued guest's ticket
+            expect(orders.filter(order => !order.isGuestTicket)).toEqual([])
+            expect(orders.filter(order => order.isGuestTicket).map(order => order.state)).toEqual(Array.from({length: 1 + sold}, () => OrderStateSchema.enum.BOOKED))
+            const waiting = (await WaitlistFactory.entries(adminContext, [dinner.id])).filter(entry => entry.inhabitantId === inhabitant.id)
+            expect(waiting).toHaveLength(queuedGuests - sold)
+        })
     })
 })

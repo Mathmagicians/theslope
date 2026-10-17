@@ -317,9 +317,6 @@ test.describe.serial('Heynabo Integration API', () => {
 
         await HouseholdFactory.getInhabitantById(context, testData.inhabitant.fakeId, 404)
 
-        const orphanUserResponse = await context.request.get(`/api/admin/users/${testData.user.orphanId}`)
-        expect(orphanUserResponse.status(), 'DELETE: Orphan user deleted (404)').toBe(404)
-
         // Fetch post-import data
         const households = await HouseholdFactory.getAllHouseholds(context)
         const household = households.find(h => h.id === testData.householdId)
@@ -328,6 +325,7 @@ test.describe.serial('Heynabo Integration API', () => {
         const householdDetail = await HouseholdFactory.getHouseholdById(context, testData.householdId)
 
         const users = await UserFactory.getUsers(context)
+        expect(users.some(user => user.id === testData.user.orphanId), 'DELETE: Orphan user deleted').toBe(false)
 
         // ========================================================================
         // HOUSEHOLD ASSERTIONS

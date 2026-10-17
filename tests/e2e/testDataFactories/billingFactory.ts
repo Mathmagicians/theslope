@@ -295,7 +295,7 @@ Børn (2-12 år),,${childCounts}
     static readonly getBillingCsvByToken = async (
         context: BrowserContext,
         token: string
-    ): Promise<{csv: string, filename: string}> => {
+    ): Promise<{csv: string, filename: string, contentType: string}> => {
         const response = await context.request.get(`${PUBLIC_BILLING_ENDPOINT}/${token}/csv`)
         expect(response.status(), 'Get billing CSV failed').toBe(200)
 
@@ -304,7 +304,7 @@ Børn (2-12 år),,${childCounts}
         const filenameMatch = contentDisposition.match(/filename\*=UTF-8''([^;\s]+)/)
         const filename = filenameMatch?.[1] ? decodeURIComponent(filenameMatch[1]) : ''
 
-        return {csv: await response.text(), filename}
+        return {csv: await response.text(), filename, contentType: response.headers()['content-type'] ?? ''}
     }
 
     /**

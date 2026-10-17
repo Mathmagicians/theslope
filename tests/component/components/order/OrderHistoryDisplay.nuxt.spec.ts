@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
-import {describe, it, expect, beforeEach, vi} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach, vi} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
-import {flushPromises} from '@vue/test-utils'
+import {enableAutoUnmount, flushPromises} from '@vue/test-utils'
 import OrderHistoryDisplay from '~/components/order/OrderHistoryDisplay.vue'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {asyncDataStatus, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
@@ -12,6 +12,8 @@ const orderDetailEndpoint = vi.fn(() => ({
     history: [OrderFactory.defaultOrderHistoryDisplay('order-history', {orderId: ORDER_ID})]
 }))
 registerEndpoint(`/api/order/${ORDER_ID}`, orderDetailEndpoint)
+
+enableAutoUnmount(afterEach)
 
 describe('OrderHistoryDisplay', () => {
     beforeEach(() => {
