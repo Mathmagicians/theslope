@@ -134,12 +134,10 @@ const {TicketTypeSchema, OrderStateSchema} = useBookingValidation()
 const OrderState = OrderStateSchema.enum
 const {computeAllergenOverview} = useAllergy()
 const {formatTicketCounts, countTicketTypes} = useBilling()
-const {ticketTypeWords} = useTicket()
 const {getHouseholdForInhabitant} = useHouseholdsStore()
 
 const ticketFiguresOf = (counts: Partial<Record<TicketType, number>>): TicketFigures => ({
-  figures: TicketTypeSchema.options.map((ticketType, index) =>
-    ({ticketType, text: `${index > 0 ? '| ' : ''}${ticketTypeWords[ticketType].label}: ${counts[ticketType] ?? 0}`})),
+  figures: TICKET_COUNTS.labelled.parts(counts),
   total: sumBy(TicketTypeSchema.options, ticketType => counts[ticketType] ?? 0)
 })
 

@@ -53,7 +53,7 @@ const {DinnerModeSchema, OrderStateSchema, GuestBookingFormSchema, TicketTypeSch
 const DinnerModeEnum = DinnerModeSchema.enum
 const OrderStateEnum = OrderStateSchema.enum
 
-// Booking options using getBookingOptions utility (orderState = null for new guest)
+// Booking options using getBookingOptions utility (no order for a new guest)
 const bookingOptions = computed(() => getBookingOptions(
   null,
   canModifyOrders(props.dinnerEvent.date),
@@ -192,7 +192,7 @@ const handleCancel = () => emit('cancel')
         <div :class="guestForm.header">
           <UIcon :name="ICONS.userPlus" :class="guestForm.headerIcon" />
           <h4 :class="guestForm.title">Tilføj gæst</h4>
-          <UBadge v-if="props.releasedTicketCounts.total > 0" :color="COLOR.info" :icon="ICONS.claim" :variant="NOISE.subtle" :size="SIZES.small">
+          <UBadge v-if="hasTicketsForSale(props.releasedTicketCounts)" :color="COLOR.info" :icon="ICONS.claim" :variant="NOISE.subtle" :size="SIZES.small">
             {{ SUPPLY_WORDS.forSaleCount(props.releasedTicketCounts) }}
           </UBadge>
         </div>

@@ -46,17 +46,17 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | Test sweep | dead and duplicate cases removed; cleanup fails early; factories, `gotoHydrated` and web-first waits replace raw sleeps; the `setup-season` project creates the active season once per run | `docs/testing.md` | packages 1–4 committed (5b1616b, b7d238d, 2d17d64, 45c1f83, 084ea42); 5 and 6 verified, their remaining edits in the working tree |
 | DRY sweep | dead code and duplicate token paths removed; the specs share their mount, endpoint and session helpers | `tests/component/testHelpers.ts`, `tests/component/hoistedMocks.ts` | committed (72cf9d9, 6b65a70, b456b2f, 999bdbd, c0beb62, 43876aa) |
 | PRF spike | passkey and PRF research with the device protocol | `../feature-proposal-relogin-faceid.md`, `../archived/feature-mobile-native-feel.md` | committed |
-| One booking path, end to end | outcomes in, notification out; the scaffold survives a partial failure and reports per person; the waiting list catches up; one client write; preview and toast from one word table; the ticket history follows kuverter | § One booking path, end to end | points 1–6 committed (2ad1429 to e448ae9); 6b and 7 in progress |
+| One booking path, end to end | outcomes in, notification out; the scaffold survives a partial failure and reports per person; the waiting list catches up; one client write; preview and toast from one word table; the ticket history follows kuverter | § One booking path, end to end | points 1–7 committed (2ad1429 to 5883d6b); 6b in progress |
 | Docs and tooling | the user, chef and admin guides; `docs/ui.md` and the compliance tables compacted; `docs/testing.md` Rule 0; the ui skill and the frontend agent | `docs/`, `.claude/skills/`, `.claude/agents/` | committed (b82852e, 38804ef, 0dfd8eb, 450bcc8) |
-| Close keeps the eating mode | the nightly close writes each order's own eating mode | `server/utils/closeOrders.ts`, `fetchPendingOrdersOnConsumedDinners` | in the working tree |
+| Close keeps the eating mode | the nightly close writes each order's own eating mode | `server/utils/closeOrders.ts`, `fetchPendingOrdersOnConsumedDinners` | committed (16b4035) |
+| One audit format for the order history | one `auditData` schema, written and read through one pair of functions | § One audit format for the order history | signed off 2026-10-17; runs after "Shared words, supply predicates and the system's identity" |
 
 ## Open before the release
 
 | Item | State |
 |---|---|
-| Close keeps the eating mode | the repair of the orders closed since cc05ea9, § Close keeps the eating mode |
 | ADR review fixes | items 1–10 and 12 of the PR #168 review, each signed off with the architect, § ADR review |
-| One booking path, end to end | points 6b and 7, § One booking path, end to end |
+| One booking path, end to end | point 6b, § One booking path, end to end |
 | Waitlist notifications | planned, § Waitlist notifications |
 | CI summary | read on the Actions run page: categories, counts, red ui failures, report links |
 | Visual check per UI package | the route → viewport → element tables, carried into the PR description |
@@ -304,9 +304,8 @@ write audit rows; `buildUpdateData` writes the `dinnerMode` it is given, and the
 
 ### Solution
 
-`fetchPendingOrdersOnConsumedDinners` selects `dinnerMode`; the close passes each order's own mode. Orders closed since
-cc05ea9 carry Spisesal; the mode before the close is the order's last history row before it. Whether to repair those
-orders from that row is settled in the package's first round (`/prisma` for a backfill).
+`fetchPendingOrdersOnConsumedDinners` selects `dinnerMode`; the close passes each order's own mode. The orders closed
+since cc05ea9 keep the Spisesal they carry.
 
 ### TDD
 
@@ -316,25 +315,45 @@ orders from that row is settled in the package's first round (`/prisma` for a ba
 
 `server/utils/closeOrders.ts`, `server/data/financesRepository.ts`, `tests/e2e/api/serial/admin/maintenance.e2e.spec.ts`.
 
+## One audit format for the order history
+
+### Problem
+
+`OrderHistory.orderId` is NULL once its order is deleted (`onDelete: SetNull`). The rows `createOrders` writes
+(`{source, orderData}`) and `updateOrdersBatch` writes (`{state, dinnerMode, ticketPriceId, priceAtBooking}`) carry no
+order id in `auditData`, so the ticket history cannot group the rows of one person's deleted guest orders.
+
+### Solution
+
+One Zod schema for `auditData`, `{change, orderSnapshot, source?}`; `change` takes its values from the existing enums
+(`BookingAction` plus `CLOSE`), and the column keeps its type. The writers (`createOrders`, `updateOrdersBatch`,
+`claimOrder`, `deleteOrder`) write through `createOrderAuditData`. The readers (the ticket-history replay, the
+order-history endpoint, the preferences intents, the claim provenance) read through `readOrderAudit`, which maps the
+three legacy shapes and returns null for what a row cannot tell. The history groups rows by order id, else by dinner and
+household, and prints "?" for a ticket it cannot attribute.
+
+The legacy cancellations on upcoming dinners hold no guest ticket in production, dev or local, so an unknown guest flag
+reads as a regular ticket. The count re-runs after the 0.9 deploy.
+
 ## ADR review
 
 `/code-review 168` against `docs/adr.md`, 2026-10-17, read-only at 5165b4f. The architect signs off each
 remediation after a discussion with the peer that owns its code (`app/`, `server/`: orchestrator); the fix follows the
 sign-off.
 
-| # | Rule | Where | Breach | Architect sign-off |
-|---|---|---|---|---|
-| 1 | One booking path (ADR-016): a stale order id is skipped | `app/composables/useBooking.ts:205` | `decideOrderAction` throws when an order id is not found; a released order sold to another household sinks the member's whole save, reported as no failure | ⏳ |
-| 2 | Display types for batches, D1 query limit (ADR-009, ADR-014) | `server/utils/waitlistAssignment.ts:45` | each queued claim reloads the full dinner and season (about 20–25 queries); around 40 claims reach D1's 1,000-query limit and the save fails part-way | ⏳ |
-| 3 | Idempotent jobs (ADR-015) | `server/utils/waitlistAssignment.ts:123` | a sale writes the order before deleting the queue entry; a crash between the two fails the next run with a 409 at that entry each time | ⏳ |
-| 4 | External calls warn and never block (ADR-013); notify after the action (ADR-016) | `server/routes/api/household/order/scaffold.post.ts:61` and 8 other endpoints | a failed recipient lookup while building the mails turns a saved booking into a 500, and the member retries | ⏳ |
-| 5 | A store's dataset key stays constant (ADR-007) | `app/stores/allergies.ts:116` | the key changes with the url and an extra refresh fires: up to 3 requests race per filter change | ⏳ |
-| 6 | UI words in `use<Domain>Ui` (ADR-017) | `app/composables/useBooking.ts:136` | `formatPlace` ("Voksen #3") sits in a composable the server imports | ⏳ |
-| 7 | Stores own writes and toasts (ADR-007) | `app/components/common/HelpButton.vue:60` | the feedback POST goes through `apiRequest` in the component | ⏳ |
-| 8 | App code imports from `app/` and `shared/` (ADR-017) | `app/components/common/HelpButton.vue:39` | types imported from `~~/server/integration/github/githubClient` | ⏳ |
-| 9 | Validation composables export a serialized schema (ADR-010) | `app/composables/useDutyValidation.ts:39` | `SerializedJokerSlot` is a hand-written type; the `affinity` JSON goes unvalidated | ⏳ |
-| 10 | A single delete returns the deleted id (ADR-009) | `server/data/waitlistRepository.ts:75` | `deleteWaitlistEntry` returns `void` | ⏳ |
-| 12 | One booking path (ADR-016, rule 5) | `server/utils/scaffoldPrebookings.ts:124-132` | the "REVERT after healing" relaxation outlives the healing endpoint this PR removes; a user-mode run without a `userId` records SYSTEM audits | ⏳ |
+| # | Rule | Where | Breach | Architect sign-off | Fix |
+|---|---|---|---|---|---|
+| 1 | One booking path (ADR-016): a stale order id is skipped | `app/composables/useBooking.ts:205` | `decideOrderAction` throws when an order id is not found; a released order sold to another household sinks the member's whole save, reported as no failure | ✅ 2026-10-17 | |
+| 2 | Display types for batches, D1 query limit (ADR-009, ADR-014) | `server/utils/waitlistAssignment.ts:45` | each queued claim reloads the full dinner and season (about 20–25 queries); around 40 claims reach D1's 1,000-query limit and the save fails part-way | ✅ 2026-10-17 | 5883d6b |
+| 3 | Idempotent jobs (ADR-015) | `server/utils/waitlistAssignment.ts:123` | a sale writes the order before deleting the queue entry; a crash between the two fails the next run with a 409 at that entry each time | ✅ 2026-10-17 | 5883d6b |
+| 4 | External calls warn and never block (ADR-013); notify after the action (ADR-016) | `server/routes/api/household/order/scaffold.post.ts:61` and 8 other endpoints | a failed recipient lookup while building the mails turns a saved booking into a 500, and the member retries | ✅ 2026-10-17 | 5883d6b |
+| 5 | A store's dataset key stays constant (ADR-007) | `app/stores/allergies.ts:116` | the key changes with the url and an extra refresh fires: up to 3 requests race per filter change | ✅ 2026-10-17 | 5883d6b |
+| 6 | UI words in `use<Domain>Ui` (ADR-017) | `app/composables/useBooking.ts:136` | `formatPlace` ("Voksen #3") sits in a composable the server imports | ✅ resolved by the ADR-017 update | ADR-017 |
+| 7 | Stores own writes and toasts (ADR-007) | `app/components/common/HelpButton.vue:60` | the feedback POST goes through `apiRequest` in the component | ✅ 2026-10-17 | 5883d6b |
+| 8 | App code imports from `app/` and `shared/` (ADR-017) | `app/components/common/HelpButton.vue:39` | types imported from `~~/server/integration/github/githubClient` | ✅ 2026-10-17 | 5883d6b |
+| 9 | Validation composables export a serialized schema (ADR-010) | `app/composables/useDutyValidation.ts:39` | `SerializedJokerSlot` is a hand-written type; the `affinity` JSON goes unvalidated | ✅ 2026-10-17 | 5883d6b |
+| 10 | A single delete returns the deleted id (ADR-009) | `server/data/waitlistRepository.ts:75` | `deleteWaitlistEntry` returns `void` | ✅ 2026-10-17 | 5883d6b |
+| 12 | One booking path (ADR-016, rule 5) | `server/utils/scaffoldPrebookings.ts:124-132` | the "REVERT after healing" relaxation outlives the healing endpoint this PR removes; a user-mode run without a `userId` records SYSTEM audits | ✅ 2026-10-17 | 5883d6b |
 
 ## Decisions
 
@@ -451,6 +470,8 @@ sign-off.
   toast counts per person and closes with the sales to the waiting list and the unchanged orders. A waiting-list place
   reads as the ticket badge names its type, "Voksen #3", in the preview, the toast, the booking form's waiting-list badge
   and the kitchen box.
+- The close keeps each order's eating mode; the orders closed since cc05ea9 keep their Spisesal (§ Close keeps the
+  eating mode).
 
 ## Coverage
 

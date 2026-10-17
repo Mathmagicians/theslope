@@ -3,7 +3,7 @@ import {WEEKDAYS} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
 import {isSameDay, isWithinInterval, isBefore, subDays, subMinutes} from "date-fns"
 import {type Season, useSeasonValidation} from '~/composables/useSeasonValidation'
-import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderAuditAction, OrderAuditAction as OrderAuditActionEnum, useBookingValidation} from '~/composables/useBookingValidation'
+import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderAuditAction, OrderAuditAction as OrderAuditActionEnum, type OrderState as OrderStateEnum, useBookingValidation} from '~/composables/useBookingValidation'
 import {useCookingTeamValidation, type CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
 import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
@@ -43,7 +43,7 @@ export type SeasonDeadlines = {
     canEditDiningMode: (dinnerEventDate: Date) => boolean
     isAnnounceMenuPastDeadline: (dinnerEventDate: Date) => boolean
     getOrderCancellationAction: (dinnerEventDate: Date) => {
-        updates: { dinnerMode: DinnerMode, state: 'RELEASED', releasedAt: Date }
+        updates: { dinnerMode: DinnerMode, state: typeof OrderStateEnum.RELEASED, releasedAt: Date }
         auditAction: OrderAuditAction
     } | null
 }

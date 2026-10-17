@@ -20,7 +20,11 @@ const {
 
 /* ==== INITIALIZATION ==== */
 dotenv.config()
-const heyNaboUserName = process.env.HEY_NABO_USERNAME as string // will give runtime error if env variable is undefined - this is intentional
+
+/** The email of the Heynabo account the system logs in with; the system user carries the same email */
+export const systemAccountEmail = (): string => process.env.HEY_NABO_USERNAME as string
+
+const heyNaboUserName = systemAccountEmail() // will give runtime error if env variable is undefined - this is intentional
 const heyNaboPassword = process.env.HEY_NABO_PASSWORD as string
 const heyNaboApi = process.env.NUXT_PUBLIC_HEY_NABO_API as string
 

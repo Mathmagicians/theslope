@@ -1788,8 +1788,6 @@ export const COMPONENTS = {
         // The history glyph leads the title, in its ink and size
         title: 'inline-flex items-center gap-1',
         chips: 'inline-flex flex-wrap items-center gap-1',
-        loading: `flex items-center gap-2 py-2 ${TYPOGRAPHY.finePrint}`,
-        spinner: MOTION_SPIN,
         moreRow: 'flex justify-center py-2'
     },
 
@@ -1903,16 +1901,16 @@ export type TicketTypeColor = typeof TICKET_TYPE_COLORS[keyof typeof TICKET_TYPE
  * The ticket state from its flags; a released ticket reads released even when claimed, and a queued ticket holds
  * no order, so it reads queued only in neither state
  */
-export const getTicketState = (isReleased: boolean, isClaimed: boolean, isQueued = false): TicketState => {
-    if (isReleased) return 'released'
-    if (isClaimed) return 'claimed'
-    if (isQueued) return 'queued'
+export const getTicketState = (released: boolean, claimed: boolean, queued = false): TicketState => {
+    if (released) return 'released'
+    if (claimed) return 'claimed'
+    if (queued) return 'queued'
     return 'normal'
 }
 
-/** Get order state accent color from isReleased/isClaimed flags */
-export const getOrderStateColor = (isReleased: boolean, isClaimed: boolean): NuxtUIBadgeColor =>
-    ORDER_STATE_COLORS[getTicketState(isReleased, isClaimed)]
+/** Get order state accent color from the released and claimed flags */
+export const getOrderStateColor = (released: boolean, claimed: boolean): NuxtUIBadgeColor =>
+    ORDER_STATE_COLORS[getTicketState(released, claimed)]
 
 /**
  * ICONS - Standard icon names for common UI elements

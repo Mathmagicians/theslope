@@ -33,7 +33,7 @@ and the component headers hold the detail; a row names a gap in a few words.
 | `/admin/allergies/pdf` | `admin/allergies/pdf.vue` | ✅ allergies, plan | N/A | N/A | ✅ smoke | ✅ | ✅ |
 | **Household** | | | | | | | |
 | `/household/[shortname]` | `household/[shortname]/index.vue` | ✅ households | N/A | ✅ `?pbs=` | ✅ | ⚠️ | ⚠️ review `?pbs` on redirect |
-| `/household/[shortname]/bookings` | `HouseholdBookings.vue` | ✅ plan, households, bookings | N/A | ✅ `?pbs=` `?cal=` | ✅ | ⚠️ | ⚠️ partial unit |
+| `/household/[shortname]/bookings` | `HouseholdBookings.vue` | ✅ plan, households, bookings | N/A | ✅ `?pbs=` `?cal=` | ✅ | ✅ | ✅ |
 | `/household/[shortname]/allergies` | `HouseholdAllergies.vue` | ✅ allergies | ❓ | ✅ `?pbs=` | ✅ | ❌ | ⚠️ e2e only |
 | `/household/[shortname]/settings` | `HouseholdSettings.vue` | ✅ households | N/A | ✅ `?pbs=` | ✅ | ❌ | ⚠️ e2e only |
 | `/household/[shortname]/economy` | `HouseholdEconomy.vue` | ✅ plan, bookings | N/A | ✅ `?pbs=` | ❌ | ⚠️ store specs | ⚠️ store specs only |
@@ -180,7 +180,7 @@ Status.
 |---|---|---|---|---|---|
 | `EconomyTable.vue` | `/admin/economy`, `/household/[shortname]/economy` | none | ✅ | ✅ parent | ✅ |
 | `CostEntry.vue` | `/admin/economy`, `/household/[shortname]/economy` | none | ❌ | ✅ parent | ⚠️ missing unit |
-| `CostLine.vue` | `/admin/economy`, `/household/[shortname]/economy` | none | ❌ | ✅ parent | ⚠️ missing unit; `state`, `ticketType` typed as strings |
+| `CostLine.vue` | `/admin/economy`, `/household/[shortname]/economy` | none | ❌ | ✅ parent | ⚠️ missing unit; a transaction line carries no eating mode, so a ticket the close kept with Ingen reads Lukket there |
 | `ControlBadge.vue` | `/admin/economy`, `/household/[shortname]/economy` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `ShareLinksPopover.vue` | `/admin/economy`, `/public/billing/[token]` | none | ❌ | ✅ parent | ⚠️ missing unit |
 
@@ -239,7 +239,7 @@ Status.
 | `useCookingTeam()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `useBilling()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
 | `useHeynabo()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
-| `useOrder()` | client | N/A | N/A | ✅ | ✅ | ✅ |
+| `useOrder()` | client | N/A | N/A | ✅ | ✅ | ✅ the order predicates live in `useBooking`; `server/` reaches none of `useOrder` |
 | `useAllergy()` | client | N/A | N/A | ✅ | ✅ | ✅ |
 | `useTicket()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
 | `useMaintenance()` | client | N/A | N/A | ✅ | ✅ | ✅ |

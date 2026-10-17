@@ -4,6 +4,7 @@
  * Following ADR-001: Import enums from validation composables (NOT from generated layer)
  */
 import {useBookingValidation, type OrderDisplay, type OrderDetail, type TicketType} from '~/composables/useBookingValidation'
+import {isReleased} from '~/composables/useBooking'
 import {sumBy} from '~/utils/ledger'
 
 /**
@@ -19,10 +20,13 @@ export interface DiningModeStats {
 
 export type SpendingFigures = {budgetGross: number, spentGross: number}
 
+const {OrderStateSchema, DinnerModeSchema} = useBookingValidation()
+const OrderState = OrderStateSchema.enum
+const DinnerMode = DinnerModeSchema.enum
+
 export const useOrder = () => {
   // Import enum schemas from validation layer (ADR-001)
-  const {OrderStateSchema, TicketTypeSchema} = useBookingValidation()
-  const OrderState = OrderStateSchema.enum
+  const {TicketTypeSchema} = useBookingValidation()
   const TicketType = TicketTypeSchema.enum
 
   /**
@@ -34,34 +38,19 @@ export const useOrder = () => {
     bookerName ? `Gæst af ${bookerName}` : 'Gæst'
 
   /**
-   * Check if order is active (counts for kitchen preparation)
-   * Active = BOOKED or CLOSED (not released for sale)
-   */
-  const isActiveOrder = (order: OrderDisplay): boolean => {
-    return order.state !== OrderState.RELEASED
-  }
-
-  /**
-   * Check if order is released (available for sale/swap)
-   */
-  const isReleasedOrder = (order: OrderDisplay): boolean => {
-    return order.state === OrderState.RELEASED
-  }
-
-  /**
-   * Filter orders by active state
+   * The orders the kitchen cooks for: every order not released
    * Generic to preserve OrderDisplay or OrderDetail type
    */
   const getActiveOrders = <T extends OrderDisplay>(orders: T[]): T[] => {
-    return orders.filter(o => isActiveOrder(o))
+    return orders.filter(o => !isReleased(o))
   }
 
   /**
-   * Filter orders by released state
+   * The released orders
    * Generic to preserve OrderDisplay or OrderDetail type
    */
   const getReleasedOrders = <T extends OrderDisplay>(orders: T[]): T[] => {
-    return orders.filter(o => isReleasedOrder(o))
+    return orders.filter(o => isReleased(o))
   }
 
   // The kitchen's count of the orders: a ticket weighs its price's portions; a ticket whose price row is gone weighs 0
@@ -128,9 +117,6 @@ export const useOrder = () => {
    * @returns Array of stats per dining mode + RELEASED, with portion-based percentages
    */
   const calculateDiningModeStats = (orders: OrderDetail[]): DiningModeStats[] => {
-    const { DinnerModeSchema } = useBookingValidation()
-    const DinnerMode = DinnerModeSchema.enum
-
     const activeOrders = getActiveOrders(orders)
     const releasedOrders = getReleasedOrders(orders)
     const totalPortions = calculateTotalPortions(orders)
@@ -215,7 +201,7 @@ export const useOrder = () => {
    * Returns all financial figures for kitchen/chef planning
    *
    * Revenue counts every ticket that is paid: a ticket released after the booking deadline stays paid by its household
-   * or by the one who claims it, so it stays in the budget; kuverter are the kitchen's own count (isActiveOrder)
+   * or by the one who claims it, so it stays in the budget; kuverter are the kitchen's own count (getActiveOrders)
    */
   const calculateBudget = (
     orders: OrderDisplay[],

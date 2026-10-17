@@ -2,26 +2,36 @@ import {useBookingValidation, type TicketType} from '~/composables/useBookingVal
 import type {TicketPrice, PortionTicket} from '~/composables/useTicketPriceValidation'
 import {calculateAgeOnDate} from '~/utils/date'
 
-/** The words a ticket type goes by: its label, and its letter in a ticket count ("2V 1B") */
-export interface TicketTypeWords {
-    label: string
-    compactLabel: 'V' | 'B' | 'b'
+const {TicketTypeSchema} = useBookingValidation()
+const TicketType = TicketTypeSchema.enum
+
+// The words a ticket type goes by: its label, its letter in a ticket count ("2V 1B"), and its noun for one and for many;
+// its colour and glyph live in useBookingUi (ADR-017)
+const ticketTypeWords: Record<TicketType, {label: string, letter: string, one: string, many: string}> = {
+    [TicketType.ADULT]: {label: 'Voksen', letter: 'V', one: 'voksen', many: 'voksne'},
+    [TicketType.CHILD]: {label: 'Barn', letter: 'B', one: 'barn', many: 'børn'},
+    [TicketType.BABY]: {label: 'Baby', letter: 'b', one: 'baby', many: 'babyer'}
 }
+
+/** A ticket type's label: "Voksen" */
+export const ticketTypeLabel = (type: TicketType): string => ticketTypeWords[type].label
+
+/** A ticket type's letter in a ticket count: "V" */
+export const ticketTypeLetter = (type: TicketType): string => ticketTypeWords[type].letter
+
+/** A count of one ticket type in words: "1 barn", "8 voksne" */
+export const ticketTypeCount = (type: TicketType, count: number): string =>
+    `${count} ${count === 1 ? ticketTypeWords[type].one : ticketTypeWords[type].many}`
 
 /**
  * Business logic for working with tickets and ticket types
  *
  * Handles:
  * - Ticket type determination based on age and season pricing
- * - The words a ticket type goes by (its colour and glyph live in useBookingUi, ADR-017)
  * - The portions a ticket weighs, from the default prices in app config
  * - Ticket-related domain operations
  */
 export const useTicket = () => {
-    // Get ticket type enum from validation composable
-    const {TicketTypeSchema} = useBookingValidation()
-    const TicketType = TicketTypeSchema.enum
-
     /**
      * Get default ticket prices from app config
      * Used as fallback when no season ticket prices are available
@@ -29,12 +39,6 @@ export const useTicket = () => {
     const getDefaultTicketPrices = (): TicketPrice[] => {
         const appConfig = useAppConfig()
         return appConfig.theslope?.defaultSeason?.ticketPrices ?? []
-    }
-
-    const ticketTypeWords: Record<TicketType, TicketTypeWords> = {
-        [TicketType.ADULT]: {label: 'Voksen', compactLabel: 'V'},
-        [TicketType.CHILD]: {label: 'Barn', compactLabel: 'B'},
-        [TicketType.BABY]: {label: 'Baby', compactLabel: 'b'}
     }
 
     // The default price with the ticket's type and price names its portions, else its type's first default price
@@ -213,7 +217,6 @@ export const useTicket = () => {
     const formatPrice = (dkkFraction: number): string => convertPriceToDecimalFormat(dkkFraction).toLocaleString('da-DK')
 
     return {
-        ticketTypeWords,
         determineTicketType,
         resolveTicketType,
         groupInhabitantsByTicketCategory,

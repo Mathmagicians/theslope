@@ -65,33 +65,29 @@
  * │            Du betaler, når du får en billet fra ventelisten.     │
  * └──────────────────────────────────────────────────────────────────┘
  *
- * Under them the bar (ALERTS.info), one line per supply that exists; with neither, no bar.
+ * Under them the bar (ALERTS.info) while tickets are for sale or someone waits; with neither, no bar.
  * A dinner can hold both: a released ticket goes only to someone waiting for the same ticket type.
  * [claim] = ICONS.claim while tickets are for sale, [waitlist] = ICONS.waitlist for the waiting list alone,
- * [released] = ICONS.released. The notes and the bar read their words from SUPPLY_WORDS (useBookingUi); the
- * Framelding badge's tooltip reads the same waiting list sentence.
+ * [released] = ICONS.released. The notes read their words from SUPPLY_WORDS, the bar's one line is
+ * closedForCancellation (useBookingUi), the sentence of the Framelding badge's help text.
  *
  * TICKETS FOR SALE:
  * ┌──────────────────────────────────────────────────────────────────┐
  * │ [claim] Har du brug for flere billetter?                         │
- * │         Lukket for ændringer, men der er 4 ledige billetter til  │
- * │         salg (4V).                                               │
+ * │         Lukket for framelding: 1 barn til salg                   │
  * └──────────────────────────────────────────────────────────────────┘
  *
  * WAITING LIST:
  * ┌──────────────────────────────────────────────────────────────────┐
  * │ [waitlist] Har du brug for flere billetter?                      │
- * │            Lukket for ændringer, men du kan få en plads på       │
- * │            ventelisten. Pt står 2V 3B 1b på ventelisten.         │
+ * │            Lukket for framelding: 8 voksne på ventelisten        │
  * └──────────────────────────────────────────────────────────────────┘
  *
  * BOTH:
  * ┌──────────────────────────────────────────────────────────────────┐
  * │ [claim] Har du brug for flere billetter?                         │
- * │         Lukket for ændringer, men der er 4 ledige billetter til  │
- * │         salg (4V).                                               │
- * │         Du kan også få en plads på ventelisten. Pt står 1B på    │
- * │         ventelisten.                                             │
+ * │         Lukket for framelding: 1 barn til salg, 8 voksne på      │
+ * │         ventelisten                                              │
  * └──────────────────────────────────────────────────────────────────┘
  *
  * AFTER THE DEADLINE, SOLD OUT - the waiting list (a row without a ticket):
@@ -114,7 +110,7 @@
  * row edits its wish (requeued) or picks Ingen to leave; Tilføj gæst saves the same way.
  */
 import type {HouseholdDetail, InhabitantDisplay} from '~/composables/useCoreValidation'
-import type {DinnerEventDisplay, OrderDisplay, DinnerMode, OrderState, DesiredOrder, BookingRowAction} from '~/composables/useBookingValidation'
+import type {DinnerEventDisplay, OrderDisplay, DinnerMode, DesiredOrder, BookingRowAction} from '~/composables/useBookingValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
@@ -139,7 +135,6 @@ interface TableRow {
   ticketConfig: TicketPresentation | null
   order: OrderDisplay | null
   orders?: OrderDisplay[] // For grouped guest orders
-  orderState: OrderState | undefined
   dinnerMode: DinnerMode
   disabledModes: DinnerMode[] // Computed via getBookingOptions per row
   bookingAction: BookingRowAction | null // What action is possible for this row
@@ -149,6 +144,8 @@ interface TableRow {
   ticketPriceId: number | null // Nullable: TicketPrice may be deleted (priceAtBooking preserved)
   guestCount?: number // undefined = not guest, 1+ = guest ticket(s)
   provenanceHousehold?: string
+  isReleased: boolean // The row's ticket is released and for sale
+  isClaimed: boolean // The row's ticket was bought from another household
   allergyTypes: AllergyTypeDisplay[] // The booked inhabitant's live allergy profile; empty for every other row
 }
 
@@ -274,16 +271,16 @@ const residencyAlert = computed(() => {
 const ALL_MODES: DinnerMode[] = [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY, DinnerModeEnum.NONE]
 
 // Compute booking state for a row using getBookingOptions
-const getRowBookingState = (orderState: OrderState | undefined, isGuestAddRow: boolean, isQueued = false): { disabledModes: DinnerMode[], bookingAction: BookingRowAction | null } => {
+const getRowBookingState = (order: OrderDisplay | null, isGuestAddRow: boolean, isQueued = false): { disabledModes: DinnerMode[], bookingAction: BookingRowAction | null } => {
   const {enabledModes, action} = getBookingOptions(
-    orderState ?? null,
+    order,
     canBook.value,
     canChangeDiningMode.value,
     props.dinnerEvent.state,
     isHouseholdInResidency.value
   )
   // Disable NONE for: guest add row OR inhabitants without existing order (can't select "nothing" when no ticket exists)
-  const hasNoExistingOrder = orderState === undefined
+  const hasNoExistingOrder = order === null
   const shouldDisableNone = isGuestAddRow || hasNoExistingOrder
   const withoutNone = enabledModes.filter(m => m !== DinnerModeEnum.NONE)
   // A queued inhabitant leaves the queue by picking Ingen
@@ -301,18 +298,9 @@ const getRowBookingState = (orderState: OrderState | undefined, isGuestAddRow: b
 // Household's own released tickets (for warning message)
 const householdReleasedTickets = computed(() =>
   (props.orders ?? []).filter(o =>
-    o.state === OrderStateEnum.RELEASED &&
+    isReleased(o) &&
     o.dinnerEventId === props.dinnerEvent.id
   )
-)
-
-// Released tickets and the waiting list from all households (passed from store's lockStatus)
-const hasReleasedTickets = computed(() => props.releasedTicketCounts.total > 0)
-
-// One line per supply on a closed dinner
-const moreTicketsLines = computed(() =>
-  [SUPPLY_WORDS.forSale(props.releasedTicketCounts), SUPPLY_WORDS.waitlist(props.releasedTicketCounts)]
-    .filter((line): line is string => line !== null)
 )
 
 // ============================================================================
@@ -347,6 +335,12 @@ const {myInhabitant: bookerInhabitant} = storeToRefs(householdsStore)
 const getInhabitantName = (id: number) =>
   household.value?.inhabitants.find(i => i.id === id)?.name ?? 'Ukendt'
 
+// The state a row's ticket shows: released for sale, or bought from another household
+const ticketStateOf = (order: OrderDisplay | null): Pick<TableRow, 'isReleased' | 'isClaimed'> => ({
+  isReleased: order !== null && isReleased(order),
+  isClaimed: order !== null && isClaimedOrder(order)
+})
+
 const tableData = computed((): TableRow[] => {
   if (!household.value?.inhabitants) return []
 
@@ -354,7 +348,6 @@ const tableData = computed((): TableRow[] => {
 
   const inhabitantRows: TableRow[] = allInhabitants.map(inhabitant => {
     const order = findRegularOrder(eventOrders.value, inhabitant.id, props.dinnerEvent.id) ?? null
-    const orderState = order?.state as OrderState | undefined
     // An order supersedes a queue entry: the assignment deletes the entry it placed
     const waitlistEntry = order ? undefined : findRegularOrder(eventWaitlistEntries.value, inhabitant.id, props.dinnerEvent.id)
 
@@ -374,13 +367,13 @@ const tableData = computed((): TableRow[] => {
       inhabitant,
       ticketConfig: ticketPrice ? ticketTypePresentation(ticketPrice.ticketType) : null,
       order,
-      orderState,
       waitlistEntry,
       dinnerMode: order?.dinnerMode ?? waitlistEntry?.order.dinnerMode ?? DinnerModeEnum.NONE,
-      ...getRowBookingState(orderState, false, !!waitlistEntry),
+      ...getRowBookingState(order, false, !!waitlistEntry),
       price: order?.priceAtBooking ?? ticketPrice?.price ?? 0,
       ticketPriceId: order?.ticketPriceId ?? ticketPrice?.id ?? null,
       provenanceHousehold: order?.provenanceHousehold,
+      ...ticketStateOf(order),
       allergyTypes: order ? (inhabitant.allergies ?? []).map(allergy => allergy.allergyType) : []
     }
   })
@@ -398,7 +391,6 @@ const tableData = computed((): TableRow[] => {
     const firstOrder = orders[0] ?? null
     const held = firstOrder ?? waitlistEntry!.order
     const booker = allInhabitants.find(i => i.id === held.inhabitantId)
-    const orderState = firstOrder?.state as OrderState | undefined
 
     // A guest has no birthDate: the price the order or the entry holds names the ticket type
     const resolvedTicketPrice = waitlistEntry
@@ -414,14 +406,14 @@ const tableData = computed((): TableRow[] => {
       ticketConfig: resolvedTicketPrice ? ticketTypePresentation(resolvedTicketPrice.ticketType) : null,
       order: firstOrder,
       orders,
-      orderState,
       waitlistEntry,
       dinnerMode: held.dinnerMode,
-      ...getRowBookingState(orderState, false, !!waitlistEntry),
+      ...getRowBookingState(firstOrder, false, !!waitlistEntry),
       price: held.priceAtBooking ?? 0,
       ticketPriceId: held.ticketPriceId ?? resolvedTicketPrice?.id ?? null,
       guestCount: Math.max(orders.length, 1),
       provenanceHousehold: firstOrder?.provenanceHousehold,
+      ...ticketStateOf(firstOrder),
       allergyTypes: []
     }
   })
@@ -433,11 +425,12 @@ const tableData = computed((): TableRow[] => {
     lastName: '',
     ticketConfig: null,
     order: null,
-    orderState: undefined as OrderState | undefined,
     price: 0,
     ticketPriceId: 0,
     disabledModes: [] as DinnerMode[],
     bookingAction: null as BookingRowAction | null,
+    isReleased: false,
+    isClaimed: false,
     allergyTypes: [] as AllergyTypeDisplay[]
   }
 
@@ -477,7 +470,7 @@ const tableData = computed((): TableRow[] => {
     powerRow,
     ...inhabitantRows,
     ...guestOrderRows,
-    {...defaultSyntheticRow, rowType: 'guest' as RowType, id: 'add-guest', name: 'Tilføj gæst', inhabitant: guestAddInhabitant, dinnerMode: DinnerModeEnum.DINEIN, ...getRowBookingState(undefined, true)}
+    {...defaultSyntheticRow, rowType: 'guest' as RowType, id: 'add-guest', name: 'Tilføj gæst', inhabitant: guestAddInhabitant, dinnerMode: DinnerModeEnum.DINEIN, ...getRowBookingState(null, true)}
   ]
 })
 
@@ -573,9 +566,6 @@ const completeBooking = (orders: DesiredOrder[]) => {
 // GuestBookingForm emits ready-made orders, forward to shared function
 const handleGuestSave = (orders: DesiredOrder[]) => completeBooking(orders)
 
-const isOrderReleased = (orderState: OrderState | undefined): boolean => orderState === OrderStateEnum.RELEASED
-const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
-
 // ============================================================================
 // HELPER TEXT
 // ============================================================================
@@ -669,16 +659,13 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
         data-testid="household-waitlist-alert"
       />
       <UAlert
-        v-if="moreTicketsLines.length > 0"
+        v-if="hasTicketsForSale(releasedTicketCounts) || hasWaitlist(releasedTicketCounts)"
         v-bind="ALERTS.info"
-        :icon="hasReleasedTickets ? ICONS.claim : ICONS.waitlist"
+        :icon="hasTicketsForSale(releasedTicketCounts) ? ICONS.claim : ICONS.waitlist"
+        title="Har du brug for flere billetter?"
+        :description="closedForCancellation(releasedTicketCounts)"
         data-testid="more-tickets-alert"
-      >
-        <template #title>Har du brug for flere billetter?</template>
-        <template #description>
-          <p v-for="line in moreTicketsLines" :key="line">{{ line }}</p>
-        </template>
-      </UAlert>
+      />
     </div>
 
     <!-- Main Table with Expandable Rows -->
@@ -735,8 +722,8 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
               compact
             >
               <template #badge>
-                <UBadge v-if="hasReleasedTickets" :color="COLOR.info" :icon="ICONS.claim" :variant="NOISE.subtle" :size="SIZES.small">
-                  {{ SUPPLY_WORDS.forSaleCount(props.releasedTicketCounts) }}
+                <UBadge v-if="hasTicketsForSale(releasedTicketCounts)" :color="COLOR.info" :icon="ICONS.claim" :variant="NOISE.subtle" :size="SIZES.small">
+                  {{ SUPPLY_WORDS.forSaleCount(releasedTicketCounts) }}
                 </UBadge>
               </template>
             </UserListItem>
@@ -752,7 +739,7 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
               <template #badge>
                 <!-- Released badge -->
                 <UBadge
-                  v-if="isOrderReleased(row.original.orderState)"
+                  v-if="row.original.isReleased"
                   :color="COLOR.error"
                   :variant="NOISE.soft"
                   :size="SIZES.small"
@@ -803,8 +790,8 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
               :ticket-config="row.original.ticketConfig"
               :price="row.original.price"
               :dinner-mode="row.original.dinnerMode"
-              :is-released="isOrderReleased(row.original.orderState)"
-              :is-claimed="isTicketClaimed(row.original)"
+              :is-released="row.original.isReleased"
+              :is-claimed="row.original.isClaimed"
               :is-queued="!!row.original.waitlistEntry"
               :guest-count="row.original.guestCount"
               :allergies="row.original.allergyTypes"
@@ -831,8 +818,8 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
             :ticket-config="row.original.ticketConfig"
             :price="row.original.price"
             :dinner-mode="row.original.dinnerMode"
-            :is-released="isOrderReleased(row.original.orderState)"
-            :is-claimed="isTicketClaimed(row.original)"
+            :is-released="row.original.isReleased"
+            :is-claimed="row.original.isClaimed"
             :is-queued="!!row.original.waitlistEntry"
             :guest-count="row.original.guestCount"
             :allergies="row.original.allergyTypes"

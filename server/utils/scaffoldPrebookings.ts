@@ -15,9 +15,10 @@ const LOG = '🎟️ > SEASON > [SCAFFOLD_PREBOOKINGS]'
 // Each lost race re-reads the supply; past this many rounds the wish queues
 const CLAIM_ROUNDS = 3
 
-const {BookingActionSchema, OrderBucketSchema} = useBookingValidation()
+const {BookingActionSchema, OrderBucketSchema, OrderAuditSourceSchema} = useBookingValidation()
 const Action = BookingActionSchema.enum
 const Bucket = OrderBucketSchema.enum
+const Source = OrderAuditSourceSchema.enum
 
 /**
  * The audit action of a booking action. A user who cancels or releases signals "I don't want to eat"
@@ -239,6 +240,9 @@ export async function scaffoldPrebookings(
                 ticketType: ticketPriceById.get(desired.ticketPriceId)?.ticketType ?? null,
                 dinnerEventId: desired.dinnerEventId, dinnerMode: desired.dinnerMode, action
             })
+            // The generator skips an order the household no longer holds (bought by another household, or deleted); the save lists it as failed
+            const staleOrders = isUserMode ? options.desiredOrders!.filter(desired => desired.orderId !== undefined && !orderById.has(desired.orderId)) : []
+            failed.push(...staleOrders.map(stale => resultOf(stale, actionOfUpdate(stale, undefined))))
             const landedAs = (action: BookingAction) => (orders: {desired: DesiredOrder}[]) => landed.push(...orders.map(({desired}) => resultOf(desired, action)))
             const failedAs = (actionOf: (desired: DesiredOrder) => BookingAction) => ({desired}: {desired: DesiredOrder}, error: unknown) => {
                 failed.push(resultOf(desired, actionOf(desired)))
@@ -254,7 +258,7 @@ export async function scaffoldPrebookings(
                 await writeBatchOrEach(batch, orders => createOrders(d1Client, household.id, orders.map(({order}) => order), {
                     action: getAuditAction(isUserTriggered, Action.BOOK),
                     performedByUserId: effectiveUserId,
-                    source: isUserMode ? 'user-booking' : (options.householdId ? 'preference-update' : 'scaffold-prebookings'),
+                    source: isUserMode ? Source['user-booking'] : (options.householdId ? Source['preference-update'] : Source['scaffold-prebookings']),
                     seasonId: season.id ?? null
                 }), landedAs(Action.BOOK), failedAs(() => Action.BOOK))
             }
@@ -262,15 +266,10 @@ export async function scaffoldPrebookings(
             // Updates: each carries its action (release, reclaim, price, mode); ADR-014 groups them by signature
             const updates: {desired: DesiredOrder, update: OrderBatchUpdate, action: BookingAction}[] = []
             for (const incoming of result.update) {
-                // Validate orderId present (generator contract)
-                if (!incoming.orderId) {
-                    throw new Error(`${LOG} Data integrity: update bucket order missing orderId for inhabitant ${incoming.inhabitantId} dinnerEvent ${incoming.dinnerEventId}`)
-                }
-                const existing = orderById.get(incoming.orderId)
-                if (!existing) {
-                    console.warn(`${LOG} Order ${incoming.orderId} not found (deleted during processing?) - recorded as failed`)
-                    failed.push(resultOf(incoming, actionOfUpdate(incoming, undefined)))
-                    continue
+                // Generator contract: an update names an order among the household's
+                const existing = incoming.orderId ? orderById.get(incoming.orderId) : undefined
+                if (!incoming.orderId || !existing) {
+                    throw new Error(`${LOG} Data integrity: update bucket order ${incoming.orderId} not among the household's orders for inhabitant ${incoming.inhabitantId} dinnerEvent ${incoming.dinnerEventId}`)
                 }
                 const action = actionOfUpdate(incoming, existing)
                 const priceChanged = existing.ticketPriceId !== incoming.ticketPriceId

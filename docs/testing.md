@@ -82,7 +82,7 @@ const season = await SeasonFactory.createSeason(context, SeasonFactory.defaultSe
 - `EntityFactory.deleteEntity(context, id)` - Cleanup
 - `EntityFactory.getEntity(context, id)` - Fetch for verification
 
-**Factories on disk:** `AllergyFactory`, `BillingFactory`, `DinnerEventFactory`, `ExpenseFactory`, `HouseholdFactory`, `NotificationFactory`, `OrderFactory`, `SeasonFactory`, `SeasonImportFactory`, `SenderFactory`, `SettingFactory`, `TicketFactory`, `UserFactory`, `WaitlistFactory`; `reconciliationTestData.ts` holds the data for the four reconciliation outcomes of households, inhabitants and users, shared by unit and e2e specs.
+**Factories on disk:** `AllergyFactory`, `BillingFactory`, `DinnerEventFactory`, `ExpenseFactory`, `FeedbackFactory`, `HouseholdFactory`, `NotificationFactory`, `OrderFactory`, `SeasonFactory`, `SeasonImportFactory`, `SenderFactory`, `SettingFactory`, `TicketFactory`, `UserFactory`, `WaitlistFactory`; `reconciliationTestData.ts` holds the data for the four reconciliation outcomes of households, inhabitants and users, shared by unit and e2e specs.
 
 **Scenario methods:**
 - `SeasonFactory.createActiveSeason(context)` - the singleton active season `TestSeason-E2E-Singleton`: the `setup-season` project (`tests/e2e/season.setup.ts`) creates and activates it once per run, before the spec workers start; a spec's call returns it, and global teardown deletes it after the run
@@ -186,6 +186,7 @@ const wrapper = await mountWithTooltipProvider(AdminAllergies, {props: {canEdit:
 | `console.log()` | `expect()` assertions |
 | An e2e case asserting a class, a colour, a glyph or a label | Component spec plus the browser check (Rule 0) |
 | `page.waitForTimeout()` | `pollUntil()` or `waitForResponse()` |
+| A hand-picked `{timeout: N}` on a wait | `pollUntil()` or the response (`waitForApi`) |
 | `name` or `data-test-id` on buttons | `data-testid` + `getByTestId()` |
 | `<button type="submit">` in `UForm` tests | `formRef?.submit()` + `flushPromises()` (see [Testing UForm Submission](#testing-uform-submission)) |
 | Hardcoded formatted values (`'15/05/2026'`) | Call the same utility the component uses (`formatDate(date)`) |
@@ -267,6 +268,7 @@ import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, 
 | `resetStores()` | Fresh stores over a fresh data layer per test: the stores of the app's pinia and of the active one are disposed, the app's pinia stays active so a spec and the components it mounts share one store instance, and the keyed `useAsyncData` entries earlier stores registered go with them |
 | `registerEmptyStoreEndpoints()` | The datasets the stores request on creation, answered empty; a spec's own route for one of them registers after this call, as the last registration of a url answers |
 | `VIEWPORTS` | The two layouts a responsive token answers for, the phone (`isMd: false`) and md and up (`isMd: true`), as the table of a `describe.each` |
+| `lockedDinnerSupply(byType?, queuedByType?)` | A locked dinner's supply (`ReleasedTicketCounts`) from its tickets for sale and its waiting list per ticket type, with the totals and the compact counts |
 | `kitchenConfig()` | The kitchen's rates the money components calculate with, read from the app config inside a hook or a test |
 | `useTestScope()` | A scope per test for the composables a test body creates: the watchers they start stop with the test, as they do when a component unmounts |
 
@@ -627,8 +629,7 @@ const start = await testHelpers.readDateField(page.locator('[name="seasonDates"]
 ```typescript
 // ✅ Wait for API BEFORE navigation
 const responsePromise = page.waitForResponse(
-    (r) => r.url().match(/\/api\/admin\/season\/\d+$/),
-    { timeout: 10000 }
+    (r) => r.url().match(/\/api\/admin\/season\/\d+$/)
 )
 await page.goto('/admin/planning')
 const response = await responsePromise

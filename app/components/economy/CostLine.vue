@@ -47,8 +47,9 @@ const emit = defineEmits<{
 const {formatPrice} = useTicket()
 const {formatOrder} = useBookingUi()
 const {TYPOGRAPHY, SIZES, COMPONENTS, NOISE, BUTTONS, COLOR} = useTheSlopeDesignSystem()
-const {OrderStateSchema} = useBookingValidation()
+const {OrderStateSchema, DinnerModeSchema} = useBookingValidation()
 const OrderState = OrderStateSchema.enum
+const DinnerMode = DinnerModeSchema.enum
 
 // Extract fields from item
 // For orders: use item.id (order is itself), for transactions: use orderId (may be null if order deleted)
@@ -69,15 +70,13 @@ const showDinnerMode = computed(() => dinnerModeValue.value !== undefined)
 const itemAmount = computed(() => props.item.priceAtBooking ?? props.item.amount ?? 0)
 
 // Formatted order display (handles claimed override, released state, guest badge)
-// For transactions, as they don't have order state, use CLOSED
-const formatted = computed(() => {
-    const state = props.item.state ?? OrderState.CLOSED
-    return formatOrder({
-        state,
-        provenanceHousehold: props.item.provenanceHousehold ?? undefined,
-        isGuestTicket: props.item.isGuestTicket ?? false
-    })
-})
+// A transaction carries neither an order state nor an eating mode: it reads as closed
+const formatted = computed(() => formatOrder({
+    state: props.item.state ?? OrderState.CLOSED,
+    dinnerMode: props.item.dinnerMode ?? DinnerMode.DINEIN,
+    provenanceHousehold: props.item.provenanceHousehold ?? undefined,
+    isGuestTicket: props.item.isGuestTicket ?? false
+}))
 </script>
 
 <template>

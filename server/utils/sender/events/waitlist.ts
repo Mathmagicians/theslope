@@ -13,7 +13,7 @@ import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {fetchHousehold, fetchInhabitant, fetchUser} from '~~/server/data/prismaRepository'
 import {loadDinner, type DinnerForWaitlist} from '~~/server/utils/waitlistAssignment'
 import {formatDate} from '~/utils/date'
-import {useTicket} from '~/composables/useTicket'
+import {ticketTypeLabel} from '~/composables/useTicket'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 const LOG = '📮 > SENDER > [EVENT booking]'
@@ -170,7 +170,7 @@ export const notifyBookingOutcomes = neverThrows('booking outcomes', async (d1Cl
 
     const joined = await Promise.all(outcomes.joined.map(async event => {
         const [dinner, to, {name}] = await Promise.all([dinnerOf(event.dinnerEventId), emailOf(d1Client, event.bookedByUserId), addressOf(d1Client, event.inhabitantId)])
-        return {to, name, dinner: dinner.context, position: event.position, ticketType: event.ticketType ? useTicket().ticketTypeWords[event.ticketType].label : '-'}
+        return {to, name, dinner: dinner.context, position: event.position, ticketType: event.ticketType ? ticketTypeLabel(event.ticketType) : '-'}
     }))
     const buildups = await Promise.all(outcomes.joined.filter(event => event.queueSize === threshold).map(async event => {
         const dinner = await dinnerOf(event.dinnerEventId)

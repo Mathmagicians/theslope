@@ -25,7 +25,7 @@ import {getErrorMessage, mapZodErrorsToFormErrors} from "~/utils/validtation"
 // COMPONENT DEPENDENCIES
 const {BUTTONS, COLOR, COMPONENTS, ICONS, TYPOGRAPHY, TEXT} = useTheSlopeDesignSystem()
 const {TicketTypeSchema, TicketPricesArraySchema, createTicketPrice} = useTicketPriceValidation()
-const {portionsOf, ticketTypeWords} = useTicket()
+const {portionsOf} = useTicket()
 const TICKET_TYPES = TicketTypeSchema.options
 const TicketType = TicketTypeSchema.enum
 
@@ -57,7 +57,7 @@ const priceItems = computed(() => ticketPriceSelectItems(model.value))
 
 const ticketTypeOptions = computed(() =>
   TICKET_TYPES.map(type => ({
-    label: ticketTypeWords[type].label,
+    label: ticketTypeLabel(type),
     value: type
   }))
 )

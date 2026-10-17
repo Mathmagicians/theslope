@@ -1,9 +1,9 @@
-import {useBookingValidation, type TicketType, type BookingRowAction, type OrderBucket, type BookingAction, type BookingOutcome, type BookingResult, type BookingTotals, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketEvent, type TicketCounts, type AuditTicket, type OrderAuditAction} from '~/composables/useBookingValidation'
+import {useBookingValidation, DinnerMode as DinnerModeEnum, OrderState as OrderStateEnum, type TicketType, type BookingRowAction, type OrderBucket, type BookingAction, type BookingOutcome, type BookingResult, type BookingTotals, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketEvent, type TicketCounts, type AuditTicket} from '~/composables/useBookingValidation'
 import {useBillingValidation, type TransactionCreateData} from '~/composables/useBillingValidation'
 import {useBilling} from '~/composables/useBilling'
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
 import {useHousehold} from '~/composables/useHousehold'
-import {useTicket} from '~/composables/useTicket'
+import {useTicket, ticketTypeLabel} from '~/composables/useTicket'
 import type {InhabitantDisplay, HouseholdDisplay} from '~/composables/useCoreValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {Season} from '~/composables/useSeasonValidation'
@@ -13,12 +13,20 @@ import {calculateCountdown, formatDate, DATE_SETTINGS} from '~/utils/date'
 import {dateToWeekDay} from '~/utils/season'
 import {chunkArray, groupBy, partition} from '~/utils/batchUtils'
 import {sumBy} from '~/utils/ledger'
-import {differenceInCalendarDays} from 'date-fns'
+import {differenceInCalendarDays, isAfter} from 'date-fns'
 
 const {BookingRowActionSchema, OrderBucketSchema, BookingActionSchema} = useBookingValidation()
 const ROW_ACTION = BookingRowActionSchema.enum
 const Bucket = OrderBucketSchema.enum
 const Action = BookingActionSchema.enum
+
+/** Released and not bought: for sale until the dinner, kept with the eating mode Ingen by the close */
+export const isReleased = (order: Pick<OrderDisplay, 'state' | 'dinnerMode'>): boolean =>
+    order.state === OrderStateEnum.RELEASED || (order.state === OrderStateEnum.CLOSED && order.dinnerMode === DinnerModeEnum.NONE)
+
+/** A booked ticket bought from another household */
+export const isClaimedOrder = (order: Pick<OrderDisplay, 'state' | 'provenanceHousehold'>): boolean =>
+    order.state === OrderStateEnum.BOOKED && !!order.provenanceHousehold
 
 /**
  * Field set that reverts a dinner to a clean chef-less SCHEDULED state.
@@ -123,18 +131,16 @@ export const bookingOutcomes = (
 
 /** What an update does to the order it names; without the order at hand, a release or a mode change */
 export const actionOfUpdate = (incoming: DesiredOrder, existing: OrderDisplay | undefined): BookingAction => {
-    const {OrderStateSchema} = useBookingValidation()
-    const OrderState = OrderStateSchema.enum
-    if (incoming.state === OrderState.RELEASED && existing?.state !== OrderState.RELEASED) return Action.RELEASE
+    if (isReleased(incoming) && !(existing && isReleased(existing))) return Action.RELEASE
     if (!existing) return Action.CHANGE_MODE
-    if (incoming.state !== OrderState.RELEASED && existing.state === OrderState.RELEASED) return Action.RECLAIM
+    if (!isReleased(incoming) && isReleased(existing)) return Action.RECLAIM
     if (incoming.ticketPriceId !== existing.ticketPriceId) return Action.CHANGE_PRICE
     return Action.CHANGE_MODE
 }
 
 /** A place on a dinner's waiting list, in the line of its ticket type; an entry whose ticket price is gone has its number alone */
 export const formatPlace = (position: number, ticketType?: TicketType | null): string =>
-    `${ticketType ? `${useTicket().ticketTypeWords[ticketType].label} ` : ''}#${position}`
+    `${ticketType ? `${ticketTypeLabel(ticketType)} ` : ''}#${position}`
 
 /** The buckets whose execution has a supply outcome, in the order a preview reads them */
 export const OUTCOME_BUCKETS = [Bucket.claim, Bucket.create, Bucket.leave, Bucket.requeue] as const
@@ -166,6 +172,7 @@ export const countTotals = (items: readonly BookingResult[]): BookingTotals =>
  * - No orderId + NONE → null (skip)
  * - No orderId + eating + before deadline → create (state: BOOKED)
  * - No orderId + eating + after deadline → claim (state: BOOKED)
+ * - orderId of an order no longer among the existing ones (bought or deleted) → null (skip)
  * - orderId + NONE + before deadline → delete
  * - orderId + NONE + after deadline → update (state: RELEASED)
  * - orderId + RELEASED + eating mode → update (state: BOOKED, reclaim own)
@@ -200,10 +207,8 @@ export const decideOrderAction = (
         return { bucket, order: { ...desired, state: OrderState.BOOKED } }
     }
 
-    // Has orderId but no existing = data integrity error
-    if (!existing) {
-        throw new Error(`Order ${desired.orderId} not found in existing orders`)
-    }
+    // An orderId among no existing orders is stale: the order was bought by another household or deleted since
+    if (!existing) return null
 
     // Universal price check - runs BEFORE state-specific logic to ensure price healing
     // This catches price mismatches on ALL existing orders (BOOKED, RELEASED, any mode)
@@ -215,7 +220,7 @@ export const decideOrderAction = (
             return { bucket: Bucket.delete, order: desired }
         }
         // After deadline: release BOOKED orders, update RELEASED if price needs correction
-        if (existing.state === OrderState.RELEASED) {
+        if (isReleased(existing)) {
             if (priceChanged) {
                 return { bucket: Bucket.update, order: { ...desired, dinnerMode: DinnerMode.NONE, state: existing.state } }
             }
@@ -226,7 +231,7 @@ export const decideOrderAction = (
 
     // Reclaim: existing RELEASED + eating mode → update back to BOOKED
     // Price change is handled by scaffolder since desired.ticketPriceId is correct
-    if (existing.state === OrderState.RELEASED) {
+    if (isReleased(existing)) {
         return { bucket: Bucket.update, order: { ...desired, state: OrderState.BOOKED } }
     }
 
@@ -441,7 +446,7 @@ export const resolveOrdersFromPreferencesToBuckets = (
     const keyOf = (order: OrderDisplay) => `${order.inhabitantId}-${order.dinnerEventId}`
     // A user's own act outranks the preference: a guest ticket, an explicit booking, an explicit release
     const isManagedByPreferences = (order: OrderDisplay) =>
-        !order.isGuestTicket && !confirmedKeys.has(keyOf(order)) && !(cancelledKeys.has(keyOf(order)) && order.state === OrderState.RELEASED)
+        !order.isGuestTicket && !confirmedKeys.has(keyOf(order)) && !(cancelledKeys.has(keyOf(order)) && isReleased(order))
 
     const [managedOrders, unmanagedOrders] = partition(isManagedByPreferences)(existingOrders)
     const [unchangedOrders, outsideResidency] = partition((order: OrderDisplay) => dinnerEventById.has(order.dinnerEventId))(unmanagedOrders)
@@ -495,9 +500,8 @@ export const DEADLINE_LABELS = {
     BOOKING_CLOSED: {
         label: 'Framelding',
         openText: 'Booking kan ændres',
-        closedText: 'Booking kan ikke ændres',
-        deadlinePrefix: 'åben de næste',
-        availableText: (count: number) => `Lukket for ændringer, men der er ${count} billetter til salg`
+        closedText: 'Lukket for framelding',
+        deadlinePrefix: 'åben de næste'
     },
     GROCERIES_DONE: {
         label: 'Indkøb',
@@ -533,13 +537,20 @@ export interface ReleasedTicketCounts {
     byType: Partial<Record<TicketType, number>>  // A claim buys from its own ticket type
     queued: number
     queuedFormatted: string  // The waiting list by ticket type, in the style of formatted
+    queuedByType: Partial<Record<TicketType, number>>  // The waiting list per ticket type
 }
 
 /** A locked dinner's waiting list: its size and its breakdown by ticket type */
-export type WaitlistCounts = Pick<ReleasedTicketCounts, 'queued' | 'queuedFormatted'>
+export type WaitlistCounts = Pick<ReleasedTicketCounts, 'queued' | 'queuedFormatted' | 'queuedByType'>
 
 /** A locked dinner with nothing for sale and nobody on its waiting list */
-export const EMPTY_RELEASED_TICKET_COUNTS: ReleasedTicketCounts = {total: 0, formatted: '-', byType: {}, queued: 0, queuedFormatted: '-'}
+export const EMPTY_RELEASED_TICKET_COUNTS: ReleasedTicketCounts = {total: 0, formatted: '-', byType: {}, queued: 0, queuedFormatted: '-', queuedByType: {}}
+
+/** A locked dinner has released tickets for sale */
+export const hasTicketsForSale = (counts: Pick<ReleasedTicketCounts, 'total'>): boolean => counts.total > 0
+
+/** A locked dinner has someone on its waiting list */
+export const hasWaitlist = (counts: Pick<ReleasedTicketCounts, 'queued'>): boolean => counts.queued > 0
 
 // ============================================================================
 // Daily Maintenance - State Constants (ADR-015: Idempotent operations)
@@ -557,7 +568,11 @@ export const CONSUMABLE_DINNER_STATES = ['SCHEDULED', 'ANNOUNCED'] as const
  * Business rule: BOOKED and RELEASED orders on CONSUMED dinners become CLOSED.
  * CANCELLED orders are excluded (dinner was cancelled, already refunded).
  */
-export const CLOSABLE_ORDER_STATES = ['BOOKED', 'RELEASED'] as const
+export const CLOSABLE_ORDER_STATES = [OrderStateEnum.BOOKED, OrderStateEnum.RELEASED] as const
+
+/** Booked or released: the order waits for the close */
+export const isPendingOrder = (order: Pick<OrderDisplay, 'state'>): boolean =>
+    CLOSABLE_ORDER_STATES.some(state => state === order.state)
 
 /**
  * Dinner preparation step states (5-step workflow)
@@ -1025,12 +1040,12 @@ export const useBooking = () => {
      * UI counterpart to decideOrderAction - determines available paths of action.
      *
      * Decision matrix:
-     * | orderState | canModify | canEditMode | enabledModes        | action    |
+     * | order      | canModify | canEditMode | enabledModes        | action    |
      * |------------|-----------|-------------|---------------------|-----------|
      * | BOOKED     | -         | true        | [ALL]               | 'process' |
      * | BOOKED     | -         | false       | [NONE]              | 'process' |
-     * | RELEASED   | -         | true        | [ALL]               | 'process' |
-     * | RELEASED   | -         | false       | [DINEIN, NONE]      | 'process' |
+     * | released   | -         | true        | [ALL]               | 'process' |
+     * | released   | -         | false       | [DINEIN, NONE]      | 'process' |
      * | null       | true      | -           | [ALL]               | 'process' |
      * | null       | false     | true        | [EATING]            | 'claim'   |
      * | null       | false     | false       | [DINEIN]            | 'claim'   |
@@ -1041,23 +1056,22 @@ export const useBooking = () => {
      *
      * For "add new" (guest) context: caller filters out NONE from enabledModes.
      *
-     * @param orderState - Current order state (null if no order exists)
+     * @param order - The current order (null if no order exists)
      * @param canModifyOrders - Before booking deadline
      * @param canEditDiningMode - Before dining mode deadline
      * @param dinnerState - Dinner event state (CANCELLED/CONSUMED blocks booking)
      * @param isHouseholdInResidency - Whether household is active on the dinner date
      */
     const getBookingOptions = (
-        orderState: OrderState | null,
+        order: Pick<OrderDisplay, 'state' | 'dinnerMode'> | null,
         canModifyOrders: boolean,
         canEditDiningMode: boolean,
         dinnerState: DinnerState,
         isHouseholdInResidency: boolean
     ): { enabledModes: DinnerMode[], action: BookingRowAction | null } => {
-        const {DinnerModeSchema, DinnerStateSchema} = useBookingValidation()
+        const {DinnerModeSchema, DinnerStateSchema, OrderStateSchema} = useBookingValidation()
         const DinnerModeEnum = DinnerModeSchema.enum
         const DinnerStateEnum = DinnerStateSchema.enum
-        const {OrderStateSchema} = useBookingValidation()
         const OrderStateEnum = OrderStateSchema.enum
 
         const ALL_MODES: DinnerMode[] = [DinnerModeEnum.DINEIN, DinnerModeEnum.DINEINLATE, DinnerModeEnum.TAKEAWAY, DinnerModeEnum.NONE]
@@ -1071,14 +1085,14 @@ export const useBooking = () => {
         }
 
         // BOOKED order
-        if (orderState === OrderStateEnum.BOOKED) {
+        if (order?.state === OrderStateEnum.BOOKED) {
             return canEditDiningMode
                 ? { enabledModes: ALL_MODES, action: ROW_ACTION.process }
                 : { enabledModes: [DinnerModeEnum.NONE], action: ROW_ACTION.process }
         }
 
-        // RELEASED order (can reclaim own)
-        if (orderState === OrderStateEnum.RELEASED) {
+        // Released order (can reclaim own)
+        if (order && isReleased(order)) {
             return canEditDiningMode
                 ? { enabledModes: ALL_MODES, action: ROW_ACTION.process }
                 : { enabledModes: [DinnerModeEnum.DINEIN, DinnerModeEnum.NONE], action: ROW_ACTION.process }
@@ -1107,11 +1121,8 @@ export const useBooking = () => {
      */
     const getDayBillSummary = (orders: OrderDisplay[]): { ticketCounts: string; totalPrice: number } => {
         const {formatTicketCounts} = useBilling()
-        const {OrderStateSchema} = useBookingValidation()
 
-        const activeOrders = orders.filter(o =>
-            o.state === OrderStateSchema.enum.BOOKED || o.state === OrderStateSchema.enum.RELEASED
-        )
+        const activeOrders = orders.filter(isPendingOrder)
         return {
             ticketCounts: formatTicketCounts(activeOrders),
             totalPrice: sumBy(activeOrders, o => o.priceAtBooking)
@@ -1309,10 +1320,9 @@ export const useBooking = () => {
 
     /** Count released orders by dinner ID */
     const countReleasedOrdersByDinner = (orders: OrderDisplay[]): Map<number, number> => {
-        const {OrderStateSchema} = useBookingValidation()
         const counts = new Map<number, number>()
         for (const order of orders) {
-            if (order.state === OrderStateSchema.enum.RELEASED) {
+            if (isReleased(order)) {
                 counts.set(order.dinnerEventId, (counts.get(order.dinnerEventId) ?? 0) + 1)
             }
         }
@@ -1402,22 +1412,34 @@ export const useBooking = () => {
 
     /**
      * Replays a dinner's order history in time order into the lines of Billetændringer. Each row moves one held ticket,
-     * and its ticket events follow from that ticket before and after the row: booked, cancelled, released, bought, taken
-     * back, changed to another price row, or closed; a row that moves nothing, such as an eating mode switch, makes no
-     * event. A line gathers the events of one actor within one rendered minute, the system user acting for a row
-     * without an actor, with the tickets, kuverter and revenue after it. A ticket price the season no longer names
-     * counts in the revenue without a type or kuverter.
+     * and its ticket events follow from that ticket before and after the row: booked, the chef's extra portions,
+     * cancelled, cancelled by the admin after the booking deadline, released, bought, taken back, changed to another
+     * price row, or closed; a row that moves nothing, such as an eating mode switch, makes no event. A line gathers the
+     * events of one actor within one rendered minute, the system user acting for a row without an actor, with the
+     * tickets, kuverter and revenue after it. A ticket price the season no longer names counts in the revenue without a
+     * type or kuverter. A sale passes the ticket to the buyer, whose household its line and the ticket's later lines name.
      */
     const replayTicketChanges = (
         history: OrderHistoryDisplay[],
         ticketPriceOf: (ticketPriceId: number) => Pick<TicketPrice, 'ticketType' | 'portions'> | null,
         systemUserId: number,
-        householdShortnameOf: (householdId: number) => string | null = () => null
+        householdShortnameOf: (householdId: number) => string | null = () => null,
+        householdOfInhabitant: (inhabitantId: number) => Pick<HouseholdDisplay, 'id' | 'shortName'> | null = () => null,
+        bookingDeadline?: Date
     ): TicketChange[] => {
-        const {readAuditTicket, OrderAuditActionSchema, OrderStateSchema} = useBookingValidation()
+        const {readAuditTicket, OrderAuditActionSchema, OrderAuditSourceSchema, OrderStateSchema} = useBookingValidation()
         const Audit = OrderAuditActionSchema.enum
+        const Source = OrderAuditSourceSchema.enum
         const State = OrderStateSchema.enum
         const Kind = TicketChangeKindSchema.enum
+
+        // A sale's row names the buyer's inhabitant and holds the seller's snapshot: the ticket it moves is the buyer's
+        const ticketOf = (row: OrderHistoryDisplay): AuditTicket | null => {
+            const ticket = readAuditTicket(row)
+            if (!ticket || row.action !== Audit.USER_CLAIMED) return ticket
+            const buyer = row.inhabitantId === null ? null : householdOfInhabitant(row.inhabitantId)
+            return {...ticket, inhabitantId: row.inhabitantId, householdId: buyer?.id ?? null, householdShortname: buyer?.shortName ?? null}
+        }
 
         const priced = (ticketPriceId: number | null, price: number) => {
             const ticketPrice = ticketPriceId === null ? null : ticketPriceOf(ticketPriceId)
@@ -1435,6 +1457,12 @@ export const useBooking = () => {
             closed: current.closed || ticket.state === State.CLOSED
         })
 
+        // The row releases the ticket: a release keeps it paid, a deletion removes it
+        const releasesTicket = (ticket: AuditTicket): boolean => !ticket.deleted && ticket.state === State.RELEASED
+        // A cancellation keeps a released ticket held and paid, and takes a deleted one off the dinner
+        const afterCancellation = (current: HeldTicket, ticket: AuditTicket): HeldTicket | undefined =>
+            releasesTicket(ticket) ? updated(current, ticket) : undefined
+
         const afterRow = (current: HeldTicket | undefined, row: OrderHistoryDisplay, ticket: AuditTicket): HeldTicket | undefined => {
             switch (row.action) {
                 case Audit.USER_BOOKED:
@@ -1442,29 +1470,33 @@ export const useBooking = () => {
                     return current ? updated(current, ticket) : booked(row.id, ticket)
                 case Audit.SYSTEM_UPDATED:
                     return current && updated(current, ticket)
-                // A release after the deadline keeps the ticket; a cancellation before it deletes the order
                 case Audit.USER_CANCELLED:
-                    return current && ticket.state === State.RELEASED ? updated(current, ticket) : undefined
-                // The buyer eats on the ticket; it stays paid
+                    return current && afterCancellation(current, ticket)
+                // The buyer holds the ticket and eats on it; it stays paid
                 case Audit.USER_CLAIMED:
-                    return current && {...current, eating: true}
+                    return current && {...current, eating: true, inhabitantId: ticket.inhabitantId, householdId: ticket.householdId, householdShortname: ticket.householdShortname}
                 case Audit.SYSTEM_DELETED:
                     return undefined
             }
         }
 
-        const eventsOf = (before: HeldTicket | undefined, after: HeldTicket | undefined, action: OrderAuditAction): TicketEvent[] => {
-            if (!after) return before ? [{change: Kind.CANCEL, tickets: countsOf([before])}] : []
-            if (!before) return [{change: Kind.BOOK, tickets: countsOf([after])}]
+        // After the booking deadline only the admin's correction deletes an order
+        const isAfterBookingDeadline = (moment: Date): boolean => bookingDeadline !== undefined && isAfter(moment, bookingDeadline)
+        // The chef's extra portions are the orders the waiting-list assignment creates for the first in line
+        const isExtraPortion = (ticket: AuditTicket): boolean => ticket.source === Source['waitlist-assignment']
+
+        const eventsOf = (before: HeldTicket | undefined, after: HeldTicket | undefined, row: OrderHistoryDisplay, ticket: AuditTicket): TicketEvent[] => {
+            if (!after) return before ? [{change: isAfterBookingDeadline(row.timestamp) ? Kind.ADMIN_CANCEL : Kind.CANCEL, tickets: countsOf([before])}] : []
+            if (!before) return [{change: isExtraPortion(ticket) ? Kind.EXTRA_PORTIONS : Kind.BOOK, tickets: countsOf([after])}]
             if (after.closed && !before.closed) return [{change: Kind.CLOSE, tickets: countsOf([after])}]
-            const eatingChange = after.eating ? (action === Audit.USER_CLAIMED ? Kind.BUY : Kind.RECLAIM) : Kind.RELEASE
+            const eatingChange = after.eating ? (row.action === Audit.USER_CLAIMED ? Kind.BUY : Kind.RECLAIM) : Kind.RELEASE
             return [
                 ...(before.ticketPriceId === after.ticketPriceId ? [] : [{change: Kind.CHANGE_PRICE, tickets: countsOf([after]), from: countsOf([before])}]),
                 ...(before.eating === after.eating ? [] : [{change: eatingChange, tickets: countsOf([after])}])
             ]
         }
 
-        // A batch update's row carries the new scalars only; the ticket it moves names the household
+        // A batch update's row carries the new scalars only; the ticket it moves names the household, held as after the row
         const toLine = (row: OrderHistoryDisplay, ticket: AuditTicket, moved: HeldTicket | undefined, events: TicketEvent[], held: HeldTickets): TicketChange => {
             const householdId = ticket.householdId ?? moved?.householdId ?? null
             const household = ticket.householdShortname ?? moved?.householdShortname ?? (householdId === null ? null : householdShortnameOf(householdId))
@@ -1483,14 +1515,14 @@ export const useBooking = () => {
         }
 
         const {lines} = [...history].sort(byTime)
-            .map(row => ({row, ticket: readAuditTicket(row)}))
+            .map(row => ({row, ticket: ticketOf(row)}))
             .filter((entry): entry is {row: OrderHistoryDisplay, ticket: AuditTicket} => entry.ticket !== null)
             .reduce(({held, lines}, {row, ticket}) => {
                 const before = findHeld(held, ticket.orderId, ticket.inhabitantId)
                 const after = afterRow(before, row, ticket)
                 const next = after ? withTicket(held, after) : before ? withoutTicket(held, before.key) : held
-                const events = eventsOf(before, after, row.action)
-                return {held: next, lines: events.length > 0 ? [...lines, toLine(row, ticket, before ?? after, events, next)] : lines}
+                const events = eventsOf(before, after, row, ticket)
+                return {held: next, lines: events.length > 0 ? [...lines, toLine(row, ticket, after ?? before, events, next)] : lines}
             }, {held: new Map() as HeldTickets, lines: [] as TicketChange[]})
         return collapseByKey(lines)
     }

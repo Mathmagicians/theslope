@@ -33,7 +33,7 @@
  * - ADR-001: Types from validation composables, business logic in useOrder
  * - ADR-018: every class binds COMPONENTS.dinnerBudget
  */
-import type { OrderDetail, TicketType } from '~/composables/useBookingValidation'
+import type { OrderDetail } from '~/composables/useBookingValidation'
 import type { Expense } from '~/composables/useBillingValidation'
 import type { SpendingFragment } from '~/composables/useBookingUi'
 import type {TableColumn} from '@nuxt/ui'
@@ -66,7 +66,7 @@ const {baseRatePercent: kitchenBaseRatePercent, vatPercent} = appConfig.theslope
 
 // Business logic from useOrder and useTicket
 const { getActiveOrders, groupByTicketType, calculateBudget, calculateTotalPortions, spendingLeft, spendingAwaitsTickets } = useOrder()
-const { formatPrice, ticketTypeWords } = useTicket()
+const { formatPrice } = useTicket()
 
 // Expandable details state
 const showDetails = ref(false)
@@ -81,7 +81,6 @@ const totalPortions = computed(() => calculateTotalPortions(props.orders))
 
 // Revenue by ticket type (for expanded details table)
 const revenueByType = computed(() => groupByTicketType(activeOrders.value))
-const ticketLabel = (ticketType: TicketType) => ticketTypeWords[ticketType].label
 
 // The grocery lines against the allowance
 const spent = computed(() => sumAmounts(props.expenses))
@@ -177,7 +176,7 @@ const ticketColumns: TableColumn<TicketRevenueRow>[] = [
     <div data-testid="budget-details">
       <!-- Billetter: the ticket table named by type -->
       <UTable :data="revenueByType" :columns="ticketColumns" :ui="COMPONENTS.table.ui" data-testid="budget-ticket-table">
-        <template #ticketType-cell="{ row }">{{ ticketLabel(row.original.ticketType) }}</template>
+        <template #ticketType-cell="{ row }">{{ ticketTypeLabel(row.original.ticketType) }}</template>
         <template #unitPrice-cell="{ row }">{{ formatPrice(row.original.unitPrice) }} kr</template>
         <template #revenue-cell="{ row }">{{ formatPrice(row.original.revenue) }} kr</template>
         <template #empty>

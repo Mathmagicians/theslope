@@ -54,7 +54,7 @@ decision the user takes from a visual proposal.
 
 ## ADR-017: Isomorphic Composables, Pure UI Composables and Per-Context Type Checking
 
-**Status:** Accepted | **Date:** 2026-09-02
+**Status:** Accepted | **Date:** 2026-09-02 | **Updated:** 2026-10-17
 
 ### Context
 
@@ -66,7 +66,7 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 
 | Kind | Location / naming | Rules |
 |------|-------------------|-------|
-| **Isomorphic composable** | `app/composables/use<Domain>.ts`, `use<Domain>Validation.ts` — anything imported from `server/` | Explicit imports only (no auto-imports). No Vue reactivity, Pinia stores, nuxt-auth-utils app composables (`useUserSession`), NuxtUI or design-system calls. Types shared with the repository live in validation composables (`TransactionCreateData`), never imported from `server/` |
+| **Isomorphic composable** | `app/composables/use<Domain>.ts`, `use<Domain>Validation.ts` — anything imported from `server/` | Explicit imports only (no auto-imports). No Vue reactivity, Pinia stores, nuxt-auth-utils app composables (`useUserSession`), NuxtUI or design-system calls. Types shared with the repository live in validation composables (`TransactionCreateData`), never imported from `server/`. Formats a domain object into its text with the domain's words (`formatTicketCounts` "2V 1B", `formatPlace` "Voksen #3", `formatScaffoldResult` for the logs, `buildDinnerUrl`), so the app, the mails and the logs read the same |
 | **Pure UI composable** | `app/composables/use<Domain>Ui.ts` (`useBookingUi`, `useUserRolesUi`) | Client-only, never imported from `server/`. Owns badges, icons, labels, action previews, store-aware predicates. May use auto-imports |
 | **Design system** | `useTheSlopeDesignSystem.ts` | Owns every shared UI value (ADR-018); not booking- or user-aware; never server-reachable |
 | **Session predicates** | `app/stores/auth.ts` | `isMemberOfHousehold` and other session-aware checks wrap the isomorphic predicates from `usePermissions` |
@@ -81,7 +81,7 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 ### Compliance
 
 1. A composable imported from `server/` MUST NOT contain a bare auto-imported call; `npm run ts:server` MUST be clean
-2. Presentation code (icons, colors, labels, badge factories, store-aware predicates) MUST live in `use<Domain>Ui`, stores or components — never in isomorphic composables
+2. Presentation code (icons, colors, UI labels, badge factories, toast and preview sentences, store-aware predicates) MUST live in `use<Domain>Ui`, stores or components — never in isomorphic composables; the text of a domain object (a place in a line, ticket counts) is formatted in the isomorphic composable
 3. `use<Domain>Ui` and the design system MUST NOT be imported from `server/`
 4. App code MUST NOT import from `~~/server/**`; shared types go through validation composables
 5. New type augmentations go in `shared/types/` or `server/types/`

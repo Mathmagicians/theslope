@@ -19,15 +19,20 @@ import {
     OUTCOME_BUCKETS,
     NOTHING_FOR_SALE,
     EMPTY_RELEASED_TICKET_COUNTS,
+    isReleased,
+    isClaimedOrder,
+    hasTicketsForSale,
+    hasWaitlist,
     type PreviewSupply,
     type OrderBucketResult,
     type ReleasedTicketCounts
 } from '~/composables/useBooking'
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
 import {useOrder, type SpendingFigures} from '~/composables/useOrder'
+import {TICKET_COUNTS} from '~/composables/useBilling'
 import type {Expense} from '~/composables/useBillingValidation'
 import {useBookingValidation, DinnerMode as DinnerModeEnum, OrderState as OrderStateEnum, type OrderState, type DinnerMode, type DinnerEventDisplay, type OrderDisplay, type DesiredOrder, type OrderAuditAction, type BookingAction, type BookingOutcome, type BookingResult, type QueuePosition, type ScaffoldResult, type TicketChangeKind, type TicketType} from '~/composables/useBookingValidation'
-import {useTicket, type TicketTypeWords} from '~/composables/useTicket'
+import {useTicket, ticketTypeLabel} from '~/composables/useTicket'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {ICONS, COLOR, COMPONENTS, ALARM_TO_BADGE, BOOKING_LOCK_STATUS, ORDER_STATE_COLORS, TICKET_TYPE_COLORS, TICKET_TYPE_ICONS, type NuxtUIColor, type TicketState, type TicketTypeColor} from '~/composables/useTheSlopeDesignSystem'
 import {calculateCountdown, formatDate, formatDateRange} from '~/utils/date'
@@ -91,10 +96,10 @@ export interface TicketPresentation {
     icon: string
 }
 
-// A ticket type's words with the design system's colour and glyph for it
-export type TicketTypePresentation = TicketTypeWords & TicketPresentation & {color: TicketTypeColor}
+// A ticket type's label with the design system's colour and glyph for it
+export type TicketTypePresentation = TicketPresentation & {color: TicketTypeColor}
 export const ticketTypePresentation = (ticketType: TicketType): TicketTypePresentation => ({
-    ...useTicket().ticketTypeWords[ticketType],
+    label: ticketTypeLabel(ticketType),
     color: TICKET_TYPE_COLORS[ticketType],
     icon: TICKET_TYPE_ICONS[ticketType]
 })
@@ -193,26 +198,42 @@ export const STEP_ICONS: Record<DinnerStepState, string> = {
 }
 
 const ticketCount = (count: number) => `${count} billet${count === 1 ? '' : 'ter'}`
+const forSale = (tickets: string) => `${tickets} til salg`
 
 /**
- * The words of a closed dinner's supply, once: the booking form's bar (the tickets for sale, then the waiting list),
- * the Framelding tooltip (the same waiting list sentence) and the household's notes on the tickets it released and its
- * places on the waiting list. The first line of the bar names the closure. A queue entry is booked at its frozen price
- * when a ticket is assigned, so the household pays then
+ * The words of a closed dinner's supply, once: the Framelding badge's value line, the chef's waiting-list box, and the
+ * household's notes on the tickets it released and its places on the waiting list. A queue entry is booked at its
+ * frozen price when a ticket is assigned, so the household pays then
  */
 export const SUPPLY_WORDS = {
-    forSale: ({total, formatted}: ReleasedTicketCounts): string | null => total > 0
-        ? `Lukket for ændringer, men der er ${ticketCount(total)} til salg (${formatted}).`
-        : null,
-    forSaleCount: ({formatted}: ReleasedTicketCounts) => `${formatted} til salg`,
+    forSaleCount: ({formatted}: Pick<ReleasedTicketCounts, 'formatted'>) => forSale(formatted),
     queuedCount: ({queuedFormatted}: Pick<ReleasedTicketCounts, 'queuedFormatted'>) => `${queuedFormatted} på venteliste`,
-    waitlist: ({total, queued, queuedFormatted}: ReleasedTicketCounts): string | null => queued > 0
-        ? `${total > 0 ? 'Du kan også få' : 'Lukket for ændringer, men du kan få'} en plads på ventelisten. Pt står ${queuedFormatted} på ventelisten.`
-        : null,
     householdReleased: (count: number) =>
         ({title: `Husstanden har frigivet ${ticketCount(count)}`, description: 'Du betaler, medmindre andre køber'}),
     householdQueued: (count: number) =>
         ({title: `Husstanden står på ventelisten med ${ticketCount(count)}`, description: 'Du betaler, når du får en billet fra ventelisten.'})
+}
+
+/** A closed dinner's supply as the Framelding badge's value line: "1B til salg, 8V på venteliste"; null with neither */
+export const lockedSupply = (counts: ReleasedTicketCounts): string | null => {
+    const parts = [
+        ...(hasTicketsForSale(counts) ? [SUPPLY_WORDS.forSaleCount(counts)] : []),
+        ...(hasWaitlist(counts) ? [SUPPLY_WORDS.queuedCount(counts)] : [])
+    ]
+    return parts.length > 0 ? parts.join(', ') : null
+}
+
+/**
+ * A closed dinner's supply in a sentence, the Framelding badge's help text and the booking form's alert:
+ * "Lukket for framelding: 1 barn til salg, 8 voksne på ventelisten"; the closure alone with neither
+ */
+export const closedForCancellation = (counts: ReleasedTicketCounts): string => {
+    const {closedText} = DEADLINE_LABELS.BOOKING_CLOSED
+    const parts = [
+        ...(hasTicketsForSale(counts) ? [forSale(TICKET_COUNTS.sentence.text(counts.byType))] : []),
+        ...(hasWaitlist(counts) ? [`${TICKET_COUNTS.sentence.text(counts.queuedByType)} på ventelisten`] : [])
+    ]
+    return parts.length > 0 ? `${closedText}: ${parts.join(', ')}` : closedText
 }
 
 /**
@@ -222,27 +243,17 @@ export const SUPPLY_WORDS = {
  * @param releasedCounts - The locked dinner's supply with its formatted breakdowns
  */
 export const createBookingBadge = (isOpen: boolean, releasedCounts: ReleasedTicketCounts = EMPTY_RELEASED_TICKET_COUNTS): DeadlineBadgeData => {
-    const {label, openText, closedText, availableText} = DEADLINE_LABELS.BOOKING_CLOSED
+    const {label, openText} = DEADLINE_LABELS.BOOKING_CLOSED
     if (isOpen) return {label, icon: ICONS.lockOpen, color: COLOR.success, value: 'Åben', helpText: openText}
 
-    const {total} = releasedCounts
-    const waitlist = SUPPLY_WORDS.waitlist(releasedCounts)
-    const waiting = SUPPLY_WORDS.queuedCount(releasedCounts)
-    if (total > 0) {
-        const forSale = SUPPLY_WORDS.forSaleCount(releasedCounts)
-        return {
-            label,
-            icon: ICONS.released,
-            color: COLOR.warning,
-            value: waitlist ? `${forSale}, ${waiting}` : forSale,
-            helpText: waitlist ? `${availableText(total)}. ${waitlist}` : availableText(total)
-        }
-    }
-    if (waitlist) {
+    const value = lockedSupply(releasedCounts) ?? 'Lukket'
+    const helpText = closedForCancellation(releasedCounts)
+    if (hasTicketsForSale(releasedCounts)) return {label, icon: ICONS.released, color: COLOR.warning, value, helpText}
+    if (hasWaitlist(releasedCounts)) {
         const {icon, color} = ORDER_STATE_LABELS.queued
-        return {label, icon, color, value: waiting, helpText: waitlist}
+        return {label, icon, color, value, helpText}
     }
-    return {label, icon: ICONS.lockClosed, color: COLOR.error, value: 'Lukket', helpText: closedText}
+    return {label, icon: ICONS.lockClosed, color: COLOR.error, value, helpText}
 }
 
 /**
@@ -295,8 +306,8 @@ export const createBookingBadges = (
  */
 export const lockChip = (supply: ReleasedTicketCounts | null | undefined): {color: NuxtUIColor, text?: string, icon?: string} | null => {
     if (!supply) return null
-    if (supply.total > 0) return {color: BOOKING_LOCK_STATUS.lockedWithTickets.color, text: String(supply.total)}
-    if (supply.queued > 0) return {...BOOKING_LOCK_STATUS.lockedWithQueue}
+    if (hasTicketsForSale(supply)) return {color: BOOKING_LOCK_STATUS.lockedWithTickets.color, text: String(supply.total)}
+    if (hasWaitlist(supply)) return {...BOOKING_LOCK_STATUS.lockedWithQueue}
     return {...BOOKING_LOCK_STATUS.locked}
 }
 
@@ -328,9 +339,18 @@ export const ACTION_WORDS: Record<BookingAction, {icon: string, preview: (words:
     [Action.CHANGE_PRICE]: {icon: ICONS.edit, preview: () => 'ændrer billettype', toast: 'ændret billettype'}
 }
 
-/** The word of a ticket event in Billetændringer: the toast's word of its action, and the close's */
-export const ticketChangeWord = (change: TicketChangeKind): string =>
-    change === TicketChangeKindSchema.enum.CLOSE ? 'lukket' : ACTION_WORDS[change].toast
+/**
+ * The word of a ticket event in Billetændringer: the toast's word of its action; the admin's cancellation and the chef's
+ * extra portions build on the cancellation's and the booking's; the close has its own
+ */
+export const ticketChangeWord = (change: TicketChangeKind): string => {
+    switch (change) {
+        case TicketChangeKindSchema.enum.CLOSE: return 'lukket'
+        case TicketChangeKindSchema.enum.ADMIN_CANCEL: return `${ACTION_WORDS[Action.CANCEL].toast} af admin`
+        case TicketChangeKindSchema.enum.EXTRA_PORTIONS: return `ekstra ${ACTION_WORDS[Action.BOOK].toast}`
+        default: return ACTION_WORDS[change].toast
+    }
+}
 
 /** The booking form's save button words for each outcome */
 export const OUTCOME_WORDS: Record<BookingOutcome, {save: string}> = {
@@ -365,7 +385,7 @@ export const guestTicketsLabel = (label: string | undefined, count: number): str
 
 /** A booker's guests of one ticket type in a preview line or a toast line: "Gæst af Anna (Barn ×2)" */
 const guestGroupName = (bookerName: string, ticketType: TicketType | null | undefined, count: number): string => {
-    const tickets = guestTicketsLabel(ticketType ? useTicket().ticketTypeWords[ticketType].label : undefined, count)
+    const tickets = guestTicketsLabel(ticketType ? ticketTypeLabel(ticketType) : undefined, count)
     const guests = useOrder().formatGuestLabel(bookerName)
     return tickets ? `${guests} (${tickets})` : guests
 }
@@ -447,15 +467,21 @@ export const useBookingUi = () => {
     const {formatGuestLabel} = useOrder()
     const {getCookingDeadlineThresholds} = useSeason()
 
-    const formatOrder = (order: Pick<OrderDisplay, 'state' | 'provenanceHousehold' | 'isGuestTicket'>, bookerName?: string): FormattedOrder => {
-        const isClaimed = !!order.provenanceHousehold
-        const shown = order.state === OrderStateEnum.BOOKED && isClaimed ? ORDER_STATE_LABELS.claimed : ORDER_STATE_LABELS[order.state]
+    type FormattableOrder = Pick<OrderDisplay, 'state' | 'dinnerMode' | 'provenanceHousehold' | 'isGuestTicket'>
+    const orderLabel = (order: FormattableOrder): OrderDisplayConfig => {
+        if (isReleased(order)) return ORDER_STATE_LABELS[OrderStateEnum.RELEASED]
+        if (isClaimedOrder(order)) return ORDER_STATE_LABELS.claimed
+        return ORDER_STATE_LABELS[order.state]
+    }
+
+    const formatOrder = (order: FormattableOrder, bookerName?: string): FormattedOrder => {
+        const shown = orderLabel(order)
         return {
             guest: order.isGuestTicket ? {label: formatGuestLabel(bookerName), color: COLOR.info, icon: ICONS.userPlus} : null,
             stateText: shown.label,
             stateColor: shown.color,
             stateIcon: shown.icon,
-            isClaimed
+            isClaimed: isClaimedOrder(order)
         }
     }
 

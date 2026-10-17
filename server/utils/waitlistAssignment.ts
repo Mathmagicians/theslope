@@ -76,14 +76,14 @@ const leaveWhenAlreadyPlaced = async (d1Client: D1Database, entry: TicketWaitlis
 const placeEntry = async (
     d1Client: D1Database, dinner: DinnerForWaitlist, entry: TicketWaitlistDisplay, portions: number, performedByUserId: number | null
 ): Promise<WaitlistAssigned | null> => {
-    const {OrderAuditActionSchema} = useBookingValidation()
+    const {OrderAuditActionSchema, OrderAuditSourceSchema} = useBookingValidation()
     const {allergyTypeIds: _allergies, ...order} = entry.order
     let created: CreateOrdersResult
     try {
         created = await createOrders(d1Client, order.householdId, [order], {
             action: OrderAuditActionSchema.enum.SYSTEM_CREATED,
             performedByUserId,
-            source: 'waitlist-assignment',
+            source: OrderAuditSourceSchema.enum['waitlist-assignment'],
             seasonId: dinner.seasonId
         })
     } catch (error) {

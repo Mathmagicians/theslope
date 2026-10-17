@@ -144,9 +144,8 @@ const getInhabitantName = (id: number) =>
   props.household.inhabitants.find(i => i.id === id)?.name ?? 'Ukendt'
 
 // Validation schemas
-const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+const {DinnerModeSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
-const OrderStateEnum = OrderStateSchema.enum
 
 // ============================================================================
 // DRAFT STATE (ADR-016)
@@ -439,10 +438,10 @@ const tableData = computed((): GridRow[] => {
 const getOrderCountsForInhabitant = (inhabitantId: number): { total: number, released: number } => {
   const orders = flatEvents.value
     .flatMap(e => getOrderForCell(inhabitantId, e.id) ?? [])
-    .filter(o => o.state === OrderStateEnum.BOOKED || o.state === OrderStateEnum.RELEASED)
+    .filter(isPendingOrder)
   return {
     total: orders.length,
-    released: orders.filter(o => o.state === OrderStateEnum.RELEASED).length
+    released: orders.filter(o => isReleased(o)).length
   }
 }
 
@@ -479,7 +478,7 @@ const getDisabledModes = (order: OrderDisplay | undefined, event: DinnerEventDis
   if (isDinnerPast(event.date)) return ALL_MODES
 
   const {enabledModes} = getBookingOptions(
-    order?.state ?? null,
+    order ?? null,
     canBookEvent(event),
     canChangeEventMode(event),
     event.state,
@@ -508,7 +507,7 @@ const getPowerDisabledModes = (event: DinnerEventDisplay): DinnerMode[] => {
 const getEventLockChip = (event: DinnerEventDisplay) => {
   if (canBookEvent(event) || isDinnerPast(event.date)) return null
   const releasedCount = props.orders.filter(o =>
-    o.dinnerEventId === event.id && o.state === OrderStateEnum.RELEASED
+    o.dinnerEventId === event.id && isReleased(o)
   ).length
   return lockChip({...EMPTY_RELEASED_TICKET_COUNTS, total: releasedCount})
 }

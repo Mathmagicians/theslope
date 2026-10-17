@@ -26,7 +26,6 @@ const props = defineProps<Props>()
 const {formatPrice} = useTicket()
 const {groupByCostEntry, calculateCurrentBillingPeriod, formatTicketCounts} = useBilling()
 const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG, NOISE} = useTheSlopeDesignSystem()
-const {OrderStateSchema} = useBookingValidation()
 
 // Accessor functions for CostEntry (reusable lambdas)
 const periodTitleAccessor = (period: UnifiedBillingPeriod) =>
@@ -79,7 +78,7 @@ const upcomingOrdersData = computed(() => {
     return groupOrdersByDinner(
         orders.value
             .filter((o): o is OrderDisplay & { dinnerEvent: DinnerEventInfo } =>
-                (o.state === OrderStateSchema.enum.BOOKED || o.state === OrderStateSchema.enum.RELEASED) &&
+                isPendingOrder(o) &&
                 o.dinnerEvent !== undefined
             )
             .map(o => ({

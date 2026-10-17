@@ -780,16 +780,27 @@ export async function fetchHouseholds(d1Client: D1Database, householdId?: number
     }
 }
 
-// ADR-014: the id list chunks under D1's bound-parameter limit
-const chunkHouseholdIds = chunkArray<number>(90)
+// ADR-014: an id list reads in chunks under D1's bound-parameter limit
+const chunkIds = chunkArray<number>(90)
+const findHouseholdDisplaysByIds = async (d1Client: D1Database, ids: number[], whereOf: (batch: number[]) => Prisma.HouseholdWhereInput): Promise<HouseholdDisplay[]> =>
+    (await Promise.all(chunkIds([...new Set(ids)]).map(batch => findHouseholdDisplays(d1Client, whereOf(batch))))).flat()
 
 export async function fetchHouseholdsByIds(d1Client: D1Database, ids: number[]): Promise<HouseholdDisplay[]> {
     console.info(`🏠 > HOUSEHOLD > [GET] Fetching ${ids.length} households by id`)
     try {
-        const batches = await Promise.all(chunkHouseholdIds([...new Set(ids)]).map(batch => findHouseholdDisplays(d1Client, {id: {in: batch}})))
-        return batches.flat()
+        return await findHouseholdDisplaysByIds(d1Client, ids, batch => ({id: {in: batch}}))
     } catch (error) {
         return throwH3Error(`🏠 > HOUSEHOLDS > [GET]: Error fetching households ${ids.join(', ')}`, error)
+    }
+}
+
+/** The households the inhabitants live in, each with its inhabitants */
+export async function fetchHouseholdsByInhabitantIds(d1Client: D1Database, inhabitantIds: number[]): Promise<HouseholdDisplay[]> {
+    console.info(`🏠 > HOUSEHOLD > [GET] Fetching the households of ${inhabitantIds.length} inhabitants`)
+    try {
+        return await findHouseholdDisplaysByIds(d1Client, inhabitantIds, batch => ({inhabitants: {some: {id: {in: batch}}}}))
+    } catch (error) {
+        return throwH3Error(`🏠 > HOUSEHOLDS > [GET]: Error fetching the households of inhabitants ${inhabitantIds.join(', ')}`, error)
     }
 }
 

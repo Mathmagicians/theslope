@@ -1,7 +1,7 @@
 # ADR Compliance - Backend
 
 **Generated:** 2025-01-09
-**Last Updated:** 2026-10-15
+**Last Updated:** 2026-10-17
 **History:** git and the feature plans under `docs/features/` (shipped plans in `docs/features/archived/`)
 
 One row per endpoint and per server module an ADR names, with its markers and its API spec. The handler, its repository
@@ -103,7 +103,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | **Household** | | | | | |
 | `/api/household/[id]/update.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/inhabitants/[id]/preferences.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `/api/household/order/scaffold.post.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ a save naming an order since bought by another household lists it in `failed`; that case awaits its spec |
 | `/api/household/allergy/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/allergy/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/household/allergy/[id].get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -114,7 +114,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/chef/dinner/[id]/expenses/index.get.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/chef/dinner/[id]/expenses/index.put.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `/api/chef/dinner/[id]/expenses/[expenseId].delete.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `/api/chef/dinner/[id]/order-history.get.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec asserts the reply before ticket events |
+| `/api/chef/dinner/[id]/order-history.get.ts` | ✅ | ✅ | ✅ | ⚠️ | ⚠️ spec asserts the reply before ticket events and leaves the sale line's household (the buyer's) unread; the buyers' households come from `fetchHouseholdsByInhabitantIds`; the admin's deletion after the booking deadline (`ADMIN_CANCEL`) awaits its spec case |
 | `/api/chef/dinner/[id]/extra-portions.post.ts` | ✅ | ✅ | ✅ | ✅ serial | ✅ |
 | **Teams** | | | | | |
 | `/api/team/my.get.ts` | ✅ | N/A | ✅ | ✅ | ✅ |

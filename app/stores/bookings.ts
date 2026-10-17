@@ -197,7 +197,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
     const fetchReleasedOrders = async (dinnerEventId: number): Promise<OrderDisplay[]> => {
         const released = await apiRequest('/api/order', {
-            query: {dinnerEventIds: dinnerEventId, state: 'RELEASED', allHouseholds: true, sortBy: 'releasedAt'},
+            query: {dinnerEventIds: dinnerEventId, state: OrderStateSchema.enum.RELEASED, allHouseholds: true, sortBy: 'releasedAt'},
             schema: OrderDisplaySchema.array(),
             action: 'fetchReleasedOrders', errorMessage: 'Kunne ikke hente billetterne til salg'
         })
@@ -231,8 +231,10 @@ export const useBookingsStore = defineStore("Bookings", () => {
     )
 
     const waitlistCounts = computed(() => new Map([...groupBy<TicketWaitlistDisplay, number>(entry => entry.dinnerEventId)(waitlistEntries.value)]
-        .map(([dinnerEventId, queue]): [number, WaitlistCounts] =>
-            [dinnerEventId, {queued: queue.length, queuedFormatted: formatTicketCounts(queue.map(entry => ({ticketType: entryTicketType.value(entry) ?? null})))}])))
+        .map(([dinnerEventId, queue]): [number, WaitlistCounts] => {
+            const queuedByType = countTicketTypes(queue.map(entry => ({ticketType: entryTicketType.value(entry) ?? null})))
+            return [dinnerEventId, {queued: queue.length, queuedFormatted: formatTicketCounts(queuedByType), queuedByType}]
+        })))
 
     // Exposed computed: lockStatus map for calendar display
     const lockStatus = computed(() => {

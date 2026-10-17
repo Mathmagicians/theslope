@@ -218,10 +218,14 @@ export const useBookingValidation = () => {
      *
      * seasonId: Required for user intent tracking (fetchUserIntentKeys filters by seasonId)
      */
+    // What wrote an order's creation row: a user's booking, a preference change, the nightly scaffold, the chef's extra
+    // portions for the waiting list, the billing import
+    const OrderAuditSourceSchema = z.enum(['user-booking', 'preference-update', 'scaffold-prebookings', 'waitlist-assignment', 'csv_billing'])
+
     const AuditContextSchema = z.object({
         action: OrderAuditActionSchema,
         performedByUserId: IdSchema.nullable(),
-        source: z.string().min(1),
+        source: OrderAuditSourceSchema,
         seasonId: IdSchema.nullable()
     })
 
@@ -381,9 +385,10 @@ export const useBookingValidation = () => {
 
     // Schema for deserializing - accepts strings or Dates, outputs Dates
     /**
-     * The ticket an OrderHistory row speaks of, read from the three shapes auditData takes: the creation's `orderData`,
-     * the snapshot of an update, claim or deletion, and the scalars of a bulk close. The order id comes from the
-     * snapshot or the row; a row whose order is gone and whose data holds no id reads null and is matched by inhabitant.
+     * The ticket an OrderHistory row speaks of, read from the three shapes auditData takes: the creation's `orderData`
+     * with the source that wrote it, the snapshot of an update, claim or deletion, and the scalars of a bulk update. The
+     * order id comes from the snapshot or the row; a row whose order is gone and whose data holds no id reads null and is
+     * matched by inhabitant. A source the enum does not name reads null.
      */
     const AuditTicketSchema = z.object({
         orderId: IdSchema.nullable(),
@@ -392,10 +397,15 @@ export const useBookingValidation = () => {
         householdShortname: z.string().nullable(),
         ticketPriceId: IdSchema.nullable(),
         priceAtBooking: z.number().int(),
-        state: OrderStateSchema
+        state: OrderStateSchema,
+        deleted: z.boolean(),
+        source: OrderAuditSourceSchema.nullable().catch(null)
     })
 
-    const readAuditTicket = (row: {orderId: number | null, inhabitantId: number | null, auditData: string}): z.infer<typeof AuditTicketSchema> | null => {
+    // deleteOrder writes the deleted order's snapshot under a cancellation or a system deletion; a release writes the scalars
+    const DELETION_ACTIONS: readonly z.infer<typeof OrderAuditActionSchema>[] = [OrderAuditActionSchema.enum.USER_CANCELLED, OrderAuditActionSchema.enum.SYSTEM_DELETED]
+
+    const readAuditTicket = (row: {orderId: number | null, inhabitantId: number | null, action: z.infer<typeof OrderAuditActionSchema>, auditData: string}): z.infer<typeof AuditTicketSchema> | null => {
         const parsed = JSON.parse(row.auditData) as Record<string, unknown>
         const snapshot = parsed.orderSnapshot as Record<string, unknown> | undefined
         const source = snapshot ?? (parsed.orderData as Record<string, unknown> | undefined) ?? parsed
@@ -406,7 +416,9 @@ export const useBookingValidation = () => {
             householdShortname: snapshot?.householdShortname ?? null,
             ticketPriceId: source.ticketPriceId ?? null,
             priceAtBooking: source.priceAtBooking ?? 0,
-            state: source.state ?? OrderStateSchema.enum.BOOKED
+            state: source.state ?? OrderStateSchema.enum.BOOKED,
+            deleted: snapshot !== undefined && DELETION_ACTIONS.includes(row.action),
+            source: parsed.source ?? null
         })
         return result.success ? result.data : null
     }
@@ -680,8 +692,9 @@ export const useBookingValidation = () => {
         [TicketTypeSchema.enum.BABY]: z.number().int()
     })
 
-    // What a ticket event does: a booking action, or the nightly close
-    const TicketChangeKindSchema = z.enum([...BookingActionSchema.options, 'CLOSE'])
+    // What a ticket event does: a booking action, the admin's deletion after the booking deadline, the chef's extra
+    // portions for the waiting list, or the nightly close
+    const TicketChangeKindSchema = z.enum([...BookingActionSchema.options, 'ADMIN_CANCEL', 'EXTRA_PORTIONS', 'CLOSE'])
 
     // The tickets one event touched by type; a ticket type change also names the tickets it changed from
     const TicketEventSchema = z.object({
@@ -975,6 +988,7 @@ export const useBookingValidation = () => {
 
         // Batch Order Creation
         OrderAuditActionSchema,
+        OrderAuditSourceSchema,
         AuditContextSchema,
         OrderCreateWithPriceSchema,
         OrdersBatchSchema,
@@ -1084,6 +1098,7 @@ export type SerializedOrderHistoryDisplay = z.infer<ReturnType<typeof useBooking
 // Orders Creation (Bulk)
 export type OrderAuditAction = z.infer<ReturnType<typeof useBookingValidation>['OrderAuditActionSchema']>
 export type AuditContext = z.infer<ReturnType<typeof useBookingValidation>['AuditContextSchema']>
+export type OrderAuditSource = z.infer<ReturnType<typeof useBookingValidation>['OrderAuditSourceSchema']>
 export type OrderCreateWithPrice = z.infer<ReturnType<typeof useBookingValidation>['OrderCreateWithPriceSchema']>
 export type OrdersBatch = z.infer<ReturnType<typeof useBookingValidation>['OrdersBatchSchema']>
 export type CreateOrdersResult = z.infer<ReturnType<typeof useBookingValidation>['CreateOrdersResultSchema']>
