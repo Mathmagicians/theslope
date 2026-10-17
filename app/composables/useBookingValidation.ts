@@ -411,40 +411,6 @@ export const useBookingValidation = () => {
         return result.success ? result.data : null
     }
 
-    // ============================================================================
-    // TICKET CHANGES - the dinner's order history replayed for the chef (ADR-009 operation result)
-    // ============================================================================
-
-    const TicketCountsSchema = z.object({
-        [TicketTypeSchema.enum.ADULT]: z.number().int(),
-        [TicketTypeSchema.enum.CHILD]: z.number().int(),
-        [TicketTypeSchema.enum.BABY]: z.number().int()
-    })
-
-    /**
-     * One change of the dinner's tickets: the tickets moved by type, the composition after it, the kuverter and the
-     * revenue in øre. A system run collapses into one change without a household or a single ticket type.
-     */
-    const TicketChangeSchema = z.object({
-        id: IdSchema,
-        timestamp: z.coerce.date(),
-        action: OrderAuditActionSchema,
-        householdShortname: z.string().nullable(),
-        ticketType: TicketTypeSchema.nullable(),
-        delta: TicketCountsSchema,
-        counts: TicketCountsSchema,
-        portions: z.number(),
-        revenue: z.number().int()
-    })
-
-    // GET /api/chef/dinner/[id]/order-history: newest first; `olderCount` counts the changes before `since`
-    const TicketChangesResponseSchema = z.object({
-        dinnerEventId: IdSchema,
-        since: z.coerce.date().nullable(),
-        changes: z.array(TicketChangeSchema),
-        olderCount: z.number().int().min(0)
-    })
-
     const SerializedOrderSchema = OrderDisplaySchema.omit({
         releasedAt: true, closedAt: true, createdAt: true, updatedAt: true
     }).extend({
@@ -704,6 +670,51 @@ export const useBookingValidation = () => {
     // What a save does to the supply, which names its button: a bucket with no supply effect changes the mode
     const BookingOutcomeSchema = BookingActionSchema.extract([Action.BOOK, Action.BUY, Action.QUEUE, Action.LEAVE, Action.REQUEUE, Action.CHANGE_MODE])
 
+    // ============================================================================
+    // TICKET CHANGES - the dinner's order history replayed for the chef (ADR-009 operation result)
+    // ============================================================================
+
+    const TicketCountsSchema = z.object({
+        [TicketTypeSchema.enum.ADULT]: z.number().int(),
+        [TicketTypeSchema.enum.CHILD]: z.number().int(),
+        [TicketTypeSchema.enum.BABY]: z.number().int()
+    })
+
+    // What a ticket event does: a booking action, or the nightly close
+    const TicketChangeKindSchema = z.enum([...BookingActionSchema.options, 'CLOSE'])
+
+    // The tickets one event touched by type; a ticket type change also names the tickets it changed from
+    const TicketEventSchema = z.object({
+        change: TicketChangeKindSchema,
+        tickets: TicketCountsSchema,
+        from: TicketCountsSchema.optional()
+    })
+
+    /**
+     * One line of the dinner's ticket changes: the ticket events of one actor within one minute and the households they
+     * touched, then the tickets the dinner is paid for, their kuverter and the revenue in øre after it. A row without an
+     * actor is the system user's.
+     */
+    const TicketChangeSchema = z.object({
+        id: IdSchema,
+        timestamp: z.coerce.date(),
+        performedByUserId: IdSchema,
+        bySystem: z.boolean(),
+        households: z.array(z.string()),
+        events: z.array(TicketEventSchema).min(1),
+        counts: TicketCountsSchema,
+        portions: z.number(),
+        revenue: z.number().int()
+    })
+
+    // GET /api/chef/dinner/[id]/order-history: newest first; `olderCount` counts the changes before `since`
+    const TicketChangesResponseSchema = z.object({
+        dinnerEventId: IdSchema,
+        since: z.coerce.date().nullable(),
+        changes: z.array(TicketChangeSchema),
+        olderCount: z.number().int().min(0)
+    })
+
     // One order's result in a scaffold run: who, the ticket type, which dinner, the eating mode and the action; the ticket
     // type groups a booker's guests and is null when the order's price is gone
     const BookingResultSchema = z.object({
@@ -934,6 +945,8 @@ export const useBookingValidation = () => {
         DinnerEventInfoSchema,
         DinnerEventDetailSchema,
         TicketCountsSchema,
+        TicketChangeKindSchema,
+        TicketEventSchema,
         TicketChangeSchema,
         TicketChangesResponseSchema,
         AuditTicketSchema,
@@ -1047,6 +1060,8 @@ export type DinnerEventDetail = z.infer<ReturnType<typeof useBookingValidation>[
 export type DinnerEventCreate = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventCreateSchema']>
 export type DinnerEventUpdate = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventUpdateSchema']>
 export type TicketCounts = z.infer<ReturnType<typeof useBookingValidation>['TicketCountsSchema']>
+export type TicketChangeKind = z.infer<ReturnType<typeof useBookingValidation>['TicketChangeKindSchema']>
+export type TicketEvent = z.infer<ReturnType<typeof useBookingValidation>['TicketEventSchema']>
 export type TicketChange = z.infer<ReturnType<typeof useBookingValidation>['TicketChangeSchema']>
 export type TicketChangesResponse = z.infer<ReturnType<typeof useBookingValidation>['TicketChangesResponseSchema']>
 export type AuditTicket = z.infer<ReturnType<typeof useBookingValidation>['AuditTicketSchema']>

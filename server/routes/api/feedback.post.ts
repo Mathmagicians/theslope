@@ -1,15 +1,11 @@
-import {z} from 'zod'
 import {createFeedbackIssue} from '~~/server/integration/github/githubClient'
-import type {FeedbackPayload, GitHubIssueResponse} from '~~/server/integration/github/githubClient'
+import type {FeedbackPayload} from '~~/server/integration/github/githubClient'
 import type {UserDetail} from '~/composables/useCoreValidation'
+import {useFeedbackValidation, type FeedbackCreate, type FeedbackIssue} from '~/composables/useFeedbackValidation'
 
 const LOG = '🐙 > FEEDBACK > '
 
-const FeedbackBodySchema = z.object({
-    type: z.enum(['bug', 'idea', 'question']),
-    description: z.string().optional(),
-    currentUrl: z.string().optional()
-})
+const {FeedbackCreateSchema} = useFeedbackValidation()
 
 /**
  * POST /api/feedback
@@ -17,7 +13,7 @@ const FeedbackBodySchema = z.object({
  * Requires authentication with valid inhabitant
  * ADR-002: Separate validation and business logic try-catch
  */
-export default defineEventHandler(async (event): Promise<GitHubIssueResponse> => {
+export default defineEventHandler(async (event): Promise<FeedbackIssue> => {
     // Auth check - must be logged in with valid inhabitant
     const session = await getUserSession(event)
     const user = session?.user as UserDetail | undefined
@@ -26,9 +22,9 @@ export default defineEventHandler(async (event): Promise<GitHubIssueResponse> =>
     }
 
     // Validation - FAIL EARLY (400)
-    let body: z.infer<typeof FeedbackBodySchema>
+    let body: FeedbackCreate
     try {
-        body = await readValidatedBody(event, FeedbackBodySchema.parse)
+        body = await readValidatedBody(event, FeedbackCreateSchema.parse)
     } catch (error) {
         console.warn(LOG, 'POST > Validation failed', error)
         throw createError({statusCode: 400, message: 'Invalid feedback data', cause: error})

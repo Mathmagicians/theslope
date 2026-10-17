@@ -308,7 +308,7 @@ test.describe('Daily Maintenance API', () => {
         // Structure check: getInvoiceTransactions returns transactions with expected fields
         // On the invoices of this case's households: on a shared database the period also holds every other household's
         // invoice, and the session household may carry earlier runs' invoices
-        const ownInvoices = periodDetail.invoices.filter(inv => [householdId, secondHousehold.household.id].includes(inv.householdId))
+        const ownInvoices = periodDetail.invoices.filter(inv => inv.householdId !== null && [householdId, secondHousehold.household.id].includes(inv.householdId))
         expect(ownInvoices.some(inv => inv.householdId === secondHousehold.household.id), 'the ZZZ household is billed in this period').toBe(true)
         for (const invoice of ownInvoices) {
             const transactions = await BillingFactory.getInvoiceTransactions(context, invoice.id)

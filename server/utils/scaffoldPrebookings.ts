@@ -121,14 +121,8 @@ export async function scaffoldPrebookings(
     const isUserTriggered = options.userId !== undefined
     const isUserMode = options.desiredOrders !== undefined
 
-    // TODO: REVERT after healing is complete - restore userId requirement
-    // User mode validation: desiredOrders requires householdId and userId
-    // if (isUserMode && (!options.householdId || !options.userId)) {
-    //     throw new Error(`${LOG} User mode (desiredOrders provided) requires both householdId and userId`)
-    // }
-    // TEMPORARY: Allow desiredOrders without userId for healing (creates SYSTEM_* audit)
-    if (isUserMode && !options.householdId) {
-        throw new Error(`${LOG} User mode (desiredOrders provided) requires householdId`)
+    if (isUserMode && (!options.householdId || !options.userId)) {
+        throw new Error(`${LOG} User mode (desiredOrders provided) requires both householdId and userId`)
     }
 
     // Resolve season ID - use provided or fall back to active season
@@ -360,7 +354,7 @@ export async function scaffoldPrebookings(
                             inhabitantId: toClaim.inhabitantId,
                             isGuestTicket: toClaim.isGuestTicket,
                             order
-                        })
+                        }, {state: dinnerEventById.get(toClaim.dinnerEventId)!.state, ticketPrices: season.ticketPrices})
                         outcomes.joined.push(joined)
                         landed.push(resultOf(toClaim, Action.QUEUE))
                         positions.push({inhabitantId: toClaim.inhabitantId, dinnerEventId: toClaim.dinnerEventId, isGuestTicket: toClaim.isGuestTicket, position, ticketType: joined.ticketType})

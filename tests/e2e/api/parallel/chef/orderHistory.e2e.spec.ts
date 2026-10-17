@@ -9,13 +9,14 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 /**
  * `/api/chef/dinner/[id]/order-history`: the dinner's ticket changes replayed from its order history, newest first.
  * The member's household books an adult and a guest child, releases the child after the booking deadline and the
- * admin's household claims it: tickets and revenue stand still through release and claim while the kuverter follow the
- * eaters; `since` keeps the changes from a moment and counts the older ones.
+ * admin's household buys it: the tickets, kuverter and revenue paid for stand still through the release and the sale,
+ * and each line carries its ticket events; `since` keeps the changes from a moment and counts the older ones.
  */
 const {validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, getSessionUserInfo} = testHelpers
-const {OrderAuditActionSchema, OrderStateSchema, DinnerModeSchema} = useBookingValidation()
+const {TicketChangeKindSchema, OrderStateSchema, DinnerModeSchema} = useBookingValidation()
 const {TicketTypeSchema} = useTicketPriceValidation()
-const Action = OrderAuditActionSchema.enum
+const Kind = TicketChangeKindSchema.enum
+const {ticketCounts} = OrderFactory
 
 test.describe('Chef dinner order history', () => {
     let seasonId: number
@@ -83,13 +84,17 @@ test.describe('Chef dinner order history', () => {
         const revenue = adultPrice.price + childPrice.price
 
         expect(response.olderCount).toBe(0)
-        // The two bookings of one household within one minute are one row
-        expect(response.changes.map(change => change.action)).toEqual([Action.USER_CLAIMED, Action.USER_CANCELLED, Action.USER_BOOKED])
-        const [claim, release, booking] = response.changes
-        expect(claim).toMatchObject({ticketType: TicketTypeSchema.enum.CHILD, counts: OrderFactory.ticketCounts(1, 1, 0), portions: adultPortions + childPortions, revenue})
-        expect(release).toMatchObject({ticketType: TicketTypeSchema.enum.CHILD, delta: OrderFactory.ticketCounts(0, 0, 0), counts: OrderFactory.ticketCounts(1, 1, 0), portions: adultPortions, revenue})
-        expect(booking).toMatchObject({delta: OrderFactory.ticketCounts(1, 1, 0), counts: OrderFactory.ticketCounts(1, 1, 0)})
-        expect(response.changes.every(change => change.householdShortname !== null)).toBe(true)
+        // The two bookings by one user within one minute are one line
+        expect(response.changes.map(change => change.events)).toEqual([
+            [{change: Kind.BUY, tickets: ticketCounts(0, 1, 0)}],
+            [{change: Kind.RELEASE, tickets: ticketCounts(0, 1, 0)}],
+            [{change: Kind.BOOK, tickets: ticketCounts(1, 1, 0)}]
+        ])
+        for (const change of response.changes) {
+            expect(change).toMatchObject({counts: ticketCounts(1, 1, 0), portions: adultPortions + childPortions, revenue})
+        }
+        const [claim, release] = response.changes
+        expect(response.changes.every(change => change.households.length === 1)).toBe(true)
 
         const sinceRelease = await OrderFactory.getTicketChanges(memberContext, dinnerEventId, release!.timestamp)
         expect(sinceRelease!.changes.map(change => change.id)).toEqual([claim!.id, release!.id])

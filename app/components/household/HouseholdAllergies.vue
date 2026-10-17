@@ -57,8 +57,8 @@ const {
 } = storeToRefs(allergyStore)
 const {loadAllergiesForHousehold} = allergyStore
 
-// Load allergies for this household
-loadAllergiesForHousehold(props.household.id)
+// The household shown is the households store's selection; the store reads its allergies
+loadAllergiesForHousehold()
 
 // Expandable row state - only one at a time
 const expanded = ref<Record<number, boolean>>({})

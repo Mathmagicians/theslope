@@ -1,5 +1,6 @@
 import type {UserDetail} from '~/composables/useCoreValidation'
 import type {SenderEmitResult} from '~/composables/useNotificationValidation'
+import type {FeedbackCreate, FeedbackIssue} from '~/composables/useFeedbackValidation'
 import {DEFAULT_NOTIFICATION_CHANNELS, readAppearance, type Appearance, type NotificationChannel, type UserPreferencesUpdate} from '~/composables/useUserPreferenceValidation'
 
 /** The toast and the login form both show it when a sign-in fails */
@@ -9,6 +10,7 @@ export const useAuthStore = defineStore("Auth", () => {
     const {loggedIn, user: _user, session, clear, fetch} = useUserSession()
     const permissions = usePermissions()
     const {apiRequest, toastSaved} = useApiHandler()
+    const {FeedbackIssueSchema} = useFeedbackValidation()
 
     const user = computed(() => _user.value as UserDetail | null)
 
@@ -64,7 +66,11 @@ export const useAuthStore = defineStore("Auth", () => {
         return result
     }
 
-    return {signIn, greeting, avatar, name, lastName, email, phone, birthDate, inhabitantId, systemRoles, isAdmin, isAllergyManager, isMemberOfHousehold, address, notificationChannels, appearance, savePreferences, sendTestNotification, loggedIn, user, session, clear, fetch}
+    /** The user's feedback, filed as a GitHub issue */
+    const submitFeedback = (feedback: FeedbackCreate): Promise<FeedbackIssue> =>
+        apiRequest('/api/feedback', {method: 'POST', body: feedback, schema: FeedbackIssueSchema, action: 'submitFeedback'})
+
+    return {signIn, greeting, avatar, name, lastName, email, phone, birthDate, inhabitantId, systemRoles, isAdmin, isAllergyManager, isMemberOfHousehold, address, notificationChannels, appearance, savePreferences, sendTestNotification, submitFeedback, loggedIn, user, session, clear, fetch}
 })
 
 if (import.meta.hot) {

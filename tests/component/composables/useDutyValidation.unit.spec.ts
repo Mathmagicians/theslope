@@ -3,7 +3,7 @@ import {useDutyValidation, type JokerSlot} from '~/composables/useDutyValidation
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {SeasonFactory} from "~~/tests/e2e/testDataFactories/seasonFactory"
 
-const {RoleSchema, JokerSlotCreateSchema, serializeJokerSlot, deserializeJokerSlot} = useDutyValidation()
+const {RoleSchema, JokerSlotCreateSchema, SerializedJokerSlotSchema, serializeJokerSlot, deserializeJokerSlot} = useDutyValidation()
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
 
 const slotWithNote: JokerSlot = {
@@ -24,6 +24,12 @@ describe('useDutyValidation', () => {
         const serialized = serializeJokerSlot(slotWithNote)
         expect(typeof serialized.affinity).toBe('string')
         expect(deserializeJokerSlot(serialized)).toEqual(slotWithNote)
+    })
+
+    it('SerializedJokerSlotSchema is the stored row: it accepts the affinity as its string and rejects the domain map', () => {
+        expect(SerializedJokerSlotSchema.parse(serializeJokerSlot(slotWithNote))).toEqual(serializeJokerSlot(slotWithNote))
+        const result = SerializedJokerSlotSchema.safeParse(slotWithNote)
+        expect(result.error?.issues.map(issue => issue.path.join('.'))).toEqual(['affinity'])
     })
 
     describe('JokerSlotCreateSchema', () => {

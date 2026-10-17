@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
+import { ZodError } from 'zod'
 import { useCookingTeamValidation, type CookingTeamDisplay, type CookingTeamAssignment } from '~/composables/useCookingTeamValidation'
+import { useDutyValidation } from '~/composables/useDutyValidation'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -209,6 +211,21 @@ describe('useCookingTeamValidation', () => {
             expect(assignment.affinity).toEqual(originalAssignment.affinity)
           }
         })
+      })
+    })
+
+    describe('CookingTeamDetail joker slots', () => {
+      const { deserializeCookingTeamDetail } = useCookingTeamValidation()
+      const { serializeJokerSlot } = useDutyValidation()
+      const slot = { ...SeasonFactory.defaultJokerSlot(), id: 5, cookingTeamId: 1, note: null, createdAt: new Date(2026, 9, 1), updatedAt: new Date(2026, 9, 1) }
+      const teamRow = (jokerSlots: unknown[]) => ({ ...serializeCookingTeam(SeasonFactory.defaultCookingTeamDisplay()), dinnerEvents: [], jokerSlots })
+
+      it('restores the stored joker slot rows to domain slots', () => {
+        expect(deserializeCookingTeamDetail(teamRow([serializeJokerSlot(slot)])).jokerSlots).toEqual([slot])
+      })
+
+      it('rejects a joker slot row that is not the stored shape', () => {
+        expect(() => deserializeCookingTeamDetail(teamRow([slot]))).toThrow(ZodError)
       })
     })
 

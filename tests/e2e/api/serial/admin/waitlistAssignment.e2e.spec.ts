@@ -16,7 +16,8 @@ const {validatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo, da
 const {TicketTypeSchema} = useTicketPriceValidation()
 const TicketType = TicketTypeSchema.enum
 const {createDefaultWeekdayMap} = useCoreValidation()
-const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema, TicketChangeKindSchema} = useBookingValidation()
+const TicketChangeKind = TicketChangeKindSchema.enum
 
 /**
  * The chef releases portions on a sold-out dinner of the active season: the queue is served in strict FIFO, each
@@ -251,5 +252,11 @@ test.describe('Waiting list assignment', () => {
         expect(bought.map(order => order.state)).toEqual([OrderStateSchema.enum.BOOKED])
         expect(await householdEntries(context, closedDinner.id!)).toEqual([])
         expect(await OrderFactory.getOrders(context, {dinnerEventIds: openDinner.id!, householdId: seller.id})).toEqual([])
+
+        // The ticket history shows the system run's release and the sale that followed it
+        const history = (await OrderFactory.getTicketChanges(context, closedDinner.id!))!
+        const events = history.changes.flatMap(change => change.events.map(event => event.change))
+        expect(history.changes.some(change => change.bySystem && change.events.some(event => event.change === TicketChangeKind.RELEASE))).toBe(true)
+        expect(events).toContain(TicketChangeKind.BUY)
     })
 })

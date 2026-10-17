@@ -85,9 +85,9 @@ const selectSeason = (dinnerEvents: DinnerEventDisplay[] = []) => {
     activeSeasonIdEndpoint.mockReturnValue(SEASON_ID)
     seasonByIdEndpoint.mockReturnValue({...SEASON, dinnerEvents})
 }
-const {TicketTypeSchema, OrderAuditActionSchema} = useBookingValidation()
+const {TicketTypeSchema, TicketChangeKindSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
-const AuditAction = OrderAuditActionSchema.enum
+const TicketChangeKind = TicketChangeKindSchema.enum
 // Ids on the season's prices: a waiting-list entry names its price by id, the store reads the ticket type off it
 const ticketPrices = SEASON.ticketPrices.map((price, index) => ({...price, id: index + 1}))
 const priceOf = (ticketType: typeof TicketType[keyof typeof TicketType]) => ticketPrices.find(price => price.ticketType === ticketType)!.id!
@@ -761,9 +761,9 @@ const ticketChangesEndpoint = vi.fn((event: H3Event) => ({
     dinnerEventId: DINNER_ID,
     since: getQuery(event).since ?? null,
     changes: [{
-        id: 1, timestamp: new Date('2026-04-05T08:02:00Z'), action: AuditAction.USER_BOOKED, householdShortname: 'S_31', ticketType: TicketType.ADULT,
-        delta: {[TicketType.ADULT]: 1, [TicketType.CHILD]: 0, [TicketType.BABY]: 0},
-        counts: {[TicketType.ADULT]: 1, [TicketType.CHILD]: 0, [TicketType.BABY]: 0}, portions: 1, revenue: 5000
+        id: 1, timestamp: new Date('2026-04-05T08:02:00Z'), performedByUserId: 31, bySystem: false, households: ['S_31'],
+        events: [{change: TicketChangeKind.BOOK, tickets: OrderFactory.ticketCounts(1, 0, 0)}],
+        counts: OrderFactory.ticketCounts(1, 0, 0), portions: 1, revenue: 5000
     }],
     olderCount: 3
 }))
@@ -775,7 +775,7 @@ describe('Bookings store — ticket changes', () => {
         const since = new Date('2026-04-03T18:00:00Z')
         const response = await store.fetchTicketChanges(DINNER_ID, since)
         expect(response.changes[0]!.timestamp).toBeInstanceOf(Date)
-        expect(response.changes[0]).toMatchObject({householdShortname: 'S_31', revenue: 5000})
+        expect(response.changes[0]).toMatchObject({households: ['S_31'], revenue: 5000})
         expect(response.olderCount).toBe(3)
         expect(lastQuery(ticketChangesEndpoint)).toMatchObject({since: since.toISOString()})
     })

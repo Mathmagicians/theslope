@@ -1,11 +1,26 @@
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
+import {createError} from 'h3'
 import {
     bookingMails, emitTicketSold, emitWaitlistBuildup, emitWaitlistExtraPortion, emitWaitlistJoined, emitWaitlistTicketAssigned,
-    NO_BOOKING_MAILS, type BookingMails
+    NO_BOOKING_MAILS, notifyBookingOutcomes, notifyExtraPortions, type BookingMails
 } from '~~/server/utils/sender/events/waitlist'
+import {fetchHousehold, fetchInhabitant, fetchSeason, fetchUser} from '~~/server/data/prismaRepository'
+import {fetchDinnerEvent} from '~~/server/data/financesRepository'
 import type {EmailChannel} from '~~/server/utils/sender/config'
 import type {EmailMessage} from '~/composables/useNotificationValidation'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
+import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
+
+// The unit runtime has no D1: the lookups answer from the test
+vi.mock('~~/server/data/prismaRepository', () => ({
+    fetchHousehold: vi.fn(), fetchInhabitant: vi.fn(), fetchSeason: vi.fn(), fetchUser: vi.fn()
+}))
+vi.mock('~~/server/data/financesRepository', () => ({
+    createOrders: vi.fn(), claimOrder: vi.fn(), fetchDinnerEvent: vi.fn()
+}))
+// The events read the config and log through createError from the Nitro auto-import scope
+vi.stubGlobal('useAppConfig', () => ({theslope: {waitlistBuildupThreshold: 3}}))
+vi.stubGlobal('createError', createError)
 
 const dinner = {dinnerEventId: 7, date: new Date(2026, 9, 19), menuTitle: 'Lasagne'}
 const to = 'anna@example.com'
@@ -112,5 +127,31 @@ describe('bookingMails', () => {
 
         expect(await bookingMails(NotificationFactory.channel(queue), NO_BOOKING_MAILS)).toEqual([])
         expect(queue.send).not.toHaveBeenCalled()
+    })
+})
+
+// The mails follow a booking that is already saved: a failed lookup leaves the booking standing and sends nothing
+describe('booking notifications after the action', () => {
+    const logs = {error: vi.spyOn(console, 'error'), warn: vi.spyOn(console, 'warn'), info: vi.spyOn(console, 'info')}
+    const lookups = [fetchDinnerEvent, fetchSeason, fetchHousehold, fetchInhabitant, fetchUser]
+    beforeEach(() => {
+        Object.values(logs).forEach(spy => spy.mockImplementation(() => {}))
+        lookups.forEach(lookup => vi.mocked(lookup).mockRejectedValue(new Error('D1 down')))
+    })
+    afterEach(() => vi.clearAllMocks())
+
+    const sale = {dinnerEventId: 7, ticketPriceId: 4, buyerInhabitantId: 41, buyerHouseholdId: 2, sellerHouseholdId: 3}
+
+    it.each([
+        {operation: 'notifyBookingOutcomes', notify: (channel: EmailChannel) =>
+            notifyBookingOutcomes({} as D1Database, channel, {joined: [], ticketsSold: [sale], waitlistTicketsSold: [sale]})},
+        {operation: 'notifyExtraPortions', notify: (channel: EmailChannel) =>
+            notifyExtraPortions({} as D1Database, channel, WaitlistFactory.defaultAssignmentResult({dinnerEventId: 7}))}
+    ])('$operation logs a failed lookup and reports no mails', async ({notify}) => {
+        const queue = fakeQueue()
+
+        expect(await notify(NotificationFactory.channel(queue))).toEqual([])
+        expect(queue.send).not.toHaveBeenCalled()
+        expect(logs.error).toHaveBeenCalledWith(expect.stringContaining('D1 down'))
     })
 })

@@ -2,7 +2,7 @@ import {z} from 'zod'
 import {RoleSchema, DinnerStateSchema} from '~~/prisma/generated/zod'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useCoreValidation, IdSchema} from '~/composables/useCoreValidation'
-import {useDutyValidation, type SerializedJokerSlot} from '~/composables/useDutyValidation'
+import {useDutyValidation} from '~/composables/useDutyValidation'
 import type {WeekDayMap as _WeekDayMap} from '~/types/dateTypes'
 
 /**
@@ -50,7 +50,7 @@ export const useCookingTeamValidation = () => {
 
     // Get Inhabitant display schema for nested relations
     const {InhabitantDisplaySchema} = useCoreValidation()
-    const {JokerSlotSchema, deserializeJokerSlot} = useDutyValidation()
+    const {JokerSlotSchema, SerializedJokerSlotSchema, deserializeJokerSlot} = useDutyValidation()
 
     // Use generated Role schema from Prisma (aliased as TeamRoleSchema for backward compatibility)
     const TeamRoleSchema = RoleSchema
@@ -281,7 +281,7 @@ export const useCookingTeamValidation = () => {
     const deserializeCookingTeamDetail = (serialized: Record<string, unknown>): CookingTeamDetail => {
         const assignments = serialized.assignments as Record<string, unknown>[] | undefined
         const dinnerEvents = serialized.dinnerEvents as Record<string, unknown>[] | undefined
-        const jokerSlots = serialized.jokerSlots as SerializedJokerSlot[] | undefined
+        const jokerSlots = SerializedJokerSlotSchema.array().optional().parse(serialized.jokerSlots)
         const deserialized = {
             ...serialized,
             affinity: serialized.affinity ? deserializeWeekDayMap(serialized.affinity as string) : undefined,

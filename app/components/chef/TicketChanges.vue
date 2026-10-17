@@ -2,18 +2,25 @@
 /**
  * TicketChanges - Billetændringer: the dinner's ticket changes, newest first, behind a toggle row. Opening it loads the
  * stretch since Framelding closed; before that moment the newest change stands alone; one button loads the rest.
+ * A line holds the ticket events of one user, or of the system, within one minute: each event's word with the tickets
+ * it touched, then what the dinner is paid for after it.
  *
- *   Billetændringer                                                              [v]
- *   Dato         Husstand  Ændring                      Billetter · kuverter        Indtægter
- *   09/04 19:10  S_14      Købt fra anden  +1 (child) Barn   29 (adult) 11 (child) 3 (baby) · 34,5   1.725 kr
- *   05/04 08:02  S_31      Bestilt         +1 (adult) Voksen 29 (adult) 11 (child) 3 (baby) · 34,5   1.725 kr
- *   ── 03/04 18:00 · Menu ───────────────────────────────────────────────────────────────
+ *   Se billetændringer                                                                       [v]
+ *   Dato              Husstand  Ændring                      Billetter · kuverter     Indtægter
+ *   21/10/2026 02:00  System    lukket                       30V 11B 3b · 35,5        2.035 kr
+ *   20/10/2026 19:10  S_14      købt 1V                      30V 11B 3b · 35,5        2.035 kr
+ *   20/10/2026 12:40  S_22      ændret billettype 1B → 1V    30V 11B 3b · 35,5        2.035 kr
+ *   20/10/2026 09:05  S_31      frigivet 2V                  29V 12B 3b · 35          2.015 kr
+ *   ── Framelding lukker · 19/10/2026 18:00 ─────────────────────────────────────────────────
  *   [Vis fuld historik]
+ *
+ *   A line by one actor within one minute lists its events in the action order:
+ *   20/10/2026 12:40  S_31  tilmeldt 1B, frigivet 2V  …
  *
  * ADR-007: component-local useAsyncData exception - the pane holds its own dinner's history, fetched on open through
  * the bookings store.
  */
-import type {TicketChange, TicketCounts} from '~/composables/useBookingValidation'
+import type {TicketChange, TicketCounts, TicketEvent} from '~/composables/useBookingValidation'
 import type {TableColumn} from '@nuxt/ui'
 import {isFuture} from 'date-fns'
 
@@ -27,12 +34,12 @@ const {COMPONENTS, BUTTONS, SIZES, ICONS, NOISE, COLOR, TYPOGRAPHY, ALERTS, getR
 const noTicketChanges = getRandomEmptyMessageText('noTicketChanges')
 const changeColumns: TableColumn<TicketChange>[] = [
   {accessorKey: 'timestamp', header: 'Dato'},
-  {accessorKey: 'householdShortname', header: 'Husstand'},
+  {accessorKey: 'households', header: 'Husstand'},
   {id: 'change', header: 'Ændring'},
   {id: 'tickets', header: 'Billetter · kuverter'},
   {accessorKey: 'revenue', header: 'Indtægter', meta: COMPONENTS.table.amountColumn}
 ]
-const {TicketTypeSchema} = useBookingValidation()
+const {TicketTypeSchema, TicketChangeKindSchema} = useBookingValidation()
 const {formatPrice} = useTicket()
 const {formatMoment} = useBooking()
 const bookingsStore = useBookingsStore()
@@ -60,13 +67,17 @@ const rows = computed(() => beforeDeadline.value && !showAll.value ? changes.val
 // What the full history still holds beyond the rows shown
 const moreCount = computed(() => beforeDeadline.value && !showAll.value ? Math.max(changes.value.length - 1, 0) : (data.value?.olderCount ?? 0))
 
-const TICKET_TYPES = [TicketTypeSchema.enum.ADULT, TicketTypeSchema.enum.CHILD, TicketTypeSchema.enum.BABY] as const
-type TicketTypeKey = typeof TICKET_TYPES[number]
-const chip = (type: TicketTypeKey) => ticketTypePresentation(type)
-const movedTypes = (delta: TicketCounts) => TICKET_TYPES.filter(type => delta[type] !== 0)
-const heldTypes = (counts: TicketCounts) => TICKET_TYPES.filter(type => counts[type] > 0)
-const signed = (count: number) => `${count > 0 ? '+' : ''}${count}`
-const actionLabel = (change: TicketChange) => ORDER_ACTION_LABELS[change.action].label
+// A chip per ticket type in the count, in the type's colour
+const chipsOf = (counts: TicketCounts) => TicketTypeSchema.options
+  .filter(type => counts[type] > 0)
+  .map(type => ({type, count: counts[type], ...ticketTypePresentation(type)}))
+// The tickets an event touched; a ticket type change shows the tickets before it first, the close shows its word alone
+const chipRuns = (event: TicketEvent) => event.change === TicketChangeKindSchema.enum.CLOSE
+  ? []
+  : [...(event.from ? [chipsOf(event.from)] : []), chipsOf(event.tickets)]
+// One household by its short name; a line over several reads System for the system user and the short names for a user
+const householdLabel = ({households, bySystem}: TicketChange) =>
+  households.length !== 1 && bySystem ? 'System' : households.join(', ')
 </script>
 
 <template>
@@ -97,19 +108,27 @@ const actionLabel = (change: TicketChange) => ORDER_ACTION_LABELS[change.action]
       <UAlert v-else-if="error" v-bind="ALERTS.error" title="Kunne ikke hente billetændringer" />
       <UTable v-else :data="rows" :columns="changeColumns" :ui="COMPONENTS.table.ui">
         <template #timestamp-cell="{ row }">{{ formatMoment(row.original.timestamp) }}</template>
-        <template #householdShortname-cell="{ row }">{{ row.original.householdShortname ?? 'System' }}</template>
+        <template #households-cell="{ row }">{{ householdLabel(row.original) }}</template>
         <template #change-cell="{ row }">
-          <span :class="COMPONENTS.ticketChanges.chips">
-            <span>{{ actionLabel(row.original) }}</span>
-            <UBadge v-for="type in movedTypes(row.original.delta)" :key="type" :color="chip(type).color" :variant="NOISE.soft" :size="SIZES.small" data-testid="ticket-change-delta">
-              {{ signed(row.original.delta[type]) }} {{ chip(type).compactLabel }}
-            </UBadge>
+          <span>
+            <template v-for="(event, index) in row.original.events" :key="event.change">
+              <template v-if="index > 0">, </template>
+              <span :class="COMPONENTS.ticketChanges.chips" data-testid="ticket-change-event">
+                <span data-testid="ticket-change-word">{{ ticketChangeWord(event.change) }}</span>
+                <template v-for="(run, runIndex) in chipRuns(event)" :key="runIndex">
+                  <span v-if="runIndex > 0">→</span>
+                  <UBadge v-for="chip in run" :key="chip.type" :color="chip.color" :variant="NOISE.soft" :size="SIZES.small" data-testid="ticket-change-chip">
+                    {{ chip.count }} {{ chip.compactLabel }}
+                  </UBadge>
+                </template>
+              </span>
+            </template>
           </span>
         </template>
         <template #tickets-cell="{ row }">
           <span :class="COMPONENTS.ticketChanges.chips">
-            <UBadge v-for="type in heldTypes(row.original.counts)" :key="type" :color="chip(type).color" :variant="NOISE.soft" :size="SIZES.small">
-              {{ row.original.counts[type] }} {{ chip(type).compactLabel }}
+            <UBadge v-for="chip in chipsOf(row.original.counts)" :key="chip.type" :color="chip.color" :variant="NOISE.soft" :size="SIZES.small">
+              {{ chip.count }} {{ chip.compactLabel }}
             </UBadge>
             <span :class="TYPOGRAPHY.finePrint">· {{ formatPortions(row.original.portions) }} kuverter</span>
           </span>

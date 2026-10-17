@@ -1,4 +1,4 @@
-import {useBookingValidation, type TicketType, type BookingRowAction, type OrderBucket, type BookingAction, type BookingOutcome, type BookingResult, type BookingTotals, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketCounts, type AuditTicket, type OrderAuditAction} from '~/composables/useBookingValidation'
+import {useBookingValidation, type TicketType, type BookingRowAction, type OrderBucket, type BookingAction, type BookingOutcome, type BookingResult, type BookingTotals, type DinnerEventDetail, type DinnerEventDisplay, type DinnerEventUpdate, type HeynaboEventCreate, type OrderForTransaction, type OrderDetail, type OrderSnapshot, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderState, type DinnerState, type ScaffoldResult, type OrderHistoryDisplay, type TicketChange, type TicketEvent, type TicketCounts, type AuditTicket, type OrderAuditAction} from '~/composables/useBookingValidation'
 import {useBillingValidation, type TransactionCreateData} from '~/composables/useBillingValidation'
 import {useBilling} from '~/composables/useBilling'
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
@@ -1373,109 +1373,152 @@ export const useBooking = () => {
     // Ticket changes (Billetændringer) and the cooking round
     // ============================================================================
 
-    const {TicketTypeSchema} = useBookingValidation()
+    const {TicketTypeSchema, TicketChangeKindSchema} = useBookingValidation()
     const countsBy = (count: (type: TicketType) => number): TicketCounts =>
         Object.fromEntries(TicketTypeSchema.options.map(type => [type, count(type)])) as TicketCounts
     const emptyCounts = (): TicketCounts => countsBy(() => 0)
-    const foldCounts = (op: (a: number, b: number) => number) => (a: TicketCounts, b: TicketCounts): TicketCounts =>
-        countsBy(type => op(a[type], b[type]))
+    const countsPlus = (a: TicketCounts, b: TicketCounts): TicketCounts => countsBy(type => a[type] + b[type])
 
-    // The tickets a dinner holds after a history row; counts, kuverter and revenue are read off this set
-    type HeldTicket = Readonly<{key: number, inhabitantId: number | null, type: TicketType | null, price: number, portions: number, eating: boolean, householdId: number | null, householdShortname: string | null}>
+    // A ticket the dinner is paid for after a history row: its price row, its holder's household, whether its holder eats
+    // or has released it, and whether the close has settled it
+    type HeldTicket = Readonly<{key: number, inhabitantId: number | null, ticketPriceId: number | null, type: TicketType | null, price: number, portions: number, eating: boolean, closed: boolean, householdId: number | null, householdShortname: string | null}>
     type HeldTickets = ReadonlyMap<number, HeldTicket>
 
     const sumOver = (held: HeldTickets, weigh: (ticket: HeldTicket) => number): number => sumBy([...held.values()], weigh)
-    const countsOf = (held: HeldTickets): TicketCounts =>
-        [...held.values()].reduce((counts, ticket) => ticket.type ? {...counts, [ticket.type]: counts[ticket.type] + 1} : counts, emptyCounts())
-    // A ticket released after the booking deadline stays paid and leaves the table: revenue keeps it, kuverter drop it
-    const portionsOf = (held: HeldTickets): number =>
-        sumOver(held, ticket => ticket.eating ? ticket.portions : 0)
+    const countsOf = (tickets: Iterable<HeldTicket>): TicketCounts =>
+        [...tickets].reduce((counts, ticket) => ticket.type ? {...counts, [ticket.type]: counts[ticket.type] + 1} : counts, emptyCounts())
+    // A released ticket stays paid until someone buys it: it keeps its place in the counts, the kuverter and the revenue
+    const portionsOf = (held: HeldTickets): number => sumOver(held, ticket => ticket.portions)
     const revenueOf = (held: HeldTickets): number => sumOver(held, ticket => ticket.price)
-    const countsPlus = foldCounts((a, b) => a + b)
-    const countsMinus = foldCounts((a, b) => a - b)
 
     const withTicket = (held: HeldTickets, ticket: HeldTicket): HeldTickets => new Map(held).set(ticket.key, ticket)
     const withoutTicket = (held: HeldTickets, key: number): HeldTickets => new Map([...held].filter(([heldKey]) => heldKey !== key))
-    const withEating = (held: HeldTickets, ticket: HeldTicket, eating: boolean): HeldTickets => withTicket(held, {...ticket, eating})
-    // A creation row whose order is gone keys by its own negative row id and is found by inhabitant
+    // A booking row whose order is gone keys by its own negative row id and is found by inhabitant
     const findHeld = (held: HeldTickets, orderId: number | null, inhabitantId: number | null): HeldTicket | undefined =>
         (orderId !== null ? held.get(orderId) : undefined)
         ?? [...held.values()].find(ticket => ticket.key < 0 && ticket.inhabitantId === inhabitantId)
 
-    const byTime = byTimeThenId<OrderHistoryDisplay>(row => row.timestamp.getTime())
+    const byTime = byTimeThenId<{id: number, timestamp: Date}>(row => row.timestamp.getTime())
 
     /**
-     * Replays a dinner's order history in time order into one change per event: the tickets moved by type, the
-     * composition after it, the kuverter and the revenue. A change is the difference between the tickets held before
-     * and after its row. A ticket price the season no longer names leaves the change without a type. Consecutive
-     * changes with the same rendered moment, household and event collect into one change carrying the summed delta.
+     * Replays a dinner's order history in time order into the lines of Billetændringer. Each row moves one held ticket,
+     * and its ticket events follow from that ticket before and after the row: booked, cancelled, released, bought, taken
+     * back, changed to another price row, or closed; a row that moves nothing, such as an eating mode switch, makes no
+     * event. A line gathers the events of one actor within one rendered minute, the system user acting for a row
+     * without an actor, with the tickets, kuverter and revenue after it. A ticket price the season no longer names
+     * counts in the revenue without a type or kuverter.
      */
     const replayTicketChanges = (
         history: OrderHistoryDisplay[],
         ticketPriceOf: (ticketPriceId: number) => Pick<TicketPrice, 'ticketType' | 'portions'> | null,
+        systemUserId: number,
         householdShortnameOf: (householdId: number) => string | null = () => null
     ): TicketChange[] => {
         const {readAuditTicket, OrderAuditActionSchema, OrderStateSchema} = useBookingValidation()
-        const Action = OrderAuditActionSchema.enum
-        const priceOf = (ticket: AuditTicket) => ticket.ticketPriceId === null ? null : ticketPriceOf(ticket.ticketPriceId)
+        const Audit = OrderAuditActionSchema.enum
+        const State = OrderStateSchema.enum
+        const Kind = TicketChangeKindSchema.enum
 
-        const step = (held: HeldTickets, action: OrderAuditAction, rowId: number, ticket: AuditTicket): HeldTickets => {
-            const current = findHeld(held, ticket.orderId, ticket.inhabitantId)
-            switch (action) {
-                case Action.USER_BOOKED:
-                case Action.SYSTEM_CREATED:
-                    return current
-                        ? withEating(held, current, true)
-                        : withTicket(held, {key: ticket.orderId ?? -rowId, inhabitantId: ticket.inhabitantId, type: priceOf(ticket)?.ticketType ?? null, price: ticket.priceAtBooking, portions: priceOf(ticket)?.portions ?? 0, eating: true, householdId: ticket.householdId, householdShortname: ticket.householdShortname})
-                case Action.USER_CANCELLED:
-                    if (!current) return held
-                    return ticket.state === OrderStateSchema.enum.RELEASED ? withEating(held, current, false) : withoutTicket(held, current.key)
-                case Action.SYSTEM_DELETED:
-                    return current ? withoutTicket(held, current.key) : held
-                case Action.USER_CLAIMED:
-                    return current ? withEating(held, current, true) : held
-                default:
-                    return held
+        const priced = (ticketPriceId: number | null, price: number) => {
+            const ticketPrice = ticketPriceId === null ? null : ticketPriceOf(ticketPriceId)
+            return {ticketPriceId, type: ticketPrice?.ticketType ?? null, portions: ticketPrice?.portions ?? 0, price}
+        }
+        const booked = (rowId: number, ticket: AuditTicket): HeldTicket => ({
+            key: ticket.orderId ?? -rowId, inhabitantId: ticket.inhabitantId, ...priced(ticket.ticketPriceId, ticket.priceAtBooking),
+            eating: true, closed: false, householdId: ticket.householdId, householdShortname: ticket.householdShortname
+        })
+        // A batch update's row carries the new state, and a price row with its price only when the price row changed
+        const updated = (current: HeldTicket, ticket: AuditTicket): HeldTicket => ({
+            ...current,
+            ...(ticket.ticketPriceId === null ? {} : priced(ticket.ticketPriceId, ticket.priceAtBooking)),
+            eating: ticket.state === State.CLOSED ? current.eating : ticket.state !== State.RELEASED,
+            closed: current.closed || ticket.state === State.CLOSED
+        })
+
+        const afterRow = (current: HeldTicket | undefined, row: OrderHistoryDisplay, ticket: AuditTicket): HeldTicket | undefined => {
+            switch (row.action) {
+                case Audit.USER_BOOKED:
+                case Audit.SYSTEM_CREATED:
+                    return current ? updated(current, ticket) : booked(row.id, ticket)
+                case Audit.SYSTEM_UPDATED:
+                    return current && updated(current, ticket)
+                // A release after the deadline keeps the ticket; a cancellation before it deletes the order
+                case Audit.USER_CANCELLED:
+                    return current && ticket.state === State.RELEASED ? updated(current, ticket) : undefined
+                // The buyer eats on the ticket; it stays paid
+                case Audit.USER_CLAIMED:
+                    return current && {...current, eating: true}
+                case Audit.SYSTEM_DELETED:
+                    return undefined
             }
         }
 
-        // A batch update's row carries the new scalars only; the ticket it moves names the type and the household
-        const toChange = (row: OrderHistoryDisplay, ticket: AuditTicket, before: HeldTickets, after: HeldTickets): TicketChange => {
-            const moved = findHeld(before, ticket.orderId, ticket.inhabitantId)
+        const eventsOf = (before: HeldTicket | undefined, after: HeldTicket | undefined, action: OrderAuditAction): TicketEvent[] => {
+            if (!after) return before ? [{change: Kind.CANCEL, tickets: countsOf([before])}] : []
+            if (!before) return [{change: Kind.BOOK, tickets: countsOf([after])}]
+            if (after.closed && !before.closed) return [{change: Kind.CLOSE, tickets: countsOf([after])}]
+            const eatingChange = after.eating ? (action === Audit.USER_CLAIMED ? Kind.BUY : Kind.RECLAIM) : Kind.RELEASE
+            return [
+                ...(before.ticketPriceId === after.ticketPriceId ? [] : [{change: Kind.CHANGE_PRICE, tickets: countsOf([after]), from: countsOf([before])}]),
+                ...(before.eating === after.eating ? [] : [{change: eatingChange, tickets: countsOf([after])}])
+            ]
+        }
+
+        // A batch update's row carries the new scalars only; the ticket it moves names the household
+        const toLine = (row: OrderHistoryDisplay, ticket: AuditTicket, moved: HeldTicket | undefined, events: TicketEvent[], held: HeldTickets): TicketChange => {
             const householdId = ticket.householdId ?? moved?.householdId ?? null
+            const household = ticket.householdShortname ?? moved?.householdShortname ?? (householdId === null ? null : householdShortnameOf(householdId))
+            const performedByUserId = row.performedByUserId ?? systemUserId
             return {
                 id: row.id,
                 timestamp: row.timestamp,
-                action: row.action,
-                householdShortname: ticket.householdShortname ?? moved?.householdShortname ?? (householdId === null ? null : householdShortnameOf(householdId)),
-                ticketType: priceOf(ticket)?.ticketType ?? moved?.type ?? null,
-                delta: countsMinus(countsOf(after), countsOf(before)),
-                counts: countsOf(after),
-                portions: portionsOf(after),
-                revenue: revenueOf(after)
+                performedByUserId,
+                bySystem: performedByUserId === systemUserId,
+                households: household === null ? [] : [household],
+                events,
+                counts: countsOf(held.values()),
+                portions: portionsOf(held),
+                revenue: revenueOf(held)
             }
         }
 
-        const {changes} = [...history].sort(byTime)
+        const {lines} = [...history].sort(byTime)
             .map(row => ({row, ticket: readAuditTicket(row)}))
-            .filter((entry): entry is {row: OrderHistoryDisplay, ticket: AuditTicket} => entry.ticket !== null && entry.row.action !== Action.SYSTEM_UPDATED)
-            .reduce(({held, changes}, {row, ticket}) => {
-                const after = step(held, row.action, row.id, ticket)
-                return {held: after, changes: [...changes, toChange(row, ticket, held, after)]}
-            }, {held: new Map() as HeldTickets, changes: [] as TicketChange[]})
-        return collapseByKey(changes)
+            .filter((entry): entry is {row: OrderHistoryDisplay, ticket: AuditTicket} => entry.ticket !== null)
+            .reduce(({held, lines}, {row, ticket}) => {
+                const before = findHeld(held, ticket.orderId, ticket.inhabitantId)
+                const after = afterRow(before, row, ticket)
+                const next = after ? withTicket(held, after) : before ? withoutTicket(held, before.key) : held
+                const events = eventsOf(before, after, row.action)
+                return {held: next, lines: events.length > 0 ? [...lines, toLine(row, ticket, before ?? after, events, next)] : lines}
+            }, {held: new Map() as HeldTickets, lines: [] as TicketChange[]})
+        return collapseByKey(lines)
     }
 
     /** A moment as the chef reads it: the date mask and the hour */
     const formatMoment = (date: Date): string => formatDate(date, `${DATE_SETTINGS.DATE_MASK} HH:mm`)
-    // Every change with the same rendered moment, household and event collects into one: the deltas add up, the last row gives the rest
-    const changeKey = (change: TicketChange): string => `${formatMoment(change.timestamp)}|${change.householdShortname ?? ''}|${change.action}`
+    // One event per kind with the tickets added up, in the order of the kinds
+    const mergeEvents = (events: TicketEvent[]): TicketEvent[] =>
+        TicketChangeKindSchema.options.flatMap(change => {
+            const ofKind = events.filter(event => event.change === change)
+            const from = ofKind.flatMap(event => event.from ? [event.from] : [])
+            return ofKind.length === 0 ? [] : [{
+                change,
+                tickets: ofKind.map(event => event.tickets).reduce(countsPlus),
+                ...(from.length === 0 ? {} : {from: from.reduce(countsPlus)})
+            }]
+        })
+    // The rows of one actor within one rendered minute make one line: their households and events merge, the last row
+    // gives the rest, and the line takes its place by its last row
+    const changeKey = (change: TicketChange): string => `${formatMoment(change.timestamp)}|${change.performedByUserId}`
     const collapseByKey = (changes: TicketChange[]): TicketChange[] =>
-        [...groupBy(changeKey)(changes).values()].map(group => ({
-            ...group.at(-1)!,
-            ticketType: group.every(change => change.ticketType === group[0]!.ticketType) ? group[0]!.ticketType : null,
-            delta: group.reduce((sum, change) => countsPlus(sum, change.delta), emptyCounts())
-        }))
+        [...groupBy(changeKey)(changes).values()]
+            .map(group => ({
+                ...group.at(-1)!,
+                households: [...new Set(group.flatMap(change => change.households))],
+                events: mergeEvents(group.flatMap(change => change.events))
+            }))
+            .sort(byTime)
 
     // The team's dinners on consecutive calendar days around one dinner; a day without a team dinner ends the run
     const consecutiveDinnerRun = <T extends {id: number, date: Date}>(dinners: T[], aroundId: number): T[] => {

@@ -193,7 +193,7 @@ Status.
 | `ViewError.vue` | every route | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `Loader.vue` | every route | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `Ticker.vue` | `/` | none | ❌ | N/A | ⚠️ missing unit |
-| `HelpButton.vue` | every route | none | ❌ | N/A | ⚠️ missing unit |
+| `HelpButton.vue` | every route | auth | ✅ | N/A | ⚠️ raw layout classes and a `:ui` patch outside the tokens |
 | `Logo.vue` | every route | none | ❌ | ✅ parent | ⚠️ missing unit |
 
 ## Stores
@@ -204,7 +204,7 @@ Status.
 | `households.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `users.ts` | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ no ready flag, no `isEmpty`, `isInitialized` on my teams only; 0.9.1 |
-| `auth.ts` | N/A | ✅ | N/A | ✅ parent | ✅ |
+| `auth.ts` | N/A | ✅ | N/A | ✅ | ✅ |
 | `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ✅ spec covers the queue entries, the household places, the dinner's queue and `addExtraPortions` |
 
 ## Composables
@@ -229,6 +229,7 @@ Status.
 | `useSettingValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ | ✅ |
 | `useUserPreferenceValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `useWaitlistValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ parent | ✅ |
+| `useFeedbackValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ parent | ✅ |
 | `fragments/domainFragments.ts` | isomorphic | ✅ | N/A | ✅ | ✅ | ✅ `server/` reaches it through the validation composables |
 | **Business logic** | | | | | | |
 | `useBooking()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |

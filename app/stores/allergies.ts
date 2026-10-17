@@ -92,19 +92,10 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         isInitialized: isPosterNotesInitialized
     } = posterNotesDataset
 
-    // Allergies - Filtered by household or inhabitant
-    const filterHouseholdId = ref<number | null>(null)
+    // Allergies - the selected household's, or one inhabitant's; nothing is requested until a component asks
+    const householdsStore = useHouseholdsStore()
+    const isHouseholdAllergiesRequested = ref(false)
     const filterInhabitantId = ref<number | null>(null)
-
-    const allergiesQueryKey = computed(() => {
-        if (filterInhabitantId.value) {
-            return `/api/household/allergy?inhabitantId=${filterInhabitantId.value}`
-        }
-        if (filterHouseholdId.value) {
-            return `/api/household/allergy?householdId=${filterHouseholdId.value}`
-        }
-        return '/api/household/allergy'
-    })
 
     const {
         data: allergies,
@@ -114,12 +105,15 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         isErrored: isAllergiesErrored,
         isInitialized: isAllergiesInitialized
     } = storeAsyncData(
-        allergiesQueryKey,
-        allergiesQueryKey,
+        'allergy-store-allergies',
+        () => filterInhabitantId.value
+            ? `/api/household/allergy?inhabitantId=${filterInhabitantId.value}`
+            : `/api/household/allergy?householdId=${householdsStore.selectedHouseholdId}`,
         {
             schema: AllergyDetailSchema.array(),
             default: () => [],
-            enabled: () => !!filterInhabitantId.value || !!filterHouseholdId.value,
+            enabled: () => !!filterInhabitantId.value || (isHouseholdAllergiesRequested.value && !!householdsStore.selectedHouseholdId),
+            dependsOn: [householdsStore.selectedHouseholdDataset],
             errorMessage: 'Kunne ikke hente allergier'
         }
     )
@@ -203,18 +197,13 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     // Actions - Allergies (Household/Inhabitant)
     // ========================================
 
-    const loadAllergiesForHousehold = async (householdId: number) => {
-        filterHouseholdId.value = householdId
+    const loadAllergiesForHousehold = () => {
         filterInhabitantId.value = null
-        await refreshAllergies()
-        console.info(`🥜 > ALLERGY_STORE > Loaded ${allergies.value.length} allergies for household ${householdId}`)
+        isHouseholdAllergiesRequested.value = true
     }
 
-    const loadAllergiesForInhabitant = async (inhabitantId: number) => {
+    const loadAllergiesForInhabitant = (inhabitantId: number) => {
         filterInhabitantId.value = inhabitantId
-        filterHouseholdId.value = null
-        console.info(`🥜 > ALLERGY_STORE > Loading allergies for inhabitant ID: ${inhabitantId}`)
-        await refreshAllergies()
     }
 
     // The allergy-type catalog embeds inhabitants per type (admin counts, PDF poster),

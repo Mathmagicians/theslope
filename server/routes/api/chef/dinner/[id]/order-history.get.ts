@@ -5,6 +5,7 @@ import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {getRequiredUser} from '~~/server/utils/authorizationHelper'
 import {fetchDinnerEvent, fetchOrderHistoryForDinner} from '~~/server/data/financesRepository'
 import {fetchHouseholdsByIds, fetchSeason} from '~~/server/data/prismaRepository'
+import {getSystemUserId} from '~~/server/utils/systemUser'
 import {useBookingValidation, type TicketChangesResponse} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
 
@@ -39,7 +40,7 @@ export default defineEventHandler(async (event): Promise<TicketChangesResponse> 
     try {
         const dinner = await fetchDinnerEvent(d1Client, id)
         if (!dinner?.seasonId) throw createError({statusCode: 404, message: `Dinner event ${id} not found in a season`})
-        const [season, history] = await Promise.all([fetchSeason(d1Client, dinner.seasonId), fetchOrderHistoryForDinner(d1Client, id)])
+        const [season, history, systemUserId] = await Promise.all([fetchSeason(d1Client, dinner.seasonId), fetchOrderHistoryForDinner(d1Client, id), getSystemUserId(d1Client)])
         // A creation row names its household by id; the snapshot rows carry the short name themselves
         const unnamedHouseholdIds = history.map(readAuditTicket)
             .flatMap(ticket => ticket?.householdId && !ticket.householdShortname ? [ticket.householdId] : [])
@@ -48,7 +49,7 @@ export default defineEventHandler(async (event): Promise<TicketChangesResponse> 
         const shortNames = new Map(households.map(household => [household.id, household.shortName]))
         const householdShortnameOf = (householdId: number) => shortNames.get(householdId) ?? null
 
-        const all = replayTicketChanges(history, ticketPriceOf, householdShortnameOf).reverse()
+        const all = replayTicketChanges(history, ticketPriceOf, systemUserId, householdShortnameOf).reverse()
         const changes = since ? all.filter(change => change.timestamp >= since) : all
         setResponseStatus(event, 200)
         return TicketChangesResponseSchema.parse({dinnerEventId: id, since: since ?? null, changes, olderCount: all.length - changes.length})

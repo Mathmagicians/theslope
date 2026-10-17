@@ -26,7 +26,7 @@ import {
 import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
 import {useOrder, type SpendingFigures} from '~/composables/useOrder'
 import type {Expense} from '~/composables/useBillingValidation'
-import {useBookingValidation, DinnerMode as DinnerModeEnum, OrderState as OrderStateEnum, type OrderState, type DinnerMode, type DinnerEventDisplay, type OrderDisplay, type DesiredOrder, type OrderAuditAction, type BookingAction, type BookingOutcome, type BookingResult, type QueuePosition, type ScaffoldResult, type TicketType} from '~/composables/useBookingValidation'
+import {useBookingValidation, DinnerMode as DinnerModeEnum, OrderState as OrderStateEnum, type OrderState, type DinnerMode, type DinnerEventDisplay, type OrderDisplay, type DesiredOrder, type OrderAuditAction, type BookingAction, type BookingOutcome, type BookingResult, type QueuePosition, type ScaffoldResult, type TicketChangeKind, type TicketType} from '~/composables/useBookingValidation'
 import {useTicket, type TicketTypeWords} from '~/composables/useTicket'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {ICONS, COLOR, COMPONENTS, ALARM_TO_BADGE, BOOKING_LOCK_STATUS, ORDER_STATE_COLORS, TICKET_TYPE_COLORS, TICKET_TYPE_ICONS, type NuxtUIColor, type TicketState, type TicketTypeColor} from '~/composables/useTheSlopeDesignSystem'
@@ -48,7 +48,7 @@ export interface DeadlineBadgeData {
     alarm?: AlarmLevel  // Chef stepper: alarm level for conditional display
 }
 
-// One label, icon and colour per order history action (OrderHistoryDisplay, TicketChanges)
+// One label, icon and colour per order history action (OrderHistoryDisplay)
 export interface OrderActionLabel { icon: string; color: NuxtUIColor; label: string }
 export const ORDER_ACTION_LABELS: Record<OrderAuditAction, OrderActionLabel> = {
     USER_BOOKED: {icon: ICONS.check, color: COLOR.success, label: 'Bestilt'},
@@ -311,7 +311,7 @@ export const MODE_WORDS: Record<DinnerMode, {label: string, icon: string}> = {
 /** What a preview line names after the person: the mode's word */
 export type PreviewWords = {mode: string}
 
-const {BookingActionSchema} = useBookingValidation()
+const {BookingActionSchema, TicketChangeKindSchema} = useBookingValidation()
 const Action = BookingActionSchema.enum
 
 /** The words of each booking action, once: the preview line's glyph and its words after the name, the toast's words after the count */
@@ -327,6 +327,10 @@ export const ACTION_WORDS: Record<BookingAction, {icon: string, preview: (words:
     [Action.CHANGE_MODE]: {icon: ICONS.edit, preview: ({mode}) => `ændrer spisemåde til ${mode}`, toast: 'ændret spisemåde'},
     [Action.CHANGE_PRICE]: {icon: ICONS.edit, preview: () => 'ændrer billettype', toast: 'ændret billettype'}
 }
+
+/** The word of a ticket event in Billetændringer: the toast's word of its action, and the close's */
+export const ticketChangeWord = (change: TicketChangeKind): string =>
+    change === TicketChangeKindSchema.enum.CLOSE ? 'lukket' : ACTION_WORDS[change].toast
 
 /** The booking form's save button words for each outcome */
 export const OUTCOME_WORDS: Record<BookingOutcome, {save: string}> = {

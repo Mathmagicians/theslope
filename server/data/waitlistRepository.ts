@@ -72,11 +72,12 @@ export async function updateWaitlistEntryOrder(d1Client: D1Database, id: number,
     }
 }
 
-export async function deleteWaitlistEntry(d1Client: D1Database, id: number): Promise<void> {
+export async function deleteWaitlistEntry(d1Client: D1Database, id: number): Promise<number> {
     const prisma = await getPrismaClientConnection(d1Client)
     console.info(`${LOG} > [LEAVE] Removing queue entry ${id}`)
     try {
-        await prisma.ticketWaitlist.delete({where: {id}})
+        const deleted = await prisma.ticketWaitlist.delete({where: {id}, select: {id: true}})
+        return deleted.id
     } catch (error) {
         return throwH3Error(`${LOG} > [LEAVE] Error removing queue entry ${id}`, error)
     }

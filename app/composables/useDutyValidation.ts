@@ -35,15 +35,19 @@ export const useDutyValidation = () => {
         .refine(slot => Object.values(slot.affinity).some(Boolean), {message: 'Vælg mindst én ugedag', path: ['affinity']})
         .refine(slot => slot.endDate >= slot.startDate, {message: 'Slutdato skal være på eller efter startdato', path: ['endDate']})
 
+    // Database row: the affinity travels as JSON (ADR-010)
+    const SerializedJokerSlotSchema = JokerSlotSchema.extend({
+        affinity: z.string()
+    })
+
     type JokerSlot = z.infer<typeof JokerSlotSchema>
-    type SerializedJokerSlot = Omit<JokerSlot, 'affinity'> & {affinity: string}
 
     const serializeJokerSlot = <T extends Pick<JokerSlot, 'affinity'>>(slot: T): Omit<T, 'affinity'> & {affinity: string} => ({
         ...slot,
         affinity: serializeWeekDayMap(slot.affinity)
     })
 
-    const deserializeJokerSlot = (serialized: SerializedJokerSlot): JokerSlot => JokerSlotSchema.parse({
+    const deserializeJokerSlot = (serialized: z.infer<typeof SerializedJokerSlotSchema>): JokerSlot => JokerSlotSchema.parse({
         ...serialized,
         affinity: deserializeWeekDayMap(serialized.affinity)
     })
@@ -52,11 +56,11 @@ export const useDutyValidation = () => {
         RoleSchema,
         JokerSlotSchema,
         JokerSlotCreateSchema,
+        SerializedJokerSlotSchema,
         serializeJokerSlot,
         deserializeJokerSlot
     }
 }
 
 export type JokerSlot = z.infer<ReturnType<typeof useDutyValidation>['JokerSlotSchema']>
-export type SerializedJokerSlot = Parameters<ReturnType<typeof useDutyValidation>['deserializeJokerSlot']>[0]
 export type JokerSlotCreate = z.infer<ReturnType<typeof useDutyValidation>['JokerSlotCreateSchema']>

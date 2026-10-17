@@ -1,14 +1,31 @@
 // @vitest-environment nuxt
-import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
-import { registerEndpoint } from '@nuxt/test-utils/runtime'
+import { registerEndpoint, mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { clearNuxtData } from '#app'
 import { flushPromises } from '@vue/test-utils'
 import { ref } from 'vue'
+import { getQuery, type H3Event } from 'h3'
 import { AllergyFactory } from '~~/tests/e2e/testDataFactories/allergyFactory'
-import { asyncDataStatus, resetStores } from '~~/tests/component/testHelpers'
+import { UserFactory } from '~~/tests/e2e/testDataFactories/userFactory'
+import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
+import { asyncDataStatus, resetStores, registerEmptyStoreEndpoints } from '~~/tests/component/testHelpers'
 
 import { useAllergiesStore } from '~/stores/allergies'
+
+// The test runtime has no session cookie, so the session is the one thing faked; the households store
+// selecting the household from it is real
+const {session, useUserSession} = await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).mockSession())
+mockNuxtImport('useUserSession', () => useUserSession)
+
+// The stores' own datasets answer empty; the routes this spec drives register after
+registerEmptyStoreEndpoints()
+
+// The session user's household is the households store's default selection
+const me = UserFactory.defaultUserWithInhabitant('allergies-store')
+const MY_HOUSEHOLD_ID = me.Inhabitant!.household!.id
+registerEndpoint(`/api/admin/household/${MY_HOUSEHOLD_ID}`, () => ({...HouseholdFactory.defaultHouseholdDetail('allergies-store'), id: MY_HOUSEHOLD_ID}))
+const ALLERGIES_KEY = 'allergy-store-allergies'
 
 // The one Setting row the allergy surfaces read (catalog footer + poster)
 const POSTER_NOTES_ENDPOINT = '/api/admin/setting/allergy-poster-notes'
@@ -209,9 +226,13 @@ describe('Allergies Store - gated reads', () => {
     beforeEach(() => {
         resetStores()
         vi.clearAllMocks()
+        session.user.value = me
         allergyTypesEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypesWithInhabitants())
         allergyTypeByIdEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypes()[0])
         allergiesEndpoint.mockReturnValue(AllergyFactory.createMockAllergies())
+    })
+    afterEach(() => {
+        session.user.value = null
     })
 
     const gatedReads = [
@@ -224,12 +245,22 @@ describe('Allergies Store - gated reads', () => {
         },
         {
             dataset: 'household allergies',
-            idleKey: '/api/household/allergy',
-            requestedKey: '/api/household/allergy?householdId=1',
+            idleKey: ALLERGIES_KEY,
+            requestedKey: ALLERGIES_KEY,
             endpoint: allergiesEndpoint,
-            request: (store: Store) => store.loadAllergiesForHousehold(1)
+            request: (store: Store) => store.loadAllergiesForHousehold()
         }
     ]
+
+    it('household allergies are the selected household\'s, read in one request', async () => {
+        const store = await setupStore()
+
+        store.loadAllergiesForHousehold()
+
+        await vi.waitFor(() => expect(asyncDataStatus(ALLERGIES_KEY)).toBe('success'))
+        expect(allergiesEndpoint).toHaveBeenCalledOnce()
+        expect(getQuery(allergiesEndpoint.mock.calls[0]![0] as H3Event)).toEqual({householdId: String(MY_HOUSEHOLD_ID)})
+    })
 
     it.each(gatedReads)('$dataset is idle and unrequested while its condition is false', async ({idleKey, endpoint}) => {
         const store = await setupStore()

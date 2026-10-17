@@ -14,8 +14,20 @@ import {fetchHousehold, fetchInhabitant, fetchUser} from '~~/server/data/prismaR
 import {loadDinner, type DinnerForWaitlist} from '~~/server/utils/waitlistAssignment'
 import {formatDate} from '~/utils/date'
 import {useTicket} from '~/composables/useTicket'
+import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
 const LOG = '📮 > SENDER > [EVENT booking]'
+
+// The booking is saved before its mails are resolved: a failed lookup is logged and sends nothing, as emit never throws
+const neverThrows = <A extends unknown[]>(operation: string, notify: (...args: A) => Promise<SenderEmitResult[]>) =>
+    async (...args: A): Promise<SenderEmitResult[]> => {
+        try {
+            return await notify(...args)
+        } catch (error) {
+            eventHandlerHelper.logNuxtError(eventHandlerHelper.nuxtErrorFromCatch(`${LOG} ${operation}: no mails sent`, error), error)
+            return []
+        }
+    }
 
 export interface WaitlistDinnerContext {
     dinnerEventId: number
@@ -152,7 +164,7 @@ const resolver = (d1Client: D1Database) => {
 }
 
 /** The mails for what a scaffold run did: joined, sold, and sold to the first in a ticket type's line */
-export const notifyBookingOutcomes = async (d1Client: D1Database, channel: EmailChannel, outcomes: BookingOutcomes): Promise<SenderEmitResult[]> => {
+export const notifyBookingOutcomes = neverThrows('booking outcomes', async (d1Client: D1Database, channel: EmailChannel, outcomes: BookingOutcomes): Promise<SenderEmitResult[]> => {
     const {dinnerOf, shortnameOf, soldMails} = resolver(d1Client)
     const threshold = useAppConfig().theslope.waitlistBuildupThreshold
 
@@ -175,10 +187,10 @@ export const notifyBookingOutcomes = async (d1Client: D1Database, channel: Email
         return {to: email, name, dinner: dinner.context, ticket: ticketLabel(dinner.ticketPrices, sale.ticketPriceId), seller, buyer}
     }))
     return bookingMails(channel, {...NO_BOOKING_MAILS, joined, buildups: buildups.flat(), sold: sold.flat(), assigned})
-}
+})
 
 /** The mails for the chef's extra portions: each waiting entry that fit got a regular order */
-export const notifyExtraPortions = async (d1Client: D1Database, channel: EmailChannel, result: WaitlistAssignmentResult): Promise<SenderEmitResult[]> => {
+export const notifyExtraPortions = neverThrows('extra portions', async (d1Client: D1Database, channel: EmailChannel, result: WaitlistAssignmentResult): Promise<SenderEmitResult[]> => {
     const {dinnerOf, shortnameOf} = resolver(d1Client)
     const dinner = await dinnerOf(result.dinnerEventId)
     const extraPortions = await Promise.all(result.assigned.map(async entry => {
@@ -187,4 +199,4 @@ export const notifyExtraPortions = async (d1Client: D1Database, channel: EmailCh
         return {to, name: inhabitant?.name ?? '', dinner: dinner.context, ticket: ticketLabel(dinner.ticketPrices, entry.ticketPriceId), buyer}
     }))
     return bookingMails(channel, {...NO_BOOKING_MAILS, extraPortions})
-}
+})
