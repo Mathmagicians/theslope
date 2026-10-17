@@ -1,7 +1,7 @@
 # ADR Compliance - Frontend
 
 **Generated:** 2025-11-11
-**Last Updated:** 2026-10-16
+**Last Updated:** 2026-10-17
 **History:** git and the feature plans under `docs/features/` (shipped plans in `docs/features/archived/`)
 
 One row per route, component, store and composable: which ADRs it answers to, its markers and its test coverage. The code

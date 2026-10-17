@@ -98,7 +98,7 @@ describe('useBookingValidation', () => {
       {name: 'OrderHistoryCreateSchema', schema: OrderHistoryCreateSchema, factory: () => OrderFactory.defaultOrderHistoryCreate()},
       {name: 'OrderSnapshotSchema', schema: OrderSnapshotSchema, factory: () => OrderFactory.defaultOrderSnapshot()}
     ])('$name GIVEN the factory data WHEN parsing THEN succeeds', ({schema, factory}) => {
-      const result = schema.safeParse(factory())
+      const result: ZodSafeParseResult<unknown> = schema.safeParse(factory())
       expect(result.success, getValidationError(result)).toBe(true)
     })
 
@@ -369,6 +369,17 @@ describe('useBookingValidation', () => {
       it('GIVEN a queue place without its ticket type WHEN parsing THEN throws', () => {
         const {ticketType: _t, ...untyped} = {inhabitantId: 1, dinnerEventId: 1, isGuestTicket: false, position: 2, ticketType: null}
         expect(() => ScaffoldResultSchema.parse({...validScaffoldResult, positions: [untyped]})).toThrow()
+      })
+
+      // An order's result names its ticket type, so the guests of one booker group by type; null when the price is gone
+      it.each([TicketTypeSchema.enum.CHILD, null])('GIVEN an order\'s result of ticket type %s WHEN parsing THEN it keeps its ticket type', (ticketType) => {
+        const result = OrderFactory.defaultBookingResult({isGuestTicket: true, ticketType})
+        expect(ScaffoldResultSchema.parse({...validScaffoldResult, results: [result], failed: [result]})).toMatchObject({results: [{ticketType}], failed: [{ticketType}]})
+      })
+
+      it('GIVEN an order\'s result without its ticket type WHEN parsing THEN throws', () => {
+        const {ticketType: _t, ...untyped} = OrderFactory.defaultBookingResult()
+        expect(() => ScaffoldResultSchema.parse({...validScaffoldResult, results: [untyped]})).toThrow()
       })
 
       // The totals count every action, a zero included

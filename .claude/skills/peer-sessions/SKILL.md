@@ -14,7 +14,7 @@ session; the sessions talk to each other through `SendMessage`.
 |---|---|
 | Orchestrator | the packages with the user: briefs, design rounds, signoffs, the implementing subagents and their code |
 | test-engineer | the e2e slot: every Playwright run, one at a time, serial specs with `--no-deps`; a flaky suite reruns alone before a change is blamed; no reseed between runs; it roots out flaky and redundant e2e cases |
-| documentar | the docs: the release spec, the next release's doc, the guides, the PR body text |
+| documentar | the docs: the release spec, the next release's doc, the guides, the PR body text; it edits docs only, and a change to code or specs reaches the orchestrator from the user, never through documentar |
 
 ## How the sessions talk
 

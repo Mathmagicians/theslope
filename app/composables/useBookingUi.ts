@@ -2,14 +2,14 @@
  * Pure UI composable for the Bookings domain (ADR-017)
  *
  * Client-only presentation of booking/dinner state: deadline badges, chef step
- * icons, order state badges and the action preview shown before a booking is
- * saved. Never imported by server code — it depends on the design system, which
- * is client-only.
+ * icons, order state badges, the action preview shown before a booking is saved
+ * and the booking result reported after it. Never imported by server code — it
+ * depends on the design system, which is client-only.
  *
  * Domain logic (step machine, deadlines, bucket resolution) stays in useBooking.
  */
 import {
-    useBooking,
+    formatPlace,
     DINNER_STEP_MAP,
     DinnerStepState,
     DEADLINE_LABELS,
@@ -48,7 +48,6 @@ export interface DeadlineBadgeData {
     alarm?: AlarmLevel  // Chef stepper: alarm level for conditional display
 }
 
-/** Icon per chef workflow step (DINNER_STEP_MAP is icon-free so the server can import it) */
 // One label, icon and colour per order history action (OrderHistoryDisplay, TicketChanges)
 export interface OrderActionLabel { icon: string; color: NuxtUIColor; label: string }
 export const ORDER_ACTION_LABELS: Record<OrderAuditAction, OrderActionLabel> = {
@@ -184,6 +183,7 @@ export const allowanceRows = ({budgetGross, spentGross}: {budgetGross: number | 
     ]
 }
 
+/** Icon per chef workflow step (DINNER_STEP_MAP is icon-free so the server can import it) */
 export const STEP_ICONS: Record<DinnerStepState, string> = {
     [DinnerStepState.SCHEDULED]: ICONS.calendar,
     [DinnerStepState.ANNOUNCED]: ICONS.megaphone,
@@ -345,7 +345,7 @@ export const previewOutcome = (buckets: OrderBucketResult<DesiredOrder>, supply:
 /** The save button's label for an outcome */
 export const bookingSaveLabel = (outcome: BookingOutcome): string => OUTCOME_WORDS[outcome].save
 
-/** The guest form's button names the guests; its preview lines name each guest's outcome */
+/** The guest form's button names the guests; its preview lines name the guests per outcome */
 export const guestSaveLabel = (count: number): string => count === 1 ? 'Tilmeld gæst' : 'Tilmeld gæster'
 
 /** The look of a toast that reports a booking result: the ticket, red as soon as one order failed, green otherwise; a line per person */
@@ -355,41 +355,56 @@ export const scaffoldToastLook = (result: Pick<ScaffoldResult, 'errored'>) => ({
     ui: {description: COMPONENTS.bookingResult.lines}
 })
 
+/** A booker's guest tickets of one type, as the guest row badges them: "Barn", "Barn ×2"; the count alone when the type is gone */
+export const guestTicketsLabel = (label: string | undefined, count: number): string =>
+    [label, count > 1 ? `×${count}` : undefined].filter(Boolean).join(' ')
+
+/** A booker's guests of one ticket type in a preview line or a toast line: "Gæst af Anna (Barn ×2)" */
+const guestGroupName = (bookerName: string, ticketType: TicketType | null | undefined, count: number): string => {
+    const tickets = guestTicketsLabel(ticketType ? useTicket().ticketTypeWords[ticketType].label : undefined, count)
+    const guests = useOrder().formatGuestLabel(bookerName)
+    return tickets ? `${guests} (${tickets})` : guests
+}
+
+const failedWords = (count: number): string => `${count} ${count === 1 ? 'opdatering' : 'opdateringer'} fejlede`
+
 /**
- * A booking result in lines, for the toast and the "Sidste ændring" alerts: each person (a guest by the booker) in the
- * order the result first names them, the counts in the order of the actions with the queue places ascending and the
- * failed orders last; then the tickets sold to the waiting list and the unchanged orders
+ * A booking result in lines, for the toast and the "Sidste ændring" alerts: each person, and a booker's guests of one
+ * ticket type with the most of them at one dinner, in the order the result first names them; the counts in the order
+ * of the actions with the queue places ascending and the failed orders last. Then the tickets sold to the waiting list,
+ * the unchanged orders, and a household whose run failed as a whole, which the result counts without a person
  */
 export const formatBookingResult = (result: ScaffoldResult): string => {
-    const {formatGuestLabel} = useOrder()
-    const {formatPlace} = useBooking()
-    const personOf = ({inhabitantId, isGuestTicket}: Pick<BookingResult, 'inhabitantId' | 'isGuestTicket'>) => `${inhabitantId}:${isGuestTicket}`
-    const byPerson = groupBy<BookingResult, string>(personOf)
-    const landedBy = byPerson(result.results)
-    const failedBy = byPerson(result.failed)
-    const placesBy = groupBy<QueuePosition, string>(personOf)(result.positions)
+    const groupOf = ({inhabitantId, isGuestTicket, ticketType}: Pick<BookingResult, 'inhabitantId' | 'isGuestTicket' | 'ticketType'>) =>
+        isGuestTicket ? `${inhabitantId}:guest:${ticketType}` : `${inhabitantId}`
+    const byGroup = groupBy<BookingResult, string>(groupOf)
+    const landedBy = byGroup(result.results)
+    const failedBy = byGroup(result.failed)
+    const placesBy = groupBy<QueuePosition, string>(groupOf)(result.positions)
 
-    const personLines = Array.from(byPerson([...result.results, ...result.failed]), ([person, items]) => {
-        const {inhabitantName, isGuestTicket} = items[0]!
-        const landed = landedBy.get(person) ?? []
-        const places = [...placesBy.get(person) ?? []]
+    const groupLines = Array.from(byGroup([...result.results, ...result.failed]), ([group, items]) => {
+        const {inhabitantName, isGuestTicket, ticketType} = items[0]!
+        const guestsAtOneDinner = Math.max(...Array.from(groupBy<BookingResult, number>(item => item.dinnerEventId)(items).values(), orders => orders.length))
+        const landed = landedBy.get(group) ?? []
+        const places = [...placesBy.get(group) ?? []]
             .sort((a, b) => a.position - b.position)
-            .map(({position, ticketType}) => formatPlace(position, ticketType))
+            .map(place => formatPlace(place.position, place.ticketType))
         const counts = BookingActionSchema.options
             .map(action => ({action, count: landed.filter(item => item.action === action).length}))
             .filter(({count}) => count > 0)
             .map(({action, count}) => `${count} ${ACTION_WORDS[action].toast}${action === Action.QUEUE && places.length > 0 ? ` (${places.join(', ')})` : ''}`)
-        const failed = failedBy.get(person)?.length ?? 0
-        const parts = failed > 0 ? [...counts, `${failed} fejlede`] : counts
-        return `${isGuestTicket ? formatGuestLabel(inhabitantName) : inhabitantName}: ${parts.join(', ')}`
+        const failed = failedBy.get(group)?.length ?? 0
+        const parts = failed > 0 ? [...counts, failedWords(failed)] : counts
+        return `${isGuestTicket ? guestGroupName(inhabitantName, ticketType, guestsAtOneDinner) : inhabitantName}: ${parts.join(', ')}`
     })
     const sold = result.outcomes.waitlistTicketsSold.length
     const householdLines = [
         {count: sold, line: `${ticketCount(sold)} solgt til ventelisten`},
-        {count: result.unchanged, line: `${result.unchanged} uændret`}
+        {count: result.unchanged, line: `${result.unchanged} uændret`},
+        {count: result.errored - result.failed.length, line: 'Bookingen fejlede'}
     ].filter(({count}) => count > 0).map(({line}) => line)
 
-    const lines = [...personLines, ...householdLines]
+    const lines = [...groupLines, ...householdLines]
     return lines.length > 0 ? lines.join('\n') : 'Der var ingen ændringer i dine bookinger'
 }
 
@@ -398,7 +413,7 @@ export const createWaitlistBadge = (position: number, ticketType?: TicketType | 
     label: 'Venteliste',
     icon: ORDER_STATE_LABELS.queued.icon,
     color: ORDER_STATE_LABELS.queued.color,
-    value: useBooking().formatPlace(position, ticketType),
+    value: formatPlace(position, ticketType),
     helpText: 'Du får en billet, når en kommer til salg, eller kokken frigiver portioner'
 })
 
@@ -466,21 +481,23 @@ export const useBookingUi = () => {
 
         const getActionColor = (action: BookingAction) => ORDER_STATE_LABELS[ACTION_TO_STATE[action]].color
 
-        const toItem = (order: DesiredOrder, action: BookingAction): ActionPreviewItem => {
-            // For guests: "Gæst af {bookerName}", for regular: inhabitant name
-            const bookerName = getInhabitantName(order.inhabitantId)
-            const name = order.isGuestTicket ? formatGuestLabel(bookerName) : bookerName
-            const {icon, preview} = ACTION_WORDS[action]
-            return {name, action, icon, color: getActionColor(action), text: `${name} ${preview({mode: MODE_WORDS[order.dinnerMode].label})}`}
-        }
-
-        // One line per person and words, in the order the plan first names them; the line names each of its dinners once
+        // A booker's guests of one ticket type with the same words at one dinner are one group, counted as the guest row
+        // counts them; then one line per person or group and words, in the order the plan first names them, with its dinners
         const dateById = new Map(dinnerEvents.map(({id, date}) => [id, date]))
-        const planned = plannedActions(buckets, existingById, supply)
-            .map(({order, action}) => ({item: toItem(order, action), dinnerEventId: order.dinnerEventId}))
-        return Array.from(groupBy((entry: typeof planned[number]) => entry.item.text)(planned), ([text, group]) => {
-            const dates = [...new Set(group.map(({dinnerEventId}) => dinnerEventId))].flatMap(id => dateById.get(id) ?? [])
-            return {...group[0]!.item, text: `${text}: ${dinnerDates(dates)}`}
+        const planned = plannedActions(buckets, existingById, supply).map(({order, action}) => ({
+            order, action, ticketType: supply(order).ticketType, words: ACTION_WORDS[action].preview({mode: MODE_WORDS[order.dinnerMode].label})
+        }))
+        const atDinner = groupBy(({order, ticketType, words}: typeof planned[number]) =>
+            `${order.inhabitantId}:${order.isGuestTicket ? `guest:${ticketType}` : 'self'}:${order.dinnerEventId}:${words}`)(planned)
+        const items = Array.from(atDinner.values(), group => {
+            const {order, action, ticketType, words} = group[0]!
+            const bookerName = getInhabitantName(order.inhabitantId)
+            const name = order.isGuestTicket ? guestGroupName(bookerName, ticketType, group.length) : bookerName
+            return {name, action, icon: ACTION_WORDS[action].icon, color: getActionColor(action), text: `${name} ${words}`, dinnerEventId: order.dinnerEventId}
+        })
+        return Array.from(groupBy((item: typeof items[number]) => item.text)(items), ([text, lines]) => {
+            const {name, action, icon, color} = lines[0]!
+            return {name, action, icon, color, text: `${text}: ${dinnerDates(lines.flatMap(({dinnerEventId}) => dateById.get(dinnerEventId) ?? []))}`}
         })
     }
 

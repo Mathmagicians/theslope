@@ -60,15 +60,15 @@ I appen bruges følgende symboler til at vise spisningsform og status:
 | ![Ingen](https://api.iconify.design/heroicons:x-circle.svg?height=20&color=%23ef4444) | **Ingen** | Ikke tilmeldt denne dag |
 | ![Blandet](https://api.iconify.design/heroicons:question-mark-circle.svg?height=20&color=%23737373) | **Blandet** | Familiemedlemmer har forskellige valg |
 | ![Power](https://api.iconify.design/heroicons:bolt.svg?height=20&color=%23f59e0b) | **Power mode** | Ændr alle familiemedlemmer på én gang |
-| ![Åben](https://api.iconify.design/heroicons:lock-open.svg?height=20&color=%2322c55e) | **Åben** | Før fristen - du kan frit tilmelde og framelde dig |
-| ![Lukket](https://api.iconify.design/heroicons:lock-closed.svg?height=20&color=%23ef4444) | **Lukket** | Fristen er passeret - du kan frigive, købe eller skrive dig på ventelisten |
+| ![Åben](https://api.iconify.design/heroicons:lock-open.svg?height=20&color=%2322c55e) | **Framelding: Åben** | Booking kan ændres - du kan frit tilmelde og framelde dig |
+| ![Lukket](https://api.iconify.design/heroicons:lock-closed.svg?height=20&color=%23ef4444) | **Framelding: Lukket** | Booking kan ikke ændres - du kan frigive din billet, købe en billet til salg eller skrive dig på ventelisten |
 | ![Frigivet](https://api.iconify.design/heroicons:arrow-up-tray.svg?height=20&color=%23ef4444) | **Frigivet** | Billetten er sat til salg |
 | ![Køb](https://api.iconify.design/heroicons:arrows-right-left.svg?height=20&color=%238b5cf6) | **Køb billet** | Køb en billet, som en anden har sat til salg |
 | ![Venteliste](https://api.iconify.design/hugeicons:hourglass.svg?height=20&color=%23737373) | **Venteliste** | Du står i kø til en billet af din billettype |
 
 Kalenderne har også en **Forklaring** nederst, der viser symbolerne for netop den visning.
 
-På middagskalenderen bærer en lukket middag en lille prik med et tal, der siger hvor mange billetter der er til salg – og sidder der et lille **timeglas** i prikken i stedet, er alt udsolgt, og der står allerede sultne naboer på ventelisten. Du kan stadig skrive dig på – din plads står ud for dit navn, fx **#2 i kø**, og billetten ved siden af viser hvilken kø (voksen, barn eller baby) du står i.
+På middagskalenderen bærer en middag, der er **lukket for framelding**, en lille prik med et tal, der siger hvor mange billetter der er til salg – og sidder der et lille **timeglas** i prikken i stedet, er alt udsolgt, og der står allerede sultne naboer på ventelisten. Du kan stadig skrive dig på – din plads står ud for dit navn, fx **Voksen #2**: nummer to i køen til en voksenbillet (der er én kø for voksen, barn og baby).
 
 ---
 
@@ -208,17 +208,22 @@ Gæster har deres egen række i gitteret, så du kan ændre deres spisningsform 
 
 #### Forhåndsvisning af ændringer
 
-Før du gemmer dine bookingændringer, viser systemet en oversigt over hvad der vil ske:
+Før du gemmer dine bookingændringer, viser systemet en oversigt over hvad der vil ske - én linje per person og ændring, med datoerne på de middage det gælder:
 
 | Symbol | Tekst | Beskrivelse |
 |:------:|-------|-------------|
-| ![Plus](https://api.iconify.design/heroicons:plus-circle.svg?height=20&color=%2322c55e) | **Anna tilmeldes** | Personen bliver tilmeldt fællesspisning |
-| ![Minus](https://api.iconify.design/heroicons:x-mark.svg?height=20&color=%23ef4444) | **Peter frameldes** | Personen bliver frameldt (før deadline) |
-| ![Frigiv](https://api.iconify.design/heroicons:arrow-up-tray.svg?height=20&color=%23f59e0b) | **Peters billet frigives** | Billetten sættes til salg (efter deadline) |
-| ![Fortryd](https://api.iconify.design/heroicons:arrow-uturn-left.svg?height=20&color=%233b82f6) | **Anna tilmeldes igen** | Frigivet billet tages tilbage |
-| ![Køb](https://api.iconify.design/heroicons:arrows-right-left.svg?height=20&color=%238b5cf6) | **Emil køber en billet til salg** | Køber en billet, som en anden har frigivet |
-| ![Venteliste](https://api.iconify.design/hugeicons:hourglass.svg?height=20&color=%23737373) | **Emil skrives på ventelisten** | Ingen billet af den type til salg - Emil stiller sig i kø |
-| ![Forlad](https://api.iconify.design/heroicons:x-mark.svg?height=20&color=%23ef4444) | **Emil forlader ventelisten** | Pladsen i køen opgives |
+| ![Plus](https://api.iconify.design/heroicons:plus-circle.svg?height=20&color=%2322c55e) | **Anna tilmeldes: 20/10/2026** | Personen bliver tilmeldt fællesspisning |
+| ![Minus](https://api.iconify.design/heroicons:x-mark.svg?height=20&color=%23ef4444) | **Peter frameldes: 20/10/2026** | Personen bliver frameldt (før deadline) |
+| ![Frigiv](https://api.iconify.design/heroicons:arrow-up-tray.svg?height=20&color=%23f59e0b) | **Peter frigiver sin billet: 20/10/2026** | Billetten sættes til salg (efter deadline) |
+| ![Fortryd](https://api.iconify.design/heroicons:arrow-uturn-left.svg?height=20&color=%233b82f6) | **Anna tilmeldes igen: 20/10/2026** | Frigivet billet tages tilbage |
+| ![Spisemåde](https://api.iconify.design/heroicons:pencil.svg?height=20&color=%23737373) | **Anna ændrer spisemåde til Takeaway: 20/10/2026** | Samme billet, ny spisemåde |
+| ![Køb](https://api.iconify.design/heroicons:arrows-right-left.svg?height=20&color=%238b5cf6) | **Emil køber en billet til salg: 20/10/2026** | Køber en billet, som en anden har frigivet |
+| ![Venteliste](https://api.iconify.design/hugeicons:hourglass.svg?height=20&color=%23737373) | **Emil skrives på ventelisten: 20/10/2026** | Ingen billet af den type til salg - Emil stiller sig i kø |
+| ![Venteliste](https://api.iconify.design/hugeicons:hourglass.svg?height=20&color=%23737373) | **Emil ændrer spisemåde til Sen (venteliste): 20/10/2026** | Emil beholder sin plads i køen og ønsker nu at spise sent |
+| ![Forlad](https://api.iconify.design/heroicons:x-mark.svg?height=20&color=%23ef4444) | **Emil forlader ventelisten: 20/10/2026** | Pladsen i køen opgives |
+| ![Gæst](https://api.iconify.design/heroicons:plus-circle.svg?height=20&color=%2322c55e) | **Gæst af Anna (Barn ×2) tilmeldes: 20/10/2026** | Annas to børnegæster bliver tilmeldt - gæster med samme billettype står samlet |
+
+Gælder en ændring mere end tre middage, står antallet og den første og sidste dato, fx **Knud frameldes: 7 middage, 02/11/2026 – 14/12/2026**. Når du har gemt, får du en kvittering med én linje per person, fx *Anna: 1 købt, 2 på ventelisten (Voksen #3, Voksen #5)* - og gik noget galt, står det der også, fx *1 opdatering fejlede*.
 
 Forhåndsvisningen hjælper dig med at:
 - Se præcis hvilke ændringer du er ved at lave
@@ -251,7 +256,7 @@ Kan du ikke komme alligevel? **Frigiv** din billet, så sættes den til salg. Vi
 |:------:|------|-----------|
 | ![Frigivet](https://api.iconify.design/heroicons:arrow-up-tray.svg?height=20&color=%23ef4444) | **Ingen** | Din billet frigives og sættes til salg |
 | ![Køb](https://api.iconify.design/heroicons:arrows-right-left.svg?height=20&color=%238b5cf6) | **Køb billet** | Du køber en billet af din billettype, som en anden har frigivet |
-| ![Venteliste](https://api.iconify.design/hugeicons:hourglass.svg?height=20&color=%23737373) | **Skriv på venteliste** | Ingen billet til salg - du står i kø, fx **Barn: #1 i kø** |
+| ![Venteliste](https://api.iconify.design/hugeicons:hourglass.svg?height=20&color=%23737373) | **Skriv på venteliste** | Ingen billet til salg - du står i kø, fx **Barn #1** |
 
 Ventelisten er én kø per billettype (voksen, barn og baby): først til mølle. Frigiver en anden en billet af din type, eller laver køkkenholdet ekstra portioner, går billetten til den første i køen - og du får en mail. Vælg **Ingen** på din plads i køen og klik **Forlad ventelisten**, hvis du alligevel ikke skal med.
 

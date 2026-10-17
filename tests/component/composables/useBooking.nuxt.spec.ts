@@ -1,6 +1,6 @@
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, addYears, differenceInDays, nextDay, type Day} from 'date-fns'
-import {useBooking, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcomes, supplyOfType, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
+import {useBooking, formatPlace, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcomes, supplyOfType, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {MODE_WORDS, ORDER_STATE_LABELS} from '~/composables/useBookingUi'
 import {formatDate} from '~/utils/date'
@@ -50,7 +50,6 @@ let countReleasedOrdersByDinner: UseBookingT['countReleasedOrdersByDinner']
 let getBookingOptions: UseBookingT['getBookingOptions']
 let groupGuestOrders: UseBookingT['groupGuestOrders']
 let getDayBillSummary: UseBookingT['getDayBillSummary']
-let formatPlace: UseBookingT['formatPlace']
 let hasChanges: UseBookingT['hasChanges']
 let countChanges: UseBookingT['countChanges']
 let getPowerChanges: UseBookingT['getPowerChanges']
@@ -75,7 +74,6 @@ beforeAll(() => {
         getBookingOptions,
         groupGuestOrders,
         getDayBillSummary,
-        formatPlace,
         hasChanges,
         countChanges,
         getPowerChanges,
@@ -1875,6 +1873,12 @@ describe('Action Preview', () => {
         ({...DinnerEventFactory.defaultDinnerEventDisplay(), id: 101 + index, date: new Date(2026, 9, 19 + index)}))
     const dateOf = (dinnerEventId: number) => formatDate(dinners.find(dinner => dinner.id === dinnerEventId)!.date)
 
+    // The ticket type a preview names for an order: the child price is 2, every other price an adult's
+    const CHILD_PRICE_ID = 2
+    const ticketTypeByPrice = (order: DesiredOrder) =>
+        ({ticketsForSale: 0, ticketType: order.ticketPriceId === CHILD_PRICE_ID ? TicketTypes.CHILD : TicketTypes.ADULT})
+    const guestOn = (ticketPriceId = 1) => (dinnerEventId: number) => desired({inhabitantId: 1, dinnerEventId, ticketPriceId, isGuestTicket: true})
+
     describe('formatActionPreview', () => {
         it('returns empty array for all idempotent buckets', () => {
             const buckets = {...emptyBuckets(), idempotent: [desired()]}
@@ -1888,7 +1892,7 @@ describe('Action Preview', () => {
             {bucket: Bucket.claim, ticketsForSale: 1, action: Action.BUY, text: 'Anna køber en billet til salg'},
             {bucket: Bucket.claim, ticketsForSale: 0, action: Action.QUEUE, text: 'Anna skrives på ventelisten'},
             {bucket: Bucket.leave, ticketsForSale: 0, action: Action.LEAVE, text: 'Anna forlader ventelisten'},
-            {bucket: Bucket.requeue, ticketsForSale: 0, action: Action.REQUEUE, text: `Anna ændrer ønsket tilmelding til ${MODE_WORDS[DM.DINEIN].label}`}
+            {bucket: Bucket.requeue, ticketsForSale: 0, action: Action.REQUEUE, text: `Anna ændrer spisemåde til ${MODE_WORDS[DM.DINEIN].label} (venteliste)`}
         ])('$bucket bucket with $ticketsForSale for sale → $action action', ({bucket, ticketsForSale, action, text}) => {
             const buckets = {...emptyBuckets(), [bucket]: [desired({inhabitantId: 1})]}
             const result = formatActionPreview(buckets, [], dinners, getName, () => ({ticketsForSale}))
@@ -1901,13 +1905,6 @@ describe('Action Preview', () => {
                 text: `${text}: ${dateOf(101)}`
             })
             expect(result[0]!.icon).toBeDefined()
-        })
-
-        it('a requeue names the place it keeps in its ticket type\'s line', () => {
-            const buckets = {...emptyBuckets(), requeue: [desired({dinnerMode: DM.DINEINLATE, waitlistEntryId: 7})]}
-            const result = formatActionPreview(buckets, [], dinners, getName, () => ({ticketsForSale: 0, ticketType: TicketTypes.ADULT}), () => 2)
-
-            expect(result[0]!.text).toBe(`Anna ændrer ønsket tilmelding til ${MODE_WORDS[DM.DINEINLATE].label}, beholder ventelisteplads Voksen #2: ${dateOf(101)}`)
         })
 
         describe('update bucket → action depends on existing state', () => {
@@ -1955,11 +1952,11 @@ describe('Action Preview', () => {
 
         describe('guest ticket handling', () => {
             it.each([
-                {desc: 'a guest ticket names "Gæst af {bookerName}"', isGuestTicket: true, name: 'Gæst af Anna'},
+                {desc: 'a guest ticket names "Gæst af {bookerName}" with its ticket type', isGuestTicket: true, name: 'Gæst af Anna (Voksen)'},
                 {desc: 'a regular ticket names the inhabitant', isGuestTicket: false, name: 'Anna'}
             ])('$desc', ({isGuestTicket, name}) => {
                 const buckets = {...emptyBuckets(), create: [desired({inhabitantId: 1, isGuestTicket})]}
-                const result = formatActionPreview(buckets, [], dinners, getName)
+                const result = formatActionPreview(buckets, [], dinners, getName, ticketTypeByPrice)
 
                 expect(result).toHaveLength(1)
                 expect(result[0]!.name).toBe(name)
@@ -1979,13 +1976,13 @@ describe('Action Preview', () => {
                     ]
                 }
                 // One ticket for sale on the first dinner: the first claim buys it, the rest queue
-                const supply = (order: DesiredOrder) => ({ticketsForSale: order.dinnerEventId === 101 ? 1 : 0})
+                const supply = (order: DesiredOrder) => ({...ticketTypeByPrice(order), ticketsForSale: order.dinnerEventId === 101 ? 1 : 0})
                 const result = formatActionPreview(buckets, [], dinners, getName, supply)
 
                 expect(result.map(item => item.text)).toEqual([
                     `Anna køber en billet til salg: ${dateOf(101)}`,
                     `Anna skrives på ventelisten: ${dateOf(102)}, ${dateOf(103)}`,
-                    `Gæst af Anna skrives på ventelisten: ${dateOf(102)}`
+                    `Gæst af Anna (Voksen) skrives på ventelisten: ${dateOf(102)}`
                 ])
                 expect(result.map(item => item.action)).toEqual([Action.BUY, Action.QUEUE, Action.QUEUE])
             })
@@ -2006,11 +2003,38 @@ describe('Action Preview', () => {
                 ])
             })
 
-            it('names a dinner once when several guests of one booker book it', () => {
-                const guest = desired({inhabitantId: 1, isGuestTicket: true})
-                const result = formatActionPreview({...emptyBuckets(), create: [guest, guest, guest]}, [], dinners, getName)
+            // A booker's guests of one ticket type and action at one dinner are one group, named with the count as the
+            // guest row badges it; dinners with the same group share a line
+            it.each([
+                {
+                    desc: 'three guests at one dinner',
+                    create: [101, 101, 101].map(guestOn()),
+                    claim: [],
+                    lines: () => [`Gæst af Anna (Voksen ×3) tilmeldes: ${dateOf(101)}`]
+                },
+                {
+                    desc: 'two guests at two dinners and one at a third',
+                    create: [101, 101, 102, 102, 103].map(guestOn()),
+                    claim: [],
+                    lines: () => [`Gæst af Anna (Voksen ×2) tilmeldes: ${dateOf(101)}, ${dateOf(102)}`, `Gæst af Anna (Voksen) tilmeldes: ${dateOf(103)}`]
+                },
+                {
+                    desc: 'three guests at a dinner with one ticket for sale',
+                    create: [],
+                    claim: [101, 101, 101].map(guestOn()),
+                    lines: () => [`Gæst af Anna (Voksen) køber en billet til salg: ${dateOf(101)}`, `Gæst af Anna (Voksen ×2) skrives på ventelisten: ${dateOf(101)}`]
+                },
+                {
+                    desc: 'two child guests and an adult guest at one dinner',
+                    create: [...[101, 101].map(guestOn(CHILD_PRICE_ID)), guestOn()(101)],
+                    claim: [],
+                    lines: () => [`Gæst af Anna (Barn ×2) tilmeldes: ${dateOf(101)}`, `Gæst af Anna (Voksen) tilmeldes: ${dateOf(101)}`]
+                }
+            ])('$desc', ({create, claim, lines}) => {
+                const supply = (order: DesiredOrder) => ({...ticketTypeByPrice(order), ticketsForSale: 1})
+                const result = formatActionPreview({...emptyBuckets(), create, claim}, [], dinners, getName, supply)
 
-                expect(result.map(item => item.text)).toEqual([`Gæst af Anna tilmeldes: ${dateOf(101)}`])
+                expect(result.map(item => item.text)).toEqual(lines())
             })
 
             it.each([

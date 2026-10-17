@@ -658,16 +658,12 @@ export const useBookingValidation = () => {
     // SCAFFOLD PRE-BOOKINGS RESULT
     // ============================================================================
 
-    /**
-     * Result schema for scaffold-prebookings endpoint
-     * Used to validate API response structure
-     */
+    // A queued entry's place in the line of its ticket type on a dinner; the type is null when the entry's price is gone
     const QueuePositionSchema = z.object({
         inhabitantId: IdSchema,
         dinnerEventId: IdSchema,
         isGuestTicket: z.boolean(),
         position: z.number().int().positive(),
-        // The line the place is in; null for an entry whose ticket price is gone
         ticketType: TicketTypeSchema.nullable()
     })
 
@@ -682,7 +678,7 @@ export const useBookingValidation = () => {
         portionNeed: z.number().nonnegative()
     })
 
-    // A released ticket got a new owner: a member bought it, or the first in its ticket type's line got it
+    // A released ticket got a new owner: an inhabitant bought it, or the first in its ticket type's line got it
     const TicketSaleSchema = z.object({
         dinnerEventId: IdSchema,
         ticketPriceId: IdSchema,
@@ -708,11 +704,13 @@ export const useBookingValidation = () => {
     // What a save does to the supply, which names its button: a bucket with no supply effect changes the mode
     const BookingOutcomeSchema = BookingActionSchema.extract([Action.BOOK, Action.BUY, Action.QUEUE, Action.LEAVE, Action.REQUEUE, Action.CHANGE_MODE])
 
-    // One order's result in a scaffold run: who, which dinner, the eating mode and the action
+    // One order's result in a scaffold run: who, the ticket type, which dinner, the eating mode and the action; the ticket
+    // type groups a booker's guests and is null when the order's price is gone
     const BookingResultSchema = z.object({
         inhabitantId: IdSchema,
         inhabitantName: z.string(),
         isGuestTicket: z.boolean(),
+        ticketType: TicketTypeSchema.nullable(),
         dinnerEventId: IdSchema,
         dinnerMode: DinnerModeSchema,
         action: BookingActionSchema
@@ -721,13 +719,14 @@ export const useBookingValidation = () => {
     // The orders of a run per action, every action present
     const BookingTotalsSchema = z.record(BookingActionSchema, z.number().int().nonnegative())
 
+    // What a scaffold run did, as the endpoints that scaffold reply it
     const ScaffoldResultSchema = z.object({
         seasonId: IdSchema.nullable(),
         totals: BookingTotalsSchema,
         positions: z.array(QueuePositionSchema).default([]),        // The place in the dinner's queue of each queued entry
         unchanged: z.number().int().nonnegative(),
         households: z.number().int().nonnegative(),
-        errored: z.number().int().nonnegative().default(0),
+        errored: z.number().int().nonnegative().default(0),          // The failed orders and the households whose run failed as a whole
         results: z.array(BookingResultSchema),                       // Each order that landed, in a run scoped to one household
         failed: z.array(BookingResultSchema),                        // Each order that failed
         outcomes: BookingOutcomesSchema.default({joined: [], ticketsSold: [], waitlistTicketsSold: []})
@@ -761,7 +760,7 @@ export const useBookingValidation = () => {
 
     // ============================================================================
     // UNIFIED BOOKING SCAFFOLD (ADR-016)
-    // Every member booking write goes through the scaffolder, the claim and the queue included
+    // Every household booking write goes through the scaffolder, the claim and the queue included
     // ============================================================================
 
     /**

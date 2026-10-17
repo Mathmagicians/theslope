@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
- * HouseholdCard - members and their settings - especially weekly dinner preferences
+ * HouseholdCard - the inhabitants and their settings - especially weekly dinner preferences
  *
  * Expandable table pattern with power mode:
- * - Power row (first row): Updates all family members at once with ⚡ icon
+ * - Power row (first row): Updates all the household's inhabitants at once with ⚡ icon
  * - Collapsed row: Shows ticket type, name, preferences as VIEW badges with ✏️ icon
  * - Expanded row: WeekDayMapDinnerModeDisplay in EDIT mode (button groups)
  * - Only one row can be expanded at a time
@@ -32,7 +32,7 @@
  * │ └─────────────────────────────────────────────────────────────────────┘ │
  * └─────────────────────────────────────────────────────────────────────────┘
  *
- * EXPANDED (regular member):
+ * EXPANDED (one inhabitant):
  * ┌───────────────────────────────────────────────────────────────┐
  * │ [▼] Voksen  👤 Anna                                          │
  * │ ──────────────────────────────────────────────────────────── │
@@ -47,8 +47,8 @@
  * └───────────────────────────────────────────────────────────────┘
  *
  * Legend:
- * - ⚡ = Power mode (update all members)
- * - ✏️ = Pencil icon (edit single member)
+ * - ⚡ = Power mode (update all inhabitants)
+ * - ✏️ = Pencil icon (edit one inhabitant)
  * - ▼ = Chevron down (expanded row - click to collapse)
  * - 🍽️🕐🛍️❌ = Compact badges (collapsed VIEW mode)
  * - [Button] = Button groups (expanded EDIT mode)
@@ -85,7 +85,7 @@ const {computeAggregatedPreferences} = useHousehold()
 const { WEEKDAY, COMPONENTS, COLOR, ICONS, BUTTONS, SIZES, ALERTS, NOISE, ORIENTATIONS, TABLE_COLUMNS } = useTheSlopeDesignSystem()
 const { powerMode } = COMPONENTS
 
-// Prepare table data with synthetic "all members" power row + individual inhabitants
+// Prepare table data with synthetic "all inhabitants" power row + individual inhabitants
 const tableData = computed(() => {
   const inhabitants = props.household.inhabitants.map(inhabitant => ({
     ...inhabitant,
@@ -94,7 +94,7 @@ const tableData = computed(() => {
     consensus: undefined  // Only power row has consensus
   }))
 
-  // Create synthetic "all members" power row
+  // Create synthetic "all inhabitants" power row
   const { preferences: aggregatedPrefs, consensus } = computeAggregatedPreferences(props.household.inhabitants)
   const powerRow = {
     id: -1,
@@ -248,7 +248,7 @@ data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
         <!-- Name column - includes ticket badge on mobile -->
         <template #name-cell="{ row }">
           <div :class="COMPONENTS.householdCard.nameCell">
-            <!-- Power mode: show all family members in group -->
+            <!-- Power mode: show all the household's inhabitants in a group -->
             <UserListItem
                 v-if="row.original.isSynthetic"
                 :inhabitants="household.inhabitants"

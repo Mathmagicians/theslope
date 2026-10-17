@@ -16,7 +16,7 @@ const LOG = '🎟️ > HOUSEHOLD > [SCAFFOLD]'
 
 /**
  * POST /api/household/order/scaffold
- * The one member booking write for household dinner orders (ADR-016)
+ * The one household booking write for household dinner orders (ADR-016)
  *
  * - Creates new orders before the deadline
  * - After the deadline claims a released ticket at the price, else queues the wish and reports its position

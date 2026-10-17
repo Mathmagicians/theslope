@@ -4,6 +4,7 @@ import {useHeynaboValidation, type HeynaboImportResponse} from '~/composables/us
 import {useBillingValidation, type MonthlyBillingJobResult} from '~/composables/useBillingValidation'
 import {useBooking} from '~/composables/useBooking'
 import {formatDate} from '~/utils/date'
+import {COLOR, ICONS} from '~/composables/useTheSlopeDesignSystem'
 
 /**
  * Business logic for maintenance jobs
@@ -52,12 +53,12 @@ export const useMaintenance = () => {
     /**
      * Get UI color for job status
      */
-    const getJobStatusColor = (status: JobStatus): 'success' | 'warning' | 'error' | 'info' => {
+    const getJobStatusColor = (status: JobStatus) => {
         switch (status) {
-            case JobStatus.SUCCESS: return 'success'
-            case JobStatus.PARTIAL: return 'warning'
-            case JobStatus.FAILED: return 'error'
-            case JobStatus.RUNNING: return 'info'
+            case JobStatus.SUCCESS: return COLOR.success
+            case JobStatus.PARTIAL: return COLOR.warning
+            case JobStatus.FAILED: return COLOR.error
+            case JobStatus.RUNNING: return COLOR.info
         }
     }
 
@@ -66,12 +67,12 @@ export const useMaintenance = () => {
      */
     const getJobStatusIcon = (status: JobStatus): string => {
         switch (status) {
-            case JobStatus.SUCCESS: return 'i-heroicons-check-circle'
-            case JobStatus.PARTIAL: return 'i-heroicons-exclamation-triangle'
-            case JobStatus.RUNNING: return 'i-heroicons-arrow-path'
+            case JobStatus.SUCCESS: return ICONS.checkCircle
+            case JobStatus.PARTIAL: return ICONS.warning
+            case JobStatus.RUNNING: return ICONS.sync
             case JobStatus.FAILED:
             default:
-                return 'i-heroicons-x-circle'
+                return ICONS.jobFailed
         }
     }
 

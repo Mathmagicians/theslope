@@ -125,7 +125,7 @@ const actionPreviewItems = computed(() => {
   return formatActionPreview(buckets, [], [props.dinnerEvent], () => props.bookerName, supply)
 })
 
-// The button names the guests; the preview lines name what saving does for each
+// The button names the guests; the preview lines name what saving does for them, one line per outcome
 const saveLabel = computed(() => guestSaveLabel(formState.count))
 
 // Enabled modes for guest: filter out NONE (can't add a guest who won't eat)

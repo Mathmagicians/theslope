@@ -14,7 +14,7 @@ import {WAITLIST_TEST_IDS} from '~~/tests/component/components/dinner/waitlistTe
 
 const {memberUIFile, adminUIFile} = authFiles
 const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, gotoHydrated, pollUntil, salt, temporaryAndRandom} = testHelpers
-const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
 const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
 const {ticketTypeWords} = useTicket()
 const DinnerMode = DinnerModeSchema.enum
@@ -81,7 +81,7 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
         await memberPage.getByTestId(`inhabitant-${inhabitantId}-mode-edit-${DinnerMode.DINEIN}`).click()
         await memberPage.getByTestId(`inhabitant-${inhabitantId}-save`).click()
 
-        await expect(memberPage.getByTestId(WAITLIST_TEST_IDS.position(inhabitantId))).toContainText('#1 i kø', {timeout: 15000})
+        await expect(memberPage.getByTestId(WAITLIST_TEST_IDS.position(inhabitantId))).toContainText(`${ticketTypeWords[TicketTypeSchema.enum.ADULT].label} #1`, {timeout: 15000})
 
         const chefPage = await (await browser.newContext({storageState: adminUIFile})).newPage()
         await gotoHydrated(chefPage, `/chef?team=${teamId}&date=${formatDate(dinnerDate)}`)

@@ -20,8 +20,8 @@ const Action = BookingActionSchema.enum
 const Bucket = OrderBucketSchema.enum
 
 /**
- * The audit action of a booking action. A member who cancels or releases signals "I don't want to eat"
- * (USER_CANCELLED); every other member action books (USER_BOOKED); a system run records what it did to the row.
+ * The audit action of a booking action. A user who cancels or releases signals "I don't want to eat"
+ * (USER_CANCELLED); every other user action books (USER_BOOKED); a system run records what it did to the row.
  */
 const getAuditAction = (isUserTriggered: boolean, action: BookingAction): OrderAuditAction => {
     const cancels = action === Action.CANCEL || action === Action.RELEASE
@@ -182,7 +182,6 @@ export async function scaffoldPrebookings(
     // What happened that the caller notifies about after the run; a household that fails later keeps what already happened
     const outcomes: BookingOutcomes = {joined: [], ticketsSold: [], waitlistTicketsSold: []}
     let totalUnchanged = 0
-    let staleUpdates = 0
     let processedHouseholds = 0
     let erroredHouseholds = 0
 
@@ -243,6 +242,7 @@ export async function scaffoldPrebookings(
             const nameOf = (inhabitantId: number): string => household.inhabitants.find(inhabitant => inhabitant.id === inhabitantId)?.name ?? ''
             const resultOf = (desired: DesiredOrder, action: BookingAction): BookingResult => ({
                 inhabitantId: desired.inhabitantId, inhabitantName: nameOf(desired.inhabitantId), isGuestTicket: desired.isGuestTicket,
+                ticketType: ticketPriceById.get(desired.ticketPriceId)?.ticketType ?? null,
                 dinnerEventId: desired.dinnerEventId, dinnerMode: desired.dinnerMode, action
             })
             const landedAs = (action: BookingAction) => (orders: {desired: DesiredOrder}[]) => landed.push(...orders.map(({desired}) => resultOf(desired, action)))
@@ -274,8 +274,8 @@ export async function scaffoldPrebookings(
                 }
                 const existing = orderById.get(incoming.orderId)
                 if (!existing) {
-                    console.warn(`${LOG} Order ${incoming.orderId} not found (deleted during processing?) - skipping`)
-                    staleUpdates++
+                    console.warn(`${LOG} Order ${incoming.orderId} not found (deleted during processing?) - recorded as failed`)
+                    failed.push(resultOf(incoming, actionOfUpdate(incoming, undefined)))
                     continue
                 }
                 const action = actionOfUpdate(incoming, existing)
@@ -436,7 +436,7 @@ export async function scaffoldPrebookings(
         positions,
         unchanged: totalUnchanged,
         households: processedHouseholds,
-        errored: failed.length + erroredHouseholds + staleUpdates,
+        errored: failed.length + erroredHouseholds,
         // A run scoped to one household names each order; a season-wide run names only the failures
         results: options.householdId !== undefined ? landed : [],
         failed,

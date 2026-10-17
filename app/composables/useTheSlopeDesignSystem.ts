@@ -1097,8 +1097,9 @@ export const COMPONENTS = {
 
     /**
      * HouseholdSettings: the `root` stack, a `sectionTitle`, the household's `facts` (each `fact` a glyph, `factIcon`, and a
-     * line), the move-out card's `cardHeader` and `cardBody`, the `sectionGap` under a section divider, the calendar
-     * `intro`, and the `feedBox` with its `feedLabel` and `feedLink`
+     * line), the move-out card's `cardHeader` and `cardBody` with the sun of a household without move-out plans
+     * (`noPlansIcon`), the `sectionGap` under a section divider, the calendar `intro`, and the `feedBox` with its
+     * `feedLabel` and `feedLink`
      */
     householdSettings: {
         root: 'space-y-6 px-2 md:px-0',
@@ -1112,7 +1113,8 @@ export const COMPONENTS = {
         intro: `${TYPOGRAPHY.bodyTextMuted} mb-4`,
         feedBox: `mt-4 p-4 rounded ${BG.inset}`,
         feedLabel: `${TYPOGRAPHY.bodyTextMuted} mb-2`,
-        feedLink: 'text-primary hover:underline text-sm'
+        feedLink: 'text-primary hover:underline text-sm',
+        noPlansIcon: 'text-warning-700 dark:text-warning-400'
     },
 
     /** HouseholdBookings: the calendar column beside the booking panel from md, stacked on a phone */
@@ -1985,6 +1987,7 @@ export const ICONS = {
     megaphone: 'i-heroicons-megaphone',
     exclamationCircle: 'i-heroicons-exclamation-circle',
     warning: 'i-heroicons-exclamation-triangle',
+    jobFailed: 'i-heroicons-x-circle',
     ellipsis: 'i-heroicons-ellipsis-horizontal',
     xMark: 'i-heroicons-x-mark',
     arrowRight: 'i-heroicons-arrow-right',

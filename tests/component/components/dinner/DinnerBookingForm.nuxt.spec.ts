@@ -11,6 +11,7 @@ import ActionPreview from '~/components/booking/ActionPreview.vue'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {MODE_WORDS, SUPPLY_WORDS, bookingSaveLabel} from '~/composables/useBookingUi'
 import {EMPTY_RELEASED_TICKET_COUNTS} from '~/composables/useBooking'
+import {formatDate} from '~/utils/date'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
 import type {DinnerMode, OrderDisplay} from '~/composables/useBookingValidation'
 import type {HouseholdDetail, UserDetail} from '~/composables/useCoreValidation'
@@ -430,7 +431,7 @@ describe('DinnerBookingForm previews the outcome of a save by the supply', () =>
     expect(findByTestId(wrapper, `inhabitant-${anna.id}-save`).text()).toContain(label)
   })
 
-  // The guest form opens on Voksen; its preview lines name each guest's outcome and its button names the guests
+  // The guest form opens on Voksen; its preview lines name the guests per outcome and its button names the guests
   const guestPreview = (wrapper: Awaited<ReturnType<typeof mountRow>>) =>
     wrapper.findComponent(GuestBookingForm).findComponent(ActionPreview).props('items').map(item => item.action)
 
@@ -445,8 +446,8 @@ describe('DinnerBookingForm previews the outcome of a save by the supply', () =>
     expect(findByTestId(wrapper, 'guest-form-save').text()).toContain('Tilmeld gæst')
   })
 
-  // The guests share one name, so the buys read as one line and the places on the waiting list as another
-  it('after the deadline with 3V 1B for sale: ten adult guests preview a buy line and a waiting-list line, and save as "Tilmeld gæster"', async () => {
+  // The guests of one booker and ticket type are one group per outcome, named with the count
+  it('after the deadline with 3V 1B for sale: ten adult guests preview three buys and seven on the waiting list, and save as "Tilmeld gæster"', async () => {
     const wrapper = await mountMemberForm(false, {releasedTicketCounts: {
       ...EMPTY_RELEASED_TICKET_COUNTS, total: 4, formatted: '3V 1B', byType: {[TicketTypeSchema.enum.ADULT]: 3, [TicketTypeSchema.enum.CHILD]: 1}
     }})
@@ -454,6 +455,8 @@ describe('DinnerBookingForm previews the outcome of a save by the supply', () =>
     await wrapper.findComponent(GuestBookingForm).find('input[name="count"]').setValue(10)
 
     expect(guestPreview(wrapper)).toEqual([Action.BUY, Action.QUEUE])
+    expect(wrapper.findComponent(GuestBookingForm).findComponent(ActionPreview).props('items').map(item => item.name))
+      .toEqual([expect.stringMatching(/\(Voksen ×3\)$/), expect.stringMatching(/\(Voksen ×7\)$/)])
     expect(findByTestId(wrapper, 'guest-form-save').text()).toContain('Tilmeld gæster')
   })
 })
@@ -485,13 +488,13 @@ describe('DinnerBookingForm previews a requeue', () => {
   const bo = householdWithInhabitants.inhabitants[1]!
   const boQueued = WaitlistFactory.defaultEntry({id: 31, inhabitantId: bo.id, dinnerEventId: baseProps.dinnerEvent.id, position: 2, dinnerMode: DinnerModeSchema.enum.TAKEAWAY})
 
-  it('WHEN a queued member picks another mode THEN the save reads Opdater and the preview names the new mode and the kept place', async () => {
+  it('WHEN a queued inhabitant picks another mode THEN the save reads Opdater and the preview names the new mode on the waiting list', async () => {
     const wrapper = await mountMemberForm(false, {waitlistEntries: [boQueued]})
     await clickByTestId(wrapper, `inhabitant-${bo.id}-toggle`)
     await clickByTestId(wrapper, `inhabitant-${bo.id}-mode-edit-${DinnerModeSchema.enum.DINEINLATE}`)
 
     expect(findByTestId(wrapper, `inhabitant-${bo.id}-save`).text()).toContain(bookingSaveLabel(Action.REQUEUE))
-    expect(wrapper.text()).toContain(`ændrer ønsket tilmelding til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label}, beholder ventelisteplads Voksen #${boQueued.position}`)
+    expect(wrapper.text()).toContain(`${bo.name} ændrer spisemåde til ${MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label} (venteliste): ${formatDate(baseProps.dinnerEvent.date)}`)
   })
 })
 

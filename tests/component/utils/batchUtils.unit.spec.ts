@@ -45,7 +45,7 @@ describe('batchUtils', () => {
                 { id: 1, state: OrderState.BOOKED, mode: DinnerMode.DINEIN },
                 { id: 2, state: OrderState.RELEASED, mode: DinnerMode.DINEIN },
                 { id: 3, state: OrderState.BOOKED, mode: DinnerMode.TAKEAWAY },
-                { id: 4, state: OrderState.RELEASED, mode: DinnerMode.LATE }
+                { id: 4, state: OrderState.RELEASED, mode: DinnerMode.DINEINLATE }
             ]
             const result = groupByState(orders)
 

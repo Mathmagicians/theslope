@@ -469,7 +469,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       const first = await queue(context, testHouseholdId, inhabitantId, dinnerEventId)
       const second = await queue(memberContext, member.householdId, member.inhabitantId, dinnerEventId)
 
-      expect(first).toMatchObject({ totals: { [Action.BOOK]: 0, [Action.BUY]: 0, [Action.QUEUE]: 1 }, positions: [{ inhabitantId, dinnerEventId, isGuestTicket: false, position: 1 }] })
+      expect(first).toMatchObject({ totals: { [Action.BOOK]: 0, [Action.BUY]: 0, [Action.QUEUE]: 1 }, positions: [{ inhabitantId, dinnerEventId, isGuestTicket: false, position: 1, ticketType: TicketTypeSchema.enum.ADULT }] })
       expect(second).toMatchObject({ totals: { [Action.QUEUE]: 1 }, positions: [{ inhabitantId: member.inhabitantId, position: 2 }] })
       const entries = await WaitlistFactory.entries(context, [dinnerEventId])
       expect(entries.map(entry => [entry.inhabitantId, entry.order.householdId, entry.order.priceAtBooking])).toEqual([
@@ -487,7 +487,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       const result = await WaitlistFactory.queue(context, testHouseholdId, testSeason.id!,
         OrderFactory.createGuestOrder(testInhabitantId, dinnerEventId, testChildTicketPriceId, DinnerMode.TAKEAWAY, [allergyType.id]))
 
-      expect(result).toMatchObject({ totals: { [Action.QUEUE]: 1 }, positions: [{ inhabitantId: testInhabitantId, isGuestTicket: true, position: 1 }] })
+      expect(result).toMatchObject({ totals: { [Action.QUEUE]: 1 }, positions: [{ inhabitantId: testInhabitantId, isGuestTicket: true, position: 1, ticketType: TicketTypeSchema.enum.CHILD }] })
       const [entry] = await WaitlistFactory.entries(context, [dinnerEventId])
       expect(entry).toMatchObject({
         isGuestTicket: true,

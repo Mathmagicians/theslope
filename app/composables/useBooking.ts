@@ -132,6 +132,10 @@ export const actionOfUpdate = (incoming: DesiredOrder, existing: OrderDisplay | 
     return Action.CHANGE_MODE
 }
 
+/** A place on a dinner's waiting list, in the line of its ticket type; an entry whose ticket price is gone has its number alone */
+export const formatPlace = (position: number, ticketType?: TicketType | null): string =>
+    `${ticketType ? `${useTicket().ticketTypeWords[ticketType].label} ` : ''}#${position}`
+
 /** The buckets whose execution has a supply outcome, in the order a preview reads them */
 export const OUTCOME_BUCKETS = [Bucket.claim, Bucket.create, Bucket.leave, Bucket.requeue] as const
 
@@ -666,7 +670,7 @@ export const useBooking = () => {
     const {getDefaultDinnerStartTime, getDefaultDinnerDuration, getDinnerTimeRange, splitDinnerEvents} = useSeason()
     const {DinnerStateSchema, OrderSnapshotSchema} = useBookingValidation()
     const {formatNameWithInitials, computeConsensus} = useHousehold()
-    const {resolveTicketPrice, ticketTypeWords} = useTicket()
+    const {resolveTicketPrice} = useTicket()
     const DinnerState = DinnerStateSchema.enum
 
     // ============================================================================
@@ -1114,10 +1118,6 @@ export const useBooking = () => {
         }
     }
 
-    /** A place on a dinner's waiting list, in the line of its ticket type; an entry whose ticket price is gone has its number alone */
-    const formatPlace = (position: number, ticketType?: TicketType | null): string =>
-        `${ticketType ? `${ticketTypeWords[ticketType].label} ` : ''}#${position}`
-
     // ============================================================================
     // Booking Toast Titles - Consistent UX across pages
     // ============================================================================
@@ -1524,7 +1524,6 @@ export const useBooking = () => {
         getBookingOptions,
         // Day Bill Summary
         getDayBillSummary,
-        formatPlace,
         // Toast Titles
         BOOKING_TOAST_TITLES,
         // Action Preview (show users what will happen before save)

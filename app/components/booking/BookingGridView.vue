@@ -44,11 +44,11 @@
  * | Row Type    | Icon | VIEW           | EDIT                | Description        |
  * |-------------|------|----------------|---------------------|--------------------|
  * | power       | ⚡   | Consensus/?    | Editable (future)   | Bulk update all    |
- * | inhabitant  | 👤   | Booking state  | Editable (future)   | Household member   |
+ * | inhabitant  | 👤   | Booking state  | Editable (future)   | An inhabitant      |
  * | guest-order | 🎫   | Booking state  | Locked past, edit   | Existing guest     |
  * | guest-add   | ➕   | Hidden         | v buttons (future)  | Add new guest      |
  *
- * QUEUED CELL (a sold-out dinner, the member on the waiting list), read-only in both modes:
+ * QUEUED CELL (a sold-out dinner, the inhabitant on the waiting list), read-only in both modes:
  *   ┌──────┐
  *   │  ⌛ │  the wished mode ghosted (COMPONENTS.waitlist.ghostBadge) under the hourglass in the corner chip
  *   └──────┘  (COMPONENTS.waitlist.chip); the legend gains "På venteliste (#n)" while the household has entries.
@@ -695,7 +695,7 @@ const getEventSummary = (eventId: number) => {
                 :variant="NOISE.subtle"
                 :size="SIZES.xs"
               >
-                {{ row.original.ticketConfig.label }}{{ row.original.guestCount && row.original.guestCount > 1 ? ` ×${row.original.guestCount}` : '' }}
+                {{ guestTicketsLabel(row.original.ticketConfig.label, row.original.guestCount ?? 1) }}
               </UBadge>
             </template>
           </UserListItem>

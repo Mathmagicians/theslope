@@ -9,6 +9,7 @@ ASCII mockup (COMPONENTS.actionPreview: the list, each item a badge with its gly
 │   [buy]      Anna køber en billet til salg: 19/10/2026              │
 │   [queue]    Anna skrives på ventelisten: 20/10/2026, 21/10/2026    │
 │   [queue]    Gæst af Anna skrives på ventelisten: 20/10/2026        │
+│   [queue]    Bo ændrer spisemåde til Sen (venteliste): 20/10/2026   │
 │   [edit]     Lars ændrer spisemåde til Takeaway: 22/10/2026         │
 │   [released] Lars frigiver sin billet: 23/10/2026                   │
 │   [cancel]   Knud frameldes: 7 middage, 02/11/2026 – 14/12/2026     │

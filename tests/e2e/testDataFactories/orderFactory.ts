@@ -546,7 +546,7 @@ export class OrderFactory {
 
   /** One order's result in a scaffold run */
   static readonly defaultBookingResult = (overrides?: Partial<BookingResult>): BookingResult => ({
-    inhabitantId: 1, inhabitantName: 'Anna', isGuestTicket: false, dinnerEventId: 1,
+    inhabitantId: 1, inhabitantName: 'Anna', isGuestTicket: false, ticketType: TicketTypeSchema.enum.ADULT, dinnerEventId: 1,
     dinnerMode: DinnerModeSchema.enum.DINEIN, action: BookingActionSchema.enum.BOOK,
     ...overrides
   })

@@ -1,11 +1,11 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, ORDER_STATE_LABELS, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewOutcome, scaffoldToastLook, formatBookingResult, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, ORDER_STATE_LABELS, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewOutcome, scaffoldToastLook, formatBookingResult, guestTicketsLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, EMPTY_RELEASED_TICKET_COUNTS, emptyOrderBuckets, type OrderBucketResult, type ReleasedTicketCounts} from '~/composables/useBooking'
-import {useBookingValidation, type BookingAction, type BookingResult, type QueuePosition} from '~/composables/useBookingValidation'
+import {useBookingValidation, type BookingAction, type BookingResult, type QueuePosition, type TicketType} from '~/composables/useBookingValidation'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -169,8 +169,8 @@ describe('useBookingUi', () => {
     })
 
     describe('outcome words', () => {
-        // One word table: the preview line's words after the name, the toast's words after the count. The mode comes from
-        // the one mode-words table; a requeue keeps its place in its ticket type's line
+        // One word table: the preview line's words after the name, the toast's words after the count; the mode comes from
+        // the one mode-words table
         const LATE = MODE_WORDS[DinnerModeSchema.enum.DINEINLATE].label
         it.each([
             {action: Action.BOOK, preview: 'tilmeldes', toast: 'tilmeldt'},
@@ -180,17 +180,12 @@ describe('useBookingUi', () => {
             {action: Action.BUY, preview: 'køber en billet til salg', toast: 'købt'},
             {action: Action.QUEUE, preview: 'skrives på ventelisten', toast: 'på ventelisten'},
             {action: Action.LEAVE, preview: 'forlader ventelisten', toast: 'forlod ventelisten'},
-            {action: Action.REQUEUE, preview: `ændrer ønsket tilmelding til ${LATE}, beholder ventelisteplads Voksen #2`, toast: 'ønske ændret'},
+            {action: Action.REQUEUE, preview: `ændrer spisemåde til ${LATE} (venteliste)`, toast: 'ændret spisemåde (venteliste)'},
             {action: Action.CHANGE_MODE, preview: `ændrer spisemåde til ${LATE}`, toast: 'ændret spisemåde'},
             {action: Action.CHANGE_PRICE, preview: 'ændrer billettype', toast: 'ændret billettype'}
         ])('$action previews "$preview" and toasts "$toast"', ({action, preview, toast}) => {
-            const words = {mode: LATE, place: 'Voksen #2'}
-            expect(ACTION_WORDS[action].preview(words)).toBe(preview)
+            expect(ACTION_WORDS[action].preview({mode: LATE})).toBe(preview)
             expect(ACTION_WORDS[action].toast).toBe(toast)
-        })
-
-        it('a requeue whose place is unknown names the new mode alone', () => {
-            expect(ACTION_WORDS[Action.REQUEUE].preview({mode: LATE})).toBe(`ændrer ønsket tilmelding til ${LATE}`)
         })
 
         it.each([
@@ -204,7 +199,7 @@ describe('useBookingUi', () => {
             expect(bookingSaveLabel(outcome)).toBe(save)
         })
 
-        // The guest form's button names the guests; its preview lines name each guest's outcome
+        // The guest form's button names the guests; its preview lines name the guests per outcome
         it.each([
             {count: 1, label: 'Tilmeld gæst'},
             {count: 3, label: 'Tilmeld gæster'}
@@ -329,20 +324,23 @@ describe('scaffoldToastLook', () => {
 })
 
 describe('formatBookingResult', () => {
-    const ADULT = TicketTypeSchema.enum.ADULT
-    const ANNA = {inhabitantId: 1, inhabitantName: 'Anna'}
-    const GUEST_OF_ANNA = {...ANNA, isGuestTicket: true}
-    const LARS = {inhabitantId: 2, inhabitantName: 'Lars'}
-    const KNUD = {inhabitantId: 3, inhabitantName: 'Knud'}
-    const LENE = {inhabitantId: 4, inhabitantName: 'Lene'}
-    type Person = Pick<BookingResult, 'inhabitantId' | 'inhabitantName'> & {isGuestTicket?: boolean}
+    const {ADULT, CHILD} = TicketTypeSchema.enum
+    const ANNA = {inhabitantId: 1, inhabitantName: 'Anna', ticketType: ADULT}
+    const guestsOfAnna = (ticketType: TicketType | null) => ({...ANNA, isGuestTicket: true, ticketType})
+    const LARS = {inhabitantId: 2, inhabitantName: 'Lars', ticketType: ADULT}
+    const KNUD = {inhabitantId: 3, inhabitantName: 'Knud', ticketType: ADULT}
+    const LENE = {inhabitantId: 4, inhabitantName: 'Lene', ticketType: ADULT}
+    type Person = Pick<BookingResult, 'inhabitantId' | 'inhabitantName' | 'ticketType'> & {isGuestTicket?: boolean}
 
     // One order's result per action listed, each on its own dinner
     const resultsOf = (person: Person, ...actions: BookingAction[]): BookingResult[] =>
         actions.map((action, index) => OrderFactory.defaultBookingResult({...person, dinnerEventId: index + 1, action}))
+    // One order's result per action listed, all on one dinner: a booker's guests at one table
+    const resultsOnDinner = (dinnerEventId: number, person: Person, ...actions: BookingAction[]): BookingResult[] =>
+        actions.map(action => OrderFactory.defaultBookingResult({...person, dinnerEventId, action}))
     const times = (count: number, action: BookingAction): BookingAction[] => Array.from({length: count}, () => action)
     const placeOf = (person: Person, position: number): QueuePosition =>
-        ({inhabitantId: person.inhabitantId, dinnerEventId: 1, isGuestTicket: !!person.isGuestTicket, position, ticketType: ADULT})
+        ({inhabitantId: person.inhabitantId, dinnerEventId: 1, isGuestTicket: !!person.isGuestTicket, position, ticketType: person.ticketType})
     const soldToWaitlist = (count: number) =>
         Array.from({length: count}, () => ({dinnerEventId: 1, ticketPriceId: 1, buyerInhabitantId: 9, buyerHouseholdId: 2, sellerHouseholdId: 1}))
     const run = (overrides: Parameters<typeof OrderFactory.defaultScaffoldResult>[0]) => OrderFactory.defaultScaffoldResult(overrides)
@@ -352,10 +350,31 @@ describe('formatBookingResult', () => {
             // People in the order they first appear, their counts in the order of the actions, the places ascending
             desc: 'the grid save after the deadline',
             result: run({
-                results: [...resultsOf(ANNA, Action.QUEUE), ...resultsOf(GUEST_OF_ANNA, Action.QUEUE), ...resultsOf(ANNA, Action.BUY, Action.QUEUE)],
-                positions: [placeOf(ANNA, 5), placeOf(GUEST_OF_ANNA, 6), placeOf(ANNA, 3)]
+                results: [...resultsOf(ANNA, Action.QUEUE), ...resultsOnDinner(1, guestsOfAnna(ADULT), Action.QUEUE), ...resultsOf(ANNA, Action.BUY, Action.QUEUE)],
+                positions: [placeOf(ANNA, 5), placeOf(guestsOfAnna(ADULT), 6), placeOf(ANNA, 3)]
             }),
-            text: 'Anna: 1 købt, 2 på ventelisten (Voksen #3, Voksen #5)\nGæst af Anna: 1 på ventelisten (Voksen #6)'
+            text: 'Anna: 1 købt, 2 på ventelisten (Voksen #3, Voksen #5)\nGæst af Anna (Voksen): 1 på ventelisten (Voksen #6)'
+        },
+        {
+            // A booker's guests of one ticket type are one line, named with the count, as the guest row badges them
+            desc: 'two guests of one ticket type at one dinner',
+            result: run({results: resultsOnDinner(1, guestsOfAnna(CHILD), Action.BUY, Action.QUEUE), positions: [placeOf(guestsOfAnna(CHILD), 3)]}),
+            text: 'Gæst af Anna (Barn ×2): 1 købt, 1 på ventelisten (Barn #3)'
+        },
+        {
+            // The count is the guests at one dinner; another ticket type is another line
+            desc: 'guests of two ticket types over two dinners',
+            result: run({results: [
+                ...resultsOnDinner(1, guestsOfAnna(CHILD), Action.BOOK, Action.BOOK),
+                ...resultsOnDinner(2, guestsOfAnna(CHILD), Action.BOOK, Action.BOOK),
+                ...resultsOnDinner(1, guestsOfAnna(ADULT), Action.BOOK)
+            ]}),
+            text: 'Gæst af Anna (Barn ×2): 4 tilmeldt\nGæst af Anna (Voksen): 1 tilmeldt'
+        },
+        {
+            desc: 'guests whose ticket price is gone',
+            result: run({results: resultsOnDinner(1, guestsOfAnna(null), Action.BOOK, Action.BOOK)}),
+            text: 'Gæst af Anna (×2): 2 tilmeldt'
         },
         {
             desc: 'the grid power mode',
@@ -372,12 +391,18 @@ describe('formatBookingResult', () => {
                 unchanged: 42,
                 outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: soldToWaitlist(1)}
             }),
-            text: 'Knud: 7 frameldt, 2 frigivet\nLene: 6 frameldt, 2 frigivet, 1 fejlede\n1 billet solgt til ventelisten\n42 uændret'
+            text: 'Knud: 7 frameldt, 2 frigivet\nLene: 6 frameldt, 2 frigivet, 1 opdatering fejlede\n1 billet solgt til ventelisten\n42 uændret'
         },
         {
             desc: 'a person with only failed orders',
-            result: run({results: resultsOf(KNUD, Action.BOOK), failed: resultsOf(LENE, Action.BOOK), errored: 1}),
-            text: 'Knud: 1 tilmeldt\nLene: 1 fejlede'
+            result: run({results: resultsOf(KNUD, Action.BOOK), failed: resultsOf(LENE, Action.BOOK, Action.BOOK), errored: 2}),
+            text: 'Knud: 1 tilmeldt\nLene: 2 opdateringer fejlede'
+        },
+        {
+            // A household whose run failed as a whole names no person
+            desc: 'a household that failed beside the orders that landed',
+            result: run({results: resultsOf(KNUD, Action.BOOK), unchanged: 3, errored: 1}),
+            text: 'Knud: 1 tilmeldt\n3 uændret\nBookingen fejlede'
         },
         {
             desc: 'tickets sold to the waiting list and nothing else changed',
@@ -391,5 +416,16 @@ describe('formatBookingResult', () => {
         }
     ])('$desc', ({result, text}) => {
         expect(formatBookingResult(result)).toBe(text)
+    })
+})
+
+// A booker's guest tickets of one type, as the guest row badges them and the preview and the toast name them
+describe('guestTicketsLabel', () => {
+    it.each([
+        {label: 'Barn', count: 1, text: 'Barn'},
+        {label: 'Barn', count: 2, text: 'Barn ×2'},
+        {label: undefined, count: 3, text: '×3'}
+    ])('$count of $label read "$text"', ({label, count, text}) => {
+        expect(guestTicketsLabel(label, count)).toBe(text)
     })
 })

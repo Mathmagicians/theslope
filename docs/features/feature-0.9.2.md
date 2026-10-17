@@ -6,6 +6,7 @@
 |---|---|---|
 | Ticket price portions | A season's ticket price carries the portions its tickets weigh | proposed |
 | Billing import in the export format | The billing import reads the CSV the billing export writes | proposed |
+| Close keeps the eating mode | The nightly close keeps each order's eating mode | proposed |
 
 ## Ticket price portions
 
@@ -66,3 +67,31 @@ endpoint stays until this feature lands.
 `server/routes/api/admin/billing/import.post.ts`, `app/composables/useBillingValidation.ts`,
 `tests/e2e/testDataFactories/billingFactory.ts`, `tests/e2e/api/serial/local-theslope/billingImport.e2e.spec.ts`,
 `docs/adr-compliance-backend.md` (billing rows), `docs/adr.md` (ADR-009 example).
+
+## Close keeps the eating mode
+
+### Problem
+
+The nightly close writes Spisesal into every order it closes (`server/utils/closeOrders.ts:39`). A consumed dinner's
+kitchen box then shows its Takeaway and Sen orders under Spisesal, and a released ticket nobody bought counts as an
+active Spisesal order.
+
+### Root cause
+
+cc05ea9 (Bookings stability, #62) moved the close from `updateOrdersToState` (state only) to `updateOrdersBatch`, to
+write audit rows; `buildUpdateData` writes the `dinnerMode` it is given, and the close passes `DINEIN`.
+
+### Solution
+
+`fetchPendingOrdersOnConsumedDinners` selects `dinnerMode`; the close passes each order's own mode. Orders closed since
+cc05ea9 carry Spisesal; the mode before the close is the order's last history row before it. Whether to repair those
+orders from that row is settled in the package's first round (`/prisma` for a backfill).
+
+### TDD
+
+`tests/e2e/api/serial/admin/maintenance.e2e.spec.ts`: a Takeaway order and a released order keep their modes through
+the close.
+
+### Affected areas
+
+`server/utils/closeOrders.ts`, `server/data/financesRepository.ts`, `tests/e2e/api/serial/admin/maintenance.e2e.spec.ts`.

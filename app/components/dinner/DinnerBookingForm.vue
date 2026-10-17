@@ -185,7 +185,7 @@ const householdsStore = useHouseholdsStore()
 const {selectedHousehold} = storeToRefs(householdsStore)
 const household = computed(() => props.household ?? selectedHousehold.value)
 
-// Permission-based form mode - EDIT if user is member of household (session predicate on the auth store, ADR-017)
+// Permission-based form mode - EDIT if the user belongs to the household (session predicate on the auth store, ADR-017)
 // Admin can override via canEditAdminOverride prop
 const {isMemberOfHousehold} = useAuthStore()
 const formMode = computed(() => {
@@ -286,7 +286,7 @@ const getRowBookingState = (orderState: OrderState | undefined, isGuestAddRow: b
   const hasNoExistingOrder = orderState === undefined
   const shouldDisableNone = isGuestAddRow || hasNoExistingOrder
   const withoutNone = enabledModes.filter(m => m !== DinnerModeEnum.NONE)
-  // A queued member leaves the queue by picking Ingen
+  // A queued inhabitant leaves the queue by picking Ingen
   const effectiveEnabled = isQueued ? [...withoutNone, DinnerModeEnum.NONE] : shouldDisableNone ? withoutNone : enabledModes
   return {
     disabledModes: ALL_MODES.filter(m => !effectiveEnabled.includes(m)),
@@ -910,7 +910,7 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
             <DeadlineBadge :badge="badges.diningMode" />
           </div>
 
-          <!-- Mode selector: a queued member changes the wish (requeued) or picks Ingen to leave the queue -->
+          <!-- Mode selector: a queued inhabitant changes the wish (requeued) or picks Ingen to leave the queue -->
           <DinnerModeSelector
             v-model="draftMode"
             :form-mode="FORM_MODES.EDIT"

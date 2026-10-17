@@ -135,7 +135,6 @@ const OrderState = OrderStateSchema.enum
 const {computeAllergenOverview} = useAllergy()
 const {formatTicketCounts, countTicketTypes} = useBilling()
 const {ticketTypeWords} = useTicket()
-const {formatPlace} = useBooking()
 const {getHouseholdForInhabitant} = useHouseholdsStore()
 
 const ticketFiguresOf = (counts: Partial<Record<TicketType, number>>): TicketFigures => ({
@@ -222,7 +221,7 @@ const queue = computed(() => {
 const hasQueue = (key: string) => key === OrderState.RELEASED && queue.value !== null
 const canOpen = (key: string) => getOrdersForMode(key).length > 0 || hasQueue(key)
 
-// The waiting list by household, like the other boxes' rows: households in the order their first member joined, each
+// The waiting list by household, like the other boxes' rows: households in the order their first inhabitant joined, each
 // person with the place in the line of the ticket type, as the booking form numbers it
 interface QueuedPerson {
   entry: TicketWaitlistDisplay

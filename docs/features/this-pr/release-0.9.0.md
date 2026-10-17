@@ -43,17 +43,17 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | Table loading | a loading table shows the spinning glyph in its `#loading` slot | ADR-018, `COMPONENTS.table.loadingRow` | committed (4e7d174) |
 | Security patches | wrangler, `@nuxt/devtools` and prisma 7.10.1 patched; `nitro-cloudflare-dev` removed | `package.json` | committed (326ca63, b36d01d, 8c83700, 04d4fbd, 3629473, 861771d) |
 | Heal endpoint removed | `heal-user-bookings`, its spec and make targets are removed; `sellTicketsToWaitlist` settles the waiting list | ADR-016 | committed (6ed207b) |
-| Test sweep | dead and duplicate cases removed; cleanup fails early; factories, `gotoHydrated` and web-first waits replace raw sleeps; the `setup-season` project creates the active season once per run | `docs/testing.md` | packages 1–4 committed (5b1616b, b7d238d, 2d17d64, 45c1f83, 084ea42); 5 and 6 in progress |
+| Test sweep | dead and duplicate cases removed; cleanup fails early; factories, `gotoHydrated` and web-first waits replace raw sleeps; the `setup-season` project creates the active season once per run | `docs/testing.md` | packages 1–4 committed (5b1616b, b7d238d, 2d17d64, 45c1f83, 084ea42); 5 and 6 verified, their remaining edits in the working tree |
 | DRY sweep | dead code and duplicate token paths removed; the specs share their mount, endpoint and session helpers | `tests/component/testHelpers.ts`, `tests/component/hoistedMocks.ts` | committed (72cf9d9, 6b65a70, b456b2f, 999bdbd, c0beb62, 43876aa) |
 | PRF spike | passkey and PRF research with the device protocol | `../feature-proposal-relogin-faceid.md`, `../archived/feature-mobile-native-feel.md` | committed |
-| One booking path, end to end | outcomes in, notification out; the scaffold survives a partial failure and reports per person; the waiting list catches up; one client write; preview and toast from one word table; the ticket history follows kuverter | § One booking path, end to end | points 1–5 committed (2ad1429 to 7b6a622); 6 and 6b in progress; 7 awaiting signoff |
+| One booking path, end to end | outcomes in, notification out; the scaffold survives a partial failure and reports per person; the waiting list catches up; one client write; preview and toast from one word table; the ticket history follows kuverter | § One booking path, end to end | points 1–6 committed (2ad1429 to 5165b4f); 6b and 7 in progress |
 | Docs and tooling | the user, chef and admin guides; `docs/ui.md` and the compliance tables compacted; `docs/testing.md` Rule 0; the ui skill and the frontend agent | `docs/`, `.claude/skills/`, `.claude/agents/` | committed (b82852e, 38804ef, 0dfd8eb, 450bcc8) |
 
 ## Open before the release
 
 | Item | State |
 |---|---|
-| One booking path, end to end | points 6, 6b and 7, § One booking path, end to end |
+| One booking path, end to end | points 6b and 7, § One booking path, end to end |
 | Waitlist notifications | planned, § Waitlist notifications |
 | CI summary | read on the Actions run page: categories, counts, red ui failures, report links |
 | Visual check per UI package | the route → viewport → element tables, carried into the PR description |
@@ -135,9 +135,9 @@ Each point is presented with its files and code, and signed off on its own.
 | 4b. The views show each line | The chef's alert, the booking form and the kitchen box name the waiting list per ticket type; the kitchen box holds the tickets for sale and the waiting list together | kitchen box ✅ signed off 2026-10-16, implemented (§ Mockup — kitchen box); the chef's alert ✅ signed off 2026-10-17, implemented (`SUPPLY_WORDS.queuedCount`, mockup in `ChefMenuCard.vue`) |
 | 4c. The preview sells each ticket once | The save preview settles the claims in order as the save does: the first claims of a ticket type buy that type's tickets for sale, the rest join its waiting list (`bookingOutcomes` takes one order or a list, `supplyOfType`); the guest form opens on Voksen and its button names the guests | ✅ signed off 2026-10-16, implemented |
 | 5. One client write | Every write that changes bookings goes through `bookingsStore.writeBookings`: the request, then the household's orders, the upcoming orders, the tickets for sale, the waiting list and the dinner on view re-read once; the waiting list per locked dinner derives from the one waiting-list read; the households store keeps its own household re-reads | ✅ signed off 2026-10-17, implemented |
-| 6. Preview and toast from one word table | Future words in the preview, past words in the toast, grouped per person; the toast is red as soon as one item failed, green otherwise | toast look implemented 2026-10-16 (`scaffoldToastLook`); the words ✅ signed off 2026-10-17 (§ Mockup — toast and preview) |
+| 6. Preview and toast from one word table | Future words in the preview, past words in the toast, grouped per person; the toast is red as soon as one item failed, green otherwise | toast look implemented 2026-10-16 (`scaffoldToastLook`); the words ✅ signed off 2026-10-17, implemented (5165b4f) (§ Mockup — toast and preview) |
 | 6b. The mails speak the booking words | The waiting-list mails greet the user who booked, name the person as the toast does, carry the ticket line of the booking page and the badge's help text, and link to the dinner's booking page | mockup ✅ signed off 2026-10-17 (§ Mockup — waiting-list mails) |
-| 7. The ticket history follows kuverter | Every audit row replays, system or member alike; a line for each change of kuverter; a system run and the nightly close are one line for the dinner; the replay ends equal to state | mockup ✅ signed off 2026-10-17 (§ Mockup — ticket history) |
+| 7. The ticket history follows kuverter | Every audit row replays, user or system alike; a line for each change of kuverter; a system run and the nightly close are one line for the dinner; the replay ends equal to state | mockup ✅ signed off 2026-10-17 (§ Mockup — ticket history) |
 
 ### Coverage
 
@@ -172,19 +172,19 @@ Preview  [edit badge]      Anna ændrer spisemåde til Takeaway: 22/10/2026
          [released badge]  Anna frigiver sin billet: 23/10/2026
          [released badge]  Lars frigiver sin billet: 23/10/2026
 Toast    Bookinger processeret                                    (green)
-           Anna: 1 ændret spisemåde, 1 frigivet
-           Lars: 1 ændret spisemåde, 1 frigivet
+           Anna: 1 frigivet, 1 ændret spisemåde
+           Lars: 1 frigivet, 1 ændret spisemåde
 
 Preference power mode: Monday to Ingen, one order fails
 Toast    Alle præferencer opdateret                               (red)
            Knud: 7 frameldt, 2 frigivet
-           Lene: 6 frameldt, 2 frigivet, 1 fejlede
+           Lene: 6 frameldt, 2 frigivet, 1 opdatering fejlede
            1 billet solgt til ventelisten
            42 uændret
 ```
 
 A preview line names its dinners in the default `formatDate`: each date up to three, else the count with the first and
-last date ("Knud frameldes: 7 middage, 02/11/2026 – 14/12/2026"). A toast line counts per person; the sales to the
+last date ("Knud frameldes: 7 middage, 02/11/2026 – 14/12/2026"). A toast line counts per person, in the word table's action order; the sales to the
 waiting list and the unchanged orders count for the household.
 
 | Action | Preview, after the name | Toast, after the count |
@@ -256,21 +256,23 @@ guest flag.
 ### Mockup — ticket history ✅ signed off 2026-10-17
 
 ```
-Se billetændringer                                                                          [v]
-Dato              Husstand  Ændring                     Billetter · kuverter     Indtægter
-21/10/2026 02:00  System    lukket                      29V 11B 3b · 34,5        2.035 kr
-20/10/2026 19:10  S_14      købt               +1V      29V 11B 3b · 34,5        2.035 kr
-20/10/2026 12:40  S_31      frigivet           −2V      28V 11B 3b · 33,5        2.035 kr
-20/10/2026 09:05  S_22      ændret billettype  −1B +1V  30V 11B 3b · 35,5        2.035 kr
-── Framelding lukker · 19/10/2026 18:00 ─────────────────────────────────────────────────────
+Se billetændringer                                                                       [v]
+Dato              Husstand  Ændring                      Billetter · kuverter     Indtægter
+21/10/2026 02:00  System    lukket                       30V 11B 3b · 35,5        2.035 kr
+20/10/2026 19:10  S_14      købt 1V                      30V 11B 3b · 35,5        2.035 kr
+20/10/2026 12:40  S_22      ændret billettype 1B → 1V    30V 11B 3b · 35,5        2.035 kr
+20/10/2026 09:05  S_31      frigivet 2V                  29V 12B 3b · 35          2.015 kr
+── Framelding lukker · 19/10/2026 18:00 ─────────────────────────────────────────────────
 [Vis fuld historik]
 ```
 
-Every audit row replays, user or system. A line appears when the tickets at the table change; a switch between eating
-modes changes none. Billetter counts the tickets that eat; a released ticket leaves them and keeps its revenue until
-someone buys it. A system run is one line for the dinner, named by its household when it touched one, else System; the
-nightly close is one line, "lukket". The Ændring column reads the toast words of § Mockup — toast and preview. The last
-line equals the dinner's counts in the kitchen box.
+Every audit row replays, user or system. Every ticket event is a line: tilmeldt, frameldt, frigivet, købt, tilmeldt
+igen, ændret billettype, and the nightly close as one line, "lukket"; a switch between eating modes is no ticket event.
+Billetter and kuverter count what the dinner is paid for: a released ticket stays until someone buys it, so a release
+and a sale leave them unchanged. The Ændring column reads the toast words of § Mockup — toast and preview with the
+tickets the event touched. Rows by the same actor, the user or the system, within one minute of the line's first row
+are one line: its events in the word table's action order, dated by its first row, named by its household when it
+touched one, else System for the system and the short names for a user. The last line equals the tickets and kuverter paid for on the dinner.
 
 ### Mockup — kitchen box ✅ signed off 2026-10-16
 

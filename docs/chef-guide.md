@@ -101,7 +101,7 @@ Klik **Bliv chefkok**, bekræft — og dit ansigt pryder portrættet. Tjansen er
 - Allergenerne øverst, med antal kuverter for hvert
 - Hvilke husstande der har tilmeldt sig, og billettyper per husstand (voksen/barn/baby)
 - Hvem der har et af menuens allergener - allergenets ikon står ud for navnet
-- Under **Til salg**: billetterne til salg, og under **VENTELISTE** én linje per husstand i den rækkefølge de skrev sig på - hver person med sin plads i billettypens kø, fx *Emil (B #1)*. #1 i kø får den næste billet af sin type
+- Under **Til salg**: billetterne til salg, og under **VENTELISTE** én linje per husstand i den rækkefølge de skrev sig på - hver person med sin plads i billettypens kø, fx *Emil (Barn #1)*. #1 i kø får den næste billet af sin type
 
 > **Tip:** Brug husstandsoversigten til at planlægge portionsstørrelser og allergihensyn.
 
