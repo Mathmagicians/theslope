@@ -3,7 +3,7 @@
 **NOTE**: ADRs are numbered sequentially and ordered with NEWEST AT THE TOP.
 ## ADR-018: Design System Owns Shared UI Patterns
 
-**Status:** Accepted | **Date:** 2026-09-16 | **Updated:** 2026-10-16
+**Status:** Accepted | **Date:** 2026-09-16 | **Updated:** 2026-10-18
 
 ### Context
 
@@ -20,7 +20,7 @@ Shared UI values had drifted into per-component colour, variant and `:ui` patche
 | Buttons | `BUTTONS.<kind>` with `ICONS` | `v-bind="BUTTONS.secondaryAction" :color="COLOR.primary" :icon="ICONS.edit"` |
 | Calendars | `COMPONENTS.calendarGrid`, `CALENDAR.picker`, `dayCircleClasses(variant)` | `v-bind="COMPONENTS.calendarGrid"`; every day circle renders through the helper |
 | Table empty states | the `UTable` `#empty` slot | one empty state per table, inside the slot |
-| Table loading | `COMPONENTS.table.loadingRow`, `COMPONENTS.table.loadingSpinner` with `ICONS.sync` | a table that binds `loading` fills the `UTable` `#loading` slot with the spinning glyph and its text; without the slot UTable renders `#empty` while loading |
+| Table loading | `COMPONENTS.table.loadingRow`, `COMPONENTS.table.loadingSpinner` with `ICONS.sync` | a table bound to a dataset that reloads, a new selection or a write's re-read, binds that dataset's `loading`: UTable's loading bar runs under the column headers while the rows stay, and the `#loading` slot, filled with the spinning glyph and its text, stands in a table that has no rows yet; without the slot UTable renders `#empty` while loading |
 | Separators | `COMPONENTS.separator.<kind>` on a labelled `USeparator` | `v-bind="COMPONENTS.separator.moment" :label="…"` |
 
 A token holds exactly one value. Two values are two tokens, named by where they are used. Merging values is a design
@@ -107,7 +107,7 @@ Nuxt builds two bundles: app auto-imports (`app/composables`, `app/utils`, Vue, 
 
 ## ADR-016: Unified Booking Through Scaffold
 
-**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-10-16
+**Status:** Accepted | **Date:** 2026-01-11 | **Updated:** 2026-10-18
 
 ### Context
 
@@ -146,6 +146,11 @@ instant: a released ticket of the claim's ticket type, FIFO by `releasedAt`, whi
 else a queue entry at the frozen price with the wish (mode, guest flag, allergy ids), and the result reports the entry's
 place in its line. A lost claim race queues. Every run ends by selling the tickets for sale to the first in each line;
 a sold ticket keeps its price row.
+
+A placement (a sale, or a chef's extra portion) grabs its queue entry (`placingAt`; a sale records the released order
+in `placingOrderId`), writes the order, records it on the entry and removes the entry. Each run first recovers the grabs
+older than the lease: `placementRecoveryOf` finishes an entry whose order landed, reported as a sale or an assignment so
+its mail goes out, and releases one whose order did not. A ticket type's line stops at an entry still grabbed.
 
 A desired order targets a queue entry by `waitlistEntryId`; a regular desired order without ids targets the inhabitant's
 own regular entry on the dinner.
@@ -215,7 +220,7 @@ endpoint hands the scaffolder its deadlines: the season's (`deadlinesForSeason`)
 | `app/composables/useSeason.ts` | `deadlinesForSeason`, `OPEN_DEADLINES` |
 | `app/composables/useHousehold.ts` | `isHouseholdActiveOnDay` residency predicate |
 | `server/utils/scaffoldPrebookings.ts` | Scaffolder: transforms, executes, `rescaffoldOnFieldChange` |
-| `server/utils/waitlistAssignment.ts` | `joinWaitlist`; `sellTicketsToWaitlist`, the tickets for sale to the first in each ticket type's line; `assignWaitlistPortions`, the chef's extra portions |
+| `server/utils/waitlistAssignment.ts` | `joinWaitlist`; `sellTicketsToWaitlist`, the tickets for sale to the first in each ticket type's line; `assignWaitlistPortions`, the chef's extra portions; `recoverPlacements`, the grabs a stopped run left |
 | `server/utils/sender/events/waitlist.ts` | `notifyBookingOutcomes`, `notifyExtraPortions`: the booking mails after the action |
 
 ### Related ADRs
@@ -228,7 +233,7 @@ endpoint hands the scaffolder its deadlines: the season's (`deadlinesForSeason`)
 
 ## ADR-015: Idempotent Automated Jobs with Rolling Window
 
-**Status:** Accepted | **Date:** 2025-12-12 | **Updated:** 2026-10-16
+**Status:** Accepted | **Date:** 2025-12-12 | **Updated:** 2026-10-18
 
 ### Context
 
@@ -258,14 +263,15 @@ Daily maintenance consumes past dinners (SCHEDULED/ANNOUNCED → CONSUMED), clos
 | **closeOrders** | Only updates orders with `state IN (BOOKED, RELEASED)` on CONSUMED dinners (already closed = no-op) |
 | **createTransactions** | Only creates for orders with `Transaction: null` (existing transaction = skipped) |
 | **generateDinnerEvents** | Uses `pruneAndCreate` to reconcile by date key |
-| **sellTicketsToWaitlist** | A placed entry leaves its line; a line without a ticket of its type for sale stops at its first miss |
+| **sellTicketsToWaitlist** | A placed entry leaves its line; a line without a ticket of its type for sale stops at its first miss; a grabbed entry finishes or returns to its place at the first run after the lease |
 
 ### Configuration
 
 ```typescript
 // app.config.ts
 theslope: {
-    prebookingWindowDays: 60  // Rolling window size
+    prebookingWindowDays: 60,          // Rolling window size
+    waitlistPlacingLeaseMinutes: 10    // Age at which a run recovers another run's grab
 }
 ```
 

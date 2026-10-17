@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, resetStores, findLoadingRow} from '~~/tests/component/testHelpers'
 import {nextTick, h, defineComponent} from 'vue'
 import AllergyCatalogTable from '~/components/allergy/AllergyCatalogTable.vue'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
@@ -146,6 +146,18 @@ describe('AllergyCatalogTable', () => {
             const wrapper = await mountTable({mode: 'single', allergyTypes}, emptySlot)
 
             expect(findByTestId(wrapper, 'catalog-empty').exists()).toBe(expected)
+        })
+
+        // Until the catalog answers, the loading row stands where the consumer's empty state would
+        it.each([
+            {loading: true, loadingRow: true, empty: false},
+            {loading: false, loadingRow: false, empty: true}
+        ])('GIVEN no allergy types yet and loading=$loading THEN the loading row shows: $loadingRow, the #empty slot: $empty', async ({loading, loadingRow, empty}) => {
+            const wrapper = await mountTable({mode: 'single', allergyTypes: [], loading}, emptySlot)
+
+            expect(findLoadingRow(wrapper).exists()).toBe(loadingRow)
+            expect(wrapper.text().includes('Henter allergier...')).toBe(loadingRow)
+            expect(findByTestId(wrapper, 'catalog-empty').exists()).toBe(empty)
         })
     })
 })

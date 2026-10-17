@@ -1,12 +1,19 @@
 import {useWaitlist} from '~/composables/useWaitlist'
 import {createError} from 'h3'
-import {useBookingValidation, type CreateOrdersResult, type DinnerEventDetail, type TicketSale, type WaitlistJoined} from '~/composables/useBookingValidation'
-import type {TicketWaitlistCreate, TicketWaitlistDisplay, WaitlistAssigned, WaitlistAssignmentResult} from '~/composables/useWaitlistValidation'
+import {useBookingValidation, type CreateOrdersResult, type DinnerEventDetail, type TicketSale, type TicketType, type WaitlistJoined} from '~/composables/useBookingValidation'
+import {
+    PlacementRecovery, type GrabbedWaitlistEntry, type TicketWaitlistCreate, type TicketWaitlistDisplay, type WaitlistAssigned,
+    type WaitlistAssignmentResult, type WaitlistPlacementOutcomes
+} from '~/composables/useWaitlistValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
-import {createOrders, claimOrder, fetchDinnerEvent, type ClaimedOrder} from '~~/server/data/financesRepository'
+import {createOrders, claimReleasedOrder, findReleasedOrderId, fetchDinnerEvent, type ClaimedOrder} from '~~/server/data/financesRepository'
 import {groupBy} from '~/utils/batchUtils'
+import {sumBy} from '~/utils/ledger'
 import {fetchSeason} from '~~/server/data/prismaRepository'
-import {fetchWaitlistForDinners, deleteWaitlistEntry, createWaitlistEntry} from '~~/server/data/waitlistRepository'
+import {
+    fetchWaitlistForDinners, createWaitlistEntry, fetchOrdersServingEntry, grabWaitlistEntry, recordWaitlistPlacingOrder, releaseWaitlistEntry,
+    removePlacedWaitlistEntry
+} from '~~/server/data/waitlistRepository'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import type {WaitlistDinnerContext} from '~~/server/utils/sender/events/waitlist'
 
@@ -19,6 +26,13 @@ export interface DinnerForWaitlist {
     chefId: number | null
     state: DinnerEventDetail['state']
 }
+
+// One step of a placement walk: the line stops when another run holds the entry or nothing is for sale
+type PlacementStep<T> = {stop: boolean, placed: T | null}
+const STOP = {stop: true, placed: null} as const
+const MOVE_ON = {stop: false, placed: null} as const
+
+const placingLease = () => useWaitlist().placingLease(new Date(), useAppConfig().theslope.waitlistPlacingLeaseMinutes)
 
 // The dinner, its season's ticket prices and the label the mails use
 const forWaitlist = async (d1Client: D1Database, dinner: DinnerEventDetail | null, dinnerEventId: number): Promise<DinnerForWaitlist> => {
@@ -64,19 +78,62 @@ export async function joinWaitlist(
     return {entry, position, joined}
 }
 
-// The order is written before the entry is removed, so the unique index on regular orders answers an entry whose
-// order already landed with a conflict: that entry leaves the queue; any other failure propagates
+// The unique index on regular orders answers the write of an entry whose inhabitant already holds a regular order on
+// the dinner with a conflict: that entry leaves the queue. Any other failure propagates and the entry stays grabbed
+// for the recovery
 const leaveWhenAlreadyPlaced = async (d1Client: D1Database, entry: TicketWaitlistDisplay, error: unknown): Promise<void> => {
     if (!eventHandlerHelper.isConflict(error)) throw error
     console.info(`${LOG} Inhabitant ${entry.inhabitantId} already holds a regular order on dinner ${entry.dinnerEventId}: queue entry ${entry.id} leaves the queue`)
-    await deleteWaitlistEntry(d1Client, entry.id)
+    await removePlacedWaitlistEntry(d1Client, entry.id)
 }
 
-// Places one entry's order and removes the entry; null when the entry's order was already placed
+/**
+ * A grab past the lease is the trace of a run that stopped midway: the order that serves the entry finishes its
+ * placement, anything else hands the entry back to its place in its line. The stopped run mailed nothing, so the
+ * recovery reports what it finishes. Returns the queue as the recovery leaves it.
+ */
+const recoverPlacements = async (
+    d1Client: D1Database, queue: TicketWaitlistDisplay[], isExpired: (entry: TicketWaitlistDisplay) => entry is GrabbedWaitlistEntry,
+    portionsOf: (entry: TicketWaitlistDisplay) => number
+): Promise<{queue: TicketWaitlistDisplay[], recovered: WaitlistPlacementOutcomes}> => {
+    const {placingOrderOf, placementRecoveryOf, finishedPlacementOutcomes} = useWaitlist()
+    const servingOrderIds = new Set(queue.flatMap(entry => entry.placingOrderId === null ? [] : [entry.placingOrderId]))
+    const finished = new Set<number>()
+    const released = new Set<number>()
+    const recovered: WaitlistPlacementOutcomes = {waitlistTicketsSold: [], waitlistPortionsAssigned: []}
+    for (const entry of queue.filter(isExpired)) {
+        const order = placingOrderOf(entry, await fetchOrdersServingEntry(d1Client, entry), servingOrderIds)
+        if (order !== null && placementRecoveryOf(entry, order) === PlacementRecovery.FINISH) {
+            if (entry.placingOrderId === null) {
+                await recordWaitlistPlacingOrder(d1Client, entry.id, order.id)
+                servingOrderIds.add(order.id)
+            }
+            await removePlacedWaitlistEntry(d1Client, entry.id)
+            finished.add(entry.id)
+            const {waitlistTicketsSold, waitlistPortionsAssigned} = finishedPlacementOutcomes(entry, order, portionsOf)
+            recovered.waitlistTicketsSold.push(...waitlistTicketsSold)
+            recovered.waitlistPortionsAssigned.push(...waitlistPortionsAssigned)
+            console.info(`${LOG} Dinner ${entry.dinnerEventId}: order ${order.id} serves queue entry ${entry.id}, a stopped run's placement is finished`)
+        } else {
+            await releaseWaitlistEntry(d1Client, entry.id)
+            released.add(entry.id)
+            console.info(`${LOG} Dinner ${entry.dinnerEventId}: no order serves queue entry ${entry.id}, it waits at its place again`)
+        }
+    }
+    return {
+        queue: queue
+            .filter(entry => !finished.has(entry.id))
+            .map(entry => released.has(entry.id) ? {...entry, placingAt: null, placingOrderId: null} : entry),
+        recovered
+    }
+}
+
+// One entry's extra portion: grab the entry, write its order, record the order on the entry, remove the entry
 const placeEntry = async (
     d1Client: D1Database, dinner: DinnerForWaitlist, entry: TicketWaitlistDisplay, portions: number, performedByUserId: number | null
-): Promise<WaitlistAssigned | null> => {
+): Promise<PlacementStep<WaitlistAssigned>> => {
     const {OrderAuditActionSchema, OrderAuditSourceSchema} = useBookingValidation()
+    if (!await grabWaitlistEntry(d1Client, entry.id, new Date())) return STOP
     const {allergyTypeIds: _allergies, ...order} = entry.order
     let created: CreateOrdersResult
     try {
@@ -88,19 +145,21 @@ const placeEntry = async (
         })
     } catch (error) {
         await leaveWhenAlreadyPlaced(d1Client, entry, error)
-        return null
+        return MOVE_ON
     }
-    await deleteWaitlistEntry(d1Client, entry.id)
+    const orderId = created.createdIds[0]!
+    await recordWaitlistPlacingOrder(d1Client, entry.id, orderId)
+    await removePlacedWaitlistEntry(d1Client, entry.id)
     return {
-        entryId: entry.id, inhabitantId: entry.inhabitantId, isGuestTicket: entry.isGuestTicket, portions,
-        orderId: created.createdIds[0]!, ticketPriceId: entry.order.ticketPriceId
+        stop: false,
+        placed: {entryId: entry.id, inhabitantId: entry.inhabitantId, isGuestTicket: entry.isGuestTicket, portions, orderId, ticketPriceId: entry.order.ticketPriceId}
     }
 }
 
 /**
  * The chef releases N portions: the resolver walks the queue in strict FIFO and the entries that fit get their
- * orders at the price written at join. Idempotent: an entry placed once is gone from the queue, and the Order
- * unique index refuses a second regular order for the same inhabitant and dinner (ADR-015).
+ * orders at the price written at join. Idempotent: a placed entry is gone from the queue, a grabbed entry belongs to
+ * one run, and the recovery settles the grabs of a run that stopped midway (ADR-015).
  */
 export async function assignWaitlistPortions(
     d1Client: D1Database, dinnerEvent: DinnerEventDetail, supplyPortions: number, performedByUserId: number | null
@@ -108,49 +167,84 @@ export async function assignWaitlistPortions(
     const {resolveWaitlistAssignment, portionsOfEntryFor} = useWaitlist()
     const dinnerEventId = dinnerEvent.id
     const dinner = await forWaitlist(d1Client, dinnerEvent, dinnerEventId)
-    const entries = await fetchWaitlistForDinners(d1Client, [dinnerEventId])
-    const plan = resolveWaitlistAssignment(entries, supplyPortions, portionsOfEntryFor(dinner.ticketPrices))
+    const portionsOf = portionsOfEntryFor(dinner.ticketPrices)
+    const {isHeld, isExpired} = placingLease()
+    const {queue: entries, recovered} = await recoverPlacements(d1Client, await fetchWaitlistForDinners(d1Client, [dinnerEventId]), isExpired, portionsOf)
+    const plan = resolveWaitlistAssignment(entries, supplyPortions, portionsOf, isHeld)
     console.info(`${LOG} Dinner ${dinnerEventId}: ${supplyPortions} portions released, ${plan.take.length} of ${entries.length} entries fit`)
     const assigned: WaitlistAssigned[] = []
-    for (const {entry, portions} of plan.take) {
-        const placed = await placeEntry(d1Client, dinner, entry, portions, performedByUserId)
+    let stoppedAt = plan.take.length
+    for (const [index, {entry, portions}] of plan.take.entries()) {
+        const {stop, placed} = await placeEntry(d1Client, dinner, entry, portions, performedByUserId)
+        if (stop) {
+            console.info(`${LOG} Dinner ${dinnerEventId}: another run holds queue entry ${entry.id}, the walk stops there`)
+            stoppedAt = index
+            break
+        }
         if (placed) assigned.push(placed)
     }
-    return {dinnerEventId, supplyPortions, assigned, portionsUsed: plan.portionsUsed, waiting: plan.waiting.length}
+    const unplaced = plan.take.slice(stoppedAt)
+    return {
+        dinnerEventId, supplyPortions,
+        assigned: [...recovered.waitlistPortionsAssigned.map(({dinnerEventId: _dinnerEventId, ...placed}) => placed), ...assigned],
+        portionsUsed: plan.portionsUsed - sumBy(unplaced, take => take.portions),
+        waiting: plan.waiting.length + unplaced.length,
+        waitlistTicketsSold: recovered.waitlistTicketsSold
+    }
+}
+
+// Sells the oldest released ticket of the entry's type to the entry: grab the entry with the ticket, claim the ticket,
+// remove the entry. A ticket another buyer took first hands the entry back to its place, and the next ticket for sale is tried
+const sellToEntry = async (d1Client: D1Database, entry: TicketWaitlistDisplay, ticketType: TicketType): Promise<PlacementStep<TicketSale>> => {
+    const releasedOrderId = await findReleasedOrderId(d1Client, entry.dinnerEventId, ticketType)
+    if (releasedOrderId === null || !await grabWaitlistEntry(d1Client, entry.id, new Date(), releasedOrderId)) return STOP
+    let claimed: ClaimedOrder | null
+    try {
+        claimed = await claimReleasedOrder(d1Client, releasedOrderId, entry.inhabitantId, entry.order.bookedByUserId ?? null, entry.order.dinnerMode, entry.isGuestTicket)
+    } catch (error) {
+        await leaveWhenAlreadyPlaced(d1Client, entry, error)
+        return MOVE_ON
+    }
+    if (!claimed) {
+        await releaseWaitlistEntry(d1Client, entry.id)
+        return sellToEntry(d1Client, entry, ticketType)
+    }
+    await removePlacedWaitlistEntry(d1Client, entry.id)
+    console.info(`${LOG} Dinner ${entry.dinnerEventId}: a released ${ticketType} ticket went to the first in its line (inhabitant ${entry.inhabitantId})`)
+    return {
+        stop: false,
+        placed: {
+            dinnerEventId: entry.dinnerEventId, ticketPriceId: claimed.ticketPriceId,
+            buyerInhabitantId: entry.inhabitantId, buyerHouseholdId: entry.order.householdId, sellerHouseholdId: claimed.sellerHouseholdId
+        }
+    }
 }
 
 /**
  * The tickets for sale go to the waiting list: each ticket type's line, in join order, buys the oldest released tickets
  * of its type until the line or that supply runs out. A sold ticket keeps its price row. Idempotent: a placed entry
- * leaves its line, and a line without supply stops at its first miss (ADR-015).
+ * leaves its line, a line stops at its first miss and at an entry another run holds, and the recovery settles the
+ * grabs of a run that stopped midway (ADR-015). Reports the tickets sold, and the extra portions the recovery finished.
  */
 export async function sellTicketsToWaitlist(
-    d1Client: D1Database, dinnerEventIds: number[], ticketPrices: Pick<TicketPrice, 'id' | 'ticketType'>[]
-): Promise<TicketSale[]> {
-    const {waitingLines, ticketTypeOfEntry} = useWaitlist()
-    if (dinnerEventIds.length === 0) return []
+    d1Client: D1Database, dinnerEventIds: number[], ticketPrices: Pick<TicketPrice, 'id' | 'ticketType' | 'portions'>[]
+): Promise<WaitlistPlacementOutcomes> {
+    const {placementLines, ticketTypeOfEntry, portionsOfEntryFor} = useWaitlist()
+    if (dinnerEventIds.length === 0) return {waitlistTicketsSold: [], waitlistPortionsAssigned: []}
     const ticketTypeOf = ticketTypeOfEntry(ticketPrices)
-    const sales: TicketSale[] = []
-    const queues = groupBy<TicketWaitlistDisplay, number>(entry => entry.dinnerEventId)(await fetchWaitlistForDinners(d1Client, dinnerEventIds))
-    for (const [dinnerEventId, queue] of queues) {
-        for (const [ticketType, line] of waitingLines(queue, ticketTypeOf)) {
+    const {isHeld, isExpired} = placingLease()
+    const {queue, recovered} = await recoverPlacements(
+        d1Client, await fetchWaitlistForDinners(d1Client, dinnerEventIds), isExpired, portionsOfEntryFor(ticketPrices)
+    )
+    const sales: TicketSale[] = [...recovered.waitlistTicketsSold]
+    for (const dinnerQueue of groupBy<TicketWaitlistDisplay, number>(entry => entry.dinnerEventId)(queue).values()) {
+        for (const [ticketType, line] of placementLines(dinnerQueue, ticketTypeOf, isHeld)) {
             for (const entry of line) {
-                let claimed: ClaimedOrder | null
-                try {
-                    claimed = await claimOrder(d1Client, dinnerEventId, ticketType, entry.inhabitantId, entry.order.bookedByUserId ?? null, entry.order.dinnerMode, entry.isGuestTicket)
-                } catch (error) {
-                    await leaveWhenAlreadyPlaced(d1Client, entry, error)
-                    continue
-                }
-                if (!claimed) break
-                await deleteWaitlistEntry(d1Client, entry.id)
-                console.info(`${LOG} Dinner ${dinnerEventId}: a released ${ticketType} ticket went to the first in its line (inhabitant ${entry.inhabitantId})`)
-                sales.push({
-                    dinnerEventId, ticketPriceId: claimed.ticketPriceId,
-                    buyerInhabitantId: entry.inhabitantId, buyerHouseholdId: entry.order.householdId, sellerHouseholdId: claimed.sellerHouseholdId
-                })
+                const {stop, placed} = await sellToEntry(d1Client, entry, ticketType)
+                if (placed) sales.push(placed)
+                if (stop) break
             }
         }
     }
-    return sales
+    return {waitlistTicketsSold: sales, waitlistPortionsAssigned: recovered.waitlistPortionsAssigned}
 }

@@ -45,7 +45,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {COLOR, COMPONENTS, ICONS} = useTheSlopeDesignSystem()
+const {COLOR, COMPONENTS, ICONS, SIZES} = useTheSlopeDesignSystem()
 
 // Business logic
 const {hasNewAllergyInhabitants} = useAllergy()
@@ -180,6 +180,13 @@ const clickableCellClass = computed(() => props.readonly ? '' : COMPONENTS.table
     <!-- Docked detail (mobile master/detail) -->
     <template v-if="$slots.expanded" #expanded="scope">
       <slot name="expanded" v-bind="scope"/>
+    </template>
+
+    <template #loading>
+      <div :class="COMPONENTS.table.loadingRow">
+        <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.table.loadingSpinner"/>
+        Henter allergier...
+      </div>
     </template>
 
     <!-- Empty state owned by the parent -->

@@ -5,7 +5,7 @@ import {enableAutoUnmount} from '@vue/test-utils'
 import InhabitantSelector from '~/components/shared/InhabitantSelector.vue'
 import {nextTick, ref} from 'vue'
 import type {InhabitantDisplay} from '~/composables/useCoreValidation'
-import {mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, resetStores, findLoadingRow} from '~~/tests/component/testHelpers'
 
 enableAutoUnmount(afterEach)
 
@@ -83,6 +83,17 @@ describe('InhabitantSelector', () => {
         inhabitants.forEach(i =>
             expect(wrapper.text()).not.toContain(`${i.name} ${i.lastName}`)
         )
+    })
+
+    // Until the inhabitants answer, the table's loading row stands where the empty text would
+    it.each([
+        {loading: true, loadingRow: true, emptyText: false},
+        {loading: false, loadingRow: false, emptyText: true}
+    ])('GIVEN no inhabitants yet and loading=$loading THEN the loading row shows: $loadingRow, the empty text: $emptyText', async ({loading, loadingRow, emptyText}) => {
+        const wrapper = await mount({inhabitants: [], loading})
+        expect(findLoadingRow(wrapper).exists()).toBe(loadingRow)
+        expect(wrapper.text().includes('Henter beboere...')).toBe(loadingRow)
+        expect(wrapper.text().includes('Ingen beboere tilgængelige')).toBe(emptyText)
     })
 
     // ========== SORT TOGGLE ==========

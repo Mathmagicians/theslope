@@ -8,7 +8,7 @@ import {composeEmail, siteUrl} from '~~/server/utils/sender/compose'
 import type {EmailChannel} from '~~/server/utils/sender/config'
 import type {SenderEmitResult} from '~/composables/useNotificationValidation'
 import type {BookingOutcomes, TicketSale} from '~/composables/useBookingValidation'
-import type {WaitlistAssignmentResult} from '~/composables/useWaitlistValidation'
+import type {WaitlistAssigned, WaitlistAssignmentResult} from '~/composables/useWaitlistValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {fetchHousehold, fetchInhabitant, fetchUser} from '~~/server/data/prismaRepository'
 import {loadDinner, type DinnerForWaitlist} from '~~/server/utils/waitlistAssignment'
@@ -160,12 +160,27 @@ const resolver = (d1Client: D1Database) => {
         const members = await Promise.all((household?.inhabitants ?? []).map(async inhabitant => ({to: await emailOf(d1Client, inhabitant.userId), name: inhabitant.name})))
         return members.flatMap(({to, name}) => to ? [{to, name, dinner: dinner.context, seller, buyer}] : [])
     }
-    return {dinnerOf, shortnameOf, soldMails}
+    // The first in a ticket type's line hears that the ticket is theirs
+    const assignedMail = async (sale: TicketSale): Promise<BookingMails['assigned'][number]> => {
+        const [dinner, {email, name}, seller, buyer] = await Promise.all([
+            dinnerOf(sale.dinnerEventId), addressOf(d1Client, sale.buyerInhabitantId), shortnameOf(sale.sellerHouseholdId), shortnameOf(sale.buyerHouseholdId)
+        ])
+        return {to: email, name, dinner: dinner.context, ticket: ticketLabel(dinner.ticketPrices, sale.ticketPriceId), seller, buyer}
+    }
+    const extraPortionMail = async (dinner: DinnerForWaitlist, entry: WaitlistAssigned): Promise<BookingMails['extraPortions'][number]> => {
+        const inhabitant = await fetchInhabitant(d1Client, entry.inhabitantId)
+        const [to, buyer] = await Promise.all([emailOf(d1Client, inhabitant?.userId), inhabitant ? shortnameOf(inhabitant.householdId) : Promise.resolve('')])
+        return {to, name: inhabitant?.name ?? '', dinner: dinner.context, ticket: ticketLabel(dinner.ticketPrices, entry.ticketPriceId), buyer}
+    }
+    return {dinnerOf, soldMails, assignedMail, extraPortionMail}
 }
 
-/** The mails for what a scaffold run did: joined, sold, and sold to the first in a ticket type's line */
+/**
+ * The mails for what a scaffold run did: joined, sold, sold to the first in a ticket type's line, and the extra portions
+ * it finished for a stopped run
+ */
 export const notifyBookingOutcomes = neverThrows('booking outcomes', async (d1Client: D1Database, channel: EmailChannel, outcomes: BookingOutcomes): Promise<SenderEmitResult[]> => {
-    const {dinnerOf, shortnameOf, soldMails} = resolver(d1Client)
+    const {dinnerOf, soldMails, assignedMail, extraPortionMail} = resolver(d1Client)
     const threshold = useAppConfig().theslope.waitlistBuildupThreshold
 
     const joined = await Promise.all(outcomes.joined.map(async event => {
@@ -180,23 +195,20 @@ export const notifyBookingOutcomes = neverThrows('booking outcomes', async (d1Cl
     }))
     const allSales = [...outcomes.ticketsSold, ...outcomes.waitlistTicketsSold]
     const sold = await Promise.all(allSales.map(soldMails))
-    const assigned = await Promise.all(outcomes.waitlistTicketsSold.map(async sale => {
-        const [dinner, {email, name}, seller, buyer] = await Promise.all([
-            dinnerOf(sale.dinnerEventId), addressOf(d1Client, sale.buyerInhabitantId), shortnameOf(sale.sellerHouseholdId), shortnameOf(sale.buyerHouseholdId)
-        ])
-        return {to: email, name, dinner: dinner.context, ticket: ticketLabel(dinner.ticketPrices, sale.ticketPriceId), seller, buyer}
-    }))
-    return bookingMails(channel, {...NO_BOOKING_MAILS, joined, buildups: buildups.flat(), sold: sold.flat(), assigned})
+    const assigned = await Promise.all(outcomes.waitlistTicketsSold.map(assignedMail))
+    const extraPortions = await Promise.all(outcomes.waitlistPortionsAssigned.map(async entry => extraPortionMail(await dinnerOf(entry.dinnerEventId), entry)))
+    return bookingMails(channel, {...NO_BOOKING_MAILS, joined, buildups: buildups.flat(), sold: sold.flat(), assigned, extraPortions})
 })
 
-/** The mails for the chef's extra portions: each waiting entry that fit got a regular order */
+/**
+ * The mails for the chef's extra portions: each waiting entry that fit got a regular order; a stopped run's sale the
+ * release finished mails as a sale to the first in a ticket type's line
+ */
 export const notifyExtraPortions = neverThrows('extra portions', async (d1Client: D1Database, channel: EmailChannel, result: WaitlistAssignmentResult): Promise<SenderEmitResult[]> => {
-    const {dinnerOf, shortnameOf} = resolver(d1Client)
+    const {dinnerOf, soldMails, assignedMail, extraPortionMail} = resolver(d1Client)
     const dinner = await dinnerOf(result.dinnerEventId)
-    const extraPortions = await Promise.all(result.assigned.map(async entry => {
-        const inhabitant = await fetchInhabitant(d1Client, entry.inhabitantId)
-        const [to, buyer] = await Promise.all([emailOf(d1Client, inhabitant?.userId), inhabitant ? shortnameOf(inhabitant.householdId) : Promise.resolve('')])
-        return {to, name: inhabitant?.name ?? '', dinner: dinner.context, ticket: ticketLabel(dinner.ticketPrices, entry.ticketPriceId), buyer}
-    }))
-    return bookingMails(channel, {...NO_BOOKING_MAILS, extraPortions})
+    const extraPortions = await Promise.all(result.assigned.map(entry => extraPortionMail(dinner, entry)))
+    const sold = await Promise.all(result.waitlistTicketsSold.map(soldMails))
+    const assigned = await Promise.all(result.waitlistTicketsSold.map(assignedMail))
+    return bookingMails(channel, {...NO_BOOKING_MAILS, sold: sold.flat(), assigned, extraPortions})
 })

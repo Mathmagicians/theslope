@@ -1,9 +1,9 @@
 // @vitest-environment nuxt
-import {describe, it, expect, beforeEach, afterEach} from 'vitest'
+import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount, flushPromises} from '@vue/test-utils'
 import {nextTick, ref, type Ref} from 'vue'
-import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, holdEndpoint, findLoadingRow} from '~~/tests/component/testHelpers'
 import AdminSystem from '~/components/admin/AdminSystem.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
@@ -80,5 +80,32 @@ describe('AdminSystem job history', () => {
         await nextTick()
 
         expect(findByTestId(wrapper, DETAILS).exists()).toBe(false)
+    })
+})
+
+// Until the job history answers, the table's loading row stands where the empty text would
+describe('AdminSystem job history while it loads', () => {
+    let held: ReturnType<typeof holdEndpoint>
+
+    beforeEach(() => {
+        resetStores()
+        held = holdEndpoint('/api/admin/maintenance/job-run', [jobRun])
+    })
+
+    afterEach(() => {
+        held.release()
+        held.unregister()
+    })
+
+    it('GIVEN the job history is on the way THEN the loading row shows, WHEN it lands THEN the job', async () => {
+        const wrapper = await mountWithTooltipProvider(AdminSystem, {props: {canEdit: true}, isMd: true})
+        const {jobTypeLabels} = useMaintenance()
+
+        await vi.waitFor(() => expect(findLoadingRow(wrapper).text()).toContain('Henter jobhistorik...'))
+
+        held.release()
+
+        await vi.waitFor(() => expect(wrapper.find('tbody').text()).toContain(jobTypeLabels[JobType.MONTHLY_BILLING]))
+        expect(findLoadingRow(wrapper).exists()).toBe(false)
     })
 })

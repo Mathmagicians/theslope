@@ -54,6 +54,17 @@
  *   └──────┘  (COMPONENTS.waitlist.chip); the legend gains "På venteliste (#n)" while the household has entries.
  *   A ticket for sale after the deadline keeps the claim: the cell toggles through the eating modes as before.
  *
+ * WHILE THE BOOKINGS OF THE RANGE LOAD (`loading`, a new range or a save's re-read): UTable's loading bar runs under
+ * the column headers and the rows stay; the lock chips wait, they count the household's orders:
+ * Familiens bookinger                       [Dag] [Uge] [Måned]
+ *                  <-   oktober 2026   ->
+ * Beboer      | M 28/9 | T 29/9 | O 30/9 | ... | T 29/10 |
+ * ===================================================== <- UTable's loading bar
+ * ⚡Alle      |  🍽️    |  ?     |  🍽️    | ... |  ❌     |
+ * Anna V 🎟️4 |  🍽️    |  🍽️    |  🛍️    | ... |  ❌     |
+ * A range without dinners yet shows the table's loading row (COMPONENTS.table.loadingRow) in place of its empty state:
+ *             (sync, spinning)  Henter bookinger...
+ *
  * CELL STATES: 🍽️=dine-in, 🕐=late, 🛍️=takeaway, ❌=none, ?=no consensus, °=modified, ⌛=queued (the wish ghosted)
  * HEADER CHIPS: (🟠)=locked, (🟡N)=locked with N tickets available
  */
@@ -101,6 +112,7 @@ interface Props {
   formMode?: FormMode
   canEdit?: boolean // Access control: hide edit controls when false
   isSaving?: boolean
+  loading?: boolean // The range's bookings are on the way
   hasPrev?: boolean
   hasNext?: boolean
 }
@@ -113,6 +125,7 @@ const props = withDefaults(defineProps<Props>(), {
   formMode: FORM_MODES.VIEW,
   canEdit: true,
   isSaving: false,
+  loading: false,
   hasPrev: true,
   hasNext: true
 })
@@ -503,9 +516,9 @@ const getPowerDisabledModes = (event: DinnerEventDisplay): DinnerMode[] => {
   return getCellDisabledModes(firstInhabitant.id, event)
 }
 
-// The column header's lock chip on a locked dinner counts the household's own released tickets
+// The column header's lock chip on a locked dinner counts the household's own released tickets: it waits with the rows
 const getEventLockChip = (event: DinnerEventDisplay) => {
-  if (canBookEvent(event) || isDinnerPast(event.date)) return null
+  if (props.loading || canBookEvent(event) || isDinnerPast(event.date)) return null
   const releasedCount = props.orders.filter(o =>
     o.dinnerEventId === event.id && ticketStateOf(o) === TicketState.released
   ).length
@@ -593,9 +606,17 @@ const getEventSummary = (eventId: number) => {
       sticky
       :data="tableData"
       :columns="columns"
+      :loading="loading"
       row-key="id"
       :ui="COMPONENTS.table.gridUi"
     >
+      <template #loading>
+        <div :class="COMPONENTS.table.loadingRow">
+          <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.table.loadingSpinner" />
+          Henter bookinger...
+        </div>
+      </template>
+
       <!-- Empty state -->
       <template #empty>
         <UAlert

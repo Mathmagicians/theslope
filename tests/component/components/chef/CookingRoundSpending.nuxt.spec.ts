@@ -1,12 +1,17 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
+import {nextTick} from 'vue'
 import {enableAutoUnmount} from '@vue/test-utils'
 import CookingRoundSpending from '~/components/chef/CookingRoundSpending.vue'
 import {dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow, type SpendingFragment} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useTicket} from '~/composables/useTicket'
 import {formatDate} from '~/utils/date'
-import {mountWithTooltipProvider, findByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, resetStores, registerEmptyStoreEndpoints, holdEndpoint, isTableLoading, untilTrue} from '~~/tests/component/testHelpers'
+import {useBookingsStore} from '~/stores/bookings'
+
+// Only HTTP is faked (testing.md Rule 6): the bookings store reads the round's orders
+registerEmptyStoreEndpoints()
 
 enableAutoUnmount(afterEach)
 
@@ -94,5 +99,44 @@ describe('CookingRoundSpending, this dinner', () => {
         const wrapper = await mount({fragment: dinnerSpendingFragment(rows[2]!, [])})
         expect(dataRows(wrapper)).toHaveLength(1)
         expect(findByTestId(wrapper, 'cooking-round-empty').text()).toContain(useTheSlopeDesignSystem().getRandomEmptyMessage('noReceipts').text)
+    })
+})
+
+// The team's round reads each day's allowance off the round's orders; this dinner's rows are its receipts
+describe('CookingRoundSpending while the round\'s orders load', () => {
+    const receipt = ExpenseFactory.defaultExpense({id: 8, amount: 126500, description: 'Indkøb', createdAt: new Date('2026-04-12T10:00:00')})
+    let held: ReturnType<typeof holdEndpoint>
+
+    beforeEach(async () => {
+        held = holdEndpoint('/api/order', [])
+        const store = useBookingsStore()
+        store.loadOrdersForDinners({dinnerEventIds: rows.map(row => row.dinnerEventId), allHouseholds: true})
+        await untilTrue(() => store.isOrdersLoading)
+    })
+
+    afterEach(() => {
+        held.release()
+        held.unregister()
+    })
+
+    it('GIVEN the orders are on the way THEN the team\'s round runs its loading bar over its days and total, WHEN they land THEN the bar stops', async () => {
+        const wrapper = await mount({fragment: teamSpendingFragment(rows, words)})
+
+        expect(isTableLoading(wrapper)).toBe(true)
+        expect(wrapper.text()).toContain(rows[0]!.menuTitle)
+        expect(findByTestId(wrapper, 'cooking-round-total').exists()).toBe(true)
+
+        held.release()
+
+        await untilTrue(() => !useBookingsStore().isOrdersLoading)
+        await nextTick()
+        expect(isTableLoading(wrapper)).toBe(false)
+    })
+
+    it('GIVEN the orders are on the way THEN this dinner\'s receipts carry no loading: they come from the dinner, not the orders', async () => {
+        const wrapper = await mount({fragment: dinnerSpendingFragment(rows[2]!, [receipt])})
+
+        expect(isTableLoading(wrapper)).toBe(false)
+        expect(wrapper.text()).toContain('Indkøb')
     })
 })

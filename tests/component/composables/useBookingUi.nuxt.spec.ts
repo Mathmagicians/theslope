@@ -151,6 +151,13 @@ describe('useBookingUi', () => {
             expect(SUPPLY_WORDS.householdReleased(count)).toEqual({title: `Husstanden har frigivet ${tickets}`, description: 'Du betaler, medmindre andre køber'})
             expect(SUPPLY_WORDS.householdQueued(count)).toEqual({title: `Husstanden står på ventelisten med ${tickets}`, description: 'Du betaler, når du får en billet fra ventelisten.'})
         })
+
+        it.each([
+            {entries: 1, missing: 'En skråner mangler billet'},
+            {entries: 3, missing: 'Skrånere mangler billetter'}
+        ])('the chef is asked for portions while $entries waits: $missing', ({entries, missing}) => {
+            expect(SUPPLY_WORDS.chefAsk(entries)).toBe(`${missing} til din middag — har du mulighed for at mætte flere munde?`)
+        })
     })
 
     describe('lockChip', () => {
@@ -363,6 +370,9 @@ describe('formatBookingResult', () => {
     const soldToWaitlist = (count: number) =>
         Array.from({length: count}, () => ({dinnerEventId: 1, ticketPriceId: 1, buyerInhabitantId: 9, buyerHouseholdId: 2, sellerHouseholdId: 1}))
     const run = (overrides: Parameters<typeof OrderFactory.defaultScaffoldResult>[0]) => OrderFactory.defaultScaffoldResult(overrides)
+    // Failed orders the queue refused because a run is placing the entry
+    const conflictsOf = (person: Person, ...actions: BookingAction[]): BookingResult[] =>
+        resultsOf(person, ...actions).map(result => ({...result, reason: useBookingValidation().BookingFailureSchema.enum.CONFLICT}))
 
     it.each([
         {
@@ -408,9 +418,20 @@ describe('formatBookingResult', () => {
                 failed: resultsOf(LENE, Action.RELEASE),
                 errored: 1,
                 unchanged: 42,
-                outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: soldToWaitlist(1)}
+                outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: soldToWaitlist(1), waitlistPortionsAssigned: []}
             }),
             text: 'Knud: 7 frameldt, 2 frigivet\nLene: 6 frameldt, 2 frigivet, 1 opdatering fejlede\n1 billet solgt til ventelisten\n42 uændret'
+        },
+        {
+            // A place a run is assigning refuses its leave and its change: the words say so in place of the failed count
+            desc: 'a leave and a change of places being assigned',
+            result: run({results: resultsOf(ANNA, Action.BOOK), failed: [...conflictsOf(ANNA, Action.LEAVE), ...conflictsOf(LARS, Action.REQUEUE)], errored: 2}),
+            text: 'Anna: 1 tilmeldt, pladsen er ved at blive tildelt\nLars: pladsen er ved at blive tildelt'
+        },
+        {
+            desc: 'a booking refused by a conflict reads as any failure',
+            result: run({failed: conflictsOf(LENE, Action.BOOK), errored: 1}),
+            text: 'Lene: 1 opdatering fejlede'
         },
         {
             desc: 'a person with only failed orders',
@@ -425,7 +446,7 @@ describe('formatBookingResult', () => {
         },
         {
             desc: 'tickets sold to the waiting list and nothing else changed',
-            result: run({unchanged: 5, outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: soldToWaitlist(2)}}),
+            result: run({unchanged: 5, outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: soldToWaitlist(2), waitlistPortionsAssigned: []}}),
             text: '2 billetter solgt til ventelisten\n5 uændret'
         },
         {

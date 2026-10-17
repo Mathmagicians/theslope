@@ -2,7 +2,7 @@
 import {describe, it, expect, vi, beforeEach, afterEach, beforeAll} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS, lockedDinnerSupply} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS, lockedDinnerSupply, findLoadingRow, isTableLoading} from '~~/tests/component/testHelpers'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
@@ -276,6 +276,35 @@ describe('DinnerBookingForm', () => {
       const wrapper = await mountForm(props, isMd)
       const headers = wrapper.findAll('thead th').map(th => th.text())
       expect(headers).toContain(createTableColumns(ref(isMd)).bookingFormName.header)
+    })
+  })
+
+  // While the dinner's bookings reload, UTable runs its loading bar over the household's rows
+  describe('while the bookings of the dinner reload', () => {
+    it.each([true, false])('GIVEN loading=%s THEN the table receives it, and the household\'s rows stay', async (loading) => {
+      const wrapper = await mountMemberForm(true, {loading})
+
+      expect(isTableLoading(wrapper)).toBe(loading)
+      expect(findByTestId(wrapper, 'power-power-mode-toggle').exists()).toBe(true)
+      expect(wrapper.findAllComponents(DinnerTicket).length > 0).toBe(true)
+      expect(findLoadingRow(wrapper).exists()).toBe(false)
+    })
+
+    // The day bill and the household's notes count the orders: they wait while the orders load
+    it.each([
+      {loading: true, shown: false},
+      {loading: false, shown: true}
+    ])('GIVEN a closed dinner with a released ticket and a queue entry and loading=$loading THEN the day bill and the household\'s notes show: $shown', async ({loading, shown}) => {
+      const [anna, bo] = householdWithInhabitants.inhabitants
+      const dinnerEventId = baseProps.dinnerEvent.id
+      const released = OrderFactory.defaultOrder('released', {inhabitantId: anna!.id, dinnerEventId, state: useBookingValidation().OrderStateSchema.enum.RELEASED})
+      const entry = WaitlistFactory.defaultEntry({id: 41, inhabitantId: bo!.id, dinnerEventId})
+
+      const wrapper = await mountMemberForm(false, {orders: [released], waitlistEntries: [entry], loading})
+
+      expect(findByTestId(wrapper, 'booking-day-bill').exists()).toBe(shown)
+      expect(wrapper.text().includes(SUPPLY_WORDS.householdReleased(1).title)).toBe(shown)
+      expect(findByTestId(wrapper, WAITLIST_TEST_IDS.householdQueued).exists()).toBe(shown)
     })
   })
 })

@@ -3,7 +3,7 @@ import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import {nextTick, ref} from 'vue'
-import {mountWithTooltipProvider, clickByTestId, findAllByTestId, pollFor, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, clickByTestId, findAllByTestId, pollFor, resetStores, VIEWPORTS, holdEndpoint, findLoadingRow} from '~~/tests/component/testHelpers'
 import AdminTeams from '~/components/admin/AdminTeams.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {usePlanStore} from '~/stores/plan'
@@ -111,6 +111,28 @@ describe('AdminTeams master table', () => {
         const columns = wrapper.findComponent({name: 'UTable'}).props('columns') as Array<{header?: string, meta?: {class?: unknown}}>
         expect(columns.find(column => column.header === 'Madhold')?.meta?.class).toEqual(COMPONENTS.masterDetail.primaryColumn)
         expect(columns.find(column => column.header === 'Madlavningsdage')?.meta?.class).toEqual(COMPONENTS.masterDetail.compactColumn)
+    })
+
+    // A season without teams that reloads shows the loading row, not the empty state, until the season answers
+    it('GIVEN a season without teams WHEN it reloads THEN the loading row stands where the empty state was, until the season lands', async () => {
+        seasonByIdEndpoint.mockReturnValue(season)
+        const wrapper = await mountTeams()
+        expect(wrapper.find('[data-testid="teams-empty-state"]').exists()).toBe(true)
+        const held = holdEndpoint('/api/admin/season/1', season)
+
+        try {
+            void usePlanStore().selectedSeasonDataset.refresh()
+
+            await vi.waitFor(() => expect(findLoadingRow(wrapper).text()).toContain('Henter madhold...'))
+            expect(wrapper.find('[data-testid="teams-empty-state"]').exists()).toBe(false)
+
+            held.release()
+
+            await vi.waitFor(() => expect(wrapper.find('[data-testid="teams-empty-state"]').exists()).toBe(true))
+        } finally {
+            held.release()
+            held.unregister()
+        }
     })
 })
 

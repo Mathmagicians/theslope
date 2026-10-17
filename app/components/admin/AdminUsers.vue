@@ -137,8 +137,8 @@ const userColumns = [
     id: 'expand',
     cell: ({row}: {row: TableRow}) =>
         h(UButton, {
-          color: 'neutral',
-          variant: 'ghost',
+          color: COLOR.neutral,
+          variant: NOISE.quiet,
           icon: row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight,
           square: true,
           'aria-label': row.getIsExpanded() ? 'Luk' : 'Åbn detaljer',
@@ -167,12 +167,12 @@ const pagination = ref({
 <template>
   <UCard
       id="admin-users" data-testid="admin-users"
-      class="w-full px-0">
+      :class="COMPONENTS.adminUsers.card">
     <template #header>
-      <div class="px-6">
+      <div :class="COMPONENTS.adminUsers.header">
         <UAlert
             v-bind="ALERTS.info"
-            icon="i-hugeicons-authorized"
+            :icon="ICONS.authorized"
             title=" Brugere"
             description="Her kan du se de brugere, som vi har importeret fra Heynabo. Du kan også se, hvilke systemroller brugerne har. Brug System-fanen til at køre Heynabo import."
         />
@@ -180,7 +180,7 @@ const pagination = ref({
     </template>
 
     <!-- Search, Sort, and Pagination Row -->
-    <div class="px-6 py-3">
+    <div :class="COMPONENTS.adminUsers.toolbar">
       <TableSearchPagination
           v-model:search-query="searchQuery"
           v-model:sort-descending="sortDescending"
@@ -204,10 +204,9 @@ const pagination = ref({
         :data="formattedUsers"
         :columns="userColumns"
         :loading="isUsersLoading"
-        :loading-color="COLOR.secondary" loading-animation="carousel"
-        empty="Ingen brugere at vise ..."
+        v-bind="COMPONENTS.adminUsers.loadingBar"
         caption="Brugere - importeret fra Heynabo"
-        class="w-full"
+        :class="COMPONENTS.adminUsers.table"
         :ui="COMPONENTS.table.ui"
         :column-visibility="columnVisibility(HIDDEN_ON_PHONE)"
         :pagination-options="{
@@ -215,7 +214,7 @@ const pagination = ref({
         }"
     >
       <template #systemRoles-cell="{ row }">
-        <div v-if="row.original.systemRoles && row.original.systemRoles.length > 0" class="flex gap-1 flex-wrap">
+        <div v-if="row.original.systemRoles && row.original.systemRoles.length > 0" :class="COMPONENTS.adminUsers.roles">
           <UBadge
             v-for="role in row.original.systemRoles"
             :key="role"
@@ -223,7 +222,7 @@ const pagination = ref({
             :variant="NOISE.soft"
             :size="SIZES.md"
           >
-            <UIcon v-if="roleLabels[role]?.icon" :name="roleLabels[role].icon" class="mr-1" />
+            <UIcon v-if="roleLabels[role]?.icon" :name="roleLabels[role].icon" :class="COMPONENTS.adminUsers.roleIcon" />
             {{ roleLabels[role]?.label || role }}
           </UBadge>
         </div>
@@ -235,9 +234,18 @@ const pagination = ref({
         <span v-else>?</span>
       </template>
 
+      <template #loading>
+        <div :class="COMPONENTS.table.loadingRow">
+          <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.table.loadingSpinner" />
+          Henter brugere...
+        </div>
+      </template>
+
+      <template #empty>Ingen brugere at vise ...</template>
+
       <!-- Expanded row content -->
       <template #expanded>
-        <div :class="['p-4', BG.panel]">
+        <div :class="[COMPONENTS.adminUsers.detail, BG.panel]">
           <UserProfileCard
             v-if="expandedUser"
             :user="expandedUser"

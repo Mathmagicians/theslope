@@ -92,7 +92,7 @@ const {selectedDinnerEventId: selectedDinnerId} = storeToRefs(bookingsStore)
 
 // Household-specific orders via the user-facing endpoint (security: session-filtered).
 // Separate from dinnerEventDetail.tickets, which includes ALL households for kitchen stats.
-const {orders: householdOrders} = storeToRefs(bookingsStore)
+const {orders: householdOrders, isBookingsReloading} = storeToRefs(bookingsStore)
 bookingsStore.loadOrdersForDinners(() => ({
   dinnerEventIds: selectedDinnerId.value === null ? [] : [selectedDinnerId.value],
   includeProvenance: true
@@ -217,6 +217,7 @@ useHead({
             :deadlines="deadlinesForSeason(selectedSeason)"
             :released-ticket-counts="lockStatus.get(dinnerEventDetail.id) ?? EMPTY_RELEASED_TICKET_COUNTS"
             :waitlist-entries="householdWaitlist"
+            :loading="isBookingsReloading"
             @save-bookings="handleSaveBookings"
           />
 

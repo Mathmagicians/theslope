@@ -2,7 +2,7 @@
 import {describe, it, expect, beforeAll, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {findByTestId, clickByTestId, resetStores, findLoadingRow, isTableLoading} from '~~/tests/component/testHelpers'
 import {BookingViewSchema} from '~/composables/useBookingView'
 import BookingGridView from '~/components/booking/BookingGridView.vue'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
@@ -135,6 +135,34 @@ describe('BookingGridView', () => {
 
       expect(wrapper.text()).not.toContain('Ingen middage')
       expect(wrapper.text()).toContain('Anna')
+    })
+  })
+
+  // While the range's bookings reload, UTable runs its loading bar over the rows; a table without rows shows the loading row
+  describe('while the bookings of the range reload', () => {
+    const dinner = DinnerEventFactory.dinnerEventAt(1, 1)
+    const mountLoading = (loading: boolean, dinnerEvents: DinnerEventDisplay[] = [dinner]) => mount({
+      view: week,
+      dateRange: {start: addDays(dinner.date, -3), end: addDays(dinner.date, 3)},
+      dinnerEvents,
+      loading
+    })
+
+    it.each([true, false])('GIVEN loading=%s THEN the table receives it, and the household\'s cells and the sum row stay', async (loading) => {
+      const wrapper = await mountLoading(loading)
+
+      expect(isTableLoading(wrapper)).toBe(loading)
+      // The legend draws its own mode samples: a grid cell carries the dinner's id in its name
+      expect(wrapper.findAllComponents(DinnerModeSelector).filter(c => String(c.props('name')).endsWith(`-${dinner.id}`))).toHaveLength(mockHousehold.inhabitants.length + 1)
+      expect(wrapper.find('tfoot').exists()).toBe(true)
+      expect(findLoadingRow(wrapper).exists()).toBe(false)
+    })
+
+    it('GIVEN a range without dinners while loading THEN the loading row stands where the empty state would', async () => {
+      const wrapper = await mountLoading(true, [])
+
+      expect(findLoadingRow(wrapper).text()).toContain('Henter bookinger...')
+      expect(wrapper.text()).not.toContain('Ingen middage denne uge')
     })
   })
 
@@ -322,12 +350,13 @@ describe('BookingGridView', () => {
     const supply = (total: number): ReleasedTicketCounts => ({...EMPTY_RELEASED_TICKET_COUNTS, total, formatted: total > 0 ? `${total}V` : '-'})
     const released = (id: number, dinnerEventId: number): OrderDisplay =>
       OrderFactory.defaultOrder(undefined, {id, inhabitantId: 1, dinnerEventId, state: OrderStateSchema.enum.RELEASED})
-    const mountWeekOf = (dinnerEvent: DinnerEventDisplay, orders: OrderDisplay[], lockStatus: Map<number, ReleasedTicketCounts | null>) => mount({
+    const mountWeekOf = (dinnerEvent: DinnerEventDisplay, orders: OrderDisplay[], lockStatus: Map<number, ReleasedTicketCounts | null>, loading = false) => mount({
       view: week,
       dateRange: {start: addDays(dinnerEvent.date, -3), end: addDays(dinnerEvent.date, 3)},
       dinnerEvents: [dinnerEvent],
       orders,
-      lockStatus
+      lockStatus,
+      loading
     })
     // A standalone UChip renders its number in its base slot
     const headerChip = (wrapper: Awaited<ReturnType<typeof mount>>) => wrapper.find('thead [data-slot="base"]')
@@ -344,6 +373,12 @@ describe('BookingGridView', () => {
 
     it('carries no chip on a dinner open for booking', async () => {
       const wrapper = await mountWeekOf(DinnerEventFactory.dinnerEventAt(2, 60), [], new Map())
+      expect(headerChip(wrapper).exists()).toBe(false)
+    })
+
+    // The chip counts the household's orders: it waits with the rows while they load
+    it('carries no chip on a locked dinner while the bookings of the range load', async () => {
+      const wrapper = await mountWeekOf(lockedDinner, [released(900, lockedDinner.id)], new Map([[lockedDinner.id, supply(1)]]), true)
       expect(headerChip(wrapper).exists()).toBe(false)
     })
   })

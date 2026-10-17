@@ -16,6 +16,13 @@
  *   15/04  Pasta                0 /     0 kr      0 /     0 kr      0 /     0 kr (waiting)
  *   Hele Madhold 2          2.923 / 3.654 kr  2.850 / 3.563 kr   +73 /  +91 kr (check)
  *
+ * While the round's orders load (the bookings store), UTable's loading bar runs under the team's round's column
+ * headers and its days and total row stay; this dinner's receipts come from the dinner and carry no bar:
+ *   Hele Madhold 2, for perioden 12/04–15/04                  ex / inkl. moms
+ *   Dato   Middag            Rådighedsbeløb      Brugt         Tilbage
+ *   ==============================================================  <- UTable's loading bar
+ *   12/04  Lasagne          1.425 / 1.781 kr  1.540 / 1.925 kr  -115 / -144 kr (overdraft)
+ *
  * The arrow marks the dinner on view among the team's days; a figure without tickets waits instead of balancing; a
  * fragment without rows shows the table's own empty state. A UTable on the table token; the fragment comes from
  * dinnerSpendingFragment or teamSpendingFragment and every figure from the useOrder spending helpers.
@@ -23,11 +30,15 @@
 import type {TableColumn} from '@nuxt/ui'
 import type {SpendingFragment, SpendingTableRow} from '~/composables/useBookingUi'
 
-defineProps<{
+const props = defineProps<{
   fragment: SpendingFragment
 }>()
 
-const {COMPONENTS, ICONS, TYPOGRAPHY, ALERTS, getRandomEmptyMessageText} = useTheSlopeDesignSystem()
+const {COMPONENTS, ICONS, SIZES, TYPOGRAPHY, ALERTS, getRandomEmptyMessageText} = useTheSlopeDesignSystem()
+
+// A team's cooking days read their allowance off the round's orders; this dinner's rows are its receipts
+const {isOrdersLoading} = storeToRefs(useBookingsStore())
+const loading = computed(() => isOrdersLoading.value && props.fragment.rows.some(row => row.kind === 'dinner'))
 const noReceipts = getRandomEmptyMessageText('noReceipts')
 const {spendingLeft, spendingAwaitsTickets} = useOrder()
 
@@ -46,7 +57,7 @@ const columns: TableColumn<SpendingTableRow>[] = [
       <h5 :class="TYPOGRAPHY.sectionSubheading" data-testid="cooking-round-heading">{{ fragment.heading }}</h5>
       <span :class="COMPONENTS.vatAmount.unitHeader">ex / inkl. moms</span>
     </div>
-    <UTable :data="fragment.rows" :columns="columns" :ui="COMPONENTS.table.ui">
+    <UTable :data="fragment.rows" :columns="columns" :loading="loading" :ui="COMPONENTS.table.ui">
       <template #date-cell="{ row }">{{ formatDate(row.original.date) }}</template>
       <template #label-cell="{ row }">
         <template v-if="row.original.kind === 'dinner'">
@@ -64,6 +75,12 @@ const columns: TableColumn<SpendingTableRow>[] = [
       </template>
       <template #left-cell="{ row }">
         <VatAmount v-if="row.original.kind === 'dinner'" :gross="spendingLeft(row.original)" balance :pending="spendingAwaitsTickets(row.original)" />
+      </template>
+      <template #loading>
+        <div :class="COMPONENTS.table.loadingRow">
+          <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.table.loadingSpinner" />
+          Henter bookinger...
+        </div>
       </template>
       <template #empty>
         <UAlert v-bind="ALERTS.emptyStateCompact" :title="noReceipts" data-testid="cooking-round-empty" />

@@ -2,7 +2,7 @@
 import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {mountWithTooltipProvider, findByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, resetStores, findLoadingRow, isTableLoading} from '~~/tests/component/testHelpers'
 import EconomyTableGeneric from '~/components/economy/EconomyTable.vue'
 import {nextTick, ref, type DefineComponent} from 'vue'
 
@@ -142,7 +142,7 @@ describe('EconomyTable', () => {
         it('while loading with no rows, shows the loading row with its text and not the empty state', async () => {
             const wrapper = await mountEmpty(true)
 
-            const loadingRow = wrapper.find('[data-slot="loading"]')
+            const loadingRow = findLoadingRow(wrapper)
             expect(loadingRow.exists()).toBe(true)
             expect(loadingRow.text()).toContain('Henter fremtidige bestillinger')
             expect(findByTestId(wrapper, 'custom-empty').exists()).toBe(false)
@@ -152,7 +152,16 @@ describe('EconomyTable', () => {
             const wrapper = await mountEmpty(false)
 
             expect(findByTestId(wrapper, 'custom-empty').exists()).toBe(true)
-            expect(wrapper.find('[data-slot="loading"]').exists()).toBe(false)
+            expect(findLoadingRow(wrapper).exists()).toBe(false)
+        })
+
+        // With rows, UTable runs its loading bar over them: the rows stay, the loading row is for a table without rows
+        it.each([true, false])('GIVEN rows and loading=%s THEN the table receives it and the rows stay', async (loading) => {
+            const wrapper = await createWrapper({loading, loadingText: 'Henter fremtidige bestillinger'})
+
+            expect(isTableLoading(wrapper)).toBe(loading)
+            expect(wrapper.text()).toContain('Pasta')
+            expect(findLoadingRow(wrapper).exists()).toBe(false)
         })
     })
 

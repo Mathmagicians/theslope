@@ -30,7 +30,7 @@ export class WaitlistFactory {
     // An entry as the household read returns it; the held order follows the entry's keys and mode
     static readonly defaultEntry = (overrides: Partial<Omit<TicketWaitlistDetail, 'order'>> & {dinnerMode?: TicketWaitlistDetail['order']['dinnerMode'], ticketPriceId?: number, householdId?: number} = {}): TicketWaitlistDetail => {
         const {dinnerMode = DinnerModeSchema.enum.DINEIN, ticketPriceId = 1, householdId = 1, ...entry} = overrides
-        const keys = {id: 1, dinnerEventId: 1, inhabitantId: 1, isGuestTicket: false, position: 1, createdAt: new Date(), ...entry}
+        const keys = {id: 1, dinnerEventId: 1, inhabitantId: 1, isGuestTicket: false, position: 1, createdAt: new Date(), placingAt: null, placingOrderId: null, ...entry}
         return {
             ...keys,
             order: {
@@ -61,6 +61,7 @@ export class WaitlistFactory {
         assigned: [],
         portionsUsed: 0,
         waiting: 0,
+        waitlistTicketsSold: [],
         ...overrides
     })
 

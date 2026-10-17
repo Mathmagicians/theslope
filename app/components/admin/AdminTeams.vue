@@ -460,6 +460,13 @@ const columns = [
               </div>
             </template>
 
+            <template #loading>
+              <div :class="COMPONENTS.table.loadingRow">
+                <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.table.loadingSpinner" />
+                Henter madhold...
+              </div>
+            </template>
+
             <!-- The table owns its empty state: no separate alert rendered instead of the table -->
             <template #empty>
               <UAlert

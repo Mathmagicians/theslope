@@ -123,11 +123,9 @@ v-if="isHouseholdsErrored"
       :cause="householdsError"
     />
 
-  <UCard
-class="w-full px-0"
-         data-testid="admin-households">
+  <UCard :class="COMPONENTS.adminHouseholds.card" data-testid="admin-households">
     <template #header>
-      <div class="flex items-center justify-between">
+      <div :class="COMPONENTS.adminHouseholds.headerRow">
         <span>Husstande på Skråningen</span>
         <UButton
             v-if="props.canEdit && !isCreateFormOpen"
@@ -145,7 +143,7 @@ class="w-full px-0"
     </template>
 
     <!-- Inline create form (above table) -->
-    <div v-if="isCreateFormOpen" class="px-6 py-3">
+    <div v-if="isCreateFormOpen" :class="COMPONENTS.adminHouseholds.section">
       <HouseholdCreateForm
           :existing-households="households"
           @create="handleCreateHousehold"
@@ -154,7 +152,7 @@ class="w-full px-0"
     </div>
 
     <!-- Search, Sort, and Pagination Row -->
-    <div class="px-6 py-3">
+    <div :class="COMPONENTS.adminHouseholds.section">
       <TableSearchPagination
           v-model:search-query="searchQuery"
           v-model:sort-descending="sortDescending"
@@ -182,7 +180,7 @@ class="w-full px-0"
       <template #shortName-cell="{ row }">
         <NuxtLink
             :to="getHouseholdUrl(row.original.shortName, row.original.pbsId)"
-            class="text-primary hover:underline font-medium"
+            :class="COMPONENTS.adminHouseholds.shortNameLink"
         >
           {{ row.original.shortName }}
         </NuxtLink>
@@ -195,7 +193,7 @@ class="w-full px-0"
       </template>
 
       <template #pbsId-cell="{ row }">
-        <div class="flex flex-col md:flex-row md:items-center gap-1 md:gap-2">
+        <div :class="COMPONENTS.adminHouseholds.pbsCell">
           <span>{{ row.original.pbsId }}</span>
           <template v-for="residency in [getResidencyDisplay(row.original.movedInDate, row.original.moveOutDate)]" :key="residency?.badgeText">
             <UBadge
@@ -231,9 +229,16 @@ class="w-full px-0"
         />
       </template>
 
+      <template #loading>
+        <div :class="COMPONENTS.table.loadingRow">
+          <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.table.loadingSpinner" />
+          Henter husstande...
+        </div>
+      </template>
+
       <template #empty>
-        <div class="flex flex-col items-center justify-center py-6 gap-3">
-          <UIcon name="i-heroicons-home" :class="['w-8 h-8', TEXT.gray[400]]"/>
+        <div :class="COMPONENTS.adminHouseholds.empty">
+          <UIcon :name="ICONS.household" :class="[COMPONENTS.adminHouseholds.emptyIcon, TEXT.gray[400]]"/>
           <p v-if="searchQuery" :class="[TYPOGRAPHY.bodyTextSmall, TEXT.gray[500]]">Ingen husstande matcher søgningen "{{ searchQuery }}"</p>
           <p v-else :class="[TYPOGRAPHY.bodyTextSmall, TEXT.gray[500]]">💤 Ingen er flyttet ind i appen endnu. Vent lige, lad os se om der kommer nogen snart ...</p>
         </div>

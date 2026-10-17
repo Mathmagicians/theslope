@@ -32,7 +32,7 @@ const planStore = usePlanStore()
 const {selectedSeason, isSelectedSeasonInitialized, isSelectedSeasonLoading, isSelectedSeasonErrored} = storeToRefs(planStore)
 
 const bookingsStore = useBookingsStore()
-const {orders, isProcessingBookings, lockStatus, householdWaitlist} = storeToRefs(bookingsStore)
+const {orders, isProcessingBookings, isBookingsReloading, lockStatus, householdWaitlist} = storeToRefs(bookingsStore)
 
 // Allergies store for guest booking form
 const allergiesStore = useAllergiesStore()
@@ -204,6 +204,7 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
           :allergy-types="allergyTypes"
           :booker-id="bookerId"
           :is-saving="isProcessingBookings"
+          :loading="isBookingsReloading"
           :has-prev="hasPrev"
           :has-next="hasNext"
           @save="handleGridSave"
@@ -222,6 +223,7 @@ const handleAddGuest = async (guestOrders: DesiredOrder[]) => {
               :released-ticket-counts="lockStatus.get(selectedDinnerEvent.id) ?? EMPTY_RELEASED_TICKET_COUNTS"
               :can-edit-admin-override="adminBypass ? () => canEdit : undefined"
               :waitlist-entries="householdWaitlist"
+              :loading="isBookingsReloading"
               @save-bookings="handleDayViewSave"
             />
             <UAlert

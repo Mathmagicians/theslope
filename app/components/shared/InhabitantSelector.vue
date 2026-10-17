@@ -73,7 +73,7 @@ const table = useTemplateRef('table')
 </script>
 
 <template>
-  <div class="space-y-3">
+  <div :class="COMPONENTS.inhabitantSelector.root">
     <TableSearchPagination
         v-model:search-query="searchQuery"
         :table="table"
@@ -91,7 +91,7 @@ const table = useTemplateRef('table')
         :loading="loading"
         :ui="COMPONENTS.table.ui"
         :pagination-options="{ getPaginationRowModel: getPaginationRowModel() }"
-        class="flex-1"
+        :class="COMPONENTS.inhabitantSelector.table"
     >
       <!-- Sort toggle in status column header -->
       <template v-if="sortFn" #status-header>
@@ -103,7 +103,7 @@ const table = useTemplateRef('table')
         >
           <template #leading>
             <UIcon
-                :name="sortDescending ? 'i-lucide-arrow-down-wide-narrow' : 'i-lucide-arrow-up-narrow-wide'"
+                :name="sortDescending ? ICONS.sortDescending : ICONS.sortAscending"
                 :size="SIZES.standardIconSize"
             />
           </template>
@@ -113,14 +113,14 @@ const table = useTemplateRef('table')
 
       <!-- Name column: avatar + full name -->
       <template #name-cell="{ row }">
-        <div class="flex items-center gap-3">
+        <div :class="COMPONENTS.inhabitantSelector.nameRow">
           <UAvatar
               :src="row.original.pictureUrl ?? undefined"
               :alt="`${row.original.name} ${row.original.lastName}`"
               :icon="ICONS.user"
               :size="SIZES.sm"
           />
-          <span class="font-medium">{{ row.original.name }} {{ row.original.lastName }}</span>
+          <span :class="COMPONENTS.inhabitantSelector.name">{{ row.original.name }} {{ row.original.lastName }}</span>
         </div>
       </template>
 
@@ -138,9 +138,16 @@ const table = useTemplateRef('table')
         <slot name="expanded" :row="row" />
       </template>
 
+      <template #loading>
+        <div :class="COMPONENTS.table.loadingRow">
+          <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.table.loadingSpinner" />
+          Henter beboere...
+        </div>
+      </template>
+
       <template #empty>
-        <div class="flex flex-col items-center justify-center py-6 gap-3">
-          <UIcon name="i-heroicons-users" :class="['w-8 h-8', TEXT.gray[400]]"/>
+        <div :class="COMPONENTS.inhabitantSelector.empty">
+          <UIcon :name="ICONS.users" :class="[COMPONENTS.inhabitantSelector.emptyIcon, TEXT.gray[400]]"/>
           <p :class="[TYPOGRAPHY.bodyTextSmall, TEXT.gray[500]]">
             {{ searchQuery ? 'Ingen beboere fundet' : emptyText }}
           </p>

@@ -25,6 +25,8 @@ type DinnerEventRow = Record<string, unknown> & {
 const TicketStateSchema = z.enum(['released', 'claimed', 'queued', 'normal'])
 // A dinner's supply after the booking deadline: tickets for sale, a waiting list, both or neither
 const SupplyStateSchema = z.enum(['FOR_SALE_AND_WAITLIST', 'FOR_SALE', 'WAITLIST', 'NONE'])
+// Why an order of a booking failed: it conflicts with the state it meets, a place on the waiting list a run is assigning
+const BookingFailureSchema = z.enum(['CONFLICT'])
 
 export const DinnerMode = DinnerModeSchema.enum
 export const DinnerState = DinnerStateSchema.enum
@@ -32,6 +34,7 @@ export const OrderState = OrderStateSchema.enum
 export const OrderAuditAction = OrderAuditActionSchema.enum
 export const TicketState = TicketStateSchema.enum
 export const SupplyState = SupplyStateSchema.enum
+export const BookingFailure = BookingFailureSchema.enum
 
 /**
  * Validation schemas for Bookings domain (DinnerEvent + Order)
@@ -672,11 +675,23 @@ export const useBookingValidation = () => {
         sellerHouseholdId: IdSchema
     })
 
-    // What one scaffold run did that its caller notifies about, one list per event
+    // The chef's extra portion went to a waiting entry: a regular order at the price written at join
+    const WaitlistAssignedSchema = z.object({
+        entryId: IdSchema,
+        inhabitantId: IdSchema,
+        isGuestTicket: z.boolean(),
+        portions: z.number().nonnegative(),
+        orderId: IdSchema,
+        ticketPriceId: IdSchema
+    })
+
+    // What one scaffold run did that its caller notifies about, one list per event; a run that finishes another run's
+    // stopped extra portion reports it with its dinner
     const BookingOutcomesSchema = z.object({
         joined: z.array(WaitlistJoinedSchema),
         ticketsSold: z.array(TicketSaleSchema),
-        waitlistTicketsSold: z.array(TicketSaleSchema)
+        waitlistTicketsSold: z.array(TicketSaleSchema),
+        waitlistPortionsAssigned: z.array(WaitlistAssignedSchema.extend({dinnerEventId: IdSchema}))
     })
 
     // The generator's buckets: the reconciler's four, the claim, and a queue entry's leave and requeue
@@ -746,7 +761,8 @@ export const useBookingValidation = () => {
         ticketType: TicketTypeSchema.nullable(),
         dinnerEventId: IdSchema,
         dinnerMode: DinnerModeSchema,
-        action: BookingActionSchema
+        action: BookingActionSchema,
+        reason: BookingFailureSchema.optional()                     // A failed order's, when the failure has one
     })
 
     // The orders of a run per action, every action present
@@ -762,7 +778,7 @@ export const useBookingValidation = () => {
         errored: z.number().int().nonnegative().default(0),          // The failed orders and the households whose run failed as a whole
         results: z.array(BookingResultSchema),                       // Each order that landed, in a run scoped to one household
         failed: z.array(BookingResultSchema),                        // Each order that failed
-        outcomes: BookingOutcomesSchema.default({joined: [], ticketsSold: [], waitlistTicketsSold: []})
+        outcomes: BookingOutcomesSchema.default({joined: [], ticketsSold: [], waitlistTicketsSold: [], waitlistPortionsAssigned: []})
     })
 
     /**
@@ -970,6 +986,7 @@ export const useBookingValidation = () => {
         TicketChangeKindSchema,
         TicketStateSchema,
         SupplyStateSchema,
+        BookingFailureSchema,
         TicketEventSchema,
         TicketChangeSchema,
         TicketChangesResponseSchema,
@@ -1034,6 +1051,7 @@ export const useBookingValidation = () => {
         ScaffoldResultSchema,
         WaitlistJoinedSchema,
         TicketSaleSchema,
+        WaitlistAssignedSchema,
         BookingOutcomesSchema,
         QueuePositionSchema,
         InhabitantUpdateResponseSchema,
@@ -1079,6 +1097,7 @@ export type OrderState = z.infer<ReturnType<typeof useBookingValidation>['OrderS
 export type TicketType = z.infer<ReturnType<typeof useBookingValidation>['TicketTypeSchema']>
 export type TicketState = z.infer<ReturnType<typeof useBookingValidation>['TicketStateSchema']>
 export type SupplyState = z.infer<ReturnType<typeof useBookingValidation>['SupplyStateSchema']>
+export type BookingFailure = z.infer<ReturnType<typeof useBookingValidation>['BookingFailureSchema']>
 
 // DinnerEvent
 export type DinnerEventDisplay = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventDisplaySchema']>

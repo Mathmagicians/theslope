@@ -1,9 +1,11 @@
 import {describe, it, expect, beforeAll} from 'vitest'
-import {addDays, addYears, differenceInDays, nextDay, type Day} from 'date-fns'
+import {addDays, addYears} from 'date-fns'
 import {useBooking, formatPlace, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcomes, supplyOfType, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {MODE_WORDS, ORDER_STATE_LABELS} from '~/composables/useBookingUi'
 import {formatDate} from '~/utils/date'
+import {dateToWeekDay} from '~/utils/season'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 import {sumBy} from '~/utils/ledger'
 import {useBookingValidation, TicketState, SupplyState, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderAuditAction, type OrderAuditSource, type OrderState, type TicketType, type TicketChange} from '~/composables/useBookingValidation'
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
@@ -14,7 +16,7 @@ import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
-import {WEEKDAYS, type WeekDayMap} from '~/types/dateTypes'
+import type {WeekDayMap} from '~/types/dateTypes'
 import appConfig from '~/app.config'
 
 // Shared test constant: days offset for dinners before cancellation deadline
@@ -27,11 +29,14 @@ const DinnerModes = DinnerModeEnumSchema.enum
 const TicketTypes = TicketTypeEnumSchema.enum
 
 const FAR_FUTURE_DAYS = appConfig.theslope.defaultSeason.ticketIsCancellableDaysBefore + 20
-
-// Helper: days from today to next occurrence of weekday (0=Sun..6=Sat), at least minDaysAhead from now
 const today = new Date()
-const daysToWeekday = (dayOfWeek: Day, minDaysAhead: number = FAR_FUTURE_DAYS): number =>
-    differenceInDays(nextDay(addDays(today, minDaysAhead), dayOfWeek), today)
+
+// The default season cooks three days a week: one dinner on each, ids 101, 102 and 103, far enough ahead that no deadline applies
+const farFutureDinners = DinnerEventFactory.dinnerEventsOnCookingDays(SeasonFactory.defaultSeason(), FAR_FUTURE_DAYS, 101)
+const farFutureDinnerIds = farFutureDinners.map(de => de.id)
+const {createWeekDayMapFromSelection: dinnerModeMapFromSelection, createDefaultWeekdayMap: dinnerModeMap} = useCoreValidation()
+// DINEIN on the weekdays of those dinners, NONE on the rest
+const dineInOnDinnerDays = dinnerModeMapFromSelection(farFutureDinners.map(de => dateToWeekDay(de.date)), DinnerModes.DINEIN, DinnerModes.NONE)
 
 // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not in the describe body
 type UseBookingT = ReturnType<typeof useBooking>
@@ -1151,53 +1156,39 @@ describe('generateDesiredOrdersFromPreferences', () => {
     const {DinnerModeSchema} = useBookingValidation()
     const DinnerMode = DinnerModeSchema.enum
 
-    // Helper to create preferences
-    const createPreferences = (values: DinnerMode[]): WeekDayMap<DinnerMode> =>
-        WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: values[i]}), {} as WeekDayMap<DinnerMode>)
-
     // Helper to create inhabitant
-    const createInhabitant = (id: number, prefs: DinnerMode[] | null) => ({
+    const createInhabitant = (id: number, dinnerPreferences: WeekDayMap<DinnerMode> | null) => ({
         ...HouseholdFactory.defaultInhabitantData(),
         id,
-        dinnerPreferences: prefs ? createPreferences(prefs) : null
+        dinnerPreferences
     })
-
-    // Test dinner events (Mon=101, Wed=102, Fri=103)
-    const dinnerEvents = [
-        DinnerEventFactory.dinnerEventAt(101, 30),  // Far future Monday
-        DinnerEventFactory.dinnerEventAt(102, 32),  // Far future Wednesday
-        DinnerEventFactory.dinnerEventAt(103, 34)   // Far future Friday
-    ]
-
-    // Mon, Wed, Fri DINEIN preferences
-    const allDineIn: DinnerMode[] = [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE]
 
     const ticketPrices = SeasonFactory.defaultSeason().ticketPrices
 
     it('generates orders for all dinner events matching preferences', () => {
-        const inhabitants = [createInhabitant(1, allDineIn)]
+        const inhabitants = [createInhabitant(1, dineInOnDinnerDays)]
         const result = generateDesiredOrdersFromPreferences(
             inhabitants,
-            dinnerEvents,
+            farFutureDinners,
             [],
             new Set(),  // cancelledKeys
             ticketPrices
         )
 
-        expect(result).toHaveLength(3)
-        expect(result.map(o => o.dinnerEventId).sort()).toEqual([101, 102, 103])
+        expect(result).toHaveLength(farFutureDinners.length)
+        expect(result.map(o => o.dinnerEventId).sort()).toEqual(farFutureDinnerIds)
     })
 
     it('a key with a user intent gets no booking', () => {
-        const inhabitants = [createInhabitant(1, allDineIn)]
+        const inhabitants = [createInhabitant(1, dineInOnDinnerDays)]
 
-        const result = generateDesiredOrdersFromPreferences(inhabitants, dinnerEvents, [], new Set(['1-102']), ticketPrices)
+        const result = generateDesiredOrdersFromPreferences(inhabitants, farFutureDinners, [], new Set(['1-102']), ticketPrices)
 
-        expect(result.map(o => o.dinnerEventId).sort()).toEqual([101, 103])
+        expect(result.map(o => o.dinnerEventId).sort()).toEqual(farFutureDinnerIds.filter(id => id !== 102))
     })
 
     it('enriches with orderId when existing order found', () => {
-        const inhabitants = [createInhabitant(1, allDineIn)]
+        const inhabitants = [createInhabitant(1, dineInOnDinnerDays)]
         const existingOrder = OrderFactory.defaultOrder(undefined, {
             id: 42,
             inhabitantId: 1,
@@ -1206,7 +1197,7 @@ describe('generateDesiredOrdersFromPreferences', () => {
 
         const result = generateDesiredOrdersFromPreferences(
             inhabitants,
-            dinnerEvents,
+            farFutureDinners,
             [existingOrder],
             new Set(),  // cancelledKeys
             ticketPrices
@@ -1221,13 +1212,13 @@ describe('generateDesiredOrdersFromPreferences', () => {
 
         const result = generateDesiredOrdersFromPreferences(
             inhabitants,
-            dinnerEvents,
+            farFutureDinners,
             [],
             new Set(),  // cancelledKeys
             ticketPrices
         )
 
-        expect(result).toHaveLength(3)
+        expect(result).toHaveLength(farFutureDinners.length)
         result.forEach(o => expect(o.dinnerMode).toBe(DinnerMode.DINEIN))
     })
 
@@ -1241,8 +1232,8 @@ describe('generateDesiredOrdersFromPreferences', () => {
                 OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: 1, dinnerEventId: 101, state: OrderState.RELEASED})
             ], expectedState: OrderState.RELEASED}
         ])('$desc', ({existingOrders, expectedState}) => {
-            const inhabitants = [createInhabitant(1, allDineIn)]
-            const result = generateDesiredOrdersFromPreferences(inhabitants, dinnerEvents, existingOrders, new Set(), ticketPrices)
+            const inhabitants = [createInhabitant(1, dineInOnDinnerDays)]
+            const result = generateDesiredOrdersFromPreferences(inhabitants, farFutureDinners, existingOrders, new Set(), ticketPrices)
 
             const order101 = result.find(o => o.dinnerEventId === 101)
             expect(order101?.state).toBe(expectedState)
@@ -1259,16 +1250,12 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
     const DinnerMode = DinnerModeSchema.enum
     const OrderState = OrderStateSchema.enum
 
-    // Helper to create preferences
-    const createPreferences = (values: DinnerMode[]): WeekDayMap<DinnerMode> =>
-        WEEKDAYS.reduce((acc, day, i) => ({...acc, [day]: values[i]}), {} as WeekDayMap<DinnerMode>)
-
     // Helper to create inhabitant
-    const createInhabitant = (id: number, prefs: DinnerMode[] | null) => ({
+    const createInhabitant = (id: number, dinnerPreferences: WeekDayMap<DinnerMode> | null) => ({
         ...HouseholdFactory.defaultInhabitantData(),
         id,
         householdId: 1,
-        dinnerPreferences: prefs ? createPreferences(prefs) : null
+        dinnerPreferences
     })
 
     // Helper to create household
@@ -1297,21 +1284,14 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         dinnerEvents
     })
 
-    // Mon, Wed, Fri DINEIN preferences (WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'])
-    const allDineIn: DinnerMode[] = [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE]
-    const allNone: DinnerMode[] = Array(7).fill(DinnerMode.NONE)
+    const allNone = dinnerModeMap(DinnerMode.NONE)
 
-    // Test season with far future dinner events on Mon(1), Wed(3), Fri(5) - matches allDineIn preference
-    const testSeason = seasonWith([
-        DinnerEventFactory.dinnerEventAt(101, daysToWeekday(1)),  // Monday
-        DinnerEventFactory.dinnerEventAt(102, daysToWeekday(3)),  // Wednesday
-        DinnerEventFactory.dinnerEventAt(103, daysToWeekday(5))   // Friday
-    ])
+    const testSeason = seasonWith(farFutureDinners)
 
     it.each([
         {
             desc: 'creates all orders for household with no existing',
-            inhabitants: [createInhabitant(1, allDineIn)],
+            inhabitants: [createInhabitant(1, dineInOnDinnerDays)],
             existing: [],
             confirmed: new Set<string>(),
             cancelled: new Set<string>(),
@@ -1319,7 +1299,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         },
         {
             desc: 'recognizes matching orders as idempotent',
-            inhabitants: [createInhabitant(1, allDineIn)],
+            inhabitants: [createInhabitant(1, dineInOnDinnerDays)],
             existing: [createOrder(1, 1, 101), createOrder(2, 1, 102), createOrder(3, 1, 103)],
             confirmed: new Set<string>(),
             cancelled: new Set<string>(),
@@ -1335,7 +1315,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         },
         {
             desc: 'cancelledKeys: dont recreate deleted order',
-            inhabitants: [createInhabitant(1, allDineIn)],
+            inhabitants: [createInhabitant(1, dineInOnDinnerDays)],
             existing: [],
             confirmed: new Set<string>(),
             cancelled: new Set(['1-102']),
@@ -1343,7 +1323,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         },
         {
             desc: 'cancelledKeys: RELEASED order preserved (not deleted as orphan)',
-            inhabitants: [createInhabitant(1, allDineIn)],
+            inhabitants: [createInhabitant(1, dineInOnDinnerDays)],
             existing: [createOrder(42, 1, 102, {state: OrderState.RELEASED})],
             confirmed: new Set<string>(),
             cancelled: new Set(['1-102']),
@@ -1359,7 +1339,7 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         },
         {
             desc: 'confirmedKeys: prefs=DINEIN + user booked TAKEAWAY → PRESERVE mode',
-            inhabitants: [createInhabitant(1, allDineIn)],
+            inhabitants: [createInhabitant(1, dineInOnDinnerDays)],
             existing: [createOrder(1, 1, 101, {dinnerMode: DinnerMode.TAKEAWAY}), createOrder(2, 1, 102), createOrder(3, 1, 103)],
             confirmed: new Set(['1-101']),
             cancelled: new Set<string>(),
@@ -1470,8 +1450,8 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         // Tomorrow = after deadline. Use DINEIN for ALL days so weekday doesn't matter
         const tomorrowDinner = DinnerEventFactory.dinnerEventAt(301, 1)
         const pastDeadlineSeason = seasonWith([tomorrowDinner])
-        const allDaysPrefs: DinnerMode[] = Array(7).fill(DinnerMode.DINEIN)
-        const noDaysPrefs: DinnerMode[] = Array(7).fill(DinnerMode.NONE)
+        const allDaysPrefs = dinnerModeMap(DinnerMode.DINEIN)
+        const noDaysPrefs = dinnerModeMap(DinnerMode.NONE)
 
         it.each([
             {

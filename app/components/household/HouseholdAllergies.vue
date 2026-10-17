@@ -23,6 +23,12 @@
 │ │ └─────────────────────────────────────────────────────┘ │ │
 │ │                                                         │ │
 │ │ 💜 UAlert - Contact allergi ansvarlig (always shown)  │ │
+│ │                                                         │ │
+│ │ WHILE THE ALLERGIES LOAD (a new household or a save's   │ │
+│ │ re-read): UTable's loading bar runs under the column    │ │
+│ │ headers and the inhabitants stay; a table without rows  │ │
+│ │ yet shows its loading row (COMPONENTS.table.loadingRow) │ │
+│ │          (sync, spinning)  Henter allergier...          │ │
 │ └─────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────┘
 
@@ -34,7 +40,7 @@ import type {AllergyDisplay, AllergyTypeDisplay} from '~/composables/useAllergyV
 import type {TicketPresentation} from '~/composables/useBookingUi'
 
 // Design system
-const {SIZES, COLOR, COMPONENTS, NOISE, TYPOGRAPHY} = useTheSlopeDesignSystem()
+const {SIZES, COLOR, COMPONENTS, NOISE, TYPOGRAPHY, ICONS} = useTheSlopeDesignSystem()
 const display = COMPONENTS.householdAllergies
 
 // Ticket type config for display (label, color, icon); active season prices carry the age limits
@@ -53,6 +59,7 @@ const allergyStore = useAllergiesStore()
 const {
   allergyTypes,
   allergies,
+  isAllergiesLoading,
   isAllergyTypesLoading
 } = storeToRefs(allergyStore)
 const {loadAllergiesForHousehold} = allergyStore
@@ -227,8 +234,16 @@ const columns = computed(() => [
             v-model:expanded="expanded"
             :data="tableData"
             :columns="columns"
+            :loading="isAllergiesLoading"
             :ui="COMPONENTS.table.householdAllergiesUi"
         >
+          <template #loading>
+            <div :class="COMPONENTS.table.loadingRow">
+              <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.table.loadingSpinner" />
+              Henter allergier...
+            </div>
+          </template>
+
           <!-- Expand/Edit column (pencil icon) -->
           <template #expand-cell="{ row }">
             <UButton

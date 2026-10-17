@@ -463,7 +463,6 @@ const jobDefinitions = computed(() => {
         :data="jobHistoryRows"
         :columns="jobHistoryColumns"
         :loading="isJobHistoryLoading"
-        :empty="jobHistoryEmpty"
         caption="Seneste jobkørsler"
         :class="COMPONENTS.adminSystem.historyTable"
         :ui="COMPONENTS.table.ui"
@@ -487,6 +486,15 @@ const jobDefinitions = computed(() => {
             {{ row.original.statusLabel }}
           </UBadge>
         </template>
+
+        <template #loading>
+          <div :class="COMPONENTS.table.loadingRow">
+            <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.table.loadingSpinner" />
+            Henter jobhistorik...
+          </div>
+        </template>
+
+        <template #empty>{{ jobHistoryEmpty }}</template>
 
         <!-- Phone: the columns hidden on a phone -->
         <template #expanded="{ row }">

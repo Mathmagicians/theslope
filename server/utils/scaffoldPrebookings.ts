@@ -1,7 +1,7 @@
 import {fetchOrders, createOrders, deleteOrder, updateOrdersBatch, claimOrder, countReleasedTickets, type OrderBatchUpdate, fetchUserIntentKeys} from "~~/server/data/financesRepository"
 import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/prismaRepository"
 import {useSeason, type BookingDeadlines} from "~/composables/useSeason"
-import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, type QueuePosition, type BookingOutcomes, type BookingAction, type BookingResult, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
+import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, type QueuePosition, type BookingOutcomes, type BookingAction, type BookingResult, OrderAuditAction as AuditActions, BookingFailure} from "~/composables/useBookingValidation"
 import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets, bookingOutcomes, actionOfUpdate, countTotals} from "~/composables/useBooking"
 import {writeBatchOrEach} from "~/utils/batchUtils"
 import {sellTicketsToWaitlist, joinWaitlist} from "~~/server/utils/waitlistAssignment"
@@ -65,7 +65,7 @@ const skippedResult = (): ScaffoldResult => ({
     errored: 0,
     results: [],
     failed: [],
-    outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: []}
+    outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: [], waitlistPortionsAssigned: []}
 })
 
 /** Default scaffold result when no re-scaffold needed */
@@ -175,7 +175,7 @@ export async function scaffoldPrebookings(
     const failed: BookingResult[] = []
     const positions: QueuePosition[] = []
     // What happened that the caller notifies about after the run; a household that fails later keeps what already happened
-    const outcomes: BookingOutcomes = {joined: [], ticketsSold: [], waitlistTicketsSold: []}
+    const outcomes: BookingOutcomes = {joined: [], ticketsSold: [], waitlistTicketsSold: [], waitlistPortionsAssigned: []}
     let totalUnchanged = 0
     let processedHouseholds = 0
     let erroredHouseholds = 0
@@ -245,7 +245,7 @@ export async function scaffoldPrebookings(
             failed.push(...staleOrders.map(stale => resultOf(stale, actionOfUpdate(stale, undefined))))
             const landedAs = (action: BookingAction) => (orders: {desired: DesiredOrder}[]) => landed.push(...orders.map(({desired}) => resultOf(desired, action)))
             const failedAs = (actionOf: (desired: DesiredOrder) => BookingAction) => ({desired}: {desired: DesiredOrder}, error: unknown) => {
-                failed.push(resultOf(desired, actionOf(desired)))
+                failed.push({...resultOf(desired, actionOf(desired)), reason: eventHandlerHelper.isConflict(error) ? BookingFailure.CONFLICT : undefined})
                 eventHandlerHelper.logNuxtError(eventHandlerHelper.nuxtErrorFromCatch(
                     `${LOG} Household ${household.id} (${household.shortName}): ${actionOf(desired)} for inhabitant ${desired.inhabitantId} on dinner ${desired.dinnerEventId} failed`,
                     error
@@ -411,9 +411,12 @@ export async function scaffoldPrebookings(
         }
     }
 
-    // The tickets for sale go to the first in their type's line, once per run
+    // The tickets for sale go to the first in their type's line, once per run; the extra portions it finishes for a
+    // stopped run go to the caller with them
     try {
-        outcomes.waitlistTicketsSold.push(...await sellTicketsToWaitlist(d1Client, dinnerEventIds, season.ticketPrices))
+        const {waitlistTicketsSold, waitlistPortionsAssigned} = await sellTicketsToWaitlist(d1Client, dinnerEventIds, season.ticketPrices)
+        outcomes.waitlistTicketsSold.push(...waitlistTicketsSold)
+        outcomes.waitlistPortionsAssigned.push(...waitlistPortionsAssigned)
     } catch (error) {
         eventHandlerHelper.logNuxtError(eventHandlerHelper.nuxtErrorFromCatch(
             `${LOG} The tickets for sale on ${dinnerEventIds.length} dinner(s) did not reach the waiting list`, error

@@ -1,7 +1,7 @@
 # ADR Compliance - Frontend
 
 **Generated:** 2025-11-11
-**Last Updated:** 2026-10-17
+**Last Updated:** 2026-10-18
 **History:** git and the feature plans under `docs/features/` (shipped plans in `docs/features/archived/`)
 
 One row per route, component, store and composable: which ADRs it answers to, its markers and its test coverage. The code
@@ -25,16 +25,16 @@ and the component headers hold the detail; a row names a gap in a few words.
 | **Admin** | | | | | | | |
 | `/admin/planning` | `AdminPlanning.vue` | ✅ plan | ✅ full | ✅ `?mode=` `?season=` | ✅ | ✅ | ✅ |
 | `/admin/teams` | `AdminTeams.vue` | ✅ plan | ✅ partial | ✅ `?mode=` `?team=` | ✅ | ⚠️ | ⚠️ partial unit |
-| `/admin/households` | `AdminHouseholds.vue` | ✅ households | ❓ | ✅ `?mode=` | ✅ | ⚠️ | ⚠️ audit needed |
+| `/admin/households` | `AdminHouseholds.vue` | ✅ households | ❓ | ✅ `?mode=` | ✅ | ⚠️ loading row only | ⚠️ audit needed |
 | `/admin/allergies` | `AdminAllergies.vue` | ✅ allergies | N/A | ✅ `?allergy=` | ✅ | ✅ | ✅ |
-| `/admin/users` | `AdminUsers.vue` | ✅ users | N/A | ✅ | ✅ | ❌ | ⚠️ e2e only |
+| `/admin/users` | `AdminUsers.vue` | ✅ users | N/A | ✅ | ✅ | ⚠️ loading row only | ⚠️ partial unit |
 | `/admin/economy` | `AdminEconomy.vue` | ✅ plan, bookings | N/A | ✅ `?period=` `?invoice=` | ✅ serial | ⚠️ | ⚠️ e2e only |
 | `/admin/system` | `AdminSystem.vue` | ⚠️ job history in a component `useFetch` | N/A | ✅ | ✅ | ⚠️ | ⚠️ ADR-007 read outside a store |
 | `/admin/allergies/pdf` | `admin/allergies/pdf.vue` | ✅ allergies, plan | N/A | N/A | ✅ smoke | ✅ | ✅ |
 | **Household** | | | | | | | |
 | `/household/[shortname]` | `household/[shortname]/index.vue` | ✅ households | N/A | ✅ `?pbs=` | ✅ | ⚠️ | ⚠️ review `?pbs` on redirect |
 | `/household/[shortname]/bookings` | `HouseholdBookings.vue` | ✅ plan, households, bookings | N/A | ✅ `?pbs=` `?cal=` | ✅ | ✅ | ✅ |
-| `/household/[shortname]/allergies` | `HouseholdAllergies.vue` | ✅ allergies | ❓ | ✅ `?pbs=` | ✅ | ❌ | ⚠️ e2e only |
+| `/household/[shortname]/allergies` | `HouseholdAllergies.vue` | ✅ allergies | ❓ | ✅ `?pbs=` | ✅ | ⚠️ loading row only | ⚠️ partial unit |
 | `/household/[shortname]/settings` | `HouseholdSettings.vue` | ✅ households | N/A | ✅ `?pbs=` | ✅ | ❌ | ⚠️ e2e only |
 | `/household/[shortname]/economy` | `HouseholdEconomy.vue` | ✅ plan, bookings | N/A | ✅ `?pbs=` | ❌ | ⚠️ store specs | ⚠️ store specs only |
 | **Other** | | | | | | | |
@@ -81,7 +81,7 @@ Status.
 
 | Component | Routes | Stores | Component spec | E2E | Status |
 |---|---|---|---|---|---|
-| `AdminHouseholds.vue` | `/admin/households` | households | ⚠️ store only | ✅ | ⚠️ missing unit |
+| `AdminHouseholds.vue` | `/admin/households` | households | ⚠️ loading row only | ✅ | ⚠️ partial unit |
 | `HouseholdCreateForm.vue` | `/admin/households` | households | ✅ | ✅ parent | ❓ audit needed |
 | `HouseholdEditPanel.vue` | `/admin/households` | none | ✅ | ✅ parent | ✅ |
 | `HouseholdCard.vue` | `/admin/households`, `/household/[shortname]` | none | ✅ | ✅ parent | ⚠️ partial unit |
@@ -101,7 +101,7 @@ Status.
 | `AllergyTypeCard.vue` | `/admin/allergies`, `/household/[shortname]/allergies` | plan | ✅ | ✅ parent | ✅ |
 | `AllergyTypeDisplay.vue` | `/dinner`, `/chef`, `/admin/allergies`, `/household/[shortname]/allergies` | none | ✅ | N/A | ✅ |
 | `AllergyNotes.vue` | `/admin/allergies`, `/admin/allergies/pdf` | none | ✅ | ✅ parent | ✅ |
-| `HouseholdAllergies.vue` | `/household/[shortname]/allergies` | allergies, households | ❌ | ✅ | ⚠️ e2e only |
+| `HouseholdAllergies.vue` | `/household/[shortname]/allergies` | allergies, households | ⚠️ loading row only | ✅ | ⚠️ partial unit |
 | `AllergyEditor.vue` | `/household/[shortname]/allergies` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `AllergyManagersList.vue` | `/admin/allergies`, `/household/[shortname]/allergies` | users | ❌ | ❌ | ❌ no tests |
 
@@ -168,7 +168,7 @@ Status.
 | `DinnerBudget.vue` | `/chef` | none | ✅ | ✅ | ✅ |
 | `ExpenseLines.vue` | `/chef` | none | ✅ | ✅ | ✅ |
 | `VatAmount.vue` | `/chef` | none | ✅ | ✅ parent | ✅ |
-| `CookingRoundSpending.vue` | `/chef` | none | ✅ | ❌ | ✅; an arrow (`table.currentMarker`) before the name of the dinner on view |
+| `CookingRoundSpending.vue` | `/chef` | bookings | ✅ | ❌ | ✅; an arrow (`table.currentMarker`) before the name of the dinner on view; the team's round binds the round's orders loading |
 | `TicketChanges.vue` | `/chef` | bookings | ✅ | ❌ | ✅ |
 | `TeamRoleStatus.vue` | `/chef` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `ChefDinnerCard.vue` | `/chef` | bookings | ✅ | ✅ parent | ✅ |
@@ -205,7 +205,7 @@ Status.
 | `allergies.ts` | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `users.ts` | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ no ready flag, no `isEmpty`, `isInitialized` on my teams only; 0.9.1 |
 | `auth.ts` | N/A | ✅ | N/A | ✅ | ✅ |
-| `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ✅ spec covers the queue entries, the household places, the dinner's queue and `addExtraPortions` |
+| `bookings.ts` | ✅ | ✅ | ✅ | ✅ | ✅ spec covers the queue entries, the household places, the dinner's queue, `addExtraPortions` and `isBookingsReloading` |
 
 ## Composables
 
@@ -213,7 +213,7 @@ Status.
 |---|---|---|---|---|---|---|
 | **Validation** | | | | | | |
 | `useCoreValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `useBookingValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
+| `useBookingValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ `BookingFailureSchema` (module-level `BookingFailure`) gives a failed order its reason; `WaitlistAssignedSchema` lives here, for the outcomes a scaffold run reports (`waitlistPortionsAssigned`) |
 | `useSeasonValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `useCookingTeamValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `useDutyValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -228,12 +228,12 @@ Status.
 | `useNotificationValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ parent | ✅ |
 | `useSettingValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ | ✅ |
 | `useUserPreferenceValidation()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
-| `useWaitlistValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ parent | ✅ |
+| `useWaitlistValidation()` | isomorphic | ✅ | ✅ `PlacementRecoverySchema` | ✅ | ✅ parent | ✅ an entry carries its placement (`placingAt`, `placingOrderId`); `PlacementOrderSchema` is the order a recovery reads; `WaitlistAssignedSchema` comes from `useBookingValidation` |
 | `useFeedbackValidation()` | isomorphic | ✅ | N/A | ✅ | ✅ parent | ✅ |
 | `fragments/domainFragments.ts` | isomorphic | ✅ | N/A | ✅ | ✅ | ✅ `server/` reaches it through the validation composables |
 | **Business logic** | | | | | | |
 | `useBooking()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
-| `useWaitlist()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
+| `useWaitlist()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ `placingLease` tells a held grab from an expired one, `placementLines` stop at an entry another run holds, `placingOrderOf` finds the order that serves a grab, `placementRecoveryOf` finishes or releases a stopped run's grab, `finishedPlacementOutcomes` reports a finished placement for its mails |
 | `useHousehold()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
 | `useSeason()` | isomorphic | ✅ | N/A | ✅ | ✅ | ✅ |
 | `useCookingTeam()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -253,7 +253,7 @@ Status.
 | `useQueryParam()` | client | N/A | N/A | N/A | ✅ | ✅ |
 | `useUrlQueryWriter()` | client | N/A | N/A | N/A | ✅ | ✅ |
 | `useApiHandler()` | client | N/A | N/A | N/A | ✅ | ✅ |
-| `useBookingUi()` | pure UI | N/A | N/A | ✅ | ✅ | ✅ |
+| `useBookingUi()` | pure UI | N/A | N/A | ✅ | ✅ | ✅ a failed order's conflict reads in the result lines (`CONFLICT_WORDS`) |
 | `useUserRolesUi()` | pure UI | N/A | N/A | N/A | ✅ | ✅ |
 | `useInstallPrompt()` | pure UI | N/A | N/A | N/A | ✅ | ✅ |
 | `useTemporalCalendar()` | client | N/A | N/A | ✅ | ✅ | ✅ |

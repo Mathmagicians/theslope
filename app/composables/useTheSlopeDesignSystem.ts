@@ -1188,6 +1188,45 @@ export const COMPONENTS = {
         detailLabel: 'font-semibold'
     },
 
+    /**
+     * AdminHouseholds: the card and its header row, the padded sections above the table (the create form, the
+     * search row), the household's link, the PBS cell with its residency badge, and the table's empty state
+     */
+    adminHouseholds: {
+        card: 'w-full px-0',
+        headerRow: 'flex items-center justify-between',
+        section: 'px-6 py-3',
+        shortNameLink: 'text-primary hover:underline font-medium',
+        pbsCell: 'flex flex-col md:flex-row md:items-center gap-1 md:gap-2',
+        empty: 'flex flex-col items-center justify-center py-6 gap-3',
+        emptyIcon: 'w-8 h-8'
+    },
+
+    /**
+     * AdminUsers: the card, its header and search row, the table with its loading bar, a user's role badges, and the
+     * expanded row's detail
+     */
+    adminUsers: {
+        card: 'w-full px-0',
+        header: 'px-6',
+        toolbar: 'px-6 py-3',
+        table: 'w-full',
+        loadingBar: {loadingColor: COLOR.secondary, loadingAnimation: 'carousel' as const},
+        roles: 'flex gap-1 flex-wrap',
+        roleIcon: 'mr-1',
+        detail: 'p-4'
+    },
+
+    /** InhabitantSelector: the stack of search row and table, the name cell, and the table's empty state */
+    inhabitantSelector: {
+        root: 'space-y-3',
+        table: 'flex-1',
+        nameRow: 'flex items-center gap-3',
+        name: 'font-medium',
+        empty: 'flex flex-col items-center justify-center py-6 gap-3',
+        emptyIcon: 'w-8 h-8'
+    },
+
     /** /dinner with no season: the empty state's frame */
     dinnerPage: {emptyFrame: `p-4 md:p-8 ${BACKGROUNDS.card}`},
 
@@ -1959,6 +1998,8 @@ export const ICONS = {
     /** A joker slot: a seat the team holds open for a volunteer */
     joker: 'i-hugeicons-joker',
     household: 'i-heroicons-home',
+    /** The users imported from Heynabo with their system roles (AdminUsers) */
+    authorized: 'i-hugeicons-authorized',
     preferences: 'i-heroicons-adjustments-horizontal',
     /** The cog that opens a user's own settings ("Mine indstillinger") - `preferences` is the sliders glyph */
     settings: 'i-heroicons-cog-6-tooth',

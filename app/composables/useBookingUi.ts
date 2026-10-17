@@ -29,7 +29,7 @@ import {useSeason, type SeasonDeadlines} from '~/composables/useSeason'
 import {useOrder, type SpendingFigures} from '~/composables/useOrder'
 import {TICKET_COUNTS} from '~/composables/useBilling'
 import type {Expense} from '~/composables/useBillingValidation'
-import {useBookingValidation, DinnerMode as DinnerModeEnum, OrderState as OrderStateEnum, TicketState as TicketStateEnum, SupplyState as SupplyStateEnum, type OrderState, type SupplyState, type TicketState, type DinnerMode, type DinnerEventDisplay, type OrderDisplay, type DesiredOrder, type OrderAuditAction, type BookingAction, type BookingOutcome, type BookingResult, type QueuePosition, type ScaffoldResult, type TicketChange, type TicketChangeKind, type TicketCounts, type TicketEvent, type TicketType} from '~/composables/useBookingValidation'
+import {useBookingValidation, DinnerMode as DinnerModeEnum, OrderState as OrderStateEnum, TicketState as TicketStateEnum, SupplyState as SupplyStateEnum, BookingFailure as BookingFailureEnum, type OrderState, type SupplyState, type TicketState, type DinnerMode, type DinnerEventDisplay, type OrderDisplay, type DesiredOrder, type OrderAuditAction, type BookingAction, type BookingOutcome, type BookingResult, type QueuePosition, type ScaffoldResult, type TicketChange, type TicketChangeKind, type TicketCounts, type TicketEvent, type TicketType} from '~/composables/useBookingValidation'
 import {useTicket, ticketTypeLabel} from '~/composables/useTicket'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {ICONS, COLOR, COMPONENTS, ALARM_TO_BADGE, BOOKING_LOCK_STATUS, ORDER_STATE_COLORS, TICKET_TYPE_COLORS, TICKET_TYPE_ICONS, type NuxtUIColor, type TicketTypeColor} from '~/composables/useTheSlopeDesignSystem'
@@ -208,13 +208,15 @@ const ticketCount = (count: number) => `${count} billet${count === 1 ? '' : 'ter
 const forSale = (tickets: string) => `${tickets} til salg`
 
 /**
- * The words of a closed dinner's supply, once: the Framelding badge's value line, the chef's waiting-list box, and the
- * household's notes on the tickets it released and its places on the waiting list. A queue entry is booked at its
- * frozen price when a ticket is assigned, so the household pays then
+ * The words of a closed dinner's supply, once: the Framelding badge's value line, the chef's waiting-list box and its
+ * ask for portions, and the household's notes on the tickets it released and its places on the waiting list. A queue
+ * entry is booked at its frozen price when a ticket is assigned, so the household pays then
  */
 export const SUPPLY_WORDS = {
     forSaleCount: ({formatted}: Pick<ReleasedTicketCounts, 'formatted'>) => forSale(formatted),
     queuedCount: ({queuedFormatted}: Pick<ReleasedTicketCounts, 'queuedFormatted'>) => `${queuedFormatted} på venteliste`,
+    chefAsk: (entries: number) =>
+        `${entries === 1 ? 'En skråner mangler billet' : 'Skrånere mangler billetter'} til din middag — har du mulighed for at mætte flere munde?`,
     householdReleased: (count: number) =>
         ({title: `Husstanden har frigivet ${ticketCount(count)}`, description: 'Du betaler, medmindre andre køber'}),
     householdQueued: (count: number) =>
@@ -453,11 +455,20 @@ const guestGroupName = (bookerName: string, ticketType: TicketType | null | unde
 
 const failedWords = (count: number): string => `${count} ${count === 1 ? 'opdatering' : 'opdateringer'} fejlede`
 
+// A leave or a change the waiting list refuses while a run assigns the place
+const CONFLICT_WORDS: Partial<Record<BookingAction, string>> = {
+    [Action.LEAVE]: 'pladsen er ved at blive tildelt',
+    [Action.REQUEUE]: 'pladsen er ved at blive tildelt'
+}
+const conflictWordsOf = ({reason, action}: Pick<BookingResult, 'reason' | 'action'>): string | undefined =>
+    reason === BookingFailureEnum.CONFLICT ? CONFLICT_WORDS[action] : undefined
+
 /**
  * A booking result in lines, for the toast and the "Sidste ændring" alerts: each person, and a booker's guests of one
  * ticket type with the most of them at one dinner, in the order the result first names them; the counts in the order
- * of the actions with the queue places ascending and the failed orders last. Then the tickets sold to the waiting list,
- * the unchanged orders, and a household whose run failed as a whole, which the result counts without a person
+ * of the actions with the queue places ascending, then a refused leave or change of a place being assigned, and the
+ * failed orders last. Then the tickets sold to the waiting list, the unchanged orders, and a household whose run failed
+ * as a whole, which the result counts without a person
  */
 export const formatBookingResult = (result: ScaffoldResult): string => {
     const groupOf = ({inhabitantId, isGuestTicket, ticketType}: Pick<BookingResult, 'inhabitantId' | 'isGuestTicket' | 'ticketType'>) =>
@@ -478,8 +489,10 @@ export const formatBookingResult = (result: ScaffoldResult): string => {
             .map(action => ({action, count: landed.filter(item => item.action === action).length}))
             .filter(({count}) => count > 0)
             .map(({action, count}) => `${count} ${ACTION_WORDS[action].toast}${action === Action.QUEUE && places.length > 0 ? ` (${places.join(', ')})` : ''}`)
-        const failed = failedBy.get(group)?.length ?? 0
-        const parts = failed > 0 ? [...counts, failedWords(failed)] : counts
+        const failedItems = failedBy.get(group) ?? []
+        const conflicts = [...new Set(failedItems.map(conflictWordsOf).filter((words): words is string => words !== undefined))]
+        const failed = failedItems.filter(item => conflictWordsOf(item) === undefined).length
+        const parts = [...counts, ...conflicts, ...(failed > 0 ? [failedWords(failed)] : [])]
         return `${isGuestTicket ? guestGroupName(inhabitantName, ticketType, guestsAtOneDinner) : inhabitantName}: ${parts.join(', ')}`
     })
     const sold = result.outcomes.waitlistTicketsSold.length

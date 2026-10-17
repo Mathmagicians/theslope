@@ -26,7 +26,8 @@
  * - #expanded: Expanded row content
  * - #empty: Empty state content, once the data has answered with no rows
  *
- * While `loading` and without rows, UTable renders the loading row (its `#loading` slot) instead of `#empty`:
+ * While `loading`, UTable's loading bar runs under the column headers and the rows stay. A table without rows yet
+ * renders the loading row (its `#loading` slot) instead of `#empty`:
  * ┌──────────┬──────────────────┬──────────┬──────────┐
  * │ Dato     │ Middag           │ Kuverter │ Beløb    │
  * ├──────────┴──────────────────┴──────────┴──────────┤   UTable's loading bar under the header

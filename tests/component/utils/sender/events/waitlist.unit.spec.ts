@@ -10,13 +10,18 @@ import type {EmailChannel} from '~~/server/utils/sender/config'
 import type {EmailMessage} from '~/composables/useNotificationValidation'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 
 // The unit runtime has no D1: the lookups answer from the test
 vi.mock('~~/server/data/prismaRepository', () => ({
     fetchHousehold: vi.fn(), fetchInhabitant: vi.fn(), fetchSeason: vi.fn(), fetchUser: vi.fn()
 }))
 vi.mock('~~/server/data/financesRepository', () => ({
-    createOrders: vi.fn(), claimOrder: vi.fn(), fetchDinnerEvent: vi.fn()
+    createOrders: vi.fn(), findReleasedOrderId: vi.fn(), claimReleasedOrder: vi.fn(), fetchDinnerEvent: vi.fn()
 }))
 // The events read the config and log through createError from the Nitro auto-import scope
 vi.stubGlobal('useAppConfig', () => ({theslope: {waitlistBuildupThreshold: 3}}))
@@ -144,7 +149,7 @@ describe('booking notifications after the action', () => {
 
     it.each([
         {operation: 'notifyBookingOutcomes', notify: (channel: EmailChannel) =>
-            notifyBookingOutcomes({} as D1Database, channel, {joined: [], ticketsSold: [sale], waitlistTicketsSold: [sale]})},
+            notifyBookingOutcomes({} as D1Database, channel, {joined: [], ticketsSold: [sale], waitlistTicketsSold: [sale], waitlistPortionsAssigned: []})},
         {operation: 'notifyExtraPortions', notify: (channel: EmailChannel) =>
             notifyExtraPortions({} as D1Database, channel, WaitlistFactory.defaultAssignmentResult({dinnerEventId: 7}))}
     ])('$operation logs a failed lookup and reports no mails', async ({notify}) => {
@@ -153,5 +158,38 @@ describe('booking notifications after the action', () => {
         expect(await notify(NotificationFactory.channel(queue))).toEqual([])
         expect(queue.send).not.toHaveBeenCalled()
         expect(logs.error).toHaveBeenCalledWith(expect.stringContaining('D1 down'))
+    })
+})
+
+// A placement a run finished for another's stopped run reaches the mails its kind owes: an extra portion its buyer's,
+// a sold ticket the selling household's and the buyer's
+describe('the mails of the waiting list\'s placements', () => {
+    const logs = {warn: vi.spyOn(console, 'warn'), info: vi.spyOn(console, 'info')}
+    const household = HouseholdFactory.defaultHouseholdDetail()
+    const member = {...household.inhabitants[0]!, userId: 6}
+    beforeEach(() => {
+        Object.values(logs).forEach(spy => spy.mockImplementation(() => {}))
+        vi.mocked(fetchDinnerEvent).mockResolvedValue({...DinnerEventFactory.defaultDinnerEventDetail(), id: dinner.dinnerEventId, seasonId: 9, chefId: null})
+        vi.mocked(fetchSeason).mockResolvedValue({...SeasonFactory.defaultSeason(), id: 9, ticketPrices: TicketFactory.defaultTicketPrices({seasonId: 9})})
+        vi.mocked(fetchHousehold).mockResolvedValue({...household, inhabitants: [member]})
+        vi.mocked(fetchInhabitant).mockResolvedValue(member)
+        vi.mocked(fetchUser).mockResolvedValue(UserFactory.defaultUserWithInhabitant('member', {id: member.userId, email: to}))
+    })
+    afterEach(() => vi.clearAllMocks())
+
+    const sale = {dinnerEventId: dinner.dinnerEventId, ticketPriceId: 4, buyerInhabitantId: member.id, buyerHouseholdId: household.id, sellerHouseholdId: household.id}
+    const portion = {dinnerEventId: dinner.dinnerEventId, entryId: 1, inhabitantId: member.id, isGuestTicket: false, portions: 1, orderId: 77, ticketPriceId: 4}
+
+    it.each([
+        {placement: 'an extra portion a scaffold run finished', kinds: ['WAITLIST_EXTRA_PORTION'], notify: (channel: EmailChannel) =>
+            notifyBookingOutcomes({} as D1Database, channel, {joined: [], ticketsSold: [], waitlistTicketsSold: [], waitlistPortionsAssigned: [portion]})},
+        {placement: 'a sale the chef\'s extra portions finished', kinds: ['TICKET_SOLD', 'WAITLIST_TICKET_ASSIGNED'], notify: (channel: EmailChannel) =>
+            notifyExtraPortions({} as D1Database, channel, WaitlistFactory.defaultAssignmentResult({dinnerEventId: dinner.dinnerEventId, waitlistTicketsSold: [sale]}))}
+    ])('$placement reaches its mails', async ({kinds, notify}) => {
+        const queue = fakeQueue()
+
+        await notify(NotificationFactory.channel(queue))
+
+        expect(sentMessages(queue).map(message => message.meta.kind).sort()).toEqual(kinds)
     })
 })

@@ -55,6 +55,14 @@
  * │ └──────────────────────────────────────────────────────┘ │
  * └──────────────────────────────────────────────────────────┘
  *
+ * WHILE THE DINNER'S BOOKINGS LOAD (`loading`, a new dinner or a save's re-read): UTable's loading bar runs under the
+ * column headers and the rows stay; the deadline badges stay; the day bill and the household's own notes wait, they
+ * count the household's orders:
+ *   [booking deadline badge] [dining mode deadline badge]
+ *   ======================================================  <- UTable's loading bar
+ *   [edit] Hele familien               [DinnerTicket]
+ *   [edit] Anna B.H.                   [DinnerTicket]
+ *
  * AFTER THE DEADLINE - the household's own notes (ALERTS.warning), each while it counts a ticket, both can show:
  * ┌──────────────────────────────────────────────────────────────────┐
  * │ [released] Husstanden har frigivet 2 billetter                   │
@@ -160,6 +168,8 @@ interface Props {
   canEditAdminOverride?: () => boolean
   /** The household's queue entries with their positions (a closed, sold-out dinner) */
   waitlistEntries?: TicketWaitlistDetail[]
+  /** The dinner's bookings are on the way */
+  loading?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -168,7 +178,8 @@ const props = withDefaults(defineProps<Props>(), {
   ticketPrices: () => [],
   releasedTicketCounts: () => EMPTY_RELEASED_TICKET_COUNTS,
   canEditAdminOverride: undefined,
-  waitlistEntries: () => []
+  waitlistEntries: () => [],
+  loading: false
 })
 
 const emit = defineEmits<{
@@ -631,7 +642,7 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
         <DeadlineBadge :badge="badges.booking" />
         <DeadlineBadge :badge="badges.diningMode" />
       </div>
-      <div :class="COMPONENTS.bookingForm.dayBill">
+      <div v-if="!loading" :class="COMPONENTS.bookingForm.dayBill" data-testid="booking-day-bill">
         <span :class="TYPOGRAPHY.cardTitle">{{ dayBillSummary.ticketCounts }} · {{ formatPrice(dayBillSummary.totalPrice) }} kr</span>
       </div>
     </div>
@@ -639,14 +650,14 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
     <!-- The household's own notes and the supply bar -->
     <div v-if="!canBook" :class="COMPONENTS.bookingForm.releasedAlerts">
       <UAlert
-        v-if="householdReleasedNote"
+        v-if="householdReleasedNote && !loading"
         v-bind="ALERTS.warning"
         :icon="ICONS.released"
         :title="householdReleasedNote.title"
         :description="householdReleasedNote.description"
       />
       <UAlert
-        v-if="householdQueuedNote"
+        v-if="householdQueuedNote && !loading"
         v-bind="ALERTS.warning"
         :icon="ICONS.waitlist"
         :title="householdQueuedNote.title"
@@ -668,10 +679,18 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
       v-model:expanded="expanded"
       :data="tableData"
       :columns="columns"
+      :loading="loading"
       row-key="id"
       data-testid="booking-table"
       :ui="COMPONENTS.table.bookingUi"
     >
+      <template #loading>
+        <div :class="COMPONENTS.table.loadingRow">
+          <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.table.loadingSpinner" />
+          Henter bookinger...
+        </div>
+      </template>
+
       <!-- Expand button column - uses BUTTONS.edit for standardized sizing -->
       <template #expand-cell="{row}">
         <UButton

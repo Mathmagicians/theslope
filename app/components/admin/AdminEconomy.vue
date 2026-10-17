@@ -839,6 +839,12 @@ const dinnerBreakdownStats = computed(() => {
                               :loading="isInvoiceTransactionsLoading"
                               row-key="dinnerEvent.id"
                           >
+                          <template #loading>
+                            <div :class="COMPONENTS.table.loadingRow">
+                              <UIcon :name="ICONS.sync" :size="SIZES.smallIconSize" :class="COMPONENTS.table.loadingSpinner" />
+                              Henter transaktioner...
+                            </div>
+                          </template>
                           <template #expand-cell="{ row: dinnerRow }">
                             <UButton
                                 v-if="dinnerRow.original.items.length > 0"

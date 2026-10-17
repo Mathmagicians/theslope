@@ -24,7 +24,7 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import {formatDate} from '~/utils/date'
 import {addDays} from 'date-fns'
 import {flushPromises} from '@vue/test-utils'
-import {asyncDataStatus, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
+import {asyncDataStatus, resetStores, registerEmptyStoreEndpoints, holdEndpoint} from '~~/tests/component/testHelpers'
 const Action = useBookingValidation().BookingActionSchema.enum
 
 const DINNER_ID = 100
@@ -384,6 +384,47 @@ describe('Bookings store — one booking write', () => {
         expect(ordersEndpoint).toHaveBeenCalledTimes(2)
         expect(waitlistEntriesEndpoint).toHaveBeenCalledTimes(1)
         expect(dinnerEventDetailEndpoint).toHaveBeenCalledTimes(1)
+    })
+
+    // A table shows its loading row while the orders are in flight: for a new selection and for a save's re-read alike
+    type Store = ReturnType<typeof useBookingsStore>
+    const loadDinner = (store: Store) => store.loadOrdersForDinners({dinnerEventIds: [dinner.id], householdId: MY_HOUSEHOLD_ID})
+
+    it.each([
+        {when: 'the orders of a new selection', before: async () => {}, read: loadDinner},
+        {when: 'a booking save\'s re-read of the orders', before: async (store: Store) => {
+            loadDinner(store)
+            await vi.waitFor(() => expect(asyncDataStatus('bookings-store-orders')).toBe('success'))
+        }, read: (store: Store) => store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [])}
+    ])('WHEN $when are on the way THEN the bookings read as reloading, until they land', async ({before, read}) => {
+        const store = useBookingsStore()
+        await before(store)
+        const held = holdEndpoint('/api/order', [])
+        // A save still in flight would answer into the next case's datasets
+        let pending: unknown
+        try {
+            pending = read(store)
+            await vi.waitFor(() => expect(asyncDataStatus('bookings-store-orders')).toBe('pending'))
+
+            expect(store.isBookingsReloading).toBe(true)
+
+            held.release()
+            await vi.waitFor(() => expect(store.isBookingsReloading).toBe(false))
+        } finally {
+            held.release()
+            await Promise.resolve(pending).catch(() => undefined)
+            held.unregister()
+        }
+    })
+
+    it('reads a failed orders read as no longer reloading: the error toast ends the wait', async () => {
+        ordersEndpoint.mockImplementation(failure)
+        const store = useBookingsStore()
+
+        store.loadOrdersForDinners({dinnerEventIds: [dinner.id], householdId: MY_HOUSEHOLD_ID})
+
+        await vi.waitFor(() => expect(store.isOrdersErrored).toBe(true))
+        expect(store.isBookingsReloading).toBe(false)
     })
 })
 

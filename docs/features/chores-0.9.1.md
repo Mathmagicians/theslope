@@ -641,6 +641,7 @@ spec call sites stay as they are.
 | Billing delivery report and interrupted runs | `bug-fix-billing-delivery-report.md` | three open decisions |
 | Re-login with Face ID (S5) | `feature-proposal-relogin-faceid.md` | parked proposal; the PRF spike is complete |
 | Chef allergen selector: the selector counts a population through a ticket allergies map | § Ticket allergies on the order | brief halted 2026-10-10; presented again with the ticket allergies design |
+| AdminTeams loading row: after a season switch the table shows the previous season's teams under the loading bar; with the loading row, a team save's re-read closes the team detail docked under its row on a phone | `app/components/admin/AdminTeams.vue:396`, ADR-018 § Table loading | open: loading row with the docked detail closing, or a docked detail that survives the re-read |
 
 ### Decisions carried from release 0.9
 
@@ -689,3 +690,6 @@ spec call sites stay as they are.
 **2026-10-17**
 - The named date formats and their sweep move from release 0.9 to this release (§ Date formats); release 0.9 formats
   with the default `formatDate`.
+
+**2026-10-18**
+- The AdminTeams loading row moves from release 0.9 to this release.

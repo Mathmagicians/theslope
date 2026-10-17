@@ -46,12 +46,13 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | Test sweep | dead and duplicate cases removed; cleanup fails early; factories, `gotoHydrated` and web-first waits replace raw sleeps; the `setup-season` project creates the active season once per run | `docs/testing.md` | packages 1–4 committed (5b1616b, b7d238d, 2d17d64, 45c1f83, 084ea42); 5 and 6 verified, their remaining edits in the working tree |
 | DRY sweep | dead code and duplicate token paths removed; the specs share their mount, endpoint and session helpers | `tests/component/testHelpers.ts`, `tests/component/hoistedMocks.ts` | committed (72cf9d9, 6b65a70, b456b2f, 999bdbd, c0beb62, 43876aa) |
 | PRF spike | passkey and PRF research with the device protocol | `../feature-proposal-relogin-faceid.md`, `../archived/feature-mobile-native-feel.md` | committed |
-| One booking path, end to end | outcomes in, notification out; the scaffold survives a partial failure and reports per person; the waiting list catches up; one client write; preview and toast from one word table; the ticket history follows kuverter | § One booking path, end to end | points 1–7 committed (2ad1429 to 5883d6b); 6b in progress |
+| One booking path, end to end | outcomes in, notification out; the scaffold survives a partial failure and reports per person; the waiting list catches up; one client write; preview and toast from one word table; the ticket history follows kuverter | § One booking path, end to end | points 1–7 committed (2ad1429 to 5883d6b); 6 reopened (the preference preview); 6b in progress |
 | Docs and tooling | the user, chef and admin guides; `docs/ui.md` and the compliance tables compacted; `docs/testing.md` Rule 0; the ui skill and the frontend agent | `docs/`, `.claude/skills/`, `.claude/agents/` | committed (b82852e, 38804ef, 0dfd8eb, 450bcc8) |
 | Close keeps the eating mode | the nightly close writes each order's own eating mode | `server/utils/closeOrders.ts`, `fetchPendingOrdersOnConsumedDinners` | committed (16b4035) |
 | One released predicate (the kitchen box) | a released ticket nobody bought stays released after the close; the kitchen panels add up and TIL SALG keeps its title | `app/composables/useOrder.ts`, `KitchenPreparation.vue` | committed (56f8e12) |
 | Shared words, supply predicates and the system's identity | one set of ticket-type words and counts; "Lukket for framelding"; a stale order id is skipped; the system account from `HEY_NABO_USERNAME`; "frameldt, ADMIN korrektion" in the ticket history | `app/composables/useBookingUi.ts`, `app/composables/useTicket.ts`, `server/utils/systemUser.ts` | committed (56f8e12) |
-| A waiting-list placement happens once | the queue keeps its own placement state (`placingAt`, `placingOrderId`); migration `0018_placing` | § A waiting-list placement happens once | signed off 2026-10-17 |
+| A waiting-list placement happens once | the queue keeps its own placement state (`placingAt`, `placingOrderId`); migration `0018_protocol`; recovery reports what it finishes; a held entry refuses leave and change with a conflict | § A waiting-list placement happens once | in your test: the extra portions and one line per ticket type ✅ 2026-10-18; a sale to the first in line open |
+| Table loading instead of wrong data | a table whose rows come from a dataset that reloads binds that dataset's loading and shows its loading row, a write's re-read included (ADR-018 § Table loading, `tableRows`) | ADR-018 | in your test |
 | One audit format for the order history | one `auditData` schema, written and read through one pair of functions | § One audit format for the order history | signed off 2026-10-17; runs after "Shared words, supply predicates and the system's identity" |
 
 ## Open before the release
@@ -138,10 +139,10 @@ Each point is presented with its files and code, and signed off on its own.
 | 2. Notification after the action | The scaffold and the waiting-list steps send nothing and return outcomes that carry what a notification needs; the caller passes them to the notification service | ✅ signed off 2026-10-14, implemented |
 | 3. The scaffold survives a partial failure | A failed write batch is retried order by order; the rest of the household runs on; the reply counts the orders per action, lists them per person for a household run and lists the failed orders; the preview and the reply name the action through one function (`actionOfUpdate`) | ✅ signed off 2026-10-15, implemented |
 | 4. The waiting list catches up | A dinner's waiting list is one first-come-first-served line per ticket type; every save and every nightly run ends by selling the tickets for sale to the first in their type's line (`sellTicketsToWaitlist`), idempotent (ADR-015); a claim buys while nobody waits in its type's line; a place counts within its line; the save preview counts the tickets for sale of the row's type | ✅ signed off 2026-10-16, implemented |
-| 4b. The views show each line | The chef's alert, the booking form and the kitchen box name the waiting list per ticket type; the kitchen box holds the tickets for sale and the waiting list together | kitchen box ✅ signed off 2026-10-16, implemented (§ Mockup — kitchen box); the chef's alert ✅ signed off 2026-10-17, implemented (`SUPPLY_WORDS.queuedCount`, mockup in `ChefMenuCard.vue`) |
+| 4b. The views show each line | The chef's alert, the booking form and the kitchen box name the waiting list per ticket type; the kitchen box holds the tickets for sale and the waiting list together | kitchen box ✅ signed off 2026-10-16, implemented (§ Mockup — kitchen box); the chef's alert ✅ signed off 2026-10-17, implemented (`SUPPLY_WORDS.queuedCount`, mockup in `ChefMenuCard.vue`); its ask in singular and plural (`SUPPLY_WORDS.chefAsk`) ✅ signed off in test 2026-10-18 |
 | 4c. The preview sells each ticket once | The save preview settles the claims in order as the save does: the first claims of a ticket type buy that type's tickets for sale, the rest join its waiting list (`bookingOutcomes` takes one order or a list, `supplyOfType`); the guest form opens on Voksen and its button names the guests | ✅ signed off 2026-10-16, implemented |
 | 5. One client write | Every write that changes bookings goes through `bookingsStore.writeBookings`: the request, then the household's orders, the upcoming orders, the tickets for sale, the waiting list and the dinner on view re-read once; the waiting list per locked dinner derives from the one waiting-list read; the households store keeps its own household re-reads | ✅ signed off 2026-10-17, implemented |
-| 6. Preview and toast from one word table | Future words in the preview, past words in the toast, grouped per person; the toast is red as soon as one item failed, green otherwise | toast look implemented 2026-10-16 (`scaffoldToastLook`); the words ✅ signed off 2026-10-17, implemented (5165b4f) (§ Mockup — toast and preview) |
+| 6. Preview and toast from one word table | Future words in the preview, past words in the toast, grouped per person; the toast is red as soon as one item failed, green otherwise. A preference change, one person or power mode, previews what Gem does above the buttons, in the grid's words and badges; the preference endpoints answer `?preview=true` with the save's own run without its writes; a small loader shows while the preview loads | reopened 2026-10-18: the preference preview, mockup and brief ✅ signed off 2026-10-17 (§ Mockup — preference preview); toast look implemented 2026-10-16 (`scaffoldToastLook`); the words ✅ signed off 2026-10-17, implemented (5165b4f) (§ Mockup — toast and preview) |
 | 6b. The mails speak the booking words | The waiting-list mails greet the user who booked, name the person as the toast does, carry the ticket line of the booking page and the badge's help text, and link to the dinner's booking page | mockup ✅ signed off 2026-10-17 (§ Mockup — waiting-list mails) |
 | 7. The ticket history follows kuverter | Every audit row replays, user or system alike; a line for each change of kuverter; a system run and the nightly close are one line for the dinner; the replay ends equal to state | mockup and brief ✅ signed off 2026-10-17 (§ Mockup — ticket history) |
 
@@ -160,6 +161,36 @@ cases release through the member's booking route. The package adds the case that
 | GIVEN a child waiting WHEN a household releases one child's ticket and claims one for its other child in one save THEN the waiting child holds the released ticket and the claimer joins the child line | serial API e2e, `waitlistAssignment.e2e.spec.ts` |
 | One line per ticket type in join order; a place counts within its line | unit, `useWaitlist.unit.spec.ts` |
 | A child row on a dinner with only an adult ticket for sale saves as "Skriv på venteliste", with a child ticket as "Køb billet" | component, `DinnerBookingForm.nuxt.spec.ts` |
+
+### Mockup — preference preview ✅ signed off 2026-10-17
+
+```
+One person
+ Opdater fællesspisning præferencer for Knud
+ Man [Spis][Sen][Take][Ingen]  Tir [...]  Ons [...]  Tor [...]
+      [cancel badge]    Knud frameldes: 7 middage, 02/11/2026 – 14/12/2026
+      [released badge]  Knud frigiver sin billet: 20/10/2026, 21/10/2026
+      [edit badge]      Knud ændrer spisemåde til Takeaway: 27/10/2026, 03/11/2026
+                                                   [Annuller] [Gem]
+
+Power mode
+ Power mode: Opdater præferencer for hele husstanden
+ (warning) Du er ved at aktivere power mode ...
+ Man [Spis][Sen][Take][Ingen]  Tir [...]  Ons [...]  Tor [...]
+      [cancel badge]    Knud frameldes: 7 middage, 02/11/2026 – 14/12/2026
+      [cancel badge]    Lene frameldes: 6 middage, 02/11/2026 – 14/12/2026
+      [released badge]  Lene frigiver sin billet: 20/10/2026
+                                           [Annuller] [Gem for alle]
+
+While the preview loads
+ Man [Spis][Sen][Take][Ingen]  Tir [...]  Ons [...]  Tor [...]
+      (sync, spinning)  Prøver at beregne hvad I skal spise hvornår...
+                                                   [Annuller] [Gem]
+```
+
+The preview is empty while the draft equals the saved preferences. The preference endpoints run the save with
+`?preview=true` and return its result without writing; the lines read it through `formatActionPreview`'s words. A sale
+to the waiting list happens at save time and is not previewed.
 
 ### Mockup — toast and preview ✅ signed off 2026-10-17
 
@@ -251,7 +282,7 @@ Emne: Skråningen: 1 billet til 20/10/2026 · Lasagne er solgt
 WAITLIST_BUILDUP  → the chef, in the words of the chef's alert
 Emne: Skråningen: 3V 1B på venteliste til 20/10/2026 · Lasagne
   3V 1B på venteliste · 5 portioner
-  Mange skrånere mangler en billet til din middag — har du mulighed for at mætte flere munde?
+  Skrånere mangler billetter til din middag — har du mulighed for at mætte flere munde?
   Det gør du under Flere på middagen: https://skraaningen.dk/chef
 ```
 
@@ -358,9 +389,19 @@ without a relation, so the order model stays as it is.
 
 Regular and guest entries are placed exactly once.
 
+Recovery runs first in every run, over its dinners, for grabs older than the lease (`theslope.waitlistPlacingLeaseMinutes`,
+10). It finishes an entry whose order landed and releases one whose order did not; an entry without a recorded order is
+matched to the order its run wrote on the dinner, person, guest flag and price row after the grab. A ticket type's line
+stops at an entry still grabbed, as it stops at its first miss.
+
+### Decisions
+
+- 2026-10-17: recovery matches the order an unrecorded placement wrote; the queue's own state settles it.
+- 2026-10-17: the lease is 10 minutes, and a line stops at a grabbed entry, so the first come, first served order holds.
+
 ### Migration
 
-`0018_placing` adds the two nullable columns. B6, the ticket allergies and the ticket price portions ride their own
+`0018_protocol` adds the two nullable columns. B6, the ticket allergies and the ticket price portions ride their own
 releases.
 
 ## ADR review

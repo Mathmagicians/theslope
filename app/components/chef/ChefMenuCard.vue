@@ -77,8 +77,8 @@
  *                              +- Frigiv portioner          permanent entry in the Flere panel
  *   +----------------------------------------------------------------+
  *   | [hourglass] 2V 2B på venteliste · 2,5 portioner                |  ALERTS.info + withActions, only while
- *   |     Mange skrånere mangler en billet til din middag — har du   |  the queue has entries
- *   |     mulighed for at mætte flere munde?    [Frigiv portioner]   |
+ *   |     Skrånere mangler billetter til din middag — har du         |  the queue has entries; one entry reads
+ *   |     mulighed for at mætte flere munde?    [Frigiv portioner]   |  "En skråner mangler billet"
  *   +----------------------------------------------------------------+
  *   form:  Kan du frigive [ 2,5 ] portioner?  [Frigiv] [Fortryd]     UForm on ExtraPortionsRequestSchema,
  *                                                                    prefilled with the queue's portion need
@@ -601,7 +601,7 @@ const handleCardClick = () => {
           v-bind="{...ALERTS.info, ...ALERTS.withActions}"
           :icon="ICONS.waitlist"
           :title="`${SUPPLY_WORDS.queuedCount({queuedFormatted})} · ${formatPortions(waitlist!.portions)} portioner`"
-          description="Mange skrånere mangler en billet til din middag — har du mulighed for at mætte flere munde?"
+          :description="SUPPLY_WORDS.chefAsk(waitlist!.entries)"
           :class="COMPONENTS.chefMenuCard.alertGap"
           data-testid="chef-waitlist-alert"
         >

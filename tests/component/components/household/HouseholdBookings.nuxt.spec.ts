@@ -3,9 +3,11 @@ import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {flushPromises, enableAutoUnmount} from '@vue/test-utils'
 import type {Ref} from 'vue'
-import {mountWithTooltipProvider, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, resetStores, VIEWPORTS, holdEndpoint, isTableLoading} from '~~/tests/component/testHelpers'
 import HouseholdBookings from '~/components/household/HouseholdBookings.vue'
 import DinnerCalendarDisplay from '~/components/calendar/DinnerCalendarDisplay.vue'
+import BookingGridView from '~/components/booking/BookingGridView.vue'
+import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
@@ -28,6 +30,7 @@ registerEndpoint('/api/admin/season', () => [season])
 registerEndpoint('/api/admin/household', () => [])
 registerEndpoint('/api/admin/allergy-type', () => [])
 registerEndpoint('/api/order', () => [])
+registerEndpoint('/api/order/waitlist', () => [])
 
 vi.setConfig({testTimeout: 20_000})
 // A mounted page left alive keeps syncing its parameters into the next case's route
@@ -106,5 +109,41 @@ describe('HouseholdBookings date arrows', () => {
 
         await vi.waitFor(() => expect(arrow(wrapper, 'prev').exists()).toBe(true))
         expect(arrow(wrapper, 'next').exists()).toBe(false)
+    })
+})
+
+// While the range's orders load, the table of the view runs its loading bar over the household's rows
+describe('HouseholdBookings while the orders of the range load', () => {
+    let held: ReturnType<typeof holdEndpoint>
+
+    beforeEach(() => {
+        resetStores()
+        vi.clearAllMocks()
+        mockNavigateTo.mockImplementation(landNavigation)
+        held = holdEndpoint('/api/order', [])
+    })
+
+    afterEach(() => {
+        held.release()
+        held.unregister()
+        mockNavigateTo.mockReset()
+        mockRoute.query = {}
+    })
+
+    it.each([
+        {view: BookingViewSchema.enum.week, table: BookingGridView},
+        {view: BookingViewSchema.enum.day, table: DinnerBookingForm}
+    ])('$view: GIVEN the orders are on the way THEN the table runs its loading bar over the household\'s rows, WHEN they land THEN the bar stops', async ({view, table}) => {
+        mockRoute.query = {view, date: formatDate(dinnerEvent.date)}
+        const wrapper = await mountBookings(true)
+        const shown = () => wrapper.findComponent(table)
+
+        await vi.waitFor(() => expect(isTableLoading(shown())).toBe(true))
+        expect(shown().text()).toContain(household.inhabitants[0]!.name)
+
+        held.release()
+
+        await vi.waitFor(() => expect(isTableLoading(shown())).toBe(false))
+        expect(shown().text()).toContain(household.inhabitants[0]!.name)
     })
 })

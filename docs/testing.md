@@ -263,6 +263,9 @@ import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, 
 | `mountWithTooltipProvider(Component, {props?, isMd?})` | `mountSuspended` under reka-ui's `TooltipProvider` (the context `UApp` supplies in the app). Returns the component's own wrapper, so `find`, `text`, `emitted` and `props` read the component, not the shell. `isMd` provides the layout's responsive breakpoint ref when given (`null` before the layout has measured); pass a ref to change the breakpoint after mount |
 | `withTooltipProvider(Component, props)` | The bare wrapper definition, for the rare spec that needs the root wrapper |
 | `findByTestId(wrapper, id)` / `findAllByTestId(wrapper, id)` | `data-testid` lookups - never hand-build the selector string |
+| `findLoadingRow(wrapper)` / `findAllLoadingRows(wrapper)` | The row UTable renders from its `#loading` slot while it binds `loading` and holds no rows |
+| `holdEndpoint(url, body)` | An endpoint that answers `body` once the test calls `release()`: the window in which a dataset is pending; `unregister()` in `afterEach` hands the url back to the registration before it |
+| `untilTrue(condition)` | Resolves once a reactive condition holds (store state, a flag), watching it rather than polling; the test's own timeout bounds it |
 | `clickByTestId(wrapper, id)` | Click + `await nextTick()` |
 | `pollFor(condition, maxAttempts?)` | Poll a predicate across ticks (store readiness) |
 | `resetStores()` | Fresh stores over a fresh data layer per test: the stores of the app's pinia and of the active one are disposed, the app's pinia stays active so a spec and the components it mounts share one store instance, and the keyed `useAsyncData` entries earlier stores registered go with them |

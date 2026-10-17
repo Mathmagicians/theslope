@@ -6,7 +6,7 @@ import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {BookingViewSchema} from '~/composables/useBookingView'
 
 const {adminUIFile, memberUIFile} = authFiles
-const {validatedBrowserContext, gotoHydrated, pollUntil, salt, temporaryAndRandom, doScreenshot, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, gotoHydrated, pollUntil, salt, temporaryAndRandom, doScreenshot, getSessionUserInfo, waitForApi} = testHelpers
 
 test.describe('Household tab navigation', () => {
     // Unique salt per worker to avoid parallel test conflicts
@@ -166,6 +166,64 @@ test.describe('Household PBS query param resolution', () => {
             await pollUntil(async () => page.url(), url => url.includes(`pbs=${myPbsId}`))
         })
     }
+})
+
+// A cell without its order reads Ingen: until the new range's orders land, the grid shows its loading row
+test.describe('Household bookings while the orders of a new range load', () => {
+    const testSalt = temporaryAndRandom()
+    const createdHouseholdIds: number[] = []
+    let shortName: string
+    let pbsId: number
+
+    test.use({storageState: adminUIFile})
+
+    test.beforeAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        // Singleton active season: its dinners give the month a range to load; global teardown deletes it
+        await SeasonFactory.createActiveSeason(context, {holidays: []})
+
+        const household = await HouseholdFactory.createHousehold(context, {name: salt('SlowOrders', testSalt)})
+        createdHouseholdIds.push(household.id)
+        shortName = household.shortName
+        pbsId = household.pbsId
+    })
+
+    test.afterAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
+    })
+
+    test('GIVEN the orders are slow WHEN switching to Måned THEN the loading row shows, then the bookings', async ({page}) => {
+        await gotoHydrated(page, `/household/${encodeURIComponent(shortName)}/bookings?pbs=${pbsId}`)
+        await expect(page.getByTestId('household-bookings')).toBeVisible()
+
+        // GIVEN: the orders request waits until the test has seen the loading row
+        let releaseOrders: () => void = () => {}
+        const ordersReleased = new Promise<void>(resolve => {
+            releaseOrders = resolve
+        })
+        await page.route(url => url.pathname === '/api/order', async route => {
+            await ordersReleased
+            await route.continue()
+        })
+
+        // WHEN: the month replaces the day, and its range's orders are on the way
+        await page.getByTestId(`booking-view-${BookingViewSchema.enum.month}`).click()
+
+        // THEN: the grid shows its loading row and no booking cell
+        const grid = page.getByTestId('booking-grid-view')
+        const loadingRow = grid.locator('[data-slot="loading"]')
+        await expect(loadingRow).toBeVisible()
+        await expect(grid.locator('[data-testid^="power-"]')).toHaveCount(0)
+
+        // THEN: the household's bookings once the orders land
+        const ordersAnswered = waitForApi(page, '/api/order?', 'GET')
+        releaseOrders()
+        await ordersAnswered
+        await expect(loadingRow).toHaveCount(0)
+        await expect(grid.locator('[data-testid^="power-"]').first()).toBeVisible()
+    })
 })
 
 /**

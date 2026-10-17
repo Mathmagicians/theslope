@@ -125,6 +125,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // Convenience computed for components - true when store is fully initialized and ready to use
     const isBookingsStoreReady = computed(() => !hasFilters.value || (isOrdersInitialized.value && isWaitlistEntriesInitialized.value))
 
+    // A read of the orders or queue entries on view is in flight: a new selection or a save's re-read; a failed read ends it
+    const isBookingsReloading = computed(() => isOrdersLoading.value || isWaitlistEntriesLoading.value)
+
     // Business logic computeds
     const totalOrdersCount = computed(() => orders.value.length)
 
@@ -707,6 +710,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         lockStatus,
         isReleasedCountsLoading,
         isProcessingBookings,
+        isBookingsReloading,
         writeBookings,
         processSingleEventBookings,
         processMultipleEventsBookings,

@@ -572,7 +572,7 @@ export class OrderFactory {
     seasonId: 1, positions: [], unchanged: 0, households: 1, errored: 0,
     totals: {...Object.fromEntries(BookingActionSchema.options.map(action => [action, 0])) as BookingTotals, ...totals},
     results: [], failed: [],
-    outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: []},
+    outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: [], waitlistPortionsAssigned: []},
     ...overrides
   })
 

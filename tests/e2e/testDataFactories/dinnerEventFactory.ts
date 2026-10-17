@@ -9,6 +9,7 @@ import {
 } from "~/composables/useBookingValidation"
 import type { TeamRole } from "~/composables/useCookingTeamValidation"
 import type {Season} from "~/composables/useSeasonValidation"
+import {computeCookingDates} from "~/utils/season"
 import testHelpers from "../testHelpers"
 import {expect, type BrowserContext} from "@playwright/test"
 
@@ -74,6 +75,17 @@ export class DinnerEventFactory {
         id,
         date: startOfDay(addDays(new Date(), daysFromToday))
     })
+
+    /**
+     * A dinner on each of the season's cooking days in the week that starts `daysFromToday` days ahead, holidays left
+     * out: a week holds every weekday once, so each cooking day gets one dinner whatever weekday today is. Ids count up
+     * from `firstId`
+     */
+    static readonly dinnerEventsOnCookingDays = (season: Season, daysFromToday: number, firstId: number = 1): DinnerEventDisplay[] => {
+        const start = startOfDay(addDays(new Date(), daysFromToday))
+        return computeCookingDates(season.cookingDays, {start, end: addDays(start, 6)}, season.holidays)
+            .map((date, index) => ({...this.defaultDinnerEventDisplay(), id: firstId + index, date, seasonId: season.id ?? null}))
+    }
 
     static readonly defaultDinnerEventDetail = (testSalt?: string): DinnerEventDetail => ({
         ...this.defaultDinnerEventDisplay(testSalt),

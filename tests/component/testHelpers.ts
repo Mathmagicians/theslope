@@ -1,4 +1,4 @@
-import {nextTick, h, defineComponent, ref, isRef, effectScope, type Component, type Ref} from 'vue'
+import {nextTick, h, defineComponent, ref, isRef, effectScope, watch, type Component, type Ref} from 'vue'
 import {expect, beforeEach, afterEach} from 'vitest'
 import {TooltipProvider} from 'reka-ui'
 import {mountSuspended, registerEndpoint} from '@nuxt/test-utils/runtime'
@@ -84,6 +84,32 @@ export const registerEmptyStoreEndpoints = () => {
     registerEndpoint('/api/order', () => [])
 }
 
+/**
+ * An endpoint that answers `body` once the test releases it: the window in which a dataset is pending. The latest
+ * registration of a url answers, so `unregister` hands the url back to the one before it
+ */
+export const holdEndpoint = (url: string, body: unknown) => {
+    let release: () => void = () => {}
+    const released = new Promise<void>(resolve => {
+        release = resolve
+    })
+    const unregister = registerEndpoint(url, async () => {
+        await released
+        return body
+    })
+    return {release, unregister}
+}
+
+/** Resolves once `condition` holds, watching the reactive state it reads: no polling window, the test's timeout bounds it */
+export const untilTrue = (condition: () => boolean): Promise<void> => new Promise(resolve => {
+    const stop = watch(condition, holds => {
+        if (!holds) return
+        // An immediate hit runs before `stop` is assigned
+        queueMicrotask(() => stop())
+        resolve()
+    }, {immediate: true})
+})
+
 /** The kitchen's rates the money components calculate with, read from the app config inside a hook or a test */
 export const kitchenConfig = () => {
     const kitchen = useAppConfig().theslope?.kitchen
@@ -98,6 +124,15 @@ export const findByTestId = (wrapper: Searchable, testId: string) =>
 
 export const findAllByTestId = (wrapper: Searchable, testId: string) =>
     wrapper.findAll(`[data-testid="${testId}"]`)
+
+/** The row UTable renders from its `#loading` slot while it binds `loading` and holds no rows */
+export const findLoadingRow = (wrapper: Searchable) => wrapper.find('[data-slot="loading"]')
+
+export const findAllLoadingRows = (wrapper: Searchable) => wrapper.findAll('[data-slot="loading"]')
+
+/** Whether the table binds `loading`: UTable runs its loading bar under the column headers, a bar that carries no attribute */
+export const isTableLoading = (wrapper: Pick<VueWrapper, 'findComponent'>): boolean =>
+    wrapper.findComponent({name: 'UTable'}).props('loading') === true
 
 export const clickByTestId = async (wrapper: Searchable, testId: string) => {
     await findByTestId(wrapper, testId).trigger('click')

@@ -1196,7 +1196,8 @@ export const useBooking = () => {
         outcomes: {
             joined: results.flatMap(result => result.outcomes.joined),
             ticketsSold: results.flatMap(result => result.outcomes.ticketsSold),
-            waitlistTicketsSold: results.flatMap(result => result.outcomes.waitlistTicketsSold)
+            waitlistTicketsSold: results.flatMap(result => result.outcomes.waitlistTicketsSold),
+            waitlistPortionsAssigned: results.flatMap(result => result.outcomes.waitlistPortionsAssigned)
         }
     })
 
