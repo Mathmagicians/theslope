@@ -115,9 +115,15 @@ Wait for approval or fine-tuning. Launch one agent per package with the brief, t
 1. Red run output shown → 2. green run output shown → 3. `npm run pre:all` → 4. architect diff review against the brief, the coverage
 matrix and the design-system rule → 5. compliance rows (`docs/adr-compliance-*.md`) updated in the same change → 6. the **user commits**.
 
-A package reported green names, in that report: the files to commit (from `git status`, the package's own), and what to
-check and observe in the UI (route and state → what to see). It then waits for the user's feedback from the browser before
-the next package starts.
+A package moves through three states, and the release spec and every briefing name the state:
+- implemented: red and green shown, pre:all clean, diff reviewed, compliance rows updated;
+- in your test: the green report is out, with the files to commit and the visual check
+  (route and state → what to see);
+- signed off: the user's yes after the browser check. Only signed off is done.
+
+A finding in the user's test reopens the same package: it is fixed and reported there, never split into a new
+package. A finding in the same view and with the same symptom belongs to the package too. Anything outside the
+package's ask is one optional line.
 
 ## Hard rules (from `working-style-rules`)
 
