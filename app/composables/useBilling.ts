@@ -17,20 +17,23 @@ type TicketWord = (type: TicketType, count: number) => string
 /**
  * Ticket counts in words, curried over the wording: each ticket type's word in the order of the types, joined by the
  * separator; a type without tickets is left out unless `withZero`, and no parts read `empty`. `parts` keeps each
- * type's text apart for a list that renders one element per type
+ * type's word apart for a list that renders one element per type and draws the separator itself
  */
 const ticketCountText = ({word, separator, withZero = false, empty = ''}: {word: TicketWord, separator: string, withZero?: boolean, empty?: string}) => {
     const parts = (counts: TicketTypeCounts): {ticketType: TicketType, text: string}[] => TicketTypeSchema.options
         .filter(type => withZero || counts[type])
-        .map((type, index) => ({ticketType: type, text: `${index > 0 ? separator : ''}${word(type, counts[type] ?? 0)}`}))
-    return {parts, text: (counts: TicketTypeCounts): string => parts(counts).map(part => part.text).join('') || empty}
+        .map(type => ({ticketType: type, text: word(type, counts[type] ?? 0)}))
+    return {parts, text: (counts: TicketTypeCounts): string => parts(counts).map(part => part.text).join(separator) || empty}
 }
 
-/** The wordings of a ticket count, one builder each: "2V 1B", "2 voksne, 1 barn", and the kitchen box's "Voksen: 60", "| Barn: 30" */
+/** The separator between the kitchen box's labelled counts in running text; a rendered list draws COMPONENTS.pipe */
+const PIPE = ' | '
+
+/** The wordings of a ticket count, one builder each: "2V 1B", "2 voksne, 1 barn", and the kitchen box's "Voksen: 60 | Barn: 30" */
 export const TICKET_COUNTS = {
     compact: ticketCountText({word: (type, count) => `${count}${ticketTypeLetter(type)}`, separator: ' ', empty: '-'}),
     sentence: ticketCountText({word: ticketTypeCount, separator: ', '}),
-    labelled: ticketCountText({word: (type, count) => `${ticketTypeLabel(type)}: ${count}`, separator: '| ', withZero: true})
+    labelled: ticketCountText({word: (type, count) => `${ticketTypeLabel(type)}: ${count}`, separator: PIPE, withZero: true})
 }
 
 /**

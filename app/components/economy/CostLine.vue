@@ -1,11 +1,14 @@
 <script setup lang="ts" generic="T extends CostLineItem">
-import type {DinnerMode, OrderDisplay, TicketType} from '~/composables/useBookingValidation'
+import type {TicketType} from '~/composables/useBookingValidation'
+import type {CostLineOrder} from '~/composables/useBookingUi'
 
 /**
  * CostLine - Individual line item in economy views
  *
  * Generic component for both Transactions (billing) and Orders (live bookings).
  * Shows inhabitant name, ticket type badge, amount, guest/state badges, and order history.
+ * A live order shows its eating mode beside the name; a billed line shows none, and its badge reads Frigivet when its
+ * order closed with Ingen.
  *
  * @generic T - Item type extending CostLineItem (OrderDisplay or TransactionDisplay)
  */
@@ -13,15 +16,11 @@ import type {DinnerMode, OrderDisplay, TicketType} from '~/composables/useBookin
 /**
  * Minimal interface for CostLine items - both OrderDisplay and TransactionDisplay satisfy this
  */
-export interface CostLineItem {
+export interface CostLineItem extends CostLineOrder {
     id: number
     inhabitant: { name: string }
     ticketType: TicketType | null
-    dinnerMode?: DinnerMode      // DinnerMode for display (DINEIN/TAKEAWAY/DINEINLATE)
     orderId?: number | null      // For history lookup (transactions have this)
-    isGuestTicket?: boolean      // For guest badge
-    state?: OrderDisplay['state'] // Live orders carry their state
-    provenanceHousehold?: string | null  // Source household if claimed from marketplace
     // Amount fields - one of these will be present
     amount?: number              // TransactionDisplay
     priceAtBooking?: number      // OrderDisplay
@@ -45,11 +44,8 @@ const emit = defineEmits<{
 }>()
 
 const {formatPrice} = useTicket()
-const {formatOrder} = useBookingUi()
+const {formatCostLine} = useBookingUi()
 const {TYPOGRAPHY, SIZES, COMPONENTS, NOISE, BUTTONS, COLOR} = useTheSlopeDesignSystem()
-const {OrderStateSchema, DinnerModeSchema} = useBookingValidation()
-const OrderState = OrderStateSchema.enum
-const DinnerMode = DinnerModeSchema.enum
 
 // Extract fields from item
 // For orders: use item.id (order is itself), for transactions: use orderId (may be null if order deleted)
@@ -61,22 +57,15 @@ const orderId = computed(() => {
 })
 const isHistoryExpanded = computed(() => orderId.value !== null && props.historyOrderId === orderId.value)
 const ticketPresentation = computed(() => props.item.ticketType ? ticketTypePresentation(props.item.ticketType) : null)
-// DinnerModeSelector accepts string | undefined, handles type validation internally
-const dinnerModeValue = computed(() => props.item.dinnerMode)
-// Show dinner mode icon for all modes including NONE (X icon) - only hide if dinnerMode is undefined
+// Every mode shows, Ingen included (its X icon); a billed line shows none
+const dinnerModeValue = computed(() => costLineMode(props.item))
 const showDinnerMode = computed(() => dinnerModeValue.value !== undefined)
 
 // Amount - prefer priceAtBooking (orders) over amount (transactions)
 const itemAmount = computed(() => props.item.priceAtBooking ?? props.item.amount ?? 0)
 
-// Formatted order display (handles claimed override, released state, guest badge)
-// A transaction carries neither an order state nor an eating mode: it reads as closed
-const formatted = computed(() => formatOrder({
-    state: props.item.state ?? OrderState.CLOSED,
-    dinnerMode: props.item.dinnerMode ?? DinnerMode.DINEIN,
-    provenanceHousehold: props.item.provenanceHousehold ?? undefined,
-    isGuestTicket: props.item.isGuestTicket ?? false
-}))
+// The state and guest badges: the claimed override, a released ticket, a billed line read as closed or released
+const formatted = computed(() => formatCostLine(props.item))
 </script>
 
 <template>

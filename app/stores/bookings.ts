@@ -128,15 +128,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // Business logic computeds
     const totalOrdersCount = computed(() => orders.value.length)
 
-    const ordersByTicketType = computed(() => {
-        const byType: Record<string, number> = {}
-        orders.value.forEach(order => {
-            if (order.ticketType) {
-                byType[order.ticketType] = (byType[order.ticketType] || 0) + 1
-            }
-        })
-        return byType
-    })
+    const ordersByTicketType = computed(() => countTicketTypes(orders.value))
 
     // ========================================
     // Actions

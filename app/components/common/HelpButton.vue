@@ -40,7 +40,7 @@ const requestUrl = useRequestURL()
 const isOpen = ref(false)
 const doClose = () => isOpen.value = false
 
-const { NAVIGATION, ICONS, SIZES, COLOR, TYPOGRAPHY, BUTTONS, NOISE } = useTheSlopeDesignSystem()
+const { NAVIGATION, ICONS, SIZES, COLOR, TYPOGRAPHY, BUTTONS, NOISE, COMPONENTS } = useTheSlopeDesignSystem()
 const { FeedbackTypeSchema } = useFeedbackValidation()
 const Feedback = FeedbackTypeSchema.enum
 
@@ -121,7 +121,7 @@ watch(() => route.path, () => {
   <UPopover
       v-if="helpContent"
       v-model:open="isOpen"
-      :popper="{ placement: 'bottom-start' }"
+      :content="COMPONENTS.helpButton.popoverContent"
   >
     <UButton
         :icon="ICONS.help"
@@ -130,24 +130,24 @@ watch(() => route.path, () => {
     />
 
     <template #content>
-      <UCard class="max-w-xs sm:max-w-sm mx-2" variant="outline">
+      <UCard :class="COMPONENTS.helpButton.card" :variant="NOISE.medium">
         <template #header>
-          <div class="flex justify-between items-center gap-2">
+          <div :class="COMPONENTS.helpButton.header">
             <span :class="TYPOGRAPHY.cardTitle">{{ helpContent.title }}</span>
             <UButton
                 :icon="ICONS.xMark"
                 :variant="NOISE.quiet"
                 :size="SIZES.small"
-                class="flex-shrink-0"
+                :class="COMPONENTS.helpButton.close"
                 @click="doClose()"
             />
           </div>
         </template>
 
-        <p :class="[TYPOGRAPHY.bodyTextSmall, 'text-pretty break-words']">{{ helpContent.content }}</p>
+        <p :class="[TYPOGRAPHY.bodyTextSmall, COMPONENTS.helpButton.content]">{{ helpContent.content }}</p>
 
         <template #footer>
-          <div class="flex flex-col gap-1 md:gap-2">
+          <div :class="COMPONENTS.helpButton.actions">
             <UButton
                 to="https://github.com/Mathmagicians/theslope/blob/main/docs/user-guide.md"
                 target="_blank"
@@ -169,8 +169,8 @@ watch(() => route.path, () => {
             <!-- Expandable feedback form -->
             <UCollapsible v-model:open="showFeedbackForm" :unmount-on-hide="false">
               <template #content>
-                <div class="pt-2 md:pt-3 space-y-2 md:space-y-3">
-                  <div v-if="isSuccess" data-testid="help-feedback-success" class="text-center py-3 md:py-4 space-y-3">
+                <div :class="COMPONENTS.helpButton.feedbackForm">
+                  <div v-if="isSuccess" data-testid="help-feedback-success" :class="COMPONENTS.helpButton.success">
                     <UBadge :color="COLOR.success" :variant="NOISE.soft">✅ Tak for din feedback!</UBadge>
                     <UButton
                         v-if="feedbackResult?.html_url"
@@ -180,7 +180,7 @@ watch(() => route.path, () => {
                         :label="`Se issue #${feedbackResult.number}`"
                         :size="SIZES.small"
                         :variant="NOISE.link"
-                        class="block mx-auto underline decoration-dashed underline-offset-4"
+                        :class="COMPONENTS.helpButton.issueLink"
                     />
                   </div>
                   <template v-else>
@@ -188,7 +188,7 @@ watch(() => route.path, () => {
                         v-model="feedbackType"
                         :items="feedbackOptions"
                         value-key="value"
-                        :ui="{ fieldset: 'flex flex-col md:flex-row gap-2 md:gap-4' }"
+                        :ui="COMPONENTS.helpButton.feedbackTypesUi"
                     />
                     <UTextarea
                         v-model="feedbackDescription"
@@ -196,9 +196,9 @@ watch(() => route.path, () => {
                         placeholder="Beskriv din feedback..."
                         :size="SIZES.small"
                         :rows="3"
-                        class="w-full"
+                        :class="COMPONENTS.helpButton.description"
                     />
-                    <UFieldGroup orientation="horizontal" class="gap-2 md:gap-3">
+                    <UFieldGroup orientation="horizontal" :class="COMPONENTS.helpButton.formButtons">
                       <UButton
                           :color="COLOR.neutral"
                           :variant="NOISE.quiet"

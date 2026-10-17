@@ -61,7 +61,7 @@ I appen bruges følgende symboler til at vise spisningsform og status:
 | ![Blandet](https://api.iconify.design/heroicons:question-mark-circle.svg?height=20&color=%23737373) | **Blandet** | Familiemedlemmer har forskellige valg |
 | ![Power](https://api.iconify.design/heroicons:bolt.svg?height=20&color=%23f59e0b) | **Power mode** | Ændr alle familiemedlemmer på én gang |
 | ![Åben](https://api.iconify.design/heroicons:lock-open.svg?height=20&color=%2322c55e) | **Framelding: Åben** | Booking kan ændres - du kan frit tilmelde og framelde dig |
-| ![Lukket](https://api.iconify.design/heroicons:lock-closed.svg?height=20&color=%23ef4444) | **Framelding: Lukket** | Booking kan ikke ændres - du kan frigive din billet, købe en billet til salg eller skrive dig på ventelisten |
+| ![Lukket](https://api.iconify.design/heroicons:lock-closed.svg?height=20&color=%23ef4444) | **Framelding: Lukket** | Lukket for framelding - du kan frigive din billet, købe en billet til salg eller skrive dig på ventelisten |
 | ![Frigivet](https://api.iconify.design/heroicons:arrow-up-tray.svg?height=20&color=%23ef4444) | **Frigivet** | Billetten er sat til salg |
 | ![Køb](https://api.iconify.design/heroicons:arrows-right-left.svg?height=20&color=%238b5cf6) | **Køb billet** | Køb en billet, som en anden har sat til salg |
 | ![Venteliste](https://api.iconify.design/hugeicons:hourglass.svg?height=20&color=%23737373) | **Venteliste** | Du står i kø til en billet af din billettype |

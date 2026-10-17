@@ -31,7 +31,7 @@
  * (ORDER_STATE_COLORS.queued); its hourglass takes the toned ink
  * Mode labels: Spisesal | Sen | Takeaway | Ingen
  */
-import type {DinnerMode} from '~/composables/useBookingValidation'
+import type {DinnerMode, TicketState as TicketStateValue} from '~/composables/useBookingValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {TicketPresentation} from '~/composables/useBookingUi'
 import type {NuxtUIColor, TicketTypeColor} from '~/composables/useTheSlopeDesignSystem'
@@ -40,41 +40,40 @@ interface Props {
   ticketConfig: TicketPresentation | null
   price: number
   dinnerMode?: DinnerMode
-  isReleased?: boolean
-  isClaimed?: boolean
+  ticketState?: TicketStateValue // What the ticket is now (ticketStateOf); a queued ticket's dinnerMode is the wish, not a booking
   guestCount?: number // undefined = not guest, 1+ = guest ticket(s)
   consensus?: boolean // Power mode: true=all agree, false=mixed, undefined=not power mode
   allergies?: AllergyTypeDisplay[] // The eater's allergy types; the card shows the glyph only
   provenanceHousehold?: string // Source household if claimed
-  isQueued?: boolean // On the waiting list: dinnerMode is the wish, not a booking
   note?: string // A ticket price: its age limit and description
 }
 
 const props = withDefaults(defineProps<Props>(), {
   dinnerMode: undefined,
-  isReleased: false,
-  isClaimed: false,
+  ticketState: TicketState.normal,
   guestCount: undefined,
   consensus: undefined,
   allergies: () => [],
   provenanceHousehold: undefined,
-  isQueued: false,
   note: undefined
 })
 
 const isGuest = computed(() => props.guestCount !== undefined)
 
-const {COMPONENTS, ICONS, SIZES, NOISE, getTicketState} = useTheSlopeDesignSystem()
+const {COMPONENTS, ICONS, SIZES, NOISE} = useTheSlopeDesignSystem()
 const {formatPrice} = useTicket()
 const ticket = COMPONENTS.ticket
 
-const ticketState = computed(() => getTicketState(props.isReleased, props.isClaimed, props.isQueued))
-
-const STATE_GLYPHS = {released: ICONS.released, claimed: ICONS.claim, queued: ICONS.waitlist} as const satisfies Record<keyof typeof ticket.stateIcon, string>
-const stateGlyph = computed(() => {
-  const state = ticketState.value
-  return state === 'normal' ? null : {name: STATE_GLYPHS[state], class: ticket.stateIcon[state]}
-})
+// The state cell's glyph; a normal ticket's cell stays empty
+const STATE_GLYPHS: Record<TicketStateValue, {name: string, class: string} | null> = {
+  [TicketState.released]: {name: ICONS.released, class: ticket.stateIcon.released},
+  [TicketState.claimed]: {name: ICONS.claim, class: ticket.stateIcon.claimed},
+  [TicketState.queued]: {name: ICONS.waitlist, class: ticket.stateIcon.queued},
+  [TicketState.normal]: null
+}
+const stateGlyph = computed(() => STATE_GLYPHS[props.ticketState])
+// On the waiting list the mode is the wish, shown as its ghost
+const isWish = computed(() => props.ticketState === TicketState.queued)
 
 const hasAllergies = computed(() => props.allergies.length > 0)
 
@@ -142,7 +141,7 @@ const badgeText = computed(() => {
               v-if="dinnerMode"
               :model-value="dinnerMode"
               :consensus="consensus"
-              :ghost="isQueued"
+              :ghost="isWish"
               show-label
             />
           </slot>

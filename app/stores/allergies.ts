@@ -51,6 +51,8 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         return allergyTypes.value.find(at => at.id === id)?.id ?? null
     })
 
+    const isAllergyTypeSelected = computed(() => !!selectedAllergyTypeId.value)
+
     const {
         data: selectedAllergyType,
         error: selectedAllergyTypeError,
@@ -63,7 +65,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         {
             schema: AllergyTypeDisplaySchema.nullable(),
             default: () => null,
-            enabled: () => !!selectedAllergyTypeId.value,
+            enabled: () => isAllergyTypeSelected.value,
             dependsOn: [allergyTypesDataset],
             errorMessage: 'Kan ikke finde allergitypen',
             notFound: {
@@ -92,10 +94,10 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         isInitialized: isPosterNotesInitialized
     } = posterNotesDataset
 
-    // Allergies - the selected household's, or one inhabitant's; nothing is requested until a component asks
+    // Allergies - the selected household's; nothing is requested until a component asks
     const householdsStore = useHouseholdsStore()
     const isHouseholdAllergiesRequested = ref(false)
-    const filterInhabitantId = ref<number | null>(null)
+    const isHouseholdAllergiesEnabled = computed(() => isHouseholdAllergiesRequested.value && !!householdsStore.selectedHouseholdId)
 
     const {
         data: allergies,
@@ -106,13 +108,11 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         isInitialized: isAllergiesInitialized
     } = storeAsyncData(
         'allergy-store-allergies',
-        () => filterInhabitantId.value
-            ? `/api/household/allergy?inhabitantId=${filterInhabitantId.value}`
-            : `/api/household/allergy?householdId=${householdsStore.selectedHouseholdId}`,
+        () => `/api/household/allergy?householdId=${householdsStore.selectedHouseholdId}`,
         {
             schema: AllergyDetailSchema.array(),
             default: () => [],
-            enabled: () => !!filterInhabitantId.value || (isHouseholdAllergiesRequested.value && !!householdsStore.selectedHouseholdId),
+            enabled: () => isHouseholdAllergiesEnabled.value,
             dependsOn: [householdsStore.selectedHouseholdDataset],
             errorMessage: 'Kunne ikke hente allergier'
         }
@@ -131,8 +131,12 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         posterNotesSetting.value?.value ?? SETTING_REGISTRY[POSTER_NOTES_KEY].defaultValue
     )
 
-    // Convenience computed for components
-    const isAllergyStoreReady = computed(() => isAllergyTypesInitialized.value)
+    // The catalog, and each gated dataset once its condition holds (ADR-007); the poster notes keep their own flags
+    const isAllergyStoreReady = computed(() =>
+        isAllergyTypesInitialized.value
+        && (!isAllergyTypeSelected.value || isSelectedAllergyTypeInitialized.value)
+        && (!isHouseholdAllergiesEnabled.value || isAllergiesInitialized.value)
+    )
 
     // ========================================
     // Actions - AllergyTypes (Admin)
@@ -198,12 +202,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     // ========================================
 
     const loadAllergiesForHousehold = () => {
-        filterInhabitantId.value = null
         isHouseholdAllergiesRequested.value = true
-    }
-
-    const loadAllergiesForInhabitant = (inhabitantId: number) => {
-        filterInhabitantId.value = inhabitantId
     }
 
     // The allergy-type catalog embeds inhabitants per type (admin counts, PDF poster),
@@ -285,7 +284,6 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         savePosterNotes,
         // Actions - Allergies
         loadAllergiesForHousehold,
-        loadAllergiesForInhabitant,
         createAllergy,
         updateAllergy,
         deleteAllergy

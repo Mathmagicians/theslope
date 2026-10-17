@@ -205,7 +205,7 @@ const upcomingPeriodStart = computed(() => {
 </script>
 
 <template>
-  <div data-testid="household-economy" class="space-y-6">
+  <div data-testid="household-economy" :class="COMPONENTS.adminEconomy.page">
     <ViewError v-if="isErrored" :error="error?.statusCode" message="Kunne ikke hente økonomioversigt"/>
     <Loader v-else-if="isLoading" text="Henter økonomioversigt..."/>
 
@@ -213,11 +213,11 @@ const upcomingPeriodStart = computed(() => {
       <!-- Section 1: Kommende (Upcoming Orders) -->
       <UCard>
         <template #header>
-          <div class="flex items-center gap-2">
+          <div :class="COMPONENTS.adminEconomy.cardTitleRow">
             <UIcon :name="ICONS.calendar" :size="SIZES.standardIconSize"/>
-            <div class="flex flex-col md:flex-row md:items-center md:gap-2">
+            <div :class="COMPONENTS.householdEconomy.titleStack">
               <h3 :class="TYPOGRAPHY.cardTitle">Kommende</h3>
-              <span :class="['hidden md:inline', TEXT.gray[400]]">|</span>
+              <span :class="[COMPONENTS.pipe, COMPONENTS.householdEconomy.titlePipe, TEXT.gray[400]]">|</span>
               <p :class="TYPOGRAPHY.bodyTextMuted">{{ formatDate(upcomingPeriodStart) }} → ...</p>
             </div>
           </div>
@@ -244,8 +244,8 @@ const upcomingPeriodStart = computed(() => {
           </template>
           <template #totalAmount-cell="{ row }">{{ formatPrice(row.original.totalAmount) }} kr</template>
           <template #expanded="{ row }">
-            <UCard class="ml-2 md:ml-8 mr-2 md:mr-4 my-2">
-              <div class="space-y-2 max-h-64 md:max-h-96 overflow-y-auto">
+            <UCard :class="COMPONENTS.householdEconomy.expandedCard">
+              <div :class="COMPONENTS.householdEconomy.orderList">
                 <CostLine
                     v-for="order in row.original.items"
                     :key="order.id"
@@ -266,7 +266,7 @@ const upcomingPeriodStart = computed(() => {
         </EconomyTable>
 
         <template v-if="upcomingOrdersData.length > 0" #footer>
-          <div class="flex justify-end items-center gap-2">
+          <div :class="COMPONENTS.adminEconomy.totalRow">
             <span :class="TYPOGRAPHY.bodyTextMedium">Forventet:</span>
             <span :class="TYPOGRAPHY.cardTitle">{{ formatPrice(upcomingTotal) }} kr</span>
           </div>
@@ -276,7 +276,7 @@ const upcomingPeriodStart = computed(() => {
       <!-- Section 2: Faktureringsperioder (Unified: Virtual + Closed) -->
       <UCard>
         <template #header>
-          <div class="flex items-center gap-2">
+          <div :class="COMPONENTS.adminEconomy.cardTitleRow">
             <UIcon :name="ICONS.economy" :size="SIZES.standardIconSize"/>
             <h3 :class="TYPOGRAPHY.cardTitle">Faktureringsperioder</h3>
           </div>
@@ -325,7 +325,7 @@ const upcomingPeriodStart = computed(() => {
                 :stats-accessor="periodStatsAccessor"
                 :control-sum-accessor="periodControlSumAccessor"
                 :items-accessor="periodItemsAccessor"
-                class="ml-2 md:ml-8 mr-2 md:mr-4 my-2"
+                :class="COMPONENTS.householdEconomy.expandedCard"
             >
               <template #default="{ items }">
                 <!-- Dinner breakdown table (ocean palette to match Level 1 header) -->
@@ -352,7 +352,7 @@ const upcomingPeriodStart = computed(() => {
 
                   <!-- Expanded dinner: individual transactions with history -->
                   <template #expanded="{ row: dinnerRow }">
-                    <div :class="['p-2 space-y-1', BG.panel]">
+                    <div :class="[COMPONENTS.adminEconomy.nestedList, BG.panel]">
                       <CostLine
                           v-for="tx in dinnerRow.original.items"
                           :key="tx.id"

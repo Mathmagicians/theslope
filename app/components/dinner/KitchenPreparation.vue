@@ -284,9 +284,13 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
         <div :class="COMPONENTS.kitchen.totalsMain">
           {{ Math.round(totalPortions) }} KUVERTER
         </div>
-        <div :class="COMPONENTS.kitchen.totalsBreakdown">
-          <span v-for="figure in totalFigures.figures" :key="figure.ticketType" :class="COMPONENTS.kitchen.figure">{{ figure.text }}</span>
-          <span :class="COMPONENTS.kitchen.figureTotal">| # {{ totalFigures.total }}</span>
+        <div :class="COMPONENTS.kitchen.totalsBreakdown" data-testid="kitchen-total-figures">
+          <template v-for="(figure, index) in totalFigures.figures" :key="figure.ticketType">
+            <span v-if="index > 0" :class="COMPONENTS.pipe">|</span>
+            <span :class="COMPONENTS.kitchen.figure">{{ figure.text }}</span>
+          </template>
+          <span :class="COMPONENTS.pipe">|</span>
+          <span :class="COMPONENTS.kitchen.figureTotal"># {{ totalFigures.total }}</span>
         </div>
       </div>
     </div>
@@ -317,8 +321,11 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
         </div>
 
         <!-- Ticket breakdown -->
-        <div v-if="mode.ticketFigures" :class="COMPONENTS.kitchen.breakdown">
-          <span v-for="figure in mode.ticketFigures.figures" :key="figure.ticketType" :class="COMPONENTS.kitchen.figure">{{ figure.text }}</span>
+        <div v-if="mode.ticketFigures" :class="COMPONENTS.kitchen.breakdown" data-testid="kitchen-figures">
+          <template v-for="(figure, index) in mode.ticketFigures.figures" :key="figure.ticketType">
+            <span v-if="index > 0" :class="COMPONENTS.pipe">|</span>
+            <span :class="COMPONENTS.kitchen.figure">{{ figure.text }}</span>
+          </template>
           <span :class="COMPONENTS.kitchen.figureTotal"># {{ mode.ticketFigures.total }}</span>
         </div>
 
@@ -336,8 +343,11 @@ const normalizedWidths = computed(() => calculateNormalizedWidths(diningModeStat
             <UIcon :name="ICONS.waitlist" :class="COMPONENTS.kitchen.glyph" />
             {{ formatPortions(queue!.portions) }} kuv.
           </div>
-          <div :class="COMPONENTS.kitchen.breakdown">
-            <span v-for="figure in queue!.ticketFigures.figures" :key="figure.ticketType" :class="COMPONENTS.kitchen.figure">{{ figure.text }}</span>
+          <div :class="COMPONENTS.kitchen.breakdown" data-testid="kitchen-figures">
+            <template v-for="(figure, index) in queue!.ticketFigures.figures" :key="figure.ticketType">
+              <span v-if="index > 0" :class="COMPONENTS.pipe">|</span>
+              <span :class="COMPONENTS.kitchen.figure">{{ figure.text }}</span>
+            </template>
             <span :class="COMPONENTS.kitchen.figureTotal"># {{ queue!.ticketFigures.total }}</span>
           </div>
         </div>

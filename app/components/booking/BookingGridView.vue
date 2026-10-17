@@ -129,7 +129,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEmptyMessage, getOrderStateColor, getResidencyDisplay, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
+const {ICONS, COLOR, SIZES, COMPONENTS, TYPOGRAPHY, BUTTONS, ALERTS, getRandomEmptyMessage, ORDER_STATE_COLORS, getResidencyDisplay, LAYOUTS, NOISE} = useTheSlopeDesignSystem()
 const emptyState = getRandomEmptyMessage('noDinners')
 
 // Ticket price formatting
@@ -441,7 +441,7 @@ const getOrderCountsForInhabitant = (inhabitantId: number): { total: number, rel
     .filter(isPendingOrder)
   return {
     total: orders.length,
-    released: orders.filter(o => isReleased(o)).length
+    released: orders.filter(o => ticketStateOf(o) === TicketState.released).length
   }
 }
 
@@ -507,7 +507,7 @@ const getPowerDisabledModes = (event: DinnerEventDisplay): DinnerMode[] => {
 const getEventLockChip = (event: DinnerEventDisplay) => {
   if (canBookEvent(event) || isDinnerPast(event.date)) return null
   const releasedCount = props.orders.filter(o =>
-    o.dinnerEventId === event.id && isReleased(o)
+    o.dinnerEventId === event.id && ticketStateOf(o) === TicketState.released
   ).length
   return lockChip({...EMPTY_RELEASED_TICKET_COUNTS, total: releasedCount})
 }
@@ -668,7 +668,7 @@ const getEventSummary = (eventId: number) => {
           <UBadge
             v-if="getOrderCountsForInhabitant(row.original.inhabitant.id).released > 0"
             :data-testid="`inhabitant-released-count-${row.original.inhabitant.id}`"
-            :color="getOrderStateColor(true, false)"
+            :color="ORDER_STATE_COLORS[TicketState.released]"
             :variant="NOISE.soft"
             :size="SIZES.xs"
           >

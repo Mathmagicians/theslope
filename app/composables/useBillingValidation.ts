@@ -10,7 +10,7 @@ import {
 } from '~/composables/fragments/domainFragments'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {sumAmounts} from '~/utils/ledger'
-import type {DinnerEventInfo} from '~/composables/useBookingValidation'
+import type {DinnerEventInfo, DinnerMode} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import {useNotificationValidation} from '~/composables/useNotificationValidation'
@@ -368,7 +368,9 @@ export const useBillingValidation = () => {
         }),
         ticketType: TicketTypeSchema.nullable(),
         isGuestTicket: z.boolean().optional(),
-        provenanceHousehold: z.string().nullable().optional()
+        provenanceHousehold: z.string().nullable().optional(),
+        // The order's eating mode at the close; null for a snapshot written before the transaction kept it
+        dinnerMode: DinnerModeSchema.nullable()
     })
 
     /**
@@ -547,7 +549,8 @@ export const useBillingValidation = () => {
         }),
         ticketType: TicketTypeSchema.nullable(),
         isGuestTicket: z.boolean().optional(),
-        provenanceHousehold: z.string().nullable().optional()
+        provenanceHousehold: z.string().nullable().optional(),
+        dinnerMode: DinnerModeSchema.optional()
     })
 
     /**
@@ -560,6 +563,7 @@ export const useBillingValidation = () => {
         ticketType: string | null
         isGuestTicket?: boolean
         provenanceHousehold?: string | null
+        dinnerMode?: DinnerMode
     }): string => JSON.stringify({
         dinnerEvent: order.dinnerEvent,
         inhabitant: {
@@ -569,7 +573,8 @@ export const useBillingValidation = () => {
         },
         ticketType: order.ticketType,
         isGuestTicket: order.isGuestTicket,
-        provenanceHousehold: order.provenanceHousehold
+        provenanceHousehold: order.provenanceHousehold,
+        dinnerMode: order.dinnerMode
     })
 
     /**
@@ -590,6 +595,7 @@ export const useBillingValidation = () => {
             ticketPrice: {ticketType: string} | null
             isGuestTicket?: boolean
             provenanceHousehold?: string | null  // Populated from OrderHistory USER_CLAIMED
+            dinnerMode?: DinnerMode
         } | null
     }): z.infer<typeof TransactionDisplaySchema> => {
         const base = {id: tx.id, amount: tx.amount, createdAt: tx.createdAt, orderSnapshot: tx.orderSnapshot}
@@ -615,7 +621,8 @@ export const useBillingValidation = () => {
             inhabitant,
             ticketType: hasTicketPrice ? tx.order!.ticketPrice!.ticketType : snapshot.ticketType,
             isGuestTicket: tx.order?.isGuestTicket ?? snapshot.isGuestTicket,
-            provenanceHousehold: tx.order?.provenanceHousehold ?? snapshot.provenanceHousehold
+            provenanceHousehold: tx.order?.provenanceHousehold ?? snapshot.provenanceHousehold,
+            dinnerMode: tx.order?.dinnerMode ?? snapshot.dinnerMode ?? null
         })
     }
 

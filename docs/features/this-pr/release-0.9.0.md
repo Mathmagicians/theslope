@@ -49,6 +49,9 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | One booking path, end to end | outcomes in, notification out; the scaffold survives a partial failure and reports per person; the waiting list catches up; one client write; preview and toast from one word table; the ticket history follows kuverter | § One booking path, end to end | points 1–7 committed (2ad1429 to 5883d6b); 6b in progress |
 | Docs and tooling | the user, chef and admin guides; `docs/ui.md` and the compliance tables compacted; `docs/testing.md` Rule 0; the ui skill and the frontend agent | `docs/`, `.claude/skills/`, `.claude/agents/` | committed (b82852e, 38804ef, 0dfd8eb, 450bcc8) |
 | Close keeps the eating mode | the nightly close writes each order's own eating mode | `server/utils/closeOrders.ts`, `fetchPendingOrdersOnConsumedDinners` | committed (16b4035) |
+| One released predicate (the kitchen box) | a released ticket nobody bought stays released after the close; the kitchen panels add up and TIL SALG keeps its title | `app/composables/useOrder.ts`, `KitchenPreparation.vue` | committed (56f8e12) |
+| Shared words, supply predicates and the system's identity | one set of ticket-type words and counts; "Lukket for framelding"; a stale order id is skipped; the system account from `HEY_NABO_USERNAME`; "frameldt, ADMIN korrektion" in the ticket history | `app/composables/useBookingUi.ts`, `app/composables/useTicket.ts`, `server/utils/systemUser.ts` | committed (56f8e12) |
+| A waiting-list placement happens once | the queue keeps its own placement state (`placingAt`, `placingOrderId`); migration `0018_placing` | § A waiting-list placement happens once | signed off 2026-10-17 |
 | One audit format for the order history | one `auditData` schema, written and read through one pair of functions | § One audit format for the order history | signed off 2026-10-17; runs after "Shared words, supply predicates and the system's identity" |
 
 ## Open before the release
@@ -335,6 +338,31 @@ household, and prints "?" for a ticket it cannot attribute.
 The legacy cancellations on upcoming dinners hold no guest ticket in production, dev or local, so an unknown guest flag
 reads as a regular ticket. The count re-runs after the 0.9 deploy.
 
+## A waiting-list placement happens once
+
+### Problem
+
+A sale or an extra-portion placement writes the order, then deletes the queue entry. D1 runs the two writes without a
+transaction (the D1 adapter ignores `$transaction`, https://www.prisma.io/docs/orm/overview/databases/cloudflare-d1), so a
+crash between them leaves the entry. A guest entry has no unique index: a rerun sells or places it again, and the
+household pays twice.
+
+### Solution
+
+The queue keeps its own state: `TicketWaitlist` gains `placingAt DateTime?` and `placingOrderId Int?`, a plain id
+without a relation, so the order model stays as it is.
+
+1. A run grabs an entry by setting `placingAt` where it is null; a sale's grab also records the released order it moves.
+2. It writes the order, records `placingOrderId`, then removes the entry.
+3. Recovery reads an entry with `placingAt` set and finishes or releases it.
+
+Regular and guest entries are placed exactly once.
+
+### Migration
+
+`0018_placing` adds the two nullable columns. B6, the ticket allergies and the ticket price portions ride their own
+releases.
+
 ## ADR review
 
 `/code-review 168` against `docs/adr.md`, 2026-10-17, read-only at 5165b4f. The architect signs off each
@@ -343,7 +371,7 @@ sign-off.
 
 | # | Rule | Where | Breach | Architect sign-off | Fix |
 |---|---|---|---|---|---|
-| 1 | One booking path (ADR-016): a stale order id is skipped | `app/composables/useBooking.ts:205` | `decideOrderAction` throws when an order id is not found; a released order sold to another household sinks the member's whole save, reported as no failure | ✅ 2026-10-17 | |
+| 1 | One booking path (ADR-016): a stale order id is skipped | `app/composables/useBooking.ts:205` | `decideOrderAction` throws when an order id is not found; a released order sold to another household sinks the member's whole save, reported as no failure | ✅ 2026-10-17 | 56f8e12 |
 | 2 | Display types for batches, D1 query limit (ADR-009, ADR-014) | `server/utils/waitlistAssignment.ts:45` | each queued claim reloads the full dinner and season (about 20–25 queries); around 40 claims reach D1's 1,000-query limit and the save fails part-way | ✅ 2026-10-17 | 5883d6b |
 | 3 | Idempotent jobs (ADR-015) | `server/utils/waitlistAssignment.ts:123` | a sale writes the order before deleting the queue entry; a crash between the two fails the next run with a 409 at that entry each time | ✅ 2026-10-17 | 5883d6b |
 | 4 | External calls warn and never block (ADR-013); notify after the action (ADR-016) | `server/routes/api/household/order/scaffold.post.ts:61` and 8 other endpoints | a failed recipient lookup while building the mails turns a saved booking into a 500, and the member retries | ✅ 2026-10-17 | 5883d6b |

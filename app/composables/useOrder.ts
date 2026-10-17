@@ -3,8 +3,8 @@
  * Following ADR-001: Business logic in composables
  * Following ADR-001: Import enums from validation composables (NOT from generated layer)
  */
-import {useBookingValidation, type OrderDisplay, type OrderDetail, type TicketType} from '~/composables/useBookingValidation'
-import {isReleased} from '~/composables/useBooking'
+import {useBookingValidation, TicketState, type OrderDisplay, type OrderDetail, type TicketType} from '~/composables/useBookingValidation'
+import {ticketStateOf} from '~/composables/useBooking'
 import {sumBy} from '~/utils/ledger'
 
 /**
@@ -42,7 +42,7 @@ export const useOrder = () => {
    * Generic to preserve OrderDisplay or OrderDetail type
    */
   const getActiveOrders = <T extends OrderDisplay>(orders: T[]): T[] => {
-    return orders.filter(o => !isReleased(o))
+    return orders.filter(o => ticketStateOf(o) !== TicketState.released)
   }
 
   /**
@@ -50,7 +50,7 @@ export const useOrder = () => {
    * Generic to preserve OrderDisplay or OrderDetail type
    */
   const getReleasedOrders = <T extends OrderDisplay>(orders: T[]): T[] => {
-    return orders.filter(o => isReleased(o))
+    return orders.filter(o => ticketStateOf(o) === TicketState.released)
   }
 
   // The kitchen's count of the orders: a ticket weighs its price's portions; a ticket whose price row is gone weighs 0

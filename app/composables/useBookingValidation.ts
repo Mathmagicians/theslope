@@ -21,10 +21,17 @@ type DinnerEventRow = Record<string, unknown> & {
     expenses?: Array<Record<string, unknown> & {amount: number}> | null
 }
 
+// What a ticket is now: released and for sale, bought from another household, waited for on the waiting list, or none
+const TicketStateSchema = z.enum(['released', 'claimed', 'queued', 'normal'])
+// A dinner's supply after the booking deadline: tickets for sale, a waiting list, both or neither
+const SupplyStateSchema = z.enum(['FOR_SALE_AND_WAITLIST', 'FOR_SALE', 'WAITLIST', 'NONE'])
+
 export const DinnerMode = DinnerModeSchema.enum
 export const DinnerState = DinnerStateSchema.enum
 export const OrderState = OrderStateSchema.enum
 export const OrderAuditAction = OrderAuditActionSchema.enum
+export const TicketState = TicketStateSchema.enum
+export const SupplyState = SupplyStateSchema.enum
 
 /**
  * Validation schemas for Bookings domain (DinnerEvent + Order)
@@ -696,11 +703,13 @@ export const useBookingValidation = () => {
     // portions for the waiting list, or the nightly close
     const TicketChangeKindSchema = z.enum([...BookingActionSchema.options, 'ADMIN_CANCEL', 'EXTRA_PORTIONS', 'CLOSE'])
 
-    // The tickets one event touched by type; a ticket type change also names the tickets it changed from
+    // The tickets one event touched by type; a ticket type change also names the tickets it changed from, a sale the
+    // short name of the household it bought from
     const TicketEventSchema = z.object({
         change: TicketChangeKindSchema,
         tickets: TicketCountsSchema,
-        from: TicketCountsSchema.optional()
+        from: TicketCountsSchema.optional(),
+        seller: z.string().nullable().optional()
     })
 
     /**
@@ -959,6 +968,8 @@ export const useBookingValidation = () => {
         DinnerEventDetailSchema,
         TicketCountsSchema,
         TicketChangeKindSchema,
+        TicketStateSchema,
+        SupplyStateSchema,
         TicketEventSchema,
         TicketChangeSchema,
         TicketChangesResponseSchema,
@@ -1066,6 +1077,8 @@ export type DinnerState = z.infer<ReturnType<typeof useBookingValidation>['Dinne
 export type DinnerMode = z.infer<ReturnType<typeof useBookingValidation>['DinnerModeSchema']>
 export type OrderState = z.infer<ReturnType<typeof useBookingValidation>['OrderStateSchema']>
 export type TicketType = z.infer<ReturnType<typeof useBookingValidation>['TicketTypeSchema']>
+export type TicketState = z.infer<ReturnType<typeof useBookingValidation>['TicketStateSchema']>
+export type SupplyState = z.infer<ReturnType<typeof useBookingValidation>['SupplyStateSchema']>
 
 // DinnerEvent
 export type DinnerEventDisplay = z.infer<ReturnType<typeof useBookingValidation>['DinnerEventDisplaySchema']>

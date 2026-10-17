@@ -132,7 +132,7 @@ function and the spec hold the detail; a row names a gap in a few words.
 | `/api/billing/index.get.ts` | ✅ | ✅ | ❓ | ✅ | ❓ audit needed |
 | `/api/calendar/index.get.ts` | ❌ | ⚠️ | ❓ | ❌ | ❌ raw query read, no spec |
 | `/api/calendar/feed.ts` | ✅ | N/A | ❓ | ❌ | ⚠️ no spec |
-| `/api/feedback.post.ts` | ✅ | ✅ | N/A | ❌ | ⚠️ no spec |
+| `/api/feedback.post.ts` | ✅ | ✅ | N/A | ❌ | ⚠️ spec owed: 401 without a session, 400 on an invalid body |
 | `server/integration/github/githubClient.ts` | ✅ | ✅ | N/A | ❌ | ⚠️ no spec |
 | `/api/test/heynabo/*` | N/A | N/A | N/A | N/A | N/A test support |
 | **Authorization** | | | | | |

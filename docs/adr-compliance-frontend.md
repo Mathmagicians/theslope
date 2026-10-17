@@ -97,7 +97,7 @@ Status.
 | `AllergyCatalogTable.vue` | `/admin/allergies`, `/chef` | none | ✅ | ✅ parent | ✅ |
 | `AllergyDetailPanel.vue` | `/admin/allergies` | none | ✅ | ✅ parent | ✅ |
 | `AllergenMultiSelector.vue` | `/admin/allergies`, `/chef` | none | ✅ | ✅ parent | ✅ |
-| `AllergyOverviewLine.vue` | `/chef`, `/dinner`, `/admin/allergies` | none | ✅ parent | ✅ parent | ✅ |
+| `AllergyOverviewLine.vue` | `/chef`, `/dinner`, `/admin/allergies` | none | ✅ | ✅ parent | ✅ |
 | `AllergyTypeCard.vue` | `/admin/allergies`, `/household/[shortname]/allergies` | plan | ✅ | ✅ parent | ✅ |
 | `AllergyTypeDisplay.vue` | `/dinner`, `/chef`, `/admin/allergies`, `/household/[shortname]/allergies` | none | ✅ | N/A | ✅ |
 | `AllergyNotes.vue` | `/admin/allergies`, `/admin/allergies/pdf` | none | ✅ | ✅ parent | ✅ |
@@ -180,7 +180,7 @@ Status.
 |---|---|---|---|---|---|
 | `EconomyTable.vue` | `/admin/economy`, `/household/[shortname]/economy` | none | ✅ | ✅ parent | ✅ |
 | `CostEntry.vue` | `/admin/economy`, `/household/[shortname]/economy` | none | ❌ | ✅ parent | ⚠️ missing unit |
-| `CostLine.vue` | `/admin/economy`, `/household/[shortname]/economy` | none | ❌ | ✅ parent | ⚠️ missing unit; a transaction line carries no eating mode, so a ticket the close kept with Ingen reads Lukket there |
+| `CostLine.vue` | `/admin/economy`, `/household/[shortname]/economy` | none | ✅ | ✅ parent | ✅ |
 | `ControlBadge.vue` | `/admin/economy`, `/household/[shortname]/economy` | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `ShareLinksPopover.vue` | `/admin/economy`, `/public/billing/[token]` | none | ❌ | ✅ parent | ⚠️ missing unit |
 
@@ -193,7 +193,7 @@ Status.
 | `ViewError.vue` | every route | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `Loader.vue` | every route | none | ❌ | ✅ parent | ⚠️ missing unit |
 | `Ticker.vue` | `/` | none | ❌ | N/A | ⚠️ missing unit |
-| `HelpButton.vue` | every route | auth | ✅ | N/A | ⚠️ raw layout classes and a `:ui` patch outside the tokens |
+| `HelpButton.vue` | every route | auth | ✅ | N/A | ✅ |
 | `Logo.vue` | every route | none | ❌ | ✅ parent | ⚠️ missing unit |
 
 ## Stores
@@ -239,7 +239,7 @@ Status.
 | `useCookingTeam()` | isomorphic | ✅ | ✅ | ✅ | ✅ | ✅ |
 | `useBilling()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
 | `useHeynabo()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
-| `useOrder()` | client | N/A | N/A | ✅ | ✅ | ✅ the order predicates live in `useBooking`; `server/` reaches none of `useOrder` |
+| `useOrder()` | client | N/A | N/A | ✅ | ✅ | ✅ a ticket's state is `useBooking`'s `ticketStateOf`; `server/` reaches none of `useOrder` |
 | `useAllergy()` | client | N/A | N/A | ✅ | ✅ | ✅ |
 | `useTicket()` | isomorphic | N/A | N/A | ✅ | ✅ | ✅ |
 | `useMaintenance()` | client | N/A | N/A | ✅ | ✅ | ✅ |

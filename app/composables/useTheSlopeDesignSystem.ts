@@ -2,6 +2,7 @@ import {computed} from 'vue'
 import type {WeekDay} from '~/types/dateTypes'
 import type {AlertProps, AvatarProps, ButtonProps, BadgeProps, ChipProps} from '@nuxt/ui'
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
+import type {TicketState} from '~/composables/useBookingValidation'
 import type {SeasonStatusValue} from '~/utils/season'
 
 // NuxtUI size types extracted from component props
@@ -679,9 +680,7 @@ export const ORDER_STATE_COLORS = {
     released: COLOR.error,
     claimed: COLOR.info,
     queued: COLOR.neutral
-} as const satisfies Record<string, NuxtUIBadgeColor>
-
-export type TicketState = keyof typeof ORDER_STATE_COLORS
+} as const satisfies Record<TicketState, NuxtUIBadgeColor>
 
 // A dinner ticket's card; each face adds the edge its state colours (`COMPONENTS.ticket.face`)
 const TICKET_FACE = `relative overflow-hidden rounded-lg ${BG.ticket} p-2 md:p-3 w-full border-x-4 md:border-x-8`
@@ -692,6 +691,9 @@ const QUEUE_LOCK_CHIP = {ui: {base: 'h-3.5 min-w-3.5 md:h-4.5 md:min-w-4.5'}, ic
 export const COMPONENTS = {
     // The turn of an open-panel chevron on a button whose own icon carries it; BUTTONS.flipOpen turns a trailing chevron
     openTurn: flipOpenTurn,
+
+    // The pipe between the parts of one line, in its own span: a flex item drops the spaces a "|" in the text would carry
+    pipe: 'mx-1',
 
     // Kitchen panels (functional data) - Vibrant Pantone colors
     kitchenStatsBar: `${BG.mocha[50]} ${TEXT.gray[900]} px-0 py-4 md:p-6`,
@@ -885,6 +887,33 @@ export const COMPONENTS = {
         loadingSpinner: MOTION_SPIN,
         invoiceFrame: 'rounded-lg overflow-hidden border',
         shareRow: 'flex items-center gap-2 border-t pt-4'
+    },
+
+    // The household's economy tab: the page and its card rows share adminEconomy's tokens; these are its own
+    householdEconomy: {
+        // The Kommende title over its period on a phone, beside it from md with the pipe between them
+        titleStack: 'flex flex-col md:flex-row md:items-center md:gap-2',
+        titlePipe: 'hidden md:inline',
+        // An expanded row's card, inset under the row it opens from
+        expandedCard: 'ml-2 md:ml-8 mr-2 md:mr-4 my-2',
+        // The orders of an expanded dinner scroll inside their card
+        orderList: 'space-y-2 max-h-64 md:max-h-96 overflow-y-auto'
+    },
+
+    // HelpButton: the help popover below the button, its card, and the feedback form that unfolds in the card's footer
+    helpButton: {
+        popoverContent: {side: 'bottom', align: 'start'},
+        card: 'max-w-xs sm:max-w-sm mx-2',
+        header: 'flex justify-between items-center gap-2',
+        close: 'flex-shrink-0',
+        content: 'text-pretty break-words',
+        actions: 'flex flex-col gap-1 md:gap-2',
+        feedbackForm: 'pt-2 md:pt-3 space-y-2 md:space-y-3',
+        success: 'text-center py-3 md:py-4 space-y-3',
+        issueLink: 'block mx-auto underline decoration-dashed underline-offset-4',
+        feedbackTypesUi: {fieldset: 'flex flex-col md:flex-row gap-2 md:gap-4'},
+        description: 'w-full',
+        formButtons: 'gap-2 md:gap-3'
     },
 
     // The season form's ticket price editor (TicketPriceListEditor): the card that adds a price and the list of prices
@@ -1892,25 +1921,6 @@ export const TICKET_TYPE_COLORS = {
 
 /** The colours a ticket type badge takes; `COMPONENTS.ticket.infoIcon` is keyed by them */
 export type TicketTypeColor = typeof TICKET_TYPE_COLORS[keyof typeof TICKET_TYPE_COLORS]
-
-// ============================================================================
-// PART 5: Order State Display (ORDER_STATE_COLORS sits above COMPONENTS, its first reader)
-// ============================================================================
-
-/**
- * The ticket state from its flags; a released ticket reads released even when claimed, and a queued ticket holds
- * no order, so it reads queued only in neither state
- */
-export const getTicketState = (released: boolean, claimed: boolean, queued = false): TicketState => {
-    if (released) return 'released'
-    if (claimed) return 'claimed'
-    if (queued) return 'queued'
-    return 'normal'
-}
-
-/** Get order state accent color from the released and claimed flags */
-export const getOrderStateColor = (released: boolean, claimed: boolean): NuxtUIBadgeColor =>
-    ORDER_STATE_COLORS[getTicketState(released, claimed)]
 
 /**
  * ICONS - Standard icon names for common UI elements
@@ -3138,8 +3148,6 @@ export const useTheSlopeDesignSystem = () => {
         URGENCY_TO_CHIP_COLOR,
         BOOKING_LOCK_STATUS,
         ORDER_STATE_COLORS,
-        getOrderStateColor,
-        getTicketState,
         PANTONE_CHIPS,
         getPantoneChip,
         RAINBOW,

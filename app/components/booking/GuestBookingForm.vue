@@ -92,6 +92,8 @@ const validateForm = () => {
 
 // Deadline badges using existing factory
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))
+// The header's badge while tickets are for sale
+const forSaleWords = computed(() => ticketsForSale(props.releasedTicketCounts))
 
 // The client settles the guests' claims against the tickets for sale of their ticket type on this dinner (the lock status)
 const supply: PreviewSupply = order => supplyOfType(props.releasedTicketCounts, props.ticketPrices, order.ticketPriceId)
@@ -192,8 +194,8 @@ const handleCancel = () => emit('cancel')
         <div :class="guestForm.header">
           <UIcon :name="ICONS.userPlus" :class="guestForm.headerIcon" />
           <h4 :class="guestForm.title">Tilføj gæst</h4>
-          <UBadge v-if="hasTicketsForSale(props.releasedTicketCounts)" :color="COLOR.info" :icon="ICONS.claim" :variant="NOISE.subtle" :size="SIZES.small">
-            {{ SUPPLY_WORDS.forSaleCount(props.releasedTicketCounts) }}
+          <UBadge v-if="forSaleWords" :color="COLOR.info" :icon="ICONS.claim" :variant="NOISE.subtle" :size="SIZES.small">
+            {{ forSaleWords }}
           </UBadge>
         </div>
       </template>
