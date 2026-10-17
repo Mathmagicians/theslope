@@ -2,6 +2,7 @@ import {describe, it, expect} from 'vitest'
 import {TicketFactory} from '../../e2e/testDataFactories/ticketFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
+import {ticketTypeLabel, ticketTypeLetter, ticketTypeCount} from '~/composables/useTicket'
 import appConfig from '~/app.config'
 
 describe('useTicket', () => {
@@ -10,13 +11,15 @@ describe('useTicket', () => {
     const {TicketTypeSchema} = useBookingValidation()
     const TicketType = TicketTypeSchema.enum
 
-    describe('ticketTypeWords', () => {
+    describe('ticket type words', () => {
         it.each([
-            [TicketType.ADULT, 'Voksen', 'V'],
-            [TicketType.CHILD, 'Barn', 'B'],
-            [TicketType.BABY, 'Baby', 'b']
-        ] as const)('GIVEN %s THEN it goes by %s and the letter %s', (type, label, compactLabel) => {
-            expect(useTicket().ticketTypeWords[type]).toEqual({label, compactLabel})
+            {type: TicketType.ADULT, label: 'Voksen', letter: 'V', one: '1 voksen', many: '8 voksne', none: '0 voksne'},
+            {type: TicketType.CHILD, label: 'Barn', letter: 'B', one: '1 barn', many: '8 børn', none: '0 børn'},
+            {type: TicketType.BABY, label: 'Baby', letter: 'b', one: '1 baby', many: '8 babyer', none: '0 babyer'}
+        ])('GIVEN $type THEN it goes by $label, the letter $letter, and counts "$one" and "$many"', ({type, label, letter, one, many, none}) => {
+            expect(ticketTypeLabel(type)).toBe(label)
+            expect(ticketTypeLetter(type)).toBe(letter)
+            expect([1, 8, 0].map(count => ticketTypeCount(type, count))).toEqual([one, many, none])
         })
     })
 

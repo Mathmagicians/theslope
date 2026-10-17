@@ -3,7 +3,7 @@ import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import testHelpers from '../testHelpers'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, gotoHydrated, expectHydratedWithoutMismatch} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, gotoHydrated, expectHydratedWithoutMismatch, pollUntil} = testHelpers
 
 /**
  * E2E UI Tests for Chef Page
@@ -84,7 +84,7 @@ test.describe('Chef Page', () => {
         await gotoHydrated(page, `${chefPageUrl}?team=${team1Id}`)
 
         // Countdown renders once planStore is ready and ChefCalendarDisplay mounts
-        await expect(page.locator('[data-testid="chef-next-cooking-countdown"]').first()).toBeVisible({timeout: 15_000})
+        await pollUntil(() => page.locator('[data-testid="chef-next-cooking-countdown"]').first().isVisible(), visible => visible)
         // The role status title; its description also opens with the words
         await expect(page.getByText('Du er chefkok', {exact: true})).toBeVisible()
 

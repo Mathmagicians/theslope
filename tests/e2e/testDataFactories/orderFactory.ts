@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { OrderDisplay, BookingResult, BookingTotals, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, TicketChangesResponse, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
+import type { OrderDisplay, BookingResult, BookingTotals, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, TicketChange, TicketChangesResponse, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
@@ -21,7 +21,7 @@ const { headers, salt, temporaryAndRandom, getSessionUserInfo } = testHelpers
 const HOUSEHOLD_SCAFFOLD_ENDPOINT = '/api/household/order/scaffold'
 
 // Get enum schemas from composable
-const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema, OrderAuditActionSchema, BookingActionSchema } = useBookingValidation()
+const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema, OrderAuditActionSchema, OrderAuditSourceSchema, BookingActionSchema, TicketChangeKindSchema } = useBookingValidation()
 
 // API endpoints
 const ORDER_ENDPOINT = '/api/order'
@@ -78,6 +78,20 @@ export class OrderFactory {
   /** A ticket count per type, in the order adult, child, baby */
   static readonly ticketCounts = (adult: number, child: number, baby: number) =>
     ({[TicketTypeSchema.enum.ADULT]: adult, [TicketTypeSchema.enum.CHILD]: child, [TicketTypeSchema.enum.BABY]: baby})
+
+  /** A line of a dinner's ticket changes: user 31 of S_31 books an adult on a dinner without tickets */
+  static readonly defaultTicketChange = (overrides?: Partial<TicketChange>): TicketChange => ({
+    id: 1,
+    timestamp: new Date('2026-04-05T08:02:00Z'),
+    performedByUserId: 31,
+    bySystem: false,
+    households: ['S_31'],
+    events: [{change: TicketChangeKindSchema.enum.BOOK, tickets: OrderFactory.ticketCounts(1, 0, 0)}],
+    counts: OrderFactory.ticketCounts(1, 0, 0),
+    portions: 1,
+    revenue: 5000,
+    ...overrides
+  })
 
   /** An order's price row: the default row of its type, carrying the portions a ticket at it weighs */
   static readonly ticketPriceRow = (ticketType: OrderDetail['ticketType'] = TicketTypeSchema.enum.ADULT): NonNullable<OrderDetail['ticketPrice']> => {
@@ -265,7 +279,7 @@ export class OrderFactory {
   static readonly defaultAuditContext = (overrides?: Partial<AuditContext>): AuditContext => ({
     action: OrderAuditActionSchema.enum.SYSTEM_CREATED,
     performedByUserId: 1,
-    source: 'csv_billing',
+    source: OrderAuditSourceSchema.enum.csv_billing,
     seasonId: overrides?.seasonId ?? null,
     ...overrides
   })

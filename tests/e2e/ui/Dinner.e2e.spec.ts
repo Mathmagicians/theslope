@@ -85,7 +85,7 @@ test.describe('Dinner Page URL Navigation', () => {
 
         // THEN: URL should auto-sync to a valid dinner date (component calculates "next" at runtime);
         // checked against the season's dinners now, since a parallel spec's dinner may be the next one
-        await expect(page).toHaveURL(url => url.searchParams.has('date'), {timeout: 15_000})
+        await expect(page).toHaveURL(url => url.searchParams.has('date'))
         const syncedDate = new URL(page.url()).searchParams.get('date')
         const dinners = await DinnerEventFactory.getDinnerEventsForSeason(await validatedBrowserContext(browser), seasonId)
         expect(dinners.map(dinner => formatDate(dinner.date)), 'the synced date is one of the season\'s dinners').toContain(syncedDate)
@@ -103,7 +103,7 @@ test.describe('Dinner Page URL Navigation', () => {
         await gotoHydrated(page, `${dinnerPageUrl}?date=99/99/9999`)
 
         // THEN: URL should auto-sync to a valid dinner date
-        await expect(page).toHaveURL(onOneOfTheFirstDates, {timeout: 15_000})
+        await expect(page).toHaveURL(onOneOfTheFirstDates)
 
         // THEN: Dinner event should be displayed
         const panel = page.getByTestId('dinner-detail-panel')
@@ -131,7 +131,7 @@ test.describe('Dinner Page URL Navigation', () => {
         await gotoHydrated(page, `${dinnerPageUrl}?date=${noDinnerDate}`)
 
         // THEN: URL should auto-sync to one of the valid dinner dates
-        await expect(page).toHaveURL(onOneOfTheFirstDates, {timeout: 15_000})
+        await expect(page).toHaveURL(onOneOfTheFirstDates)
 
         // THEN: Synced dinner event should be displayed
         const panel = page.getByTestId('dinner-detail-panel')
@@ -148,7 +148,7 @@ test.describe('Dinner Page URL Navigation', () => {
 
         // Wait for dinner detail panel to be visible (confirms first event is loaded)
         const panel = page.getByTestId('dinner-detail-panel')
-        await expect(panel).toBeVisible({timeout: 15_000})
+        await expect(panel).toBeVisible()
 
         // Verify first event's date is in URL
         const currentUrl = page.url()

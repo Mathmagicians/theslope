@@ -437,6 +437,37 @@ test.describe('Household Scaffold API (ADR-016)', () => {
       expect(orderAfterClaim?.inhabitantId, 'Ticket should transfer to claiming inhabitant').toBe(claimingInhabitant.id)
       expect(orderAfterClaim?.ticketType, 'Should be ADULT price').toBe(TicketTypeSchema.enum.ADULT)
     })
+
+    test('GIVEN a save naming an order that is gone WHEN scaffolding THEN that order is listed as failed and the rest of the save lands', async ({ browser }) => {
+      const context = await validatedBrowserContext(browser)
+      // An open dinner, so the save's other order books
+      const dinner = await DinnerEventFactory.createDinnerEvent(context, {
+        seasonId: testSeason.id!, date: daysFromNow(20), menuTitle: salt('Test StaleOrder', temporaryAndRandom())
+      })
+      const otherInhabitant = await HouseholdFactory.createInhabitantForHousehold(context, testHouseholdId, salt('Test StaleOther', temporaryAndRandom()))
+      createdInhabitantIds.push(otherInhabitant.id)
+
+      const created = await OrderFactory.createOrder(context, {
+        householdId: testHouseholdId, dinnerEventId: dinner.id,
+        orders: [OrderFactory.defaultOrderItem({inhabitantId: testInhabitantId, ticketPriceId: testAdultTicketPriceId})]
+      })
+      const goneOrderId = created!.createdIds[0]!
+      await OrderFactory.deleteOrder(context, goneOrderId)
+
+      // The household's screen still holds the deleted order and saves it with a new eating mode, beside a new booking
+      const result = await OrderFactory.scaffoldOrders(context, {
+        householdId: testHouseholdId, seasonId: testSeason.id!, dinnerEventIds: [dinner.id],
+        orders: [
+          OrderFactory.defaultDesiredOrder({inhabitantId: testInhabitantId, dinnerEventId: dinner.id, ticketPriceId: testAdultTicketPriceId, dinnerMode: DinnerModeSchema.enum.TAKEAWAY, orderId: goneOrderId}),
+          OrderFactory.createBookingOrder(otherInhabitant.id, dinner.id, testAdultTicketPriceId)
+        ]
+      })
+
+      expect(result!.scaffoldResult.failed).toEqual([expect.objectContaining({inhabitantId: testInhabitantId, dinnerEventId: dinner.id, action: Action.CHANGE_MODE})])
+      expect(result!.scaffoldResult.totals[Action.BOOK]).toBe(1)
+      const booked = await OrderFactory.getOrders(context, {dinnerEventIds: dinner.id, householdId: testHouseholdId})
+      expect(booked.map(order => order.inhabitantId)).toEqual([otherInhabitant.id])
+    })
   })
 
   // ============================================================================

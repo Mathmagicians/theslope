@@ -53,7 +53,7 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
      */
     const navigateToAllergiesTab = async (page: import('@playwright/test').Page) => {
         await gotoHydrated(page, `/household/${encodeURIComponent(shortName)}/allergies?pbs=${pbsId}`)
-        await expect(page.locator('[data-testid="household-allergies"]')).toBeVisible({timeout: 15_000})
+        await expect(page.locator('[data-testid="household-allergies"]')).toBeVisible()
     }
 
     /**
@@ -62,7 +62,7 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
     const expandInhabitantRow = async (page: import('@playwright/test').Page) => {
         const toggleTestId = `inhabitant-${inhabitantId}-allergy-toggle`
         const pencilButton = page.getByTestId(toggleTestId)
-        await expect(pencilButton).toBeVisible({timeout: 5000})
+        await expect(pencilButton).toBeVisible()
         await pencilButton.click()
 
         // Wait for AllergyEditor dropdown to appear
@@ -88,7 +88,7 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
 
         // Wait for dropdown options and select the allergy type by unique name
         const option = page.getByRole('option', {name: allergyType.name})
-        await expect(option).toBeVisible({timeout: 5000})
+        await expect(option).toBeVisible()
         await option.click()
 
         // THEN: Verify allergy appears in the list (via API)
@@ -121,7 +121,7 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
 
         // WHEN: Click trash button to remove allergy
         const trashButton = page.getByTestId(`allergy-${allergyType.id}-remove`)
-        await expect(trashButton).toBeVisible({timeout: 5000})
+        await expect(trashButton).toBeVisible()
         await trashButton.click()
 
         // THEN: Verify allergy is removed (via API)
@@ -155,12 +155,12 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
 
         // WHEN: Type comment and save - use specific placeholder for our test allergy
         const commentInput = page.locator(`input[placeholder*="${allergyTypeData.name}"]`)
-        await expect(commentInput).toBeVisible({timeout: 5000})
+        await expect(commentInput).toBeVisible()
         await commentInput.fill(testComment)
 
         // Click the save button
         const saveButton = page.getByTestId(`allergy-${allergyType.id}-save-comment`)
-        await expect(saveButton).toBeVisible({timeout: 5000})
+        await expect(saveButton).toBeVisible()
         await saveButton.click()
 
         // THEN: Verify comment is persisted (via API)

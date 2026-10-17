@@ -2,7 +2,7 @@ import {test, expect} from '@playwright/test'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
-import {useBookingValidation} from '~/composables/useBookingValidation'
+import {useBookingValidation, type TicketChangeKind} from '~/composables/useBookingValidation'
 import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
@@ -12,7 +12,7 @@ import testHelpers from '~~/tests/e2e/testHelpers'
  * admin's household buys it: the tickets, kuverter and revenue paid for stand still through the release and the sale,
  * and each line carries its ticket events; `since` keeps the changes from a moment and counts the older ones.
  */
-const {validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, getSessionUserInfo, daysFromNow} = testHelpers
 const {TicketChangeKindSchema, OrderStateSchema, DinnerModeSchema} = useBookingValidation()
 const {TicketTypeSchema} = useTicketPriceValidation()
 const Kind = TicketChangeKindSchema.enum
@@ -84,21 +84,58 @@ test.describe('Chef dinner order history', () => {
         const revenue = adultPrice.price + childPrice.price
 
         expect(response.olderCount).toBe(0)
-        // The two bookings by one user within one minute are one line
-        expect(response.changes.map(change => change.events)).toEqual([
-            [{change: Kind.BUY, tickets: ticketCounts(0, 1, 0)}],
-            [{change: Kind.RELEASE, tickets: ticketCounts(0, 1, 0)}],
-            [{change: Kind.BOOK, tickets: ticketCounts(1, 1, 0)}]
-        ])
+        // One actor's rows in one minute are one line, so the admin's booking and purchase may share a line: the tickets
+        // per event add up across the lines, whichever minute each row fell in
+        const ticketsOf = (kind: TicketChangeKind) => response.changes.flatMap(change => change.events)
+            .filter(event => event.change === kind)
+            .reduce((sum, event) => ticketCounts(...TicketTypeSchema.options.map(type => sum[type] + event.tickets[type]) as [number, number, number]), ticketCounts(0, 0, 0))
+        expect(ticketsOf(Kind.BOOK)).toEqual(ticketCounts(1, 1, 0))
+        expect(ticketsOf(Kind.RELEASE)).toEqual(ticketCounts(0, 1, 0))
+        expect(ticketsOf(Kind.BUY)).toEqual(ticketCounts(0, 1, 0))
+        // The release and the sale leave the tickets, kuverter and revenue paid for unchanged
         for (const change of response.changes) {
             expect(change).toMatchObject({counts: ticketCounts(1, 1, 0), portions: adultPortions + childPortions, revenue})
         }
-        const [claim, release] = response.changes
-        expect(response.changes.every(change => change.households.length === 1)).toBe(true)
+        // The release names the seller's household, the sale the buyer's; the admin's booking and purchase may share a line
+        const lineOf = (kind: TicketChangeKind) => response.changes.find(change => change.events.some(event => event.change === kind))!
+        const member = await getSessionUserInfo(memberContext)
+        expect(lineOf(Kind.RELEASE).households).toEqual([member.householdShortname])
+        expect(lineOf(Kind.BUY).households).toContain(admin.householdShortname)
 
-        const sinceRelease = await OrderFactory.getTicketChanges(memberContext, dinnerEventId, release!.timestamp)
-        expect(sinceRelease!.changes.map(change => change.id)).toEqual([claim!.id, release!.id])
-        expect(sinceRelease!.olderCount).toBe(1)
+        const release = lineOf(Kind.RELEASE)
+        const sinceRelease = (await OrderFactory.getTicketChanges(memberContext, dinnerEventId, release.timestamp))!
+        expect(sinceRelease.changes.map(change => change.id)).toContain(release.id)
+        expect(sinceRelease.changes.length + sinceRelease.olderCount).toBe(response.changes.length)
+    })
+
+    test('GIVEN a released child ticket WHEN the admin deletes it past the deadline THEN the newest line holds the admin\'s cancellation with one child ticket fewer', async ({browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
+        const memberContext = await memberValidatedBrowserContext(browser)
+        const member = await getSessionUserInfo(memberContext)
+        // Its own dinner tomorrow, past the booking deadline: the first case expects every line at one adult and one child
+        const dinner = await DinnerEventFactory.createDinnerEvent(adminContext, {
+            ...DinnerEventFactory.defaultDinnerEvent(temporaryAndRandom()), seasonId, date: daysFromNow(1)
+        })
+        const result = await OrderFactory.createOrder(adminContext, {
+            householdId: member.householdId, dinnerEventId: dinner.id!,
+            orders: [
+                {inhabitantId: member.inhabitantId, ticketPriceId: adultPrice.id, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: false},
+                {inhabitantId: member.inhabitantId, ticketPriceId: childPrice.id, dinnerMode: DinnerModeSchema.enum.DINEIN, isGuestTicket: true}
+            ]
+        })
+        orderIds.push(...result!.createdIds)
+        const childOrderId = result!.createdIds[1]!
+
+        const released = await OrderFactory.updateOrder(memberContext, childOrderId, {dinnerMode: DinnerModeSchema.enum.NONE})
+        expect(released!.state).toBe(OrderStateSchema.enum.RELEASED)
+        await OrderFactory.deleteOrder(adminContext, childOrderId)
+
+        const {changes} = (await OrderFactory.getTicketChanges(memberContext, dinner.id!))!
+        // The admin's booking and deletion may share a line within one minute; the newest line ends with the deletion
+        expect(changes[0]!.events).toContainEqual({change: Kind.ADMIN_CANCEL, tickets: ticketCounts(0, 1, 0)})
+        expect(changes[0]!.counts).toEqual(ticketCounts(1, 0, 0))
+        const releaseLine = changes.find(change => change.events.some(event => event.change === Kind.RELEASE))!
+        expect(releaseLine.counts).toEqual(ticketCounts(1, 1, 0))
     })
 
     test('GIVEN a removed dinner WHEN reading the changes THEN 404', async ({browser}) => {

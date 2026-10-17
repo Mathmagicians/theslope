@@ -67,7 +67,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
             // GIVEN: Navigate to create mode
             await gotoHydrated(page, `${adminPlanningUrl}?mode=create`)
-            await expect(page.locator('form#seasonForm')).toBeVisible({timeout: 15_000})
+            await expect(page.locator('form#seasonForm')).toBeVisible()
 
             // WHEN: Fill and submit form
             const {seasonDates} = SeasonFactory.generateUniqueSeasonDates()
@@ -95,7 +95,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
             // GIVEN: Navigate to create mode
             await gotoHydrated(page, `${adminPlanningUrl}?mode=create`)
-            await expect(page.locator('form#seasonForm')).toBeVisible({timeout: 15_000})
+            await expect(page.locator('form#seasonForm')).toBeVisible()
 
             const {seasonDates, holiday} = SeasonFactory.generateUniqueSeasonDates()
             // The second holiday is the season's first day, before the first holiday - no overlap
@@ -171,7 +171,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
             await gotoHydrated(page, `${adminPlanningUrl}?season=${encodeURIComponent(season.shortName)}&mode=edit`)
 
             // WHEN: Wait for form and remove holiday
-            await expect(page.locator('form#seasonForm')).toBeVisible({timeout: 15_000})
+            await expect(page.locator('form#seasonForm')).toBeVisible()
             await expect(page).toHaveURL(/.*mode=edit/)
             await expect(page.getByTestId('season-selector')).toContainText(season.shortName)
             await expect(page.getByTestId('submit-season')).toHaveText(/Gem/)
@@ -206,7 +206,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
             createdSeasonIds.push(season.id!)
 
             await gotoHydrated(page, `${adminPlanningUrl}?season=${encodeURIComponent(season.shortName)}&mode=edit`)
-            await expect(page.locator('form#seasonForm')).toBeVisible({timeout: 15_000})
+            await expect(page.locator('form#seasonForm')).toBeVisible()
 
             // WHEN: Extending the holiday by one day in the row picker. Inside the season, not on its last day: the
             // picker commits UTC midnight like the Workers server, while the local dev server returns local midnight

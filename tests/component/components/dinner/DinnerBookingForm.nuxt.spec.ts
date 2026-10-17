@@ -2,14 +2,14 @@
 import {describe, it, expect, vi, beforeEach, afterEach, beforeAll} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {enableAutoUnmount} from '@vue/test-utils'
-import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints, VIEWPORTS, lockedDinnerSupply} from '~~/tests/component/testHelpers'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import DinnerBookingForm from '~/components/dinner/DinnerBookingForm.vue'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
 import GuestBookingForm from '~/components/booking/GuestBookingForm.vue'
 import ActionPreview from '~/components/booking/ActionPreview.vue'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
-import {MODE_WORDS, SUPPLY_WORDS, bookingSaveLabel} from '~/composables/useBookingUi'
+import {MODE_WORDS, SUPPLY_WORDS, bookingSaveLabel, closedForCancellation} from '~/composables/useBookingUi'
 import {EMPTY_RELEASED_TICKET_COUNTS} from '~/composables/useBooking'
 import {formatDate} from '~/utils/date'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
@@ -500,33 +500,25 @@ describe('DinnerBookingForm previews a requeue', () => {
 
 describe('DinnerBookingForm on a closed dinner: the "Har du brug for flere billetter?" bar', () => {
   const TITLE = 'Har du brug for flere billetter?'
-  const FOR_SALE = 'til salg'
-  const WAITING = 'ventelisten'
-  const supply = (total: number, formatted: string, queued: number, queuedFormatted: string) =>
-    ({...EMPTY_RELEASED_TICKET_COUNTS, total, formatted, queued, queuedFormatted})
+  const {ADULT, CHILD} = useActionValidation().TicketTypeSchema.enum
 
   it.each([
-    {desc: 'tickets for sale only', counts: supply(4, '4V', 0, '-'), icon: ICONS.claim, absent: [WAITING],
-      lines: ['Lukket for ændringer, men der er 4 billetter til salg (4V).']},
-    {desc: 'one ticket for sale', counts: supply(1, '1V', 0, '-'), icon: ICONS.claim, absent: [WAITING],
-      lines: ['Lukket for ændringer, men der er 1 billet til salg (1V).']},
-    {desc: 'the waiting list only', counts: supply(0, '-', 6, '2V 3B 1b'), icon: ICONS.waitlist, absent: [FOR_SALE],
-      lines: ['Lukket for ændringer, men du kan få en plads på ventelisten. Pt står 2V 3B 1b på ventelisten.']},
-    {desc: 'tickets for sale and a waiting list', counts: supply(4, '4V', 1, '1B'), icon: ICONS.claim, absent: [],
-      lines: ['Lukket for ændringer, men der er 4 billetter til salg (4V).', 'Du kan også få en plads på ventelisten. Pt står 1B på ventelisten.']}
-  ])('GIVEN $desc THEN one bar reads a line per supply', async ({counts, icon, absent, lines}) => {
+    {desc: 'tickets for sale only', counts: lockedDinnerSupply({[CHILD]: 1}), icon: ICONS.claim},
+    {desc: 'the waiting list only', counts: lockedDinnerSupply({}, {[ADULT]: 8}), icon: ICONS.waitlist},
+    {desc: 'tickets for sale and a waiting list', counts: lockedDinnerSupply({[CHILD]: 1}, {[ADULT]: 8}), icon: ICONS.claim}
+  ])('GIVEN $desc THEN one bar reads the closure and the supply in one line', async ({counts, icon}) => {
     const wrapper = await mountMemberForm(false, {releasedTicketCounts: counts})
 
     const bar = findByTestId(wrapper, WAITLIST_TEST_IDS.moreTickets)
-    expect(bar.text()).toContain(TITLE)
-    expect(bar.findAll('p').map(line => line.text())).toEqual(lines)
-    absent.forEach(words => expect(bar.text()).not.toContain(words))
-    expect(wrapper.findAllComponents({name: 'UAlert'}).find(alert => alert.element === bar.element)?.props('icon')).toBe(icon)
+    const alert = wrapper.findAllComponents({name: 'UAlert'}).find(component => component.element === bar.element)
+    expect(alert?.props('title')).toBe(TITLE)
+    expect(alert?.props('description')).toBe(closedForCancellation(counts))
+    expect(alert?.props('icon')).toBe(icon)
   })
 
   it.each([
     {desc: 'a closed dinner with nothing for sale and nobody waiting', canModify: false, counts: EMPTY_RELEASED_TICKET_COUNTS},
-    {desc: 'a dinner open for booking', canModify: true, counts: supply(4, '4V', 1, '1B')}
+    {desc: 'a dinner open for booking', canModify: true, counts: lockedDinnerSupply({[ADULT]: 4}, {[CHILD]: 1})}
   ])('GIVEN $desc THEN no bar shows', async ({canModify, counts}) => {
     const wrapper = await mountMemberForm(canModify, {releasedTicketCounts: counts})
 

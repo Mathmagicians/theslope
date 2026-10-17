@@ -184,7 +184,7 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
 
             // WHEN: the page is loaded and hydrated
             await gotoHydrated(page, url)
-            await expect(page.getByTestId(ready)).toBeVisible({timeout: 15_000})
+            await expect(page.getByTestId(ready)).toBeVisible()
             await reveal?.(page)
 
             // Evidence for the visual check - taken before the assertions so it exists on failure

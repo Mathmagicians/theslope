@@ -33,7 +33,7 @@ test.describe('My preferences', () => {
         await page.getByTestId(PREF_TEST_IDS.edit).click()
         await page.getByTestId(PREF_TEST_IDS.palette(palette)).click()
         await page.getByTestId(PREF_TEST_IDS.textScale(textScale)).click()
-        const saved = waitForApi(page, '/api/user/preferences', 'POST', {timeout: 15000})
+        const saved = waitForApi(page, '/api/user/preferences', 'POST')
         await page.getByTestId(PREF_TEST_IDS.save).click()
         expect((await saved).status()).toBe(200)
     }

@@ -1,15 +1,17 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, ORDER_STATE_LABELS, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewOutcome, scaffoldToastLook, formatBookingResult, guestTicketsLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, ORDER_STATE_LABELS, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewOutcome, scaffoldToastLook, formatBookingResult, guestTicketsLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
-import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, EMPTY_RELEASED_TICKET_COUNTS, emptyOrderBuckets, type OrderBucketResult, type ReleasedTicketCounts} from '~/composables/useBooking'
+import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, emptyOrderBuckets, type OrderBucketResult} from '~/composables/useBooking'
 import {useBookingValidation, type BookingAction, type BookingResult, type QueuePosition, type TicketType} from '~/composables/useBookingValidation'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
+import {lockedDinnerSupply} from '~~/tests/component/testHelpers'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
+import {ticketTypeLabel} from '~/composables/useTicket'
 import appConfig from '~/app.config'
 
 const {DinnerStateSchema, DinnerModeSchema, BookingActionSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
@@ -28,8 +30,21 @@ const FAR_FUTURE_DAYS = appConfig.theslope.defaultSeason.ticketIsCancellableDays
 const farFutureDinner = (overrides = {}) =>
     ({...DinnerEventFactory.defaultDinnerEventDisplay(), date: addDays(new Date(), FAR_FUTURE_DAYS), ...overrides})
 
-const released = (total: number, formatted = `${total}V`, queued = 0, queuedFormatted = queued > 0 ? `${queued}V` : '-'): ReleasedTicketCounts =>
-    ({...EMPTY_RELEASED_TICKET_COUNTS, total, formatted, queued, queuedFormatted})
+const {ADULT, CHILD, BABY} = TicketTypeSchema.enum
+
+// The closed dinner's supply as the Framelding badge's value line and its help text, the booking form's alert
+const SUPPLY_TABLE = [
+    {desc: 'tickets for sale and a waiting list', counts: lockedDinnerSupply({[CHILD]: 1}, {[ADULT]: 8}), look: 'forSale',
+        value: '1B til salg, 8V på venteliste', sentence: 'Lukket for framelding: 1 barn til salg, 8 voksne på ventelisten'},
+    {desc: 'tickets for sale only', counts: lockedDinnerSupply({[CHILD]: 1}), look: 'forSale',
+        value: '1B til salg', sentence: 'Lukket for framelding: 1 barn til salg'},
+    {desc: 'a waiting list only', counts: lockedDinnerSupply({}, {[ADULT]: 8}), look: 'waitlist',
+        value: '8V på venteliste', sentence: 'Lukket for framelding: 8 voksne på ventelisten'},
+    {desc: 'neither', counts: lockedDinnerSupply(), look: 'closed',
+        value: null, sentence: 'Lukket for framelding'},
+    {desc: 'several ticket types', counts: lockedDinnerSupply({[ADULT]: 2, [CHILD]: 3}, {[BABY]: 1}), look: 'forSale',
+        value: '2V 3B til salg, 1b på venteliste', sentence: 'Lukket for framelding: 2 voksne, 3 børn til salg, 1 baby på ventelisten'}
+] as const
 
 describe('spending fragments', () => {
     const dinner = (id: number, isCurrent: boolean): CookingRoundRow => ({dinnerEventId: id, date: new Date(2026, 3, 10 + id), menuTitle: `Ret ${id}`, isCurrent, budgetGross: 1000 * id, spentGross: 100 * id})
@@ -71,7 +86,6 @@ describe('useBookingUi', () => {
     })
 
     describe('createBookingBadge', () => {
-        const {openText, closedText, availableText} = DEADLINE_LABELS.BOOKING_CLOSED
         // The badge's glyph and colour per supply: the tickets for sale lead, the waiting list alone wears the queued order state
         const LOOKS = {
             open: {icon: ICONS.lockOpen, color: COLOR.success},
@@ -80,17 +94,19 @@ describe('useBookingUi', () => {
             waitlist: ORDER_STATE_LABELS.queued
         }
         it.each([
-            {desc: 'open', isOpen: true, counts: undefined, look: 'open', value: 'Åben', helpText: openText},
-            {desc: 'closed, no supply counted', isOpen: false, counts: undefined, look: 'closed', value: 'Lukket', helpText: closedText},
-            {desc: 'closed, neither tickets for sale nor a waiting list', isOpen: false, counts: released(0, '-'), look: 'closed', value: 'Lukket', helpText: closedText},
-            {desc: 'closed, one ticket for sale', isOpen: false, counts: released(1), look: 'forSale', value: '1V til salg', helpText: availableText(1)},
-            {desc: 'closed, tickets for sale only', isOpen: false, counts: released(4, '3V 1B'), look: 'forSale', value: '3V 1B til salg', helpText: availableText(4)},
-            // The tooltip reads the waiting list in the sentence of the booking form's bar
-            {desc: 'closed, a waiting list only', isOpen: false, counts: released(0, '-', 3, '2V 1B'), look: 'waitlist', value: '2V 1B på venteliste', helpText: SUPPLY_WORDS.waitlist(released(0, '-', 3, '2V 1B'))},
-            {desc: 'closed, tickets for sale and a waiting list', isOpen: false, counts: released(4, '4V', 1, '1B'), look: 'forSale', value: '4V til salg, 1B på venteliste', helpText: `${availableText(4)}. ${SUPPLY_WORDS.waitlist(released(4, '4V', 1, '1B'))}`}
+            {desc: 'open', isOpen: true, counts: undefined, look: 'open', value: 'Åben', helpText: 'Booking kan ændres'},
+            {desc: 'closed, no supply counted', isOpen: false, counts: undefined, look: 'closed', value: 'Lukket', helpText: 'Lukket for framelding'},
+            ...SUPPLY_TABLE.map(({desc, counts, look, value, sentence}) => ({desc: `closed, ${desc}`, isOpen: false, counts, look, value: value ?? 'Lukket', helpText: sentence}))
         ] as const)('$desc → $value', ({isOpen, counts, look, value, helpText}) => {
             const {icon, color} = LOOKS[look]
             expect(createBookingBadge(isOpen, counts)).toEqual({label: DEADLINE_LABELS.BOOKING_CLOSED.label, icon, color, value, helpText})
+        })
+    })
+
+    describe('a closed dinner\'s supply', () => {
+        it.each(SUPPLY_TABLE)('$desc: the value line reads "$value" and the sentence "$sentence"', ({counts, value, sentence}) => {
+            expect(lockedSupply(counts)).toBe(value)
+            expect(closedForCancellation(counts)).toBe(sentence)
         })
     })
 
@@ -129,24 +145,6 @@ describe('useBookingUi', () => {
 
     describe('SUPPLY_WORDS', () => {
         it.each([
-            {desc: 'tickets for sale', counts: released(4, '4V'), line: 'Lukket for ændringer, men der er 4 billetter til salg (4V).'},
-            {desc: 'one ticket for sale', counts: released(1, '1V'), line: 'Lukket for ændringer, men der er 1 billet til salg (1V).'},
-            {desc: 'nothing for sale', counts: released(0, '-', 3), line: null}
-        ])('the tickets for sale: $desc', ({counts, line}) => {
-            expect(SUPPLY_WORDS.forSale(counts)).toBe(line)
-        })
-
-        it.each([
-            {desc: 'alone it names the closure', counts: released(0, '-', 6, '2V 3B 1b'),
-                sentence: 'Lukket for ændringer, men du kan få en plads på ventelisten. Pt står 2V 3B 1b på ventelisten.'},
-            {desc: 'after the tickets for sale it adds itself', counts: released(4, '4V', 1, '1B'),
-                sentence: 'Du kan også få en plads på ventelisten. Pt står 1B på ventelisten.'},
-            {desc: 'nobody waiting', counts: released(4, '4V'), sentence: null}
-        ])('the waiting list: $desc', ({counts, sentence}) => {
-            expect(SUPPLY_WORDS.waitlist(counts)).toBe(sentence)
-        })
-
-        it.each([
             {count: 1, tickets: '1 billet'},
             {count: 3, tickets: '3 billetter'}
         ])('the household notes count $tickets', ({count, tickets}) => {
@@ -157,10 +155,10 @@ describe('useBookingUi', () => {
 
     describe('lockChip', () => {
         it.each([
-            {desc: 'tickets for sale count up', supply: released(2), chip: {color: BOOKING_LOCK_STATUS.lockedWithTickets.color, text: '2'}},
-            {desc: 'tickets for sale lead a waiting list', supply: released(2, '2V', 1), chip: {color: BOOKING_LOCK_STATUS.lockedWithTickets.color, text: '2'}},
-            {desc: 'a waiting list shows the hourglass without a number', supply: released(0, '-', 3), chip: {color: BOOKING_LOCK_STATUS.lockedWithQueue.color, icon: ICONS.waitlist}},
-            {desc: 'neither leaves the closed chip without a number or a glyph', supply: released(0, '-'), chip: {color: BOOKING_LOCK_STATUS.locked.color}},
+            {desc: 'tickets for sale count up', supply: lockedDinnerSupply({[ADULT]: 2}), chip: {color: BOOKING_LOCK_STATUS.lockedWithTickets.color, text: '2'}},
+            {desc: 'tickets for sale lead a waiting list', supply: lockedDinnerSupply({[ADULT]: 2}, {[ADULT]: 1}), chip: {color: BOOKING_LOCK_STATUS.lockedWithTickets.color, text: '2'}},
+            {desc: 'a waiting list shows the hourglass without a number', supply: lockedDinnerSupply({}, {[ADULT]: 3}), chip: {color: BOOKING_LOCK_STATUS.lockedWithQueue.color, icon: ICONS.waitlist}},
+            {desc: 'neither leaves the closed chip without a number or a glyph', supply: lockedDinnerSupply(), chip: {color: BOOKING_LOCK_STATUS.locked.color}},
             {desc: 'an open dinner has no chip', supply: null, chip: null},
             {desc: 'a dinner outside the lock map has no chip', supply: undefined, chip: null}
         ])('$desc', ({supply, chip}) => {
@@ -243,7 +241,7 @@ describe('useBookingUi', () => {
 
         it('booking badge carries released ticket counts once booking is closed', () => {
             const yesterday = {...DinnerEventFactory.defaultDinnerEventDisplay(), date: addDays(new Date(), -1)}
-            const badge = createChefBadges(yesterday, deadlines, released(2, '2V')).get(2)!
+            const badge = createChefBadges(yesterday, deadlines, lockedDinnerSupply({[ADULT]: 2})).get(2)!
             expect(badge.alarm).toBe(-1)
             expect(badge.value).toBe('2V til salg')
         })
@@ -258,7 +256,9 @@ describe('useBookingUi', () => {
         it.each([
             {desc: 'a booked ticket reads its state', overrides: {state: OrderState.BOOKED}, shown: ORDER_STATE_LABELS[OrderState.BOOKED]},
             {desc: 'a booked ticket claimed from another household reads as bought', overrides: {state: OrderState.BOOKED, provenanceHousehold: 'S31'}, shown: ORDER_STATE_LABELS.claimed},
-            {desc: 'a released ticket reads its state, claimed or not', overrides: {state: OrderState.RELEASED, provenanceHousehold: 'S31'}, shown: ORDER_STATE_LABELS[OrderState.RELEASED]}
+            {desc: 'a released ticket reads its state, claimed or not', overrides: {state: OrderState.RELEASED, provenanceHousehold: 'S31'}, shown: ORDER_STATE_LABELS[OrderState.RELEASED]},
+            {desc: 'a closed ticket with Ingen reads released', overrides: {state: OrderState.CLOSED, dinnerMode: DinnerModeSchema.enum.NONE}, shown: ORDER_STATE_LABELS[OrderState.RELEASED]},
+            {desc: 'a closed ticket with Spisesal reads closed', overrides: {state: OrderState.CLOSED, dinnerMode: DinnerModeSchema.enum.DINEIN}, shown: ORDER_STATE_LABELS[OrderState.CLOSED]}
         ])('$desc', ({overrides, shown}) => {
             expect(formatOrder(OrderFactory.defaultOrder(undefined, overrides)))
                 .toMatchObject({stateText: shown.label, stateColor: shown.color, stateIcon: shown.icon, guest: null})
@@ -294,7 +294,7 @@ describe('ticket type presentation', () => {
 
     it.each(TicketTypeSchema.options)('%s shows its words with the design system colour and glyph of its type', (ticketType) => {
         expect(ticketTypePresentation(ticketType)).toEqual({
-            ...useTicket().ticketTypeWords[ticketType], color: TICKET_TYPE_COLORS[ticketType], icon: TICKET_TYPE_ICONS[ticketType]
+            label: ticketTypeLabel(ticketType), color: TICKET_TYPE_COLORS[ticketType], icon: TICKET_TYPE_ICONS[ticketType]
         })
     })
 
@@ -307,7 +307,7 @@ describe('ticket type presentation', () => {
         const child = prices.find(price => price.ticketType === TicketTypeSchema.enum.CHILD)!
         const item = ticketPriceSelectItems([child])[0]!
         expect(item.presentation).toEqual(ticketTypePresentation(TicketTypeSchema.enum.CHILD))
-        expect(item.label).toBe(`${useTicket().ticketTypeWords[TicketTypeSchema.enum.CHILD].label} · ${useTicket().formatPrice(child.price)} kr`)
+        expect(item.label).toBe(`${ticketTypeLabel(TicketTypeSchema.enum.CHILD)} · ${useTicket().formatPrice(child.price)} kr`)
         expect(item.description).toBe(`Under ${child.maximumAgeLimit} år · ${child.description}`)
         expect(ticketPriceSelectItems([child], true)[0]!.description).toBeUndefined()
     })

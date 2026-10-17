@@ -4,7 +4,7 @@ import testHelpers from '~~/tests/e2e/testHelpers'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 
 const { adminUIFile, memberUIFile } = authFiles
-const { validatedBrowserContext, doScreenshot, gotoHydrated } = testHelpers
+const { validatedBrowserContext, doScreenshot, gotoHydrated, pollUntil } = testHelpers
 
 // Every tab loads to its root test-id in MobileViewport.e2e.spec.ts; the cases here cover redirects and tab selection
 const tabs = [
@@ -33,10 +33,10 @@ test.describe('Admin page path-based navigation', () => {
       await page.goto(`${adminUrl}${scenario.path}`)
       await doScreenshot(page, `admin-redirect-${scenario.path.replace('/', '') || 'root'}-after-goto`)
 
-      await expect(page).toHaveURL(/\/admin\/planning/, {timeout: 15_000})
+      await pollUntil(async () => page.url(), url => /\/admin\/planning/.test(url))
       await doScreenshot(page, `admin-redirect-${scenario.path.replace('/', '') || 'root'}-after-url-check`)
 
-      await expect(page.locator('[data-testid="admin-planning"]')).toBeVisible({timeout: 15_000})
+      await pollUntil(() => page.locator('[data-testid="admin-planning"]').isVisible(), visible => visible)
       await doScreenshot(page, `admin-redirect-${scenario.path.replace('/', '') || 'root'}-final`)
     })
   }
@@ -48,7 +48,7 @@ test.describe('Admin page path-based navigation', () => {
       expect(page.url()).toContain(`/admin/${tab.path}`)
 
       // Wait for component to appear
-      await expect(page.locator(tab.selector)).toBeVisible({timeout: 15_000})
+      await pollUntil(() => page.locator(tab.selector).isVisible(), visible => visible)
 
       const activeTab = page.locator('button[role="tab"]').filter({ hasText: tab.name }).first()
       await expect(activeTab).toHaveAttribute('aria-selected', 'true')
@@ -72,7 +72,7 @@ test.describe('Admin season URL persistence', () => {
     await doScreenshot(page, 'admin-invalid-season-before-redirect')
 
     // Wait for URL to auto-correct to a valid season
-    await expect(page).toHaveURL(url => url.href.includes('season=') && !url.href.includes('invalid-123'), {timeout: 15_000})
+    await pollUntil(async () => page.url(), url => url.includes('season=') && !url.includes('invalid-123'))
   })
 
 })
@@ -125,7 +125,7 @@ test.describe('Admin page authorization', () => {
           await doScreenshot(page, `admin-auth-${userContext.role}-${tab.path}-initial`)
 
           // Wait for tab content to load
-          await expect(page.locator(tab.selector)).toBeVisible({timeout: 15_000})
+          await expect(page.locator(tab.selector)).toBeVisible()
           await doScreenshot(page, `admin-auth-${userContext.role}-${tab.path}-loaded`)
 
           // Check readonly banner

@@ -1,6 +1,6 @@
 import {describe, it, expect, beforeAll} from 'vitest'
 import {isSameDay} from 'date-fns'
-import {useBilling} from '~/composables/useBilling'
+import {useBilling, TICKET_COUNTS} from '~/composables/useBilling'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'
 import type {OrderDisplay} from '~/composables/useBookingValidation'
@@ -228,6 +228,38 @@ describe('useBilling', () => {
             })
         })
     })
+
+    // One builder, three wordings of the same counts
+    describe('TICKET_COUNTS', () => {
+        const {ADULT, CHILD, BABY} = TicketType
+        const FULL = {[ADULT]: 8, [CHILD]: 1, [BABY]: 2}
+        const ZERO_TYPE = {[ADULT]: 2, [CHILD]: 0, [BABY]: 1}
+        const EMPTY = {}
+
+        it.each([
+            {variant: 'compact', desc: 'full counts', counts: FULL, text: '8V 1B 2b'},
+            {variant: 'compact', desc: 'a zero type', counts: ZERO_TYPE, text: '2V 1b'},
+            {variant: 'compact', desc: 'no counts', counts: EMPTY, text: '-'},
+            {variant: 'sentence', desc: 'full counts', counts: FULL, text: '8 voksne, 1 barn, 2 babyer'},
+            {variant: 'sentence', desc: 'a zero type', counts: ZERO_TYPE, text: '2 voksne, 1 baby'},
+            {variant: 'sentence', desc: 'no counts', counts: EMPTY, text: ''},
+            {variant: 'labelled', desc: 'full counts', counts: FULL, text: 'Voksen: 8| Barn: 1| Baby: 2'},
+            {variant: 'labelled', desc: 'a zero type', counts: ZERO_TYPE, text: 'Voksen: 2| Barn: 0| Baby: 1'},
+            {variant: 'labelled', desc: 'no counts', counts: EMPTY, text: 'Voksen: 0| Barn: 0| Baby: 0'}
+        ] as const)('$variant over $desc reads "$text"', ({variant, counts, text}) => {
+            expect(TICKET_COUNTS[variant].text(counts)).toBe(text)
+        })
+
+        it('names the ticket type of each part, so a list renders one part per type', () => {
+            expect(TICKET_COUNTS.labelled.parts(ZERO_TYPE)).toEqual([
+                {ticketType: ADULT, text: 'Voksen: 2'},
+                {ticketType: CHILD, text: '| Barn: 0'},
+                {ticketType: BABY, text: '| Baby: 1'}
+            ])
+            expect(TICKET_COUNTS.compact.parts(ZERO_TYPE).map(part => part.ticketType)).toEqual([ADULT, BABY])
+        })
+    })
+
     describe('decideBillingSideEffects', () => {
         it.each([
             ['a period fully done at its version', {version: 1, archivedVersion: 1, notifiedVersion: 1}, {archive: false, notify: false}],

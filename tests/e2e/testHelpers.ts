@@ -159,14 +159,14 @@ async function selectDropdownOption(
     const dropdown = page.getByTestId(dropdownTestId)
 
     // Wait for dropdown to be visible
-    await dropdown.waitFor({ state: 'visible', timeout: 10000 })
+    await dropdown.waitFor({ state: 'visible' })
 
     // Click dropdown to open it
     await dropdown.click()
 
     // Wait for the specific option to be visible
     const option = page.getByRole('option', {name: optionName, exact: true})
-    await option.waitFor({ state: 'visible', timeout: 5000 })
+    await option.waitFor({ state: 'visible' })
 
     // Click the option
     await option.click()

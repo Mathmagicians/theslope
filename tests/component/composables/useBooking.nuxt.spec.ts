@@ -1,11 +1,11 @@
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, addYears, differenceInDays, nextDay, type Day} from 'date-fns'
-import {useBooking, formatPlace, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcomes, supplyOfType, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
+import {useBooking, formatPlace, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcomes, supplyOfType, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, isReleased, isClaimedOrder, isPendingOrder, hasTicketsForSale, hasWaitlist, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {MODE_WORDS, ORDER_STATE_LABELS} from '~/composables/useBookingUi'
 import {formatDate} from '~/utils/date'
 import {sumBy} from '~/utils/ledger'
-import {useBookingValidation, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderAuditAction, type OrderState, type TicketType, type TicketChange} from '~/composables/useBookingValidation'
+import {useBookingValidation, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderAuditAction, type OrderAuditSource, type OrderState, type TicketType, type TicketChange} from '~/composables/useBookingValidation'
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -824,13 +824,15 @@ describe('decideOrderAction', () => {
         })
     })
 
-    describe('error cases', () => {
-        it('throws when orderId provided but existing not found', () => {
-            const desired = createDesired({ orderId: 999 })
-            const input = createInput(desired, null, true, true)
+    // ADR-016: an orderId among no existing orders is stale (bought by another household, or deleted)
+    describe('stale orders', () => {
+        it.each([
+            {desc: 'an eating mode before the deadline', dinnerMode: DinnerMode.DINEIN, beforeDeadline: true},
+            {desc: 'Ingen after the deadline', dinnerMode: DinnerMode.NONE, beforeDeadline: false}
+        ])('skips $desc on an order no longer among the existing orders', ({dinnerMode, beforeDeadline}) => {
+            const result = decideOrderAction(createInput(createDesired({orderId: 999, dinnerMode}), null, beforeDeadline, true), DinnerMode, OrderState)
 
-            expect(() => decideOrderAction(input, DinnerMode, OrderState))
-                .toThrow('Order 999 not found in existing orders')
+            expect(result).toBeNull()
         })
     })
 })
@@ -1629,7 +1631,7 @@ describe('Lock Status Utilities', () => {
         // The released counts the store reads, and the ReleasedTicketCounts a locked dinner carries: its tickets for sale
         // beside its waiting list
         const released = (total: number, formatted: string, byType: Partial<Record<typeof TicketTypes[keyof typeof TicketTypes], number>>) => ({ total, formatted, byType })
-        const queue = (queued: number, queuedFormatted: string) => ({ queued, queuedFormatted })
+        const queue = (queued: number, queuedFormatted: string, queuedByType: Partial<Record<typeof TicketTypes[keyof typeof TicketTypes], number>> = {}) => ({ queued, queuedFormatted, queuedByType })
         const counts = (supply = released(0, '-', {}), waitlist = queue(0, '-')) => ({ ...supply, ...waitlist })
         const emptyCount = counts()
         const adults = (count: number) => released(count, `${count}V`, {[TicketTypes.ADULT]: count})
@@ -1665,16 +1667,16 @@ describe('Lock Status Utilities', () => {
                 dinnerEvents: [makeEvent(1, 2), makeEvent(2, 5), makeEvent(3, 10)],
                 lockedDays: 7,
                 releasedCounts: undefined,
-                queues: new Map([[1, queue(3, '2V 1B')], [3, queue(4, '4V')]]),
-                expected: new Map([[1, counts(undefined, queue(3, '2V 1B'))], [2, emptyCount]])
+                queues: new Map([[1, queue(3, '2V 1B', {[TicketTypes.ADULT]: 2, [TicketTypes.CHILD]: 1})], [3, queue(4, '4V', {[TicketTypes.ADULT]: 4})]]),
+                expected: new Map([[1, counts(undefined, queue(3, '2V 1B', {[TicketTypes.ADULT]: 2, [TicketTypes.CHILD]: 1}))], [2, emptyCount]])
             },
             {
                 name: 'carries the tickets for sale and the waiting list of a locked dinner side by side',
                 dinnerEvents: [makeEvent(1, 2)],
                 lockedDays: 7,
                 releasedCounts: new Map([[1, adults(4)]]),
-                queues: new Map([[1, queue(1, '1B')]]),
-                expected: new Map([[1, counts(adults(4), queue(1, '1B'))]])
+                queues: new Map([[1, queue(1, '1B', {[TicketTypes.CHILD]: 1})]]),
+                expected: new Map([[1, counts(adults(4), queue(1, '1B', {[TicketTypes.CHILD]: 1}))]])
             }
         ])('$name', ({dinnerEvents, lockedDays, releasedCounts, queues, expected}) => {
             it('returns correct lock status map', () => {
@@ -1728,7 +1730,8 @@ describe('getBookingOptions', () => {
         {desc: 'outside residency + no order', orderState: null, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: false, expectedModes: EMPTY, expectedAction: null},
         {desc: 'outside residency + BOOKED order', orderState: OS.BOOKED, canModify: true, canEdit: true, dinnerState: DS.ANNOUNCED, inResidency: false, expectedModes: EMPTY, expectedAction: null},
     ])('$desc → modes=$expectedModes.length, action=$expectedAction', ({orderState, canModify, canEdit, dinnerState, inResidency, expectedModes, expectedAction}) => {
-        const result = getBookingOptions(orderState, canModify, canEdit, dinnerState, inResidency)
+        const order = orderState === null ? null : OrderFactory.defaultOrder(undefined, {state: orderState})
+        const result = getBookingOptions(order, canModify, canEdit, dinnerState, inResidency)
         expect(result.enabledModes).toEqual(expectedModes)
         expect(result.action).toBe(expectedAction)
     })
@@ -1798,6 +1801,47 @@ describe('getDayBillSummary', () => {
             const result = getDayBillSummary(orders)
             expect(result).toEqual({ticketCounts: expectedCounts, totalPrice: expectedPrice})
         })
+    })
+})
+
+describe('order predicates', () => {
+    it.each([
+        {desc: 'a released ticket for sale', state: OrderStates.RELEASED, dinnerMode: DinnerModes.NONE, provenanceHousehold: undefined, released: true},
+        {desc: 'a ticket the close kept with Ingen', state: OrderStates.CLOSED, dinnerMode: DinnerModes.NONE, provenanceHousehold: undefined, released: true},
+        {desc: 'a ticket the close kept with Spisesal', state: OrderStates.CLOSED, dinnerMode: DinnerModes.DINEIN, provenanceHousehold: undefined, released: false},
+        {desc: 'a booked ticket', state: OrderStates.BOOKED, dinnerMode: DinnerModes.DINEIN, provenanceHousehold: undefined, released: false},
+        {desc: 'a bought ticket', state: OrderStates.BOOKED, dinnerMode: DinnerModes.DINEIN, provenanceHousehold: 'S_22', released: false}
+    ])('GIVEN $desc THEN released is $released', ({state, dinnerMode, provenanceHousehold, released}) => {
+        expect(isReleased(OrderFactory.defaultOrder(undefined, {state, dinnerMode, provenanceHousehold}))).toBe(released)
+    })
+
+    it.each([
+        {desc: 'a booked ticket bought from another household', state: OrderStates.BOOKED, provenanceHousehold: 'S_22', claimed: true},
+        {desc: 'a booked ticket of its own household', state: OrderStates.BOOKED, provenanceHousehold: undefined, claimed: false},
+        {desc: 'a bought ticket released again', state: OrderStates.RELEASED, provenanceHousehold: 'S_22', claimed: false}
+    ])('GIVEN $desc THEN bought from another household is $claimed', ({state, provenanceHousehold, claimed}) => {
+        expect(isClaimedOrder(OrderFactory.defaultOrder(undefined, {state, provenanceHousehold}))).toBe(claimed)
+    })
+
+    it.each([
+        {state: OrderStates.BOOKED, pending: true},
+        {state: OrderStates.RELEASED, pending: true},
+        {state: OrderStates.CLOSED, pending: false},
+        {state: OrderStates.CANCELLED, pending: false}
+    ])('GIVEN an order $state THEN it waits for the close: $pending', ({state, pending}) => {
+        expect(isPendingOrder(OrderFactory.defaultOrder(undefined, {state}))).toBe(pending)
+    })
+})
+
+describe('supply predicates', () => {
+    it.each([
+        {desc: 'tickets for sale', counts: {...EMPTY_RELEASED_TICKET_COUNTS, total: 1}, forSale: true, waitlist: false},
+        {desc: 'a waiting list', counts: {...EMPTY_RELEASED_TICKET_COUNTS, queued: 8}, forSale: false, waitlist: true},
+        {desc: 'both', counts: {...EMPTY_RELEASED_TICKET_COUNTS, total: 1, queued: 8}, forSale: true, waitlist: true},
+        {desc: 'neither', counts: EMPTY_RELEASED_TICKET_COUNTS, forSale: false, waitlist: false}
+    ])('GIVEN a locked dinner with $desc THEN tickets for sale: $forSale, a waiting list: $waitlist', ({counts, forSale, waitlist}) => {
+        expect(hasTicketsForSale(counts)).toBe(forSale)
+        expect(hasWaitlist(counts)).toBe(waitlist)
     })
 })
 
@@ -2107,8 +2151,9 @@ describe('Action Preview', () => {
 // ---- Ticket changes (Billetændringer) and the cooking round ----
 
 describe('replayTicketChanges', () => {
-    const {OrderAuditActionSchema, OrderStateSchema, TicketTypeSchema, DinnerModeSchema, TicketChangeKindSchema, createOrderAuditData} = useBookingValidation()
+    const {OrderAuditActionSchema, OrderAuditSourceSchema, OrderStateSchema, TicketTypeSchema, DinnerModeSchema, TicketChangeKindSchema, createOrderAuditData} = useBookingValidation()
     const Audit = OrderAuditActionSchema.enum
+    const Source = OrderAuditSourceSchema.enum
     const State = OrderStateSchema.enum
     const Mode = DinnerModeSchema.enum
     const Kind = TicketChangeKindSchema.enum
@@ -2126,7 +2171,10 @@ describe('replayTicketChanges', () => {
     const SYSTEM = 99
     // Household n is S_n and its user is user n
     const shortNameOf = (householdId: number) => `S_${householdId}`
-    const at = (minutes: number, seconds = 0) => new Date(2026, 3, 2, 20, minutes, seconds)
+    // The buyer of household n eats as inhabitant 200 + n
+    const buyerInhabitant = (householdId: number) => 200 + householdId
+    const householdOfInhabitant = (inhabitantId: number) => ({id: inhabitantId - 200, shortName: shortNameOf(inhabitantId - 200)})
+    const at =(minutes: number, seconds = 0) => new Date(2026, 3, 2, 20, minutes, seconds)
 
     type Ticket = {id: number, inhabitantId: number, ticketPriceId: number, householdId: number}
     const ticket = (id: number, ticketPriceId: number, householdId: number): Ticket => ({id, inhabitantId: 100 + id, ticketPriceId, householdId})
@@ -2138,8 +2186,8 @@ describe('replayTicketChanges', () => {
             performedByUserId: actor, performedByUser: actor === null ? null : {id: actor, email: `user${actor}@example.com`}
         })
     // A booking writes the order's data without its id; the row's order id turns null once the order is deleted
-    const booked = (order: Ticket, actor: number, timestamp: Date, {action = Audit.USER_BOOKED, deletedLater = false}: {action?: OrderAuditAction, deletedLater?: boolean} = {}) =>
-        historyRow(action, actor, timestamp, deletedLater ? null : order.id, order.inhabitantId, JSON.stringify({source: 'test', orderData: {
+    const booked = (order: Ticket, actor: number, timestamp: Date, {action = Audit.USER_BOOKED, deletedLater = false, source = Source['user-booking']}: {action?: OrderAuditAction, deletedLater?: boolean, source?: OrderAuditSource} = {}) =>
+        historyRow(action, actor, timestamp, deletedLater ? null : order.id, order.inhabitantId, JSON.stringify({source, orderData: {
             dinnerEventId: 1, inhabitantId: order.inhabitantId, bookedByUserId: actor, ticketPriceId: order.ticketPriceId, priceAtBooking: priceOf(order.ticketPriceId),
             householdId: order.householdId, dinnerMode: Mode.DINEIN, state: State.BOOKED, isGuestTicket: false
         }}))
@@ -2148,16 +2196,22 @@ describe('replayTicketChanges', () => {
         id: order.id, inhabitantId: order.inhabitantId, dinnerEventId: 1, ticketPriceId: order.ticketPriceId, priceAtBooking: priceOf(order.ticketPriceId),
         dinnerMode: Mode.DINEIN, state, inhabitantNameWithInitials: 'A. B.', householdShortname: shortNameOf(order.householdId), householdId: order.householdId
     })
-    const deleted = (order: Ticket, actor: number | null, timestamp: Date, action: OrderAuditAction = Audit.USER_CANCELLED) =>
-        historyRow(action, actor, timestamp, null, order.inhabitantId, orderSnapshot(order, State.BOOKED))
+    const deleted = (order: Ticket, actor: number | null, timestamp: Date, action: OrderAuditAction = Audit.USER_CANCELLED, state: OrderState = State.BOOKED) =>
+        historyRow(action, actor, timestamp, null, order.inhabitantId, orderSnapshot(order, state))
     const claimed = (order: Ticket, buyer: number, timestamp: Date) =>
-        historyRow(Audit.USER_CLAIMED, buyer, timestamp, order.id, 100 + buyer, orderSnapshot(order, State.RELEASED))
+        historyRow(Audit.USER_CLAIMED, buyer, timestamp, order.id, buyerInhabitant(buyer), orderSnapshot(order, State.RELEASED))
     // A batch update writes the new scalars, the price row only when it changed
     const updated = (action: OrderAuditAction, order: Ticket, actor: number, timestamp: Date,
                      {state = State.BOOKED, dinnerMode = Mode.DINEIN, ticketPriceId = null}: {state?: OrderState, dinnerMode?: DinnerMode, ticketPriceId?: number | null} = {}) =>
         historyRow(action, actor, timestamp, order.id, order.inhabitantId, JSON.stringify({state, dinnerMode, ticketPriceId, priceAtBooking: ticketPriceId === null ? null : priceOf(ticketPriceId)}))
 
     const figures = ({counts, portions, revenue}: TicketChange) => ({counts, portions, revenue})
+    // The tickets, kuverter and revenue of the tickets the dinner is paid for
+    const paidForFigures = (paidFor: readonly Ticket[]) => ({
+        counts: Object.fromEntries(TicketTypeSchema.options.map(type => [type, paidFor.filter(order => PRICES[order.ticketPriceId]!.ticketType === type).length])),
+        portions: sumBy([...paidFor], order => PRICES[order.ticketPriceId]!.portions),
+        revenue: sumBy([...paidFor], order => priceOf(order.ticketPriceId))
+    })
 
     it('GIVEN a dinner\'s history from the system\'s bookings to the close WHEN replaying THEN a line holds one actor\'s ticket events within one minute and the last line holds the tickets and kuverter paid for', () => {
         const {replayTicketChanges} = useBooking()
@@ -2186,7 +2240,7 @@ describe('replayTicketChanges', () => {
             ...paidFor.map(order => updated(Audit.SYSTEM_UPDATED, order, SYSTEM, at(120), {state: State.CLOSED}))
         ]
 
-        const lines = replayTicketChanges(history, ticketPriceOf, SYSTEM, shortNameOf)
+        const lines = replayTicketChanges(history, ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant)
 
         expect(lines.map(({performedByUserId, bySystem, households, events}) => ({performedByUserId, bySystem, households: [...households].sort(), events}))).toEqual([
             {performedByUserId: SYSTEM, bySystem: true, households: ['S_22', 'S_31'], events: [{change: Kind.BOOK, tickets: counts(2, 2, 0)}]},
@@ -2196,7 +2250,7 @@ describe('replayTicketChanges', () => {
             {performedByUserId: 31, bySystem: false, households: ['S_31'], events: [{change: Kind.BOOK, tickets: counts(1, 1, 0)}]},
             {performedByUserId: 22, bySystem: false, households: ['S_22'], events: [{change: Kind.CHANGE_PRICE, tickets: counts(1, 0, 0), from: counts(0, 1, 0)}]},
             {performedByUserId: SYSTEM, bySystem: true, households: ['S_22'], events: [{change: Kind.RELEASE, tickets: counts(1, 0, 0)}]},
-            {performedByUserId: 14, bySystem: false, households: expect.any(Array), events: [{change: Kind.BUY, tickets: counts(1, 0, 0)}]},
+            {performedByUserId: 14, bySystem: false, households: ['S_14'], events: [{change: Kind.BUY, tickets: counts(1, 0, 0)}]},
             {performedByUserId: SYSTEM, bySystem: true, households: ['S_14', 'S_22', 'S_31'], events: [{change: Kind.CLOSE, tickets: counts(5, 2, 1)}]}
         ])
 
@@ -2206,11 +2260,7 @@ describe('replayTicketChanges', () => {
         expect(figures(sale!)).toEqual(figures(typeChange!))
         expect(typeChange!.portions - beforeTypeChange!.portions).toBe(PRICES[1]!.portions - PRICES[2]!.portions)
         expect(typeChange!.revenue - beforeTypeChange!.revenue).toBe(PRICES[1]!.price - PRICES[2]!.price)
-        expect(figures(close!)).toEqual({
-            counts: Object.fromEntries(TicketTypeSchema.options.map(type => [type, paidFor.filter(order => PRICES[order.ticketPriceId]!.ticketType === type).length])),
-            portions: sumBy(paidFor, order => PRICES[order.ticketPriceId]!.portions),
-            revenue: sumBy(paidFor, order => priceOf(order.ticketPriceId))
-        })
+        expect(figures(close!)).toEqual(paidForFigures(paidFor))
     })
 
     it('GIVEN a release and a reclaim written by the scaffold\'s batch update WHEN replaying THEN the lines name the ticket and its household, and the ticket stays paid', () => {
@@ -2230,17 +2280,86 @@ describe('replayTicketChanges', () => {
         expect(lines.map(figures)).toEqual(Array(3).fill({counts: counts(0, 1, 0), portions: PRICES[2]!.portions, revenue: PRICES[2]!.price}))
     })
 
+    it('GIVEN a ticket released by one household and bought by another WHEN replaying THEN the sale and the close name the buyer\'s household', () => {
+        const {replayTicketChanges} = useBooking()
+        const child = ticket(2, 2, 22)
+        const lines = replayTicketChanges([
+            booked(child, 22, at(1)),
+            updated(Audit.USER_CANCELLED, child, 22, at(2), {state: State.RELEASED, dinnerMode: Mode.NONE}),
+            claimed(child, 14, at(3)),
+            updated(Audit.SYSTEM_UPDATED, child, SYSTEM, at(4), {state: State.CLOSED})
+        ], ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant)
+        expect(lines.map(line => [line.events.map(event => event.change), line.households])).toEqual([
+            [[Kind.BOOK], ['S_22']],
+            [[Kind.RELEASE], ['S_22']],
+            [[Kind.BUY], ['S_14']],
+            [[Kind.CLOSE], ['S_14']]
+        ])
+    })
+
     it.each([
         {desc: 'a cancellation before the deadline', action: Audit.USER_CANCELLED, actor: 31, bySystem: false},
-        {desc: 'a system deletion', action: Audit.SYSTEM_DELETED, actor: null, bySystem: true}
+        {desc: 'a system deletion before the deadline', action: Audit.SYSTEM_DELETED, actor: null, bySystem: true}
     ])('GIVEN a booked ticket and $desc WHEN replaying THEN the ticket, its kuverter and its revenue leave', ({action, actor, bySystem}) => {
         const {replayTicketChanges} = useBooking()
         const adult = ticket(1, 1, 31)
-        const lines = replayTicketChanges([booked(adult, 31, at(0)), deleted(adult, actor, at(5), action)], ticketPriceOf, SYSTEM, shortNameOf)
+        const lines = replayTicketChanges([booked(adult, 31, at(0)), deleted(adult, actor, at(5), action)], ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant, at(30))
         expect(lines.at(-1)).toMatchObject({
             performedByUserId: actor ?? SYSTEM, bySystem, households: ['S_31'],
             events: [{change: Kind.CANCEL, tickets: counts(1, 0, 0)}], counts: counts(0, 0, 0), portions: 0, revenue: 0
         })
+    })
+
+    // After the booking deadline only the admin's correction deletes an order; a release keeps the ticket paid
+    describe('after the booking deadline', () => {
+        const DEADLINE = at(30)
+        const ADMIN = 1
+        const adult = ticket(1, 1, 22)
+        const child = ticket(2, 2, 22)
+        const release = updated(Audit.USER_CANCELLED, child, 22, at(32), {state: State.RELEASED, dinnerMode: Mode.NONE})
+
+        it.each([
+            {desc: 'a release and the admin\'s deletion of the released ticket', rows: [release, deleted(child, ADMIN, at(35), Audit.USER_CANCELLED, State.RELEASED)],
+                kinds: [[Kind.BOOK], [Kind.RELEASE], [Kind.ADMIN_CANCEL]], paidFor: [adult]},
+            {desc: 'a cancellation before the deadline', rows: [deleted(child, 22, at(10))],
+                kinds: [[Kind.BOOK], [Kind.CANCEL]], paidFor: [adult]},
+            {desc: 'a release alone', rows: [release],
+                kinds: [[Kind.BOOK], [Kind.RELEASE]], paidFor: [adult, child]}
+        ])('GIVEN two booked tickets and $desc WHEN replaying THEN the lines read $kinds and the last holds what is paid for', ({rows, kinds, paidFor}) => {
+            const {replayTicketChanges} = useBooking()
+            const lines = replayTicketChanges([booked(adult, 22, at(0)), booked(child, 22, at(0)), ...rows], ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant, DEADLINE)
+
+            expect(lines.map(line => line.events.map(event => event.change))).toEqual(kinds)
+            expect(figures(lines.at(-1)!)).toEqual(paidForFigures(paidFor))
+        })
+
+        it('GIVEN the admin\'s deletion of a released ticket WHEN replaying THEN one event takes the ticket off the counts, the kuverter and the revenue', () => {
+            const {replayTicketChanges} = useBooking()
+            const lines = replayTicketChanges([booked(adult, 22, at(0)), booked(child, 22, at(0)), release, deleted(child, ADMIN, at(35), Audit.USER_CANCELLED, State.RELEASED)],
+                ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant, DEADLINE)
+            const [, released, adminCancel] = lines
+
+            expect(adminCancel).toMatchObject({performedByUserId: ADMIN, households: ['S_22'], events: [{change: Kind.ADMIN_CANCEL, tickets: counts(0, 1, 0)}]})
+            expect(released!.revenue - adminCancel!.revenue).toBe(PRICES[2]!.price)
+            expect(released!.portions - adminCancel!.portions).toBe(PRICES[2]!.portions)
+        })
+    })
+
+    it('GIVEN the chef\'s extra portions for the first in line WHEN replaying THEN one line reads them as extra portions and the tickets, kuverter and revenue rise', () => {
+        const {replayTicketChanges} = useBooking()
+        const CHEF = 7
+        const adult = ticket(1, 1, 31)
+        const firstInLine = [ticket(5, 1, 14), ticket(6, 2, 22)]
+        const lines = replayTicketChanges([
+            booked(adult, 31, at(0)),
+            ...firstInLine.map(order => booked(order, CHEF, at(40), {action: Audit.SYSTEM_CREATED, source: Source['waitlist-assignment']}))
+        ], ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant)
+        const [before, extra] = lines
+
+        expect(lines).toHaveLength(2)
+        expect(extra).toMatchObject({performedByUserId: CHEF, households: ['S_14', 'S_22'], events: [{change: Kind.EXTRA_PORTIONS, tickets: counts(1, 1, 0)}], counts: counts(2, 1, 0)})
+        expect(extra!.revenue - before!.revenue).toBe(sumBy(firstInLine, order => priceOf(order.ticketPriceId)))
+        expect(extra!.portions - before!.portions).toBe(sumBy(firstInLine, order => PRICES[order.ticketPriceId]!.portions))
     })
 
     it('GIVEN rows out of order and an eating mode switch WHEN replaying THEN time order rules and the switch is no line', () => {

@@ -1,11 +1,35 @@
 import {describe, it, expect, vi} from 'vitest'
+import {createError} from 'h3'
 import {scaffoldPrebookings} from '~~/server/utils/scaffoldPrebookings'
+import {fetchHouseholds, fetchSeason} from '~~/server/data/prismaRepository'
+import {fetchOrders, fetchUserIntentKeys, updateOrdersBatch} from '~~/server/data/financesRepository'
+import {fetchWaitlistForHousehold, fetchWaitlistForDinners} from '~~/server/data/waitlistRepository'
+import {useBookingValidation} from '~/composables/useBookingValidation'
+import {OPEN_DEADLINES} from '~/composables/useSeason'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 
-// The scaffolder reads the app config from the Nitro auto-import scope
+// The scaffolder reads the app config, and its error log builds errors, from the Nitro auto-import scope
 vi.stubGlobal('useAppConfig', () => ({theslope: {}}))
+vi.stubGlobal('createError', createError)
+
+// The repositories stand for the database the unit runtime lacks
+vi.mock('~~/server/data/prismaRepository', () => ({
+    fetchHouseholds: vi.fn(), fetchSeason: vi.fn(), fetchActiveSeasonId: vi.fn(), fetchUser: vi.fn()
+}))
+vi.mock('~~/server/data/financesRepository', () => ({
+    fetchOrders: vi.fn(), fetchUserIntentKeys: vi.fn(), createOrders: vi.fn(), deleteOrder: vi.fn(), updateOrdersBatch: vi.fn(),
+    claimOrder: vi.fn(), countReleasedTickets: vi.fn(), fetchDinnerEvent: vi.fn()
+}))
+vi.mock('~~/server/data/waitlistRepository', () => ({
+    fetchWaitlistForHousehold: vi.fn(), fetchWaitlistForDinners: vi.fn(), deleteWaitlistEntry: vi.fn(), updateWaitlistEntryOrder: vi.fn(), createWaitlistEntry: vi.fn()
+}))
 
 const d1Client = {} as D1Database
+const {DinnerModeSchema, BookingActionSchema, TicketTypeSchema} = useBookingValidation()
 
 describe('scaffoldPrebookings', () => {
     // User mode books for a household on a user's behalf: the audit names the user and the run stays in the household
@@ -15,5 +39,35 @@ describe('scaffoldPrebookings', () => {
     ])('refuses user mode without $missing', async ({options}) => {
         await expect(scaffoldPrebookings(d1Client, {...options, seasonId: 1, desiredOrders: [OrderFactory.defaultDesiredOrder()]}))
             .rejects.toThrow('User mode (desiredOrders provided) requires both householdId and userId')
+    })
+
+    it('GIVEN a save naming an order the household no longer holds WHEN scaffolding THEN that order is listed as failed and the save\'s other orders land', async () => {
+        const ticketPrices = TicketFactory.defaultTicketPrices().map((price, index) => ({...price, id: index + 1}))
+        const adultPrice = ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)!
+        const dinner = {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 5}
+        const season = {...SeasonFactory.defaultSeason(), id: 1, ticketPrices, dinnerEvents: [dinner]}
+        const household = HouseholdFactory.defaultHouseholdDetail()
+        const [anna, bo] = household.inhabitants
+        const boOrder = OrderFactory.defaultOrder(undefined, {id: 11, inhabitantId: bo!.id, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id, priceAtBooking: adultPrice.price})
+        vi.mocked(fetchSeason).mockResolvedValue(season)
+        vi.mocked(fetchHouseholds).mockResolvedValue([household])
+        vi.mocked(fetchOrders).mockResolvedValue([boOrder])
+        vi.mocked(fetchUserIntentKeys).mockResolvedValue({confirmedKeys: new Set(), cancelledKeys: new Set()})
+        vi.mocked(fetchWaitlistForHousehold).mockResolvedValue([])
+        vi.mocked(fetchWaitlistForDinners).mockResolvedValue([])
+        vi.mocked(updateOrdersBatch).mockReturnValue(async (_d1, updates) => updates.length)
+
+        // Anna's order went to another household since the page loaded; Bo's is still the household's
+        const takeaway = (inhabitantId: number, orderId: number) => OrderFactory.defaultDesiredOrder({
+            inhabitantId, orderId, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id, dinnerMode: DinnerModeSchema.enum.TAKEAWAY
+        })
+        const result = await scaffoldPrebookings(d1Client, {
+            seasonId: season.id, householdId: household.id, userId: 1, deadlines: OPEN_DEADLINES,
+            desiredOrders: [takeaway(anna!.id, 10), takeaway(bo!.id, boOrder.id)]
+        })
+
+        expect(result.failed).toEqual([expect.objectContaining({inhabitantId: anna!.id, inhabitantName: anna!.name, action: BookingActionSchema.enum.CHANGE_MODE})])
+        expect(result.results).toEqual([expect.objectContaining({inhabitantId: bo!.id, action: BookingActionSchema.enum.CHANGE_MODE})])
+        expect(result.errored).toBe(1)
     })
 })

@@ -30,7 +30,7 @@ const NOTES_KEY = 'allergy-poster-notes'
  */
 const gotoCatalog = async (page: Page) => {
     await gotoHydrated(page, '/admin/allergies')
-    await expect(page.locator('[data-testid="admin-allergies"]')).toBeVisible({timeout: 15_000})
+    await expect(page.locator('[data-testid="admin-allergies"]')).toBeVisible()
     await expect(page.getByText('Detaljer').or(page.getByText('Vælg en allergi')).first()).toBeAttached()
 }
 
@@ -60,7 +60,7 @@ test.describe('AdminAllergies - catalog CRUD', () => {
 
     const selectRow = async (page: Page, allergyTypeId: number) => {
         const row = page.getByTestId(`allergy-row-${allergyTypeId}`)
-        await expect(row).toBeVisible({timeout: 10000})
+        await expect(row).toBeVisible()
         await row.click()
         await expect(page.getByTestId('edit-allergy-type')).toBeVisible()
     }

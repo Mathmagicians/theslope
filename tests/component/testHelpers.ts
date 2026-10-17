@@ -6,6 +6,10 @@ import {useNuxtApp, clearNuxtData, useAppConfig} from '#app'
 import {getActivePinia, setActivePinia, type Pinia} from 'pinia'
 import {flushPromises, type BaseWrapper, type VueWrapper} from '@vue/test-utils'
 import {toCalendarDate} from '~/utils/date'
+import {sumBy} from '~/utils/ledger'
+import {TICKET_COUNTS} from '~/composables/useBilling'
+import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import type {TicketType} from '~/composables/useBookingValidation'
 
 /**
  * Generic polling function for component tests
@@ -120,6 +124,13 @@ export const VIEWPORTS = [
     {viewport: 'phone', isMd: false},
     {viewport: 'md', isMd: true}
 ] as const
+
+type TicketTypeCounts = Partial<Record<TicketType, number>>
+/** A locked dinner's supply from its tickets for sale and its waiting list per ticket type, with the totals and the compact counts */
+export const lockedDinnerSupply = (byType: TicketTypeCounts = {}, queuedByType: TicketTypeCounts = {}): ReleasedTicketCounts => ({
+    total: sumBy(Object.values(byType), count => count), formatted: TICKET_COUNTS.compact.text(byType), byType,
+    queued: sumBy(Object.values(queuedByType), count => count), queuedFormatted: TICKET_COUNTS.compact.text(queuedByType), queuedByType
+})
 
 /**
  * mountSuspended under a TooltipProvider and return the wrapper of the component itself,

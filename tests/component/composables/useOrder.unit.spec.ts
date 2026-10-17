@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { useOrder } from '~/composables/useOrder'
 import { useBookingValidation } from '~/composables/useBookingValidation'
+import { sumBy } from '~/utils/ledger'
 import { OrderFactory } from '../../e2e/testDataFactories/orderFactory'
 
 // Get enum schemas for type-safe test data
@@ -196,6 +197,26 @@ describe('useOrder', () => {
         const total = stats.reduce((sum, s) => sum + s.percentage, 0)
         expect(total === 0 || total === 100).toBe(true)
       })
+    })
+
+    it('GIVEN a closed dinner with tickets kept with Ingen WHEN counting the panels THEN they add up to the total kuverter and TIL SALG holds the released ones', () => {
+      const { calculateTotalPortions } = useOrder()
+      const closed = [
+        createOrderWithMode(DinnerMode.DINEIN, TicketType.ADULT, OrderState.CLOSED),
+        createOrderWithMode(DinnerMode.DINEIN, TicketType.ADULT, OrderState.CLOSED),
+        createOrderWithMode(DinnerMode.TAKEAWAY, TicketType.ADULT, OrderState.CLOSED),
+        createOrderWithMode(DinnerMode.TAKEAWAY, TicketType.CHILD, OrderState.CLOSED),
+        createOrderWithMode(DinnerMode.TAKEAWAY, TicketType.CHILD, OrderState.CLOSED),
+        createOrderWithMode(DinnerMode.DINEINLATE, TicketType.ADULT, OrderState.CLOSED),
+        createOrderWithMode(DinnerMode.NONE, TicketType.ADULT, OrderState.CLOSED),
+        createOrderWithMode(DinnerMode.NONE, TicketType.CHILD, OrderState.CLOSED),
+        createOrderWithMode(DinnerMode.NONE, TicketType.CHILD, OrderState.CLOSED)
+      ]
+
+      const stats = calculateDiningModeStats(closed)
+
+      expect(sumBy(stats, s => s.portions)).toBe(calculateTotalPortions(closed))
+      expect(stats.find(s => s.key === OrderState.RELEASED)).toMatchObject({ label: 'TIL SALG', orderCount: 3 })
     })
   })
 

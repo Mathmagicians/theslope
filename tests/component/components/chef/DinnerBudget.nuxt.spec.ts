@@ -6,7 +6,7 @@ import DinnerBudget from '~/components/chef/DinnerBudget.vue'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useOrder} from '~/composables/useOrder'
-import {useTicket} from '~/composables/useTicket'
+import {useTicket, ticketTypeLabel} from '~/composables/useTicket'
 import {useBookingValidation, type OrderDetail, type OrderState, type TicketType} from '~/composables/useBookingValidation'
 import {dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
 import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, registerEmptyStoreEndpoints, kitchenConfig, resetStores} from '~~/tests/component/testHelpers'
@@ -16,7 +16,7 @@ import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, 
  * one chevron the ticket table named by type, the summary, the ticket changes and the team's round.
  */
 const {calculateBudget} = useOrder()
-const {formatPrice, ticketTypeWords} = useTicket()
+const {formatPrice} = useTicket()
 const {TicketTypeSchema, OrderStateSchema} = useBookingValidation()
 
 let baseRate: number
@@ -80,7 +80,7 @@ describe('DinnerBudget', () => {
         await wrapper.vm.$nextTick()
 
         const rows = findByTestId(wrapper, 'budget-ticket-table').findAll('tbody tr').filter(tr => tr.attributes('data-testid') === undefined && !tr.text().includes('Køkkenbidrag'))
-        expect(rows.map(row => row.find('td').text())).toEqual([ticketTypeWords[TicketTypeSchema.enum.ADULT].label, ticketTypeWords[TicketTypeSchema.enum.CHILD].label])
+        expect(rows.map(row => row.find('td').text())).toEqual([ticketTypeLabel(TicketTypeSchema.enum.ADULT), ticketTypeLabel(TicketTypeSchema.enum.CHILD)])
         expect(findByTestId(wrapper, 'budget-summary-left').exists()).toBe(false)
         expect(findByTestId(wrapper, 'budget-summary-available').exists()).toBe(true)
         expect(findAllByTestId(wrapper, 'cooking-round')).toHaveLength(2)

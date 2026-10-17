@@ -6,7 +6,7 @@ import type {Season} from '~/composables/useSeasonValidation'
 import {FORM_MODES, type FormMode} from '~/types/form'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, selectDropdownOption, doScreenshot, salt, temporaryAndRandom, gotoHydrated} = testHelpers
+const {validatedBrowserContext, selectDropdownOption, doScreenshot, salt, temporaryAndRandom, gotoHydrated, pollUntil} = testHelpers
 
 test.describe('SeasonSelector UI - Status Indicators', () => {
     const adminPlanningUrl = '/admin/planning'
@@ -76,7 +76,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         // Wait for the season selector, past the store loader, to show the requested season
         // (without one, the case reads the auto-selected season next)
         const seasonSelector = page.getByTestId('season-selector')
-        await expect(seasonSelector).toBeVisible({timeout: 15_000})
+        await pollUntil(() => seasonSelector.isVisible(), visible => visible)
         if (seasonShortName) await expect(seasonSelector, 'the season loads').toContainText(seasonShortName)
     }
 
@@ -89,7 +89,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         await expect(seasonSelector).toContainText(activeSeason.shortName)
 
         // Verify URL was updated with active season
-        await expect.poll(() => page.url(), {timeout: 15000}).toContain(`season=${encodeURIComponent(activeSeason.shortName)}`)
+        await pollUntil(async () => page.url(), url => url.includes(`season=${encodeURIComponent(activeSeason.shortName)}`))
     })
 
     test('GIVEN active season selected WHEN opening dropdown THEN shows all seasons with status indicators', async ({page}) => {
@@ -126,7 +126,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         await expect(seasonSelector).toContainText(futureSeason.shortName)
 
         // Verify URL updated
-        await expect.poll(() => page.url(), {timeout: 15000}).toContain(`season=${encodeURIComponent(futureSeason.shortName)}`)
+        await pollUntil(async () => page.url(), url => url.includes(`season=${encodeURIComponent(futureSeason.shortName)}`))
     })
 
     test('GIVEN future season WHEN viewing status display THEN shows activation controls', async ({page}) => {

@@ -8,15 +8,14 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {useTicket} from '~/composables/useTicket'
+import {ticketTypeLabel, ticketTypeCount} from '~/composables/useTicket'
 import {formatDate} from '~/utils/date'
 import {WAITLIST_TEST_IDS} from '~~/tests/component/components/dinner/waitlistTestIds'
 
 const {memberUIFile, adminUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, gotoHydrated, pollUntil, salt, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, gotoHydrated, pollUntil, salt, temporaryAndRandom, waitForApi} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
 const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
-const {ticketTypeWords} = useTicket()
 const DinnerMode = DinnerModeSchema.enum
 
 /**
@@ -79,13 +78,15 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
 
         await memberPage.getByTestId(`inhabitant-${inhabitantId}-toggle`).click()
         await memberPage.getByTestId(`inhabitant-${inhabitantId}-mode-edit-${DinnerMode.DINEIN}`).click()
+        const saved = waitForApi(memberPage, '/api/household/order/scaffold', 'POST')
         await memberPage.getByTestId(`inhabitant-${inhabitantId}-save`).click()
+        await saved
 
-        await expect(memberPage.getByTestId(WAITLIST_TEST_IDS.position(inhabitantId))).toContainText(`${ticketTypeWords[TicketTypeSchema.enum.ADULT].label} #1`, {timeout: 15000})
+        await expect(memberPage.getByTestId(WAITLIST_TEST_IDS.position(inhabitantId))).toContainText(`${ticketTypeLabel(TicketTypeSchema.enum.ADULT)} #1`)
 
         const chefPage = await (await browser.newContext({storageState: adminUIFile})).newPage()
         await gotoHydrated(chefPage, `/chef?team=${teamId}&date=${formatDate(dinnerDate)}`)
-        await expect(chefPage.getByTestId('chef-waitlist-alert')).toBeVisible({timeout: 15000})
+        await expect(chefPage.getByTestId('chef-waitlist-alert')).toBeVisible()
     })
 
     test('GIVEN a locked dinner with no tickets for sale and one entry on its waiting list WHEN a member opens /dinner THEN the dinner\'s calendar day chip carries the hourglass and the booking form\'s info bar reads the waiting list with the entry\'s ticket type', async ({browser}) => {
@@ -99,11 +100,11 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
 
         // UChip hands its test id to the day circle; the chip's indicator sits beside the circle and holds the hourglass
         const dayChip = memberPage.getByTestId(`calendar-dinner-date-${dinnerDate.getDate()}`).locator('xpath=..').locator('[data-slot="base"]')
-        await expect(dayChip.getByTestId(WAITLIST_TEST_IDS.calendarHourglass(dinnerDate.getDate()))).toBeVisible({timeout: 15000})
+        await pollUntil(() => dayChip.getByTestId(WAITLIST_TEST_IDS.calendarHourglass(dinnerDate.getDate())).isVisible(), visible => visible)
         await expect(dayChip).toHaveText('')
 
-        await expect(memberPage.getByTestId(WAITLIST_TEST_IDS.moreTickets))
-            .toContainText(`Lukket for ændringer, men du kan få en plads på ventelisten. Pt står 1${ticketTypeWords[ticketType].compactLabel} på ventelisten.`, {timeout: 15000})
+        await pollUntil(() => memberPage.getByTestId(WAITLIST_TEST_IDS.moreTickets).textContent(),
+            text => !!text?.includes(`Lukket for framelding: ${ticketTypeCount(ticketType, 1)} på ventelisten`))
     })
 
     test('GIVEN the member in the queue WHEN the chef releases a portion THEN the member holds a ticket and the queue is empty', async ({browser}) => {
@@ -112,6 +113,7 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
 
         await chefPage.getByTestId('chef-extra-portions-cta').click()
         await chefPage.getByTestId('chef-extra-portions-form').locator('input').fill('1')
+        const released = waitForApi(chefPage, `/api/chef/dinner/${dinnerEventId}/extra-portions`, 'POST')
         await chefPage.getByTestId('chef-extra-portions-submit').click()
 
         const orders = await pollUntil(
@@ -119,10 +121,11 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
             found => found.some(order => order.inhabitantId === inhabitantId)
         )
         expect(orders.find(order => order.inhabitantId === inhabitantId)).toMatchObject({dinnerMode: DinnerMode.DINEIN, state: OrderStateSchema.enum.BOOKED})
-        await expect(chefPage.getByTestId('chef-waitlist-alert')).toBeHidden({timeout: 15000})
+        await released
+        await expect(chefPage.getByTestId('chef-waitlist-alert')).toBeHidden()
 
         const memberPage = await (await browser.newContext({storageState: memberUIFile})).newPage()
         await gotoHydrated(memberPage, `/dinner?date=${formatDate(dinnerDate)}`)
-        await expect(memberPage.getByTestId(WAITLIST_TEST_IDS.position(inhabitantId))).toBeHidden({timeout: 15000})
+        await expect(memberPage.getByTestId(WAITLIST_TEST_IDS.position(inhabitantId))).toBeHidden()
     })
 })

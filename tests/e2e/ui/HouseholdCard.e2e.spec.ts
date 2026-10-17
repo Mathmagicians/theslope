@@ -7,7 +7,7 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
 const {memberUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, salt, temporaryAndRandom, getSessionUserInfo, gotoHydrated} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, salt, temporaryAndRandom, getSessionUserInfo, gotoHydrated, waitForApi} = testHelpers
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 
@@ -115,7 +115,7 @@ test.describe('HouseholdCard - Members and Weekday Preferences', () => {
         // Wait for edit panel to be visible (UFormField renders label as generic element, not heading)
         // Exact: the sibling members' names start with Scrooge's
         const editPanel = page.getByText(`Opdater fællesspisning præferencer for ${salt('Anders', testSalt)}`, {exact: true})
-        await expect(editPanel, 'Edit panel should be visible after clicking edit button').toBeVisible({timeout: 5000})
+        await expect(editPanel, 'Edit panel should be visible after clicking edit button').toBeVisible()
 
         // WHEN: Change Monday to TAKEAWAY
         const mondayTakeawayButton = page.getByTestId(`inhabitant-${scroogeId}-preferences-edit-mandag-${DinnerMode.TAKEAWAY}`)
@@ -135,6 +135,7 @@ test.describe('HouseholdCard - Members and Weekday Preferences', () => {
 
         // WHEN: Save preferences
         const saveButton = page.getByTestId('save-preferences')
+        const saved = waitForApi(page, `/api/household/inhabitants/${scroogeId}/preferences`, 'POST')
         await saveButton.click()
 
         // THEN: Poll until preferences are updated in database (use admin for verification)
@@ -174,8 +175,9 @@ test.describe('HouseholdCard - Members and Weekday Preferences', () => {
         expect(preferences!.torsdag).toBe(DinnerMode.DINEIN)
         expect(preferences!.fredag).toBe(DinnerMode.NONE)
 
-        // THEN: Verify UI collapsed back to VIEW mode: Scrooge's toggle reads Rediger præferencer again
-        await expect(page.getByTestId(`inhabitant-${scroogeId}-edit-preferences`)).toHaveAttribute('aria-label', 'Rediger præferencer', {timeout: 10000})
+        // THEN: Verify UI collapsed back to VIEW mode once the save lands: Scrooge's toggle reads Rediger præferencer again
+        await saved
+        await expect(page.getByTestId(`inhabitant-${scroogeId}-edit-preferences`)).toHaveAttribute('aria-label', 'Rediger præferencer')
 
         // THEN: Verify VIEW mode shows updated preferences correctly
         const updatedViewPreferences = page.getByTestId(`inhabitant-${scroogeId}-preferences-view`)

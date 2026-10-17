@@ -4,7 +4,7 @@ import { SeasonFactory } from '../testDataFactories/seasonFactory'
 import testHelpers from '../testHelpers'
 
 const { adminUIFile } = authFiles
-const { validatedBrowserContext, doScreenshot, gotoHydrated } = testHelpers
+const { validatedBrowserContext, doScreenshot, gotoHydrated, pollUntil } = testHelpers
 
 test.describe('AdminPlanning UI', () => {
   const adminPlanningUrl = '/admin/planning'
@@ -18,7 +18,7 @@ test.describe('AdminPlanning UI', () => {
    */
   const openPlanning = async (page: import('@playwright/test').Page, seasonShortName: string) => {
     await gotoHydrated(page, `${adminPlanningUrl}?season=${encodeURIComponent(seasonShortName)}`)
-    await expect(page.getByTestId('admin-planning')).toBeVisible({timeout: 15_000})
+    await pollUntil(() => page.getByTestId('admin-planning').isVisible(), visible => visible)
     await expect(page.getByTestId('season-selector'), 'the season loads').toContainText(seasonShortName)
   }
 

@@ -13,7 +13,7 @@ import {formatDate} from '~/utils/date'
 const DEFAULT_DINNER_START_HOUR = 18
 
 const {memberUIFile} = authFiles
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo, gotoHydrated} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo, gotoHydrated, waitForApi} = testHelpers
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -153,10 +153,12 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         await page.getByTestId(`inhabitant-${inhabitant.id}-preferences-edit-fredag-DINEIN`).click()
 
         // Save
+        const saved = waitForApi(page, `/api/household/inhabitants/${inhabitant.id}/preferences`, 'POST')
         await page.getByTestId('save-preferences').click()
+        await saved
 
         // THEN: the row collapses once the save lands (the toggle reads 'Luk' while open)
-        await expect(page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`)).toHaveAttribute('aria-label', 'Rediger præferencer', {timeout: 15000})
+        await expect(page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`)).toHaveAttribute('aria-label', 'Rediger præferencer')
 
         // THEN: Verify orders created only for before-deadline events via API
         const ordersAfter = await pollUntil(
@@ -194,16 +196,19 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         await gotoHydrated(page, `/household/${encodeURIComponent(shortName)}/bookings?pbs=${pbsId}&date=${formatDate(lockedDay)}`)
         // UChip hands its test id to the day circle; the chip's indicator sits beside the circle
         const dayChip = page.getByTestId(`calendar-dinner-date-${lockedDay.getDate()}`).locator('xpath=..').locator('[data-slot="base"]')
-        await expect(dayChip, 'Closed with nothing for sale').toHaveText('', {timeout: 15000})
+        await expect(dayChip, 'Closed with nothing for sale').toHaveText('')
 
         await page.getByRole('tab', {name: 'Præferencer'}).click()
         await page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`).click()
         await page.getByTestId(`inhabitant-${inhabitant.id}-preferences-edit-${dateToWeekDay(lockedDay)}-${DinnerMode.NONE}`).click()
+        const saved = waitForApi(page, `/api/household/inhabitants/${inhabitant.id}/preferences`, 'POST')
         await page.getByTestId('save-preferences').click()
-        await expect(page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`)).toHaveAttribute('aria-label', 'Rediger præferencer', {timeout: 15000})
+        await saved
+        await expect(page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`)).toHaveAttribute('aria-label', 'Rediger præferencer')
 
         await page.getByRole('tab', {name: 'Tilmeldinger'}).click()
 
-        await expect(dayChip, 'The released ticket is for sale').toHaveText('1', {timeout: 15000})
+        // The released ticket is for sale
+        await pollUntil(async () => (await dayChip.textContent())?.trim(), forSale => forSale === '1')
     })
 })

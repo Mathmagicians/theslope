@@ -8,6 +8,7 @@ import TicketChanges from '~/components/chef/TicketChanges.vue'
 import {useBookingValidation, type TicketChange, type TicketType} from '~/composables/useBookingValidation'
 import {ticketChangeWord} from '~/composables/useBookingUi'
 import {useTicket} from '~/composables/useTicket'
+import {useBilling} from '~/composables/useBilling'
 import {formatPortions} from '~/utils/utils'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
@@ -20,18 +21,17 @@ import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, 
 const DINNER_ID = 7
 const SYSTEM_USER_ID = 99
 const {TicketChangeKindSchema, TicketTypeSchema} = useBookingValidation()
-const {formatPrice, ticketTypeWords} = useTicket()
+const {formatPrice} = useTicket()
 const Kind = TicketChangeKindSchema.enum
 const TicketType = TicketTypeSchema.enum
 const counts = OrderFactory.ticketCounts
 const SINCE = new Date('2026-04-03T18:00:00')
-// A ticket chip as the pane writes it: the count and the type's letter
-const chip = (count: number, ticketType: TicketType) => `${count} ${ticketTypeWords[ticketType].compactLabel}`
+// A ticket chip as the pane writes it: the tickets of one type as the ticket counts read them
+const chip = (count: number, ticketType: TicketType) => useBilling().formatTicketCounts({[ticketType]: count})
 
-const change = (overrides: Partial<TicketChange>): TicketChange => ({
-    id: 1, timestamp: new Date('2026-04-05T08:02:00'), performedByUserId: 31, bySystem: false, households: ['S_31'],
-    events: [{change: Kind.BOOK, tickets: counts(1, 0, 0)}], counts: counts(29, 11, 3), portions: 34.5, revenue: 172500, ...overrides
-})
+// A line on a dinner holding 43 tickets
+const change = (overrides: Partial<TicketChange>): TicketChange =>
+    OrderFactory.defaultTicketChange({counts: counts(29, 11, 3), portions: 34.5, revenue: 172500, ...overrides})
 const recent = [
     change({id: 3, timestamp: new Date('2026-04-09T19:10:00'), performedByUserId: 14, households: ['S_14'], events: [{change: Kind.BUY, tickets: counts(0, 1, 0)}]}),
     change({id: 2, timestamp: new Date('2026-04-05T08:02:00')})
@@ -41,7 +41,7 @@ const older = [change({
     events: [{change: Kind.BOOK, tickets: counts(28, 11, 3)}], counts: counts(28, 11, 3), portions: 33.5, revenue: 167500
 })]
 
-const historyEndpoint = vi.fn((event: H3Event) => {
+const historyEndpoint = vi.fn<(event: H3Event) => unknown>((event: H3Event) => {
     const since = getQuery(event).since
     return {dinnerEventId: DINNER_ID, since: since ?? null, changes: since ? recent : [...recent, ...older], olderCount: since ? older.length : 0}
 })
@@ -106,6 +106,22 @@ describe('TicketChanges', () => {
         expect(findByTestId(wrapper, 'ticket-changes-more').exists()).toBe(false)
     })
 
+    it('GIVEN the changes on the way WHEN opened THEN the table shows its loading row until they land', async () => {
+        let land = () => {}
+        historyEndpoint.mockImplementationOnce(() => new Promise(resolve => {
+            land = () => resolve({dinnerEventId: DINNER_ID, since: SINCE.toISOString(), changes: recent, olderCount: 0})
+        }))
+        const wrapper = await mount()
+        await clickByTestId(wrapper, 'ticket-changes-toggle')
+        await vi.waitFor(() => expect(historyEndpoint).toHaveBeenCalled())
+
+        expect(wrapper.find('tbody').text()).toContain('Henter...')
+
+        land()
+        await vi.waitFor(() => expect(wrapper.findAll('tbody tr')).toHaveLength(recent.length))
+        expect(wrapper.find('tbody').text()).not.toContain('Henter...')
+    })
+
     it('GIVEN Framelding still ahead WHEN opened THEN the newest change shows alone in the full history columns, with the rest behind the button', async () => {
         const ahead = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
         const wrapper = await mount({since: ahead})
@@ -157,6 +173,17 @@ describe('TicketChanges', () => {
             {household: 'S_31, S_22', events: [{word: ticketChangeWord(Kind.CANCEL), chips: [chip(1, TicketType.ADULT)], arrow: false}]}
         ])
         expect(rows[2]!.findAll('td')[2]!.text()).toContain(`${chip(1, TicketType.CHILD)}, ${ticketChangeWord(Kind.RELEASE)}`)
+    })
+
+    it.each([
+        {kind: Kind.ADMIN_CANCEL, word: 'frameldt af admin'},
+        {kind: Kind.EXTRA_PORTIONS, word: 'ekstra tilmeldt'}
+    ])('GIVEN a line of $kind WHEN opened THEN Ændring reads "$word"', async ({kind, word}) => {
+        historyEndpoint.mockImplementationOnce(() => ({dinnerEventId: DINNER_ID, since: SINCE.toISOString(), changes: [change({id: 21, events: [{change: kind, tickets: counts(0, 1, 0)}]})], olderCount: 0}))
+        const wrapper = await mount()
+        await open(wrapper)
+
+        expect(findByTestId(wrapper, 'ticket-change-word').text()).toBe(word)
     })
 
     it('GIVEN no change since the deadline but older ones WHEN opened THEN the table says so and the full history stays a click away', async () => {

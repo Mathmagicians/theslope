@@ -130,17 +130,19 @@ test.describe('Waiting list assignment', () => {
         expect(again!.portionsUsed).toBe(0)
     })
 
-    test('GIVEN an inhabitant with a ticket WHEN joining the queue again THEN the Order unique index refuses the assignment path too', async ({browser}) => {
+    test('GIVEN an inhabitant with a ticket WHEN joining the queue again THEN extra portions clear the entry as already placed', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        // The queue accepts the entry; the release cannot place a second regular order for the inhabitant
+        // The queue accepts the entry; the Order unique index refuses a second regular order, so the entry counts as placed
         const result = await queue(context, OrderFactory.createBookingOrder(inhabitants[0]!.id!, dinnerEventId, adultPrice.id!))
         expect(result.totals[Action.QUEUE]).toBe(1)
 
-        await WaitlistFactory.addExtraPortions(context, dinnerEventId, 1, 409)
+        const portions = await WaitlistFactory.addExtraPortions(context, dinnerEventId, 1)
+        expect(portions!.assigned).toEqual([])
 
-        const waiting = await householdEntries(context)
-        expect(waiting.map(entry => entry.inhabitantId)).toEqual([inhabitants[0]!.id])
-        await WaitlistFactory.leave(context, activeSeasonId, waiting[0]!, true)
+        expect(await householdEntries(context)).toEqual([])
+        const regularOrders = (await OrderFactory.getOrdersForDinnerEvent(context, dinnerEventId))
+            .filter(order => order.inhabitantId === inhabitants[0]!.id && !order.isGuestTicket)
+        expect(regularOrders).toHaveLength(1)
     })
 
     test('GIVEN a queue on a dinner of yesterday WHEN the daily maintenance consumes it THEN the queue is gone', async ({browser}) => {

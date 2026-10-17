@@ -88,7 +88,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         await serverContext.close()
 
         await gotoHydrated(page, '/admin/economy')
-        await expect.poll(() => page.getByTestId(`future-orders-expand-${testDinnerEventId}`).count(), {timeout: 15_000}).toBe(1)
+        await pollUntil(() => page.getByTestId(`future-orders-expand-${testDinnerEventId}`).count(), count => count === 1)
     })
 
     test('GIVEN an order of the household WHEN its economy page is server-rendered THEN its HTML carries the billing and the upcoming orders', async () => {
@@ -117,8 +117,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         // Use tab navigation (client-side) to preserve season selection
         // Wait for the upcoming orders the economy tab requests for the season
         const orderFetchPromise = page.waitForResponse(
-            (r) => r.url().includes('/api/order') && r.url().includes('upcomingForSeason'),
-            {timeout: 15000}
+            (r) => r.url().includes('/api/order') && r.url().includes('upcomingForSeason')
         )
         await page.getByRole('tab', {name: 'Økonomi'}).click()
         await expect(page.getByTestId('admin-economy')).toBeVisible()
@@ -128,7 +127,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         await doScreenshot(page, 'admin-economy-after-order-fetch')
 
         const expandBtn = page.getByTestId(`future-orders-expand-${testDinnerEventId}`)
-        await expect(expandBtn).toBeVisible({timeout: 15_000})
+        await expect(expandBtn).toBeVisible()
 
         await doScreenshot(page, 'admin-economy-after-poll')
 

@@ -8,7 +8,7 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo} = testHelpers
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 
@@ -85,7 +85,7 @@ test.describe('Cross-Household Bookings - Serial UI Tests', () => {
         expect(targetOrder?.dinnerMode).toBe(DinnerMode.DINEINLATE)
 
         await page.goto(`/household/${encodeURIComponent(targetShortName)}/bookings?pbs=${targetPbsId}`)
-        await expect(page.locator('[data-testid="household-bookings"]')).toBeVisible({timeout: 15_000})
+        await pollUntil(() => page.locator('[data-testid="household-bookings"]').isVisible(), visible => visible)
         await expect(page.locator('[data-testid="booking-table"]')).toBeVisible()
 
         // Target inhabitant name should be visible in booking table

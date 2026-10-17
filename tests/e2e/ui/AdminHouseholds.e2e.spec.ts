@@ -28,7 +28,7 @@ test.describe('AdminHouseholds View', () => {
         await gotoHydrated(page, adminHouseholdsUrl)
 
         // Wait for container to be visible
-        await expect(page.locator('[data-testid="admin-households"]')).toBeVisible({timeout: 15_000})
+        await expect(page.locator('[data-testid="admin-households"]')).toBeVisible()
         // Wait for store to finish loading - either data rows appear OR custom empty state shows
         // Custom empty state: "Ingen er flyttet ind i appen endnu"
         // (a data row has more than the one cell of the loading or empty row)
