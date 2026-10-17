@@ -3,6 +3,7 @@ import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {getHouseholdUrl} from '~/utils/household'
 
@@ -24,6 +25,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
     let testHouseholdId: number
     let testInhabitantId: number
     let householdAddress: string
+    let householdPbsId: number
     let householdEconomyUrl: string
     const testSalt = `admin-economy-${Date.now()}`
     const createdSeasonIds: number[] = []
@@ -53,9 +55,9 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         testDinnerEventId = futureDinners[0]!.id
         const testTicketPriceId = testSeason.season.ticketPrices!.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!.id!
 
-        const households = await adminContext.request.get('/api/admin/household').then(r => r.json())
-        const household = households.find((h: { id: number }) => h.id === testHouseholdId)
-        householdAddress = household?.address ?? 'Unknown'
+        const household = (await HouseholdFactory.getAllHouseholds(adminContext)).find(h => h.id === testHouseholdId)!
+        householdAddress = household.address
+        householdPbsId = household.pbsId
         householdEconomyUrl = getHouseholdUrl(household.shortName, household.pbsId, 'economy')
 
         const result = await OrderFactory.createOrder(adminContext, {
@@ -119,70 +121,40 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
             {timeout: 15000}
         )
         await page.getByRole('tab', {name: 'Økonomi'}).click()
-        await pollUntil(
-            async () => await page.getByTestId('admin-economy').isVisible().catch(() => false),
-            (isVisible) => isVisible
-        )
+        await expect(page.getByTestId('admin-economy')).toBeVisible()
 
         // Wait for the upcoming orders to arrive
         await orderFetchPromise
         await doScreenshot(page, 'admin-economy-after-order-fetch')
 
-        const anyExpandBtn = page.locator('[data-testid^="future-orders-expand-"]').first()
-        await pollUntil(
-            async () => await anyExpandBtn.isVisible().catch(() => false),
-            (isVisible) => isVisible,
-            10,
-            1000
-        )
+        const expandBtn = page.getByTestId(`future-orders-expand-${testDinnerEventId}`)
+        await expect(expandBtn).toBeVisible({timeout: 15_000})
 
         await doScreenshot(page, 'admin-economy-after-poll')
 
-        const expandBtn = page.getByTestId(`future-orders-expand-${testDinnerEventId}`)
-        expect(await expandBtn.isVisible()).toBe(true)
-
         await expandBtn.click()
-
-        await pollUntil(
-            async () => await page.getByTestId('admin-correction-btn').isVisible().catch(() => false),
-            (isVisible) => isVisible,
-            10,
-            500
-        )
 
         // DangerButton: first click transitions to confirm, second click confirms
         const correctionBtn = page.getByTestId('admin-correction-btn')
+        await expect(correctionBtn).toBeVisible()
         await correctionBtn.click()
         // Wait for button to show confirm state (text changes to "Klik igen for at rette")
-        await pollUntil(
-            async () => (await correctionBtn.textContent())?.includes('Klik igen') ?? false,
-            (hasConfirmText) => hasConfirmText,
-            10,
-            200
-        )
+        await expect(correctionBtn).toContainText('Klik igen')
         await correctionBtn.click()
 
         const householdSelect = page.getByTestId('admin-correction-household-select')
-        await pollUntil(
-            async () => await householdSelect.isVisible().catch(() => false),
-            (isVisible) => isVisible
-        )
+        await expect(householdSelect).toBeVisible()
 
         await householdSelect.click()
-        await page.getByRole('option', {name: new RegExp(householdAddress)}).first().click()
+        // The options read "{address} · PBS {pbsId}"; households at one address share the address
+        await page.getByRole('option', {name: `${householdAddress} · PBS ${householdPbsId}`, exact: true}).click()
 
         const inhabitantToggle = page.getByTestId(`inhabitant-${testInhabitantId}-toggle`)
-        await pollUntil(
-            async () => await inhabitantToggle.isVisible().catch(() => false),
-            (isVisible) => isVisible
-        )
+        await expect(inhabitantToggle).toBeVisible()
         await inhabitantToggle.click()
 
-        const takeawayBtn = page.getByTestId(`inhabitant-${testInhabitantId}-mode-edit-TAKEAWAY`)
-        await pollUntil(
-            async () => await takeawayBtn.isVisible().catch(() => false),
-            (isVisible) => isVisible
-        )
+        const takeawayBtn = page.getByTestId(`inhabitant-${testInhabitantId}-mode-edit-${DinnerMode.TAKEAWAY}`)
+        await expect(takeawayBtn).toBeVisible()
         await takeawayBtn.click()
 
         const saveButton = page.getByTestId(`inhabitant-${testInhabitantId}-save`)
@@ -192,8 +164,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         const updatedOrder = await pollUntil(
             async () => await OrderFactory.getOrder(adminContext, testOrderId),
             (order) => order?.dinnerMode === DinnerMode.TAKEAWAY,
-            15,
-            1000
+            6
         )
         expect(updatedOrder!.dinnerMode).toBe(DinnerMode.TAKEAWAY)
         expect(updatedOrder!.state).toBe(OrderState.BOOKED)

@@ -277,7 +277,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
         householdId: testHouseholdId,
         seasonId: testSeason.id!,
         dinnerEventIds: [event.id],
-        orders: [OrderFactory.createBookingOrder(testInhabitantId, event.id, testAdultTicketPriceId, 'TAKEAWAY', orderId)]
+        orders: [OrderFactory.createBookingOrder(testInhabitantId, event.id, testAdultTicketPriceId, DinnerMode.TAKEAWAY, orderId)]
       })
 
       expect(result).not.toBeNull()
@@ -364,7 +364,7 @@ test.describe('Household Scaffold API (ADR-016)', () => {
         householdId: testHouseholdId,
         seasonId: testSeason.id!,
         dinnerEventIds: [isolatedEvent.id],
-        orders: [OrderFactory.createBookingOrder(testInhabitantId, isolatedEvent.id, testAdultTicketPriceId, 'DINEIN', orderId)]
+        orders: [OrderFactory.createBookingOrder(testInhabitantId, isolatedEvent.id, testAdultTicketPriceId, DinnerMode.DINEIN, orderId)]
       })
 
       expect(reclaimResult).not.toBeNull()

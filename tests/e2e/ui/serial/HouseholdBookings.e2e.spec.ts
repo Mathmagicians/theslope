@@ -1,4 +1,4 @@
-import {test, expect, type Page} from '@playwright/test'
+import {test, expect} from '@playwright/test'
 import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
@@ -7,6 +7,7 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useBookingValidation, type DinnerEventDisplay, type ScaffoldOrdersResponse} from '~/composables/useBookingValidation'
 import {formatDate} from '~/utils/date'
+import {BookingViewSchema, type BookingView} from '~/composables/useBookingView'
 
 /**
  * HouseholdBookings — tests for the `/household/[shortname]/bookings` tab.
@@ -16,22 +17,18 @@ import {formatDate} from '~/utils/date'
  * Each Playwright project that depends on the parallel suite guarantees the singleton
  * is restored by global teardown after this file runs.
  *
- * Scope: behaviours of the bookings-tab shell itself — arrow navigation across
- * week/month views and the week-grid save. Day-view booking form lives in
- * `DinnerBookingForm.e2e.spec.ts`; visitor/cross-household flow in
+ * Scope: behaviours of the bookings-tab shell itself — the week-grid save and the
+ * server-rendered grid. The date arrows are HouseholdBookings.nuxt.spec.ts; day-view
+ * booking form lives in `DinnerBookingForm.e2e.spec.ts`; visitor/cross-household flow in
  * `HouseholdBookingsCrossHousehold.e2e.spec.ts`.
  *
  * File-level lifecycle: one `beforeAll` / `afterAll` for the whole file, no nested
- * describes. Season spans ~50 days with Mon–Fri cooking:
- *   - Well within the 60-day prebooking window (ADR-015)
- *   - Guarantees ≥ 7 weeks of dinners → week nav has somewhere to go
- *   - Guarantees ≥ 2 calendar months of dinners → month nav has somewhere to go
- *   - 5 cooking days/week → dense enough for the "hide at last dinner" loop to
- *     terminate well inside the 12-click cap
+ * describes. Season spans 14 days with Mon–Fri cooking: inside the 60-day prebooking
+ * window (ADR-015), and its last two dinners sit past the cancel deadline's reach, open to book.
  */
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, gotoHydrated, expectHydratedWithoutMismatch, waitForApi} = testHelpers
+const {validatedBrowserContext, salt, temporaryAndRandom, gotoHydrated, expectHydratedWithoutMismatch, waitForApi} = testHelpers
 const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -54,7 +51,7 @@ test.beforeAll(async ({browser}) => {
     const context = await validatedBrowserContext(browser)
 
     // Mon–Fri cooking gives predictable density regardless of which weekday the test starts on.
-    testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days: 50, cookingDays: 'weekdays'})
+    testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days: 14, cookingDays: 'weekdays'})
     createdSeasonIds.push(testSeason.season.id!)
 
     const household = await HouseholdFactory.createHousehold(context, {name: salt('HouseholdBookings', testSalt)})
@@ -73,81 +70,10 @@ test.afterAll(async ({browser}) => {
 
 // ---- Helpers (file-scope, DRY) ----
 
-type BookingView = 'day' | 'week' | 'month'
-
 const buildBookingsUrl = (view: BookingView, date?: Date): string =>
     `/household/${encodeURIComponent(shortName)}/bookings?pbs=${pbsId}&view=${view}${date ? `&date=${formatDate(date)}` : ''}`
 
-/**
- * Parse `?date=DD/MM/YYYY` from a URL to a local-midnight Date.
- * Relative `.getTime()` comparisons stay consistent across TZs — both the URL-derived
- * value and comparators constructed the same way shift identically.
- */
-const getDateFromUrl = (url: string): Date | null => {
-    const match = url.match(/[?&]date=([^&]+)/)
-    if (!match) return null
-    const [day, month, year] = decodeURIComponent(match[1]!).split('/').map(Number)
-    if (!day || !month || !year) return null
-    return new Date(year, month - 1, day)
-}
-
-/** Open the bookings tab and wait until `useDinnerDateParam` has synced `?date=`. */
-const openBookingsView = async (page: Page, view: BookingView): Promise<Date> => {
-    await gotoHydrated(page, buildBookingsUrl(view))
-    await pollUntil(
-        async () => page.locator('[data-testid="household-bookings"]').isVisible(),
-        (v) => v,
-        10
-    )
-    await pollUntil(
-        async () => getDateFromUrl(page.url()) !== null,
-        (present) => present,
-        10
-    )
-    return getDateFromUrl(page.url())!
-}
-
-/** Click a nav arrow, poll until the URL `?date=` actually changes. No `waitForTimeout`. */
-const clickAndAwaitDateChange = async (page: Page, testId: 'date-nav-next' | 'date-nav-prev'): Promise<Date> => {
-    const before = getDateFromUrl(page.url())
-    await page.getByTestId(testId).click()
-    await pollUntil(
-        async () => {
-            const now = getDateFromUrl(page.url())
-            return !!(now && before && now.getTime() !== before.getTime())
-        },
-        (changed) => changed,
-        10
-    )
-    return getDateFromUrl(page.url())!
-}
-
 // ---- Tests ----
-
-for (const view of ['week', 'month'] as const) {
-    test(`${view} forward arrow advances ?date= to a later date and the backward arrow returns it to an earlier date`, async ({page}) => {
-        const initial = await openBookingsView(page, view)
-        const advanced = await clickAndAwaitDateChange(page, 'date-nav-next')
-        expect(advanced.getTime()).toBeGreaterThan(initial.getTime())
-
-        const after = await clickAndAwaitDateChange(page, 'date-nav-prev')
-        expect(after.getTime()).toBeLessThan(advanced.getTime())
-    })
-}
-
-test('week forward arrow hides at last dinner of season', async ({page}) => {
-    await openBookingsView(page, 'week')
-
-    const nextBtn = page.getByTestId('date-nav-next')
-    const MAX_CLICKS = 12
-
-    for (let i = 0; i < MAX_CLICKS; i++) {
-        if (!(await nextBtn.isVisible())) break
-        await clickAndAwaitDateChange(page, 'date-nav-next')
-    }
-
-    await expect(nextBtn).toBeHidden()
-})
 
 test('GIVEN an inhabitant holding only a guest ticket on a dinner WHEN the week grid power mode books the family THEN a regular order is booked and the guest ticket carries the family\'s mode', async ({page, browser}) => {
     const context = await validatedBrowserContext(browser)
@@ -168,7 +94,7 @@ test('GIVEN an inhabitant holding only a guest ticket on a dinner WHEN the week 
     const guestOrderId = guest!.createdIds[0]!
 
     // WHEN: admin unlocks the household, toggles the power cell for the dinner and saves
-    await gotoHydrated(page, buildBookingsUrl('week', dinnerEvent.date))
+    await gotoHydrated(page, buildBookingsUrl(BookingViewSchema.enum.week, dinnerEvent.date))
     const adminOverride = page.getByTestId('admin-override-btn')
     await adminOverride.click()
     await adminOverride.click()
@@ -217,7 +143,7 @@ test('GIVEN a member holding a regular order and a guest ticket on a dinner WHEN
     const guestOrder = before.find(o => o.isGuestTicket)!
 
     // WHEN: admin unlocks the household, toggles the guest cell once (DINEIN → DINEINLATE) and saves
-    await gotoHydrated(page, buildBookingsUrl('week', dinnerEvent.date))
+    await gotoHydrated(page, buildBookingsUrl(BookingViewSchema.enum.week, dinnerEvent.date))
     const adminOverride = page.getByTestId('admin-override-btn')
     await adminOverride.click()
     await adminOverride.click()
@@ -237,7 +163,7 @@ test('GIVEN a member holding a regular order and a guest ticket on a dinner WHEN
     expect(after.find(o => o.id === regularOrder.id)).toMatchObject({isGuestTicket: false, dinnerMode: DinnerMode.DINEIN, state: OrderState.BOOKED})
 })
 
-for (const view of ['day', 'week', 'month'] as const) {
+for (const view of BookingViewSchema.options) {
     test(`GIVEN a household of more inhabitants than the avatar row shows WHEN the ${view} view loads at desktop width THEN the client hydrates the server markup without a mismatch`, async ({page, browser}) => {
         const context = await validatedBrowserContext(browser)
         const household = await HouseholdFactory.createHousehold(context, {name: salt(`Hydration-${view}`, testSalt)})

@@ -71,36 +71,6 @@ affected order sits CLOSED on a past dinner and matches exactly one ticket price
 `scaffoldPrebookings.ts`, `prisma/schema.prisma`, `prisma/generated/*`, `migrations/`,
 `docs/adr-compliance-backend.md` (order rows).
 
-## Billing import in the export format
-
-### Problem
-
-`POST /api/admin/billing/import` reads the framelding pivot table and books every ticket of a household on its first
-inhabitant as a regular order. A household with two tickets on one dinner gives two regular orders for one inhabitant,
-which the Order unique index refuses. The e2e test is skipped; the endpoint stays until this chore lands.
-
-### Solution
-
-1. The import reads a CSV as `generateBillingCsv` writes it (`useBillingValidation.ts`), from an upload or from the R2
-   billing archive for a period (`server/utils/billingArchive.ts`), so the archive round-trips.
-2. One regular order per inhabitant per dinner; tickets beyond the household's inhabitants are guest tickets.
-3. Idempotent on re-import: an existing order for the key is left as is (ADR-015).
-4. The framelding endpoint, its schemas (`ImportedOrderSchema`, `BillingImportRequestSchema`,
-   `BillingImportResponseSchema`) and the `generateCSV` / `importOrders` factory helpers leave with it; ADR-009 names
-   another operation result type in its example.
-
-### TDD
-
-- Unit: the CSV parser accepts the export's own output; the order mapping yields one regular order per inhabitant and
-  guest tickets for the rest.
-- E2E: a period's archived CSV imports into a fresh season and a second import creates nothing.
-
-### Affected
-
-`server/routes/api/admin/billing/import.post.ts`, `app/composables/useBillingValidation.ts`,
-`tests/e2e/testDataFactories/billingFactory.ts`, `tests/e2e/api/serial/local-theslope/billingImport.e2e.spec.ts`,
-`docs/adr-compliance-backend.md` (billing rows), `docs/adr.md` (ADR-009 example).
-
 ## Server payload of the shared stores
 
 ### Problem
@@ -591,6 +561,29 @@ step once its run time on CI is known; `server/tsconfig.json` stays until then.
 
 `package.json`, `package-lock.json`, `.github/workflows/cicd.yml`, `docs/adr.md` ADR-017 (the gate), `CLAUDE.md` (the commands).
 
+## Test factory dates at call time
+
+### Problem
+
+`SeasonFactory.tomorrow` and `oneWeekFromTomorrow` and `DinnerEventFactory.today` and `tomorrow` are computed when the
+factory module loads; `DinnerEventFactory.tomorrow` is the load time plus 24 hours. The defaults that read them
+(`SeasonFactory.defaultSeason`, `defaultSeasonData`, `defaultJokerSlot`, `DinnerEventFactory.defaultDinnerEvent`,
+`createDinnerEvent`, `createDinnerEventOnFreeDay`) and the singleton active season carry the load day. A run that
+crosses midnight creates seasons and dinners from the day before.
+
+### Solution
+
+The factories compute today and tomorrow on each call, at midnight, through `date-fns` (`startOfDay`, `addDays`); the
+spec call sites stay as they are.
+
+### TDD
+
+- A local run of the api and ui suites that crosses midnight passes.
+
+### Affected
+
+`tests/e2e/testDataFactories/seasonFactory.ts`, `tests/e2e/testDataFactories/dinnerEventFactory.ts`.
+
 ## Deferred from release 0.9
 
 | Work | Where it lives | State |
@@ -637,7 +630,7 @@ step once its run time on CI is known; `server/tsconfig.json` stays until then.
 - `Order.orderSnapshot` (B6) and the drop of `DinnerEvent.totalCost` ride this release's migration (§ Order snapshot,
   § Drop `DinnerEvent.totalCost`).
 - The framelding billing import books every ticket on the first inhabitant and answers 409; its e2e test is skipped
-  until § Billing import in the export format.
+  until `feature-0.9.2.md` § Billing import in the export format.
 
 **2026-10-11**
 - A ticket carries a stored allergy list or follows its holder's live profile: own tickets live, guest tickets the ids

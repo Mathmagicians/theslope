@@ -8,6 +8,7 @@ import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {formatDate} from '~/utils/date'
 import {EMPTY_STATE_MESSAGES} from '~/composables/useTheSlopeDesignSystem'
+import {BookingViewSchema} from '~/composables/useBookingView'
 
 const {memberUIFile, adminUIFile} = authFiles
 const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, getSessionUserInfo, gotoHydrated, selectDropdownOption} = testHelpers
@@ -79,11 +80,8 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
         const dateParam = formatDate(date)
         await gotoHydrated(page, `/household/${householdShortname}/bookings?pbs=${householdPbsId}&date=${dateParam}`)
 
-        // Wait for booking table - ignore transient "no season" state during store init
-        await pollUntil(
-            async () => await page.getByTestId('booking-table').isVisible().catch(() => false),
-            (isVisible) => isVisible
-        )
+        // Wait for booking table - past the transient "no season" state during store init
+        await expect(page.getByTestId('booking-table')).toBeVisible()
     }
 
     test('GIVEN inhabitant row WHEN user changes mode to TAKEAWAY THEN order is updated', async ({page}) => {
@@ -92,18 +90,12 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
 
         // Expand inhabitant row
         const toggleButton = page.getByTestId(`inhabitant-${inhabitantId}-toggle`)
-        await pollUntil(
-            async () => await toggleButton.isVisible().catch(() => false),
-            (isVisible) => isVisible
-        )
+        await expect(toggleButton).toBeVisible()
         await toggleButton.click()
 
         // Select TAKEAWAY
-        const modeSelector = page.getByTestId(`inhabitant-${inhabitantId}-mode-edit-TAKEAWAY`)
-        await pollUntil(
-            async () => await modeSelector.isVisible().catch(() => false),
-            (isVisible) => isVisible
-        )
+        const modeSelector = page.getByTestId(`inhabitant-${inhabitantId}-mode-edit-${DinnerMode.TAKEAWAY}`)
+        await expect(modeSelector).toBeVisible()
         await modeSelector.click()
 
         // Save
@@ -130,37 +122,36 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
         const inhabitantCount = household?.inhabitants?.length ?? 0
         expect(inhabitantCount).toBeGreaterThan(0)
 
+        // GIVEN: the household's orders on the dinner in TAKEAWAY - activating the season booked DINEIN for the
+        // inhabitants without preferences, so only the save brings every order to DINEIN
+        const householdOrdersOnDinner = async () => (await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, testDinnerEvent.id))
+            .filter(o => o.inhabitant?.householdId === householdId && !o.isGuestTicket)
+        for (const order of await householdOrdersOnDinner()) {
+            await OrderFactory.updateOrder(adminContext, order.id, {dinnerMode: DinnerMode.TAKEAWAY}, 200, true)
+        }
+        expect((await householdOrdersOnDinner()).map(o => o.dinnerMode), 'no household order starts in DINEIN').not.toContain(DinnerMode.DINEIN)
+
         await goToBookingsPage(page, testDinnerEvent.date)
 
         // Expand power mode row
         const powerToggle = page.getByTestId('power-power-mode-toggle')
-        await pollUntil(
-            async () => await powerToggle.isVisible().catch(() => false),
-            (isVisible) => isVisible
-        )
+        await expect(powerToggle).toBeVisible()
         await powerToggle.click()
 
         // Select DINEIN
-        const modeSelector = page.getByTestId('power-power-mode-mode-edit-DINEIN')
-        await pollUntil(
-            async () => await modeSelector.isVisible().catch(() => false),
-            (isVisible) => isVisible
-        )
+        const modeSelector = page.getByTestId(`power-power-mode-mode-edit-${DinnerMode.DINEIN}`)
+        await expect(modeSelector).toBeVisible()
         await modeSelector.click()
 
         // Save
         await page.getByTestId('power-power-mode-save').click()
 
         // Verify via API
-        const orders = await pollUntil(
-            async () => await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, testDinnerEvent.id),
-            (orders) => {
-                const householdOrders = orders.filter(o => o.inhabitant?.householdId === householdId && !o.isGuestTicket)
-                return householdOrders.length === inhabitantCount && householdOrders.every(o => o.dinnerMode === DinnerMode.DINEIN)
-            }
+        const householdOrders = await pollUntil(
+            householdOrdersOnDinner,
+            (orders) => orders.length === inhabitantCount && orders.every(o => o.dinnerMode === DinnerMode.DINEIN)
         )
 
-        const householdOrders = orders.filter(o => o.inhabitant?.householdId === householdId && !o.isGuestTicket)
         expect(householdOrders).toHaveLength(inhabitantCount)
         householdOrders.forEach(o => {
             expect(o.dinnerMode).toBe(DinnerMode.DINEIN)
@@ -174,18 +165,12 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
 
         // Expand guest row
         const guestToggle = page.getByTestId('guest-add-guest-toggle')
-        await pollUntil(
-            async () => await guestToggle.isVisible().catch(() => false),
-            (isVisible) => isVisible
-        )
+        await expect(guestToggle).toBeVisible()
         await guestToggle.click()
 
         // Wait for guest form and select ticket type
         const ticketSelect = page.getByTestId('guest-ticket-type-select')
-        await pollUntil(
-            async () => await ticketSelect.isVisible().catch(() => false),
-            (isVisible) => isVisible
-        )
+        await expect(ticketSelect).toBeVisible()
         await ticketSelect.click()
         await page.getByRole('option', {name: /Voksen/}).click()
 
@@ -206,24 +191,18 @@ test.describe.serial('DinnerBookingForm - User Booking Interactions', () => {
         await doScreenshot(page, 'dinner/booking-form-guest-added', true)
     })
 
-    for (const view of ['week', 'month'] as const) {
+    for (const view of [BookingViewSchema.enum.week, BookingViewSchema.enum.month]) {
         test(`GIVEN bookings page WHEN user switches to ${view} view THEN grid displays`, async ({page}) => {
             const testDinnerEvent = await getFutureDinnerEvent(0)
             await goToBookingsPage(page, testDinnerEvent.date)
 
             // Click view button
             const viewButton = page.getByTestId(`booking-view-${view}`)
-            await pollUntil(
-                async () => await viewButton.isVisible().catch(() => false),
-                (isVisible) => isVisible
-            )
+            await expect(viewButton).toBeVisible()
             await viewButton.click()
 
             // Verify grid view
-            await pollUntil(
-                async () => await page.getByTestId('booking-grid-view').isVisible().catch(() => false),
-                (isVisible) => isVisible
-            )
+            await expect(page.getByTestId('booking-grid-view')).toBeVisible()
 
             await doScreenshot(page, `dinner/booking-grid-${view}`, true)
         })

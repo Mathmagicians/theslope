@@ -1,15 +1,17 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {ref, defineComponent} from 'vue'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import {da} from '@nuxt/ui/locale'
 import {UApp} from '#components'
-import type {VueWrapper} from '@vue/test-utils'
+import {enableAutoUnmount, type VueWrapper} from '@vue/test-utils'
 import CalendarDisplay from '~/components/calendar/CalendarDisplay.vue'
 import {CALENDAR, PLANNING_CALENDAR, createDayCircleClasses} from '~/composables/useTheSlopeDesignSystem'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
-import {mountWithTooltipProvider, expectSharedCalendarGrid} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, expectSharedCalendarGrid, resetStores} from '~~/tests/component/testHelpers'
+
+enableAutoUnmount(afterEach)
 
 const IS_MD = true
 const dayCircleClasses = createDayCircleClasses(ref(IS_MD))
@@ -43,20 +45,19 @@ const expectDayTokens = (wrapper: VueWrapper, isoDate: string, tokens: string[])
 }
 
 describe('CalendarDisplay', () => {
-
-    describe.each([
-        {name: 'generated dinner event', isoDate: GENERATED_DAY, palette: PLANNING_CALENDAR.day.generated},
-        {name: 'potential cooking day', isoDate: POTENTIAL_DAY, palette: PLANNING_CALENDAR.day.potential},
-        {name: 'holiday', isoDate: HOLIDAY_DAY, palette: CALENDAR.holiday}
-    ])('$name', ({isoDate, palette}) => {
-        it('renders the design-system circle with its palette', async () => {
-            const wrapper = await mountDisplay()
-            expectDayTokens(wrapper, isoDate, dayCircleClasses(palette))
-        })
+    beforeEach(() => {
+        resetStores()
     })
 
-    it('configures its calendar from the shared design-system grid token', async () => {
+    it('renders each day kind as the design-system circle with its palette, on the shared grid token', async () => {
+        const dayKinds = [
+            {isoDate: GENERATED_DAY, palette: PLANNING_CALENDAR.day.generated},
+            {isoDate: POTENTIAL_DAY, palette: PLANNING_CALENDAR.day.potential},
+            {isoDate: HOLIDAY_DAY, palette: CALENDAR.holiday}
+        ]
         const wrapper = await mountDisplay()
+
+        dayKinds.forEach(({isoDate, palette}) => expectDayTokens(wrapper, isoDate, dayCircleClasses(palette)))
         expectSharedCalendarGrid(wrapper)
     })
 

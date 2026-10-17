@@ -36,10 +36,7 @@ test.describe('HouseholdCard - Members and Weekday Preferences', () => {
     // Helper to navigate to household members page and wait for load
     const goToHouseholdMembers = async (page: import('@playwright/test').Page) => {
         await gotoHydrated(page, `/household/${encodeURIComponent(shortName)}/members?pbs=${pbsId}`)
-        await pollUntil(
-            async () => await page.locator('[data-testid="household-members"]').isVisible(),
-            (isVisible) => isVisible
-        )
+        await expect(page.locator('[data-testid="household-members"]')).toBeVisible()
     }
 
     test.beforeAll(async ({browser}) => {
@@ -109,37 +106,28 @@ test.describe('HouseholdCard - Members and Weekday Preferences', () => {
         await goToHouseholdMembers(page)
 
         // THEN: Verify VIEW mode shows initial preferences
-        await pollUntil(
-            async () => await page.getByTestId(`inhabitant-${scroogeId}-preferences-view`).isVisible(),
-            (isVisible) => isVisible
-        )
+        await expect(page.getByTestId(`inhabitant-${scroogeId}-preferences-view`)).toBeVisible()
 
         // WHEN: Click pencil icon to edit Scrooge's preferences (use specific testid, not .first())
         const editButton = page.getByTestId(`inhabitant-${scroogeId}-edit-preferences`)
         await editButton.click()
 
         // Wait for edit panel to be visible (UFormField renders label as generic element, not heading)
-        const editPanel = page.getByText(`Opdater fællesspisning præferencer for ${salt('Anders', testSalt)}`)
+        // Exact: the sibling members' names start with Scrooge's
+        const editPanel = page.getByText(`Opdater fællesspisning præferencer for ${salt('Anders', testSalt)}`, {exact: true})
         await expect(editPanel, 'Edit panel should be visible after clicking edit button').toBeVisible({timeout: 5000})
 
-        await pollUntil(
-            async () => {
-                const button = page.getByTestId(`inhabitant-${scroogeId}-preferences-edit-mandag-TAKEAWAY`)
-                return await button.count() > 0
-            },
-            (count) => count
-        )
-
         // WHEN: Change Monday to TAKEAWAY
-        const mondayTakeawayButton = page.getByTestId(`inhabitant-${scroogeId}-preferences-edit-mandag-TAKEAWAY`)
+        const mondayTakeawayButton = page.getByTestId(`inhabitant-${scroogeId}-preferences-edit-mandag-${DinnerMode.TAKEAWAY}`)
+        await expect(mondayTakeawayButton).toBeVisible()
         await mondayTakeawayButton.click()
 
         // WHEN: Change Wednesday to DINEINLATE
-        const wednesdayLateButton = page.getByTestId(`inhabitant-${scroogeId}-preferences-edit-onsdag-DINEINLATE`)
+        const wednesdayLateButton = page.getByTestId(`inhabitant-${scroogeId}-preferences-edit-onsdag-${DinnerMode.DINEINLATE}`)
         await wednesdayLateButton.click()
 
         // WHEN: Change Friday to NONE
-        const fridayNoneButton = page.getByTestId(`inhabitant-${scroogeId}-preferences-edit-fredag-NONE`)
+        const fridayNoneButton = page.getByTestId(`inhabitant-${scroogeId}-preferences-edit-fredag-${DinnerMode.NONE}`)
         await fridayNoneButton.click()
 
         // Documentation screenshot showing edit mode with changes
@@ -166,8 +154,7 @@ test.describe('HouseholdCard - Members and Weekday Preferences', () => {
                     preferences.onsdag === DinnerMode.DINEINLATE &&
                     preferences.fredag === DinnerMode.NONE
             },
-            10,
-            500
+            6
         )
         expect(household).not.toBeNull()
 
@@ -187,12 +174,8 @@ test.describe('HouseholdCard - Members and Weekday Preferences', () => {
         expect(preferences!.torsdag).toBe(DinnerMode.DINEIN)
         expect(preferences!.fredag).toBe(DinnerMode.NONE)
 
-        // THEN: Verify UI collapsed back to VIEW mode
-        await pollUntil(
-            async () => await page.locator('[aria-label="Rediger præferencer"]').first().isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
+        // THEN: Verify UI collapsed back to VIEW mode: Scrooge's toggle reads Rediger præferencer again
+        await expect(page.getByTestId(`inhabitant-${scroogeId}-edit-preferences`)).toHaveAttribute('aria-label', 'Rediger præferencer', {timeout: 10000})
 
         // THEN: Verify VIEW mode shows updated preferences correctly
         const updatedViewPreferences = page.getByTestId(`inhabitant-${scroogeId}-preferences-view`)

@@ -98,9 +98,6 @@ bookingsStore.loadOrdersForDinners(() => ({
   includeProvenance: true
 }))
 
-const refreshBookingData = () =>
-  Promise.all([bookingsStore.refreshSelectedDinnerEventDetail(), bookingsStore.refreshOrders()])
-
 // ADR-016: Unified booking handler via scaffold endpoint
 const handleSaveBookings = async (orders: DesiredOrder[]) => {
   const householdId = user.value?.Inhabitant?.household?.id
@@ -117,15 +114,13 @@ const handleSaveBookings = async (orders: DesiredOrder[]) => {
 
   try {
     const response = await bookingsStore.processSingleEventBookings(householdId, dinnerEventId, orders)
-    await refreshBookingData()
     toast.add({
       title: toastTitle,
       description: formatScaffoldResult(response.scaffoldResult, 'past'),
       ...scaffoldToastLook(response.scaffoldResult)
     })
-  } catch (e) {
-    console.error('Failed to process bookings:', e)
-    toast.add({title: 'Kunne ikke gemme bookinger', color: COLOR.error, icon: ICONS.exclamationCircle})
+  } catch {
+    // The request has toasted the failure
   }
 }
 

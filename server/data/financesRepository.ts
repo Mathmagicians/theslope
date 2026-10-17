@@ -230,7 +230,7 @@ export async function fetchUserIntentKeys(
     d1Client: D1Database,
     seasonId: number
 ): Promise<{ confirmedKeys: Set<string>; cancelledKeys: Set<string> }> {
-    const {OrderAuditActionSchema} = useBookingValidation()
+    const {OrderAuditActionSchema, isGuestTicketAudit} = useBookingValidation()
     const prisma = await getPrismaClientConnection(d1Client)
 
     // Fetch all user intent actions (not system actions)
@@ -245,13 +245,17 @@ export async function fetchUserIntentKeys(
             },
             seasonId: seasonId,
             inhabitantId: { not: null },
-            dinnerEventId: { not: null }
+            dinnerEventId: { not: null },
+            // A guest ticket's history is not its booker's intent: a live order tells by its flag, a deleted one by its audit data
+            OR: [{ order: { is: { isGuestTicket: false } } }, { orderId: null }]
         },
         select: {
             inhabitantId: true,
             dinnerEventId: true,
             action: true,
-            timestamp: true
+            timestamp: true,
+            orderId: true,
+            auditData: true
         },
         orderBy: { timestamp: 'desc' }
     })
@@ -259,6 +263,7 @@ export async function fetchUserIntentKeys(
     // Group by key, take most recent action per key
     const keyToAction = new Map<string, string>()
     for (const intent of userIntents) {
+        if (intent.orderId === null && isGuestTicketAudit(intent.auditData)) continue
         const key = `${intent.inhabitantId}-${intent.dinnerEventId}`
         if (!keyToAction.has(key)) {
             keyToAction.set(key, intent.action)
@@ -514,6 +519,7 @@ export async function claimOrder(
                 priceAtBooking: existingOrder.priceAtBooking,
                 dinnerMode: existingOrder.dinnerMode,
                 state: existingOrder.state,
+                isGuestTicket: existingOrder.isGuestTicket,
                 inhabitantNameWithInitials: formatNameWithInitials(existingOrder.inhabitant),
                 householdShortname: getHouseholdShortName(existingOrder.inhabitant.household.address),
                 householdId: existingOrder.inhabitant.householdId
@@ -628,6 +634,7 @@ export async function deleteOrder(
                     priceAtBooking: order.priceAtBooking,
                     dinnerMode: order.dinnerMode,
                     state: order.state,
+                    isGuestTicket: order.isGuestTicket,
                     // Provenance fields
                     inhabitantNameWithInitials: formatNameWithInitials(order.inhabitant),
                     householdShortname: getHouseholdShortName(order.inhabitant.household.address),

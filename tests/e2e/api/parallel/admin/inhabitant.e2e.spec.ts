@@ -9,7 +9,7 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
 const Action = useBookingValidation().BookingActionSchema.enum
 
-const {headers, validatedBrowserContext, pollUntil, salt, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom} = testHelpers
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
@@ -176,8 +176,7 @@ test.describe('Admin Inhabitant API', () => {
             expect(inhabitantId).toBeDefined()
 
             // Verify assignment exists via GET
-            const assignmentResponse = await context.request.get(`/api/admin/team/assignment/${assignmentId}`)
-            expect(assignmentResponse.status()).toBe(200)
+            await SeasonFactory.getCookingTeamAssignment(context, assignmentId!)
 
             // WHEN: Inhabitant is deleted
             await HouseholdFactory.deleteInhabitant(context, inhabitantId, 200)
@@ -192,10 +191,9 @@ test.describe('Admin Inhabitant API', () => {
                     return response.status()
                 },
                 (status) => status === 404,
-                10
+                6 // ~15s with doubling backoff - inside the 30s test timeout
             )
-            const assignmentAfterDelete = await context.request.get(`/api/admin/team/assignment/${assignmentId}`)
-            expect(assignmentAfterDelete.status()).toBe(404)
+            await SeasonFactory.getCookingTeamAssignment(context, assignmentId!, 404)
         })
     })
 
@@ -216,13 +214,7 @@ test.describe('Admin Inhabitant API', () => {
 
             const newPreferences = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
 
-            const response = await context.request.post(`/api/admin/household/inhabitants/${createdInhabitant.id}`, {
-                headers,
-                data: {dinnerPreferences: newPreferences}
-            })
-
-            expect(response.status()).toBe(200)
-            const updated = await response.json()
+            const updated = (await HouseholdFactory.updateInhabitant(context, createdInhabitant.id, {dinnerPreferences: newPreferences}))!
 
             // Response is InhabitantUpdateResponse: { inhabitant, scaffoldResult }
             expect(updated.inhabitant.dinnerPreferences).toEqual(newPreferences)

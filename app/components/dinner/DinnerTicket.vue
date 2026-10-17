@@ -43,7 +43,6 @@ interface Props {
   isReleased?: boolean
   isClaimed?: boolean
   guestCount?: number // undefined = not guest, 1+ = guest ticket(s)
-  ticketCount?: number // DEBUG: total orders for inhabitant (shown if > 1)
   consensus?: boolean // Power mode: true=all agree, false=mixed, undefined=not power mode
   allergies?: AllergyTypeDisplay[] // The eater's allergy types; the card shows the glyph only
   provenanceHousehold?: string // Source household if claimed
@@ -56,7 +55,6 @@ const props = withDefaults(defineProps<Props>(), {
   isReleased: false,
   isClaimed: false,
   guestCount: undefined,
-  ticketCount: undefined,
   consensus: undefined,
   allergies: () => [],
   provenanceHousehold: undefined,
@@ -88,15 +86,11 @@ const infoIconClass = computed(() => {
 })
 
 // Combined badge text: "VOKSEN · 55kr" or "BARN · 35kr · 2 Gæster" or "Powermode!" (no price for power mode)
-// DEBUG: Shows "#3" if ticketCount > 1 (duplicate orders)
 const badgeText = computed(() => {
   const parts = [props.ticketConfig?.label ?? '']
   if (props.consensus === undefined) parts.push(`${formatPrice(props.price)} kr`) // Only show price for regular tickets
   if (isGuest.value) {
     parts.push(props.guestCount === 1 ? 'Gæst' : `${props.guestCount} Gæster`)
-  }
-  if (props.ticketCount && props.ticketCount > 1) {
-    parts.push(`#${props.ticketCount}`)
   }
   return parts.join(' · ')
 })

@@ -337,7 +337,8 @@ export const useBookingValidation = () => {
         ticketPriceId: true,
         priceAtBooking: true,
         dinnerMode: true,
-        state: true
+        state: true,
+        isGuestTicket: true
     }).extend({
         // Provenance fields for ticket claim feature (pre-formatted for immutable audit trail)
         inhabitantNameWithInitials: z.string(),           // "Anna B.H." - colloquial format
@@ -349,7 +350,7 @@ export const useBookingValidation = () => {
     /**
      * Create serialized audit data for OrderHistory
      */
-    const createOrderAuditData = (orderSnapshot: z.infer<typeof OrderSnapshotSchema>): string =>
+    const createOrderAuditData = (orderSnapshot: z.input<typeof OrderSnapshotSchema>): string =>
         JSON.stringify({orderSnapshot: OrderSnapshotSchema.parse(orderSnapshot)})
 
     /**
@@ -358,6 +359,16 @@ export const useBookingValidation = () => {
     const deserializeOrderAuditData = (auditData: string): {orderSnapshot: z.infer<typeof OrderSnapshotSchema>} => {
         const parsed = JSON.parse(auditData)
         return {orderSnapshot: OrderSnapshotSchema.parse(parsed.orderSnapshot)}
+    }
+
+    // A deleted order's snapshot or a created order's data holds the flag; a row without it reads as no guest
+    const AuditGuestFlagSchema = z.object({
+        orderSnapshot: z.object({isGuestTicket: z.boolean()}).partial().optional(),
+        orderData: z.object({isGuestTicket: z.boolean()}).partial().optional()
+    })
+    const isGuestTicketAudit = (auditData: string): boolean => {
+        const parsed = AuditGuestFlagSchema.safeParse(JSON.parse(auditData))
+        return parsed.success && Boolean(parsed.data.orderSnapshot?.isGuestTicket ?? parsed.data.orderData?.isGuestTicket)
     }
 
     // ============================================================================
@@ -947,6 +958,7 @@ export const useBookingValidation = () => {
         OrderHistoryCreateSchema,
         OrderSnapshotSchema,
         createOrderAuditData,
+        isGuestTicketAudit,
         deserializeOrderAuditData,
 
         // Batch Order Creation

@@ -152,21 +152,16 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         })
         expect(dinnerEvent.id).toBeDefined()
 
-        // WHEN: GET /api/admin/dinner-event?seasonId=testSeasonId
-        const response = await context.request.get(`/api/admin/dinner-event?seasonId=${testSeasonId}`)
-
-        // THEN: Should return 200 with filtered events
-        expect(response.status()).toBe(200)
-        const events = await response.json()
-        expect(Array.isArray(events)).toBe(true)
+        // WHEN: GET /api/admin/dinner-event?seasonId=testSeasonId - THEN: Should return 200 with filtered events
+        const events = await DinnerEventFactory.getDinnerEventsForSeason(context, testSeasonId)
 
         // AND: All events should belong to testSeasonId
-        events.forEach((event: { seasonId: number }) => {
+        events.forEach(event => {
             expect(event.seasonId).toBe(testSeasonId)
         })
 
         // AND: Should include our created event
-        const foundEvent = events.find((e: { id: number }) => e.id === dinnerEvent.id)
+        const foundEvent = events.find(e => e.id === dinnerEvent.id)
         expect(foundEvent).toBeDefined()
     })
 

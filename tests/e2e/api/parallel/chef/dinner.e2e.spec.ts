@@ -2,8 +2,8 @@ import {test, expect} from '@playwright/test'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
-import {useBookingValidation} from '~/composables/useBookingValidation'
-import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import {useBookingValidation, type DinnerEventCreate} from '~/composables/useBookingValidation'
+import type {Season} from '~/composables/useSeasonValidation'
 import {getDinnerTimeRange} from '~/utils/season'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
@@ -13,21 +13,19 @@ import testHelpers from '~~/tests/e2e/testHelpers'
  * Covers menu/state/allergen mutations, Heynabo synchronisation, and the
  * `requireChefForDinner` permission guard added in Phase 1 of chef-swap.
  *
- * Single beforeAll: season + team + member-as-chef so every operational test
- * passes the guard. Permission tests use a separate (non-chef) team to verify
- * 403, and a teamless dinner to verify 404.
+ * beforeAll: a season of the file's own. Each operational test owns a dinner on a team of
+ * its own with the member as its chef, so every test passes the guard. Permission tests use
+ * a separate (non-chef) team to verify 403, and a teamless dinner to verify 404.
  */
 
 const DEFAULT_DINNER_START_TIME = 18
 
 const {validatedBrowserContext, memberValidatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo} = testHelpers
 const {DinnerStateSchema} = useBookingValidation()
-const {TeamRoleSchema} = useCookingTeamValidation()
 const DinnerState = DinnerStateSchema.enum
-const Role = TeamRoleSchema.enum
 
-let testSeasonId: number
-let chefTeamId: number
+let testSeason: Season
+let memberInhabitantId: number
 const createdSeasonIds: number[] = []
 const createdAllergyTypeIds: number[] = []
 
@@ -37,17 +35,9 @@ test.describe('Chef Dinner Endpoint', () => {
         const adminContext = await validatedBrowserContext(browser)
         const memberContext = await memberValidatedBrowserContext(browser)
 
-        const season = await SeasonFactory.createSeason(adminContext)
-        testSeasonId = season.id!
-        createdSeasonIds.push(testSeasonId)
-
-        const team = await SeasonFactory.createCookingTeamForSeason(
-            adminContext, testSeasonId, salt('ChefTeam', temporaryAndRandom())
-        )
-        chefTeamId = team.id!
-
-        const {inhabitantId: memberInhabitantId} = await getSessionUserInfo(memberContext)
-        await SeasonFactory.assignMemberToTeam(adminContext, chefTeamId, memberInhabitantId, Role.CHEF)
+        testSeason = await SeasonFactory.createSeason(adminContext)
+        createdSeasonIds.push(testSeason.id!)
+        memberInhabitantId = (await getSessionUserInfo(memberContext)).inhabitantId
     })
 
     test.afterAll(async ({browser}) => {
@@ -56,18 +46,14 @@ test.describe('Chef Dinner Endpoint', () => {
         await AllergyFactory.cleanupAllergyTypes(context, createdAllergyTypeIds)
     })
 
+    // A SCHEDULED dinner on a team of its own with the member as its chef
     const createDinner = async (
         adminContext: Awaited<ReturnType<typeof validatedBrowserContext>>,
         testSalt: string,
-        overrides: Partial<Parameters<typeof DinnerEventFactory.createDinnerEvent>[1]> = {}
-    ) => DinnerEventFactory.createDinnerEvent(adminContext, {
-        ...DinnerEventFactory.defaultDinnerEvent(testSalt),
-        seasonId: testSeasonId,
-        state: DinnerState.SCHEDULED,
-        heynaboEventId: null,
-        cookingTeamId: chefTeamId,
-        ...overrides
-    })
+        overrides: Partial<DinnerEventCreate> = {}
+    ) => (await SeasonFactory.createCookingTeamWithChefAndDinner(adminContext, testSeason, memberInhabitantId, {
+        dinner: {menuTitle: salt('Test Menu', testSalt), state: DinnerState.SCHEDULED, heynaboEventId: null, ...overrides}
+    })).dinner
 
     const createAllergyTypes = async (
         adminContext: Awaited<ReturnType<typeof validatedBrowserContext>>,
@@ -223,11 +209,11 @@ test.describe('Chef Dinner Endpoint', () => {
         const testSalt = temporaryAndRandom()
 
         const otherTeam = await SeasonFactory.createCookingTeamForSeason(
-            adminContext, testSeasonId, salt('OtherTeam', testSalt)
+            adminContext, testSeason.id!, salt('OtherTeam', testSalt)
         )
         const dinner = await DinnerEventFactory.createDinnerEvent(adminContext, {
             ...DinnerEventFactory.defaultDinnerEvent(testSalt),
-            seasonId: testSeasonId,
+            seasonId: testSeason.id!,
             cookingTeamId: otherTeam.id
         })
 
@@ -241,7 +227,7 @@ test.describe('Chef Dinner Endpoint', () => {
 
         const dinner = await DinnerEventFactory.createDinnerEvent(adminContext, {
             ...DinnerEventFactory.defaultDinnerEvent(testSalt),
-            seasonId: testSeasonId,
+            seasonId: testSeason.id!,
             cookingTeamId: null
         })
 

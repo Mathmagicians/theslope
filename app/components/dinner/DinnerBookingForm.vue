@@ -148,7 +148,6 @@ interface TableRow {
   price: number
   ticketPriceId: number | null // Nullable: TicketPrice may be deleted (priceAtBooking preserved)
   guestCount?: number // undefined = not guest, 1+ = guest ticket(s)
-  ticketCount?: number // DEBUG: total orders for this inhabitant (should be 1)
   provenanceHousehold?: string
   allergyTypes: AllergyTypeDisplay[] // The booked inhabitant's live allergy profile; empty for every other row
 }
@@ -323,9 +322,6 @@ const moreTicketsLines = computed(() =>
 const eventOrders = computed(() =>
   (props.orders ?? []).filter(o => o.dinnerEventId === props.dinnerEvent.id)
 )
-const partitionedOrders = computed(() => partitionGuestOrders(eventOrders.value))
-const guestOrders = computed(() => partitionedOrders.value.guestOrders)
-const regularOrders = computed(() => partitionedOrders.value.regularOrders)
 const eventWaitlistEntries = computed(() => props.waitlistEntries.filter(entry => entry.dinnerEventId === props.dinnerEvent.id))
 
 // The household's own notes on a closed dinner: the tickets it released and its places on the waiting list
@@ -357,10 +353,7 @@ const tableData = computed((): TableRow[] => {
   const allInhabitants = household.value.inhabitants
 
   const inhabitantRows: TableRow[] = allInhabitants.map(inhabitant => {
-    // Find ALL orders for this inhabitant (to detect duplicates)
-    const ordersForInhabitant = regularOrders.value.filter(o => o.inhabitantId === inhabitant.id)
-    const order = ordersForInhabitant[0] ?? null
-    const ticketCount = ordersForInhabitant.length
+    const order = findRegularOrder(eventOrders.value, inhabitant.id, props.dinnerEvent.id) ?? null
     const orderState = order?.state as OrderState | undefined
     // An order supersedes a queue entry: the assignment deletes the entry it placed
     const waitlistEntry = order ? undefined : findRegularOrder(eventWaitlistEntries.value, inhabitant.id, props.dinnerEvent.id)
@@ -387,7 +380,6 @@ const tableData = computed((): TableRow[] => {
       ...getRowBookingState(orderState, false, !!waitlistEntry),
       price: order?.priceAtBooking ?? ticketPrice?.price ?? 0,
       ticketPriceId: order?.ticketPriceId ?? ticketPrice?.id ?? null,
-      ticketCount: ticketCount > 1 ? ticketCount : undefined, // Only set if duplicates
       provenanceHousehold: order?.provenanceHousehold,
       allergyTypes: order ? (inhabitant.allergies ?? []).map(allergy => allergy.allergyType) : []
     }
@@ -395,7 +387,7 @@ const tableData = computed((): TableRow[] => {
 
   // A guest row is a placed group (booker, ticketType, eventId) or one queued guest: the same row, booked or queued
   type GuestItem = {id: string, orders: OrderDisplay[], waitlistEntry?: TicketWaitlistDetail}
-  const placedGuests: GuestItem[] = Object.entries(groupGuestOrders(guestOrders.value))
+  const placedGuests: GuestItem[] = Object.entries(groupGuestOrders(eventOrders.value))
     .filter(([, orders]) => orders.length > 0)
     .map(([key, orders]) => ({id: `guest-group-${key}`, orders}))
   const queuedGuests: GuestItem[] = eventWaitlistEntries.value
@@ -588,7 +580,7 @@ const isTicketClaimed = (row: TableRow): boolean => !!row.provenanceHousehold
 // HELPER TEXT
 // ============================================================================
 
-const {partitionGuestOrders, groupGuestOrders, getBookingOptions, getDayBillSummary, resolveUserBookingBuckets, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
+const {groupGuestOrders, getBookingOptions, getDayBillSummary, resolveUserBookingBuckets, buildDesiredOrders, buildGuestDesiredOrders, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
 const {createBookingBadges, createWaitlistBadge, bookingSaveLabel, previewOutcome, formatActionPreview, waitlistPositionOf} = useBookingUi()
 
 // Deadline badges
@@ -812,7 +804,6 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
               :is-claimed="isTicketClaimed(row.original)"
               :is-queued="!!row.original.waitlistEntry"
               :guest-count="row.original.guestCount"
-              :ticket-count="row.original.ticketCount"
               :allergies="row.original.allergyTypes"
               :provenance-household="row.original.provenanceHousehold"
             />
@@ -841,7 +832,6 @@ const saveLabel = computed(() => bookingSaveLabel(editingBuckets.value ? preview
             :is-claimed="isTicketClaimed(row.original)"
             :is-queued="!!row.original.waitlistEntry"
             :guest-count="row.original.guestCount"
-            :ticket-count="row.original.ticketCount"
             :allergies="row.original.allergyTypes"
             :provenance-household="row.original.provenanceHousehold"
           />

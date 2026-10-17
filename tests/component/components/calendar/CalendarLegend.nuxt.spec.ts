@@ -1,11 +1,14 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {h} from 'vue'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {enableAutoUnmount} from '@vue/test-utils'
 import CalendarLegend from '~/components/calendar/CalendarLegend.vue'
 import type {CalendarLegendItem} from '~/components/calendar/CalendarLegend.vue'
-import {mountWithTooltipProvider, findAllByTestId, findByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findAllByTestId, findByTestId, resetStores} from '~~/tests/component/testHelpers'
 import {ICONS} from '~/composables/useTheSlopeDesignSystem'
+
+enableAutoUnmount(afterEach)
 
 /**
  * The one legend every calendar renders: a row per item, and the item's kind decides the
@@ -25,42 +28,31 @@ describe('CalendarLegend', () => {
         {label: 'Madhold 1', kind: 'badge', badgeClass: 'band-one'}
     ]
 
-    const mount = () => mountWithTooltipProvider(CalendarLegend, {
-        props: {items},
-        isMd: true
+    beforeEach(() => {
+        resetStores()
     })
 
-    it('is the Forklaring panel', async () => {
-        const wrapper = await mount()
+    it('is the Forklaring panel with one entry per item, each kind rendering its sample: the day circle, the chip around it, the badge with its band', async () => {
+        const wrapper = await mountWithTooltipProvider(CalendarLegend, {props: {items}, isMd: true})
+
         expect(findByTestId(wrapper, 'calendar-legend').text()).toContain('Forklaring')
-    })
-
-    it('renders one entry per item, with its label', async () => {
-        const wrapper = await mount()
         const entries = findAllByTestId(wrapper, 'calendar-legend-entry')
         expect(entries).toHaveLength(items.length)
         items.forEach((item, index) => expect(entries[index]!.text()).toContain(item.label))
-    })
 
-    it('a circle item renders its day circle', async () => {
-        const wrapper = await mount()
         expect(findByTestId(wrapper, 'calendar-legend-circle').classes()).toContain('circle-planned')
-    })
-
-    it.each(chips.map(chip => ({label: chip.label, text: 'count' in chip ? chip.count : '', glyphs: 'icon' in chip ? [chip.icon] : []})))(
-        'the chip item "$label" wraps its day circle in a chip reading "$text" with the glyphs $glyphs', async ({label, text, glyphs}) => {
-            const wrapper = await mount()
-            const entry = findAllByTestId(wrapper, 'calendar-legend-entry').find(candidate => candidate.text().includes(label))!
-            expect(entry.find('.circle-future').exists()).toBe(true)
-            // UChip passes attrs through to the slot, so the indicator is reached by its slot name
-            const chip = entry.find('[data-slot="base"]')
-            expect(chip.text()).toBe(text)
-            expect(wrapper.findAllComponents({name: 'UIcon'}).filter(icon => chip.element.contains(icon.element)).map(icon => icon.props('name'))).toEqual(glyphs)
-        })
-
-    it('a badge item renders the badge with its band', async () => {
-        const wrapper = await mount()
         expect(findByTestId(wrapper, 'calendar-legend-badge').classes()).toContain('band-one')
+
+        // Each chip wraps its day circle in a chip reading its count, with its glyph
+        chips.forEach(chip => {
+            const entry = entries.find(candidate => candidate.text().includes(chip.label))!
+            expect(entry.find('.circle-future').exists(), chip.label).toBe(true)
+            // UChip passes attrs through to the slot, so the indicator is reached by its slot name
+            const indicator = entry.find('[data-slot="base"]')
+            expect(indicator.text(), chip.label).toBe('count' in chip ? chip.count : '')
+            expect(wrapper.findAllComponents({name: 'UIcon'}).filter(icon => indicator.element.contains(icon.element)).map(icon => icon.props('name')), chip.label)
+                .toEqual('icon' in chip ? [chip.icon] : [])
+        })
     })
 
     it('hosts own entries in the default slot and the hint under them', async () => {

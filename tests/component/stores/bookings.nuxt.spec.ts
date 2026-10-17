@@ -342,6 +342,42 @@ describe('Bookings store — scaffold bookings', () => {
     })
 })
 
+// One write for every booking change: after it, each dataset a booking touches re-reads once
+describe('Bookings store — one booking write', () => {
+    // A dinner past its booking deadline on view: the household's orders, the tickets for sale, the waiting list and its Detail read it
+    const dinner = {...DinnerEventFactory.defaultDinnerEventDisplay('one-write'), id: 1, date: addDays(new Date(), 1)}
+    const {OrderStateSchema} = useBookingValidation()
+    const queries = (endpoint: typeof ordersEndpoint) => endpoint.mock.calls.map(([event]) => getQuery(event as H3Event))
+
+    beforeEach(() => {
+        resetStores()
+        selectSeason([dinner])
+        ordersEndpoint.mockImplementation(() => [])
+    })
+
+    it('a booking save re-reads the household\'s orders, the tickets for sale, the waiting list and the dinner on view, each once', async () => {
+        const store = useBookingsStore()
+        store.loadOrdersForDinners({dinnerEventIds: [dinner.id], householdId: MY_HOUSEHOLD_ID})
+        store.selectDinnerDate(() => new Date(dinner.date))
+        await vi.waitFor(() => expect(asyncDataStatus('bookings-store-selected-dinner-event')).toBe('success'))
+        await vi.waitFor(() => expect(store.lockStatus.has(dinner.id)).toBe(true))
+        await flushPromises()
+        ordersEndpoint.mockClear()
+        waitlistEntriesEndpoint.mockClear()
+        dinnerEventDetailEndpoint.mockClear()
+
+        await store.processSingleEventBookings(MY_HOUSEHOLD_ID, dinner.id, [])
+
+        expect(queries(ordersEndpoint)).toEqual(expect.arrayContaining([
+            expect.objectContaining({householdId: String(MY_HOUSEHOLD_ID)}),
+            expect.objectContaining({state: OrderStateSchema.enum.RELEASED, allHouseholds: 'true'})
+        ]))
+        expect(ordersEndpoint).toHaveBeenCalledTimes(2)
+        expect(waitlistEntriesEndpoint).toHaveBeenCalledTimes(1)
+        expect(dinnerEventDetailEndpoint).toHaveBeenCalledTimes(1)
+    })
+})
+
 describe('Bookings store — daily maintenance', () => {
     it('keeps the result and reports it in a toast', async () => {
         const store = useBookingsStore()
@@ -429,7 +465,7 @@ describe('Bookings store — gated reads', () => {
     it.each([
         ...gatedReads.map(({dataset, idleKey, endpoint}) => ({dataset, idleKey, endpoint})),
         {dataset: 'released counts', idleKey: 'bookings-store-released-counts', endpoint: ordersEndpoint},
-        {dataset: 'queue sizes', idleKey: 'bookings-store-queue-sizes', endpoint: waitlistEntriesEndpoint}
+        {dataset: 'waiting list', idleKey: 'bookings-store-waitlist-entries', endpoint: waitlistEntriesEndpoint}
     ])('$dataset is idle and unrequested while its condition is false', async ({idleKey, endpoint}) => {
         const store = useBookingsStore()
         await vi.waitFor(() => expect(usePlanStore().isPlanStoreReady).toBe(true))

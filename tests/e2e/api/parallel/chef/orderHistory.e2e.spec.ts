@@ -4,7 +4,6 @@ import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFact
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
-import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
 /**
@@ -13,10 +12,9 @@ import testHelpers from '~~/tests/e2e/testHelpers'
  * admin's household claims it: tickets and revenue stand still through release and claim while the kuverter follow the
  * eaters; `since` keeps the changes from a moment and counts the older ones.
  */
-const {validatedBrowserContext, memberValidatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, getSessionUserInfo} = testHelpers
 const {OrderAuditActionSchema, OrderStateSchema, DinnerModeSchema} = useBookingValidation()
 const {TicketTypeSchema} = useTicketPriceValidation()
-const {TeamRoleSchema} = useCookingTeamValidation()
 const Action = OrderAuditActionSchema.enum
 
 test.describe('Chef dinner order history', () => {
@@ -36,7 +34,6 @@ test.describe('Chef dinner order history', () => {
     test.beforeAll(async ({browser}) => {
         const adminContext = await validatedBrowserContext(browser)
         const memberContext = await memberValidatedBrowserContext(browser)
-        const testSalt = temporaryAndRandom()
         const season = await SeasonFactory.createSeason(adminContext)
         seasonId = season.id!
         seasonIds.push(seasonId)
@@ -44,12 +41,8 @@ test.describe('Chef dinner order history', () => {
         childPrice = saved(season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.CHILD))
 
         const member = await getSessionUserInfo(memberContext)
-        const team = await SeasonFactory.createCookingTeamForSeason(adminContext, seasonId, salt('Historikhold', testSalt))
-        await SeasonFactory.assignMemberToTeam(adminContext, team.id!, member.inhabitantId, TeamRoleSchema.enum.CHEF)
         // Tomorrow: inside the cancellation deadline, so a release keeps the ticket paid instead of deleting it
-        const dinner = await DinnerEventFactory.createDinnerEvent(adminContext, {
-            ...DinnerEventFactory.defaultDinnerEvent(testSalt), seasonId, cookingTeamId: team.id!, chefId: member.inhabitantId
-        })
+        const {dinner} = await SeasonFactory.createCookingTeamWithChefAndDinner(adminContext, season, member.inhabitantId, {teamName: 'Historikhold'})
         dinnerEventId = dinner.id!
 
         // The member's own household, so the member can release without a bypass; the child ticket is a guest ticket

@@ -1,8 +1,11 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
+import {enableAutoUnmount} from '@vue/test-utils'
 import UserListItem from '~/components/shared/UserListItem.vue'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
-import {mountWithTooltipProvider, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
+
+enableAutoUnmount(afterEach)
 
 const SHOWN_AVATARS = 5
 
@@ -15,6 +18,9 @@ const mountItem = (props: Record<string, unknown>, isMd: boolean) =>
     mountWithTooltipProvider(UserListItem, {props, isMd})
 
 describe('UserListItem', () => {
+    beforeEach(() => {
+        resetStores()
+    })
 
     // The server renders with isMd false and the desktop client hydrates with isMd true: both must agree
     it.each([
@@ -28,12 +34,11 @@ describe('UserListItem', () => {
         expect(desktop.html()).toBe(phone.html())
     })
 
-    describe.each(VIEWPORTS)('group on $viewport', ({isMd}) => {
-        it(`shows ${SHOWN_AVATARS} avatars and counts the rest`, async () => {
-            const wrapper = await mountItem({inhabitants, showNames: false, linkToProfile: false}, isMd)
+    // The markup is the same on both widths (above), so the count runs on one
+    it(`group shows ${SHOWN_AVATARS} avatars and counts the rest`, async () => {
+        const wrapper = await mountItem({inhabitants, showNames: false, linkToProfile: false}, false)
 
-            expect(wrapper.findAll('span[data-slot="root"]')).toHaveLength(SHOWN_AVATARS)
-            expect(wrapper.find('[data-slot="fallback"]').text()).toBe(`+${inhabitants.length - SHOWN_AVATARS}`)
-        })
+        expect(wrapper.findAll('span[data-slot="root"]')).toHaveLength(SHOWN_AVATARS)
+        expect(wrapper.find('[data-slot="fallback"]').text()).toBe(`+${inhabitants.length - SHOWN_AVATARS}`)
     })
 })

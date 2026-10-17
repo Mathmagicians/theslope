@@ -1,9 +1,10 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {defineComponent, h, nextTick, ref} from 'vue'
+import {enableAutoUnmount} from '@vue/test-utils'
 import AllergyNotes from '~/components/allergy/AllergyNotes.vue'
 import {ALLERGY_TEST_IDS} from './allergyTestIds'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
 
 // The notes box is prop-driven and mounts on two surfaces (catalog footer, poster).
 // The text is one note per line - blank lines and stray whitespace are not notes.
@@ -16,6 +17,14 @@ type Wrapper = Awaited<ReturnType<typeof mountNotes>>
 
 const textareaEl = (wrapper: Wrapper) =>
     findByTestId(wrapper, ALLERGY_TEST_IDS.notesTextarea).element as HTMLTextAreaElement
+
+const openEditor = (wrapper: Wrapper) => clickByTestId(wrapper, ALLERGY_TEST_IDS.editNotes)
+
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
 
 describe('AllergyNotes - view face', () => {
     it('renders the heading and one bullet per non-empty line', async () => {
@@ -39,45 +48,35 @@ describe('AllergyNotes - view face', () => {
         expect(findByTestId(wrapper, ALLERGY_TEST_IDS.notes).exists()).toBe(false)
         expect(findAllByTestId(wrapper, ALLERGY_TEST_IDS.notesItem)).toHaveLength(0)
     })
+
+    it('shows no pencil when canEdit is false', async () => {
+        const wrapper = await mountNotes({notes: 'A\nB', canEdit: false})
+
+        expect(findByTestId(wrapper, ALLERGY_TEST_IDS.editNotes).exists()).toBe(false)
+    })
 })
 
-describe.each(VIEWPORTS)('AllergyNotes - edit face on $viewport', ({isMd}) => {
-    const mount = (props: {notes: string, canEdit?: boolean, isSaving?: boolean}) => mountNotes(props, isMd)
-
-    const openEditor = (wrapper: Wrapper) => clickByTestId(wrapper, ALLERGY_TEST_IDS.editNotes)
-
-    it.each([
-        {canEdit: true, expected: true},
-        {canEdit: false, expected: false}
-    ])('pencil with canEdit=$canEdit', async ({canEdit, expected}) => {
-        const wrapper = await mount({notes: 'A\nB', canEdit})
-
-        expect(findByTestId(wrapper, ALLERGY_TEST_IDS.editNotes).exists()).toBe(expected)
-    })
-
+// ALERTS.withCornerAction keeps the pencil in the corner on every viewport
+describe.each(VIEWPORTS)('AllergyNotes - pencil on $viewport', ({isMd}) => {
     // Nuxt UI renders a horizontal alert's actions beside its text wrapper, a vertical one's inside
     // it, under the text - so the pencil outside the wrapper is the pencil in the box's corner
     it('places the pencil beside the notes, not under them', async () => {
-        const wrapper = await mount({notes: 'A\nB', canEdit: true})
+        const wrapper = await mountNotes({notes: 'A\nB', canEdit: true}, isMd)
 
         expect(findByTestId(wrapper, ALLERGY_TEST_IDS.editNotes).exists()).toBe(true)
         expect(findByTestId(wrapper.find('[data-slot="wrapper"]'), ALLERGY_TEST_IDS.editNotes).exists()).toBe(false)
     })
+})
 
-    it('shows the current text in the textarea, one note per line', async () => {
-        const wrapper = await mount({notes: 'A\nB', canEdit: true})
-
+describe('AllergyNotes - edit face', () => {
+    it('shows the current text in the textarea; Annuller restores the text and returns to the bullets', async () => {
+        const wrapper = await mountNotes({notes: 'A\nB', canEdit: true})
         await openEditor(wrapper)
 
         expect(textareaEl(wrapper).value).toBe('A\nB')
         expect(findAllByTestId(wrapper, ALLERGY_TEST_IDS.notesItem)).toHaveLength(0)
-    })
 
-    it('Annuller restores the text and returns to the bullets', async () => {
-        const wrapper = await mount({notes: 'A\nB', canEdit: true})
-        await openEditor(wrapper)
         await findByTestId(wrapper, ALLERGY_TEST_IDS.notesTextarea).setValue('Noget helt andet')
-
         await clickByTestId(wrapper, ALLERGY_TEST_IDS.cancelNotes)
 
         expect(wrapper.emitted('save')).toBeFalsy()
@@ -88,7 +87,7 @@ describe.each(VIEWPORTS)('AllergyNotes - edit face on $viewport', ({isMd}) => {
     })
 
     it('Gem emits the trimmed text and closes the editor', async () => {
-        const wrapper = await mount({notes: 'A', canEdit: true})
+        const wrapper = await mountNotes({notes: 'A', canEdit: true})
         await openEditor(wrapper)
         await findByTestId(wrapper, ALLERGY_TEST_IDS.notesTextarea).setValue('  A\nB  ')
 
@@ -111,7 +110,7 @@ describe.each(VIEWPORTS)('AllergyNotes - edit face on $viewport', ({isMd}) => {
                 onSave: () => { isSaving.value = true }
             })
         })
-        const root = await mountWithTooltipProvider(Host, {isMd})
+        const root = await mountWithTooltipProvider(Host, {isMd: false})
         const wrapper = root.findComponent(AllergyNotes)
         await openEditor(wrapper)
 

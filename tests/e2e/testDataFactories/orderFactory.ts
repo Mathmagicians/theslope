@@ -238,6 +238,7 @@ export class OrderFactory {
     priceAtBooking: 4500,
     dinnerMode: DinnerModeSchema.enum.DINEIN,
     state: OrderStateSchema.enum.BOOKED,
+    isGuestTicket: false,
     // Provenance fields (pre-formatted for immutable audit trail)
     inhabitantNameWithInitials: 'Daisy D.',
     householdShortname: 'AR_1',
@@ -262,7 +263,7 @@ export class OrderFactory {
   })
 
   static readonly defaultAuditContext = (overrides?: Partial<AuditContext>): AuditContext => ({
-    action: 'SYSTEM_CREATED',
+    action: OrderAuditActionSchema.enum.SYSTEM_CREATED,
     performedByUserId: 1,
     source: 'csv_billing',
     seasonId: overrides?.seasonId ?? null,
@@ -659,13 +660,13 @@ export class OrderFactory {
     inhabitantId: number,
     dinnerEventId: number,
     ticketPriceId: number,
-    dinnerMode: 'DINEIN' | 'TAKEAWAY' = 'DINEIN',
+    dinnerMode: DinnerMode = DinnerModeSchema.enum.DINEIN,
     allergyTypeIds?: number[]
   ): DesiredOrder => this.defaultDesiredOrder({
     inhabitantId,
     dinnerEventId,
     ticketPriceId,
-    dinnerMode: DinnerModeSchema.enum[dinnerMode],
+    dinnerMode,
     isGuestTicket: true,
     allergyTypeIds
   })
@@ -712,7 +713,7 @@ export class OrderFactory {
       menuTitle: salt(`Fixture-${daysFromNow}d`, testSalt)
     })
 
-    const ticketPriceId = season.ticketPrices?.find(tp => tp.ticketType === 'ADULT')?.id
+    const ticketPriceId = season.ticketPrices?.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)?.id
     if (!ticketPriceId) throw new Error('No ADULT ticket price found')
 
     let order: OrderDisplay

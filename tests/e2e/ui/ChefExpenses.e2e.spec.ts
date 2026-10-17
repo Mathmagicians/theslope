@@ -2,14 +2,12 @@ import {test, expect} from '@playwright/test'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
 import {ExpenseFactory} from '../testDataFactories/expenseFactory'
-import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useTicket} from '~/composables/useTicket'
 import {formatDate} from '~/utils/date'
 import testHelpers from '../testHelpers'
 
 const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, gotoHydrated, waitForApi} = testHelpers
-const {TeamRoleSchema} = useCookingTeamValidation()
 const {ExpenseSchema} = useBillingValidation()
 const {formatPrice} = useTicket()
 
@@ -34,16 +32,14 @@ test.describe('Chef expense lines', () => {
         const activeSeason = await SeasonFactory.createActiveSeason(adminContext)
         const {inhabitantId} = await getSessionUserInfo(memberContext)
 
-        const team = await SeasonFactory.createCookingTeamForSeason(adminContext, activeSeason.id!, `Indkøbshold-${testSalt}`)
-        teamId = team.id!
-        createdTeamIds.push(teamId)
-        await SeasonFactory.assignMemberToTeam(adminContext, teamId, inhabitantId, TeamRoleSchema.enum.CHEF)
         menuTitle = `Indkøbsmiddag-${testSalt}`
         // The page selects a dinner by date, and the new team also holds the season's generated dinners: the spec's dinner
         // is alone on its day and the URL names that day
-        const dinner = await DinnerEventFactory.createDinnerEventOnFreeDay(adminContext, activeSeason, {
-            menuTitle, cookingTeamId: teamId, chefId: inhabitantId
+        const {team, dinner} = await SeasonFactory.createCookingTeamWithChefAndDinner(adminContext, activeSeason, inhabitantId, {
+            teamName: `Indkøbshold-${testSalt}`, dinner: {menuTitle}, day: 'free'
         })
+        teamId = team.id!
+        createdTeamIds.push(teamId)
         dinnerEventId = dinner.id!
         createdDinnerIds.push(dinnerEventId)
         dinnerDate = new Date(dinner.date)

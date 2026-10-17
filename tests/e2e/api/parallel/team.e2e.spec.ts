@@ -1,5 +1,6 @@
 import {test, expect} from '@playwright/test'
 import {SeasonFactory} from "~~/tests/e2e/testDataFactories/seasonFactory"
+import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
@@ -32,13 +33,11 @@ test.describe('Team API - My Teams', () => {
             const context = await validatedBrowserContext(browser)
 
             // Get the logged-in user's inhabitant ID
-            const userResponse = await context.request.get('/api/admin/users', { headers: testHelpers.headers })
-            expect(userResponse.status(), 'GET /api/admin/users should return 200').toBe(200)
-            const users = await userResponse.json()
-            const testUser = users.find((u: { email: string }) => u.email === process.env.HEY_NABO_USERNAME)
+            const users = await UserFactory.getUsers(context)
+            const testUser = users.find(u => u.email === process.env.HEY_NABO_USERNAME)
             expect(testUser, `Test user with email ${process.env.HEY_NABO_USERNAME} should exist`).toBeDefined()
-            expect(testUser.Inhabitant, `Test user should have an Inhabitant. User: ${JSON.stringify(testUser, null, 2)}`).toBeDefined()
-            const testInhabitantId = testUser.Inhabitant.id
+            expect(testUser!.Inhabitant, `Test user should have an Inhabitant. User: ${JSON.stringify(testUser, null, 2)}`).toBeDefined()
+            const testInhabitantId = testUser!.Inhabitant!.id
             expect(testInhabitantId, 'Test inhabitant ID should be defined').toBeGreaterThan(0)
 
             // Create teams and assign logged-in user to them

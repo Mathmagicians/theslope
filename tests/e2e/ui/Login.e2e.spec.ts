@@ -48,7 +48,7 @@ test.describe('Login flow', () => {
         await page.context().clearCookies()
 
         // A client-side navigation: the page's datasets answer 401 and the login page loads with the page as redirect
-        await page.locator('a[href^="/dinner"]').first().click()
+        await page.getByRole('banner').getByRole('link', {name: 'Fællesspisning', exact: true}).click()
 
         await page.waitForURL(url => url.pathname === '/login' && (url.searchParams.get('redirect') ?? '').startsWith('/dinner'))
         await expect(page.locator('input[type="email"]')).toBeVisible()

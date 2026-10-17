@@ -1160,7 +1160,6 @@ describe('generateDesiredOrdersFromPreferences', () => {
 
     // Mon, Wed, Fri DINEIN preferences
     const allDineIn: DinnerMode[] = [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.NONE]
-    const allNone: DinnerMode[] = Array(7).fill(DinnerMode.NONE)
 
     const ticketPrices = SeasonFactory.defaultSeason().ticketPrices
 
@@ -1170,7 +1169,6 @@ describe('generateDesiredOrdersFromPreferences', () => {
             inhabitants,
             dinnerEvents,
             [],
-            new Set(),  // confirmedKeys
             new Set(),  // cancelledKeys
             ticketPrices
         )
@@ -1179,133 +1177,12 @@ describe('generateDesiredOrdersFromPreferences', () => {
         expect(result.map(o => o.dinnerEventId).sort()).toEqual([101, 102, 103])
     })
 
-    describe('cancelledKeys handling', () => {
-        const {OrderStateSchema} = useBookingValidation()
-        const OrderState = OrderStateSchema.enum
-
-        it.each([
-            {desc: 'no existing → skip (dont recreate)', existingOrders: [], expectedEvents: [101, 103], expectedLength: 2},
-            // RELEASED orders in cancelledKeys are NOT generated - orphan detection handles them
-            {desc: 'RELEASED → skip (orphan detection handles)', existingOrders: [
-                OrderFactory.defaultOrder(undefined, {id: 42, inhabitantId: 1, dinnerEventId: 102, state: OrderState.RELEASED, ticketPriceId: 1})
-            ], expectedEvents: [101, 103], expectedLength: 2}
-        ])('$desc', ({existingOrders, expectedEvents, expectedLength}) => {
-            const inhabitants = [createInhabitant(1, allDineIn)]
-            const cancelledKeys = new Set(['1-102'])
-
-            const result = generateDesiredOrdersFromPreferences(
-                inhabitants,
-                dinnerEvents,
-                existingOrders,
-                new Set(),  // confirmedKeys
-                cancelledKeys,
-                ticketPrices
-            )
-
-            expect(result).toHaveLength(expectedLength)
-            expect(result.map(o => o.dinnerEventId).sort()).toEqual(expectedEvents)
-        })
-
-        it('RELEASED order not in generator result (orphan detection preserves it)', () => {
-            const inhabitants = [createInhabitant(1, allDineIn)]
-            const cancelledKeys = new Set(['1-102'])
-            const releasedOrder = OrderFactory.defaultOrder(undefined, {
-                id: 42, inhabitantId: 1, dinnerEventId: 102, state: OrderState.RELEASED, ticketPriceId: 1
-            })
-
-            const result = generateDesiredOrdersFromPreferences(
-                inhabitants,
-                dinnerEvents,
-                [releasedOrder],
-                new Set(),  // confirmedKeys
-                cancelledKeys,
-                ticketPrices
-            )
-
-            // RELEASED order in cancelledKeys is skipped - orphan detection in resolveOrdersFromPreferencesToBuckets handles it
-            const preserved = result.find(o => o.dinnerEventId === 102)
-            expect(preserved).toBeUndefined()
-        })
-    })
-
-    it('preserves guest orders (not managed by preferences)', () => {
-        const inhabitants = [createInhabitant(1, allNone)]  // NONE preferences
-        const existingGuestOrder = OrderFactory.defaultOrder(undefined, {
-            id: 99,
-            inhabitantId: 1,
-            dinnerEventId: 101,
-            isGuestTicket: true
-        })
-
-        const result = generateDesiredOrdersFromPreferences(
-            inhabitants,
-            dinnerEvents,
-            [existingGuestOrder],
-            new Set(),  // confirmedKeys
-            new Set(),  // cancelledKeys
-            ticketPrices
-        )
-
-        // Should preserve guest order even with NONE preferences
-        const guestOrders = result.filter(o => o.isGuestTicket)
-        expect(guestOrders).toHaveLength(1)
-        expect(guestOrders[0]!.orderId).toBe(99)
-    })
-
-    it('preserves orphaned guest order with ticketPriceId 0 when no prices available', () => {
-        const inhabitants = [createInhabitant(1, allNone)]
-        const singleEvent = [dinnerEvents[0]!]  // Only event 101 (guest order's event)
-        const orphanedGuestOrder = {
-            ...OrderFactory.defaultOrder(undefined, {
-                id: 99,
-                inhabitantId: 1,
-                dinnerEventId: 101,
-                isGuestTicket: true,
-                priceAtBooking: 9999
-            }),
-            ticketPriceId: null
-        } as OrderDisplay
-
-        const result = generateDesiredOrdersFromPreferences(
-            inhabitants,
-            singleEvent,
-            [orphanedGuestOrder],
-            new Set(),  // confirmedKeys
-            new Set(),  // cancelledKeys
-            []  // Empty ticketPrices
-        )
-
-        const guestOrders = result.filter(o => o.isGuestTicket)
-        expect(guestOrders).toHaveLength(1)
-        expect(guestOrders[0]!.ticketPriceId).toBe(0)  // Fallback to 0 for idempotent
-        expect(guestOrders[0]!.orderId).toBe(99)
-    })
-
-    it('resolves orphaned guest order using priceAtBooking fallback', () => {
+    it('a key with a user intent gets no booking', () => {
         const inhabitants = [createInhabitant(1, allDineIn)]
-        const orphanedGuestOrder = {
-            ...OrderFactory.defaultOrder(undefined, {
-                id: 99,
-                inhabitantId: 1,
-                dinnerEventId: 101,
-                isGuestTicket: true,
-                priceAtBooking: 5000  // Matches ADULT price
-            }),
-            ticketPriceId: null
-        } as OrderDisplay
 
-        const result = generateDesiredOrdersFromPreferences(
-            inhabitants,
-            dinnerEvents,
-            [orphanedGuestOrder],
-            new Set(),  // confirmedKeys
-            new Set(),  // cancelledKeys
-            ticketPrices
-        )
+        const result = generateDesiredOrdersFromPreferences(inhabitants, dinnerEvents, [], new Set(['1-102']), ticketPrices)
 
-        const guestOrders = result.filter(o => o.isGuestTicket)
-        expect(guestOrders).toHaveLength(1)
-        expect(guestOrders[0]!.ticketPriceId).toBe(ticketPrices.find(tp => tp.price === 5000)!.id)
+        expect(result.map(o => o.dinnerEventId).sort()).toEqual([101, 103])
     })
 
     it('enriches with orderId when existing order found', () => {
@@ -1320,7 +1197,6 @@ describe('generateDesiredOrdersFromPreferences', () => {
             inhabitants,
             dinnerEvents,
             [existingOrder],
-            new Set(),  // confirmedKeys
             new Set(),  // cancelledKeys
             ticketPrices
         )
@@ -1336,7 +1212,6 @@ describe('generateDesiredOrdersFromPreferences', () => {
             inhabitants,
             dinnerEvents,
             [],
-            new Set(),  // confirmedKeys
             new Set(),  // cancelledKeys
             ticketPrices
         )
@@ -1356,7 +1231,7 @@ describe('generateDesiredOrdersFromPreferences', () => {
             ], expectedState: OrderState.RELEASED}
         ])('$desc', ({existingOrders, expectedState}) => {
             const inhabitants = [createInhabitant(1, allDineIn)]
-            const result = generateDesiredOrdersFromPreferences(inhabitants, dinnerEvents, existingOrders, new Set(), new Set(), ticketPrices)
+            const result = generateDesiredOrdersFromPreferences(inhabitants, dinnerEvents, existingOrders, new Set(), ticketPrices)
 
             const order101 = result.find(o => o.dinnerEventId === 101)
             expect(order101?.state).toBe(expectedState)
@@ -1553,6 +1428,16 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
         })
     })
 
+    it('keeps a guest ticket whose price row is gone as it is, never an update', () => {
+        const household = createHousehold(1, [createInhabitant(1, allNone)])
+        const guest = {...createOrder(99, 1, 101, {isGuestTicket: true, priceAtBooking: 5000}), ticketPriceId: null}
+
+        const result = resolveOrdersFromPreferencesToBuckets(testSeason, household, [guest], new Set(), new Set())
+
+        expect(result.idempotent.map(order => order.orderId)).toEqual([99])
+        expect(result.update).toEqual([])
+    })
+
     it('preserves guest orders (not managed by preferences)', () => {
         const household = createHousehold(1, [createInhabitant(1, allNone)])  // NONE preferences
         const guestOrder = createOrder(99, 1, 101, { isGuestTicket: true })
@@ -1601,6 +1486,32 @@ describe('resolveOrdersFromPreferencesToBuckets', () => {
 
             expect(result.create).toHaveLength(expected.create)
             expect(result.claim).toHaveLength(expected.claim)
+        })
+
+        // A guest ticket booked on a person is not the person's own ticket, in either order of the list
+        it.each([
+            {desc: 'the guest ticket listed last', guestLast: true},
+            {desc: 'the guest ticket listed first', guestLast: false}
+        ])('GIVEN a person\'s own ticket and a guest ticket on them, $desc, WHEN the preference turns Ingen THEN the own ticket releases and the guest ticket stays', ({guestLast}) => {
+            const household = createHousehold(1, [createInhabitant(1, noDaysPrefs)])
+            const own = createOrder(10, 1, tomorrowDinner.id)
+            const guest = createOrder(11, 1, tomorrowDinner.id, {isGuestTicket: true})
+
+            const result = resolveOrdersFromPreferencesToBuckets(pastDeadlineSeason, household, guestLast ? [own, guest] : [guest, own], new Set(), new Set())
+
+            expect(result.update).toEqual([expect.objectContaining({orderId: own.id, state: OrderState.RELEASED})])
+            expect(result.idempotent).toEqual([expect.objectContaining({orderId: guest.id, isGuestTicket: true})])
+            expect(result.delete).toEqual([])
+        })
+
+        it('GIVEN two guest tickets on one person on a dinner THEN both stay as they are', () => {
+            const household = createHousehold(1, [createInhabitant(1, noDaysPrefs)])
+            const guests = [11, 12].map(id => createOrder(id, 1, tomorrowDinner.id, {isGuestTicket: true}))
+
+            const result = resolveOrdersFromPreferencesToBuckets(pastDeadlineSeason, household, guests, new Set(), new Set())
+
+            expect(result.idempotent.map(order => order.orderId)).toEqual([11, 12])
+            expect(result.delete).toEqual([])
         })
     })
 })
@@ -1828,7 +1739,7 @@ describe('getBookingOptions', () => {
 describe('groupGuestOrders', () => {
 
     const order = (overrides: {id?: number, allergies?: string[] | null, provenance?: string | null} = {}) => ({
-        inhabitantId: 1, ticketType: TicketTypes.ADULT, dinnerEventId: 101,
+        inhabitantId: 1, ticketType: TicketTypes.ADULT, dinnerEventId: 101, isGuestTicket: true,
         provenanceAllergies: overrides.allergies ?? null,
         provenanceHousehold: overrides.provenance ?? null
     })
@@ -1849,6 +1760,12 @@ describe('groupGuestOrders', () => {
         ], expected: 4},
     ])('$desc → $expected groups', ({orders, expected}) => {
         expect(Object.keys(groupGuestOrders(orders))).toHaveLength(expected)
+    })
+
+    it('leaves the booker\'s own order out of the guest groups', () => {
+        const groups = groupGuestOrders([order(), {...order(), isGuestTicket: false}])
+
+        expect(Object.values(groups).map(group => group.length)).toEqual([1])
     })
 })
 

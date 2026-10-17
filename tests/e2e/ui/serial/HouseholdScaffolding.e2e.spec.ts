@@ -6,7 +6,8 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
-import {isBeforeDeadline, getDinnerTimeRange} from '~/utils/season'
+import {isBeforeDeadline, getDinnerTimeRange, dateToWeekDay} from '~/utils/season'
+import {formatDate} from '~/utils/date'
 
 // Hardcoded from app.config.ts (Nuxt auto-imports not available in Playwright)
 const DEFAULT_DINNER_START_HOUR = 18
@@ -154,13 +155,8 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         // Save
         await page.getByTestId('save-preferences').click()
 
-        // THEN: Wait for edit mode to collapse (indicates save completed)
-        await pollUntil(
-            async () => await page.locator(`[data-testid="inhabitant-${inhabitant.id}-edit-preferences"]`).isVisible(),
-            (isVisible) => isVisible,
-            15,
-            500
-        )
+        // THEN: the row collapses once the save lands (the toggle reads 'Luk' while open)
+        await expect(page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`)).toHaveAttribute('aria-label', 'Rediger præferencer', {timeout: 15000})
 
         // THEN: Verify orders created only for before-deadline events via API
         const ordersAfter = await pollUntil(
@@ -178,5 +174,36 @@ test.describe('Household Scaffolding - Serial UI Tests', () => {
         for (const order of ordersAfter) {
             expect(order.state, 'Order should be BOOKED').toBe(OrderState.BOOKED)
         }
+    })
+
+    test('GIVEN a member holding a ticket on a dinner past its deadline WHEN the member sets that day to Ingen THEN the bookings tab\'s calendar chip shows the ticket for sale without a reload', async ({page, browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
+        const lockedDinner = [...testSeason.dinnerEvents].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())[0]!
+        const lockedDay = new Date(lockedDinner.date)
+        const inhabitant = await HouseholdFactory.createInhabitantWithConfig(adminContext, householdId, {
+            name: salt('Frida', testSalt),
+            lastName: salt('Frigiver', testSalt),
+            dinnerPreferences: createDinnerModeWeekdayMap(DinnerMode.NONE)
+        })
+        createdInhabitantIds.push(inhabitant.id)
+        // The scaffold books the inhabitant while every dinner is open, as the nightly run does; the season's own deadline then closes the first
+        await SeasonFactory.updateSeason(adminContext, {...testSeason.season, ticketIsCancellableDaysBefore: 0})
+        await HouseholdFactory.updateInhabitantPreferences(adminContext, inhabitant.id, createDinnerModeWeekdayMap(DinnerMode.DINEIN), 200, testSeason.season.id!, undefined, true)
+        await SeasonFactory.updateSeason(adminContext, testSeason.season)
+
+        await gotoHydrated(page, `/household/${encodeURIComponent(shortName)}/bookings?pbs=${pbsId}&date=${formatDate(lockedDay)}`)
+        // UChip hands its test id to the day circle; the chip's indicator sits beside the circle
+        const dayChip = page.getByTestId(`calendar-dinner-date-${lockedDay.getDate()}`).locator('xpath=..').locator('[data-slot="base"]')
+        await expect(dayChip, 'Closed with nothing for sale').toHaveText('', {timeout: 15000})
+
+        await page.getByRole('tab', {name: 'Præferencer'}).click()
+        await page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`).click()
+        await page.getByTestId(`inhabitant-${inhabitant.id}-preferences-edit-${dateToWeekDay(lockedDay)}-${DinnerMode.NONE}`).click()
+        await page.getByTestId('save-preferences').click()
+        await expect(page.getByTestId(`inhabitant-${inhabitant.id}-edit-preferences`)).toHaveAttribute('aria-label', 'Rediger præferencer', {timeout: 15000})
+
+        await page.getByRole('tab', {name: 'Tilmeldinger'}).click()
+
+        await expect(dayChip, 'The released ticket is for sale').toHaveText('1', {timeout: 15000})
     })
 })

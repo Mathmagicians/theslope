@@ -10,7 +10,7 @@ import type {
     CookingTeamCreate,
     TeamRole
 } from "~/composables/useCookingTeamValidation"
-import {useBookingValidation, type DinnerEventDisplay, type ScaffoldResult, type DailyMaintenanceResult} from "~/composables/useBookingValidation"
+import {useBookingValidation, type DinnerEventCreate, type DinnerEventDisplay, type ScaffoldResult, type DailyMaintenanceResult} from "~/composables/useBookingValidation"
 import {useMaintenanceValidation, type JobRunDisplay} from "~/composables/useMaintenanceValidation"
 import {useDutyValidation, type JokerSlot, type JokerSlotCreate} from "~/composables/useDutyValidation"
 import {getEachDayOfIntervalWithSelectedWeekdays, excludeDatesFromInterval} from '~/utils/date'
@@ -28,8 +28,10 @@ type CookingTeamCreateAssignment = NonNullable<CookingTeamCreate['assignments']>
 // Serialization now handled internally by repository layer
 const {salt, temporaryAndRandom, headers} = testHelpers
 const {createDefaultWeekdayMap} = useWeekDayMapValidation()
-const {CookingTeamDetailSchema, CookingTeamDisplaySchema, CookingTeamAssignmentSchema, CreateTeamsResponseSchema} = useCookingTeamValidation()
+const {CookingTeamDetailSchema, CookingTeamDisplaySchema, CookingTeamAssignmentSchema, CreateTeamsResponseSchema, TeamRoleSchema} = useCookingTeamValidation()
 const {RoleSchema, JokerSlotSchema} = useDutyValidation()
+const {DinnerStateSchema} = useBookingValidation()
+const {JobType, JobStatus} = useMaintenanceValidation()
 const ADMIN_TEAM_ENDPOINT = '/api/admin/team'
 
 export class SeasonFactory {
@@ -161,7 +163,7 @@ export class SeasonFactory {
                 menuTitle: 'Test Menu 1',
                 menuDescription: 'Test Description',
                 menuPictureUrl: null,
-                state: 'SCHEDULED' as const,
+                state: DinnerStateSchema.enum.SCHEDULED,
                 totalCost: 0,
                 chefId: null,
                 cookingTeamId: 1,
@@ -180,7 +182,7 @@ export class SeasonFactory {
      */
     static readonly defaultCookingTeamCreateAssignment = (overrides: Partial<CookingTeamCreateAssignment> = {}): CookingTeamCreateAssignment => ({
         inhabitantId: 42,
-        role: 'CHEF' as const,
+        role: TeamRoleSchema.enum.CHEF,
         allocationPercentage: 100,
         affinity: null,
         ...overrides
@@ -206,7 +208,7 @@ export class SeasonFactory {
         const data = {
             cookingTeamId: 1,
             inhabitantId,
-            role: 'CHEF' as const,
+            role: TeamRoleSchema.enum.CHEF,
             allocationPercentage: 100,
             inhabitant: {
                 id: inhabitantId,
@@ -469,7 +471,7 @@ export class SeasonFactory {
                     return season as Season
                 },
                 (season: Season) => season.isActive === true,
-                10 // Max attempts with exponential backoff
+                6 // ~15s with doubling backoff - inside the 30s hook timeout
             )
 
             console.info('🌞 > SEASON_FACTORY > Singleton season is already active')
@@ -491,7 +493,7 @@ export class SeasonFactory {
                 return season as Season
             },
             (season: Season) => season.isActive === true,
-            10 // Max attempts with exponential backoff
+            6 // ~15s with doubling backoff - inside the 30s hook timeout
         )
 
         // Cache the active season
@@ -834,6 +836,31 @@ export class SeasonFactory {
     }
 
     /**
+     * A dinner of a cooking team with its chef: a team in `season` with `chefInhabitantId` as CHEF and a dinner of the
+     * team with that chef, returned as `{team, dinner}`, the team read back with its assignment and dinner. `dinner` sets
+     * the dinner's fields (`chefId: null` leaves the duty vacant); `day` places it on a free day of the season (`'free'`,
+     * a browser spec, Rule 3) or alone on that day (a serial spec), else on the date `dinner` names, tomorrow by default.
+     */
+    static readonly createCookingTeamWithChefAndDinner = async (
+        context: BrowserContext,
+        season: Season,
+        chefInhabitantId: number,
+        {teamName = 'ChefTeam', dinner = {}, day}: {teamName?: string, dinner?: Partial<Omit<DinnerEventCreate, 'seasonId' | 'cookingTeamId'>>, day?: 'free' | Date} = {}
+    ): Promise<{ team: CookingTeamDetail, dinner: DinnerEventDisplay }> => {
+        const created = await this.createCookingTeamForSeason(context, season.id!, teamName)
+        await this.assignMemberToTeam(context, created.id!, chefInhabitantId, TeamRoleSchema.enum.CHEF)
+        const dinnerData = {chefId: chefInhabitantId, ...dinner, cookingTeamId: created.id!}
+        const placeDinner = () => {
+            if (day === 'free') return DinnerEventFactory.createDinnerEventOnFreeDay(context, season, dinnerData)
+            if (day) return DinnerEventFactory.createDinnerEventAloneOnDay(context, season, day, dinnerData)
+            return DinnerEventFactory.createDinnerEvent(context, {...dinnerData, seasonId: season.id!})
+        }
+        const teamDinner = await placeDinner()
+        const team = await this.getCookingTeamById(context, created.id!)
+        return {team: team!, dinner: teamDinner}
+    }
+
+    /**
      * Create a single dinner event for a season (convenience wrapper)
      */
     static readonly createDinnerEventForSeason = async (
@@ -899,7 +926,7 @@ export class SeasonFactory {
         )
 
         // Assign members to team with different roles
-        const roles: TeamRole[] = ['CHEF', 'COOK', 'JUNIORHELPER']
+        const roles: TeamRole[] = [TeamRoleSchema.enum.CHEF, TeamRoleSchema.enum.COOK, TeamRoleSchema.enum.JUNIORHELPER]
         await Promise.all(
             householdWithInhabitants.inhabitants.map((inhabitant, index: number) =>
                 this.assignMemberToTeam(context, team.id!, inhabitant.id, roles[index % roles.length]!)
@@ -1152,8 +1179,8 @@ export class SeasonFactory {
     /** A completed daily-maintenance run, as GET /api/admin/maintenance/job-run returns it */
     static readonly defaultJobRun = (overrides: Partial<JobRunDisplay> = {}): JobRunDisplay => ({
         id: 1,
-        jobType: 'DAILY_MAINTENANCE',
-        status: 'SUCCESS',
+        jobType: JobType.DAILY_MAINTENANCE,
+        status: JobStatus.SUCCESS,
         startedAt: new Date('2026-09-17T21:33:00Z'),
         completedAt: new Date('2026-09-17T21:33:04Z'),
         durationMs: 4500,

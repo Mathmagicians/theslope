@@ -191,27 +191,15 @@ test.describe('AllergyType API - Validation', () => {
     test('GIVEN invalid data (empty name) WHEN creating THEN returns 400', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // WHEN: Try to create with empty name
-        const response = await context.request.put('/api/admin/allergy-type', {
-            headers: testHelpers.headers,
-            data: {
-                name: '',
-                description: 'Test description'
-            }
-        })
-
-        // THEN: Should fail validation
-        expect(response.status()).toBe(400)
+        // WHEN: Try to create with empty name - THEN: Should fail validation
+        await AllergyFactory.createAllergyType(context, {name: '', description: 'Test description'}, 400)
     })
 
     test('GIVEN invalid ID (negative) WHEN fetching THEN returns 400', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // WHEN: Try to fetch with invalid ID
-        const response = await context.request.get('/api/admin/allergy-type/-1')
-
-        // THEN: Should fail validation
-        expect(response.status()).toBe(400)
+        // WHEN: Try to fetch with invalid ID - THEN: Should fail validation
+        await AllergyFactory.getAllergyType(context, -1, 400)
     })
 })
 

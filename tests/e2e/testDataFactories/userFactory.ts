@@ -171,7 +171,7 @@ export class UserFactory {
     }
 
     /**
-     * POST /api/admin/users/:id - the admin path used to arrange a user's roles for a test.
+     * POST /api/admin/users/:id - the admin path used to arrange a user's roles for a test; returns the saved user.
      * ALLERGYMANAGER is TheSlope-owned, so it survives the user's next login; a spec that
      * grants it restores the original roles afterwards.
      */
@@ -179,9 +179,11 @@ export class UserFactory {
         context: BrowserContext,
         userId: number,
         systemRoles: string[]
-    ): Promise<void> => {
+    ): Promise<UserDetail> => {
         const response = await context.request.post(`/api/admin/users/${userId}`, {headers, data: {systemRoles}})
         expect(response.status(), 'Unexpected status setting system roles').toBe(200)
+        const {UserDetailSchema} = useCoreValidation()
+        return UserDetailSchema.parse(await response.json())
     }
 
     /**

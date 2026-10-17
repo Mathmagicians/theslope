@@ -1,12 +1,9 @@
 import {test, expect} from '@playwright/test'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
-import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import testHelpers from '../testHelpers'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, getSessionUserInfo, temporaryAndRandom, gotoHydrated, expectHydratedWithoutMismatch} = testHelpers
-const {TeamRoleSchema} = useCookingTeamValidation()
-const TeamRole = TeamRoleSchema.enum
+const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, gotoHydrated, expectHydratedWithoutMismatch} = testHelpers
 
 /**
  * E2E UI Tests for Chef Page
@@ -36,31 +33,20 @@ test.describe('Chef Page', () => {
         const {inhabitantId} = await getSessionUserInfo(memberContext)
         memberInhabitantId = inhabitantId
 
-        // Two teams; each receives the season's generated dinners by affinity and one dinner of its own, alone on a free
-        // day, so the team cooks at least once (the page selects a dinner by date)
+        // Two teams with the member as chef; each receives the season's generated dinners by affinity and one dinner of
+        // its own, alone on a free day, so the team cooks at least once (the page selects a dinner by date)
+        const createChefTeam = async (teamName: string, menuTitle: string) => {
+            const {team, dinner} = await SeasonFactory.createCookingTeamWithChefAndDinner(adminContext, activeSeason, memberInhabitantId, {
+                teamName, dinner: {menuTitle}, day: 'free'
+            })
+            createdTeamIds.push(team.id!)
+            createdDinnerIds.push(dinner.id!)
+            return team.id!
+        }
         team1Name = `ChefTeam1-${testSalt}`
-        const team1 = await SeasonFactory.createCookingTeamForSeason(adminContext, activeSeason.id!, team1Name)
-        team1Id = team1.id!
-        createdTeamIds.push(team1Id)
-        await SeasonFactory.assignMemberToTeam(adminContext, team1Id, memberInhabitantId, TeamRole.CHEF)
-        const team1Dinner = await DinnerEventFactory.createDinnerEventOnFreeDay(adminContext, activeSeason, {
-            menuTitle: `Team1Dinner-${testSalt}`,
-            cookingTeamId: team1Id,
-            chefId: memberInhabitantId
-        })
-        createdDinnerIds.push(team1Dinner.id!)
-
+        team1Id = await createChefTeam(team1Name, `Team1Dinner-${testSalt}`)
         team2Name = `ChefTeam2-${testSalt}`
-        const team2 = await SeasonFactory.createCookingTeamForSeason(adminContext, activeSeason.id!, team2Name)
-        team2Id = team2.id!
-        createdTeamIds.push(team2Id)
-        await SeasonFactory.assignMemberToTeam(adminContext, team2Id, memberInhabitantId, TeamRole.CHEF)
-        const team2Dinner = await DinnerEventFactory.createDinnerEventOnFreeDay(adminContext, activeSeason, {
-            menuTitle: `Team2Dinner-${testSalt}`,
-            cookingTeamId: team2Id,
-            chefId: memberInhabitantId
-        })
-        createdDinnerIds.push(team2Dinner.id!)
+        team2Id = await createChefTeam(team2Name, `Team2Dinner-${testSalt}`)
     })
 
     test.afterAll(async ({browser}) => {
@@ -97,13 +83,10 @@ test.describe('Chef Page', () => {
         // Navigate with Team 1 selected
         await gotoHydrated(page, `${chefPageUrl}?team=${team1Id}`)
 
-        // Countdown renders once planStore is ready and ChefCalendarDisplay mounts - poll for testid
-        await pollUntil(
-            async () => await page.locator('[data-testid="chef-next-cooking-countdown"]').first().isVisible().catch(() => false),
-            (isVisible) => isVisible,
-            10
-        )
-        await expect(page.locator('text=Du er chefkok').first()).toBeVisible()
+        // Countdown renders once planStore is ready and ChefCalendarDisplay mounts
+        await expect(page.locator('[data-testid="chef-next-cooking-countdown"]').first()).toBeVisible({timeout: 15_000})
+        // The role status title; its description also opens with the words
+        await expect(page.getByText('Du er chefkok', {exact: true})).toBeVisible()
 
         // Get Team 1's countdown text
         const team1CountdownText = await page.locator('[data-testid="chef-next-cooking-countdown"]').first().textContent()
@@ -112,7 +95,8 @@ test.describe('Chef Page', () => {
         // Switch to Team 2 tab (use exact name to avoid matching leftover teams)
         await page.getByRole('tab', {name: team2Name}).click()
         await page.waitForURL(url => url.searchParams.get('team') === String(team2Id))
-        await page.waitForTimeout(500)
+        // The role status names the selected team; the countdown renders from the same selection
+        await expect(page.getByText(`Du er chefkok på ${team2Name}`)).toBeVisible()
 
         // Verify countdown changed
         const team2CountdownText = await page.locator('[data-testid="chef-next-cooking-countdown"]').first().textContent()
@@ -124,7 +108,7 @@ test.describe('Chef Page', () => {
         // Switch back to Team 1 - verify it updates again
         await page.getByRole('tab', {name: team1Name}).click()
         await page.waitForURL(url => url.searchParams.get('team') === String(team1Id))
-        await page.waitForTimeout(500)
+        await expect(page.getByText(`Du er chefkok på ${team1Name}`)).toBeVisible()
 
         const team1CountdownTextAfter = await page.locator('[data-testid="chef-next-cooking-countdown"]').first().textContent()
         expect(team1CountdownTextAfter).toBe(team1CountdownText)

@@ -3,6 +3,7 @@ import {useWeekDayMapValidation} from '~~/app/composables/useWeekDayMapValidatio
 import {useBookingValidation, type DinnerEventDisplay} from '~~/app/composables/useBookingValidation'
 import type {CookingTeamDetail} from '~~/app/composables/useCookingTeamValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
+import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
@@ -49,10 +50,7 @@ test.describe('Season API Tests', () => {
             assertTicketPrices(created)
 
             // WHEN: GET all seasons (index endpoint)
-            const listResponse = await context.request.get('/api/admin/season')
-            expect(listResponse.status()).toBe(200)
-
-            const seasons: Season[] = await listResponse.json()
+            const seasons = await SeasonFactory.getAllSeasons(context)
             const foundSeason = seasons.find(s => s.id === created.id)
 
             // THEN: the season and its ticketPrices are included in the list response
@@ -89,10 +87,7 @@ test.describe('Season API Tests', () => {
             const expectedEventCount = SeasonFactory.calculateExpectedEventCount(season)
 
             // WHEN: GET detail endpoint for specific season
-            const detailResponse = await context.request.get(`/api/admin/season/${season.id}`)
-            expect(detailResponse.status()).toBe(200)
-
-            const detailSeason: Season = await detailResponse.json()
+            const detailSeason = await SeasonFactory.getSeason(context, season.id!)
 
             // THEN: dinnerEvents should be auto-generated and included (orchestrated PUT + ADR-009)
             expect(detailSeason.dinnerEvents).toBeDefined()
@@ -214,27 +209,21 @@ test.describe('Season API Tests', () => {
             expect(dinnerEvents.length).toBeGreaterThan(0)
 
             // Verify teams exist
-            const team1Response = await context.request.get(`/api/admin/team/${teams[0]!.id}`)
-            expect(team1Response.status()).toBe(200)
+            await SeasonFactory.getCookingTeamById(context, teams[0]!.id!)
 
             // Verify events exist
-            const firstEventResponse = await context.request.get(`/api/admin/dinner-event/${dinnerEvents[0]!.id}`)
-            expect(firstEventResponse.status()).toBe(200)
+            await DinnerEventFactory.getDinnerEvent(context, dinnerEvents[0]!.id)
 
             // WHEN: Season is deleted
             await SeasonFactory.deleteSeason(context, season.id!, 200)
 
             // THEN: ALL cooking teams should be cascade deleted
-            const team1AfterDelete = await context.request.get(`/api/admin/team/${teams[0]!.id}`)
-            expect(team1AfterDelete.status()).toBe(404)
-
-            const team2AfterDelete = await context.request.get(`/api/admin/team/${teams[1]!.id}`)
-            expect(team2AfterDelete.status()).toBe(404)
+            await SeasonFactory.getCookingTeamById(context, teams[0]!.id!, 404)
+            await SeasonFactory.getCookingTeamById(context, teams[1]!.id!, 404)
 
             // AND: ALL dinner events should be cascade deleted
             for (const event of dinnerEvents) {
-                const response = await context.request.get(`/api/admin/dinner-event/${event.id}`)
-                expect(response.status()).toBe(404)
+                await DinnerEventFactory.getDinnerEvent(context, event.id, 404)
             }
 
             // AND: Season itself should be deleted

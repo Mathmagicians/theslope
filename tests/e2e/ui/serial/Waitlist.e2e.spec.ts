@@ -1,5 +1,5 @@
 import {test, expect, type BrowserContext} from '@playwright/test'
-import {addDays, isSameDay, startOfDay} from 'date-fns'
+import {addDays, startOfDay} from 'date-fns'
 import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -7,7 +7,6 @@ import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFact
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
-import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useTicket} from '~/composables/useTicket'
 import {formatDate} from '~/utils/date'
@@ -16,7 +15,6 @@ import {WAITLIST_TEST_IDS} from '~~/tests/component/components/dinner/waitlistTe
 const {memberUIFile, adminUIFile} = authFiles
 const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, gotoHydrated, pollUntil, salt, temporaryAndRandom} = testHelpers
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
-const {TeamRoleSchema} = useCookingTeamValidation()
 const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
 const {ticketTypeWords} = useTicket()
 const DinnerMode = DinnerModeSchema.enum
@@ -57,19 +55,12 @@ test.describe.serial('Waiting list - join through the save, served by the chef\'
         createdSeasonIds.push(seasonId)
         await SeasonFactory.activateSeason(adminContext, seasonId)
 
-        const team = await SeasonFactory.createCookingTeamForSeason(adminContext, seasonId, salt('Ventelistehold', testSalt))
+        // The dinner of tomorrow, one per day: the generated one gives way to the team's
+        const {team, dinner} = await SeasonFactory.createCookingTeamWithChefAndDinner(adminContext, season, chefInhabitantId, {
+            teamName: salt('Ventelistehold', testSalt), dinner: {menuTitle: salt('Ventelistemiddag', testSalt)}, day: tomorrow
+        })
         teamId = team.id!
         createdTeamIds.push(teamId)
-        await SeasonFactory.assignMemberToTeam(adminContext, teamId, chefInhabitantId, TeamRoleSchema.enum.CHEF)
-
-        // The dinner of tomorrow, one per day: the generated one gives way to the team's
-        const generated = await DinnerEventFactory.getDinnerEventsForSeason(adminContext, seasonId)
-        for (const dinner of generated.filter(dinner => isSameDay(new Date(dinner.date), tomorrow))) {
-            await DinnerEventFactory.deleteDinnerEvent(adminContext, dinner.id!, 200)
-        }
-        const dinner = await DinnerEventFactory.createDinnerEvent(adminContext, {
-            date: tomorrow, seasonId, cookingTeamId: teamId, chefId: chefInhabitantId, menuTitle: salt('Ventelistemiddag', testSalt)
-        })
         dinnerEventId = dinner.id!
         createdDinnerIds.push(dinnerEventId)
         dinnerDate = tomorrow

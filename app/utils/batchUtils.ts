@@ -34,6 +34,10 @@ export const groupBy = <T, K extends string | number>(getKey: (item: T) => K) =>
             return map.set(key, [...group, item])
         }, new Map<K, T[]>())
 
+/** Splits a list by a predicate: the items that match, then the rest */
+export const partition = <T>(predicate: (item: T) => boolean) => (items: T[]): [T[], T[]] =>
+    [items.filter(predicate), items.filter(item => !predicate(item))]
+
 // The reconciler's buckets; the order buckets extend them
 export const ReconciliationBucketSchema = z.enum(['create', 'update', 'idempotent', 'delete'])
 export type ReconciliationBucket = z.infer<typeof ReconciliationBucketSchema>

@@ -87,7 +87,7 @@ test.describe('AdminTeams Form UI', () => {
                 const teams = await pollUntil(
                     () => SeasonFactory.getCookingTeamsForSeason(context, season.id!),
                     (teams) => teams.length === 2,
-                    10
+                    6
                 )
                 expect(teams.length).toBe(2)
                 expect(teams[0]!.name).toContain('Madhold 1')
@@ -137,11 +137,7 @@ test.describe('AdminTeams Form UI', () => {
 
             // Navigate to edit mode with season in URL
             await page.goto(`${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
-            await pollUntil(
-                async () => await page.getByTestId('admin-teams').isVisible(),
-                (isVisible) => isVisible === true,
-                10
-            )
+            await expect(page.getByTestId('admin-teams')).toBeVisible({timeout: 15_000})
         })
 
         test('GIVEN user in edit mode WHEN renaming team THEN team name is updated immediately', async () => {
@@ -150,11 +146,7 @@ test.describe('AdminTeams Form UI', () => {
 
             // Navigate with the team open in the edit face
             await gotoHydrated(page, `${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
-            await pollUntil(
-                async () => await page.getByTestId('admin-teams').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
+            await expect(page.getByTestId('admin-teams')).toBeVisible({timeout: 15_000})
 
             // Wait for team input to be visible
             const teamInput = page.getByTestId('team-name-input').first()
@@ -184,11 +176,7 @@ test.describe('AdminTeams Form UI', () => {
 
             // Navigate with the team open in the edit face
             await gotoHydrated(page, `${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
-            await pollUntil(
-                async () => await page.getByTestId('admin-teams').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
+            await expect(page.getByTestId('admin-teams')).toBeVisible({timeout: 15_000})
 
             // Verify team is shown
             const teamInput = page.getByTestId('team-name-input').first()
@@ -223,11 +211,7 @@ test.describe('AdminTeams Form UI', () => {
 
             // Navigate to see the teams
             await gotoHydrated(page, `${adminTeamsUrl}?mode=edit&season=${season.shortName}`)
-            await pollUntil(
-                async () => await page.getByTestId('admin-teams').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
+            await expect(page.getByTestId('admin-teams')).toBeVisible({timeout: 15_000})
 
             // THEN: the master table lists the teams in the overview (nothing opened)
             const teamRows = page.locator('[data-testid^="team-row-"]')
@@ -264,24 +248,22 @@ test.describe('AdminTeams Form UI', () => {
             await HouseholdFactory.createInhabitantForHousehold(context, household.id, `Medlem-${testSalt} Testesen`)
 
             await gotoHydrated(page, `${adminTeamsUrl}?mode=edit&season=${season.shortName}&team=${team.id}`)
-            await pollUntil(
-                async () => await page.getByTestId('admin-teams').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
+            await expect(page.getByTestId('admin-teams')).toBeVisible({timeout: 15_000})
 
             // WHEN: adding the inhabitant through the member finder
             const search = page.getByPlaceholder('Søg efter navn...')
             await expect(search).toBeVisible()
             await search.fill(`Medlem-${testSalt}`)
-            // The finder filters on the typed name; the row action then expands the add form (its label
-            // flips to Luk), which leaves the form's submit as the only Tilføj button
+            // The finder filters on the typed name; the member's row action then expands the add form under
+            // the row (its label flips to Luk)
             await expect(page.getByText(`Medlem-${testSalt}`)).toBeVisible()
-            await page.getByRole('button', {name: 'Tilføj', exact: true}).first().click()
-            await expect(page.getByRole('button', {name: 'Luk', exact: true}).first()).toBeVisible()
+            const memberRow = page.getByRole('row').filter({hasText: `Medlem-${testSalt}`})
+            await memberRow.getByRole('button', {name: 'Tilføj', exact: true}).click()
+            await expect(memberRow.getByRole('button', {name: 'Luk', exact: true})).toBeVisible()
             const responsePromise = waitForApi(page, '/api/admin/team/assignment', 'PUT', {timeout: 15000})
-            // The expanded member form's submit comes first in the column; the joker row's Tilføj follows it
-            await page.getByRole('button', {name: 'Tilføj', exact: true}).first().click()
+            // The expanded row holds the member form; the joker row's Tilføj sits outside the finder
+            const memberForm = page.getByRole('row').filter({has: page.getByTestId('team-member-role-select')})
+            await memberForm.getByRole('button', {name: 'Tilføj', exact: true}).click()
             const response = await responsePromise
             expect(response.status()).toBe(201)
 

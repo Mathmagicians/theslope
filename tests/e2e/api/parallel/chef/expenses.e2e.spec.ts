@@ -3,7 +3,6 @@ import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFact
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useBillingValidation} from '~/composables/useBillingValidation'
-import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventCreate} from '~/composables/useBookingValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
 
@@ -13,9 +12,8 @@ import testHelpers from '~~/tests/e2e/testHelpers'
  * Setup: season + team + member as CHEF. The admin is not on the team and stands in for a non-chef. A test that
  * writes owns its dinner (the file runs fully parallel); the tests that are refused share one.
  */
-const {validatedBrowserContext, memberValidatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, temporaryAndRandom, getSessionUserInfo} = testHelpers
 const {LedgerEntryTypeSchema} = useBillingValidation()
-const {TeamRoleSchema} = useCookingTeamValidation()
 
 type Context = Awaited<ReturnType<typeof validatedBrowserContext>>
 type DinnerLines = {dinnerEventId: number, expenseIds: number[]}
@@ -34,12 +32,11 @@ test.describe('Chef dinner expenses', () => {
         const season = await SeasonFactory.createSeason(adminContext)
         seasonId = season.id!
         seasonIds.push(seasonId)
-        const team = await SeasonFactory.createCookingTeamForSeason(adminContext, seasonId, salt('Udgiftshold', temporaryAndRandom()))
-        teamId = team.id!
         const member = await getSessionUserInfo(memberContext)
         chef = {userId: member.userId, userEmail: member.userEmail}
-        await SeasonFactory.assignMemberToTeam(adminContext, teamId, member.inhabitantId, TeamRoleSchema.enum.CHEF)
-        sharedDinnerId = (await createDinner(adminContext)).dinnerEventId
+        const {team, dinner} = await SeasonFactory.createCookingTeamWithChefAndDinner(adminContext, season, member.inhabitantId, {teamName: 'Udgiftshold'})
+        teamId = team.id!
+        sharedDinnerId = dinner.id!
     })
 
     test.afterAll(async ({browser}) => {

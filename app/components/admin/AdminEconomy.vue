@@ -93,7 +93,6 @@ const getInhabitantName = (id: number) => inhabitantsMap.value.get(id) ?? `#${id
 const {getHouseholdForInhabitant} = householdsStore
 
 const {upcomingOrders, isUpcomingOrdersLoaded} = storeToRefs(bookingsStore)
-const {refreshUpcomingOrders} = bookingsStore
 bookingsStore.loadUpcomingOrders(true)
 // Loading until the upcoming orders have answered: a dataset idle in the server render reads as loading, not empty
 const isUpcomingOrdersLoading = computed(() =>
@@ -432,7 +431,6 @@ const handleAdminSave = async (orders: DesiredOrder[]) => {
         orders,
         guestBookerInhabitantId
     )
-    await refreshUpcomingOrders()
     toast.add({
         title: 'Administrator Korrektion',
         description: `${editingHousehold.value.address}: ${formatScaffoldResult(result, 'past')}`,

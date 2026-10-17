@@ -8,7 +8,7 @@ import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo} = testHelpers
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 
@@ -85,22 +85,16 @@ test.describe('Cross-Household Bookings - Serial UI Tests', () => {
         expect(targetOrder?.dinnerMode).toBe(DinnerMode.DINEINLATE)
 
         await page.goto(`/household/${encodeURIComponent(targetShortName)}/bookings?pbs=${targetPbsId}`)
-        await pollUntil(
-            async () => await page.locator('[data-testid="household-bookings"]').isVisible(),
-            (isVisible) => isVisible, 10
-        )
-        await pollUntil(
-            async () => await page.locator('[data-testid="booking-table"]').isVisible(),
-            (isVisible) => isVisible, 10
-        )
+        await expect(page.locator('[data-testid="household-bookings"]')).toBeVisible({timeout: 15_000})
+        await expect(page.locator('[data-testid="booking-table"]')).toBeVisible()
 
         // Target inhabitant name should be visible in booking table
         const bookingTable = page.locator('[data-testid="booking-table"]')
-        const targetNameCount = await bookingTable.locator('text=TargetUser').count()
+        const targetNameCount = await bookingTable.getByText(salt('TargetUser', testSalt)).count()
         expect(targetNameCount, 'Target inhabitant should be visible').toBeGreaterThan(0)
 
         // DINEINLATE shows as "Sen" in Danish UI - should be visible for target orders
-        const senCount = await bookingTable.locator('text=Sen').count()
+        const senCount = await bookingTable.getByText('Sen', {exact: true}).count()
         expect(senCount, 'Should show Sen (DINEINLATE) for target inhabitant').toBeGreaterThan(0)
 
         // Admin's inhabitant name should NOT appear in booking table

@@ -1,4 +1,4 @@
-import {defineEventHandler, getValidatedRouterParams, readValidatedBody} from "h3"
+import {createError, defineEventHandler, getValidatedRouterParams, readValidatedBody} from "h3"
 import {fetchUser, saveUser} from "~~/server/data/prismaRepository"
 import {idParams, useCoreValidation, type UserCreate, type UserDetail} from "~/composables/useCoreValidation"
 import {reconcileUserRoles, RoleOwner} from "~/composables/useUserRoles"
@@ -38,7 +38,7 @@ export default defineEventHandler(async (event): Promise<UserDetail> => {
     try {
         const existingUser = await fetchUser(d1Client, {id: userId})
         if (!existingUser) {
-            throw new Error(`User with ID ${userId} not found`)
+            throw createError({statusCode: 404, message: `User with ID ${userId} not found`})
         }
 
         // Build delta — only the fields the admin actually set (no merge with existing).

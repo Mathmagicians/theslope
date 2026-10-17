@@ -7,7 +7,7 @@ import { isSameDay } from 'date-fns'
 const { SystemRoleSchema } = useCoreValidation()
 const SystemRole = SystemRoleSchema.enum
 
-type InhabitantData = Omit<InhabitantCreate, 'householdId'>
+export type InhabitantData = Omit<InhabitantCreate, 'householdId'>
 
 // deleteMany/findMany with WHERE IN: D1 caps bound parameters at 100, one per id. Using 90 for safety.
 const HEYNABO_ID_BATCH_SIZE = 90

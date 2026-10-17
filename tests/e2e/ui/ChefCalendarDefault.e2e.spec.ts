@@ -1,11 +1,9 @@
 import {test, expect, type Page} from '@playwright/test'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../testDataFactories/dinnerEventFactory'
-import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import testHelpers from '../testHelpers'
 
 const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, gotoHydrated} = testHelpers
-const {TeamRoleSchema} = useCookingTeamValidation()
 
 /**
  * The chef calendar's open default follows the viewport the layout measures after mount: desktop lands on
@@ -29,11 +27,11 @@ test.describe('Chef calendar default', () => {
         const {inhabitantId} = await getSessionUserInfo(memberContext)
 
         // The member chefs one team with one dinner of its own, alone on a free day, so the calendar has content
-        const team = await SeasonFactory.createCookingTeamForSeason(adminContext, activeSeason.id!, `CalendarDefault-${temporaryAndRandom()}`)
+        const {team, dinner} = await SeasonFactory.createCookingTeamWithChefAndDinner(adminContext, activeSeason, inhabitantId, {
+            teamName: `CalendarDefault-${temporaryAndRandom()}`, day: 'free'
+        })
         teamId = team.id!
         createdTeamIds.push(teamId)
-        await SeasonFactory.assignMemberToTeam(adminContext, teamId, inhabitantId, TeamRoleSchema.enum.CHEF)
-        const dinner = await DinnerEventFactory.createDinnerEventOnFreeDay(adminContext, activeSeason, {cookingTeamId: teamId, chefId: inhabitantId})
         createdDinnerIds.push(dinner.id!)
     })
 

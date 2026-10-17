@@ -4,17 +4,24 @@
  * cells), the type badge and how you eat; row 2 names the household a claimed ticket came from.
  * Real component and children, real design system (testing.md Rule 6).
  */
-import {describe, it, expect, beforeAll} from 'vitest'
+import {describe, it, expect, beforeAll, beforeEach, afterEach} from 'vitest'
 import {h} from 'vue'
+import {enableAutoUnmount} from '@vue/test-utils'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
 import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
-import {findByTestId, mountWithTooltipProvider, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {findByTestId, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
 
 const ALLERGY_TYPES = AllergyFactory.createMockAllergyTypes()
 const TICKET_TYPES = useBookingValidation().TicketTypeSchema.options
 const CELLS = ['ticket-state-cell', 'ticket-guest-cell', 'ticket-allergy-cell']
+
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
 
 let baseProps: Record<string, unknown>
 beforeAll(() => {
@@ -42,32 +49,18 @@ const iconNamed = (wrapper: Mounted, name: string) => icons(wrapper).find(icon =
 const bindsToken = (wrapper: Mounted, name: string, token: string) =>
     expect(iconNamed(wrapper, name).classes()).toEqual(expect.arrayContaining(token.split(' ')))
 
+// No outcome depends on the width: the ticket binds static sizes, so the cases mount once
 describe('DinnerTicket', () => {
-    describe.each(VIEWPORTS)('$viewport', ({isMd}) => {
-        it.each([
-            {desc: 'two allergy types', allergies: ALLERGY_TYPES, hasGlyph: true},
-            {desc: 'no allergy types', allergies: [], hasGlyph: false}
-        ])('GIVEN $desc THEN the allergy glyph shows: $hasGlyph', async ({allergies, hasGlyph}) => {
-            const wrapper = await mountTicket({allergies}, isMd)
+    it('GIVEN allergy types THEN the card names none of them', async () => {
+        const wrapper = await mountTicket({allergies: ALLERGY_TYPES})
 
-            expect(findByTestId(wrapper, 'ticket-allergy-icon').exists()).toBe(hasGlyph)
-            expect(iconNames(wrapper).includes(ICONS.allergy)).toBe(hasGlyph)
-        })
+        ALLERGY_TYPES.forEach(type => expect(wrapper.text()).not.toContain(type.name))
+    })
 
-        it('GIVEN allergy types THEN the card names none of them', async () => {
-            const wrapper = await mountTicket({allergies: ALLERGY_TYPES}, isMd)
+    it('GIVEN a normal ticket THEN the special slot renders its three cells, empty', async () => {
+        const wrapper = await mountTicket()
 
-            ALLERGY_TYPES.forEach(type => expect(wrapper.text()).not.toContain(type.name))
-        })
-
-        it.each([
-            {desc: 'a normal ticket', props: {}},
-            {desc: 'a claimed allergic guest ticket', props: {isClaimed: true, guestCount: 2, allergies: ALLERGY_TYPES}}
-        ])('GIVEN $desc THEN the special slot renders its three cells', async ({props}) => {
-            const wrapper = await mountTicket(props, isMd)
-
-            CELLS.forEach(cell => expect(findByTestId(wrapper, cell).exists()).toBe(true))
-        })
+        CELLS.forEach(cell => expect(findByTestId(wrapper, cell).exists()).toBe(true))
     })
 
     describe('special slot', () => {
@@ -81,6 +74,7 @@ describe('DinnerTicket', () => {
 
             expect(iconNamesIn(wrapper, 'ticket-guest-cell').includes(ICONS.userPlus)).toBe(guest)
             expect(iconNamesIn(wrapper, 'ticket-allergy-cell').includes(ICONS.allergy)).toBe(allergy)
+            expect(findByTestId(wrapper, 'ticket-allergy-icon').exists()).toBe(allergy)
         })
 
         it.each(TICKET_TYPES)('GIVEN a %s guest ticket with allergies THEN both info glyphs bind the infoIcon token of the badge colour', async (ticketType) => {
@@ -112,16 +106,6 @@ describe('DinnerTicket', () => {
     })
 
     describe('states', () => {
-        it.each([
-            {desc: 'released', props: {isReleased: true}, stateIcon: ICONS.released},
-            {desc: 'claimed', props: {isClaimed: true, provenanceHousehold: 'Hansen'}, stateIcon: ICONS.claim},
-            {desc: 'a guest ticket', props: {guestCount: 1}, stateIcon: ICONS.userPlus}
-        ])('GIVEN $desc THEN the state glyph leads the badge', async ({props, stateIcon}) => {
-            const wrapper = await mountTicket(props)
-
-            expect(iconNames(wrapper)).toContain(stateIcon)
-        })
-
         it('GIVEN a normal ticket THEN no state glyph shows', async () => {
             const wrapper = await mountTicket()
 

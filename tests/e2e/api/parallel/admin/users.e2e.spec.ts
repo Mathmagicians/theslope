@@ -30,17 +30,14 @@ test("PUT /api/admin/users should create a new user and GET should list it among
     expect(created.email).toBe(newUser.email)
 
     // Get user list to verify it appears there
-    const listResponse = await context.request.get('/api/admin/users')
-    expect(listResponse.status()).toBe(200)
-
-    const users = await listResponse.json()
-    const foundUser = users.find((u: UserDisplay) => u.email === newUser.email)
+    const users = await UserFactory.getUsers(context)
+    const foundUser = users.find(u => u.email === newUser.email)
 
     expect(foundUser).toBeTruthy()
     expect(foundUser!.id).toBe(created.id)
 
     // Every user the index returns is a valid UserDisplay
-    users.forEach((user: UserDisplay) => UserDisplaySchema.parse(user))
+    users.forEach(user => UserDisplaySchema.parse(user))
 })
 
 // Test for validation
@@ -121,12 +118,7 @@ test.describe('POST /api/admin/users/[id] role updates', () => {
         expect(user.systemRoles).toContain(SystemRole.ADMIN)
 
         // Try to add ALLERGYMANAGER - ADMIN should be preserved
-        const response = await context.request.post(`/api/admin/users/${user.id}`, {
-            data: { systemRoles: [SystemRole.ALLERGYMANAGER] }
-        })
-        expect(response.status()).toBe(200)
-
-        const updated = await response.json()
+        const updated = await UserFactory.setSystemRoles(context, user.id as number, [SystemRole.ALLERGYMANAGER])
         expect(updated.systemRoles).toContain(SystemRole.ADMIN) // HN-owned preserved
         expect(updated.systemRoles).toContain(SystemRole.ALLERGYMANAGER) // TS-owned added
     })
@@ -141,12 +133,7 @@ test.describe('POST /api/admin/users/[id] role updates', () => {
         expect(user.systemRoles).toContain(SystemRole.ALLERGYMANAGER)
 
         // Send empty roles - should only remove ALLERGYMANAGER, preserve ADMIN
-        const response = await context.request.post(`/api/admin/users/${user.id}`, {
-            data: { systemRoles: [] }
-        })
-        expect(response.status()).toBe(200)
-
-        const updated = await response.json()
+        const updated = await UserFactory.setSystemRoles(context, user.id as number, [])
         expect(updated.systemRoles).toContain(SystemRole.ADMIN) // HN-owned preserved
         expect(updated.systemRoles).not.toContain(SystemRole.ALLERGYMANAGER) // TS-owned removed
     })
@@ -160,7 +147,7 @@ test.describe('POST /api/admin/users/[id] role updates', () => {
         expect(response.status()).toBe(400)
     })
 
-    test('should return 500 for a removed user ID', async ({browser}) => {
+    test('should return 404 for a removed user ID', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const removedUser = await UserFactory.createUser(context, UserFactory.defaultUser(salt('removed', testSalt)))
         await UserFactory.deleteUser(context, removedUser.id as number)
@@ -168,7 +155,7 @@ test.describe('POST /api/admin/users/[id] role updates', () => {
         const response = await context.request.post(`/api/admin/users/${removedUser.id}`, {
             data: { systemRoles: [] }
         })
-        expect(response.status()).toBe(500)
+        expect(response.status()).toBe(404)
     })
 })
 

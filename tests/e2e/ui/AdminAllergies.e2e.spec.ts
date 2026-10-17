@@ -30,16 +30,8 @@ const NOTES_KEY = 'allergy-poster-notes'
  */
 const gotoCatalog = async (page: Page) => {
     await gotoHydrated(page, '/admin/allergies')
-    await pollUntil(
-        async () => page.locator('[data-testid="admin-allergies"]').isVisible(),
-        (isVisible) => isVisible,
-        10
-    )
-    await pollUntil(
-        async () => (await page.getByText('Detaljer').count()) + (await page.getByText('Vælg en allergi').count()),
-        (paneCount) => paneCount > 0,
-        10
-    )
+    await expect(page.locator('[data-testid="admin-allergies"]')).toBeVisible({timeout: 15_000})
+    await expect(page.getByText('Detaljer').or(page.getByText('Vælg en allergi')).first()).toBeAttached()
 }
 
 /**

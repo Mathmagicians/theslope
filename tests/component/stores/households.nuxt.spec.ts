@@ -15,6 +15,7 @@ import { OrderFactory } from '~~/tests/e2e/testDataFactories/orderFactory'
 import { asyncDataStatus, resetStores } from '~~/tests/component/testHelpers'
 
 import { useHouseholdsStore } from '~/stores/households'
+import { useBookingsStore } from '~/stores/bookings'
 const Action = useBookingValidation().BookingActionSchema.enum
 
 // nuxt-auth-utils has no session in the test environment; the spec logs in and out and sets the session user
@@ -480,6 +481,26 @@ describe('Households Store', () => {
 
       // deleteHousehold catches errors with handleApiError and does not rethrow
       await expect(store.deleteHousehold(1)).resolves.toBeUndefined()
+    })
+  })
+
+  // A write that changes bookings goes through the bookings store's one write, which re-reads what a booking touches
+  describe('booking writes', () => {
+    it.each([
+      {write: 'a preference change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateInhabitantPreferences(1, { MONDAY: 'DINEIN' })},
+      {write: 'a power mode change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateAllInhabitantPreferences(1, { MONDAY: 'DINEIN' })},
+      {write: 'a move-out date', run: (store: ReturnType<typeof useHouseholdsStore>) => store.setMoveOutDate(1, new Date())},
+      {write: 'a move to another household', run: (store: ReturnType<typeof useHouseholdsStore>) => store.moveInhabitant(1, 2)}
+    ])('$write goes through the one booking write', async ({run}) => {
+      moveOutEndpoint.mockReturnValue({ household: createMockHouseholdDetail(), scaffoldResult: OrderFactory.defaultScaffoldResult() })
+      const store = await setupStore()
+      const bookingsStore = useBookingsStore()
+
+      const write = run(store)
+      expect(bookingsStore.isProcessingBookings).toBe(true)
+      await write
+
+      expect(bookingsStore.isProcessingBookings).toBe(false)
     })
   })
 

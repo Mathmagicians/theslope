@@ -3,9 +3,10 @@ import {authFiles} from '../config'
 import testHelpers from '../testHelpers'
 import {HouseholdFactory} from '../testDataFactories/householdFactory'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
+import {BookingViewSchema} from '~/composables/useBookingView'
 
 const {adminUIFile, memberUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, salt, temporaryAndRandom, doScreenshot, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, gotoHydrated, salt, temporaryAndRandom, doScreenshot, getSessionUserInfo} = testHelpers
 
 test.describe('Household tab navigation', () => {
     // Unique salt per worker to avoid parallel test conflicts
@@ -29,19 +30,11 @@ test.describe('Household tab navigation', () => {
     const buildUrl = (tabPath: string) => `/household/${encodeURIComponent(shortName)}/${tabPath}?pbs=${pbsId}`
 
     const waitForTabVisible = async (page: Page, tab: Tab) => {
-        await pollUntil(
-            async () => {
-                const isVisible = await page.locator(tab.selector).isVisible()
-                return isVisible
-            },
-            (isVisible) => isVisible,
-            10
-        )
+        await expect(page.locator(tab.selector)).toBeVisible({timeout: 15_000})
     }
 
     /**
      * Navigate to tab and wait for it to be visible
-     * Uses pollUntil with exponential backoff for robustness under load
      */
     const navigateToTab = async (page: Page, tab: Tab) => {
         await page.goto(buildUrl(tab.path))
@@ -74,12 +67,7 @@ test.describe('Household tab navigation', () => {
     test('Base URL redirects to default tab', async ({page}) => {
         await page.goto(`/household/${encodeURIComponent(shortName)}?pbs=${pbsId}`)
 
-        await pollUntil(
-            async () => page.url(),
-            (url) => url.includes(buildUrl(defaultTab.path)),
-            10
-        )
-        expect(page.url()).toContain(buildUrl(defaultTab.path))
+        await expect.poll(() => page.url(), {timeout: 15_000}).toContain(buildUrl(defaultTab.path))
 
         // Screenshot before waiting for component (debug flakiness)
         await page.screenshot({ path: `test-results/base-url-redirect-before-wait-${Date.now()}.png`, fullPage: true })
@@ -90,12 +78,7 @@ test.describe('Household tab navigation', () => {
     test('Invalid tab redirects to default tab', async ({page}) => {
         await page.goto(buildUrl('unicorn'))
 
-        await pollUntil(
-            async () => page.url(),
-            (url) => url.includes(buildUrl(defaultTab.path)),
-            10
-        )
-        expect(page.url()).toContain(buildUrl(defaultTab.path))
+        await expect.poll(() => page.url(), {timeout: 15_000}).toContain(buildUrl(defaultTab.path))
         await waitForTabVisible(page, defaultTab)
     })
 
@@ -156,11 +139,7 @@ test.describe('Household PBS query param resolution', () => {
     test('Valid ?pbs= loads that household', async ({page}) => {
         await page.goto(`/household/${encodeURIComponent(shortName)}/bookings?pbs=${pbsId}`)
 
-        await pollUntil(
-            async () => page.locator('[data-testid="household-bookings"]').isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
+        await expect(page.locator('[data-testid="household-bookings"]')).toBeVisible({timeout: 15_000})
 
         expect(page.url()).toContain(`pbs=${pbsId}`)
     })
@@ -168,11 +147,7 @@ test.describe('Household PBS query param resolution', () => {
     test('Missing ?pbs= defaults to user own household', async ({page}) => {
         await page.goto(`/household/${encodeURIComponent(myShortName)}/bookings`)
 
-        await pollUntil(
-            async () => page.locator('[data-testid="household-bookings"]').isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
+        await expect(page.locator('[data-testid="household-bookings"]')).toBeVisible({timeout: 15_000})
 
         await expect.poll(() => page.url(), {timeout: 15000}).toContain(`pbs=${myPbsId}`)
     })
@@ -186,11 +161,7 @@ test.describe('Household PBS query param resolution', () => {
         test(`${description} ?pbs= falls back to user own household`, async ({page}) => {
             await page.goto(`/household/${encodeURIComponent(myShortName)}/bookings?pbs=${pbs}`)
 
-            await pollUntil(
-                async () => page.locator('[data-testid="household-bookings"]').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
+            await expect(page.locator('[data-testid="household-bookings"]')).toBeVisible({timeout: 15_000})
 
             await expect.poll(() => page.url(), {timeout: 15000}).toContain(`pbs=${myPbsId}`)
         })
@@ -230,7 +201,7 @@ const editControlTestCases = [
     },
     {
         name: 'Bookings (week view)',
-        path: 'bookings?view=week',
+        path: `bookings?view=${BookingViewSchema.enum.week}`,
         contentSelector: '[data-testid="booking-grid-view"]',
         hiddenSelectors: [
             {desc: 'grid edit button', selector: '[data-testid="grid-edit"]'}
@@ -271,14 +242,10 @@ for (const ctx of visitorContexts) {
         })
 
         test('Visitor banner is shown when visiting another household', async ({page}) => {
-            await page.goto(`/household/${encodeURIComponent(shortName)}/bookings?pbs=${pbsId}`)
+            await gotoHydrated(page, `/household/${encodeURIComponent(shortName)}/bookings?pbs=${pbsId}`)
 
-            // Wait for page to load using pollUntil (same pattern as other tests)
-            await pollUntil(
-                async () => page.locator('[data-testid="household-bookings"]').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
+            // Wait for page to load
+            await expect(page.locator('[data-testid="household-bookings"]')).toBeVisible({timeout: 15_000})
 
             // Visitor banner should be visible with generic text (not hardcoded to specific wording)
             const visitorBanner = page.locator('[data-testid="visitor-banner"]')
@@ -297,14 +264,11 @@ for (const ctx of visitorContexts) {
         for (const testCase of ctx.editControlCases) {
             test(`${testCase.name} tab - edit controls hidden when visiting`, async ({page}) => {
                 const separator = testCase.path.includes('?') ? '&' : '?'
-                await page.goto(`/household/${encodeURIComponent(shortName)}/${testCase.path}${separator}pbs=${pbsId}`)
+                // Hydrated first: the edit controls are counted after the client has applied the permissions
+                await gotoHydrated(page, `/household/${encodeURIComponent(shortName)}/${testCase.path}${separator}pbs=${pbsId}`)
 
-                // Wait for page content to load using pollUntil (same pattern as other tests)
-                await pollUntil(
-                    async () => page.locator(testCase.contentSelector).isVisible(),
-                    (isVisible) => isVisible,
-                    10
-                )
+                // Wait for page content to load
+                await expect(page.locator(testCase.contentSelector)).toBeVisible({timeout: 15_000})
 
                 // Verify all edit controls are hidden (admin without override)
                 for (const {desc, selector} of testCase.hiddenSelectors) {

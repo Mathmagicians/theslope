@@ -11,7 +11,7 @@ import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {byTimeThenId} from '~/composables/useWaitlist'
 import {calculateCountdown, formatDate, DATE_SETTINGS} from '~/utils/date'
 import {dateToWeekDay} from '~/utils/season'
-import {chunkArray, groupBy} from '~/utils/batchUtils'
+import {chunkArray, groupBy, partition} from '~/utils/batchUtils'
 import {sumBy} from '~/utils/ledger'
 import {differenceInCalendarDays} from 'date-fns'
 
@@ -370,117 +370,56 @@ export const buildGuestDesiredOrder = (
     }))
 }
 
-/**
- * Generate DesiredOrder[] from inhabitant preferences for system scaffolding.
- * Unified loop handles: guest preservation, user intent keys, and preference-based orders.
- *
- * User intent keys (from OrderHistory):
- * - confirmedKeys: USER_BOOKED, USER_CLAIMED → preserve order as-is
- * - cancelledKeys: USER_CANCELLED → don't recreate deleted orders
- */
+/** Desired orders from inhabitant preferences; only the orders preferences manage come in */
 export const generateDesiredOrdersFromPreferences = (
     inhabitants: InhabitantDisplay[],
     dinnerEvents: DinnerEventDisplay[],
-    existingOrders: OrderDisplay[],
-    confirmedKeys: Set<string>,
-    cancelledKeys: Set<string>,
+    managedOrders: OrderDisplay[],
+    userIntentKeys: Set<string>,
     ticketPrices: TicketPrice[]
 ): DesiredOrder[] => {
     const {resolveTicketPrice} = useTicket()
     const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
     const DinnerMode = DinnerModeSchema.enum
     const OrderState = OrderStateSchema.enum
+    const orderByKey = new Map(managedOrders.map(o => [`${o.inhabitantId}-${o.dinnerEventId}`, o]))
 
-    // Build lookup: composite key → existing order
-    const existingByKey = new Map(
-        existingOrders.map(o => [`${o.inhabitantId}-${o.dinnerEventId}`, o])
-    )
+    return inhabitants.flatMap(inhabitant => dinnerEvents.flatMap((de): DesiredOrder[] => {
+        const key = `${inhabitant.id}-${de.id}`
+        if (userIntentKeys.has(key)) return []
+        const existing = orderByKey.get(key)
 
-    const result: DesiredOrder[] = []
+        const requestedMode = inhabitant.dinnerPreferences?.[dateToWeekDay(de.date)] ?? DinnerMode.DINEIN
+        if (!existing && requestedMode === DinnerMode.NONE) return []
 
-    for (const inhabitant of inhabitants) {
-        for (const de of dinnerEvents) {
-            const key = `${inhabitant.id}-${de.id}`
-            const existing = existingByKey.get(key)
-
-            // Guest order: preserve (not managed by preferences)
-            if (existing?.isGuestTicket) {
-                // Resolve ticketPriceId: existing → priceAtBooking fallback → 0 (idempotent)
-                const resolvedId = existing.ticketPriceId
-                    ?? resolveTicketPrice(null, existing.priceAtBooking, ticketPrices)?.id
-                if (!resolvedId) {
-                    console.warn(`⚠️ > BOOKING > Order ${existing.id} has orphaned price (no matching ticketPrice)`)
-                }
-                result.push({
-                    inhabitantId: existing.inhabitantId,
-                    dinnerEventId: existing.dinnerEventId,
-                    dinnerMode: existing.dinnerMode,
-                    ticketPriceId: resolvedId ?? 0,
-                    isGuestTicket: true,
-                    orderId: existing.id,
-                    state: existing.state
-                })
-                continue
-            }
-
-            // User confirmed (USER_BOOKED or USER_CLAIMED): preserve order as-is
-            if (confirmedKeys.has(key) && existing) {
-                result.push({
-                    inhabitantId: existing.inhabitantId,
-                    dinnerEventId: existing.dinnerEventId,
-                    dinnerMode: existing.dinnerMode,
-                    ticketPriceId: existing.ticketPriceId ?? 0,
-                    isGuestTicket: false,
-                    orderId: existing.id,
-                    state: existing.state
-                })
-                continue
-            }
-
-            // User cancelled (USER_CANCELLED): respect their intent
-            // - No existing order: don't recreate deleted order
-            // - RELEASED order: skip here, let orphan detection preserve it
-            // - BOOKED order: user re-booked after cancelling, let through (will be idempotent)
-            if (cancelledKeys.has(key)) {
-                if (!existing) {
-                    continue  // Don't recreate deleted order
-                }
-                if (existing.state === OrderState.RELEASED) {
-                    continue  // Let orphan detection preserve in idempotent bucket
-                }
-            }
-
-            // Get preference mode (default DINEIN if no preferences set)
-            const weekDay = dateToWeekDay(de.date)
-            const requestedMode = inhabitant.dinnerPreferences?.[weekDay] ?? DinnerMode.DINEIN
-
-            // Derive ticket price from age
-            const ticketPrice = resolveTicketPrice(inhabitant.birthDate ?? null, null, ticketPrices, de.date)
-            if (!ticketPrice?.id) {
-                throw new Error(`No ticket price for inhabitant ${inhabitant.id}`)
-            }
-
-            result.push({
-                inhabitantId: inhabitant.id,
-                dinnerEventId: de.id,
-                dinnerMode: requestedMode,
-                ticketPriceId: ticketPrice.id,
-                isGuestTicket: false,
-                orderId: existing?.id,
-                state: existing?.state ?? OrderState.BOOKED
-            })
+        const ticketPrice = resolveTicketPrice(inhabitant.birthDate ?? null, null, ticketPrices, de.date)
+        if (!ticketPrice?.id) {
+            throw new Error(`No ticket price for inhabitant ${inhabitant.id}`)
         }
-    }
 
-    return result
+        return [{
+            inhabitantId: inhabitant.id,
+            dinnerEventId: de.id,
+            dinnerMode: requestedMode,
+            ticketPriceId: ticketPrice.id,
+            isGuestTicket: false,
+            orderId: existing?.id,
+            state: existing?.state ?? OrderState.BOOKED
+        }]
+    }))
 }
 
-/**
- * Resolve orders from inhabitant preferences to buckets.
- * Generates DesiredOrder[] from preferences, then resolves to buckets.
- * Also detects orphan orders (existing orders not matched by any desired order).
- * System mode never claims: buying a ticket or queueing after the deadline is a member's act.
- */
+const asBucketEntry = (order: OrderDisplay): DesiredOrder => ({
+    inhabitantId: order.inhabitantId,
+    dinnerEventId: order.dinnerEventId,
+    dinnerMode: order.dinnerMode,
+    ticketPriceId: order.ticketPriceId ?? 0,
+    isGuestTicket: order.isGuestTicket,
+    orderId: order.id,
+    state: order.state
+})
+
+/** System mode never claims: buying a ticket or queueing after the deadline is a user's act */
 export const resolveOrdersFromPreferencesToBuckets = (
     season: Season,
     household: HouseholdDisplay,
@@ -496,79 +435,36 @@ export const resolveOrdersFromPreferencesToBuckets = (
     const dinnerEventById = new Map(dinnerEvents.map(de => [de.id, de]))
     const {canModifyOrders, canEditDiningMode} = deadlinesForSeason(season)
 
-    const desiredOrders = generateDesiredOrdersFromPreferences(
-        household.inhabitants,
-        dinnerEvents,
-        existingOrders,
-        confirmedKeys,
-        cancelledKeys,
-        season.ticketPrices
-    )
+    const keyOf = (order: OrderDisplay) => `${order.inhabitantId}-${order.dinnerEventId}`
+    // A user's own act outranks the preference: a guest ticket, an explicit booking, an explicit release
+    const isManagedByPreferences = (order: OrderDisplay) =>
+        !order.isGuestTicket && !confirmedKeys.has(keyOf(order)) && !(cancelledKeys.has(keyOf(order)) && order.state === OrderState.RELEASED)
+
+    const [managedOrders, unmanagedOrders] = partition(isManagedByPreferences)(existingOrders)
+    const [unchangedOrders, outsideResidency] = partition((order: OrderDisplay) => dinnerEventById.has(order.dinnerEventId))(unmanagedOrders)
+
+    const managedKeys = new Set(managedOrders.map(keyOf))
+    const userIntentKeys = new Set([
+        ...unmanagedOrders.filter(order => !order.isGuestTicket).map(keyOf),
+        ...[...cancelledKeys].filter(key => !managedKeys.has(key))
+    ])
+    const desiredOrders = generateDesiredOrdersFromPreferences(household.inhabitants, dinnerEvents, managedOrders, userIntentKeys, season.ticketPrices)
 
     // System mode never claims
     const result = {
-        ...resolveDesiredOrdersToBuckets(desiredOrders, existingOrders, dinnerEventById, canModifyOrders, canEditDiningMode, DinnerMode, OrderState),
+        ...resolveDesiredOrdersToBuckets(desiredOrders, managedOrders, dinnerEventById, canModifyOrders, canEditDiningMode, DinnerMode, OrderState),
         [Bucket.claim]: []
     }
 
-    // Detect orphan orders: existing orders not matched by any desired order
-    const processedOrderIds = new Set([
-        ...result.create.map(o => o.orderId).filter(Boolean),
-        ...result.update.map(o => o.orderId).filter(Boolean),
-        ...result.delete.map(o => o.orderId).filter(Boolean),
-        ...result.idempotent.map(o => o.orderId).filter(Boolean)
-    ])
-
-    for (const existing of existingOrders) {
-        if (processedOrderIds.has(existing.id)) continue
-
-        const key = `${existing.inhabitantId}-${existing.dinnerEventId}`
-
-        // Residency enforcement: orders for events outside the eligible set (e.g. after moveOutDate)
-        // are force-deleted regardless of user intent
-        const isInEligibleEvents = dinnerEventById.has(existing.dinnerEventId)
-        if (!isInEligibleEvents) {
-            console.info(`🏠 > RESIDENCY_CHECK > Order ${existing.id} (key=${key}) DELETED (event ${existing.dinnerEventId} outside residency period)`)
-            result.delete.push({
-                inhabitantId: existing.inhabitantId,
-                dinnerEventId: existing.dinnerEventId,
-                dinnerMode: existing.dinnerMode,
-                ticketPriceId: existing.ticketPriceId ?? 0,
-                isGuestTicket: existing.isGuestTicket ?? false,
-                orderId: existing.id,
-                state: existing.state
-            })
-            continue
-        }
-
-        // User-intent orders within eligible events: preserve (confirmed = user wants it, cancelled = user released it)
-        if (confirmedKeys.has(key) || cancelledKeys.has(key)) {
-            console.info(`🔒 > ORPHAN_CHECK > Order ${existing.id} (key=${key}) PRESERVED (in confirmedKeys=${confirmedKeys.has(key)}, cancelledKeys=${cancelledKeys.has(key)})`)
-            result.idempotent.push({
-                inhabitantId: existing.inhabitantId,
-                dinnerEventId: existing.dinnerEventId,
-                dinnerMode: existing.dinnerMode,
-                ticketPriceId: existing.ticketPriceId ?? 0,
-                isGuestTicket: existing.isGuestTicket ?? false,
-                orderId: existing.id,
-                state: existing.state
-            })
-            continue
-        }
-
-        // True orphan order (no user intent, within eligible events) - add to delete bucket
-        console.info(`🗑️ > ORPHAN_CHECK > Order ${existing.id} (key=${key}) DELETED (orphan - not in confirmedKeys or cancelledKeys)`)
-        result.delete.push({
-            inhabitantId: existing.inhabitantId,
-            dinnerEventId: existing.dinnerEventId,
-            dinnerMode: existing.dinnerMode,
-            ticketPriceId: existing.ticketPriceId ?? 0,
-            isGuestTicket: existing.isGuestTicket ?? false,
-            orderId: existing.id,
-            state: existing.state
-        })
+    const decidedOrderIds = new Set([...result.update, ...result.delete, ...result.idempotent].map(order => order.orderId))
+    const orphans = managedOrders.filter(order => !decidedOrderIds.has(order.id))
+    const deleted = [...outsideResidency, ...orphans]
+    if (deleted.length > 0) {
+        console.info(`🗑️ > ORPHAN_CHECK > Household ${household.id}: deleting orders ${deleted.map(order => order.id).join(', ')} (outside residency, or no preference wants them)`)
     }
 
+    result.idempotent.push(...unchangedOrders.map(asBucketEntry))
+    result.delete.push(...deleted.map(asBucketEntry))
     return result
 }
 
@@ -1100,7 +996,7 @@ export const useBooking = () => {
     }
 
     /**
-     * Group guest orders by (booker, ticketType, dinnerEventId, allergies, provenance)
+     * Group the guest tickets among the orders by (booker, ticketType, dinnerEventId, allergies, provenance)
      * Returns a map from group key to array of orders
      *
      * Guests with different allergies or claimed tickets (provenanceHousehold) are separate rows.
@@ -1109,32 +1005,17 @@ export const useBooking = () => {
         inhabitantId: number | null
         ticketType?: string | null
         dinnerEventId: number
+        isGuestTicket: boolean
         provenanceHousehold?: string | null
         provenanceAllergies?: string[] | null
     }>(
         orders: T[]
-    ): Record<string, T[]> => {
-        return orders.reduce((acc, order) => {
-            const allergiesKey = order.provenanceAllergies?.slice().sort().join(',') ?? ''
-            const provenanceKey = order.provenanceHousehold ?? ''
-            const key = `${order.inhabitantId}-${order.ticketType ?? 'unknown'}-${order.dinnerEventId}-${allergiesKey}-${provenanceKey}`
-            if (!acc[key]) acc[key] = []
-            acc[key].push(order)
-            return acc
-        }, {} as Record<string, T[]>)
-    }
+    ): Record<string, T[]> => Object.fromEntries(groupBy<T, string>(order => {
+        const allergiesKey = order.provenanceAllergies?.slice().sort().join(',') ?? ''
+        const provenanceKey = order.provenanceHousehold ?? ''
+        return `${order.inhabitantId}-${order.ticketType ?? 'unknown'}-${order.dinnerEventId}-${allergiesKey}-${provenanceKey}`
+    })(orders.filter(order => order.isGuestTicket)))
 
-    /**
-     * Partition orders into guest and regular (inhabitant) orders
-     */
-    const partitionGuestOrders = <T extends { isGuestTicket?: boolean }>(
-        orders: T[]
-    ): { guestOrders: T[], regularOrders: T[] } => {
-        return orders.reduce((acc, order) => {
-            (order.isGuestTicket ? acc.guestOrders : acc.regularOrders).push(order)
-            return acc
-        }, { guestOrders: [] as T[], regularOrders: [] as T[] })
-    }
 
     /**
      * Get booking options: enabled dinner modes and which action to take.
@@ -1391,7 +1272,7 @@ export const useBooking = () => {
         dinnerEventId: number
     ): {inhabitantIds: number[], guestGroups: OrderDisplay[][]} => ({
         inhabitantIds,
-        guestGroups: Object.values(groupGuestOrders(orders.filter(o => o.isGuestTicket && o.dinnerEventId === dinnerEventId)))
+        guestGroups: Object.values(groupGuestOrders(orders.filter(o => o.dinnerEventId === dinnerEventId)))
     })
 
     /** A power change on one dinner as BookingChanges: one intent per inhabitant, one guest intent per guest group */
@@ -1651,7 +1532,6 @@ export const useBooking = () => {
         // Guest Booking
         buildGuestOrder,
         groupGuestOrders,
-        partitionGuestOrders,
         // Scaffold Result Formatting
         formatScaffoldResult,
         sumScaffoldResults,

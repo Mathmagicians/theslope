@@ -59,23 +59,34 @@ export const useBookingsStore = defineStore("Bookings", () => {
         }
     )
 
-    // The queues of the dinners the page shows, every household's entries in queue order; the rows, the positions,
-    // the queue size and the portion need derive from them
     const {TicketWaitlistDisplaySchema, WaitlistAssignmentResultSchema} = useWaitlistValidation()
     const {inQueueOrder, ticketTypeOfEntry, waitingLines, positionOf, portionNeed, portionsOfEntryFor} = useWaitlist()
     // The ticket type each entry waits for, read off the selected season's prices
     const entryTicketType = computed(() => ticketTypeOfEntry(planStore.selectedSeason?.ticketPrices ?? []))
+
+    const {getLockedFutureDinnerIds, computeLockStatus} = useBooking()
+    const {deadlinesForSeason, splitDinnerEvents} = useSeason()
+    // The selected season's future dinners past their booking deadline
+    const lockedDinnerIds = computed(() => {
+        const season = planStore.selectedSeason
+        if (!season?.dinnerEvents?.length) return []
+        const {nextDinner, futureDinners} = splitDinnerEvents(season.dinnerEvents)
+        return getLockedFutureDinnerIds(nextDinner, futureDinners, deadlinesForSeason(season))
+    })
+
+    // The locked dinners are read too: the calendar counts their waiting lists
+    const waitlistDinnerIds = computed(() => [...new Set([...ordersFilter.value().dinnerEventIds, ...lockedDinnerIds.value])])
 
     const {
         data: waitlistEntries, isLoading: isWaitlistEntriesLoading, isErrored: isWaitlistEntriesErrored, isInitialized: isWaitlistEntriesInitialized,
         refresh: refreshWaitlistEntries
     } = storeAsyncData(
         'bookings-store-waitlist-entries',
-        () => `/api/order/waitlist?${orderQuery({dinnerEventIds: ordersFilter.value().dinnerEventIds})}`,
+        () => `/api/order/waitlist?${orderQuery({dinnerEventIds: waitlistDinnerIds.value})}`,
         {
             schema: TicketWaitlistDisplaySchema.array(),
             default: () => [],
-            enabled: hasFilters,
+            enabled: () => waitlistDinnerIds.value.length > 0,
             dependsOn: [planStore.selectedSeasonDataset],
             errorMessage: 'Kunne ikke hente ventelisten'
         }
@@ -197,15 +208,6 @@ export const useBookingsStore = defineStore("Bookings", () => {
     // ========================================
     // Lock Status (reactive, watches planStore)
     // ========================================
-    const {getLockedFutureDinnerIds, computeLockStatus} = useBooking()
-    const {deadlinesForSeason, splitDinnerEvents} = useSeason()
-    // The selected season's future dinners past their booking deadline
-    const lockedDinnerIds = computed(() => {
-        const season = planStore.selectedSeason
-        if (!season?.dinnerEvents?.length) return []
-        const {nextDinner, futureDinners} = splitDinnerEvents(season.dinnerEvents)
-        return getLockedFutureDinnerIds(nextDinner, futureDinners, deadlinesForSeason(season))
-    })
     const {countTicketTypes, formatTicketCounts} = useBilling()
 
     const {data: releasedCounts, isLoading: isReleasedCountsLoading, refresh: refreshReleasedCounts} = storeAsyncData(
@@ -228,23 +230,9 @@ export const useBookingsStore = defineStore("Bookings", () => {
         }
     )
 
-    // Every household's entries on the locked dinners, per dinner: the queue's size and its breakdown by ticket type,
-    // read off the season price each entry holds
-    const {data: waitlistCounts, refresh: refreshWaitlistCounts} = storeAsyncData(
-        'bookings-store-queue-sizes',
-        () => `/api/order/waitlist?${orderQuery({dinnerEventIds: lockedDinnerIds.value})}`,
-        {
-            schema: TicketWaitlistDisplaySchema.array().transform(entries => {
-                const ticketTypeOf = (entry: TicketWaitlistDisplay) => ({ticketType: entryTicketType.value(entry) ?? null})
-                return new Map([...groupBy<TicketWaitlistDisplay, number>(entry => entry.dinnerEventId)(entries)]
-                    .map(([dinnerEventId, queue]): [number, WaitlistCounts] =>
-                        [dinnerEventId, {queued: queue.length, queuedFormatted: formatTicketCounts(queue.map(ticketTypeOf))}]))
-            }),
-            default: () => new Map<number, WaitlistCounts>(),
-            enabled: () => lockedDinnerIds.value.length > 0,
-            dependsOn: [planStore.selectedSeasonDataset]
-        }
-    )
+    const waitlistCounts = computed(() => new Map([...groupBy<TicketWaitlistDisplay, number>(entry => entry.dinnerEventId)(waitlistEntries.value)]
+        .map(([dinnerEventId, queue]): [number, WaitlistCounts] =>
+            [dinnerEventId, {queued: queue.length, queuedFormatted: formatTicketCounts(queue.map(entry => ({ticketType: entryTicketType.value(entry) ?? null})))}])))
 
     // Exposed computed: lockStatus map for calendar display
     const lockStatus = computed(() => {
@@ -255,6 +243,23 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
 
     const isProcessingBookings = ref(false)
+
+    // A dataset whose gate is closed stays idle on refresh
+    const refreshBookings = () => Promise.all([
+        refreshOrders(), refreshUpcomingOrders(), refreshReleasedCounts(), refreshWaitlistEntries(), refreshSelectedDinnerEventDetail()
+    ])
+
+    /** A write that changes bookings: the request, then every dataset a booking touches re-reads once */
+    const writeBookings = async <T>(request: () => Promise<T>): Promise<T> => {
+        isProcessingBookings.value = true
+        try {
+            const result = await request()
+            await refreshBookings()
+            return result
+        } finally {
+            isProcessingBookings.value = false
+        }
+    }
 
     // A scaffold result toast: the title names the view, the suffix the dinner (guest bookings)
     type ScaffoldToast = {title: string, suffix?: string}
@@ -271,26 +276,20 @@ export const useBookingsStore = defineStore("Bookings", () => {
         report: ScaffoldToast | undefined,
         label: string
     ): Promise<ScaffoldOrdersResponse> => {
-        isProcessingBookings.value = true
-        try {
-            const result = await apiRequest('/api/household/order/scaffold', {
-                method: 'POST',
-                body: request,
-                query: {adminBypass},
-                schema: ScaffoldOrdersResponseSchema,
-                action: 'processBookings', errorMessage: 'Kunne ikke gemme bookinger'
-            })
-            await Promise.all([refreshOrders(), refreshReleasedCounts(), refreshWaitlistCounts(), refreshWaitlistEntries()])
-            console.info(CTX, `${label}: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
-            if (report) toast.add({
-                title: report.title,
-                description: describeScaffoldResult(result.scaffoldResult, report.suffix),
-                ...scaffoldToastLook(result.scaffoldResult)
-            })
-            return result
-        } finally {
-            isProcessingBookings.value = false
-        }
+        const result = await writeBookings(() => apiRequest('/api/household/order/scaffold', {
+            method: 'POST',
+            body: request,
+            query: {adminBypass},
+            schema: ScaffoldOrdersResponseSchema,
+            action: 'processBookings', errorMessage: 'Kunne ikke gemme bookinger'
+        }))
+        console.info(CTX, `${label}: ${formatScaffoldResult(result.scaffoldResult, 'compact')}`)
+        if (report) toast.add({
+            title: report.title,
+            description: describeScaffoldResult(result.scaffoldResult, report.suffix),
+            ...scaffoldToastLook(result.scaffoldResult)
+        })
+        return result
     }
 
     /**
@@ -452,12 +451,11 @@ export const useBookingsStore = defineStore("Bookings", () => {
 
     // The release places the first entries that fit as orders: the dinner's tickets and the queue both change
     const addExtraPortions = withLoading(async (dinnerEventId: number, portions: number): Promise<WaitlistAssignmentResult> => {
-        const result = await apiRequest(`/api/chef/dinner/${dinnerEventId}/extra-portions`, {
+        const result = await writeBookings(() => apiRequest(`/api/chef/dinner/${dinnerEventId}/extra-portions`, {
             method: 'POST', body: {portions}, schema: WaitlistAssignmentResultSchema,
             action: 'addExtraPortions', errorMessage: 'Kunne ikke frigive portionerne'
-        })
+        }))
         console.info(CTX, `Released ${portions} portions on dinner ${dinnerEventId}: ${result.assigned.length} assigned, ${result.waiting} waiting`)
-        await Promise.all([refreshWaitlistEntries(), refreshOrders(), refreshReleasedCounts(), refreshWaitlistCounts(), refreshDinnerIfSelected(dinnerEventId)])
         toast.add({
             title: 'Portioner frigivet',
             description: `${result.assigned.length} fik billet, ${result.waiting} står stadig på ventelisten`,
@@ -715,6 +713,7 @@ export const useBookingsStore = defineStore("Bookings", () => {
         lockStatus,
         isReleasedCountsLoading,
         isProcessingBookings,
+        writeBookings,
         processSingleEventBookings,
         processMultipleEventsBookings,
         processAdminCorrection,

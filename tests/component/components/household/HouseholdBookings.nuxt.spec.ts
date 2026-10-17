@@ -9,6 +9,8 @@ import DinnerCalendarDisplay from '~/components/calendar/DinnerCalendarDisplay.v
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import {BookingViewSchema} from '~/composables/useBookingView'
+import {formatDate} from '~/utils/date'
 
 // The test environment has no router to navigate: useQueryParam writes the URL through navigateTo (ADR-006)
 const {mockNavigateTo, mockRoute, landNavigation, useRoute} = await vi.hoisted(async () =>
@@ -57,5 +59,52 @@ describe('HouseholdBookings calendar in ?cal=', () => {
 
         await vi.waitFor(() => expect(mockRoute.query.cal).toBe(isMd ? 'open' : 'closed'))
         expect(wrapper.findComponent(DinnerCalendarDisplay).exists()).toBe(isMd)
+    })
+})
+
+// The arrows' wiring to ?date=; which dinner is adjacent is useBookingView's navigation matrix
+describe('HouseholdBookings date arrows', () => {
+    // Two dinners four weeks apart and in two months, so a step of either view lands on the other one
+    const firstDinner = {...dinnerEvent, id: 11, date: new Date(2030, 0, 7)}
+    const lastDinner = {...dinnerEvent, id: 12, date: new Date(2030, 1, 4)}
+    const seasonShape = {dinnerEvents: season.dinnerEvents, seasonDates: season.seasonDates}
+    const arrow = (wrapper: Awaited<ReturnType<typeof mountBookings>>, direction: 'prev' | 'next') =>
+        wrapper.find(`[data-testid="date-nav-${direction}"]`)
+
+    beforeEach(() => {
+        resetStores()
+        vi.clearAllMocks()
+        mockNavigateTo.mockImplementation(landNavigation)
+        Object.assign(season, {
+            dinnerEvents: [firstDinner, lastDinner],
+            seasonDates: {start: new Date(2030, 0, 1), end: new Date(2030, 2, 31)}
+        })
+    })
+
+    afterEach(() => {
+        mockNavigateTo.mockReset()
+        mockRoute.query = {}
+        Object.assign(season, seasonShape)
+    })
+
+    it.each([BookingViewSchema.enum.week, BookingViewSchema.enum.month])('%s: the next arrow moves ?date= to the next dinner and the previous arrow brings it back', async (view) => {
+        mockRoute.query = {view, date: formatDate(firstDinner.date)}
+        const wrapper = await mountBookings(true)
+
+        await vi.waitFor(() => expect(arrow(wrapper, 'next').exists()).toBe(true))
+        await arrow(wrapper, 'next').trigger('click')
+        await vi.waitFor(() => expect(mockRoute.query.date).toBe(formatDate(lastDinner.date)))
+
+        await vi.waitFor(() => expect(arrow(wrapper, 'prev').exists()).toBe(true))
+        await arrow(wrapper, 'prev').trigger('click')
+        await vi.waitFor(() => expect(mockRoute.query.date).toBe(formatDate(firstDinner.date)))
+    })
+
+    it('week: the next arrow is gone on the season\'s last dinner', async () => {
+        mockRoute.query = {view: BookingViewSchema.enum.week, date: formatDate(lastDinner.date)}
+        const wrapper = await mountBookings(true)
+
+        await vi.waitFor(() => expect(arrow(wrapper, 'prev').exists()).toBe(true))
+        expect(arrow(wrapper, 'next').exists()).toBe(false)
     })
 })

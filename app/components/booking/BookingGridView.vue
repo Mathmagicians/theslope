@@ -136,7 +136,7 @@ const emptyState = getRandomEmptyMessage('noDinners')
 const {formatPrice, resolveTicketPrice} = useTicket()
 
 // Booking helpers (shared with DinnerBookingForm)
-const {groupGuestOrders, partitionGuestOrders, getDayBillSummary, resolveUserBookingBuckets, getBookingOptions, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
+const {groupGuestOrders, getDayBillSummary, resolveUserBookingBuckets, getBookingOptions, buildBookingChanges, getPowerChanges, getPowerConsensus} = useBooking()
 const {formatActionPreview, waitlistPositionOf, lockChip} = useBookingUi()
 
 // Inhabitant name lookup (used by actionPreviewItems)
@@ -399,7 +399,7 @@ const tableData = computed((): GridRow[] => {
   })
 
   // Guest order rows - grouped by (booker, ticketType, eventId) - same pattern as DinnerBookingForm
-  const guestGroups = groupGuestOrders(guestOrders.value)
+  const guestGroups = groupGuestOrders(props.orders)
   Object.entries(guestGroups).forEach(([key, orders]) => {
     const firstOrder = orders[0]!
     const booker = inhabitants.find(i => i.id === firstOrder.inhabitantId)
@@ -445,10 +445,6 @@ const getOrderCountsForInhabitant = (inhabitantId: number): { total: number, rel
     released: orders.filter(o => o.state === OrderStateEnum.RELEASED).length
   }
 }
-
-// Check if order is released (for cell visual indicator - reserved for future use)
-const _isOrderReleased = (inhabitantId: number, eventId: number): boolean =>
-  getOrderForCell(inhabitantId, eventId)?.state === OrderStateEnum.RELEASED
 
 const getEventConsensus = (eventId: number): { value: DinnerMode, consensus: boolean } =>
   getPowerConsensus(householdInhabitantIds.value, props.orders, eventId, {
@@ -535,8 +531,6 @@ const navigationLabel = computed(() => {
 // GUEST ORDERS
 // ============================================================================
 
-// Use partitionGuestOrders (same as DinnerBookingForm) - filters by isGuestTicket
-const guestOrders = computed(() => partitionGuestOrders(props.orders).guestOrders)
 
 // ============================================================================
 // EVENT SUMMARIES (for footer - matches economy view format)

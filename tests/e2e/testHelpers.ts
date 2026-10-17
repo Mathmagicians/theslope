@@ -141,7 +141,7 @@ async function doScreenshot(page: Page, name: string, isDocumentation: boolean =
 
 /**
  * Select an option from a dropdown by test ID
- * Uses .first() to avoid strict mode violations on Linux where dropdown shows text twice
+ * Matches the option by its exact name: a substring name also matches the options whose names contain it
  * With reactive stores (useFetch immediate:true by default), dropdown data loads automatically on page load
  *
  * @param page - Playwright Page object
@@ -165,7 +165,7 @@ async function selectDropdownOption(
     await dropdown.click()
 
     // Wait for the specific option to be visible
-    const option = page.getByRole('option', {name: optionName}).first()
+    const option = page.getByRole('option', {name: optionName, exact: true})
     await option.waitFor({ state: 'visible', timeout: 5000 })
 
     // Click the option
@@ -279,7 +279,7 @@ const waitForApi = (page: Page, path: string, method: string, options?: {timeout
 /**
  * Types a dd/MM/yyyy date into a UInputDate field: clicks the field's day segment and
  * types the digits - the segments auto-advance through day, month and year.
- * `scope` holds the picker (e.g. `page.locator('[name="seasonDates"]')`); a range picker
+ * `scope` holds the picker (e.g. `page.locator('div[name="seasonDates"]')`); a range picker
  * has two fields, `field` picks one.
  */
 const fillDateField = async (scope: Locator, field: 'start' | 'end', date: string) => {

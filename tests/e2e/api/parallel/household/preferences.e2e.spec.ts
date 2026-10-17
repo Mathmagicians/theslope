@@ -6,10 +6,11 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
+import {differenceInCalendarDays} from 'date-fns'
 const Action = useBookingValidation().BookingActionSchema.enum
 
 const {validatedBrowserContext, memberValidatedBrowserContext, getSessionUserInfo, temporaryAndRandom, salt} = testHelpers
-const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const {createDefaultWeekdayMap} = useWeekDayMapValidation({valueSchema: DinnerModeSchema, defaultValue: DinnerMode.NONE})
 
@@ -241,5 +242,49 @@ test.describe('Preference Transition Scaffold Counts', () => {
                 expect(response.scaffoldResult.totals[Action.CANCEL], 'Should not delete orders').toBe(0)
             }
         )
+    })
+})
+
+/**
+ * A guest ticket booked on a person is not the person's own ticket: a preference change decides the person's own
+ * order and leaves the guest ticket as it is. The spec's own season books with its deadline open, then closes it.
+ */
+test.describe('Preferences and guest tickets', () => {
+    const seasonIds: number[] = []
+    const inhabitantIds: number[] = []
+    // Every dinner of the week-long season lies within it once the season closes
+    const CLOSED_PERIOD = 10
+
+    test.afterAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        for (const id of inhabitantIds) await HouseholdFactory.deleteInhabitant(context, id)
+        await SeasonFactory.cleanupSeasons(context, seasonIds)
+    })
+
+    test('GIVEN a person\'s own ticket and a guest ticket booked on them on a closed dinner WHEN the preference turns Ingen THEN the own ticket is released and the guest ticket stays', async ({browser}) => {
+        const adminContext = await validatedBrowserContext(browser)
+        const memberContext = await memberValidatedBrowserContext(browser)
+        const testSalt = temporaryAndRandom()
+        const {householdId} = await getSessionUserInfo(memberContext)
+        const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(adminContext, testSalt, {ticketIsCancellableDaysBefore: 0})
+        seasonIds.push(season.id!)
+        const inhabitant = await HouseholdFactory.createInhabitantForHousehold(adminContext, householdId, salt('Guest-Booker', testSalt))
+        inhabitantIds.push(inhabitant.id)
+        const dinner = dinnerEvents.find(de => differenceInCalendarDays(de.date, new Date()) >= 1)!
+        const adultPrice = season.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)!
+
+        // While the dinner is open: the preference books the person, the member books a guest on them
+        await HouseholdFactory.updateInhabitantPreferences(memberContext, inhabitant.id, createDefaultWeekdayMap(DinnerMode.DINEIN), 200, season.id)
+        await OrderFactory.scaffoldOrders(memberContext, {householdId, seasonId: season.id!, dinnerEventIds: [dinner.id], orders: [
+            OrderFactory.defaultDesiredOrder({inhabitantId: inhabitant.id, dinnerEventId: dinner.id, ticketPriceId: adultPrice.id!, dinnerMode: DinnerMode.DINEIN, isGuestTicket: true})
+        ]})
+        await SeasonFactory.updateSeason(adminContext, {...season, ticketIsCancellableDaysBefore: CLOSED_PERIOD})
+
+        const result = await HouseholdFactory.updateInhabitantPreferences(memberContext, inhabitant.id, createDefaultWeekdayMap(DinnerMode.NONE), 200, season.id)
+
+        expect(result!.scaffoldResult.failed).toEqual([])
+        const orders = (await OrderFactory.getOrdersForDinnerEventsViaAdmin(adminContext, [dinner.id])).filter(order => order.inhabitantId === inhabitant.id)
+        expect(orders.filter(order => !order.isGuestTicket).map(order => order.state)).toEqual([OrderStateSchema.enum.RELEASED])
+        expect(orders.filter(order => order.isGuestTicket).map(order => order.state)).toEqual([OrderStateSchema.enum.BOOKED])
     })
 })

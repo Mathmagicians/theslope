@@ -2,7 +2,7 @@ import type {
     HouseholdDisplay,
     HouseholdDetail
 } from '~/composables/useCoreValidation'
-import type {ScaffoldResult, InhabitantUpdateResponse, HouseholdUpdateResponse} from '~/composables/useBookingValidation'
+import {useBookingValidation, type ScaffoldResult} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
 
 /**
@@ -16,6 +16,7 @@ export const useHouseholdsStore = defineStore("Households", () => {
     const {storeAsyncData, loadOrThrow, apiRequest, toastSaved, notFoundToast} = useApiHandler()
     const {formatScaffoldResult, sumScaffoldResults} = useBooking()
     const {HouseholdDisplaySchema, HouseholdDetailSchema} = useCoreValidation()
+    const {InhabitantUpdateResponseSchema, HouseholdUpdateResponseSchema} = useBookingValidation()
 
     // Last preference update result (persists across component remounts)
     const lastPreferenceResult = ref<ScaffoldResult | null>(null)
@@ -158,11 +159,12 @@ export const useHouseholdsStore = defineStore("Households", () => {
     const updateInhabitantPreferences = async (inhabitantId: number, preferences: Record<string, string>, adminBypass = false) => {
         console.info(`🏠 > HOUSEHOLDS_STORE > Updating preferences for inhabitant ${inhabitantId}${adminBypass ? ' (admin bypass)' : ''}`)
 
-        const result = await apiRequest<InhabitantUpdateResponse>(preferencesUrl(inhabitantId, adminBypass), {
+        const result = await useBookingsStore().writeBookings(() => apiRequest(preferencesUrl(inhabitantId, adminBypass), {
             method: 'POST',
             body: { dinnerPreferences: preferences },
+            schema: InhabitantUpdateResponseSchema,
             action: 'updateInhabitantPreferences'
-        })
+        }))
 
         // Store result for persistent UI display
         lastPreferenceResult.value = result.scaffoldResult
@@ -192,15 +194,18 @@ export const useHouseholdsStore = defineStore("Households", () => {
         // Update all inhabitants SEQUENTIALLY to avoid race conditions in scaffolding
         // Each update triggers scaffoldPrebookings for the same household - parallel execution
         // causes FK constraint errors when multiple scaffolds try to delete the same orders
-        const results = []
-        for (const inhabitant of household.inhabitants) {
-            const result = await apiRequest<InhabitantUpdateResponse>(preferencesUrl(inhabitant.id, adminBypass), {
-                method: 'POST',
-                body: { dinnerPreferences: preferences },
-                action: 'updateAllInhabitantPreferences'
-            })
-            results.push(result)
-        }
+        const results = await useBookingsStore().writeBookings(async () => {
+            const responses = []
+            for (const inhabitant of household.inhabitants) {
+                responses.push(await apiRequest(preferencesUrl(inhabitant.id, adminBypass), {
+                    method: 'POST',
+                    body: { dinnerPreferences: preferences },
+                    schema: InhabitantUpdateResponseSchema,
+                    action: 'updateAllInhabitantPreferences'
+                }))
+            }
+            return responses
+        })
 
         // Refresh the selected household once after all updates
         if (selectedHouseholdId.value === householdId) {
@@ -226,12 +231,13 @@ export const useHouseholdsStore = defineStore("Households", () => {
      */
     const setMoveOutDate = async (householdId: number, moveOutDate: Date | null, adminBypass = false) => {
         console.info(`🏠 > HOUSEHOLDS_STORE > Setting moveOutDate for household ${householdId}: ${moveOutDate?.toISOString() ?? 'null'}`)
-        const result = await apiRequest<HouseholdUpdateResponse>(`/api/household/${householdId}/update`, {
+        const result = await useBookingsStore().writeBookings(() => apiRequest(`/api/household/${householdId}/update`, {
             method: 'POST',
             body: { moveOutDate },
             query: {adminBypass},
+            schema: HouseholdUpdateResponseSchema,
             action: 'setMoveOutDate'
-        })
+        }))
 
         // Store scaffold result for persistent UI display
         lastMoveOutResult.value = result.scaffoldResult
@@ -243,10 +249,6 @@ export const useHouseholdsStore = defineStore("Households", () => {
         }
         // Also refresh household list to update display badges
         await refreshHouseholds()
-
-        // Refresh bookings so UI reflects scaffold changes (deleted/created orders)
-        const bookingsStore = useBookingsStore()
-        await bookingsStore.refreshOrders()
 
         return result.scaffoldResult
     }
@@ -261,11 +263,12 @@ export const useHouseholdsStore = defineStore("Households", () => {
      */
     const moveInhabitant = async (inhabitantId: number, targetHouseholdId: number) => {
         console.info(`${LOG_CTX} 🏠 > HOUSEHOLDS_STORE > Moving inhabitant ${inhabitantId} to household ${targetHouseholdId}`)
-        const result = await apiRequest<InhabitantUpdateResponse>(`/api/admin/household/inhabitants/${inhabitantId}`, {
+        const result = await useBookingsStore().writeBookings(() => apiRequest(`/api/admin/household/inhabitants/${inhabitantId}`, {
             method: 'POST',
             body: {householdId: targetHouseholdId},
+            schema: InhabitantUpdateResponseSchema,
             action: 'moveInhabitant'
-        }).catch(() => null)
+        })).catch(() => null)
         if (!result) return
 
         lastMoveResult.value = result.scaffoldResult
@@ -275,9 +278,6 @@ export const useHouseholdsStore = defineStore("Households", () => {
             await refreshSelectedHousehold()
         }
         await refreshHouseholds()
-
-        const bookingsStore = useBookingsStore()
-        await bookingsStore.refreshOrders()
 
         const targetHousehold = households.value.find(h => h.id === targetHouseholdId)
         const targetLabel = targetHousehold ? `${targetHousehold.shortName} (PBS ${targetHousehold.pbsId})` : `husstand ${targetHouseholdId}`

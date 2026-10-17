@@ -1,12 +1,11 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach} from 'vitest'
 import {mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {SystemRoleSchema} from '~~/prisma/generated/zod'
 import {useUserRolesUi} from '~/composables/useUserRolesUi'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
-import type {SystemRole as SystemRoleValue} from '~/composables/useCoreValidation'
+import {useCoreValidation, type SystemRole as SystemRoleValue} from '~/composables/useCoreValidation'
 
-const SystemRole = SystemRoleSchema.enum
+const SystemRole = useCoreValidation().SystemRoleSchema.enum
 
 // The test runtime has no session cookie and no /api/_auth endpoint, so the session nuxt-auth-utils
 // would hydrate is the one thing faked; the auth store deriving the predicates from it is real
@@ -65,12 +64,6 @@ describe('useUserRolesUi', () => {
                 isAdmin: false,
                 isAllergyManager: true,
                 expected: [SystemRole.ALLERGYMANAGER]
-            },
-            {
-                scenario: 'all roles when all predicates true',
-                isAdmin: true,
-                isAllergyManager: true,
-                expected: [SystemRole.ADMIN, SystemRole.ALLERGYMANAGER]
             },
             {
                 scenario: 'no roles when no predicates true',

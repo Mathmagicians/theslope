@@ -9,6 +9,7 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {usePlanStore} from '~/stores/plan'
 import {useAuthStore} from '~/stores/auth'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 import {COMPONENTS, getRainbowBand, getRainbowAccent, createResponsiveIcons} from '~/composables/useTheSlopeDesignSystem'
 
 // The test environment has no router to navigate: useEntityFormManager and useQueryParam
@@ -25,7 +26,7 @@ const createdTeams = [
     {...SeasonFactory.defaultCookingTeamDetail(), id: 12, name: 'Hold 2'}
 ]
 const createTeamsEndpoint = vi.fn(() => ({teams: createdTeams, eventsAssigned: 6}))
-registerEndpoint('/api/_auth/session', () => ({user: {id: 1, email: 'admin@skraaningen.dk', systemRoles: ['ADMIN']}}))
+registerEndpoint('/api/_auth/session', () => ({user: {id: 1, email: 'admin@skraaningen.dk', systemRoles: [useCoreValidation().SystemRoleSchema.enum.ADMIN]}}))
 registerEndpoint('/api/admin/season/active', () => 1)
 const seasonByIdEndpoint = vi.fn(() => season)
 registerEndpoint('/api/admin/season/1', seasonByIdEndpoint)
@@ -96,7 +97,7 @@ describe('AdminTeams master table', () => {
         vi.clearAllMocks()
     })
 
-    it('shows the joker badge in the row of a team that holds joker slots, and none in a team without', async () => {
+    it('shows the joker badge in the row of a team that holds joker slots, none in a team without, and the columns bind their tokens', async () => {
         const withJokers = SeasonFactory.defaultCookingTeamDisplay({id: 21, name: 'Hold 1', jokerSlotCount: 2})
         const withoutJokers = SeasonFactory.defaultCookingTeamDisplay({id: 22, name: 'Hold 2', jokerSlotCount: 0})
         seasonByIdEndpoint.mockReturnValue({...season, CookingTeams: [withJokers, withoutJokers]})
@@ -105,15 +106,8 @@ describe('AdminTeams master table', () => {
 
         expect(wrapper.find(`[data-testid="team-row-${withJokers.id}"] [data-testid="team-badge-jokers"]`).exists()).toBe(true)
         expect(wrapper.find(`[data-testid="team-row-${withoutJokers.id}"] [data-testid="team-badge-jokers"]`).exists()).toBe(false)
-    })
 
-    // The Madhold column takes the row's slack, so the badges stay on one line while the weekdays fit their letters
-    it('the Madhold and Madlavningsdage columns bind COMPONENTS.masterDetail.primaryColumn and compactColumn', async () => {
-        const team = SeasonFactory.defaultCookingTeamDisplay({id: 23, name: 'Hold 1'})
-        seasonByIdEndpoint.mockReturnValue({...season, CookingTeams: [team]})
-
-        const wrapper = await mountTeams()
-
+        // The Madhold column takes the row's slack, so the badges stay on one line while the weekdays fit their letters
         const columns = wrapper.findComponent({name: 'UTable'}).props('columns') as Array<{header?: string, meta?: {class?: unknown}}>
         expect(columns.find(column => column.header === 'Madhold')?.meta?.class).toEqual(COMPONENTS.masterDetail.primaryColumn)
         expect(columns.find(column => column.header === 'Madlavningsdage')?.meta?.class).toEqual(COMPONENTS.masterDetail.compactColumn)
@@ -156,15 +150,12 @@ describe('AdminTeams team selection', () => {
             return wrapper
         }
 
-        it('turns its toggle to the open-detail chevron of its viewport', async () => {
+        it(`turns its toggle to the open-detail chevron of its viewport and renders its detail once, ${isMd ? 'in the pane beside the table' : 'docked in the table row'}`, async () => {
             const wrapper = await openTeam()
             const toggle = wrapper.findAllComponents({name: 'UButton'})
                 .find(button => button.attributes('data-testid') === `team-toggle-${team.id}`)
             expect(toggle?.props('icon')).toBe(createResponsiveIcons(ref(isMd)).detailOpen)
-        })
 
-        it(`renders its detail once, ${isMd ? 'in the pane beside the table' : 'docked in the table row'}`, async () => {
-            const wrapper = await openTeam()
             await vi.waitFor(() => expect(findAllByTestId(wrapper, 'edit-team')).toHaveLength(1))
             expect(wrapper.find('tbody [data-testid="edit-team"]').exists()).toBe(!isMd)
         })
@@ -196,14 +187,11 @@ describe('AdminTeams team colours', () => {
         mockRoute.query = {}
     })
 
-    it.each(numbered)('the row of "$name" wears the stop of number $number', async ({id, number}) => {
+    it.each(numbered)('the row of "$name" wears the stop of number $number, and selecting it accents the row with that stop', async ({id, number}) => {
         const wrapper = await mountTeams()
         const badge = wrapper.find(`[data-testid="team-row-${id}"] [data-testid="team-badge-name"]`)
         expect(badge.classes()).toEqual(expect.arrayContaining(getRainbowBand(number - 1).split(' ')))
-    })
 
-    it.each(numbered)('selecting "$name" accents its row with the stop of number $number', async ({id, number}) => {
-        const wrapper = await mountTeams()
         await clickByTestId(wrapper, `team-row-${id}`)
         await vi.waitFor(() => expect(wrapper.find(`[data-testid="team-row-${id}"]`).classes())
             .toEqual(expect.arrayContaining(getRainbowAccent(number - 1).split(' '))))

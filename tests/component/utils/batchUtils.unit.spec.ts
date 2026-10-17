@@ -1,5 +1,5 @@
 import {describe, it, expect, vi} from 'vitest'
-import {chunkArray, groupBy, pruneAndCreate, writeBatchOrEach} from '~/utils/batchUtils'
+import {chunkArray, groupBy, partition, pruneAndCreate, writeBatchOrEach} from '~/utils/batchUtils'
 
 describe('batchUtils', () => {
     describe('chunkArray', () => {
@@ -26,6 +26,18 @@ describe('batchUtils', () => {
             const chunkBy2 = chunkArray<number>(2)
             expect(typeof chunkBy2).toBe('function')
             expect(chunkBy2([1, 2, 3, 4, 5])).toEqual([[1, 2], [3, 4], [5]])
+        })
+    })
+
+    describe('partition', () => {
+        const isEven = (n: number) => n % 2 === 0
+
+        it.each([
+            {input: [1, 2, 3, 4, 5], expected: [[2, 4], [1, 3, 5]]},
+            {input: [2, 4], expected: [[2, 4], []]},
+            {input: [], expected: [[], []]}
+        ])('splits $input into the items that match and the rest, each in order', ({input, expected}) => {
+            expect(partition(isEven)(input)).toEqual(expected)
         })
     })
 

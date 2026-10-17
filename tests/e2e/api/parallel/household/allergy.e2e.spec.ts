@@ -193,8 +193,7 @@ test.describe('Allergy API - CRUD Operations', () => {
         expect(deleted!.id).toBe(created.id)
 
         // Verify it no longer exists (should return 404)
-        const response = await context.request.get(`/api/household/allergy/${created.id}`)
-        expect(response.status()).toBe(404)
+        await AllergyFactory.getAllergy(context, created.id, 404)
     })
 
     test('GIVEN allergy with optional comment omitted WHEN creating THEN creates successfully', async ({browser}) => {
@@ -247,11 +246,8 @@ test.describe('Allergy API - Validation', () => {
     test('GIVEN invalid ID (negative) WHEN fetching THEN returns 400', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        // WHEN: Try to fetch with invalid ID
-        const response = await context.request.get('/api/household/allergy/-1')
-
-        // THEN: Should fail validation
-        expect(response.status()).toBe(400)
+        // WHEN: Try to fetch with invalid ID - THEN: Should fail validation
+        await AllergyFactory.getAllergy(context, -1, 400)
     })
 
     test('GIVEN no query parameters WHEN fetching allergies THEN returns 400', async ({browser}) => {
@@ -299,8 +295,7 @@ test.describe('Allergy API - CASCADE Deletion', () => {
         await AllergyFactory.deleteAllergyType(context, allergyType.id)
 
         // THEN: Verify allergy was also deleted (CASCADE)
-        const allergyResponse = await context.request.get(`/api/household/allergy/${allergy.id}`)
-        expect(allergyResponse.status()).toBe(404)
+        await AllergyFactory.getAllergy(context, allergy.id, 404)
     })
 
     test('GIVEN inhabitant has allergies WHEN deleting inhabitant THEN cascades to allergies', async ({browser}) => {
@@ -324,8 +319,7 @@ test.describe('Allergy API - CASCADE Deletion', () => {
         await HouseholdFactory.deleteInhabitant(context, inhabitant.id, 200)
 
         // THEN: Verify allergy was also deleted (CASCADE)
-        const allergyResponse = await context.request.get(`/api/household/allergy/${allergy.id}`)
-        expect(allergyResponse.status()).toBe(404)
+        await AllergyFactory.getAllergy(context, allergy.id, 404)
     })
 })
 

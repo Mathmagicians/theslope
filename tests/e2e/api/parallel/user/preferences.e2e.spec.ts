@@ -87,12 +87,7 @@ test.describe('User preferences', () => {
     test('GIVEN no session WHEN saving preferences THEN 401', async ({browser}) => {
         const anonymous = await browser.newContext()
 
-        const response = await anonymous.request.post('/api/user/preferences', {
-            headers: testHelpers.headers,
-            data: {notificationChannels: [Channel.EMAIL]}
-        })
-
-        expect(response.status()).toBe(401)
+        await UserFactory.updateMyPreferences(anonymous, {notificationChannels: [Channel.EMAIL]}, 401)
     })
 
     test('GIVEN a member WHEN asking for a test message THEN it is queued to the member', async ({browser}) => {
@@ -100,6 +95,6 @@ test.describe('User preferences', () => {
 
         const result = await UserFactory.sendTestNotification(context)
 
-        expect(result!.dedupeKey).toMatch(/^TEST:EMAIL:/)
+        expect(result!.dedupeKey).toMatch(new RegExp(`^TEST:${Channel.EMAIL}:`))
     })
 })

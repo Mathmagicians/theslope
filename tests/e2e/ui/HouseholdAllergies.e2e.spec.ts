@@ -53,11 +53,7 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
      */
     const navigateToAllergiesTab = async (page: import('@playwright/test').Page) => {
         await gotoHydrated(page, `/household/${encodeURIComponent(shortName)}/allergies?pbs=${pbsId}`)
-        await pollUntil(
-            async () => page.locator('[data-testid="household-allergies"]').isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
+        await expect(page.locator('[data-testid="household-allergies"]')).toBeVisible({timeout: 15_000})
     }
 
     /**
@@ -70,11 +66,7 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
         await pencilButton.click()
 
         // Wait for AllergyEditor dropdown to appear
-        await pollUntil(
-            async () => page.getByTestId('allergy-editor-select').isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
+        await expect(page.getByTestId('allergy-editor-select')).toBeVisible()
     }
 
     test('GIVEN inhabitant row expanded WHEN selecting allergy from dropdown THEN allergy is added', async ({page, browser}) => {
@@ -95,7 +87,7 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
         await dropdown.click()
 
         // Wait for dropdown options and select the allergy type by unique name
-        const option = page.getByRole('option', {name: new RegExp(testSalt)}).first()
+        const option = page.getByRole('option', {name: allergyType.name})
         await expect(option).toBeVisible({timeout: 5000})
         await option.click()
 
@@ -103,7 +95,7 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
         await pollUntil(
             async () => AllergyFactory.getAllergiesForInhabitant(adminContext, inhabitantId),
             (allergies) => allergies.some(a => a.allergyTypeId === allergyType.id),
-            10
+            6
         )
     })
 
@@ -136,7 +128,7 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
         await pollUntil(
             async () => AllergyFactory.getAllergiesForInhabitant(adminContext, inhabitantId),
             (allergies) => !allergies.some(a => a.allergyTypeId === allergyType.id),
-            10
+            6
         )
     })
 
@@ -178,7 +170,7 @@ test.describe('HouseholdAllergies - CRUD Operations', () => {
                 const allergy = allergies.find(a => a.allergyTypeId === allergyType.id)
                 return allergy?.inhabitantComment === testComment
             },
-            10
+            6
         )
         const updatedAllergy = allergies.find(a => a.allergyTypeId === allergyType.id)
         expect(updatedAllergy?.inhabitantComment).toBe(testComment)

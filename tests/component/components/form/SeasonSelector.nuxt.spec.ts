@@ -1,7 +1,8 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from "@nuxt/test-utils/runtime"
-import {mountWithTooltipProvider, findByTestId, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {mountWithTooltipProvider, findByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
 import {createResponsiveSizes, ICONS, SEASON_STATUS_GLYPHS} from '~/composables/useTheSlopeDesignSystem'
 import {getSeasonStatus} from '~/utils/season'
 import {SEASON_STATUS} from '~/composables/useSeasonValidation'
@@ -9,6 +10,8 @@ import SeasonSelector from '~/components/form/SeasonSelector.vue'
 import {nextTick, ref} from 'vue'
 import {SeasonFactory} from '../../../e2e/testDataFactories/seasonFactory'
 import type {Season} from '~/composables/useSeasonValidation'
+
+enableAutoUnmount(afterEach)
 
 describe('SeasonSelector', () => {
 
@@ -28,6 +31,10 @@ describe('SeasonSelector', () => {
             seasonDates: {start: new Date('2026-01-01'), end: new Date('2026-05-31')}
         }
     ]
+
+    beforeEach(() => {
+        resetStores()
+    })
 
     const createWrapper = (props: {
         modelValue: number | undefined
@@ -49,7 +56,7 @@ describe('SeasonSelector', () => {
         await nextTick()
     }
 
-    it('renders dropdown with seasons list', async () => {
+    it('renders the dropdown with the "Vælg sæson" placeholder when seasons exist but none selected', async () => {
         const wrapper = await createWrapper({
             modelValue: undefined,
             seasons: mockSeasons
@@ -57,40 +64,7 @@ describe('SeasonSelector', () => {
 
         const dropdown = getDropdown(wrapper)
         expect(dropdown.exists()).toBe(true)
-
-        // Verify seasons were passed to component
-        expect(wrapper.props('seasons')).toEqual(mockSeasons)
-        expect(wrapper.props('seasons').length).toBe(2)
-    })
-
-    it('shows "Vælg sæson" placeholder when seasons exist but none selected', async () => {
-        const wrapper = await createWrapper({
-            modelValue: undefined,
-            seasons: mockSeasons
-        })
-
-        const dropdown = getDropdown(wrapper)
         expect(dropdown.text()).toContain('Vælg sæson')
-    })
-
-    it('shows "Ingen sæsoner" placeholder when seasons array is empty', async () => {
-        const wrapper = await createWrapper({
-            modelValue: undefined,
-            seasons: []
-        })
-
-        const dropdown = getDropdown(wrapper)
-        expect(dropdown.text()).toContain('Ingen sæsoner')
-    })
-
-    it('displays selected season when modelValue is provided', async () => {
-        const wrapper = await createWrapper({
-            modelValue: 1,
-            seasons: mockSeasons
-        })
-
-        const dropdown = getDropdown(wrapper)
-        expect(dropdown.text()).toContain('fall-2025')
     })
 
     it('emits update:modelValue when season is selected', async () => {
@@ -106,29 +80,7 @@ describe('SeasonSelector', () => {
         expect(emitted?.[0]).toEqual([2]) // ID of spring-2026
     })
 
-    it('shows loading state', async () => {
-        const wrapper = await createWrapper({
-            modelValue: undefined,
-            seasons: mockSeasons,
-            loading: true
-        })
-
-        // Verify loading prop was passed
-        expect(wrapper.props('loading')).toBe(true)
-    })
-
-    it('shows disabled state', async () => {
-        const wrapper = await createWrapper({
-            modelValue: 1,
-            seasons: mockSeasons,
-            disabled: true
-        })
-
-        // Verify disabled prop was passed
-        expect(wrapper.props('disabled')).toBe(true)
-    })
-
-    it('handles empty seasons array without errors', async () => {
+    it('handles empty seasons array with the "Ingen sæsoner" placeholder and no options', async () => {
         const wrapper = await createWrapper({
             modelValue: undefined,
             seasons: []
@@ -149,7 +101,7 @@ describe('SeasonSelector', () => {
     })
 
     // setProps works on the mounted root alone
-    it('updates displayed value when modelValue prop changes', async () => {
+    it('displays the selected season and updates it when the modelValue prop changes', async () => {
         const wrapper = await mountSuspended(SeasonSelector, {
             props: {modelValue: 1, seasons: mockSeasons},
             global: {provide: {isMd: ref(false)}}

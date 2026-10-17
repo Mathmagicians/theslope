@@ -72,19 +72,9 @@ const effectiveSelectedIds = computed(() =>
     : props.selectedIds
 )
 
-// Available types (not yet selected)
-const availableTypes = computed(() =>
-  props.allergyTypes.filter(t => !effectiveSelectedIds.value.includes(t.id))
-)
-
-// Selected types with full display data
-const selectedTypes = computed(() =>
-  props.allergyTypes.filter(t => effectiveSelectedIds.value.includes(t.id))
-)
-
-// Get comment for a type (comments mode) - reserved for future use
-const _getComment = (typeId: number): string =>
-  props.allergies.find(a => a.allergyTypeId === typeId)?.comment || ''
+const splitTypes = computed(() => partition((type: AllergyTypeDisplay) => effectiveSelectedIds.value.includes(type.id))(props.allergyTypes))
+const selectedTypes = computed(() => splitTypes.value[0])
+const availableTypes = computed(() => splitTypes.value[1])
 
 // Handlers - emit events, parent decides what to do
 const handleAdd = (typeId: number | undefined) => {

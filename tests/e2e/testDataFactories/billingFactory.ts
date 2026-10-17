@@ -47,7 +47,7 @@ export class BillingFactory {
     /**
      * Create order snapshot JSON for test transactions
      */
-    private static readonly makeOrderSnapshot = (testSalt: string, dinnerEventId: number, ticketType: 'ADULT' | 'CHILD' | 'BABY') =>
+    private static readonly makeOrderSnapshot = (testSalt: string, dinnerEventId: number, ticketType: TicketPrice['ticketType']) =>
         serializeTransaction({
             dinnerEvent: {id: dinnerEventId, date: new Date('2025-11-10'), menuTitle: salt('Test Menu', testSalt)},
             inhabitant: {id: 1, name: salt('Test Person', testSalt), household: {id: 1, pbsId: 2053, address: salt('Testgade 42', testSalt)}},
@@ -81,8 +81,8 @@ export class BillingFactory {
             pbsId: 2053,
             address: salt('Smedekildevej 42', testSalt),
             transactions: [
-                {amount: 58200, orderSnapshot: BillingFactory.makeOrderSnapshot(testSalt, 1, 'ADULT')},
-                {amount: 58200, orderSnapshot: BillingFactory.makeOrderSnapshot(testSalt, 2, 'ADULT')}
+                {amount: 58200, orderSnapshot: BillingFactory.makeOrderSnapshot(testSalt, 1, TicketType.ADULT)},
+                {amount: 58200, orderSnapshot: BillingFactory.makeOrderSnapshot(testSalt, 2, TicketType.ADULT)}
             ]
         }]
     })
@@ -132,7 +132,7 @@ export class BillingFactory {
      */
     static readonly defaultSerializeInput = (
         testSalt: string = 'default',
-        ticketType: string | null = 'ADULT',
+        ticketType: string | null = TicketType.ADULT,
         options?: {isGuestTicket?: boolean, provenanceHousehold?: string | null}
     ) => ({
         dinnerEvent: {id: 1, date: new Date('2025-01-15'), menuTitle: salt('Test Dinner', testSalt)},

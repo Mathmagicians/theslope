@@ -1,6 +1,7 @@
 import {test, expect} from '@playwright/test'
 import {useBookingValidation} from '~~/app/composables/useBookingValidation'
 import {useMaintenanceValidation} from '~~/app/composables/useMaintenanceValidation'
+import {useUserPreferenceValidation} from '~~/app/composables/useUserPreferenceValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
@@ -13,6 +14,7 @@ import type {BrowserContext} from '@playwright/test'
 
 const {DinnerStateSchema, DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const {JobType, JobStatus} = useMaintenanceValidation()
+const Channel = useUserPreferenceValidation().NotificationChannelSchema.enum
 const DinnerState = DinnerStateSchema.enum
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
@@ -258,7 +260,7 @@ test.describe('Daily Maintenance API', () => {
         expect(periodState!.emailSent, 'accountant mail queued').toBe(true)
         expect(periodState!.archive?.key).toMatch(/^billing\/\d{4}-\d{2}\/pbs-opgoerelse-\d{4}-\d{2}-v\d+\.csv$/)
         // v1 closes the period, a later version (catch-up into an existing period) is mailed as an update
-        expect(periodState!.notification?.dedupeKey).toMatch(new RegExp(`^BILLING_PERIOD_${periodState!.version > 1 ? 'UPDATED' : 'CLOSED'}:EMAIL:`))
+        expect(periodState!.notification?.dedupeKey).toMatch(new RegExp(`^BILLING_PERIOD_${periodState!.version > 1 ? 'UPDATED' : 'CLOSED'}:${Channel.EMAIL}:`))
 
         // ADR-015: a re-run bills nothing new and redoes no side effect — the period keeps its end state
         const rerun = await BillingFactory.generateBilling(context)

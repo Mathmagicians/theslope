@@ -197,7 +197,7 @@ endpoint hands the scaffolder its deadlines: the season's (`deadlinesForSeason`)
 1. Generator MUST set `state` and `dinnerMode` - scaffolder doesn't re-derive
 2. Scaffolder enriches (`priceAtBooking`, `bookedByUserId`, `releasedAt`) and settles supply for the claim bucket (a released ticket, else a queue entry)
 3. UI MUST include `orderId` from existing orders for updates
-4. Guest orders preserved (not managed by preferences)
+4. Guest orders preserved (not managed by preferences), each by its own `orderId`: a guest ticket booked on a person is neither the person's order nor the person's intent (`fetchUserIntentKeys` leaves guest history out)
 5. User cancellations tracked in `cancelledKeys` set
 6. Generators MUST receive dinner events filtered by `isHouseholdActiveOnDay`
 7. Booking-relevant field changes MUST trigger immediate re-scaffold via `rescaffoldOnFieldChange`

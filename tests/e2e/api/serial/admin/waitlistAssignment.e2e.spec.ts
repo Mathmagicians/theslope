@@ -6,7 +6,6 @@ import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
-import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import {useCoreValidation, type InhabitantDisplay} from '~/composables/useCoreValidation'
@@ -16,7 +15,6 @@ const Action = useBookingValidation().BookingActionSchema.enum
 const {validatedBrowserContext, salt, temporaryAndRandom, getSessionUserInfo, daysFromNow} = testHelpers
 const {TicketTypeSchema} = useTicketPriceValidation()
 const TicketType = TicketTypeSchema.enum
-const {TeamRoleSchema} = useCookingTeamValidation()
 const {createDefaultWeekdayMap} = useCoreValidation()
 const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 
@@ -70,13 +68,11 @@ test.describe('Waiting list assignment', () => {
         childPrice = activeSeason.ticketPrices.find(price => price.ticketType === TicketType.CHILD)!
         activeSeasonId = activeSeason.id!
         ;({inhabitantId: adminInhabitantId, householdId} = await getSessionUserInfo(context))
-        const team = await SeasonFactory.createCookingTeamForSeason(context, activeSeason.id!, salt('Ventelistehold', testSalt))
+        const {team, dinner} = await SeasonFactory.createCookingTeamWithChefAndDinner(context, activeSeason, adminInhabitantId, {
+            teamName: 'Ventelistehold', dinner: {date: daysFromNow(2), menuTitle: salt('Ventelistemiddag', testSalt)}
+        })
         teamIds.push(team.id!)
         teamId = team.id!
-        await SeasonFactory.assignMemberToTeam(context, teamId, adminInhabitantId, TeamRoleSchema.enum.CHEF)
-        const dinner = await DinnerEventFactory.createDinnerEvent(context, {
-            date: daysFromNow(2), menuTitle: salt('Ventelistemiddag', testSalt), seasonId: activeSeason.id!, cookingTeamId: teamId, chefId: adminInhabitantId
-        })
         dinnerEventId = dinner.id!
         dinnerIds.push(dinnerEventId)
         for (const name of ['Et', 'To', 'Tre', 'Fire']) {

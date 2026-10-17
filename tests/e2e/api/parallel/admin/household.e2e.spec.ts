@@ -171,12 +171,8 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         )
         testHouseholdIds.push(household.id)
 
-        // WHEN: Fetch household by ID (detail endpoint)
-        const response = await context.request.get(`/api/admin/household/${household.id}`)
-
-        // THEN: Response is valid HouseholdDetail (server validates against schema)
-        expect(response.status()).toBe(200)
-        const fetchedHousehold = await response.json()
+        // WHEN: Fetch household by ID (detail endpoint) - THEN: Response is valid HouseholdDetail (the factory parses it)
+        const fetchedHousehold = (await HouseholdFactory.getHouseholdById(context, household.id))!
 
         // Verify response structure
         verifyHouseholdStructure(fetchedHousehold, 'GET /api/admin/household/[id]')
@@ -206,12 +202,7 @@ test.describe('Household /api/admin/household CRUD operations', () => {
         await HouseholdFactory.deleteHousehold(context, result.household.id, 200)
 
         // THEN: All inhabitants should be cascade deleted
-        const checksAfter = await Promise.all(
-            inhabitantIds.map(id => context.request.get(`/api/admin/household/inhabitants/${id}`))
-        )
-        checksAfter.forEach(response => {
-            expect(response.status()).toBe(404)
-        })
+        await Promise.all(inhabitantIds.map(id => HouseholdFactory.getInhabitantById(context, id, 404)))
     })
 
     test('createAtExistingAddress copies heynaboId + name from sibling (Phase 4 frontend flow)', async ({browser}) => {

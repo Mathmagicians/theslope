@@ -67,17 +67,12 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
             // GIVEN: Navigate to create mode
             await gotoHydrated(page, `${adminPlanningUrl}?mode=create`)
-            await pollUntil(
-                async () => await page.locator('form#seasonForm').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
-            await expect(page.locator('form#seasonForm')).toBeVisible()
+            await expect(page.locator('form#seasonForm')).toBeVisible({timeout: 15_000})
 
             // WHEN: Fill and submit form
             const {seasonDates} = SeasonFactory.generateUniqueSeasonDates()
-            await fillDateField(page.locator('[name="seasonDates"]'), 'start', formatDate(seasonDates.start))
-            await fillDateField(page.locator('[name="seasonDates"]'), 'end', formatDate(seasonDates.end))
+            await fillDateField(page.locator('div[name="seasonDates"]'), 'start', formatDate(seasonDates.start))
+            await fillDateField(page.locator('div[name="seasonDates"]'), 'end', formatDate(seasonDates.end))
             const createdSeason = await submitNewSeason(page, createdSeasonIds)
 
             // THEN: Switches to view mode
@@ -100,18 +95,13 @@ test.describe('AdminPlanningSeason Form UI', () => {
 
             // GIVEN: Navigate to create mode
             await gotoHydrated(page, `${adminPlanningUrl}?mode=create`)
-            await pollUntil(
-                async () => await page.locator('form#seasonForm').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
-            await expect(page.locator('form#seasonForm')).toBeVisible()
+            await expect(page.locator('form#seasonForm')).toBeVisible({timeout: 15_000})
 
             const {seasonDates, holiday} = SeasonFactory.generateUniqueSeasonDates()
             // The second holiday is the season's first day, before the first holiday - no overlap
             const earlierHoliday = {start: seasonDates.start, end: seasonDates.start}
-            await fillDateField(page.locator('[name="seasonDates"]'), 'start', formatDate(seasonDates.start))
-            await fillDateField(page.locator('[name="seasonDates"]'), 'end', formatDate(seasonDates.end))
+            await fillDateField(page.locator('div[name="seasonDates"]'), 'start', formatDate(seasonDates.start))
+            await fillDateField(page.locator('div[name="seasonDates"]'), 'end', formatDate(seasonDates.end))
 
             // THEN: the season picker grid never renders a date twice - adjacent-month days
             // are disabled and hidden by the shared COMPONENTS.calendarGrid token
@@ -119,7 +109,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
             // Hidden leading cells are not addressable, so count only the :visible ones
             const seasonPicker = page.getByRole('dialog')
             const visibleDayCells = seasonPicker.locator('[data-slot="cellTrigger"]:visible')
-            await page.locator('[name="seasonDates"]').getByRole('button', {name: /Åbn kalender/}).first().click()
+            await page.locator('div[name="seasonDates"]').getByRole('button', {name: 'Åbn kalender', exact: true}).click()
             await expect(visibleDayCells.first()).toBeVisible()
             await expect(seasonPicker.locator('[data-slot="cellTrigger"][data-outside-view]:visible')).toHaveCount(0)
             expect(await visibleDayCells.count()).toBeGreaterThan(27)
@@ -135,18 +125,14 @@ test.describe('AdminPlanningSeason Form UI', () => {
                 5
             )
 
-            // WHEN: Add holiday period
+            // WHEN: Add holiday period (create mode seeds the default holidays for the typed dates, so count the rows first)
+            const rowCountBeforeFirst = (await holidayRowStartDates(page)).length
             await fillDateField(page.locator('div[name="holidayRangeList"]'), 'start', formatDate(holiday.start))
             await fillDateField(page.locator('div[name="holidayRangeList"]'), 'end', formatDate(holiday.end))
             await page.getByTestId('holiday-range-add').click()
 
-            // THEN: Holiday appears in list (use pollUntil for reliable visibility check)
-            await pollUntil(
-                async () => await page.locator('div[name^="holidayRangeList-0"]').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
-            await expect(page.locator('div[name^="holidayRangeList-0"]')).toBeVisible()
+            // THEN: The list holds one more holiday row
+            await expect(page.locator('div[name^="holidayRangeList-"]')).toHaveCount(rowCountBeforeFirst + 1)
             await expect(page.getByTestId('holiday-range-remove-0')).toBeVisible()
 
             // WHEN: Add a second holiday period starting BEFORE the first one
@@ -185,41 +171,22 @@ test.describe('AdminPlanningSeason Form UI', () => {
             await gotoHydrated(page, `${adminPlanningUrl}?season=${encodeURIComponent(season.shortName)}&mode=edit`)
 
             // WHEN: Wait for form and remove holiday
-            await pollUntil(
-                async () => await page.locator('form#seasonForm').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
+            await expect(page.locator('form#seasonForm')).toBeVisible({timeout: 15_000})
             await expect(page).toHaveURL(/.*mode=edit/)
-            await expect(page.locator('form#seasonForm')).toBeVisible()
             await expect(page.getByTestId('season-selector')).toContainText(season.shortName)
             await expect(page.getByTestId('submit-season')).toHaveText(/Gem/)
 
             const holidayItem = page.locator('div[name^="holidayRangeList-0"]')
-            await pollUntil(
-                async () => await holidayItem.isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
+            await expect(holidayItem).toBeVisible()
 
             const removeButton = page.getByTestId('holiday-range-remove-0')
             await removeButton.click()
 
             // THEN: Holiday removed from UI
-            await pollUntil(
-                async () => !(await holidayItem.isVisible()),
-                (isNotVisible) => isNotVisible,
-                10
-            )
             await expect(holidayItem).not.toBeVisible()
 
             // Submit and verify via API
             await page.getByTestId('submit-season').click()
-            await pollUntil(
-                async () => /\bmode=view\b/.test(page.url()),
-                (inViewMode) => inViewMode,
-                10
-            )
             await expect(page).toHaveURL(/.*mode=view/)
 
             const updatedSeason = await pollUntil(
@@ -239,11 +206,7 @@ test.describe('AdminPlanningSeason Form UI', () => {
             createdSeasonIds.push(season.id!)
 
             await gotoHydrated(page, `${adminPlanningUrl}?season=${encodeURIComponent(season.shortName)}&mode=edit`)
-            await pollUntil(
-                async () => await page.locator('form#seasonForm').isVisible(),
-                (isVisible) => isVisible,
-                10
-            )
+            await expect(page.locator('form#seasonForm')).toBeVisible({timeout: 15_000})
 
             // WHEN: Extending the holiday by one day in the row picker. Inside the season, not on its last day: the
             // picker commits UTC midnight like the Workers server, while the local dev server returns local midnight

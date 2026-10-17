@@ -4,7 +4,7 @@ import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactor
 import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import { useCookingTeamValidation } from '~/composables/useCookingTeamValidation'
-import { useBookingValidation } from '~/composables/useBookingValidation'
+import { useBookingValidation, type DinnerEventCreate } from '~/composables/useBookingValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 
 const { validatedBrowserContext, salt, temporaryAndRandom } = testHelpers
@@ -129,18 +129,15 @@ test.describe('DinnerEvent API - Assign Role', () => {
             const createDinnerWithChef = async (
                 context: Awaited<ReturnType<typeof validatedBrowserContext>>,
                 testSalt: string,
-                dinnerOverrides: Record<string, unknown> = {}
+                dinnerOverrides: Partial<DinnerEventCreate> = {}
             ) => {
-                const team = await SeasonFactory.createCookingTeamForSeason(context, testSeason.id!, salt('TakeoverTeam', testSalt))
                 const household = await HouseholdFactory.createHousehold(context, { name: salt('TakeoverHouse', testSalt) })
                 createdHouseholdIds.push(household.id)
                 const currentChef = await HouseholdFactory.createInhabitantForHousehold(context, household.id, salt('CurrentChef', testSalt))
                 const taker = await HouseholdFactory.createInhabitantForHousehold(context, household.id, salt('Taker', testSalt))
-                const dinnerEvent = await SeasonFactory.createDinnerEventForSeason(
-                    context, testSeason.id!,
-                    { chefId: null, cookingTeamId: team.id, heynaboEventId: null, ...dinnerOverrides }
-                )
-                await DinnerEventFactory.assignRoleToDinnerEvent(context, dinnerEvent.id, currentChef.id, TeamRole.CHEF)
+                const { dinner: dinnerEvent } = await SeasonFactory.createCookingTeamWithChefAndDinner(context, testSeason, currentChef.id, {
+                    teamName: 'TakeoverTeam', dinner: { heynaboEventId: null, ...dinnerOverrides }
+                })
                 return { dinnerEvent, currentChef, taker }
             }
 

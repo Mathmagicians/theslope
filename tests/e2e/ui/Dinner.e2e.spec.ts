@@ -72,6 +72,10 @@ test.describe('Dinner Page URL Navigation', () => {
     // NOTE: Do NOT cleanup singleton season here - global teardown handles it (ADR-003)
     // Individual test afterAll hooks must not delete singleton test data
 
+    // The URL names one of the season's first three future dinners
+    const onOneOfTheFirstDates = (url: URL) =>
+        [testData.dates.first, testData.dates.second, testData.dates.third].includes(url.searchParams.get('date') ?? '')
+
     test('GIVEN no date in URL WHEN page loads THEN auto-syncs to next dinner date and displays event', async ({browser}) => {
         const context = await memberValidatedBrowserContext(browser)
         const page = await context.newPage()
@@ -81,25 +85,12 @@ test.describe('Dinner Page URL Navigation', () => {
 
         // THEN: URL should auto-sync to a valid dinner date (component calculates "next" at runtime);
         // checked against the season's dinners now, since a parallel spec's dinner may be the next one
-        const syncedDate = await pollUntil(
-            async () => new URL(page.url()).searchParams.get('date'),
-            (date) => date !== null,
-            10
-        )
+        await expect(page).toHaveURL(url => url.searchParams.has('date'), {timeout: 15_000})
+        const syncedDate = new URL(page.url()).searchParams.get('date')
         const dinners = await DinnerEventFactory.getDinnerEventsForSeason(await validatedBrowserContext(browser), seasonId)
         expect(dinners.map(dinner => formatDate(dinner.date)), 'the synced date is one of the season\'s dinners').toContain(syncedDate)
 
-        // Wait for dinner detail panel to load (always present when event is displayed)
-        await pollUntil(
-            async () => {
-                const panel = page.getByTestId('dinner-detail-panel')
-                return await panel.isVisible().catch(() => false)
-            },
-            (isVisible) => isVisible,
-            10
-        )
-
-        // THEN: Dinner event panel should be displayed
+        // THEN: Dinner event panel should be displayed (always present when event is displayed)
         const panel = page.getByTestId('dinner-detail-panel')
         await expect(panel, 'Dinner detail panel should be visible').toBeVisible()
     })
@@ -112,25 +103,7 @@ test.describe('Dinner Page URL Navigation', () => {
         await gotoHydrated(page, `${dinnerPageUrl}?date=99/99/9999`)
 
         // THEN: URL should auto-sync to a valid dinner date
-        await pollUntil(
-            async () => page.url(),
-            (url) => {
-                const urlObj = new URL(url)
-                const dateParam = urlObj.searchParams.get('date')
-                return dateParam === testData.dates.first || dateParam === testData.dates.second || dateParam === testData.dates.third
-            },
-            10
-        )
-
-        // Wait for dinner detail panel to load
-        await pollUntil(
-            async () => {
-                const panel = page.getByTestId('dinner-detail-panel')
-                return await panel.isVisible().catch(() => false)
-            },
-            (isVisible) => isVisible,
-            10
-        )
+        await expect(page).toHaveURL(onOneOfTheFirstDates, {timeout: 15_000})
 
         // THEN: Dinner event should be displayed
         const panel = page.getByTestId('dinner-detail-panel')
@@ -158,25 +131,7 @@ test.describe('Dinner Page URL Navigation', () => {
         await gotoHydrated(page, `${dinnerPageUrl}?date=${noDinnerDate}`)
 
         // THEN: URL should auto-sync to one of the valid dinner dates
-        await pollUntil(
-            async () => page.url(),
-            (url) => {
-                const urlObj = new URL(url)
-                const dateParam = urlObj.searchParams.get('date')
-                return dateParam === testData.dates.first || dateParam === testData.dates.second || dateParam === testData.dates.third
-            },
-            10
-        )
-
-        // Wait for dinner detail panel to load
-        await pollUntil(
-            async () => {
-                const panel = page.getByTestId('dinner-detail-panel')
-                return await panel.isVisible().catch(() => false)
-            },
-            (isVisible) => isVisible,
-            10
-        )
+        await expect(page).toHaveURL(onOneOfTheFirstDates, {timeout: 15_000})
 
         // THEN: Synced dinner event should be displayed
         const panel = page.getByTestId('dinner-detail-panel')
@@ -192,14 +147,8 @@ test.describe('Dinner Page URL Navigation', () => {
         await gotoHydrated(page, `${dinnerPageUrl}?date=${testData.dates.first}`)
 
         // Wait for dinner detail panel to be visible (confirms first event is loaded)
-        await pollUntil(
-            async () => {
-                const panel = page.getByTestId('dinner-detail-panel')
-                return await panel.isVisible().catch(() => false)
-            },
-            (isVisible) => isVisible,
-            10
-        )
+        const panel = page.getByTestId('dinner-detail-panel')
+        await expect(panel).toBeVisible({timeout: 15_000})
 
         // Verify first event's date is in URL
         const currentUrl = page.url()
@@ -211,22 +160,10 @@ test.describe('Dinner Page URL Navigation', () => {
         await day2Button.click({force: true})
 
         // THEN: URL should update to second event's date
-        await pollUntil(
-            async () => page.url(),
-            (url) => new URL(url).searchParams.get('date') === testData.dates.second,
-            10
-        )
+        await expect(page).toHaveURL(url => url.searchParams.get('date') === testData.dates.second)
 
         // THEN: Panel should update to show second event's date
-        const panel = page.getByTestId('dinner-detail-panel')
-        await pollUntil(
-            async () => await panel.textContent(),
-            (text) => text?.includes(testData.dates.second) || false,
-            10
-        )
-
-        const panelText = await panel.textContent()
-        expect(panelText, "Panel should now show second event date").toContain(testData.dates.second)
+        await expect(panel, "Panel should now show second event date").toContainText(testData.dates.second)
     })
 
     test.describe('Ticket allergies', () => {
