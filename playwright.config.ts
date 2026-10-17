@@ -73,12 +73,18 @@ export default defineConfig({
       grep: /Authenticate member for UI/,
       dependencies: ['setup-member-api']
     },
+    // Setup project - the singleton active season, once per run (needs the admin login)
+    {
+      name: 'setup-season',
+      testMatch: /season\.setup\.ts/,
+      dependencies: ['setup-api']
+    },
     // API tests - parallel
     {
       name: 'chromium-api',
       use: { ...devices['Desktop Chrome'] },
       testMatch: /tests\/e2e\/api\/parallel\/.*\.spec\.ts/,
-      dependencies: ['setup-api', 'setup-member-api'],
+      dependencies: ['setup-api', 'setup-member-api', 'setup-season'],
     },
     // API serial tests (heynabo imports/deletes data, maintenance scaffolds ALL households)
     // Runs after parallel API tests to avoid interference
@@ -95,7 +101,7 @@ export default defineConfig({
       name: 'chromium-ui',
       use: { ...devices['Desktop Chrome'] },
       testMatch: /tests\/e2e\/ui\/(?!serial\/).*\.spec\.ts/,
-      dependencies: ['setup-ui', 'setup-member-ui'],
+      dependencies: ['setup-ui', 'setup-member-ui', 'setup-season'],
     },
     // UI serial tests (create their own season, must run after parallel UI tests)
     {

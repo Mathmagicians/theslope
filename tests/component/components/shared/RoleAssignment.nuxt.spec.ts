@@ -68,11 +68,6 @@ beforeEach(() => {
 })
 
 describe('RoleAssignment', () => {
-    it('vacant trigger label names the role to volunteer for', async () => {
-        const label = findByTestId(await mountWith(null), TEST_IDS.trigger).text().toLowerCase()
-        expect(label).toContain(ROLE_LABELS[TeamRole.CHEF].toLowerCase())
-    })
-
     it.each([
         {desc: 'self is chef',  chef: ME},
         {desc: 'other is chef', chef: OTHER}
@@ -83,19 +78,14 @@ describe('RoleAssignment', () => {
         expect(assigned).not.toBe('')
     })
 
-    it('clicking the trigger opens the collapsible panel', async () => {
+    // The store settles a claim over several requests (the claim, the teams, the dinner on view), so the emit is awaited
+    it('volunteer flow: the vacant trigger names the role, opens the collapsible panel, and save claims the role for me on the dinner and emits role-assigned', async () => {
         const wrapper = await mountWith()
+        expect(findByTestId(wrapper, TEST_IDS.trigger).text().toLowerCase()).toContain(ROLE_LABELS[TeamRole.CHEF].toLowerCase())
         expect(findByTestId(wrapper, TEST_IDS.save).exists()).toBe(false)
 
         await clickByTestId(wrapper, TEST_IDS.trigger)
-
         expect(findByTestId(wrapper, TEST_IDS.save).exists()).toBe(true)
-    })
-
-    // The store settles a claim over several requests (the claim, the teams, the dinner on view), so the emit is awaited
-    it('volunteer flow: save claims the role for me on the dinner and emits role-assigned', async () => {
-        const wrapper = await mountWith()
-        await clickByTestId(wrapper, TEST_IDS.trigger)
         await clickByTestId(wrapper, TEST_IDS.save)
 
         await vi.waitFor(() => expect(wrapper.emitted('role-assigned')).toHaveLength(1))
@@ -145,15 +135,11 @@ describe('RoleAssignment', () => {
         expect(findByTestId(wrapper, TEST_IDS.save).exists()).toBe(true)
     })
 
-    it('renders nothing for past dinners (cannot act in the past)', async () => {
+    it('renders nothing for past dinners (cannot act in the past), and its exposed open() is a no-op', async () => {
         const pastDinner = {...buildDinner(), id: 999, date: new Date(Date.now() - 24 * 60 * 60 * 1000)}
         const wrapper = await mountSuspended(RoleAssignment, {props: {dinnerEvent: pastDinner, role: TeamRole.CHEF}})
         expect(findByTestId(wrapper, TEST_IDS.trigger).exists()).toBe(false)
-    })
 
-    it('exposed open() is a no-op for past dinners', async () => {
-        const pastDinner = {...buildDinner(), id: 999, date: new Date(Date.now() - 24 * 60 * 60 * 1000)}
-        const wrapper = await mountSuspended(RoleAssignment, {props: {dinnerEvent: pastDinner, role: TeamRole.CHEF}})
         const exposed = (wrapper.vm.$ as {exposed: {open: () => void} | null}).exposed
         exposed!.open()
         await flushPromises()

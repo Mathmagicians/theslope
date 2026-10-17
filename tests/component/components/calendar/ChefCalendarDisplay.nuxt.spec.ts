@@ -48,11 +48,6 @@ describe('ChefCalendarDisplay', () => {
         resetStores()
     })
 
-    it('tells the chef when the team has no dinners', async () => {
-        const wrapper = await mountCalendar()
-        expect(wrapper.text()).toContain('Ingen fællesspisninger planlagt for dette hold')
-    })
-
     it.each<{from: ViewMode, label: string, to: ViewMode}>([
         {from: 'agenda', label: 'Kalender', to: 'calendar'},
         {from: 'calendar', label: 'Agenda', to: 'agenda'}
@@ -65,20 +60,17 @@ describe('ChefCalendarDisplay', () => {
         expect(wrapper.emitted('tab-click')).toEqual([[to]])
     })
 
-    it.each([true, false])('the chevron with accordion-open %s emits update:accordion-open with the toggled value', async (open) => {
+    it.each([true, false])('accordion-open %s renders the content only when open, and the chevron emits update:accordion-open with the toggled value', async (open) => {
         const wrapper = await mountCalendar({accordionOpen: open})
+        expect(findByTestId(wrapper, TEST_IDS.content).exists()).toBe(open)
         expect(findByTestId(wrapper, TEST_IDS.toggle).attributes('aria-expanded')).toBe(String(open))
         await clickByTestId(wrapper, TEST_IDS.toggle)
         expect(wrapper.emitted('update:accordion-open')).toEqual([[!open]])
     })
 
-    it.each([true, false])('accordion-open %s renders the content when open and none when closed', async (open) => {
-        const wrapper = await mountCalendar({accordionOpen: open})
-        expect(findByTestId(wrapper, TEST_IDS.content).exists()).toBe(open)
-    })
-
-    it('renders the header without a button inside a button', async () => {
+    it('tells the chef when the team has no dinners, under a header without a button inside a button', async () => {
         const wrapper = await mountCalendar()
+        expect(wrapper.text()).toContain('Ingen fællesspisninger planlagt for dette hold')
         const header = findByTestId(wrapper, TEST_IDS.header)
         const buttons = header.findAll('button')
         expect(buttons.length, 'the header holds the two tabs and the chevron').toBe(3)

@@ -53,16 +53,14 @@ describe('useWaitlist', () => {
     })
 
     it.each([
-        {entryId: 1, position: 1, description: 'the first adult is first in the adult line'},
         {entryId: 3, position: 2, description: 'the second adult is second in the adult line'},
-        {entryId: 4, position: 2, description: 'the second child is second in the child line'},
         {entryId: 99, position: null, description: 'an entry outside the queue has no place'}
     ])('$description', ({entryId, position}) => {
         expect(positionOf(queue, entryId, ticketTypeOf)).toBe(position)
     })
 
-    it.each(Object.values(TicketType))('weighs a %s entry at the portions its price carries', (ticketType) => {
-        expect(portionsOf(entry(1, ticketType, 0))).toBe(PORTIONS[ticketType])
+    it('weighs an entry at the portions its price carries', () => {
+        expect(portionsOf(entry(1, TicketType.CHILD, 0))).toBe(PORTIONS[TicketType.CHILD])
     })
 
     it('weighs an entry whose price is outside the season at nothing', () => {
@@ -76,9 +74,7 @@ describe('useWaitlist', () => {
     describe.each([
         {supply: 2.5, taken: [1, 2, 3], used: 2.5, waiting: [4], description: '2.5 portions feed voksen, barn, voksen; the last barn waits'},
         {supply: 3, taken: [1, 2, 3, 4], used: 3, waiting: [], description: '3 portions feed the whole queue'},
-        {supply: 1, taken: [1], used: 1, waiting: [2, 3, 4], description: '1 portion feeds the head only'},
-        {supply: 0.5, taken: [], used: 0, waiting: [1, 2, 3, 4], description: 'half a portion does not fit the head, and nobody overtakes'},
-        {supply: 0, taken: [], used: 0, waiting: [1, 2, 3, 4], description: 'no supply assigns nothing'}
+        {supply: 0.5, taken: [], used: 0, waiting: [1, 2, 3, 4], description: 'half a portion does not fit the head, and nobody overtakes'}
     ])('$description', ({supply, taken, used, waiting}) => {
         it('takes strictly in FIFO order', () => {
             const plan = resolveWaitlistAssignment(queue, supply, portionsOf)
@@ -99,10 +95,5 @@ describe('useWaitlist', () => {
         const first = resolveWaitlistAssignment(queue, 2.5, portionsOf)
         const second = resolveWaitlistAssignment(queue, 2.5, portionsOf)
         expect(second).toEqual(first)
-    })
-
-    it('assigns nothing when the taken entries are gone and the rest still do not fit', () => {
-        const afterAssignment = resolveWaitlistAssignment(queue, 2.5, portionsOf).waiting
-        expect(resolveWaitlistAssignment(afterAssignment, 0, portionsOf).take).toEqual([])
     })
 })

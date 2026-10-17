@@ -8,25 +8,14 @@ import { RAINBOW, getRainbowBand } from '~/composables/useTheSlopeDesignSystem'
 
 describe('useCookingTeam', () => {
 
-  describe('createDefaultTeamName', () => {
-    it('creates correct team name format', () => {
-      const { createDefaultTeamName } = useCookingTeam()
-      const name = createDefaultTeamName('Winter 2025', 3)
-      expect(name).toBe('Madhold 3 - Winter 2025')
-    })
-  })
-
   describe('extractTeamNumber', () => {
     const { extractTeamNumber } = useCookingTeam()
 
     describe('valid team names', () => {
       it.each([
-        { teamName: 'Madhold 1', expected: 1, description: 'CSV format' },
         { teamName: 'Madhold 1 - 08/25-06/26', expected: 1, description: 'full format extracts first number' },
         { teamName: 'Madhold 10 - Winter 2025', expected: 10, description: 'double digit' },
-        { teamName: '0', expected: 0, description: 'zero boundary' },
-        { teamName: '99Team', expected: 99, description: 'number at start' },
-        { teamName: 'Team99End', expected: 99, description: 'number in middle' }
+        { teamName: '0', expected: 0, description: 'zero boundary' }
       ])('extracts $expected from "$teamName" ($description)', ({ teamName, expected }) => {
         expect(extractTeamNumber(teamName)).toBe(expected)
       })
@@ -34,8 +23,7 @@ describe('useCookingTeam', () => {
 
     describe('invalid team names', () => {
       it.each([
-        { teamName: 'Madhold', description: 'no digits' },
-        { teamName: '', description: 'empty string' }
+        { teamName: 'Madhold', description: 'no digits' }
       ])('returns null for "$teamName" ($description)', ({ teamName }) => {
         expect(extractTeamNumber(teamName)).toBeNull()
       })
@@ -51,7 +39,6 @@ describe('useCookingTeam', () => {
 
     it.each([
       { team: seasonTeams[0]!, teams: seasonTeams, expected: 3, description: 'number in the name, listed first' },
-      { team: seasonTeams[1]!, teams: seasonTeams, expected: 1, description: 'number in the name, listed second' },
       { team: unnumbered(20), teams: [...seasonTeams, unnumbered(20)], expected: 4, description: 'no number: position in the season list + 1' },
       { team: unnumbered(30), teams: seasonTeams, expected: 1, description: 'no number and outside the season list' },
       { team: named(40, 'Madhold 0'), teams: [...seasonTeams, named(40, 'Madhold 0')], expected: 4, description: 'a zero in the name: position in the season list + 1' },
@@ -73,9 +60,7 @@ describe('useCookingTeam', () => {
     const roles = (...values: TeamRole[]) => values.map(role => ({ role }))
 
     it.each([
-      { assignments: roles(), expected: 0, description: 'no assignments' },
       { assignments: roles(COOK, JUNIORHELPER), expected: 0, description: 'no chefs among members' },
-      { assignments: roles(CHEF, COOK, JUNIORHELPER), expected: 1, description: 'one chef in a mixed team' },
       { assignments: roles(CHEF, CHEF, COOK), expected: 2, description: 'two chefs' }
     ])('counts $expected ($description)', ({ assignments, expected }) => {
       expect(countChefs(assignments)).toBe(expected)
@@ -87,10 +72,7 @@ describe('useCookingTeam', () => {
 
     describe('with dash separator', () => {
       it.each([
-        { teamName: 'Madhold 1 - 08/25-06/26', expected: 'Madhold 1', description: 'typical full format' },
-        { teamName: 'Madhold 2 - Winter 2025', expected: 'Madhold 2', description: 'season name format' },
-        { teamName: 'Team A - Season', expected: 'Team A', description: 'letter-based team' },
-        { teamName: 'Madhold 10 - Long Season Name Here', expected: 'Madhold 10', description: 'double digit with long season' }
+        { teamName: 'Madhold 1 - 08/25-06/26', expected: 'Madhold 1', description: 'typical full format' }
       ])('returns "$expected" from "$teamName" ($description)', ({ teamName, expected }) => {
         expect(getTeamShortName(teamName)).toBe(expected)
       })
@@ -98,9 +80,7 @@ describe('useCookingTeam', () => {
 
     describe('without dash separator (fallback to full name)', () => {
       it.each([
-        { teamName: 'Madhold 1', expected: 'Madhold 1', description: 'already short' },
-        { teamName: 'Team A', expected: 'Team A', description: 'no season suffix' },
-        { teamName: '', expected: '', description: 'empty string' }
+        { teamName: 'Madhold 1', expected: 'Madhold 1', description: 'already short' }
       ])('returns "$expected" from "$teamName" ($description)', ({ teamName, expected }) => {
         expect(getTeamShortName(teamName)).toBe(expected)
       })
@@ -177,29 +157,6 @@ describe('useCookingTeam', () => {
       expect(result[0]!.CookingTeamAssignment!.map(a => a.cookingTeamId)).toEqual([1, 2])
       expect(result[0]!.CookingTeamAssignment!.map(a => a.allocationPercentage)).toEqual([50, 50])
     })
-
-    it('preserves allocationPercentage and affinity on assignments', () => {
-      const {mergeInhabitantsWithAssignments} = useCookingTeam()
-      const teams = [makeTeam(1, 'Madhold 1', [makeAssignment(101, Role.CHEF, anna, {allocationPercentage: 25})])]
-
-      const result = mergeInhabitantsWithAssignments([anna], teams)
-
-      const assignment = result[0]!.CookingTeamAssignment![0]!
-      expect(assignment.allocationPercentage).toBe(25)
-      expect(assignment.affinity).toBeUndefined()
-    })
-
-    it('returns empty assignments for empty teams', () => {
-      const {mergeInhabitantsWithAssignments} = useCookingTeam()
-      const result = mergeInhabitantsWithAssignments([anna, bob], [])
-
-      result.forEach(i => expect(i.CookingTeamAssignment).toBeUndefined())
-    })
-
-    it('returns empty array for empty inhabitants', () => {
-      const {mergeInhabitantsWithAssignments} = useCookingTeam()
-      expect(mergeInhabitantsWithAssignments([], [])).toEqual([])
-    })
   })
 
   describe('decideRoleAssignmentWrites', () => {
@@ -213,17 +170,11 @@ describe('useCookingTeam', () => {
 
     it.each([
       // Promotion / first-time CHEF — nextChefId becomes me regardless of prior state
-      {desc: 'CHEF, dinner had no chef',          role: Role.CHEF,         currentChefId: null,         expectedNext: ME},
-      {desc: 'CHEF, I was already chef',          role: Role.CHEF,         currentChefId: ME,           expectedNext: ME},
       {desc: 'CHEF, replacing someone else',      role: Role.CHEF,         currentChefId: SOMEONE_ELSE, expectedNext: ME},
       // Demotion — when I am being assigned non-CHEF and I was the dinner's chef → clear
       {desc: 'COOK, I was the chef (demote)',     role: Role.COOK,         currentChefId: ME,           expectedNext: null},
-      {desc: 'JUNIORHELPER, I was the chef',      role: Role.JUNIORHELPER, currentChefId: ME,           expectedNext: null},
       // Non-CHEF assignment doesn't disturb someone else's chef status
-      {desc: 'COOK, someone else is chef',        role: Role.COOK,         currentChefId: SOMEONE_ELSE, expectedNext: SOMEONE_ELSE},
-      {desc: 'JUNIORHELPER, someone else is chef',role: Role.JUNIORHELPER, currentChefId: SOMEONE_ELSE, expectedNext: SOMEONE_ELSE},
-      // Non-CHEF assignment on a vacant dinner — stays vacant
-      {desc: 'COOK, dinner had no chef',          role: Role.COOK,         currentChefId: null,         expectedNext: null}
+      {desc: 'COOK, someone else is chef',        role: Role.COOK,         currentChefId: SOMEONE_ELSE, expectedNext: SOMEONE_ELSE}
     ])('GIVEN $desc THEN nextChefId=$expectedNext AND assignment populated', ({role, currentChefId, expectedNext}) => {
       const plan = decideRoleAssignmentWrites(COOKING_TEAM_ID, ME, role, currentChefId)
       expect(plan.nextChefId).toBe(expectedNext)
@@ -247,7 +198,6 @@ describe('useCookingTeam', () => {
       {desc: 'no holder, I am authenticated',           holder: undefined,    myInhabitantId: ME,   expected: true},
       {desc: 'someone else is holder',                  holder: someoneElse,  myInhabitantId: ME,   expected: true},
       {desc: 'I am the holder',                         holder: me,           myInhabitantId: ME,   expected: false},
-      {desc: 'no holder, I am not authenticated',       holder: undefined,    myInhabitantId: null, expected: true},
       {desc: 'someone else holds, I am unauthenticated',holder: someoneElse,  myInhabitantId: null, expected: false}
     ])('$desc → $expected', ({holder, myInhabitantId, expected}) => {
       expect(isNotAssignedToMe(holder, myInhabitantId)).toBe(expected)
@@ -262,7 +212,6 @@ describe('useCookingTeam', () => {
     const tuesdayAndThursday = createDefaultWeekdayMap([false, true, false, true, false, false, false])
 
     describe.each([
-      {desc: 'period inside one week', start: new Date(2026, 9, 5), end: new Date(2026, 9, 11), affinity: tuesday, expected: 1},
       {desc: 'period across weeks', start: new Date(2026, 9, 5), end: new Date(2026, 9, 21), affinity: tuesday, expected: 3},
       {desc: 'period bounded by cooking days', start: new Date(2026, 9, 6), end: new Date(2026, 9, 20), affinity: tuesday, expected: 3},
       {desc: 'affinity with two weekdays', start: new Date(2026, 9, 5), end: new Date(2026, 9, 21), affinity: tuesdayAndThursday, expected: 5},

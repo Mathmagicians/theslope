@@ -115,21 +115,23 @@ describe('CookingTeamCard', () => {
 
     // The regular and the edit face render the same boxes; the edit controls have their own cases
     describe('Holdmedlemmer and Jokere', () => {
-        it('every box heading carries its glyph once', async () => {
+        it('the view face: every box heading carries its glyph once, the member rows align, the Jokere box lists one line per slot with its period, role and note, and no edit control shows', async () => {
             const wrapper = await mountCard('regular')
             ROLES.forEach(role => expectHeadingWithGlyph(wrapper, TEST_IDS.roleHeading(role), ROLE_ICONS[role]))
             expectHeadingWithGlyph(wrapper, TEST_IDS.jokerHeading, ICONS.joker)
-        })
 
-        it('every member row holds one cell per element, so the columns align', async () => {
-            const wrapper = await mountCard('regular')
+            // Every member row holds one cell per element, so the columns align
             const rows = findAllByTestId(wrapper, TEST_IDS.memberRow)
             expect(rows).toHaveLength(assignments.length)
             expect(new Set(rows.map(row => row.element.children.length)).size).toBe(1)
-        })
 
-        it('the Jokere box lists one line per slot with its period, role and note', async () => {
-            const wrapper = await mountCard('regular')
+            // No remove, slet, add or "Tilføj jokere" controls
+            assignments.forEach(({id}) => expect(findByTestId(wrapper, TEST_IDS.memberRemove(id!)).exists()).toBe(false))
+            slots.forEach(({slot}) => expect(findByTestId(wrapper, JOKER_SLOT_IDS.delete(slot.id)).exists()).toBe(false))
+            expect(findByTestId(wrapper, JOKER_SLOT_IDS.add).exists()).toBe(false)
+            expect(findByTestId(wrapper, TEST_IDS.jokerAddRow).exists()).toBe(false)
+            expect(wrapper.findAll('h4').some(heading => heading.text() === 'Tilføj jokere')).toBe(false)
+
             const lines = findAllByTestId(findByTestId(wrapper, TEST_IDS.jokerBox), TEST_IDS.jokerSlot)
             expect(lines).toHaveLength(slots.length)
             slots.forEach(({slot}, index) => {
@@ -172,8 +174,8 @@ describe('CookingTeamCard', () => {
         })
     })
 
-    describe('edit face, Jokere', () => {
-        it('every slot line carries a slet that emits remove:jokerSlot with its id', async () => {
+    describe('edit face, Jokere and Holdmedlemmer', () => {
+        it('every slot line carries a slet that emits remove:jokerSlot, and every member row a labelled trash button that emits remove:member, with its id', async () => {
             const wrapper = await mountCard('edit')
             const lines = findAllByTestId(findByTestId(wrapper, TEST_IDS.jokerBox), TEST_IDS.jokerSlot)
             slots.forEach(({slot}, index) => {
@@ -181,6 +183,15 @@ describe('CookingTeamCard', () => {
             })
             await clickByTestId(wrapper, JOKER_SLOT_IDS.delete(slots[1]!.slot.id))
             expect(wrapper.emitted('remove:jokerSlot')).toEqual([[slots[1]!.slot.id]])
+
+            const buttons = (wrapper.findAllComponents({name: 'UButton'}) as VueWrapper<ComponentPublicInstance<{icon?: string}>>[])
+            assignments.forEach(({id}) => {
+                const remove = findByTestId(wrapper, TEST_IDS.memberRemove(id!))
+                expect(remove.attributes('aria-label')).toBeTruthy()
+                expect(buttons.find(button => button.element === remove.element)!.props('icon')).toBe(ICONS.trash)
+            })
+            await clickByTestId(wrapper, TEST_IDS.memberRemove(assignments[1]!.id!))
+            expect(wrapper.emitted('remove:member')).toEqual([[assignments[1]!.id]])
         })
     })
 
@@ -207,29 +218,6 @@ describe('CookingTeamCard', () => {
         })
     })
 
-    describe('edit face, Holdmedlemmer', () => {
-        it('every member row carries a labelled trash button that emits remove:member with its assignment id', async () => {
-            const wrapper = await mountCard('edit')
-            const buttons = (wrapper.findAllComponents({name: 'UButton'}) as VueWrapper<ComponentPublicInstance<{icon?: string}>>[])
-            assignments.forEach(({id}) => {
-                const remove = findByTestId(wrapper, TEST_IDS.memberRemove(id!))
-                expect(remove.attributes('aria-label')).toBeTruthy()
-                expect(buttons.find(button => button.element === remove.element)!.props('icon')).toBe(ICONS.trash)
-            })
-            await clickByTestId(wrapper, TEST_IDS.memberRemove(assignments[1]!.id!))
-            expect(wrapper.emitted('remove:member')).toEqual([[assignments[1]!.id]])
-        })
-    })
-
-    it('the view face shows no remove, slet, add or "Tilføj jokere" controls', async () => {
-        const wrapper = await mountCard('regular')
-        assignments.forEach(({id}) => expect(findByTestId(wrapper, TEST_IDS.memberRemove(id!)).exists()).toBe(false))
-        slots.forEach(({slot}) => expect(findByTestId(wrapper, JOKER_SLOT_IDS.delete(slot.id)).exists()).toBe(false))
-        expect(findByTestId(wrapper, JOKER_SLOT_IDS.add).exists()).toBe(false)
-        expect(findByTestId(wrapper, TEST_IDS.jokerAddRow).exists()).toBe(false)
-        expect(wrapper.findAll('h4').some(heading => heading.text() === 'Tilføj jokere')).toBe(false)
-    })
-
     describe('monitor face', () => {
         it('every group heading carries its role glyph once', async () => {
             const wrapper = await mountCard('monitor')
@@ -240,14 +228,10 @@ describe('CookingTeamCard', () => {
     describe('edit face, Holdnavn', () => {
         const nameInput = (wrapper: VueWrapper) => wrapper.find('[data-testid="team-name-input"]')
 
-        it('shows the resolved team name', async () => {
-            const wrapper = await mountCard('edit', {name: 'Team Alpha'})
-            expect((nameInput(wrapper).element as HTMLInputElement).value).toBe('Team Alpha')
-        })
-
-        it('emits the trimmed draft once on blur after a focus seeds it', async () => {
+        it('shows the resolved team name, and emits the trimmed draft once on blur after a focus seeds it', async () => {
             const wrapper = await mountCard('edit', {name: 'Team Alpha'})
             const input = nameInput(wrapper)
+            expect((input.element as HTMLInputElement).value).toBe('Team Alpha')
             await input.trigger('focus')
             await input.setValue(' Team Alpha Q ')
             await input.trigger('blur')

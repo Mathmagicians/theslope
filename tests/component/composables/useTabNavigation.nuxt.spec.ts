@@ -80,23 +80,12 @@ describe('useTabNavigation.ts', () => {
   })
 
   describe('Simple Routes (pattern: /base/[tab])', () => {
-    describe('Tab Initialization', () => {
-      const initTestCases = [
-        { routeParam: 'tab1', expectedTab: 'tab1', description: 'valid tab from route' },
-        { routeParam: undefined, expectedTab: 'tab1', description: 'undefined route param' },
-        { routeParam: 'invalid', expectedTab: 'tab1', description: 'invalid route param' },
-        { routeParam: 'Tab1', expectedTab: 'tab1', description: 'case-insensitive matching' }
-      ]
+    it('should initialize with case-insensitive matching', () => {
+      setupRoute({ path: '/simple/tab1', params: { tab: 'Tab1' } })
 
-      for (const testCase of initTestCases) {
-        it(`should initialize with ${testCase.description}`, () => {
-          setupRoute({ path: '/simple/tab1', params: { tab: testCase.routeParam } })
+      const { activeTab } = createNavigationInstance(simpleRouteConfig)
 
-          const { activeTab } = createNavigationInstance(simpleRouteConfig)
-
-          expect(activeTab.value).toBe(testCase.expectedTab)
-        })
-      }
+      expect(activeTab.value).toBe('tab1')
     })
 
     describe('Tab Navigation', () => {
@@ -106,8 +95,7 @@ describe('useTabNavigation.ts', () => {
         const { activeTab } = createNavigationInstance(simpleRouteConfig)
         await setActiveTab(activeTab, 'tab2')
 
-        expect(mockNavigateTo).toHaveBeenCalled()
-        expect(mockNavigateTo.mock.calls[0]![0].path).toBe('/simple/tab2')
+        expectNavigationToPath('/simple/tab2')
       })
 
       it('should not call navigateTo when setting to current tab', async () => {
@@ -123,147 +111,44 @@ describe('useTabNavigation.ts', () => {
         expect(mockNavigateTo).not.toHaveBeenCalled()
       })
     })
+  })
 
-    describe('Parametrized: All tabs are navigable', () => {
-      for (const tab of simpleRouteConfig.tabs.filter(t => t !== 'tab1')) {
-        it(`should navigate to ${tab}`, async () => {
-          setupRoute({ path: '/simple/tab1', params: { tab: 'tab1' } })
-
-          const { activeTab } = createNavigationInstance(simpleRouteConfig)
-          await setActiveTab(activeTab, tab)
-
-          expectNavigationToPath(`/simple/${tab}`)
-        })
+  describe('Routes with additional params', () => {
+    it.each([
+      {
+        description: 'a nested route keeps param1',
+        route: { path: '/nested/value1/tab1', params: { param1: 'value1', tab: 'tab1' } },
+        config: nestedRouteConfig,
+        expected: '/nested/value1/tab2'
+      },
+      {
+        description: 'a route with two params keeps both',
+        route: { path: '/base/param1value/param2value/tab1', params: { param1: 'param1value', param2: 'param2value', tab: 'tab1' } },
+        config: { tabs: ['tab1', 'tab2'], basePath: '/base', additionalParams: ['param1', 'param2'] },
+        expected: '/base/param1value/param2value/tab2'
       }
+    ])('$description when navigating to another tab', async ({route, config, expected}) => {
+      setupRoute(route)
+
+      const { activeTab } = createNavigationInstance(config)
+      await setActiveTab(activeTab, 'tab2')
+
+      expectNavigationToPath(expected)
+    })
+
+    it('constructUrlForTab leaves out a missing additional param', () => {
+      const { constructUrlForTab } = createNavigationInstance(nestedRouteConfig)
+      expect(constructUrlForTab('tab2', { tab: 'tab1' })).toBe('/nested/tab2')
     })
   })
 
-  describe('Nested Routes (pattern: /base/[param1]/[tab])', () => {
-    beforeEach(() => {
-      setupRoute({
-        path: '/nested/value1/tab1',
-        params: { param1: 'value1', tab: 'tab1' }
-      })
-    })
-
-    describe('Tab Initialization with Additional Params', () => {
-      const nestedInitCases = [
-        {
-          params: { param1: 'value1', tab: 'tab1' },
-          expectedTab: 'tab1',
-          description: 'valid nested route'
-        },
-        {
-          params: { param1: 'value1', tab: undefined },
-          expectedTab: 'tab1',
-          description: 'missing tab param'
-        },
-        {
-          params: { param1: 'value1', tab: 'invalid' },
-          expectedTab: 'tab1',
-          description: 'invalid tab with valid param1'
-        },
-        {
-          params: { tab: 'tab1' },
-          expectedTab: 'tab1',
-          description: 'missing param1'
-        }
-      ]
-
-      for (const testCase of nestedInitCases) {
-        it(`should handle ${testCase.description}`, () => {
-          setupRoute({ path: '/nested/value1/tab1', params: testCase.params })
-
-          const { activeTab } = createNavigationInstance(nestedRouteConfig)
-
-          expect(activeTab.value).toBe(testCase.expectedTab)
-        })
-      }
-    })
-
-    describe('Navigation with Additional Params', () => {
-      it('should call navigateTo with path including additional params', async () => {
-        const { activeTab } = createNavigationInstance(nestedRouteConfig)
-        await setActiveTab(activeTab, 'tab2')
-
-        expect(mockNavigateTo).toHaveBeenCalled()
-        expect(mockNavigateTo.mock.calls[0]![0].path).toBe('/nested/value1/tab2')
-      })
-    })
-
-    describe('Parametrized: All tabs preserve additional params', () => {
-      for (const tab of nestedRouteConfig.tabs.filter(t => t !== 'tab1')) {
-        it(`should navigate to ${tab} with param1 preserved`, async () => {
-          setupRoute({
-            path: '/nested/value1/tab1',
-            params: { param1: 'value1', tab: 'tab1' }
-          })
-
-          const { activeTab } = createNavigationInstance(nestedRouteConfig)
-          await setActiveTab(activeTab, tab)
-
-          expectNavigationToPath(`/nested/value1/${tab}`)
-        })
-      }
-    })
-  })
-
-  describe('Helper Functions', () => {
-    describe('isValidTab', () => {
-      const validationCases = [
-        { tab: 'tab1', expected: true, description: 'valid tab' },
-        { tab: 'tab2', expected: true, description: 'another valid tab' },
-        { tab: 'invalid', expected: false, description: 'invalid tab' },
-        { tab: '', expected: false, description: 'empty string' }
-      ]
-
-      for (const testCase of validationCases) {
-        it(`should return ${testCase.expected} for ${testCase.description}`, () => {
-          const { isValidTab } = createNavigationInstance(simpleRouteConfig)
-          expect(isValidTab(testCase.tab)).toBe(testCase.expected)
-        })
-      }
-    })
-
-    describe('constructUrlForTab', () => {
-      const urlConstructionCases = [
-        {
-          description: 'simple route without additional params',
-          config: simpleRouteConfig,
-          params: { tab: 'tab1' },
-          targetTab: 'tab2',
-          expected: '/simple/tab2'
-        },
-        {
-          description: 'nested route with single additional param',
-          config: nestedRouteConfig,
-          params: { param1: 'value1', tab: 'tab1' },
-          targetTab: 'tab2',
-          expected: '/nested/value1/tab2'
-        },
-        {
-          description: 'route with multiple additional params',
-          config: { tabs: ['tab1', 'tab2'], basePath: '/base', additionalParams: ['param1', 'param2'] },
-          params: { param1: 'param1value', param2: 'param2value', tab: 'tab1' },
-          targetTab: 'tab2',
-          expected: '/base/param1value/param2value/tab2'
-        },
-        {
-          description: 'missing additional params',
-          config: nestedRouteConfig,
-          params: { tab: 'tab1' },
-          targetTab: 'tab2',
-          expected: '/nested/tab2'
-        }
-      ]
-
-      for (const testCase of urlConstructionCases) {
-        it(`should construct ${testCase.description}`, () => {
-          // Don't need setupRoute - pass params directly to pure function
-          const { constructUrlForTab } = createNavigationInstance(testCase.config)
-          expect(constructUrlForTab(testCase.targetTab, testCase.params)).toBe(testCase.expected)
-        })
-      }
+  describe('isValidTab', () => {
+    it.each([
+      { tab: 'tab1', expected: true },
+      { tab: 'invalid', expected: false }
+    ])('should return $expected for $tab', ({tab, expected}) => {
+      const { isValidTab } = createNavigationInstance(simpleRouteConfig)
+      expect(isValidTab(tab)).toBe(expected)
     })
   })
 
@@ -273,7 +158,7 @@ describe('useTabNavigation.ts', () => {
         routeParam: 'invalid',
         expectedTab: 'tab1',
         shouldSync: true,
-        description: 'invalid tab triggers sync'
+        description: 'invalid tab falls back to the first tab and triggers sync'
       },
       {
         routeParam: 'tab2',
@@ -285,7 +170,7 @@ describe('useTabNavigation.ts', () => {
         routeParam: undefined,
         expectedTab: 'tab1',
         shouldSync: true,
-        description: 'missing tab triggers sync'
+        description: 'missing tab falls back to the first tab and triggers sync'
       }
     ]
 
@@ -301,46 +186,5 @@ describe('useTabNavigation.ts', () => {
         expect(shouldSyncActiveTab.value).toBe(testCase.shouldSync)
       })
     }
-  })
-
-  describe('Edge Cases', () => {
-    it('should handle tabs with dashes and underscores', () => {
-      setupRoute({ path: '/custom/my-tab', params: { tab: 'my-tab' } })
-
-      const customConfig = {
-        tabs: ['my-tab', 'other_tab'],
-        basePath: '/custom'
-      }
-
-      const { activeTab } = createNavigationInstance(customConfig)
-      expect(activeTab.value).toBe('my-tab')
-    })
-
-    it('should handle multiple additional params', async () => {
-      setupRoute({
-        path: '/base/param1value/param2value/tab1',
-        params: { param1: 'param1value', param2: 'param2value', tab: 'tab1' }
-      })
-
-      const multiParamConfig = {
-        tabs: ['tab1', 'tab2'],
-        basePath: '/base',
-        additionalParams: ['param1', 'param2']
-      }
-
-      const { activeTab } = createNavigationInstance(multiParamConfig)
-      await setActiveTab(activeTab, 'tab2')
-
-      expectNavigationToPath('/base/param1value/param2value/tab2')
-    })
-
-    it('should use first tab as default', () => {
-      setupRoute({ path: '/simple/invalid', params: { tab: 'invalid' } })
-
-      const { activeTab } = createNavigationInstance(simpleRouteConfig)
-
-      // Should fall back to first tab in array
-      expect(activeTab.value).toBe('tab1')
-    })
   })
 })

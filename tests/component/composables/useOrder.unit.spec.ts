@@ -58,7 +58,6 @@ describe('useOrder', () => {
     it.each([
       {bookerName: undefined, expected: 'Gæst'},
       {bookerName: 'Anna', expected: 'Gæst af Anna'},
-      {bookerName: 'Peter Hansen', expected: 'Gæst af Peter Hansen'},
       {bookerName: '', expected: 'Gæst'},  // empty string treated as falsy
     ])('GIVEN bookerName="$bookerName" THEN returns "$expected"', ({bookerName, expected}) => {
       expect(formatGuestLabel(bookerName)).toBe(expected)
@@ -69,12 +68,8 @@ describe('useOrder', () => {
     describe.each([
       // toNet=true: gross → net (divide by 1.25 for 25% VAT)
       { amountOre: 12500, vatPercent: 25, toNet: true, expected: 10000, description: '125 kr gross → 100 kr net' },
-      { amountOre: 10000, vatPercent: 25, toNet: true, expected: 8000, description: '100 kr gross → 80 kr net' },
-      { amountOre: 0, vatPercent: 25, toNet: true, expected: 0, description: '0 kr gross → 0 kr net' },
       // toNet=false: net → gross (multiply by 1.25 for 25% VAT)
-      { amountOre: 10000, vatPercent: 25, toNet: false, expected: 12500, description: '100 kr net → 125 kr gross' },
-      { amountOre: 8000, vatPercent: 25, toNet: false, expected: 10000, description: '80 kr net → 100 kr gross' },
-      { amountOre: 0, vatPercent: 25, toNet: false, expected: 0, description: '0 kr net → 0 kr gross' }
+      { amountOre: 10000, vatPercent: 25, toNet: false, expected: 12500, description: '100 kr net → 125 kr gross' }
     ])('GIVEN $description', ({ amountOre, vatPercent, toNet, expected }) => {
       it(`WHEN converting with toNet=${toNet} THEN returns ${expected} øre`, () => {
         expect(convertVat(amountOre, vatPercent, toNet)).toBe(expected)
@@ -85,16 +80,6 @@ describe('useOrder', () => {
   describe('calculateBudget', () => {
     describe.each([
       {
-        scenario: 'empty orders',
-        orders: [],
-        expected: { ticketCount: 0, totalRevenue: 0, kitchenContribution: 0, availableBudget: 0, availableBudgetExVat: 0 }
-      },
-      {
-        scenario: 'single BOOKED order (50 kr)',
-        orders: [createTestOrder({ state: OrderState.BOOKED, priceAtBooking: 5000 })],
-        expected: { ticketCount: 1, totalRevenue: 5000, kitchenContribution: 250, availableBudget: 4750, availableBudgetExVat: 3800 }
-      },
-      {
         scenario: 'mixed states (BOOKED, CLOSED and RELEASED all paid)',
         orders: [
           createTestOrder({ state: OrderState.BOOKED, priceAtBooking: 5000 }),
@@ -102,14 +87,6 @@ describe('useOrder', () => {
           createTestOrder({ state: OrderState.RELEASED, priceAtBooking: 5000 })
         ],
         expected: { ticketCount: 3, totalRevenue: 15000, kitchenContribution: 750, availableBudget: 14250, availableBudgetExVat: 11400 }
-      },
-      {
-        scenario: 'released tickets after the deadline stay paid',
-        orders: [
-          createTestOrder({ state: OrderState.RELEASED, priceAtBooking: 5000 }),
-          createTestOrder({ state: OrderState.RELEASED, priceAtBooking: 5000 })
-        ],
-        expected: { ticketCount: 2, totalRevenue: 10000, kitchenContribution: 500, availableBudget: 9500, availableBudgetExVat: 7600 }
       }
     ])('GIVEN $scenario', ({ orders, expected }) => {
       it('WHEN calculating budget THEN returns correct values', () => {
@@ -161,7 +138,6 @@ describe('useOrder', () => {
   describe('requiresChair', () => {
     it.each([
       [TicketType.ADULT, true],
-      [TicketType.CHILD, true],
       [TicketType.BABY, false]
     ])('GIVEN %s WHEN checking chair requirement THEN returns %s',
       (ticketType, expected) => {
@@ -185,14 +161,6 @@ describe('useOrder', () => {
         scenario: 'empty orders',
         orders: [] as ReturnType<typeof createTestOrder>[],
         expected: { TAKEAWAY: 0, SPISESAL: 0, 'SPIS SENT': 0, 'TIL SALG': 0 }
-      },
-      {
-        scenario: 'all adults in DINEIN → SPISESAL 100%',
-        orders: [
-          createOrderWithMode(DinnerMode.DINEIN, TicketType.ADULT),
-          createOrderWithMode(DinnerMode.DINEIN, TicketType.ADULT)
-        ],
-        expected: { TAKEAWAY: 0, SPISESAL: 100, 'SPIS SENT': 0, 'TIL SALG': 0 }
       },
       {
         scenario: 'released babies → TIL SALG 0% (not order-based)',

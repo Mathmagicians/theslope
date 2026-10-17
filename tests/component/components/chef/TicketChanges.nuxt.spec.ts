@@ -61,15 +61,12 @@ describe('TicketChanges', () => {
         historyEndpoint.mockClear()
     })
 
-    it('GIVEN the pane WHEN closed THEN nothing is read and no table shows', async () => {
+    it('GIVEN the closed pane THEN nothing is read; WHEN opened THEN the changes since Framelding closed come newest first with household, event, ticket, composition and Indtægter; WHEN "Vis fuld historik" is clicked THEN the whole history is read and the deadline line goes', async () => {
         const wrapper = await mount()
         expect(wrapper.text()).toContain('Se billetændringer')
         expect(wrapper.findAll('tbody tr')).toHaveLength(0)
         expect(historyEndpoint).not.toHaveBeenCalled()
-    })
 
-    it('GIVEN the toggle WHEN opened THEN the changes since Framelding closed come newest first with household, event, ticket, composition and Indtægter', async () => {
-        const wrapper = await mount()
         await open(wrapper)
 
         expect(historyEndpoint).toHaveBeenCalledTimes(1)
@@ -84,11 +81,6 @@ describe('TicketChanges', () => {
         expect(rows[1]!.text()).toContain(`${formatPortions(34.5)} kuverter`)
         expect(findAllByTestId(wrapper, 'ticket-change-revenue')[1]!.text()).toBe(`${formatPrice(172500)} kr`)
         expect(findByTestId(wrapper, 'ticket-changes-deadline').text()).toContain('Framelding lukker · 03/04/2026 18:00')
-    })
-
-    it('GIVEN older changes WHEN "Vis fuld historik" is clicked THEN the whole history is read and the deadline line goes', async () => {
-        const wrapper = await mount()
-        await open(wrapper)
         expect(findByTestId(wrapper, 'ticket-changes-more').exists()).toBe(true)
 
         await clickByTestId(wrapper, 'ticket-changes-more')
@@ -96,11 +88,11 @@ describe('TicketChanges', () => {
         await nextTick()
 
         expect(getQuery(historyEndpoint.mock.calls.at(-1)![0] as H3Event)).not.toHaveProperty('since')
-        const rows = wrapper.findAll('tbody tr')
-        expect(rows).toHaveLength(3)
-        expect(rows[2]!.text()).toContain('System')
-        expect(rows[2]!.text()).toContain('Automatisk bestilling')
-        expect(rows[2]!.text()).toContain('+28 V')
+        const allRows = wrapper.findAll('tbody tr')
+        expect(allRows).toHaveLength(3)
+        expect(allRows[2]!.text()).toContain('System')
+        expect(allRows[2]!.text()).toContain('Automatisk bestilling')
+        expect(allRows[2]!.text()).toContain('+28 V')
         expect(findByTestId(wrapper, 'ticket-changes-deadline').exists()).toBe(false)
         expect(findByTestId(wrapper, 'ticket-changes-more').exists()).toBe(false)
     })

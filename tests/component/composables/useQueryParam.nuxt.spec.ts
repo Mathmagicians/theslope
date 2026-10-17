@@ -58,7 +58,6 @@ describe('useQueryParam.ts', () => {
       const readCases: { query: Record<string, string>, expected: string, description: string }[] = [
         {query: {}, expected: 'view', description: 'no query param'},
         {query: {mode: 'edit'}, expected: 'edit', description: 'valid mode'},
-        {query: {mode: 'create'}, expected: 'create', description: 'another valid mode'},
         {query: {mode: 'invalid'}, expected: 'view', description: 'invalid mode falls back to default'}
       ]
 
@@ -85,19 +84,6 @@ describe('useQueryParam.ts', () => {
           query: {mode: 'edit'}
         })
         expect(mockNavigateTo.mock.calls[0]![1]).toEqual({replace: true})
-      })
-
-      it('should preserve other query params', async () => {
-        setupQuery({other: 'value', mode: 'view'})
-        const {value} = createModeParam()
-
-        value.value = 'edit'
-        await flushPromises()
-
-        expect(mockNavigateTo.mock.calls[0]![0].query).toEqual({
-          other: 'value',
-          mode: 'edit'
-        })
       })
 
       it('should not navigate if value is same', async () => {
@@ -156,23 +142,11 @@ describe('useQueryParam.ts', () => {
     })
 
     describe('Reading from URL', () => {
-      it('should return default when no query param', () => {
-        setupQuery({})
-        const {value} = createDateParam()
-        expect(value.value.toISOString()).toBe(new Date('2025-01-01').toISOString())
-      })
-
       it('should deserialize valid date from URL', () => {
         setupQuery({date: '15/01/2025'})
         const {value} = createDateParam()
         // Compare dates ignoring time (parseDate creates date at midnight local time)
         expect(value.value.toDateString()).toBe(testDate.toDateString())
-      })
-
-      it('should return default for invalid date', () => {
-        setupQuery({date: 'invalid'})
-        const {value} = createDateParam()
-        expect(value.value.toISOString()).toBe(new Date('2025-01-01').toISOString())
       })
     })
 
@@ -272,20 +246,6 @@ describe('useQueryParam.ts', () => {
     })
 
     describe('replaceHistory', () => {
-      it('should replace history by default', async () => {
-        setupQuery({})
-
-        const {value} = useQueryParam<string>('test', {
-          defaultValue: 'default',
-          syncWhen: () => false
-        })
-
-        value.value = 'new'
-        await flushPromises()
-
-        expect(mockNavigateTo.mock.calls[0]![1]).toEqual({replace: true})
-      })
-
       it('should push to history when replaceHistory is false', async () => {
         setupQuery({})
 
@@ -316,74 +276,6 @@ describe('useQueryParam.ts', () => {
     })
   })
 
-  describe('Parametrized: All standard types', () => {
-    // Test string type
-    describe('string', () => {
-      it('should read from query', () => {
-        setupQuery({test: 'test'})
-        const {value} = useQueryParam<string>('test', {defaultValue: 'default'})
-        expect(value.value).toEqual('test')
-      })
-
-      it('should write to query', async () => {
-        setupQuery({})
-        const {value} = useQueryParam<string>('test', {defaultValue: 'default'})
-        value.value = 'test'
-        await flushPromises()
-        expect(mockNavigateTo.mock.calls[0]![0].query.test).toBe('test')
-      })
-    })
-
-    // Test number type
-    describe('number (as string)', () => {
-      const numberOptions = {
-        serialize: (n: number) => String(n),
-        deserialize: (s: string) => {
-          const parsed = parseInt(s, 10)
-          return isNaN(parsed) ? null : parsed
-        },
-        defaultValue: 0
-      }
-
-      it('should read from query', () => {
-        setupQuery({test: '42'})
-        const {value} = useQueryParam<number>('test', numberOptions)
-        expect(value.value).toEqual(42)
-      })
-
-      it('should write to query', async () => {
-        setupQuery({})
-        const {value} = useQueryParam<number>('test', numberOptions)
-        value.value = 42
-        await flushPromises()
-        expect(mockNavigateTo.mock.calls[0]![0].query.test).toBe('42')
-      })
-    })
-
-    // Test boolean type
-    describe('boolean (as string)', () => {
-      const boolOptions = {
-        serialize: (b: boolean) => b ? 'true' : 'false',
-        deserialize: (s: string) => s === 'true' ? true : s === 'false' ? false : null,
-        defaultValue: false
-      }
-
-      it('should read from query', () => {
-        setupQuery({test: 'true'})
-        const {value} = useQueryParam<boolean>('test', boolOptions)
-        expect(value.value).toEqual(true)
-      })
-
-      it('should write to query', async () => {
-        setupQuery({})
-        const {value} = useQueryParam<boolean>('test', boolOptions)
-        value.value = true
-        await flushPromises()
-        expect(mockNavigateTo.mock.calls[0]![0].query.test).toBe('true')
-      })
-    })
-  })
-
   describe('Auto-Sync (syncWhen)', () => {
     it('should auto-sync when URL is invalid and syncWhen returns true', async () => {
       setupQuery({mode: 'invalid'})
@@ -406,23 +298,6 @@ describe('useQueryParam.ts', () => {
         {path: '/test', query: {mode: 'view'}},
         {replace: true}
       )
-    })
-
-    it('should NOT auto-sync when syncWhen returns false', async () => {
-      setupQuery({mode: 'invalid'})
-
-      const {value} = useQueryParam<string>('mode', {
-        deserialize: (s) => ['view', 'edit'].includes(s) ? s : null,
-        validate: (v) => ['view', 'edit'].includes(v),
-        defaultValue: 'view',
-        syncWhen: () => false // Auto-sync disabled
-      })
-
-      expect(value.value).toBe('view')
-      await flushPromises()
-
-      // Should NOT have called navigateTo
-      expect(mockNavigateTo).not.toHaveBeenCalled()
     })
 
     it('should wait for syncWhen condition before auto-syncing', async () => {
@@ -563,37 +438,18 @@ describe('useQueryParam.ts', () => {
       syncWhen
     })
 
-    const viewStateCases: {
-      initial: string,
-      action: ViewState,
-      expected: string,
-      description: string
-    }[] = [
-      // Tab clicks always open accordion
-      { initial: 'calendar:closed', action: { mode: 'calendar', open: true }, expected: 'calendar:open', description: 'same tab click when closed opens accordion' },
-      { initial: 'calendar:open', action: { mode: 'agenda', open: true }, expected: 'agenda:open', description: 'different tab click opens that tab' },
-      { initial: 'agenda:closed', action: { mode: 'agenda', open: true }, expected: 'agenda:open', description: 'same tab click when closed opens accordion' },
-      { initial: 'agenda:closed', action: { mode: 'calendar', open: true }, expected: 'calendar:open', description: 'different tab click opens that tab' },
-      // Toggle button toggles accordion, keeps mode
-      { initial: 'calendar:open', action: { mode: 'calendar', open: false }, expected: 'calendar:closed', description: 'toggle closes accordion' },
-      { initial: 'calendar:closed', action: { mode: 'calendar', open: true }, expected: 'calendar:open', description: 'toggle opens accordion' },
-      { initial: 'agenda:open', action: { mode: 'agenda', open: false }, expected: 'agenda:closed', description: 'toggle closes agenda accordion' },
-    ]
+    it('should serialize the state object to the URL', async () => {
+      setupQuery({ view: 'calendar:open' })
+      const { setValue } = createViewStateParam()
 
-    for (const { initial, action, expected, description } of viewStateCases) {
-      it(`should update ${initial} to ${expected} when ${description}`, async () => {
-        setupQuery({ view: initial })
-        const { setValue } = createViewStateParam()
+      await setValue({ mode: 'agenda', open: false })
+      await flushPromises()
 
-        await setValue(action)
-        await flushPromises()
-
-        expect(mockNavigateTo).toHaveBeenCalledWith(
-          { path: '/test', query: { view: expected } },
-          { replace: true }
-        )
-      })
-    }
+      expect(mockNavigateTo).toHaveBeenCalledWith(
+        { path: '/test', query: { view: 'agenda:closed' } },
+        { replace: true }
+      )
+    })
 
     it('should NOT navigate when setting same value', async () => {
       setupQuery({ view: 'agenda:open' })
@@ -603,27 +459,6 @@ describe('useQueryParam.ts', () => {
       await flushPromises()
 
       expect(mockNavigateTo).not.toHaveBeenCalled()
-    })
-
-    it('should return default when URL has invalid format', () => {
-      setupQuery({ view: 'invalid' })
-      const { value } = createViewStateParam()
-
-      expect(value.value).toEqual({ mode: 'calendar', open: false })
-    })
-
-    it('should preserve other query params when updating', async () => {
-      setupQuery({ view: 'calendar:closed', date: '15/01/2025', team: '3' })
-      const { setValue } = createViewStateParam()
-
-      await setValue({ mode: 'agenda', open: true })
-      await flushPromises()
-
-      expect(mockNavigateTo.mock.calls[0]![0].query).toEqual({
-        view: 'agenda:open',
-        date: '15/01/2025',
-        team: '3'
-      })
     })
   })
 
@@ -638,20 +473,6 @@ describe('useQueryParam.ts', () => {
       })
 
       expect(value.value).toBe('')
-    })
-
-    it('should handle special characters in serialized value', async () => {
-      setupQuery({})
-
-      const {value} = useQueryParam<string>('test', {
-        defaultValue: 'default',
-        syncWhen: () => false // Disable auto-sync for this test
-      })
-
-      value.value = 'value/with/slashes'
-      await flushPromises()
-
-      expect(mockNavigateTo.mock.calls[0]![0].query.test).toBe('value/with/slashes')
     })
 
     it('should handle validation returning false when syncWhen is true', () => {

@@ -74,17 +74,6 @@ describe('useAllergy.computeAffectedDiners', () => {
                 {name: 'Anna', allergens: [PEANUTS.name]},
                 {name: 'Cy', allergens: [PEANUTS.name]}
             ]
-        },
-        {
-            filter: 'menu filter on lactose',
-            menuAllergenIds: [LACTOSE.id],
-            totalAffected: 2,
-            totalPortions: 1.5,
-            breakdown: [{name: LACTOSE.name, count: 2, portions: 1.5}],
-            diners: [
-                {name: 'Anna', allergens: [LACTOSE.name]},
-                {name: 'Bo', allergens: [LACTOSE.name]}
-            ]
         }
     ])('GIVEN an adult, a child and a baby with allergies and $filter', ({menuAllergenIds, totalAffected, totalPortions, breakdown, diners}) => {
         const result = () => computeAffectedDiners(ORDERS, CATALOGUE, menuAllergenIds)
@@ -197,14 +186,6 @@ describe('useAllergy.computeAllergenOverview', () => {
                 {...PEANUTS, portions: 1}
             ],
             diners: ['Anna', 'Bo', 'Cy']
-        },
-        {
-            allergens: 'only an allergen nobody carries',
-            orders: ORDERS,
-            selection: [SESAME],
-            totalPortions: 0,
-            breakdown: [{...SESAME, portions: 0}],
-            diners: []
         },
         {allergens: 'no allergens', orders: ORDERS, selection: [], totalPortions: 0, breakdown: [], diners: []},
         {

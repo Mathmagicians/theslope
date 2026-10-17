@@ -60,9 +60,10 @@ describe('useEntityFormManager', () => {
   }
 
   describe('Form Mode State Management', () => {
-    it('should initialize with VIEW mode', () => {
-      const { formMode } = createFormManager()
+    it('should initialize with VIEW mode and return the selected entity itself', () => {
+      const { formMode, currentModel } = createFormManager()
       expect(formMode.value).toBe(FORM_MODES.VIEW)
+      expect(currentModel.value).toBe(selectedEntity.value)
     })
 
     it('should change to CREATE mode and set draft to default entity', async () => {
@@ -72,6 +73,7 @@ describe('useEntityFormManager', () => {
 
       expect(formMode.value).toBe(FORM_MODES.CREATE)
       expect(currentModel.value).toEqual(defaultEntity)
+      expect(currentModel.value).not.toBe(selectedEntity.value)
       expect(getDefaultEntity).toHaveBeenCalled()
     })
 
@@ -84,20 +86,6 @@ describe('useEntityFormManager', () => {
       expect(currentModel.value).toEqual(existingEntity)
       // Verify it's a copy, not the same reference
       expect(currentModel.value).not.toBe(existingEntity)
-    })
-
-    it('should change to VIEW mode and clear draft entity', async () => {
-      const { formMode, currentModel, onModeChange } = createFormManager()
-
-      // First go to CREATE mode
-      await onModeChange(FORM_MODES.CREATE)
-      expect(currentModel.value).toEqual(defaultEntity)
-
-      // Then go to VIEW mode
-      await onModeChange(FORM_MODES.VIEW)
-
-      expect(formMode.value).toBe(FORM_MODES.VIEW)
-      expect(currentModel.value).toEqual(existingEntity) // Back to selected entity
     })
   })
 
@@ -113,16 +101,18 @@ describe('useEntityFormManager', () => {
     })
 
     it('should maintain draft changes when switching between CREATE and VIEW modes', async () => {
-      const { currentModel, onModeChange } = createFormManager()
+      const { formMode, currentModel, onModeChange } = createFormManager()
 
       // Create mode
       await onModeChange(FORM_MODES.CREATE)
 
       // Modify draft
       currentModel.value = { name: 'Modified', value: 99 }
+      expect(currentModel.value).toEqual({ name: 'Modified', value: 99 })
 
-      // Switch to VIEW
+      // Switch to VIEW - back to the selected entity
       await onModeChange(FORM_MODES.VIEW)
+      expect(formMode.value).toBe(FORM_MODES.VIEW)
       expect(currentModel.value).toEqual(existingEntity)
 
       // Switch back to CREATE - should get fresh default, not modified draft
@@ -142,44 +132,6 @@ describe('useEntityFormManager', () => {
 
       // Selected entity should remain unchanged
       expect(selectedEntity.value?.name).toBe('Existing')
-    })
-  })
-
-  describe('currentModel Computed Property', () => {
-    it('should return selected entity when in VIEW mode', () => {
-      const { currentModel } = createFormManager()
-
-      expect(currentModel.value).toEqual(existingEntity)
-      expect(currentModel.value).toBe(selectedEntity.value)
-    })
-
-    it('should return draft entity when in CREATE mode', async () => {
-      const { currentModel, onModeChange } = createFormManager()
-
-      await onModeChange(FORM_MODES.CREATE)
-
-      expect(currentModel.value).toEqual(defaultEntity)
-      expect(currentModel.value).not.toBe(selectedEntity.value)
-    })
-
-    it('should return draft entity when in EDIT mode', async () => {
-      const { currentModel, onModeChange } = createFormManager()
-
-      await onModeChange(FORM_MODES.EDIT)
-
-      expect(currentModel.value).toEqual(existingEntity)
-      expect(currentModel.value).not.toBe(selectedEntity.value) // Copy, not reference
-    })
-
-    it('should allow setting draft entity value', async () => {
-      const { currentModel, onModeChange } = createFormManager()
-
-      await onModeChange(FORM_MODES.CREATE)
-
-      const newEntity: TestEntity = { name: 'New', value: 123 }
-      currentModel.value = newEntity
-
-      expect(currentModel.value).toEqual(newEntity)
     })
   })
 

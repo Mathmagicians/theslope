@@ -32,89 +32,50 @@ describe('AdminPlanningSeason', () => {
         resetStores()
     })
 
-    it('renders the season form', async () => {
+    it('mode=view renders the season form named by the season, counts the cooking days it scaffolds, offers an edit control labelled with the season that emits edit, and no footer', async () => {
         const wrapper = await mount(FORM_MODES.VIEW)
         expect(wrapper.find('form#seasonForm').exists()).toBe(true)
-    })
+        expect(wrapper.find('h2').text()).toContain(season.shortName)
 
-    it('counts the cooking days the saved season scaffolds', async () => {
-        const wrapper = await mount(FORM_MODES.VIEW)
         const expected = computeCookingDates(season.cookingDays, season.seasonDates, season.holidays).length
         expect(expected).toBeGreaterThan(0)
         const counter = findByTestId(wrapper, PLANNING_TEST_IDS.cookingDayCount)
         expect(counter.text()).toContain(String(expected))
         expect(counter.text()).toContain('Madlavningsdage')
+
+        expect(findByTestId(wrapper, PLANNING_TEST_IDS.submit).exists()).toBe(false)
+        expect(findByTestId(wrapper, PLANNING_TEST_IDS.cancel).exists()).toBe(false)
+
+        // The edit control keeps the imperative "Rediger"
+        const label = findByTestId(wrapper, PLANNING_TEST_IDS.edit).text()
+        expect(label.split(' ')[0]).toBe('Rediger')
+        expect(label).toContain(season.shortName)
+        await clickByTestId(wrapper, PLANNING_TEST_IDS.edit)
+        expect(wrapper.emitted('edit')).toBeTruthy()
     })
 
-    describe('title', () => {
-        it.each([FORM_MODES.VIEW, FORM_MODES.EDIT])('mode=%s names the season being shown', async (mode) => {
-            const wrapper = await mount(mode)
-            expect(wrapper.find('h2').text()).toContain(season.shortName)
-        })
-
-        // The title says what the form is doing; the edit control keeps the imperative "Rediger"
-        it.each([
-            {mode: FORM_MODES.EDIT, heading: 'Redigerer fællesspisning sæson'},
-            {mode: FORM_MODES.CREATE, heading: 'Opretter fællesspisning sæson'}
-        ])('mode=$mode reads "$heading"', async ({mode, heading}) => {
-            const wrapper = await mount(mode)
-            expect(wrapper.find('h2').text()).toContain(heading)
-        })
-
-        it('carries the name instead of a read-only field', async () => {
-            const wrapper = await mount(FORM_MODES.EDIT)
-            expect(wrapper.find('input[name="shortName"]').exists()).toBe(false)
-        })
+    it('mode=view without canEdit offers no edit control', async () => {
+        const wrapper = await mount(FORM_MODES.VIEW, false)
+        expect(findByTestId(wrapper, PLANNING_TEST_IDS.edit).exists()).toBe(false)
     })
 
-    describe('edit control', () => {
-        const editCases = [
-            {mode: FORM_MODES.VIEW, canEdit: true, expected: true},
-            {mode: FORM_MODES.VIEW, canEdit: false, expected: false},
-            {mode: FORM_MODES.EDIT, canEdit: true, expected: false}
-        ] as const
+    // The title says what the form is doing
+    it('mode=edit titles the season it edits instead of a read-only name field, offers no edit control, and a footer Annuller / Gem that cancels and submits', async () => {
+        const wrapper = await mount(FORM_MODES.EDIT)
+        expect(wrapper.find('h2').text()).toContain('Redigerer fællesspisning sæson')
+        expect(wrapper.find('h2').text()).toContain(season.shortName)
+        expect(wrapper.find('input[name="shortName"]').exists()).toBe(false)
+        expect(findByTestId(wrapper, PLANNING_TEST_IDS.edit).exists()).toBe(false)
 
-        it.each(editCases)('mode=$mode canEdit=$canEdit → edit control exists=$expected', async ({mode, canEdit, expected}) => {
-            const wrapper = await mount(mode, canEdit)
-            expect(findByTestId(wrapper, PLANNING_TEST_IDS.edit).exists()).toBe(expected)
-        })
-
-        it('is labelled with the season it edits', async () => {
-            const wrapper = await mount(FORM_MODES.VIEW)
-            const label = findByTestId(wrapper, PLANNING_TEST_IDS.edit).text()
-            expect(label.split(' ')[0]).toBe('Rediger')
-            expect(label).toContain(season.shortName)
-        })
-
-        it('emits edit when it is clicked', async () => {
-            const wrapper = await mount(FORM_MODES.VIEW)
-            await clickByTestId(wrapper, PLANNING_TEST_IDS.edit)
-            expect(wrapper.emitted('edit')).toBeTruthy()
-        })
+        expect(findByTestId(wrapper, PLANNING_TEST_IDS.submit).text()).toBe('Gem')
+        expect(findByTestId(wrapper, PLANNING_TEST_IDS.submit).attributes('type')).toBe('submit')
+        expect(findByTestId(wrapper, PLANNING_TEST_IDS.cancel).text()).toBe('Annuller')
+        await clickByTestId(wrapper, PLANNING_TEST_IDS.cancel)
+        expect(wrapper.emitted('cancel')).toBeTruthy()
     })
 
-    describe('footer', () => {
-        it('mode=view → no footer buttons', async () => {
-            const wrapper = await mount(FORM_MODES.VIEW)
-            expect(findByTestId(wrapper, PLANNING_TEST_IDS.submit).exists()).toBe(false)
-            expect(findByTestId(wrapper, PLANNING_TEST_IDS.cancel).exists()).toBe(false)
-        })
-
-        it('mode=edit labels the footer Annuller / Gem', async () => {
-            const wrapper = await mount(FORM_MODES.EDIT)
-            expect(findByTestId(wrapper, PLANNING_TEST_IDS.cancel).text()).toBe('Annuller')
-            expect(findByTestId(wrapper, PLANNING_TEST_IDS.submit).text()).toBe('Gem')
-        })
-
-        it('submits the form from the save button', async () => {
-            const wrapper = await mount(FORM_MODES.EDIT)
-            expect(findByTestId(wrapper, PLANNING_TEST_IDS.submit).attributes('type')).toBe('submit')
-        })
-
-        it('emits cancel from the cancel button', async () => {
-            const wrapper = await mount(FORM_MODES.EDIT)
-            await clickByTestId(wrapper, PLANNING_TEST_IDS.cancel)
-            expect(wrapper.emitted('cancel')).toBeTruthy()
-        })
+    it('mode=create reads "Opretter fællesspisning sæson"', async () => {
+        const wrapper = await mount(FORM_MODES.CREATE)
+        expect(wrapper.find('h2').text()).toContain('Opretter fællesspisning sæson')
     })
 })

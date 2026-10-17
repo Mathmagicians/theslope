@@ -77,16 +77,6 @@ describe('ChefMenuCard', () => {
         return wrapper.findComponent(AllergenMultiSelector)
     }
 
-    describe('Allergen ID Extraction', () => {
-        it('hands the editor each allergen id, not a join row allergyTypeId', async () => {
-            const dinnerEvent = createDinnerEventWithAllergens([1, 3, 5])
-            const wrapper = await createWrapper({dinnerEvent})
-
-            const selector = await openAllergenEditor(wrapper)
-            expect(selector.props('modelValue')).toEqual([1, 3, 5])
-        })
-    })
-
     describe('Empty Allergens', () => {
         it('handles dinner event without allergens array', async () => {
             const dinnerEvent = {
@@ -114,9 +104,10 @@ describe('ChefMenuCard', () => {
             OrderFactory.defaultOrderDetailWithAllergies(3, 'Cy', [NUTS!], {ticketType: TicketType.ADULT})
         ]
 
-        it.each([FORM_MODES.VIEW, FORM_MODES.EDIT])('GIVEN a menu with milk and gluten in %s mode THEN shows the total and each menu allergen as its compact allergy type with its kuverter, a zero included', async (formMode) => {
+        // The line renders the same in both modes; EDIT only adds the Rediger allergener button
+        it('GIVEN a menu with milk and gluten THEN shows the total and each menu allergen as its compact allergy type with its kuverter, a zero included, under the Allergener title its glyph leads', async () => {
             const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), allergens: [MILK!, GLUTEN!], tickets}
-            const wrapper = await createWrapper({dinnerEvent, formMode})
+            const wrapper = await createWrapper({dinnerEvent, formMode: FORM_MODES.VIEW})
 
             const overview = findByTestId(wrapper, ALLERGEN_OVERVIEW)
             expect(overview.findAll(':scope > span').map(part => part.text())).toEqual([
@@ -127,17 +118,12 @@ describe('ChefMenuCard', () => {
             const allergens = overview.findAllComponents(AllergyTypeDisplay) as VueWrapper<ComponentPublicInstance<{allergyType: unknown, compact: boolean, showName: boolean}>>[]
             expect(allergens.map(allergen => allergen.props('allergyType'))).toEqual([expect.objectContaining(MILK!), expect.objectContaining(GLUTEN!)])
             expect(allergens.every(allergen => allergen.props('compact') && allergen.props('showName'))).toBe(true)
-        })
-
-        it.each([FORM_MODES.VIEW, FORM_MODES.EDIT])('GIVEN a menu with milk in %s mode THEN the allergy glyph leads the Allergener title and the overview carries none', async (formMode) => {
-            const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), allergens: [MILK!], tickets}
-            const wrapper = await createWrapper({dinnerEvent, formMode})
 
             const label = findByTestId(wrapper, ALLERGEN_LABEL)
             expect(label.text()).toBe('Allergener')
             expect(label.element.firstElementChild).toBe(label.findComponent({name: 'UIcon'}).element)
             expect(label.findComponent({name: 'UIcon'}).props('name')).toBe(ICONS.allergy)
-            const icons = findByTestId(wrapper, ALLERGEN_OVERVIEW).findAllComponents({name: 'UIcon'}) as VueWrapper<ComponentPublicInstance<{name: string}>>[]
+            const icons = overview.findAllComponents({name: 'UIcon'}) as VueWrapper<ComponentPublicInstance<{name: string}>>[]
             expect(icons.filter(icon => icon.props('name') === ICONS.allergy)).toHaveLength(0)
         })
 
@@ -149,27 +135,24 @@ describe('ChefMenuCard', () => {
             expect(findByTestId(wrapper, ALLERGEN_OVERVIEW).exists()).toBe(false)
         })
 
-        it('hands the dinner tickets to the allergen editor', async () => {
-            const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), allergens: [MILK!], tickets}
+        it('hands the allergen editor each allergen id, not a join row allergyTypeId, and the dinner tickets', async () => {
+            const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), allergens: [MILK!, GLUTEN!], tickets}
             const wrapper = await createWrapper({dinnerEvent})
 
             const selector = await openAllergenEditor(wrapper)
+            expect(selector.props('modelValue')).toEqual([MILK!.id, GLUTEN!.id])
             expect(selector.props('tickets')).toHaveLength(tickets.length)
         })
     })
 
     describe('Menu action row (EDIT mode)', () => {
-        it('shows a labelled primary edit, secondary publish, and a quiet overflow trigger', async () => {
+        it('shows a labelled primary edit, secondary publish, and a quiet overflow trigger that keeps the cancel-dinner action', async () => {
             const wrapper = await createWrapper()
 
             // The primary action is labelled, the overflow trigger is the quiet icon-only one
             expect(findByTestId(wrapper, 'edit-menu').text()).toContain('Rediger menu')
             expect(wrapper.find('[name="announce-dinner"]').text()).toContain('Publicer')
             expect(findByTestId(wrapper, 'dinner-more-actions').exists()).toBe(true)
-        })
-
-        it('keeps the cancel-dinner action behind the overflow panel', async () => {
-            const wrapper = await createWrapper()
 
             // Danger zone is collapsed by default - cancel action is not in the DOM
             expect(findByTestId(wrapper, 'dinner-danger-zone').exists()).toBe(false)
@@ -197,21 +180,19 @@ describe('ChefMenuCard', () => {
         type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
         const chef = {id: 7, heynaboId: 7, householdId: 1, name: 'Anna', lastName: 'Kok', pictureUrl: null, birthDate: null}
 
-        it.each([
-            {name: 'a wanted poster without a chef', chef: null, testId: 'chef-wanted'},
-            {name: 'the chef', chef, testId: 'chef-display'}
-        ])('renders $name', async ({chef: dinnerChef, testId}) => {
-            const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), chef: dinnerChef}
+        it('renders a wanted poster without a chef, the chef glyph as its hat', async () => {
+            const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), chef: null}
             const wrapper = await createWrapper({dinnerEvent, formMode: FORM_MODES.VIEW})
-
-            expect(findByTestId(wrapper, testId).exists()).toBe(true)
-        })
-
-        it('renders the chef glyph as the hat on the wanted poster', async () => {
-            const wrapper = await createWrapper({formMode: FORM_MODES.VIEW})
 
             const icons = findByTestId(wrapper, 'chef-wanted').findAllComponents({name: 'UIcon'})
             expect(icons.some((icon: IconWrapper) => icon.props('name') === ICONS.chef)).toBe(true)
+        })
+
+        it('renders the chef', async () => {
+            const dinnerEvent = {...DinnerEventFactory.defaultDinnerEventDetail(), chef}
+            const wrapper = await createWrapper({dinnerEvent, formMode: FORM_MODES.VIEW})
+
+            expect(findByTestId(wrapper, 'chef-display').exists()).toBe(true)
         })
     })
 })
