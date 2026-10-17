@@ -281,18 +281,19 @@ describe('Bookings store — scaffold bookings', () => {
     })
 
     it.each([
-        {view: 'day', errored: 0, color: COLOR.success},
-        {view: 'grid', errored: 1, color: COLOR.error}
-    ])('reports the result in the toast it is given ($view view, errored $errored)', async ({view, errored, color}) => {
+        {view: 'day', failedOrders: 0, color: COLOR.success, description: 'Anna: 2 tilmeldt d. 01/01/2026'},
+        {view: 'grid', failedOrders: 1, color: COLOR.error, description: 'Anna: 2 tilmeldt, 1 opdatering fejlede d. 01/01/2026'}
+    ])('reports the result in the toast it is given ($view view, $failedOrders failed)', async ({view, failedOrders, color, description}) => {
         const results = [1, 2].map(dinnerEventId => OrderFactory.defaultBookingResult({inhabitantName: 'Anna', dinnerEventId, action: Action.BOOK}))
-        scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({totals: {[Action.BOOK]: 2}, results, errored}))
+        const failed = Array.from({length: failedOrders}, () => OrderFactory.defaultBookingResult({inhabitantName: 'Anna', dinnerEventId: 3, action: Action.BOOK}))
+        scaffoldEndpoint.mockImplementation(() => OrderFactory.defaultScaffoldOrdersResponse({totals: {[Action.BOOK]: 2}, results, failed, errored: failed.length}))
         const store = useBookingsStore()
 
         await store.processSingleEventBookings(1, DINNER_ID, [], false, {title: view, suffix: ' d. 01/01/2026'})
 
         expect(useToast().toasts.value.at(-1)).toMatchObject({
             title: view,
-            description: 'Anna: 2 tilmeldt d. 01/01/2026',
+            description,
             color,
             ui: {description: COMPONENTS.bookingResult.lines}
         })

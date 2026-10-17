@@ -185,16 +185,17 @@ test.describe('Daily Maintenance API', () => {
         )
         createdHouseholdIds.push(secondHousehold.household.id)
         // Admin session doesn't belong to 2nd household → use adminBypass
-        await OrderFactory.createOrder(context, {
+        const takeawayOrderResult = await OrderFactory.createOrder(context, {
             householdId: secondHousehold.household.id,
             dinnerEventId: dinner.id,
             orders: [{
                 inhabitantId: secondHousehold.inhabitants[0]!.id,
                 ticketPriceId: ticketPrice.id!,
-                dinnerMode: DinnerMode.DINEIN,
+                dinnerMode: DinnerMode.TAKEAWAY,
                 isGuestTicket: false
             }]
         })
+        const takeawayOrderId = takeawayOrderResult!.createdIds[0]!
 
         // Setup: Create inhabitant with NULL preferences (simulates Heynabo import)
         const nullPrefsInhabitant = await HouseholdFactory.createInhabitantWithConfig(
@@ -208,6 +209,8 @@ test.describe('Daily Maintenance API', () => {
         expect(maintenanceResult.initPrefs.initialized, 'Should initialize NULL preferences').toBeGreaterThanOrEqual(1)
         expect(maintenanceResult.close.closed, 'Should close orders on CONSUMED dinner').toBeGreaterThanOrEqual(2)
         expect(maintenanceResult.transact.created, 'Should create transactions for closed orders').toBeGreaterThanOrEqual(2)
+        expect(await OrderFactory.getOrder(context, takeawayOrderId), 'The close keeps the eating mode')
+            .toMatchObject({state: OrderState.CLOSED, dinnerMode: DinnerMode.TAKEAWAY})
 
         // Build expected maps: NULL→DINEIN on cooking days, existing→preserved on cooking days
         const expectedNullPrefs = Object.fromEntries(
@@ -303,7 +306,11 @@ test.describe('Daily Maintenance API', () => {
 
         // Control sum: each invoice.transactionSum equals Σ of its transactions
         // Structure check: getInvoiceTransactions returns transactions with expected fields
-        for (const invoice of periodDetail.invoices) {
+        // On the invoices of this case's households: on a shared database the period also holds every other household's
+        // invoice, and the session household may carry earlier runs' invoices
+        const ownInvoices = periodDetail.invoices.filter(inv => [householdId, secondHousehold.household.id].includes(inv.householdId))
+        expect(ownInvoices.some(inv => inv.householdId === secondHousehold.household.id), 'the ZZZ household is billed in this period').toBe(true)
+        for (const invoice of ownInvoices) {
             const transactions = await BillingFactory.getInvoiceTransactions(context, invoice.id)
             const computedSum = transactions.reduce((sum, tx) => sum + tx.amount, 0)
             expect(invoice.transactionSum, `transactionSum for invoice ${invoice.id} should equal Σ transactions`).toBe(computedSum)

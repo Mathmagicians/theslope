@@ -238,8 +238,8 @@ test.describe('Waiting list assignment', () => {
         expect(response!.scaffoldResult.errored).toBe(0)
         expect(response!.scaffoldResult.failed).toEqual([])
         expect(response!.scaffoldResult.results).toEqual(expect.arrayContaining([
-            expect.objectContaining({inhabitantId: sellerInhabitant!.id, dinnerEventId: closedDinner.id, action: Action.RELEASE}),
-            expect.objectContaining({inhabitantId: sellerInhabitant!.id, dinnerEventId: openDinner.id, action: Action.CANCEL})
+            expect.objectContaining({inhabitantId: sellerInhabitant!.id, dinnerEventId: closedDinner.id, action: Action.RELEASE, ticketType: TicketType.ADULT}),
+            expect.objectContaining({inhabitantId: sellerInhabitant!.id, dinnerEventId: openDinner.id, action: Action.CANCEL, ticketType: TicketType.ADULT})
         ]))
         // The seller holds a ticket on every dinner of the season, so its release also serves the lines the earlier cases leave
         const salesOnDinner = response!.scaffoldResult.outcomes.waitlistTicketsSold.filter(sale => sale.dinnerEventId === closedDinner.id)

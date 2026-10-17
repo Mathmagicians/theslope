@@ -1181,7 +1181,7 @@ export async function updateDinnersToConsumed(
  */
 export async function fetchPendingOrdersOnConsumedDinners(
     d1Client: D1Database
-): Promise<{id: number, inhabitantId: number, dinnerEventId: number, seasonId: number}[]> {
+): Promise<{id: number, inhabitantId: number, dinnerEventId: number, dinnerMode: DinnerMode, seasonId: number}[]> {
     const {DinnerStateSchema} = useBookingValidation()
     const {CLOSABLE_ORDER_STATES} = useBooking()
     const activeSeasonId = await fetchActiveSeasonId(d1Client)
@@ -1199,7 +1199,7 @@ export async function fetchPendingOrdersOnConsumedDinners(
                 state: DinnerStateSchema.enum.CONSUMED
             }
         },
-        select: {id: true, inhabitantId: true, dinnerEventId: true}
+        select: {id: true, inhabitantId: true, dinnerEventId: true, dinnerMode: true}
     })
 
     // Add seasonId (we already know it's the active season)

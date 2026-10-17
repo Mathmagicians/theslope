@@ -3,17 +3,17 @@ Action Preview - Shows users what will happen when they save booking changes: on
 naming the dinners (up to three dates, else the count with the first and last date)
 
 ASCII mockup (COMPONENTS.actionPreview: the list, each item a badge with its glyph):
-┌─────────────────────────────────────────────────────────────────────┐
-│ (ticket) Du er ved at ændre familiens booking                       │
-│                                                                     │
-│   [buy]      Anna køber en billet til salg: 19/10/2026              │
-│   [queue]    Anna skrives på ventelisten: 20/10/2026, 21/10/2026    │
-│   [queue]    Gæst af Anna skrives på ventelisten: 20/10/2026        │
-│   [queue]    Bo ændrer spisemåde til Sen (venteliste): 20/10/2026   │
-│   [edit]     Lars ændrer spisemåde til Takeaway: 22/10/2026         │
-│   [released] Lars frigiver sin billet: 23/10/2026                   │
-│   [cancel]   Knud frameldes: 7 middage, 02/11/2026 – 14/12/2026     │
-└─────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────┐
+│ (ticket) Du er ved at ændre familiens booking                            │
+│                                                                          │
+│   [buy]      Anna køber en billet til salg: 19/10/2026                   │
+│   [queue]    Anna skrives på ventelisten: 20/10/2026, 21/10/2026         │
+│   [queue]    Gæst af Anna (Barn ×2) skrives på ventelisten: 20/10/2026   │
+│   [queue]    Bo ændrer spisemåde til Sen (venteliste): 20/10/2026        │
+│   [edit]     Lars ændrer spisemåde til Takeaway: 22/10/2026              │
+│   [released] Lars frigiver sin billet: 23/10/2026                        │
+│   [cancel]   Knud frameldes: 7 middage, 02/11/2026 – 14/12/2026          │
+└──────────────────────────────────────────────────────────────────────────┘
 
 Visual check: a grid save at 375px and desktop; the longest line stays inside the panel.
 -->
