@@ -113,6 +113,17 @@ const SIZED_FAMILIES = ['UButton', 'UBadge', 'UAvatar', 'UAvatarGroup']
 /** ` size="sm"`, ` variant="ghost"`, ` icon="i-…"`, ` :size="'md'"` - a design value spelled out in the tag */
 const LITERAL_DESIGN_PROP = /(?:^|\s)(?:(?:size|variant|icon|leading-icon|trailing-icon)="[^"]*"|:(?:size|variant|icon|leading-icon|trailing-icon)="'[^"]*'")/g
 
+/** A `.vue` with its script and style blocks, comments and interpolations blanked, newlines kept: what is left is markup */
+const templateMarkup = (source: string): string =>
+    source.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<!--[\s\S]*?-->|\{\{[\s\S]*?\}\}/g, blanked => blanked.replace(/[^\n]/g, ' '))
+
+/** A tag (quote-aware, so `v-if="a || b"` stays inside it) and the text after it up to the next tag */
+const TAG_AND_TEXT = /<(\/?)([\w-]+)((?:[^>"']|"[^"]*"|'[^']*')*)>([^<]*)/g
+
+/** The one way to write the pipe between parts: alone, in a span that binds COMPONENTS.pipe */
+const isPipeSpan = ([, closing, tag, attributes, text]: RegExpMatchArray): boolean =>
+    closing === '' && tag === 'span' && /:class="[^"]*\bCOMPONENTS\.pipe\b/.test(attributes!) && text!.trim() === '|'
+
 /** `file:line - <match>` for every hit of `pattern`, so the failure names the site */
 const scan = (files: string[], pattern: RegExp, hint: string) =>
     files.flatMap(file =>
@@ -239,6 +250,19 @@ describe('ADR-018: components bind design-system tokens, never raw Nuxt UI props
             /\binject\b[^(\n]*\(\s*['"]isMd['"]/g,
             'bind a responsive token, or read breakpoint from useTheSlopeDesignSystem()'
         )
+        expect(report(violations)).toBe('')
+    })
+
+    it('no template writes a "|" by hand: the pipe between parts is a span on COMPONENTS.pipe', () => {
+        const violations = vueFiles.flatMap(file => {
+            const markup = templateMarkup(readVue(file))
+            return [...markup.matchAll(TAG_AND_TEXT)]
+                .filter(match => match[4]!.includes('|') && !isPipeSpan(match))
+                .map(match => {
+                    const pipeAt = match.index! + match[0].length - match[4]!.length + match[4]!.indexOf('|')
+                    return `app/${file}:${markup.slice(0, pipeAt).split('\n').length} - a hand-written "|" (render <span :class="COMPONENTS.pipe">|</span>)`
+                })
+        })
         expect(report(violations)).toBe('')
     })
 

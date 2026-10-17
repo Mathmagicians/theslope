@@ -1577,6 +1577,7 @@ export async function fetchTransactionsForInvoice(
                 select: {
                     id: true,
                     isGuestTicket: true,
+                    dinnerMode: true,
                     inhabitant: {
                         select: {
                             id: true, name: true,
@@ -1628,10 +1629,11 @@ export async function fetchHouseholdBilling(
 
     const currentPeriod = calculateCurrentBillingPeriod()
 
-    // Order selection: id + isGuestTicket + relations (matches deserializeTransaction signature)
+    // Order selection: id + isGuestTicket + dinnerMode + relations (matches deserializeTransaction signature)
     const orderSelect = {
         id: true,
         isGuestTicket: true,
+        dinnerMode: true,
         inhabitant: {
             select: {
                 id: true, name: true,

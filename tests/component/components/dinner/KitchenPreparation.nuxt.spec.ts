@@ -83,6 +83,21 @@ const mountKitchen = async (allergens: AllergyTypeDisplay[] = [GLUTEN, MILK]) =>
     return wrapper
 }
 
+// A line's parts as their spans read: each figure, and each pipe between them as its own span
+const spansOf = (line: ReturnType<typeof findByTestId>) => line.findAll(':scope > span').map(span => span.text())
+
+describe('KitchenPreparation ticket figures', () => {
+    it('GIVEN two adults and a child THEN the header reads each ticket type\'s figure with a pipe between them, then a pipe and the total', async () => {
+        const wrapper = await mountKitchen()
+        expect(spansOf(findByTestId(wrapper, 'kitchen-total-figures'))).toEqual(['Voksen: 2', '|', 'Barn: 1', '|', 'Baby: 0', '|', '# 3'])
+    })
+
+    it('GIVEN SPISESAL with an adult and a child THEN its box reads the figures with a pipe between them, then the total', async () => {
+        const wrapper = await mountKitchen()
+        expect(spansOf(findByTestId(findByTestId(wrapper, PANEL(DinnerMode.DINEIN)), 'kitchen-figures'))).toEqual(['Voksen: 1', '|', 'Barn: 1', '|', 'Baby: 0', '# 2'])
+    })
+})
+
 describe('KitchenPreparation allergy line', () => {
     let wrapper: Awaited<ReturnType<typeof mountKitchen>>
 
@@ -107,7 +122,7 @@ describe('KitchenPreparation allergy line', () => {
         await clickByTestId(wrapper, PANEL(DinnerMode.DINEIN))
 
         const overview = findByTestId(wrapper, ALLERGY_OVERVIEW)
-        expect(overview.findAll(':scope > span').map(part => part.text())).toEqual(['1,5 kuv.', `| ${GLUTEN.icon}Gluten · 1`, `| ${MILK.icon}Mælk · 0,5`])
+        expect(spansOf(overview)).toEqual(['1,5 kuv.', '|', `${GLUTEN.icon}Gluten · 1`, '|', `${MILK.icon}Mælk · 0,5`])
         const overviewAllergies = allergiesIn(overview)
         expect(overviewAllergies.map(allergy => allergy.props('allergyType'))).toEqual([expect.objectContaining(GLUTEN), expect.objectContaining(MILK)])
         expect(overviewAllergies.every(allergy => allergy.props('compact') && allergy.props('showName'))).toBe(true)

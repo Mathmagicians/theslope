@@ -10,7 +10,7 @@ import {dateToWeekDay} from '~/utils/season'
 import {addDays} from 'date-fns/addDays'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 
-const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, expectHydratedWithoutMismatch, getSessionUserInfo, gotoHydrated, salt, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, memberValidatedBrowserContext, pollUntil, doScreenshot, expectHydratedWithoutMismatch, getSessionUserInfo, gotoHydrated, salt, temporaryAndRandom, waitForApi} = testHelpers
 const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
 
 /**
@@ -157,12 +157,15 @@ test.describe('Dinner Page URL Navigation', () => {
         // WHEN: Click on second event's date in the calendar (calculate day from date)
         const event2Day = event2.date.getDate()
         const day2Button = page.getByTestId(`calendar-dinner-date-${event2Day}`)
+        // The panel fills from the selected dinner's detail, fetched on the click
+        const event2Loaded = waitForApi(page, `/api/admin/dinner-event/${event2.id}`, 'GET')
         await day2Button.click({force: true})
 
         // THEN: URL should update to second event's date
         await expect(page).toHaveURL(url => url.searchParams.get('date') === testData.dates.second)
 
         // THEN: Panel should update to show second event's date
+        await event2Loaded
         await expect(panel, "Panel should now show second event date").toContainText(testData.dates.second)
     })
 

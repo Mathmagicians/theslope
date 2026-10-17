@@ -23,7 +23,7 @@ import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {ICONS, createTableColumns, useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 import {WAITLIST_TEST_IDS} from './waitlistTestIds'
-import {useBookingValidation as useActionValidation} from '~/composables/useBookingValidation'
+import {useBookingValidation as useActionValidation, TicketState} from '~/composables/useBookingValidation'
 const Action = useActionValidation().BookingActionSchema.enum
 
 /**
@@ -316,7 +316,7 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
     const wrapper = await mountClosed({waitlistEntries: [boQueued]})
 
     expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(bo!.id)).text()).toContain('Voksen #2')
-    const queuedTickets = wrapper.findAllComponents(DinnerTicket).filter(ticket => ticket.props('isQueued'))
+    const queuedTickets = wrapper.findAllComponents(DinnerTicket).filter(ticket => ticket.props('ticketState') === TicketState.queued)
     expect(queuedTickets.length).toBeGreaterThan(0)
     queuedTickets.forEach(ticket => expect(ticket.props('dinnerMode')).toBe(DinnerMode.TAKEAWAY))
   })
@@ -335,7 +335,7 @@ describe('DinnerBookingForm on a closed, sold-out dinner (waiting list)', () => 
     const wrapper = await mountClosed({orders: [order], waitlistEntries: [{...boQueued, inhabitantId: anna!.id}]})
 
     expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(anna!.id)).exists()).toBe(false)
-    expect(wrapper.findAllComponents(DinnerTicket).some(ticket => ticket.props('isQueued'))).toBe(false)
+    expect(wrapper.findAllComponents(DinnerTicket).some(ticket => ticket.props('ticketState') === TicketState.queued)).toBe(false)
   })
 
   it('GIVEN the guest form WHEN it saves a guest THEN the guest goes through the one booking path', async () => {
@@ -391,7 +391,7 @@ describe('DinnerBookingForm on a queued guest row', () => {
     const wrapper = await mountQueuedGuest()
 
     expect(findByTestId(wrapper, WAITLIST_TEST_IDS.position(guestRowId)).text()).toContain('Barn #3')
-    const ticket = wrapper.findAllComponents(DinnerTicket).find(candidate => candidate.props('isQueued') && candidate.props('guestCount') !== undefined)
+    const ticket = wrapper.findAllComponents(DinnerTicket).find(candidate => candidate.props('ticketState') === TicketState.queued && candidate.props('guestCount') !== undefined)
     expect(ticket?.props()).toMatchObject({dinnerMode: DinnerMode.DINEIN, guestCount: 1})
   })
 

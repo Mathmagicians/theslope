@@ -14,6 +14,7 @@ import {
     type TransactionDisplay
 } from '~/composables/useBillingValidation'
 import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
+import type {DinnerMode} from '~/composables/useBookingValidation'
 
 const {headers, salt} = testHelpers
 const {createTicketPrice} = useTicketPriceValidation()
@@ -133,13 +134,14 @@ export class BillingFactory {
     static readonly defaultSerializeInput = (
         testSalt: string = 'default',
         ticketType: string | null = TicketType.ADULT,
-        options?: {isGuestTicket?: boolean, provenanceHousehold?: string | null}
+        options?: {isGuestTicket?: boolean, provenanceHousehold?: string | null, dinnerMode?: DinnerMode}
     ) => ({
         dinnerEvent: {id: 1, date: new Date('2025-01-15'), menuTitle: salt('Test Dinner', testSalt)},
         inhabitant: {id: 2, name: salt('Anna', testSalt), household: {id: 3, pbsId: 2053, address: salt('Testgade 42', testSalt)}},
         ticketType,
         isGuestTicket: options?.isGuestTicket,
-        provenanceHousehold: options?.provenanceHousehold
+        provenanceHousehold: options?.provenanceHousehold,
+        dinnerMode: options?.dinnerMode
     })
 
     /**
@@ -153,7 +155,9 @@ export class BillingFactory {
         options?: {
             snapshotIsGuestTicket?: boolean,
             snapshotProvenance?: string | null,
-            liveIsGuestTicket?: boolean
+            snapshotDinnerMode?: DinnerMode,
+            liveIsGuestTicket?: boolean,
+            liveDinnerMode?: DinnerMode
         }
     ) => {
         const {TicketType} = useBillingValidation()
@@ -163,7 +167,8 @@ export class BillingFactory {
             inhabitant: {id: 2, name: salt('Snapshot Name', testSalt), household: {id: 3, pbsId: 9999, address: salt('Snapshot Street', testSalt)}},
             ticketType: TicketType.CHILD,
             isGuestTicket: options?.snapshotIsGuestTicket,
-            provenanceHousehold: options?.snapshotProvenance
+            provenanceHousehold: options?.snapshotProvenance,
+            dinnerMode: options?.snapshotDinnerMode
         }
 
         const base = {
@@ -178,7 +183,8 @@ export class BillingFactory {
             dinnerEvent: {id: 1, date: new Date('2025-01-15'), menuTitle: salt('Live Dinner', testSalt)},
             inhabitant: {id: 2, name: salt('Live Name', testSalt), household: {id: 3, pbsId: 1111, address: salt('Live Street', testSalt)}},
             ticketPrice: {ticketType: TicketType.ADULT},
-            isGuestTicket: options?.liveIsGuestTicket
+            isGuestTicket: options?.liveIsGuestTicket,
+            dinnerMode: options?.liveDinnerMode
         }
 
         switch (liveData) {

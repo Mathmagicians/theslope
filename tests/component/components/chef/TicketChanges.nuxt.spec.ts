@@ -6,7 +6,7 @@ import {nextTick} from 'vue'
 import {getQuery, type H3Event} from 'h3'
 import TicketChanges from '~/components/chef/TicketChanges.vue'
 import {useBookingValidation, type TicketChange, type TicketType} from '~/composables/useBookingValidation'
-import {ticketChangeWord} from '~/composables/useBookingUi'
+import {ticketChangeWord, ticketChangeSeller} from '~/composables/useBookingUi'
 import {useTicket} from '~/composables/useTicket'
 import {useBilling} from '~/composables/useBilling'
 import {formatPortions} from '~/utils/utils'
@@ -176,7 +176,7 @@ describe('TicketChanges', () => {
     })
 
     it.each([
-        {kind: Kind.ADMIN_CANCEL, word: 'frameldt af admin'},
+        {kind: Kind.ADMIN_CANCEL, word: 'frameldt, ADMIN korrektion'},
         {kind: Kind.EXTRA_PORTIONS, word: 'ekstra tilmeldt'}
     ])('GIVEN a line of $kind WHEN opened THEN Ændring reads "$word"', async ({kind, word}) => {
         historyEndpoint.mockImplementationOnce(() => ({dinnerEventId: DINNER_ID, since: SINCE.toISOString(), changes: [change({id: 21, events: [{change: kind, tickets: counts(0, 1, 0)}]})], olderCount: 0}))
@@ -184,6 +184,25 @@ describe('TicketChanges', () => {
         await open(wrapper)
 
         expect(findByTestId(wrapper, 'ticket-change-word').text()).toBe(word)
+    })
+
+    it('GIVEN a line of sales from two households WHEN opened THEN each sale reads its word, its tickets and the seller it was bought from', async () => {
+        const sales = change({id: 31, performedByUserId: 14, households: ['S_14'], events: [
+            {change: Kind.BUY, tickets: counts(1, 0, 0), seller: 'S_32'},
+            {change: Kind.BUY, tickets: counts(0, 1, 0), seller: 'S_22'}
+        ]})
+        historyEndpoint.mockImplementationOnce(() => ({dinnerEventId: DINNER_ID, since: SINCE.toISOString(), changes: [sales], olderCount: 0}))
+        const wrapper = await mount()
+        await open(wrapper)
+
+        expect(findAllByTestId(wrapper, 'ticket-change-event').map(event => ({
+            word: findByTestId(event, 'ticket-change-word').text(),
+            chips: findAllByTestId(event, 'ticket-change-chip').map(badge => badge.text()),
+            seller: findByTestId(event, 'ticket-change-seller').text()
+        }))).toEqual([
+            {word: ticketChangeWord(Kind.BUY), chips: [chip(1, TicketType.ADULT)], seller: ticketChangeSeller('S_32')},
+            {word: ticketChangeWord(Kind.BUY), chips: [chip(1, TicketType.CHILD)], seller: ticketChangeSeller('S_22')}
+        ])
     })
 
     it('GIVEN no change since the deadline but older ones WHEN opened THEN the table says so and the full history stays a click away', async () => {

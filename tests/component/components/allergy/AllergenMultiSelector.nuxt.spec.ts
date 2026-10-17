@@ -99,8 +99,10 @@ describe('AllergenMultiSelector', () => {
             expect(panel?.text()).toContain('Allergier blandt gæsterne')
             expect(partsOf(findByTestId(wrapper, ALLERGY_TEST_IDS.allergyPanelOverview))).toEqual([
                 `${formatPortions(1)} kuv.`,
-                `| ${MILK.icon}${MILK.name} · ${formatPortions(1)}`,
-                `| ${GLUTEN.icon}${GLUTEN.name} · ${formatPortions(0)}`
+                '|',
+                `${MILK.icon}${MILK.name} · ${formatPortions(1)}`,
+                '|',
+                `${GLUTEN.icon}${GLUTEN.name} · ${formatPortions(0)}`
             ])
             const allergens = findByTestId(wrapper, ALLERGY_TEST_IDS.allergyPanelOverview).findAllComponents(AllergyTypeDisplay) as VueWrapper<ComponentPublicInstance<{allergyType: unknown, compact: boolean, showName: boolean}>>[]
             expect(allergens.map(allergen => allergen.props('allergyType'))).toEqual([expect.objectContaining(MILK), expect.objectContaining(GLUTEN)])

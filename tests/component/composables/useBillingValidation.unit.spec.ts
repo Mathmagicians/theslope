@@ -1,6 +1,7 @@
 import {describe, it, expect} from 'vitest'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {useTicket} from '~/composables/useTicket'
+import {DinnerMode} from '~/composables/useBookingValidation'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 
@@ -123,6 +124,16 @@ describe('useBillingValidation', () => {
             const result = deserializeTransaction(tx)
             expect(result.provenanceHousehold).toBe(expected)
         })
+
+        // dinnerMode: the live order's when it lives, else the snapshot's; a snapshot written before it carried the mode reads null
+        it.each([
+            {desc: 'live preferred over snapshot', liveData: 'full' as const, live: DinnerMode.NONE, snapshot: DinnerMode.DINEIN, expected: DinnerMode.NONE},
+            {desc: 'snapshot when the order is gone', liveData: 'noOrder' as const, live: undefined, snapshot: DinnerMode.NONE, expected: DinnerMode.NONE},
+            {desc: 'null when neither has it', liveData: 'noOrder' as const, live: undefined, snapshot: undefined, expected: null}
+        ])('dinnerMode: $desc', ({liveData, live, snapshot, expected}) => {
+            const tx = BillingFactory.defaultPrismaTransaction('mode-test', liveData, {liveDinnerMode: live, snapshotDinnerMode: snapshot})
+            expect(deserializeTransaction(tx).dinnerMode).toBe(expected)
+        })
     })
 
     describe('serialize/deserialize roundtrip', () => {
@@ -158,6 +169,16 @@ describe('useBillingValidation', () => {
 
             expect(result.isGuestTicket).toBe(isGuestTicket)
             expect(result.provenanceHousehold).toBe(provenanceHousehold)
+        })
+
+        it.each([
+            {desc: 'a released ticket closed with Ingen', dinnerMode: DinnerMode.NONE, expected: DinnerMode.NONE},
+            {desc: 'an eaten ticket', dinnerMode: DinnerMode.TAKEAWAY, expected: DinnerMode.TAKEAWAY},
+            {desc: 'an order serialized without its mode', dinnerMode: undefined, expected: null}
+        ])('GIVEN $desc WHEN roundtrip THEN the eating mode reads $expected', ({dinnerMode, expected}) => {
+            const order = BillingFactory.defaultSerializeInput('roundtrip-mode', TicketType.ADULT, {dinnerMode})
+            const tx = {id: 1, amount: 0, createdAt: new Date(), orderSnapshot: serializeTransaction(order), order: null}
+            expect(deserializeTransaction(tx).dinnerMode).toBe(expected)
         })
     })
 

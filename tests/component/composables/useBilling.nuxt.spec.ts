@@ -117,7 +117,8 @@ describe('useBilling', () => {
             id: 1, orderId: 1, amount, createdAt: new Date(), orderSnapshot: '{}',
             dinnerEvent: {id: 1, date: new Date(), menuTitle: 'Test'},
             inhabitant: {id: 1, name: 'Test', household: {id: 1, pbsId: 100, address: 'Test'}},
-            ticketType: TicketType.ADULT
+            ticketType: TicketType.ADULT,
+            dinnerMode: null
         })
 
         it.each([
@@ -180,7 +181,8 @@ describe('useBilling', () => {
             id: householdId * 10, orderId: 1, amount, createdAt: new Date(), orderSnapshot: '{}',
             dinnerEvent: {id: 1, date: new Date(), menuTitle: 'Test'},
             inhabitant: {id: 1, name: 'Test', household: {id: householdId, pbsId, address}},
-            ticketType: TicketType.ADULT
+            ticketType: TicketType.ADULT,
+            dinnerMode: null
         })
 
         // Verifies grouped output is ordered by address, then pbsId as tiebreaker.
@@ -234,6 +236,7 @@ describe('useBilling', () => {
         const {ADULT, CHILD, BABY} = TicketType
         const FULL = {[ADULT]: 8, [CHILD]: 1, [BABY]: 2}
         const ZERO_TYPE = {[ADULT]: 2, [CHILD]: 0, [BABY]: 1}
+        const KITCHEN = {[ADULT]: 60, [CHILD]: 30, [BABY]: 10}
         const EMPTY = {}
 
         it.each([
@@ -243,18 +246,18 @@ describe('useBilling', () => {
             {variant: 'sentence', desc: 'full counts', counts: FULL, text: '8 voksne, 1 barn, 2 babyer'},
             {variant: 'sentence', desc: 'a zero type', counts: ZERO_TYPE, text: '2 voksne, 1 baby'},
             {variant: 'sentence', desc: 'no counts', counts: EMPTY, text: ''},
-            {variant: 'labelled', desc: 'full counts', counts: FULL, text: 'Voksen: 8| Barn: 1| Baby: 2'},
-            {variant: 'labelled', desc: 'a zero type', counts: ZERO_TYPE, text: 'Voksen: 2| Barn: 0| Baby: 1'},
-            {variant: 'labelled', desc: 'no counts', counts: EMPTY, text: 'Voksen: 0| Barn: 0| Baby: 0'}
+            {variant: 'labelled', desc: 'full counts', counts: KITCHEN, text: 'Voksen: 60 | Barn: 30 | Baby: 10'},
+            {variant: 'labelled', desc: 'a zero type', counts: ZERO_TYPE, text: 'Voksen: 2 | Barn: 0 | Baby: 1'},
+            {variant: 'labelled', desc: 'no counts', counts: EMPTY, text: 'Voksen: 0 | Barn: 0 | Baby: 0'}
         ] as const)('$variant over $desc reads "$text"', ({variant, counts, text}) => {
             expect(TICKET_COUNTS[variant].text(counts)).toBe(text)
         })
 
-        it('names the ticket type of each part, so a list renders one part per type', () => {
+        it('names the ticket type of each part and holds its figure alone, so a list renders one part per type and draws its own separator', () => {
             expect(TICKET_COUNTS.labelled.parts(ZERO_TYPE)).toEqual([
                 {ticketType: ADULT, text: 'Voksen: 2'},
-                {ticketType: CHILD, text: '| Barn: 0'},
-                {ticketType: BABY, text: '| Baby: 1'}
+                {ticketType: CHILD, text: 'Barn: 0'},
+                {ticketType: BABY, text: 'Baby: 1'}
             ])
             expect(TICKET_COUNTS.compact.parts(ZERO_TYPE).map(part => part.ticketType)).toEqual([ADULT, BABY])
         })

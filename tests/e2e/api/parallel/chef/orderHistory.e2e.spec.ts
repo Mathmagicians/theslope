@@ -101,6 +101,8 @@ test.describe('Chef dinner order history', () => {
         const member = await getSessionUserInfo(memberContext)
         expect(lineOf(Kind.RELEASE).households).toEqual([member.householdShortname])
         expect(lineOf(Kind.BUY).households).toContain(admin.householdShortname)
+        // The sale names the household it bought from
+        expect(lineOf(Kind.BUY).events.find(event => event.change === Kind.BUY)!.seller).toBe(member.householdShortname)
 
         const release = lineOf(Kind.RELEASE)
         const sinceRelease = (await OrderFactory.getTicketChanges(memberContext, dinnerEventId, release.timestamp))!

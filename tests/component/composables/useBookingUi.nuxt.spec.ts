@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays} from 'date-fns'
-import {useBookingUi, ORDER_STATE_LABELS, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewOutcome, scaffoldToastLook, formatBookingResult, guestTicketsLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
+import {useBookingUi, ORDER_STATE_LABELS, costLineMode, allowanceRows, STEP_ICONS, createBookingBadge, createDiningModeBadge, createBookingBadges, createWaitlistBadge, lockChip, SUPPLY_WORDS, lockedSupply, closedForCancellation, bookingSaveLabel, guestSaveLabel, ACTION_WORDS, MODE_WORDS, previewOutcome, scaffoldToastLook, formatBookingResult, guestTicketsLabel, dinnerSpendingFragment, teamSpendingFragment, ticketTypePresentation, resolveTicketTypePresentation, ticketPriceSelectItems, type CookingRoundRow} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {DINNER_STEP_MAP, DinnerStepState, DEADLINE_LABELS, emptyOrderBuckets, type OrderBucketResult} from '~/composables/useBooking'
@@ -267,6 +267,25 @@ describe('useBookingUi', () => {
         it('badges a guest ticket with its booker', () => {
             const formatted = formatOrder(OrderFactory.defaultOrder(undefined, {isGuestTicket: true}), 'Anna')
             expect(formatted.guest).toEqual({label: 'Gæst af Anna', color: COLOR.info, icon: ICONS.userPlus})
+        })
+    })
+
+    // A billed line carries no order state; its eating mode, when its snapshot kept one, tells a released ticket
+    describe('cost lines', () => {
+        let formatCostLine: ReturnType<typeof useBookingUi>['formatCostLine']
+        beforeAll(() => {
+            ({formatCostLine} = useBookingUi())
+        })
+        const {DINEIN, TAKEAWAY, NONE} = DinnerModeSchema.enum
+
+        it.each([
+            {desc: 'a billed released ticket reads released', line: {dinnerMode: NONE}, shown: ORDER_STATE_LABELS[OrderState.RELEASED], mode: undefined},
+            {desc: 'a billed eaten ticket reads closed', line: {dinnerMode: TAKEAWAY}, shown: ORDER_STATE_LABELS[OrderState.CLOSED], mode: undefined},
+            {desc: 'a billed ticket whose snapshot has no mode reads closed', line: {dinnerMode: null}, shown: ORDER_STATE_LABELS[OrderState.CLOSED], mode: undefined},
+            {desc: 'a live order reads its state and shows its mode', line: {state: OrderState.BOOKED, dinnerMode: DINEIN}, shown: ORDER_STATE_LABELS[OrderState.BOOKED], mode: DINEIN}
+        ])('$desc', ({line, shown, mode}) => {
+            expect(formatCostLine(line)).toMatchObject({stateText: shown.label, stateColor: shown.color, stateIcon: shown.icon, guest: null})
+            expect(costLineMode(line)).toBe(mode)
         })
     })
 })

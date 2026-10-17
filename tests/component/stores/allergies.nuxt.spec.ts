@@ -200,26 +200,6 @@ describe('Allergies Store - selected allergy type', () => {
     })
 })
 
-describe('Allergies Store - Allergies (Household/Inhabitant)', () => {
-    beforeEach(() => {
-        clearNuxtData()
-        vi.clearAllMocks()
-        allergiesEndpoint.mockClear()
-
-        // Mock allergies endpoint with query params
-        allergiesEndpoint.mockReturnValue(AllergyFactory.createMockAllergies())
-    })
-
-    it('loads allergies for inhabitant', async () => {
-        const store = useAllergiesStore()
-
-        store.loadAllergiesForInhabitant(1)
-
-        await vi.waitFor(() => expect(store.allergies).toHaveLength(1))
-        expect(store.allergies[0]!.inhabitantId).toBe(1)
-    })
-})
-
 describe('Allergies Store - gated reads', () => {
     type Store = ReturnType<typeof useAllergiesStore>
 
@@ -241,6 +221,7 @@ describe('Allergies Store - gated reads', () => {
             idleKey: SELECTED_ALLERGY_TYPE_KEY,
             requestedKey: SELECTED_ALLERGY_TYPE_KEY,
             endpoint: allergyTypeByIdEndpoint,
+            answer: () => AllergyFactory.createMockAllergyTypes()[0],
             request: (store: Store) => store.selectAllergyType(() => 1)
         },
         {
@@ -248,6 +229,7 @@ describe('Allergies Store - gated reads', () => {
             idleKey: ALLERGIES_KEY,
             requestedKey: ALLERGIES_KEY,
             endpoint: allergiesEndpoint,
+            answer: () => AllergyFactory.createMockAllergies(),
             request: (store: Store) => store.loadAllergiesForHousehold()
         }
     ]
@@ -280,6 +262,22 @@ describe('Allergies Store - gated reads', () => {
         expect(store.isAllergyStoreReady).toBe(true)
     })
 
+    it.each(gatedReads)('the ready flag waits for $dataset while it loads', async ({requestedKey, endpoint, answer, request}) => {
+        const store = await setupStore()
+        let land = () => {}
+        endpoint.mockImplementationOnce(() => new Promise(resolve => {
+            land = () => resolve(answer())
+        }))
+
+        request(store)
+        await vi.waitFor(() => expect(endpoint).toHaveBeenCalled())
+
+        expect(store.isAllergyStoreReady).toBe(false)
+        land()
+        await vi.waitFor(() => expect(asyncDataStatus(requestedKey)).toBe('success'))
+        expect(store.isAllergyStoreReady).toBe(true)
+    })
+
     it('reads idle household allergies as neither loading, errored, loaded nor empty', async () => {
         const store = await setupStore()
 
@@ -304,14 +302,26 @@ describe('Allergies Store - gated reads', () => {
 // until a hard page refresh.
 describe('Allergies Store - cache coherence between allergies and the catalog', () => {
     beforeEach(() => {
-        clearNuxtData()
+        resetStores()
         vi.clearAllMocks()
+        session.user.value = me
 
         allergyTypesEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypesWithInhabitants())
         allergyTypeByIdEndpoint.mockReturnValue(AllergyFactory.createMockAllergyTypes()[0])
         allergiesEndpoint.mockReturnValue(AllergyFactory.createMockAllergies())
         allergyByIdEndpoint.mockReturnValue(AllergyFactory.createMockAllergies()[0])
     })
+    afterEach(() => {
+        session.user.value = null
+    })
+
+    // The household's allergies loaded, as the household page loads them
+    const setupHouseholdAllergies = async () => {
+        const store = await setupStore()
+        store.loadAllergiesForHousehold()
+        await vi.waitFor(() => expect(asyncDataStatus(ALLERGIES_KEY)).toBe('success'))
+        return store
+    }
 
     it.each([
         {
@@ -329,9 +339,7 @@ describe('Allergies Store - cache coherence between allergies and the catalog', 
             act: (store: ReturnType<typeof useAllergiesStore>) => store.deleteAllergy(1)
         }
     ])('$mutation refetches the allergy-type catalog', async ({act}) => {
-        const store = await setupStore()
-        store.loadAllergiesForInhabitant(1)
-        await new Promise(resolve => setTimeout(resolve, 0))
+        const store = await setupHouseholdAllergies()
         const catalogFetchesBefore = allergyTypesEndpoint.mock.calls.length
 
         await act(store)
@@ -341,9 +349,7 @@ describe('Allergies Store - cache coherence between allergies and the catalog', 
     })
 
     it('deleteAllergyType refetches household allergies (CASCADE removes their rows)', async () => {
-        const store = await setupStore()
-        store.loadAllergiesForInhabitant(1)
-        await new Promise(resolve => setTimeout(resolve, 0))
+        const store = await setupHouseholdAllergies()
         const allergyFetchesBefore = allergiesEndpoint.mock.calls.length
 
         await store.deleteAllergyType(1)

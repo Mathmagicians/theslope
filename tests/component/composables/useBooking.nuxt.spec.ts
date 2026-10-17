@@ -1,11 +1,11 @@
 import {describe, it, expect, beforeAll} from 'vitest'
 import {addDays, addYears, differenceInDays, nextDay, type Day} from 'date-fns'
-import {useBooking, formatPlace, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcomes, supplyOfType, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, isReleased, isClaimedOrder, isPendingOrder, hasTicketsForSale, hasWaitlist, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
+import {useBooking, formatPlace, emptyOrderBuckets, actionOfUpdate, plannedActions, countTotals, DINNER_STEP_MAP, DinnerStepState, CONSUMABLE_DINNER_STATES, CLOSABLE_ORDER_STATES, decideOrderAction, resolveDesiredOrdersToBuckets, generateDesiredOrdersFromPreferences, resolveOrdersFromPreferencesToBuckets, getNewOrderAction, bookingOutcomes, supplyOfType, EMPTY_RELEASED_TICKET_COUNTS, buildDesiredOrder, buildGuestDesiredOrder, findRegularOrder, ticketStateOf, supplyStateOf, isPendingOrder, type OrderDecisionInput, type BookingIntent, type TicketPriceResolver} from '~/composables/useBooking'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {MODE_WORDS, ORDER_STATE_LABELS} from '~/composables/useBookingUi'
 import {formatDate} from '~/utils/date'
 import {sumBy} from '~/utils/ledger'
-import {useBookingValidation, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderAuditAction, type OrderAuditSource, type OrderState, type TicketType, type TicketChange} from '~/composables/useBookingValidation'
+import {useBookingValidation, TicketState, SupplyState, type OrderDisplay, type DinnerMode, type DesiredOrder, type OrderAuditAction, type OrderAuditSource, type OrderState, type TicketType, type TicketChange} from '~/composables/useBookingValidation'
 import type {TicketWaitlistDisplay} from '~/composables/useWaitlistValidation'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -400,6 +400,13 @@ describe('useBooking', () => {
             const results = prepareTransactionData([order])
             const snapshot = OrderSnapshotSchema.parse(JSON.parse(results[0]!.orderSnapshot))
             expect(snapshot.isGuestTicket).toBe(isGuestTicket)
+        })
+
+        // The close keeps each order's mode: a released ticket nobody bought is billed with Ingen
+        it.each([DinnerModes.NONE, DinnerModes.TAKEAWAY])('an order closed with %s keeps its eating mode in the snapshot', (dinnerMode) => {
+            const order = {...OrderFactory.defaultOrderForTransaction('mode-test'), dinnerMode}
+            const snapshot = OrderSnapshotSchema.parse(JSON.parse(prepareTransactionData([order])[0]!.orderSnapshot))
+            expect(snapshot.dinnerMode).toBe(dinnerMode)
         })
     })
 
@@ -1805,22 +1812,19 @@ describe('getDayBillSummary', () => {
 })
 
 describe('order predicates', () => {
+    // Released wins over bought; a person on the waiting list holds no order
     it.each([
-        {desc: 'a released ticket for sale', state: OrderStates.RELEASED, dinnerMode: DinnerModes.NONE, provenanceHousehold: undefined, released: true},
-        {desc: 'a ticket the close kept with Ingen', state: OrderStates.CLOSED, dinnerMode: DinnerModes.NONE, provenanceHousehold: undefined, released: true},
-        {desc: 'a ticket the close kept with Spisesal', state: OrderStates.CLOSED, dinnerMode: DinnerModes.DINEIN, provenanceHousehold: undefined, released: false},
-        {desc: 'a booked ticket', state: OrderStates.BOOKED, dinnerMode: DinnerModes.DINEIN, provenanceHousehold: undefined, released: false},
-        {desc: 'a bought ticket', state: OrderStates.BOOKED, dinnerMode: DinnerModes.DINEIN, provenanceHousehold: 'S_22', released: false}
-    ])('GIVEN $desc THEN released is $released', ({state, dinnerMode, provenanceHousehold, released}) => {
-        expect(isReleased(OrderFactory.defaultOrder(undefined, {state, dinnerMode, provenanceHousehold}))).toBe(released)
-    })
-
-    it.each([
-        {desc: 'a booked ticket bought from another household', state: OrderStates.BOOKED, provenanceHousehold: 'S_22', claimed: true},
-        {desc: 'a booked ticket of its own household', state: OrderStates.BOOKED, provenanceHousehold: undefined, claimed: false},
-        {desc: 'a bought ticket released again', state: OrderStates.RELEASED, provenanceHousehold: 'S_22', claimed: false}
-    ])('GIVEN $desc THEN bought from another household is $claimed', ({state, provenanceHousehold, claimed}) => {
-        expect(isClaimedOrder(OrderFactory.defaultOrder(undefined, {state, provenanceHousehold}))).toBe(claimed)
+        {desc: 'a released ticket for sale', order: {state: OrderStates.RELEASED, dinnerMode: DinnerModes.NONE}, queued: false, ticketState: TicketState.released},
+        {desc: 'a ticket the close kept with Ingen', order: {state: OrderStates.CLOSED, dinnerMode: DinnerModes.NONE}, queued: false, ticketState: TicketState.released},
+        {desc: 'a ticket the close kept with Spisesal', order: {state: OrderStates.CLOSED, dinnerMode: DinnerModes.DINEIN}, queued: false, ticketState: TicketState.normal},
+        {desc: 'a bought ticket the close kept', order: {state: OrderStates.CLOSED, dinnerMode: DinnerModes.DINEIN, provenanceHousehold: 'S_22'}, queued: false, ticketState: TicketState.claimed},
+        {desc: 'a booked ticket bought from another household', order: {state: OrderStates.BOOKED, dinnerMode: DinnerModes.DINEIN, provenanceHousehold: 'S_22'}, queued: false, ticketState: TicketState.claimed},
+        {desc: 'a bought ticket released again', order: {state: OrderStates.RELEASED, dinnerMode: DinnerModes.NONE, provenanceHousehold: 'S_22'}, queued: false, ticketState: TicketState.released},
+        {desc: 'a place on the waiting list', order: null, queued: true, ticketState: TicketState.queued},
+        {desc: 'a bought ticket of a person also on the waiting list', order: {state: OrderStates.BOOKED, dinnerMode: DinnerModes.DINEIN, provenanceHousehold: 'S_22'}, queued: true, ticketState: TicketState.claimed},
+        {desc: 'a booked ticket of its own household', order: {state: OrderStates.BOOKED, dinnerMode: DinnerModes.DINEIN}, queued: false, ticketState: TicketState.normal}
+    ])('GIVEN $desc THEN the ticket is $ticketState', ({order, queued, ticketState}) => {
+        expect(ticketStateOf(order && OrderFactory.defaultOrder(undefined, order), queued)).toBe(ticketState)
     })
 
     it.each([
@@ -1833,15 +1837,14 @@ describe('order predicates', () => {
     })
 })
 
-describe('supply predicates', () => {
+describe('supplyStateOf', () => {
     it.each([
-        {desc: 'tickets for sale', counts: {...EMPTY_RELEASED_TICKET_COUNTS, total: 1}, forSale: true, waitlist: false},
-        {desc: 'a waiting list', counts: {...EMPTY_RELEASED_TICKET_COUNTS, queued: 8}, forSale: false, waitlist: true},
-        {desc: 'both', counts: {...EMPTY_RELEASED_TICKET_COUNTS, total: 1, queued: 8}, forSale: true, waitlist: true},
-        {desc: 'neither', counts: EMPTY_RELEASED_TICKET_COUNTS, forSale: false, waitlist: false}
-    ])('GIVEN a locked dinner with $desc THEN tickets for sale: $forSale, a waiting list: $waitlist', ({counts, forSale, waitlist}) => {
-        expect(hasTicketsForSale(counts)).toBe(forSale)
-        expect(hasWaitlist(counts)).toBe(waitlist)
+        {desc: 'tickets for sale and a waiting list', counts: {...EMPTY_RELEASED_TICKET_COUNTS, total: 1, queued: 8}, supply: SupplyState.FOR_SALE_AND_WAITLIST},
+        {desc: 'tickets for sale', counts: {...EMPTY_RELEASED_TICKET_COUNTS, total: 1}, supply: SupplyState.FOR_SALE},
+        {desc: 'a waiting list', counts: {...EMPTY_RELEASED_TICKET_COUNTS, queued: 8}, supply: SupplyState.WAITLIST},
+        {desc: 'neither', counts: EMPTY_RELEASED_TICKET_COUNTS, supply: SupplyState.NONE}
+    ])('GIVEN a locked dinner with $desc THEN its supply is $supply', ({counts, supply}) => {
+        expect(supplyStateOf(counts)).toBe(supply)
     })
 })
 
@@ -2250,7 +2253,7 @@ describe('replayTicketChanges', () => {
             {performedByUserId: 31, bySystem: false, households: ['S_31'], events: [{change: Kind.BOOK, tickets: counts(1, 1, 0)}]},
             {performedByUserId: 22, bySystem: false, households: ['S_22'], events: [{change: Kind.CHANGE_PRICE, tickets: counts(1, 0, 0), from: counts(0, 1, 0)}]},
             {performedByUserId: SYSTEM, bySystem: true, households: ['S_22'], events: [{change: Kind.RELEASE, tickets: counts(1, 0, 0)}]},
-            {performedByUserId: 14, bySystem: false, households: ['S_14'], events: [{change: Kind.BUY, tickets: counts(1, 0, 0)}]},
+            {performedByUserId: 14, bySystem: false, households: ['S_14'], events: [{change: Kind.BUY, tickets: counts(1, 0, 0), seller: shortNameOf(o3.householdId)}]},
             {performedByUserId: SYSTEM, bySystem: true, households: ['S_14', 'S_22', 'S_31'], events: [{change: Kind.CLOSE, tickets: counts(5, 2, 1)}]}
         ])
 
@@ -2297,6 +2300,22 @@ describe('replayTicketChanges', () => {
         ])
     })
 
+    it('GIVEN one user buying, within one minute, tickets released by two households WHEN replaying THEN each sale names its seller, the two sellers stay two events and one seller\'s tickets add up', () => {
+        const {replayTicketChanges} = useBooking()
+        const [adultOf22, adultOf32, childOf22] = [ticket(1, 1, 22), ticket(2, 1, 32), ticket(3, 2, 22)]
+        const forSale = [adultOf22, adultOf32, childOf22]
+        const lines = replayTicketChanges([
+            ...forSale.map(order => booked(order, order.householdId, at(0))),
+            ...forSale.map(order => updated(Audit.USER_CANCELLED, order, order.householdId, at(10), {state: State.RELEASED, dinnerMode: Mode.NONE})),
+            ...forSale.map((order, index) => claimed(order, 14, at(20, index * 10)))
+        ], ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant)
+
+        expect(lines.at(-1)).toMatchObject({performedByUserId: 14, households: ['S_14'], events: [
+            {change: Kind.BUY, tickets: counts(1, 1, 0), seller: shortNameOf(22)},
+            {change: Kind.BUY, tickets: counts(1, 0, 0), seller: shortNameOf(32)}
+        ]})
+    })
+
     it.each([
         {desc: 'a cancellation before the deadline', action: Audit.USER_CANCELLED, actor: 31, bySystem: false},
         {desc: 'a system deletion before the deadline', action: Audit.SYSTEM_DELETED, actor: null, bySystem: true}
@@ -2331,6 +2350,18 @@ describe('replayTicketChanges', () => {
 
             expect(lines.map(line => line.events.map(event => event.change))).toEqual(kinds)
             expect(figures(lines.at(-1)!)).toEqual(paidForFigures(paidFor))
+        })
+
+        // After the deadline a user releases instead of deleting: a user-mode deletion then is the admin's correction
+        it.each([
+            {desc: 'a system run\'s deletion after the deadline', action: Audit.SYSTEM_DELETED, actor: null, timestamp: at(35), kind: Kind.CANCEL},
+            {desc: 'a user-mode deletion after the deadline', action: Audit.USER_CANCELLED, actor: ADMIN, timestamp: at(35), kind: Kind.ADMIN_CANCEL},
+            {desc: 'a user-mode deletion before the deadline', action: Audit.USER_CANCELLED, actor: 22, timestamp: at(10), kind: Kind.CANCEL}
+        ])('GIVEN a booked ticket and $desc WHEN replaying THEN the deletion reads $kind', ({action, actor, timestamp, kind}) => {
+            const {replayTicketChanges} = useBooking()
+            const lines = replayTicketChanges([booked(child, 22, at(0)), deleted(child, actor, timestamp, action)], ticketPriceOf, SYSTEM, shortNameOf, householdOfInhabitant, DEADLINE)
+
+            expect(lines.at(-1)!.events).toEqual([{change: kind, tickets: counts(0, 1, 0)}])
         })
 
         it('GIVEN the admin\'s deletion of a released ticket WHEN replaying THEN one event takes the ticket off the counts, the kuverter and the revenue', () => {

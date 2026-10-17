@@ -10,6 +10,7 @@ import {enableAutoUnmount} from '@vue/test-utils'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import DinnerTicket from '~/components/dinner/DinnerTicket.vue'
 import {COMPONENTS, ICONS} from '~/composables/useTheSlopeDesignSystem'
+import {TicketState} from '~/composables/useBookingValidation'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {findByTestId, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
 
@@ -87,17 +88,17 @@ describe('DinnerTicket', () => {
         })
 
         it.each([
-            {state: 'released', props: {isReleased: true}, icon: ICONS.released},
-            {state: 'claimed', props: {isClaimed: true}, icon: ICONS.claim},
-            {state: 'queued', props: {isQueued: true}, icon: ICONS.waitlist}
-        ] as const)('GIVEN a $state ticket THEN the state glyph binds its state token', async ({state, props, icon}) => {
-            const wrapper = await mountTicket(props)
+            {state: TicketState.released, icon: ICONS.released},
+            {state: TicketState.claimed, icon: ICONS.claim},
+            {state: TicketState.queued, icon: ICONS.waitlist}
+        ] as const)('GIVEN a $state ticket THEN the state glyph binds its state token', async ({state, icon}) => {
+            const wrapper = await mountTicket({ticketState: state})
 
             bindsToken(wrapper, icon, COMPONENTS.ticket.stateIcon[state])
         })
 
         it('GIVEN a claimed allergic guest ticket THEN the how-you-eat slot carries none of the special glyphs', async () => {
-            const wrapper = await mountTicket({isClaimed: true, guestCount: 1, allergies: ALLERGY_TYPES})
+            const wrapper = await mountTicket({ticketState: TicketState.claimed, guestCount: 1, allergies: ALLERGY_TYPES})
 
             const modeSlotIcons = iconNamesIn(wrapper, 'ticket-mode-slot')
             const specialGlyphs = [ICONS.released, ICONS.claim, ICONS.userPlus, ICONS.allergy]
@@ -115,7 +116,7 @@ describe('DinnerTicket', () => {
         })
 
         it('GIVEN a claimed ticket THEN the second row names the household it came from', async () => {
-            const wrapper = await mountTicket({isClaimed: true, provenanceHousehold: 'Hansen'})
+            const wrapper = await mountTicket({ticketState: TicketState.claimed, provenanceHousehold: 'Hansen'})
 
             expect(wrapper.text()).toContain('fra Hansen')
         })
@@ -133,7 +134,7 @@ describe('DinnerTicket', () => {
 
 describe('DinnerTicket on the waiting list', () => {
     it('GIVEN a queued ticket THEN the hourglass sits in the state cell and the card wears the queued face, apart from the normal one', async () => {
-        const wrapper = await mountTicket({isQueued: true})
+        const wrapper = await mountTicket({ticketState: TicketState.queued})
 
         expect(iconNamesIn(wrapper, 'ticket-state-cell')).toEqual([ICONS.waitlist])
         expect(wrapper.classes()).toEqual(COMPONENTS.ticket.face.queued.split(' '))
@@ -141,19 +142,19 @@ describe('DinnerTicket on the waiting list', () => {
     })
 
     it.each([
-        {desc: 'a queued ticket', isQueued: true},
-        {desc: 'a booked ticket', isQueued: false}
-    ])('GIVEN $desc THEN the mode slot shows the mode ghosted: $isQueued', async ({isQueued}) => {
-        const wrapper = await mountTicket({isQueued})
+        {desc: 'a queued ticket', ticketState: TicketState.queued, ghost: true},
+        {desc: 'a booked ticket', ticketState: TicketState.normal, ghost: false}
+    ])('GIVEN $desc THEN the mode slot shows the mode ghosted: $ghost', async ({ticketState, ghost}) => {
+        const wrapper = await mountTicket({ticketState})
 
         const selector = wrapper.findComponent({name: 'DinnerModeSelector'})
-        expect(selector.props()).toMatchObject({modelValue: baseProps.dinnerMode, ghost: isQueued})
+        expect(selector.props()).toMatchObject({modelValue: baseProps.dinnerMode, ghost})
     })
 })
 
 describe('DinnerTicket for a queued guest', () => {
     it('GIVEN a queued guest THEN the state cell carries the hourglass and the guest cell the guest glyph', async () => {
-        const wrapper = await mountTicket({isQueued: true, guestCount: 1})
+        const wrapper = await mountTicket({ticketState: TicketState.queued, guestCount: 1})
 
         expect(iconNamesIn(wrapper, 'ticket-state-cell')).toEqual([ICONS.waitlist])
         expect(iconNamesIn(wrapper, 'ticket-guest-cell')).toEqual([ICONS.userPlus])

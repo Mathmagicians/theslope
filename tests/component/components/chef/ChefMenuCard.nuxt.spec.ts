@@ -112,8 +112,10 @@ describe('ChefMenuCard', () => {
             const overview = findByTestId(wrapper, ALLERGEN_OVERVIEW)
             expect(overview.findAll(':scope > span').map(part => part.text())).toEqual([
                 `${formatPortions(1.5)} kuv.`,
-                `| ${MILK!.icon}${MILK!.name} · ${formatPortions(1.5)}`,
-                `| ${GLUTEN!.icon}${GLUTEN!.name} · ${formatPortions(0)}`
+                '|',
+                `${MILK!.icon}${MILK!.name} · ${formatPortions(1.5)}`,
+                '|',
+                `${GLUTEN!.icon}${GLUTEN!.name} · ${formatPortions(0)}`
             ])
             const allergens = overview.findAllComponents(AllergyTypeDisplay) as VueWrapper<ComponentPublicInstance<{allergyType: unknown, compact: boolean, showName: boolean}>>[]
             expect(allergens.map(allergen => allergen.props('allergyType'))).toEqual([expect.objectContaining(MILK!), expect.objectContaining(GLUTEN!)])
