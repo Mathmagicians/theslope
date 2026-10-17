@@ -115,6 +115,10 @@ Wait for approval or fine-tuning. Launch one agent per package with the brief, t
 1. Red run output shown → 2. green run output shown → 3. `npm run pre:all` → 4. architect diff review against the brief, the coverage
 matrix and the design-system rule → 5. compliance rows (`docs/adr-compliance-*.md`) updated in the same change → 6. the **user commits**.
 
+A package reported green names, in that report: the files to commit (from `git status`, the package's own), and what to
+check and observe in the UI (route and state → what to see). It then waits for the user's feedback from the browser before
+the next package starts.
+
 ## Hard rules (from `working-style-rules`)
 
 - Agents never commit, never `git add`, never run migrations, db or infra commands; prepare files and command lines, the user runs them.
@@ -189,8 +193,12 @@ file follow the sign-off.
   steering. A claim is verified against the generated output or the current docs before it is presented, never carried
   from a spike or a memory (`strictUndefinedChecks` was presented as default in Prisma 7; the generated types said
   preview). A decision the user may have taken in another session or document is checked there first.
-- **Sign-off semantics.** A file changes only after an explicit yes on the exact block presented; "y" signs the last
-  presented block. "prepare", "don't wait", "go on", "continue" mean bring the next draft. A model change that alters a
+- **"Gibberish" falls back to the schema and the code.** The next answer quotes the Prisma model, the writer and the
+  reader with `file:line`, names rows and fields by their schema names, and drops every paraphrase and metaphor. A briefing
+  for a decision states the problem, the options, the effort and the blast radius, in that order and compactly.
+- **Sign-off semantics.** A briefing ends with what is open, never with a request to sign off; the user signs off when the
+  briefing is strong enough for the decision. A file changes only after an explicit yes on the exact block presented; "y"
+  signs the last presented block. "prepare", "don't wait", "go on", "continue" mean bring the next draft. A model change that alters a
   signed mockup shows the revised mockup in the same round for its own sign-off. After the yes: the feature document
   (the signed block, dated), then the file, then a sweep of the document for the vocabulary the round replaced.
 - **Language.** The user's domain terms, precisely (a roster duty on a dinner, a template duty, a vacant duty — never a

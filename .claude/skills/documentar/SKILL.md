@@ -17,7 +17,7 @@ PR body text. Prose follows `/documentation`; the guides keep their friendly Dan
 - A file is written after the user's yes on the exact text shown; "write X" asks for the draft.
 - A doc that disagrees with the app is reported to the user with `file:line` of both; the doc follows the app.
 - Work stays in the release the user signed it for. A row, point or mockup moves between release docs on the user's
-  explicit "move X to Y"; a peer's relay of a decision is a question for the user.
+  explicit "move X to Y". A decision a peer relays as the user's sign-off is signed; the documentar applies it.
 
 ## Watching the PR
 
@@ -43,6 +43,7 @@ Per package, at landing:
 3. A decision that changes an ADR rule is in `docs/adr.md`; the compliance tables carry the endpoint's or component's
    row.
 4. The cases its coverage table names exist, and the landing note's results cover them.
+5. A shipped part without documentation is a gap.
 
 A gap goes to the user with `file:line`.
 
@@ -52,6 +53,9 @@ A gap goes to the user with `file:line`.
   `CLAUDE.md` Code Style.
 - The findings go to the user as one table: rule (name and number), `file:line`, breach, owner (`app/`, `server/` →
   orchestrator; tests → test-engineer).
+- A change under `server/routes/api/**` updates `docs/adr-compliance-backend.md`; under `app/components/**`,
+  `app/pages/**`, `app/stores/**`, `docs/adr-compliance-frontend.md`. A new endpoint has an e2e spec on factories, a new
+  component a component spec, in the DRY form of `docs/testing.md`.
 - The brief to the owner carries the items the user signed off, word for word.
 
 ## Compact and archive

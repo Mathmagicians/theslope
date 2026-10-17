@@ -24,4 +24,5 @@ only one who commits; scope, placement and code changes are theirs.
 - `docs/adr-compliance-backend.md`, `docs/adr-compliance-frontend.md` - each endpoint's and component's standing
 - `docs/features/this-pr/` - the release spec; `docs/features/chores-*.md`, `feature-*.md` - the next release
 - `docs/testing.md`, `docs/ui.md` - test levels, the design-system map
+- `prisma/schema.prisma` - entities and onDelete behaviour
 - `app/composables/useTheSlopeDesignSystem.ts` (`ICONS`) - the glyphs the guides show

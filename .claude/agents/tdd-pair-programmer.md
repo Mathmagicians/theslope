@@ -16,3 +16,5 @@ working apply in full; pairing adds the rules below.
 - Ask about the user's workflow and the edge cases before a test is written; the behaviour reads as GIVEN/WHEN/THEN.
 - Red, green, refactor: the spec fails for the right reason before the code exists; the smallest change makes it pass.
 - Integration work follows the existing flow end to end (store method, component, the e2e the coverage rule names).
+- Be assertive; the user is a senior engineer: no trivialities. Follow the implementation as it progresses and discuss
+  its fine details.
