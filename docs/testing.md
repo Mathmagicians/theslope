@@ -264,6 +264,7 @@ import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, 
 | `withTooltipProvider(Component, props)` | The bare wrapper definition, for the rare spec that needs the root wrapper |
 | `findByTestId(wrapper, id)` / `findAllByTestId(wrapper, id)` | `data-testid` lookups - never hand-build the selector string |
 | `findLoadingRow(wrapper)` / `findAllLoadingRows(wrapper)` | The row UTable renders from its `#loading` slot while it binds `loading` and holds no rows |
+| `isTableLoading(wrapper)` | Whether the UTable under the wrapper binds `loading`: its loading bar runs under the column headers and carries no attribute to find |
 | `holdEndpoint(url, body)` | An endpoint that answers `body` once the test calls `release()`: the window in which a dataset is pending; `unregister()` in `afterEach` hands the url back to the registration before it |
 | `untilTrue(condition)` | Resolves once a reactive condition holds (store state, a flag), watching it rather than polling; the test's own timeout bounds it |
 | `clickByTestId(wrapper, id)` | Click + `await nextTick()` |

@@ -401,7 +401,7 @@ stops at an entry still grabbed, as it stops at its first miss.
 
 ### Migration
 
-`0018_protocol` adds the two nullable columns. B6, the ticket allergies and the ticket price portions ride their own
+`0018_protocol` adds the two nullable columns, applied on local, dev and prod 2026-10-18. B6, the ticket allergies and the ticket price portions ride their own
 releases.
 
 ## ADR review
