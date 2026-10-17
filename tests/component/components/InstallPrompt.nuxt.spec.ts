@@ -2,11 +2,13 @@
 import {describe, it, expect, beforeEach, afterEach, vi} from 'vitest'
 import {nextTick, markRaw} from 'vue'
 import {clearNuxtState, useState} from '#app'
-import {flushPromises} from '@vue/test-utils'
+import {enableAutoUnmount, flushPromises} from '@vue/test-utils'
 import InstallPrompt from '~/components/InstallPrompt.vue'
 import {INSTALL_DISMISSED_COOKIE, INSTALL_MEDIA_QUERIES, INSTALL_PROMPT_STATE, type BeforeInstallPromptEvent} from '~/composables/useInstallPrompt'
 import {INSTALL_TEST_IDS} from './installPromptTestIds'
-import {mountWithTooltipProvider, findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
+
+enableAutoUnmount(afterEach)
 
 // The card shows the strongest install affordance the browser offers; the capability is
 // a browser fact, so each case fakes the browser and the component decides the face.
@@ -53,6 +55,7 @@ const ICON_SRC = '/app-icon.svg'
 
 describe('InstallPrompt', () => {
     beforeEach(() => {
+        resetStores()
         promptStub.mockClear()
         clearNuxtState(Object.values(INSTALL_PROMPT_STATE))
         document.cookie = `${INSTALL_DISMISSED_COOKIE}=; max-age=0; path=/`
@@ -68,32 +71,28 @@ describe('InstallPrompt', () => {
         ['share-sheet', 'Åbn Del-menuen og vælg \'Føj til hjemmeskærm\'', false],
         ['touch-first', 'Åbn browserens menu og vælg \'Føj til startskærm\'', false]
     ])('%s face', (capability, description, hasInstallButton) => {
-        it('renders the title, the app icon and the description', async () => {
+        it(`renders the title, the app icon, the description and Ikke nu${hasInstallButton ? ' and Installér app' : ' only'}`, async () => {
             const wrapper = await mountWith(capability)
             const card = findByTestId(wrapper, INSTALL_TEST_IDS.card)
 
             expect(card.find('h2').text()).toBe('Få Skråningen som app')
             expect(card.text()).toContain(description)
             expect(card.find(`img[src="${ICON_SRC}"]`).exists()).toBe(true)
-        })
-
-        it(`renders Ikke nu${hasInstallButton ? ' and Installér app' : ' only'}`, async () => {
-            const wrapper = await mountWith(capability)
-
             expect(findByTestId(wrapper, INSTALL_TEST_IDS.dismiss).text()).toContain('Ikke nu')
             expect(findByTestId(wrapper, INSTALL_TEST_IDS.install).exists()).toBe(hasInstallButton)
         })
+    })
 
-        it('Ikke nu hides the card and the dismissal outlives the mount', async () => {
-            const wrapper = await mountWith(capability)
-            await clickByTestId(wrapper, INSTALL_TEST_IDS.dismiss)
+    // Every face shares the one Ikke nu button
+    it('Ikke nu hides the card and the dismissal outlives the mount', async () => {
+        const wrapper = await mountWith('chromium')
+        await clickByTestId(wrapper, INSTALL_TEST_IDS.dismiss)
 
-            expect(findByTestId(wrapper, INSTALL_TEST_IDS.card).exists()).toBe(false)
-            expect(document.cookie).toContain(`${INSTALL_DISMISSED_COOKIE}=true`)
+        expect(findByTestId(wrapper, INSTALL_TEST_IDS.card).exists()).toBe(false)
+        expect(document.cookie).toContain(`${INSTALL_DISMISSED_COOKIE}=true`)
 
-            const remounted = await mountWith(capability)
-            expect(findByTestId(remounted, INSTALL_TEST_IDS.card).exists()).toBe(false)
-        })
+        const remounted = await mountWith('chromium')
+        expect(findByTestId(remounted, INSTALL_TEST_IDS.card).exists()).toBe(false)
     })
 
     it('Installér app calls the captured event\'s prompt()', async () => {

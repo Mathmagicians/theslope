@@ -2,17 +2,23 @@ import {test, expect} from '@playwright/test'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import type {Season} from '~/composables/useSeasonValidation'
 import testHelpers from '~~/tests/e2e/testHelpers'
+const Action = useBookingValidation().BookingActionSchema.enum
 
 const {validatedBrowserContext, getSessionUserInfo} = testHelpers
-const {DinnerModeSchema} = useBookingValidation()
+const {DinnerModeSchema, TicketTypeSchema} = useBookingValidation()
 
 // Variables to store for cleanup and test data
 let testSeasonId: number
 let testSeason: Season
+const testSeasonIds: number[] = []
+const testHouseholdIds: number[] = []
+const testAllergyTypeIds: number[] = []
 
 test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
 
@@ -21,7 +27,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         const context = await validatedBrowserContext(browser)
         testSeason = await SeasonFactory.createSeason(context)
         testSeasonId = testSeason.id as number
-        console.info(`Created test season ${testSeason.shortName} with ID ${testSeasonId}`)
+        testSeasonIds.push(testSeasonId)
     })
 
     test('PUT can create and GET can retrieve with status 200', async ({browser}) => {
@@ -65,31 +71,20 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(adultPrice!.id).toBeGreaterThan(0)
         expect(adultPrice!.id).not.toBe(1) // Should not be factory default
 
-        const orderData = {
-            inhabitantId,
-            ticketPriceId: adultPrice!.id!,
-            bookedByUserId: 1, // Factory default user ID
-            dinnerMode: DinnerModeSchema.enum.DINEIN,
-            isGuestTicket: false
+        // WHEN: The same regular order is booked twice in parallel
+        const request = {
+            householdId,
+            seasonId: testSeasonId,
+            dinnerEventIds: [createdDinnerEvent.id!],
+            orders: [OrderFactory.createBookingOrder(inhabitantId, createdDinnerEvent.id!, adultPrice!.id!, DinnerModeSchema.enum.DINEIN)]
         }
-
-        const [result1, result2] = await Promise.all([
-            OrderFactory.createOrder(context, {
-                householdId,
-                dinnerEventId: createdDinnerEvent.id!,
-                orders: [orderData]
-            }),
-            OrderFactory.createOrder(context, {
-                householdId,
-                dinnerEventId: createdDinnerEvent.id!,
-                orders: [orderData]
-            })
+        const responses = await Promise.all([
+            OrderFactory.scaffoldOrders(context, request, 200, true),
+            OrderFactory.scaffoldOrders(context, request, 200, true)
         ])
 
-        expect(result1, 'First order creation should succeed').not.toBeNull()
-        expect(result2, 'Second order creation should succeed').not.toBeNull()
-        expect(result1?.createdIds).toHaveLength(1)
-        expect(result2?.createdIds).toHaveLength(1)
+        // THEN: One regular order per inhabitant per dinner - the second booking finds the first or meets the unique index
+        expect(responses.reduce((sum, response) => sum + response!.scaffoldResult.totals[Action.BOOK], 0), 'One create succeeds').toBe(1)
 
         // AND: Retrieve dinner event detail again with tickets
         const detailWithTickets = await DinnerEventFactory.getDinnerEvent(context, createdDinnerEvent.id!)
@@ -105,7 +100,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         // AND: Detail includes tickets with full relations (ADR-009: detail endpoint comprehensive)
         expect(detailWithTickets).not.toBeNull()
         expect(detailWithTickets!.tickets).toBeDefined()
-        expect(detailWithTickets!.tickets!.length).toBe(2)
+        expect(detailWithTickets!.tickets!.length).toBe(1)
         const ticket = detailWithTickets!.tickets![0]
         expect(ticket).toBeDefined()
         expect(ticket!.inhabitant.id).toBe(inhabitantId)
@@ -157,21 +152,16 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         })
         expect(dinnerEvent.id).toBeDefined()
 
-        // WHEN: GET /api/admin/dinner-event?seasonId=testSeasonId
-        const response = await context.request.get(`/api/admin/dinner-event?seasonId=${testSeasonId}`)
-
-        // THEN: Should return 200 with filtered events
-        expect(response.status()).toBe(200)
-        const events = await response.json()
-        expect(Array.isArray(events)).toBe(true)
+        // WHEN: GET /api/admin/dinner-event?seasonId=testSeasonId - THEN: Should return 200 with filtered events
+        const events = await DinnerEventFactory.getDinnerEventsForSeason(context, testSeasonId)
 
         // AND: All events should belong to testSeasonId
-        events.forEach((event: { seasonId: number }) => {
+        events.forEach(event => {
             expect(event.seasonId).toBe(testSeasonId)
         })
 
         // AND: Should include our created event
-        const foundEvent = events.find((e: { id: number }) => e.id === dinnerEvent.id)
+        const foundEvent = events.find(e => e.id === dinnerEvent.id)
         expect(foundEvent).toBeDefined()
     })
 
@@ -186,6 +176,39 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(response.status()).toBe(400)
     })
 
+    test('GET detail answers each ticket inhabitant with its allergies and their allergy types', async ({browser}) => {
+        // GIVEN: A dinner booked for an inhabitant with an allergy
+        const context = await validatedBrowserContext(browser)
+        const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(context, {}, 1)
+        testHouseholdIds.push(household.id)
+        const inhabitant = inhabitants[0]!
+        const allergyType = await AllergyFactory.createAllergyType(context)
+        testAllergyTypeIds.push(allergyType.id)
+        await AllergyFactory.createAllergy(context, AllergyFactory.defaultAllergyData(inhabitant.id, allergyType.id))
+
+        const dinnerEvent = await DinnerEventFactory.createDinnerEvent(context, {
+            ...DinnerEventFactory.defaultDinnerEvent(),
+            seasonId: testSeasonId
+        })
+        const adultPrice = testSeason.ticketPrices.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!
+        // Admin session doesn't belong to the test household → adminBypass
+        await OrderFactory.createOrder(context, {
+            householdId: household.id,
+            dinnerEventId: dinnerEvent.id!,
+            orders: [OrderFactory.defaultOrderItem({inhabitantId: inhabitant.id, ticketPriceId: adultPrice.id!})]
+        })
+
+        // WHEN: Fetching the dinner detail
+        const detail = await DinnerEventFactory.getDinnerEvent(context, dinnerEvent.id!)
+
+        // THEN: The ticket inhabitant carries the allergy with its allergy type
+        const ticket = detail!.tickets!.find(t => t.inhabitantId === inhabitant.id)
+        expect(ticket?.inhabitant.allergies).toMatchObject([{
+            allergyTypeId: allergyType.id,
+            allergyType: {id: allergyType.id, name: allergyType.name}
+        }])
+    })
+
     test('DELETE can remove existing dinner event with status 200', async ({browser}) => {
         // GIVEN: An existing dinner event
         const context = await validatedBrowserContext(browser)
@@ -197,7 +220,7 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
         expect(createdDinnerEvent.id).toBeDefined()
 
         // WHEN: Deleting the dinner event
-        const deletedDinnerEvent = await DinnerEventFactory.deleteDinnerEvent(context, createdDinnerEvent.id!)
+        const deletedDinnerEvent = await DinnerEventFactory.deleteDinnerEvent(context, createdDinnerEvent.id!, 200)
 
         // THEN: Delete succeeds and returns the deleted event
         expect(deletedDinnerEvent?.id).toBe(createdDinnerEvent.id)
@@ -210,14 +233,11 @@ test.describe('Dinner Event /api/admin/dinner-event CRUD operations', () => {
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
+        // Household delete cascades its inhabitants' orders and allergies (ADR-005)
+        await HouseholdFactory.deleteHousehold(context, testHouseholdIds)
+        await AllergyFactory.cleanupAllergyTypes(context, testAllergyTypeIds)
+
         // Clean up the test season (CASCADE deletes all dinner events automatically per ADR-005)
-        if (testSeasonId) {
-            try {
-                await SeasonFactory.deleteSeason(context, testSeasonId)
-                console.info(`Cleaned up test season ${testSeasonId} (cascade deleted all dinner events)`)
-            } catch (error) {
-                console.warn(`Failed to cleanup test season ${testSeasonId}:`, error)
-            }
-        }
+        await SeasonFactory.cleanupSeasons(context, testSeasonIds)
     })
 })

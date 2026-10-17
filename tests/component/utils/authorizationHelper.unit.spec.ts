@@ -62,14 +62,15 @@ beforeEach(() => {
 })
 
 describe('requireChefForDinner', () => {
-    it('GIVEN caller is CHEF on dinner team THEN returns user', async () => {
+    it('GIVEN caller is CHEF on dinner team THEN returns user and dinner', async () => {
         getSessionUser.mockResolvedValue(mockUser())
         vi.mocked(fetchDinnerEvent).mockResolvedValue(mockDinner())
         vi.mocked(findTeamAssignmentByTeamAndInhabitant).mockResolvedValue(mockAssignment(Role.CHEF))
 
-        const user = await requireChefForDinner(mockEvent, DINNER_ID)
+        const {user, dinner} = await requireChefForDinner(mockEvent, DINNER_ID)
 
         expect(user.email).toBe('me@example.com')
+        expect(dinner.id).toBe(DINNER_ID)
         expect(findTeamAssignmentByTeamAndInhabitant).toHaveBeenCalledWith(expect.anything(), TEAM_ID, ME_INHABITANT_ID)
     })
 

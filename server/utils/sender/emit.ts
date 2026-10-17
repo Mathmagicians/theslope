@@ -4,6 +4,7 @@
  * Never throws: notification is a side effect of a business operation, and a missing or failing
  * queue must not fail that operation. The caller gets a result to log or return.
  */
+import {z} from 'zod'
 import {useNotificationValidation, type SenderEmitResult} from '~/composables/useNotificationValidation'
 
 const {NotificationMessageSchema} = useNotificationValidation()
@@ -12,13 +13,23 @@ const LOG = '📮 > SENDER > [EMIT]'
 const dedupeKeyOf = (message: unknown): string =>
     (message as {meta?: {dedupeKey?: unknown}} | null)?.meta?.dedupeKey?.toString() ?? 'unknown'
 
+// The result for a mail that is never composed (no recipient address, or a mailbox missing from the config); the operation goes on
+export const notSent = (kind: string, reason: 'unaddressed' | 'unconfigured', subject?: string): Promise<SenderEmitResult> =>
+    Promise.resolve({queued: false, dedupeKey: [kind, 'EMAIL', reason, subject].filter(part => part !== undefined).join(':'), degraded: true})
+
+// E-mail is off in this environment: the kind is logged with the missing setting and reported not sent
+export const channelOff = (kind: string, missing: string, subject?: string): Promise<SenderEmitResult> => {
+    console.warn(`${LOG} e-mail is off (${missing} not set): ${kind} not sent`)
+    return notSent(kind, 'unconfigured', subject)
+}
+
 export const emit = async (queue: Queue | undefined, message: unknown): Promise<SenderEmitResult> => {
     const dedupeKey = dedupeKeyOf(message)
     const parsed = NotificationMessageSchema.safeParse(message)
     if (!parsed.success) {
         console.error(`${LOG} message rejected by the contract`, {
             dedupeKey,
-            issues: parsed.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`)
+            issues: z.prettifyError(parsed.error)
         })
         return {queued: false, dedupeKey, degraded: false}
     }

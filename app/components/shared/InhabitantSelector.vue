@@ -32,7 +32,7 @@ const props = withDefaults(defineProps<Props>(), {
   loading: false
 })
 
-const { SIZES, COMPONENTS, TYPOGRAPHY, TEXT } = useTheSlopeDesignSystem()
+const { SIZES, COMPONENTS, TYPOGRAPHY, TEXT, ICONS, NOISE } = useTheSlopeDesignSystem()
 
 // Search + sort at data level (same pattern as AdminHouseholds, AdminUsers)
 const searchQuery = ref('')
@@ -96,7 +96,7 @@ const table = useTemplateRef('table')
       <!-- Sort toggle in status column header -->
       <template v-if="sortFn" #status-header>
         <UButton
-            variant="outline"
+            :variant="NOISE.medium"
             :size="SIZES.standard"
             name="sort-by-status"
             @click="sortDescending = !sortDescending"
@@ -117,8 +117,8 @@ const table = useTemplateRef('table')
           <UAvatar
               :src="row.original.pictureUrl ?? undefined"
               :alt="`${row.original.name} ${row.original.lastName}`"
-              icon="i-heroicons-user"
-              size="sm"
+              :icon="ICONS.user"
+              :size="SIZES.sm"
           />
           <span class="font-medium">{{ row.original.name }} {{ row.original.lastName }}</span>
         </div>

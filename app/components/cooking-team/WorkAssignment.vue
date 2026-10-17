@@ -38,7 +38,7 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const { COMPONENTS, ICONS, ROLE_ICONS } = useTheSlopeDesignSystem()
+const { COMPONENTS, ICONS, ROLE_ICONS, NOISE, SIZES } = useTheSlopeDesignSystem()
 
 // Store integration
 const planStore = usePlanStore()
@@ -95,8 +95,8 @@ const handleRoleAssignment = async (role: typeof TeamRole[keyof typeof TeamRole]
     <div class="flex flex-wrap gap-1 md:gap-2">
       <UButton
         :color="COMPONENTS.heroPanel.light.primaryButton"
-        variant="solid"
-        size="md"
+        :variant="NOISE.loud"
+        :size="SIZES.md"
         name="volunteer-cook"
         :loading="isAssigningRole"
         :disabled="isAssigningRole || !canVolunteer"
@@ -108,8 +108,8 @@ const handleRoleAssignment = async (role: typeof TeamRole[keyof typeof TeamRole]
       </UButton>
       <UButton
         :color="COMPONENTS.heroPanel.light.primaryButton"
-        variant="solid"
-        size="md"
+        :variant="NOISE.loud"
+        :size="SIZES.md"
         name="volunteer-helper"
         :loading="isAssigningRole"
         :disabled="isAssigningRole || !canVolunteer"
@@ -121,8 +121,8 @@ const handleRoleAssignment = async (role: typeof TeamRole[keyof typeof TeamRole]
       </UButton>
       <UButton
         :color="COMPONENTS.heroPanel.light.primaryButton"
-        variant="solid"
-        size="md"
+        :variant="NOISE.loud"
+        :size="SIZES.md"
         name="swap-shift"
         :disabled="true"
       >

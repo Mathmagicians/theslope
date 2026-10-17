@@ -1,20 +1,27 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
-import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {findByTestId, findAllByTestId} from '~~/tests/component/testHelpers'
-import {ref, nextTick, h, defineComponent} from 'vue'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {nextTick, h, defineComponent} from 'vue'
 import AllergyCatalogTable from '~/components/allergy/AllergyCatalogTable.vue'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 
 const mockAllergyTypes = AllergyFactory.createMockAllergyTypesWithInhabitants()
+
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
 
 // One shared master table for the allergy catalog:
 // - single mode: row click emits the id (AdminAllergies master)
 // - multi mode: checkboxes emit id[] (AllergenMultiSelector / compare)
 // It forwards UTable's expanded model + #expanded slot so the detail panel
 // can dock under the selected row on mobile.
+// A host renders the table, so the cases hand it slots; the wrapper is the host's
 const mountTable = async (props: Record<string, unknown> = {}, slots: Record<string, unknown> = {}) => {
-    const wrapper = await mountSuspended(defineComponent({
+    const wrapper = await mountWithTooltipProvider(defineComponent({
         components: {AllergyCatalogTable},
         setup: () => ({props, slots}),
         render() {
@@ -24,9 +31,7 @@ const mountTable = async (props: Record<string, unknown> = {}, slots: Record<str
                 ...props
             }, slots)
         }
-    }), {
-        global: {provide: {isMd: ref(false)}}
-    })
+    }), {isMd: false})
     await nextTick()
     return wrapper
 }
@@ -41,29 +46,25 @@ const clickName = async (wrapper: Wrapper, name: string) => {
 
 describe('AllergyCatalogTable', () => {
     describe.each(['single', 'multi'] as const)('%s mode', (mode) => {
-        it('renders every allergy type with count', async () => {
-            const wrapper = await mountTable({mode})
+        it.each([
+            {showNewBadge: true, expected: true},
+            {showNewBadge: false, expected: false}
+        ])('renders every allergy type with count, and the new column with showNewBadge=$showNewBadge', async ({showNewBadge, expected}) => {
+            const wrapper = await mountTable({mode, showNewBadge})
 
             const html = wrapper.html()
             mockAllergyTypes.forEach(at => {
                 expect(html).toContain(at.name)
             })
             expect(html).toContain('Antal')
-        })
-
-        it.each([
-            {showNewBadge: true, expected: true},
-            {showNewBadge: false, expected: false}
-        ])('new column with showNewBadge=$showNewBadge', async ({showNewBadge, expected}) => {
-            const wrapper = await mountTable({mode, showNewBadge})
-
-            expect(wrapper.html().includes('Nyt')).toBe(expected)
+            expect(html.includes('Nyt')).toBe(expected)
         })
     })
 
     describe('single mode selection', () => {
-        it('emits the clicked row id', async () => {
+        it('renders no checkboxes and emits the clicked row id', async () => {
             const wrapper = await mountTable({mode: 'single'})
+            expect(wrapper.find('[role="checkbox"]').exists()).toBe(false)
 
             await clickName(wrapper, 'Jordnødder')
 
@@ -79,23 +80,12 @@ describe('AllergyCatalogTable', () => {
             expect(selected.length).toBeGreaterThan(0)
             expect(selected[0]!.text()).toContain('Jordnødder')
         })
-
-        it('renders no checkboxes', async () => {
-            const wrapper = await mountTable({mode: 'single'})
-
-            expect(wrapper.find('[role="checkbox"]').exists()).toBe(false)
-        })
     })
 
     describe('multi mode selection', () => {
-        it('renders a checkbox per row', async () => {
-            const wrapper = await mountTable({mode: 'multi', modelValue: []})
-
-            expect(wrapper.findAll('[role="checkbox"]')).toHaveLength(mockAllergyTypes.length)
-        })
-
-        it('emits the toggled id added to the selection', async () => {
+        it('renders a checkbox per row and emits the toggled id added to the selection', async () => {
             const wrapper = await mountTable({mode: 'multi', modelValue: [1]})
+            expect(wrapper.findAll('[role="checkbox"]')).toHaveLength(mockAllergyTypes.length)
 
             await clickName(wrapper, 'Gluten')
 

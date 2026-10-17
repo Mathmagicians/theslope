@@ -1,6 +1,6 @@
 import {defineEventHandler, getValidatedRouterParams, readValidatedBody, setResponseStatus, getRequestURL} from 'h3'
 import type {H3Error} from 'h3'
-import {fetchDinnerEvent, updateDinnerEvent, updateDinnerEventAllergens} from '~~/server/data/financesRepository'
+import {updateDinnerEvent, updateDinnerEventAllergens} from '~~/server/data/financesRepository'
 import {createHeynaboEvent, updateHeynaboEvent, cancelHeynaboEvent, uploadDefaultDinnerPictureToEvent, updateHeynaboEventWithFallback} from '~~/server/integration/heynabo/heynaboClient'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {useBooking} from '~/composables/useBooking'
@@ -9,20 +9,20 @@ import type {UserSession} from '~/composables/useCoreValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {requireChefForDinner} from '~~/server/utils/authorizationHelper'
 import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
 const {DinnerStateSchema, DinnerEventUpdateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
-// Consolidated schema: menu fields + state + allergens (all optional, at least one required)
+// Consolidated schema: menu fields + state + allergens (all optional, at least one required). Strict: the cost is
+// computed from the dinner's expense lines, so a body carrying totalCost is a 400
 const ChefDinnerUpdateSchema = DinnerEventUpdateSchema.extend({
     state: DinnerStateSchema.optional(),
     allergenIds: z.array(z.number().int().positive()).optional()
-}).refine(
+}).strict().refine(
     data => Object.keys(data).some(k => data[k as keyof typeof data] !== undefined),
     {message: 'At least one field must be provided'}
 )
@@ -50,7 +50,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     let id!: number
     let updates!: ChefDinnerUpdate
     try {
-        ({id} = await getValidatedRouterParams(event, idSchema.parse))
+        ({id} = await getValidatedRouterParams(event, paramSchema.parse))
         updates = await readValidatedBody(event, ChefDinnerUpdateSchema.parse)
         console.info(PREFIX, `Called with dinner ID ${id}, updates:`, Object.keys(updates).join(', '))
     } catch (error) {
@@ -59,7 +59,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
 
     // Authorization: caller must be in this dinner's team chef pool.
     // Throws 401/403/404.
-    await requireChefForDinner(event, id)
+    const {dinner} = await requireChefForDinner(event, id)
 
     // Get user session and Heynabo token
     const session = await getUserSession(event)
@@ -68,11 +68,6 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
 
     // Business logic
     try {
-        const dinner = await fetchDinnerEvent(d1Client, id)
-        if (!dinner) {
-            throw createError({statusCode: 404, message: PREFIX + `Dinner event ${id} not found`})
-        }
-
         const {createHeynaboEventPayload, canCancelDinner} = useBooking()
         const baseUrl = getRequestURL(event).origin
         let updatedDinner = dinner

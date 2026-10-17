@@ -4,16 +4,18 @@ import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactor
 import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import { useCookingTeamValidation } from '~/composables/useCookingTeamValidation'
-import { useBookingValidation } from '~/composables/useBookingValidation'
+import { useBookingValidation, type DinnerEventCreate } from '~/composables/useBookingValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 
 const { validatedBrowserContext, salt, temporaryAndRandom } = testHelpers
 const { TeamRoleSchema } = useCookingTeamValidation()
 const TeamRole = TeamRoleSchema.enum
-const { DinnerStateSchema } = useBookingValidation()
+const { DinnerStateSchema, MenuSwapStrategySchema } = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
+const MenuSwapStrategy = MenuSwapStrategySchema.enum
 
 let testSeason: Season
+const createdSeasonIds: number[] = []
 const createdHouseholdIds: number[] = []
 
 test.describe('DinnerEvent API - Assign Role', () => {
@@ -22,28 +24,17 @@ test.describe('DinnerEvent API - Assign Role', () => {
         const context = await validatedBrowserContext(browser)
         // Create dedicated season for this test (not singleton - we don't need active season)
         testSeason = await SeasonFactory.createSeason(context)
+        createdSeasonIds.push(testSeason.id!)
     })
 
     test.afterAll(async ({ browser }) => {
         const context = await validatedBrowserContext(browser)
 
         // Delete season - CASCADE deletes teams, dinner events, and assignments (ADR-005)
-        if (testSeason?.id) {
-            try {
-                await SeasonFactory.deleteSeason(context, testSeason.id)
-            } catch (error) {
-                console.warn(`Failed to delete test season ${testSeason.id}:`, error)
-            }
-        }
+        await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
 
         // Delete households (not related to season, need manual cleanup)
-        for (const id of createdHouseholdIds) {
-            try {
-                await HouseholdFactory.deleteHousehold(context, id)
-            } catch (error) {
-                console.warn(`Failed to delete household ${id}:`, error)
-            }
-        }
+        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
     })
 
     test.describe('POST /api/team/cooking/[id]/assign-role', () => {
@@ -138,18 +129,15 @@ test.describe('DinnerEvent API - Assign Role', () => {
             const createDinnerWithChef = async (
                 context: Awaited<ReturnType<typeof validatedBrowserContext>>,
                 testSalt: string,
-                dinnerOverrides: Record<string, unknown> = {}
+                dinnerOverrides: Partial<DinnerEventCreate> = {}
             ) => {
-                const team = await SeasonFactory.createCookingTeamForSeason(context, testSeason.id!, salt('TakeoverTeam', testSalt))
                 const household = await HouseholdFactory.createHousehold(context, { name: salt('TakeoverHouse', testSalt) })
                 createdHouseholdIds.push(household.id)
                 const currentChef = await HouseholdFactory.createInhabitantForHousehold(context, household.id, salt('CurrentChef', testSalt))
                 const taker = await HouseholdFactory.createInhabitantForHousehold(context, household.id, salt('Taker', testSalt))
-                const dinnerEvent = await SeasonFactory.createDinnerEventForSeason(
-                    context, testSeason.id!,
-                    { chefId: null, cookingTeamId: team.id, heynaboEventId: null, ...dinnerOverrides }
-                )
-                await DinnerEventFactory.assignRoleToDinnerEvent(context, dinnerEvent.id, currentChef.id, TeamRole.CHEF)
+                const { dinner: dinnerEvent } = await SeasonFactory.createCookingTeamWithChefAndDinner(context, testSeason, currentChef.id, {
+                    teamName: 'TakeoverTeam', dinner: { heynaboEventId: null, ...dinnerOverrides }
+                })
                 return { dinnerEvent, currentChef, taker }
             }
 
@@ -170,7 +158,7 @@ test.describe('DinnerEvent API - Assign Role', () => {
                     menuTitle: salt('OldChefMenu', testSalt)
                 })
 
-                const updated = await DinnerEventFactory.assignRoleToDinnerEvent(context, dinnerEvent.id, taker.id, TeamRole.CHEF, 200, 'CLEAR')
+                const updated = await DinnerEventFactory.assignRoleToDinnerEvent(context, dinnerEvent.id, taker.id, TeamRole.CHEF, 200, MenuSwapStrategy.CLEAR)
 
                 expect(updated!.chefId, 'taker is the chef').toBe(taker.id)
                 expect(updated!.state, 'dinner reset to SCHEDULED').toBe(DinnerState.SCHEDULED)
@@ -186,7 +174,7 @@ test.describe('DinnerEvent API - Assign Role', () => {
                     heynaboEventId: 999999999 // Heynabo no longer has it — system delete fails, sync degrades
                 })
 
-                const updated = await DinnerEventFactory.assignRoleToDinnerEvent(context, dinnerEvent.id, taker.id, TeamRole.CHEF, 207, 'CLEAR')
+                const updated = await DinnerEventFactory.assignRoleToDinnerEvent(context, dinnerEvent.id, taker.id, TeamRole.CHEF, 207, MenuSwapStrategy.CLEAR)
 
                 expect(updated!.chefId, 'taker is the chef despite degraded sync').toBe(taker.id)
                 expect(updated!.state, 'dinner reset to SCHEDULED').toBe(DinnerState.SCHEDULED)
@@ -201,7 +189,7 @@ test.describe('DinnerEvent API - Assign Role', () => {
                     menuTitle
                 })
 
-                const updated = await DinnerEventFactory.assignRoleToDinnerEvent(context, dinnerEvent.id, taker.id, TeamRole.CHEF, 200, 'PRESERVE')
+                const updated = await DinnerEventFactory.assignRoleToDinnerEvent(context, dinnerEvent.id, taker.id, TeamRole.CHEF, 200, MenuSwapStrategy.PRESERVE)
 
                 expect(updated!.chefId, 'taker is the chef').toBe(taker.id)
                 expect(updated!.state, 'announcement stands').toBe(DinnerState.ANNOUNCED)
@@ -345,7 +333,7 @@ test.describe('DinnerEvent API - Assign Role', () => {
             )
         })
 
-        test('GIVEN non-existent dinner event WHEN assigning role THEN returns 404 error', async ({ browser }) => {
+        test('GIVEN removed dinner event WHEN assigning role THEN returns 404 error', async ({ browser }) => {
             const context = await validatedBrowserContext(browser)
             const testSalt = temporaryAndRandom()
 
@@ -361,11 +349,12 @@ test.describe('DinnerEvent API - Assign Role', () => {
                 salt('Role', testSalt)
             )
 
-            // Attempt to assign role to non-existent dinner
-            const nonExistentId = 999999
+            // Attempt to assign role to a dinner that was created and deleted
+            const removedDinner = await SeasonFactory.createDinnerEventForSeason(context, testSeason.id!)
+            await DinnerEventFactory.deleteDinnerEvent(context, removedDinner.id, 200)
             await DinnerEventFactory.assignRoleToDinnerEvent(
                 context,
-                nonExistentId,
+                removedDinner.id,
                 inhabitant.id,
                 TeamRole.CHEF,
                 404  // Expected status

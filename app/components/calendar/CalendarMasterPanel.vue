@@ -9,7 +9,7 @@
  *
  * Used by:
  * - /dinner page: DinnerCalendarDisplay with countdown timer
- * - /chef page: MyTeamSelector + TeamRoleStatus + TeamCalendarDisplay
+ * - /chef page: MyTeamSelector + TeamRoleStatus + ChefCalendarDisplay
  *
  * Features:
  * - Consistent card structure across master panels

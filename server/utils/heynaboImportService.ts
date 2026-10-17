@@ -20,7 +20,7 @@ import {importFromHeynabo} from '~~/server/integration/heynabo/heynaboClient'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 import {useHeynaboValidation, type HeynaboImportResponse} from '~/composables/useHeynaboValidation'
 import {useMaintenanceValidation} from '~/composables/useMaintenanceValidation'
-import {reconcileHouseholds, reconcileUsers, mergeHouseholdForUpdate, resolveInhabitantImportPlan, chunkHeynaboIds} from '~/composables/useHeynabo'
+import {reconcileHouseholds, reconcileUsers, mergeHouseholdForUpdate, resolveInhabitantImportPlan, chunkHeynaboIds, type InhabitantData} from '~/composables/useHeynabo'
 import {
     fetchHouseholds,
     fetchUsers,
@@ -37,7 +37,7 @@ import {
 } from '~~/server/data/prismaRepository'
 import {createJobRun, completeJobRun} from '~~/server/data/maintenanceRepository'
 import {removeChefRoleForInhabitants} from '~~/server/utils/removeChefRole'
-import {chunkArray, groupBy} from '~/utils/batchUtils'
+import {chunkArray, groupBy, partition} from '~/utils/batchUtils'
 import {buildResolvedHouseholdMap} from '~/composables/useHousehold'
 import type {HouseholdCreate, HouseholdDisplay, InhabitantCreate, UserCreate, SystemRole} from '~/composables/useCoreValidation'
 import {reconcileUserRoles, RoleOwner} from '~/composables/useUserRoles'
@@ -183,9 +183,8 @@ export async function runHeynaboImport(d1Client: D1Database, triggeredBy: string
         }
 
         // CREATE new users and link to inhabitants
-        // Split: truly new (batch create) vs unlinked existing (just re-link)
-        const trulyNewUsers = userReconciliation.create.filter(i => !allEmails.has(i.user!.email))
-        const unlinkedExisting = userReconciliation.create.filter(i => allEmails.has(i.user!.email))
+        // A user whose email already has an account is only re-linked; the rest are created
+        const [unlinkedExisting, trulyNewUsers] = partition((inhabitant: InhabitantData) => allEmails.has(inhabitant.user!.email))(userReconciliation.create)
         console.info(`${LOG} Create split: ${trulyNewUsers.length} new, ${unlinkedExisting.length} unlinked existing`)
 
         if (trulyNewUsers.length > 0) {

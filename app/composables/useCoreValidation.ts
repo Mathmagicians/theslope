@@ -1,7 +1,7 @@
 import {z} from 'zod'
 import {isBefore} from 'date-fns'
 import {SystemRoleSchema, DinnerModeSchema} from '~~/prisma/generated/zod'
-import {UserFragmentSchema, InhabitantFragmentSchema, HouseholdFragmentSchema} from '~/composables/fragments/domainFragments'
+import {IdSchema, UserFragmentSchema, InhabitantFragmentSchema, HouseholdFragmentSchema, AllergyFragmentSchema} from '~/composables/fragments/domainFragments'
 import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} from '~/composables/useUserPreferenceValidation'
 import {useWeekDayMapValidation} from './useWeekDayMapValidation'
 
@@ -20,11 +20,21 @@ import {useWeekDayMapValidation} from './useWeekDayMapValidation'
 // Re-export SystemRole type
 export type SystemRole = z.infer<typeof SystemRoleSchema>
 
-/**
- * Positive integer ID — single source of truth for entity ids (ADR-001).
- * Use IdSchema for required ids, IdSchema.nullable() for FK fields.
- */
-export const IdSchema = z.number().int().positive()
+export {IdSchema}
+
+// A url carries its ids as strings
+export const RouteIdSchema = z.coerce.number().int().positive()
+
+export const idParams = <const K extends string>(...names: K[]) =>
+    z.object(Object.fromEntries(names.map(name => [name, RouteIdSchema])) as Record<K, typeof RouteIdSchema>)
+
+// Only the literal "true" bypasses: z.coerce.boolean() reads the string "false" as true
+export const AdminBypassQuerySchema = z.object({
+    adminBypass: z.enum(['true', 'false']).optional().transform(flag => flag === 'true')
+})
+
+// Response of a delete whose entity no caller renders (ADR-009)
+export const DeletedCountSchema = z.number().int().min(0)
 
 /**
  * Generate shortName from household address
@@ -115,13 +125,13 @@ export const useCoreValidation = () => {
     // 1. Standard: user@domain.com
     // 2. RFC 5322 with display name: Display Name <user@domain.com>
     const emailSchema = z.union([
-        z.string().email(),
+        z.email(),
         z.string().regex(/^.+\s+<.+@.+\..+>$/)
     ]).transform((val) => {
         // Normalize to standard format by extracting email from angle brackets
         const match = val.match(/<(.+)>/)
         return match ? match[1] : val
-    }).pipe(z.string().email())
+    }).pipe(z.email())
 
     // Domain schema - systemRoles as array
     const BaseUserSchema = UserFragmentSchema.extend({
@@ -186,7 +196,7 @@ export const useCoreValidation = () => {
         // Override with more specific validation
         name: z.string().min(1, "Navn skal være mindst 1 karakter").max(100, "Navn må ikke være længere end 100 karakterer"),
         lastName: z.string().min(1, "Efternavn skal være mindst 1 karakter").max(100, "Efternavn må ikke være længere end 100 karakterer"),
-        pictureUrl: z.string().url().optional().nullable(),
+        pictureUrl: z.url().optional().nullable(),
         // Add domain-specific field
         dinnerPreferences: WeekDayMapSchemaOptional.optional().nullable()
     })
@@ -231,7 +241,7 @@ export const useCoreValidation = () => {
 
     // Login schema for authentication
     const LoginSchema = z.object({
-        email: z.string().email('Indtast den mail, du er registreret med i Heynabo'),
+        email: z.email('Indtast den mail, du er registreret med i Heynabo'),
         password: z.string().nonempty('Indtast din Heynabo adgangskode')
     })
 
@@ -272,10 +282,10 @@ export const useCoreValidation = () => {
         HouseholdCreateSchema
             .pick({pbsId: true, address: true, movedInDate: true})
             .extend({
-                pbsId: z.coerce.number({invalid_type_error: 'PBS skal være et tal'})
+                pbsId: z.coerce.number({error: 'PBS skal være et tal'})
                     .int({message: 'PBS skal være et helt tal'})
                     .positive({message: 'PBS skal være positivt'}),
-                movedInDate: z.date({invalid_type_error: 'Du skal sætte en indflytningsdato for den nye familie'})
+                movedInDate: z.date({error: 'Du skal sætte en indflytningsdato for den nye familie'})
             })
             .refine(
                 (data) => siblingMoveOutConstraints.every(c => !isBefore(data.movedInDate, c)),
@@ -306,7 +316,7 @@ export const useCoreValidation = () => {
         inhabitants: z.array(InhabitantDisplaySchema) // Lightweight relation
     })
 
-    // ADR-009: Detail endpoint - full household with complete inhabitant data
+    // ADR-009: Detail endpoint - full household with complete inhabitant data and each inhabitant's allergies
     const HouseholdDetailSchema = BaseHouseholdSchema.required({
         id: true,
         heynaboId: true,
@@ -317,7 +327,9 @@ export const useCoreValidation = () => {
         moveOutDate: true,
         shortName: true
     }).extend({
-        inhabitants: z.array(InhabitantDetailSchema)
+        inhabitants: z.array(InhabitantDetailSchema.extend({
+            allergies: z.array(AllergyFragmentSchema).optional()
+        }))
     })
 
     // ADR-009: User detail with nested Inhabitant and Household (essential context for auth)
@@ -497,7 +509,7 @@ export const useCoreValidation = () => {
             movedInDate: new Date(serialized.movedInDate as string),
             moveOutDate: serialized.moveOutDate ? new Date(serialized.moveOutDate as string) : null,
             shortName: getHouseholdShortName(serialized.address as string),
-            inhabitants: inhabitants?.map((inhabitant) => deserializeInhabitantDisplay(inhabitant))
+            inhabitants: inhabitants?.map((inhabitant) => ({...deserializeInhabitantDisplay(inhabitant), allergies: inhabitant.allergies}))
         }
         return HouseholdDetailSchema.parse(deserialized)
     }
@@ -505,6 +517,7 @@ export const useCoreValidation = () => {
     return {
         // Shared building blocks
         IdSchema,
+        DeletedCountSchema,
         // Schemas - Role Ownership
         RoleOwnerSchema,
         ReconcileResultSchema,

@@ -1,16 +1,14 @@
 // DELETE /api/admin/team/assignments/[assignmentId] - Remove team assignment
 
 import {defineEventHandler,  getValidatedRouterParams} from "h3"
-import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 import {deleteCookingTeamAssignments} from "~~/server/data/prismaRepository"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 
 const {throwH3Error} = eventHandlerHelper
 
 // Define schema for parameters
-const paramSchema = z.object({
-    id: z.coerce.number().int().positive('assignment ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 export default defineEventHandler(async (event): Promise<number> => {
     const {cloudflare} = event.context

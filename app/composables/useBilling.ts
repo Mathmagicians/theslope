@@ -1,12 +1,37 @@
 import type {DateRange} from '~/types/dateTypes'
-import {createDateRange, formatDateRange} from '~/utils/date'
+import {createDateRange, formatDate, formatDateRange} from '~/utils/date'
 import {useSeason} from '~/composables/useSeason'
-import {useTicket} from '~/composables/useTicket'
-import {useBookingValidation, type TicketType, type OrderDisplay, type DinnerEventInfo} from '~/composables/useBookingValidation'
+import {ticketTypeCount, ticketTypeLabel, ticketTypeLetter} from '~/composables/useTicket'
+import {useCookingTeam} from '~/composables/useCookingTeam'
+import {useBookingValidation, type TicketType, type OrderDisplay, type DinnerEventInfo, type DinnerEventDetail} from '~/composables/useBookingValidation'
 import {chunkArray} from '~/utils/batchUtils'
-import type {BillingSideEffectStamps, CostEntry, HouseholdEntry, InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'
+import type {BillingSideEffectStamps, CostEntry, Expense, HouseholdEntry, InvoiceDisplay, TransactionDisplay} from '~/composables/useBillingValidation'
 
 const LINK_TRANSACTION_BATCH_SIZE = 90
+
+const {TicketTypeSchema} = useBookingValidation()
+
+type TicketTypeCounts = Partial<Record<TicketType, number>>
+type TicketWord = (type: TicketType, count: number) => string
+
+/**
+ * Ticket counts in words, curried over the wording: each ticket type's word in the order of the types, joined by the
+ * separator; a type without tickets is left out unless `withZero`, and no parts read `empty`. `parts` keeps each
+ * type's text apart for a list that renders one element per type
+ */
+const ticketCountText = ({word, separator, withZero = false, empty = ''}: {word: TicketWord, separator: string, withZero?: boolean, empty?: string}) => {
+    const parts = (counts: TicketTypeCounts): {ticketType: TicketType, text: string}[] => TicketTypeSchema.options
+        .filter(type => withZero || counts[type])
+        .map((type, index) => ({ticketType: type, text: `${index > 0 ? separator : ''}${word(type, counts[type] ?? 0)}`}))
+    return {parts, text: (counts: TicketTypeCounts): string => parts(counts).map(part => part.text).join('') || empty}
+}
+
+/** The wordings of a ticket count, one builder each: "2V 1B", "2 voksne, 1 barn", and the kitchen box's "Voksen: 60", "| Barn: 30" */
+export const TICKET_COUNTS = {
+    compact: ticketCountText({word: (type, count) => `${count}${ticketTypeLetter(type)}`, separator: ' ', empty: '-'}),
+    sentence: ticketCountText({word: ticketTypeCount, separator: ', '}),
+    labelled: ticketCountText({word: (type, count) => `${ticketTypeLabel(type)}: ${count}`, separator: '| ', withZero: true})
+}
 
 /**
  * Billing business logic composable
@@ -16,9 +41,13 @@ const LINK_TRANSACTION_BATCH_SIZE = 90
  */
 export const useBilling = () => {
     const {getBillingCutoffDay} = useSeason()
-    const {TicketTypeSchema} = useBookingValidation()
-    const TicketType = TicketTypeSchema.enum
-    const {ticketTypeConfig} = useTicket()
+
+    // How many items carry each ticket type
+    const countTicketTypes = <T extends { ticketType: TicketType | null }>(items: T[]): Partial<Record<TicketType, number>> =>
+        items.reduce((acc, item) => {
+            if (item.ticketType) acc[item.ticketType] = (acc[item.ticketType] ?? 0) + 1
+            return acc
+        }, {} as Partial<Record<TicketType, number>>)
 
     /**
      * Format ticket counts for display (e.g., "2V 1B")
@@ -28,20 +57,7 @@ export const useBilling = () => {
      */
     const formatTicketCounts = <T extends { ticketType: TicketType | null }>(
         input: T[] | Partial<Record<TicketType, number>>
-    ): string => {
-        // Build counts map from array, or use directly if already a map
-        const counts: Partial<Record<TicketType, number>> = Array.isArray(input)
-            ? input.reduce((acc, item) => {
-                if (item.ticketType) acc[item.ticketType] = (acc[item.ticketType] ?? 0) + 1
-                return acc
-            }, {} as Partial<Record<TicketType, number>>)
-            : input
-
-        const parts = [TicketType.ADULT, TicketType.CHILD, TicketType.BABY]
-            .filter(type => counts[type])
-            .map(type => `${counts[type]}${ticketTypeConfig[type].compactLabel}`)
-        return parts.join(' ') || '-'
-    }
+    ): string => TICKET_COUNTS.compact.text(Array.isArray(input) ? countTicketTypes(input) : input)
 
     /**
      * Curried generic groupBy factory for economy views.
@@ -326,12 +342,29 @@ export const useBilling = () => {
         notify: notifiedVersion < version
     })
 
+    /**
+     * The note a grocery line starts with, as the ledgers read it where lines of many dinners meet: the menu in quotes with
+     * the dinner's date, then who bought for which team. The words end at bestiller for a dinner without a team and start
+     * at the date for one without a title. The entry form prefills them; the route writes them for a body without a note
+     */
+    const {getTeamShortName} = useCookingTeam()
+    const expenseNoteWords = (
+        dinner: Pick<DinnerEventDetail, 'date' | 'menuTitle'> & {cookingTeam: Pick<NonNullable<DinnerEventDetail['cookingTeam']>, 'name'> | null},
+        payer: Pick<Expense['paidBy'], 'name' | 'email'>
+    ): string => {
+        const title = dinner.menuTitle ? `"${dinner.menuTitle}" ` : ''
+        const team = dinner.cookingTeam ? ` for ${getTeamShortName(dinner.cookingTeam.name)}` : ''
+        return `${title}${formatDate(dinner.date)}, ${payer.name ?? payer.email} bestiller${team}`
+    }
+
     return {
+        expenseNoteWords,
         calculateClosedBillingPeriod,
         calculateCurrentBillingPeriod,
         getBillingPeriodForDate,
         groupByCostEntry,
         groupByHouseholdEntry,
+        countTicketTypes,
         formatTicketCounts,
         chunkTransactionIds,
         // Control sums

@@ -61,7 +61,7 @@ describe('emitBillingPeriodClosed', () => {
     it('queues the mail through the binding', async () => {
         const queue = {send: vi.fn().mockResolvedValue(undefined)} as unknown as Queue
 
-        const result = await emitBillingPeriodClosed(queue, config, summary)
+        const result = await emitBillingPeriodClosed(NotificationFactory.channel(queue), summary)
 
         expect(result.queued).toBe(true)
         expect(queue.send).toHaveBeenCalledOnce()
@@ -70,10 +70,17 @@ describe('emitBillingPeriodClosed', () => {
     it('reports degraded without touching the binding when no accountant mailbox is configured', async () => {
         const queue = {send: vi.fn()} as unknown as Queue
 
-        const result = await emitBillingPeriodClosed(queue, NotificationFactory.config({accountantEmail: ''}), summary)
+        const result = await emitBillingPeriodClosed(NotificationFactory.channel(queue, {accountantEmail: ''}), summary)
 
         expect(result).toMatchObject({queued: false, degraded: true})
         expect(queue.send).not.toHaveBeenCalled()
         expect(logs.warn).toHaveBeenCalledOnce()
+    })
+
+    it('reports not sent and logs the missing setting when e-mail is off', async () => {
+        const result = await emitBillingPeriodClosed({on: false, missing: 'DEPLOY_URL'}, summary)
+
+        expect(result).toMatchObject({queued: false, degraded: true})
+        expect(logs.warn).toHaveBeenCalledWith(expect.stringContaining('DEPLOY_URL'))
     })
 })

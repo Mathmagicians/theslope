@@ -29,8 +29,8 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
+  /* One worker on CI; a fixed few locally, the local D1 proxy drops requests under a wider fan-out */
+  workers: process.env.CI ? 1 : 3,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   reporter: 'html',
   /* Global teardown - runs once after all tests complete */
@@ -73,12 +73,18 @@ export default defineConfig({
       grep: /Authenticate member for UI/,
       dependencies: ['setup-member-api']
     },
+    // Setup project - the singleton active season, once per run (needs the admin login)
+    {
+      name: 'setup-season',
+      testMatch: /season\.setup\.ts/,
+      dependencies: ['setup-api']
+    },
     // API tests - parallel
     {
       name: 'chromium-api',
       use: { ...devices['Desktop Chrome'] },
       testMatch: /tests\/e2e\/api\/parallel\/.*\.spec\.ts/,
-      dependencies: ['setup-api', 'setup-member-api'],
+      dependencies: ['setup-api', 'setup-member-api', 'setup-season'],
     },
     // API serial tests (heynabo imports/deletes data, maintenance scaffolds ALL households)
     // Runs after parallel API tests to avoid interference
@@ -95,7 +101,7 @@ export default defineConfig({
       name: 'chromium-ui',
       use: { ...devices['Desktop Chrome'] },
       testMatch: /tests\/e2e\/ui\/(?!serial\/).*\.spec\.ts/,
-      dependencies: ['setup-ui', 'setup-member-ui'],
+      dependencies: ['setup-ui', 'setup-member-ui', 'setup-season'],
     },
     // UI serial tests (create their own season, must run after parallel UI tests)
     {
@@ -115,13 +121,6 @@ export default defineConfig({
       fullyParallel: false,
       workers: 1,
       dependencies: ['setup-api', 'setup-ui'],
-    },
-    // Exploratory tests - only run when explicitly targeted
-    {
-      name: 'exploratory',
-      use: { ...devices['Desktop Chrome'] },
-      testMatch: /tests\/e2e\/exploratory\/.*\.ts/,
-      dependencies: ['setup-api'],
     },
 
     /* Test against mobile viewports. */

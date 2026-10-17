@@ -4,7 +4,8 @@
  *
  * Uses getBookingOptions to determine:
  * - Which dinner modes are available based on deadlines and released tickets
- * - Which action to take: 'process' (scaffolder) vs 'claim' (claim endpoint)
+ * - Which action to take: 'process' before the deadline, 'claim' after it; both save through the scaffold, which
+ *   books, buys a ticket for sale or queues the guest by supply
  *
  * For "add guest" context, NONE is always disabled (can't add a guest who won't eat)
  * but shown for visual consistency with other booking forms.
@@ -13,8 +14,7 @@ import type {DinnerEventDisplay, DinnerMode, DesiredOrder, GuestBookingFormData}
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
 import type {AllergyTypeDisplay} from '~/composables/useAllergyValidation'
 import type {SeasonDeadlines} from '~/composables/useSeason'
-import type {TicketPriceSelectItem} from '~/composables/useTicket'
-import type {ReleasedTicketCounts} from '~/composables/useBooking'
+import {supplyOfType, type PreviewSupply, type ReleasedTicketCounts} from '~/composables/useBooking'
 import type {FormSubmitEvent} from '@nuxt/ui'
 import {FORM_MODES} from '~/types/form'
 
@@ -37,62 +37,53 @@ const emit = defineEmits<{
 }>()
 
 // Design system
-const {SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage} = useTheSlopeDesignSystem()
-
-// Ticket type config for styled badges
-const {getTicketPriceSelectItems} = useTicket()
+const {SIZES, COLOR, ICONS, BUTTONS, ALERTS, getRandomEmptyMessage, LAYOUTS, NOISE, COMPONENTS, ORIENTATIONS} = useTheSlopeDesignSystem()
+const guestForm = COMPONENTS.guestBookingForm
 
 // Empty state message when no booking action available
 const emptyStateMessage = computed(() => getRandomEmptyMessage('noGuestTickets'))
 
 // Booking logic
 const {getBookingOptions, resolveUserBookingBuckets} = useBooking()
-const {createBookingBadges, formatActionPreview} = useBookingUi()
+const {createBookingBadges, formatActionPreview, guestSaveLabel} = useBookingUi()
 const {canModifyOrders, canEditDiningMode} = props.deadlines
 
 // Validation schemas
-const {DinnerModeSchema, OrderStateSchema, GuestBookingFormSchema} = useBookingValidation()
+const {DinnerModeSchema, OrderStateSchema, GuestBookingFormSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerModeEnum = DinnerModeSchema.enum
 const OrderStateEnum = OrderStateSchema.enum
 
-// Booking options using getBookingOptions utility (orderState = null for new guest)
+// Booking options using getBookingOptions utility (no order for a new guest)
 const bookingOptions = computed(() => getBookingOptions(
   null,
   canModifyOrders(props.dinnerEvent.date),
   canEditDiningMode(props.dinnerEvent.date),
   props.dinnerEvent.state,
-  props.releasedTicketCounts.total > 0,
   props.isHouseholdInResidency
 ))
 
+// The guests a save books: how many, at which ticket price, how they eat and their allergies
+type GuestDraft = Pick<DesiredOrder, 'dinnerMode'> & {count: number, ticketPriceId: number, allergyTypeIds: number[]}
+
 // Form state - reactive object for UForm binding
-const formState = reactive({
+const formState = reactive<Omit<GuestDraft, 'ticketPriceId'> & {ticketPriceId: number | undefined}>({
   count: 1,
-  ticketPriceId: undefined as number | undefined,
-  allergyTypeIds: [] as number[],
-  dinnerMode: DinnerModeEnum.DINEIN as DinnerMode
+  // The form opens on the adult ticket
+  ticketPriceId: props.ticketPrices.find(price => price.ticketType === TicketTypeSchema.enum.ADULT)?.id,
+  allergyTypeIds: [],
+  dinnerMode: DinnerModeEnum.DINEIN
 })
 const isSaving = ref(false)
 
 
 // Contextual validation - business logic that needs props/computed access
 // Zod schema handles structural validation (type, min, max)
-const validateForm = (state: Partial<typeof formState>) => {
+const validateForm = () => {
   const errors: {name: string, message: string}[] = []
   const {action} = bookingOptions.value
-  const count = state.count ?? 1
-
-  // No booking action available (deadlines passed, no released tickets, etc.)
+  // No booking action: the dinner is cancelled or past, or the household lives elsewhere on the day
   if (!action) {
     errors.push({name: 'count', message: 'Kan desværre ikke tilmelde dine gæster'})
-  }
-
-  // Claiming: count must not exceed available released tickets
-  if (action === 'claim' && count > props.releasedTicketCounts.total) {
-    errors.push({
-      name: 'count',
-      message: `Kun ${props.releasedTicketCounts.total} billet${props.releasedTicketCounts.total === 1 ? '' : 'ter'} ledig${props.releasedTicketCounts.total === 1 ? '' : 'e'}`
-    })
   }
 
   return errors
@@ -102,39 +93,40 @@ const validateForm = (state: Partial<typeof formState>) => {
 // Deadline badges using existing factory
 const badges = computed(() => createBookingBadges(props.dinnerEvent, props.deadlines, props.releasedTicketCounts))
 
-// Action preview: show what the server will do when saving (uses same resolver)
-const actionPreviewItems = computed(() => {
-  if (!formState.ticketPriceId || !bookingOptions.value.action) return []
+// The client settles the guests' claims against the tickets for sale of their ticket type on this dinner (the lock status)
+const supply: PreviewSupply = order => supplyOfType(props.releasedTicketCounts, props.ticketPrices, order.ticketPriceId)
 
-  // Build desired orders from form state (same structure as handleSubmit)
-  const desiredOrders: DesiredOrder[] = Array.from({length: formState.count}, () => ({
+// The guests the form books: count orders at the picked ticket price, booked by the booker
+const guestOrdersOf = ({count, ticketPriceId, dinnerMode, allergyTypeIds}: GuestDraft): DesiredOrder[] =>
+  Array.from({length: count}, () => ({
     inhabitantId: props.bookerId,
     dinnerEventId: props.dinnerEvent.id,
-    dinnerMode: formState.dinnerMode,
-    ticketPriceId: formState.ticketPriceId!,
+    dinnerMode,
+    ticketPriceId,
     isGuestTicket: true,
-    allergyTypeIds: formState.allergyTypeIds.length > 0 ? formState.allergyTypeIds : undefined,
+    allergyTypeIds: allergyTypeIds.length > 0 ? allergyTypeIds : undefined,
     state: OrderStateEnum.BOOKED
   }))
 
-  // Build releasedByEventAndPrice for claim detection
-  // If released tickets exist for this event, mark the selected price as claimable
-  const releasedByEventAndPrice = props.releasedTicketCounts.total > 0
-    ? new Set([`${props.dinnerEvent.id}-${formState.ticketPriceId}`])
-    : new Set<string>()
+// Action preview: the guests' orders settled against the supply as the save settles them
+const actionPreviewItems = computed(() => {
+  const {ticketPriceId} = formState
+  if (!ticketPriceId || !bookingOptions.value.action) return []
 
-  // Resolve buckets using same logic as server
+  // Resolve buckets using same logic as server; a new guest has no order and no queue entry
   const buckets = resolveUserBookingBuckets(
-    desiredOrders,
-    [], // No existing orders for new guests
+    guestOrdersOf({...formState, ticketPriceId}),
+    [],
     [props.dinnerEvent],
-    props.deadlines,
-    releasedByEventAndPrice
+    props.deadlines
   )
 
   // Format preview items - use booker name for guest label
-  return formatActionPreview(buckets, [], () => props.bookerName)
+  return formatActionPreview(buckets, [], [props.dinnerEvent], () => props.bookerName, supply)
 })
+
+// The button names the guests; the preview lines name what saving does for them, one line per outcome
+const saveLabel = computed(() => guestSaveLabel(formState.count))
 
 // Enabled modes for guest: filter out NONE (can't add a guest who won't eat)
 const enabledModesForGuest = computed((): DinnerMode[] =>
@@ -159,24 +151,12 @@ watch(enabledModesForGuest, (modes) => {
 
 // UForm submit handler - receives validated data from FormSubmitEvent
 const handleSubmit = async (event: FormSubmitEvent<GuestBookingFormData>) => {
-  const {ticketPriceId, allergyTypeIds, count, dinnerMode} = event.data
-
-  if (!ticketPriceId || !bookingOptions.value.action) return
+  if (!event.data.ticketPriceId || !bookingOptions.value.action) return
 
   isSaving.value = true
 
   try {
-    const orders: DesiredOrder[] = Array.from({length: count}, () => ({
-      inhabitantId: props.bookerId,
-      dinnerEventId: props.dinnerEvent.id,
-      dinnerMode,
-      ticketPriceId,
-      isGuestTicket: true,
-      allergyTypeIds: allergyTypeIds.length > 0 ? allergyTypeIds : undefined,
-      state: OrderStateEnum.BOOKED
-    }))
-
-    emit('save', orders)
+    emit('save', guestOrdersOf(event.data))
   } finally {
     isSaving.value = false
   }
@@ -206,21 +186,20 @@ const handleCancel = () => emit('cancel')
     <template #default="{ errors }">
       <UCard
       :color="COLOR.info"
-      variant="soft"
-      :ui="{body: 'p-4 flex flex-col gap-4', footer: 'p-4'}"
+      v-bind="guestForm.card"
     >
       <template #header>
-        <div class="flex items-center gap-2">
-          <UIcon :name="ICONS.userPlus" class="size-5 text-info" />
-          <h4 class="text-md font-semibold">Tilføj gæst</h4>
-          <UBadge v-if="props.releasedTicketCounts.total > 0" :color="COLOR.info" :icon="ICONS.claim" variant="subtle" :size="SIZES.small">
-            {{ props.releasedTicketCounts.formatted }} Ledig{{ props.releasedTicketCounts.total === 1 ? '' : 'e' }}
+        <div :class="guestForm.header">
+          <UIcon :name="ICONS.userPlus" :class="guestForm.headerIcon" />
+          <h4 :class="guestForm.title">Tilføj gæst</h4>
+          <UBadge v-if="hasTicketsForSale(props.releasedTicketCounts)" :color="COLOR.info" :icon="ICONS.claim" :variant="NOISE.subtle" :size="SIZES.small">
+            {{ SUPPLY_WORDS.forSaleCount(props.releasedTicketCounts) }}
           </UBadge>
         </div>
       </template>
 
       <!-- Deadline badges + Dinner mode selector (top, like regular form) -->
-      <div class="flex flex-col md:flex-row md:justify-between gap-2">
+      <div :class="guestForm.deadlines">
         <DeadlineBadge :badge="badges.booking" />
         <DeadlineBadge :badge="badges.diningMode" />
       </div>
@@ -232,14 +211,14 @@ const handleCancel = () => emit('cancel')
           :disabled-modes="disabledModes"
           :size="SIZES.standard"
           name="guest-dinner-mode"
-          orientation="horizontal"
+          :orientation="ORIENTATIONS.horizontal"
         />
       </UFormField>
 
       <!-- Two columns: ticket info | allergies (stacked on mobile) -->
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div :class="guestForm.columns">
         <!-- Left: Antal + Billettype -->
-        <div class="flex flex-col gap-4">
+        <div :class="guestForm.fieldStack">
           <UFormField label="Antal gæster" name="count" :size="SIZES.small">
             <UInput
               v-model.number="formState.count"
@@ -253,18 +232,18 @@ const handleCancel = () => emit('cancel')
           <UFormField label="Billettype" name="ticketPriceId" :size="SIZES.small">
             <USelectMenu
               v-model="formState.ticketPriceId"
-              :items="getTicketPriceSelectItems(ticketPrices).toReversed()"
+              :items="ticketPriceSelectItems(ticketPrices).toReversed()"
               value-key="id"
               placeholder="Vælg billettype..."
-              class="w-full"
+              :class="guestForm.select"
               data-testid="guest-ticket-type-select"
             >
               <template #item="{ item }">
-                <div class="flex flex-col gap-0.5">
-                  <UBadge :color="(item as TicketPriceSelectItem).config.color" variant="solid" size="sm" class="uppercase w-fit">
-                    {{ (item as TicketPriceSelectItem).label }}
+                <div :class="guestForm.option">
+                  <UBadge :color="item.presentation.color" :variant="NOISE.loud" :size="SIZES.sm" :class="guestForm.optionBadge">
+                    {{ item.label }}
                   </UBadge>
-                  <span v-if="(item as TicketPriceSelectItem).description" class="text-xs text-muted">{{ (item as TicketPriceSelectItem).description }}</span>
+                  <span v-if="item.description" :class="guestForm.optionNote">{{ item.description }}</span>
                 </div>
               </template>
             </USelectMenu>
@@ -285,20 +264,20 @@ const handleCancel = () => emit('cancel')
 
       <!-- Footer: Action preview + error messages + buttons -->
       <template #footer>
-        <div class="flex flex-col gap-2">
+        <div :class="guestForm.footer">
           <!-- Action preview: show what will happen when saving -->
           <ActionPreview :items="actionPreviewItems" title="Du er ved at tilføje gæster" />
 
           <!-- Error messages near buttons -->
-          <div v-if="errors.length > 0" class="text-sm text-error">
-            <div v-for="error in errors" :key="error.name" class="flex items-center gap-1">
-              <UIcon :name="ICONS.xMark" class="size-4" />
+          <div v-if="errors.length > 0" :class="guestForm.errors">
+            <div v-for="error in errors" :key="error.name" :class="guestForm.error">
+              <UIcon :name="ICONS.xMark" :class="guestForm.errorIcon" />
               <span>{{ error.message }}</span>
             </div>
           </div>
 
           <!-- Action buttons - stacked on mobile (primary on top), horizontal on desktop -->
-          <div class="flex flex-col-reverse md:flex-row md:justify-end gap-2">
+          <div :class="LAYOUTS.formButtonRow">
             <UButton
               v-bind="BUTTONS.cancel"
               data-testid="guest-form-cancel"
@@ -315,7 +294,7 @@ const handleCancel = () => emit('cancel')
               <template #leading>
                 <UIcon :name="ICONS.userPlus" />
               </template>
-              Tilføj gæst
+              {{ saveLabel }}
             </UButton>
           </div>
         </div>

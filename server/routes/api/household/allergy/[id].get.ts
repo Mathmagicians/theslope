@@ -2,14 +2,12 @@ import {createError, defineEventHandler, getValidatedRouterParams, setResponseSt
 import {fetchAllergy} from "~~/server/data/allergyRepository"
 import type {AllergyDetail} from "~/composables/useAllergyValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('Allergy ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 export default defineEventHandler(async (event): Promise<AllergyDetail> => {
     const {cloudflare} = event.context
@@ -18,7 +16,7 @@ export default defineEventHandler(async (event): Promise<AllergyDetail> => {
     // Validate input - fail early on invalid data
     let allergyId!: number
     try {
-        const {id} = await getValidatedRouterParams(event, idSchema.parse)
+        const {id} = await getValidatedRouterParams(event, paramSchema.parse)
         allergyId = id
     } catch (error) {
         return throwH3Error('🏥 > ALLERGY > [GET] Input validation error', error)

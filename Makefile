@@ -65,10 +65,10 @@ help: ## Show this help
 .PHONY: palettes
 
 palettes: ## Regenerate the palette presets from the design system (rerun after a change to main.css scales, app.config ui.colors or a fill/ink token)
-	@npx jiti scripts/palettes/generate.ts
+	@JITI_ALIAS='{"~~":"$(CURDIR)","~":"$(CURDIR)/app"}' npx jiti scripts/palettes/generate.ts
 
 # --- Schema → migration files → Prisma client + zod (prisma/generated, committed)
-.PHONY: d1-prisma-zod d1-prisma d1-create-migration d1-flatten-migrations
+.PHONY: d1-prisma-zod d1-prisma d1-prisma-check d1-create-migration d1-flatten-migrations
 
 d1-prisma-zod:
 	@npx prisma generate zod
@@ -77,6 +77,9 @@ d1-prisma: d1-prisma-zod ## Generate Prisma client and Zod types
 	@npx prisma format
 	@npx prisma validate
 	@npm run db:generate-client
+
+d1-prisma-check: d1-prisma ## Fail when the committed generated layer differs from the schema
+	@git diff --exit-code --stat prisma/generated prisma/schema.prisma
 
 d1-create-migration: ## Create migration (name=xxx)
 	@echo "📝 Creating new Prisma migration..."
@@ -282,7 +285,24 @@ d1-copy-dev-to-local: ## Replace the local D1 with a copy of dev (schema, data, 
 # ============================================================================
 # TESTING
 # ============================================================================
-.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod
+.PHONY: unit-test unit-test-single e2e-team e2e-season smoke-dev smoke-prod test-report
+
+TEST_REPORT_JQ = {passed: (.stats.expected // 0), failed: (.stats.unexpected // 0), flaky: (.stats.flaky // 0), skipped: (.stats.skipped // 0)} as $$r \
+	| (if $$r.failed > 0 then "❌" else "✅" end) as $$icon \
+	| "\#\# \($$icon) \($$title)\n\n| Passed | Failed | Flaky | Skipped |\n|---:|---:|---:|---:|\n| \($$r.passed) | \($$r.failed) | \($$r.flaky) | \($$r.skipped) |\n" \
+	+ (if ($$r.failed > 0) and (($$note | length) > 0) then "\n> ⚠️ \($$note)\n" else "" end) \
+	+ (if ($$link | length) > 0 then "\n[Playwright report (artifact)](\($$link))\n" else "" end)
+
+TEST_REPORT_USAGE := usage: make test-report report=<playwright json> title=<text> [link=<url>] [note=<warning shown when failed > 0>]
+
+test-report: ## Markdown summary of a Playwright suite - report=<json> title=<text> [link=<url>] [note=<text>]
+	@test -n "$(report)" -a -n "$(title)" || { echo "$(TEST_REPORT_USAGE)"; exit 1; }
+	@if [ -f "$(report)" ]; then \
+		jq -r --arg title "$(title)" --arg link "$(link)" --arg note "$(note)" '$(TEST_REPORT_JQ)' "$(report)" \
+			|| echo "## ⚠️ $(title) — could not parse $(report)"; \
+	else \
+		echo "## ⚠️ $(title) — no results file at $(report)"; \
+	fi
 
 unit-test: ## Run all unit tests
 	@npx vitest --run
@@ -541,22 +561,6 @@ theslope-export-teams: ## Export the active season's team members as a teams CSV
 	@echo "$$(($$(wc -l < $(out)) - 1)) members → $(out)"
 
 # ============================================================================
-# HEAL USER BOOKINGS (bugfix - one-time healing)
-# ============================================================================
-# Usage: make heal-local hid=123 dryrun=false
-# Default: dryrun=true (preview mode)
-.PHONY: heal-local heal-dev heal-prod
-
-heal-local: ## Heal user bookings (local) - hid=householdId dryrun=true|false
-	$(call theslope_call,$(ENV_local),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
-
-heal-dev: ## Heal user bookings (dev) - hid=householdId dryrun=true|false
-	$(call theslope_call,$(ENV_dev),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
-
-heal-prod: ## Heal user bookings (prod) - hid=householdId dryrun=true|false
-	$(call theslope_call,$(ENV_prod),-X POST "$$BASE_URL/api/admin/maintenance/heal-user-bookings?dryRun=$(or $(dryrun),true)$(if $(hid),&householdId=$(hid),)")
-
-# ============================================================================
 # REGENERATE DINNER EVENTS (reconcile with season config - fixes stale holiday events)
 # ============================================================================
 # Usage: make regen-dinner-events-prod sid=2
@@ -641,36 +645,30 @@ generate-session-secret: ## Generate a session secret
 	@cat .env | sed 's/=.*$$/=/g' > .env.example
 
 # ============================================================================
-# CLAUDE MODES
+# CLAUDE MODES - each mode starts its agent from .claude/agents/
 # ============================================================================
-.PHONY: claude-senior-dev claude-test claude-adr claude-ux claude-doc claude-pair claude-devops
+.PHONY: claude-senior-dev claude-test claude-adr claude-ux claude-doc claude-pair claude-devops claude-code-review
 
 claude-senior-dev: ## Claude as senior dev
-	@claude --system-prompt "You are a senior nuxt developer, and your task is to develop the next feature described in the docs. Remember about @docs/adr-compliance-frontend.md and @docs/adr-compliance-backend.md. You must point out if any significant parts of the project are missing or could be improved. You must also ensure that existing code follows best practices, is secure, and well tested. You are not allowed to commit to git, and you are not allowed to start dev server, the user does that. You should start by asking about what feature we are implementing, and what the business requirements are."
+	@claude --agent nuxt-typescript-developer
 
 claude-test: ## Claude as test engineer
-	@claude --system-prompt "You are a senior test automation engineer, and you know how to write dry parametrized tests, both unit, component, e2e api and e2e ui. Your task is to make sure our tests are green, test factories well maintained, and coverage is comprehensive. You MUST point out if test cases are missing. You must take care to update our adr-compliance documents."
+	@claude --agent test-automation-engineer
 
 claude-adr: ## Claude as architect
-	@claude --system-prompt "You are a senior software architect, and your task is to make sure our architecture decision records (ADRs) are up to date and comprehensive. You must point out if any ADRs are missing for significant decisions made in the project. You must also ensure that existing ADRs are well written and follow best practices."
+	@claude --agent senior-architect
 
 claude-ux: ## Claude as UX designer
-	@claude --system-prompt "You are a a wizard UX designer, with great frontend coding skill, and your task is to help us design a friendly, and consistent user interface. Your task is to design ascii mockups for new features, implement components with Nuxtui, stay consistent with our DesignSystem, and update it along the way. Your code needs to conform to the @docs/adr-compliance-frontend.md. Start by asking what feature we are designing, and what the business requirements are"
+	@claude --agent frontend-engineer
 
-claude-doc: ## Claude as tech writer
-	@claude --system-prompt "You are a technical writer, and your task is to make sure our documentation is up to date, but compact. You must point out if any significant parts of the project are missing documentation. You must also ensure that existing documentation is well written and follows best practices. You have to maintain the @docs/features.md when developers finish a feature, add asci art from feature to the file, together with 1 documentation screenshot generated by e2e test for that feature."
+claude-doc: ## Claude as documentar
+	@claude --agent documentar
 
 claude-pair: ## Claude as pair programmer
-	@claude --system-prompt "You are my pair programmer, use the pair programmer subagent until I tell you otherwise. I write code, you assist with tests, discussions and clarifications. Be assertive, I am a senior engineer, no trivialities, watch how the implementation is progressing and discuss fine details."
+	@claude --agent tdd-pair-programmer
 
 claude-devops: ## Claude as DevOps engineer
-	@claude --system-prompt "You are a senior DevOps engineer, use the devops subagent ONLY. Your task is to make sure our deployment pipelines, infrastructure as code, and cloud resources are well managed and optimized. You must point out if any significant parts of our DevOps practices are missing or could be improved. You must also ensure that existing configurations follow best practices and are secure. You are not allowed to commit to git, but you are allowed to merge pr on request."
+	@claude --agent devops-engineer
 
 claude-code-review: ## Claude PR review against ADRs
-	@claude --system-prompt "Review this PR for ADR compliance and documentation maintenance.\n\n\
-	1. Read: docs/adr.md, docs/adr-compliance-backend.md, docs/adr-compliance-frontend.md, prisma/schema.prisma, docs/testing.md\n\n\
-	2. Check code changes against ALL ADRs - flag violations with specific references.\n\n\
-	3. Check compliance doc maintenance:\n\
-	   - server/routes/api/** changes → adr-compliance-backend.md MUST be updated\n\
-	   - app/components/**, app/pages/**, app/stores/** changes → adr-compliance-frontend.md MUST be updated\n\n\
-	4. Check test coverage: New endpoints need E2E tests with factories, new components need tests, tests must be DRY."
+	@claude --agent documentar "/code-review"

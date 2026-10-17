@@ -1,15 +1,17 @@
-import {describe, it, expect, beforeEach} from 'vitest'
-import {setActivePinia, createPinia} from 'pinia'
-import {clearNuxtData} from '#app'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {nextTick} from 'vue'
 import ChefCalendarDisplay from '~/components/calendar/ChefCalendarDisplay.vue'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
+import {findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
 
-/**
- * The agenda table's #empty slot: Nuxt UI 4 renders it only when data is empty, and it was
- * dead until the v2 slot name `#empty-state` was renamed. This holds the rename in place.
- */
+const TEST_IDS = {
+    header: 'chef-calendar-header',
+    toggle: 'chef-calendar-toggle',
+    content: 'chef-calendar-content'
+} as const
 
 const team = {
     id: 1,
@@ -20,7 +22,14 @@ const team = {
     cookingDaysCount: 0
 } as unknown as CookingTeamDisplay
 
-const mountAgenda = async (dinnerEvents: DinnerEventDisplay[] = []) => {
+type ViewMode = 'agenda' | 'calendar'
+
+// The next test's resetStores drops the datasets a still-mounted calendar reads
+enableAutoUnmount(afterEach)
+
+const mountCalendar = async ({viewMode = 'agenda', accordionOpen = true, dinnerEvents = []}: {
+    viewMode?: ViewMode, accordionOpen?: boolean, dinnerEvents?: DinnerEventDisplay[]
+} = {}) => {
     const {deadlinesForSeason} = useSeason()
     return await mountSuspended(ChefCalendarDisplay, {
         props: {
@@ -28,20 +37,44 @@ const mountAgenda = async (dinnerEvents: DinnerEventDisplay[] = []) => {
             team,
             dinnerEvents,
             deadlines: deadlinesForSeason({ticketIsCancellableDaysBefore: 4, diningModeIsEditableMinutesBefore: 0}),
-            viewMode: 'agenda' as const,
-            accordionOpen: true
+            viewMode,
+            accordionOpen
         }
     })
 }
 
-describe('ChefCalendarDisplay agenda', () => {
+describe('ChefCalendarDisplay', () => {
     beforeEach(() => {
-        setActivePinia(createPinia())
-        clearNuxtData()
+        resetStores()
     })
 
-    it('tells the chef when the team has no dinners', async () => {
-        const wrapper = await mountAgenda()
+    it.each<{from: ViewMode, label: string, to: ViewMode}>([
+        {from: 'agenda', label: 'Kalender', to: 'calendar'},
+        {from: 'calendar', label: 'Agenda', to: 'agenda'}
+    ])('a click on the $label tab emits tab-click with $to', async ({from, label, to}) => {
+        const wrapper = await mountCalendar({viewMode: from})
+        const tab = findByTestId(wrapper, TEST_IDS.header).findAll('[role="tab"]').find(t => t.text().includes(label))
+        expect(tab, `the ${label} tab renders in the header`).toBeDefined()
+        await tab!.trigger('mousedown', {button: 0})
+        await nextTick()
+        expect(wrapper.emitted('tab-click')).toEqual([[to]])
+    })
+
+    it.each([true, false])('accordion-open %s renders the content only when open, and the chevron emits update:accordion-open with the toggled value', async (open) => {
+        const wrapper = await mountCalendar({accordionOpen: open})
+        expect(findByTestId(wrapper, TEST_IDS.content).exists()).toBe(open)
+        expect(findByTestId(wrapper, TEST_IDS.toggle).attributes('aria-expanded')).toBe(String(open))
+        await clickByTestId(wrapper, TEST_IDS.toggle)
+        expect(wrapper.emitted('update:accordion-open')).toEqual([[!open]])
+    })
+
+    it('tells the chef when the team has no dinners, under a header without a button inside a button', async () => {
+        const wrapper = await mountCalendar()
         expect(wrapper.text()).toContain('Ingen fællesspisninger planlagt for dette hold')
+        const header = findByTestId(wrapper, TEST_IDS.header)
+        const buttons = header.findAll('button')
+        expect(buttons.length, 'the header holds the two tabs and the chevron').toBe(3)
+        expect(buttons.filter(button => button.element.parentElement?.closest('button'))).toEqual([])
+        expect(header.element.closest('button'), 'the header row is no button itself').toBeNull()
     })
 })

@@ -13,7 +13,9 @@
       "WebFetch(domain:nuxt.com)",
       "WebFetch(domain:ui4.nuxt.com)",
       "WebFetch(domain:ui.nuxt.com)",
-      "Bash(npx wrangler d1 execute=:* --remote=:* --command :*SELECT:*)",
+      "Bash(npx wrangler d1 execute *--command*SELECT*--remote*)",
+      "Bash(wrangler d1 execute *--command*SELECT*--remote*)",
+      "Bash(wrangler d1 execute *--command*SELECT*--local*)",
       "Bash(npx wrangler queues --help)",
       "Bash(wrangler queues --help)",
       "Bash(npx wrangler queues list:*)",
@@ -26,7 +28,10 @@
       "Read(./.env)",
       "Read(./.env.dev)",
       "Read(./.env.prod)",
-      "Bash(npx wrangler :* --remote :*DELETE:*)",
+      "Bash(npx wrangler *--remote*DELETE*)",
+      "Bash(npx wrangler *DELETE*--remote*)",
+      "Bash(wrangler *--remote*DELETE*)",
+      "Bash(wrangler *DELETE*--remote*)",
       "Bash(npm run dev:*)",
       "Bash(git stash:*)",
       "Bash(python:*)",
@@ -64,9 +69,12 @@
       "Bash(wrangler d1 export:*)"
     ],
     "ask": [
-      "Bash(npx wrangler :* --remote :*)"
-    ],
-    "includeCoAuthoredBy": false
+    ]
+  },
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
   },
   "hooks": {
     "PreToolUse": [

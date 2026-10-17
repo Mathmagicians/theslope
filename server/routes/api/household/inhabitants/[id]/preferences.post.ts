@@ -1,26 +1,22 @@
 import {defineEventHandler, getValidatedRouterParams, getValidatedQuery, readValidatedBody, setResponseStatus} from "h3"
-import {z} from 'zod'
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import {isAdmin} from '~/composables/usePermissions'
-import {useCoreValidation} from "~/composables/useCoreValidation"
+import {AdminBypassQuerySchema, RouteIdSchema, idParams, useCoreValidation} from "~/composables/useCoreValidation"
 import {useBookingValidation, type InhabitantUpdateResponse, type ScaffoldResult, type DinnerMode} from "~/composables/useBookingValidation"
 import {fetchInhabitant, updateInhabitant} from "~~/server/data/prismaRepository"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
+import {emailChannel} from "~~/server/utils/sender/config"
+import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
 import type {WeekDayMap} from "~/types/dateTypes"
 
 const {throwH3Error} = eventHandlerHelper
 
 const LOG = '👩‍🏠 > INHABITANT > [PREFERENCES]'
 
-const idSchema = z.object({
-    id: z.coerce.number().int().positive()
-})
+const paramSchema = idParams('id')
 
-const querySchema = z.object({
-    seasonId: z.coerce.number().int().positive().optional(),
-    adminBypass: z.coerce.boolean().default(false)
-})
+const querySchema = AdminBypassQuerySchema.extend({seasonId: RouteIdSchema.optional()})
 
 /**
  * POST /api/household/inhabitants/[id]/preferences
@@ -39,7 +35,7 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
         const {InhabitantUpdateSchema} = useCoreValidation()
         const bodySchema = InhabitantUpdateSchema.pick({dinnerPreferences: true}).required()
 
-        const params = await getValidatedRouterParams(event, idSchema.parse)
+        const params = await getValidatedRouterParams(event, paramSchema.parse)
         id = params.id
         const query = await getValidatedQuery(event, querySchema.parse)
         seasonId = query.seasonId
@@ -69,6 +65,7 @@ export default defineEventHandler<Promise<InhabitantUpdateResponse>>(async (even
             seasonId,
             householdId: updatedInhabitant.householdId
         })
+        await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), scaffoldResult.outcomes)
 
         const {InhabitantUpdateResponseSchema} = useBookingValidation()
         setResponseStatus(event, 200)

@@ -7,3 +7,6 @@ export function maskPassword(password: string, visibleChars: number = 1): string
 
 /** Upper-case the first character, leave the rest alone */
 export const capitalize = (text: string): string => text.charAt(0).toUpperCase() + text.slice(1)
+
+/** Kuverter in Danish notation: 1,5 */
+export const formatPortions = (portions: number): string => portions.toLocaleString('da-DK')

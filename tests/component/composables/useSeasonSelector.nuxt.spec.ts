@@ -1,17 +1,16 @@
-import { describe, it, expect, beforeEach, vi, type Mock } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mockNuxtImport } from '@nuxt/test-utils/runtime'
 import { computed, ref, type Ref } from 'vue'
 import type { Season } from '~/composables/useSeasonValidation'
 import type { SeasonSelectorOptions } from '~/composables/useSeasonSelector'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
+import { FORM_MODES } from '~/types/form'
 
-const { mockNavigateTo, mockRouteData } = vi.hoisted(() => ({
-  mockNavigateTo: vi.fn(),
-  mockRouteData: { path: '/admin/planning', params: {}, query: {}, hash: '' }
-}))
+const { mockNavigateTo, mockRoute: mockRouteData, useRoute } = await vi.hoisted(async () =>
+  (await import('~~/tests/component/hoistedMocks')).mockRouteAndNavigation({path: '/admin/planning'}))
 
 mockNuxtImport('navigateTo', () => mockNavigateTo)
-mockNuxtImport('useRoute', () => () => mockRouteData)
+mockNuxtImport('useRoute', () => useRoute)
 
 // Mock seasons using factory pattern
 const mockSeasons: Season[] = [
@@ -34,20 +33,17 @@ const mockSeasons: Season[] = [
 const createSelectorOptions = (
   seasonsRef: Ref<Season[]>,
   selectedSeasonIdRef: Ref<number | null>,
-  activeSeasonRef: Ref<Season | null>,
-  onSeasonSelect: (id: number) => void
+  activeSeasonRef: Ref<Season | null>
 ): SeasonSelectorOptions => ({
   seasons: computed(() => seasonsRef.value),
   selectedSeasonId: computed(() => selectedSeasonIdRef.value),
-  activeSeason: computed(() => activeSeasonRef.value),
-  onSeasonSelect
+  activeSeason: computed(() => activeSeasonRef.value)
 })
 
 describe('useSeasonSelector', () => {
   let mockSeasonsRef: Ref<Season[]>
   let mockSelectedSeasonIdRef: Ref<number | null>
   let mockActiveSeasonRef: Ref<Season | null>
-  let mockOnSeasonSelect: Mock<(id: number) => void>
 
   beforeEach(() => {
     vi.clearAllMocks()
@@ -57,10 +53,6 @@ describe('useSeasonSelector', () => {
     mockSeasonsRef = ref(mockSeasons)
     mockSelectedSeasonIdRef = ref(mockSeasons[0]!.id ?? null)
     mockActiveSeasonRef = ref(mockSeasons.find(s => s.isActive) ?? null)
-    mockOnSeasonSelect = vi.fn((id: number) => {
-      // Simulate store behavior: update selectedSeasonId when season is selected
-      mockSelectedSeasonIdRef.value = id
-    })
   })
 
   it.each([
@@ -72,7 +64,7 @@ describe('useSeasonSelector', () => {
 
     const { useSeasonSelector } = await import('~/composables/useSeasonSelector')
     const { season } = useSeasonSelector(
-      createSelectorOptions(mockSeasonsRef, mockSelectedSeasonIdRef, mockActiveSeasonRef, mockOnSeasonSelect)
+      createSelectorOptions(mockSeasonsRef, mockSelectedSeasonIdRef, mockActiveSeasonRef)
     )
 
     await vi.waitFor(() => {
@@ -82,13 +74,13 @@ describe('useSeasonSelector', () => {
 
   it.each([
     { initialQuery: {}, newSeason: 'fall-2025', expectedQuery: { season: 'fall-2025' } },
-    { initialQuery: { mode: 'edit' }, newSeason: 'spring-2026', expectedQuery: { mode: 'edit', season: 'spring-2026' } }
+    { initialQuery: { mode: FORM_MODES.EDIT, season: 'fall-2025' }, newSeason: 'spring-2026', expectedQuery: { mode: FORM_MODES.EDIT, season: 'spring-2026' } }
   ])('onSeasonChange updates URL: $expectedQuery', async ({ initialQuery, newSeason, expectedQuery }) => {
     mockRouteData.query = initialQuery
 
     const { useSeasonSelector } = await import('~/composables/useSeasonSelector')
     const { onSeasonChange } = useSeasonSelector(
-      createSelectorOptions(mockSeasonsRef, mockSelectedSeasonIdRef, mockActiveSeasonRef, mockOnSeasonSelect)
+      createSelectorOptions(mockSeasonsRef, mockSelectedSeasonIdRef, mockActiveSeasonRef)
     )
 
     await onSeasonChange(newSeason)
@@ -99,17 +91,21 @@ describe('useSeasonSelector', () => {
     )
   })
 
-  it('calls onSeasonSelect when season changes', async () => {
-    mockRouteData.query = {}
+  it('choosing a season writes the URL and leaves the selection to the store, which follows the URL', async () => {
+    mockRouteData.query = { season: 'fall-2025' }
 
     const { useSeasonSelector } = await import('~/composables/useSeasonSelector')
     const { onSeasonChange } = useSeasonSelector(
-      createSelectorOptions(mockSeasonsRef, mockSelectedSeasonIdRef, mockActiveSeasonRef, mockOnSeasonSelect)
+      createSelectorOptions(mockSeasonsRef, mockSelectedSeasonIdRef, mockActiveSeasonRef)
     )
 
     await onSeasonChange('spring-2026')
 
-    expect(mockOnSeasonSelect).toHaveBeenCalledWith(2) // spring-2026 has id: 2
+    expect(mockNavigateTo).toHaveBeenCalledWith(
+      { path: '/admin/planning', query: { season: 'spring-2026' } },
+      { replace: true }
+    )
+    expect(mockSelectedSeasonIdRef.value).toBe(mockSeasons[0]!.id)
   })
 
   it.each([
@@ -120,7 +116,7 @@ describe('useSeasonSelector', () => {
 
     const { useSeasonSelector } = await import('~/composables/useSeasonSelector')
     useSeasonSelector(
-      createSelectorOptions(mockSeasonsRef, mockSelectedSeasonIdRef, mockActiveSeasonRef, mockOnSeasonSelect)
+      createSelectorOptions(mockSeasonsRef, mockSelectedSeasonIdRef, mockActiveSeasonRef)
     )
 
     await vi.waitFor(() => {
@@ -131,19 +127,17 @@ describe('useSeasonSelector', () => {
     })
   })
 
-  it('does not call onSeasonSelect or navigate when selecting already selected season with matching URL', async () => {
+  it('does not navigate when selecting the season the URL already holds', async () => {
     mockRouteData.query = { season: 'fall-2025' }
 
     const { useSeasonSelector } = await import('~/composables/useSeasonSelector')
     const { onSeasonChange } = useSeasonSelector(
-      createSelectorOptions(mockSeasonsRef, mockSelectedSeasonIdRef, mockActiveSeasonRef, mockOnSeasonSelect)
+      createSelectorOptions(mockSeasonsRef, mockSelectedSeasonIdRef, mockActiveSeasonRef)
     )
 
     // Try to select the already selected season (which also matches URL)
     await onSeasonChange('fall-2025')
 
-    // Should not navigate (already in sync) and not call onSeasonSelect (already selected)
     expect(mockNavigateTo).not.toHaveBeenCalled()
-    expect(mockOnSeasonSelect).not.toHaveBeenCalled()
   })
 })

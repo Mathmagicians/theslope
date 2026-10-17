@@ -5,7 +5,7 @@ import testHelpers from '../testHelpers'
 
 const {headers} = testHelpers
 const SEASON_IMPORT_ENDPOINT = '/api/admin/season/import'
-const TEAM_IMPORT_DIR = join(process.cwd(), '.theslope', 'team-import')
+const TEAM_IMPORT_DIR = join(process.cwd(), '.theslope', 'team-import', '2026-import')
 
 export class SeasonImportFactory {
 

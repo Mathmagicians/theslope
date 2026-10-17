@@ -3,22 +3,23 @@ import {authFiles} from '../config'
 import testHelpers from '../testHelpers'
 import {UserFactory} from '../testDataFactories/userFactory'
 import {PREF_TEST_IDS} from '~~/tests/component/components/user/userPreferencesTestIds'
-import type {Appearance, NotificationChannel} from '~/composables/useUserPreferenceValidation'
+import {useUserPreferenceValidation, type Appearance, type NotificationChannel, type Palette, type TextScale} from '~/composables/useUserPreferenceValidation'
 
 const {memberUIFile} = authFiles
-const {waitForHydration, memberValidatedBrowserContext} = testHelpers
+const {waitForHydration, gotoHydrated, memberValidatedBrowserContext, waitForApi} = testHelpers
+const {PaletteSchema, TextScaleSchema, DEFAULT_APPEARANCE} = useUserPreferenceValidation()
+const PaletteKind = PaletteSchema.enum
+const TextScaleKind = TextScaleSchema.enum
 
 /**
  * "Mine indstillinger" on the dashboard: the appearance a member picks reaches <html> on every page,
  * through the layout's htmlAttrs, and survives a reload because the session carries it.
  */
 test.describe('My preferences', () => {
-    // Both cases save the same member's appearance, so they run in order
-    test.describe.configure({mode: 'serial'})
     test.use({storageState: memberUIFile})
 
     let originalChannels: NotificationChannel[] = []
-    let originalAppearance: Appearance = {palette: 'default', textScale: 'normal'}
+    let originalAppearance: Appearance = DEFAULT_APPEARANCE
 
     const html = (page: import('@playwright/test').Page) => page.locator('html')
 
@@ -28,14 +29,11 @@ test.describe('My preferences', () => {
         await expect(page.getByTestId(PREF_TEST_IDS.card)).toBeVisible()
     }
 
-    const saveAppearance = async (page: import('@playwright/test').Page, palette: string, textScale: string) => {
+    const saveAppearance = async (page: import('@playwright/test').Page, palette: Palette, textScale: TextScale) => {
         await page.getByTestId(PREF_TEST_IDS.edit).click()
         await page.getByTestId(PREF_TEST_IDS.palette(palette)).click()
         await page.getByTestId(PREF_TEST_IDS.textScale(textScale)).click()
-        const saved = page.waitForResponse(
-            (response) => response.url().includes('/api/user/preferences') && response.request().method() === 'POST',
-            {timeout: 15000}
-        )
+        const saved = waitForApi(page, '/api/user/preferences', 'POST')
         await page.getByTestId(PREF_TEST_IDS.save).click()
         expect((await saved).status()).toBe(200)
     }
@@ -60,30 +58,24 @@ test.describe('My preferences', () => {
         test.setTimeout(90_000)
     })
 
-    test('GIVEN a logged-in member on the dashboard WHEN picking Høj kontrast and Stor THEN html carries the appearance, also after reload', async ({page}) => {
-        await page.goto('/login')
-        await waitForHydration(page)
+    test('GIVEN a logged-in member on the dashboard WHEN picking Høj kontrast and Stor THEN html carries the appearance, also after reload, AND WHEN picking Glade farver and Normal THEN html carries neither attribute', async ({page}) => {
+        await gotoHydrated(page, '/login')
         await openPreferences(page)
 
-        await saveAppearance(page, 'high-contrast', 'large')
+        await saveAppearance(page, PaletteKind['high-contrast'], TextScaleKind.large)
 
-        await expect(html(page)).toHaveAttribute('data-palette', 'high-contrast')
-        await expect(html(page)).toHaveAttribute('data-text-scale', 'large')
+        await expect(html(page)).toHaveAttribute('data-palette', PaletteKind['high-contrast'])
+        await expect(html(page)).toHaveAttribute('data-text-scale', TextScaleKind.large)
 
         await page.reload()
         await waitForHydration(page)
 
-        await expect(html(page)).toHaveAttribute('data-palette', 'high-contrast')
-        await expect(html(page)).toHaveAttribute('data-text-scale', 'large')
-    })
+        await expect(html(page)).toHaveAttribute('data-palette', PaletteKind['high-contrast'])
+        await expect(html(page)).toHaveAttribute('data-text-scale', TextScaleKind.large)
 
-    test('GIVEN a member on Høj kontrast WHEN picking Glade farver and Normal THEN html carries neither attribute', async ({page}) => {
-        await page.goto('/login')
-        await waitForHydration(page)
+        // WHEN: back to the base palette and text size, the reload closed the card
         await openPreferences(page)
-        await saveAppearance(page, 'high-contrast', 'large')
-
-        await saveAppearance(page, 'default', 'normal')
+        await saveAppearance(page, PaletteKind.default, TextScaleKind.normal)
 
         await expect(html(page)).not.toHaveAttribute('data-palette')
         await expect(html(page)).not.toHaveAttribute('data-text-scale')

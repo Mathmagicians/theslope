@@ -1,17 +1,18 @@
 import {test, expect} from '@playwright/test'
 import {useCoreValidation} from '~~/app/composables/useCoreValidation'
 import {useBookingValidation} from '~~/app/composables/useBookingValidation'
-import {useWeekDayMapValidation} from '~~/app/composables/useWeekDayMapValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
+import {WEEKDAYS} from '~~/app/types/dateTypes'
+import {useBookingValidation as useActionValidation} from '~/composables/useBookingValidation'
+const Action = useActionValidation().BookingActionSchema.enum
 
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const {createDefaultWeekdayMap: createDefaultDinnerModeMap} = useCoreValidation()
-const {createDefaultWeekdayMap: createBooleanWeekdayMap} = useWeekDayMapValidation()
 const {validatedBrowserContext, temporaryAndRandom} = testHelpers
 
 /**
@@ -42,18 +43,9 @@ test.describe('POST /api/admin/season/[id] on the active season', () => {
     test.beforeAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
-        const tomorrow = new Date()
-        tomorrow.setDate(tomorrow.getDate() + 1)
-        tomorrow.setHours(0, 0, 0, 0)
-
-        const created = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
-            cookingDays: createBooleanWeekdayMap([true, true, true, true, true, true, true]),
-            seasonDates: {start: tomorrow, end: dayAfter(tomorrow, 10)},
-            ticketIsCancellableDaysBefore: 2
-        })
+        const created = await SeasonFactory.createActiveSeasonFromTomorrow(context, testSalt, {days: 10, deadline: 2, cookingDays: 'all'})
         season = created.season
         createdSeasonIds.push(season.id!)
-        await SeasonFactory.activateSeason(context, season.id!)
 
         const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
             context, HouseholdFactory.defaultHouseholdData(testSalt), 1
@@ -77,13 +69,14 @@ test.describe('POST /api/admin/season/[id] on the active season', () => {
         await SeasonFactory.createActiveSeason(context)
     })
 
-    test('GIVEN the active season WHEN a holiday is added and the season extended THEN orders are reconciled and re-scaffolded', async ({browser}) => {
+    test('GIVEN the active season WHEN a holiday is added and the season extended THEN orders are reconciled, the other bookings survive and the new dinner is scaffolded', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
 
         // GIVEN: a scaffolded dinner far enough out to be removable, and the event count before the save
         const before = await SeasonFactory.getSeason(context, season.id!)
         const eventsByDate = [...before.dinnerEvents!].sort((a, b) => a.date.getTime() - b.date.getTime())
         const holidayEvent = eventsByDate[4]!
+        const keptEvent = eventsByDate[5]!
         const ordersBefore = await OrderFactory.getAllOrdersForEvents(context, holidayEvent.id)
         expect(ordersBefore.filter(o => o.inhabitantId === inhabitantId).length,
             'Scaffolding should have booked the inhabitant on the holiday date').toBeGreaterThan(0)
@@ -105,13 +98,56 @@ test.describe('POST /api/admin/season/[id] on the active season', () => {
         const ordersAfter = await OrderFactory.getAllOrdersForEvents(context, holidayEvent.id)
         expect(ordersAfter).toHaveLength(0)
 
+        // AND: the next dinner keeps its bookings
+        const ordersKept = await OrderFactory.getAllOrdersForEvents(context, keptEvent.id)
+        expect(ordersKept.filter(o => o.inhabitantId === inhabitantId).length).toBeGreaterThan(0)
+
         // AND: the same request scaffolded pre-bookings for the new dinner (ADR-015)
         expect(result.scaffold).not.toBeNull()
-        expect(result.scaffold!.created).toBeGreaterThan(0)
+        expect(result.scaffold!.totals[Action.BOOK]).toBeGreaterThan(0)
 
         const newEvent = result.season.dinnerEvents!.find(e => e.date.getTime() === newEnd.getTime())
         expect(newEvent, 'The extended season should have a dinner on the new end date').toBeDefined()
         const ordersOnNewEvent = await OrderFactory.getAllOrdersForEvents(context, newEvent!.id)
         expect(ordersOnNewEvent.filter(o => o.inhabitantId === inhabitantId).length).toBeGreaterThan(0)
+    })
+})
+
+// Serial for the same reason: activation re-books every household and clips every inhabitant's preferences
+test.describe('POST /api/admin/season/active', () => {
+    const createdHouseholdIds: number[] = []
+    const testSalt = temporaryAndRandom()
+
+    test.afterAll(async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
+    })
+
+    test('GIVEN an inhabitant with DINEIN on every day WHEN the active season is re-activated THEN the preferences are clipped to its cooking days', async ({browser}) => {
+        const context = await validatedBrowserContext(browser)
+
+        // GIVEN: The active season singleton (Mon/Wed/Fri cooking days)
+        const activeSeason = await SeasonFactory.createActiveSeason(context)
+        const cookingDays = activeSeason.cookingDays
+
+        // AND: A household with an inhabitant having DINEIN on ALL days
+        const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
+            context, HouseholdFactory.defaultHouseholdData(testSalt), 1
+        )
+        createdHouseholdIds.push(household.id)
+        const clippedInhabitantId = inhabitants[0]!.id
+        await HouseholdFactory.updateInhabitant(
+            context, clippedInhabitantId, {dinnerPreferences: createDefaultDinnerModeMap(DinnerMode.DINEIN)}, 200, activeSeason.id!
+        )
+
+        // WHEN: Season is re-activated (idempotent, triggers clipping)
+        await SeasonFactory.activateSeason(context, activeSeason.id!)
+
+        // THEN: Cooking days retain DINEIN, non-cooking days clipped to NONE
+        const after = await HouseholdFactory.getInhabitantById(context, clippedInhabitantId)
+        for (const day of WEEKDAYS) {
+            const expected = cookingDays[day] ? DinnerMode.DINEIN : DinnerMode.NONE
+            expect(after?.dinnerPreferences?.[day], `${day} cooking: ${cookingDays[day]}`).toBe(expected)
+        }
     })
 })

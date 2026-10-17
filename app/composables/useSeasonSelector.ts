@@ -5,71 +5,36 @@ export interface SeasonSelectorOptions {
     seasons: ComputedRef<Season[]>
     selectedSeasonId: ComputedRef<number | null>
     activeSeason: ComputedRef<Season | null>
-    onSeasonSelect: (id: number) => void
 }
 
+const SEASON_PRIORITY = 0
+
+/**
+ * `?season=` as a season shortName (ADR-006): a name that is no loaded season falls back to the selected season,
+ * then the active one; the URL syncs once the seasons and the selection have loaded.
+ * Writes at the default priority (`SEASON_PRIORITY`): `?season=` has one writer, so no write of a tick conflicts with it.
+ */
 export function useSeasonSelector(options: SeasonSelectorOptions) {
-    const {seasons, selectedSeasonId, activeSeason, onSeasonSelect} = options
+    const {seasons, selectedSeasonId, activeSeason} = options
 
-    const route = useRoute()
-    const seasonQuery = computed(() => route.query.season as string | undefined)
+    const isValidSeason = (shortName?: string | null): shortName is string => !!shortName && seasons.value.some(s => s.shortName === shortName)
+    const fallbackSeason = () => seasons.value.find(s => s.id === selectedSeasonId.value)?.shortName ?? activeSeason.value?.shortName
+    const safeSeason = (shortName?: string | null) => isValidSeason(shortName) ? shortName : fallbackSeason()
 
-    const isValidSeason = (shortName?: string) => shortName && seasons.value.some(s => s.shortName === shortName)
-    const getSelectedSeasonShortName = () => seasons.value.find(s => s.id === selectedSeasonId.value)?.shortName
-    const getActiveSeasonShortName = () => activeSeason.value?.shortName
-    const safeSeason = (shortName?: string) => isValidSeason(shortName) ? shortName : (getSelectedSeasonShortName() ?? getActiveSeasonShortName())
-
-    const season = computed({
-        get() {
-            return safeSeason(route.query.season as string | undefined)
-        },
-        async set(shortName: string) {
-            await onSeasonChange(shortName)
-        }
+    // The dropdown writes the URL only; the plan store follows ?season= through the getter the page hands it
+    const {value: season, setValue} = useQueryParam<string>('season', {
+        validate: isValidSeason,
+        normalize: shortName => safeSeason(shortName) ?? null,
+        defaultValue: () => fallbackSeason() ?? '',
+        syncWhen: () => seasons.value.length > 0 && selectedSeasonId.value !== null,
+        priority: SEASON_PRIORITY
     })
 
-    const updateURLQueryFromSeason = async (shortName: string | undefined) => {
-        if (seasonQuery.value === shortName) return
-        const query = {...route.query}
-        if (shortName) {
-            query.season = shortName
-        } else {
-            delete query.season
-        }
-        await navigateTo({path: route.path, query}, {replace: true})
-        console.info(`${LOG_CTX} 🔗 > Navigated to URL with query season=${shortName} `)
-    }
-
-    // exposed to handle season selection from dropdown
     const onSeasonChange = async (shortName: string) => {
         const safeSeasonName = safeSeason(shortName)
-        const seasonObject = seasons.value.find(s => s.shortName === shortName)
-
-        if (seasonObject?.id && seasonObject.id !== selectedSeasonId.value) {
-            onSeasonSelect(seasonObject.id)
-        }
-
-        await updateURLQueryFromSeason(safeSeasonName)
+        await setValue(safeSeasonName ?? '')
         console.info(`${LOG_CTX} 🌱 > SEASON_SELECTOR > Season changed to ${safeSeasonName}, requested was ${shortName}`)
     }
-
-    // signal - should url query be fixed
-    const shouldSyncSeason = computed(() => seasonQuery.value !== safeSeason(seasonQuery.value))
-
-    // NAVIGATION GUARD: autosync when URL query is invalid - normalizes to valid season
-    watchPostEffect(() => {
-        if (seasons.value.length === 0) return // Wait for seasons to load
-
-        // If no season selected yet, wait for initial season selection
-        if (selectedSeasonId.value === null) return
-
-        if (shouldSyncSeason.value) {
-            const validSeason = safeSeason(seasonQuery.value)
-            if (validSeason) {
-                season.value = validSeason
-            }
-        }
-    })
 
     return {
         season,

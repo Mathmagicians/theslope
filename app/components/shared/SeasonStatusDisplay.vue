@@ -63,7 +63,7 @@ const emit = defineEmits<{
 
 const planStore = usePlanStore()
 const {getSeasonStatus, canSeasonBeActive} = useSeason()
-const {BUTTONS, COLOR, ICONS, SIZES, TYPOGRAPHY, ALERTS} = useTheSlopeDesignSystem()
+const {BUTTONS, COLOR, ICONS, SIZES, TYPOGRAPHY, ALERTS, SEASON_STATUS_GLYPHS} = useTheSlopeDesignSystem()
 
 // Reactively get season from store - updates when store changes
 const season = computed(() => {
@@ -80,47 +80,30 @@ const status = computed(() => {
   return getSeasonStatus(season.value)
 })
 
-// Get status emoji circle (matching SeasonSelector)
-const getStatusEmoji = (status: string): string => {
-  switch (status) {
-    case SEASON_STATUS.ACTIVE:
-      return '🟢'  // Solid green circle
-    case SEASON_STATUS.FUTURE:
-      return '🌱'  // Green seedling (no green outline emoji exists)
-    case SEASON_STATUS.CURRENT:
-      return '🟡'  // Solid yellow circle
-    case SEASON_STATUS.PAST:
-    default:
-      return '⚪'  // Grey circle
-  }
-}
-
 // Alert configuration - intelligent descriptions based on status
 const alertConfig = computed(() => {
   if (!status.value) return null
-
-  const emoji = getStatusEmoji(status.value)
 
   switch (status.value) {
     case SEASON_STATUS.ACTIVE:
       return {
         kind: 'success' as const,
         icon: ICONS.checkCircle,
-        title: `Aktiv sæson ${emoji}`,
+        title: `Aktiv sæson`,
         description: 'Denne sæson er synlig for alle brugere, som kan se og booke fællesspisninger. Kun én sæson kan være aktiv ad gangen.'
       }
     case SEASON_STATUS.FUTURE:
       return {
         kind: 'info' as const,
         icon: ICONS.calendar,
-        title: `Fremtidig sæson ${emoji}`,
+        title: `Fremtidig sæson`,
         description: 'Denne sæson er kun synlig for administratorer. Når du aktiverer sæsonen, kan beboere se og booke fællesspisninger.'
       }
     case SEASON_STATUS.CURRENT:
       return {
         kind: 'warning' as const,
         icon: ICONS.calendar,
-        title: `Inaktiv sæson ${emoji}`,
+        title: `Inaktiv sæson`,
         description: 'Datoerne for denne sæson siger det er nu! Men den er ikke aktiveret. Aktiver sæsonen for at gøre den synlig for beboere.'
       }
     case SEASON_STATUS.PAST:
@@ -128,7 +111,7 @@ const alertConfig = computed(() => {
       return {
         kind: 'neutral' as const,
         icon: ICONS.archive,
-        title: `Arkiveret sæson ${emoji}`,
+        title: `Arkiveret sæson`,
         description: 'Denne sæson er afsluttet og kun synlig for administratorer. Gamle sæsoner kan ikke genaktiveres.'
       }
   }
@@ -149,6 +132,9 @@ const showButton = computed(() => {
     :title="alertConfig.title"
     :description="alertConfig.description"
   >
+    <template #title>
+      {{ alertConfig.title }} <UBadge v-if="status" v-bind="SEASON_STATUS_GLYPHS[status]" data-testid="season-status-mark" />
+    </template>
     <template v-if="showButton" #actions>
       <UFormField :hint="season?.isActive ? 'Fællesspisnings sæson er i gang' : 'Denne sæson er ikke aktiv'" :ui="{hint: TYPOGRAPHY.bodyTextMuted}">
         <!-- Deactivate uses DangerButton (destructive action) -->

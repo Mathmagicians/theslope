@@ -2,7 +2,7 @@
 import {formatDate} from '~/utils/date'
 
 // Age categories - the active season's ticket prices carry the age limits
-const {groupInhabitantsByTicketCategory, ticketTypeConfig} = useTicket()
+const {groupInhabitantsByTicketCategory} = useTicket()
 const {formatTicketCounts} = useBilling()
 const {TYPOGRAPHY, BUTTONS, COLOR, ICONS, TEXT, BG, BORDER} = useTheSlopeDesignSystem()
 
@@ -16,10 +16,6 @@ const store = useAllergiesStore()
 const {allergyTypes, isAllergyTypesLoading, posterNotes} = storeToRefs(store)
 const planStore = usePlanStore()
 const {activeSeason} = storeToRefs(planStore)
-
-// Initialize stores
-store.initAllergiesStore()
-planStore.initPlanStore()
 
 // Current date for header (formatted in Danish)
 const currentDate = computed(() => formatDate(new Date(), 'd. MMMM yyyy'))
@@ -116,7 +112,7 @@ const printPage = () => {
                     <!-- List inhabitants with compact category marker (V/B/b) -->
                     <div>
                       <span v-for="(person, idx) in allergy.members" :key="person.id">
-                        {{ person.name }} ({{ ticketTypeConfig[person.ticketType].compactLabel }})
+                        {{ person.name }} ({{ ticketTypeLetter(person.ticketType) }})
                         <span
                             v-if="person.inhabitantComment"
                             :class="`${TYPOGRAPHY.finePrint} ${TEXT.gray[600]}`">

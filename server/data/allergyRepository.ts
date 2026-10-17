@@ -1,6 +1,5 @@
-import {PrismaD1} from "@prisma/adapter-d1"
-import {PrismaClient} from "@prisma/client"
 import eventHandlerHelper from "../utils/eventHandlerHelper"
+import {getPrismaClientConnection} from '~~/server/utils/database'
 import type {
     AllergyTypeCreate,
     AllergyTypeUpdate,
@@ -14,16 +13,6 @@ import type {
 import {useAllergyValidation} from '~/composables/useAllergyValidation'
 
 const {throwH3Error} = eventHandlerHelper
-
-/**
- * Get Prisma client connection to D1 database
- */
-export async function getPrismaClientConnection(d1Client: D1Database) {
-    const adapter = new PrismaD1(d1Client)
-    const prisma = new PrismaClient({adapter})
-    await prisma.$connect()
-    return prisma
-}
 
 /*** ALLERGY TYPES ***/
 

@@ -1,6 +1,7 @@
 import {test, expect} from '@playwright/test'
 import {useBookingValidation} from '~~/app/composables/useBookingValidation'
 import {useMaintenanceValidation} from '~~/app/composables/useMaintenanceValidation'
+import {useUserPreferenceValidation} from '~~/app/composables/useUserPreferenceValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
@@ -13,10 +14,11 @@ import type {BrowserContext} from '@playwright/test'
 
 const {DinnerStateSchema, DinnerModeSchema, OrderStateSchema} = useBookingValidation()
 const {JobType, JobStatus} = useMaintenanceValidation()
+const Channel = useUserPreferenceValidation().NotificationChannelSchema.enum
 const DinnerState = DinnerStateSchema.enum
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
-const {validatedBrowserContext, temporaryAndRandom, getSessionUserInfo, salt} = testHelpers
+const {validatedBrowserContext, temporaryAndRandom, getSessionUserInfo, salt, daysFromNow} = testHelpers
 
 // === HELPERS ===
 
@@ -34,15 +36,13 @@ const createTestDinner = async (
     seasonId: number,
     testSalt: string,
     state: typeof DinnerState[keyof typeof DinnerState],
-    daysOffset: number,
-    extras: {totalCost?: number} = {}
+    daysOffset: number
 ) => {
     return await DinnerEventFactory.createDinnerEvent(context, {
         seasonId,
         date: daysFromToday(daysOffset),
         menuTitle: `${state} ${testSalt}`,
-        state,
-        ...extras
+        state
     })
 }
 
@@ -61,7 +61,6 @@ const createTestOrder = async (
         dinnerEventId: dinnerId,
         orders: [{
             inhabitantId,
-            bookedByUserId: 1, // Factory default
             ticketPriceId: ticketPrice.id!,
             dinnerMode: DinnerMode.DINEIN,
             isGuestTicket: false
@@ -148,11 +147,11 @@ test.describe('Daily Maintenance API', () => {
         const { householdId, inhabitantId } = await getSessionUserInfo(context)
 
         // Setup: Create CONSUMED dinner with order in PREVIOUS billing period (must be closed for billing)
-        const dinner = await createTestDinner(context, activeSeason.id!, testSalt, DinnerState.CONSUMED, -35, {totalCost: 50000})
+        const dinner = await createTestDinner(context, activeSeason.id!, testSalt, DinnerState.CONSUMED, -35)
         createdDinnerEventIds.push(dinner.id)
         const {orderId} = await createTestOrder(context, fullSeason, dinner.id, householdId, inhabitantId)
 
-        // Setup: Create GUEST order via PUT /api/order (bypasses deadline for test setup)
+        // Setup: Create GUEST order through the scaffold with the deadlines lifted
         // Note: Scaffold endpoint can't create orders for past dinners - deadline restriction
         const ticketPrice = fullSeason.ticketPrices[0]!
         const guestOrderResult = await OrderFactory.createOrder(context, {
@@ -160,7 +159,6 @@ test.describe('Daily Maintenance API', () => {
             dinnerEventId: dinner.id,
             orders: [{
                 inhabitantId,
-                bookedByUserId: 1,
                 ticketPriceId: ticketPrice.id!,
                 dinnerMode: DinnerMode.DINEIN,
                 isGuestTicket: true
@@ -181,22 +179,23 @@ test.describe('Daily Maintenance API', () => {
         // Setup: 2nd household at a different address so billing yields ≥2 invoices → can verify ordering
         const secondHousehold = await HouseholdFactory.createHouseholdWithInhabitants(
             context,
-            {address: salt('ZZZ Ordering Test', testSalt)}, // 'ZZZ' sorts after session household's address
+            // 'ZZZ' sorts after session household's address; moved in before the dinner, so the dinner falls in its residency
+            {address: salt('ZZZ Ordering Test', testSalt), movedInDate: daysFromNow(-60)},
             1
         )
         createdHouseholdIds.push(secondHousehold.household.id)
         // Admin session doesn't belong to 2nd household → use adminBypass
-        await OrderFactory.createOrder(context, {
+        const takeawayOrderResult = await OrderFactory.createOrder(context, {
             householdId: secondHousehold.household.id,
             dinnerEventId: dinner.id,
             orders: [{
                 inhabitantId: secondHousehold.inhabitants[0]!.id,
-                bookedByUserId: 1,
                 ticketPriceId: ticketPrice.id!,
-                dinnerMode: DinnerMode.DINEIN,
+                dinnerMode: DinnerMode.TAKEAWAY,
                 isGuestTicket: false
             }]
-        }, 201, true)
+        })
+        const takeawayOrderId = takeawayOrderResult!.createdIds[0]!
 
         // Setup: Create inhabitant with NULL preferences (simulates Heynabo import)
         const nullPrefsInhabitant = await HouseholdFactory.createInhabitantWithConfig(
@@ -210,6 +209,8 @@ test.describe('Daily Maintenance API', () => {
         expect(maintenanceResult.initPrefs.initialized, 'Should initialize NULL preferences').toBeGreaterThanOrEqual(1)
         expect(maintenanceResult.close.closed, 'Should close orders on CONSUMED dinner').toBeGreaterThanOrEqual(2)
         expect(maintenanceResult.transact.created, 'Should create transactions for closed orders').toBeGreaterThanOrEqual(2)
+        expect(await OrderFactory.getOrder(context, takeawayOrderId), 'The close keeps the eating mode')
+            .toMatchObject({state: OrderState.CLOSED, dinnerMode: DinnerMode.TAKEAWAY})
 
         // Build expected maps: NULL→DINEIN on cooking days, existing→preserved on cooking days
         const expectedNullPrefs = Object.fromEntries(
@@ -262,7 +263,7 @@ test.describe('Daily Maintenance API', () => {
         expect(periodState!.emailSent, 'accountant mail queued').toBe(true)
         expect(periodState!.archive?.key).toMatch(/^billing\/\d{4}-\d{2}\/pbs-opgoerelse-\d{4}-\d{2}-v\d+\.csv$/)
         // v1 closes the period, a later version (catch-up into an existing period) is mailed as an update
-        expect(periodState!.notification?.dedupeKey).toMatch(new RegExp(`^BILLING_PERIOD_${periodState!.version > 1 ? 'UPDATED' : 'CLOSED'}:EMAIL:`))
+        expect(periodState!.notification?.dedupeKey).toMatch(new RegExp(`^BILLING_PERIOD_${periodState!.version > 1 ? 'UPDATED' : 'CLOSED'}:${Channel.EMAIL}:`))
 
         // ADR-015: a re-run bills nothing new and redoes no side effect — the period keeps its end state
         const rerun = await BillingFactory.generateBilling(context)
@@ -305,7 +306,11 @@ test.describe('Daily Maintenance API', () => {
 
         // Control sum: each invoice.transactionSum equals Σ of its transactions
         // Structure check: getInvoiceTransactions returns transactions with expected fields
-        for (const invoice of periodDetail.invoices) {
+        // On the invoices of this case's households: on a shared database the period also holds every other household's
+        // invoice, and the session household may carry earlier runs' invoices
+        const ownInvoices = periodDetail.invoices.filter(inv => inv.householdId !== null && [householdId, secondHousehold.household.id].includes(inv.householdId))
+        expect(ownInvoices.some(inv => inv.householdId === secondHousehold.household.id), 'the ZZZ household is billed in this period').toBe(true)
+        for (const invoice of ownInvoices) {
             const transactions = await BillingFactory.getInvoiceTransactions(context, invoice.id)
             const computedSum = transactions.reduce((sum, tx) => sum + tx.amount, 0)
             expect(invoice.transactionSum, `transactionSum for invoice ${invoice.id} should equal Σ transactions`).toBe(computedSum)

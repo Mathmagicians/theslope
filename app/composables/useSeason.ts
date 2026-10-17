@@ -3,9 +3,9 @@ import {WEEKDAYS} from '~/types/dateTypes'
 import type {DateValue} from '@internationalized/date'
 import {isSameDay, isWithinInterval, isBefore, subDays, subMinutes} from "date-fns"
 import {type Season, useSeasonValidation} from '~/composables/useSeasonValidation'
-import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderAuditAction, OrderAuditAction as OrderAuditActionEnum, useBookingValidation} from '~/composables/useBookingValidation'
+import {type DinnerEventCreate, type DinnerEventDisplay, type DinnerMode, type OrderAuditAction, OrderAuditAction as OrderAuditActionEnum, type OrderState as OrderStateEnum, useBookingValidation} from '~/composables/useBookingValidation'
 import {useCookingTeamValidation, type CookingTeamDisplay as CookingTeam} from '~/composables/useCookingTeamValidation'
-import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
 import {useCoreValidation} from '~/composables/useCoreValidation'
 import { calculateDeadlineUrgency, computeAffinitiesForTeams, computeCookingDates, computeTeamAssignmentsForEvents,
     findFirstCookingDayInDates, getNextDinnerDate, getAdjacentDinner, getDinnerTimeRange, splitDinnerEvents, sortDinnerEventsByTemporal,
@@ -20,6 +20,12 @@ import {chunkArray, pruneAndCreate} from '~/utils/batchUtils'
  * 0 = On track, 1 = Warning, 2 = Critical
  */
 export type DeadlineUrgency = 0 | 1 | 2
+
+/** The two predicates the booking generator decides by */
+export type BookingDeadlines = Pick<SeasonDeadlines, 'canModifyOrders' | 'canEditDiningMode'>
+
+/** Every dinner books, cancels and changes mode as if before its deadlines: an admin's correction */
+export const OPEN_DEADLINES: BookingDeadlines = {canModifyOrders: () => true, canEditDiningMode: () => true}
 
 /**
  * Season-configured deadline functions.
@@ -37,7 +43,7 @@ export type SeasonDeadlines = {
     canEditDiningMode: (dinnerEventDate: Date) => boolean
     isAnnounceMenuPastDeadline: (dinnerEventDate: Date) => boolean
     getOrderCancellationAction: (dinnerEventDate: Date) => {
-        updates: { dinnerMode: DinnerMode, state: 'RELEASED', releasedAt: Date }
+        updates: { dinnerMode: DinnerMode, state: typeof OrderStateEnum.RELEASED, releasedAt: Date }
         auditAction: OrderAuditAction
     } | null
 }
@@ -74,8 +80,7 @@ export const useSeason = () => {
     // Get app configuration
     const appConfig = useAppConfig()
     const {theslope} = appConfig
-    const {createTicketPrice, TicketTypeSchema} = useTicketPriceValidation()
-    const TicketType = TicketTypeSchema.enum
+    const {createTicketPrice} = useTicketPriceValidation()
 
     /**
      * Create a default season based on app configuration.
@@ -88,12 +93,8 @@ export const useSeason = () => {
             end: calculateDayFromWeekNumber(4, theslope.defaultSeason.endWeek, thisYear + 1)
         }
 
-        const ticketPrices = theslope.defaultSeason.ticketPrices?.map((
-            // Explicit shape: app.config types resolve to `any` under the server tsconfig
-            {ticketType, price, description, maximumAgeLimit}: {ticketType: string; price: number; description?: string; maximumAgeLimit?: number}
-        ) => createTicketPrice(
-                ticketType, price, undefined, description, maximumAgeLimit)) ??
-            [createTicketPrice(TicketType.ADULT, 4000)]
+        // Explicit type: app.config types resolve to `any` under the server tsconfig
+        const ticketPrices = theslope.defaultSeason.ticketPrices.map((defaultPrice: TicketPrice) => createTicketPrice(defaultPrice))
 
         return {
             shortName: createSeasonName(dateRange),
@@ -173,7 +174,6 @@ export const useSeason = () => {
             menuDescription: null,
             menuPictureUrl: null,
             state: DinnerState.SCHEDULED,
-            totalCost: 0,
             heynaboEventId: null,
             chefId: null,
             cookingTeamId: null,

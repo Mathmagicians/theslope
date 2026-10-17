@@ -1,10 +1,10 @@
 import {deleteHeynaboEventAsSystem} from '~~/server/integration/heynabo/heynaboClient'
-import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 
-const idSchema = z.object({id: z.coerce.number().int().positive()})
+const paramSchema = idParams('id')
 
 export default defineEventHandler(async (event) => {
-    const {id} = await getValidatedRouterParams(event, idSchema.parse)
+    const {id} = await getValidatedRouterParams(event, paramSchema.parse)
     await deleteHeynaboEventAsSystem(id)
     return {deleted: id}
 })

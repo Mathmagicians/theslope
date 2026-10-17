@@ -2,13 +2,12 @@
 /**
  * OrderHistoryDisplay - Vertical timeline of order audit history
  *
- * Lazy-loads order history via GET /api/order/:id
+ * Lazy-loads the order's history through the bookings store's fetchOrderDetail
  * Uses UTimeline with action-specific icons and colors
  *
- * ADR-007: component-local useAsyncData exception
+ * ADR-007: component-local useAsyncData exception - each expanded row holds its own order's history
  */
-import type {OrderDetail} from '~/composables/useBookingValidation'
-import type {NuxtUIColor} from '~/composables/useTheSlopeDesignSystem'
+import type {OrderActionLabel} from '~/composables/useBookingUi'
 
 interface Props {
     orderId: number | null
@@ -16,36 +15,24 @@ interface Props {
 
 const props = defineProps<Props>()
 
-const {OrderDetailSchema, OrderAuditActionSchema} = useBookingValidation()
 const {ICONS, TYPOGRAPHY, SIZES, COLOR, ALERTS} = useTheSlopeDesignSystem()
+const bookingsStore = useBookingsStore()
 
 // Lazy-load order detail with history
-const {data: orderDetail, status, error} = useAsyncData<OrderDetail | null>(
+const {data: orderDetail, status, error} = useAsyncData(
     computed(() => `order-history-${props.orderId ?? 'null'}`),
-    () => props.orderId
-        ? $fetch<OrderDetail>(`/api/order/${props.orderId}`)
-        : Promise.resolve(null),
+    () => bookingsStore.fetchOrderDetail(props.orderId!),
     {
         default: () => null,
-        transform: (data) => data ? OrderDetailSchema.parse(data) : null
+        enabled: () => !!props.orderId
     }
 )
 
 const isLoading = computed(() => status.value === 'pending')
 
-// Action config for timeline items
-interface ActionConfig { icon: string; color: NuxtUIColor; label: string }
-const ACTION_CONFIG: Record<string, ActionConfig> = {
-    [OrderAuditActionSchema.enum.USER_BOOKED]: {icon: ICONS.check, color: COLOR.success, label: 'Bestilt'},
-    [OrderAuditActionSchema.enum.USER_CANCELLED]: {icon: ICONS.xMark, color: COLOR.warning, label: 'Afmeldt'},
-    [OrderAuditActionSchema.enum.USER_CLAIMED]: {icon: ICONS.claim, color: COLOR.info, label: 'Købt fra anden'},
-    [OrderAuditActionSchema.enum.SYSTEM_CREATED]: {icon: ICONS.calendar, color: COLOR.neutral, label: 'Automatisk bestilling'},
-    [OrderAuditActionSchema.enum.SYSTEM_DELETED]: {icon: ICONS.xMark, color: COLOR.error, label: 'Slettet'},
-    [OrderAuditActionSchema.enum.SYSTEM_UPDATED]: {icon: ICONS.edit, color: COLOR.neutral, label: 'Opdateret'}
-}
-
-const getActionConfig = (action: string): ActionConfig =>
-    ACTION_CONFIG[action] ?? {icon: ICONS.info, color: COLOR.neutral, label: action}
+// The shared action labels (useBookingUi); an action the map does not name reads as itself
+const getActionConfig = (action: string): OrderActionLabel =>
+    (ORDER_ACTION_LABELS as Record<string, OrderActionLabel>)[action] ?? {icon: ICONS.info, color: COLOR.neutral, label: action}
 
 const formatTimestamp = (date: Date) => date.toLocaleString('da-DK', {
     day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'

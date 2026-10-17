@@ -1,6 +1,6 @@
 # Feature Proposal: Notification triggers — reminders, alarms, SMS
 
-**Status:** Proposal | **Date:** 2026-08-31 | **Updated:** 2026-09-18
+**Status:** Proposal, next release (deferred 2026-10-13); the four waitlist kinds shipped in 0.9 | **Date:** 2026-08-31 | **Updated:** 2026-10-13
 **Builds on:** the delivery pipe, the accountant mail and the channel preference in
 [`archived/feature-notifications.md`](archived/feature-notifications.md)
 
@@ -13,7 +13,7 @@
 | Composing | `composeEmail` in `server/utils/sender/compose.ts`; one template per kind in `app/config/notificationTemplates.ts` |
 | Events | `server/utils/sender/events/<event>.ts`, its HTTP twin `POST /api/admin/sender/event/<event>`, `make theslope-sender-event-<event>-<env>` |
 | Delivery facts | the `Delivery` table (`subjectType`, `subjectId`, `version`, `kind` `ARCHIVE` / `EMAIL` / `SMS`), `app/composables/useDeliveryValidation.ts` |
-| Channel preference | `User.notificationChannels` (`EMAIL`, `SMS`), `useUserPreferenceValidation.ts`, `POST /api/user/preferences`, `POST /api/user/notifications/test`, `UserPreferencesCard.vue` ("My preferences" in `bug-fix-admin-ux.md`) |
+| Channel preference | `User.notificationChannels` (`EMAIL`, `SMS`), `useUserPreferenceValidation.ts`, `POST /api/user/preferences`, `POST /api/user/notifications/test`, `UserPreferencesCard.vue` ("My preferences" in `archived/bug-fix-admin-ux.md`) |
 | In-app alerts | `ALERTS` in `useTheSlopeDesignSystem.ts` (ADR-018) |
 
 ## Decisions (2026-09-16)
@@ -37,12 +37,14 @@ contract messages through `env.SENDER`.
 | Kind | Recipients | When |
 |---|---|---|
 | `CHEF_MENU_DEADLINE` / `CHEF_MENU_OVERDUE` | the dinner's chef | the menu deadline, dinner − `menuIsAnnouncedDaysBefore` (`useSeason().deadlinesForSeason`) |
+| `CHEF_ROSTER_DEADLINE` / `CHEF_ROSTER_OVERDUE` | the dinner's chef | the roster deadline, dinner − `rosterIsSignedOffHoursBefore` (`feature-proposal-duty-roster.md` § Roster UX) |
 | `DINNER_NO_CHEF` | `PLANNINGMANAGER` | a dinner without a chef |
 | `DUTY_SHIFT_REMINDER` | the team's members | 24 h and 1 h before the shift, from an hourly Nitro task; team → assignment → inhabitant → user is a new repository query (ADR-009 Display type) |
 | `JOB_FAILED` | admins | a system job run ends failed |
 | `DINNER_CANCELLED` | the dinner's diners | a dinner is cancelled |
+| `DUTY_SWAPPED` | both swap parties | a duty swap commits (`feature-proposal-duty-roster.md` Phase 5; the chef-swap flow joins the same kind) |
 
-The reminder crons join the schedule that "Job schedule labels" in `bug-fix-dinner-page-and-dates.md` single-sources.
+The waiting-list and sale kinds (`WAITLIST_JOINED`, `WAITLIST_TICKET_ASSIGNED`, `WAITLIST_EXTRA_PORTION`, `WAITLIST_BUILDUP`, `TICKET_SOLD`) shipped in 0.9 as templates and sender events (`server/utils/sender/events/waitlist.ts`, `archived/feature-waitlist.md`). The reminder crons join the schedule module of `chores-0.9.1.md` § Job schedule module.
 
 ## Producer for user notifications
 

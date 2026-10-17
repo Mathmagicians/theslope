@@ -13,15 +13,17 @@ import {
     type MonthlyBillingResponse,
     type TransactionDisplay
 } from '~/composables/useBillingValidation'
+import {useTicketPriceValidation, type TicketPrice} from '~/composables/useTicketPriceValidation'
 
 const {headers, salt} = testHelpers
+const {createTicketPrice} = useTicketPriceValidation()
 const BILLING_IMPORT_ENDPOINT = '/api/admin/billing/import'
 const BILLING_PERIODS_ENDPOINT = '/api/admin/billing/periods'
 const BILLING_INVOICES_ENDPOINT = '/api/admin/billing/invoices'
 const BILLING_CURRENT_PERIOD_ENDPOINT = '/api/admin/billing/current-period'
 const PUBLIC_BILLING_ENDPOINT = '/api/public/billing'
 const MONTHLY_BILLING_ENDPOINT = '/api/admin/maintenance/monthly'
-const ORDER_IMPORT_DIR = join(process.cwd(), '.theslope', 'order-import')
+const ORDER_IMPORT_DIR = join(process.cwd(), '.theslope', 'order-import', '2026-import')
 const HOUSEHOLD_BILLING_ENDPOINT = '/api/billing'
 const {BillingImportResponseSchema, BillingPeriodSummaryDisplaySchema, BillingPeriodSummaryDetailSchema, HouseholdBillingResponseSchema, MonthlyBillingResponseSchema, TransactionDisplaySchema, parseCSV, deserializeBillingPeriodDetail, serializeTransaction, TicketType} = useBillingValidation()
 
@@ -36,16 +38,16 @@ export class BillingFactory {
      * Mock ticket prices for resolving ticketTypes in test data
      * Used by deserializeBillingPeriodDetail when computing stats from snapshots
      */
-    private static readonly mockTicketPrices = [
-        {price: 4000, ticketType: TicketType.ADULT},
-        {price: 1700, ticketType: TicketType.CHILD},
-        {price: 0, ticketType: TicketType.BABY}
+    static readonly mockTicketPrices: TicketPrice[] = [
+        createTicketPrice({price: 4000, ticketType: TicketType.ADULT, portions: 1}),
+        createTicketPrice({price: 1700, ticketType: TicketType.CHILD, portions: 0.5}),
+        createTicketPrice({price: 0, ticketType: TicketType.BABY, portions: 0})
     ]
 
     /**
      * Create order snapshot JSON for test transactions
      */
-    private static readonly makeOrderSnapshot = (testSalt: string, dinnerEventId: number, ticketType: 'ADULT' | 'CHILD' | 'BABY') =>
+    private static readonly makeOrderSnapshot = (testSalt: string, dinnerEventId: number, ticketType: TicketPrice['ticketType']) =>
         serializeTransaction({
             dinnerEvent: {id: dinnerEventId, date: new Date('2025-11-10'), menuTitle: salt('Test Menu', testSalt)},
             inhabitant: {id: 1, name: salt('Test Person', testSalt), household: {id: 1, pbsId: 2053, address: salt('Testgade 42', testSalt)}},
@@ -79,8 +81,8 @@ export class BillingFactory {
             pbsId: 2053,
             address: salt('Smedekildevej 42', testSalt),
             transactions: [
-                {amount: 58200, orderSnapshot: BillingFactory.makeOrderSnapshot(testSalt, 1, 'ADULT')},
-                {amount: 58200, orderSnapshot: BillingFactory.makeOrderSnapshot(testSalt, 2, 'ADULT')}
+                {amount: 58200, orderSnapshot: BillingFactory.makeOrderSnapshot(testSalt, 1, TicketType.ADULT)},
+                {amount: 58200, orderSnapshot: BillingFactory.makeOrderSnapshot(testSalt, 2, TicketType.ADULT)}
             ]
         }]
     })
@@ -107,6 +109,15 @@ export class BillingFactory {
         ...overrides
     })
 
+    /** HouseholdBillingResponse data for component tests (no API call): an empty current period, no past invoices */
+    static readonly defaultHouseholdBilling = (householdId: number = 1): HouseholdBillingResponse => ({
+        householdId,
+        pbsId: 1000 + householdId,
+        address: 'Skråningen 1',
+        currentPeriod: {periodStart: new Date(2025, 9, 18), periodEnd: new Date(2025, 10, 17), totalAmount: 0, transactions: []},
+        pastInvoices: []
+    })
+
     static readonly defaultSummaryData = (testSalt: string = 'default'): BillingPeriodSummaryDetail => {
         const raw = BillingFactory.defaultRawBillingPeriod(testSalt)
         return deserializeBillingPeriodDetail(raw, BillingFactory.mockTicketPrices)!
@@ -121,7 +132,7 @@ export class BillingFactory {
      */
     static readonly defaultSerializeInput = (
         testSalt: string = 'default',
-        ticketType: string | null = 'ADULT',
+        ticketType: string | null = TicketType.ADULT,
         options?: {isGuestTicket?: boolean, provenanceHousehold?: string | null}
     ) => ({
         dinnerEvent: {id: 1, date: new Date('2025-01-15'), menuTitle: salt('Test Dinner', testSalt)},
@@ -183,7 +194,7 @@ export class BillingFactory {
     // ============================================================================
 
     /**
-     * Get all CSV files in .theslope/order-import folder
+     * Get all CSV files in .theslope/order-import/2026-import
      * Returns empty array if directory doesn't exist (gitignored, local-only)
      */
     static readonly getCSVFiles = (): string[] => {
@@ -284,7 +295,7 @@ Børn (2-12 år),,${childCounts}
     static readonly getBillingCsvByToken = async (
         context: BrowserContext,
         token: string
-    ): Promise<{csv: string, filename: string}> => {
+    ): Promise<{csv: string, filename: string, contentType: string}> => {
         const response = await context.request.get(`${PUBLIC_BILLING_ENDPOINT}/${token}/csv`)
         expect(response.status(), 'Get billing CSV failed').toBe(200)
 
@@ -293,7 +304,7 @@ Børn (2-12 år),,${childCounts}
         const filenameMatch = contentDisposition.match(/filename\*=UTF-8''([^;\s]+)/)
         const filename = filenameMatch?.[1] ? decodeURIComponent(filenameMatch[1]) : ''
 
-        return {csv: await response.text(), filename}
+        return {csv: await response.text(), filename, contentType: response.headers()['content-type'] ?? ''}
     }
 
     /**

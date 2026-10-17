@@ -91,7 +91,8 @@ test.describe('/api/admin/setting/[key]', () => {
         })
     })
 
-    // Every case here is rejected, so none of them touches the shared row
+    // Every case here is rejected, so none of them touches the shared row.
+    // One 400 per endpoint; the key and value rules are proven in the useSettingValidation unit spec
     test.describe('validation', () => {
         test('GIVEN an unknown key WHEN reading it THEN 400', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
@@ -99,24 +100,10 @@ test.describe('/api/admin/setting/[key]', () => {
             await SettingFactory.getSetting(context, 'not-a-setting', 400)
         })
 
-        test('GIVEN an unknown key WHEN writing it THEN 400', async ({browser}) => {
+        test('GIVEN an empty value WHEN writing the notes THEN 400', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
 
-            await SettingFactory.updateSetting(context, 'not-a-setting', 'noget', 400)
+            await SettingFactory.updateSetting(context, NOTES_KEY, '   ', 400)
         })
-
-        const rejectedValues = [
-            {label: 'an empty value', value: '   '},
-            {label: 'a value of the wrong type', value: {bullets: ['A']}},
-            {label: 'a value over 2000 characters', value: 'x'.repeat(2001)}
-        ]
-
-        for (const {label, value} of rejectedValues) {
-            test(`GIVEN ${label} WHEN writing the notes THEN 400`, async ({browser}) => {
-                const context = await validatedBrowserContext(browser)
-
-                await SettingFactory.updateSetting(context, NOTES_KEY, value, 400)
-            })
-        }
     })
 })

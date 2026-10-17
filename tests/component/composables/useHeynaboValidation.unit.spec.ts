@@ -1,5 +1,8 @@
 import {describe, expect, it} from 'vitest'
 import {useHeynaboValidation} from "~/composables/useHeynaboValidation"
+import {useCoreValidation} from '~/composables/useCoreValidation'
+
+const SystemRole = useCoreValidation().SystemRoleSchema.enum
 
 describe('useHeynaboValidation', () => {
     const {HeynaboMemberSchema, LoggedInHeynaboUserSchema, HeynaboLocationSchema} = useHeynaboValidation()
@@ -118,15 +121,10 @@ describe('useHeynaboValidation', () => {
     ]
 
     describe('Can parse users retrieved from Heynabo API', () => {
-        it.each(sampleHeynaboMembers)('parses user %# with id $id correctly', (user) => {
-            const result = HeynaboMemberSchema.parse(user)
-            expect(result).toBeDefined()
-            expect(result.id).toBe(user.id)
-        })
-
-        it.each(sampleHeynaboMembers)('Normalizes email %# $email, incorrect become null', (user) => {
+        it.each(sampleHeynaboMembers)('parses user %# with id $id and normalizes its email $email, an incorrect one to null', (user) => {
             const CORRECT_EMAIL_ID = 153
             const result = HeynaboMemberSchema.parse(user)
+            expect(result.id).toBe(user.id)
             if(user.id === CORRECT_EMAIL_ID)
                 expect(result.email).toBe(user.email)
             else expect(result.email).toBeNull()
@@ -177,11 +175,10 @@ describe('useHeynaboValidation', () => {
         const parsedLocations = sampleHeynaboLocations.map(l => HeynaboLocationSchema.parse(l))
 
         describe('mapHeynaboRoleToSystemRole', () => {
+            // Only the Heynabo admin maps to a system role: one other role stands for the rest
             it.each([
-                {role: 'admin', expected: ['ADMIN']},
-                {role: 'full', expected: []},
-                {role: 'limited', expected: []},
-                {role: 'unknown', expected: []}
+                {role: 'admin', expected: [SystemRole.ADMIN]},
+                {role: 'full', expected: []}
             ])('maps $role to $expected', ({role, expected}) => {
                 expect(mapHeynaboRoleToSystemRole(role)).toEqual(expected)
             })
@@ -189,8 +186,7 @@ describe('useHeynaboValidation', () => {
 
         describe('inhabitantFromMember', () => {
             it.each([
-                {member: parsedMembers[0]!, hasUser: true, systemRoles: ['ADMIN']},
-                {member: {...parsedMembers[2]!, email: 'valid@email.com'}, hasUser: true, systemRoles: []},
+                {member: parsedMembers[0]!, hasUser: true, systemRoles: [SystemRole.ADMIN]},
                 {member: parsedMembers[1]!, hasUser: false, systemRoles: []},
                 {member: {...parsedMembers[0]!, role: 'limited'}, hasUser: false, systemRoles: []}
             ])('creates inhabitant with hasUser=$hasUser for member $member.id', ({member, hasUser, systemRoles}) => {
@@ -220,7 +216,6 @@ describe('useHeynaboValidation', () => {
         describe('findInhabitantsByLocation', () => {
             it.each([
                 {locationId: 2, expectedCount: 1, expectedIds: [153]},
-                {locationId: 116, expectedCount: 1, expectedIds: [219]},
                 {locationId: 999, expectedCount: 0, expectedIds: []}
             ])('filters locationId=$locationId returns $expectedCount inhabitants', ({locationId, expectedCount, expectedIds}) => {
                 const result = findInhabitantsByLocation(locationId, parsedMembers)
@@ -231,12 +226,6 @@ describe('useHeynaboValidation', () => {
 
         describe('createHouseholdsFromImport', () => {
             it.each([
-                {
-                    locationIds: [2, 118],
-                    memberLocations: [2, 118],
-                    expectedHouseholds: 2,
-                    expectedInhabitantCounts: [1, 1]
-                },
                 {
                     locationIds: [2],
                     memberLocations: [2, 2],

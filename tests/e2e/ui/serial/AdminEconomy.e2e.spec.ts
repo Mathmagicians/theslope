@@ -3,11 +3,13 @@ import {authFiles} from '~~/tests/e2e/config'
 import testHelpers from '~~/tests/e2e/testHelpers'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
+import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {getHouseholdUrl} from '~/utils/household'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot} = testHelpers
-const {DinnerModeSchema, OrderStateSchema} = useBookingValidation()
+const {validatedBrowserContext, getSessionUserInfo, pollUntil, doScreenshot, gotoHydrated} = testHelpers
+const {DinnerModeSchema, OrderStateSchema, TicketTypeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
 const OrderState = OrderStateSchema.enum
 
@@ -23,33 +25,24 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
     let testHouseholdId: number
     let testInhabitantId: number
     let householdAddress: string
+    let householdPbsId: number
+    let householdEconomyUrl: string
     const testSalt = `admin-economy-${Date.now()}`
+    const createdSeasonIds: number[] = []
 
     test.use({storageState: adminUIFile})
 
     test.beforeAll(async ({browser}) => {
         adminContext = await validatedBrowserContext(browser)
-        const {householdId, inhabitantId, userId} = await getSessionUserInfo(adminContext)
+        const {householdId, inhabitantId} = await getSessionUserInfo(adminContext)
         testHouseholdId = householdId
         testInhabitantId = inhabitantId
 
         // Create dedicated season with future dinner events
-        const tomorrow = new Date()
-        tomorrow.setDate(tomorrow.getDate() + 1)
-        tomorrow.setHours(0, 0, 0, 0)
-
-        const twoWeeksFromTomorrow = new Date(tomorrow)
-        twoWeeksFromTomorrow.setDate(twoWeeksFromTomorrow.getDate() + 14)
-
-        testSeason = await SeasonFactory.createSeasonWithDinnerEvents(adminContext, testSalt, {
-            seasonDates: {start: tomorrow, end: twoWeeksFromTomorrow}
-        })
+        testSeason = await SeasonFactory.createActiveSeasonFromTomorrow(adminContext, testSalt, {days: 14})
+        createdSeasonIds.push(testSeason.season.id!)
 
         expect(testSeason.dinnerEvents.length, 'Test season should have dinner events').toBeGreaterThan(0)
-
-        // Activate the test season
-        const activated = await SeasonFactory.activateSeason(adminContext, testSeason.season.id!)
-        expect(activated.isActive, 'Test season should be active').toBe(true)
 
         // Get first future dinner event
         const today = new Date()
@@ -60,11 +53,12 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
 
         expect(futureDinners.length).toBeGreaterThan(0)
         testDinnerEventId = futureDinners[0]!.id
-        const testTicketPriceId = testSeason.season.ticketPrices!.find(tp => tp.ticketType === 'ADULT')!.id!
+        const testTicketPriceId = testSeason.season.ticketPrices!.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)!.id!
 
-        const households = await adminContext.request.get('/api/admin/household').then(r => r.json())
-        const household = households.find((h: { id: number }) => h.id === testHouseholdId)
-        householdAddress = household?.address ?? 'Unknown'
+        const household = (await HouseholdFactory.getAllHouseholds(adminContext)).find(h => h.id === testHouseholdId)!
+        householdAddress = household.address
+        householdPbsId = household.pbsId
+        householdEconomyUrl = getHouseholdUrl(household.shortName, household.pbsId, 'economy')
 
         const result = await OrderFactory.createOrder(adminContext, {
             householdId: testHouseholdId,
@@ -72,17 +66,37 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
             orders: [OrderFactory.defaultOrderItem({
                 inhabitantId: testInhabitantId,
                 ticketPriceId: testTicketPriceId,
-                bookedByUserId: userId,
                 dinnerMode: DinnerMode.DINEIN
             })]
         })
         testOrderId = result!.createdIds[0]!
     })
 
-    test.afterAll(async () => {
-        if (testSeason?.season?.id) {
-            await SeasonFactory.deleteSeason(adminContext, testSeason.season.id)
-        }
+    test.afterAll(async ({browser}) => {
+        // Deleting the season cascades its dinners and the order on them
+        await SeasonFactory.cleanupSeasons(await validatedBrowserContext(browser), createdSeasonIds)
+    })
+
+    test('GIVEN an upcoming order WHEN /admin/economy is server-rendered THEN the future orders table shows its loading state, and once hydrated the order row appears', async ({browser, page}) => {
+        // The economy data loads in the browser only: a context without JavaScript sees the page as the server sent it
+        const serverContext = await browser.newContext({storageState: adminUIFile, javaScriptEnabled: false})
+        const serverPage = await serverContext.newPage()
+        await serverPage.goto('/admin/economy')
+        const serverTable = serverPage.getByTestId('future-orders-table')
+        await expect(serverPage.getByTestId('admin-economy')).not.toContainText('Ingen fremtidige bestillinger')
+        await expect(serverTable.locator('[data-slot="loading"]')).toHaveCount(1)
+        await serverContext.close()
+
+        await gotoHydrated(page, '/admin/economy')
+        await pollUntil(() => page.getByTestId(`future-orders-expand-${testDinnerEventId}`).count(), count => count === 1)
+    })
+
+    test('GIVEN an order of the household WHEN its economy page is server-rendered THEN its HTML carries the billing and the upcoming orders', async () => {
+        const html = await adminContext.request.get(householdEconomyUrl).then(r => r.text())
+
+        expect(html).toContain('data-testid="household-economy"')
+        expect(html).toContain('Faktureringsperioder')
+        expect(html).not.toContain('Ingen kommende bestillinger')
     })
 
     test('GIVEN order exists WHEN admin uses correction UI THEN order mode is updated', async ({page}) => {
@@ -92,7 +106,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         expect(orderBefore!.dinnerMode).toBe(DinnerMode.DINEIN)
 
         // Navigate and select the test season (UI shows selected season's dinner events)
-        await page.goto('/admin/planning')
+        await gotoHydrated(page, '/admin/planning')
         await page.waitForSelector('[data-testid="season-selector"]')
 
         // Select test season from dropdown
@@ -101,76 +115,45 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         await doScreenshot(page, 'admin-planning-season-selected')
 
         // Use tab navigation (client-side) to preserve season selection
-        // Wait for the order fetch that will happen when the season's dinnerEvents load
+        // Wait for the upcoming orders the economy tab requests for the season
         const orderFetchPromise = page.waitForResponse(
-            (r) => r.url().includes('/api/order') && r.url().includes('dinnerEventIds'),
-            {timeout: 15000}
+            (r) => r.url().includes('/api/order') && r.url().includes('upcomingForSeason')
         )
         await page.getByRole('tab', {name: 'Økonomi'}).click()
-        await pollUntil(
-            async () => await page.getByTestId('admin-economy').isVisible().catch(() => false),
-            (isVisible) => isVisible
-        )
+        await expect(page.getByTestId('admin-economy')).toBeVisible()
 
-        // Wait for the order fetch to complete (happens after season dinnerEvents load)
+        // Wait for the upcoming orders to arrive
         await orderFetchPromise
         await doScreenshot(page, 'admin-economy-after-order-fetch')
 
-        const anyExpandBtn = page.locator('[data-testid^="future-orders-expand-"]').first()
-        await pollUntil(
-            async () => await anyExpandBtn.isVisible().catch(() => false),
-            (isVisible) => isVisible,
-            10,
-            1000
-        )
+        const expandBtn = page.getByTestId(`future-orders-expand-${testDinnerEventId}`)
+        await expect(expandBtn).toBeVisible()
 
         await doScreenshot(page, 'admin-economy-after-poll')
 
-        const expandBtn = page.getByTestId(`future-orders-expand-${testDinnerEventId}`)
-        expect(await expandBtn.isVisible()).toBe(true)
-
         await expandBtn.click()
-
-        await pollUntil(
-            async () => await page.getByTestId('admin-correction-btn').isVisible().catch(() => false),
-            (isVisible) => isVisible,
-            10,
-            500
-        )
 
         // DangerButton: first click transitions to confirm, second click confirms
         const correctionBtn = page.getByTestId('admin-correction-btn')
+        await expect(correctionBtn).toBeVisible()
         await correctionBtn.click()
         // Wait for button to show confirm state (text changes to "Klik igen for at rette")
-        await pollUntil(
-            async () => (await correctionBtn.textContent())?.includes('Klik igen') ?? false,
-            (hasConfirmText) => hasConfirmText,
-            10,
-            200
-        )
+        await expect(correctionBtn).toContainText('Klik igen')
         await correctionBtn.click()
 
         const householdSelect = page.getByTestId('admin-correction-household-select')
-        await pollUntil(
-            async () => await householdSelect.isVisible().catch(() => false),
-            (isVisible) => isVisible
-        )
+        await expect(householdSelect).toBeVisible()
 
         await householdSelect.click()
-        await page.getByRole('option', {name: new RegExp(householdAddress)}).first().click()
+        // The options read "{address} · PBS {pbsId}"; households at one address share the address
+        await page.getByRole('option', {name: `${householdAddress} · PBS ${householdPbsId}`, exact: true}).click()
 
         const inhabitantToggle = page.getByTestId(`inhabitant-${testInhabitantId}-toggle`)
-        await pollUntil(
-            async () => await inhabitantToggle.isVisible().catch(() => false),
-            (isVisible) => isVisible
-        )
+        await expect(inhabitantToggle).toBeVisible()
         await inhabitantToggle.click()
 
-        const takeawayBtn = page.getByTestId(`inhabitant-${testInhabitantId}-mode-edit-TAKEAWAY`)
-        await pollUntil(
-            async () => await takeawayBtn.isVisible().catch(() => false),
-            (isVisible) => isVisible
-        )
+        const takeawayBtn = page.getByTestId(`inhabitant-${testInhabitantId}-mode-edit-${DinnerMode.TAKEAWAY}`)
+        await expect(takeawayBtn).toBeVisible()
         await takeawayBtn.click()
 
         const saveButton = page.getByTestId(`inhabitant-${testInhabitantId}-save`)
@@ -180,8 +163,7 @@ test.describe.serial('AdminEconomy - Admin Correction', () => {
         const updatedOrder = await pollUntil(
             async () => await OrderFactory.getOrder(adminContext, testOrderId),
             (order) => order?.dinnerMode === DinnerMode.TAKEAWAY,
-            15,
-            1000
+            6
         )
         expect(updatedOrder!.dinnerMode).toBe(DinnerMode.TAKEAWAY)
         expect(updatedOrder!.state).toBe(OrderState.BOOKED)

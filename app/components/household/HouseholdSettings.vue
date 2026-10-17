@@ -5,8 +5,8 @@
  * Sections:
  * 1. Husstandsoplysninger - Read-only display: address, movedInDate, PBS ID
  * 2. Fraflytning - UCard with pencil-gate edit flow (gated by canEdit)
- *    - Toast on save (formatScaffoldResult in past tense)
- *    - Persistent alert below card (robotHappy/robotDead)
+ *    - Toast on save: the booking result, one line per person (formatBookingResult)
+ *    - Persistent alert below card (robotHappy/robotDead), the same lines
  * 3. Kalenderabonnement - Calendar feed subscription
  *
  * Fraflytning — 4 states:
@@ -53,14 +53,12 @@ const props = withDefaults(defineProps<Props>(), {
   adminBypass: false
 })
 
-const {TYPOGRAPHY, ICONS, SIZES, LAYOUTS, BUTTONS, ALERTS, COLOR, BG, getResidencyDisplay} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, ICONS, SIZES, LAYOUTS, BUTTONS, ALERTS, COLOR, NOISE, COMPONENTS, getResidencyDisplay} = useTheSlopeDesignSystem()
+const {householdSettings} = COMPONENTS
 
 // Store integration
 const householdsStore = useHouseholdsStore()
 const {lastMoveOutResult} = storeToRefs(householdsStore)
-
-// Booking business logic (scaffold result formatting)
-const {formatScaffoldResult} = useBooking()
 
 // Toast notifications
 const toast = useToast()
@@ -85,15 +83,15 @@ const cancelEdit = () => {
 
 // Status display: use shared residency config, fallback for active households
 const residencyDisplay = computed(() => getResidencyDisplay(props.household.movedInDate, props.household.moveOutDate))
-const statusIcon = computed(() => residencyDisplay.value?.icon ?? 'i-heroicons-sun')
-const statusIconClass = computed(() => residencyDisplay.value ? 'opacity-60' : 'text-warning-500')
+const statusIcon = computed(() => residencyDisplay.value?.icon ?? ICONS.noMoveOutPlans)
+const statusIconClass = computed(() => residencyDisplay.value ? householdSettings.factIcon : householdSettings.noPlansIcon)
 const statusText = computed(() => residencyDisplay.value?.dateText ?? 'Familien har ingen flytteplaner')
 const statusTextClass = computed(() => residencyDisplay.value ? TYPOGRAPHY.bodyTextMuted : TYPOGRAPHY.bodyText)
 
 // Edit alert (contextual: warning for new, info for change)
 const editAlert = computed(() => hasMoveOutDate.value
-  ? { icon: 'i-heroicons-information-circle', title: 'Ændring af fraflytningsdato', description: 'Bookinger efter den nye dato slettes, og bookinger før den nye dato kan genoprettes.', testid: 'move-out-change-warning' }
-  : { icon: 'i-heroicons-exclamation-triangle', title: 'Advarsel', description: 'Når du sætter en fraflytningsdato, slettes alle bookinger efter den valgte dato for husstanden.', testid: 'move-out-warning' }
+  ? { icon: ICONS.info, title: 'Ændring af fraflytningsdato', description: 'Bookinger efter den nye dato slettes, og bookinger før den nye dato kan genoprettes.', testid: 'move-out-change-warning' }
+  : { icon: ICONS.warning, title: 'Advarsel', description: 'Når du sætter en fraflytningsdato, slettes alle bookinger efter den valgte dato for husstanden.', testid: 'move-out-warning' }
 )
 
 const setMoveOutDate = async () => {
@@ -103,17 +101,16 @@ const setMoveOutDate = async () => {
     const result = await householdsStore.setMoveOutDate(props.household.id, moveOutDate.value, props.adminBypass)
     toast.add({
       title: 'Fraflytningsdato sat',
-      description: formatScaffoldResult(result, 'past'),
-      icon: ICONS.checkCircle,
-      color: 'success'
+      description: formatBookingResult(result),
+      ...scaffoldToastLook(result)
     })
   } catch (error) {
     console.error('Failed to set move-out date:', error)
     toast.add({
       title: 'Kunne ikke gemme',
       description: 'Der opstod en fejl. Prøv igen senere.',
-      icon: 'i-heroicons-exclamation-circle',
-      color: 'error'
+      icon: ICONS.exclamationCircle,
+      color: COLOR.error
     })
   } finally {
     isSaving.value = false
@@ -126,17 +123,16 @@ const clearMoveOutDate = async () => {
     const result = await householdsStore.setMoveOutDate(props.household.id, null, props.adminBypass)
     toast.add({
       title: 'Fraflytning fortrudt',
-      description: formatScaffoldResult(result, 'past'),
-      icon: ICONS.checkCircle,
-      color: 'success'
+      description: formatBookingResult(result),
+      ...scaffoldToastLook(result)
     })
   } catch (error) {
     console.error('Failed to clear move-out date:', error)
     toast.add({
       title: 'Kunne ikke gemme',
       description: 'Der opstod en fejl. Prøv igen senere.',
-      icon: 'i-heroicons-exclamation-circle',
-      color: 'error'
+      icon: ICONS.exclamationCircle,
+      color: COLOR.error
     })
   } finally {
     isSaving.value = false
@@ -146,31 +142,31 @@ const clearMoveOutDate = async () => {
 // Calendar feed
 const calendarFeed = ref<string | null>(null)
 const getCalendarFeedForUser = async () => {
-  calendarFeed.value = await $fetch<string>('/api/calendar/feed')
+  calendarFeed.value = await householdsStore.fetchCalendarFeed()
 }
 </script>
 
 <template>
-  <div data-testid="household-settings" class="space-y-6 px-2 md:px-0">
+  <div data-testid="household-settings" :class="householdSettings.root">
 
     <!-- Section 1: Husstandsoplysninger -->
     <div>
-      <h3 :class="TYPOGRAPHY.cardTitle" class="mb-4">Husstandsoplysninger</h3>
-      <div class="space-y-2">
-        <div class="flex items-center gap-2">
-          <UIcon :name="ICONS.household" class="opacity-60"/>
+      <h3 :class="householdSettings.sectionTitle">Husstandsoplysninger</h3>
+      <div :class="householdSettings.facts">
+        <div :class="householdSettings.fact">
+          <UIcon :name="ICONS.household" :class="householdSettings.factIcon"/>
           <span :class="TYPOGRAPHY.bodyTextMuted">{{ household.address }}</span>
         </div>
-        <div class="flex items-center gap-2">
-          <UIcon :name="ICONS.identification" class="opacity-60"/>
+        <div :class="householdSettings.fact">
+          <UIcon :name="ICONS.identification" :class="householdSettings.factIcon"/>
           <span :class="TYPOGRAPHY.bodyTextMuted">PBS {{ household.pbsId }}</span>
         </div>
-        <div class="flex items-center gap-2">
-          <UIcon :name="ICONS.moveIn" class="opacity-60"/>
+        <div :class="householdSettings.fact">
+          <UIcon :name="ICONS.moveIn" :class="householdSettings.factIcon"/>
           <span :class="TYPOGRAPHY.bodyTextMuted">Indflyttet {{ formatDate(household.movedInDate) }}</span>
         </div>
-        <div v-if="residencyDisplay" class="flex items-center gap-2">
-          <UIcon :name="residencyDisplay.icon" class="opacity-60"/>
+        <div v-if="residencyDisplay" :class="householdSettings.fact">
+          <UIcon :name="residencyDisplay.icon" :class="householdSettings.factIcon"/>
           <span :class="TYPOGRAPHY.bodyTextMuted">{{ residencyDisplay.dateText }}</span>
         </div>
       </div>
@@ -179,7 +175,7 @@ const getCalendarFeedForUser = async () => {
     <!-- Section 2: Fraflytning -->
     <UCard v-if="canEdit" data-testid="move-out-card">
       <template #header>
-        <div class="flex items-center justify-between">
+        <div :class="householdSettings.cardHeader">
           <h3 :class="TYPOGRAPHY.cardTitle">Fraflytning</h3>
           <UButton
             v-if="!isEditing"
@@ -190,9 +186,9 @@ const getCalendarFeedForUser = async () => {
         </div>
       </template>
 
-      <div class="space-y-4">
+      <div :class="householdSettings.cardBody">
         <!-- Status row (view mode) -->
-        <div v-if="!isEditing" class="flex items-center gap-2">
+        <div v-if="!isEditing" :class="householdSettings.fact">
           <UIcon :name="statusIcon" :class="statusIconClass"/>
           <span :class="statusTextClass" data-testid="move-out-date-display">{{ statusText }}</span>
         </div>
@@ -227,7 +223,7 @@ const getCalendarFeedForUser = async () => {
       </div>
 
       <template #footer>
-        <div v-if="isEditing" class="flex flex-col-reverse md:flex-row justify-end gap-2">
+        <div v-if="isEditing" :class="LAYOUTS.formButtonRow">
           <UButton v-bind="BUTTONS.cancel" data-testid="cancel-edit-move-out-date" @click="cancelEdit">Annullér</UButton>
           <!-- No date yet: destructive "set date" action -->
           <DangerButton
@@ -237,7 +233,7 @@ const getCalendarFeedForUser = async () => {
             confirm-label="Klik igen for at bekræfte fraflytning"
             :icon="ICONS.moveOut"
             :initial-color="COLOR.error"
-            initial-variant="soft"
+            :initial-variant="NOISE.soft"
             :loading="isSaving"
             :disabled="!moveOutDate"
             @confirm="setMoveOutDate"
@@ -258,10 +254,10 @@ const getCalendarFeedForUser = async () => {
     </UCard>
 
     <!-- Read-only move-out display for non-editors -->
-    <div v-else-if="residencyDisplay" :class="LAYOUTS.sectionDivider" class="pt-6">
-      <h3 :class="TYPOGRAPHY.cardTitle" class="mb-4">Fraflytning</h3>
-      <div class="flex items-center gap-2">
-        <UIcon :name="residencyDisplay.icon" class="opacity-60"/>
+    <div v-else-if="residencyDisplay" :class="[LAYOUTS.sectionDivider, householdSettings.sectionGap]">
+      <h3 :class="householdSettings.sectionTitle">Fraflytning</h3>
+      <div :class="householdSettings.fact">
+        <UIcon :name="residencyDisplay.icon" :class="householdSettings.factIcon"/>
         <span :class="TYPOGRAPHY.bodyTextMuted" data-testid="move-out-date-display">{{ residencyDisplay.dateText }}</span>
       </div>
     </div>
@@ -272,14 +268,17 @@ const getCalendarFeedForUser = async () => {
       v-bind="lastMoveOutResult.errored > 0 ? ALERTS.error : ALERTS.neutral"
       :icon="lastMoveOutResult.errored > 0 ? ICONS.robotDead : ICONS.robotHappy"
       title="Sidste ændring"
-      :description="`Fraflytningsdato ændret, og familiens bookinger har ændret sig: ${formatScaffoldResult(lastMoveOutResult, 'past')}`"
       data-testid="last-move-out-result-alert"
-    />
+    >
+      <template #description>
+        <p :class="COMPONENTS.bookingResult.lines">{{ `Fraflytningsdato ændret, og familiens bookinger har ændret sig:\n${formatBookingResult(lastMoveOutResult)}` }}</p>
+      </template>
+    </UAlert>
 
     <!-- Section 3: Kalenderabonnement -->
-    <div :class="LAYOUTS.sectionDivider" class="pt-6">
-      <h3 :class="TYPOGRAPHY.cardTitle" class="mb-4">Kalenderabonnement</h3>
-      <p :class="TYPOGRAPHY.bodyTextMuted" class="mb-4">
+    <div :class="[LAYOUTS.sectionDivider, householdSettings.sectionGap]">
+      <h3 :class="householdSettings.sectionTitle">Kalenderabonnement</h3>
+      <p :class="householdSettings.intro">
         Abonner på familiens fællesspisningskalender i din foretrukne kalenderapp (Google Calendar, Apple Calendar,
         Outlook)
       </p>
@@ -293,11 +292,11 @@ const getCalendarFeedForUser = async () => {
         Hent kalender (.ical)
       </UButton>
 
-      <div v-if="calendarFeed" :class="['mt-4 p-4 rounded', BG.inset]">
-        <p :class="TYPOGRAPHY.bodyTextMuted" class="mb-2">Kalenderfeed genereret:</p>
+      <div v-if="calendarFeed" :class="householdSettings.feedBox">
+        <p :class="householdSettings.feedLabel">Kalenderfeed genereret:</p>
         <a
           href="/api/calendar/feed"
-          class="text-primary hover:underline text-sm"
+          :class="householdSettings.feedLink"
           download="skraaningen-faellesspisning.ics"
         >
           Download skraaningen-faellesspisning.ics

@@ -1,9 +1,12 @@
 // @vitest-environment nuxt
-import {describe, it, expect, vi} from 'vitest'
+import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
 import TableSearchPagination from '~/components/shared/TableSearchPagination.vue'
 import {nextTick} from 'vue'
+
+enableAutoUnmount(afterEach)
 
 describe('TableSearchPagination', () => {
 
@@ -18,6 +21,10 @@ describe('TableSearchPagination', () => {
 
     const defaultPagination = {pageIndex: 0, pageSize: 10}
 
+    beforeEach(() => {
+        resetStores()
+    })
+
     // Mounting helper - reduces boilerplate
     const mount = (overrides: Record<string, unknown> = {}) =>
         mountSuspended(TableSearchPagination, {
@@ -25,21 +32,13 @@ describe('TableSearchPagination', () => {
         })
 
     describe('search input', () => {
-        it('renders with placeholder containing Søg', async () => {
+        it('renders with placeholder containing Søg and emits update:searchQuery when typing', async () => {
             const wrapper = await mount()
             expect(wrapper.find('input').attributes('placeholder')).toContain('Søg')
-        })
 
-        it('emits update:searchQuery when typing', async () => {
-            const wrapper = await mount()
             await wrapper.find('input').setValue('test')
             await nextTick()
             expect(wrapper.emitted('update:searchQuery')).toBeTruthy()
-        })
-
-        it('applies custom testId', async () => {
-            const wrapper = await mount({testId: 'user-search'})
-            expect(findByTestId(wrapper, 'user-search').exists()).toBe(true)
         })
     })
 

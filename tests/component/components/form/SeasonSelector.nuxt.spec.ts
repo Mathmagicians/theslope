@@ -1,15 +1,19 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from "@nuxt/test-utils/runtime"
-import {findByTestId} from '~~/tests/component/testHelpers'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {mountWithTooltipProvider, findByTestId, resetStores, VIEWPORTS} from '~~/tests/component/testHelpers'
+import {createResponsiveSizes, ICONS, SEASON_STATUS_GLYPHS} from '~/composables/useTheSlopeDesignSystem'
+import {getSeasonStatus} from '~/utils/season'
+import {SEASON_STATUS} from '~/composables/useSeasonValidation'
 import SeasonSelector from '~/components/form/SeasonSelector.vue'
 import {nextTick, ref} from 'vue'
 import {SeasonFactory} from '../../../e2e/testDataFactories/seasonFactory'
 import type {Season} from '~/composables/useSeasonValidation'
 
-describe('SeasonSelector', () => {
+enableAutoUnmount(afterEach)
 
-    type WrapperType = Awaited<ReturnType<typeof mountSuspended>>
+describe('SeasonSelector', () => {
 
     const DROPDOWN_TEST_ID = 'season-selector'
 
@@ -28,23 +32,20 @@ describe('SeasonSelector', () => {
         }
     ]
 
-    const createWrapper = async (props: {
+    beforeEach(() => {
+        resetStores()
+    })
+
+    const createWrapper = (props: {
         modelValue: number | undefined
         seasons: Season[]
         loading?: boolean
         disabled?: boolean
-    }) => {
-        return await mountSuspended(SeasonSelector, {
-            props,
-            global: {
-                provide: {
-                    isMd: ref(false) // Provide isMd injection for responsive breakpoint
-                }
-            }
-        })
-    }
+    }, isMd = false) => mountWithTooltipProvider(SeasonSelector, {props, isMd})
 
-    const getDropdown = (wrapper: WrapperType) => {
+    type WrapperType = Awaited<ReturnType<typeof createWrapper>>
+
+    const getDropdown = (wrapper: Parameters<typeof findByTestId>[0]) => {
         return findByTestId(wrapper, DROPDOWN_TEST_ID)
     }
 
@@ -55,7 +56,7 @@ describe('SeasonSelector', () => {
         await nextTick()
     }
 
-    it('renders dropdown with seasons list', async () => {
+    it('renders the dropdown with the "Vælg sæson" placeholder when seasons exist but none selected', async () => {
         const wrapper = await createWrapper({
             modelValue: undefined,
             seasons: mockSeasons
@@ -63,40 +64,7 @@ describe('SeasonSelector', () => {
 
         const dropdown = getDropdown(wrapper)
         expect(dropdown.exists()).toBe(true)
-
-        // Verify seasons were passed to component
-        expect(wrapper.props('seasons')).toEqual(mockSeasons)
-        expect(wrapper.props('seasons').length).toBe(2)
-    })
-
-    it('shows "Vælg sæson" placeholder when seasons exist but none selected', async () => {
-        const wrapper = await createWrapper({
-            modelValue: undefined,
-            seasons: mockSeasons
-        })
-
-        const dropdown = getDropdown(wrapper)
         expect(dropdown.text()).toContain('Vælg sæson')
-    })
-
-    it('shows "Ingen sæsoner" placeholder when seasons array is empty', async () => {
-        const wrapper = await createWrapper({
-            modelValue: undefined,
-            seasons: []
-        })
-
-        const dropdown = getDropdown(wrapper)
-        expect(dropdown.text()).toContain('Ingen sæsoner')
-    })
-
-    it('displays selected season when modelValue is provided', async () => {
-        const wrapper = await createWrapper({
-            modelValue: 1,
-            seasons: mockSeasons
-        })
-
-        const dropdown = getDropdown(wrapper)
-        expect(dropdown.text()).toContain('fall-2025')
     })
 
     it('emits update:modelValue when season is selected', async () => {
@@ -112,29 +80,7 @@ describe('SeasonSelector', () => {
         expect(emitted?.[0]).toEqual([2]) // ID of spring-2026
     })
 
-    it('shows loading state', async () => {
-        const wrapper = await createWrapper({
-            modelValue: undefined,
-            seasons: mockSeasons,
-            loading: true
-        })
-
-        // Verify loading prop was passed
-        expect(wrapper.props('loading')).toBe(true)
-    })
-
-    it('shows disabled state', async () => {
-        const wrapper = await createWrapper({
-            modelValue: 1,
-            seasons: mockSeasons,
-            disabled: true
-        })
-
-        // Verify disabled prop was passed
-        expect(wrapper.props('disabled')).toBe(true)
-    })
-
-    it('handles empty seasons array without errors', async () => {
+    it('handles empty seasons array with the "Ingen sæsoner" placeholder and no options', async () => {
         const wrapper = await createWrapper({
             modelValue: undefined,
             seasons: []
@@ -154,10 +100,11 @@ describe('SeasonSelector', () => {
         expect(options.length).toBe(0)
     })
 
-    it('updates displayed value when modelValue prop changes', async () => {
-        const wrapper = await createWrapper({
-            modelValue: 1,
-            seasons: mockSeasons
+    // setProps works on the mounted root alone
+    it('displays the selected season and updates it when the modelValue prop changes', async () => {
+        const wrapper = await mountSuspended(SeasonSelector, {
+            props: {modelValue: 1, seasons: mockSeasons},
+            global: {provide: {isMd: ref(false)}}
         })
 
         let dropdown = getDropdown(wrapper)
@@ -169,5 +116,23 @@ describe('SeasonSelector', () => {
 
         dropdown = getDropdown(wrapper)
         expect(dropdown.text()).toContain('spring-2026')
+    })
+
+    it.each(VIEWPORTS)('$viewport: binds the season select size of its viewport', async ({isMd}) => {
+        const wrapper = await createWrapper({modelValue: 1, seasons: mockSeasons}, isMd)
+        expect(wrapper.findComponent({name: 'USelect'}).props('size')).toBe(createResponsiveSizes(ref(isMd)).seasonSelect)
+    })
+
+    it('every option carries its status, the archive icon for an ended season and the calendar otherwise, and the selected one shows its status glyph', async () => {
+        const wrapper = await createWrapper({modelValue: 1, seasons: mockSeasons})
+        const items = wrapper.findComponent({name: 'USelect'}).props('items') as Array<Season & {status: string, icon: string}>
+        expect(items).toHaveLength(mockSeasons.length)
+        for (const item of items) {
+            expect(item.status).toBe(getSeasonStatus(item))
+            expect(item.icon).toBe(item.status === SEASON_STATUS.PAST ? ICONS.seasonPast : ICONS.calendar)
+        }
+        const glyph = wrapper.findAllComponents({name: 'UBadge'}).find(badge => badge.attributes('data-testid') === 'season-status-mark')
+        expect(glyph?.exists()).toBe(true)
+        expect(glyph!.classes()).toEqual(expect.arrayContaining(SEASON_STATUS_GLYPHS[getSeasonStatus(mockSeasons[0]!)].class.split(' ')))
     })
 })

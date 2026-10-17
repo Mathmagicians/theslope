@@ -239,8 +239,10 @@ const isTextRung = (path: string) => /^TEXT\.[a-z]+\.\d+$/.test(path)
  */
 const FILL_INK = [
     'TEXT.white', 'TEXT.black', 'TYPOGRAPHY.sectionSubheadingLight', 'TYPOGRAPHY.sectionIconLight',
-    'TYPOGRAPHY.footerText', 'CALENDAR.countdown', 'CHEF_CALENDAR.countdown',
-    'DINNER_CALENDAR.countdown', 'COMPONENTS.heroPanel', 'COMPONENTS.kitchenPanel', 'COMPONENTS.ribbon'
+    'TYPOGRAPHY.footerText', 'COMPONENTS.pageFooter.iconButtonUi', 'CALENDAR.countdown', 'CHEF_CALENDAR.countdown',
+    'DINNER_CALENDAR.countdown', 'COMPONENTS.heroPanel', 'COMPONENTS.kitchenPanel', 'COMPONENTS.ribbon',
+    'COMPONENTS.wantedPoster.lettering', 'COMPONENTS.wantedPoster.role', 'COMPONENTS.wantedPoster.avatar.ui.icon',
+    'COMPONENTS.wantedPoster.hatOnFrame'
 ]
 
 const isFillInk = (path: string) => FILL_INK.some(prefix => path === prefix || path.startsWith(`${prefix}.`))
@@ -248,6 +250,7 @@ const isFillInk = (path: string) => FILL_INK.some(prefix => path === prefix || p
 /** Ink with one owner: the fill the design system draws it on */
 const PAIRED_INK = [
     {ink: 'TYPOGRAPHY.footerText', fill: 'BACKGROUNDS.appShell'},
+    {ink: 'COMPONENTS.pageFooter.iconButtonUi.leadingIcon', fill: 'BACKGROUNDS.appShell'},
     {ink: 'TYPOGRAPHY.sectionSubheadingLight', fill: 'BACKGROUNDS.hero.mocha'},
     {ink: 'TYPOGRAPHY.sectionIconLight', fill: 'BACKGROUNDS.hero.mocha'},
     {ink: 'CALENDAR.countdown.title', fill: 'CALENDAR.countdown.container'},
@@ -257,7 +260,11 @@ const PAIRED_INK = [
     {ink: 'CHEF_CALENDAR.countdown.accentMedium', fill: 'CALENDAR.countdown.container'},
     {ink: 'DINNER_CALENDAR.countdown.accent', fill: 'CALENDAR.countdown.container'},
     {ink: 'DINNER_CALENDAR.countdown.accentLight', fill: 'CALENDAR.countdown.container'},
-    {ink: 'DINNER_CALENDAR.countdown.accentMedium', fill: 'CALENDAR.countdown.container'}
+    {ink: 'DINNER_CALENDAR.countdown.accentMedium', fill: 'CALENDAR.countdown.container'},
+    {ink: 'COMPONENTS.wantedPoster.lettering', fill: 'COMPONENTS.wantedPoster.frame'},
+    {ink: 'COMPONENTS.wantedPoster.role', fill: 'COMPONENTS.wantedPoster.frame'},
+    {ink: 'COMPONENTS.wantedPoster.avatar.ui.icon', fill: 'COMPONENTS.wantedPoster.avatar.class'},
+    {ink: 'COMPONENTS.wantedPoster.hatOnFrame', fill: 'COMPONENTS.wantedPoster.frame'}
 ] as const
 
 /** The Nuxt UI semantic slots the app maps in `app.config.ts` */
@@ -345,10 +352,10 @@ const KITCHEN_INK: PlacedInk[] = [
  * A cooking team wears the stop of its number on `UBadge`s, and the label is Nuxt UI's badge face:
  * `text-[10px]` at `sm`, `text-xs` at `md`, `text-sm` at `lg`. Every one of them is body text, and
  * `TYPOGRAPHY.bodyTextSmall` (`text-sm`) is the design-system face that grades it: 1.4.3 has one
- * bar below large scale. Drawn by CookingTeamBadges.vue:43, CookingTeamCard.vue:235,
- * AdminTeams.vue:572 and TeamCalendarDisplay.vue:121
+ * bar below large scale. Drawn by CookingTeamBadges.vue:54, CookingTeamCard.vue:321 and :502
+ * and TeamCalendarDisplay.vue:134
  */
-const TEAM_BADGE: PlacedInk[] = [{ink: 'TYPOGRAPHY.bodyTextSmall', at: 'CookingTeamBadges.vue:43'}]
+const TEAM_BADGE: PlacedInk[] = [{ink: 'TYPOGRAPHY.bodyTextSmall', at: 'CookingTeamBadges.vue:54'}]
 
 /**
  * The typography a component actually places on a fill. 1.4.3 grades a pair by the size of the
@@ -396,16 +403,23 @@ const INK_ON_FILL: Record<string, PlacedInk[]> = {
  * |---|---|
  * | `LAYOUTS.sectionDivider` | A rule between page sections; the heading and the gap separate them |
  * | `LAYOUTS.panelDivider` | The rule above a detail panel's action row; the buttons carry their own edges |
+ * | `COMPONENTS.bookingForm.dayBill` | The rule under the booking form's day bill; the bill's figures read without it |
+ * | `COMPONENTS.bookingGrid.nav` / `.actionCell` | The rule under the grid's date navigation and above its save row; the table's own header and the buttons separate them |
  * | `COMPONENTS.economyTable.level{1,2,3}.border` | The nesting tint of a tree row, alongside the row's indentation, icon and heading |
  * | `COMPONENTS.economyTable.level{1,2,3}.header` / `.footer` / `.statBox` / `.tableHead` | Banding of a table's own header, footer and stat boxes - a surface, measured for its ink in the text groups |
+ * | `BORDER.gray.frame` | The frame of the admin economy's invoice breakdown; its header band and the table inside group it |
  *
  * The edges that stay: input and card borders, the green holiday ring, the amber and red
  * deadline rings, the segmented-control ring, the calendar selection outlines - each is the
  * only thing that says where a control is or what a day means.
  */
 const DECORATIVE_EDGES = [
+    'BORDER.gray.frame',
     'LAYOUTS.sectionDivider',
     'LAYOUTS.panelDivider',
+    'COMPONENTS.bookingForm.dayBill',
+    'COMPONENTS.bookingGrid.nav',
+    'COMPONENTS.bookingGrid.actionCell',
     'COMPONENTS.economyTable.level1.border',
     'COMPONENTS.economyTable.level2.border',
     'COMPONENTS.economyTable.level3.border',
@@ -423,6 +437,14 @@ const DECORATIVE_EDGES = [
 ]
 
 export const isDecorativeEdge = (path: string) => DECORATIVE_EDGES.includes(path)
+
+/**
+ * Tokens that bring their own fill and an edge that carries meaning: a dinner ticket's edge names its order state.
+ * The edge meets the token's fill inside and the surface the card sits on outside, so it is measured against both.
+ */
+const MEANINGFUL_EDGES_ON_FILL = ['COMPONENTS.ticket.face']
+
+const isMeaningfulEdgeOnFill = (path: string) => MEANINGFUL_EDGES_ON_FILL.some(prefix => path.startsWith(`${prefix}.`))
 
 export type Level = 'AA' | 'AAA'
 
@@ -588,6 +610,17 @@ export const buildPairs = (override: PaletteOverride, level: Level): Pair[] => {
                     add('edge on surface', `${leaf.path} (${channel}) on ${surface.name}`,
                         `${mode}|${leaf.path}|${channel}|${surface.name}`, edge, surface, EDGE_THRESHOLD)
                 }
+            }
+        }
+
+        // 2a - an edge that carries meaning on a token with its own fill, against that fill and the edge surfaces
+        for (const leaf of LEAVES.filter(candidate => isMeaningfulEdgeOnFill(candidate.path))) {
+            const edge = pick(leaf.classes, 'border', mode)
+            const own = surfaceOf(leaf.classes, mode)
+            if (!edge || !own) continue
+            for (const surface of [{name: 'own fill', ...own}, ...edgeSurfaces]) {
+                add('edge on surface', `${leaf.path} (border) on ${surface.name}`,
+                    `${mode}|${leaf.path}|border|${surface.name}`, edge, surface, EDGE_THRESHOLD)
             }
         }
 

@@ -1,5 +1,6 @@
-import {z, type ZodError, type ZodIssue} from 'zod';
+import {z} from 'zod';
 import {parseDate, DATE_SETTINGS} from '~/utils/date'
+import {mapZodErrorsToFormErrors} from '~/utils/validtation'
 import {intervalToDuration, isValid} from 'date-fns'
 
 // ISO date schema - for HTTP JSON transport (e.g., "2025-01-01T00:00:00.000Z")
@@ -12,8 +13,9 @@ const isoDateSchema = z.string()
 
 // dd/MM/yyyy date schema - for UI form input (e.g., "01/01/2025" or "1/1/2025")
 const ddMMyyyyDateSchema = z.string({
-    required_error: 'Dato mangler',
-    invalid_type_error: `Forkert dato format, brug (${DATE_SETTINGS.USER_MASK})`
+    error: issue => issue.input === undefined
+        ? 'Dato mangler'
+        : `Forkert dato format, brug (${DATE_SETTINGS.USER_MASK})`
 })
     .regex(/^\d{1,2}\/\d{1,2}\/\d{4}$/, `Brug formatet ${DATE_SETTINGS.USER_MASK}`)
     .describe(`Dato ${DATE_SETTINGS.USER_MASK}`)
@@ -88,23 +90,11 @@ export const createDateRangeSchema = ({ nullableEnd = false, maxOneYear = false 
 
 type RangeAsStrings = {start: string, end: string}
 
-export const mapErrorsToFields = (zodErrors: ZodError) => {
-    const fieldMap = new Map<string, string[]>();
-
-    zodErrors.errors.forEach( (issue: ZodIssue) => {
-        const path = issue.path.join('.') || '_';
-        const existing = fieldMap.get(path) || [];
-        fieldMap.set(path, [...existing, issue.message]);
-    });
-
-    return fieldMap;
-}
-
 export const validateDateRange = ( range: RangeAsStrings ) => {
     const result = dateRangeSchema.safeParse(range)
     return {
         isValid: result.success,
         range: result.success ? result.data : undefined,
-        errors: result.success ? new Map() : mapErrorsToFields(result.error)
+        errors: result.success ? new Map() : mapZodErrorsToFormErrors(result.error)
     }
 }

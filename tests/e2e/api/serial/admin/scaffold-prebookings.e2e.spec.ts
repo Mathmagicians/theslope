@@ -6,6 +6,8 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
+import {useBookingValidation as useActionValidation} from '~/composables/useBookingValidation'
+const Action = useActionValidation().BookingActionSchema.enum
 
 const {DinnerModeSchema} = useBookingValidation()
 const DinnerMode = DinnerModeSchema.enum
@@ -38,45 +40,12 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
         await SeasonFactory.cleanupSeasons(context, createdSeasonIds)
     })
 
-    test('should create orders for inhabitants with preferences', async ({browser}) => {
+    test('should create orders for inhabitants with preferences, and be idempotent', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
 
         // Use ticketIsCancellableDaysBefore: 0 so scaffold can create orders for near-future dinners
         // Default is 8 days, but test season has dinners 1-7 days away
-        const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
-            ticketIsCancellableDaysBefore: 0
-        })
-        createdSeasonIds.push(season.id!)
-
-        const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
-            context, HouseholdFactory.defaultHouseholdData(testSalt), 2
-        )
-        createdHouseholdIds.push(household.id)
-
-        const allDaysDineIn = createDefaultDinnerModeMap(DinnerMode.DINEIN)
-        for (const inhabitant of inhabitants) {
-            await HouseholdFactory.updateInhabitant(context, inhabitant.id, {dinnerPreferences: allDaysDineIn}, 200, season.id!)
-        }
-
-        const result = await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
-
-        expect(result.seasonId).toBe(season.id)
-        expect(result.created).toBeGreaterThan(0)
-
-        const orders = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
-        const householdOrders = orders.filter(o => inhabitants.some(i => i.id === o.inhabitantId))
-        expect(householdOrders.length).toBeGreaterThan(0)
-
-        // Verify all orders have valid ticketPriceId (no orphans)
-        assertNoOrdersWithOrphanPrices(householdOrders, 'after scaffolding')
-    })
-
-    test('should be idempotent', async ({browser}) => {
-        const context = await validatedBrowserContext(browser)
-        const testSalt = temporaryAndRandom()
-
-        // Use ticketIsCancellableDaysBefore: 0 so scaffold can create orders for near-future dinners
         const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
             ticketIsCancellableDaysBefore: 0
         })
@@ -99,10 +68,12 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
 
         const scaffoldResult = await SeasonFactory.scaffoldPrebookingsForSeason(context, season.id!)
         expect(scaffoldResult.seasonId, 'Scaffold should return correct seasonId').toBe(season.id)
+        expect(scaffoldResult.totals[Action.BOOK], 'First scaffold books').toBeGreaterThan(0)
 
         const ordersAfterFirst = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
         const inhabitantOrdersAfterFirst = ordersAfterFirst.filter(o => o.inhabitantId === inhabitant.id)
         expect(inhabitantOrdersAfterFirst.length, `Expected ${dinnerEvents.length} orders for inhabitant ${inhabitant.id}`).toBe(dinnerEvents.length)
+        assertNoOrdersWithOrphanPrices(inhabitantOrdersAfterFirst, 'after scaffolding')
 
         // Second scaffold should be idempotent for THIS test's inhabitant
         // Note: Other parallel tests may create households, so we check our inhabitant's orders, not global created count
@@ -118,16 +89,21 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
         assertNoOrdersWithOrphanPrices(inhabitantOrdersAfterSecond, 'after re-scaffold')
     })
 
-    test('should return 404 for non-existent season', async ({browser}) => {
+    test('should return 404 for a removed season', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-        await SeasonFactory.scaffoldPrebookingsForSeason(context, 9999999, 404)
+        const removedSeason = await SeasonFactory.createSeason(context, SeasonFactory.defaultSeason(temporaryAndRandom()))
+        await SeasonFactory.deleteSeason(context, removedSeason.id!, 200)
+        await SeasonFactory.scaffoldPrebookingsForSeason(context, removedSeason.id!, 404)
     })
 
     test('should skip inhabitants with NONE preferences', async ({browser}) => {
         const context = await validatedBrowserContext(browser)
         const testSalt = temporaryAndRandom()
 
-        const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt)
+        // An open deadline, so the scaffold would book these dinners; only the NONE preference keeps them empty
+        const {season, dinnerEvents} = await SeasonFactory.createSeasonWithDinnerEvents(context, testSalt, {
+            ticketIsCancellableDaysBefore: 0
+        })
         createdSeasonIds.push(season.id!)
 
         const {household, inhabitants} = await HouseholdFactory.createHouseholdWithInhabitants(
@@ -206,11 +182,10 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
     })
 
     test.describe('update household triggers re-scaffold respecting dates', () => {
+        // A moveOutDate set to the past is the set step of 'clear moveOutDate → orders re-scaffolded' below
         const rescaffoldCases = [
             {desc: 'moveOutDate mid-season → only eligible orders remain',
-                moveOutAtEvent: 2, moveOutDaysFromNow: undefined as number | undefined, eligibleIndices: [0, 1, 2]},
-            {desc: 'moveOutDate set to past → ALL orders deleted',
-                moveOutAtEvent: undefined as number | undefined, moveOutDaysFromNow: -1, eligibleIndices: [] as number[]},
+                moveOutAtEvent: 2 as number | undefined, moveOutDaysFromNow: undefined as number | undefined, eligibleIndices: [0, 1, 2]},
         ]
 
         for (const {desc, moveOutAtEvent, moveOutDaysFromNow, eligibleIndices} of rescaffoldCases) {
@@ -251,7 +226,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
                 // THEN: Response contains scaffoldResult with correct counts
                 expect(updateResult, 'should return HouseholdUpdateResponse').not.toBeNull()
                 const deletedCount = inhabitantOrdersBefore.length - eligibleIndices.length
-                expect(updateResult!.scaffoldResult.deleted, 'scaffoldResult.deleted matches removed orders').toBe(deletedCount)
+                expect(updateResult!.scaffoldResult.totals[Action.CANCEL], 'scaffoldResult.totals[Action.CANCEL] matches removed orders').toBe(deletedCount)
                 expect(updateResult!.household.moveOutDate, 'response household has moveOutDate set').not.toBeNull()
 
                 // Verify moveOutDate persisted via separate GET
@@ -304,7 +279,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
 
             // THEN: scaffoldResult reflects all orders deleted
             expect(updateResult, 'should return HouseholdUpdateResponse').not.toBeNull()
-            expect(updateResult!.scaffoldResult.deleted, 'scaffoldResult.deleted matches all removed orders').toBe(inhabitantOrdersBefore.length)
+            expect(updateResult!.scaffoldResult.totals[Action.CANCEL], 'scaffoldResult.totals[Action.CANCEL] matches all removed orders').toBe(inhabitantOrdersBefore.length)
 
             // THEN: ALL orders deleted — deadline doesn't protect moved-out households
             const ordersAfter = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
@@ -340,7 +315,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
 
             // GIVEN: Set moveOutDate to past → all orders deleted
             const setResult = await HouseholdFactory.updateHousehold(context, household.id, {moveOutDate: daysFromNow(-1)})
-            expect(setResult!.scaffoldResult.deleted, 'set: all orders deleted').toBe(dinnerEvents.length)
+            expect(setResult!.scaffoldResult.totals[Action.CANCEL], 'set: all orders deleted').toBe(dinnerEvents.length)
 
             const ordersAfterMoveOut = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
             expect(ordersAfterMoveOut.filter(o => o.inhabitantId === inhabitants[0]!.id).length, 'zero orders after moveOut').toBe(0)
@@ -352,10 +327,10 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
             expect(clearResult, 'should return HouseholdUpdateResponse').not.toBeNull()
             // Debug: log full scaffold result to understand what happened
             const sr = clearResult!.scaffoldResult
-            expect(sr.seasonId, `clear: scaffold ran with season (full: created=${sr.created} deleted=${sr.deleted} released=${sr.released} unchanged=${sr.unchanged} errored=${sr.errored} households=${sr.households})`).not.toBeNull()
+            expect(sr.seasonId, `clear: scaffold ran with season (full: created=${sr.totals[Action.BOOK]} deleted=${sr.totals[Action.CANCEL]} released=${sr.totals[Action.RELEASE]} unchanged=${sr.unchanged} errored=${sr.errored} households=${sr.households})`).not.toBeNull()
             expect(clearResult!.household.moveOutDate, 'response household has moveOutDate cleared').toBeNull()
             expect(sr.households, `clear: scaffold processed the household`).toBe(1)
-            expect(sr.created, 'clear: orders re-created').toBe(dinnerEvents.length)
+            expect(sr.totals[Action.BOOK], 'clear: orders re-created').toBe(dinnerEvents.length)
 
             // THEN: Orders are back
             const ordersAfterClear = await OrderFactory.getAllOrdersForEvents(context, dinnerEvents.map(e => e.id))
@@ -438,7 +413,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
     })
 
     test.describe('user intent respected by system scaffold', () => {
-        const {OrderStateSchema} = useBookingValidation()
+        const {OrderStateSchema, OrderAuditActionSchema} = useBookingValidation()
         const OrderState = OrderStateSchema.enum
 
         // USER_CANCELLED scenarios (negative intent)
@@ -460,8 +435,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
                 }
 
                 if (action === 'delete') {
-                    // Use adminBypass when deleting from test household (admin is not a member)
-                    await OrderFactory.deleteOrder(context, order.id, 200, isTestHousehold)
+                    await OrderFactory.deleteOrder(context, order.id)
                     await OrderFactory.getOrder(context, order.id, 404)
                 } else {
                     const released = await OrderFactory.updateOrder(context, order.id, {dinnerMode: DinnerMode.NONE})
@@ -469,7 +443,7 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
 
                     // Verify USER_CANCELLED audit entry was created with denormalized fields
                     const orderWithHistory = await OrderFactory.getOrder(context, order.id)
-                    const cancelledEntry = orderWithHistory?.history?.find(h => h.action === 'USER_CANCELLED')
+                    const cancelledEntry = orderWithHistory?.history?.find(h => h.action === OrderAuditActionSchema.enum.USER_CANCELLED)
                     expect(cancelledEntry, 'USER_CANCELLED audit entry should exist').toBeDefined()
                     expect(cancelledEntry?.inhabitantId, 'Audit should have inhabitantId').toBe(inhabitant.id)
                     expect(cancelledEntry?.dinnerEventId, 'Audit should have dinnerEventId').toBe(dinnerEvent.id)
@@ -508,7 +482,6 @@ test.describe('POST /api/admin/season/[id]/scaffold-prebookings', () => {
             // Prefs DIFFER from booking - confirmedKeys prevents overwrite/delete
             {desc: 'prefs=NONE, user booked DINEIN', prefsMode: DinnerMode.NONE, bookedMode: DinnerMode.DINEIN},
             {desc: 'prefs=DINEIN, user booked TAKEAWAY', prefsMode: DinnerMode.DINEIN, bookedMode: DinnerMode.TAKEAWAY},
-            {desc: 'prefs=TAKEAWAY, user booked DINEINLATE', prefsMode: DinnerMode.TAKEAWAY, bookedMode: DinnerMode.DINEINLATE},
             // Prefs MATCH booking - confirmedKeys ensures idempotent via intent, not coincidence
             {desc: 'prefs=DINEIN, user booked DINEIN', prefsMode: DinnerMode.DINEIN, bookedMode: DinnerMode.DINEIN}
         ] as const

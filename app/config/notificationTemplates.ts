@@ -29,5 +29,25 @@ export const NOTIFICATION_TEMPLATES = {
     BILLING_PERIOD_UPDATED: {
         subject: '{{senderName}}: PBS-opgørelse {{billingPeriod}} — opdatering v{{version}}',
         text: 'Hejsa,\n\nPBS-opgørelsen for perioden {{billingPeriod}} er opdateret (version {{version}}) og erstatter den tidligere fremsendte: {{householdCount}} husstande, i alt {{totalAmount}} kr.\n\nOversigt: {{summaryUrl}}'
+    },
+    WAITLIST_JOINED: {
+        subject: '{{senderName}}: Du står nu på ventelisten til fællesspisningen d. {{dinner}}',
+        text: 'Kære {{name}},\n\nDu står nu på ventelisten til fællesspisningen {{dinner}}: #{{position}} i kø.\nBillettype: {{ticketType}}\n\nDu får besked, når der er en billet til dig.'
+    },
+    WAITLIST_TICKET_ASSIGNED: {
+        subject: '{{senderName}}: Du har fået billet til {{dinner}}',
+        text: 'Kære {{name}},\n\n{{seller}} frigav en billet til {{dinner}}, og den er solgt til din husstand {{buyer}}: {{ticket}}. Vi glæder os til at se dig.'
+    },
+    WAITLIST_EXTRA_PORTION: {
+        subject: '{{senderName}}: Du har fået billet til {{dinner}}',
+        text: 'Kære {{name}},\n\nKøkkenholdet laver flere portioner til {{dinner}}, og en af dem er booket til din husstand {{buyer}}: {{ticket}}. Vi glæder os til at se dig.'
+    },
+    WAITLIST_BUILDUP: {
+        subject: '{{senderName}}: {{entries}} skrånere står på ventelisten til {{dinner}}',
+        text: 'Kære {{name}},\n\n{{entries}} skrånere mangler en billet til din middag {{dinner}}, i alt {{portions}} portioner. Kan du frigive flere portioner? Det gør du under Flere på middagen: {{dinnerUrl}}'
+    },
+    TICKET_SOLD: {
+        subject: '{{senderName}}: Din billet til {{dinner}} er solgt',
+        text: 'Kære {{name}},\n\nBilletten, som {{seller}} frigav til {{dinner}}, er nu solgt til {{buyer}}. I betaler ikke længere for den.'
     }
 }

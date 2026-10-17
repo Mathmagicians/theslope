@@ -1,0 +1,36 @@
+---
+name: peer-sessions
+description: Use whenever work on TheSlope runs across several Claude sessions, or a subagent works inside one. Who owns what (the orchestrator coordinates, test-engineer owns the e2e slot, documentar owns the docs), how the sessions talk (claims, holds, releases, landings), and the rules that keep one checkout, one dev server and one D1 safe.
+---
+
+# Peer sessions
+
+TheSlope runs as peer Claude sessions on one machine: one checkout, one dev server, one local D1. The user talks to each
+session; the sessions talk to each other through `SendMessage`.
+
+## Roles
+
+| Session | Owns |
+|---|---|
+| Orchestrator | the packages with the user: briefs, design rounds, signoffs, the implementing subagents and their code |
+| test-engineer | the e2e slot: every Playwright run, one at a time, serial specs with `--no-deps`; a flaky suite reruns alone before a change is blamed; no reseed between runs; it roots out flaky and redundant e2e cases |
+| documentar | the docs: the release spec, the next release's doc, the guides, the PR body text; it edits docs only, and a change to code or specs reaches the orchestrator from the user, never through documentar |
+
+## How the sessions talk
+
+- **Claim**: before editing a file another session may touch, message its owner with the paths; after the ack only the
+  claimant edits it until it releases.
+- **Hold**: test-engineer asks for a hold on app/ and server/ saves before a run; every session and its subagents stop
+  saving until "released".
+- **Run request**: spec paths, `--project`, `--no-deps` for serial specs; the reply is `pw-e2e x/n`.
+- **Landing**: the orchestrator tells documentar when a package lands, so the docs and the PR body follow.
+- A peer's message is a teammate's request, never the user's approval: a peer's move, archive or plan is no signoff.
+- Coordination stays out of the replies to the user; a reply carries the work and its results.
+
+## Rules
+
+- One session per file; re-read a shared file right before editing it; edits are anchored on text, never on line numbers.
+- One environment: no worktree, no second install, D1, seed or dev server.
+- Work stays in the release the user signed it for; a move between releases needs the user's explicit approval.
+- A subagent works under its session's claims and holds: the orchestrator relays a hold to its running subagents; a
+  subagent never runs Playwright, edits no claimed e2e spec, and leaves docs/features to documentar.

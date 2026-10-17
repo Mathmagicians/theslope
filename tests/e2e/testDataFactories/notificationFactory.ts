@@ -1,5 +1,6 @@
 import {NOTIFICATION_SIGNATURE, NOTIFICATION_TEMPLATES, senderAddress, senderDisplayName} from '~/config/notificationTemplates'
 import type {NotificationConfig} from '~/composables/useNotificationValidation'
+import type {EmailChannel} from '~~/server/utils/sender/config'
 
 /**
  * Notification config for unit tests: the real templates and signature, dev-like addresses (ADR-003 factory).
@@ -16,4 +17,8 @@ export class NotificationFactory {
         templates: NOTIFICATION_TEMPLATES,
         ...overrides
     })
+
+    /** E-mail switched on over the given queue */
+    static readonly channel = (queue: Queue, overrides: Partial<NotificationConfig> = {}): EmailChannel =>
+        ({on: true, queue, config: NotificationFactory.config(overrides)})
 }

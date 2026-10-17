@@ -69,66 +69,34 @@ User (Bruger)
 | **Monthly Billing** | Generate invoices, magic link sharing, CSV export | [Admin Guide](../admin-guide.md#økonomi) |
 | **Job History Panel** | View/trigger system jobs, track run history | [Admin Guide](../admin-guide.md#systemvedligeholdelse) |
 | **Authorization** | Role-based access control (Admin, AllergyManager) | — |
+| **Waitlist** | Claim a released ticket or queue for one through the booking form; the chef releases portions; queue mails (ADR-016) | [User Guide](../user-guide.md) |
+| **Chef Budget** | Income, allowance and kitchen share per dinner, grocery lines with VAT and a prefilled note, the team's round, ticket changes | [Chef Guide](../chef-guide.md#6-madbestilling-og-budget) |
+| **Joker Slots** | A time-bound team vacancy with a period, weekdays, role and note, managed in the team card | [Admin Guide](../admin-guide.md#cooking-teams) |
+| **Allergy Lines** | Allergy kuverter per dining mode in the kitchen stats, allergen counts in the chef's allergen row, a booked inhabitant's allergies on the ticket | [Chef Guide](../chef-guide.md) |
+| **Dead-session Re-login** | A request that meets a 401 loads the login page with the current URL as redirect and returns there after sign-in | — |
 
 ### Partially Implemented
 
 | Feature | Remaining Work |
 |---------|----------------|
-| **Ticket Claim UI** | Backend done, need UI for claiming released tickets |
 | **Chef Components** | Missing component tests for DinnerStatusStepper, TeamRoleStatus, DinnerDetailPanel |
 
 ### Planned
 
 | Feature | Description |
 |---------|-------------|
-| **Ticket Claim UI** | Claim released tickets from other households (backend ready) |
 | **PBS Export** | Direct PBS file generation |
-| **Chef Budget View** | Calculate budget from ticket counts |
+| **Duty Roster** | Templates, duties, audit trail, derived sign-off and cross-team swap (`feature-proposal-duty-roster.md`) |
+| **Season Spending** | Sæsontrend per chef, admin Forbrug with scopes, basisvarer entry (`feature-proposal-season-spending.md`) |
+| **Ad-hoc Charges** | Admin charges on a household, reversal, the spending views (`feature-proposal-adhoc-admin-billing.md`) |
+| **Notification Triggers** | Chef deadlines, roster and shift reminders, job failed, dinner cancelled, duty swapped (`feature-proposal-notification-triggers.md`) |
 
 ---
 
-## Screenshots
+## Guides
 
-### User Dashboard
-![User Dashboard](screenshots/user/dashboard.png)
-*Dashboard shown after login with quick actions for Dinner, Household, and Cooking Team*
-
-### Dinner Calendar
-![Dinner Calendar](screenshots/dinner/dinner-calendar.png)
-*Public dinner calendar showing upcoming events with booking status*
-
-### Household Views
-![Household Bookings](screenshots/household/household-bookings.png)
-*Household booking view showing family members and their reservations*
-
-![Weekly Preferences](screenshots/household/household-members-view-mode.png)
-*VIEW mode: Compact badges show preferences. Click ✏️ to edit individual, ⚡ for power mode*
-
-![Editing Preferences](screenshots/household/household-card-preferences-editing.png)
-*EDIT mode: Button groups for each day with immediate save*
-
-### Chef Views
-![Chef Dashboard](screenshots/chef/chef-dashboard.png)
-*Chef view showing upcoming cooking assignments*
-
-![Chef Menu Card](screenshots/chef/chef-menu-card.png)
-*Menu card with team info and allergen tracking*
-
-### Admin Views
-![Admin Planning](screenshots/admin/admin-planning-loaded.png)
-*Season planning with cooking days and holiday configuration*
-
-![Season Selector](screenshots/admin/season-selector-dropdown-status-indicators.png)
-*Season selector with status indicators: 🟢 Active | 🌱 Future | ⚪ Past*
-
-![Admin Teams](screenshots/admin/admin-teams-edit.png)
-*Team management with master-detail interface*
-
-![Admin Households](screenshots/admin/admin-households-list.png)
-*Household list with inhabitants — inline edit-panel expands per row for move/delete*
-
-![Household Settings](screenshots/household/household-settings.png)
-*Husstandens indstillinger — set/clear move-out date via pencil-gate*
+The guides show the app with screenshots, in Danish: [user guide](../user-guide.md) for members,
+[chef guide](../chef-guide.md) for the chef and the cooking team, [admin guide](../admin-guide.md) for admins.
 
 ---
 
@@ -259,8 +227,8 @@ Legend: ⚡ Power mode | ✏️ Edit | 🍽️ Dine in | 🕐 Late | 🛍️ Tak
 - **ADR-010:** Domain-driven serialization (repository layer)
 - **ADR-015:** Idempotent automated jobs with rolling window
 
-> **For developers:** See [Architecture Decision Records](adr.md) for detailed patterns.
+> **For developers:** See [Architecture Decision Records](../adr.md) for detailed patterns.
 
 ---
 
-*Last Updated: April 2026*
+*Last Updated: October 2026*

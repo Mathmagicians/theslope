@@ -113,7 +113,7 @@ describe('WCAG 2.1 §1.4.1: the design system keeps its meanings apart under col
         if (file !== null) {
             it('publishes the stylesheet its badge claims', () => {
                 // A registry entry with no generated file claims a mapping nobody measured
-                expect(published, `${file} is missing - run npx jiti scripts/palettes/generate.ts`).toBe(true)
+                expect(published, `${file} is missing - run make palettes`).toBe(true)
             })
         }
 

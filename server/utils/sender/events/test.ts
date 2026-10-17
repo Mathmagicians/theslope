@@ -3,9 +3,10 @@
  * to the recipient the caller names otherwise (a member testing their own notifications).
  * Called by its HTTP twins (POST /api/admin/sender/event/test, POST /api/user/notifications/test).
  */
-import {emit} from '~~/server/utils/sender/emit'
+import {channelOff, emit, notSent} from '~~/server/utils/sender/emit'
 import {composeEmail, missingAddress} from '~~/server/utils/sender/compose'
 import type {EmailMessage, NotificationConfig, SenderEmitResult} from '~/composables/useNotificationValidation'
+import type {EmailChannel} from '~~/server/utils/sender/config'
 
 const KIND = 'TEST'
 const LOG = `📮 > SENDER > [EVENT ${KIND}]`
@@ -13,14 +14,12 @@ const LOG = `📮 > SENDER > [EVENT ${KIND}]`
 export const buildTestEmail = (config: NotificationConfig, to: string = config.adminEmail, now?: Date): EmailMessage =>
     composeEmail(config, {kind: KIND, to, now})
 
-export const emitTestEmail = (
-    queue: Queue | undefined,
-    config: NotificationConfig,
-    to: string = config.adminEmail
-): Promise<SenderEmitResult> => {
-    if (!to) {
-        console.warn(`${LOG} ${missingAddress(config, 'adminEmail')} not set — mail not sent`)
-        return Promise.resolve({queued: false, dedupeKey: `${KIND}:EMAIL:unconfigured`, degraded: true})
+export const emitTestEmail = (channel: EmailChannel, to?: string): Promise<SenderEmitResult> => {
+    if (!channel.on) return channelOff(KIND, channel.missing)
+    const recipient = to ?? channel.config.adminEmail
+    if (!recipient) {
+        console.warn(`${LOG} ${missingAddress(channel.config, 'adminEmail')} not set — mail not sent`)
+        return notSent(KIND, 'unconfigured')
     }
-    return emit(queue, buildTestEmail(config, to))
+    return emit(channel.queue, buildTestEmail(channel.config, recipient))
 }

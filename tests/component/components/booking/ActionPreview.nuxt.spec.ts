@@ -2,11 +2,14 @@ import {describe, it, expect} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
 import ActionPreview from '~/components/booking/ActionPreview.vue'
 import type {ActionPreviewItem} from '~/composables/useBookingUi'
+import {useBookingValidation} from '~/composables/useBookingValidation'
+
+const Action = useBookingValidation().BookingActionSchema.enum
 
 describe('ActionPreview', () => {
     const createItem = (overrides: Partial<ActionPreviewItem> = {}): ActionPreviewItem => ({
         name: 'Anna',
-        action: 'create',
+        action: Action.BOOK,
         icon: 'i-heroicons-plus-circle',
         color: 'primary',
         text: 'Anna tilmeldes',
@@ -47,7 +50,7 @@ describe('ActionPreview', () => {
         it('renders all items as list', async () => {
             const items = [
                 createItem({text: 'Anna tilmeldes'}),
-                createItem({text: 'Peter frameldes', action: 'delete', color: 'error'})
+                createItem({text: 'Peter frameldes', action: Action.CANCEL, color: 'error'})
             ]
             const wrapper = await mountSuspended(ActionPreview, {
                 props: {items}
@@ -62,10 +65,11 @@ describe('ActionPreview', () => {
 
     describe('colors', () => {
         it.each([
-            {color: 'primary' as const, action: 'create' as const},
-            {color: 'error' as const, action: 'delete' as const},
-            {color: 'info' as const, action: 'claim' as const},
-            {color: 'neutral' as const, action: 'updateMode' as const}
+            {color: 'primary' as const, action: Action.BOOK},
+            {color: 'error' as const, action: Action.CANCEL},
+            {color: 'info' as const, action: Action.BUY},
+            {color: 'info' as const, action: Action.QUEUE},
+            {color: 'neutral' as const, action: Action.CHANGE_MODE}
         ])('renders $action with $color badge', async ({color, action}) => {
             const item = createItem({action, color, text: `Test ${action}`})
             const wrapper = await mountSuspended(ActionPreview, {

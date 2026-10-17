@@ -1,7 +1,15 @@
 import {z} from 'zod'
-import {TicketTypeSchema, DinnerModeSchema, OrderStateSchema} from '~~/prisma/generated/zod'
+import {TicketTypeSchema, DinnerModeSchema, OrderStateSchema, LedgerEntryTypeSchema} from '~~/prisma/generated/zod'
 import {parse as parseDate} from 'date-fns'
+import {
+    ExpenseFragmentSchema,
+    SerializedExpenseFragmentSchema,
+    PayerSnapshotSchema,
+    serializeExpense,
+    deserializeExpense
+} from '~/composables/fragments/domainFragments'
 import {useBookingValidation} from '~/composables/useBookingValidation'
+import {sumAmounts} from '~/utils/ledger'
 import type {DinnerEventInfo} from '~/composables/useBookingValidation'
 import {useTicket} from '~/composables/useTicket'
 import type {TicketPrice} from '~/composables/useTicketPriceValidation'
@@ -28,16 +36,14 @@ export const useBillingValidation = () => {
     const DinnerMode = DinnerModeSchema.enum
     const OrderState = OrderStateSchema.enum
     const {convertPriceToDecimalFormat} = useTicket()
+    const {CreateOrdersResultSchema, TicketCountsSchema} = useBookingValidation()
 
     // ============================================================================
     // BillingPeriodSummary Schemas (ADR-009: Display vs Detail)
     // ============================================================================
 
-    /**
-     * Ticket counts by type - raw data from repository
-     * Keys are TicketType enum values
-     */
-    const TicketCountsByTypeSchema = z.record(TicketTypeSchema, z.number().int())
+    // Ticket counts by type from the repository; a type without tickets is absent
+    const TicketCountsByTypeSchema = TicketCountsSchema.partial()
 
     /**
      * BillingPeriodSummary Display - for index endpoints (lightweight)
@@ -121,7 +127,6 @@ export const useBillingValidation = () => {
         csvContent: z.string().min(1, 'CSV content is required')
     })
 
-    const {CreateOrdersResultSchema} = useBookingValidation()
 
     const BillingImportResponseSchema = z.object({
         results: z.array(CreateOrdersResultSchema),
@@ -300,6 +305,29 @@ export const useBillingValidation = () => {
     // ============================================================================
     // Household Billing Schemas (ADR-009)
     // ============================================================================
+
+    // Expense - the ledger twin of Transaction: a cost paid from the kitchen's money (ADR-009: one shape, no Display/Detail split)
+    const LedgerEntryType = LedgerEntryTypeSchema.enum
+    const ExpenseSchema = ExpenseFragmentSchema
+    const SerializedExpenseSchema = SerializedExpenseFragmentSchema
+
+    // API body of a grocery line in gross øre with its note; the caller is the payer, the route writes the ledger type
+    // and, when the body carries no note, the words of useBilling's expenseNoteWords. Strict: a stray key is a 400
+    const ExpenseCreateSchema = z.object({
+        amount: z.number().int().positive('Beløbet skal være større end nul'),
+        description: z.string().optional()
+    }).strict()
+
+    // The entry form: a kr amount in the unit the receipt states and the note; the component turns the amount into gross øre
+    const VatModeSchema = z.enum(['inkl', 'ex'])
+    const ExpenseLineFormSchema = z.object({
+        amountKr: z.coerce.number().positive('Beløbet skal være større end nul'),
+        vatMode: VatModeSchema,
+        note: z.string().optional()
+    })
+
+    // Repository input: the row without its database-assigned fields
+    const ExpenseCreateDataSchema = ExpenseSchema.omit({id: true, createdAt: true, updatedAt: true})
 
     /**
      * Transaction create data - batch input for createTransactionsBatch (repository)
@@ -669,7 +697,7 @@ export const useBillingValidation = () => {
         ticketPrices: TicketPrice[]
     ): z.infer<typeof BillingPeriodSummaryDisplaySchema> => {
         const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(raw.invoices, ticketPrices)
-        const invoiceSum = raw.invoices.reduce((sum, inv) => sum + inv.amount, 0)
+        const invoiceSum = sumAmounts(raw.invoices)
         return BillingPeriodSummaryDisplaySchema.parse({...raw, invoiceSum, dinnerCount, ticketCountsByType})
     }
 
@@ -684,7 +712,7 @@ export const useBillingValidation = () => {
     ): z.infer<typeof BillingPeriodSummaryDetailSchema> | null => {
         if (!raw) return null
         const {dinnerCount, ticketCountsByType} = computeStatsFromSnapshots(raw.invoices, ticketPrices)
-        const invoiceSum = raw.invoices.reduce((sum, inv) => sum + inv.amount, 0)
+        const invoiceSum = sumAmounts(raw.invoices)
         const invoices = raw.invoices.map(inv => deserializeInvoice(inv))
         return BillingPeriodSummaryDetailSchema.parse({...raw, invoices, invoiceSum, dinnerCount, ticketCountsByType})
     }
@@ -713,7 +741,7 @@ export const useBillingValidation = () => {
      */
     const deserializeInvoice = (raw: RawInvoice): z.infer<typeof InvoiceDisplaySchema> => {
         const {transactions, ...inv} = raw
-        const transactionSum = transactions.reduce((sum, tx) => sum + tx.amount, 0)
+        const transactionSum = sumAmounts(transactions)
 
         return InvoiceDisplaySchema.parse({
             ...inv,
@@ -786,7 +814,20 @@ export const useBillingValidation = () => {
         computeStatsFromSnapshots,
         deserializeBillingPeriodDisplay,
         deserializeBillingPeriodDetail,
-        deserializeInvoice
+        deserializeInvoice,
+
+        // Expense (ledger)
+        LedgerEntryTypeSchema,
+        LedgerEntryType,
+        ExpenseSchema,
+        SerializedExpenseSchema,
+        ExpenseCreateSchema,
+        ExpenseCreateDataSchema,
+        VatModeSchema,
+        ExpenseLineFormSchema,
+        PayerSnapshotSchema,
+        serializeExpense,
+        deserializeExpense
     }
 }
 
@@ -823,6 +864,15 @@ export type MonthlyBillingResponse = z.infer<ReturnType<typeof useBillingValidat
 export type HouseholdBillingResponse = z.infer<ReturnType<typeof useBillingValidation>['HouseholdBillingResponseSchema']>
 export type TransactionDisplay = z.infer<ReturnType<typeof useBillingValidation>['TransactionDisplaySchema']>
 export type TransactionCreateData = z.infer<ReturnType<typeof useBillingValidation>['TransactionCreateDataSchema']>
+
+// Expense types (ledger)
+export type Expense = z.infer<ReturnType<typeof useBillingValidation>['ExpenseSchema']>
+export type SerializedExpense = z.infer<ReturnType<typeof useBillingValidation>['SerializedExpenseSchema']>
+export type ExpenseCreate = z.infer<ReturnType<typeof useBillingValidation>['ExpenseCreateSchema']>
+export type ExpenseCreateData = z.infer<ReturnType<typeof useBillingValidation>['ExpenseCreateDataSchema']>
+export type VatMode = z.infer<ReturnType<typeof useBillingValidation>['VatModeSchema']>
+export type ExpenseLineForm = z.infer<ReturnType<typeof useBillingValidation>['ExpenseLineFormSchema']>
+export type PayerSnapshot = z.infer<ReturnType<typeof useBillingValidation>['PayerSnapshotSchema']>
 export type HouseholdInvoice = z.infer<ReturnType<typeof useBillingValidation>['HouseholdInvoiceSchema']>
 export type CurrentPeriodBilling = z.infer<ReturnType<typeof useBillingValidation>['CurrentPeriodBillingSchema']>
 

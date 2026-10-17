@@ -23,7 +23,8 @@ useHead({
 
 const {BACKGROUNDS} = useTheSlopeDesignSystem()
 
-const isMd: Ref<boolean> = ref(false)
+// null until measured after mount: the server cannot know the viewport, and a default that reads it waits for the measure
+const isMd: Ref<boolean | null> = ref(null)
 const checkMdBreakpoint = () => {
   if (import.meta.client) {
     isMd.value = !!document.getElementById('breakpoint-md')?.offsetParent
@@ -53,9 +54,6 @@ provide('isMd', isMd) //exposes the reactive variable to all children - it detec
     <div class="flex-grow">
       <slot/>
     </div>
-    <ClientOnly>
-      <UToaster />
-    </ClientOnly>
     <PageFooter class="flex-shrink-0"/>
     <div id="breakpoint-md" class="hidden md:block w-0 h-0"/>
   </div>

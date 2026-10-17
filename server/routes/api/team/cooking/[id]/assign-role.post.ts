@@ -12,13 +12,11 @@ import { useBooking } from '~/composables/useBooking'
 import { useCookingTeam } from '~/composables/useCookingTeam'
 import type { DinnerEventDetail, AssignRole } from '~/composables/useBookingValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
-import { z } from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 
 const { throwH3Error } = eventHandlerHelper
 
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 // ADR-001: Import schema from validation composable
 const { AssignRoleSchema, DinnerStateSchema, MenuSwapStrategySchema } = useBookingValidation()
@@ -46,7 +44,7 @@ export default defineEventHandler(async (event): Promise<DinnerEventDetail> => {
     let id!: number
     let assignData!: AssignRole
     try {
-        ({ id } = await getValidatedRouterParams(event, idSchema.parse))
+        ({ id } = await getValidatedRouterParams(event, paramSchema.parse))
         assignData = await readValidatedBody(event, AssignRoleSchema.parse)
     } catch (error) {
         return throwH3Error(PREFIX, error)

@@ -1,8 +1,9 @@
 # Feature Proposal: Duty Roster (with Audit Trail + Cross-Team Swap)
 
-**Status:** Draft
+**Status:** Signed off (schema 2026-10-07, roster UX 2026-10-05 to 08); deferred to the next release 2026-10-13; the joker slot shipped in 0.9 (`archived/feature-joker-slot.md`) | **Umbrella of the signoffs:** `this-pr/release-0.9.0.md`
 **Date:** 2026-04-29
-**Builds on:** `feature-proposal-chef-swap.md` (in flight)
+**Updated:** 2026-10-05 — refreshed for the work-roster push (`this-pr/release-0.9.0.md`): chef-swap shipped (`assign-role`, `remove-role` live; `assignment/swap` did not ship — cross-team duty swap in Phase 5 covers the swap need); instrumentation of shipped endpoints is retroactive; Joker section added; schema lands via the PR's bundled Prisma package
+**Builds on:** `archived/feature-chef-swap.md` (shipped; its unshipped Phase 4 move-out cascade is carried here under Phase 5)
 
 ## Problem
 
@@ -21,7 +22,7 @@ This proposal introduces the **duty roster**: the per-dinner allocation layer th
 
 ## Scope
 
-- New models: `DinnerDutyTemplate`, `DinnerDuty`, `DutyHistory`. New enums: `DutyState`, `DutyAuditAction`. **No new fields on `DinnerEvent`** — just a `dinnerDuties: DinnerDuty[]` back-relation declaration.
+- New models: `DinnerDutyTemplate`, `JokerSlot`, `DinnerDuty`, `DutyHistory`. New enums: `DutyAuditAction`, `DutyOrigin`. `CookingTeamAssignment` stays untouched; `DinnerEvent` gains the `dinnerDuties` back-relation only.
 - New utility: `getDutyTimeRange()` in `app/utils/season.ts`, sibling of `getDinnerTimeRange()`.
 - Audit instrumentation on every existing site that mutates `CookingTeamAssignment` or `DinnerEvent.chefId / cookingTeamId`, plus the chef-swap PR's pending endpoints when they land.
 - Read endpoints: per-dinner roster history; per-team-member assignment history.
@@ -44,137 +45,11 @@ The "roster" is a derived view: `DinnerEvent.dinnerDuties` (the duty rows for on
 | **1. Season membership** | `CookingTeamAssignment` (existing) | "Anna is on team 7, Tuesdays, 50%" | unchanged |
 | **2. Team time-slot template** | `DinnerDutyTemplate` (NEW) | "Team 7's standard slots: 3h before dinner = madlavning COOK 180min" | new |
 | **3. Concrete dinner duty** | `DinnerDuty` (NEW) | "Anna is on dinner 2026-04-15, COOK, 3h before dinner, 180min, madlavning" — links directly to `DinnerEvent` | new |
-| **Audit** | `DutyHistory` (NEW) | Per-duty timeline of human actions: 6 verbs (ASSIGNED, UNASSIGNED, SWAPPED, UPDATED, SIGNED_OFF, MISSED) | new |
+| **Audit** | `DutyHistory` (NEW) | Timeline of duty changes and roster sign-offs: `DUTY_ASSIGNED`, `DUTY_UNASSIGNED`, `DUTY_SWAPPED`, `DUTY_UPDATED`, `ROSTER_SIGNED_OFF` | new |
 
-## Schema additions
+## Schema additions ✅ signed 2026-10-07 · ✅ in the 0.9 Prisma bundle
 
-```prisma
-// Team-level template — "we always do these slots on a cooking day".
-//
-// Time encoding: relative to dinner start (chef mental model: "prep done 3h before dinner").
-// `minutesFromDinnerStart` — signed integer. -180 = 3h before dinner, 0 = dinner start, +120 = 2h after.
-// Composes with the global `defaultDinnerStartTime` (app.config.ts) at read time via getDutyTimeRange().
-// Survives global config changes; auto-tracks if dinner-start ever becomes per-dinner.
-// Sorts naturally in ascending chronological order (most-negative first → most-positive last).
-model DinnerDutyTemplate {
-  id                     Int         @id @default(autoincrement())
-  cookingTeamId          Int
-  cookingTeam            CookingTeam @relation(fields: [cookingTeamId], references: [id], onDelete: Cascade)
-  role                   Role
-  minutesFromDinnerStart Int         // signed; -180 = 3h before, +120 = 2h after dinner start. Doubles as natural sort key.
-  durationMinutes        Int         // ≥1
-  taskDescription        String      // e.g. "Madlavning", "Opvask", "Prep"
-  createdAt              DateTime    @default(now())
-  updatedAt              DateTime    @updatedAt
-
-  duties                 DinnerDuty[]
-  @@index([cookingTeamId])
-}
-
-// Concrete duty on a specific dinner. Links directly to DinnerEvent (no Roster aggregate).
-//
-// Time encoding: relative to dinner start (same convention as DinnerDutyTemplate).
-// Time + task fields nullable — duty can exist with role+person locked but slot/task TBD.
-// Display via getDutyTimeRange(dinner.date, getDefaultDinnerStartTime(), minutesFromDinnerStart, durationMinutes)
-// — composes with existing createDateInTimezone (utils/date.ts:361) + addMinutes (date-fns).
-model DinnerDuty {
-  id                     Int           @id @default(autoincrement())
-  dinnerEventId          Int
-  dinnerEvent            DinnerEvent   @relation(fields: [dinnerEventId], references: [id], onDelete: Cascade)
-  inhabitantId           Int?          // nullable — vacant duty (after release, before someone takes it)
-  inhabitant             Inhabitant?   @relation(fields: [inhabitantId], references: [id], onDelete: SetNull)
-  role                   Role
-  state                  DutyState     @default(PLANNED)
-  minutesFromDinnerStart Int?          // signed; nullable: slot TBD
-  durationMinutes        Int?          // ≥1; nullable: slot TBD
-  taskDescription        String?
-  sourceTemplateId       Int?          // FK to DinnerDutyTemplate (null if ad-hoc / template deleted)
-  sourceTemplate         DinnerDutyTemplate? @relation(fields: [sourceTemplateId], references: [id], onDelete: SetNull)
-  createdAt              DateTime      @default(now())
-  updatedAt              DateTime      @updatedAt
-
-  history                DutyHistory[]
-  @@index([dinnerEventId])
-  @@index([inhabitantId])
-  @@index([state])
-}
-
-// Duty lifecycle — state cache. Every transition is audited (human or system).
-//
-// PLANNED   → default; in-flight (covers both "member committed" and "vacant slot awaiting fill")
-// COMPLETED → post-event terminal. Cascade when DinnerEvent.state → CONSUMED, for rows with inhabitantId set.
-//             Audited as COMPLETED (system, performedByUserId null).
-// MISSED    → human-only flag (no-show). Audited as MISSED (user).
-// CANCELLED → post-event terminal. Cascade when DinnerEvent.state → CANCELLED.
-//             Audited as CANCELLED (system, performedByUserId null).
-//
-// Pre-sign-off "slot TBD" is captured by `minutesFromDinnerStart == null` (data condition, not state).
-enum DutyState {
-  PLANNED
-  COMPLETED
-  MISSED
-  CANCELLED
-}
-
-// DinnerEvent — NO new columns. Just a back-relation declaration so we can do `dinner.dinnerDuties`.
-model DinnerEvent {
-  // ...all existing fields unchanged (date, menu, state, chefId, cookingTeamId, heynaboEventId, ...)
-  dinnerDuties  DinnerDuty[]   // back-relation only
-}
-
-// Audit table — per-duty timeline. Mirrors OrderHistory shape: weak FK to the audited row
-// + denormalized scope keys for queries after the parent is deleted.
-// `performedByUserId` is nullable: null = SYSTEM cascade; set = USER action (chef, member, admin).
-model DutyHistory {
-  id                Int             @id @default(autoincrement())
-
-  dinnerDutyId      Int?            // weak FK; SET NULL preserves history if duty deleted
-  dinnerDuty        DinnerDuty?     @relation(fields: [dinnerDutyId], references: [id], onDelete: SetNull)
-
-  action            DutyAuditAction
-  performedByUserId Int?            // null = system; set = user
-  performedByUser   User?           @relation(fields: [performedByUserId], references: [id], onDelete: SetNull)
-  auditData         String          // JSON snapshot — see DutyAuditDataSchema
-  timestamp         DateTime        @default(now())
-
-  // Denormalized — survive parent deletion (mirrors OrderHistory pattern)
-  inhabitantId      Int?
-  dinnerEventId     Int?
-  seasonId          Int?
-
-  // Pair-swap correlation: two rows written together share swapGroupId
-  swapGroupId       String?
-
-  @@index([dinnerDutyId])
-  @@index([inhabitantId])
-  @@index([dinnerEventId])
-  @@index([seasonId])
-  @@index([timestamp])
-  @@index([dinnerEventId, action])  // chef-view "events on dinner D"
-  @@index([swapGroupId])
-}
-
-// 8 verbs. Actor in performedByUserId (null = system, set = user).
-// Nuance ("was the slot vacant before vs taken from another user") lives in auditData.before,
-// not in the action name.
-enum DutyAuditAction {
-  // Human actions (performedByUserId set)
-  ASSIGNED        // someone assigned to a duty (volunteer / claim / takeover / chef-assign)
-  UNASSIGNED      // someone unassigned (release / chef clear / move-out cascade)
-  SWAPPED         // pair-swap (with swapGroupId)
-  UPDATED         // chef edited time / task / role
-  SIGNED_OFF      // chef confirmed this duty (chef hits "sign off roster" → N rows, one per duty)
-  MISSED          // someone flagged this duty as no-show after the dinner
-
-  // System cascades (performedByUserId null)
-  COMPLETED       // DinnerEvent → CONSUMED → DutyState PLANNED → COMPLETED (filled duties only)
-  CANCELLED       // DinnerEvent → CANCELLED → DutyState PLANNED → CANCELLED (every duty in the dinner)
-}
-
-// Actor invariant (Zod refine on DutyHistoryCreateSchema):
-//   COMPLETED, CANCELLED → performedByUserId MUST be null (system-only cascades)
-//   All other actions    → performedByUserId MUST be set (human actions)
-```
+`DinnerDutyTemplate`, `DinnerDuty` (+ `jokerSlotId`), `DutyHistory`, `JokerSlot`, `DutyState`, `DutyAuditAction` and `DutyOrigin` are in `prisma/schema.prisma` since migration `0017_roster` (2026-10-08); the model set and its cascade rules are the schema file.
 
 ## Default templates (`app.config.ts`) + team-creation bootstrap
 
@@ -242,12 +117,12 @@ Pure composition of existing primitives. Timezone correctness inherited from `cr
 
 | Relationship | Behavior | Reason |
 |---|---|---|
-| `DutyHistory → DinnerDuty` | SET NULL | Preserve history after duty delete (denorm `dinnerEventId / inhabitantId / seasonId` cover queries) |
-| `DutyHistory → User` (`performedByUser`) | NoAction (or restrict deletion) | Audit row's actor is non-nullable; deleting the user is an admin operation that should detach via separate flow |
-| `DinnerDuty → DinnerEvent` | CASCADE | Duties die with their dinner; history survives via denorm |
-| `DinnerDuty → Inhabitant` | SET NULL | A duty can be vacant; inhabitant deletion shouldn't kill the duty |
-| `DinnerDuty → DinnerDutyTemplate` | SET NULL | Template can be edited/deleted without orphaning concrete duties |
+| `DutyHistory → DinnerDuty` | SET NULL | History outlives the duty; the denormalized `dinnerEventId / inhabitantId / seasonId` carry the queries |
+| `DutyHistory → User` (`performedByUser`) | SET NULL | The actor is nullable (system rows); a deleted user's rows render as "System", as `OrderHistory` does |
+| `DinnerDuty → DinnerEvent` | CASCADE | Duties die with their dinner; history survives via the denormalized keys |
+| `DinnerDuty → Inhabitant` | SET NULL | The duty becomes vacant |
 | `DinnerDutyTemplate → CookingTeam` | CASCADE | Templates die with their team |
+| `JokerSlot → CookingTeam` | CASCADE | Joker slots die with their team |
 
 ## Object counts — example scenario
 
@@ -268,35 +143,30 @@ Why member-centric scaffold (not slot-centric):
 1. **Matches user wording** — "each member should know they are assigned a duty on a given day." Members are assigned (rows exist with `inhabitantId`); specifics are TBD.
 2. **No K-vs-M mismatch.** A team with 4 templates and 2 members produces 20 rows (member-driven), not 40 (template-driven). Reflects reality: chef merges/assigns templates to whoever's available.
 3. **Lighter DB footprint** — ~57% reduction at scale.
-4. **Cleaner audit** — `ASSIGNED` / `UNASSIGNED` mutate a row's `inhabitantId`, not "create a row that maps a vacant slot to a person."
+4. **Cleaner audit** — `DUTY_ASSIGNED` / `DUTY_UNASSIGNED` mutate a row's `inhabitantId`, not "create a row that maps a vacant slot to a person."
 
 Chef-edit lifecycle on a single dinner:
 
 | Step | DinnerDuty rows for this dinner | DutyHistory rows |
 |---|---|---|
-| 1. Season activation scaffolds | Anna PLANNED slot=null, Per PLANNED slot=null | (none — initial state isn't a change) |
-| 2. Chef pairs Anna→madlavning, Per→opvask, signs off | Anna PLANNED slot pinned (`sourceTemplateId` set), Per PLANNED slot pinned | UPDATED ×2 (chef pinned slots), SIGNED_OFF ×2 (chef confirmed each duty) |
-| 3. Per gets sick, calls release | Anna PLANNED, **Per PLANNED with `inhabitantId=null`** | UNASSIGNED (Per released his slot) |
-| 4. Nobody takes Per's slot, dinner happens with 1 cook | unchanged | (none) |
-| 5. Dinner consumed | Anna → COMPLETED (cascade); Per's row stays PLANNED until human flags | COMPLETED (system, null) — for Anna's filled duty |
-| 6. Bob retroactively flags Per's slot | Per → MISSED | MISSED (chef) |
+| 1. Roster created from the template | one duty per template duty, role/time/task copied; Anna and Per assigned (origin TEAM) | (none — the initial state is not a change) |
+| 2. Every duty filled | unchanged | `ROSTER_SIGNED_OFF` (system) |
+| 3. Per gets sick, releases | Per's duty vacant (`inhabitantId` null) | `DUTY_UNASSIGNED` (Per); the roster reads unsigned again |
+| 4. Bo shows up and takes it | Bo on Per's duty, origin VOLUNTEER | `DUTY_ASSIGNED` (Bo), then `ROSTER_SIGNED_OFF` (system) |
+| 5. Dinner consumed | unchanged — completed is derived from the dinner's state | (none) |
 
 ## Mutation instrumentation map
 
-This audit is **per-duty timeline only**. Out of scope: team-membership events, team-to-dinner-binding events.
+This audit covers duty changes and roster sign-offs. Out of scope: team-membership events, team-to-dinner-binding events.
 
 | Endpoint / code path | Audit action — `performedByUserId` |
 |---|---|
-| `POST /api/team/cooking/[id]/assign-role` (chef-swap Phase 1, shipped) | `ASSIGNED` (caller) — covers volunteer / claim / takeover / chef-assign |
-| `POST /api/team/cooking/[id]/remove-role` (chef-swap Phase 3, pending) | `UNASSIGNED` (caller) |
-| `POST /api/team/cooking/assignment/swap` (chef-swap Phase 3, pending) | TWO `SWAPPED` rows sharing `swapGroupId` (caller) |
-| `POST /api/team/cooking/duty/swap` (this proposal, Phase 5) | TWO `SWAPPED` rows sharing `swapGroupId` (caller) |
-| Move-out cascade (chef-swap Phase 4 / extends here) | `UNASSIGNED` per affected duty (`performedByUserId` = the admin who triggered the move-out) |
-| Chef sign-off (this proposal, Phase 4) | `SIGNED_OFF` × N duties (one per duty in the dinner; chef hits "sign off roster" → backend writes N rows) |
-| Chef marks no-show (this proposal, Phase 4) | `MISSED` (chef or member) |
-| Chef edits a duty (this proposal, Phase 4) | `UPDATED` (chef) |
-| Daily maintenance / `consumeDinners` cascade | `COMPLETED` (system, null) — one per duty with `inhabitantId` set when DinnerEvent → CONSUMED |
-| Dinner cancellation cascade | `CANCELLED` (system, null) — one per duty in the dinner when DinnerEvent → CANCELLED |
+| `POST /api/team/cooking/[id]/assign-role` (shipped) | `DUTY_ASSIGNED` (caller) — covers volunteer / claim / takeover / chef-assign |
+| `POST /api/team/cooking/[id]/remove-role` (shipped) | `DUTY_UNASSIGNED` (caller) |
+| `POST /api/team/cooking/duty/swap` (this proposal, Phase 5) | TWO `DUTY_SWAPPED` rows sharing `swapGroupId` (caller) |
+| Move-out cascade (chef-swap Phase 4 / extends here) | `DUTY_UNASSIGNED` per affected duty (`performedByUserId` = the admin who triggered the move-out) |
+| Roster sign-off (Phase 4) | one `ROSTER_SIGNED_OFF` row per sign-off, `dinnerDutyId` null, `dinnerEventId` set — actor null when every duty is filled (auto), the chef on "Godkend alligevel" |
+| Chef edits a duty (Phase 4) | `DUTY_UPDATED` (chef) |
 
 Pattern in code (mirrors `financesRepository.createOrders` paired-`createMany` pattern; D1 has no transactions):
 
@@ -309,7 +179,7 @@ const writeDutyHistory = (d1Client: D1Database, entries: DutyHistoryCreate[]) =>
 await Promise.all([
     saveDuty(...),
     writeDutyHistory(d1Client, [{
-        action: DutyAuditAction.ASSIGNED,
+        action: DutyAuditAction.DUTY_ASSIGNED,
         performedByUserId: caller.id,
         dinnerDutyId: duty.id,
         inhabitantId: caller.inhabitant.id,
@@ -319,18 +189,15 @@ await Promise.all([
     }])
 ])
 
-// Sign-off endpoint: chef hits "sign off roster" — backend writes one row per duty
-await writeDutyHistory(d1Client,
-    duties.map(duty => ({
-        action: DutyAuditAction.SIGNED_OFF,
-        performedByUserId: chef.id,
-        dinnerDutyId: duty.id,
-        inhabitantId: duty.inhabitantId,
-        dinnerEventId: duty.dinnerEventId,
-        seasonId: dinner.seasonId,
-        auditData: createDutyAuditData({ snapshot: snapshotDuty(duty) })
-    }))
-)
+// Roster sign-off: one row for the dinner; performedByUserId null on auto-sign, the chef on "Godkend alligevel"
+await writeDutyHistory(d1Client, [{
+    action: DutyAuditAction.ROSTER_SIGNED_OFF,
+    performedByUserId: actorId,
+    dinnerDutyId: null,
+    dinnerEventId: dinner.id,
+    seasonId: dinner.seasonId,
+    auditData: createDutyAuditData({ snapshot: snapshotRoster(duties) })
+}])
 ```
 
 ## auditData JSON shape
@@ -339,7 +206,7 @@ await writeDutyHistory(d1Client,
 DutyAuditDataSchema = z.object({
   before:   DutyEntitySnapshotSchema.optional(),  // null on create / sign-off
   after:    DutyEntitySnapshotSchema.optional(),  // null on delete
-  snapshot: DutyEntitySnapshotSchema.optional(),  // single snapshot (used by SIGNED_OFF)
+  snapshot: DutyEntitySnapshotSchema.optional(),  // the roster snapshot on ROSTER_SIGNED_OFF
   partner:  z.object({ inhabitantId: IdSchema, dinnerEventId: IdSchema.optional() }).optional()  // swap correlation
 })
 
@@ -349,9 +216,9 @@ DutyEntitySnapshotSchema = z.object({
   role:                   TeamRoleSchema,
   dinnerEventId:          IdSchema,
   dinnerDate:             z.coerce.date(),
-  minutesFromDinnerStart: z.number().int().nullable().optional(),
-  durationMinutes:        z.number().int().min(1).nullable().optional(),
-  taskDescription:        z.string().nullable().optional()
+  minutesFromDinnerStart: z.number().int(),
+  durationMinutes:        z.number().int().min(1),
+  taskDescription:        z.string()
 })
 ```
 
@@ -361,7 +228,7 @@ DutyEntitySnapshotSchema = z.object({
 |---|---|---|
 | **`DinnerCard` / `ChefMenuCard`** — expandable section per dinner | Timeline of all events for dinner D + relevant team-level events for D's `cookingTeamId` since season start. Mirror of `OrderHistoryDisplay.vue` UTimeline. | `GET /api/dinner-event/[id]/duty-history` (NEW) |
 | **`CookingTeamCard`** — expandable per team member | Timeline of that member's assignment history. | `GET /api/team/cooking/[id]/member/[inhabitantId]/history` (NEW) |
-| **`MyDuties` view** — per-inhabitant ("my upcoming + past duties") | List of `DinnerDuty` rows; expand each row to see its history. | Extends existing `GET /api/team/my` |
+| **Member planning face** — my duties on `/chef` ✅ signed 2026-10-06 | The existing calendar/agenda carries it: my duty days marked on the calendar (+ the signed gap markers), the agenda row gains the duty line, vacancy rows render inline with [Tag tjansen]; day select opens the CTC dinner face where the Rediger holdplan pane lives. No new component. | Extends existing `GET /api/team/my` |
 
 Reuse `OrderHistoryDisplay.vue`'s pattern — extract a generic `AuditTimeline.vue` (props: `entries: AuditEntryDisplay[]`, `actionConfig: Record<Action, {icon, color, labelDa}>`) so both order history and roster history render via the same component.
 
@@ -370,9 +237,9 @@ Reuse `OrderHistoryDisplay.vue`'s pattern — extract a generic `AuditTimeline.v
 ```ts
 // app/composables/useDutyValidation.ts (NEW)
 export const useDutyValidation = () => {
-  const DutyAuditActionSchema = z.nativeEnum(DutyAuditAction)
-  const DutyStateSchema       = z.nativeEnum(DutyState)
+  // DutyAuditActionSchema, DutyOriginSchema: imported from ~~/prisma/generated/zod and re-exported (ADR-001)
   const DinnerDutyTemplateSchema = z.object({...})
+  const JokerSlotSchema          = z.object({...})
   const DinnerDutySchema         = z.object({...})
   const DinnerDutyCreateSchema   = DinnerDutySchema.omit({id: true, createdAt: true, updatedAt: true})
   const DinnerDutyUpdateSchema   = DinnerDutySchema.partial().extend({id: IdSchema})
@@ -385,10 +252,10 @@ export const useDutyValidation = () => {
   const DutyHistoryCreateSchema  = DutyHistoryDisplaySchema
     .omit({id: true, timestamp: true, performedByUser: true})
     .refine(
-      h => [DutyAuditAction.COMPLETED, DutyAuditAction.CANCELLED].includes(h.action)
-        ? h.performedByUserId == null   // system cascades
-        : h.performedByUserId != null,  // human actions
-      'COMPLETED / CANCELLED MUST have null performedByUserId (system); all others MUST have it set (user)'
+      h => h.action === DutyAuditAction.ROSTER_SIGNED_OFF
+        ? h.dinnerDutyId == null                                   // roster-level; actor null (auto) or the chef
+        : h.dinnerDutyId != null && h.performedByUserId != null,   // every DUTY_* row names its duty and actor
+      'ROSTER_SIGNED_OFF carries no duty; DUTY_* rows carry duty and actor'
     )
 
   const createDutyAuditData    = (data: DutyAuditData): string => JSON.stringify(data)
@@ -399,23 +266,392 @@ export const useDutyValidation = () => {
 }
 ```
 
+## Joker — time-bounded team vacancy (decisions 2026-10-05)
+
+A joker is a time-bound team assignment without a person: the team needs one more of a role on its affinity
+weekdays within a period (a member away on leave or travel). It is the `JokerSlot` table beside
+`CookingTeamAssignment` (§ Schema additions) — same shared characteristics (team, role, allocation, affinity), plus
+period and note. The roster never points at the slot: a joker vacancy is a vacant duty of the slot's role on a day the
+slot is active; a volunteer takes it one dinner at a time, and the duty records `origin = JOKER`
+(`DUTY_ASSIGNED` audit; releasing writes `DUTY_UNASSIGNED` and the duty is open again).
+
+### Vacancy is a "missing" on the dinner
+
+A dinner missing its chef or carrying a vacant duty (regular or joker) surfaces the gap on the dinner itself — the
+existing missing-chef display pattern extends to "mangler: 1 kok". Volunteer actions live on the dinner roster
+(`/chef` is where team members plan their work and see the roster).
+
+### Admin overviews
+
+The team administrator sees vacancies and load in `/admin/teams`:
+- **Team card:** the team's joker slots (CRUD) and, per member, the season's shift counts split by kind
+  (chefkok / fast tjans / joker) — volunteers see how the extra load spreads.
+- **Big overview:** all vacancies across the season, split on teams and split on people.
+
+The team card's joker slots and shift counts are part of the signed CTC season face — § Roster UX.
+
+**Joker slot CRUD** ✅ shipped in 0.9: the form, the team card's Jokertjanser list and the admin endpoints are pointers in `archived/feature-joker-slot.md`; the form restricts the weekday picker to the team's affinity and the period defaults to the season's dates. The scaffolder (Phase 3) expands a slot to one vacant duty per matching cooking day in the period.
+
+**Mockup — vacancy big overview (admin teams)** ✅ signed 2026-10-06 · rows refined ✅ 2026-10-08
+
+Mounts in the admin teams overview region (no team selected), under the all-teams calendar. Per team,
+chronological; a vacant duty shows its origin — the joker slot's note, or who released a regular duty (audit).
+No person linkage beyond that: a joker slot covers no named member (no `coversInhabitantId`). Rows carry the gap
+glyph and a Spilleplan link into the day's game plan. Chef and joker gaps list for the whole season, regular open
+seats within the planner's window; teams with a missing chef sort first, then by first gap. The drawing is part of
+the admin teams face mockup in § Roster UX.
+
+**Calendar day-cell language** ✅ signed 2026-10-06 (marker vocabulary) · ✅ signed 2026-10-08 (cell rules) —
+design-system tokens, ink-coloured, one glyph per gap kind: chef hat = missing chef, joker hat = open joker seat,
+empty circle = open regular seat, a number in a circle (the Ledige billetter look) from four open seats. Glyphs
+picked from the icon set at implementation; the token names are the contract.
+
+| Calendar | Chip corner | Gap row |
+|---|---|---|
+| Admin teams overview (aggregated per day over the teams) and team detail | the worst of the menu, groceries and Holdplan alarms | chef hat and joker hat all season; open regular seats within the planner's window, circles up to three, a number from four |
+| `/chef` | the chef's worst-of with Holdplan joined | the member's own teams' open seats within the window |
+
+The planner's window is the menu deadline's reach (`menuIsAnnouncedDaysBefore`, 10 days), so a missed menu deadline
+shows black from day 10 to the dinner. Klar or Godkendt takes Holdplan out of the worst-of. Chip and gap row carry an
+aria-label with counts and kinds.
+
+```
+Day cell, admin teams calendars
+ beyond 10 days                            within 10 days
+ chef missing   joker open   full          3 open, on track   8 open, yellow   chef + 1 open, red   menu missed, black
+   +----+        +----+       +----+         +----+             +----+ y         +----+ r             +----+ k
+   | 14 |        | 14 |       | 14 |         | 14 |             | 14 |           | 14 |               | 14 |
+   +----+        +----+       +----+         +----+             +----+           +----+               +----+
+   (hat)         (joker)                     o o o               (8)            (hat) o
+ y = yellow chip (24-72 h), r = red (<24 h), k = black (past)
+
+Legend rows (ALERTS.legend), admin calendars
+  (hat)   Chefkok mangler           (joker) Joker mangler
+  o       Ledig plads (10 dage)     (n)     Ledige pladser (10 dage)
+  y chip  Deadline snart (24-72t)   r chip  Deadline kritisk (<24t)   k chip  Deadline overskredet
+```
+
+The dinner-roster rendering of jokers lives in § Roster UX (the CookingTeamCard dinner face).
+
+### Volunteering moves from membership to duty
+
+Today `assign-role` writes a `CookingTeamAssignment` — the designed way to live without a roster layer. With the
+roster, a one-dinner volunteer claims the dinner's duty (or takes the chef duty) and season membership stays what it
+is. The endpoint's write target changes with Phase 4, and the shipped rows get a one-time data separation before
+this feature ships: genuine season members keep their `CookingTeamAssignment`, one-off volunteers are re-expressed
+as duty history. The separation list is produced for the user to review; the user applies it.
+
+## Roster UX — CookingTeamCard drives it ✅ signed 2026-10-05 · dinner face ✅ signed 2026-10-08
+
+A template duty is one row of the team's standard roster: three cooks 15–18 are three identical template duties.
+A dinner's roster has one roster duty per template duty, with role, time and task copied at creation; a vacancy is a
+roster duty without a person. Capacity is edited by adding/removing template duties; counts in the UI are derived by
+grouping identical (time, task, role) duties. A one-off deviation ("Emil kommer 15-16 i dag") is a Meld fra plus an
+Ekstra vagt with the new time.
+
+**One pane, three modes.** The dinner face has one edit affordance: the card-header pencil for a member,
+[Opdater holdplan] for the chef. It opens the Rediger holdplan pane with the modes Meld til, Meld fra and Byt. The
+"Denne middag" pane lists this dinner's seats; the "Anden middag" pane renders in Byt only. A member is preselected
+as Hvem; the chef's Hvem is a picker (the chef override). Meld til is always available: a vacant seat, the vacant
+Chefkok seat (commits through the shipped chef claim, so the hero poster and the seat are two doors to one action)
+or an Ekstra vagt (Kok or Kokkespire; creates the seat, row badge `ekstra`). Meld fra lists the viewer's seats, every
+seat for the chef. Byt takes a filled seat on this dinner; a seat of the viewer's on another dinner is optional (the
+half swap), and repayment is agreed between the two.
+
+**Sign-off is derived from the seats and Historik.**
+
+| State | Rule | Band |
+|---|---|---|
+| Klar | no vacant seat; the system writes `ROSTER_SIGNED_OFF` when the last seat fills | `ALERTS.success` |
+| Godkendt | the chef's `ROSTER_SIGNED_OFF` row is newer than the last row that opened a seat | `ALERTS.success`, "mangler stadig" + [Meld til] |
+| Åben | otherwise; a seat that goes vacant after either sign-off reopens the plan and the old row stays in Historik | `ALERTS.neutral` while the step is green; `ALERTS.warning` + [Meld til] from yellow on |
+
+**Holdplan is a chef step** in the workflow line after Madbestilling klar, with a user-action deadline (green /
+yellow / red / "mangler" from the cooking thresholds). The deadline is 24 hours before the dinner start:
+`rosterIsSignedOffHoursBefore: 24` in `app.config.ts` beside `menuIsAnnouncedDaysBefore`, read into `SeasonDeadlines`
+as the roster deadline getter. The band's voice follows the step's alarm level; the band's second line "Din tjans: …"
+renders for a viewer with a seat on the dinner. The gap line lists the vacancies by kind in the calendar-marker
+vocabulary, chef hat for the Chefkok seat, joker hat for a joker seat, dot for a regular seat, each with its task, in
+that order. [Godkend holdplan] renders for the chef while the plan is open.
+
+**Wanted avatars.** A vacant seat renders the hero poster's question-mark avatar, small, with the hat of its seat
+kind (chef hat, joker hat, none for a regular seat); clicking it opens the pane in Meld til with the seat picked.
+The seat-kind icons carry through into the pane's seat lists. The poster's classes become a design-system token
+shared by the hero and the roster card.
+
+**Role and marker glyphs** ✅ signed 2026-10-08, one set (Hugeicons): Chefkok `i-hugeicons-chef-hat`, Kok `i-hugeicons-whisk` (a tool, not a rank), Kokkespire `i-hugeicons-plant-01`, Joker `i-hugeicons-joker`, Frivillig `i-hugeicons-hand-heart`; Middag `i-hugeicons-dish-02`. In the drawings `(hat)` is the chef hat, `(pot)` the whisk, `(sprout)` the plant, `(joker hat)` the joker, `(heart)` the hand with a heart. The calendar-marker vocabulary and the wanted avatars render these glyphs.
+
+**Role glyphs** ✅ signed 2026-10-08: the chef hat (`ICONS.chef`), the whisk (`i-hugeicons-whisk`, a tool, not a rank) for Kok, the sprout for Kokkespire; every `(pot)` in the drawings reads as the whisk.
+
+**The hero poster carries the seats** ✅ signed 2026-10-08. The chef stays the headliner, rendered whenever the chef
+is missing as today. One small wanted avatar per vacant seat (joker hat or plain) sits in the poster with an
+aria-label and a tooltip (kind, task, time); clicking one scrolls to the roster card and opens the pane in Meld til
+with that seat picked. The small avatars render while the plan is Åben and the Holdplan step is yellow or later;
+Godkendt removes them.
+
+```
+Hero, chef missing, three seats open
+|  +-- dashed amber, mocha -----------------------------+                      |
+|  |  ( (?) )   WANTED                                  |                      |
+|  |    hat     Chefkok          (?)joker  (?)  (?)     |                      |
+|  +----------------------------------------------------+                      |
+
+Hero, chef present, two seats open
+|  ( (av) )  Bo Jensen        +-- dashed amber, mocha ---+                     |
+|    hat     Chefkok          |  WANTED   (?)joker  (?)  |                     |
+|                             +--------------------------+                     |
+
+Phone (375 px), chef present
+|  ( (av) )  Bo Jensen                   |
+|    hat     Chefkok                     |
+|  +-- dashed amber, mocha ------------+ |
+|  |  WANTED   (?)joker  (?)           | |
+|  +-----------------------------------+ |
+```
+
+| Role | Powers |
+|---|---|
+| Team member | Meld til (vacant seat, Chefkok seat, Ekstra vagt), Meld fra (own seats), Byt (take a seat here, optional return seat) |
+| Chef | the same pane through [Opdater holdplan] with the Hvem picker and every seat in Meld fra; [Godkend holdplan]; release extra portions (`archived/feature-waitlist.md`) |
+| Admin | membership moves; game-plan drill-down is view-only |
+| System | auto-sign, reopening on a vacancy, the Holdplan step's countdown |
+
+**Mockup — CTC dinner face** (`/chef`, `/dinner`) ✅ signed 2026-10-08
+
+```
+Chef workflow line (DinnerStatusStepper)
+ Planlagt    Publiceret   Framelding   Madbestilling klar   Holdplan     Afholdt
+ (calendar)  (megaphone)  (ticket)     (cart)               (team)       (check)
+             [om 2d]      [åben 5d]    [om 9d]              [om 8d]
+                                                            green / yellow / red / "mangler"
+
+Card header
+chef    | [v] [(team) Hold 3] [(hat) 1] [(mem) 5]   [(pencil) Opdater holdplan] [Godkend holdplan] |
+member  | [v] [(team) Hold 3] [(hat) 1] [(mem) 5]                                        [(pencil)] |
+  the chevron expands the team card
+
+Band, four voices
+Åben, step green                                                          ALERTS.neutral
+| (i) Holdplanen er åben · 2 af 5 besat                                          |
+|     Mangler: (chef hat) chefkok · (joker hat) joker til Madlavning · (dot) fast tjans til Opvask |
+|     Din tjans: Prep 08:00-11:00                                                |
+Åben, step yellow / red / mangler                            ALERTS.warning + withActions
+| (!) Vi mangler 3 · kan du hjælpe?                                   [Meld til] |
+|     (chef hat) chefkok · (joker hat) joker til Madlavning · (dot) fast tjans til Opvask |
+|     Din tjans: Prep 08:00-11:00                                                |
+Godkendt                                                     ALERTS.success + withActions
+| (check) Chefkokken har godkendt holdplanen · 4 af 5 besat           [Meld til] |
+|         Mangler stadig: (joker hat) joker til Madlavning                       |
+Klar                                                                      ALERTS.success
+| (check) Holdplanen er klar · 5 af 5 besat                                      |
+|         Din tjans: Prep 08:00-11:00                                            |
+  the chef's band carries no Meld til
+
+Desktop (md+), member Anna, step yellow, chef missing
+Hvem laver maden?
++----------------------------------------------------------------------------------+
+| [v] [(team) Hold 3] [(hat) 0] [(mem) 5]                                [(pencil)] |
++----------------------------------------------------------------------------------+
+| +------------------------------------------------------------------------------+ |
+| | (!) Vi mangler 2 · kan du hjælpe?                                 [Meld til] | |
+| |     (chef hat) chefkok · (joker hat) joker til Madlavning                    | |
+| |     Din tjans: Prep 08:00-11:00                                              | |
+| +------------------------------------------------------------------------------+ |
+|  08:00-11:00  (pot) Prep          I (av) Anna · din tjans                        |
+|  15:00-18:00  (hat) Chefkok         [(?) chef hat  Ledig]                        |
+|  15:00-18:00  (pot) Madlavning      (av) Maria [bytter]  (av) Per  [(?) joker hat  Ledig] |
+|  16:30-18:00  (sprout) Børnetjans   (av) Emil                                    |
+|  18:30-21:30  (pot) Opvask          (av) Lise                                    |
+| [v] Historik                                                                     |
++----------------------------------------------------------------------------------+
+
+Phone (375 px), same state
++-- Hvem laver maden? -------------------+
+| [v] [Hold 3] [(hat) 0] [(mem) 5] [(pencil)] |
+| +------------------------------------+ |
+| | (!) Vi mangler 2 · kan du hjælpe?  | |
+| |     (chef hat) chefkok             | |
+| |     (joker hat) joker til Madlavning | |
+| |     Din tjans: Prep 08-11          | |
+| |                        [Meld til]  | |
+| +------------------------------------+ |
+| 08-11       Prep       (av) Anna · din |
+| 15-18       Chefkok    [(?) hat Ledig] |
+| 15-18       Madlavning (av) Maria      |
+|                        (av) Per        |
+|                        [(?) joker Ledig] |
+| 16:30-18    Børnetjans (av) Emil       |
+| 18:30-21:30 Opvask     (av) Lise       |
+| [v] Historik                           |
++----------------------------------------+
+
+Pane — opens from the pencil, Opdater holdplan, the band's Meld til or a wanted avatar
+Meld til
++-- Rediger holdplan --------------------------------------------------------------+
+|  [(x) Meld til]  [( ) Meld fra]  [( ) Byt]                                       |
+|  +-- Denne middag · ti 15/04 ---------------------------------------------------+|
+|  |  (x) (hat) Chefkok 15:00-18:00 · ledig                                       ||
+|  |  ( ) (pot) Madlavning 15:00-18:00 · ledig · joker (Anna barsel)              ||
+|  |  ( ) Ekstra vagt   rolle [KOK v]   fra [15:00]  til [18:00]                  ||
+|  |  Hvem: (av) Anna (dig)                                                       || <- chef: a picker
+|  +------------------------------------------------------------------------------+|
+|                                                        [Annuller]   [Meld til]   |
++----------------------------------------------------------------------------------+
+Meld fra — the viewer's seats, every seat for the chef
+|  +-- Denne middag · ti 15/04 ---------------------------------------------------+|
+|  |  (x) (pot) Prep 08:00-11:00 · din tjans                                      ||
+|  +------------------------------------------------------------------------------+|
+|                                                        [Annuller]   [Meld fra]   |
+Byt — take a seat here, a seat of yours elsewhere is optional
+|  [( ) Meld til]  [( ) Meld fra]  [(x) Byt]                                       |
+|  +-- Denne middag · ti 15/04 ------------------+ +-- Anden middag (valgfri) ----------+|
+|  |  (x) (pot) Madlavning 15:00-18:00 · Per     | |  Middag: [ ti 22/10 · Hold 3  v ]  ||
+|  |  ( ) (pot) Madlavning 15:00-18:00 · Maria   | |  (x) (pot) Madlavning 15-18 · din  ||
+|  |  ( ) (pot) Opvask 18:30-21:30 · Lise        | |  ( ) ingen · jeg skylder Per en    ||
+|  |  ( ) (sprout) Børnetjans 16:30-18:00 · Emil | |                                    ||
+|  +---------------------------------------------+ +------------------------------------+|
+|  [x] Per og jeg har aftalt det                                                   |
+|  Resultat: Du tager Pers Madlavning ti 15/04 · Per tager din Madlavning ti 22/10 |
+|                                                        [Annuller]   [Byt]        |
+  on the phone the two Byt panes stack and the result reads as two lines
+```
+
+**Mockup — admin teams face** ✅ signed 2026-10-08 (refines the season face of 2026-10-05)
+
+The master table and the region beside it stay as `AdminTeams.vue` draws them. Members sit in one box per role, the
+heading carrying the role's glyph once (✅ 2026-10-08); shift counts sit on the member row as glyph columns (chefkok,
+fast tjans, frivillig, i alt). A fourth box, Jokere, lists the team's joker slots, one line per slot with its period,
+weekday, role, note and the count of shifts it covers in the team's calendar count badge. Standardvagter is a flip-open collapsible with a count in the
+view face; the Phase 3 editor and the joker slot form open in the edit face, where every change saves at once. Spilleplan is the team calendar's day select
+and renders the signed dinner face without its pencil and pane. Rows in Ledige tjanser carry the gap glyph and a
+Spilleplan link that opens the team with that day selected; teams with a missing chef sort first, then by first gap.
+
+```
+Overview, no team selected (md+)
++-- Madhold ------------------------------------------------------------------------------+
+| [Sæson: 2026/1 v]                                                  [(plus) Opret madhold] |
++----------------------------------+------------------------------------------------------+
+| v | Madhold          | Dage      |  ALLE HOLD · kalender (team colours; day cells per    |
+| v | [Madhold 3]...   | tir       |  the calendar day-cell language)                      |
+| v | [Madhold 4]...   | ons       |                                                      |
+| v | [Madhold 6]...   | ons       |  Ledige tjanser · sæson 2026/1                        |
+|   |                  |           |  Hold 4 · chefkok mangler                             |
+|   |                  |           |   to 16/10  (chef hat)  Chefkok 15-18          [Spilleplan] |
+|   |                  |           |  Hold 3 · 2 huller                                    |
+|   |                  |           |   ti 14/10  (joker hat) Madlavning 15-18 · Anna barsel [Spilleplan] |
+|   |                  |           |   ti 21/10  (joker hat) Madlavning 15-18 · Anna barsel [Spilleplan] |
+|   |                  |           |  Hold 6 · 1 hul                                       |
+|   |                  |           |   on 22/10  (dot)       Opvask 18:30-21:30 · afgivet af Per [Spilleplan] |
++----------------------------------+------------------------------------------------------+
+
+Team open, view face (md+)
++----------------------------------+------------------------------------------------------+
+| v | Madhold          | Dage      | +--------------------------------------------------+ |
+| > I [Madhold 3]...   | tir       | | Madhold 3  [(hat) 1] [(mem) 5]      [(pencil) Rediger] | |
+| v | [Madhold 4]...   | ons       | |                                                  | |
+|   |                  |           | | Holdmedlemmer              (hat) · (whisk) · (heart) · I alt |
+|   |                  |           | | (chef hat) Chefkok                               | |
+|   |                  |           | | |  (av) Anna  tir 100%         2 ·  8 · 0 · 10 | | |
+|   |                  |           | | (whisk) Kokke                                    | |
+|   |                  |           | | |  (av) Per   tir  50%         0 · 10 · 0 · 10 | | |
+|   |                  |           | | |  (av) Maria tir 100%         0 ·  9 · 0 ·  9 | | |
+|   |                  |           | | (plant) Kokkespirer                              | |
+|   |                  |           | | |  (av) Emil  tir              0 ·  8 · 0 ·  8 | | |
+|   |                  |           | | (joker) Jokere                                   | |
+|   |                  |           | | |  07/10-01/12 · tir · (whisk) Kok · Anna barsel [(calendar) 8] | | |
+|   |                  |           | |                                                  | |
+|   |                  |           | | [>] Standardvagter · 5 vagter                     | |
+|   |                  |           | |                                                  | |
+|   |                  |           | | Ugedage [man][tir][ons]…   Holdets kalender        | |
+|   |                  |           | |                            [calendar, day cells]   | |
+|   |                  |           | |                                                  | |
+|   |                  |           | | Spilleplan · ti 14/10                             | |
+|   |                  |           | |  | (i) Holdplanen er åben · 4 af 5 besat        | | |
+|   |                  |           | |  08:00-11:00 (pot) Prep        (av) Anna          | |
+|   |                  |           | |  15:00-18:00 (hat) Chefkok     (av) Bo            | |
+|   |                  |           | |  15:00-18:00 (pot) Madlavning  (av) Maria (av) Per [(?)joker Ledig] | |
+|   |                  |           | |  16:30-18:00 (sprout) Børnetjans (av) Emil        | |
+|   |                  |           | |  18:30-21:30 (pot) Opvask      (av) Lise          | |
+|   |                  |           | |  [>] Historik                                     | |
+|   |                  |           | +--------------------------------------------------+ |
++----------------------------------+------------------------------------------------------+
+
+Team open, edit face (md+), pencil pressed
+| | Madhold 3  [(hat) 1] [(mem) 5]                              [(arrow) Tilbage] | |
+| |                                                                               | |
+| | Holdmedlemmer (as today)         | Tilføj medlemmer (finder, as today)        | |
+| |  (av) Anna  Kok  tir 100%  [(pencil)] |  (av) Lise  LEDIG            [Tilføj] | |
+| |  ...                             |  ...                                       | |
+| |  (joker) Jokere                  | Tilføj jokere                              | |
+| |   07/10-01/12 tir Kok Anna barsel| (joker) Joker · en plads uden navn [Tilføj]| |
+| |   [slet]                         |   <- open: the button reads Luk            | |
+| |                                  |   Periode  [07/10/2026] - [01/12/2026]     | |
+| |                                  |   Ugedage  [x man] [x ons] [ ] fre         | |
+| |                                  |   Rolle [(whisk) Kok v] Arbejdstid [100% v]| |
+| |                                  |   Note     [Anna barsel     ]  Valgfri     | |
+| |                                  |                  [Annuller]  [Tilføj]      | |
+| |                                                                               | |
+| | [v] Standardvagter · 5 vagter                                                 | |
+| |   Tid                            Opgave        Rolle                           | |
+| |   08:00-11:00 (10t før middag)   Prep          Kok      [slet]                 | |
+| |   15:00-18:00 (3t før)           Madlavning    Kok      [slet]                 | |
+| |   15:00-18:00 (3t før)           Madlavning    Kok      [slet]                 | |
+| |   16:30-18:00 (1,5t før)         Børnetjans    Spire    [slet]                 | |
+| |   18:30-21:30 (0,5t efter)       Opvask        Kok      [slet]                 | |
+| |   [ + Tilføj vagt ]                              [Indlæs standardvagter]        | |
+| |                                                                               | |
+| | Ugedage [man][x tir][ons]…   Holdets kalender                                  | |
+
+Phone (375 px), team open, view face, the dock under the row
+| ^ I [Madhold 3][(hat)1][(mem)5]  | tir |
+|   +----------------------------------+ |
+|   | Madhold 3               [(pencil)] | |  <- sticky
+|   | Holdmedlemmer                    | |
+|   | (chef hat) Chefkok               | |
+|   |  (av) Anna  tir 100%             | |
+|   |       (hat)2 (whisk)8 (heart)0 · 10 | |
+|   | (whisk) Kokke                    | |
+|   |  (av) Per   tir 50%              | |
+|   |       (hat)0 (whisk)10 (heart)0 · 10 | |
+|   |  ...                             | |
+|   | (joker) Jokere                   | |
+|   |  07/10-01/12 · tir · Kok         | |
+|   |  Anna barsel · [(calendar) 8]    | |
+|   | [>] Standardvagter · 5           | |
+|   | Ugedage [man][tir][ons]…         | |
+|   | [calendar, day cells]            | |
+|   | Spilleplan · ti 14/10            | |
+|   |  | (i) Holdplanen er åben      | | |
+|   |  08-11  Prep        (av) Anna    | |
+|   |  15-18  Chefkok     (av) Bo      | |
+|   |  ...                             | |
+|   +----------------------------------+ |
+```
+
+Which face leads is decided by whether CTC receives a dinner context. Deviation markers come from the audit trail
+(`origin` SWAP → "bytter", JOKER → "joker", VOLUNTEER → "frivillig"; a vacant duty of a role with an active joker slot
+→ "Ledig (joker)"). Vacancies also
+surface as a "mangler"-marker on the day in the calendar and on the dinner (the missing-chef pattern). The Flytter
+badge is dropped from `/chef` — the vacancy itself carries the story; admin teams reads it from the joker slot's
+note. No `requiredCount` field — rows model capacity.
+
 ## ADR compliance
 
 | ADR | Compliance |
 |---|---|
-| **ADR-001** Three-layer types | New schemas in `useDutyValidation`; `DutyState` and `DutyAuditAction` enums imported from `~~/prisma/generated/zod`; re-exported for app code |
+| **ADR-001** Three-layer types | New schemas in `useDutyValidation`; `DutyAuditAction` and `DutyOrigin` enums imported from `~~/prisma/generated/zod`; re-exported for app code |
 | **ADR-002** Separate try-catch | New endpoints follow validation/business split |
 | **ADR-005** Cascade strategy | SET NULL on history FKs, CASCADE on duty→event (matches OrderHistory pattern) |
 | **ADR-009** Display vs Detail | `DutyHistoryDisplay` (lightweight) for index; `DutyHistoryDetail` (with teamAssignment + dinnerDuty) for `/[id]` |
 | **ADR-010** Domain serialization | `auditData` is a JSON String column; serialize/deserialize in validation composable |
 | **ADR-011** Audit-survives-deletion | SET NULL FKs + denormalized `inhabitantId / dinnerEventId / seasonId` |
 | **ADR-014** Batch operations | Bulk audit writes via `createMany` (chunked); season import + activation use `createManyAndReturn` for duties |
-| **ADR-015** Idempotent jobs | Season-activation duty scaffold uses `pruneAndCreate` keyed on `(dinnerEventId, sourceTemplateId, inhabitantId)`; re-run safe |
+| **ADR-015** Idempotent jobs | Season-activation duty scaffold uses `pruneAndCreate` keyed on `(dinnerEventId, role, minutesFromDinnerStart, taskDescription, ordinal among identical duties)`; re-run safe |
 | **ADR-016** Generator/Scaffolder pattern | Duty scaffolder mirrors prebooking pattern: pure `decideDutyAction` → scaffolder applies; lives in `useDuty.ts` + `server/utils/scaffoldDuties.ts` |
 
 ## Phases
 
-This feature ships **on top of** the chef-swap PR (in flight). Chef-swap delivers role swap *for the CHEF role only*, intra-team. This proposal delivers everything else.
+Chef-swap shipped volunteer/claim/resign for the CHEF role (`assign-role`, `remove-role`). This proposal delivers everything else; its Phase 1 instruments the shipped endpoints retroactively.
 
 ### Phase 0 — This proposal ✍️
 
@@ -423,45 +659,92 @@ The current document. Reviewable artifact before code.
 
 ### Phase 1 — Schema + audit infrastructure (no behavior change)
 
-- Prisma migration: `DinnerDutyTemplate`, `DinnerDuty`, `DutyState` enum, `DutyHistory`, `DutyAuditAction` enum. `DinnerEvent` gets the `dinnerDuties` back-relation declaration only — no new columns.
+- ✅ shipped (`0017_roster`) — Schema: `DinnerDutyTemplate`, `JokerSlot`, `DinnerDuty`, `DutyHistory`, enums `DutyAuditAction`, `DutyOrigin`; back-relations only on `CookingTeam`, `DinnerEvent`, `Inhabitant`, `User`.
 - `useDutyValidation` composable + unit tests.
 - `getDutyTimeRange` added to `app/utils/season.ts` next to `getDinnerTimeRange` + unit tests.
 - Repository functions in `cookingRepository.ts` (or extend `prismaRepository.ts`): `writeDutyHistory(entries[])`, `fetchDutyHistoryForDinner(dinnerEventId)`, `fetchDutyHistoryForMember(cookingTeamId, inhabitantId)`.
 - Instrument existing mutation sites: `assign-role`, `admin/team/assignment` PUT/DELETE/POST, `admin/dinner-event/[id]`, `admin/season/[id]/assign-cooking-teams`, `admin/season/import`. Each site adds a paired audit write in the same pass.
-- Instrument chef-swap endpoints **as they land** (`remove-role`, `assignment/swap`, move-out cascade) — coordinated with the chef-swap PR; if chef-swap merges first, instrument retroactively in this PR.
+- Instrument the shipped chef-swap endpoints retroactively (`assign-role`, `remove-role`, move-out cascade).
 - E2E tests: each mutation site asserts the corresponding `DutyHistory` row is created with the right action and actor.
 
 ### Phase 2 — Read endpoints + generic `AuditTimeline.vue`
 
 - `GET /api/dinner-event/[id]/duty-history` and `GET /api/team/cooking/[id]/member/[inhabitantId]/history`.
 - Extract `AuditTimeline.vue` (generic) from `OrderHistoryDisplay.vue`. Both order and roster timelines render via it.
-- Wire into `ChefMenuCard.vue` and `CookingTeamCard.vue` as expandable section. Per-row expand pattern matches the existing order-history "expand to see history" UX.
+- Wire into the CTC faces as collapsed-by-default expandables ✅ signed 2026-10-06: per dinner under the roster
+  table (dinner face), per member on the member row (season face) — one component, two mounts, the order-history
+  `actionConfig` pattern (icon + colour + Danish label per verb); system events name "automatisk" as actor.
+
+```
+Historik                                              [v]
+ +- 06/10 14:02   Byt: Maria overtog Madlavning fra Per (aftalt)
+    05/10 09:11   Emil tog Børnetjansen (joker)
+    04/10 21:30   Vagtplan godkendt (automatisk — alle sæder besat)
+    01/10 08:00   Per afgav Madlavning
+```
 - Tests: component unit + E2E.
 
 ### Phase 3 — DinnerDutyTemplate CRUD + duty scaffolding
 
-- Admin team UI: edit `DinnerDutyTemplate` rows for a team (CRUD). Form fields: role, `minutesFromDinnerStart` (rendered as "X min/h before/after dinner"), `durationMinutes`, `taskDescription`.
-- Season activation triggers `scaffoldDuties(seasonId)` — generator decides desired duties from team members × cooking days per their `affinity`; scaffolder reconciles via `pruneAndCreate` (idempotent per ADR-015) keyed on `(dinnerEventId, sourceTemplateId, inhabitantId)`.
+- Admin team UI: edit `DinnerDutyTemplate` rows for a team (CRUD) — mockup below (✅ signed 2026-10-06). Entry is
+  wall-clock, stored as `minutesFromDinnerStart` + `durationMinutes` composed with the global dinner start, and
+  displayed with the relative hint; the add-form keeps its values between adds so identical template duties duplicate fast.
+
+```
+Standardvagter — Hold 3            (admin teams, holdets detalje — ✅ 2026-10-06)
+  Tid                             Opgave           Rolle
+  08:00-11:00  (10t før middag)   Prep             KOK        [slet]
+  15:00-18:00  (3t før)           Madlavning       KOK        [slet]
+  15:00-18:00  (3t før)           Madlavning       KOK        [slet]   <- 2 sæder = 2 rækker
+  16:30-18:00  (1,5t før)         Børnetjans       JUNIOR     [slet]
+  18:30-21:30  (0,5t efter)       Opvask           KOK        [slet]
+  [ + Tilføj vagt ]                        [Indlæs standardvagter]
+     +- form: fra [15:00] til [18:00]  opgave [        ]  rolle [KOK v]
+```
+- Season activation triggers `scaffoldDuties(seasonId)` — generator decides desired duties from team members × cooking days per their `affinity`; scaffolder reconciles via `pruneAndCreate` (idempotent per ADR-015) keyed on `(dinnerEventId, role, minutesFromDinnerStart, taskDescription, ordinal among identical duties)`.
 - E2E: activate season, verify duties materialized respecting Anna's two-team multi-affinity case (Tuesday duty in team 7, Wednesday duty in team 6); reactivate, verify idempotent.
 
-### Phase 4 — Single-dinner roster editing + chef sign-off
+### Phase 4 — Single-dinner roster + derived sign-off (UX in § Roster UX)
 
-- **Single-day scope**: chef edits the roster of *one* dinner at a time. No multi-day grid.
-- Chef view per dinner: roster table (members × time slots derived via `getDutyTimeRange`); chef can reassign duties between team members, edit time/task, remove vacant slots, add ad-hoc slots, mark no-shows. All writes audited.
-- Sign-off action: chef hits "sign off roster" → backend writes one `SIGNED_OFF` audit row per duty in the dinner. No state column on duty for sign-off; "is this duty signed off?" is derived from history (latest `SIGNED_OFF` for this duty AFTER any subsequent `ASSIGNED`/`UNASSIGNED`/`SWAPPED`/`UPDATED` on the same duty).
-- E2E: chef edits roster, signs off (N rows written), edits a single duty post-sign-off (only that duty's sign-off invalidated; others stay confirmed), re-signs that one duty.
+- **Single-day scope**: one dinner's roster at a time, inside the CTC dinner face. No multi-day grid.
+- One pane, three modes (Meld til / Meld fra / Byt) for members and chef; the chef's Hvem picker is the override;
+  Ekstra vagt is always offered in Meld til and creates a seat (origin VOLUNTEER); times and tasks come from the
+  templates. All writes audited.
+- Sign-off is derived (§ Roster UX table): Klar when every seat is filled (system `ROSTER_SIGNED_OFF`), Godkendt when
+  the chef's `ROSTER_SIGNED_OFF` row is newer than the last row that opened a seat, Åben otherwise. No state column.
+- Holdplan step after Madbestilling klar: `DinnerStepState` gains the step, `DINNER_STEP_MAP` and `DEADLINE_LABELS`
+  the entry, `SeasonDeadlines` the roster deadline getter from `rosterIsSignedOffHoursBefore`; the band reads the
+  step's alarm level; the chef's roster deadline kinds join the trigger catalog
+  (`feature-proposal-notification-triggers.md`).
+- E2E: fill the last seat → the auto-sign row is written; empty a seat → the plan reopens; chef [Godkend holdplan] on
+  a short roster → chef-actor row; refill → auto re-sign; Ekstra vagt → an `ekstra` seat with origin VOLUNTEER.
 
-### Phase 5 — Cross-team duty swap (the headline)
+### Phase 5 — Duty swap (the headline)
 
-- `POST /api/team/cooking/duty/swap` — pair swap of two `DinnerDuty` rows. Two `DutyHistory` rows with same `swapGroupId`. Body:
+- `POST /api/team/cooking/duty/swap` — take a seat, optionally give one. Body:
   ```ts
-  { aDutyId: number, bDutyId: number, agreementConfirmed: boolean }
+  { takeDutyId: number, giveDutyId?: number, agreementConfirmed: boolean }
   ```
-- **Cross-team supported**: A and B may belong to different `CookingTeam`s and on different `DinnerEvent`s. The swap exchanges `inhabitantId` between the two duty rows; everything else (role, time slot, task, dinner) stays put on each row. Both teams' chefs see the swap in their roster timelines.
-- **Authorization**: caller must own one of the two duties (or be admin). The other party's consent is via the `agreementConfirmed` flag — out-of-band negotiation, in-app one-sided commit, mirrors chef-swap pattern.
-- Member-facing UI: "Byt tjans" panel on any duty row (extends generic `RoleAssignment.vue` from chef-swap to all roles). Selector lists candidate duties from `usersStore.myDuties` (existing data).
-- Move-out cascade nulls `inhabitantId` on future PLANNED duties for the moving inhabitant; emits `UNASSIGNED` per affected duty (`performedByUserId` = the admin who triggered the move-out).
-- E2E: Anna (team 7, Mon prep) ↔ Peter (team 2, Thu prep); both teams' rosters reflect the swap; both timelines show the paired audit rows with shared `swapGroupId`.
+  `takeDutyId` is a filled seat; the caller replaces its holder. `giveDutyId` is a seat the caller holds on another
+  dinner; the former holder of `takeDutyId` receives it. One `DutyHistory` row per touched duty (`DUTY_SWAPPED`); the
+  pair shares a `swapGroupId`, a half swap writes one row.
+- **Cross-team supported**: the two seats may belong to different `CookingTeam`s and `DinnerEvent`s; role, time, task
+  and dinner stay on each row. Both teams' chefs see the swap in their roster timelines.
+- **Authorization**: the caller holds `giveDutyId` when it is given (or is admin); the other party's consent is the
+  `agreementConfirmed` flag — out-of-band agreement, in-app one-sided commit, the chef-swap pattern. Repayment of a
+  half swap is between the two.
+- Member-facing UI ✅ signed 2026-10-08: the Byt mode of the Rediger holdplan pane (§ Roster UX mockup); the result
+  line spells out both directions, or "Per er fri" for a half swap. Meld fra releases a seat (`DUTY_UNASSIGNED`). A
+  swap reverses by swapping back.
+- Move-out cascade (carried from chef-swap Phase 4, unshipped): on a `moveOutDate` change,
+  `server/utils/cleanupAssignmentsOnMoveOut.ts` deletes the inhabitant's future `CookingTeamAssignment` rows, fully
+  resets future dinners where they are chef (`CHEF_LOSS_DINNER_UPDATES`), nulls `inhabitantId` on their future
+  PLANNED duties and emits `DUTY_UNASSIGNED` per affected duty (`performedByUserId` = the admin who triggered the
+  move-out); wired into `POST /api/household/[id]/update`. `CookingTeamCard.vue` shows a "Flytter {date}" badge for
+  members with a future `moveOutDate`. Tests: `cleanupAssignmentsOnMoveOut.unit.spec.ts`, `moveout-cascade.e2e.spec.ts`.
+- E2E: Anna takes Per's Madlavning ti 15/04 and gives her Madlavning to 17/10 (Hold 3 ↔ Hold 2); both rosters
+  reflect it; both timelines show the paired rows with a shared `swapGroupId`. A half swap writes one row and leaves
+  Per without a return seat.
 
 ## Reuse
 

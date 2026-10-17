@@ -1,9 +1,8 @@
 // @vitest-environment nuxt
-import {describe, it, expect, beforeEach} from 'vitest'
-import {setActivePinia, createPinia} from 'pinia'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended, registerEndpoint} from '@nuxt/test-utils/runtime'
-import {clearNuxtData} from '#app'
-import {findByTestId, pollFor} from '~~/tests/component/testHelpers'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {findByTestId, pollFor, resetStores} from '~~/tests/component/testHelpers'
 import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTestIds'
 import SeasonStatusDisplay from '~/components/shared/SeasonStatusDisplay.vue'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -20,11 +19,13 @@ registerEndpoint('/api/admin/season/1', () => activeSeason)
 registerEndpoint('/api/admin/season/2', () => inactiveSeason)
 registerEndpoint('/api/admin/season', () => [activeSeason, inactiveSeason])
 
+// The next test's resetStores drops the datasets a still-mounted display reads
+enableAutoUnmount(afterEach)
+
 describe('SeasonStatusDisplay', () => {
 
     beforeEach(() => {
-        setActivePinia(createPinia())
-        clearNuxtData()
+        resetStores()
     })
 
     const mount = async (props: {seasonId: number | null, showActivationButton?: boolean}) => {
@@ -48,13 +49,10 @@ describe('SeasonStatusDisplay', () => {
     })
 
     describe('activation button', () => {
-        it.each([
-            {seasonId: 2, showButton: false, buttonTestId: PLANNING_TEST_IDS.activate, shouldExist: false},
-            {seasonId: 2, showButton: true, buttonTestId: PLANNING_TEST_IDS.activate, shouldExist: true},
-            {seasonId: 1, showButton: true, buttonTestId: PLANNING_TEST_IDS.deactivate, shouldExist: true}
-        ])('seasonId=$seasonId showButton=$showButton → $buttonTestId exists=$shouldExist', async ({seasonId, showButton, buttonTestId, shouldExist}) => {
-            const wrapper = await mount({seasonId, showActivationButton: showButton})
-            expect(findByTestId(wrapper, buttonTestId).exists()).toBe(shouldExist)
+        // With showActivationButton the activate and deactivate cases below find their button
+        it('showButton=false → no activate button', async () => {
+            const wrapper = await mount({seasonId: 2, showActivationButton: false})
+            expect(findByTestId(wrapper, PLANNING_TEST_IDS.activate).exists()).toBe(false)
         })
 
         it('seasonId=2 shows the activate label and emits activate on click', async () => {

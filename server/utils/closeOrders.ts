@@ -17,7 +17,7 @@ const LOG = '🎟️ > DAILY > [CLOSE_ORDERS]'
  * @returns CloseOrdersResult with count of closed orders
  */
 export async function closeOrders(d1Client: D1Database): Promise<CloseOrdersResult> {
-    const {OrderStateSchema, OrderAuditActionSchema, DinnerModeSchema} = useBookingValidation()
+    const {OrderStateSchema, OrderAuditActionSchema} = useBookingValidation()
 
     // Get system user for audit trail (ADR-013: system operations use cached admin user)
     const systemUserId = await getSystemUserId(d1Client)
@@ -36,7 +36,7 @@ export async function closeOrders(d1Client: D1Database): Promise<CloseOrdersResu
     const updates: OrderBatchUpdate[] = pendingOrders.map(order => ({
         orderId: order.id,
         state: OrderStateSchema.enum.CLOSED,
-        dinnerMode: DinnerModeSchema.enum.DINEIN, // Preserve existing mode - not actually changing
+        dinnerMode: order.dinnerMode,
         ticketPriceId: null, // No change
         priceAtBooking: null, // No change
         isNewRelease: false,

@@ -1,16 +1,17 @@
 import {test, expect, type BrowserContext} from '@playwright/test'
 import testHelpers from '~~/tests/e2e/testHelpers'
-import {useHeynaboValidation} from '~/composables/useHeynaboValidation'
 import {useBookingValidation} from '~/composables/useBookingValidation'
 import {isInhabitantDataEqual} from '~/composables/useHeynabo'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import {isAdmin, isAllergyManager} from '~/composables/usePermissions'
-import type {UserDisplay, InhabitantDisplay, HouseholdDetail} from '~/composables/useCoreValidation'
+import {useCoreValidation, type InhabitantDisplay, type HouseholdDetail} from '~/composables/useCoreValidation'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 
 const {validatedBrowserContext, saltedId, salt, headers} = testHelpers
-const {HeynaboImportResponseSchema} = useHeynaboValidation()
+const {SystemRoleSchema} = useCoreValidation()
+const SystemRole = SystemRoleSchema.enum
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
@@ -159,9 +160,7 @@ test.describe.serial('Heynabo Integration API', () => {
         // STEP 1: Run initial Heynabo import (CREATE - populates DB from Heynabo)
         // In CI the DB is clean, so we need to import first to get all entities
         // ========================================================================
-        const initialImport = await context.request.get('/api/admin/heynabo/import')
-        expect(initialImport.status(), 'Initial Heynabo import must succeed').toBe(200)
-        HeynaboImportResponseSchema.parse(await initialImport.json())
+        await HouseholdFactory.runHeynaboImport(context)
 
         // ========================================================================
         // STEP 2: Find test household (now exists after import)
@@ -258,8 +257,7 @@ test.describe.serial('Heynabo Integration API', () => {
         // import UPDATE bucket must rewrite the existing row by id, not email-keyed upsert.
         // ALLERGYMANAGER (TS-owned, granted in same partial update) must survive the email change.
         // We do NOT mutate agata (auth user) — re-auth in this run would break.
-        const usersResponse = await context.request.get('/api/admin/users')
-        const users: UserDisplay[] = await usersResponse.json()
+        const users = await UserFactory.getUsers(context)
         const memberUser = users.find(u => u.email === MEMBER_USER_EMAIL)
         expect(memberUser, 'Member user must exist after import').toBeDefined()
         testData.user.memberUserId = memberUser!.id
@@ -270,7 +268,7 @@ test.describe.serial('Heynabo Integration API', () => {
         const mutateResponse = await context.request.post(`/api/admin/users/${memberUser!.id}`, {
             headers,
             data: {
-                systemRoles: ['ALLERGYMANAGER'],
+                systemRoles: [SystemRole.ALLERGYMANAGER],
                 email: testData.user.memberUserMutatedEmail,
                 phone: testData.user.memberUserMutatedPhone
             }
@@ -279,17 +277,7 @@ test.describe.serial('Heynabo Integration API', () => {
 
         // DELETE: Create orphan user on limited-role inhabitant
         testData.user.orphanEmail = `orphan-${testSalt}@test.dk`
-        const userResponse = await context.request.put('/api/admin/users', {
-            headers,
-            data: {
-                email: testData.user.orphanEmail,
-                phone: '+4512345678',
-                passwordHash: 'test',
-                systemRoles: []
-            }
-        })
-        expect(userResponse.status()).toBe(201)
-        const orphanUser = await userResponse.json()
+        const orphanUser = await UserFactory.createUser(context, {...UserFactory.defaultUser(), email: testData.user.orphanEmail})
         testData.user.orphanId = orphanUser.id
         createdUserIds.push(orphanUser.id)
 
@@ -304,15 +292,13 @@ test.describe.serial('Heynabo Integration API', () => {
             const household = householdsBeforeDelete.find(h => h.heynaboId === heynaboId)
             if (household) {
                 deletedIdsByHeynaboId.set(heynaboId, household.id)
-                await context.request.delete(`/api/admin/household/${household.id}`)
+                await HouseholdFactory.deleteHousehold(context, household.id, 200)
             }
         }
         testData.household.deletedIdsByHeynaboId = deletedIdsByHeynaboId
 
         // Run 2: Reconciliation import
-        const reconciliationImport = await context.request.get('/api/admin/heynabo/import')
-        expect(reconciliationImport.status(), 'Reconciliation import must succeed').toBe(200)
-        testData.reconciliationResult = HeynaboImportResponseSchema.parse(await reconciliationImport.json())
+        testData.reconciliationResult = await HouseholdFactory.runHeynaboImport(context)
     })
 
     test('should reconcile mutations from Heynabo (CREATE/UPDATE/DELETE/IDEMPOTENT)', async ({browser}) => {
@@ -327,14 +313,9 @@ test.describe.serial('Heynabo Integration API', () => {
         expect(result.sanityCheck.passed, 'Sanity check passed').toBe(true)
 
         // Verify our specific test items were deleted via direct API checks
-        const fakeHouseholdResponse = await context.request.get(`/api/admin/household/${testData.household.fakeId}`)
-        expect(fakeHouseholdResponse.status(), 'DELETE: Fake household deleted (404)').toBe(404)
+        await HouseholdFactory.getHouseholdById(context, testData.household.fakeId, 404)
 
-        const fakeInhabitantResponse = await context.request.get(`/api/admin/household/inhabitants/${testData.inhabitant.fakeId}`)
-        expect(fakeInhabitantResponse.status(), 'DELETE: Fake inhabitant deleted (404)').toBe(404)
-
-        const orphanUserResponse = await context.request.get(`/api/admin/users/${testData.user.orphanId}`)
-        expect(orphanUserResponse.status(), 'DELETE: Orphan user deleted (404)').toBe(404)
+        await HouseholdFactory.getInhabitantById(context, testData.inhabitant.fakeId, 404)
 
         // Fetch post-import data
         const households = await HouseholdFactory.getAllHouseholds(context)
@@ -343,8 +324,8 @@ test.describe.serial('Heynabo Integration API', () => {
 
         const householdDetail = await HouseholdFactory.getHouseholdById(context, testData.householdId)
 
-        const usersResponse = await context.request.get('/api/admin/users')
-        const users: UserDisplay[] = await usersResponse.json()
+        const users = await UserFactory.getUsers(context)
+        expect(users.some(user => user.id === testData.user.orphanId), 'DELETE: Orphan user deleted').toBe(false)
 
         // ========================================================================
         // HOUSEHOLD ASSERTIONS
@@ -452,11 +433,7 @@ test.describe.serial('Heynabo Integration API', () => {
         const before = await captureInhabitants()
 
         // Run idempotency import (third import - no mutations since last import)
-        const response = await context.request.get('/api/admin/heynabo/import')
-        const responseBody = await response.text()
-        expect(response.status(), `Import failed: ${responseBody}`).toBe(200)
-
-        const result = HeynaboImportResponseSchema.parse(JSON.parse(responseBody))
+        const result = await HouseholdFactory.runHeynaboImport(context)
 
         const after = await captureInhabitants()
         const drift = [...before.entries()]
@@ -484,7 +461,7 @@ test.describe.serial('Heynabo Integration API', () => {
         const context = await validatedBrowserContext(browser)
 
         // Delete Babyyoda from seed household
-        await HouseholdFactory.deleteInhabitant(context, testData.inhabitant.babyyodaId)
+        await HouseholdFactory.deleteInhabitant(context, testData.inhabitant.babyyodaId, 200)
 
         // Run import — Heynabo still has Babyyoda at heynaboId=2
         const result = await HouseholdFactory.runHeynaboImport(context)
@@ -570,27 +547,7 @@ test.describe.serial('Heynabo Integration API', () => {
             return oldHousehold
         }
 
-        test('deletes an inhabitant of the old household when deleted in Heynabo', async ({browser}) => {
-            const context = await validatedBrowserContext(browser)
-            const oldHousehold = getOldHousehold()
-
-            // GIVEN: an inhabitant in the old household that Heynabo does not have
-            const inhabitant = await HouseholdFactory.createInhabitantForHousehold(
-                context, oldHousehold.id, `Departed-${Date.now()}`
-            )
-            expect(inhabitant.householdId, 'Setup: inhabitant is in the old household').toBe(oldHousehold.id)
-
-            // WHEN: import runs
-            const result = await HouseholdFactory.runHeynaboImport(context)
-
-            // THEN: the inhabitant is gone from TheSlope
-            const response = await context.request.get(`/api/admin/household/inhabitants/${inhabitant.id}`)
-            expect(response.status(), 'Inhabitant deleted').toBe(404)
-            expect(result.inhabitantsDeleted, 'Deletion reported in import result').toBeGreaterThanOrEqual(1)
-            expect(result.sanityCheck.passed, 'No count drift between TheSlope and Heynabo').toBe(true)
-        })
-
-        test('deletes a user of the old household when deleted in Heynabo', async ({browser}) => {
+        test('deletes an inhabitant of the old household and its user when deleted in Heynabo', async ({browser}) => {
             const context = await validatedBrowserContext(browser)
             const oldHousehold = getOldHousehold()
             const testSalt = Date.now().toString()
@@ -599,22 +556,22 @@ test.describe.serial('Heynabo Integration API', () => {
             const inhabitant = await HouseholdFactory.createInhabitantForHousehold(
                 context, oldHousehold.id, `DepartedUser-${testSalt}`
             )
+            expect(inhabitant.householdId, 'Setup: inhabitant is in the old household').toBe(oldHousehold.id)
             const email = `departed-${testSalt}@test.dk`
-            const userResponse = await context.request.put('/api/admin/users', {
-                headers,
-                data: {email, phone: '+4512345678', passwordHash: 'test', systemRoles: []}
-            })
-            expect(userResponse.status(), 'Setup: user created').toBe(201)
-            const user = await userResponse.json()
+            const user = await UserFactory.createUser(context, {...UserFactory.defaultUser(), email})
             createdUserIds.push(user.id)
             await HouseholdFactory.updateInhabitant(context, inhabitant.id, {userId: user.id})
 
             // WHEN: import runs
-            await HouseholdFactory.runHeynaboImport(context)
+            const result = await HouseholdFactory.runHeynaboImport(context)
 
-            // THEN: the user is gone from TheSlope
-            const usersResponse = await context.request.get('/api/admin/users')
-            const users: UserDisplay[] = await usersResponse.json()
+            // THEN: the inhabitant is gone from TheSlope
+            await HouseholdFactory.getInhabitantById(context, inhabitant.id, 404)
+            expect(result.inhabitantsDeleted, 'Deletion reported in import result').toBeGreaterThanOrEqual(1)
+            expect(result.sanityCheck.passed, 'No count drift between TheSlope and Heynabo').toBe(true)
+
+            // AND: so is its user
+            const users = await UserFactory.getUsers(context)
             expect(users.find(u => u.email === email), 'User deleted').toBeUndefined()
         })
     })
@@ -648,7 +605,7 @@ test.describe.serial('Heynabo Integration API', () => {
             const babyyoda = await findInhabitantAtHeynaboAddress(context, TEST_HOUSEHOLD_HEYNABO_ID, INHABITANTS.BABYYODA.heynaboId)
             expect(babyyoda, 'Setup: Babyyoda starts at their Heynabo address').toBeDefined()
 
-            await HouseholdFactory.deleteInhabitant(context, babyyoda!.id)
+            await HouseholdFactory.deleteInhabitant(context, babyyoda!.id, 200)
             const driftedInhabitant = await HouseholdFactory.createInhabitantWithConfig(context, householdAtDifferentAddress!.id, {
                 heynaboId: INHABITANTS.BABYYODA.heynaboId,
                 name: `Drifted-${Date.now()}`
@@ -674,11 +631,11 @@ test.describe.serial('Heynabo Integration API', () => {
      * deleted member was chef on, so the dinner is ready for a new chef.
      */
     test.describe('member deleted in Heynabo while chef on an upcoming dinner', () => {
-        let chefLossSeasonId: number
+        const chefLossSeasonIds: number[] = []
 
         test.afterAll(async ({browser}) => {
             const context = await validatedBrowserContext(browser)
-            if (chefLossSeasonId) await SeasonFactory.cleanupSeasons(context, [chefLossSeasonId])
+            await SeasonFactory.cleanupSeasons(context, chefLossSeasonIds)
         })
 
         test('reverts the dinner to a clean SCHEDULED state', async ({browser}) => {
@@ -690,9 +647,9 @@ test.describe.serial('Heynabo Integration API', () => {
                 context, testData.householdId, `DepartingChef-${testSalt}`
             )
             const season = await SeasonFactory.createSeason(context)
-            chefLossSeasonId = season.id!
+            chefLossSeasonIds.push(season.id!)
             const dinner = await DinnerEventFactory.createDinnerEvent(context, {
-                seasonId: chefLossSeasonId,
+                seasonId: season.id!,
                 state: DinnerState.ANNOUNCED,
                 menuTitle: salt('Chef-loss menu', testSalt),
                 chefId: departingChef.id
@@ -712,16 +669,10 @@ test.describe.serial('Heynabo Integration API', () => {
         })
     })
 
-    // Cleanup: Remove test data if tests fail before import can reconcile
+    // Cleanup: Remove test data if tests fail before import can reconcile; an entity the import already deleted counts as removed
     test.afterAll(async ({browser}) => {
         const context = await validatedBrowserContext(browser)
-
-        // Best-effort cleanup — entities may already be deleted by import
-        await Promise.all(createdHouseholdIds.map(id =>
-            HouseholdFactory.deleteHousehold(context, id).catch(() => {})
-        ))
-        await Promise.all(createdUserIds.map(id =>
-            context.request.delete(`/api/admin/users/${id}`).catch(() => {})
-        ))
+        await HouseholdFactory.deleteHousehold(context, createdHouseholdIds)
+        await UserFactory.cleanupUsers(context, createdUserIds)
     })
 })

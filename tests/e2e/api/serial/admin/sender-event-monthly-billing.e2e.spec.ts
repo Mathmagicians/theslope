@@ -2,8 +2,10 @@ import {test, expect} from '@playwright/test'
 import {SenderFactory} from '~~/tests/e2e/testDataFactories/senderFactory'
 import {BillingFactory} from '~~/tests/e2e/testDataFactories/billingFactory'
 import testHelpers from '~~/tests/e2e/testHelpers'
+import {useUserPreferenceValidation} from '~/composables/useUserPreferenceValidation'
 
 const {validatedBrowserContext, memberValidatedBrowserContext} = testHelpers
+const Channel = useUserPreferenceValidation().NotificationChannelSchema.enum
 
 /** Serial: needs a billing period, which monthly billing creates from all unbilled transactions (ADR-015 idempotent). */
 test.describe('POST /api/admin/sender/event/monthly-billing', () => {
@@ -26,7 +28,7 @@ test.describe('POST /api/admin/sender/event/monthly-billing', () => {
         expect(result!.queued).toBe(true)
         // the mail kind follows the period's version: v1 closes it, a later version is an update
         const {version} = await BillingFactory.getBillingPeriodById(context, billingPeriodSummaryId)
-        expect(result!.dedupeKey).toMatch(new RegExp(`^BILLING_PERIOD_${version > 1 ? 'UPDATED' : 'CLOSED'}:EMAIL:`))
+        expect(result!.dedupeKey).toMatch(new RegExp(`^BILLING_PERIOD_${version > 1 ? 'UPDATED' : 'CLOSED'}:${Channel.EMAIL}:`))
     })
 
     test('GIVEN an unknown period THEN 404', async ({browser}) => {

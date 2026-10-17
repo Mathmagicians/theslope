@@ -8,7 +8,7 @@ import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 const {throwH3Error} = eventHandlerHelper
 const LOG = '💰 > BILLING > [PUBLIC]'
 
-const tokenSchema = z.object({token: z.string().uuid()})
+const tokenSchema = z.object({token: z.uuid()})
 
 /**
  * GET /api/public/billing/[token]

@@ -2,9 +2,10 @@ import {z} from 'zod'
 import {dateRangeSchema} from '~/composables/useDateRangeValidation'
 import {formatDate, parseDate, isDateRangeInside, areRangesOverlapping, sortDateRanges, formatDateRange, DATE_SETTINGS} from '~/utils/date'
 import {useBookingValidation} from '~/composables/useBookingValidation'
-import {useTicketPriceValidation} from '~/composables/useTicketPriceValidation'
+import {useTicketPriceValidation, type PortionTicket} from '~/composables/useTicketPriceValidation'
 import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import {useCookingTeamValidation} from '~/composables/useCookingTeamValidation'
+import {IdSchema} from '~/composables/useCoreValidation'
 import type {WeekDayMap} from '~/types/dateTypes'
 
 // Season status constants - single source of truth
@@ -36,7 +37,7 @@ export const useSeasonValidation = () => {
         isRequired: (map: WeekDayMap<boolean>) => Object.values(map).some(Boolean),
         requiredMessage: "Man skal lave mad mindst en dag om ugen"
     })
-    const {DinnerEventDisplaySchema, ScaffoldResultSchema} = useBookingValidation()
+    const {DinnerEventDisplaySchema, deserializeDinnerEvent, ScaffoldResultSchema} = useBookingValidation()
     const {TicketPricesArraySchema} = useTicketPriceValidation()
     const {deserializeCookingTeamDisplay, CookingTeamDisplaySchema} = useCookingTeamValidation()
 
@@ -47,7 +48,7 @@ export const useSeasonValidation = () => {
         })
 
     const BaseSeasonSchema = z.object({
-        id: z.number().int().positive().optional(),
+        id: IdSchema.optional(),
         shortName: z.string().min(4),
         seasonDates: dateRangeSchema,
         isActive: z.boolean(),
@@ -104,10 +105,17 @@ export const useSeasonValidation = () => {
         scaffold: ScaffoldResultSchema.nullable()
     })
 
+    // GET /api/admin/season/active: a null id arrives as an empty body
+    const ActiveSeasonIdSchema = z.preprocess(id => id || null, IdSchema.nullable())
+
     // Serialization and deserialization functions
     const serializeSeason = (season: Season): SerializedSeason => SerializedSeasonSchema.parse(season)
 
-    const deserializeSeason = (serialized: Record<string, unknown>): Season => {
+    // The price rows hold no portions; withPortions adds what a ticket at each price weighs
+    const deserializeSeason = (
+        serialized: Record<string, unknown>,
+        withPortions: (ticketPrice: PortionTicket) => PortionTicket & {portions: number}
+    ): Season => {
         const parsedSeasonDates = JSON.parse(serialized.seasonDates as string) as { start: string; end: string }
 
         const baseSeason = {
@@ -134,11 +142,11 @@ export const useSeasonValidation = () => {
         if (dinnerEvents || CookingTeams || serialized.ticketPrices) {
             return {
                 ...baseSeason,
-                // Parse dinner events to ensure dates are Date objects (not strings from JSON)
-                dinnerEvents: dinnerEvents?.map((event) => DinnerEventDisplaySchema.parse(event)),
+                // Dinner rows from the repository: dates become Date objects, the cost becomes the sum of the expense rows
+                dinnerEvents: dinnerEvents?.map((event) => deserializeDinnerEvent(event as Record<string, unknown>)),
                 // Deserialize nested CookingTeams (including affinity fields)
                 CookingTeams: CookingTeams?.map((team) => deserializeCookingTeamDisplay(team)),
-                ticketPrices: serialized.ticketPrices as Season['ticketPrices']
+                ticketPrices: (serialized.ticketPrices as PortionTicket[] | undefined)?.map(withPortions) as Season['ticketPrices']
             } as Season
         }
         return baseSeason as Season
@@ -153,6 +161,7 @@ export const useSeasonValidation = () => {
         SerializedSeasonSchema,
         ReconciliationResultSchema,
         SeasonUpdateResponseSchema,
+        ActiveSeasonIdSchema,
         serializeSeason,
         deserializeSeason,
         createWeekDayMapFromSelection,

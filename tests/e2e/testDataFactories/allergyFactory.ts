@@ -91,6 +91,16 @@ export class AllergyFactory {
         }
     ]
 
+    /** Allergy rows as the repository include loads them (with allergyType), one per mock allergy type */
+    static readonly serializedAllergies = (count: number, inhabitantId: number = 1) =>
+        this.createMockAllergyTypes().slice(0, count).map((allergyType, i) => ({
+            ...this.createValidAllergyData({inhabitantId, allergyTypeId: allergyType.id}),
+            id: i + 1,
+            createdAt: new Date('2024-01-01'),
+            updatedAt: new Date('2024-01-01'),
+            allergyType
+        }))
+
     /**
      * Create mock AllergyTypeDetail data with inhabitants for component tests (no API call)
      * Returns array of AllergyTypeDetail objects (includes inhabitants with allergyUpdatedAt)
@@ -247,11 +257,10 @@ export class AllergyFactory {
         context: BrowserContext,
         allergyTypeIds: number[]
     ): Promise<void> => {
+        // An allergy type already gone counts as removed
         await Promise.all(allergyTypeIds.map(async (id) => {
             const response = await context.request.delete(`${ALLERGY_TYPE_ENDPOINT}/${id}`)
-            if (response.status() !== 200 && response.status() !== 404) {
-                console.warn(`Failed to cleanup allergy type ${id}: status ${response.status()}`)
-            }
+            expect([200, 404], `Unexpected status cleaning up allergy type ${id}: ${await response.text()}`).toContain(response.status())
         }))
     }
 
@@ -383,12 +392,10 @@ export class AllergyFactory {
         context: BrowserContext,
         allergyIds: number[]
     ): Promise<void> => {
+        // An allergy already gone counts as removed
         for (const id of allergyIds) {
-            try {
-                await this.deleteAllergy(context, id)
-            } catch (error) {
-                console.warn(`Failed to cleanup allergy ${id}:`, error)
-            }
+            const response = await context.request.delete(`${ALLERGY_ENDPOINT}/${id}`)
+            expect([200, 404], `Unexpected status cleaning up allergy ${id}: ${await response.text()}`).toContain(response.status())
         }
     }
 }

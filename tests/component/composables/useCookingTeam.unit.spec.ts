@@ -1,0 +1,225 @@
+import { describe, it, expect } from 'vitest'
+import { useCookingTeam } from '~/composables/useCookingTeam'
+import { useCookingTeamValidation, type CookingTeamAssignment, type TeamRole } from '~/composables/useCookingTeamValidation'
+import type { InhabitantDisplay } from '~/composables/useCoreValidation'
+import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
+import { createDefaultWeekdayMap } from '~/types/dateTypes'
+import { RAINBOW, getRainbowBand } from '~/composables/useTheSlopeDesignSystem'
+
+describe('useCookingTeam', () => {
+
+  describe('extractTeamNumber', () => {
+    const { extractTeamNumber } = useCookingTeam()
+
+    describe('valid team names', () => {
+      it.each([
+        { teamName: 'Madhold 1 - 08/25-06/26', expected: 1, description: 'full format extracts first number' },
+        { teamName: 'Madhold 10 - Winter 2025', expected: 10, description: 'double digit' },
+        { teamName: '0', expected: 0, description: 'zero boundary' }
+      ])('extracts $expected from "$teamName" ($description)', ({ teamName, expected }) => {
+        expect(extractTeamNumber(teamName)).toBe(expected)
+      })
+    })
+
+    describe('invalid team names', () => {
+      it.each([
+        { teamName: 'Madhold', description: 'no digits' }
+      ])('returns null for "$teamName" ($description)', ({ teamName }) => {
+        expect(extractTeamNumber(teamName)).toBeNull()
+      })
+    })
+  })
+
+  describe('getTeamNumber', () => {
+    const { getTeamNumber, getDefaultCookingTeam } = useCookingTeam()
+    // Listed out of number order, so a position-derived number differs from the named one
+    const seasonTeams = [3, 1, 2].map(n => getDefaultCookingTeam(1, 'S1', n, { id: 10 + n }))
+    const unnumbered = (id: number) => getDefaultCookingTeam(1, 'S1', 1, { id, name: 'Holdet uden tal' })
+    const named = (id: number, name: string) => getDefaultCookingTeam(1, 'S1', 1, { id, name })
+
+    it.each([
+      { team: seasonTeams[0]!, teams: seasonTeams, expected: 3, description: 'number in the name, listed first' },
+      { team: unnumbered(20), teams: [...seasonTeams, unnumbered(20)], expected: 4, description: 'no number: position in the season list + 1' },
+      { team: unnumbered(30), teams: seasonTeams, expected: 1, description: 'no number and outside the season list' },
+      { team: named(40, 'Madhold 0'), teams: [...seasonTeams, named(40, 'Madhold 0')], expected: 4, description: 'a zero in the name: position in the season list + 1' },
+      { team: named(50, 'Hold 2025'), teams: seasonTeams, expected: 2025, description: 'a year-like number in the name counts' }
+    ])('gives $expected ($description)', ({ team, teams, expected }) => {
+      expect(getTeamNumber(team, teams)).toBe(expected)
+    })
+
+    it('a number past the rainbow wraps to the stop of its remainder', () => {
+      const number = getTeamNumber(named(50, 'Hold 2025'), seasonTeams)
+      expect(getRainbowBand(number - 1)).toBe(getRainbowBand((number - 1) % RAINBOW.length))
+    })
+  })
+
+  describe('countChefs', () => {
+    const { countChefs } = useCookingTeam()
+    const { TeamRoleSchema } = useCookingTeamValidation()
+    const { CHEF, COOK, JUNIORHELPER } = TeamRoleSchema.enum
+    const roles = (...values: TeamRole[]) => values.map(role => ({ role }))
+
+    it.each([
+      { assignments: roles(COOK, JUNIORHELPER), expected: 0, description: 'no chefs among members' },
+      { assignments: roles(CHEF, CHEF, COOK), expected: 2, description: 'two chefs' }
+    ])('counts $expected ($description)', ({ assignments, expected }) => {
+      expect(countChefs(assignments)).toBe(expected)
+    })
+  })
+
+  describe('getTeamShortName', () => {
+    const { getTeamShortName } = useCookingTeam()
+
+    describe('with dash separator', () => {
+      it.each([
+        { teamName: 'Madhold 1 - 08/25-06/26', expected: 'Madhold 1', description: 'typical full format' }
+      ])('returns "$expected" from "$teamName" ($description)', ({ teamName, expected }) => {
+        expect(getTeamShortName(teamName)).toBe(expected)
+      })
+    })
+
+    describe('without dash separator (fallback to full name)', () => {
+      it.each([
+        { teamName: 'Madhold 1', expected: 'Madhold 1', description: 'already short' }
+      ])('returns "$expected" from "$teamName" ($description)', ({ teamName, expected }) => {
+        expect(getTeamShortName(teamName)).toBe(expected)
+      })
+    })
+  })
+
+  describe('getDefaultCookingTeam', () => {
+    it('creates default team with generated name', () => {
+      const { getDefaultCookingTeam } = useCookingTeam()
+      const team = getDefaultCookingTeam(1, 'Winter 2025', 2)
+
+      expect(team).toEqual({
+        seasonId: 1,
+        name: 'Madhold 2 - Winter 2025',
+        assignments: [],
+        cookingDaysCount: 0,
+        jokerSlotCount: 0
+      })
+    })
+
+    it('allows overriding default values', () => {
+      const { getDefaultCookingTeam } = useCookingTeam()
+      const team = getDefaultCookingTeam(1, 'Winter 2025', 1, { name: 'Custom Team' })
+
+      expect(team.name).toBe('Custom Team')
+      expect(team.seasonId).toBe(1)
+    })
+  })
+
+  describe('mergeInhabitantsWithAssignments', () => {
+    const anna = {...HouseholdFactory.defaultInhabitantData('test-anna'), id: 1, name: 'Anna', lastName: 'Hansen'}
+    const bob = {...HouseholdFactory.defaultInhabitantData('test-bob'), id: 2, name: 'Bob', lastName: 'Jensen'}
+    const charlie = {...HouseholdFactory.defaultInhabitantData('test-charlie'), id: 3, name: 'Charlie', lastName: 'Nielsen'}
+
+    const {TeamRoleSchema} = useCookingTeamValidation()
+    const Role = TeamRoleSchema.enum
+
+    const makeAssignment = (id: number, role: TeamRole, inhabitant: InhabitantDisplay, overrides?: Partial<CookingTeamAssignment>): CookingTeamAssignment => ({
+      id, role, inhabitantId: inhabitant.id, cookingTeamId: 0, allocationPercentage: 100, inhabitant, ...overrides
+    })
+
+    const makeTeam = (id: number, name: string, assignments: CookingTeamAssignment[]) => ({
+      id, name, seasonId: 1, affinity: null, cookingDaysCount: 0, jokerSlotCount: 0,
+      assignments: assignments.map(a => ({...a, cookingTeamId: id}))
+    })
+
+    it('merges inhabitants with their assignments from multiple teams', () => {
+      const {mergeInhabitantsWithAssignments} = useCookingTeam()
+      const teams = [
+        makeTeam(1, 'Madhold 1', [makeAssignment(101, Role.CHEF, anna)]),
+        makeTeam(2, 'Madhold 2', [makeAssignment(102, Role.COOK, bob)])
+      ]
+
+      const result = mergeInhabitantsWithAssignments([anna, bob, charlie], teams)
+
+      expect(result).toHaveLength(3)
+      const annaResult = result.find(i => i.id === 1)!
+      expect(annaResult.CookingTeamAssignment).toHaveLength(1)
+      expect(annaResult.CookingTeamAssignment![0]!.cookingTeamId).toBe(1)
+      expect(result.find(i => i.id === 2)!.CookingTeamAssignment).toHaveLength(1)
+      expect(result.find(i => i.id === 3)!.CookingTeamAssignment).toBeUndefined()
+    })
+
+    it('returns all assignments when inhabitant is in multiple teams', () => {
+      const {mergeInhabitantsWithAssignments} = useCookingTeam()
+      const teams = [
+        makeTeam(1, 'Madhold 1', [makeAssignment(101, Role.CHEF, anna, {allocationPercentage: 50})]),
+        makeTeam(2, 'Madhold 2', [makeAssignment(102, Role.COOK, anna, {allocationPercentage: 50})])
+      ]
+
+      const result = mergeInhabitantsWithAssignments([anna], teams)
+
+      expect(result[0]!.CookingTeamAssignment).toHaveLength(2)
+      expect(result[0]!.CookingTeamAssignment!.map(a => a.cookingTeamId)).toEqual([1, 2])
+      expect(result[0]!.CookingTeamAssignment!.map(a => a.allocationPercentage)).toEqual([50, 50])
+    })
+  })
+
+  describe('decideRoleAssignmentWrites', () => {
+    const {decideRoleAssignmentWrites} = useCookingTeam()
+    const {TeamRoleSchema} = useCookingTeamValidation()
+    const Role = TeamRoleSchema.enum
+
+    const COOKING_TEAM_ID = 7
+    const ME = 42
+    const SOMEONE_ELSE = 99
+
+    it.each([
+      // Promotion / first-time CHEF — nextChefId becomes me regardless of prior state
+      {desc: 'CHEF, replacing someone else',      role: Role.CHEF,         currentChefId: SOMEONE_ELSE, expectedNext: ME},
+      // Demotion — when I am being assigned non-CHEF and I was the dinner's chef → clear
+      {desc: 'COOK, I was the chef (demote)',     role: Role.COOK,         currentChefId: ME,           expectedNext: null},
+      // Non-CHEF assignment doesn't disturb someone else's chef status
+      {desc: 'COOK, someone else is chef',        role: Role.COOK,         currentChefId: SOMEONE_ELSE, expectedNext: SOMEONE_ELSE}
+    ])('GIVEN $desc THEN nextChefId=$expectedNext AND assignment populated', ({role, currentChefId, expectedNext}) => {
+      const plan = decideRoleAssignmentWrites(COOKING_TEAM_ID, ME, role, currentChefId)
+      expect(plan.nextChefId).toBe(expectedNext)
+      expect(plan.assignment).toEqual({
+        cookingTeamId: COOKING_TEAM_ID,
+        inhabitantId: ME,
+        role,
+        allocationPercentage: 100,
+        affinity: null
+      })
+    })
+  })
+
+  describe('isNotAssignedToMe', () => {
+    const {isNotAssignedToMe} = useCookingTeam()
+    const ME = 42
+    const someoneElse = {id: 99, name: 'Anna', lastName: 'Hansen'} as InhabitantDisplay
+    const me = {id: ME, name: 'Selv', lastName: 'Test'} as InhabitantDisplay
+
+    it.each([
+      {desc: 'no holder, I am authenticated',           holder: undefined,    myInhabitantId: ME,   expected: true},
+      {desc: 'someone else is holder',                  holder: someoneElse,  myInhabitantId: ME,   expected: true},
+      {desc: 'I am the holder',                         holder: me,           myInhabitantId: ME,   expected: false},
+      {desc: 'someone else holds, I am unauthenticated',holder: someoneElse,  myInhabitantId: null, expected: false}
+    ])('$desc → $expected', ({holder, myInhabitantId, expected}) => {
+      expect(isNotAssignedToMe(holder, myInhabitantId)).toBe(expected)
+    })
+  })
+
+  describe('countJokerSlotShifts', () => {
+    const {countJokerSlotShifts} = useCookingTeam()
+    // The team cooks tuesdays and thursdays, from monday 5 October 2026
+    const cookingDates = [6, 8, 13, 15, 20, 22].map(day => new Date(2026, 9, day))
+    const tuesday = createDefaultWeekdayMap([false, true, false, false, false, false, false])
+    const tuesdayAndThursday = createDefaultWeekdayMap([false, true, false, true, false, false, false])
+
+    describe.each([
+      {desc: 'period across weeks', start: new Date(2026, 9, 5), end: new Date(2026, 9, 21), affinity: tuesday, expected: 3},
+      {desc: 'period bounded by cooking days', start: new Date(2026, 9, 6), end: new Date(2026, 9, 20), affinity: tuesday, expected: 3},
+      {desc: 'affinity with two weekdays', start: new Date(2026, 9, 5), end: new Date(2026, 9, 21), affinity: tuesdayAndThursday, expected: 5},
+      {desc: 'period with no cooking day', start: new Date(2026, 9, 23), end: new Date(2026, 9, 31), affinity: tuesdayAndThursday, expected: 0}
+    ])('$desc', ({start, end, affinity, expected}) => {
+      it(`counts ${expected} shifts`, () => {
+        expect(countJokerSlotShifts({startDate: start, endDate: end, affinity}, cookingDates)).toBe(expected)
+      })
+    })
+  })
+})

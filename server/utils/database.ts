@@ -1,6 +1,6 @@
 import {PrismaD1} from "@prisma/adapter-d1"
-import {PrismaClient} from "@prisma/client"
-import type {Prisma} from "@prisma/client"
+import {PrismaClient} from "~~/prisma/generated/client/client"
+import type {Prisma} from "~~/prisma/generated/client/client"
 
 /**
  * Shared database connection utility
@@ -10,13 +10,13 @@ import type {Prisma} from "@prisma/client"
  * @returns Connected Prisma client
  */
 
-const log: Prisma.LogLevel[] = process.env.NODE_ENV === 'production'
+const defaultLog: Prisma.LogLevel[] = process.env.NODE_ENV === 'production'
     ? ['error']
     : ['warn', 'error']
 
 export async function getPrismaClientConnection(d1Client: D1Database) {
     const adapter = new PrismaD1(d1Client)
-    const prisma = new PrismaClient({adapter, log})
+    const prisma = new PrismaClient({adapter, log: defaultLog})
     await prisma.$connect()
     return prisma
 }

@@ -6,7 +6,8 @@ import {
     DinnerModeSchema,
     DinnerStateSchema,
     OrderStateSchema,
-    NotificationChannelSchema
+    NotificationChannelSchema,
+    LedgerEntryTypeSchema
 } from '~~/prisma/generated/zod'
 import {AppearanceSchema, DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} from '~/composables/useUserPreferenceValidation'
 
@@ -33,6 +34,12 @@ import {AppearanceSchema, DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} fro
 // ============================================================================
 
 /**
+ * Positive integer ID - single source of truth for entity ids (ADR-001), re-exported by useCoreValidation.
+ * Use IdSchema for required ids, IdSchema.nullable() for FK fields.
+ */
+export const IdSchema = z.number().int().positive()
+
+/**
  * User Fragment - Authentication, system access and own settings
  * Used by: useCoreValidation, useBookingValidation (bookedByUser)
  *
@@ -40,8 +47,8 @@ import {AppearanceSchema, DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} fro
  * `user.appearance.palette` without a fallback (ADR-010: the repository holds the JSON strings).
  */
 export const UserFragmentSchema = z.object({
-    id: z.number().int().positive(),
-    email: z.string().email(),
+    id: IdSchema,
+    email: z.email(),
     phone: z.string().nullable().optional(),
     systemRoles: z.array(SystemRoleSchema).default([]),
     notificationChannels: z.array(NotificationChannelSchema).default(DEFAULT_NOTIFICATION_CHANNELS),
@@ -53,10 +60,10 @@ export const UserFragmentSchema = z.object({
  * Used by: useCoreValidation, useHealthValidation, useBookingValidation, usePlanningValidation
  */
 export const InhabitantFragmentSchema = z.object({
-    id: z.number().int().positive(),
-    heynaboId: z.number().int().positive(),
-    userId: z.number().int().positive().nullable().optional(),
-    householdId: z.number().int().positive(),
+    id: IdSchema,
+    heynaboId: IdSchema,
+    userId: IdSchema.nullable().optional(),
+    householdId: IdSchema,
     name: z.string(),
     lastName: z.string(),
     pictureUrl: z.string().nullable().optional(),
@@ -68,9 +75,9 @@ export const InhabitantFragmentSchema = z.object({
  * Used by: useCoreValidation, useFinancialValidation
  */
 export const HouseholdFragmentSchema = z.object({
-    id: z.number().int().positive(),
-    heynaboId: z.number().int().positive(),
-    pbsId: z.number().int().positive(),
+    id: IdSchema,
+    heynaboId: IdSchema,
+    pbsId: IdSchema,
     name: z.string(),
     address: z.string(),
     movedInDate: z.coerce.date(),
@@ -86,7 +93,7 @@ export const HouseholdFragmentSchema = z.object({
  * Used by: usePlanningValidation, useBookingValidation
  */
 export const SeasonFragmentSchema = z.object({
-    id: z.number().int().positive(),
+    id: IdSchema,
     shortName: z.string().min(4),
     isActive: z.boolean(),
     ticketIsCancellableDaysBefore: z.number().min(0).max(31),
@@ -99,8 +106,8 @@ export const SeasonFragmentSchema = z.object({
  * Used by: usePlanningValidation, useBookingValidation
  */
 export const CookingTeamFragmentSchema = z.object({
-    id: z.number().int().positive(),
-    seasonId: z.number().int().positive(),
+    id: IdSchema,
+    seasonId: IdSchema,
     name: z.string()
 })
 
@@ -109,17 +116,17 @@ export const CookingTeamFragmentSchema = z.object({
  * Used by: useBookingValidation, usePlanningValidation, useHealthValidation
  */
 export const DinnerEventFragmentSchema = z.object({
-    id: z.number().int().positive(),
+    id: IdSchema,
     date: z.coerce.date(),
     menuTitle: z.string().max(500),
     menuDescription: z.string().nullable(),
     menuPictureUrl: z.string().nullable(),
     state: DinnerStateSchema,
     totalCost: z.number().int().min(0),
-    chefId: z.number().int().positive().nullable(),
-    cookingTeamId: z.number().int().positive().nullable(),
-    heynaboEventId: z.number().int().positive().nullable(),
-    seasonId: z.number().int().positive().nullable(),
+    chefId: IdSchema.nullable(),
+    cookingTeamId: IdSchema.nullable(),
+    heynaboEventId: IdSchema.nullable(),
+    seasonId: IdSchema.nullable(),
     createdAt: z.coerce.date(),
     updatedAt: z.coerce.date()
 })
@@ -133,11 +140,11 @@ export const DinnerEventFragmentSchema = z.object({
  * Used by: useBookingValidation, useFinancialValidation
  */
 export const OrderFragmentSchema = z.object({
-    id: z.number().int().positive(),
-    dinnerEventId: z.number().int().positive(),
-    inhabitantId: z.number().int().positive(),
-    bookedByUserId: z.number().int().positive().nullable(),
-    ticketPriceId: z.number().int().positive(),
+    id: IdSchema,
+    dinnerEventId: IdSchema,
+    inhabitantId: IdSchema,
+    bookedByUserId: IdSchema.nullable(),
+    ticketPriceId: IdSchema,
     priceAtBooking: z.number().int(),
     dinnerMode: DinnerModeSchema,
     state: OrderStateSchema,
@@ -152,8 +159,8 @@ export const OrderFragmentSchema = z.object({
  * Used by: useBookingValidation, usePlanningValidation
  */
 export const TicketPriceFragmentSchema = z.object({
-    id: z.number().int().positive(),
-    seasonId: z.number().int().positive(),
+    id: IdSchema,
+    seasonId: IdSchema,
     ticketType: TicketTypeSchema,
     price: z.number().int(),
     description: z.string().nullable(),
@@ -161,18 +168,79 @@ export const TicketPriceFragmentSchema = z.object({
 })
 
 // ============================================================================
+// LEDGER DOMAIN FRAGMENTS
+// ============================================================================
+
+/**
+ * Payer Snapshot - the user who reported a ledger row, as they were when it was written; outlives the user row.
+ * The id is null only on the rows the roster migration mapped from the legacy dinner cost column (email SYSTEM).
+ * Used by: useBillingValidation (Expense)
+ */
+export const PayerSnapshotSchema = z.object({
+    id: z.number().int().nullable(),
+    email: z.string(),
+    // The name the card writes for people (formatNameWithInitials); absent on the rows the migration mapped
+    name: z.string().optional()
+})
+
+/**
+ * Expense Fragment - a cost paid from the kitchen's money; a REGULAR row belongs to a dinner, an ADHOC row to the pool
+ * Used by: useBillingValidation (the ledger home), useBookingValidation (DinnerEventDetail.expenses)
+ * The two transforms live beside the fragment so both composables share them without importing each other (ADR-010)
+ */
+export const ExpenseFragmentSchema = z.object({
+    id: IdSchema,
+    type: LedgerEntryTypeSchema,
+    dinnerEventId: IdSchema.nullable(),
+    // The reporting user; SetNull once their user row is gone, the snapshot keeps them
+    paidByUserId: IdSchema.nullable(),
+    paidBy: PayerSnapshotSchema,
+    amount: z.number().int(),
+    description: z.string(),
+    createdAt: z.coerce.date(),
+    updatedAt: z.coerce.date()
+})
+
+export const SerializedExpenseFragmentSchema = ExpenseFragmentSchema.omit({paidBy: true}).extend({
+    userSnapshot: z.string()
+})
+
+// The payer snapshot is a JSON column; a create shape serializes the same way as a full row
+export const serializeExpense = <T extends {paidBy: z.infer<typeof PayerSnapshotSchema>}>({paidBy, ...row}: T): Omit<T, 'paidBy'> & {userSnapshot: string} =>
+    ({...row, userSnapshot: JSON.stringify(paidBy)})
+
+export const deserializeExpense = (row: Record<string, unknown>): z.infer<typeof ExpenseFragmentSchema> => {
+    const {userSnapshot, ...rest} = row
+    return ExpenseFragmentSchema.parse({...rest, paidBy: PayerSnapshotSchema.parse(JSON.parse(String(userSnapshot)))})
+}
+
+// ============================================================================
 // HEALTH DOMAIN FRAGMENTS
 // ============================================================================
 
 /**
  * AllergyType Fragment - Catalog of allergens
- * Used by: useHealthValidation, useBookingValidation
+ * Used by: useAllergyValidation (AllergyTypeDisplay), useCoreValidation (via the Allergy fragment)
  */
 export const AllergyTypeFragmentSchema = z.object({
-    id: z.number().int().positive(),
+    id: IdSchema,
     name: z.string(),
     description: z.string(),
     icon: z.string().nullable().optional()
+})
+
+/**
+ * Allergy Fragment - An inhabitant's allergy with its type, as an `allergies.include.allergyType` read loads it
+ * Used by: useAllergyValidation (AllergyDisplay), useCoreValidation (HouseholdDetail inhabitants)
+ */
+export const AllergyFragmentSchema = z.object({
+    id: IdSchema,
+    inhabitantId: IdSchema,
+    allergyTypeId: IdSchema,
+    inhabitantComment: z.string().nullable().optional(),
+    createdAt: z.coerce.date(),
+    updatedAt: z.coerce.date(),
+    allergyType: AllergyTypeFragmentSchema
 })
 
 // ============================================================================
@@ -188,3 +256,7 @@ export type DinnerEventFragment = z.infer<typeof DinnerEventFragmentSchema>
 export type OrderFragment = z.infer<typeof OrderFragmentSchema>
 export type TicketPriceFragment = z.infer<typeof TicketPriceFragmentSchema>
 export type AllergyTypeFragment = z.infer<typeof AllergyTypeFragmentSchema>
+export type AllergyFragment = z.infer<typeof AllergyFragmentSchema>
+export type PayerSnapshot = z.infer<typeof PayerSnapshotSchema>
+export type ExpenseFragment = z.infer<typeof ExpenseFragmentSchema>
+export type SerializedExpenseFragment = z.infer<typeof SerializedExpenseFragmentSchema>

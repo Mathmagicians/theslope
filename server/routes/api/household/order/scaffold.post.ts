@@ -1,10 +1,14 @@
-import {z} from 'zod'
 import {defineEventHandler, readValidatedBody, getValidatedQuery, setResponseStatus} from "h3"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {requireHouseholdAccess} from "~~/server/utils/authorizationHelper"
 import {isAdmin} from '~/composables/usePermissions'
 import {useBookingValidation, type ScaffoldOrdersRequest, type ScaffoldOrdersResponse} from "~/composables/useBookingValidation"
 import {scaffoldPrebookings} from "~~/server/utils/scaffoldPrebookings"
+import {useBooking} from "~/composables/useBooking"
+import {emailChannel} from "~~/server/utils/sender/config"
+import {notifyBookingOutcomes} from "~~/server/utils/sender/events/waitlist"
+import {AdminBypassQuerySchema} from '~/composables/useCoreValidation'
+import {OPEN_DEADLINES} from '~/composables/useSeason'
 
 const {throwH3Error} = eventHandlerHelper
 
@@ -12,13 +16,14 @@ const LOG = '🎟️ > HOUSEHOLD > [SCAFFOLD]'
 
 /**
  * POST /api/household/order/scaffold
- * Unified booking mutation for household dinner orders (ADR-016)
+ * The one household booking write for household dinner orders (ADR-016)
  *
- * Replaces direct order mutations with scaffold-based approach:
- * - Creates new orders from desiredOrders
+ * - Creates new orders before the deadline
+ * - After the deadline claims a released ticket at the price, else queues the wish and reports its position
  * - Updates existing orders (mode changes, price changes)
- * - Deletes orders when NONE before deadline
- * - Releases orders when NONE after deadline
+ * - Deletes orders when NONE before deadline, releases them after it (the ticket goes to the queue head when it fits)
+ * - Leaves the queue on NONE for an entry, rewrites the entry's wish on another mode or price
+ * - `?adminBypass=true` from an admin: any household, and the deadlines lift (the admin correction)
  *
  * Requires: authenticated user belongs to the household
  */
@@ -29,15 +34,15 @@ export default defineEventHandler<Promise<ScaffoldOrdersResponse>>(async (event)
 
     // Input validation (ADR-002)
     let requestData!: ScaffoldOrdersRequest
+    let adminBypass!: boolean
     try {
         requestData = await readValidatedBody(event, ScaffoldOrdersRequestSchema.parse)
+        adminBypass = (await getValidatedQuery(event, AdminBypassQuerySchema.parse)).adminBypass
     } catch (error) {
         return throwH3Error(`${LOG} Input validation error`, error)
     }
 
     // Authorization: verify user belongs to household (admin can bypass via ?adminBypass=true)
-    const querySchema = z.object({adminBypass: z.coerce.boolean().optional()})
-    const {adminBypass} = await getValidatedQuery(event, querySchema.parse)
     const user = await requireHouseholdAccess(event, requestData.householdId, adminBypass ? isAdmin : undefined)
 
     // Business logic (ADR-002)
@@ -50,10 +55,12 @@ export default defineEventHandler<Promise<ScaffoldOrdersResponse>>(async (event)
             householdId: requestData.householdId,
             dinnerEventIds: requestData.dinnerEventIds,
             desiredOrders: requestData.orders,
-            userId: user.id
+            userId: user.id,
+            deadlines: adminBypass && isAdmin(user) ? OPEN_DEADLINES : undefined
         })
+        await notifyBookingOutcomes(d1Client, emailChannel(cloudflare.env), result.outcomes)
 
-        console.info(`${LOG} Scaffold complete: created=${result.created}, deleted=${result.deleted}, released=${result.released}`)
+        console.info(`${LOG} Scaffold complete: ${useBooking().formatScaffoldResult(result)}`)
 
         setResponseStatus(event, 200)
         return ScaffoldOrdersResponseSchema.parse({

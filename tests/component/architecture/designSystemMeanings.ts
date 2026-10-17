@@ -12,6 +12,9 @@ import {ORDER_STATE_COLORS, TICKET_TYPE_COLORS} from '../../../app/composables/u
 import {createResolver, leafClasses, pickColour, type Channel, type Mode} from './designSystemPairs'
 import {composite, type ModeOverride, type Rgb} from './contrast'
 
+// A queued ticket is told apart by its hourglass on every waiting-list mark, so its colour is not measured as a meaning
+const {queued: _toldByGlyph, ...ORDER_STATES_TOLD_BY_COLOUR} = ORDER_STATE_COLORS
+
 /**
  * The bar two meanings keep apart, ΔE in Oklab: the separation the Color Universal Design set
  * itself keeps on its closest pair (bluish green vs reddish purple, deuteranopia). A palette built
@@ -53,7 +56,7 @@ export const MEANING_SETS: {name: string, meanings: Meaning[]}[] = [
     },
     {
         name: 'order states',
-        meanings: Object.entries(ORDER_STATE_COLORS).map(([label, slot]) => ({label, slot}))
+        meanings: Object.entries(ORDER_STATES_TOLD_BY_COLOUR).map(([label, slot]) => ({label, slot}))
     },
     {
         name: 'ticket types',

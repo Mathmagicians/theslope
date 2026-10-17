@@ -19,6 +19,10 @@ export const ALLERGY_TEST_IDS = {
     sort: 'sort-by-count',
     // AllergenMultiSelector
     summaryBar: 'compare-summary-bar',
+    allergyPanel: 'allergy-panel',
+    allergyPanelOverview: 'allergy-panel-overview',
+    allergyPanelWho: 'allergy-panel-who',
+    allergyPanelNames: 'allergy-panel-names',
     // Shared QrCode on the poster
     qr: 'qr-code',
     // AllergyNotes - catalog footer and poster
@@ -29,5 +33,6 @@ export const ALLERGY_TEST_IDS = {
     cancelNotes: 'cancel-allergy-notes',
     notesTextarea: 'allergy-notes-textarea',
     // AllergyCatalogTable rows
-    row: (allergyTypeId: number) => `allergy-row-${allergyTypeId}`
+    row: (allergyTypeId: number) => `allergy-row-${allergyTypeId}`,
+    count: (allergyTypeId: number) => `allergy-count-${allergyTypeId}`
 } as const

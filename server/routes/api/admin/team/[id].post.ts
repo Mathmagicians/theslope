@@ -5,14 +5,12 @@ import {updateTeamWithAssignments} from "~~/server/utils/teamService"
 import type {CookingTeamDetail, CookingTeamUpdate} from "~/composables/useCookingTeamValidation"
 import {useCookingTeamValidation} from "~/composables/useCookingTeamValidation"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
-import {z} from 'zod'
+import {idParams} from '~/composables/useCoreValidation'
 
 const {throwH3Error} = eventHandlerHelper
 
 // Define schema for ID parameter
-const idSchema = z.object({
-    id: z.coerce.number().int().positive('Team ID must be a positive integer')
-})
+const paramSchema = idParams('id')
 
 // Get the validation schema from composable (ADR-009)
 const {CookingTeamUpdateSchema} = useCookingTeamValidation()
@@ -28,7 +26,7 @@ export default defineEventHandler(async (event): Promise<CookingTeamDetail> => {
     let id!: number
     let teamData!: CookingTeamUpdate
     try {
-        const params = await getValidatedRouterParams(event, idSchema.parse)
+        const params = await getValidatedRouterParams(event, paramSchema.parse)
         id = params.id
         const bodyData = await readValidatedBody(event, PostTeamSchema.parse)
         // Construct CookingTeamUpdate with id from URL

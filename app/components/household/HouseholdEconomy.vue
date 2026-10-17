@@ -7,11 +7,11 @@
  * - Faktureringsperioder: unified table with virtual (current) + closed (past) periods
  *
  * Uses EconomyTable for tables, CostEntry/CostLine for grouped items.
- * Data: GET /api/billing?householdId=X + orders from bookingsStore + dinnerEvents from planStore
+ * Data: billing and upcoming orders from bookingsStore, dinnerEvents from planStore
  */
 import {formatDate, createDateRange, formatDateRange} from '~/utils/date'
 import type {DateRange} from '~/types/dateTypes'
-import type {HouseholdBillingResponse, TransactionDisplay, CostEntry} from '~/composables/useBillingValidation'
+import type {TransactionDisplay, CostEntry} from '~/composables/useBillingValidation'
 import type {OrderDisplay, DinnerEventInfo} from '~/composables/useBookingValidation'
 import type {StatBox} from '~/components/economy/CostEntry.vue'
 import type {HouseholdDetail} from '~/composables/useCoreValidation'
@@ -25,9 +25,7 @@ const props = defineProps<Props>()
 // Composables
 const {formatPrice} = useTicket()
 const {groupByCostEntry, calculateCurrentBillingPeriod, formatTicketCounts} = useBilling()
-const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG} = useTheSlopeDesignSystem()
-const {OrderStateSchema} = useBookingValidation()
-const {HouseholdBillingResponseSchema} = useBillingValidation()
+const {ICONS, SIZES, TYPOGRAPHY, COMPONENTS, ALERTS, COLOR, TEXT, BG, NOISE} = useTheSlopeDesignSystem()
 
 // Accessor functions for CostEntry (reusable lambdas)
 const periodTitleAccessor = (period: UnifiedBillingPeriod) =>
@@ -50,46 +48,20 @@ const periodControlSumAccessor = (period: UnifiedBillingPeriod) => ({
 const periodItemsAccessor = (period: UnifiedBillingPeriod) => period.groups
 
 const planStore = usePlanStore()
-const {selectedSeason, isSelectedSeasonInitialized} = storeToRefs(planStore)
-planStore.initPlanStore()
+const {isSelectedSeasonInitialized} = storeToRefs(planStore)
 
-const {OrderDisplaySchema} = useBookingValidation()
-const selectedSeasonId = computed(() => selectedSeason.value?.id)
-const {data: orders, status: ordersStatus} = useAsyncData<OrderDisplay[]>(
-    computed(() => `economy-orders-${props.household.id}-season-${selectedSeasonId.value ?? 'none'}`),
-    () => {
-        if (!selectedSeasonId.value) return Promise.resolve([])
-        return $fetch<OrderDisplay[]>('/api/order', {
-            query: {
-                householdId: props.household.id,
-                upcomingForSeason: selectedSeasonId.value,
-                includeDinnerContext: true
-            }
-        })
-    },
-    {
-        default: () => [],
-        transform: (data: unknown[]) => (data as Record<string, unknown>[]).map(o => OrderDisplaySchema.parse(o)),
-        watch: [() => props.household.id, selectedSeasonId]
-    }
-)
-const isOrdersLoading = computed(() => ordersStatus.value === 'pending')
+const bookingsStore = useBookingsStore()
+const {
+    upcomingOrders: orders,
+    isUpcomingOrdersLoading: isOrdersLoading,
+    householdBilling: billing,
+    householdBillingError: error,
+    isHouseholdBillingLoading: isLoading,
+    isHouseholdBillingErrored: isErrored
+} = storeToRefs(bookingsStore)
+bookingsStore.loadHouseholdBilling()
+bookingsStore.loadUpcomingOrders(false)
 const isUpcomingOrdersLoading = computed(() => isOrdersLoading.value || !isSelectedSeasonInitialized.value)
-
-// Data fetch (ADR-007: component-local exception)
-const householdId = computed(() => props.household.id)
-const {data: billing, status, error} = useAsyncData<HouseholdBillingResponse | null>(
-    computed(() => `billing-${householdId.value}`),
-    () => $fetch<HouseholdBillingResponse>('/api/billing', {query: {householdId: householdId.value}}),
-    {
-        default: () => null,
-        transform: (data) => data ? HouseholdBillingResponseSchema.parse(data) : null,
-        watch: [householdId]
-    }
-)
-
-const isLoading = computed(() => status.value === 'pending')
-const isErrored = computed(() => status.value === 'error')
 
 
 // Inhabitants lookup for name resolution
@@ -106,7 +78,7 @@ const upcomingOrdersData = computed(() => {
     return groupOrdersByDinner(
         orders.value
             .filter((o): o is OrderDisplay & { dinnerEvent: DinnerEventInfo } =>
-                (o.state === OrderStateSchema.enum.BOOKED || o.state === OrderStateSchema.enum.RELEASED) &&
+                isPendingOrder(o) &&
                 o.dinnerEvent !== undefined
             )
             .map(o => ({
@@ -158,7 +130,7 @@ const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
     const currentGroups = currentPeriodData.value
 
     // Control sum for virtual: Σ transaction amounts
-    const virtualTransactionSum = currentPeriod.transactions.reduce((sum, tx) => sum + tx.amount, 0)
+    const virtualTransactionSum = sumAmounts(currentPeriod.transactions)
 
     periods.push({
         id: 'virtual',
@@ -176,7 +148,7 @@ const unifiedBillingPeriods = computed((): UnifiedBillingPeriod[] => {
     for (const inv of billing.value.pastInvoices) {
         const groups = groupTxByDinner(inv.transactions, tx => tx.amount)
         // Control sum: Σ transaction amounts vs invoice amount
-        const invoiceTransactionSum = inv.transactions.reduce((sum, tx) => sum + tx.amount, 0)
+        const invoiceTransactionSum = sumAmounts(inv.transactions)
         periods.push({
             id: inv.id,
             period: createDateRange(new Date(inv.cutoffDate), new Date(inv.paymentDate)),
@@ -262,7 +234,7 @@ const upcomingPeriodStart = computed(() => {
             <UButton
                 v-if="row.original.items.length > 0"
                 :color="COLOR.neutral"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                 square
                 :size="SIZES.small"
@@ -322,7 +294,7 @@ const upcomingPeriodStart = computed(() => {
             <UButton
                 v-if="row.original.groups.length > 0"
                 :color="COLOR.neutral"
-                variant="ghost"
+                :variant="NOISE.quiet"
                 :icon="row.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                 square
                 :size="SIZES.small"
@@ -331,11 +303,11 @@ const upcomingPeriodStart = computed(() => {
             />
           </template>
           <template #status-cell="{ row }">
-            <UBadge v-if="!row.original.isClosed" :color="COLOR.success" variant="subtle" :size="SIZES.small">
+            <UBadge v-if="!row.original.isClosed" :color="COLOR.success" :variant="NOISE.subtle" :size="SIZES.small">
               <UIcon :name="ICONS.ellipsisCircle" :class="SIZES.smallBadgeIcon"/>
               Igangværende
             </UBadge>
-            <UBadge v-else :color="COLOR.neutral" variant="subtle" :size="SIZES.small">
+            <UBadge v-else :color="COLOR.neutral" :variant="NOISE.subtle" :size="SIZES.small">
               <UIcon :name="ICONS.check" :class="SIZES.smallBadgeIcon"/>
               Afsluttet
             </UBadge>
@@ -367,7 +339,7 @@ const upcomingPeriodStart = computed(() => {
                     <UButton
                         v-if="dinnerRow.original.items.length > 0"
                         :color="COLOR.neutral"
-                        variant="ghost"
+                        :variant="NOISE.quiet"
                         :icon="dinnerRow.getIsExpanded() ? ICONS.chevronDown : ICONS.chevronRight"
                         square
                         :size="SIZES.small"

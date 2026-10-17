@@ -126,9 +126,8 @@ const onUpdateHoliday = (index: number, range: DateRange) => {
                 @update:model-value="onUpdateHoliday(index, $event)"/>
             <UButton
                 v-if="!props.disabled"
-                v-bind="BUTTONS.edit"
+                v-bind="BUTTONS.remove"
                 :data-testid="`holiday-range-remove-${index}`"
-                :icon="ICONS.trash"
                 :aria-label="`Fjern ferieperiode ${formatDateRange(dates)}`"
                 @click="model.splice(index, 1)"/>
           </div>

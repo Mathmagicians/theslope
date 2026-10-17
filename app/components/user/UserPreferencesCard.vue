@@ -39,7 +39,7 @@ import {
 } from '~/composables/useUserPreferenceValidation'
 
 const authStore = useAuthStore()
-const {TYPOGRAPHY, LAYOUTS, BUTTONS, COMPONENTS, ICONS, COLOR, SIZES} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, LAYOUTS, BUTTONS, COMPONENTS, ICONS, COLOR, SIZES, NOISE} = useTheSlopeDesignSystem()
 const {NotificationChannelSchema, PaletteSchema, TextScaleSchema} = useUserPreferenceValidation()
 
 // Danish labels and the badge wording live here; the registry only knows what is verified (ADR-017)
@@ -154,7 +154,7 @@ const sendTest = async () => {
             v-for="channel in channels"
             :key="channel"
             :color="COLOR.primary"
-            variant="subtle"
+            :variant="NOISE.subtle"
             :size="SIZES.small"
           >
             <UIcon :name="CHANNEL_LABELS[channel].icon" class="mr-1" />
@@ -172,7 +172,7 @@ const sendTest = async () => {
           v-for="badge in paletteBadges(appearance.palette)"
           :key="badge"
           :color="COLOR.success"
-          variant="subtle"
+          :variant="NOISE.subtle"
           :size="SIZES.small"
         >
           {{ badge }}
@@ -252,7 +252,7 @@ const sendTest = async () => {
                 v-for="badge in paletteBadges(item.value as Palette)"
                 :key="badge"
                 :color="COLOR.success"
-                variant="subtle"
+                :variant="NOISE.subtle"
                 :size="SIZES.small"
               >
                 {{ badge }}

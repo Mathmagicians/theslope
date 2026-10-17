@@ -1,9 +1,17 @@
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {resetStores} from '~~/tests/component/testHelpers'
 import DinnerModeLegend from '~/components/dinner/DinnerModeLegend.vue'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
 import {DinnerMode} from '~/composables/useBookingValidation'
 import {FORM_MODES} from '~/types/form'
+
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
 
 // The mode labels live in DinnerModeSelector, so the expected text is read from a real
 // selector render rather than repeated here - a renamed label cannot pass both places
@@ -52,5 +60,14 @@ describe('DinnerModeLegend', () => {
         expect(grid.find('[data-testid="dinner-mode-legend-modified"]').exists()).toBe(true)
         expect(grid.text()).toContain('Klik på en celle')
         expect(plain.find('[data-testid="dinner-mode-legend-modified"]').exists()).toBe(false)
+    })
+
+    it('explains the queue marker only where the surface shows queued cells', async () => {
+        const plain = await mountSuspended(DinnerModeLegend)
+        const grid = await mountSuspended(DinnerModeLegend, {props: {showWaitlist: true}})
+
+        expect(grid.find('[data-testid="dinner-mode-legend-waitlist"]').text()).toContain('På venteliste')
+        expect(grid.findAllComponents(DinnerModeSelector).some(selector => selector.props('ghost'))).toBe(true)
+        expect(plain.find('[data-testid="dinner-mode-legend-waitlist"]').exists()).toBe(false)
     })
 })

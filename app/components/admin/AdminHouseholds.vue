@@ -12,9 +12,8 @@ const props = withDefaults(defineProps<Props>(), {
 const householdsStore = useHouseholdsStore()
 const {households, isHouseholdsLoading, isHouseholdsErrored, householdsError} = storeToRefs(householdsStore)
 
-householdsStore.initHouseholdsStore()
 
-const {COMPONENTS, SIZES, BUTTONS, ICONS, TYPOGRAPHY, TEXT, getResidencyDisplay} = useTheSlopeDesignSystem()
+const {COMPONENTS, SIZES, BUTTONS, ICONS, TYPOGRAPHY, TEXT, getResidencyDisplay, NOISE} = useTheSlopeDesignSystem()
 
 // Row expansion for edit panel
 const expanded = ref<Record<string, boolean>>({})
@@ -203,8 +202,8 @@ class="w-full px-0"
               v-if="residency"
               :color="residency.color"
               :icon="residency.icon"
-              variant="subtle"
-              size="sm"
+              :variant="NOISE.subtle"
+              :size="SIZES.sm"
             >
               {{ residency.badgeText }}
             </UBadge>

@@ -1,6 +1,6 @@
 import {defineEventHandler, setResponseStatus, getQuery} from 'h3'
 import {runMonthlyBilling} from '~~/server/utils/monthlyBillingService'
-import {getNotificationConfig} from '~~/server/utils/sender/config'
+import {emailChannel} from '~~/server/utils/sender/config'
 import type {MonthlyBillingResponse} from '~/composables/useBillingValidation'
 import eventHandlerHelper from '~~/server/utils/eventHandlerHelper'
 
@@ -22,7 +22,7 @@ export default defineEventHandler(async (event): Promise<MonthlyBillingResponse>
     const triggeredBy = (query.triggeredBy as string) || 'ADMIN'
 
     try {
-        const result = await runMonthlyBilling(env.DB, triggeredBy, {queue: env.SENDER, archive: env.ARCHIVE, notifications: getNotificationConfig(event)})
+        const result = await runMonthlyBilling(env.DB, triggeredBy, {archive: env.ARCHIVE, email: emailChannel(env)})
         setResponseStatus(event, 200)
         return result
     } catch (error) {

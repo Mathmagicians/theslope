@@ -1,5 +1,5 @@
 <script setup lang="ts" generic="T extends CostLineItem">
-import type {DinnerMode} from '~/composables/useBookingValidation'
+import type {DinnerMode, OrderDisplay, TicketType} from '~/composables/useBookingValidation'
 
 /**
  * CostLine - Individual line item in economy views
@@ -16,11 +16,11 @@ import type {DinnerMode} from '~/composables/useBookingValidation'
 export interface CostLineItem {
     id: number
     inhabitant: { name: string }
-    ticketType: string | null
+    ticketType: TicketType | null
     dinnerMode?: DinnerMode      // DinnerMode for display (DINEIN/TAKEAWAY/DINEINLATE)
     orderId?: number | null      // For history lookup (transactions have this)
     isGuestTicket?: boolean      // For guest badge
-    state?: string               // OrderState for live orders
+    state?: OrderDisplay['state'] // Live orders carry their state
     provenanceHousehold?: string | null  // Source household if claimed from marketplace
     // Amount fields - one of these will be present
     amount?: number              // TransactionDisplay
@@ -44,11 +44,12 @@ const emit = defineEmits<{
     'toggle-history': [orderId: number | null]
 }>()
 
-const {formatPrice, ticketTypeConfig} = useTicket()
-const {formatOrder} = useOrder()
-const {TYPOGRAPHY, ICONS, SIZES, COMPONENTS, COLOR} = useTheSlopeDesignSystem()
-const {OrderStateSchema} = useBookingValidation()
+const {formatPrice} = useTicket()
+const {formatOrder} = useBookingUi()
+const {TYPOGRAPHY, SIZES, COMPONENTS, NOISE, BUTTONS, COLOR} = useTheSlopeDesignSystem()
+const {OrderStateSchema, DinnerModeSchema} = useBookingValidation()
 const OrderState = OrderStateSchema.enum
+const DinnerMode = DinnerModeSchema.enum
 
 // Extract fields from item
 // For orders: use item.id (order is itself), for transactions: use orderId (may be null if order deleted)
@@ -58,9 +59,8 @@ const orderId = computed(() => {
     }
     return props.item.id  // orders - use own id for history
 })
-const isHistoryExpanded = computed(() => orderId.value && props.historyOrderId === orderId.value)
-const ticketLabel = computed(() => props.item.ticketType ? ticketTypeConfig[props.item.ticketType as keyof typeof ticketTypeConfig]?.label : 'Ukendt')
-const ticketColor = computed(() => props.item.ticketType ? ticketTypeConfig[props.item.ticketType as keyof typeof ticketTypeConfig]?.color : 'neutral')
+const isHistoryExpanded = computed(() => orderId.value !== null && props.historyOrderId === orderId.value)
+const ticketPresentation = computed(() => props.item.ticketType ? ticketTypePresentation(props.item.ticketType) : null)
 // DinnerModeSelector accepts string | undefined, handles type validation internally
 const dinnerModeValue = computed(() => props.item.dinnerMode)
 // Show dinner mode icon for all modes including NONE (X icon) - only hide if dinnerMode is undefined
@@ -70,61 +70,55 @@ const showDinnerMode = computed(() => dinnerModeValue.value !== undefined)
 const itemAmount = computed(() => props.item.priceAtBooking ?? props.item.amount ?? 0)
 
 // Formatted order display (handles claimed override, released state, guest badge)
-// For transactions, as they don't have order state, use CLOSED
-const formatted = computed(() => {
-    const state = props.item.state ?? OrderState.CLOSED
-    return formatOrder({
-        state,
-        provenanceHousehold: props.item.provenanceHousehold ?? null,
-        isGuestTicket: props.item.isGuestTicket ?? false
-    } as Parameters<typeof formatOrder>[0])
-})
+// A transaction carries neither an order state nor an eating mode: it reads as closed
+const formatted = computed(() => formatOrder({
+    state: props.item.state ?? OrderState.CLOSED,
+    dinnerMode: props.item.dinnerMode ?? DinnerMode.DINEIN,
+    provenanceHousehold: props.item.provenanceHousehold ?? undefined,
+    isGuestTicket: props.item.isGuestTicket ?? false
+}))
 </script>
 
 <template>
-  <div class="space-y-1">
+  <div :class="COMPONENTS.costLine.stack">
     <div :class="[COMPONENTS.costLine.row, COMPONENTS.costLine.columns, compact ? TYPOGRAPHY.finePrint : TYPOGRAPHY.bodyTextSmall]">
       <!-- History button -->
       <div>
         <UButton
             v-if="orderId"
-            :color="COLOR.neutral"
-            variant="ghost"
-            :icon="isHistoryExpanded ? ICONS.chevronUp : ICONS.clipboard"
-            square
-            :size="SIZES.small"
+            v-bind="BUTTONS.history(isHistoryExpanded)"
             aria-label="Vis ordrehistorik"
             @click="emit('toggle-history', orderId)"
         />
       </div>
       <!-- Name -->
-      <span :class="['truncate', COMPONENTS.costLine.nameSlot]">{{ item.inhabitant.name }}</span>
+      <span :class="COMPONENTS.costLine.nameSlot">{{ item.inhabitant.name }}</span>
       <!-- Ticket type -->
       <div>
-        <UBadge :color="ticketColor" variant="soft" :size="SIZES.small">
-          {{ ticketLabel }}
+        <UBadge :color="ticketPresentation?.color ?? COLOR.neutral" :variant="NOISE.soft" :size="SIZES.small">
+          {{ ticketPresentation?.label ?? 'Ukendt' }}
         </UBadge>
       </div>
       <!-- Dinner mode -->
       <div>
-        <DinnerModeSelector v-if="showDinnerMode" :model-value="dinnerModeValue" size="xs"/>
+        <DinnerModeSelector v-if="showDinnerMode" :model-value="dinnerModeValue" :size="SIZES.xs"/>
       </div>
       <!-- Guest badge -->
       <div>
-        <UBadge v-if="formatted.guest" :color="formatted.guest.color" variant="soft" :size="SIZES.small" :icon="formatted.guest.icon">
+        <UBadge v-if="formatted.guest" :color="formatted.guest.color" :variant="NOISE.soft" :size="SIZES.small" :icon="formatted.guest.icon">
           {{ formatted.guest.label }}
         </UBadge>
       </div>
       <!-- Order state -->
       <div>
-        <UBadge :color="formatted.stateColor" variant="soft" :size="SIZES.small" :icon="formatted.stateIcon">
+        <UBadge :color="formatted.stateColor" :variant="NOISE.soft" :size="SIZES.small" :icon="formatted.stateIcon">
           {{ formatted.stateText }}
         </UBadge>
       </div>
       <!-- Amount -->
       <span :class="[COMPONENTS.costLine.amountSlot, compact ? TYPOGRAPHY.finePrint : TYPOGRAPHY.bodyTextMuted]">{{ formatPrice(itemAmount) }} kr</span>
     </div>
-    <div v-if="isHistoryExpanded" class="pl-6 md:pl-8 pt-1">
+    <div v-if="isHistoryExpanded" :class="COMPONENTS.costLine.history">
       <OrderHistoryDisplay :order-id="orderId!"/>
     </div>
   </div>

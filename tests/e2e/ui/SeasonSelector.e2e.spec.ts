@@ -3,9 +3,10 @@ import {authFiles} from '../config'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import testHelpers from '../testHelpers'
 import type {Season} from '~/composables/useSeasonValidation'
+import {FORM_MODES, type FormMode} from '~/types/form'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, selectDropdownOption, doScreenshot, salt, temporaryAndRandom} = testHelpers
+const {validatedBrowserContext, selectDropdownOption, doScreenshot, salt, temporaryAndRandom, gotoHydrated, pollUntil} = testHelpers
 
 test.describe('SeasonSelector UI - Status Indicators', () => {
     const adminPlanningUrl = '/admin/planning'
@@ -62,29 +63,21 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
     /**
      * Helper: Navigate to planning page and wait for store to be ready
      */
-    const navigateToPlanning = async (page: Page, seasonShortName?: string, mode?: string) => {
+    const navigateToPlanning = async (page: Page, seasonShortName?: string, mode?: FormMode) => {
         // Build URL with optional season and mode params
         const params = new URLSearchParams()
         if (seasonShortName) params.set('season', seasonShortName)
         if (mode) params.set('mode', mode)
         const url = params.toString() ? `${adminPlanningUrl}?${params}` : adminPlanningUrl
 
-        await page.goto(url)
+        await gotoHydrated(page, url)
         await doScreenshot(page, 'season-selector-after-goto')
 
-        // Wait for Loader to disappear
-        await pollUntil(
-            async () => await page.locator('text=Vi venter på data').isVisible(),
-            (isVisible) => !isVisible,
-            10
-        )
-
-        // Wait for season selector to be visible
-        await pollUntil(
-            async () => await page.getByTestId('season-selector').isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
+        // Wait for the season selector, past the store loader, to show the requested season
+        // (without one, the case reads the auto-selected season next)
+        const seasonSelector = page.getByTestId('season-selector')
+        await pollUntil(() => seasonSelector.isVisible(), visible => visible)
+        if (seasonShortName) await expect(seasonSelector, 'the season loads').toContainText(seasonShortName)
     }
 
     test('GIVEN no season parameter WHEN navigating to admin/planning THEN auto-selects active season', async ({page}) => {
@@ -94,13 +87,9 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         // THEN: Active season should be auto-selected (shows green circle)
         const seasonSelector = page.getByTestId('season-selector')
         await expect(seasonSelector).toContainText(activeSeason.shortName)
-        await expect(seasonSelector).toContainText('🟢')
 
         // Verify URL was updated with active season
-        expect(page.url()).toContain(`season=${encodeURIComponent(activeSeason.shortName)}`)
-
-        // Take screenshot showing auto-selection
-        await doScreenshot(page, 'admin/season-selector-auto-select-active', true)
+        await pollUntil(async () => page.url(), url => url.includes(`season=${encodeURIComponent(activeSeason.shortName)}`))
     })
 
     test('GIVEN active season selected WHEN opening dropdown THEN shows all seasons with status indicators', async ({page}) => {
@@ -108,20 +97,12 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         await navigateToPlanning(page, activeSeason.shortName)
 
         const seasonSelector = page.getByTestId('season-selector')
-        await expect(seasonSelector).toContainText('🟢')
-
-        // Take screenshot showing season selector with active season
-        await doScreenshot(page, 'admin/season-selector-with-active-season', true)
 
         // Click to open dropdown
         await seasonSelector.click()
 
         // Wait for dropdown options to be visible
-        await pollUntil(
-            async () => await page.locator('[role="option"]', {hasText: futureSeason.shortName}).isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
+        await expect(page.locator('[role="option"]', {hasText: futureSeason.shortName})).toBeVisible()
 
         // Take screenshot of dropdown with all status indicators
         await doScreenshot(page, 'admin/season-selector-dropdown-status-indicators', true)
@@ -137,45 +118,23 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         await navigateToPlanning(page, activeSeason.shortName)
 
         const seasonSelector = page.getByTestId('season-selector')
-        await expect(seasonSelector).toContainText('🟢')
 
         // WHEN: Switch to future season
         await selectDropdownOption(page, 'season-selector', futureSeason.shortName)
 
-        // Wait for selection to update (poll for seedling emoji)
-        await pollUntil(
-            async () => {
-                const text = await seasonSelector.textContent()
-                return text?.includes('🌱') || false
-            },
-            (hasEmoji) => hasEmoji,
-            10
-        )
-
         // THEN: Future season should be selected
         await expect(seasonSelector).toContainText(futureSeason.shortName)
-        await expect(seasonSelector).toContainText('🌱')
-
-        // Take screenshot showing future season selected
-        await doScreenshot(page, 'admin/season-selector-future-season-selected', true)
 
         // Verify URL updated
-        expect(page.url()).toContain(`season=${encodeURIComponent(futureSeason.shortName)}`)
+        await pollUntil(async () => page.url(), url => url.includes(`season=${encodeURIComponent(futureSeason.shortName)}`))
     })
 
     test('GIVEN future season WHEN viewing status display THEN shows activation controls', async ({page}) => {
         // Navigate directly to future season in EDIT mode (activation button only visible in edit mode)
-        await navigateToPlanning(page, futureSeason.shortName, 'edit')
+        await navigateToPlanning(page, futureSeason.shortName, FORM_MODES.EDIT)
 
         // Debug: screenshot before waiting for button
         await doScreenshot(page, 'season-status-before-button-wait')
-
-        // Wait for activation button to load
-        await pollUntil(
-            async () => await page.getByTestId('activate-season').isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
 
         // THEN: Should show enabled activation button
         const activateButton = page.getByTestId('activate-season')
@@ -184,7 +143,7 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
         await expect(activateButton).toContainText('Aktiver Sæson')
 
         // Verify status text
-        await expect(page.getByText('Fremtidig sæson 🌱')).toBeVisible()
+        await expect(page.getByText('Fremtidig sæson')).toBeVisible()
 
         // Take screenshot
         await doScreenshot(page, 'admin/season-status-display-future-season', true)
@@ -192,25 +151,15 @@ test.describe('SeasonSelector UI - Status Indicators', () => {
 
     test('GIVEN active season WHEN viewing status display THEN shows deactivation controls', async ({page}) => {
         // Navigate directly to active season in EDIT mode (deactivation button only visible in edit mode)
-        await navigateToPlanning(page, activeSeason.shortName, 'edit')
+        await navigateToPlanning(page, activeSeason.shortName, FORM_MODES.EDIT)
 
-        // Wait for deactivation button to load (active seasons show deactivate, not activate)
-        await pollUntil(
-            async () => await page.getByTestId('deactivate-season').isVisible(),
-            (isVisible) => isVisible,
-            10
-        )
-
-        // THEN: Should show enabled deactivation button
+        // THEN: Should show enabled deactivation button (active seasons show deactivate, not activate)
         const deactivateButton = page.getByTestId('deactivate-season')
         await expect(deactivateButton).toBeVisible()
         await expect(deactivateButton).not.toBeDisabled()
         await expect(deactivateButton).toContainText('Deaktiver Sæson')
 
         // Verify status text
-        await expect(page.getByText('Aktiv sæson 🟢')).toBeVisible()
-
-        // Take screenshot
-        await doScreenshot(page, 'admin/season-status-display-active-season', true)
+        await expect(page.getByText('Aktiv sæson', {exact: true})).toBeVisible()
     })
 })

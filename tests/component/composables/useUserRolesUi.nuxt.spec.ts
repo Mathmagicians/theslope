@@ -1,39 +1,25 @@
 // @vitest-environment nuxt
-import {describe, it, expect, beforeEach} from 'vitest'
+import {describe, it, expect, vi, beforeEach} from 'vitest'
 import {mockNuxtImport} from '@nuxt/test-utils/runtime'
-import {SystemRoleSchema} from '~~/prisma/generated/zod'
 import {useUserRolesUi} from '~/composables/useUserRolesUi'
+import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
+import {useCoreValidation, type SystemRole as SystemRoleValue} from '~/composables/useCoreValidation'
 
-const SystemRole = SystemRoleSchema.enum
+const SystemRole = useCoreValidation().SystemRoleSchema.enum
 
-// Mock auth state - only mock what needs mocking
-const mockAuthState = {
-    systemRoles: [] as string[],
-    isAdmin: false,
-    isAllergyManager: false
+// The test runtime has no session cookie and no /api/_auth endpoint, so the session nuxt-auth-utils
+// would hydrate is the one thing faked; the auth store deriving the predicates from it is real
+const {session, useUserSession} = await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).mockSession())
+mockNuxtImport('useUserSession', () => useUserSession)
+
+/** The session user with the given roles; the auth store derives isAdmin and isAllergyManager from them */
+const logInWithRoles = (roles: SystemRoleValue[]) => {
+    session.user.value = UserFactory.defaultUserWithInhabitant('roles', {systemRoles: roles})
 }
 
-mockNuxtImport('useAuthStore', () => {
-    return () => ({
-        systemRoles: ref(mockAuthState.systemRoles),
-        isAdmin: ref(mockAuthState.isAdmin),
-        isAllergyManager: ref(mockAuthState.isAllergyManager)
-    })
-})
-
 describe('useUserRolesUi', () => {
-    const setupMocks = (config: {
-        systemRoles?: string[]
-        isAdmin?: boolean
-        isAllergyManager?: boolean
-    } = {}) => {
-        mockAuthState.systemRoles = config.systemRoles ?? []
-        mockAuthState.isAdmin = config.isAdmin ?? false
-        mockAuthState.isAllergyManager = config.isAllergyManager ?? false
-    }
-
     beforeEach(() => {
-        setupMocks()
+        session.user.value = null
     })
 
     describe('getRoleConfig', () => {
@@ -80,23 +66,14 @@ describe('useUserRolesUi', () => {
                 expected: [SystemRole.ALLERGYMANAGER]
             },
             {
-                scenario: 'all roles when all predicates true',
-                isAdmin: true,
-                isAllergyManager: true,
-                expected: [SystemRole.ADMIN, SystemRole.ALLERGYMANAGER]
-            },
-            {
                 scenario: 'no roles when no predicates true',
                 isAdmin: false,
                 isAllergyManager: false,
                 expected: []
             }
         ])('shows $scenario', ({isAdmin, isAllergyManager, expected}) => {
-            setupMocks({
-                systemRoles: [SystemRole.ADMIN, SystemRole.ALLERGYMANAGER],
-                isAdmin,
-                isAllergyManager
-            })
+            // Each predicate is true for the session user holding its role
+            logInWithRoles([...(isAdmin ? [SystemRole.ADMIN] : []), ...(isAllergyManager ? [SystemRole.ALLERGYMANAGER] : [])])
 
             const {visibleRoles} = useUserRolesUi()
 

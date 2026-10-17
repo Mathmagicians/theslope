@@ -7,6 +7,8 @@ import type {HouseholdDetail, HouseholdDisplay, InhabitantDetail, InhabitantCrea
 import {useCoreValidation} from "~/composables/useCoreValidation"
 import {useBookingValidation, type InhabitantUpdateResponse, type HouseholdUpdateResponse} from "~/composables/useBookingValidation"
 import {useHeynaboValidation, type HeynaboImportResponse} from "~/composables/useHeynaboValidation"
+import {useBookingValidation as useActionValidation} from '~/composables/useBookingValidation'
+const Action = useActionValidation().BookingActionSchema.enum
 
 const {salt, saltedId, temporaryAndRandom, headers} = testHelpers
 const {createDefaultWeekdayMap, InhabitantDetailSchema, UserDisplaySchema, HouseholdDisplaySchema} = useCoreValidation()
@@ -36,6 +38,18 @@ export class HouseholdFactory {
             moveOutDate: null as Date | null
         }
     }
+
+    /** HeynaboImportResponse data for component tests (no API call) */
+    static readonly defaultHeynaboImportResponse = (overrides: Partial<HeynaboImportResponse> = {}): HeynaboImportResponse =>
+        HeynaboImportResponseSchema.parse({
+            jobRunId: 1,
+            householdsCreated: 0,
+            householdsDeleted: 0,
+            inhabitantsCreated: 0,
+            inhabitantsDeleted: 0,
+            usersCreated: 0,
+            ...overrides
+        })
 
     /** Mock HouseholdDetail for component tests (no API calls) */
     static readonly defaultHouseholdDetail = (testSalt: string = temporaryAndRandom()): HouseholdDetail => {
@@ -187,10 +201,9 @@ export class HouseholdFactory {
     }
 
     /**
-     * Delete household(s) - accepts single ID or array of IDs
-     * Always returns HouseholdDetail[] for consistent typing
-     * For cleanup (afterAll): Don't pass expectedStatus - silent on success, logs only failures
-     * For API tests: Pass expectedStatus (e.g. 200) - validates status for each deletion
+     * Delete household(s) - accepts single ID or array of IDs, returns the deleted households
+     * Cleanup (afterAll): no expectedStatus - a household already gone counts as removed, any other status fails
+     * API tests: pass expectedStatus - every deletion answers it
      */
     static readonly deleteHousehold = async (
         context: BrowserContext,
@@ -200,47 +213,16 @@ export class HouseholdFactory {
         const {HouseholdDetailSchema} = useCoreValidation()
         const ids = Array.isArray(householdIds) ? householdIds : [householdIds]
 
-        // Delete households (repository handles Invoice cleanup + cascades for inhabitants, orders, allergies, assignments)
-        const results = await Promise.all(
-            ids.map(async (id) => {
-                try {
-                    const response = await context.request.delete(`${HOUSEHOLD_ADMIN_ENDPOINT}/${id}`)
-                    const status = response.status()
+        // The repository removes the invoices; inhabitants, orders, allergies and assignments cascade
+        const deleted = await Promise.all(ids.map(async (id) => {
+            const response = await context.request.delete(`${HOUSEHOLD_ADMIN_ENDPOINT}/${id}`)
+            const status = response.status()
+            const body = await response.text()
+            expect(expectedStatus === undefined ? [200, 404] : [expectedStatus], `Unexpected status deleting household ${id}: ${body}`).toContain(status)
+            return status === 200 ? HouseholdDetailSchema.parse(JSON.parse(body)) : null
+        }))
 
-                    // Cleanup mode - silent on success, log only failures
-                    if (expectedStatus === undefined) {
-                        if (status === 200) {
-                            return await response.json()
-                        } else if (status === 404) {
-                            return null // Already deleted
-                        } else {
-                            const body = await response.json()
-                            console.error(`❌ Failed to delete household ${id} (status ${status}): ${body.message || body.statusMessage}`)
-                            return null
-                        }
-                    }
-
-                    // API test mode - validate expectedStatus
-                    if (status === expectedStatus) {
-                        return status === 200 ? await response.json() : null
-                    } else if (status === 404 && expectedStatus === 200) {
-                        return null
-                    } else {
-                        const body = await response.json()
-                        console.warn(`❌ Household ${id} deletion returned ${status} (expected ${expectedStatus}): ${body.message || body.statusMessage}`)
-                        return null
-                    }
-                } catch (error) {
-                    console.error(`❌ Failed to delete household ${id}:`, error)
-                    return null
-                }
-            })
-        )
-
-        // Validate and return
-        return results.filter(r => r !== null).map(r => {
-            return HouseholdDetailSchema.parse(r)
-        }) as HouseholdDetail[]
+        return deleted.filter((household): household is HouseholdDetail => household !== null)
     }
 
     // === INHABITANT METHODS ===
@@ -462,6 +444,7 @@ export class HouseholdFactory {
      *
      * @param seasonId - Optional seasonId query param for parallel-safe testing
      * @param assertResponse - Optional callback to assert response properties
+     * @param adminBypass - An admin changing another household's preferences
      */
     static readonly updateInhabitantPreferences = async (
         context: BrowserContext,
@@ -469,11 +452,13 @@ export class HouseholdFactory {
         dinnerPreferences: Record<string, string>,
         expectedStatus: number = 200,
         seasonId?: number,
-        assertResponse?: (response: InhabitantUpdateResponse) => void
+        assertResponse?: (response: InhabitantUpdateResponse) => void,
+        adminBypass: boolean = false
     ): Promise<InhabitantUpdateResponse | null> => {
-        const url = seasonId !== undefined
-            ? `/api/household/inhabitants/${inhabitantId}/preferences?seasonId=${seasonId}`
-            : `/api/household/inhabitants/${inhabitantId}/preferences`
+        const query = new URLSearchParams()
+        if (seasonId !== undefined) query.append('seasonId', String(seasonId))
+        if (adminBypass) query.append('adminBypass', 'true')
+        const url = `/api/household/inhabitants/${inhabitantId}/preferences${query.size > 0 ? `?${query}` : ''}`
 
         const response = await context.request.post(url, {
             headers,
@@ -510,29 +495,24 @@ export class HouseholdFactory {
         const result = await HouseholdFactory.updateInhabitant(context, inhabitantId, {
             dinnerPreferences: createDefaultWeekdayMap(DinnerMode.NONE)
         }, 200, seasonId)
-        return result?.scaffoldResult?.released ?? 0
+        return result?.scaffoldResult?.totals[Action.RELEASE] ?? 0
     }
 
     /**
-     * Delete inhabitant (for API test scenarios)
+     * Delete inhabitant, returns the deleted inhabitant
+     * Cleanup (afterAll): no expectedStatus - an inhabitant already gone counts as removed, any other status fails
+     * API tests: pass expectedStatus - the deletion answers it
      */
     static readonly deleteInhabitant = async (
         context: BrowserContext,
         inhabitantId: number,
-        expectedStatus: number = 200
+        expectedStatus?: number
     ): Promise<InhabitantDetail | null> => {
         const response = await context.request.delete(`${INHABITANT_ENDPOINT}/${inhabitantId}`)
         const status = response.status()
-
-        if (status === expectedStatus) {
-            return status === 200 ? InhabitantDetailSchema.parse(await response.json()) : null
-        } else if (status === 404 && expectedStatus === 200) {
-            return null
-        } else {
-            const body = await response.text()
-            console.warn(`❌ Inhabitant ${inhabitantId} deletion returned ${status} (expected ${expectedStatus}):`, body)
-            return null
-        }
+        const body = await response.text()
+        expect(expectedStatus === undefined ? [200, 404] : [expectedStatus], `Unexpected status deleting inhabitant ${inhabitantId}: ${body}`).toContain(status)
+        return status === 200 ? InhabitantDetailSchema.parse(JSON.parse(body)) : null
     }
 
     // === HEYNABO IMPORT METHODS ===

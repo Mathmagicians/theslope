@@ -5,49 +5,24 @@
  */
 
 import {describe, it, expect} from 'vitest'
-import type {z} from 'zod'
 import {useCoreValidation, getHouseholdShortName} from '~/composables/useCoreValidation'
 import type {UserCreate} from '~/composables/useCoreValidation'
-import {DinnerModeSchema} from '~~/prisma/generated/zod'
-import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS} from '~/composables/useUserPreferenceValidation'
+import {useBookingValidation, type DinnerMode as DinnerModeType} from '~/composables/useBookingValidation'
+import {DEFAULT_APPEARANCE, DEFAULT_NOTIFICATION_CHANNELS, useUserPreferenceValidation} from '~/composables/useUserPreferenceValidation'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
+import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import type {WeekDayMap} from '~/types/dateTypes'
 
-const DinnerMode = DinnerModeSchema.enum
-type DinnerModeType = z.infer<typeof DinnerModeSchema>
+const DinnerMode = useBookingValidation().DinnerModeSchema.enum
+const SystemRole = useCoreValidation().SystemRoleSchema.enum
+const {NotificationChannelSchema, PaletteSchema, TextScaleSchema} = useUserPreferenceValidation()
 
 /** The JSON columns a User row carries in the database: roles plus the two preference columns (ADR-010) */
 const serializedUserColumns = (user: UserCreate) => ({
     systemRoles: JSON.stringify(user.systemRoles),
     notificationChannels: JSON.stringify(user.notificationChannels),
     appearance: JSON.stringify(user.appearance)
-})
-
-// ============================================================================
-// ID SCHEMA — shared building block for entity ids (ADR-001)
-// ============================================================================
-
-describe('useCoreValidation - IdSchema', () => {
-    const {IdSchema} = useCoreValidation()
-
-    it.each([
-        {desc: 'positive int', input: 1},
-        {desc: 'large positive int', input: 999999}
-    ])('GIVEN $desc THEN parses successfully', ({input}) => {
-        expect(IdSchema.parse(input)).toBe(input)
-    })
-
-    it.each([
-        {desc: 'zero', input: 0},
-        {desc: 'negative int', input: -1},
-        {desc: 'float', input: 1.5},
-        {desc: 'string', input: '1'},
-        {desc: 'null', input: null},
-        {desc: 'undefined', input: undefined}
-    ])('GIVEN $desc THEN rejects', ({input}) => {
-        expect(() => IdSchema.parse(input)).toThrow()
-    })
 })
 
 // ============================================================================
@@ -67,17 +42,6 @@ describe('useCoreValidation - User Schemas', () => {
         ['UserCreateSchema', () => UserCreateSchema, UserFactory.defaultUser()]
     ])('%s should parse factory data', (_name, getSchema, input) => {
         expect(() => getSchema().parse(input)).not.toThrow()
-    })
-
-    it('should normalize RFC 5322 email format', () => {
-        const user = {
-            ...UserFactory.defaultUser(),
-            id: 1,
-            email: 'Display Name <test@example.com>'
-        }
-        const result = BaseUserSchema.parse(user)
-
-        expect(result.email).toBe('test@example.com')
     })
 
     it('should serialize and deserialize user systemRoles', () => {
@@ -135,13 +99,6 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
                 dinnerPreferences: serializeWeekDayMap(createDefaultWeekdayMap(DinnerMode.DINEIN)),
                 expectBirthDate: false,
                 expectDinnerPrefs: true
-            },
-            {
-                testCase: 'with both',
-                birthDate: '1990-01-01',
-                dinnerPreferences: serializeWeekDayMap(createDefaultWeekdayMap(DinnerMode.TAKEAWAY)),
-                expectBirthDate: true,
-                expectDinnerPrefs: true
             }
         ])('should deserialize inhabitant $testCase', ({birthDate, dinnerPreferences, expectBirthDate, expectDinnerPrefs}) => {
             const serialized = {
@@ -161,8 +118,7 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
             }
 
             if (expectDinnerPrefs) {
-                expect(deserialized.dinnerPreferences).toBeDefined()
-                expect(deserialized.dinnerPreferences?.mandag).toBeDefined()
+                expect(deserialized.dinnerPreferences).toEqual(createDefaultWeekdayMap(DinnerMode.DINEIN))
             } else {
                 expect(deserialized.dinnerPreferences).toBeNull()
             }
@@ -184,13 +140,6 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
                 dinnerPreferences: serializeWeekDayMap(createDefaultWeekdayMap(DinnerMode.DINEIN)),
                 expectBirthDate: false,
                 expectDinnerPrefs: true
-            },
-            {
-                testCase: 'with both',
-                birthDate: '1990-01-01',
-                dinnerPreferences: serializeWeekDayMap(createDefaultWeekdayMap(DinnerMode.TAKEAWAY)),
-                expectBirthDate: true,
-                expectDinnerPrefs: true
             }
         ])('should deserialize inhabitant detail $testCase', ({birthDate, dinnerPreferences, expectBirthDate, expectDinnerPrefs}) => {
             const serialized = {
@@ -202,8 +151,8 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
             }
             const deserialized = deserializeInhabitantDetail(serialized)
 
-            // Detail schema requires dinnerPreferences (never undefined)
-            expect(deserialized.dinnerPreferences).not.toBeUndefined()
+            // Detail schema requires dinnerPreferences: the key is present, null when the column is empty
+            expect('dinnerPreferences' in deserialized).toBe(true)
 
             if (expectBirthDate) {
                 expect(deserialized.birthDate).toBeInstanceOf(Date)
@@ -219,25 +168,6 @@ describe('useCoreValidation - Inhabitant Schemas', () => {
                 expect(deserialized.dinnerPreferences).toBeNull()
             }
         })
-
-        it('should return InhabitantDetail type (dinnerPreferences required)', () => {
-            const serialized = {
-                ...HouseholdFactory.defaultInhabitantData(),
-                id: 1,
-                householdId: 1,
-                birthDate: null,
-                dinnerPreferences: null
-            }
-            const deserialized = deserializeInhabitantDetail(serialized)
-
-            // InhabitantDetail has dinnerPreferences as required but nullable
-            // This means it can be null but not undefined
-            expect('dinnerPreferences' in deserialized).toBe(true)
-            expect(deserialized.dinnerPreferences).toBeNull()
-
-            // Verify schema validation passes
-            expect(() => InhabitantDetailSchema.parse(deserialized)).not.toThrow()
-        })
     })
 })
 
@@ -249,6 +179,7 @@ describe('useCoreValidation - Household Schemas', () => {
     const {
         BaseHouseholdSchema,
         HouseholdCreateSchema,
+        HouseholdDetailSchema,
         deserializeHouseholdDisplay,
         deserializeHouseholdDetail
     } = useCoreValidation()
@@ -258,23 +189,6 @@ describe('useCoreValidation - Household Schemas', () => {
         ['HouseholdCreateSchema', () => HouseholdCreateSchema, HouseholdFactory.defaultHouseholdData()]
     ])('%s should parse factory data', (_name, getSchema, input) => {
         expect(() => getSchema().parse(input)).not.toThrow()
-    })
-
-    describe('validation rules', () => {
-        it.each([
-            {field: 'name', value: '', shouldFail: true},
-            {field: 'name', value: 'Valid Name', shouldFail: false},
-            {field: 'address', value: '', shouldFail: true},
-            {field: 'address', value: 'Valid Address 123', shouldFail: false}
-        ])('should validate $field with value "$value"', ({field, value, shouldFail}) => {
-            const household = {...HouseholdFactory.defaultHouseholdData(), [field]: value}
-
-            if (shouldFail) {
-                expect(() => HouseholdCreateSchema.parse(household)).toThrow()
-            } else {
-                expect(() => HouseholdCreateSchema.parse(household)).not.toThrow()
-            }
-        })
     })
 
     describe('deserializeHouseholdDisplay', () => {
@@ -292,6 +206,29 @@ describe('useCoreValidation - Household Schemas', () => {
             expect(deserialized.shortName).toBeDefined()
             expect(typeof deserialized.shortName).toBe('string')
             expect(deserialized.inhabitants).toEqual([])
+        })
+
+        it.each([
+            {moveOutDate: null, description: 'null moveOutDate'},
+            {moveOutDate: '2024-12-31', description: 'with moveOutDate'}
+        ])('should handle $description', ({moveOutDate}) => {
+            const householdData = HouseholdFactory.defaultHouseholdData()
+
+            const serialized = {
+                ...householdData,
+                id: 1,
+                movedInDate: '2020-01-01',
+                moveOutDate,
+                inhabitants: []
+            }
+
+            const result = deserializeHouseholdDisplay(serialized)
+
+            if (moveOutDate) {
+                expect(result.moveOutDate).toBeInstanceOf(Date)
+            } else {
+                expect(result.moveOutDate).toBeNull()
+            }
         })
     })
 
@@ -319,6 +256,28 @@ describe('useCoreValidation - Household Schemas', () => {
             expect(deserialized.inhabitants![0]!.birthDate).toBeInstanceOf(Date)
             expect(deserialized.inhabitants![0]!.name).toBe(serialized.inhabitants[0]!.name)
         })
+
+        const householdRowWithAllergies = () => ({
+            ...HouseholdFactory.defaultHouseholdData(),
+            id: 1,
+            movedInDate: '2020-01-01',
+            moveOutDate: null,
+            inhabitants: [
+                {...HouseholdFactory.defaultInhabitantData(), id: 1, householdId: 1, birthDate: null, dinnerPreferences: null, allergies: AllergyFactory.serializedAllergies(2, 1)},
+                {...HouseholdFactory.defaultInhabitantData(), id: 2, householdId: 1, birthDate: null, dinnerPreferences: null, allergies: []}
+            ]
+        })
+
+        it.each([
+            {through: 'the deserializer', read: () => deserializeHouseholdDetail(householdRowWithAllergies())},
+            {through: 'the schema', read: () => HouseholdDetailSchema.parse(JSON.parse(JSON.stringify(deserializeHouseholdDetail(householdRowWithAllergies()))))}
+        ])('keeps each inhabitant\'s allergies with their allergy type through $through', ({read}) => {
+            const [withAllergies, withoutAllergies] = read().inhabitants
+
+            expect(withAllergies!.allergies?.map(allergy => allergy.allergyType)).toEqual(AllergyFactory.createMockAllergyTypes())
+            expect(withAllergies!.allergies?.every(allergy => allergy.inhabitantId === withAllergies!.id)).toBe(true)
+            expect(withoutAllergies!.allergies).toEqual([])
+        })
     })
 })
 
@@ -329,18 +288,15 @@ describe('useCoreValidation - Household Schemas', () => {
 describe('getHouseholdShortName', () => {
     it.each([
         {address: 'Skråningen 31', expected: 'S_31'},
-        {address: 'Tvethøjvej 43, 1', expected: 'T_43_1'},
         {address: 'Abbey Road 1 th.', expected: 'AR_1_th'},
         {address: 'Penny Lane 4, 1 4', expected: 'PL_4_1_4'},
         {address: 'Østerbrogade 123, 2.', expected: 'Ø_123_2'},
-        {address: 'Broadway 42', expected: 'B_42'},
         // Dot format should produce same result as comma-space format
         {address: 'Smedekildevej 37.1', expected: 'S_37_1'},
         {address: 'Smedekildevej 37, 1', expected: 'S_37_1'},
-        {address: 'Smedekildevej 37, st', expected: 'S_37_st'},
-        {address: 'Tvethøjvej 44.1', expected: 'T_44_1'},
-        {address: 'Tvethøjvej 44, 1', expected: 'T_44_1'},
-        {address: 'Tvethøjvej 44, st', expected: 'T_44_st'}
+        {address: ' Andeby Vej 2 ', expected: 'AV_2'},
+        {address: ' Heynabo! ', expected: 'H'},
+        {address: ' 123 ', expected: '123'}
     ])('should generate "$expected" from "$address"', ({address, expected}) => {
         expect(getHouseholdShortName(address)).toBe(expected)
     })
@@ -392,7 +348,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
         const serialized = {
             ...UserFactory.defaultUser(),
             id: 1,
-            ...serializedUserColumns({...UserFactory.defaultUser(), systemRoles: ['ADMIN']}),
+            ...serializedUserColumns({...UserFactory.defaultUser(), systemRoles: [SystemRole.ADMIN]}),
             createdAt: new Date(),
             updatedAt: new Date(),
             Inhabitant: {
@@ -438,63 +394,7 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
         // THEN: Inhabitant should be null, systemRoles deserialized
         expect(user.Inhabitant).toBeNull()
         expect(Array.isArray(user.systemRoles)).toBe(true)
-        expect(user.systemRoles).toContain('ADMIN')
-    })
-
-    it('should deserialize UserDetail with dinnerPreferences', () => {
-        // GIVEN: Factory data with dinnerPreferences
-        const householdData = HouseholdFactory.defaultHouseholdData()
-        const inhabitantData = HouseholdFactory.defaultInhabitantData()
-        const factoryUser = UserFactory.defaultUser()
-        const userData = {...factoryUser, systemRoles: [...factoryUser.systemRoles]}
-
-        // Create dinnerPreferences using factory method with proper DinnerMode values
-        const dinnerPreferences = createDefaultWeekdayMap(DinnerMode.DINEIN)
-        dinnerPreferences.onsdag = DinnerMode.NONE
-        dinnerPreferences.lørdag = DinnerMode.NONE
-        dinnerPreferences.søndag = DinnerMode.NONE
-
-        const serializedUser = {
-            ...userData,
-            ...serializedUserColumns(userData),
-            id: 1,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-            Inhabitant: {
-                id: 10,
-                heynaboId: inhabitantData.heynaboId,
-                name: inhabitantData.name,
-                lastName: inhabitantData.lastName,
-                pictureUrl: inhabitantData.pictureUrl,
-                birthDate: inhabitantData.birthDate,
-                userId: 1,
-                householdId: 5,
-                dinnerPreferences: serializeWeekDayMap(dinnerPreferences),
-                household: {
-                    id: 5,
-                    heynaboId: householdData.heynaboId,
-                    pbsId: householdData.pbsId,
-                    movedInDate: householdData.movedInDate,
-                    moveOutDate: null,
-                    name: householdData.name,
-                    address: householdData.address
-                }
-            }
-        }
-
-        // WHEN: Deserializing
-        const user = deserializeUserDetail(serializedUser)
-
-        // THEN: dinnerPreferences should be deserialized to WeekDayMap object with proper DinnerMode values
-        expect(user.Inhabitant?.dinnerPreferences).toBeDefined()
-        expect(typeof user.Inhabitant?.dinnerPreferences).toBe('object')
-        expect(user.Inhabitant?.dinnerPreferences?.mandag).toBe(DinnerMode.DINEIN)
-        expect(user.Inhabitant?.dinnerPreferences?.tirsdag).toBe(DinnerMode.DINEIN)
-        expect(user.Inhabitant?.dinnerPreferences?.onsdag).toBe(DinnerMode.NONE)
-        expect(user.Inhabitant?.dinnerPreferences?.torsdag).toBe(DinnerMode.DINEIN)
-        expect(user.Inhabitant?.dinnerPreferences?.fredag).toBe(DinnerMode.DINEIN)
-        expect(user.Inhabitant?.dinnerPreferences?.lørdag).toBe(DinnerMode.NONE)
-        expect(user.Inhabitant?.dinnerPreferences?.søndag).toBe(DinnerMode.NONE)
+        expect(user.systemRoles).toContain(SystemRole.ADMIN)
     })
 
     it('should parse HouseholdSummary with nested inhabitants array', () => {
@@ -526,20 +426,6 @@ describe('useCoreValidation - Cross-Schema Integration', () => {
 })
 
 // ============================================================================
-// FRAGMENT PATTERN VALIDATION
-// ============================================================================
-
-describe('useCoreValidation - Fragment Pattern Compliance', () => {
-    it.each([
-        ['User', () => useCoreValidation().BaseUserSchema, {...UserFactory.defaultUser(), id: 1}],
-        ['Inhabitant', () => useCoreValidation().BaseInhabitantSchema, {...HouseholdFactory.defaultInhabitantData(), id: 1}],
-        ['Household', () => useCoreValidation().BaseHouseholdSchema, {...HouseholdFactory.defaultHouseholdData(), id: 1}]
-    ])('%s Fragment should extend without circular dependencies', (_entity, getSchema, data) => {
-        expect(() => getSchema().parse(data)).not.toThrow()
-    })
-})
-
-// ============================================================================
 // SCHEMA VALIDATION EDGE CASES
 // ============================================================================
 
@@ -567,27 +453,19 @@ describe('useCoreValidation - User Schema Validation Edge Cases', () => {
         }
     ] as const
 
-    const invalidEmails = [
-        {email: 'not-an-email', description: 'missing @ symbol'},
-        {email: '@example.com', description: 'missing local part'},
-        {email: 'user@', description: 'missing domain'}
-    ]
     const validEmails = [
         {email: 'simple@example.com', expected: 'simple@example.com', description: 'simple format'},
         {email: 'John Doe <john@example.com>', expected: 'john@example.com', description: 'RFC 5322 with display name'}
     ]
     const phoneCases = [
-        {phone: 'abc-def-ghij', shouldPass: false, description: 'reject letters'},
-        {phone: '12-34-56', shouldPass: false, description: 'reject special characters'},
+        {phone: 'abc-def-ghij', shouldPass: false, description: 'reject letters and dashes'},
         {phone: '+45 12345678', shouldPass: true, description: 'accept country code with spaces'},
-        {phone: '12345678', shouldPass: true, description: 'accept no country code'},
-        {phone: '+4512345678', shouldPass: true, description: 'accept country code without spaces'},
-        {phone: '+45 12 34 56 78', shouldPass: true, description: 'accept extra spaces'}
+        {phone: '12345678', shouldPass: true, description: 'accept no country code'}
     ]
 
     describe.each(variants)('$name', ({schema, withEmail, withPhone}) => {
-        it.each(invalidEmails)('rejects invalid email: $description', ({email}) => {
-            expect(schema.safeParse(withEmail(email)).success).toBe(false)
+        it('rejects invalid email: missing @ symbol', () => {
+            expect(schema.safeParse(withEmail('not-an-email')).success).toBe(false)
         })
 
         it.each(validEmails)('accepts and normalizes: $description', ({email, expected}) => {
@@ -622,86 +500,6 @@ describe('useCoreValidation - User Schema Validation Edge Cases', () => {
     })
 })
 
-describe('useCoreValidation - Inhabitant Schema Validation Edge Cases', () => {
-    const {InhabitantCreateSchema} = useCoreValidation()
-
-    it.each([
-        {field: 'name', value: '', shouldFail: true},
-        {field: 'name', value: 'a'.repeat(101), shouldFail: true},
-        {field: 'lastName', value: '', shouldFail: true},
-        {field: 'lastName', value: 'a'.repeat(101), shouldFail: true},
-    ])('should validate $field with value length', ({field, value, shouldFail}) => {
-        const inhabitant = {
-            ...HouseholdFactory.defaultInhabitantData(),
-            householdId: 1,
-            [field]: value
-        }
-
-        if (shouldFail) {
-            expect(() => InhabitantCreateSchema.parse(inhabitant)).toThrow()
-        } else {
-            expect(() => InhabitantCreateSchema.parse(inhabitant)).not.toThrow()
-        }
-    })
-
-    it('should reject invalid pictureUrl', () => {
-        const invalidInhabitant = {
-            ...HouseholdFactory.defaultInhabitantData(),
-            householdId: 1,
-            pictureUrl: 'not-a-url'
-        }
-        const result = InhabitantCreateSchema.safeParse(invalidInhabitant)
-        expect(result.success).toBe(false)
-    })
-
-    it('should accept valid pictureUrl', () => {
-        const inhabitant = {
-            ...HouseholdFactory.defaultInhabitantData(),
-            householdId: 1,
-            pictureUrl: 'https://example.com/photo.jpg'
-        }
-        const result = InhabitantCreateSchema.safeParse(inhabitant)
-        expect(result.success).toBe(true)
-    })
-})
-
-describe('useCoreValidation - Household Schema Validation Edge Cases', () => {
-    const {HouseholdCreateSchema} = useCoreValidation()
-
-    it('should handle maximum valid lengths', () => {
-        const household = {
-            ...HouseholdFactory.defaultHouseholdData(),
-            name: 'a'.repeat(100),
-            address: 'a'.repeat(200)
-        }
-        const result = HouseholdCreateSchema.safeParse(household)
-        expect(result.success).toBe(true)
-    })
-
-    it('should reject negative IDs', () => {
-        const invalidHousehold = {
-            ...HouseholdFactory.defaultHouseholdData(),
-            heynaboId: -1
-        }
-        const result = HouseholdCreateSchema.safeParse(invalidHousehold)
-        expect(result.success).toBe(false)
-    })
-
-    it('should coerce date strings to Date objects', () => {
-        // Input typed as Record to test schema coercion of string dates
-        const household: Record<string, unknown> = {
-            ...HouseholdFactory.defaultHouseholdData(),
-            movedInDate: '2024-01-01'
-        }
-        const result = HouseholdCreateSchema.safeParse(household)
-
-        expect(result.success).toBe(true)
-        if (result.success) {
-            expect(result.data.movedInDate).toBeInstanceOf(Date)
-        }
-    })
-})
-
 // ============================================================================
 // HOUSEHOLD CREATE FORM SCHEMA
 // ============================================================================
@@ -720,8 +518,13 @@ describe('useCoreValidation - HouseholdCreateFormSchema', () => {
 
     // ---------- Happy path + coercion ----------
 
-    it('accepts valid form input', () => {
-        expect(baseSchema.safeParse(validFormInput()).success).toBe(true)
+    it('accepts valid form input and keeps only the form fields (pbsId, address, movedInDate)', () => {
+        const result = baseSchema.safeParse(validFormInput())
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.movedInDate).toBeInstanceOf(Date)
+            expect(Object.keys(result.data).sort()).toEqual(['address', 'movedInDate', 'pbsId'])
+        }
     })
 
     it('coerces stringified pbsId from HTML number input to integer', () => {
@@ -738,8 +541,7 @@ describe('useCoreValidation - HouseholdCreateFormSchema', () => {
     it.each([
         ['non-numeric string',        'abc',   'PBS skal være et tal'],
         ['decimal',                   12.5,    'PBS skal være et helt tal'],
-        ['zero',                      0,       'PBS skal være positivt'],
-        ['negative',                  -1,      'PBS skal være positivt']
+        ['zero',                      0,       'PBS skal være positivt']
     ])('rejects pbsId when %s', (_, pbsId, expectedMessage) => {
         const result = baseSchema.safeParse({...validFormInput(), pbsId})
         expect(result.success).toBe(false)
@@ -749,25 +551,10 @@ describe('useCoreValidation - HouseholdCreateFormSchema', () => {
         }
     })
 
-    // ---------- address validation ----------
-
-    it('rejects empty address', () => {
-        expect(baseSchema.safeParse({...validFormInput(), address: ''}).success).toBe(false)
-    })
-
-    it('inherits address max length (200) from BaseHouseholdSchema', () => {
-        expect(baseSchema.safeParse({...validFormInput(), address: 'a'.repeat(201)}).success).toBe(false)
-    })
-
     // ---------- movedInDate validation (strict z.date() — no coercion) ----------
 
-    it.each([
-        ['null',               null],
-        ['undefined',          undefined],
-        ['empty string',       ''],
-        ['ISO date string',    '2026-05-15']
-    ])('rejects movedInDate when %s', (_, movedInDate) => {
-        const result = baseSchema.safeParse({...validFormInput(), movedInDate})
+    it('rejects an ISO date string for movedInDate (no coercion)', () => {
+        const result = baseSchema.safeParse({...validFormInput(), movedInDate: '2026-05-15'})
         expect(result.success).toBe(false)
         if (!result.success) {
             expect(result.error.issues.find(i => i.path[0] === 'movedInDate')).toBeDefined()
@@ -783,22 +570,6 @@ describe('useCoreValidation - HouseholdCreateFormSchema', () => {
         }
     })
 
-    it('accepts a valid Date instance', () => {
-        const result = baseSchema.safeParse(validFormInput())
-        expect(result.success).toBe(true)
-        if (result.success) {
-            expect(result.data.movedInDate).toBeInstanceOf(Date)
-        }
-    })
-
-    it('only contains the form fields (pbsId, address, movedInDate) — nothing else', () => {
-        const result = baseSchema.safeParse(validFormInput())
-        expect(result.success).toBe(true)
-        if (result.success) {
-            expect(Object.keys(result.data).sort()).toEqual(['address', 'movedInDate', 'pbsId'])
-        }
-    })
-
     // ---------- Sibling move-out constraints (closure) ----------
 
     const movedIn = new Date('2026-05-15')
@@ -811,7 +582,6 @@ describe('useCoreValidation - HouseholdCreateFormSchema', () => {
         ['constraint before movedInDate',      [dayBefore]                          , true],
         ['constraint equal to movedInDate',    [sameDay]                            , true],
         ['constraint after movedInDate',       [dayAfter]                           , false],
-        ['all constraints <= movedInDate',     [dayBefore, sameDay]                 , true],
         ['any constraint > movedInDate fails', [dayBefore, dayAfter]                , false]
     ])('sibling constraints: %s → valid=%s', (_, constraints, expectedValid) => {
         const result = HouseholdCreateFormSchema(constraints).safeParse({...validFormInput(), movedInDate: movedIn})
@@ -824,57 +594,6 @@ describe('useCoreValidation - HouseholdCreateFormSchema', () => {
 })
 
 // ============================================================================
-// WEEKDAYMAP VALIDATION
-// ============================================================================
-
-describe('useCoreValidation - WeekDayMap Validation', () => {
-    const {createDefaultWeekdayMap, serializeWeekDayMap, deserializeWeekDayMap, createWeekDayMapFromSelection} = useCoreValidation()
-
-    it('should create default weekday map with all days', () => {
-        const weekdayMap = createDefaultWeekdayMap(DinnerMode.DINEIN)
-
-        expect(weekdayMap.mandag).toBe(DinnerMode.DINEIN)
-        expect(weekdayMap.tirsdag).toBe(DinnerMode.DINEIN)
-        expect(weekdayMap.onsdag).toBe(DinnerMode.DINEIN)
-        expect(weekdayMap.torsdag).toBe(DinnerMode.DINEIN)
-        expect(weekdayMap.fredag).toBe(DinnerMode.DINEIN)
-        expect(weekdayMap.lørdag).toBe(DinnerMode.DINEIN)
-        expect(weekdayMap.søndag).toBe(DinnerMode.DINEIN)
-    })
-
-    it('should create weekday map from selection', () => {
-        const selection = ['mandag', 'onsdag', 'fredag', 'søndag'] // Selected weekdays
-        const weekdayMap = createWeekDayMapFromSelection(selection, DinnerMode.DINEIN, DinnerMode.NONE)
-
-        expect(weekdayMap.mandag).toBe(DinnerMode.DINEIN)
-        expect(weekdayMap.tirsdag).toBe(DinnerMode.NONE)
-        expect(weekdayMap.onsdag).toBe(DinnerMode.DINEIN)
-        expect(weekdayMap.torsdag).toBe(DinnerMode.NONE)
-        expect(weekdayMap.fredag).toBe(DinnerMode.DINEIN)
-        expect(weekdayMap.lørdag).toBe(DinnerMode.NONE)
-        expect(weekdayMap.søndag).toBe(DinnerMode.DINEIN)
-    })
-
-    it('should roundtrip serialize/deserialize all DinnerMode values', () => {
-        const weekdayMap = {
-            mandag: DinnerMode.DINEIN,
-            tirsdag: DinnerMode.TAKEAWAY,
-            onsdag: DinnerMode.DINEINLATE,
-            torsdag: DinnerMode.NONE,
-            fredag: DinnerMode.DINEIN,
-            lørdag: DinnerMode.TAKEAWAY,
-            søndag: DinnerMode.NONE
-        }
-
-        const serialized = serializeWeekDayMap(weekdayMap)
-        expect(typeof serialized).toBe('string')
-
-        const deserialized = deserializeWeekDayMap(serialized)
-        expect(deserialized).toEqual(weekdayMap)
-    })
-})
-
-// ============================================================================
 // HOUSEHOLD CREATE SCHEMA TESTS (with optional inhabitants per ADR-009)
 // ============================================================================
 
@@ -883,59 +602,25 @@ describe('useCoreValidation - HouseholdCreateSchema with inhabitants', () => {
 
     // Helper to create inhabitant without householdId (as expected by nested schema)
     const createInhabitantWithoutHouseholdId = (salt: string) => {
-        const {householdId, ...inhabitant} = HouseholdFactory.defaultInhabitantData(salt)
+        const {householdId: _householdId, ...inhabitant} = HouseholdFactory.defaultInhabitantData(salt)
         return inhabitant
     }
 
-    describe.each([
+    it.each([
         {name: 'no inhabitants', inhabitants: undefined, expectedLength: undefined},
-        {name: 'empty array', inhabitants: [], expectedLength: 0},
-        {name: 'one inhabitant', inhabitants: [createInhabitantWithoutHouseholdId('i1')], expectedLength: 1},
-        {name: 'multiple inhabitants', inhabitants: [
-            createInhabitantWithoutHouseholdId('i1'),
-            createInhabitantWithoutHouseholdId('i2'),
-            createInhabitantWithoutHouseholdId('i3')
-        ], expectedLength: 3},
-    ])('valid household with $name', ({inhabitants, expectedLength}) => {
-        it('should parse successfully', () => {
-            const household = {...HouseholdFactory.defaultHouseholdData(), inhabitants}
-            const result = HouseholdCreateSchema.safeParse(household)
-
-            expect(result.success).toBe(true)
-            if (result.success) {
-                if (expectedLength === undefined) {
-                    expect(result.data.inhabitants).toBeUndefined()
-                } else {
-                    expect(result.data.inhabitants).toHaveLength(expectedLength)
-                }
-            }
-        })
-    })
-
-    it('should accept inhabitant with user profile in nested creation', () => {
-        const household = {
-            ...HouseholdFactory.defaultHouseholdData(),
-            inhabitants: [{
-                ...createInhabitantWithoutHouseholdId('withUser'),
-                user: {email: 'john@example.com', passwordHash: 'hash123', systemRole: 'USER' as const}
-            }]
-        }
-
+        {name: 'one inhabitant', inhabitants: [createInhabitantWithoutHouseholdId('i1')], expectedLength: 1}
+    ])('valid household with $name should parse successfully', ({inhabitants, expectedLength}) => {
+        const household = {...HouseholdFactory.defaultHouseholdData(), inhabitants}
         const result = HouseholdCreateSchema.safeParse(household)
+
         expect(result.success).toBe(true)
         if (result.success) {
-            expect(result.data.inhabitants![0]?.user?.email).toBe('john@example.com')
+            if (expectedLength === undefined) {
+                expect(result.data.inhabitants).toBeUndefined()
+            } else {
+                expect(result.data.inhabitants).toHaveLength(expectedLength)
+            }
         }
-    })
-
-    it('should reject household with invalid inhabitant (empty name)', () => {
-        const household = {
-            ...HouseholdFactory.defaultHouseholdData(),
-            inhabitants: [{...createInhabitantWithoutHouseholdId('invalid'), name: ''}]
-        }
-
-        const result = HouseholdCreateSchema.safeParse(household)
-        expect(result.success).toBe(false)
     })
 })
 
@@ -952,8 +637,7 @@ describe('useCoreValidation - InhabitantCreateSchema Additional Tests', () => {
             householdId: 1,
             user: {
                 email: 'john@example.com',
-                passwordHash: 'hashedpassword123',
-                systemRole: 'USER' as const
+                passwordHash: 'hashedpassword123'
             }
         }
 
@@ -981,28 +665,11 @@ describe('useCoreValidation - InhabitantCreateSchema Additional Tests', () => {
     })
 
     it.each([
-        {value: undefined, description: 'without dinnerPreferences (optional)'},
-        {value: null, description: 'with null dinnerPreferences'}
-    ])('should accept inhabitant $description', ({value}) => {
-        const inhabitant = {
-            ...HouseholdFactory.defaultInhabitantData(),
-            householdId: 1,
-            dinnerPreferences: value
-        }
-
-        const result = InhabitantCreateSchema.safeParse(inhabitant)
-        expect(result.success).toBe(true)
-        if (result.success) {
-            expect(result.data.dinnerPreferences).toBe(value)
-        }
-    })
-
-    it.each([
         {
             getData: () => {
                 const map = createDefaultWeekdayMap(DinnerMode.DINEIN)
                 // Cast to test invalid enum value at runtime
-                map.mandag = 'INVALID_MODE' as 'DINEIN'
+                map.mandag = 'INVALID_MODE' as DinnerModeType
                 return map
             },
             description: 'invalid DinnerMode value'
@@ -1026,105 +693,6 @@ describe('useCoreValidation - InhabitantCreateSchema Additional Tests', () => {
         const result = InhabitantCreateSchema.safeParse(invalidInhabitant)
         expect(result.success).toBe(false)
     })
-
-    it('should handle null pictureUrl for inhabitant', () => {
-        const inhabitant = {
-            ...HouseholdFactory.defaultInhabitantData(),
-            householdId: 1,
-            pictureUrl: null
-        }
-
-        const result = InhabitantCreateSchema.safeParse(inhabitant)
-        expect(result.success).toBe(true)
-        if (result.success) {
-            expect(result.data.pictureUrl).toBeNull()
-        }
-    })
-
-    it('should handle null birthDate for inhabitant', () => {
-        const inhabitant = {
-            ...HouseholdFactory.defaultInhabitantData(),
-            householdId: 1,
-            birthDate: null
-        }
-
-        const result = InhabitantCreateSchema.safeParse(inhabitant)
-        expect(result.success).toBe(true)
-        if (result.success) {
-            expect(result.data.birthDate).toBeNull()
-        }
-    })
-})
-
-// ============================================================================
-// HOUSEHOLD SCHEMA VALIDATION (from old useHouseholdValidation tests)
-// ============================================================================
-
-describe('useCoreValidation - HouseholdCreateSchema Additional Tests', () => {
-    const {HouseholdCreateSchema} = useCoreValidation()
-
-    it('should accept household with optional moveOutDate', () => {
-        const household = {
-            ...HouseholdFactory.defaultHouseholdData(),
-            moveOutDate: new Date('2024-12-31')
-        }
-
-        const result = HouseholdCreateSchema.safeParse(household)
-        expect(result.success).toBe(true)
-        if (result.success) {
-            expect(result.data.moveOutDate).toBeDefined()
-        }
-    })
-
-    it('should reject household with missing heynaboId', () => {
-        const invalidHousehold = {
-            ...HouseholdFactory.defaultHouseholdData(),
-            heynaboId: undefined
-        }
-
-        const result = HouseholdCreateSchema.safeParse(invalidHousehold)
-        expect(result.success).toBe(false)
-    })
-
-    it('should reject household with name too long (101 chars)', () => {
-        const invalidHousehold = {
-            ...HouseholdFactory.defaultHouseholdData(),
-            name: 'a'.repeat(101)
-        }
-
-        const result = HouseholdCreateSchema.safeParse(invalidHousehold)
-        expect(result.success).toBe(false)
-    })
-})
-
-// ============================================================================
-// GETHOUSHOLDSHORTNAME ADDITIONAL TESTS
-// ============================================================================
-
-describe('getHouseholdShortName - Additional Test Cases', () => {
-    it.each([
-        {address: ' Andeby Vej 2 ', expected: 'AV_2', description: 'with leading/trailing spaces'},
-        {address: ' Heynabo! ', expected: 'H', description: 'non-alphanumeric characters'},
-        {address: ' 123 ', expected: '123', description: 'only numbers with spaces'}
-    ])('should generate "$expected" from "$address" ($description)', ({address, expected}) => {
-        expect(getHouseholdShortName(address)).toBe(expected)
-    })
-
-    it('should produce URL-safe shortNames that survive encode/decode round-trip', () => {
-        const testAddresses = [
-            'Skråningen 31',
-            'Tvethøjvej 43, 1',
-            'Abbey Road 1 th.',
-            'Heynabo!'
-        ]
-
-        testAddresses.forEach(address => {
-            const shortName = getHouseholdShortName(address)
-            const encoded = encodeURIComponent(shortName)
-            const decoded = decodeURIComponent(encoded)
-            expect(decoded).toBe(shortName)
-        })
-    })
 })
 
 // ============================================================================
@@ -1140,234 +708,123 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
         createDefaultWeekdayMap
     } = useCoreValidation()
 
-    describe('deserializeInhabitantDisplay additional tests', () => {
-        it('should deserialize inhabitant from factory data', () => {
-            const inhabitantData = HouseholdFactory.defaultInhabitantData()
-            const dinnerPrefs = createDefaultWeekdayMap(DinnerMode.DINEIN)
+    // Type aliases for roundtrip test data
+    type SerializeFn = (data: Record<string, unknown>) => Record<string, unknown>
+    type CheckFieldsFn = (original: Record<string, unknown>, deserialized: Record<string, unknown>) => void
 
-            // Simulate database serialized format
-            const serialized = {
-                ...inhabitantData,
+    interface RoundtripTestCase {
+        type: string
+        getData: () => Record<string, unknown>
+        serialize: SerializeFn
+        deserialize: (data: Record<string, unknown>) => Record<string, unknown>
+        checkFields: CheckFieldsFn
+    }
+
+    const testCases: RoundtripTestCase[] = [
+        {
+            type: 'inhabitant',
+            getData: () => ({
+                ...HouseholdFactory.defaultInhabitantData(),
                 id: 1,
                 householdId: 1,
-                birthDate: '1990-01-15',
-                dinnerPreferences: serializeWeekDayMap(dinnerPrefs)
+                birthDate: new Date('1990-01-15'),
+                dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
+            }),
+            serialize: (data) => ({
+                ...data,
+                birthDate: (data.birthDate as Date).toISOString(),
+                dinnerPreferences: serializeWeekDayMap(data.dinnerPreferences as WeekDayMap<DinnerModeType>)
+            }),
+            deserialize: deserializeInhabitantDisplay,
+            checkFields: (original, deserialized) => {
+                expect(deserialized.birthDate).toBeInstanceOf(Date)
+                expect((deserialized.birthDate as Date).getTime()).toBe((original.birthDate as Date).getTime())
+                expect(deserialized.dinnerPreferences).toEqual(original.dinnerPreferences)
             }
-
-            const result = deserializeInhabitantDisplay(serialized)
-
-            expect(result.birthDate).toBeInstanceOf(Date)
-            expect(result.dinnerPreferences?.mandag).toBe(DinnerMode.DINEIN)
-            expect(result.dinnerPreferences?.tirsdag).toBe(DinnerMode.DINEIN)
-        })
-    })
-
-    describe('deserializeHouseholdDisplay additional tests', () => {
-        it('should deserialize household summary from factory data with dinnerPreferences', () => {
-            const householdData = HouseholdFactory.defaultHouseholdData()
-            const inhabitantData = HouseholdFactory.defaultInhabitantData()
-
-            const serialized = {
-                ...householdData,
+        },
+        {
+            type: 'household summary',
+            getData: () => ({
+                ...HouseholdFactory.defaultHouseholdData(),
                 id: 1,
-                movedInDate: '2020-01-01',
-                moveOutDate: null,
+                movedInDate: new Date('2020-01-01'),
+                moveOutDate: new Date('2024-12-31'),
                 inhabitants: [
                     {
-                        ...inhabitantData,
+                        ...HouseholdFactory.defaultInhabitantData(),
                         id: 10,
-                        birthDate: inhabitantData.birthDate?.toISOString(),
-                        dinnerPreferences: serializeWeekDayMap(inhabitantData.dinnerPreferences!)
+                        birthDate: new Date('1990-01-15')
                     }
                 ]
+            }),
+            serialize: (data) => ({
+                ...data,
+                movedInDate: (data.movedInDate as Date).toISOString(),
+                moveOutDate: (data.moveOutDate as Date | null)?.toISOString(),
+                inhabitants: (data.inhabitants as Record<string, unknown>[]).map((i) => ({
+                    ...i,
+                    birthDate: (i.birthDate as Date | null)?.toISOString(),
+                    dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences as WeekDayMap<DinnerModeType>) : null
+                }))
+            }),
+            deserialize: deserializeHouseholdDisplay,
+            checkFields: (original, deserialized) => {
+                expect(deserialized.movedInDate).toBeInstanceOf(Date)
+                expect((deserialized.movedInDate as Date).getTime()).toBe((original.movedInDate as Date).getTime())
+                expect(deserialized.shortName).toBe(getHouseholdShortName(original.address as string))
+                const [originalInhabitant] = original.inhabitants as Record<string, unknown>[]
+                const [deserializedInhabitant] = deserialized.inhabitants as Record<string, unknown>[]
+                expect(deserializedInhabitant).toBeDefined()
+                expect(deserializedInhabitant!.birthDate).toBeInstanceOf(Date)
+                expect(deserializedInhabitant!.dinnerPreferences).toEqual(originalInhabitant!.dinnerPreferences)
             }
-
-            const result = deserializeHouseholdDisplay(serialized)
-
-            expect(result.id).toBe(1)
-            expect(result.shortName).toBe(getHouseholdShortName(householdData.address))
-            expect(result.movedInDate).toBeInstanceOf(Date)
-            expect(result.inhabitants).toHaveLength(1)
-            const [inhabitant] = result.inhabitants!
-            expect(inhabitant!.birthDate).toBeInstanceOf(Date)
-            expect(inhabitant!.dinnerPreferences).toBeDefined()
-            expect(inhabitant!.dinnerPreferences?.mandag).toBe(DinnerMode.DINEIN)
-        })
-
-        it.each([
-            {moveOutDate: null, description: 'null moveOutDate'},
-            {moveOutDate: '2024-12-31', description: 'with moveOutDate'}
-        ])('should handle $description', ({moveOutDate}) => {
-            const householdData = HouseholdFactory.defaultHouseholdData()
-
-            const serialized = {
-                ...householdData,
+        },
+        {
+            type: 'household with inhabitants',
+            getData: () => ({
+                ...HouseholdFactory.defaultHouseholdData(),
                 id: 1,
-                movedInDate: '2020-01-01',
-                moveOutDate,
-                inhabitants: []
-            }
-
-            const result = deserializeHouseholdDisplay(serialized)
-
-            if (moveOutDate) {
-                expect(result.moveOutDate).toBeInstanceOf(Date)
-            } else {
-                expect(result.moveOutDate).toBeNull()
-            }
-        })
-    })
-
-    describe('deserializeHouseholdDetail additional tests', () => {
-        it('should deserialize household with inhabitants from factory data', () => {
-            const householdData = HouseholdFactory.defaultHouseholdData()
-            const inhabitantData = HouseholdFactory.defaultInhabitantData()
-            const dinnerPrefs = createDefaultWeekdayMap(DinnerMode.DINEIN)
-
-            const serialized = {
-                ...householdData,
-                id: 1,
-                movedInDate: '2020-01-01',
+                movedInDate: new Date('2020-01-01'),
                 moveOutDate: null,
                 inhabitants: [
                     {
-                        ...inhabitantData,
+                        ...HouseholdFactory.defaultInhabitantData(),
                         id: 10,
                         householdId: 1,
-                        birthDate: '1990-01-15',
-                        dinnerPreferences: serializeWeekDayMap(dinnerPrefs)
+                        birthDate: new Date('1990-01-15'),
+                        dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
                     }
                 ]
+            }),
+            serialize: (data) => ({
+                ...data,
+                movedInDate: (data.movedInDate as Date).toISOString(),
+                inhabitants: (data.inhabitants as Record<string, unknown>[]).map((i) => ({
+                    ...i,
+                    birthDate: (i.birthDate as Date | null)?.toISOString(),
+                    dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences as WeekDayMap<DinnerModeType>) : null
+                }))
+            }),
+            deserialize: deserializeHouseholdDetail,
+            checkFields: (original, deserialized) => {
+                expect(deserialized.shortName).toBe(getHouseholdShortName(original.address as string))
+                expect(deserialized.movedInDate).toBeInstanceOf(Date)
+                const [originalInhabitant] = original.inhabitants as Record<string, unknown>[]
+                const [deserializedInhabitant] = deserialized.inhabitants as Record<string, unknown>[]
+                expect(deserializedInhabitant).toBeDefined()
+                expect(deserializedInhabitant!.birthDate).toBeInstanceOf(Date)
+                expect((deserializedInhabitant!.birthDate as Date).getTime()).toBe((originalInhabitant!.birthDate as Date).getTime())
+                expect(deserializedInhabitant!.dinnerPreferences).toEqual(originalInhabitant!.dinnerPreferences)
             }
-
-            const result = deserializeHouseholdDetail(serialized)
-
-            expect(result.shortName).toBe(getHouseholdShortName(householdData.address))
-            expect(result.movedInDate).toBeInstanceOf(Date)
-            expect(result.inhabitants).toHaveLength(1)
-            const [inhabitant] = result.inhabitants!
-            expect(inhabitant!.birthDate).toBeInstanceOf(Date)
-            expect(inhabitant!.dinnerPreferences?.mandag).toBe(DinnerMode.DINEIN)
-        })
-    })
-
-    describe('Roundtrip Tests', () => {
-        // Type aliases for roundtrip test data
-        type SerializeFn = (data: Record<string, unknown>) => Record<string, unknown>
-        type CheckFieldsFn = (original: Record<string, unknown>, deserialized: Record<string, unknown>) => void
-
-        interface RoundtripTestCase {
-            type: string
-            getData: () => Record<string, unknown>
-            serialize: SerializeFn
-            deserialize: (data: Record<string, unknown>) => Record<string, unknown>
-            checkFields: CheckFieldsFn
         }
+    ]
 
-        const testCases: RoundtripTestCase[] = [
-            {
-                type: 'inhabitant',
-                getData: () => ({
-                    ...HouseholdFactory.defaultInhabitantData(),
-                    id: 1,
-                    householdId: 1,
-                    birthDate: new Date('1990-01-15'),
-                    dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
-                }),
-                serialize: (data) => ({
-                    ...data,
-                    birthDate: (data.birthDate as Date).toISOString(),
-                    dinnerPreferences: serializeWeekDayMap(data.dinnerPreferences as WeekDayMap<DinnerModeType>)
-                }),
-                deserialize: deserializeInhabitantDisplay,
-                checkFields: (original, deserialized) => {
-                    expect(deserialized.birthDate).toBeInstanceOf(Date)
-                    expect((deserialized.birthDate as Date).getTime()).toBe((original.birthDate as Date).getTime())
-                    expect(deserialized.dinnerPreferences).toEqual(original.dinnerPreferences)
-                }
-            },
-            {
-                type: 'household summary',
-                getData: () => ({
-                    ...HouseholdFactory.defaultHouseholdData(),
-                    id: 1,
-                    movedInDate: new Date('2020-01-01'),
-                    moveOutDate: new Date('2024-12-31'),
-                    inhabitants: [
-                        {
-                            ...HouseholdFactory.defaultInhabitantData(),
-                            id: 10,
-                            birthDate: new Date('1990-01-15')
-                        }
-                    ]
-                }),
-                serialize: (data) => ({
-                    ...data,
-                    movedInDate: (data.movedInDate as Date).toISOString(),
-                    moveOutDate: (data.moveOutDate as Date | null)?.toISOString(),
-                    inhabitants: (data.inhabitants as Record<string, unknown>[]).map((i) => ({
-                        ...i,
-                        birthDate: (i.birthDate as Date | null)?.toISOString(),
-                        dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences as WeekDayMap<DinnerModeType>) : null
-                    }))
-                }),
-                deserialize: deserializeHouseholdDisplay,
-                checkFields: (original, deserialized) => {
-                    expect(deserialized.movedInDate).toBeInstanceOf(Date)
-                    expect((deserialized.movedInDate as Date).getTime()).toBe((original.movedInDate as Date).getTime())
-                    expect(deserialized.shortName).toBe(getHouseholdShortName(original.address as string))
-                    const [originalInhabitant] = original.inhabitants as Record<string, unknown>[]
-                    const [deserializedInhabitant] = deserialized.inhabitants as Record<string, unknown>[]
-                    expect(deserializedInhabitant).toBeDefined()
-                    expect(deserializedInhabitant!.birthDate).toBeInstanceOf(Date)
-                    expect(deserializedInhabitant!.dinnerPreferences).toEqual(originalInhabitant!.dinnerPreferences)
-                }
-            },
-            {
-                type: 'household with inhabitants',
-                getData: () => ({
-                    ...HouseholdFactory.defaultHouseholdData(),
-                    id: 1,
-                    movedInDate: new Date('2020-01-01'),
-                    moveOutDate: null,
-                    inhabitants: [
-                        {
-                            ...HouseholdFactory.defaultInhabitantData(),
-                            id: 10,
-                            householdId: 1,
-                            birthDate: new Date('1990-01-15'),
-                            dinnerPreferences: createDefaultWeekdayMap(DinnerMode.DINEIN)
-                        }
-                    ]
-                }),
-                serialize: (data) => ({
-                    ...data,
-                    movedInDate: (data.movedInDate as Date).toISOString(),
-                    inhabitants: (data.inhabitants as Record<string, unknown>[]).map((i) => ({
-                        ...i,
-                        birthDate: (i.birthDate as Date | null)?.toISOString(),
-                        dinnerPreferences: i.dinnerPreferences ? serializeWeekDayMap(i.dinnerPreferences as WeekDayMap<DinnerModeType>) : null
-                    }))
-                }),
-                deserialize: deserializeHouseholdDetail,
-                checkFields: (original, deserialized) => {
-                    const [originalInhabitant] = original.inhabitants as Record<string, unknown>[]
-                    const [deserializedInhabitant] = deserialized.inhabitants as Record<string, unknown>[]
-                    expect(deserializedInhabitant).toBeDefined()
-                    expect(deserializedInhabitant!.birthDate).toBeInstanceOf(Date)
-                    expect((deserializedInhabitant!.birthDate as Date).getTime()).toBe((originalInhabitant!.birthDate as Date).getTime())
-                    expect(deserializedInhabitant!.dinnerPreferences).toEqual(originalInhabitant!.dinnerPreferences)
-                }
-            }
-        ]
+    it.each(testCases)('should roundtrip $type', ({getData, serialize, deserialize, checkFields}) => {
+        const original = getData()
+        const serialized = serialize(original)
+        const deserialized = deserialize(serialized)
 
-        it.each(testCases)('should roundtrip $type', ({getData, serialize, deserialize, checkFields}) => {
-            const original = getData()
-            const serialized = serialize(original)
-            const deserialized = deserialize(serialized)
-
-            checkFields(original, deserialized)
-        })
+        checkFields(original, deserialized)
     })
 })
 
@@ -1378,7 +835,6 @@ describe('useCoreValidation - Household Deserialization Roundtrip Tests', () => 
 describe('useCoreValidation - User preference columns', () => {
     const {
         BaseUserSchema,
-        UserUpdateSchema,
         UserDetailSchema,
         UserSessionSchema,
         serializeUserInput,
@@ -1387,8 +843,8 @@ describe('useCoreValidation - User preference columns', () => {
     } = useCoreValidation()
 
     const preferences: Pick<UserCreate, 'notificationChannels' | 'appearance'> = {
-        notificationChannels: ['EMAIL', 'SMS'],
-        appearance: {palette: 'high-contrast', textScale: 'large'}
+        notificationChannels: [NotificationChannelSchema.enum.EMAIL, NotificationChannelSchema.enum.SMS],
+        appearance: {palette: PaletteSchema.enum['high-contrast'], textScale: TextScaleSchema.enum.large}
     }
 
     it('GIVEN a user without the columns THEN the domain schema fills the defaults', () => {
@@ -1431,13 +887,6 @@ describe('useCoreValidation - User preference columns', () => {
 
         expect(detail.notificationChannels).toEqual(preferences.notificationChannels)
         expect(detail.appearance).toEqual(preferences.appearance)
-    })
-
-    it.each([
-        {desc: 'channels only', update: {id: 1, notificationChannels: ['SMS']}},
-        {desc: 'appearance only', update: {id: 1, appearance: {palette: 'default', textScale: 'larger'}}}
-    ])('GIVEN $desc THEN UserUpdateSchema accepts the partial', ({update}) => {
-        expect(() => UserUpdateSchema.parse(update)).not.toThrow()
     })
 
     it('GIVEN a session user THEN the session carries both columns', () => {

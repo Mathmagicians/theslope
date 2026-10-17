@@ -32,7 +32,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 // Design system and validation
-const {TYPOGRAPHY, ICONS, DINNER_STATE_BADGES, SIZES, IMG, BACKGROUNDS, COLOR} = useTheSlopeDesignSystem()
+const {TYPOGRAPHY, ICONS, DINNER_STATE_BADGES, SIZES, IMG, BACKGROUNDS, COLOR, NOISE} = useTheSlopeDesignSystem()
 const {DinnerStateSchema} = useBookingValidation()
 const DinnerState = DinnerStateSchema.enum
 
@@ -70,7 +70,7 @@ const emit = defineEmits<{
       <UBadge
         :color="COLOR.mocha"
         :icon="stateBadge.icon"
-        variant="outline"
+        :variant="NOISE.medium"
         :size="SIZES.standard"
         :class="TYPOGRAPHY.bodyTextMedium"
       >
@@ -98,7 +98,7 @@ const emit = defineEmits<{
         :to="heynaboEventUrl"
         target="_blank"
         :color="COLOR.neutral"
-        variant="ghost"
+        :variant="NOISE.quiet"
         :size="SIZES.standard"
         :avatar="{src: IMG.heynabo, alt: 'Heynabo'}"
         :trailing-icon="ICONS.arrowRight"

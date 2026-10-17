@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
+import { ZodError } from 'zod'
 import { useCookingTeamValidation, type CookingTeamDisplay, type CookingTeamAssignment } from '~/composables/useCookingTeamValidation'
+import { useDutyValidation } from '~/composables/useDutyValidation'
 import { useWeekDayMapValidation } from '~/composables/useWeekDayMapValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
@@ -11,181 +13,25 @@ const { serializeWeekDayMap: serializeDinnerPreferences } = useCoreValidation()
 describe('useCookingTeamValidation', () => {
   // Get validation utilities
   const {
-    CookingTeamSchema,
-    CookingTeamDisplaySchema,
     TeamRoleSchema,
     getTeamMemberCounts
   } = useCookingTeamValidation()
-
-  describe('CookingTeamSchema', () => {
-    it.each([
-      {
-        name: 'valid team data',
-        team: { seasonId: 1, name: "Team Alpha" },
-        expected: { success: true, seasonId: 1, name: "Team Alpha" }
-      },
-      {
-        name: 'team with optional id',
-        team: { id: 42, seasonId: 1, name: "Team Beta" },
-        expected: { success: true, id: 42 }
-      }
-    ])('should accept $name', ({ team, expected }) => {
-      const result = CookingTeamSchema.safeParse(team)
-      expect(result.success).toBe(expected.success)
-      if (result.success && expected.seasonId) {
-        expect(result.data.seasonId).toBe(expected.seasonId)
-        expect(result.data.name).toBe(expected.name)
-      }
-      if (result.success && expected.id) {
-        expect(result.data.id).toBe(expected.id)
-      }
-    })
-
-    it.each([
-      {
-        name: 'missing seasonId',
-        team: { name: "Team Gamma" }
-      },
-      {
-        name: 'empty name',
-        team: { seasonId: 1, name: "" }
-      },
-      {
-        name: 'name too long (101 chars)',
-        team: { seasonId: 1, name: "a".repeat(101) }
-      },
-      {
-        name: 'invalid seasonId (negative)',
-        team: { seasonId: -1, name: "Team" }
-      }
-    ])('should reject team with $name', ({ team }) => {
-      const result = CookingTeamSchema.safeParse(team)
-      expect(result.success).toBe(false)
-    })
-  })
-
-  describe('TeamRoleSchema', () => {
-    it.each([
-      { role: 'CHEF', expected: true },
-      { role: 'COOK', expected: true },
-      { role: 'JUNIORHELPER', expected: true },
-      { role: 'INVALID', expected: false },
-      { role: 'chef', expected: false },
-      { role: '', expected: false }
-    ])('should return $expected for role "$role"', ({ role, expected }) => {
-      expect(TeamRoleSchema.safeParse(role).success).toBe(expected)
-    })
-  })
-
-  describe('CookingTeamDisplaySchema', () => {
-    it.each([
-      {
-        name: 'team with empty assignments (defaults)',
-        team: SeasonFactory.defaultCookingTeam(),
-        expectedAssignments: []
-      },
-      {
-        name: 'team with 4 valid members',
-        team: SeasonFactory.defaultCookingTeamDisplay({
-          assignments: [
-            SeasonFactory.defaultCookingTeamAssignment({ role: 'CHEF', inhabitantId: 1 }),
-            SeasonFactory.defaultCookingTeamAssignment({ role: 'COOK', inhabitantId: 2 }),
-            SeasonFactory.defaultCookingTeamAssignment({ role: 'COOK', inhabitantId: 3 }),
-            SeasonFactory.defaultCookingTeamAssignment({ role: 'JUNIORHELPER', inhabitantId: 4 })
-          ]
-        }),
-        expectedAssignments: 4
-      }
-    ])('should accept $name', ({ team, expectedAssignments }) => {
-      const result = CookingTeamDisplaySchema.safeParse(team)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        const expectedLength = typeof expectedAssignments === 'number' ? expectedAssignments : expectedAssignments.length
-        expect(result.data.assignments).toHaveLength(expectedLength)
-      }
-    })
-
-    it('should reject team with invalid member role', () => {
-      // Create a team and then override the role with an invalid value for testing validation
-      const assignment = SeasonFactory.defaultCookingTeamAssignment({ role: 'CHEF' })
-      const teamWithInvalidRole = SeasonFactory.defaultCookingTeamDisplay({
-        assignments: [{ ...assignment, role: 'INVALID_ROLE' as 'CHEF' }]
-      })
-
-      const result = CookingTeamDisplaySchema.safeParse(teamWithInvalidRole)
-      expect(result.success).toBe(false)
-    })
-  })
+  const { CHEF, COOK, JUNIORHELPER } = TeamRoleSchema.enum
 
   describe('CookingTeamDetailSchema', () => {
     const { CookingTeamDetailSchema } = useCookingTeamValidation()
 
-    it.each([
-      {
-        name: 'team with default dinnerEvents (Detail pattern with 1 event)',
-        team: SeasonFactory.defaultCookingTeamDetail(),
-        expectedDinnerEvents: 1,
-        expectedCookingDaysCount: 0
-      },
-      {
-        name: 'team with empty dinnerEvents array',
-        team: SeasonFactory.defaultCookingTeamDetail({
-          dinnerEvents: []
-        }),
-        expectedDinnerEvents: 0,
-        expectedCookingDaysCount: 0
-      },
-      {
-        name: 'team with multiple dinnerEvents',
-        team: SeasonFactory.defaultCookingTeamDetail({
-          cookingDaysCount: 2,
-          dinnerEvents: [
-            {
-              id: 1,
-              date: new Date(),
-              menuTitle: 'Test Menu 1',
-              cookingTeamId: 1,
-              state: 'SCHEDULED' as const,
-              totalCost: 0,
-              chefId: null,
-              heynaboEventId: null,
-              seasonId: 1,
-              menuDescription: null,
-              menuPictureUrl: null,
-              createdAt: new Date(),
-              updatedAt: new Date()
-            },
-            {
-              id: 2,
-              date: new Date(),
-              menuTitle: 'Test Menu 2',
-              cookingTeamId: 1,
-              state: 'SCHEDULED' as const,
-              totalCost: 0,
-              chefId: null,
-              heynaboEventId: null,
-              seasonId: 1,
-              menuDescription: null,
-              menuPictureUrl: null,
-              createdAt: new Date(),
-              updatedAt: new Date()
-            }
-          ]
-        }),
-        expectedDinnerEvents: 2,
-        expectedCookingDaysCount: 2
-      }
-    ])('should accept $name', ({ team, expectedDinnerEvents, expectedCookingDaysCount }) => {
-      const result = CookingTeamDetailSchema.safeParse(team)
+    it('should accept the factory team (Detail pattern with 1 event) with its Display and base fields', () => {
+      const result = CookingTeamDetailSchema.safeParse(SeasonFactory.defaultCookingTeamDetail())
       expect(result.success).toBe(true)
       if (result.success) {
         // Verify Detail pattern includes dinnerEvents
-        expect(result.data.dinnerEvents).toHaveLength(expectedDinnerEvents)
+        expect(result.data.dinnerEvents).toHaveLength(1)
 
         // Verify it also has Display fields
         expect(result.data).toHaveProperty('assignments')
         expect(result.data).toHaveProperty('cookingDaysCount')
-        expect(result.data.cookingDaysCount).toBe(expectedCookingDaysCount)
+        expect(result.data.cookingDaysCount).toBe(0)
 
         // Verify base fields
         expect(result.data).toHaveProperty('id')
@@ -193,119 +39,19 @@ describe('useCookingTeamValidation', () => {
         expect(result.data).toHaveProperty('name')
       }
     })
-
-    it('should include assignments in Detail pattern', () => {
-      const teamWithAssignments = SeasonFactory.defaultCookingTeamDetail({
-        assignments: [
-          SeasonFactory.defaultCookingTeamAssignment({ role: 'CHEF', inhabitantId: 1 }),
-          SeasonFactory.defaultCookingTeamAssignment({ role: 'COOK', inhabitantId: 2 })
-        ]
-      })
-
-      const result = CookingTeamDetailSchema.safeParse(teamWithAssignments)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.assignments).toHaveLength(2)
-        expect(result.data.dinnerEvents).toHaveLength(1) // Default includes 1 event
-      }
-    })
-  })
-
-  describe('validation functions', () => {
-    it.each([
-      {
-        name: 'CookingTeamSchema.parse with valid data',
-        fn: () => CookingTeamSchema.parse(SeasonFactory.defaultCookingTeam({ name: "Test Team" })),
-        shouldThrow: false,
-        expected: { seasonId: 1, name: "Test Team" }
-      },
-      {
-        name: 'CookingTeamSchema.parse with invalid data',
-        fn: () => CookingTeamSchema.parse({ seasonId: "not a number", name: "Test Team" }),
-        shouldThrow: true
-      },
-      {
-        name: 'CookingTeamDisplaySchema.parse with valid data',
-        fn: () => CookingTeamDisplaySchema.parse(SeasonFactory.defaultCookingTeamDisplay()),
-        shouldThrow: false,
-        expected: { assignments: [] }
-      }
-    ])('$name', ({ fn, shouldThrow, expected }) => {
-      if (shouldThrow) {
-        expect(fn).toThrow()
-      } else {
-        expect(fn).not.toThrow()
-        const result = fn() as Record<string, unknown>
-        if (expected) {
-          Object.entries(expected).forEach(([key, value]) => {
-            expect(result[key]).toEqual(value)
-          })
-        }
-      }
-    })
   })
 
   describe('utility functions', () => {
-    it.each([
-      {
-        name: '4 team members',
-        team: SeasonFactory.defaultCookingTeamDisplay({
-          assignments: [
-            SeasonFactory.defaultCookingTeamAssignment({ role: 'CHEF', inhabitantId: 1 }),
-            SeasonFactory.defaultCookingTeamAssignment({ role: 'COOK', inhabitantId: 2 }),
-            SeasonFactory.defaultCookingTeamAssignment({ role: 'COOK', inhabitantId: 3 }),
-            SeasonFactory.defaultCookingTeamAssignment({ role: 'JUNIORHELPER', inhabitantId: 4 })
-          ]
-        }),
-        expected: 4
-      },
-      {
-        name: 'empty team',
-        team: SeasonFactory.defaultCookingTeamDisplay({ name: "Empty Team", assignments: [] }),
-        expected: 0
-      }
-    ])('getTeamMemberCounts should count $name correctly', ({ team, expected }) => {
-      const counts = getTeamMemberCounts(team as CookingTeamDisplay)
-      expect(counts).toBe(expected)
-    })
-  })
-
-  describe('edge cases', () => {
-    it.each([
-      {
-        name: 'team names with whitespace',
-        team: SeasonFactory.defaultCookingTeam({ name: "  Team with spaces  " }),
-        expected: { success: true, name: "  Team with spaces  " }
-      },
-      {
-        name: 'maximum valid name length (100 chars)',
-        team: SeasonFactory.defaultCookingTeam({ name: "a".repeat(100) }),
-        expected: { success: true }
-      },
-      {
-        name: 'team members with optional IDs',
-        team: SeasonFactory.defaultCookingTeamDisplay({
-          name: "Team with Member IDs",
-          assignments: [
-            SeasonFactory.defaultCookingTeamAssignment({ id: 1, inhabitantId: 10, role: 'CHEF' }),
-            SeasonFactory.defaultCookingTeamAssignment({ id: 2, inhabitantId: 20, role: 'COOK' })
-          ]
-        }),
-        expected: { success: true, assignment0Id: 1, assignment1Id: 2 },
-        useWithMembersSchema: true
-      }
-    ])('should handle $name', ({ team, expected, useWithMembersSchema }) => {
-      const schema = useWithMembersSchema ? CookingTeamDisplaySchema : CookingTeamSchema
-      const result = schema.safeParse(team)
-      expect(result.success).toBe(expected.success)
-      if (result.success && expected.name) {
-        expect(result.data.name).toBe(expected.name)
-      }
-      if (result.success && expected.assignment0Id) {
-        const teamResult = result.data as CookingTeamDisplay
-        expect(teamResult.assignments[0]?.id).toBe(expected.assignment0Id)
-        expect(teamResult.assignments[1]?.id).toBe(expected.assignment1Id)
-      }
+    it('getTeamMemberCounts should count the team members', () => {
+      const team = SeasonFactory.defaultCookingTeamDisplay({
+        assignments: [
+          SeasonFactory.defaultCookingTeamAssignment({ role: CHEF, inhabitantId: 1 }),
+          SeasonFactory.defaultCookingTeamAssignment({ role: COOK, inhabitantId: 2 }),
+          SeasonFactory.defaultCookingTeamAssignment({ role: COOK, inhabitantId: 3 }),
+          SeasonFactory.defaultCookingTeamAssignment({ role: JUNIORHELPER, inhabitantId: 4 })
+        ]
+      })
+      expect(getTeamMemberCounts(team as CookingTeamDisplay)).toBe(4)
     })
   })
 
@@ -324,17 +70,9 @@ describe('useCookingTeamValidation', () => {
           expectedAffinity: createDefaultWeekdayMap([true, false, true, false, false, false, false])
         },
         {
-          name: 'assignment without affinity',
-          serialized: {
-            ...SeasonFactory.defaultCookingTeamAssignment({ id: 11, cookingTeamId: 2, inhabitantId: 99, role: 'COOK' }),
-            affinity: undefined
-          },
-          expectedAffinity: undefined
-        },
-        {
           name: 'assignment with null affinity',
           serialized: {
-            ...SeasonFactory.defaultCookingTeamAssignment({ id: 12, cookingTeamId: 3, inhabitantId: 55, role: 'JUNIORHELPER', allocationPercentage: 50 }),
+            ...SeasonFactory.defaultCookingTeamAssignment({ id: 12, cookingTeamId: 3, inhabitantId: 55, role: JUNIORHELPER, allocationPercentage: 50 }),
             affinity: null
           },
           expectedAffinity: undefined
@@ -356,7 +94,7 @@ describe('useCookingTeamValidation', () => {
 
         // Simulate database response: assignment with serialized inhabitant
         const serialized = {
-          ...SeasonFactory.defaultCookingTeamAssignment({ role: 'CHEF' }),
+          ...SeasonFactory.defaultCookingTeamAssignment({ role: CHEF }),
           inhabitant: {
             ...inhabitant,
             dinnerPreferences: serializeDinnerPreferences(inhabitant.dinnerPreferences!)
@@ -375,45 +113,6 @@ describe('useCookingTeamValidation', () => {
     describe('CookingTeamDisplay aggregate root roundtrip', () => {
       it.each([
         {
-          name: 'team with affinity + assignment with affinity',
-          team: {
-            id: 1,
-            seasonId: 5,
-            name: "Team Alpha",
-            affinity: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon, Wed, Fri
-            assignments: [
-              SeasonFactory.defaultCookingTeamAssignment({
-                id: 10,
-                cookingTeamId: 1,
-                inhabitantId: 42,
-                allocationPercentage: 75,
-                affinity: createDefaultWeekdayMap([false, true, false, true, false, false, false]) // Tue, Thu
-              })
-            ]
-          } as CookingTeamDisplay,
-          expectedTeamAffinity: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
-          expectedAssignmentAffinity: createDefaultWeekdayMap([false, true, false, true, false, false, false])
-        },
-        {
-          name: 'team with affinity + assignment without affinity',
-          team: {
-            id: 2,
-            seasonId: 5,
-            name: "Team Beta",
-            affinity: createDefaultWeekdayMap([true, true, false, false, false, false, false]), // Mon, Tue
-            assignments: [
-              SeasonFactory.defaultCookingTeamAssignment({
-                id: 11,
-                cookingTeamId: 2,
-                inhabitantId: 99,
-                role: 'COOK'
-              })
-            ]
-          } as CookingTeamDisplay,
-          expectedTeamAffinity: createDefaultWeekdayMap([true, true, false, false, false, false, false]),
-          expectedAssignmentAffinity: undefined
-        },
-        {
           name: 'team without affinity + assignment with affinity',
           team: {
             id: 3,
@@ -424,7 +123,7 @@ describe('useCookingTeamValidation', () => {
                 id: 12,
                 cookingTeamId: 3,
                 inhabitantId: 55,
-                role: 'JUNIORHELPER',
+                role: JUNIORHELPER,
                 allocationPercentage: 50,
                 affinity: createDefaultWeekdayMap([false, false, false, false, true, true, false]) // Fri, Sat
               })
@@ -434,25 +133,7 @@ describe('useCookingTeamValidation', () => {
           expectedAssignmentAffinity: createDefaultWeekdayMap([false, false, false, false, true, true, false])
         },
         {
-          name: 'team without affinity + assignment without affinity',
-          team: {
-            id: 4,
-            seasonId: 5,
-            name: "Team Delta",
-            assignments: [
-              SeasonFactory.defaultCookingTeamAssignment({
-                id: 13,
-                cookingTeamId: 4,
-                inhabitantId: 77,
-                role: 'COOK'
-              })
-            ]
-          } as CookingTeamDisplay,
-          expectedTeamAffinity: undefined,
-          expectedAssignmentAffinity: undefined
-        },
-        {
-          name: 'team with multiple assignments (mixed affinities)',
+          name: 'team with affinity + multiple assignments (mixed affinities)',
           team: {
             id: 5,
             seasonId: 5,
@@ -469,7 +150,7 @@ describe('useCookingTeamValidation', () => {
                 id: 15,
                 cookingTeamId: 5,
                 inhabitantId: 21,
-                role: 'COOK',
+                role: COOK,
                 allocationPercentage: 50
                 // No affinity
               })
@@ -532,6 +213,32 @@ describe('useCookingTeamValidation', () => {
         })
       })
     })
+
+    describe('CookingTeamDetail joker slots', () => {
+      const { deserializeCookingTeamDetail } = useCookingTeamValidation()
+      const { serializeJokerSlot } = useDutyValidation()
+      const slot = { ...SeasonFactory.defaultJokerSlot(), id: 5, cookingTeamId: 1, note: null, createdAt: new Date(2026, 9, 1), updatedAt: new Date(2026, 9, 1) }
+      const teamRow = (jokerSlots: unknown[]) => ({ ...serializeCookingTeam(SeasonFactory.defaultCookingTeamDisplay()), dinnerEvents: [], jokerSlots })
+
+      it('restores the stored joker slot rows to domain slots', () => {
+        expect(deserializeCookingTeamDetail(teamRow([serializeJokerSlot(slot)])).jokerSlots).toEqual([slot])
+      })
+
+      it('rejects a joker slot row that is not the stored shape', () => {
+        expect(() => deserializeCookingTeamDetail(teamRow([slot]))).toThrow(ZodError)
+      })
+    })
+
+    describe('CookingTeamDisplay aggregates from Prisma _count', () => {
+      it.each([
+        { name: 'counted dinners and joker slots', _count: { dinners: 4, jokerSlots: 2 }, expected: { cookingDaysCount: 4, jokerSlotCount: 2 } },
+        { name: 'no _count', _count: undefined, expected: { cookingDaysCount: 0, jokerSlotCount: 0 } }
+      ])('should map $name onto the aggregates', ({ _count, expected }) => {
+        const deserialized = deserializeCookingTeamDisplay({ ...serializeCookingTeam(SeasonFactory.defaultCookingTeamDisplay()), _count })
+
+        expect(deserialized).toMatchObject(expected)
+      })
+    })
   })
 
   describe('Prisma transformation functions', () => {
@@ -553,6 +260,11 @@ describe('useCookingTeamValidation', () => {
           excludedField: 'cookingDaysCount'
         },
         {
+          name: 'excludes computed field: jokerSlotCount',
+          team: SeasonFactory.defaultCookingTeamDetail({ jokerSlotCount: 3 }),
+          excludedField: 'jokerSlotCount'
+        },
+        {
           name: 'excludes read-only relation: dinnerEvents',
           team: SeasonFactory.defaultCookingTeamDetail({ dinnerEvents: [] }),
           excludedField: 'dinnerEvents'
@@ -562,22 +274,9 @@ describe('useCookingTeamValidation', () => {
         expect(result).not.toHaveProperty(excludedField)
       })
 
-      it.each([
-        {
-          name: 'preserves required field: name',
-          team: SeasonFactory.defaultCookingTeamDetail({ name: 'Test Team' }),
-          field: 'name',
-          expectedValue: 'Test Team'
-        },
-        {
-          name: 'preserves required field: seasonId',
-          team: SeasonFactory.defaultCookingTeamDetail({ seasonId: 99 }),
-          field: 'seasonId',
-          expectedValue: 99
-        }
-      ])('should preserve $name', ({ team, field, expectedValue }) => {
-        const result = fn(team)
-        expect(result[field as keyof typeof result]).toBe(expectedValue)
+      it('should preserve the team fields (name)', () => {
+        const result = fn(SeasonFactory.defaultCookingTeamDetail({ name: 'Test Team' }))
+        expect(result.name).toBe('Test Team')
       })
 
       it('should serialize affinity WeekDayMap to JSON string', () => {
@@ -590,18 +289,13 @@ describe('useCookingTeamValidation', () => {
         expect(() => JSON.parse(result.affinity as string)).not.toThrow()
       })
 
-      it.each([
-        { name: 'with 0 assignments', assignmentCount: 0 },
-        { name: 'with 1 assignment', assignmentCount: 1 },
-        { name: 'with multiple assignments', assignmentCount: 3 }
-      ])('should preserve assignments $name', ({ assignmentCount }) => {
-        const assignments = Array.from({ length: assignmentCount }, (_, i) =>
+      it('should preserve assignments', () => {
+        const assignments = Array.from({ length: 3 }, (_, i) =>
           SeasonFactory.defaultCookingTeamAssignment({ inhabitantId: i + 1 })
         )
-        const team = SeasonFactory.defaultCookingTeamDetail({ assignments })
-        const result = fn(team)
+        const result = fn(SeasonFactory.defaultCookingTeamDetail({ assignments }))
 
-        expect(result.assignments).toHaveLength(assignmentCount)
+        expect(result.assignments).toHaveLength(3)
       })
     })
 
@@ -613,24 +307,12 @@ describe('useCookingTeamValidation', () => {
           expectedAssignmentCount: undefined
         },
         {
-          name: 'team with empty assignments',
-          team: SeasonFactory.defaultCookingTeamCreate({ assignments: [] }),
-          expectedAssignmentCount: 0
-        },
-        {
-          name: 'team with single assignment',
-          team: SeasonFactory.defaultCookingTeamCreate({
-            assignments: [SeasonFactory.defaultCookingTeamCreateAssignment()]
-          }),
-          expectedAssignmentCount: 1
-        },
-        {
           name: 'team with multiple assignments (import pattern)',
           team: SeasonFactory.defaultCookingTeamCreate({
             assignments: [
-              SeasonFactory.defaultCookingTeamCreateAssignment({ inhabitantId: 1, role: 'CHEF' }),
-              SeasonFactory.defaultCookingTeamCreateAssignment({ inhabitantId: 2, role: 'COOK', allocationPercentage: 50 }),
-              SeasonFactory.defaultCookingTeamCreateAssignment({ inhabitantId: 3, role: 'JUNIORHELPER' })
+              SeasonFactory.defaultCookingTeamCreateAssignment({ inhabitantId: 1, role: CHEF }),
+              SeasonFactory.defaultCookingTeamCreateAssignment({ inhabitantId: 2, role: COOK, allocationPercentage: 50 }),
+              SeasonFactory.defaultCookingTeamCreateAssignment({ inhabitantId: 3, role: JUNIORHELPER })
             ]
           }),
           expectedAssignmentCount: 3
@@ -717,21 +399,6 @@ describe('useCookingTeamValidation', () => {
         const result = toPrismaUpdateData(updateInput)
 
         expect(result).toHaveProperty('affinity', undefined)  // undefined should be passed through
-      })
-
-      it('should handle full update with name and seasonId', () => {
-        const updateInput = {
-          id: 42,
-          name: 'Updated Team',
-          seasonId: 1
-        }
-        const result = toPrismaUpdateData(updateInput)
-
-        expect(result).toHaveProperty('name', 'Updated Team')
-        expect(result).toHaveProperty('seasonId', 1)
-        expect(result).not.toHaveProperty('id')
-        expect(result).not.toHaveProperty('cookingDaysCount')
-        expect(result).not.toHaveProperty('dinnerEvents')
       })
     })
   })

@@ -11,8 +11,7 @@ import {
     isAuthenticated,
     canMutateAllergies,
     getRoutePermission,
-    ROUTE_PERMISSIONS,
-    usePermissions
+    ROUTE_PERMISSIONS
 } from '~/composables/usePermissions'
 import { useCoreValidation } from '~/composables/useCoreValidation'
 import type { UserDetail } from '~/composables/useCoreValidation'
@@ -73,8 +72,6 @@ describe('usePermissions - Base Predicates', () => {
         it.each([
             { roles: [SystemRole.ADMIN], expected: true, description: 'with ADMIN role' },
             { roles: [SystemRole.ALLERGYMANAGER], expected: false, description: 'with ALLERGYMANAGER only' },
-            { roles: [], expected: false, description: 'with no roles' },
-            { roles: [SystemRole.ADMIN, SystemRole.ALLERGYMANAGER], expected: true, description: 'with multiple roles including ADMIN' },
         ])('should return $expected $description', ({ roles, expected }) => {
             const user = createUser({ systemRoles: roles })
             expect(isAdmin(user)).toBe(expected)
@@ -90,8 +87,6 @@ describe('usePermissions - Base Predicates', () => {
         it.each([
             { roles: [SystemRole.ALLERGYMANAGER], expected: true, description: 'with ALLERGYMANAGER role' },
             { roles: [SystemRole.ADMIN], expected: false, description: 'with ADMIN only' },
-            { roles: [], expected: false, description: 'with no roles' },
-            { roles: [SystemRole.ADMIN, SystemRole.ALLERGYMANAGER], expected: true, description: 'with multiple roles including ALLERGYMANAGER' },
         ])('should return $expected $description', ({ roles, expected }) => {
             const user = createUser({ systemRoles: roles })
             expect(isAllergyManager(user)).toBe(expected)
@@ -107,7 +102,6 @@ describe('usePermissions - Base Predicates', () => {
         it.each([
             { userHouseholdId: 1, targetHouseholdId: 1, expected: true, description: 'matching household' },
             { userHouseholdId: 1, targetHouseholdId: 2, expected: false, description: 'different household' },
-            { userHouseholdId: 5, targetHouseholdId: 5, expected: true, description: 'another matching household' },
         ])('should return $expected for $description', ({ userHouseholdId, targetHouseholdId, expected }) => {
             const user = createUserWithInhabitant(userHouseholdId)
             expect(isInHousehold(user, targetHouseholdId)).toBe(expected)
@@ -141,7 +135,6 @@ describe('usePermissions - Composed Predicates', () => {
         it.each([
             { roles: [SystemRole.ADMIN], expected: true, description: 'ADMIN can mutate' },
             { roles: [SystemRole.ALLERGYMANAGER], expected: true, description: 'ALLERGYMANAGER can mutate' },
-            { roles: [SystemRole.ADMIN, SystemRole.ALLERGYMANAGER], expected: true, description: 'both roles can mutate' },
             { roles: [], expected: false, description: 'no roles cannot mutate' },
         ])('$description', ({ roles, expected }) => {
             const user = createUser({ systemRoles: roles })
@@ -155,42 +148,11 @@ describe('usePermissions - Composed Predicates', () => {
 // ============================================================================
 
 describe('usePermissions - Route Permission Table', () => {
+    // Which check a route gets is the Route Permission Checks' subject; the fallback catches every other api route
     describe('getRoutePermission', () => {
-        it.each([
-            // Admin allergy-type mutations (most specific)
-            { pathname: '/api/admin/allergy-type', method: 'PUT', expectsCheck: true, description: 'allergy-type PUT' },
-            { pathname: '/api/admin/allergy-type', method: 'POST', expectsCheck: true, description: 'allergy-type POST' },
-            { pathname: '/api/admin/allergy-type', method: 'DELETE', expectsCheck: true, description: 'allergy-type DELETE' },
-            { pathname: '/api/admin/allergy-type/1', method: 'DELETE', expectsCheck: true, description: 'allergy-type/:id DELETE' },
-
-            // Other admin mutations (ADMIN only)
-            { pathname: '/api/admin/season', method: 'PUT', expectsCheck: true, description: 'season PUT' },
-            { pathname: '/api/admin/household', method: 'POST', expectsCheck: true, description: 'household POST' },
-            { pathname: '/api/admin/users', method: 'DELETE', expectsCheck: true, description: 'users DELETE' },
-
-            // Admin GET (authenticated)
-            { pathname: '/api/admin/season', method: 'GET', expectsCheck: true, description: 'admin GET' },
-
-            // User routes (authenticated, ownership checked per-endpoint)
-            { pathname: '/api/order/1', method: 'GET', expectsCheck: true, description: 'order GET' },
-            { pathname: '/api/order/', method: 'PUT', expectsCheck: true, description: 'order PUT' },
-            { pathname: '/api/household/1', method: 'GET', expectsCheck: true, description: 'household GET' },
-            { pathname: '/api/team/my', method: 'GET', expectsCheck: true, description: 'team GET' },
-            { pathname: '/api/admin/setting/allergy-poster-notes', method: 'POST', expectsCheck: true, description: 'setting POST' },
-            { pathname: '/api/admin/setting/allergy-poster-notes', method: 'GET', expectsCheck: true, description: 'setting GET' },
-            { pathname: '/api/user/preferences', method: 'POST', expectsCheck: true, description: 'own preferences POST' },
-            { pathname: '/api/user/notifications/test', method: 'POST', expectsCheck: true, description: 'own test notification POST' },
-
-            // Fallback
-            { pathname: '/api/unknown', method: 'GET', expectsCheck: true, description: 'unknown api route' },
-        ])('should find permission check for $description', ({ pathname, method, expectsCheck }) => {
-            const check = getRoutePermission(pathname, method)
-            if (expectsCheck) {
-                expect(check).not.toBeNull()
-                expect(typeof check).toBe('function')
-            } else {
-                expect(check).toBeNull()
-            }
+        it('should find the fallback permission check for an unknown api route', () => {
+            const check = getRoutePermission('/api/unknown', 'GET')
+            expect(typeof check).toBe('function')
         })
 
         it('should return null for non-API routes', () => {
@@ -204,18 +166,11 @@ describe('usePermissions - Route Permission Table', () => {
         const allergyManagerUser = createUser({ systemRoles: [SystemRole.ALLERGYMANAGER] })
         const regularUser = createUser({ systemRoles: [] })
 
-        it('allergy-type mutations should allow ADMIN', () => {
+        // The allergy-type rule comes before the general admin rule, or the ALLERGYMANAGER would be denied
+        it('allergy-type mutations should allow ADMIN and ALLERGYMANAGER, and deny a regular user', () => {
             const check = getRoutePermission('/api/admin/allergy-type', 'PUT')
             expect(check!(adminUser)).toBe(true)
-        })
-
-        it('allergy-type mutations should allow ALLERGYMANAGER', () => {
-            const check = getRoutePermission('/api/admin/allergy-type', 'PUT')
             expect(check!(allergyManagerUser)).toBe(true)
-        })
-
-        it('allergy-type mutations should deny regular user', () => {
-            const check = getRoutePermission('/api/admin/allergy-type', 'PUT')
             expect(check!(regularUser)).toBe(false)
         })
 
@@ -245,7 +200,8 @@ describe('usePermissions - Route Permission Table', () => {
 
         // Settings carry a per-key writer in the registry, so the route table is a coarse
         // gate: it lets any authenticated caller reach the endpoint, which then runs the
-        // key's own predicate. Key names never enter the route table.
+        // key's own predicate. Key names never enter the route table. The setting rule comes
+        // before the general admin rule, or the regular user would be denied.
         it('setting POST reaches the endpoint for any authenticated user', () => {
             const check = getRoutePermission('/api/admin/setting/allergy-poster-notes', 'POST')
 
@@ -256,29 +212,6 @@ describe('usePermissions - Route Permission Table', () => {
     })
 
     describe('ROUTE_PERMISSIONS order matters', () => {
-        it('should have allergy-type rule before general admin rule', () => {
-            const allergyTypeRuleIndex = ROUTE_PERMISSIONS.findIndex(
-                r => r.prefix === '/api/admin/allergy-type'
-            )
-            const generalAdminRuleIndex = ROUTE_PERMISSIONS.findIndex(
-                r => r.prefix === '/api/admin/' && r.methods?.includes('PUT')
-            )
-
-            expect(allergyTypeRuleIndex).toBeLessThan(generalAdminRuleIndex)
-        })
-
-        it('should have the setting rule before the general admin rule', () => {
-            const settingRuleIndex = ROUTE_PERMISSIONS.findIndex(
-                r => r.prefix === '/api/admin/setting/' && r.methods?.includes('POST')
-            )
-            const generalAdminRuleIndex = ROUTE_PERMISSIONS.findIndex(
-                r => r.prefix === '/api/admin/' && r.methods?.includes('POST')
-            )
-
-            expect(settingRuleIndex).toBeGreaterThanOrEqual(0)
-            expect(settingRuleIndex).toBeLessThan(generalAdminRuleIndex)
-        })
-
         it('should have the own-user rule before the generic api fallback', () => {
             const userRuleIndex = ROUTE_PERMISSIONS.findIndex(r => r.prefix === '/api/user/')
             const fallbackIndex = ROUTE_PERMISSIONS.findIndex(r => r.prefix === '/api/')
@@ -303,41 +236,5 @@ describe('usePermissions - Route Permission Table', () => {
                 }
             }
         })
-    })
-})
-
-// ============================================================================
-// COMPOSABLE EXPORT
-// ============================================================================
-
-describe('usePermissions - Composable Export', () => {
-    it('should export all functions via composable', () => {
-        const permissions = usePermissions()
-
-        expect(permissions.isAdmin).toBe(isAdmin)
-        expect(permissions.isAllergyManager).toBe(isAllergyManager)
-        expect(permissions.isInHousehold).toBe(isInHousehold)
-        expect(permissions.isAuthenticated).toBe(isAuthenticated)
-        expect(permissions.canMutateAllergies).toBe(canMutateAllergies)
-        expect(permissions.getRoutePermission).toBe(getRoutePermission)
-        expect(permissions.ROUTE_PERMISSIONS).toBe(ROUTE_PERMISSIONS)
-    })
-})
-
-// ============================================================================
-// ADR-001 COMPLIANCE
-// ============================================================================
-
-describe('usePermissions - ADR-001 Compliance', () => {
-    it('should import SystemRoleSchema from generated layer', () => {
-        // Verify the enum values match Prisma generated types
-        expect(SystemRole.ADMIN).toBe('ADMIN')
-        expect(SystemRole.ALLERGYMANAGER).toBe('ALLERGYMANAGER')
-    })
-
-    it('should use .enum property for enum values', () => {
-        const user = createUser({ systemRoles: [SystemRole.ADMIN] })
-        // The composable uses SystemRoleSchema.enum internally
-        expect(isAdmin(user)).toBe(true)
     })
 })

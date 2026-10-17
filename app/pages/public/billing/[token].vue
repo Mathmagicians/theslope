@@ -9,7 +9,7 @@
  * Data: GET /api/public/billing/[token]
  */
 import {formatDate} from '~/utils/date'
-import type {BillingPeriodSummaryDetail, InvoiceDisplay} from '~/composables/useBillingValidation'
+import type {InvoiceDisplay} from '~/composables/useBillingValidation'
 
 // Page config - no auth required, no layout
 definePageMeta({
@@ -23,24 +23,15 @@ const token = computed(() => route.params.token as string)
 const {formatPrice} = useTicket()
 const {COMPONENTS, ICONS, SIZES, TYPOGRAPHY, BG} = useTheSlopeDesignSystem()
 const {BillingPeriodSummaryDetailSchema} = useBillingValidation()
-const {handleApiError} = useApiHandler()
+const {storeAsyncData} = useApiHandler()
 
-// Fetch billing data (no auth required)
-// Transform: parse schema to coerce date strings → Date objects (API returns already-deserialized data)
-const {data: billing, status, error} = useFetch<BillingPeriodSummaryDetail | null>(
-    `/api/public/billing/${token.value}`,
+const {data: billing, status, error} = storeAsyncData(
+    () => `public-billing-${token.value}`,
+    () => `/api/public/billing/${token.value}`,
     {
-        key: `public-billing-${token.value}`,
+        schema: BillingPeriodSummaryDetailSchema.nullable(),
         default: () => null,
-        transform: (data) => {
-            if (!data) return null
-            try {
-                return BillingPeriodSummaryDetailSchema.parse(data)
-            } catch (e) {
-                handleApiError(e, 'PUBLIC_BILLING > transform')
-                throw e
-            }
-        }
+        errorMessage: 'Kunne ikke hente fakturaoversigt'
     }
 )
 

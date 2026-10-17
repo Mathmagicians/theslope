@@ -1,9 +1,9 @@
 <script setup lang="ts">
 /**
- * HouseholdCard - members and their settings - especially weekly dinner preferences
+ * HouseholdCard - the inhabitants and their settings - especially weekly dinner preferences
  *
  * Expandable table pattern with power mode:
- * - Power row (first row): Updates all family members at once with ⚡ icon
+ * - Power row (first row): Updates all the household's inhabitants at once with ⚡ icon
  * - Collapsed row: Shows ticket type, name, preferences as VIEW badges with ✏️ icon
  * - Expanded row: WeekDayMapDinnerModeDisplay in EDIT mode (button groups)
  * - Only one row can be expanded at a time
@@ -32,7 +32,7 @@
  * │ └─────────────────────────────────────────────────────────────────────┘ │
  * └─────────────────────────────────────────────────────────────────────────┘
  *
- * EXPANDED (regular member):
+ * EXPANDED (one inhabitant):
  * ┌───────────────────────────────────────────────────────────────┐
  * │ [▼] Voksen  👤 Anna                                          │
  * │ ──────────────────────────────────────────────────────────── │
@@ -47,8 +47,8 @@
  * └───────────────────────────────────────────────────────────────┘
  *
  * Legend:
- * - ⚡ = Power mode (update all members)
- * - ✏️ = Pencil icon (edit single member)
+ * - ⚡ = Power mode (update all inhabitants)
+ * - ✏️ = Pencil icon (edit one inhabitant)
  * - ▼ = Chevron down (expanded row - click to collapse)
  * - 🍽️🕐🛍️❌ = Compact badges (collapsed VIEW mode)
  * - [Button] = Button groups (expanded EDIT mode)
@@ -77,32 +77,24 @@ const planStore = usePlanStore()
 const {activeSeason} = storeToRefs(planStore)
 
 // Ticket business logic
-const {getTicketTypeConfig} = useTicket()
 
 // Household business logic
 const {computeAggregatedPreferences} = useHousehold()
 
-// Booking business logic
-const {formatScaffoldResult} = useBooking()
-
-// Inject responsive breakpoint
-const isMd = inject<Ref<boolean>>('isMd')
-const getIsMd = computed((): boolean => isMd?.value ?? false)
-
 // Design system
-const { WEEKDAY, COMPONENTS, COLOR, ICONS, BUTTONS, SIZES, ALERTS } = useTheSlopeDesignSystem()
+const { WEEKDAY, COMPONENTS, COLOR, ICONS, BUTTONS, SIZES, ALERTS, NOISE, ORIENTATIONS, TABLE_COLUMNS } = useTheSlopeDesignSystem()
 const { powerMode } = COMPONENTS
 
-// Prepare table data with synthetic "all members" power row + individual inhabitants
+// Prepare table data with synthetic "all inhabitants" power row + individual inhabitants
 const tableData = computed(() => {
   const inhabitants = props.household.inhabitants.map(inhabitant => ({
     ...inhabitant,
-    ticketConfig: getTicketTypeConfig(inhabitant.birthDate ?? null, activeSeason.value?.ticketPrices),
+    ticketConfig: resolveTicketTypePresentation(inhabitant.birthDate ?? null, activeSeason.value?.ticketPrices),
     isSynthetic: false,
     consensus: undefined  // Only power row has consensus
   }))
 
-  // Create synthetic "all members" power row
+  // Create synthetic "all inhabitants" power row
   const { preferences: aggregatedPrefs, consensus } = computeAggregatedPreferences(props.household.inhabitants)
   const powerRow = {
     id: -1,
@@ -165,9 +157,8 @@ const savePreferences = async () => {
 
     toast.add({
       title: isPowerMode ? 'Alle præferencer opdateret' : 'Præferencer opdateret',
-      description: formatScaffoldResult(result, 'past'),
-      icon: 'i-heroicons-check-circle',
-      color: 'success'
+      description: formatBookingResult(result),
+      ...scaffoldToastLook(result)
     })
 
     // Close the row after save
@@ -179,8 +170,8 @@ const savePreferences = async () => {
     toast.add({
       title: 'Kunne ikke gemme',
       description: 'Der opstod en fejl. Prøv igen senere.',
-      icon: 'i-heroicons-exclamation-circle',
-      color: 'error'
+      icon: ICONS.exclamationCircle,
+      color: COLOR.error
     })
   } finally {
     isSaving.value = false
@@ -201,8 +192,8 @@ const visibleDays = computed(() => {
 // Table columns - 3 columns on mobile (toggle, name+ticket, modes), 4 on desktop
 const columns = computed(() => [
   { id: 'expand' },
-  { id: 'name', header: getIsMd.value ? 'Medlem' : undefined },
-  { id: 'ticketType', header: getIsMd.value ? 'Billet' : undefined, class: 'hidden md:table-cell' },
+  { id: 'name', ...TABLE_COLUMNS.householdMemberName },
+  { id: 'ticketType', ...TABLE_COLUMNS.householdTicketType },
   { id: 'preferences' }
 ])
 </script>
@@ -210,20 +201,19 @@ const columns = computed(() => [
 <template>
   <!-- Weekly Preferences Section -->
   <UCard
-data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:border-t"
-         :ui="{ body: 'px-0 mb-0 md:px-4' }">
+data-testid="household-members" v-bind="COMPONENTS.householdAllergies.card">
     <template #header>
-      <h3 class="text-lg font-semibold">Husstandens ugentlige booking præferencer</h3>
+      <h3 :class="COMPONENTS.householdCard.title">Husstandens ugentlige booking præferencer</h3>
     </template>
 
-    <div class="space-y-2 md:space-y-4">
+    <div :class="COMPONENTS.householdCard.stack">
       <!-- Inhabitants table with expandable preference editing -->
       <UTable
           v-model:expanded="expanded"
           :data="tableData"
           :columns="columns"
           row-key="id"
-          :ui="{ ...COMPONENTS.table.denseUi, tbody: '[&_tr:first-child]:bg-info/10', tr: 'data-[expanded=true]:bg-elevated/50' }"
+          :ui="COMPONENTS.table.householdPreferencesUi"
       >
         <!-- Expand button column - only shown when canEdit -->
         <template #expand-cell="{ row }">
@@ -234,21 +224,20 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
               :aria-label="row.getIsExpanded() ? 'Luk' : (row.original.isSynthetic ? 'Power mode' : 'Rediger præferencer')"
               :data-testid="row.original.isSynthetic ? 'power-mode-toggle' : `inhabitant-${row.original.id}-edit-preferences`"
               :class="[
-                row.getIsExpanded() ? 'rotate-180' : '',
-                row.original.isSynthetic && !row.getIsExpanded() ? 'hover:animate-pulse hover:scale-125 hover:rotate-45 hover:text-warning active:scale-175 active:rotate-[720deg] active:text-error' : ''
+                COMPONENTS.openTurn(row.getIsExpanded()),
+                row.original.isSynthetic && !row.getIsExpanded() && COMPONENTS.householdCard.powerToggleIdle
               ]"
-              class="transition-all duration-700"
               @click="row.toggleExpanded()"
           />
         </template>
 
         <!-- Ticket type column (desktop only) -->
         <template #ticketType-cell="{ row }">
-          <div class="hidden md:block">
+          <div :class="COMPONENTS.householdCard.ticketDesktop">
             <UBadge
-                :color="row.original.ticketConfig?.color ?? 'neutral'"
-                variant="subtle"
-                size="sm"
+                :color="row.original.ticketConfig?.color ?? COLOR.neutral"
+                :variant="NOISE.subtle"
+                :size="SIZES.sm"
                 :data-testid="`ticket-type-${row.original.id}`"
             >
               {{ row.original.ticketConfig?.label ?? 'Ukendt' }}
@@ -258,8 +247,8 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
 
         <!-- Name column - includes ticket badge on mobile -->
         <template #name-cell="{ row }">
-          <div class="flex flex-col gap-0.5">
-            <!-- Power mode: show all family members in group -->
+          <div :class="COMPONENTS.householdCard.nameCell">
+            <!-- Power mode: show all the household's inhabitants in a group -->
             <UserListItem
                 v-if="row.original.isSynthetic"
                 :inhabitants="household.inhabitants"
@@ -277,10 +266,10 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
             />
             <!-- Ticket badge - mobile only (under name) -->
             <UBadge
-                class="md:hidden w-fit"
-                :color="row.original.ticketConfig?.color ?? 'neutral'"
-                variant="subtle"
-                size="xs"
+                :class="COMPONENTS.householdCard.ticketPhone"
+                :color="row.original.ticketConfig?.color ?? COLOR.neutral"
+                :variant="NOISE.subtle"
+                :size="SIZES.xs"
             >
               {{ row.original.ticketConfig?.label ?? 'Ukendt' }}
             </UBadge>
@@ -289,7 +278,7 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
 
         <!-- Preferences header (weekday labels) -->
         <template #preferences-header>
-          <UFieldGroup :size="SIZES.standard" orientation="horizontal" :class="WEEKDAY.fieldGroupClasses">
+          <UFieldGroup :size="SIZES.standard" :orientation="ORIENTATIONS.horizontal" :class="WEEKDAY.fieldGroupClasses">
             <DinnerModeSelector
               v-for="day in visibleDays"
               :key="day"
@@ -317,9 +306,9 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
         <template #expanded="{ row }">
           <UFormField
               :label="row.original.isSynthetic ? 'Power mode: Opdater præferencer for hele husstanden' : `Opdater fællesspisning præferencer for ${row.original.name}`"
-              class="py-2"
+              :class="COMPONENTS.householdCard.editorField"
           >
-            <div class="flex flex-col gap-3">
+            <div :class="COMPONENTS.householdCard.editorStack">
               <!-- Power mode warning alert -->
               <UAlert
                   v-if="row.original.isSynthetic"
@@ -342,11 +331,11 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
               />
 
               <!-- Actions grouped -->
-              <div class="flex justify-start md:justify-end">
-                <UFieldGroup :size="getIsMd ? 'md' : 'sm'">
+              <div :class="COMPONENTS.householdCard.actionsRow">
+                <UFieldGroup :size="SIZES.cardFieldGroup">
                   <UButton
                       :color="COLOR.neutral"
-                      variant="ghost"
+                      :variant="NOISE.quiet"
                       :icon="ICONS.xMark"
                       data-testid="cancel-preferences"
                       @click="row.toggleExpanded()"
@@ -356,10 +345,10 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
                   <UButton
                       v-if="canEdit"
                       :color="row.original.isSynthetic ? COMPONENTS.powerMode.color : COLOR.primary"
-                      variant="solid"
+                      :variant="NOISE.loud"
                       :loading="isSaving"
                       :disabled="isSaving"
-                      class="group"
+                      :class="COMPONENTS.householdCard.saveButton"
                       data-testid="save-preferences"
                       @click="savePreferences"
                   >
@@ -367,9 +356,9 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
                       <UIcon
                         :name="row.original.isSynthetic ? COMPONENTS.powerMode.buttonIcon : ICONS.check"
                         :class="[
-                          'transition-all duration-700',
-                          row.original.isSynthetic && isSaving ? 'animate-spin' : '',
-                          row.original.isSynthetic && !isSaving ? 'group-hover:animate-pulse group-hover:scale-125 group-hover:rotate-12 group-active:rotate-[360deg]' : ''
+                          COMPONENTS.householdCard.saveIcon,
+                          row.original.isSynthetic && isSaving && COMPONENTS.householdCard.saveIconSaving,
+                          row.original.isSynthetic && !isSaving && COMPONENTS.householdCard.saveIconIdle
                         ]"
                       />
                     </template>
@@ -388,9 +377,12 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
           v-bind="lastPreferenceResult.errored > 0 ? ALERTS.error : ALERTS.neutral"
           :icon="lastPreferenceResult.errored > 0 ? ICONS.robotDead : ICONS.robotHappy"
           title="Sidste ændring"
-          :description="`Du har ændret præferencer, og familiens bookinger har ændret sig: ${formatScaffoldResult(lastPreferenceResult, 'past')}`"
           data-testid="last-result-alert"
-      />
+      >
+        <template #description>
+          <p :class="COMPONENTS.bookingResult.lines">{{ `Du har ændret præferencer, og familiens bookinger har ændret sig:\n${formatBookingResult(lastPreferenceResult)}` }}</p>
+        </template>
+      </UAlert>
 
       <!-- Info alert -->
       <UAlert
@@ -398,20 +390,20 @@ data-testid="household-members" class="rounded-none md:rounded-lg border-t-0 md:
           title="Sådan redigerer du præferencer"
       >
         <template #description>
-          <div class="flex flex-col gap-1">
-            <span class="flex items-center gap-1">
-              <UIcon name="i-heroicons-bolt" class="size-4" /> Power mode opdaterer alle medlemmer samtidigt - ændringer opdaterer fremtidige tilmeldinger
+          <div :class="COMPONENTS.householdCard.hintList">
+            <span :class="COMPONENTS.householdCard.hintLine">
+              <UIcon :name="COMPONENTS.powerMode.buttonIcon" :class="COMPONENTS.householdCard.hintIcon" /> Power mode opdaterer alle medlemmer samtidigt - ændringer opdaterer fremtidige tilmeldinger
             </span>
-            <span class="flex items-center gap-1">
-              <UIcon name="i-heroicons-pencil" class="size-4" /> Klik på blyanten for at redigere enkeltpersoner
+            <span :class="COMPONENTS.householdCard.hintLine">
+              <UIcon :name="ICONS.edit" :class="COMPONENTS.householdCard.hintIcon" /> Klik på blyanten for at redigere enkeltpersoner
             </span>
             <span>Ændringer gemmes når du trykker på GEM, og påvirker fremtidige bookinger</span>
-            <span class="flex items-center gap-1 mt-1">
+            <span :class="COMPONENTS.householdCard.hintModes">
               <strong>Valg for fællesspisning:</strong>
-              <UIcon name="i-streamline-food-kitchenware-spoon-plate-fork-plate-food-dine-cook-utensils-eat-restaurant-dining" class="size-4" /> Fællesspisning
-              <UIcon name="i-heroicons-clock" class="size-4" /> Sen spisning
-              <UIcon name="i-heroicons-shopping-bag" class="size-4" /> Takeaway
-              <UIcon name="i-heroicons-x-circle" class="size-4" /> Ingen spisning
+              <UIcon :name="ICONS.dinner" :class="COMPONENTS.householdCard.hintIcon" /> Fællesspisning
+              <UIcon :name="ICONS.clock" :class="COMPONENTS.householdCard.hintIcon" /> Sen spisning
+              <UIcon :name="ICONS.takeaway" :class="COMPONENTS.householdCard.hintIcon" /> Takeaway
+              <UIcon :name="ICONS.noDinner" :class="COMPONENTS.householdCard.hintIcon" /> Ingen spisning
             </span>
           </div>
         </template>

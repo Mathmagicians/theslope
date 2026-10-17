@@ -1,40 +1,35 @@
-import {fetchOrders, createOrders, deleteOrder, updateOrdersBatch, claimOrder, type OrderBatchUpdate, fetchUserIntentKeys} from "~~/server/data/financesRepository"
+import {fetchOrders, createOrders, deleteOrder, updateOrdersBatch, claimOrder, countReleasedTickets, type OrderBatchUpdate, fetchUserIntentKeys} from "~~/server/data/financesRepository"
 import {fetchHouseholds, fetchSeason, fetchActiveSeasonId} from "~~/server/data/prismaRepository"
-import {useSeason} from "~/composables/useSeason"
-import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
-import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets} from "~/composables/useBooking"
+import {useSeason, type BookingDeadlines} from "~/composables/useSeason"
+import {useBookingValidation, type ScaffoldResult, type DesiredOrder, type OrderAuditAction, type QueuePosition, type BookingOutcomes, type BookingAction, type BookingResult, OrderAuditAction as AuditActions} from "~/composables/useBookingValidation"
+import {resolveOrdersFromPreferencesToBuckets, resolveDesiredOrdersToBuckets, bookingOutcomes, actionOfUpdate, countTotals} from "~/composables/useBooking"
+import {writeBatchOrEach} from "~/utils/batchUtils"
+import {sellTicketsToWaitlist, joinWaitlist} from "~~/server/utils/waitlistAssignment"
+import {fetchWaitlistForHousehold, fetchWaitlistForDinners, deleteWaitlistEntry, updateWaitlistEntryOrder} from "~~/server/data/waitlistRepository"
+import {useWaitlist} from "~/composables/useWaitlist"
 import {isHouseholdActiveOnDay} from "~/composables/useHousehold"
 import eventHandlerHelper from "~~/server/utils/eventHandlerHelper"
 import {getSystemUserId} from "~~/server/utils/systemUser"
 
 const LOG = '🎟️ > SEASON > [SCAFFOLD_PREBOOKINGS]'
+// Each lost race re-reads the supply; past this many rounds the wish queues
+const CLAIM_ROUNDS = 3
+
+const {BookingActionSchema, OrderBucketSchema, OrderAuditSourceSchema} = useBookingValidation()
+const Action = BookingActionSchema.enum
+const Bucket = OrderBucketSchema.enum
+const Source = OrderAuditSourceSchema.enum
 
 /**
- * Determine audit action based on user vs system trigger
- *
- * Intent model:
- * - USER_CANCELLED = user signals "I don't want to eat" (delete before deadline, release after)
- * - USER_BOOKED = user books/reclaims a ticket
- * - SYSTEM_* = automated scaffold operations
+ * The audit action of a booking action. A user who cancels or releases signals "I don't want to eat"
+ * (USER_CANCELLED); every other user action books (USER_BOOKED); a system run records what it did to the row.
  */
-const getAuditAction = (
-    isUserTriggered: boolean,
-    actionType: 'create' | 'update' | 'delete' | 'release'
-): OrderAuditAction => {
-    if (isUserTriggered) {
-        // User cancellation intent (delete or release) → USER_CANCELLED
-        // User booking intent (create or reclaim) → USER_BOOKED
-        if (actionType === 'delete' || actionType === 'release') {
-            return AuditActions.USER_CANCELLED
-        }
-        return AuditActions.USER_BOOKED
-    }
-    switch (actionType) {
-        case 'create': return AuditActions.SYSTEM_CREATED
-        case 'delete': return AuditActions.SYSTEM_DELETED
-        case 'update': return AuditActions.SYSTEM_UPDATED
-        case 'release': return AuditActions.SYSTEM_UPDATED
-    }
+const getAuditAction = (isUserTriggered: boolean, action: BookingAction): OrderAuditAction => {
+    const cancels = action === Action.CANCEL || action === Action.RELEASE
+    if (isUserTriggered) return cancels ? AuditActions.USER_CANCELLED : AuditActions.USER_BOOKED
+    if (action === Action.BOOK) return AuditActions.SYSTEM_CREATED
+    if (action === Action.CANCEL) return AuditActions.SYSTEM_DELETED
+    return AuditActions.SYSTEM_UPDATED
 }
 
 /**
@@ -54,6 +49,8 @@ export type ScaffoldOptions = {
     desiredOrders?: DesiredOrder[]
     /** If provided, use USER_* audit actions. Otherwise SYSTEM_*. */
     userId?: number
+    /** The deadlines user mode decides by; the season's when absent */
+    deadlines?: BookingDeadlines
 }
 
 /**
@@ -61,16 +58,14 @@ export type ScaffoldOptions = {
  */
 const skippedResult = (): ScaffoldResult => ({
     seasonId: null,
-    created: 0,
-    deleted: 0,
-    released: 0,
-    claimed: 0,
-    claimRejected: 0,
-    priceUpdated: 0,
-    modeUpdated: 0,
+    totals: countTotals([]),
+    positions: [],
     unchanged: 0,
     households: 0,
-    errored: 0
+    errored: 0,
+    results: [],
+    failed: [],
+    outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: []}
 })
 
 /** Default scaffold result when no re-scaffold needed */
@@ -121,19 +116,14 @@ export async function scaffoldPrebookings(
     options: ScaffoldOptions = {}
 ): Promise<ScaffoldResult> {
     const {getScaffoldableDinnerEvents, deadlinesForSeason} = useSeason()
-    const {OrderStateSchema, DinnerModeSchema, ScaffoldResultSchema, chunkFetchIds, chunkOrderBatch, chunkIds} = useBookingValidation()
+    const {OrderStateSchema, DinnerModeSchema, ScaffoldResultSchema, chunkFetchIds, chunkOrderBatch, chunkDeleteBatch} = useBookingValidation()
+    const {waitingLines, ticketTypeOfEntry} = useWaitlist()
 
     const isUserTriggered = options.userId !== undefined
     const isUserMode = options.desiredOrders !== undefined
 
-    // TODO: REVERT after healing is complete - restore userId requirement
-    // User mode validation: desiredOrders requires householdId and userId
-    // if (isUserMode && (!options.householdId || !options.userId)) {
-    //     throw new Error(`${LOG} User mode (desiredOrders provided) requires both householdId and userId`)
-    // }
-    // TEMPORARY: Allow desiredOrders without userId for healing (creates SYSTEM_* audit)
-    if (isUserMode && !options.householdId) {
-        throw new Error(`${LOG} User mode (desiredOrders provided) requires householdId`)
+    if (isUserMode && (!options.householdId || !options.userId)) {
+        throw new Error(`${LOG} User mode (desiredOrders provided) requires both householdId and userId`)
     }
 
     // Resolve season ID - use provided or fall back to active season
@@ -165,34 +155,28 @@ export async function scaffoldPrebookings(
 
     const households = await fetchHouseholds(d1Client, options.householdId)
 
-    // Fetch orders (chunked) and user intent keys in parallel
-    const [orderBatches, userIntentKeys] = await Promise.all([
+    // Fetch orders (chunked), user intent keys and, in user mode, the household's queue entries in parallel
+    const [orderBatches, userIntentKeys, existingEntries] = await Promise.all([
         Promise.all(chunkFetchIds(dinnerEventIds).map(batch => fetchOrders(d1Client, batch))),
-        fetchUserIntentKeys(d1Client, effectiveSeasonId)
+        fetchUserIntentKeys(d1Client, effectiveSeasonId),
+        isUserMode ? fetchWaitlistForHousehold(d1Client, options.householdId!, dinnerEventIds) : Promise.resolve([])
     ])
     const existingOrders = orderBatches.flat()
     const {confirmedKeys, cancelledKeys} = userIntentKeys
+    const entryById = new Map(existingEntries.map(entry => [entry.id, entry]))
+    // The season's prices: the frozen price of a booking, the ticket type of a claim and of a waiting entry
+    const ticketPriceById = new Map(season.ticketPrices.map(tp => [tp.id, tp]))
+    const ticketTypeOf = ticketTypeOfEntry(season.ticketPrices)
 
-    // Build set of "eventId-priceId" keys where released tickets exist (for claim decisions)
-    const releasedByEventAndPrice = new Set<string>()
-    for (const order of existingOrders) {
-        if (order.state === OrderStateSchema.enum.RELEASED && order.ticketPriceId) {
-            releasedByEventAndPrice.add(`${order.dinnerEventId}-${order.ticketPriceId}`)
-        }
-    }
+    console.info(`${LOG} ${isUserMode ? 'User' : 'System'} mode: ${households.length} household(s), ${dinnerEvents.length} events, ${existingEntries.length} queue entries`)
 
-    console.info(`${LOG} ${isUserMode ? 'User' : 'System'} mode: ${households.length} household(s), ${dinnerEvents.length} events, ${releasedByEventAndPrice.size} event-price combos with released tickets`)
-
-    // Process each household and accumulate results
-    let totalCreated = 0
-    let totalDeleted = 0
-    let totalReleased = 0
-    let totalClaimed = 0
-    let totalClaimRejected = 0
-    let totalPriceUpdated = 0
-    let totalModeUpdated = 0
+    // Process each household and accumulate one result per order that landed or failed
+    const landed: BookingResult[] = []
+    const failed: BookingResult[] = []
+    const positions: QueuePosition[] = []
+    // What happened that the caller notifies about after the run; a household that fails later keeps what already happened
+    const outcomes: BookingOutcomes = {joined: [], ticketsSold: [], waitlistTicketsSold: []}
     let totalUnchanged = 0
-    let totalOrderErrors = 0
     let processedHouseholds = 0
     let erroredHouseholds = 0
 
@@ -208,10 +192,8 @@ export async function scaffoldPrebookings(
             // Build lookup: orderId → existing order (for updates)
             const orderById = new Map(householdOrders.map(o => [o.id, o]))
             const dinnerEventById = new Map(householdDinnerEvents.map(de => [de.id, de]))
-            const {canModifyOrders, canEditDiningMode} = deadlinesForSeason(season)
+            const {canModifyOrders, canEditDiningMode} = options.deadlines ?? deadlinesForSeason(season)
 
-            // Build ticket price lookup (needed for creates and price change detection)
-            const ticketPriceById = new Map(season.ticketPrices.map(tp => [tp.id, tp]))
 
             // Resolve desired orders to buckets
             const result = isUserMode
@@ -223,19 +205,18 @@ export async function scaffoldPrebookings(
                     canEditDiningMode,
                     DinnerModeSchema.enum,
                     OrderStateSchema.enum,
-                    releasedByEventAndPrice
+                    existingEntries
                 )
                 : resolveOrdersFromPreferencesToBuckets(
                     { ...season, dinnerEvents: householdDinnerEvents },
                     household,
                     householdOrders,
                     confirmedKeys,
-                    cancelledKeys,
-                    releasedByEventAndPrice
+                    cancelledKeys
                 )
 
-            // Transform DesiredOrder[] to OrderCreateWithPrice[] for create
-            const ordersToCreate = result.create.map(desired => {
+            // DesiredOrder → OrderCreateWithPrice: the payer, the frozen price and the household
+            const toOrderCreate = (desired: DesiredOrder) => {
                 const ticketPrice = ticketPriceById.get(desired.ticketPriceId)
                 if (!ticketPrice) {
                     throw new Error(`${LOG} Missing ticket price ${desired.ticketPriceId} for order`)
@@ -251,131 +232,172 @@ export async function scaffoldPrebookings(
                     isGuestTicket: desired.isGuestTicket,
                     householdId: household.id
                 }
+            }
+            // One result per order; a failed one is logged with the person and the dinner
+            const nameOf = (inhabitantId: number): string => household.inhabitants.find(inhabitant => inhabitant.id === inhabitantId)?.name ?? ''
+            const resultOf = (desired: DesiredOrder, action: BookingAction): BookingResult => ({
+                inhabitantId: desired.inhabitantId, inhabitantName: nameOf(desired.inhabitantId), isGuestTicket: desired.isGuestTicket,
+                ticketType: ticketPriceById.get(desired.ticketPriceId)?.ticketType ?? null,
+                dinnerEventId: desired.dinnerEventId, dinnerMode: desired.dinnerMode, action
             })
-
-            // Create new orders
-            for (const batch of chunkOrderBatch(ordersToCreate)) {
-                await createOrders(d1Client, household.id, batch, {
-                    action: getAuditAction(isUserTriggered, 'create'),
-                    performedByUserId: effectiveUserId,
-                    source: isUserMode ? 'user-booking' : (options.householdId ? 'preference-update' : 'scaffold-prebookings'),
-                    seasonId: season.id ?? null
-                })
+            // The generator skips an order the household no longer holds (bought by another household, or deleted); the save lists it as failed
+            const staleOrders = isUserMode ? options.desiredOrders!.filter(desired => desired.orderId !== undefined && !orderById.has(desired.orderId)) : []
+            failed.push(...staleOrders.map(stale => resultOf(stale, actionOfUpdate(stale, undefined))))
+            const landedAs = (action: BookingAction) => (orders: {desired: DesiredOrder}[]) => landed.push(...orders.map(({desired}) => resultOf(desired, action)))
+            const failedAs = (actionOf: (desired: DesiredOrder) => BookingAction) => ({desired}: {desired: DesiredOrder}, error: unknown) => {
+                failed.push(resultOf(desired, actionOf(desired)))
+                eventHandlerHelper.logNuxtError(eventHandlerHelper.nuxtErrorFromCatch(
+                    `${LOG} Household ${household.id} (${household.shortName}): ${actionOf(desired)} for inhabitant ${desired.inhabitantId} on dinner ${desired.dinnerEventId} failed`,
+                    error
+                ), error)
             }
 
-            // Build batch updates - collect all updates for efficient batching
-            // ADR-014: Groups by (state, dinnerMode, ticketPriceId) to minimize queries
-            let householdPriceUpdates = 0
-            let householdModeUpdates = 0
-            let householdReleased = 0
-            let householdUpdateErrors = 0
-            const batchUpdates: OrderBatchUpdate[] = []
+            // Create new orders; a failed batch is written order by order
+            const creates = result.create.map(desired => ({desired, order: toOrderCreate(desired)}))
+            for (const batch of chunkOrderBatch(creates)) {
+                await writeBatchOrEach(batch, orders => createOrders(d1Client, household.id, orders.map(({order}) => order), {
+                    action: getAuditAction(isUserTriggered, Action.BOOK),
+                    performedByUserId: effectiveUserId,
+                    source: isUserMode ? Source['user-booking'] : (options.householdId ? Source['preference-update'] : Source['scaffold-prebookings']),
+                    seasonId: season.id ?? null
+                }), landedAs(Action.BOOK), failedAs(() => Action.BOOK))
+            }
 
+            // Updates: each carries its action (release, reclaim, price, mode); ADR-014 groups them by signature
+            const updates: {desired: DesiredOrder, update: OrderBatchUpdate, action: BookingAction}[] = []
             for (const incoming of result.update) {
-                // Validate orderId present (generator contract)
-                if (!incoming.orderId) {
-                    throw new Error(`${LOG} Data integrity: update bucket order missing orderId for inhabitant ${incoming.inhabitantId} dinnerEvent ${incoming.dinnerEventId}`)
+                // Generator contract: an update names an order among the household's
+                const existing = incoming.orderId ? orderById.get(incoming.orderId) : undefined
+                if (!incoming.orderId || !existing) {
+                    throw new Error(`${LOG} Data integrity: update bucket order ${incoming.orderId} not among the household's orders for inhabitant ${incoming.inhabitantId} dinnerEvent ${incoming.dinnerEventId}`)
                 }
-                const existing = orderById.get(incoming.orderId)
-                if (!existing) {
-                    console.warn(`${LOG} Order ${incoming.orderId} not found (deleted during processing?) - skipping`)
-                    householdUpdateErrors++
-                    continue
+                const action = actionOfUpdate(incoming, existing)
+                const priceChanged = existing.ticketPriceId !== incoming.ticketPriceId
+                const newTicketPrice = priceChanged ? ticketPriceById.get(incoming.ticketPriceId) : undefined
+                if (priceChanged && !newTicketPrice) {
+                    throw new Error(`${LOG} Ticket price ${incoming.ticketPriceId} not found in season`)
                 }
-
-                // Categorize for stats
-                const isPriceChange = existing.ticketPriceId !== incoming.ticketPriceId
-                const isNewRelease = incoming.state === OrderStateSchema.enum.RELEASED && existing.state !== OrderStateSchema.enum.RELEASED
-
-                // Determine audit action: release → USER_CANCELLED (or SYSTEM_UPDATED), other → USER_BOOKED (or SYSTEM_UPDATED)
-                const auditAction = getAuditAction(isUserTriggered, isNewRelease ? 'release' : 'update')
-                const audit = {
-                    action: auditAction,
-                    performedByUserId: effectiveUserId,
-                    inhabitantId: incoming.inhabitantId,
-                    dinnerEventId: incoming.dinnerEventId,
-                    seasonId: season.id ?? null
-                }
-
-                if (isPriceChange) {
-                    const newTicketPrice = ticketPriceById.get(incoming.ticketPriceId)
-                    if (!newTicketPrice) {
-                        throw new Error(`${LOG} Ticket price ${incoming.ticketPriceId} not found in season`)
+                updates.push({desired: incoming, action, update: {
+                    orderId: incoming.orderId,
+                    state: incoming.state,
+                    dinnerMode: incoming.dinnerMode,
+                    ticketPriceId: priceChanged ? incoming.ticketPriceId : null,
+                    priceAtBooking: newTicketPrice?.price ?? null,
+                    isNewRelease: action === Action.RELEASE,
+                    audit: {
+                        action: getAuditAction(isUserTriggered, action),
+                        performedByUserId: effectiveUserId,
+                        inhabitantId: incoming.inhabitantId,
+                        dinnerEventId: incoming.dinnerEventId,
+                        seasonId: season.id ?? null
                     }
-                    householdPriceUpdates++
-                    batchUpdates.push({
-                        orderId: incoming.orderId,
-                        state: incoming.state,
-                        dinnerMode: incoming.dinnerMode,
-                        ticketPriceId: incoming.ticketPriceId,
-                        priceAtBooking: newTicketPrice.price,
-                        isNewRelease,
-                        audit
-                    })
-                } else {
-                    if (isNewRelease) householdReleased++
-                    else householdModeUpdates++
-                    batchUpdates.push({
-                        orderId: incoming.orderId,
-                        state: incoming.state,
-                        dinnerMode: incoming.dinnerMode,
-                        ticketPriceId: null,
-                        priceAtBooking: null,
-                        isNewRelease,
-                        audit
-                    })
-                }
+                }})
             }
-
-            // Execute batch updates (grouped by signature, chunked within groups)
             const executeBatchUpdates = updateOrdersBatch(90)
-            await executeBatchUpdates(d1Client, batchUpdates)
-
-            // Batch delete orders - chunk to respect D1's 100 param limit (ADR-014)
-            const deleteIds = result.delete
-                .map(toDelete => {
-                    if (!toDelete.orderId) {
-                        throw new Error(`${LOG} Data integrity violation: delete bucket order missing orderId for inhabitant ${toDelete.inhabitantId} dinnerEvent ${toDelete.dinnerEventId}`)
-                    }
-                    return toDelete.orderId
-                })
-            if (deleteIds.length > 0) {
-                for (const idChunk of chunkIds(deleteIds)) {
-                    // Pass null for system-triggered deletes → SYSTEM_DELETED audit (deleteOrder contract: null = system)
-                    // Pass effectiveUserId for user-triggered deletes → USER_CANCELLED audit (respected by scaffolder)
-                    await deleteOrder(d1Client, idChunk, isUserTriggered ? effectiveUserId : null)
+            const actionOf = (desired: DesiredOrder) => updates.find(entry => entry.desired === desired)!.action
+            await writeBatchOrEach(updates, entries => executeBatchUpdates(d1Client, entries.map(({update}) => update)),
+                entries => {
+                    for (const {desired, action} of entries) landed.push(resultOf(desired, action))
+                },
+                failedAs(actionOf))
+            // Cancel orders before the deadline, chunked to respect D1's 100 param limit (ADR-014); a failed chunk is cancelled order by order
+            const cancels = result.delete.map(desired => {
+                if (!desired.orderId) {
+                    throw new Error(`${LOG} Data integrity violation: delete bucket order missing orderId for inhabitant ${desired.inhabitantId} dinnerEvent ${desired.dinnerEventId}`)
                 }
+                return {desired, orderId: desired.orderId}
+            })
+            for (const chunk of chunkDeleteBatch(cancels)) {
+                // Pass null for system-triggered deletes → SYSTEM_DELETED audit (deleteOrder contract: null = system)
+                // Pass effectiveUserId for user-triggered deletes → USER_CANCELLED audit (respected by scaffolder)
+                await writeBatchOrEach(chunk, entries => deleteOrder(d1Client, entries.map(({orderId}) => orderId), isUserTriggered ? effectiveUserId : null),
+                    landedAs(Action.CANCEL), failedAs(() => Action.CANCEL))
             }
 
-            // Process claims (try to claim released tickets from marketplace)
-            let householdClaimed = 0
-            let householdClaimRejected = 0
+            // Claims act on bookingOutcomes over the supply read at this instant: a ticket of the claim's type is bought
+            // while nobody waits in its line, else the wish joins the line
             for (const toClaim of result.claim) {
-                const claimed = await claimOrder(
-                    d1Client,
-                    toClaim.dinnerEventId,
-                    toClaim.ticketPriceId,
-                    toClaim.inhabitantId,
-                    effectiveUserId,
-                    toClaim.dinnerMode,
-                    toClaim.isGuestTicket
-                )
-                if (claimed) {
-                    householdClaimed++
-                } else {
-                    householdClaimRejected++
+                let bought = false
+                try {
+                    const ticketType = ticketPriceById.get(toClaim.ticketPriceId)?.ticketType
+                    if (!ticketType) throw new Error(`${LOG} Missing ticket price ${toClaim.ticketPriceId} for claim`)
+                    const nobodyWaits = !waitingLines(await fetchWaitlistForDinners(d1Client, [toClaim.dinnerEventId]), ticketTypeOf).has(ticketType)
+                    for (let round = 0; nobodyWaits && round < CLAIM_ROUNDS && !bought; round++) {
+                        const ticketsForSale = await countReleasedTickets(d1Client, toClaim.dinnerEventId, ticketType)
+                        if (bookingOutcomes(Bucket.claim, toClaim, () => ({ticketsForSale}))[0]?.outcome !== Action.BUY) break
+                        const claimed = await claimOrder(
+                            d1Client,
+                            toClaim.dinnerEventId,
+                            ticketType,
+                            toClaim.inhabitantId,
+                            effectiveUserId,
+                            toClaim.dinnerMode,
+                            toClaim.isGuestTicket
+                        )
+                        if (claimed) {
+                            outcomes.ticketsSold.push({
+                                dinnerEventId: toClaim.dinnerEventId, ticketPriceId: claimed.ticketPriceId,
+                                buyerInhabitantId: toClaim.inhabitantId, buyerHouseholdId: household.id, sellerHouseholdId: claimed.sellerHouseholdId
+                            })
+                            bought = true
+                        }
+                    }
+                    if (bought) {
+                        landed.push(resultOf(toClaim, Action.BUY))
+                        continue
+                    }
+                    const order = {...toOrderCreate(toClaim), state: OrderStateSchema.enum.BOOKED, allergyTypeIds: toClaim.allergyTypeIds}
+                    try {
+                        const {position, joined} = await joinWaitlist(d1Client, {
+                            dinnerEventId: toClaim.dinnerEventId,
+                            inhabitantId: toClaim.inhabitantId,
+                            isGuestTicket: toClaim.isGuestTicket,
+                            order
+                        }, {state: dinnerEventById.get(toClaim.dinnerEventId)!.state, ticketPrices: season.ticketPrices})
+                        outcomes.joined.push(joined)
+                        landed.push(resultOf(toClaim, Action.QUEUE))
+                        positions.push({inhabitantId: toClaim.inhabitantId, dinnerEventId: toClaim.dinnerEventId, isGuestTicket: toClaim.isGuestTicket, position, ticketType: joined.ticketType})
+                    } catch (error) {
+                        // The partial unique index holds one regular entry per inhabitant per dinner: a concurrent join already queued it
+                        if (!eventHandlerHelper.isConflict(error)) throw error
+                        console.info(`${LOG} Inhabitant ${toClaim.inhabitantId} already queues for dinner ${toClaim.dinnerEventId}`)
+                        totalUnchanged++
+                    }
+                } catch (error) {
+                    failedAs(() => bought ? Action.BUY : Action.QUEUE)({desired: toClaim}, error)
                 }
             }
 
-            totalCreated += result.create.length
-            totalDeleted += result.delete.length
-            totalReleased += householdReleased
-            totalClaimed += householdClaimed
-            totalClaimRejected += householdClaimRejected
-            totalPriceUpdated += householdPriceUpdates
-            totalModeUpdated += householdModeUpdates
+            for (const toLeave of result.leave) {
+                try {
+                    await deleteWaitlistEntry(d1Client, toLeave.waitlistEntryId!)
+                    landed.push(resultOf(toLeave, Action.LEAVE))
+                } catch (error) {
+                    failedAs(() => Action.LEAVE)({desired: toLeave}, error)
+                }
+            }
+
+            for (const toRequeue of result.requeue) {
+                const entry = entryById.get(toRequeue.waitlistEntryId!)
+                const ticketPrice = ticketPriceById.get(toRequeue.ticketPriceId)
+                if (!entry || !ticketPrice) {
+                    throw new Error(`${LOG} Data integrity: requeue of entry ${toRequeue.waitlistEntryId} at ticket price ${toRequeue.ticketPriceId}`)
+                }
+                try {
+                    await updateWaitlistEntryOrder(d1Client, entry.id, {
+                        ...entry.order,
+                        dinnerMode: toRequeue.dinnerMode,
+                        ticketPriceId: toRequeue.ticketPriceId,
+                        priceAtBooking: ticketPrice.price,
+                        allergyTypeIds: toRequeue.allergyTypeIds ?? entry.order.allergyTypeIds
+                    })
+                    landed.push(resultOf(toRequeue, Action.REQUEUE))
+                } catch (error) {
+                    failedAs(() => Action.REQUEUE)({desired: toRequeue}, error)
+                }
+            }
+
             totalUnchanged += result.idempotent.length
-            totalOrderErrors += householdUpdateErrors
             processedHouseholds++
         } catch (error) {
             // Household may have been deleted during scaffolding (FK constraint error)
@@ -389,19 +411,28 @@ export async function scaffoldPrebookings(
         }
     }
 
-    console.info(`${LOG} Complete: created=${totalCreated}, deleted=${totalDeleted}, released=${totalReleased}, claimed=${totalClaimed}, claimRejected=${totalClaimRejected}, priceUpdated=${totalPriceUpdated}, modeUpdated=${totalModeUpdated}, unchanged=${totalUnchanged}, orderErrors=${totalOrderErrors}, households=${processedHouseholds}, householdErrors=${erroredHouseholds}`)
+    // The tickets for sale go to the first in their type's line, once per run
+    try {
+        outcomes.waitlistTicketsSold.push(...await sellTicketsToWaitlist(d1Client, dinnerEventIds, season.ticketPrices))
+    } catch (error) {
+        eventHandlerHelper.logNuxtError(eventHandlerHelper.nuxtErrorFromCatch(
+            `${LOG} The tickets for sale on ${dinnerEventIds.length} dinner(s) did not reach the waiting list`, error
+        ), error)
+    }
+
+    const totals = countTotals(landed)
+    console.info(`${LOG} Complete: ${Object.entries(totals).filter(([, count]) => count > 0).map(([action, count]) => `${action}=${count}`).join(', ') || 'no changes'}, unchanged=${totalUnchanged}, failed=${failed.length}, households=${processedHouseholds}, errored households=${erroredHouseholds}`)
 
     return ScaffoldResultSchema.parse({
         seasonId: effectiveSeasonId,
-        created: totalCreated,
-        deleted: totalDeleted,
-        released: totalReleased,
-        claimed: totalClaimed,
-        claimRejected: totalClaimRejected,
-        priceUpdated: totalPriceUpdated,
-        modeUpdated: totalModeUpdated,
+        totals,
+        positions,
         unchanged: totalUnchanged,
         households: processedHouseholds,
-        errored: erroredHouseholds + totalOrderErrors
+        errored: failed.length + erroredHouseholds,
+        // A run scoped to one household names each order; a season-wide run names only the failures
+        results: options.householdId !== undefined ? landed : [],
+        failed,
+        outcomes
     })
 }

@@ -6,6 +6,7 @@
  * including the messages that were already delivered. `Env` is the generated binding type
  * (worker-configuration.d.ts) — wrangler guarantees the bindings it declares.
  */
+import {z} from 'zod'
 import {NotificationMessageSchema} from '~/contract'
 import type {NotificationMessage} from '~/contract'
 import {RetryableError, TerminalError, deliver} from '~/utils/delivery'
@@ -33,7 +34,7 @@ const handleMessage = async (message: Message<unknown>, providers: Providers): P
     if (!parsed.success) {
         console.error(`${LOG} > [CONTRACT] rejected`, {
             msgId: message.id,
-            issues: parsed.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`)
+            issues: z.prettifyError(parsed.error)
         })
         message.ack()
         return

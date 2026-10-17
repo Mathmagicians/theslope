@@ -1,5 +1,5 @@
 // Factory for Order test data
-import type { OrderDisplay, CreateOrdersRequest, SwapOrderRequest, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay } from '~/composables/useBookingValidation'
+import type { OrderDisplay, BookingResult, BookingTotals, OrderDetail, OrderHistoryDisplay, OrderHistoryDetail, TicketChange, TicketChangesResponse, OrderHistoryCreate, OrderSnapshot, OrderCreateWithPrice, AuditContext, CreateOrdersResult, OrderForTransaction, DesiredOrder, DinnerMode, ScaffoldOrdersRequest, ScaffoldOrdersResponse, DinnerEventDisplay, ScaffoldResult, DailyMaintenanceResult } from '~/composables/useBookingValidation'
 import type { Season } from '~/composables/useSeasonValidation'
 import { useBookingValidation } from '~/composables/useBookingValidation'
 import { useCoreValidation } from '~/composables/useCoreValidation'
@@ -11,6 +11,9 @@ import testHelpers from '../testHelpers'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
 import { HouseholdFactory } from '~~/tests/e2e/testDataFactories/householdFactory'
 import { DinnerEventFactory } from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
+import { AllergyFactory } from '~~/tests/e2e/testDataFactories/allergyFactory'
+import { TicketFactory } from '~~/tests/e2e/testDataFactories/ticketFactory'
+import type { AllergyTypeDisplay } from '~/composables/useAllergyValidation'
 
 const { headers, salt, temporaryAndRandom, getSessionUserInfo } = testHelpers
 
@@ -18,18 +21,24 @@ const { headers, salt, temporaryAndRandom, getSessionUserInfo } = testHelpers
 const HOUSEHOLD_SCAFFOLD_ENDPOINT = '/api/household/order/scaffold'
 
 // Get enum schemas from composable
-const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema, OrderAuditActionSchema } = useBookingValidation()
+const { OrderStateSchema, TicketTypeSchema, DinnerModeSchema, DinnerStateSchema, OrderAuditActionSchema, OrderAuditSourceSchema, BookingActionSchema, TicketChangeKindSchema } = useBookingValidation()
 
 // API endpoints
 const ORDER_ENDPOINT = '/api/order'
 
+/** Orders a test sets up on one dinner of a household; the scaffold books them with the deadlines lifted */
+export type OrderSetupRequest = {
+  householdId: number
+  dinnerEventId: number
+  orders: Array<Pick<DesiredOrder, 'inhabitantId' | 'ticketPriceId' | 'dinnerMode'> & { isGuestTicket?: boolean }>
+}
+
 export class OrderFactory {
 
   /** Default order item - pass inhabitantId & ticketPriceId, rest uses defaults */
-  static readonly defaultOrderItem = (overrides: Partial<CreateOrdersRequest['orders'][number]>) => ({
+  static readonly defaultOrderItem = (overrides: Partial<OrderSetupRequest['orders'][number]>) => ({
     inhabitantId: 1,
     ticketPriceId: 1,
-    bookedByUserId: 1,
     dinnerMode: DinnerModeSchema.enum.DINEIN,
     isGuestTicket: false,
     ...overrides
@@ -66,6 +75,30 @@ export class OrderFactory {
     ...overrides
   })
 
+  /** A ticket count per type, in the order adult, child, baby */
+  static readonly ticketCounts = (adult: number, child: number, baby: number) =>
+    ({[TicketTypeSchema.enum.ADULT]: adult, [TicketTypeSchema.enum.CHILD]: child, [TicketTypeSchema.enum.BABY]: baby})
+
+  /** A line of a dinner's ticket changes: user 31 of S_31 books an adult on a dinner without tickets */
+  static readonly defaultTicketChange = (overrides?: Partial<TicketChange>): TicketChange => ({
+    id: 1,
+    timestamp: new Date('2026-04-05T08:02:00Z'),
+    performedByUserId: 31,
+    bySystem: false,
+    households: ['S_31'],
+    events: [{change: TicketChangeKindSchema.enum.BOOK, tickets: OrderFactory.ticketCounts(1, 0, 0)}],
+    counts: OrderFactory.ticketCounts(1, 0, 0),
+    portions: 1,
+    revenue: 5000,
+    ...overrides
+  })
+
+  /** An order's price row: the default row of its type, carrying the portions a ticket at it weighs */
+  static readonly ticketPriceRow = (ticketType: OrderDetail['ticketType'] = TicketTypeSchema.enum.ADULT): NonNullable<OrderDetail['ticketPrice']> => {
+    const row = TicketFactory.defaultTicketPricesData.find(price => price.ticketType === ticketType)!
+    return {id: 1, ticketType: row.ticketType, price: 45, description: row.description ?? null, portions: row.portions}
+  }
+
   static readonly defaultOrderDetail = (testSalt: string = temporaryAndRandom(), overrides?: Partial<OrderDetail>): OrderDetail => ({
     ...OrderFactory.defaultOrder(testSalt),
     dinnerEvent: {
@@ -96,16 +129,37 @@ export class OrderFactory {
       id: 1,
       email: salt('daisy', testSalt) + '@andeby.dk'
     },
-    ticketPrice: {
-      id: 1,
-      ticketType: TicketTypeSchema.enum.ADULT,
-      price: 45,
-      description: 'Adult ticket'
-    },
+    ticketPrice: OrderFactory.ticketPriceRow(overrides?.ticketType ?? TicketTypeSchema.enum.ADULT),
     ...overrides
   })
 
-  static readonly defaultCreateOrdersRequest = (overrides?: Partial<CreateOrdersRequest>): CreateOrdersRequest => {
+  /** An order whose inhabitant carries one allergy per given type, the diner the allergy overviews count */
+  static readonly defaultOrderDetailWithAllergies = (
+    inhabitantId: number,
+    name: string,
+    allergyTypes: AllergyTypeDisplay[] = [],
+    overrides?: Partial<OrderDetail>
+  ): OrderDetail => {
+    const base = OrderFactory.defaultOrderDetail(`allergy-${inhabitantId}`, {id: inhabitantId, inhabitantId, ...overrides})
+    const [allergyTemplate] = AllergyFactory.createMockAllergies()
+    return {
+      ...base,
+      inhabitant: {
+        ...base.inhabitant,
+        id: inhabitantId,
+        name,
+        allergies: allergyTypes.map(allergyType => ({
+          ...allergyTemplate!,
+          id: inhabitantId * 10 + allergyType.id,
+          inhabitantId,
+          allergyTypeId: allergyType.id,
+          allergyType
+        }))
+      }
+    }
+  }
+
+  static readonly defaultCreateOrdersRequest = (overrides?: Partial<OrderSetupRequest>): OrderSetupRequest => {
     const defaults = {
       householdId: 1,
       dinnerEventId: 5,
@@ -123,11 +177,6 @@ export class OrderFactory {
 
     return { ...defaults, ...overrides }
   }
-
-  static readonly defaultSwapOrderRequest = (overrides?: Partial<SwapOrderRequest>): SwapOrderRequest => ({
-    inhabitantId: 10,
-    ...overrides
-  })
 
   static readonly defaultOrderForTransaction = (testSalt: string = temporaryAndRandom()): OrderForTransaction => {
     const detail = OrderFactory.defaultOrderDetail(testSalt, {state: OrderStateSchema.enum.CLOSED, closedAt: new Date()})
@@ -203,6 +252,7 @@ export class OrderFactory {
     priceAtBooking: 4500,
     dinnerMode: DinnerModeSchema.enum.DINEIN,
     state: OrderStateSchema.enum.BOOKED,
+    isGuestTicket: false,
     // Provenance fields (pre-formatted for immutable audit trail)
     inhabitantNameWithInitials: 'Daisy D.',
     householdShortname: 'AR_1',
@@ -227,9 +277,9 @@ export class OrderFactory {
   })
 
   static readonly defaultAuditContext = (overrides?: Partial<AuditContext>): AuditContext => ({
-    action: 'SYSTEM_CREATED',
+    action: OrderAuditActionSchema.enum.SYSTEM_CREATED,
     performedByUserId: 1,
-    source: 'csv_billing',
+    source: OrderAuditSourceSchema.enum.csv_billing,
     seasonId: overrides?.seasonId ?? null,
     ...overrides
   })
@@ -248,31 +298,29 @@ export class OrderFactory {
 
   // === API METHODS ===
 
+  /**
+   * Set up orders through the scaffold with `?adminBypass=true`: an admin books any household on any dinner,
+   * the deadlines lifted; a member books its own household. createdIds are the household's new orders on the dinner.
+   */
   static readonly createOrder = async (
     context: BrowserContext,
-    orderData?: Partial<CreateOrdersRequest>,
-    expectedStatus: number = 201,
-    withAdminBypass: boolean = false
+    orderData?: Partial<OrderSetupRequest>,
+    expectedStatus: number = 200
   ): Promise<CreateOrdersResult | null> => {
-    const { CreateOrdersResultSchema } = useBookingValidation()
     const data = this.defaultCreateOrdersRequest(orderData)
-
-    const query = withAdminBypass ? '?adminBypass=true' : ''
-    const response = await context.request.put(`${ORDER_ENDPOINT}${query}`, {
-      headers,
-      data
-    })
-
-    const status = response.status()
-    const errorBody = status !== expectedStatus ? await response.text() : ''
-    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
-
-    if (expectedStatus === 201) {
-      const responseBody = await response.json()
-      return CreateOrdersResultSchema.parse(responseBody)
-    }
-
-    return null
+    const householdOrders = () => this.getOrders(context, {dinnerEventIds: data.dinnerEventId, householdId: data.householdId})
+    const before = new Set((await householdOrders()).map(order => order.id))
+    const dinnerEvent = await DinnerEventFactory.getDinnerEvent(context, data.dinnerEventId)
+    const response = await this.scaffoldOrders(context, {
+      householdId: data.householdId,
+      seasonId: dinnerEvent?.seasonId ?? undefined,
+      dinnerEventIds: [data.dinnerEventId],
+      orders: data.orders.map(order => this.defaultDesiredOrder({...order, dinnerEventId: data.dinnerEventId, isGuestTicket: order.isGuestTicket ?? false}))
+    }, expectedStatus, true)
+    if (!response) return null
+    expect(response.scaffoldResult.errored, 'The scaffold placed every order').toBe(0)
+    const createdIds = (await householdOrders()).map(order => order.id).filter(id => !before.has(id))
+    return {householdId: data.householdId, createdIds}
   }
 
   static readonly getOrder = async (
@@ -293,28 +341,34 @@ export class OrderFactory {
     return null
   }
 
+  /**
+   * Change an order's mode through the scaffold under the deadlines: NONE deletes before the cancellation deadline
+   * and releases after it. `withAdminBypass` lifts the deadlines (the admin correction). Returns the order after.
+   */
   static readonly updateOrder = async (
     context: BrowserContext,
     orderId: number,
-    updateData: { dinnerMode: string },
+    updateData: { dinnerMode: DinnerMode },
     expectedStatus: number = 200,
     withAdminBypass: boolean = false
   ): Promise<OrderDetail | null> => {
-    const query = withAdminBypass ? '?adminBypass=true' : ''
-    const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}${query}`, {
-      headers,
-      data: updateData
-    })
-
-    const status = response.status()
-    const errorBody = status !== expectedStatus ? await response.text() : ''
-    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
-
-    if (expectedStatus === 200) {
-      return await response.json()
-    }
-
-    return null
+    const order = await this.getOrder(context, orderId)
+    await this.scaffoldOrders(context, {
+      householdId: order!.inhabitant.householdId,
+      seasonId: order!.dinnerEvent.seasonId ?? undefined,
+      dinnerEventIds: [order!.dinnerEventId],
+      orders: [this.defaultDesiredOrder({
+        inhabitantId: order!.inhabitantId,
+        dinnerEventId: order!.dinnerEventId,
+        ticketPriceId: order!.ticketPriceId!,
+        isGuestTicket: order!.isGuestTicket,
+        dinnerMode: updateData.dinnerMode,
+        orderId
+      })]
+    }, expectedStatus, withAdminBypass)
+    if (expectedStatus !== 200) return null
+    const response = await context.request.get(`${ORDER_ENDPOINT}/${orderId}`, { headers })
+    return response.status() === 200 ? await response.json() : null
   }
 
   /**
@@ -324,108 +378,31 @@ export class OrderFactory {
    * @param expectedStatus - Expected HTTP status (default 200)
    * @param withAdminBypass - If true, adds ?adminBypass=true (for admin tests deleting orders from test households)
    */
+  /**
+   * Delete an order through the scaffold with `?adminBypass=true`: NONE with the deadlines lifted deletes it.
+   * Returns the order as it was, or null when it is already gone.
+   */
   static readonly deleteOrder = async (
     context: BrowserContext,
-    orderId: number,
-    expectedStatus: number = 200,
-    withAdminBypass: boolean = false
-  ): Promise<OrderDisplay | null> => {
-    const query = withAdminBypass ? '?adminBypass=true' : ''
-    const response = await context.request.delete(`${ORDER_ENDPOINT}/${orderId}${query}`, { headers })
-
-    const status = response.status()
-    const errorBody = status !== expectedStatus ? await response.text() : ''
-    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
-
-    if (expectedStatus === 200) {
-      return await response.json()
-    }
-
-    return null
-  }
-
-  static readonly releaseOrder = async (
-    context: BrowserContext,
-    orderId: number,
-    expectedStatus: number = 200
-  ): Promise<OrderDisplay | null> => {
-    const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}/release`, { headers })
-
-    const status = response.status()
-    const errorBody = status !== expectedStatus ? await response.text() : ''
-    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
-
-    if (expectedStatus === 200) {
-      return await response.json()
-    }
-
-    return null
-  }
-
-  static readonly swapOrder = async (
-    context: BrowserContext,
-    orderId: number,
-    swapData?: Partial<SwapOrderRequest>,
-    expectedStatus: number = 200
-  ): Promise<OrderDisplay | null> => {
-    const data = this.defaultSwapOrderRequest(swapData)
-
-    const response = await context.request.post(`${ORDER_ENDPOINT}/${orderId}/swap-order`, {
-      headers,
-      data
-    })
-
-    const status = response.status()
-    const errorBody = status !== expectedStatus ? await response.text() : ''
-    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
-
-    if (expectedStatus === 200) {
-      return await response.json()
-    }
-
-    return null
-  }
-
-  static readonly claimOrder = async (
-    context: BrowserContext,
-    dinnerEventId: number,
-    ticketPriceId: number,
-    inhabitantId: number,
-    isGuestTicket: boolean = false,
-    expectedStatus: number = 200
+    orderId: number
   ): Promise<OrderDetail | null> => {
-    const response = await context.request.post(`${ORDER_ENDPOINT}/claim`, {
-      headers,
-      data: { dinnerEventId, ticketPriceId, inhabitantId, isGuestTicket }
-    })
-
-    const status = response.status()
-    const errorBody = status !== expectedStatus ? await response.text() : ''
-    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
-
-    if (expectedStatus === 200) {
-      return await response.json()
-    }
-
-    return null
-  }
-
-  static readonly getOrderHistory = async (
-    context: BrowserContext,
-    orderId: number,
-    expectedStatus: number = 200
-  ): Promise<OrderHistoryDisplay[]> => {
-    const response = await context.request.get(`${ORDER_ENDPOINT}/${orderId}/history`, { headers })
-
-    const status = response.status()
-    const errorBody = status !== expectedStatus ? await response.text() : ''
-    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
-
-    if (expectedStatus === 200) {
-      return await response.json()
-    }
-
-    return []
+    const response = await context.request.get(`${ORDER_ENDPOINT}/${orderId}`, { headers })
+    if (response.status() === 404) return null
+    const order: OrderDetail = await response.json()
+    await this.scaffoldOrders(context, {
+      householdId: order.inhabitant.householdId,
+      seasonId: order.dinnerEvent.seasonId ?? undefined,
+      dinnerEventIds: [order.dinnerEventId],
+      orders: [this.defaultDesiredOrder({
+        inhabitantId: order.inhabitantId,
+        dinnerEventId: order.dinnerEventId,
+        ticketPriceId: order.ticketPriceId!,
+        isGuestTicket: order.isGuestTicket,
+        dinnerMode: DinnerModeSchema.enum.NONE,
+        orderId
+      })]
+    }, 200, true)
+    return order
   }
 
   /**
@@ -545,20 +522,12 @@ export class OrderFactory {
    * @param orderIds - Array of order IDs to delete
    * @param withAdminBypass - If true, adds ?adminBypass=true (for admin tests deleting orders from test households)
    */
+  /** Cleanup orders by ID (afterAll hooks); an order already gone counts as removed */
   static readonly cleanupOrders = async (
     context: BrowserContext,
-    orderIds: number[],
-    withAdminBypass: boolean = false
+    orderIds: number[]
   ): Promise<void> => {
-    if (orderIds.length === 0) return
-
-    const query = withAdminBypass ? '?adminBypass=true' : ''
-    await Promise.all(orderIds.map(async (id) => {
-      const response = await context.request.delete(`${ORDER_ENDPOINT}/${id}${query}`)
-      if (response.status() !== 200 && response.status() !== 404) {
-        console.warn(`Failed to cleanup order ${id}: status ${response.status()}`)
-      }
-    }))
+    for (const id of orderIds) await this.deleteOrder(context, id)
   }
 
   // === SCAFFOLD ORDERS (ADR-016 Unified Booking) ===
@@ -589,6 +558,42 @@ export class OrderFactory {
     ...overrides
   })
 
+  /** One order's result in a scaffold run */
+  static readonly defaultBookingResult = (overrides?: Partial<BookingResult>): BookingResult => ({
+    inhabitantId: 1, inhabitantName: 'Anna', isGuestTicket: false, ticketType: TicketTypeSchema.enum.ADULT, dinnerEventId: 1,
+    dinnerMode: DinnerModeSchema.enum.DINEIN, action: BookingActionSchema.enum.BOOK,
+    ...overrides
+  })
+
+  /** ScaffoldResult data for component tests (no API call); totals name only the actions that differ from zero */
+  static readonly defaultScaffoldResult = (
+    {totals, ...overrides}: Partial<Omit<ScaffoldResult, 'totals'>> & {totals?: Partial<BookingTotals>} = {}
+  ): ScaffoldResult => ({
+    seasonId: 1, positions: [], unchanged: 0, households: 1, errored: 0,
+    totals: {...Object.fromEntries(BookingActionSchema.options.map(action => [action, 0])) as BookingTotals, ...totals},
+    results: [], failed: [],
+    outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: []},
+    ...overrides
+  })
+
+  /** ScaffoldOrdersResponse data for component tests (no API call) */
+  static readonly defaultScaffoldOrdersResponse = (scaffoldResult: Parameters<typeof OrderFactory.defaultScaffoldResult>[0] = {}, householdId: number = 1): ScaffoldOrdersResponse => ({
+    householdId,
+    scaffoldResult: OrderFactory.defaultScaffoldResult(scaffoldResult)
+  })
+
+  /** DailyMaintenanceResult data for component tests (no API call) */
+  static readonly defaultDailyMaintenanceResult = (overrides?: Partial<DailyMaintenanceResult>): DailyMaintenanceResult => ({
+    jobRunId: 1,
+    consume: {consumed: 0},
+    close: {closed: 0},
+    transact: {created: 0},
+    clearWaitlist: {cleared: 0, dinners: []},
+    initPrefs: {initialized: 0},
+    scaffold: null,
+    ...overrides
+  })
+
   /**
    * Scaffold orders via household endpoint (POST /api/household/order/scaffold)
    * ADR-016: Unified booking mutation - creates, updates, releases, and deletes orders
@@ -596,16 +601,18 @@ export class OrderFactory {
    * @param context - Browser context for API requests
    * @param request - ScaffoldOrdersRequest with householdId, dinnerEventIds, orders
    * @param expectedStatus - Expected HTTP status (default 200)
+   * @param adminBypass - Admin acts for a household that is not its own; omitted sends no query, a boolean is sent as given
    * @returns ScaffoldOrdersResponse with householdId and scaffoldResult
    */
   static readonly scaffoldOrders = async (
     context: BrowserContext,
     request: ScaffoldOrdersRequest,
-    expectedStatus: number = 200
+    expectedStatus: number = 200,
+    adminBypass?: boolean
   ): Promise<ScaffoldOrdersResponse | null> => {
     const { ScaffoldOrdersResponseSchema } = useBookingValidation()
 
-    const response = await context.request.post(HOUSEHOLD_SCAFFOLD_ENDPOINT, {
+    const response = await context.request.post(`${HOUSEHOLD_SCAFFOLD_ENDPOINT}${adminBypass === undefined ? '' : `?adminBypass=${adminBypass}`}`, {
       headers,
       data: request
     })
@@ -667,13 +674,13 @@ export class OrderFactory {
     inhabitantId: number,
     dinnerEventId: number,
     ticketPriceId: number,
-    dinnerMode: 'DINEIN' | 'TAKEAWAY' = 'DINEIN',
+    dinnerMode: DinnerMode = DinnerModeSchema.enum.DINEIN,
     allergyTypeIds?: number[]
   ): DesiredOrder => this.defaultDesiredOrder({
     inhabitantId,
     dinnerEventId,
     ticketPriceId,
-    dinnerMode: DinnerModeSchema.enum[dinnerMode],
+    dinnerMode,
     isGuestTicket: true,
     allergyTypeIds
   })
@@ -720,7 +727,7 @@ export class OrderFactory {
       menuTitle: salt(`Fixture-${daysFromNow}d`, testSalt)
     })
 
-    const ticketPriceId = season.ticketPrices?.find(tp => tp.ticketType === 'ADULT')?.id
+    const ticketPriceId = season.ticketPrices?.find(tp => tp.ticketType === TicketTypeSchema.enum.ADULT)?.id
     if (!ticketPriceId) throw new Error('No ADULT ticket price found')
 
     let order: OrderDisplay
@@ -780,5 +787,23 @@ export class OrderFactory {
       ticketPriceId,
       isTestHousehold
     }
+  }
+
+  // GET /api/chef/dinner/[id]/order-history: the dinner's ticket changes newest first, from `since` when given
+  static readonly getTicketChanges = async (
+    context: BrowserContext,
+    dinnerEventId: number,
+    since?: Date,
+    expectedStatus: number = 200
+  ): Promise<TicketChangesResponse | null> => {
+    const { TicketChangesResponseSchema } = useBookingValidation()
+    const query = since ? `?since=${encodeURIComponent(since.toISOString())}` : ''
+    const response = await context.request.get(`/api/chef/dinner/${dinnerEventId}/order-history${query}`, { headers })
+
+    const status = response.status()
+    const errorBody = status !== expectedStatus ? await response.text() : ''
+    expect(status, `Unexpected status. Response: ${errorBody}`).toBe(expectedStatus)
+
+    return expectedStatus === 200 ? TicketChangesResponseSchema.parse(await response.json()) : null
   }
 }

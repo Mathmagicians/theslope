@@ -6,52 +6,25 @@
  * - Master (Calendar): 1/4 width, shows calendar with dinner events
  * - Detail (Dinner info): 3/4 width, shows selected day details
  *
- * Detail View Layout:
+ * Detail view: DinnerDetailPanel lays out three slots; each component's header draws its own layout.
  * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ MENU HERO (UCard Header - Full Bleed)                                      │
- * │ ┌─────────────────────────────────────────────────────────────────────────┐ │
- * │ │ [Baggrund: Menu Foto eller Fast Farve]                                  │ │
- * │ │                                                                          │ │
- * │ │                       SPAGHETTI CARBONARA                                │ │
- * │ │               Cremet pasta med bacon og parmesan                         │ │
- * │ │                                                                          │ │
- * │ │     Allergener: 🥛 Laktose   🌾 Gluten   🥚 Æg                           │ │
- * │ │                                                                          │ │
- * │ │     [Bestil] [Byt] [Annuller] [Skift Servering]                         │ │
- * │ └─────────────────────────────────────────────────────────────────────────┘ │
+ * │ #hero  [ChefMenuCard] in view mode: the dinner, its menu and allergens     │
+ * │        └─ [DinnerBookingForm] the household's tickets and queue places     │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ #team  [CookingTeamCard] (monitor) or the no-team alert, [WorkAssignment]  │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ #stats [KitchenPreparation] the kitchen stats with the alternating fourth  │
+ * │        box (TIL SALG or VENTELISTE), drawn in KitchenPreparation.vue       │
  * └─────────────────────────────────────────────────────────────────────────────┘
- *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ KØKKEN FORBEREDELSE (UCard Body - Full Bleed)                              │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │ 👨‍🍳 Chefkok: Anna Larsen                                                   │
- * │ 👥 Madhold 3: Bob Jensen, Clara Nielsen, David Hansen                      │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │                          LAV MAD - 100%                                     │
- * │  100 KUVERTER                                                               │
- * │  Voksne: 80  |  Børn: 40 (20 kuverter)  |  Baby: 5 (0 kuverter)            │
- * ├──────────────────────────┬─────────────────────┬──────────────┬────────────┤
- * │   TAKEAWAY - 40%         │  SPIS HER - 35%     │SPIS SENT-20% │IKKE-5%     │
- * │                          │                     │              │            │
- * │      50 personer         │    44 personer      │  25 personer │ 6 personer │
- * │                          │                     │              │            │
- * │    40 kuverter           │     35 stole        │   20 stole   │            │
- * │    40 tallerkener        │   33 tallerkener    │18 tallerkener│            │
- * │                          │                     │              │            │
- * │    🌾 Maria (2)          │   🥛 Anna (3)       │  🌾 Peter    │            │
- * │    🥚 Tom (1)            │   🥚 Lars (1)       │              │            │
- * │                          │                     │              │            │
- * └──────────────────────────┴─────────────────────┴──────────────┴────────────┘
- * ←─────────── 40% ─────────→←──────── 35% ──────→←──── 20% ───→←─── 5% ──→
  */
 
 import {FORM_MODES} from '~/types/form'
-import type {OrderDisplay, DesiredOrder} from '~/composables/useBookingValidation'
-import {useDinnerDateParam, useBookingView} from '~/composables/useBookingView'
-import {useQueryParam} from '~/composables/useQueryParam'
+import type {DesiredOrder} from '~/composables/useBookingValidation'
+import {EMPTY_RELEASED_TICKET_COUNTS} from '~/composables/useBooking'
+import {useDinnerDateParam, useBookingView, useCalendarOpenParam} from '~/composables/useBookingView'
 
 // Design system
-const { COLOR, BACKGROUNDS, ICONS, ALERTS, getRandomEmptyMessage } = useTheSlopeDesignSystem()
+const { COLOR, COMPONENTS, ICONS, ALERTS, getRandomEmptyMessage, NOISE, SIZES } = useTheSlopeDesignSystem()
 
 // Fun empty state for no team assigned
 const noTeamMessage = getRandomEmptyMessage('noTeamAssigned')
@@ -64,38 +37,30 @@ const authStore = useAuthStore()
 const {user} = storeToRefs(authStore)
 
 // Booking validation and helpers
-const {formatScaffoldResult, BOOKING_TOAST_TITLES} = useBooking()
+const {BOOKING_TOAST_TITLES} = useBooking()
 
 // Component needs to handle its own data needs
 const planStore = usePlanStore()
 const {selectedSeason, isPlanStoreReady, isSelectedSeasonInitialized, isSelectedSeasonErrored} = storeToRefs(planStore)
 
-// Responsive breakpoint for calendar default state
-const isMd = inject<Ref<boolean>>('isMd')
+const {value: calendarOpen, setValue: setCalendarOpen} = useCalendarOpenParam(() => isPlanStoreReady.value)
 
-// Calendar accordion state via URL param + responsive default (ADR-006)
-const {value: calendarOpen, setValue: setCalendarOpen} = useQueryParam<boolean>('cal', {
-  serialize: (v) => v ? 'open' : 'closed',
-  deserialize: (s) => s === 'open' ? true : s === 'closed' ? false : null,
-  defaultValue: () => isMd?.value ?? false,
-  syncWhen: () => isPlanStoreReady.value
-})
-// Initialize without await for SSR hydration consistency
-planStore.initPlanStore()
-
-// Initialize allergies store for allergen data
-const allergiesStore = useAllergiesStore()
-allergiesStore.initAllergiesStore()
 
 const bookingsStore = useBookingsStore()
 useUsersStore()  // chef-volunteer flow needs it instantiated in setup context
 
 const {
   lockStatus,
+  householdWaitlist,
+  selectedDinnerWaitlist,
   selectedDinnerEventDetail: dinnerEventDetail,
   isSelectedDinnerEventLoading: isDinnerDetailLoading,
   isSelectedDinnerEventErrored: isDinnerDetailError
 } = storeToRefs(bookingsStore)
+const {getTeamNumber} = useCookingTeam()
+
+// The team card reads the dinner's cooking team from the plan store
+planStore.selectTeam(() => dinnerEventDetail.value?.cookingTeamId ?? null)
 
 // Derive needed data from store
 const seasonDates = computed(() => selectedSeason.value?.seasonDates)
@@ -121,46 +86,17 @@ const {hasPrev, hasNext, navigate} = useBookingView({
     dinnerDates: () => dinnerDates.value
 })
 
-// Selected dinner event based on URL date
-const selectedDinnerEvent = computed(() => {
-    return dinnerEvents.value.find(e => {
-        const eventDate = new Date(e.date)
-        return eventDate.toDateString() === selectedDate.value.toDateString()
-    })
-})
+// The store resolves the dinner on the URL date from the selected season, so the server renders its Detail
+bookingsStore.selectDinnerDate(selectedDate)
+const {selectedDinnerEventId: selectedDinnerId} = storeToRefs(bookingsStore)
 
-const selectedDinnerId = computed(() => selectedDinnerEvent.value?.id ?? null)
-
-watchEffect(() => {
-  const id = selectedDinnerId.value
-  if (id !== null) bookingsStore.loadDinnerEventDetail(id)
-})
-
-const { OrderDisplaySchema } = useBookingValidation()
-
-// Fetch household-specific orders via user-facing endpoint (security: session-filtered)
-// This is separate from dinnerEventDetail.tickets which includes ALL households for kitchen stats
-const {
-  data: householdOrders,
-  refresh: _refreshHouseholdOrders
-} = useAsyncData(
-  computed(() => `household-orders-${selectedDinnerId.value || 'null'}`),
-  () => selectedDinnerId.value
-    ? $fetch<OrderDisplay[]>(`/api/order?dinnerEventIds=${selectedDinnerId.value}&includeProvenance=true`)
-    : Promise.resolve([]),
-  {
-    default: () => [],
-    watch: [selectedDinnerId],
-    immediate: true,
-    transform: (data: unknown) => {
-      if (!Array.isArray(data)) return []
-      return data.map(order => OrderDisplaySchema.parse(order))
-    }
-  }
-)
-
-const refreshBookingData = () =>
-  Promise.all([bookingsStore.refreshSelectedDinnerEventDetail(), _refreshHouseholdOrders()])
+// Household-specific orders via the user-facing endpoint (security: session-filtered).
+// Separate from dinnerEventDetail.tickets, which includes ALL households for kitchen stats.
+const {orders: householdOrders} = storeToRefs(bookingsStore)
+bookingsStore.loadOrdersForDinners(() => ({
+  dinnerEventIds: selectedDinnerId.value === null ? [] : [selectedDinnerId.value],
+  includeProvenance: true
+}))
 
 // ADR-016: Unified booking handler via scaffold endpoint
 const handleSaveBookings = async (orders: DesiredOrder[]) => {
@@ -178,16 +114,13 @@ const handleSaveBookings = async (orders: DesiredOrder[]) => {
 
   try {
     const response = await bookingsStore.processSingleEventBookings(householdId, dinnerEventId, orders)
-    await refreshBookingData()
     toast.add({
       title: toastTitle,
-      description: formatScaffoldResult(response.scaffoldResult, 'past'),
-      color: 'success',
-      icon: ICONS.checkCircle
+      description: formatBookingResult(response.scaffoldResult),
+      ...scaffoldToastLook(response.scaffoldResult)
     })
-  } catch (e) {
-    console.error('Failed to process bookings:', e)
-    toast.add({title: 'Kunne ikke gemme bookinger', color: 'error', icon: ICONS.exclamationCircle})
+  } catch {
+    // The request has toasted the failure
   }
 }
 
@@ -206,7 +139,7 @@ useHead({
   <Loader v-if="!isPlanStoreReady" text="Henter sæsondata..." />
   <ViewError v-else-if="isSelectedSeasonErrored" text="Kan ikke hente sæsondata" />
   <UPage v-else-if="isSelectedSeasonInitialized && !selectedSeason">
-    <div :class="`p-4 md:p-8 ${BACKGROUNDS.card}`">
+    <div :class="COMPONENTS.dinnerPage.emptyFrame">
       <UAlert
         v-bind="ALERTS.emptyState"
         :icon="ICONS.robotDead"
@@ -220,10 +153,10 @@ useHead({
         <template #actions>
           <UButton
             :color="COLOR.secondary"
-            variant="solid"
+            :variant="NOISE.loud"
             to="/admin/planning"
             :icon="ICONS.plusCircle"
-            size="lg"
+            :size="SIZES.lg"
           >
             Værsgo, opret en ny sæson
           </UButton>
@@ -282,7 +215,8 @@ useHead({
             :orders="householdOrders"
             :ticket-prices="selectedSeason?.ticketPrices ?? []"
             :deadlines="deadlinesForSeason(selectedSeason)"
-            :released-ticket-counts="lockStatus.get(dinnerEventDetail.id) ?? { total: 0, formatted: '-' }"
+            :released-ticket-counts="lockStatus.get(dinnerEventDetail.id) ?? EMPTY_RELEASED_TICKET_COUNTS"
+            :waitlist-entries="householdWaitlist"
             @save-bookings="handleSaveBookings"
           />
 
@@ -293,9 +227,9 @@ useHead({
       <template #team>
         <template v-if="dinnerEventDetail">
           <CookingTeamCard
-            v-if="dinnerEventDetail.cookingTeamId"
+            v-if="dinnerEventDetail.cookingTeamId && dinnerEventDetail.cookingTeam"
             :team-id="dinnerEventDetail.cookingTeamId"
-            :team-number="dinnerEventDetail.cookingTeamId"
+            :team-number="getTeamNumber(dinnerEventDetail.cookingTeam, selectedSeason?.CookingTeams ?? [])"
             mode="monitor"
             use-short-name
           />
@@ -315,6 +249,7 @@ useHead({
           v-if="dinnerEventDetail"
           :orders="dinnerEventDetail.tickets ?? []"
           :allergens="dinnerEventDetail.allergens"
+          :waitlist="selectedDinnerWaitlist"
         />
       </template>
     </DinnerDetailPanel>

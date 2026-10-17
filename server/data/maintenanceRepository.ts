@@ -1,5 +1,5 @@
-import {Prisma as _PrismaSkip, Prisma} from '@prisma/client'
-import {getPrismaClientConnection} from './allergyRepository'
+import {Prisma} from "~~/prisma/generated/client/client"
+import {getPrismaClientConnection} from '~~/server/utils/database'
 import type {
     JobRunDisplay,
     JobRunCreate,
@@ -34,7 +34,7 @@ export async function fetchJobRuns(
     const {JobRunDisplaySchema} = useMaintenanceValidation()
 
     const jobRuns = await prisma.jobRun.findMany({
-        where: jobType ? {jobType} : Prisma.skip,
+        where: jobType ? {jobType} : {},
         orderBy: {startedAt: 'desc'},
         take: limit
     })

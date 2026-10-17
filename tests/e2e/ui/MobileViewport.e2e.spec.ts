@@ -4,9 +4,10 @@ import testHelpers from '../testHelpers'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {BillingFactory} from '../testDataFactories/billingFactory'
 import {getHouseholdUrl} from '~/utils/household'
+import {BookingViewSchema} from '~/composables/useBookingView'
 
 const {adminUIFile} = authFiles
-const {validatedBrowserContext, pollUntil, doScreenshot, waitForHydration, getSessionUserInfo} = testHelpers
+const {validatedBrowserContext, doScreenshot, gotoHydrated, getSessionUserInfo} = testHelpers
 
 /**
  * Mobile viewport guard (iPhone X, 375x812): every screen fits a phone.
@@ -55,7 +56,7 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
     const ADMIN_TABS = ['planning', 'teams', 'households', 'allergies', 'users', 'economy', 'system']
     const HOUSEHOLD_TABS = ['bookings', 'members', 'allergies', 'economy', 'settings']
     /** The bookings tab case renders the default day view */
-    const BOOKING_VIEWS = ['week', 'month']
+    const BOOKING_VIEWS = [BookingViewSchema.enum.week, BookingViewSchema.enum.month]
 
     const householdTab = (tab: string, query = '') =>
         `${getHouseholdUrl(ownHousehold.shortName, ownHousehold.pbsId, tab)}${query}`
@@ -182,13 +183,8 @@ test.describe('Mobile viewport - no horizontal overflow', () => {
             await sampleOverflowEveryFrame(page)
 
             // WHEN: the page is loaded and hydrated
-            await page.goto(url)
-            await waitForHydration(page)
-            await pollUntil(
-                async () => page.getByTestId(ready).isVisible().catch(() => false),
-                (isVisible) => isVisible,
-                8
-            )
+            await gotoHydrated(page, url)
+            await expect(page.getByTestId(ready)).toBeVisible()
             await reveal?.(page)
 
             // Evidence for the visual check - taken before the assertions so it exists on failure

@@ -5,6 +5,7 @@ import {AllergyFactory} from '../testDataFactories/allergyFactory'
 import {SeasonFactory} from '../testDataFactories/seasonFactory'
 import {SettingFactory} from '../testDataFactories/settingFactory'
 import {UserFactory} from '../testDataFactories/userFactory'
+import {useAllergyValidation} from '~/composables/useAllergyValidation'
 
 const {adminUIFile} = authFiles
 const {
@@ -13,9 +14,12 @@ const {
     freshMemberContext,
     getSessionUserInfo,
     pollUntil,
+    gotoHydrated,
+    waitForApi,
     salt,
     temporaryAndRandom
 } = testHelpers
+const {AllergyTypeDisplaySchema} = useAllergyValidation()
 
 const NOTES_KEY = 'allergy-poster-notes'
 
@@ -25,17 +29,9 @@ const NOTES_KEY = 'allergy-poster-notes'
  * that the page is hydrated and interactive.
  */
 const gotoCatalog = async (page: Page) => {
-    await page.goto('/admin/allergies')
-    await pollUntil(
-        async () => page.locator('[data-testid="admin-allergies"]').isVisible(),
-        (isVisible) => isVisible,
-        10
-    )
-    await pollUntil(
-        async () => (await page.getByText('Detaljer').count()) + (await page.getByText('Vælg en allergi').count()),
-        (paneCount) => paneCount > 0,
-        10
-    )
+    await gotoHydrated(page, '/admin/allergies')
+    await expect(page.locator('[data-testid="admin-allergies"]')).toBeVisible()
+    await expect(page.getByText('Detaljer').or(page.getByText('Vælg en allergi')).first()).toBeAttached()
 }
 
 /**
@@ -64,7 +60,7 @@ test.describe('AdminAllergies - catalog CRUD', () => {
 
     const selectRow = async (page: Page, allergyTypeId: number) => {
         const row = page.getByTestId(`allergy-row-${allergyTypeId}`)
-        await expect(row).toBeVisible({timeout: 10000})
+        await expect(row).toBeVisible()
         await row.click()
         await expect(page.getByTestId('edit-allergy-type')).toBeVisible()
     }
@@ -84,15 +80,16 @@ test.describe('AdminAllergies - catalog CRUD', () => {
         await page.locator('input[name="allergy-name"]').fill(name)
         await page.locator('input[name="allergy-icon"]').fill('🥜')
         await page.locator('textarea[name="allergy-description"]').fill(`Beskrivelse ${testSalt}`)
+        const saved = waitForApi(page, '/api/admin/allergy-type', 'PUT')
         await page.getByTestId('save-allergy-type').click()
+        const response = await saved
+        const savedType = AllergyTypeDisplaySchema.parse(await response.json())
+        createdAllergyTypeIds.push(savedType.id!)
+        expect(response.status()).toBe(201)
 
-        const types = await pollUntil(
-            () => AllergyFactory.getAllergyTypes(context),
-            (allTypes) => allTypes.some(t => t.name === name)
-        )
-        const createdType = types.find(t => t.name === name)!
-        createdAllergyTypeIds.push(createdType.id!)
-        expect(createdType.description).toContain(testSalt)
+        const createdType = await AllergyFactory.getAllergyType(context, savedType.id!)
+        expect(createdType!.name).toBe(name)
+        expect(createdType!.description).toContain(testSalt)
     })
 
     test('GIVEN a selected allergy WHEN editing its name THEN the change is persisted', async ({page, browser}) => {
@@ -128,6 +125,8 @@ test.describe('AdminAllergies - catalog CRUD', () => {
             description: `Slettes ${testSalt}`,
             icon: '🥜'
         })
+        // Tracked in case the UI delete does not land; cleanup counts a type already gone as removed
+        createdAllergyTypeIds.push(allergyType.id!)
 
         await gotoCatalog(page)
         await selectRow(page, allergyType.id!)

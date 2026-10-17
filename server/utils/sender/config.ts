@@ -1,22 +1,30 @@
 /**
- * The app's notification config, read once per call site (routes, tasks) and passed down —
- * events and compose are pure functions of it, so unit tests build the config with NotificationFactory.
+ * The e-mail channel as the environment sets it, read once per call site (routes, tasks) and passed down —
+ * events and compose are pure functions of the config, so unit tests build it with NotificationFactory.
  *
- * Environment and site come from the deployment's URL: the DEPLOY_URL var (wrangler.toml [env.*.vars]),
- * else the request origin (local nuxt dev). Sender address and display name derive from the environment;
- * the mailboxes come from runtimeConfig.notifications.
+ * Environment and site come from the deployment's URL, the DEPLOY_URL var (wrangler.toml [env.*.vars], .env locally).
+ * Sender address and display name derive from the environment; the mailboxes come from runtimeConfig.notifications.
  */
-import {getRequestURL, type H3Event} from 'h3'
 import {deploymentFromUrl, useNotificationValidation, type NotificationConfig} from '~/composables/useNotificationValidation'
 import {senderAddress, senderDisplayName} from '~/config/notificationTemplates'
 
 const {NotificationConfigSchema} = useNotificationValidation()
 
-export const getNotificationConfig = (event?: H3Event): NotificationConfig => {
-    const deployUrl = process.env.DEPLOY_URL || (event ? getRequestURL(event).origin : undefined)
-    if (!deployUrl) throw new Error('DEPLOY_URL is not set and there is no request to derive the site from')
+/** E-mail is on with its queue and settings, or off with the setting that is missing */
+export type EmailChannel =
+    | {on: true, queue: Queue, config: NotificationConfig}
+    | {on: false, missing: 'DEPLOY_URL' | 'SENDER'}
+
+const notificationConfig = (deployUrl: string): NotificationConfig => {
     const {environment, site} = deploymentFromUrl(deployUrl)
     const {notifications} = useRuntimeConfig()
     const {theslope: {notifications: {signature, templates}}} = useAppConfig()
     return NotificationConfigSchema.parse({...notifications, environment, site, from: senderAddress(environment), fromName: senderDisplayName(environment), signature, templates})
+}
+
+export const emailChannel = (env: {SENDER?: Queue}): EmailChannel => {
+    const deployUrl = process.env.DEPLOY_URL
+    if (!deployUrl) return {on: false, missing: 'DEPLOY_URL'}
+    if (!env.SENDER) return {on: false, missing: 'SENDER'}
+    return {on: true, queue: env.SENDER, config: notificationConfig(deployUrl)}
 }

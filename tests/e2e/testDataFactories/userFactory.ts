@@ -106,11 +106,10 @@ export class UserFactory {
         context: BrowserContext,
         userIds: number[]
     ): Promise<void> => {
+        // A user already gone counts as removed
         await Promise.all(userIds.map(async (id) => {
             const response = await context.request.delete(`/api/admin/users/${id}`)
-            if (response.status() !== 200 && response.status() !== 404) {
-                console.warn(`Failed to cleanup user ${id}: status ${response.status()}`)
-            }
+            expect([200, 404], `Unexpected status cleaning up user ${id}: ${await response.text()}`).toContain(response.status())
         }))
     }
 
@@ -172,7 +171,7 @@ export class UserFactory {
     }
 
     /**
-     * POST /api/admin/users/:id - the admin path used to arrange a user's roles for a test.
+     * POST /api/admin/users/:id - the admin path used to arrange a user's roles for a test; returns the saved user.
      * ALLERGYMANAGER is TheSlope-owned, so it survives the user's next login; a spec that
      * grants it restores the original roles afterwards.
      */
@@ -180,9 +179,11 @@ export class UserFactory {
         context: BrowserContext,
         userId: number,
         systemRoles: string[]
-    ): Promise<void> => {
+    ): Promise<UserDetail> => {
         const response = await context.request.post(`/api/admin/users/${userId}`, {headers, data: {systemRoles}})
         expect(response.status(), 'Unexpected status setting system roles').toBe(200)
+        const {UserDetailSchema} = useCoreValidation()
+        return UserDetailSchema.parse(await response.json())
     }
 
     /**

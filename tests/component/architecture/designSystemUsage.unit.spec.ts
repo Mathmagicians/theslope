@@ -1,6 +1,7 @@
 import {describe, it, expect} from 'vitest'
 import {readdirSync, readFileSync} from 'node:fs'
 import {fileURLToPath} from 'node:url'
+import {LAYOUTS} from '../../../app/composables/useTheSlopeDesignSystem'
 
 /**
  * Architecture test - ADR-018 [Design system owns shared UI patterns]
@@ -79,6 +80,10 @@ const BINDS_CALENDAR_GRID = /v-bind="(COMPONENTS\.calendarGrid|calendarProps)"/
 /** The team tab strip (a UTabs whose file renders CookingTeamBadges triggers) binds its token in the tag */
 const BINDS_TEAM_TABS = /v-bind="COMPONENTS\.teamTabs"/
 
+/** A class or ui on a `<UCollapsible>` comes from a `COMPONENTS.collapsible` token; a bare collapsible carries neither */
+const STYLES_COLLAPSIBLE = /(?:^|\s)(?::|v-bind:)?(?:class|ui)=/
+const BINDS_COLLAPSIBLE_TOKEN = /v-bind="COMPONENTS\.collapsible\./
+
 /** Every palette family a Tailwind colour utility can name here: defaults plus our custom ones */
 const COLOUR_FAMILIES = [
     'amber', 'blue', 'pink', 'orange', 'sky', 'red', 'violet', 'winery', 'party', 'peach',
@@ -101,6 +106,12 @@ const COLOUR_NAMES = ['primary', 'secondary', 'success', 'error', 'warning', 'in
 
 /** `color="error"` and `:color="'error'"`. `:color="COLOR.error"`, `:color="cfg.color"` and `v-bind` pass */
 const LITERAL_COLOUR_PROP = new RegExp(`\\bcolor="'?(?:${COLOUR_NAMES})'?"`, 'g')
+
+/** The Nuxt UI families whose size, variant and icon come from SIZES, NOISE, BUTTONS and ICONS */
+const SIZED_FAMILIES = ['UButton', 'UBadge', 'UAvatar', 'UAvatarGroup']
+
+/** ` size="sm"`, ` variant="ghost"`, ` icon="i-…"`, ` :size="'md'"` - a design value spelled out in the tag */
+const LITERAL_DESIGN_PROP = /(?:^|\s)(?:(?:size|variant|icon|leading-icon|trailing-icon)="[^"]*"|:(?:size|variant|icon|leading-icon|trailing-icon)="'[^"]*'")/g
 
 /** `file:line - <match>` for every hit of `pattern`, so the failure names the site */
 const scan = (files: string[], pattern: RegExp, hint: string) =>
@@ -150,6 +161,16 @@ describe('ADR-018: components bind design-system tokens, never raw Nuxt UI props
         expect(report(violations)).toBe('')
     })
 
+    it('no raw <table> under app/: a table is a UTable on a table token', () => {
+        // The print page keeps its own markup for the PDF
+        const exempt = new Set(['pages/admin/allergies/pdf.vue'])
+        const violations = vueFiles
+            .filter(file => !exempt.has(String(file).replace(/\\/g, '/')))
+            .filter(file => /<table\b/.test(readVue(file)))
+            .map(file => `app/${file} - raw <table>; render it with <UTable :ui="COMPONENTS.table.ui">`)
+        expect(report(violations)).toBe('')
+    })
+
     it('every team <UTabs> binds COMPONENTS.teamTabs', () => {
         const violations = vueFiles.flatMap(file => {
             const source = readVue(file)
@@ -161,6 +182,25 @@ describe('ADR-018: components bind design-system tokens, never raw Nuxt UI props
         expect(report(violations)).toBe('')
     })
 
+    it('no <UCollapsible> styles itself outside a COMPONENTS.collapsible token', () => {
+        const violations = vueFiles.flatMap(file =>
+            openingTags(readVue(file), 'UCollapsible')
+                .filter(tag => STYLES_COLLAPSIBLE.test(tag.text) && !BINDS_COLLAPSIBLE_TOKEN.test(tag.text))
+                .map(tag => `app/${file}:${tag.line} - raw class or ui (use v-bind="COMPONENTS.collapsible.<kind>")`)
+        )
+        expect(report(violations)).toBe('')
+    })
+
+    it('every labelled <USeparator> binds a COMPONENTS.separator kind', () => {
+        const violations = vueFiles.flatMap(file => {
+            const source = readVue(file)
+            return openingTags(source, 'USeparator')
+                .filter(tag => /(?:^|\s):?label=/.test(tag.text) && !/v-bind="COMPONENTS\.separator\./.test(tag.text))
+                .map(tag => `app/${file}:${tag.line} - a labelled separator binds a separator kind (v-bind="COMPONENTS.separator.<kind>")`)
+        })
+        expect(report(violations)).toBe('')
+    })
+
     it('no .vue names a Tailwind palette shade', () => {
         const violations = scan(colourFiles, RAW_COLOUR_CLASS, 'raw palette shade - use a BG/TEXT/BORDER/TYPOGRAPHY token')
         expect(report(violations)).toBe('')
@@ -168,6 +208,37 @@ describe('ADR-018: components bind design-system tokens, never raw Nuxt UI props
 
     it('no .vue passes a literal colour to a component', () => {
         const violations = scan(colourFiles, LITERAL_COLOUR_PROP, 'literal colour - use :color="COLOR.<name>" or a domain token')
+        expect(report(violations)).toBe('')
+    })
+
+    it('no <UButton>, <UBadge>, <UAvatar> or <UAvatarGroup> passes a literal size, variant or icon', () => {
+        const violations = vueFiles.flatMap(file => {
+            const source = readVue(file)
+            return SIZED_FAMILIES.flatMap(family => openingTags(source, family).flatMap(tag =>
+                [...tag.text.matchAll(LITERAL_DESIGN_PROP)].map(match =>
+                    `app/${file}:${tag.line} - <${family}${match[0]} (bind SIZES, NOISE, BUTTONS or ICONS)`)
+            ))
+        })
+        expect(report(violations)).toBe('')
+    })
+
+    it('no .vue spells out the form button row instead of binding LAYOUTS.formButtonRow', () => {
+        const violations = vueFiles.flatMap(file =>
+            readVue(file).split('\n').flatMap((line, index) =>
+                line.includes(LAYOUTS.formButtonRow) ? [`app/${file}:${index + 1} - raw form button row (bind :class="LAYOUTS.formButtonRow")`] : []
+            )
+        )
+        expect(report(violations)).toBe('')
+    })
+
+    it('no .vue injects the breakpoint: the layout provides it, the design system reads it', () => {
+        // The layout measures and provides the breakpoint
+        const exempt = new Set(['layouts/default.vue'])
+        const violations = scan(
+            vueFiles.filter(file => !exempt.has(String(file).replace(/\\/g, '/'))),
+            /\binject\b[^(\n]*\(\s*['"]isMd['"]/g,
+            'bind a responsive token, or read breakpoint from useTheSlopeDesignSystem()'
+        )
         expect(report(violations)).toBe('')
     })
 

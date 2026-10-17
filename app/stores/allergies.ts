@@ -1,12 +1,10 @@
-import type {SettingDetail} from '~/composables/useSettingValidation'
 import type {
-    AllergyTypeDetail,
     AllergyTypeCreate,
     AllergyTypeUpdate,
+    AllergyTypeDisplay,
     AllergyDisplay,
     AllergyCreate,
-    AllergyUpdate,
-    AllergyDetail
+    AllergyUpdate
 } from '~/composables/useAllergyValidation'
 
 /** The one Setting row the allergy surfaces read */
@@ -21,114 +19,102 @@ const POSTER_NOTES_ENDPOINT = `/api/admin/setting/${POSTER_NOTES_KEY}`
 export const useAllergiesStore = defineStore("Allergies", () => {
 
     // DEPENDENCIES
-    const {handleApiError} = useApiHandler()
-    const {AllergyTypeDetailSchema} = useAllergyValidation()
+    const {storeAsyncData, loadOrThrow, apiRequest} = useApiHandler()
+    const {AllergyTypeDisplaySchema, AllergyTypeDetailSchema, AllergyDetailSchema} = useAllergyValidation()
     const {SettingDetailSchema, SETTING_REGISTRY} = useSettingValidation()
 
     // ========================================
-    // State - useAsyncData with useRequestFetch for SSR-safe auth context (ADR-007)
-    // Using useRequestFetch ensures cookies are properly forwarded during both SSR and CSR
+    // State (ADR-007)
     // ========================================
-    const requestFetch = useRequestFetch()
 
     // AllergyTypes - Global catalog (admin managed)
     // Only reached on protected routes (server/middleware/1.guard.ts redirects without a
     // session), so no auth gate is needed - one fetch, identical on server and client.
+    const allergyTypesDataset = storeAsyncData('allergy-store-types', '/api/admin/allergy-type', {
+        schema: AllergyTypeDetailSchema.array(),
+        default: () => [],
+        errorMessage: 'Kunne ikke hente allergi katalog'
+    })
     const {
         data: allergyTypes,
-        status: allergyTypesStatus,
         error: allergyTypesError,
-        refresh: refreshAllergyTypes
-    } = useAsyncData<AllergyTypeDetail[]>(
-        'allergy-store-types',
-        () => requestFetch<AllergyTypeDetail[]>('/api/admin/allergy-type', {
-            onResponseError: ({response}) => {
-                console.error(`🥜 > ALLERGY_STORE > fetchAllergyTypes failed: ${response.status} ${response.statusText}`)
-                handleApiError(response._data, 'Kunne ikke hente allergi katalog')
-            }
-        }),
-        {
-            default: () => [],
-            // ADR-007/ADR-010: parse to domain types - dates arrive as JSON strings over HTTP
-            transform: (data: AllergyTypeDetail[]) => data.map(at => AllergyTypeDetailSchema.parse(at))
-        }
-    )
+        refresh: refreshAllergyTypes,
+        isLoading: isAllergyTypesLoading,
+        isErrored: isAllergyTypesErrored,
+        isInitialized: isAllergyTypesInitialized
+    } = allergyTypesDataset
 
-    // Selected AllergyType - For detail view/editing
-    const selectedAllergyTypeId = ref<number | null>(null)
-    const selectedAllergyTypeKey = computed(() => `/api/admin/allergy-type/${selectedAllergyTypeId.value || 'null'}`)
+    // The page names the allergy type its URL carries; an id outside the catalog selects none
+    const allergyTypeChoice = shallowRef<() => number | null>(() => null)
+    const selectedAllergyTypeId = computed(() => {
+        const id = allergyTypeChoice.value()
+        return allergyTypes.value.find(at => at.id === id)?.id ?? null
+    })
 
     const {
         data: selectedAllergyType,
-        status: selectedAllergyTypeStatus,
-        error: selectedAllergyTypeError
-    } = useAsyncData<AllergyTypeDetail | null>(
-        selectedAllergyTypeKey,
-        () => {
-            if (!selectedAllergyTypeId.value) return Promise.resolve(null)
-            return useRequestFetch()<AllergyTypeDetail>(`/api/admin/allergy-type/${selectedAllergyTypeId.value}`, {
-                onResponseError: ({response}) => { handleApiError(response._data, 'Kunne ikke hente allergitype') }
-            })
-        },
+        error: selectedAllergyTypeError,
+        isLoading: isSelectedAllergyTypeLoading,
+        isErrored: isSelectedAllergyTypeErrored,
+        isInitialized: isSelectedAllergyTypeInitialized
+    } = storeAsyncData(
+        'allergy-store-selected-allergy-type',
+        () => `/api/admin/allergy-type/${selectedAllergyTypeId.value}`,
         {
-            default: () => null
+            schema: AllergyTypeDisplaySchema.nullable(),
+            default: () => null,
+            enabled: () => !!selectedAllergyTypeId.value,
+            dependsOn: [allergyTypesDataset],
+            errorMessage: 'Kan ikke finde allergitypen',
+            notFound: {
+                recover: async () => {
+                    skipGoneId(allergyTypeChoice, selectedAllergyTypeId.value)
+                    await refreshAllergyTypes()
+                },
+                toast: 'Kan ikke finde allergitypen'
+            }
         }
     )
 
     // Poster notes - ONE Setting row, read by the catalog card header and the poster.
-    // It keeps its own status refs and stays out of isAllergyStoreReady, so the poster
+    // It keeps its own status flags and stays out of isAllergyStoreReady, so the poster
     // prints its notes even while the catalog is still loading.
+    const posterNotesDataset = storeAsyncData('allergy-store-poster-notes', POSTER_NOTES_ENDPOINT, {
+        schema: SettingDetailSchema.nullable(),
+        default: () => null,
+        errorMessage: 'Kunne ikke hente bemærkninger'
+    })
     const {
         data: posterNotesSetting,
-        status: posterNotesStatus,
         error: posterNotesError,
-        refresh: refreshPosterNotes
-    } = useAsyncData<SettingDetail>(
-        'allergy-store-poster-notes',
-        () => requestFetch<SettingDetail>(POSTER_NOTES_ENDPOINT, {
-            onResponseError: ({response}) => {
-                console.error(`🥜 > ALLERGY_STORE > fetchPosterNotes failed: ${response.status} ${response.statusText}`)
-                handleApiError(response._data, 'Kunne ikke hente bemærkninger')
-            }
-        }),
-        {
-            // ADR-007/ADR-010: parse to domain types - updatedAt arrives as a JSON string over HTTP
-            transform: (data: SettingDetail) => SettingDetailSchema.parse(data)
-        }
-    )
+        isLoading: isPosterNotesLoading,
+        isErrored: isPosterNotesErrored,
+        isInitialized: isPosterNotesInitialized
+    } = posterNotesDataset
 
-    // Allergies - Filtered by household or inhabitant
-    const filterHouseholdId = ref<number | null>(null)
+    // Allergies - the selected household's, or one inhabitant's; nothing is requested until a component asks
+    const householdsStore = useHouseholdsStore()
+    const isHouseholdAllergiesRequested = ref(false)
     const filterInhabitantId = ref<number | null>(null)
-
-    const allergiesQueryKey = computed(() => {
-        if (filterInhabitantId.value) {
-            return `/api/household/allergy?inhabitantId=${filterInhabitantId.value}`
-        }
-        if (filterHouseholdId.value) {
-            return `/api/household/allergy?householdId=${filterHouseholdId.value}`
-        }
-        return '/api/household/allergy-null' // Invalid key - will not fetch
-    })
 
     const {
         data: allergies,
-        status: allergiesStatus,
         error: allergiesError,
-        refresh: refreshAllergies
-    } = useAsyncData<AllergyDetail[]>(
-        allergiesQueryKey,
-        () => {
-            if (!filterInhabitantId.value && !filterHouseholdId.value) {
-                return Promise.resolve([])
-            }
-            return useRequestFetch()<AllergyDetail[]>(allergiesQueryKey.value, {
-                onResponseError: ({response}) => { handleApiError(response._data, 'Kunne ikke hente allergier') }
-            })
-        },
+        refresh: refreshAllergies,
+        isLoading: isAllergiesLoading,
+        isErrored: isAllergiesErrored,
+        isInitialized: isAllergiesInitialized
+    } = storeAsyncData(
+        'allergy-store-allergies',
+        () => filterInhabitantId.value
+            ? `/api/household/allergy?inhabitantId=${filterInhabitantId.value}`
+            : `/api/household/allergy?householdId=${householdsStore.selectedHouseholdId}`,
         {
-            immediate: true,
-            default: () => []
+            schema: AllergyDetailSchema.array(),
+            default: () => [],
+            enabled: () => !!filterInhabitantId.value || (isHouseholdAllergiesRequested.value && !!householdsStore.selectedHouseholdId),
+            dependsOn: [householdsStore.selectedHouseholdDataset],
+            errorMessage: 'Kunne ikke hente allergier'
         }
     )
 
@@ -136,34 +122,10 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     // Computed - Public API (derived from status)
     // ========================================
 
-    // AllergyTypes status
-    const isAllergyTypesLoading = computed(() => allergyTypesStatus.value === 'pending')
-    const isAllergyTypesErrored = computed(() => allergyTypesStatus.value === 'error')
-    // ADR-007: initialized requires data to exist, not just a successful status
-    const isAllergyTypesInitialized = computed(() =>
-        allergyTypesStatus.value === 'success' && allergyTypes.value !== null
-    )
     const isNoAllergyTypes = computed(() => isAllergyTypesInitialized.value && allergyTypes.value.length === 0)
 
-    // Selected AllergyType status
-    const isSelectedAllergyTypeLoading = computed(() => selectedAllergyTypeStatus.value === 'pending')
-    const isSelectedAllergyTypeErrored = computed(() => selectedAllergyTypeStatus.value === 'error')
-    const isSelectedAllergyTypeInitialized = computed(() =>
-        selectedAllergyTypeStatus.value === 'success' && selectedAllergyType.value !== null
-    )
-
-    // Allergies status
-    const isAllergiesLoading = computed(() => allergiesStatus.value === 'pending')
-    const isAllergiesErrored = computed(() => allergiesStatus.value === 'error')
-    const isAllergiesInitialized = computed(() => allergiesStatus.value === 'success')
     const isNoAllergies = computed(() => isAllergiesInitialized.value && allergies.value.length === 0)
 
-    // Poster notes status - deliberately NOT folded into isAllergyStoreReady
-    const isPosterNotesLoading = computed(() => posterNotesStatus.value === 'pending')
-    const isPosterNotesErrored = computed(() => posterNotesStatus.value === 'error')
-    const isPosterNotesInitialized = computed(() =>
-        posterNotesStatus.value === 'success' && posterNotesSetting.value !== null
-    )
     // The registry default covers the first paint and a failed fetch, so the box is never empty
     const posterNotes = computed(() =>
         posterNotesSetting.value?.value ?? SETTING_REGISTRY[POSTER_NOTES_KEY].defaultValue
@@ -176,114 +138,72 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     // Actions - AllergyTypes (Admin)
     // ========================================
 
-    const loadAllergyTypes = async () => {
-        await refreshAllergyTypes()
-        if (allergyTypesError.value) {
-            handleApiError(allergyTypesError.value, 'loadAllergyTypes')
-            throw allergyTypesError.value
-        }
-        console.info(`🥜 > ALLERGY_STORE > Loaded ${allergyTypes.value.length} allergy types`)
-    }
+    const loadAllergyTypes = () => loadOrThrow(allergyTypesDataset, () => `🥜 > ALLERGY_STORE > Loaded ${allergyTypes.value.length} allergy types`)
 
-    const loadAllergyType = (id: number) => {
-        selectedAllergyTypeId.value = id
-        console.info(`🥜 > ALLERGY_STORE > Loading allergy type ID: ${id}`)
+    const selectAllergyType = (choice: MaybeRefOrGetter<number | null>) => {
+        allergyTypeChoice.value = () => toValue(choice)
     }
 
     const createAllergyType = async (allergyTypeData: AllergyTypeCreate): Promise<AllergyTypeDisplay> => {
-        try {
-            const created = await $fetch<AllergyTypeDisplay>('/api/admin/allergy-type', {
-                method: 'PUT',
-                body: allergyTypeData,
-                headers: {'Content-Type': 'application/json'}
-            })
-            await loadAllergyTypes()
-            console.info(`🥜 > ALLERGY_STORE > Created allergy type: ${created.name}`)
-            return created
-        } catch (e: unknown) {
-            handleApiError(e, 'createAllergyType')
-            throw e
-        }
+        const created = await apiRequest<AllergyTypeDisplay>('/api/admin/allergy-type', {
+            method: 'PUT',
+            body: allergyTypeData,
+            action: 'createAllergyType'
+        })
+        await loadAllergyTypes()
+        console.info(`🥜 > ALLERGY_STORE > Created allergy type: ${created.name}`)
+        return created
     }
 
     const updateAllergyType = async (id: number, allergyTypeData: Omit<AllergyTypeUpdate, 'id'>): Promise<AllergyTypeDisplay> => {
-        try {
-            const updated = await $fetch<AllergyTypeDisplay>(`/api/admin/allergy-type/${id}`, {
-                method: 'POST',
-                body: allergyTypeData,
-                headers: {'Content-Type': 'application/json'}
-            })
-            await loadAllergyTypes()
-            console.info(`🥜 > ALLERGY_STORE > Updated allergy type: ${updated.name}`)
-            return updated
-        } catch (e: unknown) {
-            handleApiError(e, 'updateAllergyType')
-            throw e
-        }
+        const updated = await apiRequest<AllergyTypeDisplay>(`/api/admin/allergy-type/${id}`, {
+            method: 'POST',
+            body: allergyTypeData,
+            action: 'updateAllergyType'
+        })
+        await loadAllergyTypes()
+        console.info(`🥜 > ALLERGY_STORE > Updated allergy type: ${updated.name}`)
+        return updated
     }
 
     const deleteAllergyType = async (id: number): Promise<void> => {
-        try {
-            await $fetch(`/api/admin/allergy-type/${id}`, {
-                method: 'DELETE'
-            })
-            await loadAllergyTypes()
-            // CASCADE removed the type's household allergies — refresh that cache too
-            await refreshAllergies()
-            console.info(`🥜 > ALLERGY_STORE > Deleted allergy type ID: ${id}`)
-        } catch (e: unknown) {
-            handleApiError(e, 'deleteAllergyType')
-            throw e
-        }
+        await apiRequest(`/api/admin/allergy-type/${id}`, {method: 'DELETE', action: 'deleteAllergyType'})
+        await loadAllergyTypes()
+        // CASCADE removed the type's household allergies — refresh that cache too
+        await refreshAllergies()
+        console.info(`🥜 > ALLERGY_STORE > Deleted allergy type ID: ${id}`)
     }
 
     // ========================================
     // Actions - Poster notes (Setting)
     // ========================================
 
-    const loadPosterNotes = async () => {
-        await refreshPosterNotes()
-        if (posterNotesError.value) {
-            handleApiError(posterNotesError.value, 'loadPosterNotes')
-            throw posterNotesError.value
-        }
-        console.info('🥜 > ALLERGY_STORE > Loaded poster notes')
-    }
+    const loadPosterNotes = () => loadOrThrow(posterNotesDataset, '🥜 > ALLERGY_STORE > Loaded poster notes')
 
     // The endpoint returns the stored row (ADR-009), so the response IS the new value.
     // Reading it back in a second round trip would put the box one failed request away from
     // the registry default - old notes on screen under a "saved" toast.
     const savePosterNotes = async (value: string): Promise<void> => {
-        try {
-            const saved = await $fetch<SettingDetail>(POSTER_NOTES_ENDPOINT, {
-                method: 'POST',
-                body: {value},
-                headers: {'Content-Type': 'application/json'}
-            })
-            posterNotesSetting.value = SettingDetailSchema.parse(saved)
-            console.info('🥜 > ALLERGY_STORE > Saved poster notes')
-        } catch (e: unknown) {
-            handleApiError(e, 'savePosterNotes')
-            throw e
-        }
+        posterNotesSetting.value = await apiRequest(POSTER_NOTES_ENDPOINT, {
+            method: 'POST',
+            body: {value},
+            schema: SettingDetailSchema,
+            action: 'savePosterNotes'
+        })
+        console.info('🥜 > ALLERGY_STORE > Saved poster notes')
     }
 
     // ========================================
     // Actions - Allergies (Household/Inhabitant)
     // ========================================
 
-    const loadAllergiesForHousehold = async (householdId: number) => {
-        filterHouseholdId.value = householdId
+    const loadAllergiesForHousehold = () => {
         filterInhabitantId.value = null
-        await refreshAllergies()
-        console.info(`🥜 > ALLERGY_STORE > Loaded ${allergies.value.length} allergies for household ${householdId}`)
+        isHouseholdAllergiesRequested.value = true
     }
 
-    const loadAllergiesForInhabitant = async (inhabitantId: number) => {
+    const loadAllergiesForInhabitant = (inhabitantId: number) => {
         filterInhabitantId.value = inhabitantId
-        filterHouseholdId.value = null
-        console.info(`🥜 > ALLERGY_STORE > Loading allergies for inhabitant ID: ${inhabitantId}`)
-        await refreshAllergies()
     }
 
     // The allergy-type catalog embeds inhabitants per type (admin counts, PDF poster),
@@ -294,70 +214,39 @@ export const useAllergiesStore = defineStore("Allergies", () => {
     }
 
     const createAllergy = async (allergyData: AllergyCreate): Promise<AllergyDisplay> => {
-        try {
-            const created = await $fetch<AllergyDisplay>('/api/household/allergy', {
-                method: 'PUT',
-                body: allergyData,
-                headers: {'Content-Type': 'application/json'}
-            })
-            await refreshAfterAllergyMutation()
-            console.info(`🥜 > ALLERGY_STORE > Created allergy for inhabitant ID: ${created.inhabitantId}`)
-            return created
-        } catch (e: unknown) {
-            handleApiError(e, 'createAllergy')
-            throw e
-        }
+        const created = await apiRequest<AllergyDisplay>('/api/household/allergy', {
+            method: 'PUT',
+            body: allergyData,
+            action: 'createAllergy'
+        })
+        await refreshAfterAllergyMutation()
+        console.info(`🥜 > ALLERGY_STORE > Created allergy for inhabitant ID: ${created.inhabitantId}`)
+        return created
     }
 
     // id travels in the path, not the body - the endpoint injects it (mirrors updateAllergyType)
     const updateAllergy = async (id: number, allergyData: Omit<AllergyUpdate, 'id'>): Promise<AllergyDisplay> => {
-        try {
-            const updated = await $fetch<AllergyDisplay>(`/api/household/allergy/${id}`, {
-                method: 'POST',
-                body: allergyData,
-                headers: {'Content-Type': 'application/json'}
-            })
-            await refreshAfterAllergyMutation()
-            console.info(`🥜 > ALLERGY_STORE > Updated allergy ID: ${updated.id}`)
-            return updated
-        } catch (e: unknown) {
-            handleApiError(e, 'updateAllergy')
-            throw e
-        }
+        const updated = await apiRequest<AllergyDisplay>(`/api/household/allergy/${id}`, {
+            method: 'POST',
+            body: allergyData,
+            action: 'updateAllergy'
+        })
+        await refreshAfterAllergyMutation()
+        console.info(`🥜 > ALLERGY_STORE > Updated allergy ID: ${updated.id}`)
+        return updated
     }
 
     const deleteAllergy = async (id: number): Promise<void> => {
-        try {
-            await $fetch(`/api/household/allergy/${id}`, {
-                method: 'DELETE'
-            })
-            await refreshAfterAllergyMutation()
-            console.info(`🥜 > ALLERGY_STORE > Deleted allergy ID: ${id}`)
-        } catch (e: unknown) {
-            handleApiError(e, 'deleteAllergy')
-            throw e
-        }
+        await apiRequest(`/api/household/allergy/${id}`, {method: 'DELETE', action: 'deleteAllergy'})
+        await refreshAfterAllergyMutation()
+        console.info(`🥜 > ALLERGY_STORE > Deleted allergy ID: ${id}`)
     }
-
-    // ========================================
-    // Initialize Store
-    // ========================================
-
-    const initAllergiesStore = () => {
-        // AllergyTypes auto-load on store creation (immediate: true)
-        console.info('🥜 > ALLERGY_STORE > Store initialized')
-    }
-
-    // AUTO-INITIALIZATION - Watch for allergy types to load
-    watch(isAllergyTypesInitialized, () => {
-        if (!isAllergyTypesInitialized.value) return
-        console.info('🥜 > ALLERGY_STORE > Allergy types loaded')
-    })
 
     return {
         // State - AllergyTypes
         allergyTypes,
         selectedAllergyType,
+        selectedAllergyTypeId,
         // State - Allergies
         allergies,
         // State - Poster notes
@@ -387,7 +276,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         isAllergyStoreReady,
         // Actions - AllergyTypes
         loadAllergyTypes,
-        loadAllergyType,
+        selectAllergyType,
         createAllergyType,
         updateAllergyType,
         deleteAllergyType,
@@ -399,9 +288,7 @@ export const useAllergiesStore = defineStore("Allergies", () => {
         loadAllergiesForInhabitant,
         createAllergy,
         updateAllergy,
-        deleteAllergy,
-        // Initialize
-        initAllergiesStore
+        deleteAllergy
     }
 })
 
