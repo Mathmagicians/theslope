@@ -131,9 +131,7 @@ matrix and the design-system rule → 5. compliance rows (`docs/adr-compliance-*
 
 ## One e2e runner at a time
 
-- Never let two agents run Playwright concurrently: they share the local dev server and the D1 database, so one agent's
-  `beforeAll` season activation or a server restart shows up as random timeouts in the other's suite. Sequence packages that
-  run e2e; if a suite looks flaky, rerun it alone before blaming the change. No DB reseed between test runs.
+The test-engineer session owns the e2e slot; the sessions, claims and holds follow `/peer-sessions`.
 
 ## Visual check before a package is done
 
