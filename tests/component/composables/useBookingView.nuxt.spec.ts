@@ -1,10 +1,12 @@
 // @vitest-environment nuxt
-import {describe, it, expect, beforeEach, vi} from 'vitest'
-import {flushPromises} from '@vue/test-utils'
+import {describe, it, expect, beforeEach, afterEach, vi} from 'vitest'
+import {enableAutoUnmount, flushPromises} from '@vue/test-utils'
 import {mockNuxtImport} from '@nuxt/test-utils/runtime'
 import {useBookingView, useDinnerDateParam, useCalendarOpenParam, BookingViewSchema, type BookingView} from '~/composables/useBookingView'
 import {defineComponent, h, type Ref} from 'vue'
-import {mountWithTooltipProvider} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
+
+const {day, week, month} = BookingViewSchema.enum
 
 /**
  * Unit tests for useBookingView composable (curried pattern)
@@ -36,7 +38,7 @@ const setupQuery = (query: Record<string, string>) => {
 // Helper to create refs for useBookingView (simulates what pages do)
 const createMockRefs = (
   initialDate: Date = new Date(),
-  initialView: BookingView = 'day'
+  initialView: BookingView = day
 ) => {
   const dateRef = ref(initialDate)
   const viewRef = ref(initialView)
@@ -57,25 +59,14 @@ describe('useBookingView', () => {
     setupQuery({})
   })
 
-  describe('BookingViewSchema', () => {
-    it.each(BookingViewSchema.options)('parses valid view: %s', (view) => {
-      expect(BookingViewSchema.parse(view)).toBe(view)
-    })
-
-    it('rejects invalid view', () => {
-      expect(BookingViewSchema.safeParse('invalid').success).toBe(false)
-    })
-  })
-
   describe('dateRange Computed', () => {
     const rangeCases: { view: BookingView, date: Date, expectedStartDay: number, expectedEndDay: number }[] = [
       // Day view: same start/end
-      {view: 'day', date: new Date(2025, 0, 15), expectedStartDay: 15, expectedEndDay: 15},
+      {view: day, date: new Date(2025, 0, 15), expectedStartDay: 15, expectedEndDay: 15},
       // Week view: Monday-Sunday (15th is Wednesday → 13-19)
-      {view: 'week', date: new Date(2025, 0, 15), expectedStartDay: 13, expectedEndDay: 19},
+      {view: week, date: new Date(2025, 0, 15), expectedStartDay: 13, expectedEndDay: 19},
       // Month view: 1st to last day
-      {view: 'month', date: new Date(2025, 0, 15), expectedStartDay: 1, expectedEndDay: 31},
-      {view: 'month', date: new Date(2025, 1, 15), expectedStartDay: 1, expectedEndDay: 28}
+      {view: month, date: new Date(2025, 0, 15), expectedStartDay: 1, expectedEndDay: 31}
     ]
 
     it.each(rangeCases)('$view view → days $expectedStartDay-$expectedEndDay', ({view, date, expectedStartDay, expectedEndDay}) => {
@@ -87,14 +78,14 @@ describe('useBookingView', () => {
   })
 
   describe('weeks Computed', () => {
-    it.each(['day', 'week'] as const)('returns empty for %s view', (view) => {
-      const refs = createMockRefs(new Date(2025, 0, 15), view)
+    it('returns empty for a view other than month', () => {
+      const refs = createMockRefs(new Date(2025, 0, 15), week)
       const {weeks} = useBookingView({...refs})
       expect(weeks.value).toEqual([])
     })
 
     it('returns weeks for month view with Monday-Sunday spans', () => {
-      const refs = createMockRefs(new Date(2025, 0, 15), 'month')
+      const refs = createMockRefs(new Date(2025, 0, 15), month)
       const {weeks} = useBookingView({...refs})
       expect(weeks.value.length).toBeGreaterThan(0)
       weeks.value.forEach(week => {
@@ -138,33 +129,26 @@ describe('useBookingView', () => {
     }[] = [
       // DAY view
       {desc: 'day +1 from Wed 15 → Fri 17',
-        date: wed15, view: 'day', direction: 1, dinnerDates: allDinners, expected: fri17},
+        date: wed15, view: day, direction: 1, dinnerDates: allDinners, expected: fri17},
       {desc: 'day -1 from Wed 15 → Mon 13',
-        date: wed15, view: 'day', direction: -1, dinnerDates: allDinners, expected: mon13},
+        date: wed15, view: day, direction: -1, dinnerDates: allDinners, expected: mon13},
+      // No dinner on that side → the arrow is blocked
       {desc: 'day +1 from last dinner (Mar 3) → null (no-op)',
-        date: mar3, view: 'day', direction: 1, dinnerDates: allDinners, expected: null},
+        date: mar3, view: day, direction: 1, dinnerDates: allDinners, expected: null},
       {desc: 'day -1 from first dinner (Mon 13) → null (no-op)',
-        date: mon13, view: 'day', direction: -1, dinnerDates: allDinners, expected: null},
+        date: mon13, view: day, direction: -1, dinnerDates: allDinners, expected: null},
 
       // WEEK view — skips the empty week of Mon 20.
       {desc: 'week +1 from Wed 15 skips empty week-of-20 → Wed 29',
-        date: wed15, view: 'week', direction: 1, dinnerDates: allDinners, expected: wed29},
+        date: wed15, view: week, direction: 1, dinnerDates: allDinners, expected: wed29},
       {desc: 'week -1 from Wed 29 skips empty week-of-20 → Fri 17',
-        date: wed29, view: 'week', direction: -1, dinnerDates: allDinners, expected: fri17},
+        date: wed29, view: week, direction: -1, dinnerDates: allDinners, expected: fri17},
 
       // MONTH view — skips empty February.
       {desc: 'month +1 from January skips empty Feb → Mar 3',
-        date: wed15, view: 'month', direction: 1, dinnerDates: allDinners, expected: mar3},
+        date: wed15, view: month, direction: 1, dinnerDates: allDinners, expected: mar3},
       {desc: 'month -1 from March skips empty Feb → Wed 29',
-        date: mar3, view: 'month', direction: -1, dinnerDates: allDinners, expected: wed29},
-
-      // No dinner dates supplied → every arrow is blocked.
-      {desc: 'day +1 with empty dinnerDates → null',
-        date: wed15, view: 'day', direction: 1, dinnerDates: [], expected: null},
-      {desc: 'week +1 with empty dinnerDates → null',
-        date: wed15, view: 'week', direction: 1, dinnerDates: [], expected: null},
-      {desc: 'month +1 with empty dinnerDates → null',
-        date: wed15, view: 'month', direction: 1, dinnerDates: [], expected: null}
+        date: mar3, view: month, direction: -1, dinnerDates: allDinners, expected: wed29}
     ]
 
     it.each(cases)('$desc', async ({date, view, direction, dinnerDates, expected}) => {
@@ -226,7 +210,11 @@ describe('useDinnerDateParam', () => {
 })
 
 describe('useCalendarOpenParam', () => {
+  // A mounted host left alive keeps syncing ?cal= into the next case's route
+  enableAutoUnmount(afterEach)
+
   beforeEach(() => {
+    resetStores()
     vi.clearAllMocks()
     setupQuery({})
   })

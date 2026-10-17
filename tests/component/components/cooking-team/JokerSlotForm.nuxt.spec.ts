@@ -1,8 +1,8 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {nextTick, type ComponentPublicInstance} from 'vue'
-import type {VueWrapper} from '@vue/test-utils'
-import {mountWithTooltipProvider, findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {enableAutoUnmount, type VueWrapper} from '@vue/test-utils'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
 import {JOKER_SLOT_IDS, toggleEveryWeekday, submitJokerSlotForm} from '~~/tests/component/components/cooking-team/jokerSlotForm'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import JokerSlotForm from '~/components/cooking-team/JokerSlotForm.vue'
@@ -23,6 +23,12 @@ const season = SeasonFactory.defaultSeason()
 // The team cooks tuesdays and thursdays
 const teamAffinity = createDefaultWeekdayMap([false, true, false, true, false, false, false])
 const teamWeekdays = WEEKDAYS.filter(day => teamAffinity[day])
+
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
 
 const mountForm = () => mountWithTooltipProvider(JokerSlotForm, {
     props: {seasonDates: season.seasonDates, teamAffinity},
@@ -61,21 +67,15 @@ describe('JokerSlotForm', () => {
         expect(slot).not.toHaveProperty('note')
     })
 
-    it('the allocation field starts at full time', async () => {
+    it('names each field after its schema path, starts the allocation at full time and offers only the team cooking days, each ticked', async () => {
+        const schemaPaths = ['endDate', 'affinity', 'role', 'allocationPercentage', 'note']
         const wrapper = await mountForm()
-        expect(fieldNamed(wrapper, 'allocationPercentage')!.text()).toContain(fullTimeLabel)
-    })
 
-    it('offers only the team cooking days as weekdays, each ticked', async () => {
-        const wrapper = await mountForm()
+        schemaPaths.forEach(path => expect(fieldNamed(wrapper, path), path).toBeDefined())
+        expect(fieldNamed(wrapper, 'allocationPercentage')!.text()).toContain(fullTimeLabel)
         const weekdays = fieldNamed(wrapper, 'affinity')!.findAll('[role="checkbox"]')
         expect(weekdays.map(weekday => weekday.attributes('aria-checked'))).toEqual(teamWeekdays.map(() => 'true'))
         expect(fieldNamed(wrapper, 'affinity')!.text()).toBe(`Ugedage${teamWeekdays.join('')}`)
-    })
-
-    it.each(['endDate', 'affinity', 'role', 'allocationPercentage', 'note'])('the %s field is named after its schema path', async (path) => {
-        const wrapper = await mountForm()
-        expect(fieldNamed(wrapper, path)).toBeDefined()
     })
 
     it('an end before the start blocks Tilføj and shows the message on the period field', async () => {
@@ -91,13 +91,14 @@ describe('JokerSlotForm', () => {
         expect(fieldNamed(wrapper, 'endDate')!.find('[data-slot="error"]').text()).toMatch(/slutdato/i)
     })
 
-    it.each([Role.CHEF, Role.COOK, Role.JUNIORHELPER])('the role trigger shows the %s glyph once chosen', async (role) => {
+    // One template binds the glyph of the chosen role: one role stands for all
+    it('the role trigger shows the glyph of the chosen role', async () => {
         const wrapper = await mountForm()
         const select = wrapper.findAllComponents({name: 'USelectMenu'})
             .find(menu => findByTestId(menu, JOKER_SLOT_IDS.roleSelect).exists())
-        select!.vm.$emit('update:modelValue', role)
+        select!.vm.$emit('update:modelValue', Role.CHEF)
         await nextTick()
-        expect(roleTriggerGlyphs(wrapper)).toEqual([ROLE_ICONS[role]])
+        expect(roleTriggerGlyphs(wrapper)).toEqual([ROLE_ICONS[Role.CHEF]])
     })
 
     it('Annuller emits cancel and nothing else', async () => {

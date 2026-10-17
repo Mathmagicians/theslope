@@ -86,8 +86,9 @@ const selectSeason = (dinnerEvents: DinnerEventDisplay[] = []) => {
     activeSeasonIdEndpoint.mockReturnValue(SEASON_ID)
     seasonByIdEndpoint.mockReturnValue({...SEASON, dinnerEvents})
 }
-const {TicketTypeSchema} = useBookingValidation()
+const {TicketTypeSchema, OrderAuditActionSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
+const AuditAction = OrderAuditActionSchema.enum
 // Ids on the season's prices: a waiting-list entry names its price by id, the store reads the ticket type off it
 const ticketPrices = SEASON.ticketPrices.map((price, index) => ({...price, id: index + 1}))
 const priceOf = (ticketType: typeof TicketType[keyof typeof TicketType]) => ticketPrices.find(price => price.ticketType === ticketType)!.id!
@@ -759,8 +760,9 @@ const ticketChangesEndpoint = vi.fn((event: H3Event) => ({
     dinnerEventId: DINNER_ID,
     since: getQuery(event).since ?? null,
     changes: [{
-        id: 1, timestamp: new Date('2026-04-05T08:02:00Z'), action: 'USER_BOOKED', householdShortname: 'S_31', ticketType: 'ADULT',
-        delta: {ADULT: 1, CHILD: 0, BABY: 0}, counts: {ADULT: 1, CHILD: 0, BABY: 0}, portions: 1, revenue: 5000
+        id: 1, timestamp: new Date('2026-04-05T08:02:00Z'), action: AuditAction.USER_BOOKED, householdShortname: 'S_31', ticketType: TicketType.ADULT,
+        delta: {[TicketType.ADULT]: 1, [TicketType.CHILD]: 0, [TicketType.BABY]: 0},
+        counts: {[TicketType.ADULT]: 1, [TicketType.CHILD]: 0, [TicketType.BABY]: 0}, portions: 1, revenue: 5000
     }],
     olderCount: 3
 }))

@@ -1,7 +1,9 @@
 // @vitest-environment nuxt
-import {describe, it, expect, beforeAll} from 'vitest'
+import {describe, it, expect, beforeAll, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {BookingViewSchema} from '~/composables/useBookingView'
 import BookingGridView from '~/components/booking/BookingGridView.vue'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
 import {useBookingValidation, type DinnerEventDisplay, type DinnerMode, type OrderDisplay, type OrderState} from '~/composables/useBookingValidation'
@@ -14,6 +16,14 @@ import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFact
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
 import {ICONS} from '~/composables/useTheSlopeDesignSystem'
 import {addDays, startOfDay} from 'date-fns'
+
+const {day, week, month} = BookingViewSchema.enum
+
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+  resetStores()
+})
 
 const ticketPrices = TicketFactory.defaultTicketPrices()
 // Use real deadlinesForSeason() to stay in sync with SeasonDeadlines interface
@@ -41,7 +51,7 @@ const mockHousehold = {
 }
 
 const baseProps = {
-  view: 'day' as const,
+  view: day,
   dateRange: {start: new Date('2025-01-15'), end: new Date('2025-01-15')},
   household: mockHousehold,
   dinnerEvents: [],
@@ -58,7 +68,7 @@ const mount = (props = {}) => mountSuspended(BookingGridView, {
 
 describe('BookingGridView', () => {
   it('renders day-content slot for day view', async () => {
-    const wrapper = await mount({view: 'day'})
+    const wrapper = await mount({view: day})
     expect(findByTestId(wrapper, 'day-slot').exists()).toBe(true)
   })
 
@@ -76,24 +86,24 @@ describe('BookingGridView', () => {
 
   it('emits update:formMode EDIT when edit button clicked (week/month only)', async () => {
     // Edit button only renders for week/month views, not day view
-    const wrapper = await mount({view: 'week'})
+    const wrapper = await mount({view: week})
     await findByTestId(wrapper, 'grid-edit').trigger('click')
-    expect(wrapper.emitted('update:formMode')?.[0]).toEqual(['edit'])
+    expect(wrapper.emitted('update:formMode')?.[0]).toEqual([FORM_MODES.EDIT])
   })
 
   describe('canEdit prop', () => {
     it('hides edit button when canEdit=false', async () => {
-      const wrapper = await mount({view: 'week', canEdit: false})
+      const wrapper = await mount({view: week, canEdit: false})
       expect(findByTestId(wrapper, 'grid-edit').exists()).toBe(false)
     })
 
     it('hides save button when canEdit=false in edit mode', async () => {
-      const wrapper = await mount({view: 'week', canEdit: false, formMode: 'edit'})
+      const wrapper = await mount({view: week, canEdit: false, formMode: FORM_MODES.EDIT})
       expect(findByTestId(wrapper, 'grid-save').exists()).toBe(false)
     })
 
     it('shows save button when canEdit=true in edit mode', async () => {
-      const wrapper = await mount({view: 'week', canEdit: true, formMode: 'edit'})
+      const wrapper = await mount({view: week, canEdit: true, formMode: FORM_MODES.EDIT})
       expect(findByTestId(wrapper, 'grid-save').exists()).toBe(true)
     })
   })
@@ -107,8 +117,8 @@ describe('BookingGridView', () => {
     }
 
     it.each([
-      {view: 'week' as const, text: 'Ingen middage denne uge'},
-      {view: 'month' as const, text: 'Ingen middage denne måned'}
+      {view: week, text: 'Ingen middage denne uge'},
+      {view: month, text: 'Ingen middage denne måned'}
     ])('renders the $view empty state instead of an empty grid', async ({view, text}) => {
       const wrapper = await mount({view, dateRange: weekAroundToday, dinnerEvents: []})
 
@@ -118,7 +128,7 @@ describe('BookingGridView', () => {
 
     it('grids the household again as soon as the period holds a dinner', async () => {
       const wrapper = await mount({
-        view: 'week',
+        view: week,
         dateRange: weekAroundToday,
         dinnerEvents: [DinnerEventFactory.dinnerEventAt(1, 1)]
       })
@@ -141,7 +151,7 @@ describe('BookingGridView', () => {
       OrderFactory.defaultOrder(undefined, {id, inhabitantId, dinnerEventId, isGuestTicket, dinnerMode, state})
 
     const mountWeek = (orders: OrderDisplay[], dinnerEvent: DinnerEventDisplay = event, formMode: FormMode = FORM_MODES.VIEW) => mount({
-      view: 'week',
+      view: week,
       dateRange: {start: addDays(dinnerEvent.date, -3), end: addDays(dinnerEvent.date, 3)},
       dinnerEvents: [dinnerEvent],
       orders,
@@ -185,13 +195,9 @@ describe('BookingGridView', () => {
         power: {modelValue: DinnerMode.DINEINLATE, consensus: true}
       }
     ])('Anna holds a $desc', ({orders, annaMode, power}) => {
-      it(`renders Anna's cell as ${annaMode}`, async () => {
+      it(`renders Anna's cell as ${annaMode} and hands the power row ${power.modelValue} with consensus ${power.consensus}`, async () => {
         const wrapper = await mountWeek(orders)
         expect(selectorProps(wrapper, `cell-${anna.id}-${event.id}`).modelValue).toBe(annaMode)
-      })
-
-      it(`hands the power row ${power.modelValue} with consensus ${power.consensus}`, async () => {
-        const wrapper = await mountWeek(orders)
         expect(selectorProps(wrapper, `power-${event.id}`)).toMatchObject(power)
       })
     })
@@ -216,14 +222,11 @@ describe('BookingGridView', () => {
 
       const mountEdit = () => mountWeek([guest, annaOwn], future, FORM_MODES.EDIT)
 
-      it('renders an editable guest cell', async () => {
-        const wrapper = await mountEdit()
-        expect(selectorProps(wrapper, guestCellName(wrapper))).toMatchObject({formMode: FORM_MODES.EDIT, interaction: 'toggle'})
-      })
-
-      it('keeps the booker\'s own cell untouched when the guest cell changes', async () => {
+      it('renders an editable guest cell, and keeps the booker\'s own cell untouched when the guest cell changes', async () => {
         const wrapper = await mountEdit()
         const guestCell = guestCellName(wrapper)
+        expect(selectorProps(wrapper, guestCell)).toMatchObject({formMode: FORM_MODES.EDIT, interaction: 'toggle'})
+
         await clickByTestId(wrapper, guestCell)
 
         expect(selectorProps(wrapper, guestCell)).toMatchObject({isModified: true})
@@ -252,26 +255,15 @@ describe('BookingGridView', () => {
         const family = [annaOwn, order(43, lars.id, false, DinnerMode.DINEIN, OrderState.BOOKED, future.id)]
         const powerCell = `power-${future.id}`
 
-        const mountPowerSet = async (dinnerMode: DinnerMode) => {
-          const wrapper = await mountWeek([differingGuest, ...family], future, FORM_MODES.EDIT)
-          wrapper.findAllComponents(DinnerModeSelector).find(c => c.props('name') === powerCell)!.vm.$emit('update:modelValue', dinnerMode)
-          await nextTick()
-          return wrapper
-        }
-
-        it('shows no consensus while the family is uniform', async () => {
+        it('shows no consensus while the family is uniform; setting the power mode carries it into the guest draft, regains consensus, and saves the guest intent alongside the family\'s', async () => {
           const wrapper = await mountWeek([differingGuest, ...family], future, FORM_MODES.EDIT)
           expect(selectorProps(wrapper, powerCell)).toMatchObject({modelValue: DinnerMode.DINEIN, consensus: false})
-        })
 
-        it('carries the power mode into the guest draft and regains consensus', async () => {
-          const wrapper = await mountPowerSet(DinnerMode.TAKEAWAY)
+          wrapper.findAllComponents(DinnerModeSelector).find(c => c.props('name') === powerCell)!.vm.$emit('update:modelValue', DinnerMode.TAKEAWAY)
+          await nextTick()
           expect(selectorProps(wrapper, guestCellName(wrapper))).toMatchObject({modelValue: DinnerMode.TAKEAWAY, isModified: true})
           expect(selectorProps(wrapper, powerCell)).toMatchObject({modelValue: DinnerMode.TAKEAWAY, consensus: true})
-        })
 
-        it('emits the guest intent alongside the family\'s in one save', async () => {
-          const wrapper = await mountPowerSet(DinnerMode.TAKEAWAY)
           await clickByTestId(wrapper, 'grid-save')
 
           expect(wrapper.emitted('save')?.[0]).toEqual([{
@@ -301,7 +293,7 @@ describe('BookingGridView', () => {
     const closedDinner = DinnerEventFactory.dinnerEventAt(1, 1)
     const annaQueued = WaitlistFactory.defaultEntry({id: 9, inhabitantId: anna.id, dinnerEventId: closedDinner.id, position: 3, dinnerMode: DinnerMode.TAKEAWAY})
     const mountQueued = (formMode: FormMode = FORM_MODES.VIEW) => mount({
-      view: 'week',
+      view: week,
       dateRange: {start: addDays(closedDinner.date, -3), end: addDays(closedDinner.date, 3)},
       dinnerEvents: [closedDinner],
       waitlistEntries: [annaQueued],
@@ -331,7 +323,7 @@ describe('BookingGridView', () => {
     const released = (id: number, dinnerEventId: number): OrderDisplay =>
       OrderFactory.defaultOrder(undefined, {id, inhabitantId: 1, dinnerEventId, state: OrderStateSchema.enum.RELEASED})
     const mountWeekOf = (dinnerEvent: DinnerEventDisplay, orders: OrderDisplay[], lockStatus: Map<number, ReleasedTicketCounts | null>) => mount({
-      view: 'week',
+      view: week,
       dateRange: {start: addDays(dinnerEvent.date, -3), end: addDays(dinnerEvent.date, 3)},
       dinnerEvents: [dinnerEvent],
       orders,
@@ -360,7 +352,7 @@ describe('BookingGridView', () => {
 describe('BookingGridView add-guest button', () => {
   const future = DinnerEventFactory.dinnerEventAt(2, 60)
   const mountEdit = () => mount({
-    view: 'week',
+    view: week,
     dateRange: {start: addDays(future.date, -3), end: addDays(future.date, 3)},
     dinnerEvents: [future],
     formMode: FORM_MODES.EDIT,

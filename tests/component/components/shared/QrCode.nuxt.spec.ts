@@ -1,8 +1,16 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {resetStores} from '~~/tests/component/testHelpers'
 import QrCode from '~/components/shared/QrCode.vue'
 import {encodeQrPath} from '~/utils/qr'
+
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
 
 const POSTER_URL = 'https://theslope.example/admin/allergies/pdf'
 const OTHER_URL = 'https://theslope.example/admin/allergies'

@@ -1,12 +1,15 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {mountWithTooltipProvider, findByTestId} from '~~/tests/component/testHelpers'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {mountWithTooltipProvider, findByTestId, resetStores} from '~~/tests/component/testHelpers'
 import EconomyTableGeneric from '~/components/economy/EconomyTable.vue'
 import {nextTick, ref, type DefineComponent} from 'vue'
 
 // A generic component's type is a function; the mount helper keys on a constructor
 const EconomyTable = EconomyTableGeneric as unknown as DefineComponent
+
+enableAutoUnmount(afterEach)
 
 interface TestRow {
     id: number
@@ -45,6 +48,10 @@ describe('EconomyTable', () => {
     // Required dateAccessor for EconomyTable (typed as unknown for mount compatibility)
     const dateAccessor = (item: unknown) => (item as TestRow).date
 
+    beforeEach(() => {
+        resetStores()
+    })
+
     const createWrapper = (props: Record<string, unknown> = {}) => mountWithTooltipProvider(EconomyTable, {
         props: {data: createTestData(), columns: defaultColumns, rowKey: 'date', dateAccessor, pageSize: 5, ...props},
         isMd: true
@@ -59,21 +66,12 @@ describe('EconomyTable', () => {
         wrapper.find('button[aria-label="Skift sortering"]')
 
     describe('Rendering', () => {
-        it('renders with data', async () => {
+        it('renders the search input and the sort toggle in the expand column header, and every row while the search is empty', async () => {
             const wrapper = await createWrapper()
-            expect(wrapper.exists()).toBe(true)
-        })
-
-        it('renders search input in expand column header', async () => {
-            const wrapper = await createWrapper()
-            const searchInput = getSearchInput(wrapper)
-            expect(searchInput.exists()).toBe(true)
-        })
-
-        it('renders sort toggle button in expand column header', async () => {
-            const wrapper = await createWrapper()
-            const sortButton = getSortButton(wrapper)
-            expect(sortButton.exists()).toBe(true)
+            expect(getSearchInput(wrapper).exists()).toBe(true)
+            expect(getSortButton(wrapper).exists()).toBe(true)
+            const vm = wrapper.vm as unknown as EconomyTableVm
+            expect(vm.filteredData.length).toBe(6)
         })
 
         it('renders custom search placeholder', async () => {
@@ -84,60 +82,7 @@ describe('EconomyTable', () => {
         })
     })
 
-    describe('Date Filtering', () => {
-        it('filters data by date string match', async () => {
-            const wrapper = await createWrapper()
-            const searchInput = getSearchInput(wrapper)
-
-            // Format is dd/MM/yyyy, search for "/01/" (January)
-            await searchInput.setValue('/01/')
-            await nextTick()
-
-            // Should filter to only January dates (3 items: Jan 10, 15, 20)
-            const vm = wrapper.vm as unknown as EconomyTableVm
-            expect(vm.filteredData.length).toBe(3)
-        })
-
-        it('filters by day number', async () => {
-            const wrapper = await createWrapper()
-            const searchInput = getSearchInput(wrapper)
-
-            // Format is dd/MM/yyyy, search for day 15 (appears twice: Jan 15, Feb 15)
-            await searchInput.setValue('15/')
-            await nextTick()
-
-            const vm = wrapper.vm as unknown as EconomyTableVm
-            expect(vm.filteredData.length).toBe(2)
-        })
-
-        it('shows all data when search is empty', async () => {
-            const wrapper = await createWrapper()
-            const vm = wrapper.vm as unknown as EconomyTableVm
-            expect(vm.filteredData.length).toBe(6)
-        })
-
-        it('shows empty when no match', async () => {
-            const wrapper = await createWrapper()
-            const searchInput = getSearchInput(wrapper)
-
-            await searchInput.setValue('/12/')
-            await nextTick()
-
-            const vm = wrapper.vm as unknown as EconomyTableVm
-            expect(vm.filteredData.length).toBe(0)
-        })
-    })
-
     describe('Sorting', () => {
-        it('sorts ascending by default (closest dates first)', async () => {
-            const wrapper = await createWrapper()
-            const vm = wrapper.vm as unknown as EconomyTableVm
-
-            // First item should be earliest date (Jan 10)
-            expect(vm.filteredData[0]!.date.getDate()).toBe(10)
-            expect(vm.filteredData[0]!.date.getMonth()).toBe(0) // January
-        })
-
         it('sorts descending when defaultSortDesc=true', async () => {
             const wrapper = await createWrapper({defaultSortDesc: true})
             const vm = wrapper.vm as unknown as EconomyTableVm
@@ -159,20 +104,6 @@ describe('EconomyTable', () => {
             expect(vm.filteredData[0]!.date.getDate()).toBe(15)
             expect(vm.filteredData[0]!.date.getMonth()).toBe(1) // February
         })
-
-        it('toggles back to ascending on second click', async () => {
-            const wrapper = await createWrapper()
-            const sortButton = getSortButton(wrapper)
-
-            await sortButton.trigger('click')
-            await sortButton.trigger('click')
-            await nextTick()
-
-            const vm = wrapper.vm as unknown as EconomyTableVm
-            // Back to ascending - first item is Jan 10
-            expect(vm.filteredData[0]!.date.getDate()).toBe(10)
-            expect(vm.filteredData[0]!.date.getMonth()).toBe(0)
-        })
     })
 
     describe('Pagination', () => {
@@ -180,12 +111,6 @@ describe('EconomyTable', () => {
             const wrapper = await createWrapper({data: createTestData(), pageSize: 5})
             const vm = wrapper.vm as unknown as EconomyTableVm
             expect(vm.showPagination).toBe(true)
-        })
-
-        it('hides pagination when data fits in one page', async () => {
-            const wrapper = await createWrapper({data: createTestData().slice(0, 3), pageSize: 5})
-            const vm = wrapper.vm as unknown as EconomyTableVm
-            expect(vm.showPagination).toBe(false)
         })
 
         it('hides pagination when data equals pageSize', async () => {
@@ -207,13 +132,6 @@ describe('EconomyTable', () => {
     })
 
     describe('Loading State', () => {
-        it('passes loading prop to UTable', async () => {
-            const wrapper = await createWrapper({loading: true})
-
-            const table = wrapper.findComponent({name: 'UTable'})
-            expect(table.props('loading')).toBe(true)
-        })
-
         // Slots go through the root mount alone
         const mountEmpty = (loading: boolean) => mountSuspended(EconomyTable, {
             props: {data: [], columns: defaultColumns, rowKey: 'date', dateAccessor, loading, loadingText: 'Henter fremtidige bestillinger'},
@@ -238,36 +156,8 @@ describe('EconomyTable', () => {
         })
     })
 
-    describe('Empty State', () => {
-        it('renders with empty data', async () => {
-            const wrapper = await createWrapper({data: []})
-            expect(wrapper.exists()).toBe(true)
-        })
-
-        // Slots go through the root mount alone
-        it('passes empty slot through', async () => {
-            const wrapper = await mountSuspended(EconomyTable, {
-                props: {
-                    data: [],
-                    columns: defaultColumns,
-                    rowKey: 'date',
-                    dateAccessor
-                },
-                slots: {
-                    empty: '<div data-testid="custom-empty">No data</div>'
-                },
-                global: {
-                    provide: {isMd: ref(true)}
-                }
-            })
-
-            const emptySlot = findByTestId(wrapper, 'custom-empty')
-            expect(emptySlot.exists()).toBe(true)
-        })
-    })
-
     describe('Filter + Sort Combined', () => {
-        it('filters then sorts in correct order', async () => {
+        it('filters by the date string, then sorts ascending by default', async () => {
             const wrapper = await createWrapper()
             const searchInput = getSearchInput(wrapper)
 

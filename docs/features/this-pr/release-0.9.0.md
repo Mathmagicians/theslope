@@ -38,17 +38,17 @@ The packages of release 0.9, where each one lives and the decisions behind them.
 | Admin economy loads on request | the billing periods and the current period fetch while the economy tab is on the page | `loadBillingOverview` in `app/stores/bookings.ts`, ADR-007 rule 9 | committed (83597f8) |
 | Team delete returns the deleted id | `DELETE /api/admin/team/[id]` answers the id of the deleted team | ADR-009 rule 7 | committed (afadb83) |
 | Joker slot delete returns the deleted id | `DELETE /api/admin/team/[id]/joker-slot/[slotId]` answers the id of the deleted slot; a slot of another team answers 404 | ADR-009 rule 7 | committed (679fc8f) |
-| Validation owns the types | `TicketType` and the booking row action (`BookingRowActionSchema`) come from `useBookingValidation`; `app/utils/portions.ts` and `useBooking.ts` import them | ADR-001 | signed off |
+| Validation owns the types | `TicketType` and the booking row action (`BookingRowActionSchema`) come from `useBookingValidation` | ADR-001 | committed (1cc6b5e, fdff39e) |
 | DRY sweep | dead code and duplicate token paths removed; the specs share their mount, endpoint and session helpers | `tests/component/testHelpers.ts`, `tests/component/hoistedMocks.ts` | committed (72cf9d9, 6b65a70, b456b2f, 999bdbd, c0beb62, 43876aa) |
 | PRF spike | passkey and PRF research with the device protocol | `../feature-proposal-relogin-faceid.md`, `../archived/feature-mobile-native-feel.md` | committed |
-| One booking path, end to end | outcomes in, notification out; the scaffold survives a partial failure and reports per person; the waiting list catches up; one client write; preview and toast from one word table; the ticket history follows kuverter | § One booking path, end to end | planned |
+| One booking path, end to end | outcomes in, notification out; the scaffold survives a partial failure and reports per person; the waiting list catches up; one client write; preview and toast from one word table; the ticket history follows kuverter | § One booking path, end to end | points 1–5 committed (2ad1429 to 7b6a622); 6 and 7 open |
 | Docs and tooling | the user, chef and admin guides; `docs/ui.md` and the compliance tables compacted; `docs/testing.md` Rule 0; the ui skill and the frontend agent | `docs/`, `.claude/skills/`, `.claude/agents/` | committed (b82852e, 38804ef, 0dfd8eb, 450bcc8) |
 
 ## Open before the release
 
 | Item | State |
 |---|---|
-| One booking path, end to end | planned, § One booking path, end to end; seven points, each signed off on its own |
+| One booking path, end to end | points 6 and 7, § One booking path, end to end |
 | Waitlist notifications | planned, § Waitlist notifications |
 | CI summary | read on the Actions run page: categories, counts, red ui failures, report links |
 | Visual check per UI package | the route → viewport → element tables, carried into the PR description |
@@ -130,7 +130,7 @@ Each point is presented with its files and code, and signed off on its own.
 | 4b. The views show each line | The chef's alert, the booking form and the kitchen box name the waiting list per ticket type; the kitchen box holds the tickets for sale and the waiting list together | kitchen box ✅ signed off 2026-10-16, implemented (§ Mockup — kitchen box); the chef's alert ✅ signed off 2026-10-17, implemented (`SUPPLY_WORDS.queuedCount`, mockup in `ChefMenuCard.vue`) |
 | 4c. The preview sells each ticket once | The save preview settles the claims in order as the save does: the first claims of a ticket type buy that type's tickets for sale, the rest join its waiting list (`bookingOutcomes` takes one order or a list, `supplyOfType`); the guest form opens on Voksen and its button names the guests | ✅ signed off 2026-10-16, implemented |
 | 5. One client write | Every write that changes bookings goes through `bookingsStore.writeBookings`: the request, then the household's orders, the upcoming orders, the tickets for sale, the waiting list and the dinner on view re-read once; the waiting list per locked dinner derives from the one waiting-list read; the households store keeps its own household re-reads | ✅ signed off 2026-10-17, implemented |
-| 6. Preview and toast from one word table | Future words in the preview, past words in the toast, grouped per person; the toast is red as soon as one item failed, green otherwise | toast look implemented 2026-10-16 (`scaffoldToastLook`: the ticket, red on a failed order); the word table ⏳ awaiting signoff |
+| 6. Preview and toast from one word table | Future words in the preview, past words in the toast, grouped per person; the toast is red as soon as one item failed, green otherwise | toast look implemented 2026-10-16 (`scaffoldToastLook`: the ticket, red on a failed order); the words ✅ signed off 2026-10-17 (§ Mockup — toast and preview) |
 | 7. The ticket history follows kuverter | Every audit row replays, system or member alike; a line for each change of kuverter; a system run and the nightly close are one line for the dinner; the replay ends equal to state | ⏳ awaiting signoff |
 
 ### Coverage
@@ -149,28 +149,50 @@ cases release through the member's booking route. The package adds the case that
 | One line per ticket type in join order; a place counts within its line | unit, `useWaitlist.unit.spec.ts` |
 | A child row on a dinner with only an adult ticket for sale saves as "Skriv på venteliste", with a child ticket as "Køb billet" | component, `DinnerBookingForm.nuxt.spec.ts` |
 
-### Mockup — toast and preview ⏳ awaiting signoff
+### Mockup — toast and preview ✅ signed off 2026-10-17
 
 ```
-Preference change for the household, past the deadline, a waiting list on Monday
-  Preview   Du er ved at ændre familiens booking
-              Knud: 2 billetter frigives (1 til ventelisten), 4 skifter spisemåde, 14 frameldes
-              Lene: 2 billetter frigives, 4 skifter spisemåde, 14 frameldes
-  Toast     Alle præferencer opdateret (red: one item failed)
-              Knud: 2 billetter frigivet (1 solgt til ventelisten), 4 skiftede spisemåde, 14 frameldt
-              Lene: 2 billetter frigivet, 4 skiftede spisemåde, 13 frameldt, 1 fejlede
-
 Grid save after the deadline
-  Preview   Anna: 1 køber en ledig billet, 2 skrives på ventelisten
-            Gæst af Anna: skrives på ventelisten
-  Toast     Bookinger gemt (green)
-              Anna: 1 købte en ledig billet, 2 kom på ventelisten (#3, #5)
-              Gæst af Anna: kom på ventelisten (#6)
+Preview  [buy badge]    Anna køber en billet til salg: 19/10/2026
+         [queue badge]  Anna skrives på ventelisten: 20/10/2026, 21/10/2026
+         [queue badge]  Gæst af Anna skrives på ventelisten: 20/10/2026
+Toast    Bookinger processeret                                    (green)
+           Anna: 1 købt, 2 på ventelisten (Voksen #3, Voksen #5)
+           Gæst af Anna: 1 på ventelisten (Voksen #6)
 
-One dinner: a count of 1 drops
-  Preview   Anna køber en ledig billet / Peter skrives på ventelisten
-  Toast     Anna købte en ledig billet / Peter kom på ventelisten (#2)
+Grid power mode: Takeaway on Thursday (open), Ingen on Friday (past the deadline)
+Preview  [edit badge]      Anna skifter til Takeaway: 22/10/2026
+         [edit badge]      Lars skifter til Takeaway: 22/10/2026
+         [released badge]  Anna frigiver sin billet: 23/10/2026
+         [released badge]  Lars frigiver sin billet: 23/10/2026
+Toast    Bookinger processeret                                    (green)
+           Anna: 1 ny spisemåde, 1 frigivet
+           Lars: 1 ny spisemåde, 1 frigivet
+
+Preference power mode: Monday to Ingen, one order fails
+Toast    Alle præferencer opdateret                               (red)
+           Knud: 7 frameldt, 2 frigivet
+           Lene: 6 frameldt, 2 frigivet, 1 fejlede
+           1 billet solgt til ventelisten
+           42 uændret
 ```
+
+A preview line names its dinners in the default `formatDate`: each date up to three, else the count with the first and
+last date ("Knud frameldes: 7 middage, 02/11/2026 – 14/12/2026"). A toast line counts per person; the sales to the
+waiting list and the unchanged orders count for the household.
+
+| Action | Preview, after the name | Toast, after the count |
+|---|---|---|
+| BOOK | tilmeldes | tilmeldt |
+| CANCEL | frameldes | frameldt |
+| RELEASE | frigiver sin billet | frigivet |
+| RECLAIM | tilmeldes igen | tilmeldt igen |
+| BUY | køber en billet til salg | købt |
+| QUEUE | skrives på ventelisten | på ventelisten (Voksen #3) |
+| LEAVE | forlader ventelisten | forlod ventelisten |
+| REQUEUE | ændrer ønsket tilmelding til Takeaway, beholder ventelisteplads Voksen #2 | ønske ændret |
+| CHANGE_MODE | skifter til Takeaway | ny spisemåde |
+| CHANGE_PRICE | får ny pris | ny pris |
 
 ### Mockup — kitchen box ✅ signed off 2026-10-16
 
@@ -296,6 +318,10 @@ crosses the buildup threshold and asserts each event writes its Delivery row.
 - The waiting list's glyph is the Hugeicons hourglass, the set of the role icons: an outline that fills its box like the
   glyphs beside it. Icon use is symmetric: each part of the TIL SALG box carries its glyph beside its kuverter, as the
   allergy line does, the released glyph and the hourglass; the titles and the list headings carry none.
+- The preview and the toast read from one word table: the preview names each person's action with its dinners' dates, the
+  toast counts per person and closes with the sales to the waiting list and the unchanged orders. A waiting-list place
+  reads as the ticket badge names its type, "Voksen #3", in the preview, the toast, the booking form's waiting-list badge
+  and the kitchen box.
 
 ## Coverage
 

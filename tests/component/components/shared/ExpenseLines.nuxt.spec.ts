@@ -1,7 +1,7 @@
 // @vitest-environment nuxt
-import {describe, it, expect, beforeAll} from 'vitest'
+import {describe, it, expect, beforeAll, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {flushPromises} from '@vue/test-utils'
+import {enableAutoUnmount, flushPromises} from '@vue/test-utils'
 import {nextTick, ref} from 'vue'
 import ExpenseLines from '~/components/shared/ExpenseLines.vue'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
@@ -9,7 +9,13 @@ import {useOrder} from '~/composables/useOrder'
 import {useTicket} from '~/composables/useTicket'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import {formatDate} from '~/utils/date'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, kitchenConfig} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, kitchenConfig, resetStores} from '~~/tests/component/testHelpers'
+
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
 
 /**
  * ExpenseLines: folded it is one row, the glyph, the title and the total in both units (or the empty text), with the
@@ -70,7 +76,7 @@ const hintRow = (wrapper: Wrapper, label: string) => findAllByTestId(wrapper, 'e
 
 describe('ExpenseLines', () => {
     describe('folded', () => {
-        it('renders the title and the total in both units, no lines and no form', async () => {
+        it('renders the title and the total in both units, no lines and no form, and no edit button in a read-only pane', async () => {
             const wrapper = await mount()
             const spent = spentOf(lines())
             expect(findByTestId(wrapper, 'expense-row').text()).toContain('Madbestilling')
@@ -80,6 +86,7 @@ describe('ExpenseLines', () => {
             expect(lineRows(wrapper)).toHaveLength(0)
             expect(findByTestId(wrapper, 'expense-form').exists()).toBe(false)
             expect(findByTestId(wrapper, 'expense-table').exists()).toBe(false)
+            expect(findByTestId(wrapper, 'expense-edit').exists()).toBe(false)
         })
 
         it('GIVEN no lines WHEN rendering THEN the row carries the empty text instead of a total', async () => {
@@ -88,20 +95,12 @@ describe('ExpenseLines', () => {
             expect(findByTestId(wrapper, 'expense-total').exists()).toBe(false)
         })
 
-        it('GIVEN a read-only pane WHEN rendering THEN there is no edit button', async () => {
-            const wrapper = await mount()
-            expect(findByTestId(wrapper, 'expense-edit').exists()).toBe(false)
-        })
-
-        it('GIVEN an editable pane WHEN rendering THEN the edit button carries its label', async () => {
-            const wrapper = await mount({editable: true})
-            expect(findByTestId(wrapper, 'expense-edit').text()).toContain('Rediger madbestilling')
-        })
     })
 
     describe('open', () => {
-        it('GIVEN the edit button WHEN clicked THEN the editor heads with the hint and Luk, and Luk folds it back', async () => {
+        it('GIVEN the edit button with its label WHEN clicked THEN the editor heads with the hint and Luk, and Luk folds it back', async () => {
             const wrapper = await mount({editable: true})
+            expect(findByTestId(wrapper, 'expense-edit').text()).toContain('Rediger madbestilling')
             await open(wrapper)
             expect(findByTestId(wrapper, 'expense-row').exists()).toBe(false)
             expect(wrapper.text()).toContain('Hvad kostede indkøbene?')
@@ -113,9 +112,10 @@ describe('ExpenseLines', () => {
             expect(findByTestId(wrapper, 'expense-form').exists()).toBe(false)
         })
 
-        it('GIVEN the editor WHEN open THEN the entry row comes first, the lines next and the sums last', async () => {
+        it('GIVEN lines and a budget WHEN open THEN the entry row with the note prefill comes first, every line next with its date, bestiller, note and both units in entry order and slet, and the sums last: Rådighedsbeløb, Brugt and Tilbage as the difference with its icon', async () => {
             const wrapper = await mount({editable: true})
             await open(wrapper)
+
             const html = wrapper.html()
             const form = html.indexOf('data-testid="expense-form"')
             const table = html.indexOf('data-testid="expense-table"')
@@ -123,11 +123,19 @@ describe('ExpenseLines', () => {
             expect(form).toBeGreaterThan(-1)
             expect(table).toBeGreaterThan(form)
             expect(sums).toBeGreaterThan(table)
-        })
+            expect((noteInput(wrapper).element as HTMLInputElement).value).toBe(NOTE_PREFILL)
 
-        it('GIVEN a budget WHEN open THEN the hint reads Rådighedsbeløb, Brugt and Tilbage as the difference with its icon', async () => {
-            const wrapper = await mount({editable: true})
-            await open(wrapper)
+            const rows = lineRows(wrapper)
+            expect(rows).toHaveLength(2)
+            lines().forEach((line, index) => {
+                expect(rows[index]!.text()).toContain(formatDate(line.createdAt))
+                expect(rows[index]!.find('[data-testid="expense-payer"]').text()).toBe(line.paidBy.name!)
+                expect(rows[index]!.find('[data-testid="expense-note"]').text()).toBe(line.description)
+                expect(rows[index]!.text()).toContain(formatPrice(exOf(line.amount)))
+                expect(rows[index]!.text()).toContain(`/ ${formatPrice(line.amount)} kr`)
+            })
+            expect(findAllByTestId(wrapper, 'expense-remove')).toHaveLength(2)
+
             const spent = spentOf(lines())
             expect(hintRow(wrapper, 'Rådighedsbeløb')!.text()).toContain(`/ ${formatPrice(BUDGET)} kr`)
             expect(hintRow(wrapper, 'Brugt')!.text()).toContain(`/ ${formatPrice(spent)} kr`)
@@ -178,21 +186,6 @@ describe('ExpenseLines', () => {
             expect(hintRow(wrapper, 'Brugt')).toBeDefined()
         })
 
-        it('GIVEN lines WHEN open THEN every line shows its date, bestiller, note and both units in entry order, with slet', async () => {
-            const wrapper = await mount({editable: true})
-            await open(wrapper)
-            const rows = lineRows(wrapper)
-            expect(rows).toHaveLength(2)
-            lines().forEach((line, index) => {
-                expect(rows[index]!.text()).toContain(formatDate(line.createdAt))
-                expect(rows[index]!.find('[data-testid="expense-payer"]').text()).toBe(line.paidBy.name!)
-                expect(rows[index]!.find('[data-testid="expense-note"]').text()).toBe(line.description)
-                expect(rows[index]!.text()).toContain(formatPrice(exOf(line.amount)))
-                expect(rows[index]!.text()).toContain(`/ ${formatPrice(line.amount)} kr`)
-            })
-            expect(findAllByTestId(wrapper, 'expense-remove')).toHaveLength(2)
-        })
-
         it('GIVEN no lines WHEN open THEN the table says so under its headers and the form is ready', async () => {
             const wrapper = await mount({editable: true, expenses: []})
             await open(wrapper)
@@ -213,12 +206,6 @@ describe('ExpenseLines', () => {
 
             expect(wrapper.emitted('add')).toEqual([[{amount: grossOf(1012), description: NOTE_PREFILL}]])
             expect((wrapper.find('input[name="expense-amount-input"]').element as HTMLInputElement).value).toBe('')
-        })
-
-        it('GIVEN the editor WHEN opened THEN the note field carries the prefill', async () => {
-            const wrapper = await mount({editable: true})
-            await open(wrapper)
-            expect((noteInput(wrapper).element as HTMLInputElement).value).toBe(NOTE_PREFILL)
         })
 
         it('GIVEN an edited note WHEN adding THEN emits it as typed and the field returns to the prefill', async () => {

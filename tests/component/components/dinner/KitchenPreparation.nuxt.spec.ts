@@ -5,13 +5,13 @@
  * Real component, real households store, real design system (testing.md Rule 6); only HTTP and the
  * session are faked. The households store resolves each order's household for the expanded list.
  */
-import {describe, it, expect, vi, beforeEach} from 'vitest'
+import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {nextTick, type ComponentPublicInstance} from 'vue'
-import {flushPromises, type VueWrapper} from '@vue/test-utils'
+import {enableAutoUnmount, flushPromises, type VueWrapper} from '@vue/test-utils'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
 import KitchenPreparation from '~/components/dinner/KitchenPreparation.vue'
 import AllergyTypeDisplayComponent from '~/components/allergy/AllergyTypeDisplay.vue'
-import {mountWithTooltipProvider, findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import {WaitlistFactory} from '~~/tests/e2e/testDataFactories/waitlistFactory'
@@ -64,6 +64,13 @@ const HOUSEHOLDS: HouseholdDisplay[] = [{
 
 registerEndpoint('/api/admin/household', () => HOUSEHOLDS)
 
+// The next test's resetStores drops the households dataset a still-mounted box reads
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
+
 const PANEL = (mode: string) => `kitchen-panel-${mode}`
 const ALLERGY_HEAD = 'kitchen-allergy-head'
 const ALLERGY_OVERVIEW = 'kitchen-allergy-overview'
@@ -92,46 +99,36 @@ describe('KitchenPreparation allergy line', () => {
     }
     const allergenNamesIn = (list: ReturnType<typeof findByTestId>) => allergiesInDinersOf(list).map(allergy => allergy.props('allergyType').name)
 
-    describe('GIVEN SPISESAL with an allergic adult and an allergic child', () => {
-        it('THEN the panel head shows the allergy kuverter and no diner names', () => {
-            const panel = findByTestId(wrapper, PANEL(DinnerMode.DINEIN))
-            expect(findByTestId(panel, ALLERGY_HEAD).text()).toBe('1,5 kuv.')
-            expect(panel.text()).not.toContain('Anna')
-        })
+    it('GIVEN SPISESAL with an allergic adult and an allergic child THEN the panel head shows the allergy kuverter and no diner names; WHEN the panel opens THEN the overview lists the total and each menu allergen in menu order, and each allergic diner carries one compact allergy type with its name per allergy, no badge, no tooltip', async () => {
+        const panel = findByTestId(wrapper, PANEL(DinnerMode.DINEIN))
+        expect(findByTestId(panel, ALLERGY_HEAD).text()).toBe('1,5 kuv.')
+        expect(panel.text()).not.toContain('Anna')
 
-        it('WHEN the panel opens THEN the overview lists the total and each menu allergen as its compact allergy type with its kuverter, in menu order', async () => {
-            await clickByTestId(wrapper, PANEL(DinnerMode.DINEIN))
-            const overview = findByTestId(wrapper, ALLERGY_OVERVIEW)
-            expect(overview.findAll(':scope > span').map(part => part.text())).toEqual(['1,5 kuv.', `| ${GLUTEN.icon}Gluten · 1`, `| ${MILK.icon}Mælk · 0,5`])
-            const allergies = allergiesIn(overview)
-            expect(allergies.map(allergy => allergy.props('allergyType'))).toEqual([expect.objectContaining(GLUTEN), expect.objectContaining(MILK)])
-            expect(allergies.every(allergy => allergy.props('compact') && allergy.props('showName'))).toBe(true)
-        })
+        await clickByTestId(wrapper, PANEL(DinnerMode.DINEIN))
 
-        it('WHEN the panel opens THEN each allergic diner carries one compact allergy type with its name per allergy, no badge, no tooltip', async () => {
-            await clickByTestId(wrapper, PANEL(DinnerMode.DINEIN))
-            const list = findByTestId(wrapper, HOUSEHOLD_LIST)
-            const allergies = allergiesInDinersOf(list)
-            expect(allergenNamesIn(list)).toEqual([GLUTEN.name, MILK.name])
-            expect(allergies.map(allergy => allergy.text())).toEqual([GLUTEN, MILK].map(({icon, name}) => `${icon}${name}`))
-            expect(allergies.every(allergy => allergy.props('compact') && allergy.props('showName'))).toBe(true)
-            expect(list.findAllComponents({name: 'UBadge'})).toHaveLength(0)
-            expect(list.findAllComponents({name: 'UTooltip'})).toHaveLength(0)
-        })
+        const overview = findByTestId(wrapper, ALLERGY_OVERVIEW)
+        expect(overview.findAll(':scope > span').map(part => part.text())).toEqual(['1,5 kuv.', `| ${GLUTEN.icon}Gluten · 1`, `| ${MILK.icon}Mælk · 0,5`])
+        const overviewAllergies = allergiesIn(overview)
+        expect(overviewAllergies.map(allergy => allergy.props('allergyType'))).toEqual([expect.objectContaining(GLUTEN), expect.objectContaining(MILK)])
+        expect(overviewAllergies.every(allergy => allergy.props('compact') && allergy.props('showName'))).toBe(true)
+
+        const list = findByTestId(wrapper, HOUSEHOLD_LIST)
+        const allergies = allergiesInDinersOf(list)
+        expect(allergenNamesIn(list)).toEqual([GLUTEN.name, MILK.name])
+        expect(allergies.map(allergy => allergy.text())).toEqual([GLUTEN, MILK].map(({icon, name}) => `${icon}${name}`))
+        expect(allergies.every(allergy => allergy.props('compact') && allergy.props('showName'))).toBe(true)
+        expect(list.findAllComponents({name: 'UBadge'})).toHaveLength(0)
+        expect(list.findAllComponents({name: 'UTooltip'})).toHaveLength(0)
     })
 
-    describe('GIVEN TAKEAWAY without an allergic diner', () => {
-        it('THEN the panel head has no allergy line', () => {
-            expect(findByTestId(findByTestId(wrapper, PANEL(DinnerMode.TAKEAWAY)), ALLERGY_HEAD).exists()).toBe(false)
-        })
+    it('GIVEN TAKEAWAY without an allergic diner THEN the panel head has no allergy line, and the opened list has no overview and no allergy types', async () => {
+        expect(findByTestId(findByTestId(wrapper, PANEL(DinnerMode.TAKEAWAY)), ALLERGY_HEAD).exists()).toBe(false)
 
-        it('WHEN the panel opens THEN the list has no overview and no allergy types', async () => {
-            await clickByTestId(wrapper, PANEL(DinnerMode.TAKEAWAY))
-            const list = findByTestId(wrapper, HOUSEHOLD_LIST)
-            expect(list.text()).toContain('Per')
-            expect(findByTestId(wrapper, ALLERGY_OVERVIEW).exists()).toBe(false)
-            expect(allergiesIn(list)).toHaveLength(0)
-        })
+        await clickByTestId(wrapper, PANEL(DinnerMode.TAKEAWAY))
+        const list = findByTestId(wrapper, HOUSEHOLD_LIST)
+        expect(list.text()).toContain('Per')
+        expect(findByTestId(wrapper, ALLERGY_OVERVIEW).exists()).toBe(false)
+        expect(allergiesIn(list)).toHaveLength(0)
     })
 
     describe.each([
@@ -142,11 +139,9 @@ describe('KitchenPreparation allergy line', () => {
             wrapper = await mountKitchen(allergens)
         })
 
-        it('THEN the panel head has no allergy line', () => {
+        it('THEN the panel head has no allergy line, and the opened list has no overview and no allergy types', async () => {
             expect(findByTestId(findByTestId(wrapper, PANEL(DinnerMode.DINEIN)), ALLERGY_HEAD).exists()).toBe(false)
-        })
 
-        it('WHEN the panel opens THEN the list has no overview and no allergy types', async () => {
             await clickByTestId(wrapper, PANEL(DinnerMode.DINEIN))
             const list = findByTestId(wrapper, HOUSEHOLD_LIST)
             expect(list.text()).toContain('Anna')
@@ -193,7 +188,7 @@ describe('KitchenPreparation TIL SALG box', () => {
     const iconsIn = (element: ReturnType<typeof findByTestId>) =>
         (element.findAllComponents({name: 'UIcon'}) as VueWrapper<ComponentPublicInstance<{name: string}>>[]).map(icon => icon.props('name'))
 
-    it('GIVEN one adult and two children waiting THEN TIL SALG carries the waiting-list part with the queue\'s kuverter and its ticket count', async () => {
+    it('GIVEN one adult and two children waiting THEN TIL SALG carries the waiting-list part with the queue\'s kuverter and its ticket count, and each part its icon beside its kuverter: the released icon, the hourglass', async () => {
         const wrapper = await mountWith(QUEUE)
 
         const box = findByTestId(wrapper, FOR_SALE)
@@ -201,15 +196,10 @@ describe('KitchenPreparation TIL SALG box', () => {
         const part = findByTestId(box, WAITLIST_PART)
         for (const text of ['VENTELISTE', '2 kuv.', 'Voksen: 1', 'Barn: 2', 'Baby: 0', '# 3']) expect(part.text()).toContain(text)
         expect(part.text()).not.toContain('%')
-    })
 
-    it('GIVEN a queue THEN each part of TIL SALG carries its icon beside its kuverter, as the allergy line does: the released icon, the hourglass', async () => {
-        const wrapper = await mountWith(QUEUE)
-
-        // The line that reads exactly the kuverter: an icon renders no text
+        // The line that reads exactly the kuverter: an icon renders no text, as the allergy line does
         const kuverterLine = (element: ReturnType<typeof findByTestId>, kuverter: string) =>
             element.findAll('div').find(line => line.text() === kuverter)!
-        const box = findByTestId(wrapper, FOR_SALE)
         expect(iconsIn(kuverterLine(box, '0 kuv.'))).toEqual([ICONS.released])
         expect(iconsIn(kuverterLine(findByTestId(box, WAITLIST_PART), '2 kuv.'))).toEqual([ICONS.waitlist])
     })

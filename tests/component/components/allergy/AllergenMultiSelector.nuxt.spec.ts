@@ -1,6 +1,6 @@
 // @vitest-environment nuxt
-import { describe, it, expect } from 'vitest'
-import type { DOMWrapper, VueWrapper } from '@vue/test-utils'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { enableAutoUnmount, type DOMWrapper, type VueWrapper } from '@vue/test-utils'
 import type { ComponentPublicInstance } from 'vue'
 import AllergenMultiSelector from '~/components/allergy/AllergenMultiSelector.vue'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
@@ -10,10 +10,16 @@ import { useBookingValidation } from '~/composables/useBookingValidation'
 import { ICONS } from '~/composables/useTheSlopeDesignSystem'
 import {formatPortions} from '~/utils/utils'
 import { ALLERGY_TEST_IDS } from './allergyTestIds'
-import { mountWithTooltipProvider, findByTestId, clickByTestId } from '~~/tests/component/testHelpers'
+import { mountWithTooltipProvider, findByTestId, clickByTestId, resetStores } from '~~/tests/component/testHelpers'
 
 const {TicketTypeSchema} = useBookingValidation()
 const TicketType = TicketTypeSchema.enum
+
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
 
 describe('AllergenMultiSelector', () => {
     // Test data from factory
@@ -41,18 +47,8 @@ describe('AllergenMultiSelector', () => {
 
     const partsOf = (line: DOMWrapper<Element>) => line.findAll(':scope > span').map(part => part.text())
 
+    // The table and its new badge column are AllergyCatalogTable's, specced there
     describe('Edit Mode', () => {
-        it('renders table with allergen data', async () => {
-            const wrapper = await createWrapper()
-
-            const html = wrapper.html()
-            // Verify all allergy types are rendered
-            expect(html).toContain('Mælk')
-            expect(html).toContain('Jordnødder')
-            expect(html).toContain('Gluten')
-            expect(html).toContain('Antal')
-        })
-
         it.each([
             { showStatistics: true, shouldShow: true },
             { showStatistics: false, shouldShow: false }
@@ -67,26 +63,15 @@ describe('AllergenMultiSelector', () => {
 
             expect(wrapper.html()).toContain('Vælg allergener')
         })
-
-        it.each([
-            { showNewBadge: true, expectedText: 'Nyt' },
-            { showNewBadge: false, notExpectedText: 'Nyt' }
-        ])('new badge column with showNewBadge=$showNewBadge', async ({ showNewBadge, expectedText, notExpectedText }) => {
-            const wrapper = await createWrapper({ showNewBadge })
-
-            const html = wrapper.html()
-            if (expectedText) {
-                expect(html).toContain(expectedText)
-            }
-            if (notExpectedText) {
-                expect(html).not.toContain(notExpectedText)
-            }
-        })
     })
 
     describe('Counts from this dinner\'s diners', () => {
-        it('shows each allergen\'s kuverter in the count column, a zero included', async () => {
+        it('renders every allergen and shows its kuverter in the count column, a zero included', async () => {
             const wrapper = await createWrapper()
+
+            const html = wrapper.html()
+            mockAllergyTypes.forEach(allergyType => expect(html).toContain(allergyType.name))
+            expect(html).toContain('Antal')
 
             const counts = mockAllergyTypes.map(allergyType => findByTestId(wrapper, ALLERGY_TEST_IDS.count(allergyType.id)).text())
             expect(counts).toEqual([formatPortions(1), formatPortions(1.5), formatPortions(0)])
@@ -105,7 +90,7 @@ describe('AllergenMultiSelector', () => {
         // Milk and gluten selected: Anna and Bo carry milk, nobody carries gluten
         const selection = [MILK.id, GLUTEN.id]
 
-        it('carries the allergy glyph, the title and the overview of the selected allergens, each its compact allergy type', async () => {
+        it('carries the allergy glyph, the title and the overview of the selected allergens, each its compact allergy type, and opens the names behind Hvem', async () => {
             const wrapper = await createWrapper({ modelValue: selection })
 
             const panel = wrapper.findAllComponents({ name: 'UAlert' })
@@ -120,10 +105,8 @@ describe('AllergenMultiSelector', () => {
             const allergens = findByTestId(wrapper, ALLERGY_TEST_IDS.allergyPanelOverview).findAllComponents(AllergyTypeDisplay) as VueWrapper<ComponentPublicInstance<{allergyType: unknown, compact: boolean, showName: boolean}>>[]
             expect(allergens.map(allergen => allergen.props('allergyType'))).toEqual([expect.objectContaining(MILK), expect.objectContaining(GLUTEN)])
             expect(allergens.every(allergen => allergen.props('compact') && allergen.props('showName'))).toBe(true)
-        })
 
-        it('opens the names with one compact allergy type and its name per matching allergy behind Hvem', async () => {
-            const wrapper = await createWrapper({ modelValue: selection })
+            // Behind Hvem: the names, with one compact allergy type and its name per matching allergy
             const who = () => findByTestId(wrapper, ALLERGY_TEST_IDS.allergyPanelWho)
 
             expect(who().attributes('aria-expanded')).toBe('false')
@@ -150,39 +133,23 @@ describe('AllergenMultiSelector', () => {
         })
     })
 
-    describe('Props and Data Flow', () => {
-        it('renders correctly with all props', async () => {
-            const wrapper = await createWrapper({
-                modelValue: [1, 2],
-                showStatistics: true,
-                showNewBadge: true,
-                readonly: false
-            })
-
-            expect(wrapper.props('modelValue')).toEqual([1, 2])
-            expect(wrapper.props('showStatistics')).toBe(true)
-            expect(wrapper.props('showNewBadge')).toBe(true)
-            expect(wrapper.props('readonly')).toBe(false)
-        })
-    })
-
     // On mobile the allergy panel lands below the list, so a fixed bar
     // summarises the selection and jumps to the panel on tap.
     describe('Sticky Mobile Summary', () => {
         it.each([
-            { modelValue: [MILK.id, GLUTEN.id], tickets, expected: true },
-            { modelValue: [], tickets, expected: false },
-            { modelValue: [MILK.id, GLUTEN.id], tickets: undefined, expected: false }
-        ])('bar rendered=$expected with selection=$modelValue', async ({ modelValue, tickets, expected }) => {
+            { desc: 'no selection', modelValue: [], tickets },
+            { desc: 'no tickets', modelValue: [MILK.id, GLUTEN.id], tickets: undefined }
+        ])('renders no bar with $desc', async ({ modelValue, tickets }) => {
             const wrapper = await createWrapper({ modelValue, tickets, showStatistics: true })
 
-            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.summaryBar).exists()).toBe(expected)
+            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.summaryBar).exists()).toBe(false)
         })
 
         it('summarises the selected count and the kuverter of the diners carrying them', async () => {
             const wrapper = await createWrapper({ modelValue: [MILK.id, GLUTEN.id], showStatistics: true })
 
             const bar = findByTestId(wrapper, ALLERGY_TEST_IDS.summaryBar)
+            expect(bar.exists()).toBe(true)
             expect(bar.text()).toContain('2 valgte')
             expect(bar.text()).toContain(`${formatPortions(1)} kuv.`)
         })

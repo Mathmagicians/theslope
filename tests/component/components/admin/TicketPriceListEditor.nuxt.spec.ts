@@ -1,14 +1,21 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {reactive} from 'vue'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
 import {PLANNING_TEST_IDS} from '~~/tests/component/components/admin/planningTestIds'
 import {TicketFactory} from '~~/tests/e2e/testDataFactories/ticketFactory'
 import TicketPriceListEditor from '~/components/admin/planning/TicketPriceListEditor.vue'
 import {ticketPriceSelectItems} from '~/composables/useBookingUi'
 
+enableAutoUnmount(afterEach)
+
 describe('TicketPriceListEditor', () => {
+
+    beforeEach(() => {
+        resetStores()
+    })
 
     const mount = async (disabled = false) => {
         // reactive so an in-place splice by the component re-renders the list
@@ -17,29 +24,19 @@ describe('TicketPriceListEditor', () => {
         return {wrapper, modelValue}
     }
 
-    it('offers the add control', async () => {
-        const {wrapper} = await mount()
+    it('offers the add control, and each price shows its ticket type and price on the badge, its age limit and description beside it, and a remove control', async () => {
+        const {wrapper, modelValue} = await mount()
         const addButton = findByTestId(wrapper, PLANNING_TEST_IDS.ticketAdd)
         expect(addButton.exists()).toBe(true)
         expect(addButton.text()).toContain('Tilføj billet')
-    })
 
-    it('each price shows its ticket type and price on the badge and its age limit and description beside it', async () => {
-        const {wrapper, modelValue} = await mount()
         const rows = wrapper.findAll('li')
-
         expect(rows).toHaveLength(modelValue.length)
         ticketPriceSelectItems(modelValue).forEach((item, index) => {
             expect(rows[index]!.text()).toContain(item.label)
             expect(rows[index]!.text()).toContain(item.description)
-        })
-    })
-
-    it('renders a remove control per ticket price', async () => {
-        const {wrapper, modelValue} = await mount()
-        modelValue.forEach((_, index) =>
             expect(findByTestId(wrapper, PLANNING_TEST_IDS.ticketRemove(index)).exists()).toBe(true)
-        )
+        })
     })
 
     it('removing a row drops it from the model', async () => {

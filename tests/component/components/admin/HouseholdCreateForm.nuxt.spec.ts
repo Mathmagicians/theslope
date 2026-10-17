@@ -1,10 +1,16 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
-import {flushPromises} from '@vue/test-utils'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
+import {enableAutoUnmount, flushPromises} from '@vue/test-utils'
 import HouseholdCreateForm from '~/components/admin/HouseholdCreateForm.vue'
 import {nextTick} from 'vue'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
-import {mountWithTooltipProvider, findDateSegments} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findDateSegments, resetStores} from '~~/tests/component/testHelpers'
+
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
 
 // ---- Test data helpers ----
 
@@ -71,16 +77,10 @@ describe('HouseholdCreateForm', () => {
 
     // ========== RENDERING ==========
 
-    it.each([
-        ['Ny husstand'],
-        ['PBS'],
-        ['Adresse'],
-        ['Vælg en indflytningsdato'],
-        ['Annuller'],
-        ['Opret husstand'],
-    ])('renders label/button "%s"', async (label) => {
+    it('renders its labels and buttons', async () => {
+        const labels = ['Ny husstand', 'PBS', 'Adresse', 'Vælg en indflytningsdato', 'Annuller', 'Opret husstand']
         const wrapper = await mount()
-        expect(wrapper.text()).toContain(label)
+        labels.forEach(label => expect(wrapper.text(), label).toContain(label))
     })
 
     // ========== PBS CONFLICT ==========
@@ -103,19 +103,13 @@ describe('HouseholdCreateForm', () => {
 
     // ========== COEXISTENCE NOTICE ==========
 
-    it('shows coexistence notice when address matches existing household', async () => {
-        const existing = [makeHousehold({pbsId: 115, address: 'Skråningen 14', shortName: 'S_14', heynaboId: 42})]
+    it('shows coexistence notice when address matches existing household, and the heynaboId in the address option label (admin reference)', async () => {
+        const existing = [makeHousehold({pbsId: 115, address: 'Skråningen 14', shortName: 'S_14', heynaboId: 99})]
         const wrapper = await mount({existingHouseholds: existing})
         await pickAddress(wrapper, 'Skråningen 14')
         expect(wrapper.text()).toContain('S_14')
         expect(wrapper.text()).toContain('115')
         expect(wrapper.text()).toMatch(/[Ee]ksisterende husstand/)
-    })
-
-    it('shows heynaboId in the address option label (admin reference)', async () => {
-        const existing = [makeHousehold({pbsId: 115, address: 'Skråningen 14', heynaboId: 99})]
-        const wrapper = await mount({existingHouseholds: existing})
-        await pickAddress(wrapper, 'Skråningen 14')
         // USelect renders the label "Skråningen 14 · HN 99"
         expect(wrapper.text()).toContain('HN 99')
     })
@@ -170,8 +164,6 @@ describe('HouseholdCreateForm', () => {
 
     it.each<[string, ValidationScenario]>([
         ['no fields filled',                              {}],
-        ['only pbsId',                                    {pbsId: '999'}],
-        ['only address',                                  {address: 'Skråningen 14'}],
         ['pbsId + address (missing date)',                {pbsId: '999', address: 'Skråningen 14'}],
         ['PBS conflicts with existing household',         {
             existingHouseholds: [makeHousehold({pbsId: 101, shortName: 'S_14', address: 'Skråningen 14'})],

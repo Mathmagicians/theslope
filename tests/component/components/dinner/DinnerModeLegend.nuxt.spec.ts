@@ -1,9 +1,17 @@
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {resetStores} from '~~/tests/component/testHelpers'
 import DinnerModeLegend from '~/components/dinner/DinnerModeLegend.vue'
 import DinnerModeSelector from '~/components/dinner/DinnerModeSelector.vue'
 import {DinnerMode} from '~/composables/useBookingValidation'
 import {FORM_MODES} from '~/types/form'
+
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
 
 // The mode labels live in DinnerModeSelector, so the expected text is read from a real
 // selector render rather than repeated here - a renamed label cannot pass both places

@@ -1,11 +1,18 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
+import {enableAutoUnmount} from '@vue/test-utils'
 import CookingRoundSpending from '~/components/chef/CookingRoundSpending.vue'
 import {dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow, type SpendingFragment} from '~/composables/useBookingUi'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useTicket} from '~/composables/useTicket'
 import {formatDate} from '~/utils/date'
-import {mountWithTooltipProvider, findByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, resetStores} from '~~/tests/component/testHelpers'
+
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
 
 /**
  * CookingRoundSpending: a fragment of the one spending table. The team's round: heading, one row per cooking day with
@@ -26,7 +33,7 @@ const mount = (props: {fragment: SpendingFragment}) => mountWithTooltipProvider(
 const dataRows = (wrapper: Awaited<ReturnType<typeof mount>>) => wrapper.findAll('tbody tr').filter(tr => tr.attributes('data-testid') !== 'cooking-round-total')
 
 describe('CookingRoundSpending, the team\'s round', () => {
-    it('renders the heading, one row per dinner in order with date and menu, and the arrow on the dinner on view', async () => {
+    it('renders the heading, one row per dinner in order with date and menu, the arrow on the dinner on view, each row\'s figures, and the team\'s total row', async () => {
         const wrapper = await mount({fragment: teamSpendingFragment(rows, words)})
         expect(findByTestId(wrapper, 'cooking-round-heading').text()).toBe(words.heading)
         const rendered = dataRows(wrapper)
@@ -37,16 +44,22 @@ describe('CookingRoundSpending, the team\'s round', () => {
         })
         expect(rendered[2]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(true)
         expect(rendered[0]!.find('[data-testid="cooking-round-marker"]').exists()).toBe(false)
-    })
 
-    it('reads each row\'s allowance, spending and what is left in both units, red with the exclamation icon when over', async () => {
-        const wrapper = await mount({fragment: teamSpendingFragment(rows, words)})
+        // Each row's allowance, spending and what is left in both units, red with the exclamation icon when over
         const over = dataRows(wrapper)[0]!
         expect(over.text()).toContain(`/ ${formatPrice(178100)} kr`)
         expect(over.text()).toContain(`/ ${formatPrice(192500)} kr`)
         expect(over.text()).toContain(`/ -${formatPrice(14400)} kr`)
         expect(over.find('[data-testid="vat-amount-over"]').exists()).toBe(true)
         expect(dataRows(wrapper)[1]!.find('[data-testid="vat-amount-ok"]').exists()).toBe(true)
+
+        // The round sums into the team's total row
+        const total = findByTestId(wrapper, 'cooking-round-total')
+        expect(total.text()).toContain('Hele Madhold 2')
+        expect(total.text()).toContain(`/ ${formatPrice(178100 + 189000 + 187300)} kr`)
+        expect(total.text()).toContain(`/ ${formatPrice(192500 + 174400 + 163800)} kr`)
+        expect(total.text()).toContain(`/ +${formatPrice(178100 + 189000 + 187300 - 192500 - 174400 - 163800)} kr`)
+        expect(total.find('[data-testid="vat-amount-ok"]').exists()).toBe(true)
     })
 
     it('GIVEN a dinner without tickets yet WHEN rendering THEN its Tilbage carries the waiting glyph, not the check', async () => {
@@ -55,16 +68,6 @@ describe('CookingRoundSpending, the team\'s round', () => {
         const last = dataRows(wrapper)[3]!
         expect(last.find('[data-testid="vat-amount-pending"]').exists()).toBe(true)
         expect(last.find('[data-testid="vat-amount-ok"]').exists()).toBe(false)
-    })
-
-    it('sums the round into the team\'s total row', async () => {
-        const wrapper = await mount({fragment: teamSpendingFragment(rows, words)})
-        const total = findByTestId(wrapper, 'cooking-round-total')
-        expect(total.text()).toContain('Hele Madhold 2')
-        expect(total.text()).toContain(`/ ${formatPrice(178100 + 189000 + 187300)} kr`)
-        expect(total.text()).toContain(`/ ${formatPrice(192500 + 174400 + 163800)} kr`)
-        expect(total.text()).toContain(`/ +${formatPrice(178100 + 189000 + 187300 - 192500 - 174400 - 163800)} kr`)
-        expect(total.find('[data-testid="vat-amount-ok"]').exists()).toBe(true)
     })
 })
 

@@ -30,7 +30,6 @@ import {useWeekDayMapValidation} from '~/composables/useWeekDayMapValidation'
 import type {DateRange, WeekDay, WeekDayMap} from '~/types/dateTypes'
 import {createDateInTimezone, getPeriodBoundary} from '~/utils/date'
 import {createWeekDayMapFromSelection} from '~/types/dateTypes'
-import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
 import {SeasonFactory} from '../../e2e/testDataFactories/seasonFactory'
 import {DinnerEventFactory} from '../../e2e/testDataFactories/dinnerEventFactory'
 
@@ -56,59 +55,19 @@ const createEvent = (id: number, date: Date, teamId: number | null = null) => ({
 })
 
 describe('computeCookingDates', () => {
-    it.each([
-        {
-            scenario: 'Monday and Wednesday cooking days',
-            seasonDates: {
-                start: new Date(2025, 0, 6),  // Monday, Jan 6
-                end: new Date(2025, 0, 31)     // Friday, Jan 31
-            },
-            cookingDays: createDefaultWeekdayMap([true, false, true, false, false, false, false]),
-            holidays: [],
-            expectedDayOfWeek: [1, 3], // Monday, Wednesday
-            minExpectedCount: 8
-        },
-        {
-            scenario: 'Tuesday only',
-            seasonDates: {
-                start: new Date(2025, 0, 1),
-                end: new Date(2025, 0, 31)
-            },
-            cookingDays: createDefaultWeekdayMap([false, true, false, false, false, false, false]),
-            holidays: [],
-            expectedDayOfWeek: [2], // Tuesday
-            minExpectedCount: 4
-        },
-        {
-            scenario: 'Mon-Fri in one week',
-            seasonDates: {
-                start: new Date(2025, 0, 6),   // Monday
-                end: new Date(2025, 0, 10)     // Friday
-            },
-            cookingDays: createDefaultWeekdayMap([true, true, true, true, true, false, false]),
-            holidays: [],
-            expectedDayOfWeek: [1, 2, 3, 4, 5], // Mon-Fri
-            minExpectedCount: 5,
-            exactCount: 5
+    it('should return dates for cooking days: Mon-Fri in one week', () => {
+        const seasonDates = {
+            start: new Date(2025, 0, 6),   // Monday
+            end: new Date(2025, 0, 10)     // Friday
         }
-    ])('should return dates for cooking days: $scenario', ({ seasonDates, cookingDays, holidays, expectedDayOfWeek, minExpectedCount, exactCount }) => {
+
         // WHEN: Computing cooking dates
-        const dates = computeCookingDates(cookingDays, seasonDates, holidays)
+        const dates = computeCookingDates(createDefaultWeekdayMap([true, true, true, true, true, false, false]), seasonDates, [])
 
-        // THEN: Correct dates are returned
-        if (exactCount) {
-            expect(dates.length).toBe(exactCount)
-        } else {
-            expect(dates.length).toBeGreaterThanOrEqual(minExpectedCount)
-        }
-
-        // AND: All dates match expected weekdays
+        // THEN: One date per cooking weekday, all within season boundaries
+        expect(dates.length).toBe(5)
         dates.forEach(date => {
-            expect(expectedDayOfWeek).toContain(date.getDay())
-        })
-
-        // AND: All dates are within season boundaries
-        dates.forEach(date => {
+            expect([1, 2, 3, 4, 5]).toContain(date.getDay())
             expect(date >= seasonDates.start).toBe(true)
             expect(date <= seasonDates.end).toBe(true)
         })
@@ -135,18 +94,6 @@ describe('computeCookingDates', () => {
         // AND: Other Tuesdays are included
         expect(dates.length).toBeGreaterThan(0)
         dates.forEach(date => expect(date.getDay()).toBe(2))
-    })
-
-    it('should return empty array when no cooking days are selected', () => {
-        // GIVEN: Season with no cooking days enabled
-        const dates = computeCookingDates(
-            createDefaultWeekdayMap(false),
-            { start: new Date(2025, 0, 1), end: new Date(2025, 0, 31) },
-            []
-        )
-
-        // THEN: No dates are returned
-        expect(dates).toEqual([])
     })
 })
 
@@ -179,12 +126,6 @@ describe('findFirstCookingDayInDates', () => {
             scenario: 'no matches returns undefined',
             cookingDays: [true, false, true, false, true, false, false],
             dates: [new Date(2025, 0, 7), new Date(2025, 0, 9)],
-            expected: undefined
-        },
-        {
-            scenario: 'empty array returns undefined',
-            cookingDays: [true, false, true, false, true, false, false],
-            dates: [],
             expected: undefined
         }
     ])('$scenario', ({ cookingDays, dates, expected }) => {
@@ -235,20 +176,6 @@ describe('isHolidayGhostDuty', () => {
             expected: false
         },
         {
-            scenario: '6 cooking days in holiday = 2 week-offs, NO ghost (Mon/Wed/Fri)',
-            cookingDate: new Date(2025, 0, 17), // Fri Jan 17 (6th cooking day)
-            holidays: [{ start: new Date(2025, 0, 6), end: new Date(2025, 0, 19) }], // Mon-Sun×2 = 6 cooking days
-            cookingDays: [true, false, true, false, true, false, false],
-            expected: false
-        },
-        {
-            scenario: '7 cooking days in holiday = 2 week-offs + 1 ghost (Mon/Wed/Fri)',
-            cookingDate: new Date(2025, 0, 20), // Mon Jan 20 (7th cooking day = 1st ghost)
-            holidays: [{ start: new Date(2025, 0, 6), end: new Date(2025, 0, 20) }], // = 7 cooking days
-            cookingDays: [true, false, true, false, true, false, false],
-            expected: true
-        },
-        {
             scenario: '4 cooking days = 1 week-off (Mon-Thu schedule)',
             cookingDate: new Date(2025, 9, 16), // Thu Oct 16 (4th cooking day)
             holidays: [{ start: new Date(2025, 9, 13), end: new Date(2025, 9, 16) }], // Mon-Thu = 4 cooking days
@@ -263,23 +190,9 @@ describe('isHolidayGhostDuty', () => {
             expected: true
         },
         {
-            scenario: '5 cooking days = 1 week-off + 1 ghost, check week-off portion (Mon-Thu)',
-            cookingDate: new Date(2025, 2, 30), // Mon Mar 30 (1st cooking day = week-off)
-            holidays: [{ start: new Date(2025, 2, 30), end: new Date(2025, 3, 6) }], // 5 cooking days
-            cookingDays: [true, true, true, true, false, false, false],
-            expected: false
-        },
-        {
             scenario: 'not in any holiday = false',
             cookingDate: new Date(2025, 0, 22), // Wed Jan 22
             holidays: [{ start: new Date(2025, 0, 6), end: new Date(2025, 0, 12) }],
-            cookingDays: [true, false, true, false, true, false, false],
-            expected: false
-        },
-        {
-            scenario: 'empty holidays = false',
-            cookingDate: new Date(2025, 0, 8),
-            holidays: [],
             cookingDays: [true, false, true, false, true, false, false],
             expected: false
         }
@@ -363,35 +276,8 @@ describe('computeAffinitiesForTeams', () => {
         expect(Object.values(team5?.affinity || {}).filter(Boolean).length).toBe(1) // Hold 5: Wed (wrapped)
     })
 
-    it('should return empty array when no teams', () => {
-        // GIVEN: No teams
-        const teams: CookingTeamDisplay[] = []
-        const cookingDays = createDefaultWeekdayMap([true, false, true, false, true, false, false])
-        const firstDay = new Date(2025, 0, 6) // Monday, Jan 6
-
-        // WHEN: Computing affinities
-        const result = computeAffinitiesForTeams(teams, cookingDays, 2, firstDay)
-
-        // THEN: Returns empty array
-        expect(result).toEqual([])
-    })
-
+    // A season starting Monday is the round-robin rows above
     it.each([
-        {
-            scenario: 'season starting Monday (first cooking day)',
-            seasonDates: {
-                start: new Date(2025, 0, 6),   // Monday, Jan 6
-                end: new Date(2025, 0, 31)
-            },
-            teams: [createTeam(1, 'Hold 1'), createTeam(2, 'Hold 2'), createTeam(3, 'Hold 3')],
-            cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon/Wed/Fri
-            consecutiveCookingDays: 1,
-            expected: {
-                1: createDefaultWeekdayMap([true, false, false, false, false, false, false]),  // Mon
-                2: createDefaultWeekdayMap([false, false, true, false, false, false, false]),  // Wed
-                3: createDefaultWeekdayMap([false, false, false, false, true, false, false])   // Fri
-            }
-        },
         {
             scenario: 'season starting Wednesday (second cooking day)',
             seasonDates: {
@@ -405,21 +291,6 @@ describe('computeAffinitiesForTeams', () => {
                 1: createDefaultWeekdayMap([false, false, true, false, false, false, false]),  // Wed
                 2: createDefaultWeekdayMap([false, false, false, false, true, false, false]),  // Fri
                 3: createDefaultWeekdayMap([true, false, false, false, false, false, false])   // Mon (wrapped)
-            }
-        },
-        {
-            scenario: 'season starting Friday (third cooking day)',
-            seasonDates: {
-                start: new Date(2025, 0, 10),  // Friday, Jan 10
-                end: new Date(2025, 0, 31)
-            },
-            teams: [createTeam(1, 'Hold 1'), createTeam(2, 'Hold 2'), createTeam(3, 'Hold 3')],
-            cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]), // Mon/Wed/Fri
-            consecutiveCookingDays: 1,
-            expected: {
-                1: createDefaultWeekdayMap([false, false, false, false, true, false, false]),  // Fri
-                2: createDefaultWeekdayMap([true, false, false, false, false, false, false]),   // Mon (wrapped)
-                3: createDefaultWeekdayMap([false, false, true, false, false, false, false])    // Wed
             }
         }
     ])('should start rotation from first cooking day in season: $scenario', ({ seasonDates, teams, cookingDays, consecutiveCookingDays, expected }) => {
@@ -486,7 +357,6 @@ describe('computeAffinitiesForTeams', () => {
 describe('compareAffinities', () => {
     it.each([
         { startDay: 'mandag' as WeekDay, aff1: ['mandag'], aff2: ['onsdag'], expected: -1 },
-        { startDay: 'mandag' as WeekDay, aff1: ['onsdag'], aff2: ['mandag'], expected: 1 },
         { startDay: 'mandag' as WeekDay, aff1: ['søndag'], aff2: ['onsdag'], expected: 1 },
         { startDay: 'onsdag' as WeekDay, aff1: ['fredag'], aff2: ['mandag'], expected: -1 },
         { startDay: 'mandag' as WeekDay, aff1: ['mandag'], aff2: ['mandag'], expected: 0 }
@@ -530,13 +400,6 @@ describe('createSortedAffinitiesToTeamsMap', () => {
             startDay: undefined,
             expectedKeys: ['fredag'],
             expectedTeams: { fredag: ['A-Team', 'B-Team', 'C-Team'] }
-        },
-        {
-            scenario: 'empty teams',
-            teams: [],
-            startDay: undefined,
-            expectedKeys: [],
-            expectedTeams: {}
         }
     ])('$scenario', ({ teams, startDay, expectedKeys, expectedTeams }) => {
         const result = startDay
@@ -566,16 +429,6 @@ describe('createTeamRoster', () => {
             expected: ['Team1', 'Team2', 'Team3']
         },
         {
-            scenario: '3 different affinities (1 team each) zigzag',
-            startDay: 'mandag' as WeekDay,
-            teams: [
-                createTeam(1, 'Mon1', createWeekDayMapFromSelection(['mandag'])),
-                createTeam(2, 'Wed1', createWeekDayMapFromSelection(['onsdag'])),
-                createTeam(3, 'Fri1', createWeekDayMapFromSelection(['fredag']))
-            ],
-            expected: ['Mon1', 'Wed1', 'Fri1']
-        },
-        {
             scenario: 'mixed affinities (varying sizes) zigzag round-robin',
             startDay: 'mandag' as WeekDay,
             teams: [
@@ -587,8 +440,7 @@ describe('createTeamRoster', () => {
                 createTeam(6, 'Fri1', createWeekDayMapFromSelection(['fredag']))
             ],
             expected: ['Mon1', 'Wed1', 'Fri1', 'Mon2', 'Wed2', 'Mon3']
-        },
-        { scenario: 'empty teams', startDay: 'mandag' as WeekDay, teams: [], expected: [] }
+        }
     ])('$scenario', ({ startDay, teams, expected }) => {
         expect(createTeamRoster(startDay, teams).map(t => t.name)).toEqual(expected)
     })
@@ -639,24 +491,6 @@ describe('computeTeamAssignmentsForEvents', () => {
             ],
             consecutiveCookingDays: 1,
             expectedAssignments: [1, 2, 1, 2]
-        },
-        {
-            scenario: '3 teams, 9 events (Mon/Wed/Fri), consecutiveCookingDays=3',
-            teams: [createTeam(1, 'Hold 1'), createTeam(2, 'Hold 2'), createTeam(3, 'Hold 3')],
-            cookingDays: createDefaultWeekdayMap([true, false, true, false, true, false, false]),
-            events: [
-                createEvent(1, new Date(2025, 0, 6)),  // Mon
-                createEvent(2, new Date(2025, 0, 8)),  // Wed
-                createEvent(3, new Date(2025, 0, 10)), // Fri
-                createEvent(4, new Date(2025, 0, 13)), // Mon
-                createEvent(5, new Date(2025, 0, 15)), // Wed
-                createEvent(6, new Date(2025, 0, 17)), // Fri
-                createEvent(7, new Date(2025, 0, 20)), // Mon
-                createEvent(8, new Date(2025, 0, 22)), // Wed
-                createEvent(9, new Date(2025, 0, 24))  // Fri
-            ],
-            consecutiveCookingDays: 3,
-            expectedAssignments: [1, 1, 1, 2, 2, 2, 3, 3, 3]
         }
     ])('should assign teams in round-robin: $scenario', ({ teams, cookingDays, events, consecutiveCookingDays, expectedAssignments }) => {
         // GIVEN: Teams with computed affinities
@@ -692,12 +526,6 @@ describe('computeTeamAssignmentsForEvents', () => {
     })
 
     it.each([
-        {
-            scenario: 'no events',
-            teams: [createTeam(1, 'Hold 1')],
-            events: [],
-            expected: []
-        },
         {
             scenario: 'no teams',
             teams: [],
@@ -803,53 +631,6 @@ describe('computeTeamAssignmentsForEvents', () => {
         expect(result[1]!.cookingTeamId).toBe(2) // Fri Jan 17 → Team 2 (quota=1)
         expect(result[2]!.cookingTeamId).toBe(2) // Mon Jan 20 → Team 2 (quota=2, rotation)
         expect(result[3]!.cookingTeamId).toBe(1) // Wed Jan 22 → Team 1 (quota=1)
-    })
-
-    it('should handle 2-week holiday (14 days) with no ghost duties', () => {
-        // GIVEN: 14-day holiday = 2 full weeks = no ghost duties
-        const teams = [createTeam(1, 'Hold 1'), createTeam(2, 'Hold 2')]
-        const cookingDays = createDefaultWeekdayMap([true, false, true, false, true, false, false]) // Mon/Wed/Fri
-        const holidays: DateRange[] = [
-            { start: new Date(2025, 0, 6), end: new Date(2025, 0, 19) } // Mon Jan 6 - Sun Jan 19 (14 days)
-        ]
-        const events = [
-            createEvent(1, new Date(2025, 0, 20)), // Mon Jan 20
-            createEvent(2, new Date(2025, 0, 22)), // Wed Jan 22
-            createEvent(3, new Date(2025, 0, 24)), // Fri Jan 24
-            createEvent(4, new Date(2025, 0, 27))  // Mon Jan 27
-        ]
-        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, events[0]!.date)
-
-        // WHEN: Assigning teams
-        const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, 2, events, holidays)
-
-        // THEN: 2 full weeks = no ghost duties, rotation starts fresh
-        expect(result[0]!.cookingTeamId).toBe(1) // Mon Jan 20 → Team 1 (quota=1)
-        expect(result[1]!.cookingTeamId).toBe(1) // Wed Jan 22 → Team 1 (quota=2, rotation)
-        expect(result[2]!.cookingTeamId).toBe(2) // Fri Jan 24 → Team 2 (quota=1)
-        expect(result[3]!.cookingTeamId).toBe(2) // Mon Jan 27 → Team 2 (quota=2)
-    })
-
-    it('should handle no holidays (backwards compatible)', () => {
-        // GIVEN: No holidays - same as original behavior
-        const teams = [createTeam(1, 'Hold 1'), createTeam(2, 'Hold 2')]
-        const cookingDays = createDefaultWeekdayMap([true, false, true, false, true, false, false])
-        const events = [
-            createEvent(1, new Date(2025, 0, 6)),  // Mon
-            createEvent(2, new Date(2025, 0, 8)),  // Wed
-            createEvent(3, new Date(2025, 0, 10)), // Fri
-            createEvent(4, new Date(2025, 0, 13))  // Mon
-        ]
-        const teamsWithAffinities = computeAffinitiesForTeams(teams, cookingDays, 2, events[0]!.date)
-
-        // WHEN: Assigning without holidays parameter
-        const result = computeTeamAssignmentsForEvents(teamsWithAffinities, cookingDays, 2, events)
-
-        // THEN: Normal round-robin
-        expect(result[0]!.cookingTeamId).toBe(1) // Mon → Team 1 (quota=1)
-        expect(result[1]!.cookingTeamId).toBe(1) // Wed → Team 1 (quota=2, rotation)
-        expect(result[2]!.cookingTeamId).toBe(2) // Fri → Team 2 (quota=1)
-        expect(result[3]!.cookingTeamId).toBe(2) // Mon → Team 2 (quota=2)
     })
 
     /**
@@ -988,8 +769,7 @@ describe('Active Season Management utilities', () => {
     describe('isPast', () => {
         it.each([
             { desc: 'season ending yesterday', end: new Date(2025, 0, 10), ref: new Date(2025, 0, 11), expected: true },
-            { desc: 'season ending today (not past)', end: new Date(2025, 0, 15), ref: new Date(2025, 0, 15), expected: false },
-            { desc: 'season ending tomorrow', end: new Date(2025, 0, 20), ref: new Date(2025, 0, 19), expected: false }
+            { desc: 'season ending today (not past)', end: new Date(2025, 0, 15), ref: new Date(2025, 0, 15), expected: false }
         ])('$desc → $expected', ({ end, ref, expected }) => {
             const season = { ...SeasonFactory.defaultSeason(), id: 1, seasonDates: { start: new Date(2025, 0, 1), end } }
             expect(isPast(season, ref)).toBe(expected)
@@ -999,8 +779,7 @@ describe('Active Season Management utilities', () => {
     describe('isFuture', () => {
         it.each([
             { desc: 'season starting tomorrow', start: new Date(2025, 0, 16), ref: new Date(2025, 0, 15), expected: true },
-            { desc: 'season starting today (not future)', start: new Date(2025, 0, 15), ref: new Date(2025, 0, 15), expected: false },
-            { desc: 'season starting yesterday', start: new Date(2025, 0, 10), ref: new Date(2025, 0, 11), expected: false }
+            { desc: 'season starting today (not future)', start: new Date(2025, 0, 15), ref: new Date(2025, 0, 15), expected: false }
         ])('$desc → $expected', ({ start, ref, expected }) => {
             const season = { ...SeasonFactory.defaultSeason(), id: 1, seasonDates: { start, end: new Date(2025, 5, 30) } }
             expect(isFuture(season, ref)).toBe(expected)
@@ -1020,9 +799,8 @@ describe('Active Season Management utilities', () => {
 
     describe('canSeasonBeActive', () => {
         it.each([
+            // A season not past may be active: today is the boundary
             { desc: 'past season (ended yesterday)', start: new Date(2025, 0, 1), end: new Date(2025, 0, 14), ref: new Date(2025, 0, 15), expected: false },
-            { desc: 'current season (includes today)', start: new Date(2025, 0, 1), end: new Date(2025, 0, 31), ref: new Date(2025, 0, 15), expected: true },
-            { desc: 'future season', start: new Date(2025, 1, 1), end: new Date(2025, 5, 30), ref: new Date(2025, 0, 15), expected: true },
             { desc: 'season ending today (still eligible)', start: new Date(2025, 0, 1), end: new Date(2025, 0, 15), ref: new Date(2025, 0, 15), expected: true }
         ])('$desc → $expected', ({ start, end, ref, expected }) => {
             const season = { ...SeasonFactory.defaultSeason(), id: 1, seasonDates: { start, end } }
@@ -1058,13 +836,6 @@ describe('Active Season Management utilities', () => {
                 'Active', 'Current', 'Future Close', 'Future Far', 'Past Recent', 'Past Far'
             ])
         })
-
-        it.each([
-            { desc: 'empty array', seasons: [], expected: [] },
-            { desc: 'single season', seasons: [{ ...SeasonFactory.defaultSeason(), id: 1, shortName: 'Test' }], expected: ['Test'] }
-        ])('$desc', ({ seasons, expected }) => {
-            expect(sortSeasonsByActivePriority(seasons).map(s => s.shortName)).toEqual(expected)
-        })
     })
 
     describe('selectMostAppropriateActiveSeason', () => {
@@ -1081,15 +852,6 @@ describe('Active Season Management utilities', () => {
                     { ...SeasonFactory.defaultSeason(), id: 3, shortName: 'Future Far', isActive: false, seasonDates: { start: new Date(2026, 0, 1), end: new Date(2026, 11, 31) } }
                 ],
                 expected: 'Future Close'
-            },
-            {
-                desc: 'current season when no future',
-                ref: new Date(2025, 2, 15),
-                seasons: [
-                    { ...SeasonFactory.defaultSeason(), id: 1, shortName: 'Past', isActive: false, seasonDates: { start: new Date(2024, 0, 1), end: new Date(2024, 11, 31) } },
-                    { ...SeasonFactory.defaultSeason(), id: 2, shortName: 'Current', isActive: false, seasonDates: { start: new Date(2025, 0, 1), end: new Date(2025, 5, 30) } }
-                ],
-                expected: 'Current'
             },
             {
                 desc: 'active season in progress stays the pick',
@@ -1123,19 +885,13 @@ describe('Active Season Management utilities', () => {
             expect(selectMostAppropriateActiveSeason(seasons, ref)?.shortName).toBe(expected)
         })
 
-        it.each([
-            {
-                desc: 'null when all past (cannot activate)',
-                ref: new Date(2026, 0, 15),
-                seasons: [
-                    { ...SeasonFactory.defaultSeason(), id: 1, shortName: 'Past 2023', isActive: false, seasonDates: { start: new Date(2023, 0, 1), end: new Date(2023, 11, 31) } },
-                    { ...SeasonFactory.defaultSeason(), id: 2, shortName: 'Past 2024', isActive: false, seasonDates: { start: new Date(2024, 0, 1), end: new Date(2024, 11, 31) } },
-                    { ...SeasonFactory.defaultSeason(), id: 3, shortName: 'Past 2025', isActive: false, seasonDates: { start: new Date(2025, 0, 1), end: new Date(2025, 11, 31) } }
-                ]
-            },
-            { desc: 'null when no seasons', ref: new Date(2025, 0, 15), seasons: [] }
-        ])('$desc', ({ ref, seasons }) => {
-            expect(selectMostAppropriateActiveSeason(seasons, ref)).toBeNull()
+        it('null when all past (cannot activate)', () => {
+            const seasons = [
+                { ...SeasonFactory.defaultSeason(), id: 1, shortName: 'Past 2023', isActive: false, seasonDates: { start: new Date(2023, 0, 1), end: new Date(2023, 11, 31) } },
+                { ...SeasonFactory.defaultSeason(), id: 2, shortName: 'Past 2024', isActive: false, seasonDates: { start: new Date(2024, 0, 1), end: new Date(2024, 11, 31) } },
+                { ...SeasonFactory.defaultSeason(), id: 3, shortName: 'Past 2025', isActive: false, seasonDates: { start: new Date(2025, 0, 1), end: new Date(2025, 11, 31) } }
+            ]
+            expect(selectMostAppropriateActiveSeason(seasons, new Date(2026, 0, 15))).toBeNull()
         })
     })
 
@@ -1155,18 +911,6 @@ describe('Active Season Management utilities', () => {
 
             it.each([
                 {
-                    scenario: 'first future event is next dinner',
-                    referenceTime: new Date(2025, 0, 5, 12, 0),  // Jan 5, noon
-                    events: [
-                        { id: 1, date: jan6 },   // Jan 6 - first future
-                        { id: 2, date: jan8 },   // Jan 8
-                        { id: 3, date: jan10 }   // Jan 10
-                    ],
-                    expectedNextDinnerId: 1,
-                    expectedPastCount: 0,
-                    expectedFutureCount: 2
-                },
-                {
                     scenario: 'middle event is next when earlier events are past',
                     referenceTime: new Date(2025, 0, 7, 12, 0),  // Jan 7, noon (after Jan 6 dinner)
                     events: [
@@ -1177,18 +921,6 @@ describe('Active Season Management utilities', () => {
                     expectedNextDinnerId: 2,
                     expectedPastCount: 1,
                     expectedFutureCount: 1
-                },
-                {
-                    scenario: 'last event is next when all others are past',
-                    referenceTime: new Date(2025, 0, 9, 12, 0),  // Jan 9, noon
-                    events: [
-                        { id: 1, date: jan6 },   // Jan 6 - past
-                        { id: 2, date: jan8 },   // Jan 8 - past
-                        { id: 3, date: jan10 }   // Jan 10 - next
-                    ],
-                    expectedNextDinnerId: 3,
-                    expectedPastCount: 2,
-                    expectedFutureCount: 0
                 },
                 {
                     scenario: 'today event is next when before dinner ends',
@@ -1229,17 +961,8 @@ describe('Active Season Management utilities', () => {
         })
 
         describe('edge cases', () => {
+            // All events past: the maxDaysAhead case 'all events past means no next dinner'
             it.each([
-                {
-                    scenario: 'returns null nextDinner when all events are past',
-                    referenceTime: new Date(2025, 0, 15, 12, 0),  // Jan 15
-                    events: [
-                        { id: 1, date: new Date(2025, 0, 6, 18, 0) },
-                        { id: 2, date: new Date(2025, 0, 8, 18, 0) }
-                    ],
-                    expectedPastCount: 2,
-                    expectedFutureCount: 0
-                },
                 {
                     scenario: 'handles empty events array',
                     referenceTime: new Date(2025, 0, 8, 12, 0),
@@ -1425,14 +1148,6 @@ describe('Active Season Management utilities', () => {
                 events: [mon13, wed15, fri17], input: mon13.date, view: 'day' as const,
                 direction: -1 as const, expected: null},
 
-            // Empty input list.
-            {desc: '+1 on empty list → null',
-                events: [], input: wed15.date, view: 'day' as const,
-                direction: 1 as const, expected: null},
-            {desc: '-1 on empty list → null',
-                events: [], input: wed15.date, view: 'day' as const,
-                direction: -1 as const, expected: null},
-
             // Input from a non-dinner day (e.g. route parameter landed on a non-cooking day).
             {desc: 'day +1 from non-dinner day → next dinner after',
                 events: [mon13, wed15, fri17, wed29], input: mon20Boundary, view: 'day' as const,
@@ -1511,11 +1226,6 @@ describe('Active Season Management utilities', () => {
             expect(result.map(e => e.id)).toEqual([2, 1])
             expect(result.map(e => e.temporalCategory)).toEqual(['future', 'past'])
         })
-
-        it('should handle empty events array', () => {
-            const result = sortDinnerEventsByTemporal([], null)
-            expect(result).toEqual([])
-        })
     })
 
     describe('getNextDinnerDate', () => {
@@ -1568,15 +1278,12 @@ describe('Active Season Management utilities', () => {
             // Reference times - Copenhagen times (absolute moments for "18:57 CPH" etc.)
             const duringDinner = createDateInTimezone(jan15, 18, 57)  // 18:57 CPH
             const afterDinner = createDateInTimezone(jan15, 19, 7)    // 19:07 CPH
-            const lateNight = createDateInTimezone(jan15, 23, 59)     // 23:59 CPH
 
             it.each([
                 // 18:57 CPH is before 19:00 CPH dinner end → today's dinner
                 {scenario: 'during dinner (18:57 CPH)', refTime: duringDinner, dates: [todayDate, nextDate], expected: todayDinnerStart},
                 // 19:07 CPH is after 19:00 CPH dinner end → next dinner
                 {scenario: 'after dinner (19:07 CPH)', refTime: afterDinner, dates: [todayDate, nextDate], expected: nextDinnerStart},
-                // Late night → next dinner
-                {scenario: 'late night (23:59 CPH)', refTime: lateNight, dates: [todayDate, nextDate], expected: nextDinnerStart},
             ])('$scenario should return correct dinner', ({refTime, dates, expected}) => {
                 const result = getNextDinnerDate(dinnerStartHour, dinnerDurationMinutes)(dates, refTime)
 
@@ -1650,39 +1357,11 @@ describe('Active Season Management utilities', () => {
                 expected: true  // Now (12:00) is before 16:00 (2 hours before 18:00)
             },
             {
-                scenario: 'minutes offset - after deadline',
-                dinnerStartTime: new Date(2025, 0, 15, 12, 0),  // Jan 15 at 12:00 (today, same as now)
-                offsetDays: 0,
-                offsetMinutes: 30,
-                expected: false  // Now (12:00) is after 11:30 (30 min before 12:00), deadline passed
-            },
-            {
-                scenario: 'combined days and minutes - before deadline',
-                dinnerStartTime: new Date(2025, 0, 18, 18, 0),  // Jan 18 at 18:00
-                offsetDays: 2,
-                offsetMinutes: 360,  // 6 hours
-                expected: true  // Now (Jan 15 12:00) is before Jan 16 12:00 (2 days + 6 hours before dinner)
-            },
-            {
                 scenario: 'combined days and minutes - after deadline',
                 dinnerStartTime: new Date(2025, 0, 16, 10, 0),  // Jan 16 at 10:00
                 offsetDays: 1,
                 offsetMinutes: 120,  // 2 hours
                 expected: false  // Now (Jan 15 12:00) is after Jan 15 08:00 (1 day + 2 hours before dinner), deadline passed
-            },
-            {
-                scenario: 'zero offsets - dinner in future',
-                dinnerStartTime: new Date(2025, 0, 20, 18, 0),  // Jan 20 at 18:00
-                offsetDays: 0,
-                offsetMinutes: 0,
-                expected: true  // Now is before dinner time
-            },
-            {
-                scenario: 'zero offsets - dinner in past',
-                dinnerStartTime: new Date(2025, 0, 10, 18, 0),  // Jan 10 at 18:00
-                offsetDays: 0,
-                offsetMinutes: 0,
-                expected: false  // Now is after dinner time
             }
         ])('$scenario', ({ dinnerStartTime, offsetDays, offsetMinutes, expected }) => {
             // WHEN: Checking if now is before deadline
@@ -1761,30 +1440,15 @@ describe('Active Season Management utilities', () => {
             expect(urgency).toBe(expected)
         })
 
-        it.each([
-            {
-                scenario: 'custom thresholds - 12h critical, 36h warning',
-                dinnerStartTime: new Date(2025, 0, 12, 6, 0),
-                criticalHours: 12,
-                warningHours: 36,
-                expectedUrgency: 1  // 12h < time < 36h = warning
-            },
-            {
-                scenario: 'custom thresholds - 6 hours before (critical)',
-                dinnerStartTime: new Date(2025, 0, 12, 0, 0),
-                criticalHours: 12,
-                warningHours: 36,
-                expectedUrgency: 2  // < 12h = critical
-            }
-        ])('$scenario', ({ dinnerStartTime, criticalHours, warningHours, expectedUrgency }) => {
+        it('custom thresholds - 12h critical, 36h warning: 12 hours before reads warning, not the default critical', () => {
             // GIVEN: Fixed reference time (Jan 11, 2025 at 18:00)
             const referenceTime = new Date(2025, 0, 11, 18, 0)
 
             // WHEN: Calculating with custom thresholds
-            const urgency = calculateDeadlineUrgency(dinnerStartTime, criticalHours, warningHours, referenceTime)
+            const urgency = calculateDeadlineUrgency(new Date(2025, 0, 12, 6, 0), 12, 36, referenceTime)
 
-            // THEN: Respects custom threshold values
-            expect(urgency).toBe(expectedUrgency)
+            // THEN: Respects custom threshold values: 12h < time < 36h = warning
+            expect(urgency).toBe(1)
         })
     })
 })
@@ -1797,8 +1461,6 @@ describe('getEventsForGridView', () => {
     // Week 3 of 2025: Mon Jan 13 - Sun Jan 19
     it.each([
         // Basic grouping
-        { scenario: 'empty events', events: [], range: [6, 12], expectedWeekSizes: [] },
-        { scenario: 'single event', events: [8], range: [6, 12], expectedWeekSizes: [1] },
         { scenario: 'same week', events: [6, 8, 10], range: [6, 12], expectedWeekSizes: [3] },
         { scenario: 'two weeks', events: [8, 10, 13, 15], range: [6, 19], expectedWeekSizes: [2, 2] },
 

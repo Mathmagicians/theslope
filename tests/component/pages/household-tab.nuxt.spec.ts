@@ -1,6 +1,7 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach, afterEach, type MockInstance} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
+import {enableAutoUnmount} from '@vue/test-utils'
 import {toValue} from 'vue'
 import HouseholdPage from '~/pages/household/[shortname]/[tab].vue'
 import {useHouseholdsStore} from '~/stores/households'
@@ -24,6 +25,9 @@ registerEndpoint('/api/admin/household', () => [mine, other])
 // The detail never arrives: the page stays behind its ready gate, so no tab mounts
 registerEndpoint(`/api/admin/household/${mine.id}`, () => new Promise(() => {}))
 registerEndpoint(`/api/admin/household/${other.id}`, () => new Promise(() => {}))
+
+// A mounted page left alive keeps reading the next case's route
+enableAutoUnmount(afterEach)
 
 const landOn = (shortname: string, query: Record<string, string>) => {
     mockRoute.params = {shortname, tab: 'bookings'}

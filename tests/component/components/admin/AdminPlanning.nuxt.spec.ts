@@ -10,6 +10,9 @@ import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {usePlanStore} from '~/stores/plan'
 import {useAuthStore} from '~/stores/auth'
 import {FORM_MODES} from '~/types/form'
+import {useCoreValidation} from '~/composables/useCoreValidation'
+
+const SystemRole = useCoreValidation().SystemRoleSchema.enum
 
 // The test environment has no router to navigate: useEntityFormManager writes ?mode=
 // through navigateTo (ADR-006 / ADR-008), which is what this spec asserts on
@@ -52,16 +55,12 @@ describe('AdminPlanning', () => {
     beforeEach(() => {
         resetStores()
         vi.clearAllMocks()
-        sessionEndpoint.mockReturnValue({user: {id: 1, email: 'admin@skraaningen.dk', systemRoles: ['ADMIN']}})
+        sessionEndpoint.mockReturnValue({user: {id: 1, email: 'admin@skraaningen.dk', systemRoles: [SystemRole.ADMIN]}})
         seasonsEndpoint.mockReturnValue([season])
     })
 
+    // The admin's create action is the one the create mode transition clicks, below
     describe('header controls', () => {
-        it('shows the create action for an admin', async () => {
-            const wrapper = await mountPlanning()
-            expect(findByTestId(wrapper, PLANNING_TEST_IDS.create).exists()).toBe(true)
-        })
-
         it('shows neither create nor edit control for a member', async () => {
             sessionEndpoint.mockReturnValue({user: {id: 2, email: 'member@skraaningen.dk', systemRoles: []}})
             const wrapper = await mountPlanning({canEdit: false})
@@ -78,19 +77,14 @@ describe('AdminPlanning', () => {
     })
 
     describe('mode transitions', () => {
-        it('opens the form in edit mode from the pencil', async () => {
+        it('opens the form in edit mode from the pencil, and returns to view mode from cancel', async () => {
             const wrapper = await mountPlanning()
             await clickByTestId(wrapper, PLANNING_TEST_IDS.edit)
             await flushPromises()
 
             expect(findByTestId(wrapper, PLANNING_TEST_IDS.submit).exists()).toBe(true)
             expect(lastModeQuery()).toBe(FORM_MODES.EDIT)
-        })
 
-        it('returns to view mode from cancel', async () => {
-            const wrapper = await mountPlanning()
-            await clickByTestId(wrapper, PLANNING_TEST_IDS.edit)
-            await flushPromises()
             await clickByTestId(wrapper, PLANNING_TEST_IDS.cancel)
             await flushPromises()
 

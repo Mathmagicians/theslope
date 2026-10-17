@@ -1,6 +1,7 @@
 // @vitest-environment nuxt
-import {describe, it, expect, beforeAll} from 'vitest'
+import {describe, it, expect, beforeAll, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
+import {enableAutoUnmount} from '@vue/test-utils'
 import DinnerBudget from '~/components/chef/DinnerBudget.vue'
 import {OrderFactory} from '~~/tests/e2e/testDataFactories/orderFactory'
 import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
@@ -8,7 +9,7 @@ import {useOrder} from '~/composables/useOrder'
 import {useTicket} from '~/composables/useTicket'
 import {useBookingValidation, type OrderDetail, type OrderState, type TicketType} from '~/composables/useBookingValidation'
 import {dinnerSpendingFragment, teamSpendingFragment, type CookingRoundRow} from '~/composables/useBookingUi'
-import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, registerEmptyStoreEndpoints, kitchenConfig} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, findAllByTestId, clickByTestId, registerEmptyStoreEndpoints, kitchenConfig, resetStores} from '~~/tests/component/testHelpers'
 
 /**
  * DinnerBudget: the three boxes in both units, the RÅDIGHEDSBELØB box with start, Brugt and Tilbage, and under the
@@ -42,13 +43,19 @@ const round: CookingRoundRow[] = [
 registerEmptyStoreEndpoints()
 registerEndpoint('/api/chef/dinner/7/order-history', () => ({dinnerEventId: 7, since: null, changes: [], olderCount: 0}))
 
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
+
 const mount = (props: Record<string, unknown> = {}) => mountWithTooltipProvider(DinnerBudget, {
     props: {orders, mode: 'full', expenses, dinnerEventId: 7, bookingDeadline: new Date('2026-04-03T18:00:00'), dinnerFragment: dinnerSpendingFragment(round[0]!, expenses), teamFragment: teamSpendingFragment(round, {team: 'Hele Madhold 2', heading: 'Hele Madhold 2, for perioden 12/04–13/04'}), ...props},
     isMd: true
 })
 
 describe('DinnerBudget', () => {
-    it('GIVEN paid tickets, a released one included WHEN rendering THEN the boxes read revenue, allowance and contribution in both units', async () => {
+    it('GIVEN paid tickets, a released one included, and lines WHEN rendering with the chevron closed THEN the boxes read revenue, allowance and contribution in both units, the allowance box carries Brugt and Tilbage, and no details show', async () => {
         const wrapper = await mount()
         const budget = calculateBudget(orders, baseRate, vatPercent)
         expect(findByTestId(wrapper, 'budget-box-revenue').text()).toContain(`${formatPrice(budget.totalRevenue)} kr`)
@@ -56,24 +63,14 @@ describe('DinnerBudget', () => {
         expect(findByTestId(wrapper, 'budget-box-available').text()).toContain(`/ ${formatPrice(budget.availableBudget)} kr`)
         expect(findByTestId(wrapper, 'budget-box-contribution').text()).toContain(`/ ${formatPrice(budget.kitchenContribution)} kr`)
         expect(budget.totalRevenue).toBe(12500)
-    })
 
-    it('GIVEN lines WHEN rendering THEN the allowance box carries Brugt and Tilbage with its icon', async () => {
-        const wrapper = await mount()
-        const budget = calculateBudget(orders, baseRate, vatPercent)
+        // Brugt and Tilbage with its icon; both carry the icon slot, so their kr line up
         expect(findByTestId(wrapper, 'budget-spent').text()).toContain(`/ ${formatPrice(4000)} kr`)
         expect(findByTestId(wrapper, 'budget-left').text()).toContain(`/ +${formatPrice(budget.availableBudget - 4000)} kr`)
         expect(findByTestId(wrapper, 'budget-left').find('[data-testid="vat-amount-ok"]').exists()).toBe(true)
-    })
-
-    it('GIVEN the box rows WHEN rendering THEN Brugt and Tilbage both carry the icon slot, so their kr line up', async () => {
-        const wrapper = await mount()
         expect(findByTestId(wrapper, 'budget-spent').find('[data-testid="vat-amount-slot"]').exists()).toBe(true)
         expect(findByTestId(wrapper, 'budget-left').find('[data-testid="vat-amount-slot"]').exists()).toBe(true)
-    })
 
-    it('GIVEN the chevron closed WHEN rendering THEN no details show', async () => {
-        const wrapper = await mount()
         expect(findByTestId(wrapper, 'budget-details').exists()).toBe(false)
     })
 

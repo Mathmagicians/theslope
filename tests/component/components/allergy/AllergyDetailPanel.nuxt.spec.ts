@@ -1,17 +1,23 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint} from '@nuxt/test-utils/runtime'
+import {enableAutoUnmount} from '@vue/test-utils'
 import AllergyDetailPanel from '~/components/allergy/AllergyDetailPanel.vue'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
 import {ALLERGY_TEST_IDS} from './allergyTestIds'
-import {mountWithTooltipProvider, findByTestId, clickByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findByTestId, clickByTestId, resetStores} from '~~/tests/component/testHelpers'
+import {FORM_MODES} from '~/types/form'
 
 // AllergyTypeCard reads the active season's ticket prices from the plan store - fake its HTTP (Rule 6)
 registerEndpoint('/api/admin/season/active', () => null)
 registerEndpoint('/api/admin/season', () => [])
 
+// The next test's resetStores drops the datasets a still-mounted panel reads
+enableAutoUnmount(afterEach)
+
 const mockAllergyTypes = AllergyFactory.createMockAllergyTypesWithInhabitants()
 const [firstType] = mockAllergyTypes
+const CONFIRM_DELETE = 'confirm-delete'
 
 // The portable detail region of the allergy catalog: the SAME
 // component mounts beside the master on desktop and under the selected row on
@@ -20,7 +26,7 @@ const mountPanel = (props: Record<string, unknown> = {}) =>
     mountWithTooltipProvider(AllergyDetailPanel, {
         props: {
             allergyType: firstType,
-            panelMode: 'view',
+            panelMode: FORM_MODES.VIEW,
             canEdit: true,
             ...props
         },
@@ -28,12 +34,18 @@ const mountPanel = (props: Record<string, unknown> = {}) =>
     })
 
 describe('AllergyDetailPanel', () => {
+    beforeEach(() => {
+        resetStores()
+    })
+
     describe('view mode', () => {
-        it('renders the selected allergy', async () => {
+        // The detail header carries the square pencil; form cards carry a labelled edit button
+        it('renders the selected allergy, with the edit entry as the pencil with an accessible name', async () => {
             const wrapper = await mountPanel()
 
             expect(wrapper.text()).toContain(firstType!.name)
             expect(wrapper.text()).toContain('Detaljer')
+            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.edit).attributes('aria-label')).toBe('Rediger')
         })
 
         it.each([
@@ -47,17 +59,11 @@ describe('AllergyDetailPanel', () => {
             expect(wrapper.emitted(event)).toBeTruthy()
         })
 
-        // The detail header carries the square pencil; form cards carry a labelled edit button
-        it('offers the edit entry as the pencil with an accessible name', async () => {
-            const wrapper = await mountPanel()
-
-            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.edit).attributes('aria-label')).toBe('Rediger')
-        })
-
-        it.each([ALLERGY_TEST_IDS.edit, ALLERGY_TEST_IDS.delete])('hides %s when canEdit is false', async (testId) => {
+        it('hides the edit and delete actions when canEdit is false', async () => {
             const wrapper = await mountPanel({canEdit: false})
 
-            expect(findByTestId(wrapper, testId).exists()).toBe(false)
+            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.edit).exists()).toBe(false)
+            expect(findByTestId(wrapper, ALLERGY_TEST_IDS.delete).exists()).toBe(false)
         })
 
         it('shows a placeholder when nothing is selected', async () => {
@@ -69,8 +75,8 @@ describe('AllergyDetailPanel', () => {
     })
 
     describe.each([
-        {panelMode: 'edit', heading: 'Rediger allergi'},
-        {panelMode: 'create', heading: 'Opret allergi'}
+        {panelMode: FORM_MODES.EDIT, heading: 'Rediger allergi'},
+        {panelMode: FORM_MODES.CREATE, heading: 'Opret allergi'}
     ])('$panelMode mode', ({panelMode, heading}) => {
         it('renders the form', async () => {
             const wrapper = await mountPanel({panelMode})
@@ -82,7 +88,7 @@ describe('AllergyDetailPanel', () => {
 
     describe('edit mode', () => {
         it('forwards save from the form with the allergy data', async () => {
-            const wrapper = await mountPanel({panelMode: 'edit'})
+            const wrapper = await mountPanel({panelMode: FORM_MODES.EDIT})
 
             await clickByTestId(wrapper, ALLERGY_TEST_IDS.save)
 
@@ -94,7 +100,7 @@ describe('AllergyDetailPanel', () => {
 
     describe('confirm-delete mode', () => {
         it('names the allergy and the cascade to inhabitants', async () => {
-            const wrapper = await mountPanel({panelMode: 'confirm-delete'})
+            const wrapper = await mountPanel({panelMode: CONFIRM_DELETE})
 
             const confirmPanel = findByTestId(wrapper, ALLERGY_TEST_IDS.deleteConfirm)
             expect(confirmPanel.exists()).toBe(true)
@@ -106,7 +112,7 @@ describe('AllergyDetailPanel', () => {
             {control: 'cancel', testId: ALLERGY_TEST_IDS.cancelDelete, event: 'cancel-delete'},
             {control: 'confirm', testId: ALLERGY_TEST_IDS.confirmDelete, event: 'confirm-delete'}
         ])('emits $event from the $control action', async ({testId, event}) => {
-            const wrapper = await mountPanel({panelMode: 'confirm-delete'})
+            const wrapper = await mountPanel({panelMode: CONFIRM_DELETE})
 
             await clickByTestId(wrapper, testId)
 

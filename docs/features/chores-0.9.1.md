@@ -443,6 +443,50 @@ The twelve files with a ` kr` site (`AdminEconomy.vue` 14, `DinnerBudget.vue` 5,
 public billing page 3, `ControlBadge.vue` 2, `CostLine.vue`, `DinnerBookingForm.vue`, `DinnerTicket.vue`, `ChefMenuCard.vue`,
 `TicketChanges.vue`, `BookingGridView.vue`, `VatAmount.vue`), the five with a portions site, `app/utils/utils.ts`, `app/composables/useTicket.ts`, the utils unit spec.
 
+### Date formats
+
+#### Problem
+
+`formatDate` takes any mask, and the masks live at their call sites: `'EEE dd/MM'`, `'EEEE dd/MM'`, `'EEEEE d'`,
+`'EEEEE'`, `'d/M'`, `'dd/MM'`, `'MMMM yyyy'`, and `'dd/MM/yyyy HH:mm'` twice beside `formatMoment`'s
+`${DATE_SETTINGS.DATE_MASK} HH:mm`. `OrderHistoryDisplay.vue` formats with `toLocaleString` ("20.10. 14.30"). The
+weekday and month helpers' comments name capitalised output ("Man 15/11", "Januar 2026"); the `da` locale renders
+lowercase ("tir. 20/10", "januar 2026").
+
+#### Solution
+
+`DATE_FORMATS` in `app/utils/date.ts` names the formats; `formatDate` and `formatDateRange` take a format name
+(`keyof typeof DATE_FORMATS`), so a call site passes no mask.
+
+The package slims the variations: a site takes `date` or `weekdayDate`, and another format stays only where its
+surface cannot hold those two. The package's first round settles the list below.
+
+| Format | Renders | Sites |
+|---|---|---|
+| `date` | 20/10/2026 | the default: dates, ranges, the mails |
+| `weekdayDate` | tir. 20/10/2026 | `CountdownTimer.vue`, `ChefDinnerCard.vue`, the grid's day navigation |
+| `dateTime` | 20/10/2026 14:30 | `AdminSystem.vue`, `formatMoment`, `OrderHistoryDisplay.vue` |
+| `dayMonth` | 20/10 | the grid's week range, the maintenance log |
+| `month` | oktober 2026 | the grid's month navigation, the billing headings |
+| `seasonName` | 08/25 | season names |
+
+`formatDanishWeekdayDate`, `formatFullWeekdayDate` and `formatMonthYear` leave `date.ts`; `DATE_MASK` and
+`SEASON_NAME_MASK` leave `DATE_SETTINGS`.
+
+**OPEN — the grid's column headers.** View mode reads "T 20" (`formatCompactWeekdayDate`, `BookingGridView.vue:345`),
+edit mode "T" over "20/10" (`BookingGridView.vue:616-617`).
+- A: both modes show the weekday letter (`formatWeekdayCompact`) over `dayMonth`; six formats.
+- B: a seventh format `gridDay` ("T 20") for view mode; the two modes keep their headers.
+
+#### TDD
+
+`date.unit`: one case per format name.
+
+#### Affected
+
+`app/utils/date.ts`, the call sites in the table, `BookingGridView.vue`, `useSeason.ts`, `useMaintenance.ts`,
+`tests/component/utils/date.unit.spec.ts`.
+
 ### Raw utility classes
 
 #### Problem
@@ -641,3 +685,7 @@ spec call sites stay as they are.
 - The duty roster, the season spending views, the ad-hoc charges, the remaining notification kinds and the billing
   delivery report move from release 0.9 to this release.
 - The users store, the dinner Detail's tickets and `HouseholdDisplay`: § Server payload of the shared stores.
+
+**2026-10-17**
+- The named date formats and their sweep move from release 0.9 to this release (§ Date formats); release 0.9 formats
+  with the default `formatDate`.

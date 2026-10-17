@@ -2,8 +2,10 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 import {buildTestEmail, emitTestEmail} from '~~/server/utils/sender/events/test'
 import {useNotificationValidation} from '~/composables/useNotificationValidation'
 import {NotificationFactory} from '~~/tests/e2e/testDataFactories/notificationFactory'
+import {useUserPreferenceValidation} from '~/composables/useUserPreferenceValidation'
 
 const {NotificationMessageSchema} = useNotificationValidation()
+const {EMAIL} = useUserPreferenceValidation().NotificationChannelSchema.enum
 
 describe('buildTestEmail', () => {
     describe.each([
@@ -14,7 +16,7 @@ describe('buildTestEmail', () => {
 
         it('is a contract-valid TEST e-mail to the admin mailbox from the environment\'s sender', () => {
             expect(NotificationMessageSchema.safeParse(message).success).toBe(true)
-            expect(message).toMatchObject({channel: 'EMAIL', to: config.adminEmail, from: config.from, fromName: config.fromName, replyTo: config.adminEmail, meta: {kind: 'TEST', environment}})
+            expect(message).toMatchObject({channel: EMAIL, to: config.adminEmail, from: config.from, fromName: config.fromName, replyTo: config.adminEmail, meta: {kind: 'TEST', environment}})
         })
 
         it('addresses the recipient the caller names, keeping the admin mailbox as Reply-To', () => {

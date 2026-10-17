@@ -1,8 +1,12 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach, afterEach} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
+import {enableAutoUnmount} from '@vue/test-utils'
 import {nextTick} from 'vue'
 import DangerButton from '~/components/shared/DangerButton.vue'
+import {resetStores} from '~~/tests/component/testHelpers'
+
+enableAutoUnmount(afterEach)
 
 /**
  * DangerButton regression tests
@@ -30,6 +34,7 @@ const getButton = (wrapper: Awaited<ReturnType<typeof mountButton>>) => wrapper.
 
 describe('DangerButton', () => {
     beforeEach(() => {
+        resetStores()
         vi.useFakeTimers()
     })
 
@@ -37,14 +42,11 @@ describe('DangerButton', () => {
         vi.useRealTimers()
     })
 
-    it('GIVEN initial state WHEN rendered THEN shows label not confirmLabel', async () => {
+    it('GIVEN initial state WHEN rendered THEN shows label not confirmLabel, and WHEN clicked THEN enters confirm mode', async () => {
         const wrapper = await mountButton()
         expect(getButton(wrapper).text()).toContain(LABEL)
         expect(getButton(wrapper).text()).not.toContain(CONFIRM_LABEL)
-    })
 
-    it('GIVEN initial state WHEN clicked THEN enters confirm mode', async () => {
-        const wrapper = await mountButton()
         await getButton(wrapper).trigger('click')
         await nextTick()
         expect(getButton(wrapper).text()).toContain(CONFIRM_LABEL)

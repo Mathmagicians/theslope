@@ -3,17 +3,23 @@
  * AllergyTypeDisplay - an allergy type's own icon or emoji in a UAvatar, optionally with its name.
  * Real component, real design system (testing.md Rule 6).
  */
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {ref, type ComponentPublicInstance} from 'vue'
-import type {VueWrapper} from '@vue/test-utils'
+import {enableAutoUnmount, type VueWrapper} from '@vue/test-utils'
 import AllergyTypeDisplay from '~/components/allergy/AllergyTypeDisplay.vue'
 import {COMPONENTS, ICONS, createResponsiveSizes} from '~/composables/useTheSlopeDesignSystem'
-import {mountWithTooltipProvider} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
 
 type AvatarProps = {icon?: string, text?: string, size?: string, ui?: Record<string, string>}
 
 const MILK = {name: 'Mælk', icon: '🥛'}
 const NUTS = {name: 'Nødder', icon: 'i-mdi-peanut'}
+
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
 
 const mountDisplay = async (props: Record<string, unknown>, isMd = true) => {
     const wrapper = await mountWithTooltipProvider(AllergyTypeDisplay, {props, isMd})
@@ -21,52 +27,45 @@ const mountDisplay = async (props: Record<string, unknown>, isMd = true) => {
     return {wrapper, avatar}
 }
 
+// Each face is its own template branch binding the avatar, so every case runs on both
 describe('AllergyTypeDisplay', () => {
     describe.each([
         {face: 'compact', compact: true},
         {face: 'regular', compact: false}
     ])('$face', ({compact}) => {
-        it('GIVEN a type with an iconify icon THEN the avatar carries it as its icon', async () => {
+        it('GIVEN a type with an iconify icon THEN the avatar carries it as its icon, keeps its own icon ink, and takes the md size of its face', async () => {
             const {avatar} = await mountDisplay({allergyType: NUTS, compact})
             expect(avatar.props('icon')).toBe(NUTS.icon)
             expect(avatar.props('text')).toBeUndefined()
+            expect(avatar.props('ui')).toBeUndefined()
+            const sizes = createResponsiveSizes(ref(true))
+            expect(avatar.props('size')).toBe(compact ? sizes.allergyAvatarCompact : sizes.allergyAvatar)
         })
 
-        it('GIVEN a type with an emoji THEN the avatar carries it as its text', async () => {
+        it('GIVEN a type with an emoji THEN the avatar carries it as its text and keeps its own icon ink', async () => {
             const {avatar} = await mountDisplay({allergyType: MILK, compact})
             expect(avatar.props('text')).toBe(MILK.icon)
             expect(avatar.props('icon')).toBeUndefined()
+            expect(avatar.props('ui')).toBeUndefined()
         })
 
-        it.each([
-            {showName: true, shown: true},
-            {showName: false, shown: false}
-        ])('GIVEN show-name=$showName THEN the name renders: $shown', async ({showName, shown}) => {
-            const {wrapper} = await mountDisplay({allergyType: MILK, compact, showName})
-            expect(wrapper.text().includes(MILK.name)).toBe(shown)
+        it('GIVEN show-name=false THEN the name does not render', async () => {
+            const {wrapper} = await mountDisplay({allergyType: MILK, compact, showName: false})
+            expect(wrapper.text().includes(MILK.name)).toBe(false)
         })
 
-        it('GIVEN no type THEN it renders the no-allergy state', async () => {
+        it('GIVEN no type THEN it renders the no-allergy state by name, and the avatar binds the no-allergy ink its icon renders', async () => {
             const {wrapper, avatar} = await mountDisplay({compact, showName: true})
             expect(wrapper.text()).toBe('Ingen')
             expect(avatar.props('icon')).toBe(ICONS.noAllergy)
-        })
-
-        it('GIVEN no type THEN the avatar binds the no-allergy ink, and its icon renders it', async () => {
-            const {avatar} = await mountDisplay({compact})
             const noneUi = COMPONENTS.allergyTypeDisplay.noneAvatarUi
             expect(avatar.props('ui')).toEqual(noneUi)
             expect(avatar.find('[data-slot="icon"]').classes()).toEqual(expect.arrayContaining(noneUi.icon.split(' ')))
         })
 
-        it.each([MILK, NUTS])('GIVEN the type $name THEN its avatar keeps its own icon ink', async allergyType => {
-            const {avatar} = await mountDisplay({allergyType, compact})
-            expect(avatar.props('ui')).toBeUndefined()
-        })
-
-        it.each([true, false])('GIVEN isMd=%s THEN the avatar takes the size of its face', async isMd => {
-            const {avatar} = await mountDisplay({allergyType: MILK, compact}, isMd)
-            const sizes = createResponsiveSizes(ref(isMd))
+        it('GIVEN the phone THEN the avatar takes the phone size of its face', async () => {
+            const {avatar} = await mountDisplay({allergyType: MILK, compact}, false)
+            const sizes = createResponsiveSizes(ref(false))
             expect(avatar.props('size')).toBe(compact ? sizes.allergyAvatarCompact : sizes.allergyAvatar)
         })
     })

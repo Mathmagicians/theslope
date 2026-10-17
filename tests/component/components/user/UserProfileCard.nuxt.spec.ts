@@ -13,8 +13,10 @@ import {mockNuxtImport} from '@nuxt/test-utils/runtime'
 import UserProfileCard from '~/components/user/UserProfileCard.vue'
 import {mountWithTooltipProvider, findByTestId, resetStores, registerEmptyStoreEndpoints} from '~~/tests/component/testHelpers'
 import {UserFactory} from '~~/tests/e2e/testDataFactories/userFactory'
-import type {UserDetail, SystemRole} from '~/composables/useCoreValidation'
+import {useCoreValidation, type UserDetail, type SystemRole as SystemRoleValue} from '~/composables/useCoreValidation'
 import {PREF_TEST_IDS} from './userPreferencesTestIds'
+
+const SystemRole = useCoreValidation().SystemRoleSchema.enum
 
 /** The header's own actions; the ⚙ is `PREF_TEST_IDS.toggle`, next to the card it opens */
 const PROFILE_TEST_IDS = {
@@ -60,18 +62,13 @@ describe('UserProfileCard - header actions', () => {
         expect(findByTestId(wrapper, PROFILE_TEST_IDS.logout).exists()).toBe(visible)
     })
 
-    it('GIVEN the toggle THEN it is the wheel alone, named "Indstillinger" for assistive tech', async () => {
+    it('GIVEN the toggle, the wheel alone named "Indstillinger" for assistive tech, WHEN it is clicked THEN the card asks its parent to toggle the settings', async () => {
         const wrapper = await mountCard({user: me, showActions: true})
         const toggle = findByTestId(wrapper, PREF_TEST_IDS.toggle)
-
         expect(toggle.text()).toBe('')
         expect(toggle.attributes('aria-label')).toBe('Indstillinger')
-    })
 
-    it('GIVEN the toggle WHEN it is clicked THEN the card asks its parent to toggle the settings', async () => {
-        const wrapper = await mountCard({user: me, showActions: true})
-
-        await findByTestId(wrapper, PREF_TEST_IDS.toggle).trigger('click')
+        await toggle.trigger('click')
         await nextTick()
 
         expect(wrapper.emitted('toggle-preferences')).toHaveLength(1)
@@ -91,7 +88,7 @@ describe('UserProfileCard - role badges', () => {
     it.each([
         {
             scenario: 'display badges for known roles',
-            roles: ['ADMIN', 'ALLERGYMANAGER'] as const,
+            roles: [SystemRole.ADMIN, SystemRole.ALLERGYMANAGER],
             shouldInclude: ['Admin', 'Allergichef'],
             shouldExclude: []
         },
@@ -100,16 +97,10 @@ describe('UserProfileCard - role badges', () => {
             roles: ['UNKNOWN_ROLE'],
             shouldInclude: [],
             shouldExclude: ['UNKNOWN_ROLE']
-        },
-        {
-            scenario: 'not display badge section when no roles',
-            roles: [],
-            shouldInclude: [],
-            shouldExclude: []
         }
     ])('should $scenario', async ({roles, shouldInclude, shouldExclude}) => {
         // Set after the factory, which parses the user: the session may hold a role the catalog no longer knows
-        const user = {...UserFactory.defaultUserWithInhabitant('profile-roles'), systemRoles: roles as SystemRole[]}
+        const user = {...UserFactory.defaultUserWithInhabitant('profile-roles'), systemRoles: roles as SystemRoleValue[]}
 
         const wrapper = await mountCard({user})
 

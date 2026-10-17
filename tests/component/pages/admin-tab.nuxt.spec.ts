@@ -1,10 +1,12 @@
 // @vitest-environment nuxt
 import {describe, it, expect, vi, beforeEach, afterEach, type MockInstance} from 'vitest'
 import {registerEndpoint, mockNuxtImport} from '@nuxt/test-utils/runtime'
+import {enableAutoUnmount} from '@vue/test-utils'
 import {toValue} from 'vue'
 import AdminPage from '~/pages/admin/[tab].vue'
 import {usePlanStore} from '~/stores/plan'
 import {useBookingsStore} from '~/stores/bookings'
+import {useCoreValidation} from '~/composables/useCoreValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {mountedStore, mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
 
@@ -19,12 +21,19 @@ const season = {...SeasonFactory.defaultSeason('admin-tab'), id: 1}
 const otherSeason = SeasonFactory.defaultSeason('admin-tab-other')
 // The seasons never arrive: every mounted page stays behind its ready gate, so AdminTeams never mounts
 registerEndpoint('/api/admin/season', () => new Promise(() => {}))
-registerEndpoint('/api/_auth/session', () => ({user: {id: 1, email: 'admin@skraaningen.dk', systemRoles: ['ADMIN']}}))
+registerEndpoint('/api/_auth/session', () => ({user: {id: 1, email: 'admin@skraaningen.dk', systemRoles: [useCoreValidation().SystemRoleSchema.enum.ADMIN]}}))
 registerEndpoint('/api/admin/season/active', () => season.id)
 registerEndpoint(`/api/admin/season/${season.id}`, () => season)
 registerEndpoint(`/api/admin/team/${TEAM_ID}`, () => SeasonFactory.defaultCookingTeamDetail({id: TEAM_ID}))
 registerEndpoint('/api/admin/billing/periods', () => [])
 registerEndpoint('/api/admin/billing/current-period', () => [])
+
+// A mounted page left alive keeps reading the next case's route
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
 
 describe('admin/[tab] - a deep link to a team', () => {
     it.each([
@@ -81,7 +90,6 @@ describe('admin/[tab] - the billing overview on the economy tab', () => {
     let loadBillingOverview: MockInstance<ReturnType<typeof useBookingsStore>['loadBillingOverview']>
 
     beforeEach(() => {
-        resetStores()
         loadBillingOverview = vi.spyOn(mountedStore(useBookingsStore), 'loadBillingOverview')
     })
 

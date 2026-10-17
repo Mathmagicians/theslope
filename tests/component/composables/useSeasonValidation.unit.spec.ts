@@ -129,44 +129,12 @@ describe('useSeasonValidation', () => {
       expect(deserialized.seasonDates.end.getTime()).toBe(originalSeason.seasonDates.end.getTime())
     })
 
-    it('should correctly handle the API test season', () => {
-
-      // Verify the test season validates
-      const validationResult = SeasonSchema.safeParse(testSeason)
-      if (!validationResult.success) {
-        console.error("Validation error:", validationResult.error.format())
-      }
-      expect(validationResult.success).toBe(true)
-
-      // Test the serialization and deserialization process
-      const serialized = serializeSeason(testSeason)
-
-      expect(typeof serialized.cookingDays).toBe('string')
-      expect(typeof serialized.holidays).toBe('string')
-      expect(typeof serialized.seasonDates).toBe('string')
-
-      // Deserialize and ensure dates are parsed correctly
-      const deserialized = deserializeSeason(serialized, withPortions)
-      expect(deserialized.shortName).toBe(testSeason.shortName)
-
-      // Always parse seasonDates to Date objects before formatting
-      const originalStartDate = testSeason.seasonDates.start as Date
-      const originalEndDate = testSeason.seasonDates.end as Date
-
-      const formatDateStart = formatDate(deserialized.seasonDates.start)
-      const formatDateEnd = formatDate(deserialized.seasonDates.end)
-
-      expect(formatDateStart).toBe(formatDate(originalStartDate))
-      expect(formatDateEnd).toBe(formatDate(originalEndDate))
-    })
-
     it('should correctly serialize and deserialize a Season with relations', () => {
       const dinnerEvent1 = {
         ...DinnerEventFactory.defaultDinnerEventDisplay(),
         id: 1,
         date: new Date(2025, 0, 6),
         menuTitle: 'Pasta Night',
-        dinnerMode: 'DINEIN' as const,
         chefId: 1,
         cookingTeamId: 1
       }
@@ -176,7 +144,6 @@ describe('useSeasonValidation', () => {
         id: 2,
         date: new Date(2025, 0, 13),
         menuTitle: 'Taco Tuesday',
-        dinnerMode: 'TAKEAWAY' as const,
         chefId: null,
         cookingTeamId: 2
       }

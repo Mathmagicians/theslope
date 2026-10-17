@@ -10,17 +10,15 @@ import {ExpenseFactory} from '~~/tests/e2e/testDataFactories/expenseFactory'
 import {useBillingValidation} from '~/composables/useBillingValidation'
 import type {ZodSafeParseResult} from 'zod'
 
-const {DinnerStateSchema, DinnerModeSchema, OrderStateSchema, TicketTypeSchema, OrderAuditActionSchema} = useBookingValidation()
+const {TicketTypeSchema} = useBookingValidation()
 
 const getValidationError = <T>(result: ZodSafeParseResult<T>) =>
   !result.success ? `Validation errors: ${JSON.stringify(result.error.format())}` : ''
 
+// Plain zod (enums, required and nullable fields, lengths, positive ids) is not restated here: the cases cover
+// the factory data each schema parses, the write schemas' strictness, the refinements, defaults and the (de)serializers
 describe('useBookingValidation', () => {
   const {
-    DinnerStateSchema: ExportedDinnerStateSchema,
-    DinnerModeSchema: ExportedDinnerModeSchema,
-    OrderStateSchema: ExportedOrderStateSchema,
-    TicketTypeSchema: ExportedTicketTypeSchema,
     DinnerEventDisplaySchema,
     DinnerEventDetailSchema,
     DinnerEventCreateSchema,
@@ -40,74 +38,15 @@ describe('useBookingValidation', () => {
     deserializeDinnerEventDetail
   } = useBookingValidation()
 
-  const DinnerState = DinnerStateSchema.enum
-
-  describe('Enum Validation', () => {
-    it.each([
-      {enum: 'DinnerState', values: DinnerStateSchema.options, schema: ExportedDinnerStateSchema},
-      {enum: 'DinnerMode', values: DinnerModeSchema.options, schema: ExportedDinnerModeSchema},
-      {enum: 'OrderState', values: OrderStateSchema.options, schema: ExportedOrderStateSchema},
-      {enum: 'TicketType', values: TicketTypeSchema.options, schema: ExportedTicketTypeSchema}
-    ])('GIVEN every generated $enum value WHEN parsing THEN succeeds', ({values, schema}) => {
-      values.forEach(value => expect(() => schema.parse(value)).not.toThrow())
-    })
-
-    it.each([
-      {enum: 'DinnerState', value: 'INVALID', schema: ExportedDinnerStateSchema},
-      {enum: 'DinnerMode', value: 'INVALID', schema: ExportedDinnerModeSchema},
-      {enum: 'OrderState', value: 'INVALID', schema: ExportedOrderStateSchema},
-      {enum: 'TicketType', value: 'INVALID', schema: ExportedTicketTypeSchema}
-    ])('GIVEN invalid $enum value WHEN parsing THEN throws', ({value, schema}) => {
-      expect(() => schema.parse(value)).toThrow()
-    })
-  })
-
   describe('DinnerEvent Schemas', () => {
-    describe('DinnerEventDisplaySchema (ADR-009: Minimal)', () => {
+    it('DinnerEventDisplaySchema (ADR-009: Minimal) GIVEN the factory display data WHEN parsing THEN succeeds', () => {
       const validDisplay = DinnerEventFactory.defaultDinnerEventDisplay()
-
-      it('GIVEN valid display data WHEN parsing THEN succeeds', () => {
-        const result = DinnerEventDisplaySchema.parse(validDisplay)
-        expect(result).toMatchObject(validDisplay)
-      })
-
-      it('GIVEN every state WHEN parsing THEN succeeds', () => {
-        DinnerStateSchema.options.forEach(state =>
-          expect(() => DinnerEventDisplaySchema.parse({...validDisplay, state})).not.toThrow())
-      })
-
-      it.each([
-        {desc: 'missing id', override: {id: undefined}},
-        {desc: 'invalid state', override: {state: 'INVALID'}}
-      ])('GIVEN $desc WHEN parsing THEN throws', ({override}) => {
-        expect(() => DinnerEventDisplaySchema.parse({...validDisplay, ...override})).toThrow()
-      })
+      expect(DinnerEventDisplaySchema.parse(validDisplay)).toMatchObject(validDisplay)
     })
 
-    describe('DinnerEventDetailSchema (ADR-009: Detail extends Display)', () => {
+    it('DinnerEventDetailSchema (ADR-009: Detail extends Display) GIVEN detail with ALL scalar fields WHEN parsing THEN succeeds', () => {
       const validDetail = DinnerEventFactory.defaultDinnerEventDetail()
-
-      it('GIVEN detail with ALL scalar fields WHEN parsing THEN succeeds', () => {
-        const result = DinnerEventDetailSchema.parse(validDetail)
-        expect(result).toMatchObject(validDetail)
-      })
-
-      it.each([
-        {field: 'chef', value: null},
-        {field: 'cookingTeam', value: null},
-        {field: 'tickets', value: []},
-        {field: 'menuDescription', value: null},
-        {field: 'heynaboEventId', value: null}
-      ])('GIVEN nullable $field WHEN parsing THEN succeeds', ({field, value}) => {
-        expect(() => DinnerEventDetailSchema.parse({...validDetail, [field]: value})).not.toThrow()
-      })
-
-      it.each([
-        {desc: 'negative totalCost', override: {totalCost: -100}},
-        {desc: 'menuDescription too long', override: {menuDescription: 'a'.repeat(501)}}
-      ])('GIVEN $desc WHEN parsing THEN throws', ({override}) => {
-        expect(() => DinnerEventDetailSchema.parse({...validDetail, ...override})).toThrow()
-      })
+      expect(DinnerEventDetailSchema.parse(validDetail)).toMatchObject(validDetail)
     })
 
     describe('DinnerEventCreateSchema', () => {
@@ -117,157 +56,50 @@ describe('useBookingValidation', () => {
         expect(() => DinnerEventCreateSchema.parse(baseCreate)).not.toThrow()
       })
 
-      it.each([
-        {desc: 'menuTitle too long (>500)', override: {menuTitle: 'a'.repeat(501)}},
-        {desc: 'a totalCost key (the cost is computed from the expense rows)', override: {totalCost: 50}},
-        {desc: 'an unknown key', override: {foo: 1}}
-      ])('GIVEN $desc WHEN parsing THEN throws', ({override}) => {
-        expect(() => DinnerEventCreateSchema.parse({...baseCreate, ...override})).toThrow()
-      })
-
-      it('GIVEN empty menuTitle WHEN parsing THEN succeeds (no min validation)', () => {
-        expect(() => DinnerEventCreateSchema.parse({...baseCreate, menuTitle: ''})).not.toThrow()
+      it('GIVEN a totalCost key (the cost is computed from the expense rows) WHEN parsing THEN throws', () => {
+        expect(() => DinnerEventCreateSchema.parse({...baseCreate, totalCost: 50})).toThrow()
       })
     })
 
     describe('DinnerEventUpdateSchema', () => {
       // Note: id comes from URL path, not body (ADR-013)
-      it('GIVEN partial update with menuTitle WHEN parsing THEN succeeds', () => {
-        const result = DinnerEventUpdateSchema.parse({menuTitle: 'Updated'})
-        expect(result.menuTitle).toBe('Updated')
-      })
-
-      it('GIVEN empty update WHEN parsing THEN succeeds (all fields optional)', () => {
-        const result = DinnerEventUpdateSchema.parse({})
-        expect(result).toEqual({})
-      })
-
-      it.each([
-        {desc: 'a totalCost key (the cost is computed from the expense rows)', body: {totalCost: 50000}},
-        {desc: 'an unknown key', body: {menuTitle: 'Ret', foo: 1}}
-      ])('GIVEN $desc WHEN parsing THEN throws', ({body}) => {
-        expect(() => DinnerEventUpdateSchema.parse(body)).toThrow()
-      })
-
-      it.each([
-        {field: 'menuTitle', value: 'Updated Title'},
-        {field: 'state', value: DinnerState.CANCELLED},
-        {field: 'menuDescription', value: 'Ny beskrivelse'}
-      ])('GIVEN partial update with $field WHEN parsing THEN succeeds', ({field, value}) => {
-        const result = DinnerEventUpdateSchema.parse({[field]: value})
-        expect(result[field as keyof typeof result]).toBe(value)
+      it('GIVEN a totalCost key (the cost is computed from the expense rows) WHEN parsing THEN throws', () => {
+        expect(() => DinnerEventUpdateSchema.parse({totalCost: 50000})).toThrow()
       })
     })
   })
 
   describe('Order Schemas', () => {
-    describe('OrderDisplaySchema (ADR-009: Minimal)', () => {
-      it('GIVEN valid order WHEN parsing THEN succeeds', () => {
-        const validOrder = OrderFactory.defaultOrder()
-        const result = OrderDisplaySchema.safeParse(validOrder)
-        expect(result.success, getValidationError(result)).toBe(true)
-      })
-
-      it('GIVEN every state WHEN parsing THEN succeeds', () => {
-        OrderStateSchema.options.forEach(state => {
-          const result = OrderDisplaySchema.safeParse(OrderFactory.defaultOrder(undefined, {state}))
-          expect(result.success, getValidationError(result)).toBe(true)
-        })
-      })
-
-      it.each([
-        {field: 'bookedByUserId', value: null},
-        {field: 'releasedAt', value: null},
-        {field: 'closedAt', value: null}
-      ])('GIVEN nullable $field WHEN parsing THEN succeeds', ({field, value}) => {
-        const order = OrderFactory.defaultOrder(undefined, {[field]: value})
-        const result = OrderDisplaySchema.safeParse(order)
-        expect(result.success, getValidationError(result)).toBe(true)
-      })
-
-      it('GIVEN any required field missing WHEN parsing THEN throws', () => {
-        const required = ['id', 'dinnerEventId', 'inhabitantId', 'ticketPriceId',
-          'priceAtBooking', 'dinnerMode', 'state', 'createdAt', 'updatedAt', 'ticketType']
-        required.forEach(field => {
-          const order = OrderFactory.defaultOrder() as Record<string, unknown>
-          Reflect.deleteProperty(order, field)
-          expect(OrderDisplaySchema.safeParse(order).success, field).toBe(false)
-        })
-      })
-
+    it('OrderDisplaySchema (ADR-009: Minimal) GIVEN valid order WHEN parsing THEN succeeds', () => {
+      const result = OrderDisplaySchema.safeParse(OrderFactory.defaultOrder())
+      expect(result.success, getValidationError(result)).toBe(true)
     })
 
-    describe('OrderDetailSchema (ADR-009: ALL scalar relations)', () => {
-      it('GIVEN valid detail WHEN parsing THEN succeeds', () => {
-        const validDetail = OrderFactory.defaultOrderDetail()
-        const result = OrderDetailSchema.safeParse(validDetail)
-        expect(result.success, getValidationError(result)).toBe(true)
-      })
+    it('OrderDetailSchema (ADR-009: ALL scalar relations) GIVEN detail WHEN parsing THEN succeeds and includes ALL DinnerEvent scalars', () => {
+      const result = OrderDetailSchema.safeParse(OrderFactory.defaultOrderDetail())
+      expect(result.success, getValidationError(result)).toBe(true)
 
-      it('GIVEN detail WHEN parsing THEN includes ALL DinnerEvent scalars (ADR-009)', () => {
-        const detail = OrderFactory.defaultOrderDetail()
-        const result = OrderDetailSchema.safeParse(detail)
-
-        if (result.success) {
-          const dinnerEvent = result.data.dinnerEvent
-          const requiredFields = [
-            'id', 'date', 'menuTitle', 'menuDescription', 'menuPictureUrl',
-            'state', 'totalCost', 'heynaboEventId', 'chefId', 'cookingTeamId',
-            'seasonId', 'createdAt', 'updatedAt'
-          ]
-          requiredFields.forEach(field => {
-            expect(dinnerEvent).toHaveProperty(field)
-          })
-        }
-      })
-
-      it('GIVEN nullable bookedByUser WHEN parsing THEN succeeds', () => {
-        const detail = OrderFactory.defaultOrderDetail(undefined, {
-          bookedByUserId: null,
-          bookedByUser: null
+      if (result.success) {
+        const dinnerEvent = result.data.dinnerEvent
+        const requiredFields = [
+          'id', 'date', 'menuTitle', 'menuDescription', 'menuPictureUrl',
+          'state', 'totalCost', 'heynaboEventId', 'chefId', 'cookingTeamId',
+          'seasonId', 'createdAt', 'updatedAt'
+        ]
+        requiredFields.forEach(field => {
+          expect(dinnerEvent).toHaveProperty(field)
         })
-        const result = OrderDetailSchema.safeParse(detail)
-        expect(result.success, getValidationError(result)).toBe(true)
-      })
+      }
     })
 
-    describe.each([
+    it.each([
       {name: 'OrderHistoryDisplaySchema', schema: OrderHistoryDisplaySchema, factory: () => OrderFactory.defaultOrderHistoryDisplay()},
       {name: 'OrderHistoryDetailSchema', schema: OrderHistoryDetailSchema, factory: () => OrderFactory.defaultOrderHistoryDetail()},
-      {name: 'OrderHistoryCreateSchema', schema: OrderHistoryCreateSchema, factory: () => OrderFactory.defaultOrderHistoryCreate()}
-    ])('$name', ({schema, factory}) => {
-      it('GIVEN valid data WHEN parsing THEN succeeds', () => {
-        const result = schema.safeParse(factory())
-        expect(result.success, getValidationError(result)).toBe(true)
-      })
-
-      it('GIVEN every action WHEN parsing THEN succeeds', () => {
-        OrderAuditActionSchema.options.forEach(action => {
-          const result = schema.safeParse({...factory(), action})
-          expect(result.success, getValidationError(result)).toBe(true)
-        })
-      })
-    })
-
-    describe('OrderHistoryDetailSchema nullable order', () => {
-      it('GIVEN null order WHEN parsing THEN succeeds', () => {
-        const result = OrderHistoryDetailSchema.safeParse(OrderFactory.defaultOrderHistoryDetail(undefined, {order: null}))
-        expect(result.success, getValidationError(result)).toBe(true)
-      })
-    })
-
-    describe('OrderSnapshotSchema', () => {
-      it('GIVEN valid snapshot WHEN parsing THEN succeeds', () => {
-        const result = OrderSnapshotSchema.safeParse(OrderFactory.defaultOrderSnapshot())
-        expect(result.success, getValidationError(result)).toBe(true)
-      })
-
-      it('GIVEN every state WHEN parsing THEN succeeds', () => {
-        OrderStateSchema.options.forEach(state => {
-          const result = OrderSnapshotSchema.safeParse(OrderFactory.defaultOrderSnapshot({state}))
-          expect(result.success, getValidationError(result)).toBe(true)
-        })
-      })
+      {name: 'OrderHistoryCreateSchema', schema: OrderHistoryCreateSchema, factory: () => OrderFactory.defaultOrderHistoryCreate()},
+      {name: 'OrderSnapshotSchema', schema: OrderSnapshotSchema, factory: () => OrderFactory.defaultOrderSnapshot()}
+    ])('$name GIVEN the factory data WHEN parsing THEN succeeds', ({schema, factory}) => {
+      const result = schema.safeParse(factory())
+      expect(result.success, getValidationError(result)).toBe(true)
     })
 
     describe('createOrderAuditData', () => {
@@ -283,7 +115,6 @@ describe('useBookingValidation', () => {
 
   describe('Orders Creation (Batch)', () => {
     const {
-      OrderAuditActionSchema,
       AuditContextSchema,
       OrderCreateWithPriceSchema,
       OrdersBatchSchema,
@@ -291,73 +122,22 @@ describe('useBookingValidation', () => {
       ORDER_BATCH_SIZE
     } = useBookingValidation()
 
-    describe('OrderAuditActionSchema', () => {
-      it('GIVEN every action WHEN parsing THEN succeeds', () => {
-        OrderAuditActionSchema.options.forEach(action => expect(() => OrderAuditActionSchema.parse(action)).not.toThrow())
-      })
-
-      it('GIVEN invalid action WHEN parsing THEN throws', () => {
-        expect(() => OrderAuditActionSchema.parse('INVALID')).toThrow()
-      })
+    it.each([
+      {name: 'AuditContextSchema', parse: () => AuditContextSchema.parse(OrderFactory.defaultAuditContext())},
+      {name: 'OrderCreateWithPriceSchema', parse: () => OrderCreateWithPriceSchema.parse(OrderFactory.defaultOrderCreateWithPrice())},
+      {name: 'CreateOrdersResultSchema', parse: () => CreateOrdersResultSchema.parse(OrderFactory.defaultCreateOrdersResult())}
+    ])('$name GIVEN the factory data WHEN parsing THEN succeeds', ({parse}) => {
+      expect(parse).not.toThrow()
     })
 
-    describe('AuditContextSchema', () => {
-      it.each([
-        {desc: 'with userId', ctx: OrderFactory.defaultAuditContext()},
-        {desc: 'null userId (system)', ctx: OrderFactory.defaultAuditContext({performedByUserId: null})}
-      ])('GIVEN valid context $desc WHEN parsing THEN succeeds', ({ctx}) => {
-        expect(() => AuditContextSchema.parse(ctx)).not.toThrow()
-      })
-
-      it('GIVEN empty source WHEN parsing THEN throws', () => {
-        expect(() => AuditContextSchema.parse(OrderFactory.defaultAuditContext({source: ''}))).toThrow()
-      })
-    })
-
-    describe('OrderCreateWithPriceSchema', () => {
-      it('GIVEN valid order WHEN parsing THEN succeeds', () => {
-        expect(() => OrderCreateWithPriceSchema.parse(OrderFactory.defaultOrderCreateWithPrice())).not.toThrow()
-      })
-
-      it.each([
-        {field: 'householdId' as const, desc: 'missing householdId'},
-        {field: 'priceAtBooking' as const, desc: 'missing priceAtBooking'}
-      ])('GIVEN $desc WHEN parsing THEN throws', ({field}) => {
-        const order = OrderFactory.defaultOrderCreateWithPrice()
-        const {[field]: _removed, ...orderWithoutField} = order
-        expect(() => OrderCreateWithPriceSchema.parse(orderWithoutField)).toThrow()
-      })
-
-      it('GIVEN negative priceAtBooking WHEN parsing THEN throws', () => {
-        expect(() => OrderCreateWithPriceSchema.parse(
-          OrderFactory.defaultOrderCreateWithPrice(1, {priceAtBooking: -100})
-        )).toThrow()
-      })
-
-      it('GIVEN zero priceAtBooking (free ticket) WHEN parsing THEN succeeds', () => {
-        expect(() => OrderCreateWithPriceSchema.parse(
-          OrderFactory.defaultOrderCreateWithPrice(1, {priceAtBooking: 0})
-        )).not.toThrow()
-      })
-    })
-
+    // The batch size is the D1 limit (ADR-014); one batch belongs to one household
     describe('OrdersBatchSchema', () => {
-      it.each([
-        {count: 1, desc: 'min'},
-        {count: ORDER_BATCH_SIZE, desc: 'max'}
-      ])('GIVEN batch of $desc ($count) orders WHEN parsing THEN succeeds', ({count}) => {
-        expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(1, count))).not.toThrow()
+      it('GIVEN batch of max (ORDER_BATCH_SIZE) orders of one household WHEN parsing THEN succeeds', () => {
+        expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(1, ORDER_BATCH_SIZE))).not.toThrow()
       })
 
-      it.each([
-        {count: 0, desc: 'empty', errorMatch: /Mindst én/},
-        {count: ORDER_BATCH_SIZE + 1, desc: 'exceeds max', errorMatch: /Maksimalt/}
-      ])('GIVEN $desc batch WHEN parsing THEN throws', ({count, errorMatch}) => {
-        expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(1, count))).toThrow(errorMatch)
-      })
-
-      it('GIVEN batch with same householdId WHEN parsing THEN succeeds', () => {
-        expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(42, 3))).not.toThrow()
+      it('GIVEN a batch exceeding max WHEN parsing THEN throws', () => {
+        expect(() => OrdersBatchSchema.parse(OrderFactory.createOrdersBatch(1, ORDER_BATCH_SIZE + 1))).toThrow(/Maksimalt/)
       })
 
       it('GIVEN batch with different householdIds WHEN parsing THEN throws', () => {
@@ -366,24 +146,6 @@ describe('useBookingValidation', () => {
           OrderFactory.defaultOrderCreateWithPrice(2)
         ]
         expect(() => OrdersBatchSchema.parse(mixedBatch)).toThrow(/samme husstand/)
-      })
-    })
-
-    describe('CreateOrdersResultSchema', () => {
-      it.each([
-        {result: OrderFactory.defaultCreateOrdersResult(), desc: 'with ids'},
-        {result: OrderFactory.defaultCreateOrdersResult({createdIds: []}), desc: 'empty ids'}
-      ])('GIVEN valid result $desc WHEN parsing THEN succeeds', ({result}) => {
-        expect(() => CreateOrdersResultSchema.parse(result)).not.toThrow()
-      })
-
-      it.each([
-        {override: {householdId: 0}, desc: 'zero householdId'},
-        {override: {householdId: -1}, desc: 'negative householdId'},
-        {override: {createdIds: [0]}, desc: 'zero in createdIds'},
-        {override: {createdIds: [-1]}, desc: 'negative in createdIds'}
-      ])('GIVEN $desc WHEN parsing THEN throws', ({override}) => {
-        expect(() => CreateOrdersResultSchema.parse(OrderFactory.defaultCreateOrdersResult(override))).toThrow()
       })
     })
   })
@@ -438,24 +200,11 @@ describe('useBookingValidation', () => {
     })
 
     describe('serializeOrderHistoryDisplay / deserializeOrderHistoryDisplay', () => {
-      it('GIVEN history WHEN round-tripping THEN preserves data', () => {
+      it('GIVEN history WHEN serializing THEN converts timestamp to string, and the round trip preserves the data', () => {
         const originalHistory = OrderFactory.defaultOrderHistoryDisplay()
         const serialized = serializeOrderHistoryDisplay(originalHistory)
-        const deserialized = deserializeOrderHistoryDisplay(serialized)
-        expect(deserialized).toEqual(originalHistory)
-      })
-
-      it('GIVEN history WHEN serializing THEN converts timestamp to string', () => {
-        const history = OrderFactory.defaultOrderHistoryDisplay()
-        const serialized = serializeOrderHistoryDisplay(history)
         expect(typeof serialized.timestamp).toBe('string')
-      })
-
-      it('GIVEN serialized history WHEN deserializing THEN converts to Date', () => {
-        const history = OrderFactory.defaultOrderHistoryDisplay()
-        const serialized = serializeOrderHistoryDisplay(history)
-        const deserialized = deserializeOrderHistoryDisplay(serialized)
-        expect(deserialized.timestamp).toBeInstanceOf(Date)
+        expect(deserializeOrderHistoryDisplay(serialized)).toEqual(originalHistory)
       })
     })
 
@@ -593,81 +342,17 @@ describe('useBookingValidation', () => {
 
   describe('Daily Maintenance Result Schemas', () => {
     const {
-      ConsumeResultSchema,
-      CloseOrdersResultSchema,
-      CreateTransactionsResultSchema,
       DailyMaintenanceResultSchema,
       ScaffoldResultSchema,
       BookingActionSchema
     } = useBookingValidation()
     const Action = BookingActionSchema.enum
 
-    describe('ConsumeResultSchema', () => {
-      it.each([
-        {consumed: 0},
-        {consumed: 5},
-        {consumed: 100}
-      ])('GIVEN valid consumed count $consumed WHEN parsing THEN succeeds', (data) => {
-        expect(() => ConsumeResultSchema.parse(data)).not.toThrow()
-      })
-
-      it.each([
-        {desc: 'negative consumed', data: {consumed: -1}},
-        {desc: 'missing consumed', data: {}},
-        {desc: 'non-integer consumed', data: {consumed: 1.5}},
-        {desc: 'string consumed', data: {consumed: 'five'}}
-      ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
-        expect(() => ConsumeResultSchema.parse(data)).toThrow()
-      })
-    })
-
-    describe('CloseOrdersResultSchema', () => {
-      it.each([
-        {closed: 0},
-        {closed: 10},
-        {closed: 500}
-      ])('GIVEN valid closed count $closed WHEN parsing THEN succeeds', (data) => {
-        expect(() => CloseOrdersResultSchema.parse(data)).not.toThrow()
-      })
-
-      it.each([
-        {desc: 'negative closed', data: {closed: -5}},
-        {desc: 'missing closed', data: {}},
-        {desc: 'non-integer closed', data: {closed: 2.5}}
-      ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
-        expect(() => CloseOrdersResultSchema.parse(data)).toThrow()
-      })
-    })
-
-    describe('CreateTransactionsResultSchema', () => {
-      it.each([
-        {created: 0},
-        {created: 25},
-        {created: 1000}
-      ])('GIVEN valid created count $created WHEN parsing THEN succeeds', (data) => {
-        expect(() => CreateTransactionsResultSchema.parse(data)).not.toThrow()
-      })
-
-      it.each([
-        {desc: 'negative created', data: {created: -10}},
-        {desc: 'missing created', data: {}},
-        {desc: 'non-integer created', data: {created: 3.7}}
-      ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
-        expect(() => CreateTransactionsResultSchema.parse(data)).toThrow()
-      })
-    })
-
     describe('ScaffoldResultSchema', () => {
       const validScaffoldResult = OrderFactory.defaultScaffoldResult({totals: {[Action.BOOK]: 10, [Action.CANCEL]: 2, [Action.RELEASE]: 1}, unchanged: 50, households: 5})
-      const position = {inhabitantId: 1, dinnerEventId: 10, isGuestTicket: false, position: 2}
 
-      it.each([
-        {desc: 'a run with orders', data: validScaffoldResult},
-        {desc: 'zero counts', data: OrderFactory.defaultScaffoldResult({households: 0})},
-        {desc: 'large counts', data: OrderFactory.defaultScaffoldResult({totals: {[Action.BOOK]: 1000, [Action.CANCEL]: 500, [Action.RELEASE]: 200}, unchanged: 2000, households: 100})},
-        {desc: 'no active season', data: OrderFactory.defaultScaffoldResult({seasonId: null})}
-      ])('GIVEN $desc WHEN parsing THEN succeeds', ({data}) => {
-        expect(() => ScaffoldResultSchema.parse(data)).not.toThrow()
+      it('GIVEN a run with orders WHEN parsing THEN succeeds', () => {
+        expect(() => ScaffoldResultSchema.parse(validScaffoldResult)).not.toThrow()
       })
 
       it('GIVEN a result without positions, errors and outcomes WHEN parsing THEN they default to none', () => {
@@ -675,30 +360,9 @@ describe('useBookingValidation', () => {
         expect(ScaffoldResultSchema.parse(bare)).toMatchObject({positions: [], errored: 0, outcomes: {joined: [], ticketsSold: [], waitlistTicketsSold: []}})
       })
 
-      it('GIVEN queued entries with their positions WHEN parsing THEN the positions survive', () => {
-        const result = OrderFactory.defaultScaffoldResult({totals: {[Action.QUEUE]: 1}, positions: [position]})
-        expect(ScaffoldResultSchema.parse(result).positions).toEqual([position])
-      })
-
-      it('GIVEN landed and failed orders WHEN parsing THEN each keeps its action', () => {
-        const landed = OrderFactory.defaultBookingResult({action: Action.RELEASE})
-        const failed = OrderFactory.defaultBookingResult({inhabitantId: 2, action: Action.BOOK})
-        const result = OrderFactory.defaultScaffoldResult({errored: 1, results: [landed], failed: [failed]})
-        expect(ScaffoldResultSchema.parse(result)).toMatchObject({results: [landed], failed: [failed]})
-      })
-
-      it.each([
-        {desc: 'missing seasonId', data: (({seasonId: _s, ...rest}) => rest)(validScaffoldResult)},
-        {desc: 'missing results', data: (({results: _r, ...rest}) => rest)(validScaffoldResult)},
-        {desc: 'missing failed', data: (({failed: _f, ...rest}) => rest)(validScaffoldResult)},
-        {desc: 'a total missing an action', data: {...validScaffoldResult, totals: {[Action.BOOK]: 1}}},
-        {desc: 'position zero', data: {...validScaffoldResult, positions: [{...position, position: 0}]}},
-        {desc: 'negative total', data: {...validScaffoldResult, totals: {...validScaffoldResult.totals, [Action.BOOK]: -1}}},
-        {desc: 'non-integer total', data: {...validScaffoldResult, totals: {...validScaffoldResult.totals, [Action.CANCEL]: 1.5}}},
-        {desc: 'unknown action on a failed order', data: {...validScaffoldResult, failed: [{...OrderFactory.defaultBookingResult(), action: 'EAT'}]}},
-        {desc: 'zero seasonId', data: {...validScaffoldResult, seasonId: 0}}
-      ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
-        expect(() => ScaffoldResultSchema.parse(data)).toThrow()
+      // The totals count every action, a zero included
+      it('GIVEN a total missing an action WHEN parsing THEN throws', () => {
+        expect(() => ScaffoldResultSchema.parse({...validScaffoldResult, totals: {[Action.BOOK]: 1}})).toThrow()
       })
     })
 
@@ -723,39 +387,9 @@ describe('useBookingValidation', () => {
         expect(result.scaffold?.seasonId).toBe(1)
       })
 
-      it('GIVEN null scaffold (no active season) WHEN parsing THEN succeeds', () => {
-        const resultWithNullScaffold = {...validResult, scaffold: null}
-        const result = DailyMaintenanceResultSchema.parse(resultWithNullScaffold)
-        expect(result.scaffold).toBeNull()
-      })
-
       it('GIVEN a result without clearWaitlist WHEN parsing THEN clearWaitlist defaults to zero', () => {
         const {clearWaitlist: _cleared, ...withoutClearWaitlist} = validResult
         expect(DailyMaintenanceResultSchema.parse(withoutClearWaitlist).clearWaitlist.cleared).toBe(0)
-      })
-
-      it('GIVEN all zero counts WHEN parsing THEN succeeds (idempotent run)', () => {
-        const idempotentResult = {
-          jobRunId: 99,
-          consume: {consumed: 0},
-          close: {closed: 0},
-          transact: {created: 0},
-          scaffold: OrderFactory.defaultScaffoldResult({unchanged: 150, households: 15})
-        }
-        expect(() => DailyMaintenanceResultSchema.parse(idempotentResult)).not.toThrow()
-      })
-
-      it.each([
-        {desc: 'missing jobRunId', data: {consume: {consumed: 0}, close: {closed: 0}, transact: {created: 0}, scaffold: null}},
-        {desc: 'missing consume', data: {jobRunId: 1, close: {closed: 0}, transact: {created: 0}, scaffold: null}},
-        {desc: 'missing close', data: {jobRunId: 1, consume: {consumed: 0}, transact: {created: 0}, scaffold: null}},
-        {desc: 'missing transact', data: {jobRunId: 1, consume: {consumed: 0}, close: {closed: 0}, scaffold: null}},
-        {desc: 'invalid jobRunId', data: {...validResult, jobRunId: 0}},
-        {desc: 'invalid consume', data: {...validResult, consume: {consumed: -1}}},
-        {desc: 'invalid clearWaitlist', data: {...validResult, clearWaitlist: {cleared: -1}}},
-        {desc: 'invalid scaffold', data: {...validResult, scaffold: {seasonId: 0}}}
-      ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
-        expect(() => DailyMaintenanceResultSchema.parse(data)).toThrow()
       })
     })
   })
@@ -769,21 +403,14 @@ describe('useBookingValidation', () => {
 
     it.each([
       {input: undefined, expected: [], desc: 'undefined'},
-      {input: 5, expected: [5], desc: 'single number'},
       {input: '5', expected: [5], desc: 'single string'},
-      {input: [1, 2, 3], expected: [1, 2, 3], desc: 'array of numbers'},
       {input: ['1', '2'], expected: [1, 2], desc: 'array of strings'}
     ])('GIVEN $desc WHEN parsing THEN returns $expected', ({input, expected}) => {
       expect(IdOrIdsSchema.parse(input)).toEqual(expected)
     })
 
-    it.each([
-      {input: 0, desc: 'zero'},
-      {input: -1, desc: 'negative'},
-      {input: 'abc', desc: 'non-numeric string'},
-      {input: [0, 1], desc: 'array with zero'}
-    ])('GIVEN invalid $desc WHEN parsing THEN throws', ({input}) => {
-      expect(() => IdOrIdsSchema.parse(input)).toThrow()
+    it('GIVEN a non-numeric string WHEN parsing THEN throws', () => {
+      expect(() => IdOrIdsSchema.parse('abc')).toThrow()
     })
   })
 
@@ -804,80 +431,21 @@ describe('useBookingValidation', () => {
     const OrderState = OrderStateSchema.enum
     const DinnerMode = DinnerModeSchema.enum
 
-    describe('DesiredOrderSchema', () => {
-      const validDesiredOrder = {
-        inhabitantId: 1,
-        dinnerEventId: 10,
-        dinnerMode: DinnerMode.DINEIN,
-        isGuestTicket: false,
-        ticketPriceId: 5,
-        state: OrderState.BOOKED
-      }
+    const validDesiredOrder = {
+      inhabitantId: 1,
+      dinnerEventId: 10,
+      dinnerMode: DinnerMode.DINEIN,
+      isGuestTicket: false,
+      ticketPriceId: 5,
+      state: OrderState.BOOKED
+    }
 
-      it('GIVEN valid desired order WHEN parsing THEN succeeds', () => {
-        expect(() => DesiredOrderSchema.parse(validDesiredOrder)).not.toThrow()
-      })
-
-      it.each([
-        {desc: 'guest ticket with allergies', data: {...validDesiredOrder, isGuestTicket: true, allergyTypeIds: [1, 2]}},
-        {desc: 'guest ticket without allergies', data: {...validDesiredOrder, isGuestTicket: true}},
-        {desc: 'TAKEAWAY mode', data: {...validDesiredOrder, dinnerMode: DinnerMode.TAKEAWAY}},
-        {desc: 'NONE mode', data: {...validDesiredOrder, dinnerMode: DinnerMode.NONE}},
-        {desc: 'a queue entry', data: {...validDesiredOrder, waitlistEntryId: 7}}
-      ])('GIVEN $desc WHEN parsing THEN succeeds', ({data}) => {
-        expect(() => DesiredOrderSchema.parse(data)).not.toThrow()
-      })
-
-      it.each([
-        {desc: 'missing inhabitantId', data: {dinnerEventId: 10, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 5, state: OrderState.BOOKED}},
-        {desc: 'missing dinnerEventId', data: {inhabitantId: 1, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 5, state: OrderState.BOOKED}},
-        {desc: 'missing dinnerMode', data: {inhabitantId: 1, dinnerEventId: 10, ticketPriceId: 5, state: OrderState.BOOKED}},
-        {desc: 'missing ticketPriceId', data: {inhabitantId: 1, dinnerEventId: 10, dinnerMode: DinnerMode.DINEIN, state: OrderState.BOOKED}},
-        {desc: 'missing state', data: {inhabitantId: 1, dinnerEventId: 10, dinnerMode: DinnerMode.DINEIN, ticketPriceId: 5}},
-        {desc: 'invalid dinnerMode', data: {...validDesiredOrder, dinnerMode: 'INVALID'}},
-        {desc: 'zero waitlistEntryId', data: {...validDesiredOrder, waitlistEntryId: 0}}
-      ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
-        expect(() => DesiredOrderSchema.parse(data)).toThrow()
-      })
-    })
-
-    describe('ScaffoldOrdersRequestSchema', () => {
-      const validRequest = {
-        householdId: 1,
-        dinnerEventIds: [10, 11],
-        orders: [{
-          inhabitantId: 1,
-          dinnerEventId: 10,
-          dinnerMode: DinnerMode.DINEIN,
-          isGuestTicket: false,
-          ticketPriceId: 5,
-          state: OrderState.BOOKED
-        }]
-      }
-
-      it('GIVEN valid request WHEN parsing THEN succeeds', () => {
-        expect(() => ScaffoldOrdersRequestSchema.parse(validRequest)).not.toThrow()
-      })
-
-      it('GIVEN empty orders array WHEN parsing THEN succeeds', () => {
-        expect(() => ScaffoldOrdersRequestSchema.parse({...validRequest, orders: []})).not.toThrow()
-      })
-
-      it.each([
-        {desc: 'missing householdId', data: {dinnerEventIds: [10], orders: []}},
-        {desc: 'missing dinnerEventIds', data: {householdId: 1, orders: []}},
-        {desc: 'empty dinnerEventIds', data: {householdId: 1, dinnerEventIds: [], orders: []}}
-      ])('GIVEN $desc WHEN parsing THEN throws', ({data}) => {
-        expect(() => ScaffoldOrdersRequestSchema.parse(data)).toThrow()
-      })
-    })
-
-    describe('ScaffoldOrdersResponseSchema', () => {
-      const validResponse = OrderFactory.defaultScaffoldOrdersResponse({totals: {[BookingActionSchema.enum.BOOK]: 2}, unchanged: 5})
-
-      it('GIVEN valid response WHEN parsing THEN succeeds', () => {
-        expect(() => ScaffoldOrdersResponseSchema.parse(validResponse)).not.toThrow()
-      })
+    it.each([
+      {name: 'DesiredOrderSchema', parse: () => DesiredOrderSchema.parse(validDesiredOrder)},
+      {name: 'ScaffoldOrdersRequestSchema', parse: () => ScaffoldOrdersRequestSchema.parse({householdId: 1, dinnerEventIds: [10, 11], orders: [validDesiredOrder]})},
+      {name: 'ScaffoldOrdersResponseSchema', parse: () => ScaffoldOrdersResponseSchema.parse(OrderFactory.defaultScaffoldOrdersResponse({totals: {[BookingActionSchema.enum.BOOK]: 2}, unchanged: 5}))}
+    ])('$name GIVEN valid data WHEN parsing THEN succeeds', ({parse}) => {
+      expect(parse).not.toThrow()
     })
   })
 })

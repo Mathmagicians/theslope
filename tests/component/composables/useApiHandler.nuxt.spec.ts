@@ -1,11 +1,13 @@
-import {describe, it, expect, vi, beforeAll, beforeEach, expectTypeOf} from 'vitest'
+import {describe, it, expect, vi, beforeAll, beforeEach, afterEach, expectTypeOf} from 'vitest'
 import {registerEndpoint, mockNuxtImport, mountSuspended} from '@nuxt/test-utils/runtime'
-import {clearNuxtData, useNuxtApp} from '#app'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {useNuxtApp} from '#app'
 import {ref, h, defineComponent, type Ref} from 'vue'
 import {defineStore, type Pinia} from 'pinia'
 import {useApiHandler, resolveApiError, type StoreAsyncDataOptions} from '~/composables/useApiHandler'
 import {useAllergyValidation, type AllergyTypeDetail} from '~/composables/useAllergyValidation'
 import {AllergyFactory} from '~~/tests/e2e/testDataFactories/allergyFactory'
+import {resetStores} from '~~/tests/component/testHelpers'
 
 const CATALOG = '/api/admin/allergy-type'
 const ERROR_MESSAGE = 'Kunne ikke hente allergi katalog'
@@ -36,6 +38,9 @@ const failWith = (statusCode: number) => () => {
 }
 const lastToast = () => useToast().toasts.value.at(-1)
 
+// The hydration cases mount a component reading a store; it unmounts before the next case
+enableAutoUnmount(afterEach)
+
 describe('useApiHandler', () => {
     // @nuxt/test-utils 4 starts Nuxt in beforeAll: composables run there, not in the describe body
     let storeAsyncData: ReturnType<typeof useApiHandler>['storeAsyncData']
@@ -47,7 +52,7 @@ describe('useApiHandler', () => {
     })
 
     beforeEach(() => {
-        clearNuxtData()
+        resetStores()
         useToast().clear()
         vi.clearAllMocks()
         catalogEndpoint.mockImplementation(() => AllergyFactory.createMockAllergyTypesWithInhabitants())

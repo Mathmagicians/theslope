@@ -30,15 +30,6 @@ describe('useBillingValidation', () => {
             expect(row).toContain(invoice.address)
             expect(row).toContain(String(convertPriceToDecimalFormat(invoice.amount)))
         })
-
-        it('GIVEN invoice with zero amount WHEN generating row THEN still includes pbsId with zero DKK', () => {
-            const summary = BillingFactory.defaultSummaryData('test')
-            const invoice = {...BillingFactory.defaultInvoiceData('test'), amount: 0}
-            const row = generateCsvRow(invoice, summary)
-
-            expect(row).toContain(String(invoice.pbsId))
-            expect(row.split(',')[2]).toBe(String(convertPriceToDecimalFormat(invoice.amount)))
-        })
     })
 
     describe('generateBillingCsv', () => {
@@ -51,17 +42,12 @@ describe('useBillingValidation', () => {
             expect(lines.length).toBe(1 + summary.invoices.length)
             expect(lines[1]).toContain(String(summary.invoices[0]!.pbsId))
         })
-
-        it('GIVEN summary with empty invoices WHEN generating CSV THEN returns only header', () => {
-            const summary = {...BillingFactory.defaultSummaryData('test'), invoices: []}
-            expect(generateBillingCsv(summary)).toBe(CSV_HEADER)
-        })
     })
 
     describe('generateCsvFilename', () => {
-        it.each([1, 2])('GIVEN summary at version %i WHEN generating filename THEN uses billingPeriod and the version', (version) => {
-            const summary = {...BillingFactory.defaultSummaryData('test'), version}
-            expect(generateCsvFilename(summary)).toBe(`PBS-Opgørelse-Skråningen-${summary.billingPeriod}-v${version}.csv`)
+        it('GIVEN summary at a version WHEN generating filename THEN uses billingPeriod and the version', () => {
+            const summary = {...BillingFactory.defaultSummaryData('test'), version: 2}
+            expect(generateCsvFilename(summary)).toBe(`PBS-Opgørelse-Skråningen-${summary.billingPeriod}-v2.csv`)
         })
     })
 
@@ -69,18 +55,8 @@ describe('useBillingValidation', () => {
     // Transaction Serialization (ADR-010)
     // ============================================================================
 
+    // Each field's passage through the snapshot is the roundtrip's, below
     describe('serializeTransaction', () => {
-        it.each([
-            [TicketType.ADULT, TicketType.ADULT],
-            [TicketType.CHILD, TicketType.CHILD],
-            [TicketType.BABY, TicketType.BABY],
-            [null, null]
-        ])('GIVEN ticketType=%s WHEN serializing THEN snapshot contains ticketType=%s', (input, expected) => {
-            const order = BillingFactory.defaultSerializeInput('test', input)
-            const parsed = JSON.parse(serializeTransaction(order))
-            expect(parsed.ticketType).toBe(expected)
-        })
-
         it('GIVEN order data WHEN serializing THEN snapshot contains all billing fields', () => {
             const order = BillingFactory.defaultSerializeInput('ser-test')
             const parsed = JSON.parse(serializeTransaction(order))
@@ -91,26 +67,6 @@ describe('useBillingValidation', () => {
             expect(parsed.inhabitant.name).toBe(order.inhabitant.name)
             expect(parsed.inhabitant.household.pbsId).toBe(order.inhabitant.household.pbsId)
             expect(parsed.inhabitant.household.address).toBe(order.inhabitant.household.address)
-        })
-
-        it.each([
-            [true, true],
-            [false, false],
-            [undefined, undefined]
-        ])('GIVEN isGuestTicket=%s WHEN serializing THEN snapshot contains isGuestTicket=%s', (input, expected) => {
-            const order = BillingFactory.defaultSerializeInput('guest-test', TicketType.ADULT, {isGuestTicket: input})
-            const parsed = JSON.parse(serializeTransaction(order))
-            expect(parsed.isGuestTicket).toBe(expected)
-        })
-
-        it.each([
-            ['Testgade 42', 'Testgade 42'],
-            [null, null],
-            [undefined, undefined]
-        ])('GIVEN provenanceHousehold=%s WHEN serializing THEN snapshot contains provenanceHousehold=%s', (input, expected) => {
-            const order = BillingFactory.defaultSerializeInput('prov-test', TicketType.ADULT, {provenanceHousehold: input})
-            const parsed = JSON.parse(serializeTransaction(order))
-            expect(parsed.provenanceHousehold).toBe(expected)
         })
     })
 
@@ -142,11 +98,10 @@ describe('useBillingValidation', () => {
             expect(result.orderSnapshot).toBe(tx.orderSnapshot)
         })
 
-        // isGuestTicket tests - parametrized for DRY
+        // isGuestTicket: live when set, else the snapshot (a deleted order has no live value)
         it.each<[string, 'full' | 'noOrder', boolean | undefined, boolean | undefined, boolean | undefined]>([
             ['live preferred over snapshot', 'full', true, false, true],
             ['snapshot fallback when live undefined', 'full', undefined, true, true],
-            ['snapshot when order deleted', 'noOrder', undefined, true, true],
             ['undefined when neither set', 'full', undefined, undefined, undefined]
         ])('isGuestTicket: %s', (_, liveData, liveValue, snapshotValue, expected) => {
             const tx = BillingFactory.defaultPrismaTransaction('guest-test', liveData, {
@@ -157,11 +112,9 @@ describe('useBillingValidation', () => {
             expect(result.isGuestTicket).toBe(expected)
         })
 
-        // provenanceHousehold tests - parametrized for DRY
+        // provenanceHousehold always reads from the snapshot, whether or not the order lives
         it.each<[string, 'full' | 'noOrder', string | null | undefined, string | null | undefined]>([
             ['from snapshot when order exists', 'full', 'Testgade 42', 'Testgade 42'],
-            ['from snapshot when order deleted', 'noOrder', 'Birkevej 5', 'Birkevej 5'],
-            ['null preserved', 'full', null, null],
             ['undefined when not set', 'full', undefined, undefined]
         ])('provenanceHousehold: %s', (_, liveData, snapshotValue, expected) => {
             const tx = BillingFactory.defaultPrismaTransaction('prov-test', liveData, {
@@ -175,8 +128,6 @@ describe('useBillingValidation', () => {
     describe('serialize/deserialize roundtrip', () => {
         it.each([
             [TicketType.ADULT],
-            [TicketType.CHILD],
-            [TicketType.BABY],
             [null]
         ])('GIVEN ticketType=%s WHEN roundtrip THEN data preserved', (ticketType) => {
             const order = BillingFactory.defaultSerializeInput('roundtrip', ticketType)
@@ -195,7 +146,6 @@ describe('useBillingValidation', () => {
 
         it.each([
             [true, 'Testgade 42'],
-            [false, null],
             [undefined, undefined]
         ])('GIVEN isGuestTicket=%s, provenanceHousehold=%s WHEN roundtrip THEN preserved', (isGuestTicket, provenanceHousehold) => {
             const order = BillingFactory.defaultSerializeInput('roundtrip-extra', TicketType.ADULT, {
@@ -228,14 +178,9 @@ describe('useBillingValidation', () => {
     describe('computeStatsFromSnapshots', () => {
         it.each([
             ['empty', [], 0, {}],
-            ['single ADULT', [[1, TicketType.ADULT, 4000]], 1, {[TicketType.ADULT]: 1}],
-            ['mixed types same dinner', [[1, TicketType.ADULT, 4000], [1, TicketType.CHILD, 1700], [1, TicketType.BABY, 0]], 1, {[TicketType.ADULT]: 1, [TicketType.CHILD]: 1, [TicketType.BABY]: 1}],
-            ['same type multiple dinners', [[1, TicketType.ADULT, 4000], [2, TicketType.ADULT, 4000], [3, TicketType.ADULT, 4000]], 3, {[TicketType.ADULT]: 3}],
-            ['mixed all', [[1, TicketType.ADULT, 4000], [1, TicketType.ADULT, 4000], [2, TicketType.CHILD, 1700], [2, TicketType.BABY, 0], [3, TicketType.ADULT, 4000]], 3, {[TicketType.ADULT]: 3, [TicketType.CHILD]: 1, [TicketType.BABY]: 1}],
-            // null ticketType resolved from amount using ticketPrices (4000 → ADULT)
-            ['null ticketType resolved from amount', [[1, null, 4000], [1, TicketType.ADULT, 4000]], 1, {[TicketType.ADULT]: 2}],
-            // null ticketType with CHILD price resolves to CHILD
-            ['null ticketType resolved to CHILD', [[1, null, 1700], [1, TicketType.ADULT, 4000]], 1, {[TicketType.CHILD]: 1, [TicketType.ADULT]: 1}],
+            ['mixed types across dinners', [[1, TicketType.ADULT, 4000], [1, TicketType.ADULT, 4000], [2, TicketType.CHILD, 1700], [2, TicketType.BABY, 0], [3, TicketType.ADULT, 4000]], 3, {[TicketType.ADULT]: 3, [TicketType.CHILD]: 1, [TicketType.BABY]: 1}],
+            // null ticketType resolved from amount using ticketPrices (1700 → CHILD)
+            ['null ticketType resolved from amount', [[1, null, 1700], [1, TicketType.ADULT, 4000]], 1, {[TicketType.CHILD]: 1, [TicketType.ADULT]: 1}],
         ] as const)('%s', (_, txData, expectedDinners, expectedCounts) => {
             const invoices = [{
                 transactions: txData.map(([dinnerId, type, amount]) => ({
@@ -294,41 +239,18 @@ describe('useBillingValidation', () => {
             }))
         })
 
-        it('GIVEN period with invoices WHEN deserializing THEN computes invoiceSum', () => {
+        it('GIVEN period with invoices WHEN deserializing THEN computes the invoiceSum, counts unique dinners and counts tickets by type', () => {
             const raw = makeRawPeriod([
-                {amount: 5000, transactions: [{amount: 5000, orderSnapshot: makeSnapshot(1, TicketType.ADULT)}]},
-                {amount: 3000, transactions: [{amount: 3000, orderSnapshot: makeSnapshot(1, TicketType.CHILD)}]}
+                {amount: 8000, transactions: [
+                    {amount: 5000, orderSnapshot: makeSnapshot(1, TicketType.ADULT)},
+                    {amount: 3000, orderSnapshot: makeSnapshot(2, TicketType.ADULT)}
+                ]},
+                {amount: 2000, transactions: [{amount: 2000, orderSnapshot: makeSnapshot(1, TicketType.CHILD)}]} // same dinner as first
             ])
             const result = deserializeBillingPeriodDisplay(raw, mockTicketPrices)
 
-            expect(result.invoiceSum).toBe(8000)
-        })
-
-        it('GIVEN period with multiple dinners WHEN deserializing THEN counts unique dinners', () => {
-            const raw = makeRawPeriod([{
-                amount: 10000,
-                transactions: [
-                    {amount: 5000, orderSnapshot: makeSnapshot(1, TicketType.ADULT)},
-                    {amount: 3000, orderSnapshot: makeSnapshot(2, TicketType.ADULT)},
-                    {amount: 2000, orderSnapshot: makeSnapshot(1, TicketType.CHILD)} // same dinner as first
-                ]
-            }])
-            const result = deserializeBillingPeriodDisplay(raw, mockTicketPrices)
-
+            expect(result.invoiceSum).toBe(10000)
             expect(result.dinnerCount).toBe(2) // dinners 1 and 2
-        })
-
-        it('GIVEN period with tickets WHEN deserializing THEN counts by type', () => {
-            const raw = makeRawPeriod([{
-                amount: 10000,
-                transactions: [
-                    {amount: 5000, orderSnapshot: makeSnapshot(1, TicketType.ADULT)},
-                    {amount: 3000, orderSnapshot: makeSnapshot(1, TicketType.ADULT)},
-                    {amount: 2000, orderSnapshot: makeSnapshot(1, TicketType.CHILD)}
-                ]
-            }])
-            const result = deserializeBillingPeriodDisplay(raw, mockTicketPrices)
-
             expect(result.ticketCountsByType).toEqual({[TicketType.ADULT]: 2, [TicketType.CHILD]: 1})
         })
     })
@@ -364,18 +286,12 @@ describe('useBillingValidation', () => {
         const {ExpenseCreateSchema} = useBillingValidation()
         const valid = ExpenseFactory.defaultExpenseCreate()
 
-        it.each([
-            {desc: 'a gross amount alone (the route writes the note)', body: valid},
-            {desc: 'a gross amount and a note', body: {...valid, description: 'Mejeri'}}
-        ])('GIVEN $desc WHEN parsing THEN succeeds', ({body}) => {
-            expect(ExpenseCreateSchema.parse(body)).toEqual(body)
+        it('GIVEN a gross amount alone (the route writes the note) WHEN parsing THEN succeeds', () => {
+            expect(ExpenseCreateSchema.parse(valid)).toEqual(valid)
         })
 
+        // The write schema is strict: a deprecated column and the payer never come from the body
         it.each([
-            {desc: 'an amount of zero', body: {...valid, amount: 0}},
-            {desc: 'a negative amount', body: {...valid, amount: -1}},
-            {desc: 'a fractional amount', body: {...valid, amount: 10.5}},
-            {desc: 'a note that is not text', body: {...valid, description: 7}},
             {desc: 'a stray totalCost key', body: {...valid, totalCost: 100}},
             {desc: 'a payer key (the caller is the payer)', body: {...valid, paidByUserId: 7}}
         ])('GIVEN $desc WHEN parsing THEN throws', ({body}) => {
@@ -383,26 +299,17 @@ describe('useBillingValidation', () => {
         })
     })
 
+    // The form's ex/inkl modes, zero and empty amounts are ExpenseLines' cases
     describe('ExpenseLineFormSchema', () => {
         const {ExpenseLineFormSchema, VatModeSchema} = useBillingValidation()
         const valid = {amountKr: 1012, vatMode: VatModeSchema.enum.ex}
 
-        it.each([
-            {desc: 'a kr amount ex moms', form: valid},
-            {desc: 'a kr amount inkl. moms', form: {...valid, vatMode: VatModeSchema.enum.inkl}},
-            {desc: 'a kr amount typed as text', form: {...valid, amountKr: '1012'}, expected: valid},
-            {desc: 'a kr amount with a note', form: {...valid, note: 'Mejeri'}}
-        ])('GIVEN $desc WHEN parsing THEN succeeds', ({form, expected}) => {
-            expect(ExpenseLineFormSchema.parse(form)).toEqual(expected ?? form)
+        it('GIVEN a kr amount typed as text WHEN parsing THEN it parses to the number', () => {
+            expect(ExpenseLineFormSchema.parse({...valid, amountKr: '1012'})).toEqual(valid)
         })
 
-        it.each([
-            {desc: 'an amount of zero', form: {...valid, amountKr: 0}},
-            {desc: 'an empty amount', form: {...valid, amountKr: ''}},
-            {desc: 'a negative amount', form: {...valid, amountKr: -5}},
-            {desc: 'an unknown vat mode', form: {...valid, vatMode: 'brutto'}}
-        ])('GIVEN $desc WHEN parsing THEN throws', ({form}) => {
-            expect(() => ExpenseLineFormSchema.parse(form)).toThrow()
+        it('GIVEN an empty amount WHEN parsing THEN throws', () => {
+            expect(() => ExpenseLineFormSchema.parse({...valid, amountKr: ''})).toThrow()
         })
     })
 

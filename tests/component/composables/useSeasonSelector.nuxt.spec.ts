@@ -4,6 +4,7 @@ import { computed, ref, type Ref } from 'vue'
 import type { Season } from '~/composables/useSeasonValidation'
 import type { SeasonSelectorOptions } from '~/composables/useSeasonSelector'
 import { SeasonFactory } from '~~/tests/e2e/testDataFactories/seasonFactory'
+import { FORM_MODES } from '~/types/form'
 
 const { mockNavigateTo, mockRoute: mockRouteData, useRoute } = await vi.hoisted(async () =>
   (await import('~~/tests/component/hoistedMocks')).mockRouteAndNavigation({path: '/admin/planning'}))
@@ -73,7 +74,7 @@ describe('useSeasonSelector', () => {
 
   it.each([
     { initialQuery: {}, newSeason: 'fall-2025', expectedQuery: { season: 'fall-2025' } },
-    { initialQuery: { mode: 'edit', season: 'fall-2025' }, newSeason: 'spring-2026', expectedQuery: { mode: 'edit', season: 'spring-2026' } }
+    { initialQuery: { mode: FORM_MODES.EDIT, season: 'fall-2025' }, newSeason: 'spring-2026', expectedQuery: { mode: FORM_MODES.EDIT, season: 'spring-2026' } }
   ])('onSeasonChange updates URL: $expectedQuery', async ({ initialQuery, newSeason, expectedQuery }) => {
     mockRouteData.query = initialQuery
 

@@ -1,10 +1,13 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
+import {enableAutoUnmount} from '@vue/test-utils'
 import TeamCalendarDisplay from '~/components/calendar/TeamCalendarDisplay.vue'
 import {RAINBOW, getRainbowBand} from '~/composables/useTheSlopeDesignSystem'
-import {mountWithTooltipProvider, findAllByTestId} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, findAllByTestId, resetStores} from '~~/tests/component/testHelpers'
 import {DinnerEventFactory} from '~~/tests/e2e/testDataFactories/dinnerEventFactory'
 import type {CookingTeamDisplay} from '~/composables/useCookingTeamValidation'
+
+enableAutoUnmount(afterEach)
 
 /**
  * The legend is where every team of a season is on screen at once, so it is where the rule
@@ -23,36 +26,33 @@ describe('TeamCalendarDisplay legend', () => {
         getDefaultCookingTeam(1, 'S1', index + 1, {id: index + 1})).reverse()
     const bandOf = (number: number) => getRainbowBand(number - 1).split(' ')
 
+    beforeEach(() => {
+        resetStores()
+    })
+
     const mount = (shown: CookingTeamDisplay[], seasonTeams: CookingTeamDisplay[] = shown, dinnerEvents = [] as ReturnType<typeof DinnerEventFactory.defaultDinnerEventDisplay>[]) =>
         mountWithTooltipProvider(TeamCalendarDisplay, {
             props: {seasonDates, teams: shown, seasonTeams, dinnerEvents},
             isMd: true
         })
 
-    it(`renders one legend entry per team`, async () => {
+    it(`renders one legend entry per team, each wearing the stop of its number; the stops are all different and team ${RAINBOW.length + 1} wraps`, async () => {
         const wrapper = await mount(teams)
         expect(findAllByTestId(wrapper, 'calendar-legend-entry')).toHaveLength(teams.length)
-    })
 
-    it('every team, listed from the highest number down, wears the stop of its number', async () => {
-        const wrapper = await mount(teams)
+        // Listed from the highest number down
         const badges = findAllByTestId(wrapper, 'calendar-legend-badge')
         teams.forEach((_team, position) => expect(badges[position]!.classes()).toEqual(expect.arrayContaining(bandOf(teams.length - position))))
-    })
 
-    it(`the stops a season of teams renders are all different, and team ${RAINBOW.length + 1} wraps`, async () => {
-        const wrapper = await mount(teams)
         // What a badge renders of the rainbow: its own classes, kept to the ones a stop names
         const stopClasses = new Set(RAINBOW.flatMap(stop => stop.split(' ')))
-        const rendered = findAllByTestId(wrapper, 'calendar-legend-badge')
-            .map(badge => badge.classes().filter(name => stopClasses.has(name)).sort().join(' '))
-
-        // Listed from the highest number down: the first entry is the wrapping team, the last is team 1
+        const rendered = badges.map(badge => badge.classes().filter(name => stopClasses.has(name)).sort().join(' '))
+        // The first entry is the wrapping team, the last is team 1
         expect(new Set(rendered.slice(1)).size).toBe(RAINBOW.length)
         expect(rendered[0]).toBe(rendered[RAINBOW.length])
     })
 
-    describe('a renamed team with no number in its name, shown alone', () => {
+    it('a renamed team with no number in its name, shown alone, wears the stop of its position in the season on its legend badge and its cooking day', async () => {
         const season = [
             getDefaultCookingTeam(1, 'S1', 1, {id: 1}),
             getDefaultCookingTeam(1, 'S1', 2, {id: 2, name: 'Holdet uden tal'}),
@@ -61,15 +61,10 @@ describe('TeamCalendarDisplay legend', () => {
         const renamed = season[1]!
         const dinner = {...DinnerEventFactory.defaultDinnerEventDisplay(), id: 7, date: new Date('2026-01-15'), cookingTeamId: renamed.id!}
 
-        it('the legend badge wears the stop of its position in the season', async () => {
-            const wrapper = await mount([renamed], season)
-            expect(findAllByTestId(wrapper, 'calendar-legend-badge')[0]!.classes()).toEqual(expect.arrayContaining(bandOf(2)))
-        })
+        const wrapper = await mount([renamed], season, [dinner])
 
-        it('its cooking day wears the same stop', async () => {
-            const wrapper = await mount([renamed], season, [dinner])
-            const day = findAllByTestId(wrapper, 'team-calendar-day')[0]!
-            expect(day.classes()).toEqual(expect.arrayContaining(bandOf(2)))
-        })
+        expect(findAllByTestId(wrapper, 'calendar-legend-badge')[0]!.classes()).toEqual(expect.arrayContaining(bandOf(2)))
+        const day = findAllByTestId(wrapper, 'team-calendar-day')[0]!
+        expect(day.classes()).toEqual(expect.arrayContaining(bandOf(2)))
     })
 })

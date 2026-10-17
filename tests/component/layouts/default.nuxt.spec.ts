@@ -1,11 +1,19 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import {registerEndpoint, mountSuspended} from '@nuxt/test-utils/runtime'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {resetStores} from '~~/tests/component/testHelpers'
 import {defineComponent, h, inject, nextTick, type Ref} from 'vue'
 import {TooltipProvider} from 'reka-ui'
 import DefaultLayout from '~/layouts/default.vue'
 
 registerEndpoint('/api/_auth/session', () => ({}))
+
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
 
 /**
  * The layout measures the md breakpoint after mount, so `isMd` is null until then: a page's default that

@@ -1,10 +1,13 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import HouseholdEditPanel from '~/components/admin/HouseholdEditPanel.vue'
 import {nextTick} from 'vue'
+import {enableAutoUnmount} from '@vue/test-utils'
 import {HouseholdFactory} from '~~/tests/e2e/testDataFactories/householdFactory'
 import type {HouseholdDisplay} from '~/composables/useCoreValidation'
-import {mountWithTooltipProvider} from '~~/tests/component/testHelpers'
+import {mountWithTooltipProvider, resetStores} from '~~/tests/component/testHelpers'
+
+enableAutoUnmount(afterEach)
 
 describe('HouseholdEditPanel', () => {
 
@@ -32,46 +35,34 @@ describe('HouseholdEditPanel', () => {
     ])
     const allHouseholds = [household1, household2]
 
+    beforeEach(() => {
+        resetStores()
+    })
+
     const mount = (household: HouseholdDisplay = household1) =>
         mountWithTooltipProvider(HouseholdEditPanel, {props: {household, allHouseholds}, isMd: true})
 
-    // ========== STAMDATA ==========
-
-    it.each([
-        ['PBS-nummer', '100'],
-        ['Adresse', household1.address],
-        ['Heynabo-ID', String(household1.heynaboId)],
-        ['Forkortelse', 'S_31']
-    ])('shows stamdata %s = %s', async (label, value) => {
-        const wrapper = await mount()
-        expect(wrapper.text()).toContain(label)
-        expect(wrapper.text()).toContain(value)
-    })
-
-    // ========== RESIDENS ==========
-
-    it('shows residens section', async () => {
-        const wrapper = await mount()
-        expect(wrapper.text()).toContain('Residens')
-    })
-
-    // ========== BEBOERE ==========
-
-    it('shows all inhabitants across households', async () => {
+    it('shows the stamdata, the residens section, every inhabitant at the address with its place, and the delete naming the household', async () => {
+        const stamdata = [
+            ['PBS-nummer', '100'],
+            ['Adresse', household1.address],
+            ['Heynabo-ID', String(household1.heynaboId)],
+            ['Forkortelse', 'S_31']
+        ]
         const wrapper = await mount()
         const text = wrapper.text()
+
+        stamdata.forEach(([label, value]) => {
+            expect(text).toContain(label)
+            expect(text).toContain(value)
+        })
+        expect(text).toContain('Residens')
+        // Own inhabitants read "I denne husstand", the sibling household's offer "Flyt hertil"
         expect(text).toContain('Emil')
         expect(text).toContain('Anna')
-    })
-
-    it('shows "I denne husstand" for own inhabitants', async () => {
-        const wrapper = await mount()
-        expect(wrapper.text()).toContain('I denne husstand')
-    })
-
-    it('shows "Flyt hertil" for other inhabitants', async () => {
-        const wrapper = await mount()
-        expect(wrapper.text()).toContain('Flyt hertil')
+        expect(text).toContain('I denne husstand')
+        expect(text).toContain('Flyt hertil')
+        expect(text).toContain('Slet S_31 (PBS 100)')
     })
 
     // ========== EMITS ==========
@@ -90,12 +81,5 @@ describe('HouseholdEditPanel', () => {
         await btn!.trigger('click')
         await nextTick()
         expect(wrapper.emitted('close')).toBeTruthy()
-    })
-
-    // ========== DELETE ==========
-
-    it('shows delete with shortName and PBS', async () => {
-        const wrapper = await mount()
-        expect(wrapper.text()).toContain('Slet S_31 (PBS 100)')
     })
 })

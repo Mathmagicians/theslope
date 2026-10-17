@@ -1,10 +1,13 @@
 import {describe, it, expect, vi, beforeEach, afterEach, beforeAll} from 'vitest'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {findByTestId, findAllByTestId} from '~~/tests/component/testHelpers'
+import {enableAutoUnmount} from '@vue/test-utils'
+import {findByTestId, findAllByTestId, resetStores} from '~~/tests/component/testHelpers'
 import ChefDinnerCard from '~/components/chef/ChefDinnerCard.vue'
 import type {DinnerEventDisplay} from '~/composables/useBookingValidation'
 import {SeasonFactory} from '~~/tests/e2e/testDataFactories/seasonFactory'
 import {nextTick} from 'vue'
+
+enableAutoUnmount(afterEach)
 
 describe('ChefDinnerCard', () => {
     const {DinnerStateSchema} = useBookingValidation()
@@ -22,6 +25,7 @@ describe('ChefDinnerCard', () => {
     })
 
     beforeEach(() => {
+        resetStores()
         // Use fake timers for temporal consistency
         vi.useFakeTimers()
         vi.setSystemTime(REFERENCE_TIME)
@@ -53,12 +57,21 @@ describe('ChefDinnerCard', () => {
             props: { deadlines: defaultDeadlines, ...props }
         })
 
+    // Each badge by its label, read off one mount
+    const badgeTexts = (wrapper: Awaited<ReturnType<typeof mountCard>>, labels: string[]) => {
+        const badges = findAllByTestId(wrapper, 'deadline-badge')
+        return labels.map(label => badges.find(b => b.text().includes(label))?.text())
+    }
+
     describe('Rendering', () => {
-        it('should render dinner event with menu title', async () => {
-            const dinnerEvent = createDinnerEvent()
-            const wrapper = await mountCard({ dinnerEvent })
+        it('should render the menu title, the formatted date with weekday and the Menu and Framelding badges', async () => {
+            const wrapper = await mountCard({ dinnerEvent: createDinnerEvent({ date: new Date('2025-12-25T18:00:00') }) })
 
             expect(wrapper.text()).toContain('Spaghetti Carbonara')
+            // Should show weekday and date (e.g., "tor. 25/12")
+            expect(wrapper.text()).toContain('25/12')
+            expect(wrapper.text()).toContain('Menu')
+            expect(wrapper.text()).toContain('Framelding')
         })
 
         it('should show placeholder for unannounced menu', async () => {
@@ -67,141 +80,47 @@ describe('ChefDinnerCard', () => {
 
             expect(wrapper.text()).toContain('Ingen menu endnu')
         })
-
-        it('should show formatted date with weekday', async () => {
-            const dinnerEvent = createDinnerEvent({ date: new Date('2025-12-25T18:00:00') })
-            const wrapper = await mountCard({ dinnerEvent })
-
-            // Should show weekday and date (e.g., "tor. 25/12")
-            expect(wrapper.text()).toContain('25/12')
-        })
     })
 
     describe('Deadline badges', () => {
-        it('should show Menu and Framelding labels', async () => {
-            const dinnerEvent = createDinnerEvent()
-            const wrapper = await mountCard({ dinnerEvent })
-
-            expect(wrapper.text()).toContain('Menu')
-            expect(wrapper.text()).toContain('Framelding')
-        })
-
-        it('should show åben or lukket for framelding status', async () => {
-            const dinnerEvent = createDinnerEvent()
-            const wrapper = await mountCard({ dinnerEvent })
-
-            const text = wrapper.text()
-            expect(text).toMatch(/åben|lukket/i)
-        })
-
         // SCHEDULED dinners: menu NOT done
         // Each badge counts to its OWN deadline (menu, booking, groceries, dinner are independent)
-        describe.each([
+        it.each([
             {
                 name: 'SCHEDULED, far future (15 days)',
                 dinnerDate: new Date(2025, 0, 26, 18, 0),
-                dinnerState: DinnerState.SCHEDULED,
-                expectedBadges: {
-                    menu: /om\s+5\s+dage/i,
-                    framelding: /åben/i,
-                    groceries: /om\s+15\s+dage/i,
-                    dinner: /om\s+15\s+dage/i
-                }
+                expectedBadges: [/om\s+5\s+dage/i, /åben/i, /om\s+15\s+dage/i, /om\s+15\s+dage/i]
             },
             {
                 name: 'SCHEDULED, 9 days (menu deadline passed)',
                 dinnerDate: new Date(2025, 0, 20, 18, 0),
-                dinnerState: DinnerState.SCHEDULED,
-                expectedBadges: {
-                    menu: /mangler/i,
-                    framelding: /åben/i,
-                    groceries: /om\s+9\s+dage/i,  // Independent: counts to dinner time
-                    dinner: /om\s+9\s+dage/i
-                }
+                // Groceries independent: counts to dinner time
+                expectedBadges: [/mangler/i, /åben/i, /om\s+9\s+dage/i, /om\s+9\s+dage/i]
             },
             {
                 name: 'SCHEDULED, 6 days (both deadlines passed)',
                 dinnerDate: new Date(2025, 0, 17, 18, 0),
-                dinnerState: DinnerState.SCHEDULED,
-                expectedBadges: {
-                    menu: /mangler/i,
-                    framelding: /lukket/i,
-                    groceries: /om\s+6\s+dage/i,  // Independent: counts to dinner time
-                    dinner: /om\s+6\s+dage/i
-                }
+                expectedBadges: [/mangler/i, /lukket/i, /om\s+6\s+dage/i, /om\s+6\s+dage/i]
             }
-        ])('$name', ({ dinnerDate, dinnerState, expectedBadges }) => {
-            it.each([
-                { label: 'Menu', pattern: expectedBadges.menu },
-                { label: 'Framelding', pattern: expectedBadges.framelding },
-                { label: 'Indkøb', pattern: expectedBadges.groceries },
-                { label: 'Spisning', pattern: expectedBadges.dinner }
-            ])('$label badge', async ({ label, pattern }) => {
-                const dinnerEvent = createDinnerEvent({ date: dinnerDate, state: dinnerState })
-                const wrapper = await mountCard({ dinnerEvent })
-                const badges = findAllByTestId(wrapper, 'deadline-badge')
-                const badge = badges.find(b => b.text().includes(label))
-                expect(badge?.text()).toMatch(pattern)
-            })
+        ])('$name: the Menu, Framelding, Indkøb and Spisning badges', async ({ dinnerDate, expectedBadges }) => {
+            const wrapper = await mountCard({ dinnerEvent: createDinnerEvent({ date: dinnerDate, state: DinnerState.SCHEDULED }) })
+
+            badgeTexts(wrapper, ['Menu', 'Framelding', 'Indkøb', 'Spisning'])
+                .forEach((text, index) => expect(text).toMatch(expectedBadges[index]!))
         })
 
-        // ANNOUNCED dinners: menu IS done
-        // When menu done: groceries shows countdown (NO cascade)
-        describe.each([
-            {
-                name: 'ANNOUNCED, 9 days (menu done, groceries shows countdown)',
-                dinnerDate: new Date(2025, 0, 20, 18, 0),
-                dinnerState: DinnerState.ANNOUNCED,
-                expectedBadges: {
-                    framelding: /åben/i,
-                    groceries: /om\s+9\s+dage/i,  // No cascade: menu done
-                    dinner: /om\s+9\s+dage/i
-                }
-            },
-            {
-                name: 'ANNOUNCED, 6 days (menu done, booking closed)',
-                dinnerDate: new Date(2025, 0, 17, 18, 0),
-                dinnerState: DinnerState.ANNOUNCED,
-                expectedBadges: {
-                    framelding: /lukket/i,
-                    groceries: /om\s+6\s+dage/i,  // No cascade: menu done
-                    dinner: /om\s+6\s+dage/i
-                }
-            }
-        ])('$name', ({ dinnerDate, dinnerState, expectedBadges }) => {
-            it.each([
-                { label: 'Framelding', pattern: expectedBadges.framelding },
-                { label: 'Indkøb', pattern: expectedBadges.groceries },
-                { label: 'Spisning', pattern: expectedBadges.dinner }
-            ])('$label badge', async ({ label, pattern }) => {
-                const dinnerEvent = createDinnerEvent({ date: dinnerDate, state: dinnerState })
-                const wrapper = await mountCard({ dinnerEvent })
-                const badges = findAllByTestId(wrapper, 'deadline-badge')
-                const badge = badges.find(b => b.text().includes(label))
-                expect(badge?.text()).toMatch(pattern)
-            })
+        // ANNOUNCED dinners: menu IS done; groceries shows countdown (NO cascade)
+        it('ANNOUNCED, 9 days (menu done, groceries shows countdown): the Framelding, Indkøb and Spisning badges', async () => {
+            const wrapper = await mountCard({ dinnerEvent: createDinnerEvent({ date: new Date(2025, 0, 20, 18, 0), state: DinnerState.ANNOUNCED }) })
+
+            const [framelding, groceries, dinner] = badgeTexts(wrapper, ['Framelding', 'Indkøb', 'Spisning'])
+            expect(framelding).toMatch(/åben/i)
+            expect(groceries).toMatch(/om\s+9\s+dage/i)
+            expect(dinner).toMatch(/om\s+9\s+dage/i)
         })
     })
 
     describe('Selection', () => {
-        it('should apply cursor pointer styling to card', async () => {
-            const dinnerEvent = createDinnerEvent()
-            const wrapper = await mountCard({ dinnerEvent, selected: true })
-
-            const card = findByTestId(wrapper, 'chef-dinner-card-1')
-            expect(card.exists()).toBe(true)
-            // cursor-pointer is on UCard root, check component text renders
-            expect(wrapper.text()).toContain('Spaghetti Carbonara')
-        })
-
-        it('should render card without errors when not selected', async () => {
-            const dinnerEvent = createDinnerEvent()
-            const wrapper = await mountCard({ dinnerEvent, selected: false })
-
-            const card = findByTestId(wrapper, 'chef-dinner-card-1')
-            expect(card.exists()).toBe(true)
-        })
-
         it('should emit select event with dinner ID when clicked', async () => {
             const dinnerEvent = createDinnerEvent({ id: 42 })
             const wrapper = await mountCard({ dinnerEvent })

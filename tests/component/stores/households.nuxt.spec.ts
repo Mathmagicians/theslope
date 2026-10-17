@@ -17,6 +17,7 @@ import { asyncDataStatus, resetStores } from '~~/tests/component/testHelpers'
 import { useHouseholdsStore } from '~/stores/households'
 import { useBookingsStore } from '~/stores/bookings'
 const Action = useBookingValidation().BookingActionSchema.enum
+const DinnerMode = useBookingValidation().DinnerModeSchema.enum
 
 // nuxt-auth-utils has no session in the test environment; the spec logs in and out and sets the session user
 const { session, useUserSession } = await vi.hoisted(async () => (await import('~~/tests/component/hoistedMocks')).mockSession())
@@ -195,7 +196,7 @@ describe('Households Store', () => {
   describe('updateInhabitantPreferences', () => {
     it('calls API endpoint', async () => {
       const store = await setupStore()
-      const preferences = { MONDAY: 'DINEIN', TUESDAY: 'TAKEAWAY' }
+      const preferences = { MONDAY: DinnerMode.DINEIN, TUESDAY: DinnerMode.TAKEAWAY }
 
       await store.updateInhabitantPreferences(1, preferences)
 
@@ -207,7 +208,7 @@ describe('Households Store', () => {
       const mockResponse = createMockInhabitantUpdateResponse()
       preferencesEndpoint1.mockReturnValue(mockResponse)
 
-      const result = await store.updateInhabitantPreferences(1, { MONDAY: 'DINEIN' })
+      const result = await store.updateInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
 
       expect(result).toEqual(mockResponse.scaffoldResult)
     })
@@ -217,7 +218,7 @@ describe('Households Store', () => {
       const mockResponse = createMockInhabitantUpdateResponse()
       preferencesEndpoint1.mockReturnValue(mockResponse)
 
-      await store.updateInhabitantPreferences(1, { MONDAY: 'DINEIN' })
+      await store.updateInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
 
       expect(store.lastPreferenceResult).toEqual(mockResponse.scaffoldResult)
     })
@@ -232,7 +233,7 @@ describe('Households Store', () => {
       // Clear previous calls
       householdByIdEndpoint.mockClear()
 
-      await store.updateInhabitantPreferences(1, { MONDAY: 'DINEIN' })
+      await store.updateInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
 
       // Verify refresh was called
       expect(householdByIdEndpoint).toHaveBeenCalled()
@@ -248,7 +249,7 @@ describe('Households Store', () => {
       })
 
       await expect(
-        store.updateInhabitantPreferences(1, { MONDAY: 'DINEIN' })
+        store.updateInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
       ).rejects.toThrow()
     })
   })
@@ -261,7 +262,7 @@ describe('Households Store', () => {
       store.selectHousehold(1)
       await vi.waitFor(() => expect(store.selectedHousehold).toBeDefined())
 
-      const preferences = { MONDAY: 'DINEIN', TUESDAY: 'TAKEAWAY' }
+      const preferences = { MONDAY: DinnerMode.DINEIN, TUESDAY: DinnerMode.TAKEAWAY }
       await store.updateAllInhabitantPreferences(1, preferences)
 
       // Should call preferences endpoint for both inhabitants
@@ -286,7 +287,7 @@ describe('Households Store', () => {
         scaffoldResult: OrderFactory.defaultScaffoldResult({totals: {[Action.BOOK]: 2, [Action.CANCEL]: 1, [Action.RELEASE]: 1, [Action.CHANGE_PRICE]: 1}, unchanged: 1})
       }))
 
-      await store.updateAllInhabitantPreferences(1, { MONDAY: 'DINEIN' })
+      await store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
 
       // Verify aggregated result (includes all ScaffoldResult fields)
       expect(store.lastPreferenceResult).toEqual(OrderFactory.defaultScaffoldResult({
@@ -313,7 +314,7 @@ describe('Households Store', () => {
         return createMockInhabitantUpdateResponse()
       })
 
-      await store.updateAllInhabitantPreferences(1, { MONDAY: 'DINEIN' })
+      await store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
 
       // Verify sequential execution (order preserved)
       expect(callOrder).toEqual([1, 2])
@@ -328,7 +329,7 @@ describe('Households Store', () => {
       // Clear previous calls from loadHousehold
       householdByIdEndpoint.mockClear()
 
-      await store.updateAllInhabitantPreferences(1, { MONDAY: 'DINEIN' })
+      await store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
 
       // Should be called exactly once after all updates
       expect(householdByIdEndpoint).toHaveBeenCalledTimes(1)
@@ -338,7 +339,7 @@ describe('Households Store', () => {
       const store = await setupStore()
 
       await expect(
-        store.updateAllInhabitantPreferences(999, { MONDAY: 'DINEIN' })
+        store.updateAllInhabitantPreferences(999, { MONDAY: DinnerMode.DINEIN })
       ).rejects.toThrow('Household 999 not found')
     })
 
@@ -358,7 +359,7 @@ describe('Households Store', () => {
       })
 
       await expect(
-        store.updateAllInhabitantPreferences(1, { MONDAY: 'DINEIN' })
+        store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })
       ).rejects.toThrow()
     })
   })
@@ -487,8 +488,8 @@ describe('Households Store', () => {
   // A write that changes bookings goes through the bookings store's one write, which re-reads what a booking touches
   describe('booking writes', () => {
     it.each([
-      {write: 'a preference change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateInhabitantPreferences(1, { MONDAY: 'DINEIN' })},
-      {write: 'a power mode change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateAllInhabitantPreferences(1, { MONDAY: 'DINEIN' })},
+      {write: 'a preference change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })},
+      {write: 'a power mode change', run: (store: ReturnType<typeof useHouseholdsStore>) => store.updateAllInhabitantPreferences(1, { MONDAY: DinnerMode.DINEIN })},
       {write: 'a move-out date', run: (store: ReturnType<typeof useHouseholdsStore>) => store.setMoveOutDate(1, new Date())},
       {write: 'a move to another household', run: (store: ReturnType<typeof useHouseholdsStore>) => store.moveInhabitant(1, 2)}
     ])('$write goes through the one booking write', async ({run}) => {

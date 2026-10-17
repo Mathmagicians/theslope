@@ -1,13 +1,19 @@
 // @vitest-environment nuxt
-import {describe, it, expect} from 'vitest'
+import {describe, it, expect, beforeEach, afterEach} from 'vitest'
 import type {ComponentPublicInstance} from 'vue'
-import type {VueWrapper} from '@vue/test-utils'
+import {enableAutoUnmount, type VueWrapper} from '@vue/test-utils'
 import {mountSuspended} from '@nuxt/test-utils/runtime'
-import {findByTestId} from '~~/tests/component/testHelpers'
+import {findByTestId, resetStores} from '~~/tests/component/testHelpers'
 import CookingTeamBadges from '~/components/shared/CookingTeamBadges.vue'
 import {useTheSlopeDesignSystem} from '~/composables/useTheSlopeDesignSystem'
 
 const {ICONS} = useTheSlopeDesignSystem()
+
+enableAutoUnmount(afterEach)
+
+beforeEach(() => {
+    resetStores()
+})
 
 type IconWrapper = VueWrapper<ComponentPublicInstance<{name: string}>>
 

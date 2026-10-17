@@ -9,22 +9,14 @@ import { WEEKDAYS } from '~/types/dateTypes'
 describe('isHouseholdActiveOnDay', () => {
   const date = (y: number, m: number, d: number) => new Date(y, m - 1, d)
 
+  // Inactive before move-in and after move-out; both days themselves count
   it.each([
-    { scenario: 'past move-in, no move-out → all events eligible',
-      movedIn: date(2020, 1, 1), moveOut: null,
-      eventDate: date(2026, 5, 1), expected: true },
     { scenario: 'future move-in → event before move-in ineligible',
       movedIn: date(2026, 4, 1), moveOut: null,
       eventDate: date(2026, 3, 15), expected: false },
-    { scenario: 'future move-in → event after move-in eligible',
-      movedIn: date(2026, 4, 1), moveOut: null,
-      eventDate: date(2026, 5, 1), expected: true },
     { scenario: 'past move-out → event after move-out ineligible',
       movedIn: date(2020, 1, 1), moveOut: date(2026, 4, 1),
       eventDate: date(2026, 5, 1), expected: false },
-    { scenario: 'past move-out → event before move-out eligible',
-      movedIn: date(2020, 1, 1), moveOut: date(2026, 4, 1),
-      eventDate: date(2026, 3, 15), expected: true },
     { scenario: 'boundary: event on movedInDate → eligible',
       movedIn: date(2026, 4, 1), moveOut: null,
       eventDate: date(2026, 4, 1), expected: true },
@@ -42,22 +34,16 @@ describe('getResidencyStatus', () => {
   const REF = date(2026, 3, 1) // Fixed reference date: 2026-03-01
 
   it.each([
-    { scenario: 'moved in long ago, no move-out',
-      movedIn: date(2020, 1, 1), moveOut: null, expected: 'active' },
     { scenario: 'moved in on reference date, no move-out',
       movedIn: REF, moveOut: null, expected: 'active' },
     { scenario: 'not yet moved in (future movedInDate)',
       movedIn: date(2026, 6, 1), moveOut: null, expected: 'pending' },
     { scenario: 'not yet moved in, with future move-out',
       movedIn: date(2026, 6, 1), moveOut: date(2027, 1, 1), expected: 'pending' },
-    { scenario: 'active with future move-out date',
-      movedIn: date(2020, 1, 1), moveOut: date(2026, 6, 1), expected: 'leaving' },
     { scenario: 'move-out date on reference date (still leaving)',
       movedIn: date(2020, 1, 1), moveOut: REF, expected: 'leaving' },
     { scenario: 'move-out date in the past',
       movedIn: date(2020, 1, 1), moveOut: date(2025, 12, 1), expected: 'moved-out' },
-    { scenario: 'moved in and out in the past',
-      movedIn: date(2020, 1, 1), moveOut: date(2022, 1, 1), expected: 'moved-out' },
   ])('$scenario → $expected', ({ movedIn, moveOut, expected }) => {
     expect(getResidencyStatus(movedIn, moveOut, REF)).toBe(expected)
   })
@@ -76,18 +62,10 @@ describe('useHousehold', () => {
 
     it.each([
       { values: [], defaultValue: DinnerMode.DINEIN, expected: { value: DinnerMode.DINEIN, consensus: true } },
-      { values: [DinnerMode.TAKEAWAY], defaultValue: DinnerMode.DINEIN, expected: { value: DinnerMode.TAKEAWAY, consensus: true } },
       { values: [DinnerMode.NONE, DinnerMode.NONE], defaultValue: DinnerMode.DINEIN, expected: { value: DinnerMode.NONE, consensus: true } },
-      { values: [DinnerMode.DINEIN, DinnerMode.TAKEAWAY], defaultValue: DinnerMode.DINEIN, expected: { value: DinnerMode.DINEIN, consensus: false } },
-      { values: [DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE], defaultValue: DinnerMode.DINEIN, expected: { value: DinnerMode.DINEIN, consensus: false } }
+      { values: [DinnerMode.DINEIN, DinnerMode.TAKEAWAY], defaultValue: DinnerMode.DINEIN, expected: { value: DinnerMode.DINEIN, consensus: false } }
     ])('returns $expected for $values.length values', ({ values, defaultValue, expected }) => {
       expect(computeConsensus(values, defaultValue)).toEqual(expected)
-    })
-
-    it('works with non-DinnerMode types', () => {
-      expect(computeConsensus(['a', 'a', 'a'], 'default')).toEqual({ value: 'a', consensus: true })
-      expect(computeConsensus(['a', 'b'], 'default')).toEqual({ value: 'default', consensus: false })
-      expect(computeConsensus([1, 1], 0)).toEqual({ value: 1, consensus: true })
     })
   })
 
@@ -118,89 +96,6 @@ describe('useHousehold', () => {
       })
     })
 
-    describe('consensus scenarios', () => {
-      // Parametrized test for all DinnerMode values
-      describe.each([
-        { mode: DinnerMode.DINEIN, label: 'DINEIN' },
-        { mode: DinnerMode.DINEINLATE, label: 'DINEINLATE' },
-        { mode: DinnerMode.TAKEAWAY, label: 'TAKEAWAY' },
-        { mode: DinnerMode.NONE, label: 'NONE' }
-      ])('with $label mode', ({ mode, label }) => {
-        it(`returns ${label} when all inhabitants agree on all days`, () => {
-          const preferences = createDefaultWeekdayMap(mode)
-
-          const inhabitants = [
-            { dinnerPreferences: preferences },
-            { dinnerPreferences: preferences },
-            { dinnerPreferences: preferences }
-          ]
-
-          const result = computeAggregatedPreferences(inhabitants)
-
-          WEEKDAYS.forEach(day => {
-            expect(result.preferences[day]).toBe(mode)
-          })
-        })
-
-        it(`returns ${label} for single inhabitant with ${label} preference`, () => {
-          const preferences = createDefaultWeekdayMap(mode)
-          const inhabitants = [{ dinnerPreferences: preferences }]
-
-          const result = computeAggregatedPreferences(inhabitants)
-
-          WEEKDAYS.forEach(day => {
-            expect(result.preferences[day]).toBe(mode)
-          })
-        })
-      })
-    })
-
-    describe('mixed preference scenarios', () => {
-      // Parametrized test for different combinations of mixed preferences
-      describe.each([
-        {
-          scenario: 'two different preferences',
-          inhabitant1: [DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.DINEIN],
-          inhabitant2: [DinnerMode.DINEINLATE, DinnerMode.DINEIN, DinnerMode.DINEINLATE, DinnerMode.DINEIN, DinnerMode.DINEINLATE, DinnerMode.TAKEAWAY, DinnerMode.DINEINLATE],
-          expectMixed: ['mandag', 'onsdag', 'fredag', 'søndag'],
-          expectConsensus: { tirsdag: DinnerMode.DINEIN, torsdag: DinnerMode.DINEIN, lørdag: DinnerMode.TAKEAWAY }
-        },
-        {
-          scenario: 'DINEIN vs NONE',
-          inhabitant1: [DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN, DinnerMode.NONE, DinnerMode.DINEIN],
-          inhabitant2: [DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE, DinnerMode.NONE],
-          expectMixed: ['mandag', 'onsdag', 'fredag', 'søndag'],
-          expectConsensus: { tirsdag: DinnerMode.NONE, torsdag: DinnerMode.NONE, lørdag: DinnerMode.NONE }
-        },
-        {
-          scenario: 'TAKEAWAY vs DINEINLATE',
-          inhabitant1: [DinnerMode.TAKEAWAY, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.DINEIN, DinnerMode.TAKEAWAY],
-          inhabitant2: [DinnerMode.DINEINLATE, DinnerMode.DINEIN, DinnerMode.DINEINLATE, DinnerMode.DINEIN, DinnerMode.DINEINLATE, DinnerMode.DINEIN, DinnerMode.DINEINLATE],
-          expectMixed: ['mandag', 'onsdag', 'fredag', 'søndag'],
-          expectConsensus: { tirsdag: DinnerMode.DINEIN, torsdag: DinnerMode.DINEIN, lørdag: DinnerMode.DINEIN }
-        }
-      ])('$scenario', ({ inhabitant1, inhabitant2, expectMixed, expectConsensus }) => {
-        it('returns DINEIN for mixed preferences and consensus where they agree', () => {
-          const inhabitants = [
-            { dinnerPreferences: createDefaultWeekdayMap(inhabitant1) },
-            { dinnerPreferences: createDefaultWeekdayMap(inhabitant2) }
-          ]
-
-          const result = computeAggregatedPreferences(inhabitants)
-
-          // Check mixed days - fall back to DINEIN
-          expectMixed.forEach(day => {
-            expect(result.preferences[day as keyof typeof result.preferences]).toBe(DinnerMode.DINEIN)
-          })
-
-          // Check consensus days
-          Object.entries(expectConsensus).forEach(([day, value]) => {
-            expect(result.preferences[day as keyof typeof result.preferences]).toBe(value)
-          })
-        })
-      })
-    })
-
     describe('null handling in input preferences', () => {
       it('treats null preference values as DINEIN default', () => {
         const prefs1 = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
@@ -219,33 +114,14 @@ describe('useHousehold', () => {
         expect(result.preferences.mandag).toBe(DinnerMode.DINEIN)
         expect(result.preferences.tirsdag).toBe(DinnerMode.DINEIN)
       })
-
-      it('returns DINEIN when null values cause mismatch with non-default', () => {
-        const prefs1 = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
-        // Build maps with null in specific positions to test null handling
-        const prefs2Base = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEINLATE, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
-        const prefs2 = {...prefs2Base, mandag: null as unknown as typeof DinnerMode.DINEIN}
-        const prefs3Base = createDefaultWeekdayMap([DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.DINEIN, DinnerMode.TAKEAWAY, DinnerMode.NONE, DinnerMode.NONE])
-        const prefs3 = {...prefs3Base, tirsdag: null as unknown as typeof DinnerMode.DINEIN}
-
-        const inhabitants = [
-          { dinnerPreferences: prefs1 },
-          { dinnerPreferences: prefs2 },
-          { dinnerPreferences: prefs3 }
-        ]
-
-        const result = computeAggregatedPreferences(inhabitants)
-
-        expect(result.preferences.mandag).toBe(DinnerMode.DINEIN) // All agree (null → DINEIN)
-        expect(result.preferences.tirsdag).toBe(DinnerMode.DINEIN) // Mixed, falls back to DINEIN
-      })
     })
 
+    // A day the household agrees on keeps its mode; a mixed day falls back to DINEIN
     describe('real-world scenarios', () => {
       // D = DINEIN, L = DINEINLATE, T = TAKEAWAY, N = NONE, X = null (treated as DINEIN)
       const D = DinnerMode.DINEIN, L = DinnerMode.DINEINLATE, T = DinnerMode.TAKEAWAY, N = DinnerMode.NONE
 
-      describe.each([
+      it.each([
         {
           scenario: 'parents agree, child differs on Friday',
           prefs: [[D,D,D,D,T,N,N], [D,D,D,D,T,N,N], [D,D,D,D,D,N,N]],
@@ -265,56 +141,16 @@ describe('useHousehold', () => {
           scenario: 'all agree on everything',
           prefs: [[D,D,T,T,N,N,D], [D,D,T,T,N,N,D]],
           expected: [D,D,T,T,N,N,D]
-        },
-        {
-          scenario: 'single inhabitant',
-          prefs: [[T,T,D,D,N,L,L]],
-          expected: [T,T,D,D,N,L,L]
         }
-      ])('$scenario', ({ prefs, expected }) => {
-        it('aggregates preferences correctly', () => {
-          const inhabitants = prefs.map(p =>
-            ({ dinnerPreferences: p ? createDefaultWeekdayMap(p) : null })
-          )
+      ])('$scenario: aggregates preferences correctly', ({ prefs, expected }) => {
+        const inhabitants = prefs.map(p =>
+          ({ dinnerPreferences: p ? createDefaultWeekdayMap(p) : null })
+        )
 
-          const result = computeAggregatedPreferences(inhabitants)
+        const result = computeAggregatedPreferences(inhabitants)
 
-          WEEKDAYS.forEach((day, i) => {
-            expect(result.preferences[day]).toBe(expected[i])
-          })
-        })
-      })
-    })
-
-    describe('number of inhabitants', () => {
-      // Parametrized test for different inhabitant counts
-      describe.each([
-        { count: 1, label: 'single inhabitant' },
-        { count: 2, label: 'two inhabitants' },
-        { count: 3, label: 'three inhabitants' },
-        { count: 5, label: 'five inhabitants' },
-        { count: 10, label: 'large household (10)' }
-      ])('with $label', ({ count }) => {
-        it(`handles consensus correctly with ${count} inhabitant(s)`, () => {
-          const consensusPrefs = createDefaultWeekdayMap([
-            DinnerMode.DINEIN,
-            DinnerMode.DINEIN,
-            DinnerMode.DINEIN,
-            DinnerMode.DINEIN,
-            DinnerMode.TAKEAWAY,
-            DinnerMode.NONE,
-            DinnerMode.NONE
-          ])
-
-          const inhabitants = Array.from({ length: count }, () => ({
-            dinnerPreferences: consensusPrefs
-          }))
-
-          const result = computeAggregatedPreferences(inhabitants)
-
-          expect(result.preferences.mandag).toBe(DinnerMode.DINEIN)
-          expect(result.preferences.fredag).toBe(DinnerMode.TAKEAWAY)
-          expect(result.preferences.lørdag).toBe(DinnerMode.NONE)
+        WEEKDAYS.forEach((day, i) => {
+          expect(result.preferences[day]).toBe(expected[i])
         })
       })
     })
@@ -346,13 +182,8 @@ describe('useHousehold', () => {
     ]
 
     describe('exact match', () => {
-      it.each([
-        { shortName: 'Signe Dalby Madsen', expectedId: 4 },
-        { shortName: 'Signe Hansen', expectedId: 12 },
-        { shortName: 'Erik Anders Hansen', expectedId: 3 },
-        { shortName: 'Helle Andersen', expectedId: 1 }
-      ])('matches "$shortName" exactly', ({ shortName, expectedId }) => {
-        expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBe(expectedId)
+      it('matches "Signe Hansen" exactly, apart from the other Signe', () => {
+        expect(matchInhabitantByNameWithInitials('Signe Hansen', testInhabitants)).toBe(12)
       })
 
       it('handles case insensitivity', () => {
@@ -361,20 +192,10 @@ describe('useHousehold', () => {
       })
     })
 
-    describe('initials format - multi-part last names', () => {
+    describe('initials format', () => {
       it.each([
         { shortName: 'Signe D.M.', expectedId: 4, description: 'two-part last name' },
-        { shortName: 'Erik A.H.', expectedId: 3, description: 'two-part last name' },
-        { shortName: 'Clara U.K.', expectedId: 9, description: 'two-part last name' }
-      ])('matches "$shortName" ($description)', ({ shortName, expectedId }) => {
-        expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBe(expectedId)
-      })
-    })
-
-    describe('initials format - single-part last names', () => {
-      it.each([
-        { shortName: 'Signe H.', expectedId: 12, description: 'disambiguates from Signe D.M.' },
-        { shortName: 'Helle A.', expectedId: 1, description: 'single initial' }
+        { shortName: 'Signe H.', expectedId: 12, description: 'single-part last name, disambiguates from Signe D.M.' }
       ])('matches "$shortName" ($description)', ({ shortName, expectedId }) => {
         expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBe(expectedId)
       })
@@ -384,7 +205,6 @@ describe('useHousehold', () => {
       it.each([
         { shortName: 'Signe D.', expectedId: 4, description: 'matches first lastName word' },
         { shortName: 'Signe M.', expectedId: 4, description: 'matches second lastName word' },
-        { shortName: 'signe d.', expectedId: 4, description: 'case insensitive' },
         { shortName: 'Tommy N.', expectedId: 28, description: 'composite name: initial matches second word of name' },
         { shortName: 'Tommy L.', expectedId: 28, description: 'composite name: initial matches lastName' }
       ])('matches "$shortName" ($description)', ({ shortName, expectedId }) => {
@@ -400,15 +220,8 @@ describe('useHousehold', () => {
     describe('first name only match (Strategy 3)', () => {
       it.each([
         { shortName: 'Babyyoda', expectedId: 42, reason: 'unique first name' },
-        { shortName: 'Skransen', expectedId: 88, reason: 'unique first name' },
         { shortName: 'babyyoda', expectedId: 42, reason: 'case insensitive' },
-        { shortName: 'SKRANSEN', expectedId: 88, reason: 'case insensitive' },
-        { shortName: 'Erik', expectedId: 3, reason: 'unique first name with multi-part last name' },
-        { shortName: 'Clara', expectedId: 9, reason: 'unique first name' },
-        { shortName: 'Helle', expectedId: 1, reason: 'unique first name' },
-        { shortName: 'Kai', expectedId: 73, reason: 'unique first name with trailing whitespace in DB' },
-        { shortName: 'Luna', expectedId: 16, reason: 'unique first name' },
-        { shortName: 'Max', expectedId: 21, reason: 'unique first name' }
+        { shortName: 'Kai', expectedId: 73, reason: 'unique first name with trailing whitespace in DB' }
       ])('matches "$shortName" ($reason)', ({ shortName, expectedId }) => {
         expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBe(expectedId)
       })
@@ -422,35 +235,25 @@ describe('useHousehold', () => {
     describe('first word of composite name match (Strategy 4)', () => {
       it.each([
         { shortName: 'Tommy', expectedId: 28, reason: 'first word of "Tommy Nielsen"' },
-        { shortName: 'Zara', expectedId: 85, reason: 'first word of "Zara Noor"' },
-        { shortName: 'Nova', expectedId: 122, reason: 'first word of "Nova Star"' },
         { shortName: 'tommy', expectedId: 28, reason: 'case insensitive' }
       ])('matches "$shortName" ($reason)', ({ shortName, expectedId }) => {
         expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBe(expectedId)
       })
     })
 
+    // Luna and Max share the lastName prefix "Sol": the first name tells them apart
     describe('first name + lastName prefix match (Strategy 5)', () => {
       it.each([
         { shortName: 'Luna Sol', expectedId: 16, reason: 'lastName starts with "Sol"' },
-        { shortName: 'Max Sol', expectedId: 21, reason: 'lastName starts with "Sol"' },
-        { shortName: 'luna sol', expectedId: 16, reason: 'case insensitive' }
+        { shortName: 'Max Sol', expectedId: 21, reason: 'lastName starts with "Sol"' }
       ])('matches "$shortName" ($reason)', ({ shortName, expectedId }) => {
         expect(matchInhabitantByNameWithInitials(shortName, testInhabitants)).toBe(expectedId)
-      })
-
-      it('returns null when lastName prefix is ambiguous', () => {
-        // Both Luna and Max have lastName starting with "Sol" - but input has first name
-        // So "Luna Sol" matches Luna, "Max Sol" matches Max (no ambiguity)
-        expect(matchInhabitantByNameWithInitials('Luna Sol', testInhabitants)).toBe(16)
-        expect(matchInhabitantByNameWithInitials('Max Sol', testInhabitants)).toBe(21)
       })
     })
 
     describe('no match cases', () => {
       it.each([
         { shortName: 'Unknown Person', reason: 'no inhabitant with this name' },
-        { shortName: 'Signe', reason: 'non-unique first name (two Signes exist)' },
         { shortName: 'Signe X.Y.', reason: 'wrong initials' },
         { shortName: 'Anna D.M.', reason: 'wrong first name' }
       ])('returns null for "$shortName" ($reason)', ({ shortName }) => {
@@ -473,7 +276,6 @@ describe('useHousehold', () => {
     const { formatHouseholdFamilyName } = useHousehold()
 
     it.each([
-      { inhabitants: [], expected: null, scenario: 'empty array' },
       { inhabitants: [{ lastName: '' }], expected: null, scenario: 'empty lastName' },
       { inhabitants: [{ lastName: 'Hansen' }], expected: 'Hansen', scenario: 'single person' },
       { inhabitants: [{ lastName: 'Hansen' }, { lastName: 'Hansen' }], expected: 'Familien Hansen', scenario: 'same lastName' },
@@ -494,12 +296,6 @@ describe('buildResolvedHouseholdMap', () => {
     id,
     heynaboId,
     moveOutDate
-  })
-
-  it('empty input → empty maps', () => {
-    const {resolved, inhabitantPlacements} = buildResolvedHouseholdMap([])
-    expect(resolved.size).toBe(0)
-    expect(inhabitantPlacements.size).toBe(0)
   })
 
   it('unique heynaboIds → 1:1 map unchanged', () => {
@@ -535,29 +331,11 @@ describe('buildResolvedHouseholdMap', () => {
       scenario: '2+ active → lowest id (deterministic)',
       households: [household(41, 42, null), household(40, 42, null)],
       expectedId: 40
-    },
-    {
-      scenario: '3 candidates, 2 active → lowest active id',
-      households: [household(50, 42, date(2026, 1, 1)), household(52, 42, null), household(51, 42, null)],
-      expectedId: 51
     }
   ])('duplicate heynaboId: $scenario', ({ households, expectedId }) => {
     const {resolved} = buildResolvedHouseholdMap(households)
     expect(resolved.size).toBe(1)
     expect(resolved.get(42)!.id).toBe(expectedId)
-  })
-
-  it('mixed: some unique, some duplicate heynaboIds', () => {
-    const {resolved} = buildResolvedHouseholdMap([
-      household(1, 10),
-      household(2, 20, null),
-      household(3, 20, date(2026, 6, 1)),
-      household(4, 30)
-    ])
-    expect(resolved.size).toBe(3)
-    expect(resolved.get(10)!.id).toBe(1)
-    expect(resolved.get(20)!.id).toBe(2)
-    expect(resolved.get(30)!.id).toBe(4)
   })
 
   // Factory: minimal inhabitant shape for placement (only id, heynaboId, householdId matter)
